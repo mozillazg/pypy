@@ -81,6 +81,12 @@ class ImmedLoc(AssemblerLocation):
     def __repr__(self):
         return "ImmedLoc(%d)" % (self.value)
 
+    def lowest8bits(self):
+        # XXX: Maybe we could just truncate? But I'm not sure when that
+        # would be the correct behavior.
+        assert rx86.single_byte(self.value)
+        return self
+
 class AddressLoc(AssemblerLocation):
     _immutable_ = True
 
@@ -96,7 +102,7 @@ class AddressLoc(AssemblerLocation):
                 self.value = base_loc.value + (scaled_loc.value << scale) + static_offset
             else:
                 self._location_code = 'a'
-                self.value = (None, scaled_loc.value, scale, static_offset)
+                self.value = (None, scaled_loc.value, scale, base_loc.value + static_offset)
         else:
             if isinstance(scaled_loc, ImmedLoc):
                 # FIXME: What if base_loc is ebp or esp?
@@ -134,15 +140,16 @@ class LocationCodeBuilder(object):
             getattr(self, name + '_' + loc.location_code())(loc.value)
         return INSN
 
-    ADD = _binaryop('ADD')
+    AND = _binaryop('AND')
     OR  = _binaryop('OR')
     XOR = _binaryop('XOR')
+    NOT = _unaryop('NOT')
     SHL = _binaryop('SHL')
     SHR = _binaryop('SHR')
     SAR = _binaryop('SAR')
     TEST = _binaryop('TEST')
 
-    AND = _binaryop('AND')
+    ADD = _binaryop('ADD')
     SUB = _binaryop('SUB')
     IMUL = _binaryop('IMUL')
     NEG = _unaryop('NEG')
@@ -153,6 +160,9 @@ class LocationCodeBuilder(object):
     MOVZX8 = _binaryop('MOVZX8')
     MOVZX16 = _binaryop('MOVZX16')
 
+    PUSH = _unaryop("PUSH")
+    POP = _unaryop("POP")
+
     LEA = _binaryop('LEA')
 
     MOVSD = _binaryop('MOVSD')
@@ -162,6 +172,7 @@ class LocationCodeBuilder(object):
     DIVSD = _binaryop('DIVSD')
     UCOMISD = _binaryop('UCOMISD')
     CVTSI2SD = _binaryop('CVTSI2SD')
+    CVTTSD2SI = _binaryop('CVTTSD2SI')
 
 
     def CALL(self, loc):
@@ -176,14 +187,6 @@ class LocationCodeBuilder(object):
         # Select 16-bit operand mode
         self.writechar('\x66')
         self.MOV(dest_loc, src_loc)
-
-    def PUSH(self, loc):
-        assert isinstance(loc, RegLoc)
-        self.PUSH_r(loc.value)
-
-    def POP(self, loc):
-        assert isinstance(loc, RegLoc)
-        self.POP_r(loc.value)
 
     def CMPi(self, loc0, loc1):
         # like CMP, but optimized for the case of loc1 being a Const

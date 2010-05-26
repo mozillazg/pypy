@@ -576,16 +576,15 @@ class Assembler386(object):
             self.mc.UCOMISD(arglocs[0], arglocs[1])
             if guard_opnum == rop.GUARD_FALSE:
                 mc = self.mc._mc
-                name = 'J' + cond
                 if need_jp:
-                    mc.JP(rel8(6))
-                getattr(mc, name)(rel32(addr))
+                    mc.J_il8(rx86.Conditions['P'], 6)
+                mc.J_il(rx86.Conditions[cond], addr)
                 return mc.tell() - 4
             else:
                 if need_jp:
                     mc = self.mc._mc
-                    mc.JP(rel8(2))
-                    getattr(mc, 'J' + cond)(rel8(5))
+                    mc.J_il8(rx86.Conditions['P'], 2)
+                    mc.J_il8(rx86.Conditions[cond], 5)
                     return self.implement_guard(addr)
                 return self.implement_guard(addr, false_cond)
         return genop_cmp_guard_float
@@ -687,12 +686,12 @@ class Assembler386(object):
         self.mc.UCOMISD(arglocs[0], arglocs[1])
         mc = self.mc._mc
         if guard_opnum == rop.GUARD_TRUE:
-            mc.JP(rel8(6))
-            mc.JE(rel32(addr))
+            mc.J_il8(rx86.Conditions['P'], 6)
+            mc.J_il(rx86.Conditions['E'], addr)
             return mc.tell() - 4
         else:
-            mc.JP(rel8(2))
-            mc.JE(rel8(5))
+            mc.J_il8(rx86.Conditions['P'], 2)
+            mc.J_il8(rx86.Conditions['E'], 5)
             return self.implement_guard(addr)
 
     def genop_float_neg(self, op, arglocs, resloc):
@@ -710,12 +709,12 @@ class Assembler386(object):
         self.mc.UCOMISD(loc0, loc1)
         mc = self.mc._mc
         if guard_opnum == rop.GUARD_TRUE:
-            mc.JP(rel8(6))
-            mc.JZ(rel32(addr))
+            mc.J_il8(rx86.Conditions['P'], 6)
+            mc.J_il(rx86.Conditions['Z'], addr)
             return mc.tell() - 4
         else:
-            mc.JP(rel8(2))
-            mc.JZ(rel8(5))
+            mc.J_il8(rx86.Conditions['P'], 2)
+            mc.J_il8(rx86.Conditions['Z'], 5)
             return self.implement_guard(addr)
 
     def genop_float_is_true(self, op, arglocs, resloc):
@@ -832,7 +831,7 @@ class Assembler386(object):
                                              scale.value))
         else:
             if scale.value == 0:
-                self.mc.MOVZX(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
+                self.mc.MOVZX8(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
                                                 scale.value))
             elif scale.value == 2:
                 self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
@@ -1402,7 +1401,7 @@ class Assembler386(object):
         self._emit_call(x, arglocs, 2, tmp=tmp)
 
         if isinstance(resloc, StackLoc) and resloc.width == 8:
-            self.mc.FSTP(resloc)
+            self.mc.FSTP_b(resloc.value)
         elif size == 1:
             self.mc.AND(eax, imm(0xff))
         elif size == 2:
@@ -1446,7 +1445,7 @@ class Assembler386(object):
         mc.overwrite(jmp_location - 1, [chr(offset)])
         self._stop_block()
         if isinstance(result_loc, StackLoc) and result_loc.width == 8:
-            self.mc.FSTP(result_loc)
+            self.mc.FSTP_b(result_loc.value)
         else:
             assert result_loc is eax or result_loc is None
         self.mc.CMP_bi(FORCE_INDEX_OFS, 0)
@@ -1461,8 +1460,8 @@ class Assembler386(object):
             assert cls is not None and isinstance(descr, cls)
         loc_base = arglocs[0]
         mc = self._start_block()
-        mc.TEST(mem8(loc_base, descr.jit_wb_if_flag_byteofs),
-                imm8(descr.jit_wb_if_flag_singlebyte))
+        mc.TEST8_mi((loc_base.value, descr.jit_wb_if_flag_byteofs),
+                descr.jit_wb_if_flag_singlebyte)
         mc.J_il8(rx86.Conditions['Z'], 0) # patched later
         jz_location = mc.get_relative_pos()
         # the following is supposed to be the slow path, so whenever possible
@@ -1475,7 +1474,7 @@ class Assembler386(object):
         mc.CALL_l(descr.get_write_barrier_fn(self.cpu))
         for i in range(len(arglocs)):
             loc = arglocs[i]
-            assert isinstance(loc, REG)
+            assert isinstance(loc, RegLoc)
             mc.POP(loc)
         # patch the JZ above
         offset = mc.get_relative_pos() - jz_location
@@ -1579,6 +1578,8 @@ def round_up_to_4(size):
 
 def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     return AddressLoc(reg_or_imm1, reg_or_imm2, scale, offset)
+addr64_add = addr_add
+addr8_add = addr_add
 
 def addr_add_const(reg_or_imm1, offset):
     return AddressLoc(reg_or_imm1, ImmedLoc(0), 0, offset)
