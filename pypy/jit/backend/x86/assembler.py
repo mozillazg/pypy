@@ -124,8 +124,8 @@ class Assembler386(object):
         self.fail_boxes_ptr = values_array(llmemory.GCREF, failargs_limit)
         self.fail_boxes_float = values_array(lltype.Float, failargs_limit)
         self.fail_ebp = 0
-        self.loc_float_const_neg = None
-        self.loc_float_const_abs = None
+        self.float_const_neg_addr = 0
+        self.float_const_abs_addr = 0
         self.malloc_fixedsize_slowpath1 = 0
         self.malloc_fixedsize_slowpath2 = 0
         self.setup_failure_recovery()
@@ -193,8 +193,8 @@ class Assembler386(object):
         addr[5] = 2147483647       # / for abs
         addr[6] = 0                #
         addr[7] = 0                #
-        self.loc_float_const_neg = float_constants
-        self.loc_float_const_abs = float_constants + 16
+        self.float_const_neg_addr = float_constants
+        self.float_const_abs_addr = float_constants + 16
 
     def _build_malloc_fixedsize_slowpath(self):
         mc = self.mc2._mc
@@ -696,11 +696,11 @@ class Assembler386(object):
 
     def genop_float_neg(self, op, arglocs, resloc):
         # Following what gcc does: res = x ^ 0x8000000000000000
-        self.mc.XORPD_xj(arglocs[0].value, self.loc_float_const_neg)
+        self.mc.XORPD_xj(arglocs[0].value, self.float_const_neg_addr)
 
     def genop_float_abs(self, op, arglocs, resloc):
         # Following what gcc does: res = x & 0x7FFFFFFFFFFFFFFF
-        self.mc.ANDPD_xj(arglocs[0].value, self.loc_float_const_abs)
+        self.mc.ANDPD_xj(arglocs[0].value, self.float_const_abs_addr)
 
     def genop_guard_float_is_true(self, op, guard_op, addr, arglocs, resloc):
         guard_opnum = guard_op.opnum
