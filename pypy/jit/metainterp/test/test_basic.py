@@ -578,6 +578,7 @@ class BasicTests:
             return n
         res = self.meta_interp(f, [20, 1, 2])
         assert res == 0
+        self.check_loops(call=0)
 
     def test_abs(self):
         myjitdriver = JitDriver(greens = [], reds = ['i', 't'])
