@@ -1,5 +1,5 @@
 import py, sys
-from pypy.rpython.lltypesystem import lltype, rstr
+from pypy.rpython.lltypesystem import lltype, rstr, rclass
 from pypy.rpython import rlist
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
@@ -498,6 +498,9 @@ class Transformer(object):
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
     def handle_getfield_typeptr(self, op):
+        if isinstance(op.args[0], Constant):
+            cls = op.args[0].value.typeptr
+            return Constant(cls, concretetype=rclass.CLASSTYPE)
         op0 = SpaceOperation('-live-', [], None)
         op1 = SpaceOperation('guard_class', [op.args[0]], op.result)
         return [op0, op1]
