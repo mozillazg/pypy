@@ -185,10 +185,22 @@ def _ll_2_int_mod_zer(x, y):
     return llop.int_mod_zer(lltype.Signed, x, y)
 
 def _ll_2_int_lshift_ovf(x, y):
-    return llop.int_lshift_ovf(lltype.Signed, x, y)
+    result = x << y
+    if (result >> y) != x:
+        raise OverflowError
+    return result
 
 def _ll_1_int_abs(x):
-    return abs(x)
+    if x < 0:
+        return -x
+    else:
+        return x
+
+# in the following calls to builtins, the JIT is allowed to look inside:
+inline_calls_to = [
+    ('int_lshift_ovf', [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_abs',        [lltype.Signed],                lltype.Signed),
+    ]
 
 
 class LLtypeHelpers:

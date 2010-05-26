@@ -127,3 +127,15 @@ def test_instantiate():
         else:
             assert 0, "missing instantiate_*_%s in:\n%r" % (expected,
                                                             names)
+
+def test_int_abs():
+    def f(n):
+        return abs(n)
+    rtyper = support.annotate(f, [35])
+    maingraph = rtyper.annotator.translator.graphs[0]
+    cw = CodeWriter(FakeCPU(rtyper), maingraph)
+    cw.find_all_graphs(FakePolicy())
+    cw.make_jitcodes(verbose=True)
+    #
+    s = cw.mainjitcode.dump()
+    assert "inline_call_ir_i <JitCode '_ll_1_int_abs__Signed'>" in s

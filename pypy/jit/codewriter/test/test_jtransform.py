@@ -641,3 +641,13 @@ def test_promote_2():
     assert block.operations[1].args == [v1]
     assert block.operations[1].result is None
     assert block.exits[0].args == [v1]
+
+def test_int_abs():
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    op = SpaceOperation('int_abs', [v1], v2)
+    tr = Transformer(FakeCPU(), FakeRegularCallControl())
+    tr.graph = "somemaingraph"
+    oplist = tr.rewrite_operation(op)
+    assert oplist[0].opname == 'inline_call_ir_i'
+    assert oplist[0].args[0] == 'somejitcode'
