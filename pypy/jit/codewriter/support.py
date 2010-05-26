@@ -1,3 +1,4 @@
+import sys
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import rlist
@@ -170,19 +171,40 @@ def _ll_1_gc_identityhash(x):
 def _ll_1_jit_force_virtual(inst):
     return llop.jit_force_virtual(lltype.typeOf(inst), inst)
 
+
 def _ll_2_int_floordiv_ovf_zer(x, y):
-    return llop.int_floordiv_ovf_zer(lltype.Signed, x, y)
+    if y == 0:
+        raise ZeroDivisionError
+    if ((x + sys.maxint) & y) == -1:    # detect "x = -sys.maxint-1, y = -1".
+        raise OverflowError
+    return llop.int_floordiv(lltype.Signed, x, y)
+
 def _ll_2_int_floordiv_ovf(x, y):
-    return llop.int_floordiv_ovf(lltype.Signed, x, y)
+    if ((x + sys.maxint) & y) == -1:    # detect "x = -sys.maxint-1, y = -1".
+        raise OverflowError
+    return llop.int_floordiv(lltype.Signed, x, y)
+
 def _ll_2_int_floordiv_zer(x, y):
+    if y == 0:
+        raise ZeroDivisionError
     return llop.int_floordiv_zer(lltype.Signed, x, y)
 
 def _ll_2_int_mod_ovf_zer(x, y):
-    return llop.int_mod_ovf_zer(lltype.Signed, x, y)
+    if y == 0:
+        raise ZeroDivisionError
+    if ((x + sys.maxint) & y) == -1:    # detect "x = -sys.maxint-1, y = -1".
+        raise OverflowError
+    return llop.int_mod(lltype.Signed, x, y)
+
 def _ll_2_int_mod_ovf(x, y):
-    return llop.int_mod_ovf(lltype.Signed, x, y)
+    if ((x + sys.maxint) & y) == -1:    # detect "x = -sys.maxint-1, y = -1".
+        raise OverflowError
+    return llop.int_mod(lltype.Signed, x, y)
+
 def _ll_2_int_mod_zer(x, y):
-    return llop.int_mod_zer(lltype.Signed, x, y)
+    if y == 0:
+        raise ZeroDivisionError
+    return llop.int_mod(lltype.Signed, x, y)
 
 def _ll_2_int_lshift_ovf(x, y):
     result = x << y
@@ -198,8 +220,14 @@ def _ll_1_int_abs(x):
 
 # in the following calls to builtins, the JIT is allowed to look inside:
 inline_calls_to = [
-    ('int_lshift_ovf', [lltype.Signed, lltype.Signed], lltype.Signed),
-    ('int_abs',        [lltype.Signed],                lltype.Signed),
+    ('int_floordiv_ovf_zer', [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_floordiv_ovf',     [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_floordiv_zer',     [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_mod_ovf_zer',      [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_mod_ovf',          [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_mod_zer',          [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_lshift_ovf',       [lltype.Signed, lltype.Signed], lltype.Signed),
+    ('int_abs',              [lltype.Signed],                lltype.Signed),
     ]
 
 
