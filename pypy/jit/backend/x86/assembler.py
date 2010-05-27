@@ -996,8 +996,6 @@ class Assembler386(object):
         if offset is not None:
             mc.CMP(mem(locs[0], offset), locs[1])
         else:
-            # We haven't implemented CMP16 yet...
-            raise AssertionError("FIXME")
             # XXX hard-coded assumption: to go from an object to its class
             # we use the following algorithm:
             #   - read the typeid from mem(locs[0]), i.e. at offset 0
@@ -1014,7 +1012,7 @@ class Assembler386(object):
             type_info_group = llop.gc_get_type_info_group(llmemory.Address)
             type_info_group = rffi.cast(lltype.Signed, type_info_group)
             expected_typeid = (classptr - sizeof_ti - type_info_group) >> 2
-            mc.CMP16(mem(locs[0], 0), imm32(expected_typeid))
+            mc.CMP16(mem(locs[0], 0), ImmedLoc(expected_typeid))
 
     def genop_guard_guard_class(self, ign_1, guard_op, addr, locs, ign_2):
         mc = self._start_block()
