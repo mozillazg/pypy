@@ -800,6 +800,45 @@ class BlackholeInterpreter(object):
             XXX
             raise LeaveFrame
 
+    def get_portal_runner(self):
+        metainterp_sd = self.builder.metainterp_sd
+        fnptr = llmemory.cast_ptr_to_adr(metainterp_sd.portal_runner_ptr)
+        calldescr = metainterp_sd.portal_code.calldescr
+        return fnptr, calldescr
+
+    @arguments("self", "I", "R", "F", "I", "R", "F", returns="i")
+    def bhimpl_recursive_call_i(self, greens_i, greens_r, greens_f,
+                                      reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner()
+        return self.cpu.bh_call_i(fnptr, calldescr,
+                                  greens_i + reds_i,
+                                  greens_r + reds_r,
+                                  greens_f + reds_f)
+    @arguments("self", "I", "R", "F", "I", "R", "F", returns="r")
+    def bhimpl_recursive_call_r(self, greens_i, greens_r, greens_f,
+                                      reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner()
+        return self.cpu.bh_call_r(fnptr, calldescr,
+                                  greens_i + reds_i,
+                                  greens_r + reds_r,
+                                  greens_f + reds_f)
+    @arguments("self", "I", "R", "F", "I", "R", "F", returns="f")
+    def bhimpl_recursive_call_f(self, greens_i, greens_r, greens_f,
+                                      reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner()
+        return self.cpu.bh_call_f(fnptr, calldescr,
+                                  greens_i + reds_i,
+                                  greens_r + reds_r,
+                                  greens_f + reds_f)
+    @arguments("self", "I", "R", "F", "I", "R", "F")
+    def bhimpl_recursive_call_v(self, greens_i, greens_r, greens_f,
+                                      reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner()
+        return self.cpu.bh_call_v(fnptr, calldescr,
+                                  greens_i + reds_i,
+                                  greens_r + reds_r,
+                                  greens_f + reds_f)
+
     # ----------
     # list operations
 
@@ -861,7 +900,7 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_r(func, calldescr, None, args_r, None)
     @arguments("cpu", "i", "d", "R")
     def bhimpl_residual_call_r_v(cpu, func, calldescr, args_r):
-        cpu.bh_call_v(func, calldescr, None, args_r, None)
+        return cpu.bh_call_v(func, calldescr, None, args_r, None)
 
     @arguments("cpu", "i", "d", "I", "R", returns="i")
     def bhimpl_residual_call_ir_i(cpu, func, calldescr, args_i, args_r):
@@ -871,7 +910,7 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_r(func, calldescr, args_i, args_r, None)
     @arguments("cpu", "i", "d", "I", "R")
     def bhimpl_residual_call_ir_v(cpu, func, calldescr, args_i, args_r):
-        cpu.bh_call_v(func, calldescr, args_i, args_r, None)
+        return cpu.bh_call_v(func, calldescr, args_i, args_r, None)
 
     @arguments("cpu", "i", "d", "I", "R", "F", returns="i")
     def bhimpl_residual_call_irf_i(cpu, func, calldescr,args_i,args_r,args_f):
@@ -884,7 +923,7 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_f(func, calldescr, args_i, args_r, args_f)
     @arguments("cpu", "i", "d", "I", "R", "F")
     def bhimpl_residual_call_irf_v(cpu, func, calldescr,args_i,args_r,args_f):
-        cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
+        return cpu.bh_call_v(func, calldescr, args_i, args_r, args_f)
 
     @arguments("cpu", "j", "R", returns="i")
     def bhimpl_inline_call_r_i(cpu, jitcode, args_r):

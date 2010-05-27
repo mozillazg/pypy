@@ -573,7 +573,7 @@ class Optimizer(object):
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         newboxes = modifier.finish(self.values, pendingfields)
         if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
-            raise compile.GiveUp
+            compile.giveup()
         descr.store_final_boxes(op, newboxes)
         #
         if op.opnum == rop.GUARD_VALUE:

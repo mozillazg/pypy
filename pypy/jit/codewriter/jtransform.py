@@ -283,12 +283,11 @@ class Transformer(object):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1
 
-    def handle_regular_call(self, op, targetgraph=None):
+    def handle_regular_call(self, op):
         """A direct_call turns into the operation 'inline_call_xxx' if it
         is calling a function that we want to JIT.  The initial arg of
         'inline_call_xxx' is the JitCode of the called function."""
-        if targetgraph is None:
-            [targetgraph] = self.callcontrol.graphs_from(op)
+        [targetgraph] = self.callcontrol.graphs_from(op)
         jitcode = self.callcontrol.get_jitcode(targetgraph,
                                                called_from=self.graph)
         op0 = self.rewrite_call(op, 'inline_call', [jitcode])
@@ -317,7 +316,13 @@ class Transformer(object):
     def handle_recursive_call(self, op):
         ops = self.promote_greens(op.args[1:])
         targetgraph = self.callcontrol.portal_graph
-        return ops + self.handle_regular_call(op, targetgraph)
+        num_green_args = len(self.callcontrol.getjitdriver().greens)
+        args = (self.make_three_lists(op.args[1:1+num_green_args]) +
+                self.make_three_lists(op.args[1+num_green_args:]))
+        kind = getkind(op.result.concretetype)[0]
+        op0 = SpaceOperation('recursive_call_%s' % kind, args, op.result)
+        op1 = SpaceOperation('-live-', [], None)
+        return ops + [op0, op1]
 
     handle_residual_indirect_call = handle_residual_call
 
@@ -689,10 +694,8 @@ class Transformer(object):
         return op
 
     def promote_greens(self, args):
-        jitdriver = self.callcontrol.jitdriver
-        assert jitdriver is not None, "order dependency issue?"
         ops = []
-        num_green_args = len(jitdriver.greens)
+        num_green_args = len(self.callcontrol.getjitdriver().greens)
         for v in args[:num_green_args]:
             if isinstance(v, Variable) and v.concretetype is not lltype.Void:
                 kind = getkind(v.concretetype)
@@ -709,7 +712,7 @@ class Transformer(object):
     def handle_jit_marker__jit_merge_point(self, op):
         assert self.portal, "jit_merge_point in non-main graph!"
         ops = self.promote_greens(op.args[2:])
-        num_green_args = len(self.callcontrol.jitdriver.greens)
+        num_green_args = len(self.callcontrol.getjitdriver().greens)
         args = (self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
         op1 = SpaceOperation('jit_merge_point', args, None)
