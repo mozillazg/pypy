@@ -139,7 +139,7 @@ class LocationCodeBuilder(object):
             for possible_code1 in unrolling_possible_location_codes:
                 for possible_code2 in unrolling_possible_location_codes:
                     if code1 == possible_code1 and code2 == possible_code2:
-                        methname = name + "_" + code1 + code2
+                        methname = name + "_" + possible_code1 + possible_code2
                         if hasattr(rx86.AbstractX86CodeBuilder, methname):
                             getattr(self, methname)(loc1.value, loc2.value)
                         else:
@@ -152,7 +152,7 @@ class LocationCodeBuilder(object):
             code = loc.location_code()
             for possible_code in unrolling_possible_location_codes:
                 if code == possible_code:
-                    methname = name + "_" + code
+                    methname = name + "_" + possible_code
                     if hasattr(rx86.AbstractX86CodeBuilder, methname):
                         getattr(self, methname)(loc.value)
                     else:
