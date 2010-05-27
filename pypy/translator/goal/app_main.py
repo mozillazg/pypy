@@ -182,28 +182,8 @@ def get_argument(option, argv, i):
                                    option)
         return argv[i], i
 
-
-def setup_initial_paths(executable, nanos):
-    # a substituted os if we are translated
-    global os
-    os = nanos
+def get_library_path(executable):
     AUTOSUBPATH = 'share' + os.sep + 'pypy-%d.%d'
-    # find the full path to the executable, assuming that if there is no '/'
-    # in the provided one then we must look along the $PATH
-    if we_are_translated() and IS_WINDOWS and not executable.lower().endswith('.exe'):
-        executable += '.exe'
-    if os.sep in executable or (IS_WINDOWS and DRIVE_LETTER_SEP in executable):
-        pass    # the path is already more than just an executable name
-    else:
-        path = os.getenv('PATH')
-        if path:
-            for dir in path.split(os.pathsep):
-                fn = os.path.join(dir, executable)
-                if os.path.isfile(fn):
-                    executable = fn
-                    break
-    sys.executable = os.path.abspath(executable)
-
     # set up a sys.path that depends on the local machine
     autosubpath = AUTOSUBPATH % sys.pypy_version_info[:2]
     search = executable
@@ -222,6 +202,29 @@ def setup_initial_paths(executable, nanos):
                 search = dirname    # walk to the parent directory
                 continue
         break      # found!
+    return newpath
+
+def setup_initial_paths(executable, nanos):
+    # a substituted os if we are translated
+    global os
+    os = nanos
+    # find the full path to the executable, assuming that if there is no '/'
+    # in the provided one then we must look along the $PATH
+    if we_are_translated() and IS_WINDOWS and not executable.lower().endswith('.exe'):
+        executable += '.exe'
+    if os.sep in executable or (IS_WINDOWS and DRIVE_LETTER_SEP in executable):
+        pass    # the path is already more than just an executable name
+    else:
+        path = os.getenv('PATH')
+        if path:
+            for dir in path.split(os.pathsep):
+                fn = os.path.join(dir, executable)
+                if os.path.isfile(fn):
+                    executable = fn
+                    break
+    sys.executable = os.path.abspath(executable)
+
+    newpath = get_library_path(executable)
     path = os.getenv('PYTHONPATH')
     if path:
         newpath = path.split(os.pathsep) + newpath
