@@ -843,7 +843,7 @@ class MIFrame(object):
         assert exc_value_box is not None
         return exc_value_box
 
-    @FixME  #arguments("box")
+    @arguments("box")
     def opimpl_virtual_ref(self, box):
         # Details on the content of metainterp.virtualref_boxes:
         #
@@ -852,7 +852,7 @@ class MIFrame(object):
         #    the 'virtual_ref(frame)').
         #
         #  * if we detect that the virtual box escapes during tracing
-        #    already (by generating a CALl_MAY_FORCE that marks the flags
+        #    already (by generating a CALL_MAY_FORCE that marks the flags
         #    in the vref), then we replace the vref in the list with
         #    ConstPtr(NULL).
         #
@@ -874,9 +874,9 @@ class MIFrame(object):
             # SETFIELD_GCs.
         metainterp.virtualref_boxes.append(box)
         metainterp.virtualref_boxes.append(resbox)
-        self.make_result_box(resbox)
+        return resbox
 
-    @FixME  #arguments("box")
+    @arguments("box")
     def opimpl_virtual_ref_finish(self, box):
         # virtual_ref_finish() assumes that we have a stack-like, last-in
         # first-out order.
@@ -1111,6 +1111,7 @@ class MetaInterpStaticData(object):
         #
         self.portal_code = codewriter.mainjitcode
         self._portal_runner_ptr = codewriter.callcontrol.portal_runner_ptr
+        self.virtualref_info = codewriter.callcontrol.virtualref_info
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
         #

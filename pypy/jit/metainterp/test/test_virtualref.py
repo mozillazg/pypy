@@ -12,9 +12,9 @@ debug_print = lloperation.llop.debug_print
 
 class VRefTests:
 
-    def finish_metainterp_for_interp_operations(self, metainterp):
-        self.vrefinfo = VirtualRefInfo(metainterp.staticdata.state)
-        metainterp.staticdata.virtualref_info = self.vrefinfo
+    def finish_setup_for_interp_operations(self):
+        self.vrefinfo = VirtualRefInfo(self.warmrunnerstate)
+        self.cw.setup_vrefinfo(self.vrefinfo)
 
     def test_make_vref_simple(self):
         class X:
