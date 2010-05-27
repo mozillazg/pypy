@@ -996,6 +996,8 @@ class Assembler386(object):
         if offset is not None:
             mc.CMP(mem(locs[0], offset), locs[1])
         else:
+            # We haven't implemented CMP16 yet...
+            raise AssertionError("FIXME")
             # XXX hard-coded assumption: to go from an object to its class
             # we use the following algorithm:
             #   - read the typeid from mem(locs[0]), i.e. at offset 0

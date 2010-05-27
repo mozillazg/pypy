@@ -5,6 +5,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.lltypesystem import rffi
 
 BYTE_REG_FLAG = 0x20
+NO_BASE_REGISTER = -1
 
 class R(object):
     # the following are synonyms for rax, rcx, etc. on 64 bits
@@ -220,7 +221,7 @@ def encode_mem_reg_plus_scaled_reg_plus_const(mc,
     reg2 = reg_number_3bits(mc, reg2)
 
     # Special case for no base register
-    if reg1 == None:
+    if reg1 == NO_BASE_REGISTER:
         # modrm
         mc.writechar(chr(0x04 | orbyte))
         # SIB
@@ -508,6 +509,9 @@ class AbstractX86CodeBuilder(object):
     CALL_l = insn('\xE8', relative(1))
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
+    # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
+    # displacement is always enough to encode any address
+    CALL_j = CALL_l
 
     XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
     XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
