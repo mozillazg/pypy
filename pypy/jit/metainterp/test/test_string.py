@@ -1,13 +1,13 @@
 import py
 from pypy.rlib.jit import JitDriver
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 
 class StringTests:
     def test_eq_residual(self):
-        jitdriver = JitDriver(greens = [], reds = ['s', 'n', 'i'])
+        jitdriver = JitDriver(greens = [], reds = ['n', 'i', 's'])
         global_s = "hello"
         def f(n, b, s):
             if b:
