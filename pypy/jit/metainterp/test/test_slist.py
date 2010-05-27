@@ -64,7 +64,7 @@ class ListTests:
         assert res == 0
 
     def test_getitem(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'lst', 'i'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'i', 'lst'])
         def f(n):
             lst = []
             for i in range(n):
