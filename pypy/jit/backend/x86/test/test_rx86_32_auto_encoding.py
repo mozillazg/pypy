@@ -238,6 +238,8 @@ class TestRx86_32(object):
             if methname == 'FSTP_b':
                 # Doesn't work on 64-bit, skipping for now
                 py.test.skip('Skipping FSTP')
+            if methname == 'CALL_j':
+                py.test.skip("CALL_j is actually relative")
 
             return [args]
 
