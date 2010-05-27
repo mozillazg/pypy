@@ -10,11 +10,18 @@ from pypy.rlib.unroll import unrolling_iterable
 #
 
 class AssemblerLocation(AbstractValue):
-    __slots__ = 'value'
+    # XXX: Is adding "width" here correct?
+    __slots__ = ('value', 'width')
     _immutable_ = True
     def _getregkey(self):
         return self.value
 
+    def value_r(self): return self.value
+    def value_b(self): return self.value
+    def value_s(self): return self.value
+    def value_j(self): return self.value
+    def value_i(self): return self.value
+    def value_x(self): return self.value
 
 class StackLoc(AssemblerLocation):
     _immutable_ = True
@@ -94,6 +101,8 @@ class ImmedLoc(AssemblerLocation):
 class AddressLoc(AssemblerLocation):
     _immutable_ = True
 
+    # XXX
+    width = 4
     # The address is base_loc + (scaled_loc << scale) + static_offset
     def __init__(self, base_loc, scaled_loc, scale=0, static_offset=0):
         assert 0 <= scale < 4
@@ -106,28 +115,36 @@ class AddressLoc(AssemblerLocation):
                 self.value = base_loc.value + (scaled_loc.value << scale) + static_offset
             else:
                 self._location_code = 'a'
-                self.value = (None, scaled_loc.value, scale, base_loc.value + static_offset)
+                self.loc_a = (rx86.NO_BASE_REGISTER, scaled_loc.value, scale, base_loc.value + static_offset)
         else:
             if isinstance(scaled_loc, ImmedLoc):
                 # FIXME: What if base_loc is ebp or esp?
                 self._location_code = 'm'
-                self.value = (base_loc.value, (scaled_loc.value << scale) + static_offset)
+                self.loc_m = (base_loc.value, (scaled_loc.value << scale) + static_offset)
             else:
                 self._location_code = 'a'
-                self.value = (base_loc.value, scaled_loc.value, scale, static_offset)
+                self.loc_a = (base_loc.value, scaled_loc.value, scale, static_offset)
 
     def location_code(self):
         return self._location_code
 
-    def value(self):
-        return self.value
+    def value_a(self):
+        return self.loc_a
+
+    def value_m(self):
+        return self.loc_m
 
 REGLOCS = [RegLoc(i, is_xmm=False) for i in range(8)]
 XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(8)]
 eax, ecx, edx, ebx, esp, ebp, esi, edi = REGLOCS
 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = XMMREGLOCS
 
-unrolling_possible_location_codes = unrolling_iterable(list("rbsmajix"))
+possible_location_codes = list("rbsmajix")
+# Separate objects are required because you can't use the same
+# unrolling_iterable instance in more than once place
+_binop_pc_outer = unrolling_iterable(possible_location_codes)
+_binop_pc_inner = unrolling_iterable(possible_location_codes)
+_unaryop_pc = unrolling_iterable(possible_location_codes)
 
 class LocationCodeBuilder(object):
     _mixin_ = True
@@ -136,25 +153,31 @@ class LocationCodeBuilder(object):
         def INSN(self, loc1, loc2):
             code1 = loc1.location_code()
             code2 = loc2.location_code()
-            for possible_code1 in unrolling_possible_location_codes:
-                for possible_code2 in unrolling_possible_location_codes:
-                    if code1 == possible_code1 and code2 == possible_code2:
-                        methname = name + "_" + possible_code1 + possible_code2
-                        if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                            getattr(self, methname)(loc1.value, loc2.value)
-                        else:
-                            raise AssertionError("Instruction not defined: " + methname)
+            for possible_code1 in _binop_pc_outer:
+                if code1 == possible_code1:
+                    for possible_code2 in _binop_pc_inner:
+                        if code2 == possible_code2:
+                            methname = name + "_" + possible_code1 + possible_code2
+                            if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                                val1 = getattr(loc1, "value_" + possible_code1)()
+                                val2 = getattr(loc2, "value_" + possible_code2)()
+                                getattr(self, methname)(val1, val2)
+                                return
+                            else:
+                                raise AssertionError("Instruction not defined: " + methname)
 
         return INSN
 
     def _unaryop(name):
         def INSN(self, loc):
             code = loc.location_code()
-            for possible_code in unrolling_possible_location_codes:
+            for possible_code in _unaryop_pc:
                 if code == possible_code:
                     methname = name + "_" + possible_code
                     if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                        getattr(self, methname)(loc.value)
+                        val = getattr(loc, "value_" + possible_code)()
+                        getattr(self, methname)(val)
+                        return
                     else:
                         raise AssertionError("Instruction not defined: " + methname)
 
@@ -194,28 +217,12 @@ class LocationCodeBuilder(object):
     CVTSI2SD = _binaryop('CVTSI2SD')
     CVTTSD2SI = _binaryop('CVTTSD2SI')
 
-
-    def CALL(self, loc):
-        # FIXME: Kludge that works in 32-bit because the "relative" CALL is
-        # actually absolute on i386
-        if loc.location_code() == 'j':
-            self.CALL_l(loc.value)
-        else:
-            getattr(self, 'CALL_' + loc.location_code())(loc.value)
+    CALL = _unaryop('CALL')
 
     def MOV16(self, dest_loc, src_loc):
         # Select 16-bit operand mode
         self.writechar('\x66')
         self.MOV(dest_loc, src_loc)
-
-    def CMPi(self, loc0, loc1):
-        # like CMP, but optimized for the case of loc1 being a Const
-        assert isinstance(loc1, Const)
-        if isinstance(loc0, RegLoc):
-            self.CMP_ri(loc0.value, loc1.getint())
-        else:
-            assert isinstance(loc0, StackLoc)
-            self.CMP_bi(loc0.value, loc1.getint())
 
 def imm(x):
     # XXX: ri386 migration shim
