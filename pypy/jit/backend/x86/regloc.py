@@ -224,6 +224,11 @@ class LocationCodeBuilder(object):
         self.writechar('\x66')
         self.MOV(dest_loc, src_loc)
 
+    def CMP16(self, a_loc, b_loc):
+        # Select 16-bit operand mode
+        self.writechar('\x66')
+        self.CMP(a_loc, b_loc)
+
 def imm(x):
     # XXX: ri386 migration shim
     if isinstance(x, ConstInt):
