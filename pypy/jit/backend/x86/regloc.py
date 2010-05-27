@@ -1,5 +1,6 @@
 from pypy.jit.metainterp.history import AbstractValue, ConstInt
 from pypy.jit.backend.x86 import rx86
+from pypy.rlib.unroll import unrolling_iterable
 
 #
 # This module adds support for "locations", which can be either in a Const,
@@ -126,6 +127,7 @@ XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(8)]
 eax, ecx, edx, ebx, esp, ebp, esi, edi = REGLOCS
 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = XMMREGLOCS
 
+unrolling_possible_location_codes = unrolling_iterable(list("rbsmajix"))
 
 class LocationCodeBuilder(object):
     _mixin_ = True
@@ -134,163 +136,28 @@ class LocationCodeBuilder(object):
         def INSN(self, loc1, loc2):
             code1 = loc1.location_code()
             code2 = loc2.location_code()
-            # XXX: All possible combinations are given, even those that are
-            # impossible
-            if code1 == 'r' and code2 == 'r':
-                getattr(self, name + "_rr")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'b':
-                getattr(self, name + "_rb")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 's':
-                getattr(self, name + "_rs")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'm':
-                getattr(self, name + "_rm")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'a':
-                getattr(self, name + "_ra")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'j':
-                getattr(self, name + "_rj")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'i':
-                getattr(self, name + "_ri")(loc1.value, loc2.value)
-            elif code1 == 'r' and code2 == 'x':
-                getattr(self, name + "_rx")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'r':
-                getattr(self, name + "_br")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'b':
-                getattr(self, name + "_bb")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 's':
-                getattr(self, name + "_bs")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'm':
-                getattr(self, name + "_bm")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'a':
-                getattr(self, name + "_ba")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'j':
-                getattr(self, name + "_bj")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'i':
-                getattr(self, name + "_bi")(loc1.value, loc2.value)
-            elif code1 == 'b' and code2 == 'x':
-                getattr(self, name + "_bx")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'r':
-                getattr(self, name + "_sr")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'b':
-                getattr(self, name + "_sb")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 's':
-                getattr(self, name + "_ss")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'm':
-                getattr(self, name + "_sm")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'a':
-                getattr(self, name + "_sa")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'j':
-                getattr(self, name + "_sj")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'i':
-                getattr(self, name + "_si")(loc1.value, loc2.value)
-            elif code1 == 's' and code2 == 'x':
-                getattr(self, name + "_sx")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'r':
-                getattr(self, name + "_mr")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'b':
-                getattr(self, name + "_mb")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 's':
-                getattr(self, name + "_ms")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'm':
-                getattr(self, name + "_mm")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'a':
-                getattr(self, name + "_ma")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'j':
-                getattr(self, name + "_mj")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'i':
-                getattr(self, name + "_mi")(loc1.value, loc2.value)
-            elif code1 == 'm' and code2 == 'x':
-                getattr(self, name + "_mx")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'r':
-                getattr(self, name + "_ar")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'b':
-                getattr(self, name + "_ab")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 's':
-                getattr(self, name + "_as")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'm':
-                getattr(self, name + "_am")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'a':
-                getattr(self, name + "_aa")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'j':
-                getattr(self, name + "_aj")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'i':
-                getattr(self, name + "_ai")(loc1.value, loc2.value)
-            elif code1 == 'a' and code2 == 'x':
-                getattr(self, name + "_ax")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'r':
-                getattr(self, name + "_jr")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'b':
-                getattr(self, name + "_jb")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 's':
-                getattr(self, name + "_js")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'm':
-                getattr(self, name + "_jm")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'a':
-                getattr(self, name + "_ja")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'j':
-                getattr(self, name + "_jj")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'i':
-                getattr(self, name + "_ji")(loc1.value, loc2.value)
-            elif code1 == 'j' and code2 == 'x':
-                getattr(self, name + "_jx")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'r':
-                getattr(self, name + "_ir")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'b':
-                getattr(self, name + "_ib")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 's':
-                getattr(self, name + "_is")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'm':
-                getattr(self, name + "_im")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'a':
-                getattr(self, name + "_ia")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'j':
-                getattr(self, name + "_ij")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'i':
-                getattr(self, name + "_ii")(loc1.value, loc2.value)
-            elif code1 == 'i' and code2 == 'x':
-                getattr(self, name + "_ix")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'r':
-                getattr(self, name + "_xr")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'b':
-                getattr(self, name + "_xb")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 's':
-                getattr(self, name + "_xs")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'm':
-                getattr(self, name + "_xm")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'a':
-                getattr(self, name + "_xa")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'j':
-                getattr(self, name + "_xj")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'i':
-                getattr(self, name + "_xi")(loc1.value, loc2.value)
-            elif code1 == 'x' and code2 == 'x':
-                getattr(self, name + "_xx")(loc1.value, loc2.value)
-            else:
-                raise AssertionError("Invalid location codes")
+            for possible_code1 in unrolling_possible_location_codes:
+                for possible_code2 in unrolling_possible_location_codes:
+                    if code1 == possible_code1 and code2 == possible_code2:
+                        methname = name + "_" + code1 + code2
+                        if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                            getattr(self, methname)(loc1.value, loc2.value)
+                        else:
+                            raise AssertionError("Instruction not defined: " + methname)
 
         return INSN
 
     def _unaryop(name):
         def INSN(self, loc):
             code = loc.location_code()
-            # "if" is unrolled for RPython
-            if code == 'r':
-                getattr(self, name + '_r')(loc.value)
-            elif code == 'b':
-                getattr(self, name + '_b')(loc.value)
-            elif code == 's':
-                getattr(self, name + '_s')(loc.value)
-            elif code == 'm':
-                getattr(self, name + '_m')(loc.value)
-            elif code == 'a':
-                getattr(self, name + '_a')(loc.value)
-            elif code == 'j':
-                getattr(self, name + '_j')(loc.value)
-            elif code == 'i':
-                getattr(self, name + '_i')(loc.value)
-            elif code == 'x':
-                getattr(self, name + '_x')(loc.value)
-            else:
-                raise AssertionError("Unknown code")
+            for possible_code in unrolling_possible_location_codes:
+                if code == possible_code:
+                    methname = name + "_" + code
+                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                        getattr(self, methname)(loc.value)
+                    else:
+                        raise AssertionError("Instruction not defined: " + methname)
+
         return INSN
 
     AND = _binaryop('AND')
