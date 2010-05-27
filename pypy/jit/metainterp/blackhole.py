@@ -732,6 +732,9 @@ class BlackholeInterpreter(object):
         except KeyError:
             return pc
 
+    # ----------
+    # exception handling operations
+
     @arguments("L")
     def bhimpl_catch_exception(target):
         """This is a no-op when run normally.  When an exception occurs
@@ -782,6 +785,9 @@ class BlackholeInterpreter(object):
         else:
             etype = rclass.ll_type(e)
             raise LLException(etype, e)
+
+    # ----------
+    # the main hints and recursive calls
 
     @arguments()
     def bhimpl_can_enter_jit():
@@ -838,6 +844,17 @@ class BlackholeInterpreter(object):
                                   greens_i + reds_i,
                                   greens_r + reds_r,
                                   greens_f + reds_f)
+
+    # ----------
+    # virtual refs
+
+    @arguments("r", returns="r")
+    def bhimpl_virtual_ref(a):
+        return a
+
+    @arguments("r")
+    def bhimpl_virtual_ref_finish(a):
+        pass
 
     # ----------
     # list operations

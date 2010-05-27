@@ -163,8 +163,8 @@ class WarmRunnerDesc(object):
         self.make_args_specification()
         #
         from pypy.jit.metainterp.virtualref import VirtualRefInfo
-        self.metainterp_sd.virtualref_info = VirtualRefInfo(self)
-        self.codewriter.setup_vrefinfo(self.metainterp_sd.virtualref_info)
+        vrefinfo = VirtualRefInfo(self)
+        self.codewriter.setup_vrefinfo(vrefinfo)
         if self.jitdriver.virtualizables:
             from pypy.jit.metainterp.virtualizable import VirtualizableInfo
             self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)
@@ -178,7 +178,7 @@ class WarmRunnerDesc(object):
         self.codewriter.make_jitcodes(verbose=verbose)
         self.rewrite_can_enter_jit()
         self.rewrite_set_param()
-        self.rewrite_force_virtual()
+        self.rewrite_force_virtual(vrefinfo)
         self.add_finish()
         self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
@@ -657,9 +657,8 @@ class WarmRunnerDesc(object):
             op.opname = 'direct_call'
             op.args[:3] = [closures[funcname]]
 
-    def rewrite_force_virtual(self):
+    def rewrite_force_virtual(self, vrefinfo):
         if self.cpu.ts.name != 'lltype':
             py.test.skip("rewrite_force_virtual: port it to ootype")
         all_graphs = self.translator.graphs
-        vrefinfo = self.metainterp_sd.virtualref_info
         vrefinfo.replace_force_virtual_with_call(all_graphs)

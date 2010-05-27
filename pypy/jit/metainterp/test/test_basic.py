@@ -12,8 +12,20 @@ from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 
-def _get_jitcodes(CPUClass, func, values, type_system):
+def _get_jitcodes(testself, CPUClass, func, values, type_system):
     from pypy.jit.codewriter import support, codewriter
+    from pypy.jit.metainterp import simple_optimize
+
+    class FakeWarmRunnerState:
+        def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
+            pass
+
+        # pick the optimizer this way
+        optimize_loop = staticmethod(simple_optimize.optimize_loop)
+        optimize_bridge = staticmethod(simple_optimize.optimize_bridge)
+
+        trace_limit = sys.maxint
+        debug_level = 2
 
     func._jit_unroll_safe_ = True
     rtyper = support.annotate(func, values, type_system=type_system)
@@ -21,12 +33,19 @@ def _get_jitcodes(CPUClass, func, values, type_system):
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)
     cw = codewriter.CodeWriter(cpu, graphs[0])
+    testself.cw = cw
     cw.find_all_graphs(JitPolicy())
+    #
+    testself.warmrunnerstate = FakeWarmRunnerState()
+    testself.warmrunnerstate.cpu = cpu
+    if hasattr(testself, 'finish_setup_for_interp_operations'):
+        testself.finish_setup_for_interp_operations()
+    #
     cw.make_jitcodes(verbose=True)
-    return cw
 
-def _run_with_blackhole(cw, args):
+def _run_with_blackhole(testself, args):
     from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
+    cw = testself.cw
     blackholeinterpbuilder = BlackholeInterpBuilder(cw)
     blackholeinterp = blackholeinterpbuilder.acquire_interp()
     count_i = count_r = count_f = 0
@@ -47,8 +66,7 @@ def _run_with_blackhole(cw, args):
     blackholeinterp.run()
     return blackholeinterp._final_result_anytype()
 
-def _run_with_pyjitpl(cw, args, testself):
-    from pypy.jit.metainterp import simple_optimize
+def _run_with_pyjitpl(testself, args):
 
     class DoneWithThisFrame(Exception):
         pass
@@ -57,26 +75,13 @@ def _run_with_pyjitpl(cw, args, testself):
         def __init__(self, cpu, *args):
             DoneWithThisFrame.__init__(self, *args)
 
-    class FakeWarmRunnerState:
-        def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
-            pass
-
-        # pick the optimizer this way
-        optimize_loop = staticmethod(simple_optimize.optimize_loop)
-        optimize_bridge = staticmethod(simple_optimize.optimize_bridge)
-
-        trace_limit = sys.maxint
-        debug_level = 2
-
+    cw = testself.cw
     opt = history.Options(listops=True)
     metainterp_sd = pyjitpl.MetaInterpStaticData(cw.cpu, opt)
     metainterp_sd.finish_setup(cw, optimizer="bogus")
-    metainterp_sd.state = FakeWarmRunnerState()
+    metainterp_sd.state = testself.warmrunnerstate
     metainterp_sd.state.cpu = metainterp_sd.cpu
     metainterp = pyjitpl.MetaInterp(metainterp_sd)
-    if hasattr(testself, 'finish_metainterp_for_interp_operations'):
-        testself.finish_metainterp_for_interp_operations(metainterp)
-
     metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrame
     metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
     metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrame
@@ -126,11 +131,11 @@ class JitMixin:
 
     def interp_operations(self, f, args, **kwds):
         # get the JitCodes for the function f
-        cw = _get_jitcodes(self.CPUClass, f, args, self.type_system)
+        _get_jitcodes(self, self.CPUClass, f, args, self.type_system)
         # try to run it with blackhole.py
-        result1 = _run_with_blackhole(cw, args)
+        result1 = _run_with_blackhole(self, args)
         # try to run it with pyjitpl.py
-        result2 = _run_with_pyjitpl(cw, args, self)
+        result2 = _run_with_pyjitpl(self, args)
         assert result1 == result2
         return result1
 
