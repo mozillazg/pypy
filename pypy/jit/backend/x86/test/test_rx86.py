@@ -69,11 +69,11 @@ def test_mov_ra():
 
 def test_mov_ra_no_base():
     s = CodeBuilder32()
-    s.MOV_ra(edx, (None, edi, 2, 0))
+    s.MOV_ra(edx, (NO_BASE_REGISTER, edi, 2, 0))
     assert s.getvalue() == '\x8B\x14\xBD\x00\x00\x00\x00'
 
     s = CodeBuilder32()
-    s.MOV_ra(edx, (None, edi, 2, 0xCD))
+    s.MOV_ra(edx, (NO_BASE_REGISTER, edi, 2, 0xCD))
     assert s.getvalue() == '\x8B\x14\xBD\xCD\x00\x00\x00'
 
 def test_mov_ar():
