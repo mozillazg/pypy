@@ -19,7 +19,6 @@ from pypy.jit.metainterp.blackhole import get_llexception
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
-from pypy.jit.metainterp.compile import GiveUp
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 
 # ____________________________________________________________
@@ -648,40 +647,46 @@ class MIFrame(object):
         return self.execute_varargs(rop.CALL_LOOPINVARIANT, varargs, calldescr,
                                     exc=True)
 
-    @FixME  #arguments("orgpc", "descr", "varargs")
-    def opimpl_recursive_call(self, pc, calldescr, varargs):
-        warmrunnerstate = self.metainterp.staticdata.state
-        token = None
-        if not self.metainterp.is_blackholing() and warmrunnerstate.inlining:
-            num_green_args = self.metainterp.staticdata.num_green_args
-            portal_code = self.metainterp.staticdata.portal_code
-            greenkey = varargs[1:num_green_args + 1]
-            if warmrunnerstate.can_inline_callable(greenkey):
-                return self.perform_call(portal_code, varargs[1:], greenkey)
-            token = warmrunnerstate.get_assembler_token(greenkey)
-        call_position = 0
-        if token is not None:
-            call_position = len(self.metainterp.history.operations)
-            # verify that we have all green args, needed to make sure
-            # that assembler that we call is still correct
-            greenargs = varargs[1:num_green_args + 1]
-            self.verify_green_args(greenargs)
-        res = self.do_residual_call(varargs, descr=calldescr, exc=True)
-        if not self.metainterp.is_blackholing() and token is not None:
-            # XXX fix the call position, <UGLY!>
-            found = False
-            while True:
-                op = self.metainterp.history.operations[call_position]
-                if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
-                    found = True
-                    break
-                call_position += 1
-            assert found
-            # </UGLY!>
-            # this will substitute the residual call with assembler call
-            self.metainterp.direct_assembler_call(pc, varargs, token,
-                                                  call_position)
-        return res
+    @arguments("boxes3", "boxes3")
+    def _opimpl_recursive_call(self, greenboxes, redboxes):
+        allboxes = greenboxes + redboxes
+        metainterp_sd = self.metainterp.staticdata
+        portal_code = metainterp_sd.portal_code
+##        warmrunnerstate = metainterp_sd.state
+##        token = None
+##        if not self.is_blackholing() and warmrunnerstate.inlining:
+##            if warmrunnerstate.can_inline_callable(greenboxes):
+##                return self.metainterp.perform_call(portal_code, allboxes,
+##                                                    greenkey=greenboxes)
+##            token = warmrunnerstate.get_assembler_token(greenboxes)
+##        call_position = 0
+##        if token is not None:
+##            call_position = len(self.history.operations)
+##            # verify that we have all green args, needed to make sure
+##            # that assembler that we call is still correct
+##            self.verify_green_args(greenboxes)
+        #
+        k = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
+        funcbox = ConstInt(llmemory.cast_adr_to_int(k))
+        resbox = self.do_residual_call(funcbox, portal_code.calldescr,
+                                       allboxes)
+        #
+##        if token is not None:
+##            # XXX fix the call position, <UGLY!>
+##            while True:
+##                op = self.history.operations[call_position]
+##                if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
+##                    break
+##                call_position += 1
+##            # </UGLY!>
+##            # this will substitute the residual call with assembler call
+##            self.direct_assembler_call(boxes, token, call_position)
+        return resbox
+
+    opimpl_recursive_call_i = _opimpl_recursive_call
+    opimpl_recursive_call_r = _opimpl_recursive_call
+    opimpl_recursive_call_f = _opimpl_recursive_call
+    opimpl_recursive_call_v = _opimpl_recursive_call
 
     @FixME  #arguments("orgpc", "methdescr", "varargs")
     def opimpl_oosend(self, pc, methdescr, varargs):
@@ -767,9 +772,15 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
+    def verify_green_args(self, varargs):
+        num_green_args = self.metainterp.staticdata.num_green_args
+        assert len(varargs) == num_green_args
+        for i in range(num_green_args):
+            assert isinstance(varargs[i], Const)
+
     @arguments("orgpc", "boxes3", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, greenboxes, redboxes):
-        self.metainterp.verify_green_args(greenboxes)
+        self.verify_green_args(greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(greenboxes)
         if self.metainterp.seen_can_enter_jit:
@@ -1225,24 +1236,12 @@ class MetaInterp(object):
     def is_blackholing(self):
         return False       # XXX get rid of this method
 
-    def perform_call(self, jitcode, boxes):
+    def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
         # with a special case for recursive portal calls
-        if jitcode is self.staticdata.portal_code:
-            return self.perform_recursive_call_to_portal(boxes)
-        else:
-            self._perform_call(jitcode, boxes)
-            # ^^^ always raises
-
-    def _perform_call(self, jitcode, boxes, greenkey=None):
         f = self.newframe(jitcode, greenkey)
         f.setup_call(boxes)
         raise ChangeFrame
-
-    def verify_green_args(self, varargs):
-        num_green_args = self.staticdata.num_green_args
-        for i in range(num_green_args):
-            assert isinstance(varargs[i], Const)
 
     def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
@@ -1279,8 +1278,8 @@ class MetaInterp(object):
         else:
             try:
                 self.compile_done_with_this_frame(resultbox)
-            except GiveUp:
-                self.aborted_tracing(ABORT_BRIDGE)
+            except SwitchToBlackhole, stb:
+                self.aborted_tracing(stb.reason)
             sd = self.staticdata
             if sd.result_type == 'void':
                 assert resultbox is None
@@ -1320,8 +1319,8 @@ class MetaInterp(object):
             self.popframe()
         try:
             self.compile_exit_frame_with_exception(excvaluebox)
-        except GiveUp:
-            self.aborted_tracing(ABORT_BRIDGE)
+        except SwitchToBlackhole, stb:
+            self.aborted_tracing(stb.reason)
         raise self.staticdata.ExitFrameWithExceptionRef(self.cpu, excvaluebox.getref_base())
 
     def check_recursion_invariant(self):
@@ -2003,40 +2002,6 @@ class MetaInterp(object):
                 max_size = size
                 max_key = key
         return max_key
-
-    def perform_recursive_call_to_portal(self, boxes):
-        warmrunnerstate = self.staticdata.state
-        portal_code = self.staticdata.portal_code
-        token = None
-        if not self.is_blackholing() and warmrunnerstate.inlining:
-            num_green_args = self.staticdata.num_green_args
-            greenkey = boxes[:num_green_args]
-            if warmrunnerstate.can_inline_callable(greenkey):
-                return self._perform_call(portal_code, boxes, greenkey)
-            token = warmrunnerstate.get_assembler_token(greenkey)
-        call_position = 0
-        if token is not None:
-            call_position = len(self.history.operations)
-            # verify that we have all green args, needed to make sure
-            # that assembler that we call is still correct
-            self.verify_green_args(boxes)
-        #
-        k = llmemory.cast_ptr_to_adr(self.staticdata._portal_runner_ptr)
-        funcbox = ConstInt(llmemory.cast_adr_to_int(k))
-        frame = self.framestack[-1]
-        resbox = frame.do_residual_call(funcbox, portal_code.calldescr, boxes)
-        #
-        if token is not None:
-            # XXX fix the call position, <UGLY!>
-            while True:
-                op = self.history.operations[call_position]
-                if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
-                    break
-                call_position += 1
-            # </UGLY!>
-            # this will substitute the residual call with assembler call
-            self.direct_assembler_call(boxes, token, call_position)
-        return resbox
 
     def direct_assembler_call(self, boxes, token, call_position):
         """ Generate a direct call to assembler for portal entry point.

@@ -15,8 +15,10 @@ from pypy.jit.metainterp.specnode import NotSpecNode, more_general_specnodes
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 
-class GiveUp(Exception):
-    pass
+def giveup():
+    from pypy.jit.metainterp.pyjitpl import SwitchToBlackhole
+    from pypy.jit.metainterp.jitprof import ABORT_BRIDGE
+    raise SwitchToBlackhole(ABORT_BRIDGE)
 
 def show_loop(metainterp_sd, loop=None, error=None):
     # debugging

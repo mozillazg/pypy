@@ -245,3 +245,7 @@ class CallControl(object):
             self.jitdriver = jitdriver
         else:
             assert self.jitdriver is jitdriver
+
+    def getjitdriver(self):
+        assert self.jitdriver is not None, "order dependency issue?"
+        return self.jitdriver
