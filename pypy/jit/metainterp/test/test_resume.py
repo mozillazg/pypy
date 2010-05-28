@@ -333,12 +333,7 @@ def test_capture_resumedata():
     assert frame_info_list.pc == 15
 
     snapshot = storage.rd_snapshot
-    assert snapshot.boxes == vbs
-    assert snapshot.boxes is not vbs
-
-    snapshot = snapshot.prev
-    assert snapshot.boxes == vrs
-    assert snapshot.boxes is not vrs
+    assert snapshot.boxes == vrs + vbs      # in the same list
 
     snapshot = snapshot.prev
     assert snapshot.prev is fs[2].parent_resumedata_snapshot
@@ -829,9 +824,10 @@ def test_virtual_adder_memo_const_sharing():
 class ResumeDataFakeReader(ResumeDataBoxReader):
     """Another subclass of AbstractResumeDataReader meant for tests."""
     def __init__(self, storage, newboxes, metainterp):
+        self._init(metainterp.cpu, storage)
         self.liveboxes = newboxes
         self.metainterp = metainterp
-        self._prepare(metainterp.cpu, storage)
+        self._prepare(storage)
 
     def consume_boxes(self):
         self.lst = []
