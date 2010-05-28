@@ -1256,7 +1256,6 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
         resumedescr,
         False,
         all_virtuals)  # XXX
-    # XXX virtualrefs
     # XXX virtualizable
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum)
@@ -1280,7 +1279,6 @@ def convert_and_run_from_pyjitpl(metainterp, current_exc=NULL):
         curbh._copy_data_from_miframe(frame)
         curbh.nextblackholeinterp = nextbh
         nextbh = curbh
-    XXX   # virtualrefs
     firstbh = nextbh
     #
     try:
