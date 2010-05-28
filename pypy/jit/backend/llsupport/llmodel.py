@@ -461,5 +461,5 @@ class AbstractLLCPU(AbstractCPU):
             calldescr.verify_types(args_i, args_r, args_f, 'void')
         return calldescr.call_stub(func, args_i, args_r, args_f)
 
-    def do_cast_ptr_to_int(self, ptrbox):
-        return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
+    def bh_cast_ptr_to_int(self, ptr):
+        return self.cast_gcref_to_int(ptr)

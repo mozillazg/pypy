@@ -1662,7 +1662,8 @@ class LLtypeBackendTest(BaseBackendTest):
         #
         x = cpu.bh_newstr(5)
         y = cpu.bh_cast_ptr_to_int(x)
-        assert y == llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        z = cpu.bh_cast_ptr_to_int(x)
+        assert type(y) == type(z) == int and y == z
 
     def test_sorting_of_fields(self):
         S = self.S

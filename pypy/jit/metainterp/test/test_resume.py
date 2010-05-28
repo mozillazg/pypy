@@ -103,7 +103,8 @@ class MyBlackholeInterp:
 
     def get_current_position_info(self):
         class MyInfo:
-            def enumerate_vars(_, callback_i, callback_r, callback_f):
+            @staticmethod
+            def enumerate_vars(callback_i, callback_r, callback_f, _):
                 count_i = count_r = count_f = 0
                 for index, ARG in enumerate(self.ARGS):
                     if ARG == lltype.Signed:
@@ -210,7 +211,7 @@ def test_prepare_virtuals():
         _already_allocated_resume_virtuals = None
         cpu = None
     reader = ResumeDataDirectReader(None, FakeStorage())
-    assert reader.virtuals == ["allocated", None]
+    assert reader.virtuals == ["allocated", reader.virtual_default]
 
 # ____________________________________________________________
 
@@ -835,7 +836,8 @@ class ResumeDataFakeReader(ResumeDataBoxReader):
             def __eq__(self, other):
                 return True
         class MyInfo:
-            def enumerate_vars(_, callback_i, callback_r, callback_f):
+            @staticmethod
+            def enumerate_vars(callback_i, callback_r, callback_f, _):
                 for index, tagged in enumerate(self.cur_numb.nums):
                     box = self.decode_box(tagged, Whatever())
                     if box.type == INT:
