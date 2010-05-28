@@ -12,7 +12,9 @@ from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
 from pypy.jit.backend.llsupport.descr import get_size_descr,  BaseSizeDescr
 from pypy.jit.backend.llsupport.descr import get_field_descr, BaseFieldDescr
 from pypy.jit.backend.llsupport.descr import get_array_descr, BaseArrayDescr
-from pypy.jit.backend.llsupport.descr import get_call_descr,  BaseCallDescr
+from pypy.jit.backend.llsupport.descr import get_call_descr
+from pypy.jit.backend.llsupport.descr import BaseIntCallDescr, GcPtrCallDescr
+from pypy.jit.backend.llsupport.descr import FloatCallDescr, VoidCallDescr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 
 empty_int_box = BoxInt(0)
@@ -471,32 +473,29 @@ class AbstractLLCPU(AbstractCPU):
         basesize = basesize // itemsize
         rffi.cast(rffi.CArrayPtr(lltype.UniChar), a)[index + basesize] = unichr(v)
 
-    def do_call(self, args, calldescr):
-        assert isinstance(calldescr, BaseCallDescr)
-        assert len(args) == 1 + len(calldescr.arg_classes)
+    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+        assert isinstance(calldescr, BaseIntCallDescr)
         if not we_are_translated():
-            assert (list(calldescr.arg_classes) ==
-                    [arg.type for arg in args[1:]])
-        callstub = calldescr.get_call_stub()
-        try:
-            return callstub(args)
-        except Exception, e:
-            if not we_are_translated():
-                if not type(e) is LLException:
-                    raise
-                self.saved_exc_value = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                                              e.args[1])
-                self.saved_exception = rffi.cast(lltype.Signed, e.args[0])
-            else:
-                ptr = cast_instance_to_base_ptr(e)
-                self.saved_exc_value = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                                              ptr)
-                self.saved_exception = rffi.cast(lltype.Signed, ptr.typeptr)
-            return calldescr.empty_box
-            
+            calldescr.verify_types(args_i, args_r, args_f, 'int')
+        return calldescr.call_stub(func, args_i, args_r, args_f)
+
+    def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
+        assert isinstance(calldescr, GcPtrCallDescr)
+        if not we_are_translated():
+            calldescr.verify_types(args_i, args_r, args_f, 'ref')
+        return calldescr.call_stub(func, args_i, args_r, args_f)
+
+    def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
+        assert isinstance(calldescr, FloatCallDescr)
+        if not we_are_translated():
+            calldescr.verify_types(args_i, args_r, args_f, 'float')
+        return calldescr.call_stub(func, args_i, args_r, args_f)
+
+    def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
+        assert isinstance(calldescr, VoidCallDescr)
+        if not we_are_translated():
+            calldescr.verify_types(args_i, args_r, args_f, 'void')
+        return calldescr.call_stub(func, args_i, args_r, args_f)
+
     def do_cast_ptr_to_int(self, ptrbox):
         return BoxInt(self.cast_gcref_to_int(ptrbox.getref_base()))
-
-
-import pypy.jit.metainterp.executor
-pypy.jit.metainterp.executor.make_execute_list(AbstractLLCPU)
