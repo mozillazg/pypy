@@ -148,30 +148,29 @@ def test_get_call_descr_not_translated():
     assert not descr1.returns_a_pointer()
     assert not descr1.returns_a_float()
     assert descr1.arg_classes == "ii"
-    assert isinstance(descr1.empty_box, BoxInt)
     #
     T = lltype.GcStruct('T')
     descr2 = get_call_descr(c0, [lltype.Ptr(T)], lltype.Ptr(T))
     assert descr2.get_result_size(False) == rffi.sizeof(lltype.Ptr(T))
     assert descr2.returns_a_pointer()
     assert not descr2.returns_a_float()
+    assert not descr2.returns_a_void()
     assert descr2.arg_classes == "r"
-    assert isinstance(descr2.empty_box, BoxPtr)
     #
     U = lltype.GcStruct('U', ('x', lltype.Signed))
     assert descr2 == get_call_descr(c0, [lltype.Ptr(U)], lltype.Ptr(U))
     #
     V = lltype.Struct('V', ('x', lltype.Signed))
-    assert isinstance(get_call_descr(c0, [], lltype.Ptr(V)).empty_box, BoxInt)
+    assert not get_call_descr(c0, [], lltype.Ptr(V)).returns_a_pointer()
     #
-    assert get_call_descr(c0, [], lltype.Void).empty_box is None
+    assert get_call_descr(c0, [], lltype.Void).returns_a_void()
     #
     descr4 = get_call_descr(c0, [lltype.Float, lltype.Float], lltype.Float)
     assert descr4.get_result_size(False) == rffi.sizeof(lltype.Float)
     assert not descr4.returns_a_pointer()
     assert descr4.returns_a_float()
+    assert not descr4.returns_a_void()
     assert descr4.arg_classes == "ff"
-    assert isinstance(descr4.empty_box, BoxFloat)
 
 def test_get_call_descr_translated():
     c1 = GcCache(True)
@@ -245,12 +244,11 @@ def test_call_stubs():
     def f(a, b):
         return 'c'
 
-    call_stub = descr1.get_call_stub()
+    call_stub = descr1.call_stub
     fnptr = llhelper(lltype.Ptr(lltype.FuncType(ARGS, RES)), f)
 
-    res = call_stub([BoxInt(rffi.cast(lltype.Signed, fnptr)),
-                     BoxInt(1), BoxInt(2)])
-    assert res.getint() == ord('c')
+    res = call_stub(rffi.cast(lltype.Signed, fnptr), [1, 2], None, None)
+    assert res == ord('c')
 
     ARRAY = lltype.GcArray(lltype.Signed)
     ARGS = [lltype.Float, lltype.Ptr(ARRAY)]
@@ -264,6 +262,6 @@ def test_call_stubs():
     a = lltype.malloc(ARRAY, 3)
     opaquea = lltype.cast_opaque_ptr(llmemory.GCREF, a)
     a[0] = 1
-    res = descr2.get_call_stub()([BoxInt(rffi.cast(lltype.Signed, fnptr)),
-                                  BoxFloat(3.5), BoxPtr(opaquea)])
-    assert res.getfloat() == 4.5
+    res = descr2.call_stub(rffi.cast(lltype.Signed, fnptr),
+                           [], [opaquea], [3.5])
+    assert res == 4.5

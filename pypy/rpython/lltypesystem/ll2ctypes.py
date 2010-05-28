@@ -511,6 +511,10 @@ def lltype2ctypes(llobj, normalize=True):
     """
     if isinstance(llobj, lltype._uninitialized):
         return uninitialized2ctypes(llobj.TYPE)
+    if isinstance(llobj, llmemory.AddressAsInt):
+        llobj = llobj.adr
+    if isinstance(llobj, llmemory.fakeaddress):
+        llobj = llobj.ptr or 0
 
     T = lltype.typeOf(llobj)
 
@@ -975,6 +979,8 @@ def force_cast(RESTYPE, value):
     """Cast a value to a result type, trying to use the same rules as C."""
     if not isinstance(RESTYPE, lltype.LowLevelType):
         raise TypeError("rffi.cast() first arg should be a TYPE")
+    if isinstance(value, llmemory.AddressAsInt):
+        value = value.adr
     if isinstance(value, llmemory.fakeaddress):
         value = value.ptr or 0
     TYPE1 = lltype.typeOf(value)
