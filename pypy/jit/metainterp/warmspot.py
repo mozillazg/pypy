@@ -572,11 +572,11 @@ class WarmRunnerDesc(object):
                     loop_token = fail_descr.handle_fail(self.metainterp_sd)
                     fail_descr = self.cpu.execute_token(loop_token)
                 except self.ContinueRunningNormally, e:
-                    xxxxxxxxx
                     args = ()
-                    for _, name, _ in portalfunc_ARGS:
-                        v = getattr(e, name)
-                        args = args + (v,)
+                    for ARGTYPE, attrname, count in portalfunc_ARGS:
+                        x = getattr(e, attrname)[count]
+                        x = specialize_value(ARGTYPE, x)
+                        args = args + (x,)
                     return ll_portal_runner(*args)
                 except self.DoneWithThisFrameVoid:
                     assert result_kind == 'void'
