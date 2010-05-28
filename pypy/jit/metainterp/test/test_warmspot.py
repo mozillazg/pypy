@@ -282,7 +282,7 @@ class TestLLWarmspot(WarmspotTests, LLJitMixin):
     type_system = 'lltype'
 
 class TestOOWarmspot(WarmspotTests, OOJitMixin):
-    CPUClass = runner.OOtypeCPU
+    ##CPUClass = runner.OOtypeCPU
     type_system = 'ootype'
 
 class TestWarmspotDirect(object):
@@ -304,7 +304,7 @@ class TestWarmspotDirect(object):
                     raise metainterp_sd.warmrunnerdesc.DoneWithThisFrameInt(3)
                 if self.no == 1:
                     raise metainterp_sd.warmrunnerdesc.ContinueRunningNormally(
-                        [BoxInt(0), BoxInt(1)])
+                        [0], [], [], [1], [], [])
                 if self.no == 3:
                     exc = lltype.malloc(OBJECT)
                     exc.typeptr = exc_vtable
@@ -317,6 +317,7 @@ class TestWarmspotDirect(object):
             supports_floats = False
             ts = llhelper
             translate_support_code = False
+            stats = "stats"
             
             def get_fail_descr_number(self, d):
                 return -1
@@ -325,7 +326,7 @@ class TestWarmspotDirect(object):
                 pass
 
             def nodescr(self, *args, **kwds):
-                pass
+                return "this is a descr"
             fielddescrof = nodescr
             calldescrof  = nodescr
             sizeof       = nodescr
@@ -348,6 +349,7 @@ class TestWarmspotDirect(object):
             return red
 
         rtyper = annotate(f, [0])
+        FakeCPU.rtyper = rtyper
         translator = rtyper.annotator.translator
         translator.config.translation.gc = 'hybrid'
         cls.desc = WarmRunnerDesc(translator, CPUClass=FakeCPU)
