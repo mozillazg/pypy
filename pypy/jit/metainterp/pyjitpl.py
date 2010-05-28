@@ -844,21 +844,18 @@ class MIFrame(object):
         #    ConstPtr(NULL).
         #
         metainterp = self.metainterp
-        if metainterp.is_blackholing():
-            resbox = box      # good enough when blackholing
-        else:
-            vrefinfo = metainterp.staticdata.virtualref_info
-            obj = box.getref_base()
-            vref = vrefinfo.virtual_ref_during_tracing(obj)
-            resbox = history.BoxPtr(vref)
-            cindex = history.ConstInt(len(metainterp.virtualref_boxes) // 2)
-            metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
-            # Note: we allocate a JIT_VIRTUAL_REF here
-            # (in virtual_ref_during_tracing()), in order to detect when
-            # the virtual escapes during tracing already.  We record it as a
-            # VIRTUAL_REF operation.  Later, optimizeopt.py should either kill
-            # that operation or replace it with a NEW_WITH_VTABLE followed by
-            # SETFIELD_GCs.
+        vrefinfo = metainterp.staticdata.virtualref_info
+        obj = box.getref_base()
+        vref = vrefinfo.virtual_ref_during_tracing(obj)
+        resbox = history.BoxPtr(vref)
+        cindex = history.ConstInt(len(metainterp.virtualref_boxes) // 2)
+        metainterp.history.record(rop.VIRTUAL_REF, [box, cindex], resbox)
+        # Note: we allocate a JIT_VIRTUAL_REF here
+        # (in virtual_ref_during_tracing()), in order to detect when
+        # the virtual escapes during tracing already.  We record it as a
+        # VIRTUAL_REF operation.  Later, optimizeopt.py should either kill
+        # that operation or replace it with a NEW_WITH_VTABLE followed by
+        # SETFIELD_GCs.
         metainterp.virtualref_boxes.append(box)
         metainterp.virtualref_boxes.append(resbox)
         return resbox
@@ -871,12 +868,11 @@ class MIFrame(object):
         vrefbox = metainterp.virtualref_boxes.pop()
         lastbox = metainterp.virtualref_boxes.pop()
         assert box.getref_base() == lastbox.getref_base()
-        if not metainterp.is_blackholing():
-            vrefinfo = metainterp.staticdata.virtualref_info
-            vref = vrefbox.getref_base()
-            if vrefinfo.is_virtual_ref(vref):
-                metainterp.history.record(rop.VIRTUAL_REF_FINISH,
-                                          [vrefbox, lastbox], None)
+        vrefinfo = metainterp.staticdata.virtualref_info
+        vref = vrefbox.getref_base()
+        if vrefinfo.is_virtual_ref(vref):
+            metainterp.history.record(rop.VIRTUAL_REF_FINISH,
+                                      [vrefbox, lastbox], None)
 
     # ------------------------------
 
@@ -922,8 +918,6 @@ class MIFrame(object):
         if isinstance(box, Const):    # no need for a guard
             return
         metainterp = self.metainterp
-        if metainterp.is_blackholing():
-            return
         if box is not None:
             moreargs = [box] + extraargs
         else:
@@ -1226,9 +1220,6 @@ class MetaInterp(object):
         self.free_frames_list = []
         self.last_exc_value_box = None
 
-    def is_blackholing(self):
-        return False       # XXX get rid of this method
-
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
         # with a special case for recursive portal calls
@@ -1239,7 +1230,7 @@ class MetaInterp(object):
     def newframe(self, jitcode, greenkey=None):
         if jitcode is self.staticdata.portal_code:
             self.in_recursion += 1
-        if greenkey is not None and not self.is_blackholing():
+        if greenkey is not None:
             self.portal_trace_positions.append(
                     (greenkey, len(self.history.operations)))
         if len(self.free_frames_list) > 0:
@@ -1254,7 +1245,7 @@ class MetaInterp(object):
         frame = self.framestack.pop()
         if frame.jitcode is self.staticdata.portal_code:
             self.in_recursion -= 1
-        if frame.greenkey is not None and not self.is_blackholing():
+        if frame.greenkey is not None:
             self.portal_trace_positions.append(
                     (None, len(self.history.operations)))
         # we save the freed MIFrames to avoid needing to re-create new
@@ -1363,15 +1354,12 @@ class MetaInterp(object):
         profiler.count_ops(opnum)
         resbox = executor.execute_varargs(self.cpu, self,
                                           opnum, argboxes, descr)
-        if self.is_blackholing():
-            profiler.count_ops(opnum, BLACKHOLED_OPS)
+        # check if the operation can be constant-folded away
+        argboxes = list(argboxes)
+        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
+            resbox = self._record_helper_pure_varargs(opnum, resbox, descr, argboxes)
         else:
-            # check if the operation can be constant-folded away
-            argboxes = list(argboxes)
-            if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
-                resbox = self._record_helper_pure_varargs(opnum, resbox, descr, argboxes)
-            else:
-                resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
+            resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
         return resbox
 
     def _record_helper_pure(self, opnum, resbox, descr, *argboxes): 
@@ -1760,9 +1748,6 @@ class MetaInterp(object):
         vinfo.clear_vable_token(virtualizable)
 
     def vable_and_vrefs_before_residual_call(self):
-        if self.is_blackholing():
-            return
-        #
         vrefinfo = self.staticdata.virtualref_info
         for i in range(1, len(self.virtualref_boxes), 2):
             vrefbox = self.virtualref_boxes[i]
@@ -1957,8 +1942,6 @@ class MetaInterp(object):
                     boxes[i] = newbox
 
     def find_biggest_function(self):
-        assert not self.is_blackholing()
-
         start_stack = []
         max_size = 0
         max_key = None
