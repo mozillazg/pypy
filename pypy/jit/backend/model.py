@@ -174,6 +174,10 @@ class AbstractCPU(object):
         raise NotImplementedError
     def bh_new_array(self, arraydescr, length):
         raise NotImplementedError
+    def bh_newstr(self, length):
+        raise NotImplementedError
+    def bh_newunicode(self, length):
+        raise NotImplementedError
 
     def bh_arraylen_gc(self, arraydescr, array):
         raise NotImplementedError
