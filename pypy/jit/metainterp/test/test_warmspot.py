@@ -313,6 +313,9 @@ class TestWarmspotDirect(object):
                         lltype.cast_opaque_ptr(llmemory.GCREF, exc))
                 return self.no
 
+        class FakeDescr:
+            pass
+
         class FakeCPU(object):
             supports_floats = False
             ts = llhelper
@@ -326,7 +329,7 @@ class TestWarmspotDirect(object):
                 pass
 
             def nodescr(self, *args, **kwds):
-                return "this is a descr"
+                return FakeDescr()
             fielddescrof = nodescr
             calldescrof  = nodescr
             sizeof       = nodescr
