@@ -25,7 +25,7 @@ class CallControl(object):
         self.jitcodes = {}             # map {graph: jitcode}
         self.unfinished_graphs = []    # list of graphs with pending jitcodes
         self.jitdriver = None
-        if cpu is not None:
+        if hasattr(cpu, 'rtyper'):     # for tests
             self.rtyper = cpu.rtyper
             translator = self.rtyper.annotator.translator
             self.raise_analyzer = RaiseAnalyzer(translator)
