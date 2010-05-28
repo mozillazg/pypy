@@ -462,7 +462,7 @@ class ImplicitVirtualizableTests:
 
 
     def test_virtualizable_with_array(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'x'],
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'x', 'frame'],
                                 virtualizables = ['frame'])
 
         class Frame(object):

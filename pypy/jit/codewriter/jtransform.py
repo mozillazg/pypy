@@ -414,7 +414,7 @@ class Transformer(object):
             (v_base, arrayfielddescr, arraydescr) = vars
             kind = getkind(op.result.concretetype)
             return [SpaceOperation('-live-', [], None),
-                    SpaceOperation('getarrayitem_vable_%s' % kind,
+                    SpaceOperation('getarrayitem_vable_%s' % kind[0],
                                    [v_base, arrayfielddescr, arraydescr,
                                     op.args[1]], op.result)]
         # normal case follows
@@ -432,9 +432,9 @@ class Transformer(object):
         if op.args[0] in self.vable_array_vars:     # for virtualizables
             vars = self.vable_array_vars[op.args[0]]
             (v_base, arrayfielddescr, arraydescr) = vars
-            kind = getkind(op.result.concretetype)
+            kind = getkind(op.args[2].concretetype)
             return [SpaceOperation('-live-', [], None),
-                    SpaceOperation('setarrayitem_vable_%s' % kind,
+                    SpaceOperation('setarrayitem_vable_%s' % kind[0],
                                    [v_base, arrayfielddescr, arraydescr,
                                     op.args[1], op.args[2]], None)]
         arraydescr = self.cpu.arraydescrof(ARRAY)
@@ -870,11 +870,24 @@ class Transformer(object):
         return SpaceOperation('new_array', [arraydescr, v_length], op.result)
 
     def do_fixed_list_len(self, op, args, arraydescr):
+        if args[0] in self.vable_array_vars:     # virtualizable array
+            vars = self.vable_array_vars[args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            return SpaceOperation('arraylen_vable',
+                                  [v_base, arrayfielddescr, arraydescr],
+                                  op.result)
         return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
 
     do_fixed_list_len_foldable = do_fixed_list_len
 
     def do_fixed_list_getitem(self, op, args, arraydescr, pure=False):
+        if args[0] in self.vable_array_vars:     # virtualizable array
+            vars = self.vable_array_vars[args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            kind = getkind(op.result.concretetype)
+            return SpaceOperation('getarrayitem_vable_%s' % kind[0],
+                                  [v_base, arrayfielddescr, arraydescr,
+                                   args[1]], op.result)
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         extra = getkind(op.result.concretetype)[0]
@@ -888,6 +901,13 @@ class Transformer(object):
         return self.do_fixed_list_getitem(op, args, arraydescr, pure=True)
 
     def do_fixed_list_setitem(self, op, args, arraydescr):
+        if args[0] in self.vable_array_vars:     # virtualizable array
+            vars = self.vable_array_vars[args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            kind = getkind(args[2].concretetype)
+            return SpaceOperation('setarrayitem_vable_%s' % kind[0],
+                                  [v_base, arrayfielddescr, arraydescr,
+                                   args[1], args[2]], None)
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         kind = getkind(args[2].concretetype)[0]

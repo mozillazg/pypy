@@ -74,6 +74,8 @@ class VirtualizableInfo:
                                    for name in array_fields]
         self.static_field_by_descrs = dict(
             [(descr, i) for (i, descr) in enumerate(self.static_field_descrs)])
+        self.array_field_by_descrs = dict(
+            [(descr, i) for (i, descr) in enumerate(self.array_field_descrs)])
         #
         getlength = cpu.ts.getlength
         getarrayitem = cpu.ts.getarrayitem
