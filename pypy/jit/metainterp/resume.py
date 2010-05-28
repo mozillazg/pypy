@@ -496,10 +496,12 @@ class AbstractResumeDataReader(object):
     _mixin_ = True
     virtuals = None
 
-    def _prepare(self, cpu, storage):
+    def _init(self, cpu, storage):
         self.cpu = cpu
         self.cur_numb = storage.rd_numb
         self.consts = storage.rd_consts
+
+    def _prepare(self, storage):
         self._prepare_virtuals(storage.rd_virtuals)
         self._prepare_pendingfields(storage.rd_pendingfields)
 
@@ -566,21 +568,13 @@ def rebuild_from_resumedata(metainterp, storage,
     resumereader.done()
     return resumereader.liveboxes, None, virtualref_boxes
 
-def force_from_resumedata(metainterp, newboxes, storage,
-                          expects_virtualizables):
-    resumereader = ResumeDataReader(storage, newboxes, metainterp)
-    virtualizable_boxes = None
-    if expects_virtualizables:
-        virtualizable_boxes = resumereader.consume_boxes()
-    virtualref_boxes = resumereader.consume_boxes()
-    return virtualizable_boxes, virtualref_boxes, resumereader.virtuals
-
 class ResumeDataBoxReader(AbstractResumeDataReader):
 
     def __init__(self, storage, metainterp):
+        self._init(metainterp.cpu, storage)
         self.metainterp = metainterp
         self.liveboxes = [None] * metainterp.cpu.get_latest_value_count()
-        self._prepare(metainterp.cpu, storage)
+        self._prepare(storage)
 
     def consume_boxes(self, info, boxes_i, boxes_r, boxes_f):
         self.boxes_i = boxes_i
@@ -685,8 +679,9 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 # ---------- when resuming for blackholing, get direct values ----------
 
 def blackhole_from_resumedata(blackholeinterpbuilder, storage,
-                              expects_virtualizables):
-    resumereader = ResumeDataDirectReader(blackholeinterpbuilder.cpu, storage)
+                              expects_virtualizables, all_virtuals=None):
+    resumereader = ResumeDataDirectReader(blackholeinterpbuilder.cpu, storage,
+                                          all_virtuals)
     if expects_virtualizables:
         XXX
     vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
@@ -720,10 +715,25 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
     resumereader.done()
     return firstbh
 
+def force_from_resumedata(metainterp_sd, storage, expects_virtualizables):
+    resumereader = ResumeDataDirectReader(metainterp_sd.cpu, storage)
+    virtualizable_boxes = None
+    if expects_virtualizables:
+        XXX
+    vrefinfo = metainterp_sd.virtualref_info
+    resumereader.consume_virtualref_info(vrefinfo)
+    return resumereader.virtuals
+
 class ResumeDataDirectReader(AbstractResumeDataReader):
 
-    def __init__(self, cpu, storage):
-        self._prepare(cpu, storage)
+    def __init__(self, cpu, storage, all_virtuals=None):
+        self._init(cpu, storage)
+        if all_virtuals is None:        # common case
+            self._prepare(storage)
+        else:
+            # special case for resuming after a GUARD_NOT_FORCED: we already
+            # have the virtuals
+            self.virtuals = all_virtuals
 
     def consume_one_section(self, blackholeinterp):
         self.blackholeinterp = blackholeinterp

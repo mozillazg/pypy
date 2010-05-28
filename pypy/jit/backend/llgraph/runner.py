@@ -245,7 +245,7 @@ class BaseCPU(model.AbstractCPU):
 
     def get_latest_force_token(self):
         token = llimpl.get_frame_forced_token(self.latest_frame)
-        return self.cast_adr_to_int(token)
+        return llmemory.cast_adr_to_int(token)
 
     def clear_latest_values(self):
         llimpl.frame_clear_latest_values(self.latest_frame)
@@ -426,7 +426,7 @@ class LLtypeCPU(BaseCPU):
         return llimpl.cast_to_int(ptr)
 
     def force(self, force_token):
-        token = self.cast_int_to_adr(force_token)
+        token = llmemory.cast_int_to_adr(force_token)
         frame = llimpl.get_forced_token_frame(token)
         fail_index = llimpl.force(frame)
         self.latest_frame = frame

@@ -1247,14 +1247,15 @@ def _run_forever(blackholeinterp, current_exc):
         current_exc = blackholeinterp._resume_mainloop(current_exc)
         blackholeinterp = blackholeinterp.nextblackholeinterp
 
-def resume_in_blackhole(metainterp_sd, resumedescr):
+def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
     from pypy.jit.metainterp.resume import blackhole_from_resumedata
     debug_start('jit-blackhole')
     metainterp_sd.profiler.start_blackhole()
     blackholeinterp = blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
         resumedescr,
-        False)  # XXX
+        False,
+        all_virtuals)  # XXX
     # XXX virtualrefs
     # XXX virtualizable
     current_exc = blackholeinterp._prepare_resume_from_failure(

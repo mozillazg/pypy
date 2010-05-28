@@ -442,7 +442,7 @@ class VRefTests:
         self.check_aborted_count(0)
 
     def test_recursive_call_1(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'rec'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'rec', 'frame'])
         #
         class XY:
             pass
@@ -472,7 +472,7 @@ class VRefTests:
         self.check_aborted_count(0)
 
     def test_recursive_call_2(self):
-        myjitdriver = JitDriver(greens = [], reds = ['n', 'frame', 'rec'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'rec', 'frame'])
         #
         class XY:
             n = 0
