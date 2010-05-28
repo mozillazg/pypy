@@ -62,7 +62,7 @@ from pypy.tool.sourcetools import render_docstr, NiceCompile
 
 from pypy.translator.gensupp import ordered_blocks, UniqueList, builtin_base, \
      uniquemodulename, C_IDENTIFIER, NameManager
-from pypy.lib.identity_dict import identity_dict
+from pypy.tool.identity_dict import identity_dict
 
 import pypy # __path__
 import py.path

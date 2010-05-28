@@ -19,7 +19,7 @@ else:
 
 import array, operator
 
-from identity_dict import identity_dict
+from __pypy__ import identity_dict
 
 from sre_constants import ATCODES, OPCODES, CHCODES, MAXREPEAT
 from sre_constants import SRE_INFO_PREFIX, SRE_INFO_LITERAL

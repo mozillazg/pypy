@@ -1,5 +1,5 @@
 import py
-from pypy.lib.identity_dict import identity_dict, IdentityDictPurePython
+from pypy.tool.identity_dict import identity_dict, IdentityDictPurePython
 
 class TestIdentityDictNative:
     identity_dict = identity_dict
