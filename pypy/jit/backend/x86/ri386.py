@@ -1,6 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
+from pypy.rpython.lltypesystem import llmemory
 
 class OPERAND(object):
     _attrs_ = []
@@ -289,8 +290,7 @@ rel8 = REL8
 def imm(value):
     if isinstance(value, ComputedIntSymbolic):
         value = value.compute_fn()
-    if not we_are_translated():
-        assert type(value) is int
+    value = llmemory.get_inthash_from_int(value)
     if single_byte(value):
         return imm8(value)
     else:

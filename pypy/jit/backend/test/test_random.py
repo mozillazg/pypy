@@ -413,7 +413,7 @@ for _op in [rop.INT_NEG,
     OPERATIONS.append(UnaryOperation(_op))
 
 OPERATIONS.append(UnaryOperation(rop.INT_IS_TRUE, boolres=True))
-OPERATIONS.append(BooleanUnaryOperation(rop.BOOL_NOT, boolres=True))
+OPERATIONS.append(UnaryOperation(rop.INT_IS_ZERO, boolres=True))
 OPERATIONS.append(ConstUnaryOperation(rop.SAME_AS, boolres='sometimes'))
 
 for _op in [rop.INT_ADD_OVF,
@@ -433,8 +433,6 @@ for _op in [rop.FLOAT_NEG,
             rop.FLOAT_ABS,
             ]:
     OPERATIONS.append(UnaryFloatOperation(_op))
-
-OPERATIONS.append(UnaryFloatOperation(rop.FLOAT_IS_TRUE, boolres=True))
 
 OPERATIONS.append(CastFloatToIntOperation(rop.CAST_FLOAT_TO_INT))
 OPERATIONS.append(CastIntToFloatOperation(rop.CAST_INT_TO_FLOAT))

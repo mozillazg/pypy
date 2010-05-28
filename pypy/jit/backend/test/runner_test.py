@@ -265,7 +265,7 @@ class BaseBackendTest(Runner):
         assert count == 3
         assert self.cpu.get_latest_value_int(1) == 10
         assert self.cpu.get_latest_value_int(1) == 10   # multiple reads ok
-        self.cpu.clear_latest_values()
+        self.cpu.clear_latest_values(3)
 
     def test_finish(self):
         i0 = BoxInt()

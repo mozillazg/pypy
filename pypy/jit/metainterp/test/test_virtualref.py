@@ -87,7 +87,7 @@ class VRefTests:
         cpu.get_latest_value_count = lambda : len(guard_op.fail_args)
         cpu.get_latest_value_int = lambda i:guard_op.fail_args[i].getint()
         cpu.get_latest_value_ref = lambda i:guard_op.fail_args[i].getref_base()
-        cpu.clear_latest_values = lambda : None
+        cpu.clear_latest_values = lambda count: None
         resumereader = ResumeDataDirectReader(cpu, guard_op.descr)
         vrefinfo = self.metainterp.staticdata.virtualref_info
         lst = []

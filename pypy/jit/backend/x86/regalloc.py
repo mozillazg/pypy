@@ -3,7 +3,7 @@
 """
 
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
-                                         ResOperation, ConstAddr, BoxPtr,
+                                         ResOperation, BoxPtr,
                                          LoopToken, INT, REF, FLOAT)
 from pypy.jit.backend.x86.ri386 import *
 from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi, rstr
@@ -11,6 +11,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib import rgc
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.x86.jump import remap_frame_layout
+from pypy.jit.codewriter import heaptracker
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import BaseCallDescr, BaseSizeDescr
@@ -45,8 +46,6 @@ class X86RegisterManager(RegisterManager):
                 print "convert_to_imm: ConstPtr needs special care"
                 raise AssertionError
             return imm(rffi.cast(lltype.Signed, c.value))
-        elif isinstance(c, ConstAddr):
-            return imm(ll2ctypes.cast_adr_to_int(c.value))
         else:
             print "convert_to_imm: got a %s" % c
             raise AssertionError
@@ -540,8 +539,8 @@ class RegAlloc(object):
     consider_uint_lt = _consider_compop
     consider_uint_le = _consider_compop
     consider_uint_ge = _consider_compop
-    consider_oois = _consider_compop
-    consider_ooisnot = _consider_compop
+    consider_ptr_eq = _consider_compop
+    consider_ptr_ne = _consider_compop
 
     def _consider_float_op(self, op):
         loc1 = self.xrm.loc(op.args[1])
@@ -582,20 +581,6 @@ class RegAlloc(object):
         loc0 = self.xrm.force_result_in_reg(op.result, op.args[0])
         self.Perform(op, [loc0], loc0)
         self.xrm.possibly_free_var(op.args[0])
-
-    def consider_float_is_true(self, op, guard_op):
-        # doesn't need arg to be in a register
-        tmpbox0 = TempBox()
-        loc0 = self.xrm.force_allocate_reg(tmpbox0)
-        loc1 = self.xrm.loc(op.args[0])
-        arglocs = [loc0, loc1]
-        self.xrm.possibly_free_var(op.args[0])
-        self.xrm.possibly_free_var(tmpbox0)
-        if guard_op is not None:
-            self.perform_with_guard(op, guard_op, arglocs, None)
-        else:
-            loc2 = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
-            self.Perform(op, arglocs, loc2)
 
     def consider_cast_float_to_int(self, op):
         loc0 = self.xrm.make_sure_var_in_reg(op.args[0], imm_fine=False)
@@ -715,7 +700,7 @@ class RegAlloc(object):
 
     def consider_new_with_vtable(self, op):
         classint = op.args[0].getint()
-        descrsize = self.assembler.cpu.class_sizes[classint]
+        descrsize = heaptracker.vtable2descr(self.assembler.cpu, classint)
         if self.assembler.cpu.gc_ll_descr.can_inline_malloc(descrsize):
             self._fastpath_malloc(op, descrsize)
             self.assembler.set_vtable(eax, imm(classint))
@@ -879,14 +864,7 @@ class RegAlloc(object):
             resloc = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
             self.Perform(op, [argloc], resloc)
 
-    def consider_bool_not(self, op, guard_op):
-        if guard_op is not None:
-            # doesn't need arg to be in a register
-            argloc = self.loc(op.args[0])
-            self.rm.possibly_free_var(op.args[0])
-            self.perform_with_guard(op, guard_op, [argloc], None)
-        else:
-            self.consider_int_neg(op)
+    consider_int_is_zero = consider_int_is_true
 
     def consider_same_as(self, op):
         argloc = self.loc(op.args[0])

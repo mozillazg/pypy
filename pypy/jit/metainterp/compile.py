@@ -156,6 +156,7 @@ class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
         assert metainterp_sd.result_type == 'ref'
         cpu = metainterp_sd.cpu
         result = cpu.get_latest_value_ref(0)
+        cpu.clear_latest_values(1)
         raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
 class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
@@ -168,6 +169,7 @@ class ExitFrameWithExceptionDescrRef(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd):
         cpu = metainterp_sd.cpu
         value = cpu.get_latest_value_ref(0)
+        cpu.clear_latest_values(1)
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, value)
 
 

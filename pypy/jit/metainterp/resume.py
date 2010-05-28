@@ -548,7 +548,7 @@ class AbstractResumeDataReader(object):
         self.write_a_float(register_index, value)
 
     def done(self):
-        self.cpu.clear_latest_values()
+        self.cpu.clear_latest_values(self.cpu.get_latest_value_count())
 
 # ---------- when resuming for pyjitpl.py, make boxes ----------
 

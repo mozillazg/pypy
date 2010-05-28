@@ -87,7 +87,8 @@ class AbstractCPU(object):
 
     def get_latest_value_count(self):
         """Return how many values are ready to be returned by
-        get_latest_value_xxx()."""
+        get_latest_value_xxx().  Only after a guard failure; not
+        necessarily correct after a FINISH."""
         raise NotImplementedError
 
     def get_latest_force_token(self):
@@ -95,9 +96,10 @@ class AbstractCPU(object):
         same FORCE_TOKEN result as the one in the just-failed loop."""
         raise NotImplementedError
 
-    def clear_latest_values(self):
-        """Clear the latest values (at least the ref ones, so that
-        they no longer keep objects alive)."""
+    def clear_latest_values(self, count):
+        """Clear the latest values (at least the ref ones), so that
+        they no longer keep objects alive.  'count' is the number of
+        values -- normally get_latest_value_count()."""
         raise NotImplementedError
 
     def grab_exc_value(self):
