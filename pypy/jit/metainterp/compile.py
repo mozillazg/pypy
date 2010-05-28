@@ -334,6 +334,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         if all_virtuals is None:
             all_virtuals = []
         resume_in_blackhole(metainterp_sd, self, all_virtuals)
+        assert 0, "unreachable"
 
     @staticmethod
     def force_now(cpu, token):
