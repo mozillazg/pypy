@@ -61,6 +61,7 @@ def finish_registering(cpu):
 
 def vtable2descr(cpu, vtable):
     assert lltype.typeOf(vtable) is lltype.Signed
+    vtable = llmemory.cast_int_to_adr(vtable)
     if we_are_translated():
         # Build the dict {vtable: sizedescr} at runtime.
         # This is necessary because the 'vtables' are just pointers to
@@ -71,11 +72,9 @@ def vtable2descr(cpu, vtable):
             for descr in cpu._all_size_descrs_with_vtable:
                 key = descr._corresponding_vtable
                 key = llmemory.cast_ptr_to_adr(key)
-                key = llmemory.cast_adr_to_int(key)
                 d[key] = descr
         return d[vtable]
     else:
-        vtable = llmemory.cast_int_to_adr(vtable)
         vtable = llmemory.cast_adr_to_ptr(vtable, VTABLETYPE)
         for descr in cpu._all_size_descrs_with_vtable:
             if descr._corresponding_vtable == vtable:

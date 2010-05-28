@@ -635,6 +635,11 @@ def cast_int_to_adr(int):
     ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
     return cast_ptr_to_adr(ptr)
 
+def get_inthash_from_int(int):
+    if isinstance(int, AddressAsInt):
+        int = lltype.cast_ptr_to_int(int.adr.ptr)
+    return int
+
 # ____________________________________________________________
 # Weakrefs.
 #

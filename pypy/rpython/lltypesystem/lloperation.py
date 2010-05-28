@@ -410,7 +410,8 @@ LL_OPERATIONS = {
     'cast_ptr_to_adr':      LLOp(sideeffects=False),
     'cast_adr_to_ptr':      LLOp(canfold=True),
     'cast_adr_to_int':      LLOp(sideeffects=False),
-    'cast_int_to_adr':      LLOp(canfold=True),   # not implemented in llinterp
+    'cast_int_to_adr':      LLOp(canfold=True),
+    'get_inthash_from_int': LLOp(canfold=True),
 
     'get_group_member':     LLOp(canfold=True),
     'get_next_group_member':LLOp(canfold=True),
