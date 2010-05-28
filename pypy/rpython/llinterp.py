@@ -117,7 +117,7 @@ class LLInterpreter(object):
                 continue
             try:
                 logline += " " + self.typer.annotator.annotated[frame.curr_block].func.__module__
-            except (KeyError, AttributeError):
+            except (KeyError, AttributeError, TypeError):
                 logline += " <unknown module>"
             lines.append(logline)
             for i, operation in enumerate(frame.curr_block.operations):
