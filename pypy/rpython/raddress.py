@@ -2,7 +2,7 @@
 from pypy.tool.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem.llmemory import NULL, Address, \
-     cast_adr_to_int, get_inthash_from_int, fakeaddress
+     cast_adr_to_int, fakeaddress
 from pypy.rpython.rmodel import Repr, IntegerRepr
 from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype
@@ -57,9 +57,9 @@ class AddressRepr(Repr):
     get_ll_fasthash_function = get_ll_hash_function
 
 def ll_addrhash(addr1):
-    result = cast_adr_to_int(addr1)
     # we don't want to have an AddressAsInt instance in this case
-    return get_inthash_from_int(result)
+    from pypy.rpython.lltypesystem import rffi
+    return rffi.get_real_int(cast_adr_to_int(addr1))
 
 address_repr = AddressRepr()
 

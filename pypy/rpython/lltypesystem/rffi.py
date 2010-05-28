@@ -905,3 +905,11 @@ def getintfield(pdst, fieldname):
     """
     return cast(lltype.Signed, getattr(pdst, fieldname))
 getintfield._annspecialcase_ = 'specialize:ll_and_arg(1)'
+
+def get_real_int(i):
+    """No-op after translation.  Before translation, it convert an
+    AddressAsInt into a real integer, to use e.g. as a hash.  Do not store
+    the real integer (or the dict using this as a hash) across translation."""
+    # although it's not really a cast, this force_cast forces
+    # the AddressAsInt to be evaluated with ctypes
+    return cast(lltype.Signed, i)

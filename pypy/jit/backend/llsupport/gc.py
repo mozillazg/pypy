@@ -171,7 +171,7 @@ class GcRefList:
         # the object moves)
         addr = llmemory.cast_ptr_to_adr(gcref)
         hash = llmemory.cast_adr_to_int(addr)
-        hash = llmemory.get_inthash_from_int(hash)
+        hash = rffi.get_real_int(hash)
         hash -= hash >> self.HASHTABLE_BITS
         hash &= self.HASHTABLE_SIZE - 1
         addr_ref = self.hashtable[hash]

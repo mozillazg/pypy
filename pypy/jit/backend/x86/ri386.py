@@ -1,7 +1,7 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rpython.lltypesystem import llmemory
+from pypy.rpython.lltypesystem.rffi import get_real_int
 
 class OPERAND(object):
     _attrs_ = []
@@ -211,7 +211,7 @@ class MODRM8(MODRM):
 class REL32(OPERAND):
     width = 4
     def __init__(self, absolute_target):
-        self.absolute_target = absolute_target
+        self.absolute_target = get_real_int(absolute_target)
     def assembler(self):
         return '%d' % (self.absolute_target,)    
 
@@ -290,7 +290,7 @@ rel8 = REL8
 def imm(value):
     if isinstance(value, ComputedIntSymbolic):
         value = value.compute_fn()
-    value = llmemory.get_inthash_from_int(value)
+    value = get_real_int(value)
     if single_byte(value):
         return imm8(value)
     else:

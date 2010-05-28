@@ -1663,8 +1663,8 @@ class LLtypeBackendTest(BaseBackendTest):
         x = cpu.bh_newstr(5)
         y = cpu.bh_cast_ptr_to_int(x)
         z = cpu.bh_cast_ptr_to_int(x)
-        y = llmemory.get_inthash_from_int(y)
-        z = llmemory.get_inthash_from_int(z)
+        y = rffi.get_real_int(y)
+        z = rffi.get_real_int(z)
         assert type(y) == type(z) == int and y == z
 
     def test_sorting_of_fields(self):
