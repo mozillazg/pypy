@@ -20,6 +20,7 @@ from pypy.jit.metainterp import history, pyjitpl, gc
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
 from pypy.jit.metainterp.jitprof import Profiler, EmptyProfiler
+from pypy.jit.metainterp.jitexc import JitException
 from pypy.jit.codewriter import support, codewriter
 from pypy.jit.codewriter.policy import JitPolicy
 from pypy.rlib.jit import DEBUG_STEPS, DEBUG_DETAILED, DEBUG_OFF, DEBUG_PROFILE
@@ -129,9 +130,6 @@ def debug_checks():
     stats = get_stats()
     stats.maybe_view()
     stats.check_consistency()
-
-class JitException(Exception):
-    _go_through_llinterp_uncaught_ = True     # ugh
 
 class ContinueRunningNormallyBase(JitException):
     pass

@@ -15,7 +15,7 @@ from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
 from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE
-from pypy.jit.metainterp.blackhole import get_llexception
+from pypy.jit.metainterp.jitexc import JitException, get_llexception
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
@@ -1287,16 +1287,7 @@ class MetaInterp(object):
                 assert False
 
     def finishframe_exception(self):
-        # detect and propagate some exceptions early:
-        #  - AssertionError
-        #  - all subclasses of JitException
         excvaluebox = self.last_exc_value_box
-        if we_are_translated():
-            from pypy.jit.metainterp.warmspot import JitException
-            e = self.cpu.ts.get_exception_obj(excvaluebox)
-            if isinstance(e, JitException) or isinstance(e, AssertionError):
-                raise Exception, e
-        #
         while self.framestack:
             frame = self.framestack[-1]
             code = frame.bytecode
@@ -1332,7 +1323,7 @@ class MetaInterp(object):
                 else:
                     print " ",
                 print jitcode.name
-            raise Exception
+            raise AssertionError
 
     def create_empty_history(self):
         warmrunnerstate = self.staticdata.state
@@ -1417,6 +1408,8 @@ class MetaInterp(object):
             op.name = self.framestack[-1].jitcode.name
 
     def execute_raised(self, exception, constant=False):
+        if isinstance(exception, JitException):
+            raise JitException, exception      # go through
         llexception = get_llexception(self.cpu, exception)
         self.execute_ll_raised(llexception, constant)
 
@@ -2006,17 +1999,17 @@ class MetaInterp(object):
 
 # ____________________________________________________________
 
-class GenerateMergePoint(Exception):
+class GenerateMergePoint(JitException):
     def __init__(self, args, target_loop_token):
         assert target_loop_token is not None
         self.argboxes = args
         self.target_loop_token = target_loop_token
 
-class ChangeFrame(Exception):
+class ChangeFrame(JitException):
     """Raised after we mutated metainterp.framestack, in order to force
     it to reload the current top-of-stack frame that gets interpreted."""
 
-class SwitchToBlackhole(Exception):
+class SwitchToBlackhole(JitException):
     def __init__(self, reason):
         self.reason = reason
 
