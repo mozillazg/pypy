@@ -169,6 +169,8 @@ class WarmRunnerDesc(object):
             from pypy.jit.metainterp.virtualizable import VirtualizableInfo
             self.virtualizable_info = VirtualizableInfo(self)
             self.codewriter.setup_virtualizable_info(self.virtualizable_info)
+        else:
+            self.virtualizable_info = None
         #
         self.make_exception_classes()
         self.make_driverhook_graphs()
