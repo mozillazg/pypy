@@ -13,8 +13,7 @@ from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.argument import Arguments
 from pypy.rlib.unroll import unrolling_iterable
-
-space = None
+from pypy.tool.sourcetools import func_with_new_name
 
 
 def check_num_args(space, ob, n):
@@ -106,7 +105,7 @@ def wrap_next(space, w_self, w_args, func):
         raise OperationError(space.w_StopIteration, space.w_None)
     return w_res
 
-@cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=True)
+@cpython_api([PyTypeObjectPtr, PyObject, PyObject], PyObject, external=False)
 def slot_tp_new(space, type, w_args, w_kwds):
     from pypy.module.cpyext.tupleobject import PyTuple_Check
     pyo = rffi.cast(PyObject, type)
@@ -117,12 +116,20 @@ def slot_tp_new(space, type, w_args, w_kwds):
     w_args_new = space.newtuple(args_w)
     return space.call(w_func, w_args_new, w_kwds)
 
-@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
+@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1, external=False)
 def slot_tp_init(space, w_self, w_args, w_kwds):
     w_descr = space.lookup(w_self, '__init__')
     args = Arguments.frompacked(space, w_args, w_kwds)
     space.get_and_call_args(w_descr, w_self, args)
     return 0
+
+@cpython_api([PyObject, PyObject, PyObject], PyObject, external=False)
+def slot_tp_call(space, w_self, w_args, w_kwds):
+    return space.call(w_self, w_args, w_kwds)
+
+@cpython_api([PyObject], PyObject, external=False)
+def slot_nb_int(space, w_self):
+    return space.int(w_self)
 
 PyWrapperFlag_KEYWORDS = 1
 
@@ -140,12 +147,14 @@ def FLSLOT(NAME, SLOT, FUNCTION, WRAPPER, DOC, FLAGS):
         if wrapper is Ellipsis:
             def wrapper(space, w_self, w_args, func, w_kwds):
                 raise NotImplementedError("Wrapper for slot " + NAME)
+            wrapper = func_with_new_name(wrapper, WRAPPER)
         wrapper1 = None
         wrapper2 = wrapper
     else:
         if wrapper is Ellipsis:
             def wrapper(space, w_self, w_args, func):
                 raise NotImplementedError("Wrapper for slot " + NAME)
+            wrapper = func_with_new_name(wrapper, WRAPPER)
         wrapper1 = wrapper
         wrapper2 = None
     return (NAME, slotname, function, wrapper1, wrapper2, DOC)
@@ -180,18 +189,6 @@ def RBINSLOTNOTINFIX(NAME, SLOT, FUNCTION, DOC):
     return ETSLOT(NAME, "tp_as_number.c_" + SLOT, FUNCTION, "wrap_binaryfunc_r", \
             "x." + NAME + "(y) <==> " + DOC)
 
-slotdef_replacements = (
-    ("\s+", " "),
-    ("static [^{]*{", "("),
-    ("};", ")"),
-    (r"(?P<start> +..SLOT\([^,]*, )(?P<fname>[^,]*), (?P<slotcname>[^,]*), (?P<wname>[^,]*)", r"\g<start>'\g<fname>', '\g<slotcname>', '\g<wname>'"),
-    (r"(?P<start> *R?[^ ]{3}SLOT(NOTINFIX)?\([^,]*, )(?P<fname>[^,]*), (?P<slotcname>[^,]*)", r"\g<start>'\g<fname>', '\g<slotcname>'"),
-    ("'NULL'", "None"),
-    ("{NULL}", ""),
-    ("\(wrapperfunc\)", ""),
-    ("\),", "),\n"),
-)
-
 """
     /* Heap types defining __add__/__mul__ have sq_concat/sq_repeat == NULL.
        The logic in abstract.c always falls back to nb_add/nb_multiply in
@@ -203,7 +200,7 @@ slotdef_replacements = (
 # Copy new slotdefs from typeobject.c
 # Remove comments and tabs
 # Done.
-slotdefs_str = """
+slotdefs_str = r"""
 static slotdef slotdefs[] = {
         SQSLOT("__len__", sq_length, slot_sq_length, wrap_lenfunc,
                "x.__len__() <==> len(x)"),
@@ -395,6 +392,21 @@ static slotdef slotdefs[] = {
         {NULL}
 };
 """
+
+# Convert the above string into python code
+slotdef_replacements = (
+    ("\s+", " "),            # all on one line
+    ("static [^{]*{", "("),  # remove first line...
+    ("};", ")"),             # ...last line...
+    ("{NULL}", ""),          # ...and sentinel
+    # add quotes around function name, slot name, and wrapper name
+    (r"(?P<start> +..SLOT\([^,]*, )(?P<fname>[^,]*), (?P<slotcname>[^,]*), (?P<wname>[^,]*)", r"\g<start>'\g<fname>', '\g<slotcname>', '\g<wname>'"),
+    (r"(?P<start> *R?[^ ]{3}SLOT(NOTINFIX)?\([^,]*, )(?P<fname>[^,]*), (?P<slotcname>[^,]*)", r"\g<start>'\g<fname>', '\g<slotcname>'"),
+    ("'NULL'", "None"),      # but NULL becomes None
+    ("\(wrapperfunc\)", ""), # casts are not needed in python tuples
+    ("\),", "),\n"),         # add newlines again
+)
+
 for regex, repl in slotdef_replacements:
     slotdefs_str = re.sub(regex, repl, slotdefs_str)
 

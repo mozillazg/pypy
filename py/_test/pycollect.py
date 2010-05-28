@@ -253,7 +253,7 @@ class FunctionMixin(PyobjMixin):
             traceback = ntraceback.filter()
         return traceback 
 
-    def _repr_failure_py(self, excinfo):
+    def _repr_failure_py(self, excinfo, style="long"):
         if excinfo.errisinstance(funcargs.FuncargRequest.LookupError):
             fspath, lineno, msg = self.reportinfo()
             lines, _ = inspect.getsourcelines(self.obj)
@@ -261,11 +261,13 @@ class FunctionMixin(PyobjMixin):
                 if line.strip().startswith('def'):
                     return FuncargLookupErrorRepr(fspath, lineno,
             lines[:i+1], str(excinfo.value))
-        return super(FunctionMixin, self)._repr_failure_py(excinfo)
+        return super(FunctionMixin, self)._repr_failure_py(excinfo, 
+            style=style)
 
     def repr_failure(self, excinfo, outerr=None):
         assert outerr is None, "XXX outerr usage is deprecated"
-        return self._repr_failure_py(excinfo)
+        return self._repr_failure_py(excinfo, 
+            style=self.config.getvalue("tbstyle"))
 
     shortfailurerepr = "F"
 
@@ -393,5 +395,5 @@ class Function(FunctionMixin, py.test.collect.Item):
 def hasinit(obj):
     init = getattr(obj, '__init__', None)
     if init:
-        if not isinstance(init, type(object.__init__)):
+        if init != object.__init__:
             return True
