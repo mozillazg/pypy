@@ -57,7 +57,7 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot,
                         top.get_list_of_active_boxes(False))
-    #snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
+    snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
         snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
     storage.rd_snapshot = snapshot
@@ -552,7 +552,7 @@ def rebuild_from_resumedata(metainterp, storage,
     virtualizable_boxes = None
     if expects_virtualizables:
         XXX # virtualizable_boxes = resumereader.consume_boxes()
-    #resumereader.consume_boxes([], [], [])     # XXX virtualref
+    virtualref_boxes = resumereader.consume_virtualref_boxes()
     frameinfo = storage.rd_frame_info_list
     while True:
         f = metainterp.newframe(frameinfo.jitcode)
@@ -564,7 +564,7 @@ def rebuild_from_resumedata(metainterp, storage,
             break
     metainterp.framestack.reverse()
     resumereader.done()
-    return resumereader.liveboxes
+    return resumereader.liveboxes, None, virtualref_boxes
 
 def force_from_resumedata(metainterp, newboxes, storage,
                           expects_virtualizables):
@@ -572,8 +572,7 @@ def force_from_resumedata(metainterp, newboxes, storage,
     virtualizable_boxes = None
     if expects_virtualizables:
         virtualizable_boxes = resumereader.consume_boxes()
-    #virtualref_boxes = resumereader.consume_boxes()
-    virtualref_boxes = []     # XXX virtualrefs
+    virtualref_boxes = resumereader.consume_boxes()
     return virtualizable_boxes, virtualref_boxes, resumereader.virtuals
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
@@ -588,6 +587,13 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         self.boxes_r = boxes_r
         self.boxes_f = boxes_f
         self._prepare_next_section(info)
+
+    def consume_virtualref_boxes(self):
+        # Returns a list of boxes, assumed to be all BoxPtrs.
+        # We leave up to the caller to call vrefinfo.continue_tracing().
+        nums = self.cur_numb.nums
+        self.cur_numb = self.cur_numb.prev
+        return [self.decode_ref(num) for num in nums]
 
     def allocate_with_vtable(self, known_class):
         return self.metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
@@ -683,7 +689,8 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
     resumereader = ResumeDataDirectReader(blackholeinterpbuilder.cpu, storage)
     if expects_virtualizables:
         XXX
-    #virtualref_boxes = resumereader.consume_boxes()     # virtualref XXX
+    vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
+    resumereader.consume_virtualref_info(vrefinfo)
     #
     # First get a chain of blackhole interpreters whose length is given
     # by the depth of rd_frame_info_list.  The first one we get must be
@@ -722,6 +729,17 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         self.blackholeinterp = blackholeinterp
         info = blackholeinterp.get_current_position_info()
         self._prepare_next_section(info)
+
+    def consume_virtualref_info(self, vrefinfo):
+        # we have to decode a list of references containing pairs
+        # [..., virtual, vref, ...]
+        nums = self.cur_numb.nums
+        self.cur_numb = self.cur_numb.prev
+        for i in range(0, len(nums), 2):
+            virtual = self.decode_ref(nums[i])
+            vref = self.decode_ref(nums[i+1])
+            # For each pair, we store the virtual inside the vref.
+            vrefinfo.continue_tracing(vref, virtual)
 
     def allocate_with_vtable(self, known_class):
         from pypy.jit.metainterp.executor import exec_new_with_vtable

@@ -1279,6 +1279,7 @@ def convert_and_run_from_pyjitpl(metainterp, current_exc=NULL):
         curbh._copy_data_from_miframe(frame)
         curbh.nextblackholeinterp = nextbh
         nextbh = curbh
+    XXX   # virtualrefs
     firstbh = nextbh
     #
     try:

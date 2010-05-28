@@ -81,8 +81,26 @@ class VRefTests:
         JIT_VIRTUAL_REF = self.vrefinfo.JIT_VIRTUAL_REF
         bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).virtual_token = 1234567
         #
-        self.metainterp.rebuild_state_after_failure(guard_op.descr,
-                                                    guard_op.fail_args[:])
+        # try reloading from blackhole.py's point of view
+        from pypy.jit.metainterp.resume import ResumeDataDirectReader
+        cpu = self.metainterp.cpu
+        cpu.get_latest_value_count = lambda : len(guard_op.fail_args)
+        cpu.get_latest_value_int = lambda i:guard_op.fail_args[i].getint()
+        cpu.get_latest_value_ref = lambda i:guard_op.fail_args[i].getref_base()
+        cpu.clear_latest_values = lambda : None
+        resumereader = ResumeDataDirectReader(cpu, guard_op.descr)
+        vrefinfo = self.metainterp.staticdata.virtualref_info
+        lst = []
+        vrefinfo.continue_tracing = lambda vref, virtual: \
+                                        lst.append((vref, virtual))
+        resumereader.consume_virtualref_info(vrefinfo)
+        del vrefinfo.continue_tracing
+        assert len(lst) == 1
+        lltype.cast_opaque_ptr(lltype.Ptr(JIT_VIRTUAL_REF),
+                               lst[0][0])  # assert correct type
+        #
+        # try reloading from pyjitpl's point of view
+        self.metainterp.rebuild_state_after_failure(guard_op.descr)
         assert len(self.metainterp.framestack) == 1
         assert len(self.metainterp.virtualref_boxes) == 2
         assert self.metainterp.virtualref_boxes[0].value == bxs1[0].value

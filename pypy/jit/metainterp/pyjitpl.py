@@ -1864,9 +1864,7 @@ class MetaInterp(object):
         expect_virtualizable = vinfo is not None
         boxlists = resume.rebuild_from_resumedata(self, resumedescr,
                                                   expect_virtualizable)
-        #inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
-        inputargs_and_holes = boxlists    # XXX
-        virtualref_boxes = []             # XXX
+        inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
         self.virtualref_boxes = virtualref_boxes
