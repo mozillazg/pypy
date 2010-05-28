@@ -239,7 +239,7 @@ class BaseBackendTest(Runner):
         res = self.cpu.get_latest_value_int(0)
         assert res == 20
 
-    def test_make_boxes_from_latest_values(self):
+    def test_get_latest_value_count(self):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
@@ -258,12 +258,12 @@ class BaseBackendTest(Runner):
         self.cpu.set_future_value_int(0, 2)
         fail = self.cpu.execute_token(looptoken)
         assert fail is faildescr1
-        boxes = self.cpu.make_boxes_from_latest_values(faildescr1)
-        assert len(boxes) == 3
-        assert boxes[0] is None
-        assert isinstance(boxes[1], BoxInt)
-        assert boxes[1].value == 10
-        assert boxes[2] is None
+
+        count = self.cpu.get_latest_value_count()
+        assert count == 3
+        assert self.cpu.get_latest_value_int(1) == 10
+        assert self.cpu.get_latest_value_int(1) == 10   # multiple reads ok
+        self.cpu.clear_latest_values()
 
     def test_finish(self):
         i0 = BoxInt()
@@ -1104,7 +1104,7 @@ class LLtypeBackendTest(BaseBackendTest):
     @classmethod
     def get_funcbox(cls, cpu, func_ptr):
         addr = llmemory.cast_ptr_to_adr(func_ptr)
-        return BoxInt(cpu.cast_adr_to_int(addr))
+        return ConstInt(llmemory.cast_adr_to_int(addr))
 
     
     MY_VTABLE = rclass.OBJECT_VTABLE    # for tests only
@@ -1307,11 +1307,13 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.execute_token(loop.token)
         assert self.cpu.get_latest_value_int(0) == 0
         assert self.cpu.get_latest_value_ref(1) == xptr
-        self.cpu.clear_exception()
+        excvalue = self.cpu.grab_exc_value()
+        assert not excvalue
         self.cpu.set_future_value_int(0, 0)
         self.cpu.execute_token(loop.token)
         assert self.cpu.get_latest_value_int(0) == 1
-        self.cpu.clear_exception()
+        excvalue = self.cpu.grab_exc_value()
+        assert not excvalue
 
         ytp = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
         ytp.subclassrange_min = 2
@@ -1329,7 +1331,9 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.set_future_value_int(0, 1)
         self.cpu.execute_token(loop.token)
         assert self.cpu.get_latest_value_int(0) == 1
-        self.cpu.clear_exception()
+        excvalue = self.cpu.grab_exc_value()
+        assert excvalue == yptr
+        assert not self.cpu.grab_exc_value()   # cleared
 
         exc_tp = xtp
         exc_ptr = xptr
@@ -1345,11 +1349,13 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.set_future_value_int(0, 1)
         self.cpu.execute_token(loop.token)
         assert self.cpu.get_latest_value_int(0) == 1
-        self.cpu.clear_exception()
+        excvalue = self.cpu.grab_exc_value()
+        assert excvalue == xptr
         self.cpu.set_future_value_int(0, 0)
         self.cpu.execute_token(loop.token)
         assert self.cpu.get_latest_value_int(0) == 0
-        self.cpu.clear_exception()
+        excvalue = self.cpu.grab_exc_value()
+        assert not excvalue
 
     def test_cond_call_gc_wb(self):
         def func_void(a, b):
