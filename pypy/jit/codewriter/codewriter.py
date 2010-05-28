@@ -1,4 +1,4 @@
-from pypy.jit.codewriter import support
+from pypy.jit.codewriter import support, heaptracker
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler, JitCode
@@ -72,6 +72,7 @@ class CodeWriter(object):
             count += 1
             if not count % 500:
                 log.info("Produced %d jitcodes" % count)
+        heaptracker.finish_registering(self.cpu)
         log.info("there are %d JitCode instances." % count)
 
     def setup_vrefinfo(self, vrefinfo):

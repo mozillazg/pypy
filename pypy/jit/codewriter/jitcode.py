@@ -123,7 +123,7 @@ class LiveVarsInfo(object):
     def get_register_index_f(self, index):
         return ord(self.live_f[index])
 
-    def enumerate_vars(self, callback_i, callback_r, callback_f):
+    def enumerate_vars(self, callback_i, callback_r, callback_f, spec):
         index = 0
         for i in range(self.get_register_count_i()):
             callback_i(index, self.get_register_index_i(i))
@@ -134,6 +134,7 @@ class LiveVarsInfo(object):
         for i in range(self.get_register_count_f()):
             callback_f(index, self.get_register_index_f(i))
             index += 1
+    enumerate_vars._annspecialcase_ = 'specialize:arg(4)'
 
 _liveness_cache = {}
 
