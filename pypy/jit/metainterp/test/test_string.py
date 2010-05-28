@@ -44,6 +44,34 @@ class StringTests:
         assert res == 5
         self.check_loops(**{self.CALL_PURE: 0})
 
+    def test_newstr(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'm'])
+        def f(n, m):
+            while True:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                bytecode = 'adlfkj' + chr(n)
+                res = bytecode[n]
+                m -= 1
+                if m < 0:
+                    return ord(res)
+        res = self.meta_interp(f, [6, 10])
+        assert res == 6
+
+    def test_newunicode(self):
+        jitdriver = JitDriver(greens = [], reds = ['n', 'm'])
+        def f(n, m):
+            while True:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                bytecode = u'adlfkj' + unichr(n)
+                res = bytecode[n]
+                m -= 1
+                if m < 0:
+                    return ord(res)
+        res = self.meta_interp(f, [6, 10])
+        assert res == 6
+
 class TestOOtype(StringTests, OOJitMixin):
     CALL_PURE = "oosend_pure"
 
