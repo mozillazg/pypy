@@ -907,6 +907,11 @@ class BlackholeInterpreter(object):
         cpu.bh_setarrayitem_gc_f(arraydescr, items, index, nval)
 
     # ----------
+    # virtualizables operations
+
+    #xxx
+
+    # ----------
     # the following operations are directly implemented by the backend
 
     @arguments("cpu", "i", "d", "R", returns="i")
@@ -1035,6 +1040,10 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
+    bhimpl_getfield_vable_i = bhimpl_getfield_gc_i
+    bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
+    bhimpl_getfield_vable_f = bhimpl_getfield_gc_f
+
     @arguments("cpu", "i", "d", returns="i")
     def bhimpl_getfield_raw_i(cpu, struct, fielddescr):
         return cpu.bh_getfield_raw_i(struct, fielddescr)
@@ -1058,6 +1067,10 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", "d", "f")
     def bhimpl_setfield_gc_f(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_gc_f(struct, fielddescr, newvalue)
+
+    bhimpl_setfield_vable_i = bhimpl_setfield_gc_i
+    bhimpl_setfield_vable_r = bhimpl_setfield_gc_r
+    bhimpl_setfield_vable_f = bhimpl_setfield_gc_f
 
     @arguments("cpu", "i", "d", "i")
     def bhimpl_setfield_raw_i(cpu, struct, fielddescr, newvalue):
@@ -1254,8 +1267,7 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
     blackholeinterp = blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
         resumedescr,
-        False,
-        all_virtuals)  # XXX
+        all_virtuals)
     # XXX virtualizable
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum)

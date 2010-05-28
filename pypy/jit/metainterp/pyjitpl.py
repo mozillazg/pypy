@@ -516,9 +516,9 @@ class MIFrame(object):
             self.metainterp.replace_box(box, standard_box)
         return not isstandard
 
-    def _get_virtualizable_field_descr(self, index):
+    def _get_virtualizable_field_index(self, fielddescr):
         vinfo = self.metainterp.staticdata.virtualizable_info
-        return vinfo.static_field_descrs[index]
+        return vinfo.static_field_by_descrs[fielddescr]
 
     def _get_virtualizable_array_field_descr(self, index):
         vinfo = self.metainterp.staticdata.virtualizable_info
@@ -528,22 +528,31 @@ class MIFrame(object):
         vinfo = self.metainterp.staticdata.virtualizable_info
         return vinfo.array_descrs[index]
 
-    @FixME  #arguments("orgpc", "box", "int")
-    def opimpl_getfield_vable(self, pc, basebox, index):
-        if self._nonstandard_virtualizable(pc, basebox):
-            self.execute_with_descr(rop.GETFIELD_GC, self._get_virtualizable_field_descr(index), basebox)
-            return
+    @arguments("orgpc", "box", "descr")
+    def _opimpl_getfield_vable(self, pc, box, fielddescr):
+        if self._nonstandard_virtualizable(pc, box):
+            return self.execute_with_descr(rop.GETFIELD_GC, fielddescr, box)
         self.metainterp.check_synchronized_virtualizable()
-        resbox = self.metainterp.virtualizable_boxes[index]
-        self.make_result_box(resbox)
-    @FixME  #arguments("orgpc", "box", "int", "box")
-    def opimpl_setfield_vable(self, pc, basebox, index, valuebox):
-        if self._nonstandard_virtualizable(pc, basebox):
-            self.execute_with_descr(rop.SETFIELD_GC, self._get_virtualizable_field_descr(index), basebox, valuebox)
+        index = self._get_virtualizable_field_index(fielddescr)
+        return self.metainterp.virtualizable_boxes[index]
+
+    opimpl_getfield_vable_i = _opimpl_getfield_vable
+    opimpl_getfield_vable_r = _opimpl_getfield_vable
+    opimpl_getfield_vable_f = _opimpl_getfield_vable
+
+    @arguments("orgpc", "box", "descr", "box")
+    def _opimpl_setfield_vable(self, pc, box, fielddescr, valuebox):
+        if self._nonstandard_virtualizable(pc, box):
+            self.execute_with_descr(rop.SETFIELD_GC, fielddescr, box, valuebox)
             return
+        index = self._get_virtualizable_field_index(fielddescr)
         self.metainterp.virtualizable_boxes[index] = valuebox
         self.metainterp.synchronize_virtualizable()
         # XXX only the index'th field needs to be synchronized, really
+
+    opimpl_setfield_vable_i = _opimpl_setfield_vable
+    opimpl_setfield_vable_r = _opimpl_setfield_vable
+    opimpl_setfield_vable_f = _opimpl_setfield_vable
 
     def _get_arrayitem_vable_index(self, pc, arrayindex, indexbox):
         indexbox = self.implement_guard_value(pc, indexbox)
@@ -1112,6 +1121,7 @@ class MetaInterpStaticData(object):
         self.portal_code = codewriter.mainjitcode
         self._portal_runner_ptr = codewriter.callcontrol.portal_runner_ptr
         self.virtualref_info = codewriter.callcontrol.virtualref_info
+        self.virtualizable_info = codewriter.callcontrol.virtualizable_info
         RESULT = codewriter.portal_graph.getreturnvar().concretetype
         self.result_type = history.getkind(RESULT)
         #
@@ -1862,9 +1872,7 @@ class MetaInterp(object):
     def rebuild_state_after_failure(self, resumedescr):
         vinfo = self.staticdata.virtualizable_info
         self.framestack = []
-        expect_virtualizable = vinfo is not None
-        boxlists = resume.rebuild_from_resumedata(self, resumedescr,
-                                                  expect_virtualizable)
+        boxlists = resume.rebuild_from_resumedata(self, resumedescr, vinfo)
         inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
@@ -1880,11 +1888,6 @@ class MetaInterp(object):
         # boxes, in whichever direction is appropriate
         if expect_virtualizable:
             self.virtualizable_boxes = virtualizable_boxes
-            if 0:  ## self._already_allocated_resume_virtuals is not None:
-                # resuming from a ResumeGuardForcedDescr: load the new values
-                # currently stored on the virtualizable fields
-                self.load_fields_from_virtualizable()
-                return
             # just jumped away from assembler (case 4 in the comment in
             # virtualizable.py) into tracing (case 2); check that vable_token
             # is and stays 0.  Note the call to reset_vable_token() in

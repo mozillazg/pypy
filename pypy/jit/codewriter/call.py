@@ -16,6 +16,7 @@ from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
 
 class CallControl(object):
     virtualref_info = None     # optionally set from outside
+    virtualizable_info = None  # optionally set from outside
     portal_runner_ptr = None   # optionally set from outside
 
     def __init__(self, cpu=None, portal_graph=None):

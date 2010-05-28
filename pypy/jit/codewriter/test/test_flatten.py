@@ -69,6 +69,8 @@ class FakeCallControl:
     def found_jitdriver(self, jitdriver):
         assert isinstance(jitdriver, JitDriver)
         self.jitdriver = jitdriver
+    def getjitdriver(self):
+        return self.jitdriver
 
 class FakeCallControlWithVRefInfo:
     class virtualref_info:

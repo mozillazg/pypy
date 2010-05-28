@@ -167,7 +167,8 @@ class WarmRunnerDesc(object):
         self.codewriter.setup_vrefinfo(vrefinfo)
         if self.jitdriver.virtualizables:
             from pypy.jit.metainterp.virtualizable import VirtualizableInfo
-            self.metainterp_sd.virtualizable_info = VirtualizableInfo(self)
+            self.virtualizable_info = VirtualizableInfo(self)
+            self.codewriter.setup_virtualizable_info(self.virtualizable_info)
         #
         self.make_exception_classes()
         self.make_driverhook_graphs()
@@ -183,7 +184,7 @@ class WarmRunnerDesc(object):
         self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
     def finish(self):
-        vinfo = self.metainterp_sd.virtualizable_info
+        vinfo = self.virtualizable_info
         if vinfo is not None:
             vinfo.finish()
         if self.cpu.translate_support_code:
@@ -556,7 +557,7 @@ class WarmRunnerDesc(object):
             self.PTR_PORTAL_FUNCTYPE.TO.RESULT)
         self.codewriter.setup_portal_runner_ptr(self.portal_runner_ptr)
 
-        vinfo = self.metainterp_sd.virtualizable_info
+        vinfo = self.virtualizable_info
 
         def assembler_call_helper(failindex, virtualizableref):
             fail_descr = self.cpu.get_fail_descr_from_number(failindex)

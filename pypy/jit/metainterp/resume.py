@@ -1,10 +1,10 @@
 import sys, os
-from pypy.jit.metainterp.history import Box, Const, ConstInt
+from pypy.jit.metainterp.history import Box, Const, ConstInt, getkind
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
-from pypy.rpython.lltypesystem import rffi
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import have_debug_prints
@@ -57,9 +57,11 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
     storage.rd_frame_info_list = frame_info_list
     snapshot = Snapshot(top.parent_resumedata_snapshot,
                         top.get_list_of_active_boxes(False))
-    snapshot = Snapshot(snapshot, virtualref_boxes[:]) # xxx for now
     if virtualizable_boxes is not None:
-        snapshot = Snapshot(snapshot, virtualizable_boxes[:]) # xxx for now
+        boxes = virtualref_boxes + virtualizable_boxes
+    else:
+        boxes = virtualref_boxes[:]
+    snapshot = Snapshot(snapshot, boxes)
     storage.rd_snapshot = snapshot
 
 class Numbering(object):
@@ -548,11 +550,10 @@ class AbstractResumeDataReader(object):
 
 # ---------- when resuming for pyjitpl.py, make boxes ----------
 
-def rebuild_from_resumedata(metainterp, storage,
-                            expects_virtualizables):
+def rebuild_from_resumedata(metainterp, storage, virtualizable_info):
     resumereader = ResumeDataBoxReader(storage, metainterp)
     virtualizable_boxes = None
-    if expects_virtualizables:
+    if virtualizable_info:
         XXX # virtualizable_boxes = resumereader.consume_boxes()
     virtualref_boxes = resumereader.consume_virtualref_boxes()
     frameinfo = storage.rd_frame_info_list
@@ -679,13 +680,12 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 # ---------- when resuming for blackholing, get direct values ----------
 
 def blackhole_from_resumedata(blackholeinterpbuilder, storage,
-                              expects_virtualizables, all_virtuals=None):
+                              all_virtuals=None):
     resumereader = ResumeDataDirectReader(blackholeinterpbuilder.cpu, storage,
                                           all_virtuals)
-    if expects_virtualizables:
-        XXX
+    vinfo = blackholeinterpbuilder.metainterp_sd.virtualizable_info
     vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
-    resumereader.consume_virtualref_info(vrefinfo)
+    resumereader.consume_vref_and_vable(vrefinfo, vinfo)
     #
     # First get a chain of blackhole interpreters whose length is given
     # by the depth of rd_frame_info_list.  The first one we get must be
@@ -715,9 +715,8 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
     resumereader.done()
     return firstbh
 
-def force_from_resumedata(metainterp_sd, storage, expects_virtualizables):
+def force_from_resumedata(metainterp_sd, storage):
     resumereader = ResumeDataDirectReader(metainterp_sd.cpu, storage)
-    virtualizable_boxes = None
     if expects_virtualizables:
         XXX
     vrefinfo = metainterp_sd.virtualref_info
@@ -725,6 +724,7 @@ def force_from_resumedata(metainterp_sd, storage, expects_virtualizables):
     return resumereader.virtuals
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
+    resume_after_guard_not_forced = False
 
     def __init__(self, cpu, storage, all_virtuals=None):
         self._init(cpu, storage)
@@ -733,6 +733,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         else:
             # special case for resuming after a GUARD_NOT_FORCED: we already
             # have the virtuals
+            self.resume_after_guard_not_forced = True
             self.virtuals = all_virtuals
 
     def consume_one_section(self, blackholeinterp):
@@ -740,16 +741,50 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         info = blackholeinterp.get_current_position_info()
         self._prepare_next_section(info)
 
-    def consume_virtualref_info(self, vrefinfo):
+    def consume_virtualref_info(self, vrefinfo, nums, end):
         # we have to decode a list of references containing pairs
-        # [..., virtual, vref, ...]
-        nums = self.cur_numb.nums
-        self.cur_numb = self.cur_numb.prev
-        for i in range(0, len(nums), 2):
+        # [..., virtual, vref, ...]  stopping at 'end'
+        assert (end & 1) == 0
+        for i in range(0, end, 2):
             virtual = self.decode_ref(nums[i])
             vref = self.decode_ref(nums[i+1])
             # For each pair, we store the virtual inside the vref.
             vrefinfo.continue_tracing(vref, virtual)
+
+    def consume_vable_info(self, vinfo, nums):
+        # we have to ignore the initial part of 'nums' (containing vrefs),
+        # find the virtualizable from nums[-1], load all other values
+        # from the CPU stack, and copy them into the virtualizable
+        if vinfo is None:
+            return len(nums)
+        virtualizable = self.decode_ref(nums[-1])
+        virtualizable = vinfo.cast_gcref_to_vtype(virtualizable)
+        # just jumped away from assembler (case 4 in the comment in
+        # virtualizable.py) into tracing (case 2); check that vable_token
+        # is and stays 0.  Note the call to reset_vable_token() in
+        # warmstate.py.
+        assert not virtualizable.vable_token
+        return vinfo.write_from_resume_data(virtualizable, self, nums)
+
+    def load_value_of_type(self, TYPE, tagged):
+        kind = getkind(TYPE)
+        if kind == 'int':
+            x = self.decode_int(tagged)
+        elif kind == 'ref':
+            x = self.decode_ref(tagged)
+        elif kind == 'float':
+            x = self.decode_float(tagged)
+        else:
+            raise AssertionError(kind)
+        return lltype._cast_whatever(TYPE, x)
+    load_value_of_type._annspecialcase_ = 'specialize:arg(1)'
+
+    def consume_vref_and_vable(self, vrefinfo, vinfo):
+        nums = self.cur_numb.nums
+        self.cur_numb = self.cur_numb.prev
+        if not self.resume_after_guard_not_forced:
+            end_vref = self.consume_vable_info(vinfo, nums)
+            self.consume_virtualref_info(vrefinfo, nums, end_vref)
 
     def allocate_with_vtable(self, known_class):
         from pypy.jit.metainterp.executor import exec_new_with_vtable

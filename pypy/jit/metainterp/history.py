@@ -40,6 +40,7 @@ def getkind(TYPE, supports_floats=True):
         return "ref"
     else:
         raise NotImplementedError("type %s not supported" % TYPE)
+getkind._annspecialcase_ = 'specialize:memo'
 
 def repr_pointer(box):
     from pypy.rpython.lltypesystem import rstr
