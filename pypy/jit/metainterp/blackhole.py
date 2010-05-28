@@ -907,11 +907,6 @@ class BlackholeInterpreter(object):
         cpu.bh_setarrayitem_gc_f(arraydescr, items, index, nval)
 
     # ----------
-    # virtualizables operations
-
-    #xxx
-
-    # ----------
     # the following operations are directly implemented by the backend
 
     @arguments("cpu", "i", "d", "R", returns="i")
@@ -1025,6 +1020,37 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "d", "i", "r", "r", "i", "i", "i", "d")
     def bhimpl_arraycopy(cpu, calldescr, func, x1, x2, x3, x4, x5, arraydescr):
         cpu.bh_call_v(func, calldescr, [x3, x4, x5], [x1, x2], None)
+
+    @arguments("cpu", "r", "d", "d", "i", returns="i")
+    def bhimpl_getarrayitem_vable_i(cpu, vable, fielddescr, arraydescr, index):
+        array = cpu.bh_getfield_gc_r(vable, fielddescr)
+        return cpu.bh_getarrayitem_gc_i(arraydescr, array, index)
+    @arguments("cpu", "r", "d", "d", "i", returns="r")
+    def bhimpl_getarrayitem_vable_r(cpu, vable, fielddescr, arraydescr, index):
+        array = cpu.bh_getfield_gc_r(vable, fielddescr)
+        return cpu.bh_getarrayitem_gc_r(arraydescr, array, index)
+    @arguments("cpu", "r", "d", "d", "i", returns="f")
+    def bhimpl_getarrayitem_vable_f(cpu, vable, fielddescr, arraydescr, index):
+        array = cpu.bh_getfield_gc_r(vable, fielddescr)
+        return cpu.bh_getarrayitem_gc_f(arraydescr, array, index)
+
+    @arguments("cpu", "r", "d", "d", "i", "i")
+    def bhimpl_setarrayitem_vable_i(cpu, vable, fdescr, adescr, index, newval):
+        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        cpu.bh_setarrayitem_gc_i(a, array, index, newval)
+    @arguments("cpu", "r", "d", "d", "i", "r")
+    def bhimpl_setarrayitem_vable_r(cpu, vable, fdescr, adescr, index, newval):
+        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        cpu.bh_setarrayitem_gc_r(a, array, index, newval)
+    @arguments("cpu", "r", "d", "d", "i", "f")
+    def bhimpl_setarrayitem_vable_f(cpu, vable, fdescr, adescr, index, newval):
+        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        cpu.bh_setarrayitem_gc_f(a, array, index, newval)
+
+    @arguments("cpu", "r", "d", "d", returns="i")
+    def bhimpl_arraylen_vable(cpu, vable, fdescr, adescr):
+        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        return cpu.bh_arraylen_gc(adescr, array)
 
     @arguments("cpu", "r", "d", returns="i")
     def bhimpl_getfield_gc_i(cpu, struct, fielddescr):

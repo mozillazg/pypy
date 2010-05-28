@@ -29,7 +29,7 @@ def arguments(*args):
         return func
     return decorate
 
-class FixME:      # XXX temporary hack
+class FixME:      # XXX marks deprecated ootype-only operations
     def __init__(self, func):
         self.func = func
     def __getattr__(self, _):
@@ -554,60 +554,63 @@ class MIFrame(object):
     opimpl_setfield_vable_r = _opimpl_setfield_vable
     opimpl_setfield_vable_f = _opimpl_setfield_vable
 
-    def _get_arrayitem_vable_index(self, pc, arrayindex, indexbox):
+    def _get_arrayitem_vable_index(self, pc, arrayfielddescr, indexbox):
         indexbox = self.implement_guard_value(pc, indexbox)
         vinfo = self.metainterp.staticdata.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
+        arrayindex = vinfo.array_field_by_descrs[arrayfielddescr]
         index = indexbox.getint()
         if index < 0:
             index += vinfo.get_array_length(virtualizable, arrayindex)
         assert 0 <= index < vinfo.get_array_length(virtualizable, arrayindex)
         return vinfo.get_index_in_array(virtualizable, arrayindex, index)
 
-    @FixME  #arguments("orgpc", "box", "int", "box")
-    def opimpl_getarrayitem_vable(self, pc, basebox, arrayindex, indexbox):
-        if self._nonstandard_virtualizable(pc, basebox):
-            descr = self._get_virtualizable_array_field_descr(arrayindex)
+    @arguments("orgpc", "box", "descr", "descr", "box")
+    def _opimpl_getarrayitem_vable(self, pc, box, fdescr, adescr, indexbox):
+        if self._nonstandard_virtualizable(pc, box):
             arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                                          descr, basebox)
-            descr = self._get_virtualizable_array_descr(arrayindex)
-            self.execute_with_descr(rop.GETARRAYITEM_GC, descr,
-                                    arraybox, indexbox)
-            return
+                                                          fdescr, box)
+            return self.execute_with_descr(rop.GETARRAYITEM_GC, adescr,
+                                           arraybox, indexbox)
         self.metainterp.check_synchronized_virtualizable()
-        index = self._get_arrayitem_vable_index(pc, arrayindex, indexbox)
-        resbox = self.metainterp.virtualizable_boxes[index]
-        self.make_result_box(resbox)
-    @FixME  #arguments("orgpc", "box", "int", "box", "box")
-    def opimpl_setarrayitem_vable(self, pc, basebox, arrayindex, indexbox,
+        index = self._get_arrayitem_vable_index(pc, fdescr, indexbox)
+        return self.metainterp.virtualizable_boxes[index]
+
+    opimpl_getarrayitem_vable_i = _opimpl_getarrayitem_vable
+    opimpl_getarrayitem_vable_r = _opimpl_getarrayitem_vable
+    opimpl_getarrayitem_vable_f = _opimpl_getarrayitem_vable
+
+    @arguments("orgpc", "box", "descr", "descr", "box", "box")
+    def _opimpl_setarrayitem_vable(self, pc, box, fdescr, adescr, indexbox,
                                   valuebox):
-        if self._nonstandard_virtualizable(pc, basebox):
-            descr = self._get_virtualizable_array_field_descr(arrayindex)
+        if self._nonstandard_virtualizable(pc, box):
             arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                                          descr, basebox)
-            descr = self._get_virtualizable_array_descr(arrayindex)
-            self.execute_with_descr(rop.SETARRAYITEM_GC, descr,
+                                                          fdescr, box)
+            self.execute_with_descr(rop.SETARRAYITEM_GC, adescr,
                                     arraybox, indexbox, valuebox)
             return
-        index = self._get_arrayitem_vable_index(pc, arrayindex, indexbox)
+        index = self._get_arrayitem_vable_index(pc, fdescr, indexbox)
         self.metainterp.virtualizable_boxes[index] = valuebox
         self.metainterp.synchronize_virtualizable()
         # XXX only the index'th field needs to be synchronized, really
-    @FixME  #arguments("orgpc", "box", "int")
-    def opimpl_arraylen_vable(self, pc, basebox, arrayindex):
-        if self._nonstandard_virtualizable(pc, basebox):
-            descr = self._get_virtualizable_array_field_descr(arrayindex)
+
+    opimpl_setarrayitem_vable_i = _opimpl_setarrayitem_vable
+    opimpl_setarrayitem_vable_r = _opimpl_setarrayitem_vable
+    opimpl_setarrayitem_vable_f = _opimpl_setarrayitem_vable
+
+    @arguments("orgpc", "box", "descr", "descr")
+    def opimpl_arraylen_vable(self, pc, box, fdescr, adescr):
+        if self._nonstandard_virtualizable(pc, box):
             arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
-                                                          descr, basebox)
-            descr = self._get_virtualizable_array_descr(arrayindex)
-            self.execute_with_descr(rop.ARRAYLEN_GC, descr, arraybox)
-            return
+                                                          fdescr, box)
+            return self.execute_with_descr(rop.ARRAYLEN_GC, adescr, arraybox)
         vinfo = self.metainterp.staticdata.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
+        arrayindex = vinfo.array_field_by_descrs[fdescr]
         result = vinfo.get_array_length(virtualizable, arrayindex)
-        self.make_result_box(ConstInt(result))
+        return ConstInt(result)
 
     @arguments("jitcode", "boxes")
     def _opimpl_inline_call1(self, jitcode, argboxes):
@@ -650,11 +653,6 @@ class MIFrame(object):
     opimpl_residual_call_irf_r = _opimpl_residual_call3
     opimpl_residual_call_irf_f = _opimpl_residual_call3
     opimpl_residual_call_irf_v = _opimpl_residual_call3
-
-    @FixME  #arguments("descr", "varargs")
-    def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
-        return self.execute_varargs(rop.CALL_LOOPINVARIANT, varargs, calldescr,
-                                    exc=True)
 
     @arguments("boxes3", "boxes3")
     def _opimpl_recursive_call(self, greenboxes, redboxes):
