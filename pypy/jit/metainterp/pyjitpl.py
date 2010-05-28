@@ -4,6 +4,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib import nonconst
 
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
@@ -59,6 +60,8 @@ class MIFrame(object):
         """Copy jitcode.constants[0] to registers[255],
                 jitcode.constants[1] to registers[254],
                 jitcode.constants[2] to registers[253], etc."""
+        if nonconst.NonConstant(0):             # force the right type
+            constants[0] = ConstClass.value     # (useful for small tests)
         i = len(constants) - 1
         while i >= 0:
             j = 255 - i
@@ -138,7 +141,7 @@ class MIFrame(object):
             count = self.jitcode.num_regs_f()
             registers = self.registers_f
         else:
-            assert 0, repr(oldbox)
+            assert 0, oldbox
         for i in range(count):
             if registers[i] is oldbox:
                 registers[i] = newbox

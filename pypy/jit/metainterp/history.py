@@ -232,6 +232,7 @@ class Const(AbstractValue):
 
 class ConstInt(Const):
     type = INT
+    value = 0
     _attrs_ = ('value',)
 
     def __init__(self, value):

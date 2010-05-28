@@ -16,6 +16,7 @@ from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 # ____________________________________________________________
 
 def do_call(cpu, metainterp, argboxes, descr):
+    assert metainterp is not None
     # count the number of arguments of the different types
     count_i = count_r = count_f = 0
     for i in range(1, len(argboxes)):
@@ -161,6 +162,7 @@ def do_arraycopy(cpu, _, calldescr, funcbox, x1box, x2box,
                   [x1box.getref_base(), x2box.getref_base()], None)
 
 def do_int_add_ovf(cpu, metainterp, box1, box2):
+    assert metainterp is not None
     a = box1.getint()
     b = box2.getint()
     try:
@@ -173,6 +175,7 @@ def do_int_add_ovf(cpu, metainterp, box1, box2):
     return BoxInt(z)
 
 def do_int_sub_ovf(cpu, metainterp, box1, box2):
+    assert metainterp is not None
     a = box1.getint()
     b = box2.getint()
     try:
@@ -185,6 +188,7 @@ def do_int_sub_ovf(cpu, metainterp, box1, box2):
     return BoxInt(z)
 
 def do_int_mul_ovf(cpu, metainterp, box1, box2):
+    assert metainterp is not None
     a = box1.getint()
     b = box2.getint()
     try:

@@ -52,10 +52,15 @@ def register_known_gctype(cpu, vtable, STRUCT):
         cpu._all_size_descrs_with_vtable.append(sizedescr)
         sizedescr._corresponding_vtable = vtable
 
+def finish_registering(cpu):
+    # annotation hack for small examples which have no vtable at all
+    if not hasattr(cpu, '_all_size_descrs_with_vtable'):
+        STRUCT = lltype.GcStruct('empty')
+        vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
+        register_known_gctype(cpu, vtable, STRUCT)
+
 def vtable2descr(cpu, vtable):
     assert lltype.typeOf(vtable) is lltype.Signed
-    vtable = llmemory.cast_int_to_adr(vtable)
-    vtable = llmemory.cast_adr_to_ptr(vtable, VTABLETYPE)
     if we_are_translated():
         # Build the dict {vtable: sizedescr} at runtime.
         # This is necessary because the 'vtables' are just pointers to
@@ -64,9 +69,14 @@ def vtable2descr(cpu, vtable):
         if d is None:
             d = cpu._vtable_to_descr_dict = {}
             for descr in cpu._all_size_descrs_with_vtable:
-                d[descr._corresponding_vtable] = descr
+                key = descr._corresponding_vtable
+                key = llmemory.cast_ptr_to_adr(key)
+                key = llmemory.cast_adr_to_int(key)
+                d[key] = descr
         return d[vtable]
     else:
+        vtable = llmemory.cast_int_to_adr(vtable)
+        vtable = llmemory.cast_adr_to_ptr(vtable, VTABLETYPE)
         for descr in cpu._all_size_descrs_with_vtable:
             if descr._corresponding_vtable == vtable:
                 return descr

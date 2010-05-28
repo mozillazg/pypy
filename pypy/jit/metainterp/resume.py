@@ -531,7 +531,8 @@ class AbstractResumeDataReader(object):
         # pypy.jit.codewriter.jitcode.  Some tests give a different 'info'.
         info.enumerate_vars(self._callback_i,
                             self._callback_r,
-                            self._callback_f)
+                            self._callback_f,
+                            self.unique_id)    # <-- annotation hack
         self.cur_numb = self.cur_numb.prev
 
     def _callback_i(self, index, register_index):
@@ -569,6 +570,7 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info):
     return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
+    unique_id = lambda: None
 
     def __init__(self, storage, metainterp):
         self._init(metainterp.cpu, storage)
@@ -752,6 +754,7 @@ def force_from_resumedata(metainterp_sd, storage):
     return resumereader.virtuals
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
+    unique_id = lambda: None
     virtual_default = lltype.nullptr(llmemory.GCREF.TO)
     resume_after_guard_not_forced = 0
     #             0: not a GUARD_NOT_FORCED
