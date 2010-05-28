@@ -139,12 +139,7 @@ XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(8)]
 eax, ecx, edx, ebx, esp, ebp, esi, edi = REGLOCS
 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = XMMREGLOCS
 
-possible_location_codes = list("rbsmajix")
-# Separate objects are required because you can't use the same
-# unrolling_iterable instance in more than once place
-_binop_pc_outer = unrolling_iterable(possible_location_codes)
-_binop_pc_inner = unrolling_iterable(possible_location_codes)
-_unaryop_pc = unrolling_iterable(possible_location_codes)
+unrolling_location_codes = unrolling_iterable(list("rbsmajix"))
 
 class LocationCodeBuilder(object):
     _mixin_ = True
@@ -153,9 +148,9 @@ class LocationCodeBuilder(object):
         def INSN(self, loc1, loc2):
             code1 = loc1.location_code()
             code2 = loc2.location_code()
-            for possible_code1 in _binop_pc_outer:
+            for possible_code1 in unrolling_location_codes:
                 if code1 == possible_code1:
-                    for possible_code2 in _binop_pc_inner:
+                    for possible_code2 in unrolling_location_codes:
                         if code2 == possible_code2:
                             methname = name + "_" + possible_code1 + possible_code2
                             if hasattr(rx86.AbstractX86CodeBuilder, methname):
@@ -171,7 +166,7 @@ class LocationCodeBuilder(object):
     def _unaryop(name):
         def INSN(self, loc):
             code = loc.location_code()
-            for possible_code in _unaryop_pc:
+            for possible_code in unrolling_location_codes:
                 if code == possible_code:
                     methname = name + "_" + possible_code
                     if hasattr(rx86.AbstractX86CodeBuilder, methname):
