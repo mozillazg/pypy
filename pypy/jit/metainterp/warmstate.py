@@ -195,7 +195,7 @@ class WarmEnterState(object):
             return self.maybe_compile_and_run
 
         metainterp_sd = self.warmrunnerdesc.metainterp_sd
-        vinfo = metainterp_sd.virtualizable_info
+        vinfo = self.warmrunnerdesc.virtualizable_info
         num_green_args = self.warmrunnerdesc.num_green_args
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
@@ -416,7 +416,7 @@ class WarmEnterState(object):
 
         warmrunnerdesc = self.warmrunnerdesc
         cpu = warmrunnerdesc.cpu
-        vinfo = warmrunnerdesc.metainterp_sd.virtualizable_info
+        vinfo = warmrunnerdesc.virtualizable_info
         red_args_types = unrolling_iterable(warmrunnerdesc.red_args_types)
         #
         def set_future_values(*redargs):

@@ -793,6 +793,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         return vinfo.write_from_resume_data_partial(virtualizable, self, nums)
 
     def load_value_of_type(self, TYPE, tagged):
+        from pypy.jit.metainterp.warmstate import specialize_value
         kind = getkind(TYPE)
         if kind == 'int':
             x = self.decode_int(tagged)
@@ -802,7 +803,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             x = self.decode_float(tagged)
         else:
             raise AssertionError(kind)
-        return lltype._cast_whatever(TYPE, x)
+        return specialize_value(TYPE, x)
     load_value_of_type._annspecialcase_ = 'specialize:arg(1)'
 
     def consume_vref_and_vable(self, vrefinfo, vinfo):

@@ -1057,7 +1057,6 @@ class MIFrame(object):
 # ____________________________________________________________
 
 class MetaInterpStaticData(object):
-    virtualizable_info = None
     logger_noopt = None
     logger_ops = None
 
@@ -1516,11 +1515,11 @@ class MetaInterp(object):
         self.seen_can_enter_jit = False
         try:
             self.interpret()
-            assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
         except SwitchToBlackhole, stb:
             self.run_blackhole_interp_to_cancel_tracing(stb)
+        assert False, "should always raise"
 
     def handle_guard_failure(self, key):
         debug_start('jit-tracing')
@@ -1544,11 +1543,11 @@ class MetaInterp(object):
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             self.interpret()
-            assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
         except SwitchToBlackhole, stb:
             self.run_blackhole_interp_to_cancel_tracing(stb)
+        assert False, "should always raise"
 
     def run_blackhole_interp_to_cancel_tracing(self, stb):
         # We got a SwitchToBlackhole exception.  Convert the framestack into

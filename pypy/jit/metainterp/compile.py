@@ -262,6 +262,7 @@ class ResumeGuardDescr(ResumeDescr):
         else:
             from pypy.jit.metainterp.blackhole import resume_in_blackhole
             resume_in_blackhole(metainterp_sd, self)
+            assert 0, "unreachable"
 
     def _trace_and_compile_from_bridge(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
