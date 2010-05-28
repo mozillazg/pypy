@@ -5,6 +5,7 @@
 import os
 import time
 from pypy.rlib.debug import debug_print
+from pypy.jit.metainterp.jitexc import JitException
 
 counters="""
 TRACING
@@ -192,5 +193,5 @@ class Profiler(BaseProfiler):
         
         
 
-class BrokenProfilerData(Exception):
+class BrokenProfilerData(JitException):
     pass

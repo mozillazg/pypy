@@ -6,9 +6,9 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
-from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from pypy.jit.codewriter import heaptracker
+from pypy.jit.metainterp.jitexc import JitException, get_llexception
 
 
 def arguments(*argtypes, **kwds):
@@ -20,7 +20,7 @@ def arguments(*argtypes, **kwds):
         return function
     return decorate
 
-class LeaveFrame(Exception):
+class LeaveFrame(JitException):
     pass
 
 class MissingValue(object):
@@ -32,21 +32,6 @@ def signedord(c):
     return value
 
 NULL = lltype.nullptr(llmemory.GCREF.TO)
-
-def _get_standard_error(rtyper, Class):
-    exdata = rtyper.getexceptiondata()
-    clsdef = rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
-    evalue = exdata.get_standard_ll_exc_instance(rtyper, clsdef)
-    return evalue
-
-def get_llexception(cpu, e):
-    if we_are_translated():
-        return cast_instance_to_base_ptr(e)
-    if isinstance(e, LLException):
-        return e.args[1]    # ok
-    if isinstance(e, OverflowError):
-        return _get_standard_error(cpu.rtyper, OverflowError)
-    raise   # leave other exceptions to be propagated
 
 # ____________________________________________________________
 
@@ -305,6 +290,8 @@ class BlackholeInterpreter(object):
                 self.dispatch_loop(self, self.jitcode.code, self.position)
             except LeaveFrame:
                 break
+            except JitException:
+                raise     # go through
             except Exception, e:
                 lle = get_llexception(self.cpu, e)
                 self.handle_exception_in_frame(lle)
@@ -1183,6 +1170,8 @@ class BlackholeInterpreter(object):
             # we now proceed to interpret the bytecode in this frame
             self.run()
         #
+        except JitException:
+            raise     # go through
         except Exception, e:
             # if we get an exception, return it to the caller frame
             current_exc = get_llexception(self.cpu, e)

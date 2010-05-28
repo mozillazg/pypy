@@ -252,7 +252,7 @@ def _make_execute_list():
             execute = execute_by_num_args[num_args]
             #
             if execute[value] is not None:
-                raise Exception("duplicate entry for op number %d" % value)
+                raise AssertionError("duplicate entry for op number %d"% value)
             if key.endswith('_PURE'):
                 key = key[:-5]
             #
@@ -276,7 +276,14 @@ def _make_execute_list():
                 if func is not None:
                     execute[value] = func
                     continue
-            print "XXX warning: missing", key
+            if value in (rop.FORCE_TOKEN,
+                         rop.CALL_ASSEMBLER,
+                         rop.COND_CALL_GC_WB,
+                         rop.DEBUG_MERGE_POINT,
+                         rop.SETARRAYITEM_RAW,
+                         ):      # list of opcodes never executed by pyjitpl
+                continue
+            raise AssertionError("missing %r" % (key,))
     return execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
