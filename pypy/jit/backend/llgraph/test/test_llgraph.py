@@ -36,6 +36,7 @@ def test_cast_adr_to_int_and_back():
 ##     from pypy.jit.backend.llgraph.runner import OOtypeCPU as cpu_type
 
 def test_fielddescr_ootype():
+    py.test.skip("ootype tests skipped")
     from pypy.rpython.ootypesystem import ootype
     from pypy.jit.backend.llgraph.runner import OOtypeCPU
     A = ootype.Instance("A", ootype.ROOT, {"foo": ootype.Signed})

@@ -1778,6 +1778,9 @@ class OOtypeBackendTest(BaseBackendTest):
     malloc = staticmethod(ootype.new)
     nullptr = staticmethod(ootype.null)
 
+    def setup_class(cls):
+        py.test.skip("ootype tests skipped")
+
     @classmethod
     def get_funcbox(cls, cpu, func_ptr):
         return BoxObj(ootype.cast_to_object(func_ptr))
