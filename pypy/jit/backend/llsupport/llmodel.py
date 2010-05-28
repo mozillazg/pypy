@@ -421,6 +421,12 @@ class AbstractLLCPU(AbstractCPU):
             as_array[self.vtable_offset/WORD] = vtable
         return res
 
+    def bh_classof(self, struct):
+        struct = lltype.cast_opaque_ptr(rclass.OBJECTPTR, struct)
+        result = struct.typeptr
+        result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
+        return llmemory.cast_adr_to_int(result_adr)
+
     def bh_new_array(self, arraydescr, length):
         return self.gc_ll_descr.gc_malloc_array(arraydescr, length)
 
