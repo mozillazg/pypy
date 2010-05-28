@@ -636,6 +636,9 @@ def cast_int_to_adr(int):
     return cast_ptr_to_adr(ptr)
 
 def get_inthash_from_int(int):
+    """Just returns 'int' after translation.  Before translation, it convert
+    an AddressAsInt into a real integer, to use e.g. as a hash.  Do not store
+    the real integer (or the dict using this as a hash) across translation."""
     if isinstance(int, AddressAsInt):
         int = lltype.cast_ptr_to_int(int.adr.ptr)
     return int

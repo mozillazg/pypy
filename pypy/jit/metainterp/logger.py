@@ -108,6 +108,7 @@ class Logger(object):
 
 def int_could_be_an_address(x):
     if we_are_translated():
+        x = llmemory.get_inthash_from_int(x)
         return not (-32768 <= x <= 32767)
     else:
         return isinstance(x, llmemory.AddressAsInt)
