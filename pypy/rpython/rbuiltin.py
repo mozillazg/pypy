@@ -615,15 +615,9 @@ def rtype_cast_int_to_adr(hop):
     return hop.genop('cast_int_to_adr', [v_input],
                      resulttype = llmemory.Address)
 
-def rtype_get_inthash_from_int(hop):
-    v_input, = hop.inputargs(lltype.Signed)
-    hop.exception_cannot_occur()
-    return hop.genop('get_inthash_from_int', [v_input],
-                     resulttype = lltype.Signed)
-
 
 BUILTIN_TYPER[llmemory.cast_ptr_to_adr] = rtype_cast_ptr_to_adr
 BUILTIN_TYPER[llmemory.cast_adr_to_ptr] = rtype_cast_adr_to_ptr
 BUILTIN_TYPER[llmemory.cast_adr_to_int] = rtype_cast_adr_to_int
 BUILTIN_TYPER[llmemory.cast_int_to_adr] = rtype_cast_int_to_adr
-BUILTIN_TYPER[llmemory.get_inthash_from_int] = rtype_get_inthash_from_int
+

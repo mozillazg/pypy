@@ -340,9 +340,6 @@ op_cast_adr_to_ptr.need_result_type = True
 def op_cast_int_to_adr(int):
     return llmemory.cast_int_to_adr(int)
 
-def op_get_inthash_from_int(int):
-    return llmemory.get_inthash_from_int(int)
-
 ##def op_cast_int_to_adr(x):
 ##    assert type(x) is int
 ##    return llmemory.cast_int_to_adr(x)
