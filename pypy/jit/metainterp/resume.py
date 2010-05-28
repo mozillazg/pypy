@@ -4,7 +4,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import have_debug_prints
@@ -497,6 +497,7 @@ class AbstractResumeDataReader(object):
     """
     _mixin_ = True
     virtuals = None
+    virtual_default = None
 
     def _init(self, cpu, storage):
         self.cpu = cpu
@@ -509,7 +510,7 @@ class AbstractResumeDataReader(object):
 
     def _prepare_virtuals(self, virtuals):
         if virtuals:
-            self.virtuals = [None] * len(virtuals)
+            self.virtuals = [self.virtual_default] * len(virtuals)
             for i in range(len(virtuals)):
                 vinfo = virtuals[i]
                 if vinfo is not None:
@@ -751,6 +752,7 @@ def force_from_resumedata(metainterp_sd, storage):
     return resumereader.virtuals
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
+    virtual_default = lltype.nullptr(llmemory.GCREF.TO)
     resume_after_guard_not_forced = 0
     #             0: not a GUARD_NOT_FORCED
     #             1: in handle_async_forcing
