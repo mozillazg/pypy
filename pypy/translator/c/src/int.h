@@ -297,3 +297,5 @@ op_int_mul_ovf(long a, long b, long *longprod)
 #define OP_ULLONG_AND OP_LLONG_AND
 #define OP_ULLONG_OR OP_LLONG_OR
 #define OP_ULLONG_XOR OP_LLONG_XOR
+
+#define OP_GET_INTHASH_FROM_INT(x, r)  r = x;

@@ -211,3 +211,24 @@ def test_cast_int_to_adr():
     fc = compile(f, [int])
     res = fc(5)
     assert res == 42
+
+def test_dict_of_addresses():
+    TP = lltype.Struct('x')
+    a = lltype.malloc(TP, flavor='raw', immortal=True)
+    b = lltype.malloc(TP, flavor='raw', immortal=True)
+
+    def f(i):
+        d = {}
+        d[cast_ptr_to_adr(a)] = 123
+        d[cast_ptr_to_adr(b)] = 456
+        if i > 5:
+            key = cast_ptr_to_adr(a)
+        else:
+            key = cast_ptr_to_adr(b)
+        return d[key]
+
+    fc = compile(f, [int])
+    res = fc(-77)
+    assert res == 456
+    res = fc(77)
+    assert res == 123

@@ -346,6 +346,9 @@ def llmemory_cast_adr_to_int(s):
 def llmemory_cast_int_to_adr(s):
     return SomeAddress()
 
+def llmemory_get_inthash_from_int(s):
+    return SomeInteger() # xxx
+
 
 ##def rarith_ovfcheck(s_obj):
 ##    if isinstance(s_obj, SomeInteger) and s_obj.unsigned:
@@ -387,6 +390,7 @@ BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_ptr_to_adr] = llmemory
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_ptr] = llmemory_cast_adr_to_ptr
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_adr_to_int] = llmemory_cast_adr_to_int
 BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.cast_int_to_adr] = llmemory_cast_int_to_adr
+BUILTIN_ANALYZERS[pypy.rpython.lltypesystem.llmemory.get_inthash_from_int] = llmemory_get_inthash_from_int
 
 BUILTIN_ANALYZERS[getattr(OSError.__init__, 'im_func', OSError.__init__)] = (
     OSError_init)
