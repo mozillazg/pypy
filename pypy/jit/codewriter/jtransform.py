@@ -873,9 +873,10 @@ class Transformer(object):
         if args[0] in self.vable_array_vars:     # virtualizable array
             vars = self.vable_array_vars[args[0]]
             (v_base, arrayfielddescr, arraydescr) = vars
-            return SpaceOperation('arraylen_vable',
-                                  [v_base, arrayfielddescr, arraydescr],
-                                  op.result)
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('arraylen_vable',
+                                   [v_base, arrayfielddescr, arraydescr],
+                                   op.result)]
         return SpaceOperation('arraylen_gc', [args[0], arraydescr], op.result)
 
     do_fixed_list_len_foldable = do_fixed_list_len
@@ -885,9 +886,10 @@ class Transformer(object):
             vars = self.vable_array_vars[args[0]]
             (v_base, arrayfielddescr, arraydescr) = vars
             kind = getkind(op.result.concretetype)
-            return SpaceOperation('getarrayitem_vable_%s' % kind[0],
-                                  [v_base, arrayfielddescr, arraydescr,
-                                   args[1]], op.result)
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('getarrayitem_vable_%s' % kind[0],
+                                   [v_base, arrayfielddescr, arraydescr,
+                                    args[1]], op.result)]
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         extra = getkind(op.result.concretetype)[0]
@@ -905,9 +907,10 @@ class Transformer(object):
             vars = self.vable_array_vars[args[0]]
             (v_base, arrayfielddescr, arraydescr) = vars
             kind = getkind(args[2].concretetype)
-            return SpaceOperation('setarrayitem_vable_%s' % kind[0],
-                                  [v_base, arrayfielddescr, arraydescr,
-                                   args[1], args[2]], None)
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('setarrayitem_vable_%s' % kind[0],
+                                   [v_base, arrayfielddescr, arraydescr,
+                                    args[1], args[2]], None)]
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         kind = getkind(args[2].concretetype)[0]

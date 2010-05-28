@@ -744,13 +744,17 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
 
 def force_from_resumedata(metainterp_sd, storage):
     resumereader = ResumeDataDirectReader(metainterp_sd.cpu, storage)
+    resumereader.handling_async_forcing()
     vinfo = metainterp_sd.virtualizable_info
     vrefinfo = metainterp_sd.virtualref_info
     resumereader.consume_vref_and_vable(vrefinfo, vinfo)
     return resumereader.virtuals
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
-    resume_after_guard_not_forced = False
+    resume_after_guard_not_forced = 0
+    #             0: not a GUARD_NOT_FORCED
+    #             1: in handle_async_forcing
+    #             2: resuming from the GUARD_NOT_FORCED
 
     def __init__(self, cpu, storage, all_virtuals=None):
         self._init(cpu, storage)
@@ -759,8 +763,11 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         else:
             # special case for resuming after a GUARD_NOT_FORCED: we already
             # have the virtuals
-            self.resume_after_guard_not_forced = True
+            self.resume_after_guard_not_forced = 2
             self.virtuals = all_virtuals
+
+    def handling_async_forcing(self):
+        self.resume_after_guard_not_forced = 1
 
     def consume_one_section(self, blackholeinterp):
         self.blackholeinterp = blackholeinterp
@@ -785,11 +792,16 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return len(nums)
         virtualizable = self.decode_ref(nums[-1])
         virtualizable = vinfo.cast_gcref_to_vtype(virtualizable)
-        # just jumped away from assembler (case 4 in the comment in
-        # virtualizable.py) into tracing (case 2); check that vable_token
-        # is and stays 0.  Note the call to reset_vable_token() in
-        # warmstate.py.
-        assert not virtualizable.vable_token
+        if self.resume_after_guard_not_forced == 1:
+            # in the middle of handle_async_forcing()
+            assert virtualizable.vable_token
+            virtualizable.vable_token = vinfo.TOKEN_NONE
+        else:
+            # just jumped away from assembler (case 4 in the comment in
+            # virtualizable.py) into tracing (case 2); check that vable_token
+            # is and stays 0.  Note the call to reset_vable_token() in
+            # warmstate.py.
+            assert not virtualizable.vable_token
         return vinfo.write_from_resume_data_partial(virtualizable, self, nums)
 
     def load_value_of_type(self, TYPE, tagged):
@@ -809,7 +821,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     def consume_vref_and_vable(self, vrefinfo, vinfo):
         nums = self.cur_numb.nums
         self.cur_numb = self.cur_numb.prev
-        if not self.resume_after_guard_not_forced:
+        if self.resume_after_guard_not_forced != 2:
             end_vref = self.consume_vable_info(vinfo, nums)
             self.consume_virtualref_info(vrefinfo, nums, end_vref)
 
