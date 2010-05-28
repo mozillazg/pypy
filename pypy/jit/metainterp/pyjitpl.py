@@ -40,8 +40,6 @@ class FixME:      # XXX marks deprecated ootype-only operations
 
 class MIFrame(object):
 
-    env = property(lambda: xxx, lambda: xxx)     # temporary: no read/write!
-
     def __init__(self, metainterp):
         self.metainterp = metainterp
         self.registers_i = [None] * 256
@@ -659,36 +657,21 @@ class MIFrame(object):
         allboxes = greenboxes + redboxes
         metainterp_sd = self.metainterp.staticdata
         portal_code = metainterp_sd.portal_code
-##        warmrunnerstate = metainterp_sd.state
-##        token = None
-##        if not self.is_blackholing() and warmrunnerstate.inlining:
-##            if warmrunnerstate.can_inline_callable(greenboxes):
-##                return self.metainterp.perform_call(portal_code, allboxes,
-##                                                    greenkey=greenboxes)
-##            token = warmrunnerstate.get_assembler_token(greenboxes)
-##        call_position = 0
-##        if token is not None:
-##            call_position = len(self.history.operations)
-##            # verify that we have all green args, needed to make sure
-##            # that assembler that we call is still correct
-##            self.verify_green_args(greenboxes)
+        warmrunnerstate = metainterp_sd.state
+        token = None
+        if warmrunnerstate.inlining:
+            if warmrunnerstate.can_inline_callable(greenboxes):
+                return self.metainterp.perform_call(portal_code, allboxes,
+                                                    greenkey=greenboxes)
+            token = warmrunnerstate.get_assembler_token(greenboxes)
+            # verify that we have all green args, needed to make sure
+            # that assembler that we call is still correct
+            self.verify_green_args(greenboxes)
         #
         k = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
         funcbox = ConstInt(llmemory.cast_adr_to_int(k))
-        resbox = self.do_residual_call(funcbox, portal_code.calldescr,
-                                       allboxes)
-        #
-##        if token is not None:
-##            # XXX fix the call position, <UGLY!>
-##            while True:
-##                op = self.history.operations[call_position]
-##                if op.opnum == rop.CALL or op.opnum == rop.CALL_MAY_FORCE:
-##                    break
-##                call_position += 1
-##            # </UGLY!>
-##            # this will substitute the residual call with assembler call
-##            self.direct_assembler_call(boxes, token, call_position)
-        return resbox
+        return self.do_residual_call(funcbox, portal_code.calldescr,
+                                     allboxes, assembler_call_token=token)
 
     opimpl_recursive_call_i = _opimpl_recursive_call
     opimpl_recursive_call_r = _opimpl_recursive_call
@@ -1009,16 +992,20 @@ class MIFrame(object):
             self.metainterp.assert_no_exception()
         return resbox
 
-    def do_residual_call(self, funcbox, descr, argboxes):
+    def do_residual_call(self, funcbox, descr, argboxes,
+                         assembler_call_token=None):
         allboxes = [funcbox] + argboxes
         effectinfo = descr.get_extra_info()
-        if (effectinfo is None or effectinfo.extraeffect ==
-                                effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
+        if (effectinfo is None or
+                effectinfo.extraeffect ==
+                             effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
+                assembler_call_token is not None):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.vable_and_vrefs_before_residual_call()
-            # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
+            if assembler_call_token is not None:
+                self.metainterp.direct_assembler_call(assembler_call_token)
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
             self.metainterp.vable_and_vrefs_after_residual_call()
@@ -2007,20 +1994,22 @@ class MetaInterp(object):
                 max_key = key
         return max_key
 
-    def direct_assembler_call(self, boxes, token, call_position):
-        """ Generate a direct call to assembler for portal entry point.
+    def direct_assembler_call(self, token):
+        """ Generate a direct call to assembler for portal entry point,
+        patching the CALL_MAY_FORCE that occurred just now.
         """
-        assert not self.is_blackholing() # XXX
+        op = self.history.operations.pop()
+        assert op.opnum == rop.CALL_MAY_FORCE
         num_green_args = self.staticdata.num_green_args
-        args = boxes[num_green_args:]
-        resbox = self.history.operations[call_position].result
-        rest = self.history.slice_history_at(call_position)
+        args = op.args[num_green_args + 1:]
         if self.staticdata.virtualizable_info is not None:
             vindex = self.staticdata.virtualizable_info.index_of_virtualizable
-            vbox = boxes[vindex]
+            vbox = args[vindex - num_green_args]
             args += self.gen_load_from_other_virtualizable(vbox)
-        self.history.record(rop.CALL_ASSEMBLER, args[:], resbox, descr=token)
-        self.history.operations += rest
+        op.opnum = rop.CALL_ASSEMBLER
+        op.args = args
+        op.descr = token
+        self.history.operations.append(op)
 
 # ____________________________________________________________
 

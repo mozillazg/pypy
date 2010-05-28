@@ -137,7 +137,6 @@ class RecursiveTests:
 
         return interpret
 
-    @py.test.mark.xfail()
     def test_inline(self):
         code = "021"
         subcode = "00"
@@ -163,7 +162,6 @@ class RecursiveTests:
                                 inline=True) == 42
         self.check_loops(call_may_force = 1, call = 0)
 
-    @py.test.mark.xfail()
     def test_inline_faulty_can_inline(self):
         code = "021"
         subcode = "301"
@@ -471,7 +469,6 @@ class RecursiveTests:
         assert not res
         self.check_aborted_count(5)        
 
-    @py.test.mark.xfail()
     def test_set_param_inlining(self):
         myjitdriver = JitDriver(greens=[], reds=['n', 'recurse'])
         def loop(n, recurse=False):
@@ -538,7 +535,6 @@ class RecursiveTests:
         self.check_tree_loop_count(3)
         self.check_history(int_add=1)
 
-    @py.test.mark.xfail()
     def test_dont_inline_huge_stuff(self):
         def p(pc, code):
             code = hlstr(code)
@@ -583,7 +579,6 @@ class RecursiveTests:
         self.check_history(call_assembler=1, call=0)
         self.check_tree_loop_count(3)
 
-    @py.test.mark.xfail()
     def test_directly_call_assembler(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i'],
                            get_printable_location = lambda codeno : str(codeno),
@@ -621,7 +616,6 @@ class RecursiveTests:
         self.check_history(call_assembler=0, call_may_force=1)
         self.check_enter_count_at_most(1)
 
-    @py.test.mark.xfail()
     def test_directly_call_assembler_return(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno),
@@ -641,7 +635,6 @@ class RecursiveTests:
         self.meta_interp(portal, [2], inline=True)
         self.check_history(call_assembler=1)
 
-    @py.test.mark.xfail()
     def test_directly_call_assembler_raise(self):
 
         class MyException(Exception):
@@ -867,7 +860,6 @@ class RecursiveTests:
                                policy=StopAtXPolicy(change))
         assert res == main(0)
 
-    @py.test.mark.xfail()
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno),

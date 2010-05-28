@@ -816,16 +816,6 @@ class History(object):
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations[position] = op
 
-    def slice_history_at(self, position):
-        """ a strange function that does this:
-        history : operation_at_position : rest
-        it'll kill operation_at_position, store everything before that
-        in history.operations and return rest
-        """
-        rest = self.operations[position + 1:]
-        del self.operations[position:]
-        return rest
-
 # ____________________________________________________________
 
 
