@@ -2561,7 +2561,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p2, 5, descr=virtualrefindexdescr)
         escape(p2)
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, -3, descr=virtualtokendescr)
         jump(p1)
         """
         # XXX we should optimize a bit more the case of a nonvirtual.
@@ -2603,7 +2603,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p1b, 252, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, -3, descr=virtualtokendescr)
         jump(p0, i1)
         """
         self.optimize_loop(ops, 'Not, Not', expected)
@@ -2644,7 +2644,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p1b, i1, descr=valuedescr)
         setfield_gc(p1, p1b, descr=nextdescr)
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, -3, descr=virtualtokendescr)
         jump(p0, i1)
         """
         # the point of this test is that 'i1' should show up in the fail_args
@@ -2715,7 +2715,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         escape(p2)
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, -3, descr=virtualtokendescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced() []
         jump(i1)
@@ -2741,7 +2741,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setfield_gc(p2, 23, descr=virtualrefindexdescr)
         escape(p2)
         setfield_gc(p2, p1, descr=virtualforceddescr)
-        setfield_gc(p2, -2, descr=virtualtokendescr)
+        setfield_gc(p2, -3, descr=virtualtokendescr)
         call_may_force(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
         jump(i1, p1)
