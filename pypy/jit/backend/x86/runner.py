@@ -73,7 +73,7 @@ class CPU386(AbstractLLCPU):
         return self.assembler.fail_boxes_ptr.getitem(index)
 
     def get_latest_value_count(self):
-        XXX
+        return self.assembler.fail_boxes_count
 
     def clear_latest_values(self, count):
         setitem = self.assembler.fail_boxes_ptr.setitem

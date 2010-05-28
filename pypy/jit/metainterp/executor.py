@@ -8,7 +8,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
-from pypy.jit.metainterp.history import INT, REF, FLOAT, AbstractDescr
+from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID, AbstractDescr
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
@@ -75,7 +75,7 @@ def do_call(cpu, metainterp, argboxes, descr):
         else:
             metainterp.execute_did_not_raise()
         return BoxFloat(result)
-    if rettype == 'v':   # void
+    if rettype == VOID:
         try:
             cpu.bh_call_v(func, descr, args_i, args_r, args_f)
         except Exception, e:

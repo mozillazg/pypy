@@ -1188,6 +1188,7 @@ class Assembler386(object):
         #
         if not we_are_translated():
             assert bytecode[4] == 0xCC
+        self.fail_boxes_count = num
         fail_index = rffi.cast(rffi.LONGP, bytecode)[0]
         return fail_index
 

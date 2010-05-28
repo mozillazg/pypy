@@ -6,6 +6,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values,\
      BoxFloat
+from pypy.jit.metainterp import history
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
@@ -440,25 +441,25 @@ class AbstractLLCPU(AbstractCPU):
     def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
         assert isinstance(calldescr, BaseIntCallDescr)
         if not we_are_translated():
-            calldescr.verify_types(args_i, args_r, args_f, 'int')
+            calldescr.verify_types(args_i, args_r, args_f, history.INT)
         return calldescr.call_stub(func, args_i, args_r, args_f)
 
     def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
         assert isinstance(calldescr, GcPtrCallDescr)
         if not we_are_translated():
-            calldescr.verify_types(args_i, args_r, args_f, 'ref')
+            calldescr.verify_types(args_i, args_r, args_f, history.REF)
         return calldescr.call_stub(func, args_i, args_r, args_f)
 
     def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
         assert isinstance(calldescr, FloatCallDescr)
         if not we_are_translated():
-            calldescr.verify_types(args_i, args_r, args_f, 'float')
+            calldescr.verify_types(args_i, args_r, args_f, history.FLOAT)
         return calldescr.call_stub(func, args_i, args_r, args_f)
 
     def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
         assert isinstance(calldescr, VoidCallDescr)
         if not we_are_translated():
-            calldescr.verify_types(args_i, args_r, args_f, 'void')
+            calldescr.verify_types(args_i, args_r, args_f, history.VOID)
         return calldescr.call_stub(func, args_i, args_r, args_f)
 
     def bh_cast_ptr_to_int(self, ptr):
