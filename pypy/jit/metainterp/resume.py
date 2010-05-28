@@ -552,10 +552,8 @@ class AbstractResumeDataReader(object):
 
 def rebuild_from_resumedata(metainterp, storage, virtualizable_info):
     resumereader = ResumeDataBoxReader(storage, metainterp)
-    virtualizable_boxes = None
-    if virtualizable_info:
-        XXX # virtualizable_boxes = resumereader.consume_boxes()
-    virtualref_boxes = resumereader.consume_virtualref_boxes()
+    boxes = resumereader.consume_vref_and_vable_boxes(virtualizable_info)
+    virtualizable_boxes, virtualref_boxes = boxes
     frameinfo = storage.rd_frame_info_list
     while True:
         f = metainterp.newframe(frameinfo.jitcode)
@@ -567,7 +565,7 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info):
             break
     metainterp.framestack.reverse()
     resumereader.done()
-    return resumereader.liveboxes, None, virtualref_boxes
+    return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
 
@@ -583,12 +581,32 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         self.boxes_f = boxes_f
         self._prepare_next_section(info)
 
-    def consume_virtualref_boxes(self):
+    def consume_virtualizable_boxes(self, vinfo, nums):
+        # we have to ignore the initial part of 'nums' (containing vrefs),
+        # find the virtualizable from nums[-1], and use it to know how many
+        # boxes of which type we have to return.  This does not write
+        # anything into the virtualizable.
+        virtualizablebox = self.decode_ref(nums[-1])
+        virtualizable = vinfo.unwrap_virtualizable_box(virtualizablebox)
+        return vinfo.load_list_of_boxes(virtualizable, self, nums)
+
+    def consume_virtualref_boxes(self, nums, end):
         # Returns a list of boxes, assumed to be all BoxPtrs.
         # We leave up to the caller to call vrefinfo.continue_tracing().
+        assert (end & 1) == 0
+        return [self.decode_ref(nums[i]) for i in range(end)]
+
+    def consume_vref_and_vable_boxes(self, vinfo):
         nums = self.cur_numb.nums
         self.cur_numb = self.cur_numb.prev
-        return [self.decode_ref(num) for num in nums]
+        if vinfo is None:
+            virtualizable_boxes = None
+            end = len(nums)
+        else:
+            virtualizable_boxes = self.consume_virtualizable_boxes(vinfo, nums)
+            end = len(nums) - len(virtualizable_boxes)
+        virtualref_boxes = self.consume_virtualref_boxes(nums, end)
+        return virtualizable_boxes, virtualref_boxes
 
     def allocate_with_vtable(self, known_class):
         return self.metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
@@ -670,6 +688,15 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         self.liveboxes[num] = box
         return box
 
+    def decode_box_of_type(self, TYPE, tagged):
+        kind = getkind(TYPE)
+        if kind == 'int':     kind = INT
+        elif kind == 'ref':   kind = REF
+        elif kind == 'float': kind = FLOAT
+        else: raise AssertionError(kind)
+        return self.decode_box(tagged, kind)
+    decode_box_of_type._annspecialcase_ = 'specialize:arg(1)'
+
     def write_an_int(self, index, box):
         self.boxes_i[index] = box
     def write_a_ref(self, index, box):
@@ -717,10 +744,9 @@ def blackhole_from_resumedata(blackholeinterpbuilder, storage,
 
 def force_from_resumedata(metainterp_sd, storage):
     resumereader = ResumeDataDirectReader(metainterp_sd.cpu, storage)
-    if expects_virtualizables:
-        XXX
+    vinfo = metainterp_sd.virtualizable_info
     vrefinfo = metainterp_sd.virtualref_info
-    resumereader.consume_virtualref_info(vrefinfo)
+    resumereader.consume_vref_and_vable(vrefinfo, vinfo)
     return resumereader.virtuals
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
@@ -764,7 +790,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         # is and stays 0.  Note the call to reset_vable_token() in
         # warmstate.py.
         assert not virtualizable.vable_token
-        return vinfo.write_from_resume_data(virtualizable, self, nums)
+        return vinfo.write_from_resume_data_partial(virtualizable, self, nums)
 
     def load_value_of_type(self, TYPE, tagged):
         kind = getkind(TYPE)

@@ -1886,7 +1886,7 @@ class MetaInterp(object):
         #
         # virtualizable: synchronize the real virtualizable and the local
         # boxes, in whichever direction is appropriate
-        if expect_virtualizable:
+        if vinfo is not None:
             self.virtualizable_boxes = virtualizable_boxes
             # just jumped away from assembler (case 4 in the comment in
             # virtualizable.py) into tracing (case 2); check that vable_token
