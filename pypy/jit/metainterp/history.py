@@ -16,6 +16,7 @@ INT   = 'i'
 REF   = 'r'
 FLOAT = 'f'
 HOLE  = '_'
+VOID  = 'v'
 
 FAILARGS_LIMIT = 1000
 

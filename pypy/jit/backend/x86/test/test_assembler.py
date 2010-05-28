@@ -75,35 +75,6 @@ def test_write_failure_recovery_description():
     assert ([loc.assembler() for loc in newlocs] ==
             [loc.assembler() for loc in locs if loc is not None])
 
-    # finally, test make_boxes_from_latest_values(), which should
-    # reproduce the holes
-    expected_classes = [BoxInt, BoxPtr, BoxFloat,
-                        BoxInt, BoxPtr, BoxFloat,
-                        type(None), type(None),
-                        BoxInt, BoxPtr, BoxFloat]
-    ptrvalues = {}
-    S = lltype.GcStruct('S')
-    for i, cls in enumerate(expected_classes):
-        if cls == BoxInt:
-            assembler.fail_boxes_int.setitem(i, 1000 + i)
-        elif cls == BoxPtr:
-            s = lltype.malloc(S)
-            s_ref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-            ptrvalues[i] = s_ref
-            assembler.fail_boxes_ptr.setitem(i, s_ref)
-        elif cls == BoxFloat:
-            assembler.fail_boxes_float.setitem(i, 42.5 + i)
-    boxes = assembler.make_boxes_from_latest_values(bytecode_addr)
-    assert len(boxes) == len(locs) == len(expected_classes)
-    for i, (box, expected_class) in enumerate(zip(boxes, expected_classes)):
-        assert type(box) is expected_class
-        if expected_class == BoxInt:
-            assert box.value == 1000 + i
-        elif expected_class == BoxPtr:
-            assert box.value == ptrvalues[i]
-        elif expected_class == BoxFloat:
-            assert box.value == 42.5 + i
-
 # ____________________________________________________________
 
 def test_failure_recovery_func_no_floats():

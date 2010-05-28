@@ -190,18 +190,8 @@ class BaseCallDescr(AbstractDescr):
     def get_extra_info(self):
         return self.extrainfo
 
-    _returns_a_pointer = False        # unless overridden by GcPtrCallDescr
-    _returns_a_float   = False        # unless overridden by FloatCallDescr
-    _returns_a_void    = False        # unless overridden by VoidCallDescr
-
-    def returns_a_pointer(self):
-        return self._returns_a_pointer
-
-    def returns_a_float(self):
-        return self._returns_a_float
-
-    def returns_a_void(self):
-        return self._returns_a_void
+    def get_return_type(self):
+        return self._return_type
 
     def get_result_size(self, translate_support_code):
         raise NotImplementedError
@@ -225,14 +215,16 @@ class BaseCallDescr(AbstractDescr):
         seen = {'i': 0, 'r': 0, 'f': 0}
         args = ", ".join([process(c) for c in self.arg_classes])
 
-        if self.returns_a_pointer():
+        if self.get_return_type() == history.INT:
+            result = 'rffi.cast(lltype.Signed, res)'
+        elif self.get_return_type() == history.REF:
             result = 'lltype.cast_opaque_ptr(llmemory.GCREF, res)'
-        elif self.returns_a_float():
+        elif self.get_return_type() == history.FLOAT:
             result = 'res'
-        elif self.returns_a_void():
+        elif self.get_return_type() == history.VOID:
             result = 'None'
         else:
-            result = 'rffi.cast(lltype.Signed, res)'
+            assert 0
         source = py.code.Source("""
         def call_stub(func, args_i, args_r, args_f):
             fnptr = rffi.cast(lltype.Ptr(FUNC), func)
@@ -247,9 +239,7 @@ class BaseCallDescr(AbstractDescr):
         self.call_stub = d['call_stub']
 
     def verify_types(self, args_i, args_r, args_f, return_type):
-        assert self._returns_a_pointer == (return_type == 'ref')
-        assert self._returns_a_float   == (return_type == 'float')
-        assert self._returns_a_void    == (return_type == 'void')
+        assert self._return_type == return_type
         assert self.arg_classes.count('i') == len(args_i or ())
         assert self.arg_classes.count('r') == len(args_r or ())
         assert self.arg_classes.count('f') == len(args_f or ())
@@ -268,7 +258,7 @@ class BaseIntCallDescr(BaseCallDescr):
     #
     # The purpose of BaseIntCallDescr is to be the parent of all classes
     # in which 'call_stub' has a return kind of 'int'.
-    pass
+    _return_type = history.INT
 
 class NonGcPtrCallDescr(BaseIntCallDescr):
     _clsname = 'NonGcPtrCallDescr'
@@ -277,19 +267,19 @@ class NonGcPtrCallDescr(BaseIntCallDescr):
 
 class GcPtrCallDescr(BaseCallDescr):
     _clsname = 'GcPtrCallDescr'
-    _returns_a_pointer = True
+    _return_type = history.REF
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class FloatCallDescr(BaseCallDescr):
     _clsname = 'FloatCallDescr'
-    _returns_a_float = True
+    _return_type = history.FLOAT
     def get_result_size(self, translate_support_code):
         return symbolic.get_size(lltype.Float, translate_support_code)
 
 class VoidCallDescr(BaseCallDescr):
     _clsname = 'VoidCallDescr'
-    _returns_a_void = True
+    _return_type = history.VOID
     def get_result_size(self, translate_support_code):
         return 0
 
