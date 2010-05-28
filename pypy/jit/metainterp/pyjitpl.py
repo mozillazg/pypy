@@ -1019,9 +1019,9 @@ class MIFrame(object):
             # xxx do something about code duplication
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
-            self.metainterp.vable_and_vrefs_after_residual_call()
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
+            self.metainterp.vable_and_vrefs_after_residual_call()
             self.generate_guard(rop.GUARD_NOT_FORCED, None)
             self.metainterp.handle_possible_exception()
             return resbox
@@ -1553,7 +1553,10 @@ class MetaInterp(object):
         # run it.
         from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
         self.aborted_tracing(stb.reason)
-        convert_and_run_from_pyjitpl(self, stb.current_exc)
+        current_exc = lltype.nullptr(llmemory.GCREF.TO)
+        if self.last_exc_value_box is not None:
+            current_exc = self.last_exc_value_box.getref()
+        convert_and_run_from_pyjitpl(self, current_exc)
         assert False    # ^^^ must raise
 
     def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
@@ -1826,7 +1829,8 @@ class MetaInterp(object):
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             if vinfo.tracing_after_residual_call(virtualizable):
                 # the virtualizable escaped during CALL_MAY_FORCE.
-                raise XXX-SwitchToBlackhole(ABORT_ESCAPE, yyy)
+                self.load_fields_from_virtualizable()
+                raise SwitchToBlackhole(ABORT_ESCAPE)
 
     def stop_tracking_virtualref(self, i):
         virtualbox = self.virtualref_boxes[i]
@@ -1916,8 +1920,8 @@ class MetaInterp(object):
 
     def load_fields_from_virtualizable(self):
         # Force a reload of the virtualizable fields into the local
-        # boxes (called only in escaping cases)
-        assert self.is_blackholing()
+        # boxes (called only in escaping cases).  Only call this function
+        # just before SwitchToBlackhole.
         vinfo = self.staticdata.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
@@ -2031,9 +2035,8 @@ class ChangeFrame(Exception):
     it to reload the current top-of-stack frame that gets interpreted."""
 
 class SwitchToBlackhole(Exception):
-    def __init__(self, reason, current_exc=lltype.nullptr(llmemory.GCREF.TO)):
+    def __init__(self, reason):
         self.reason = reason
-        self.current_exc = current_exc
 
 # ____________________________________________________________
 

@@ -349,11 +349,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
     def handle_async_forcing(self, force_token):
         from pypy.jit.metainterp.resume import force_from_resumedata
         metainterp_sd = self.metainterp_sd
-        expect_virtualizable = metainterp_sd.virtualizable_info is not None
         all_virtuals = force_from_resumedata(metainterp_sd, self)
-        # Handle virtualizable_boxes: store them on the real virtualizable now
-        if expect_virtualizable:
-            metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
+        # The virtualizable data was stored on the real virtualizable above.
         # Handle all_virtuals: keep them for later blackholing from the
         # future failure of the GUARD_NOT_FORCED
         self.save_data(force_token, all_virtuals)

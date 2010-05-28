@@ -271,12 +271,6 @@ class VirtualizableInfo:
             assert virtualizable.vable_token == self.TOKEN_NONE
     force_now._dont_inline_ = True
 
-    def forced_vable(self, virtualizable_boxes):
-        virtualizable_box = virtualizable_boxes[-1]
-        virtualizable = self.unwrap_virtualizable_box(virtualizable_box)
-        self.write_boxes(virtualizable, virtualizable_boxes)
-        virtualizable.vable_token = self.TOKEN_NONE
-
 # ____________________________________________________________
 #
 # The 'vable_token' field of a virtualizable is either 0, -1, or points

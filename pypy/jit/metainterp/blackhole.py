@@ -808,7 +808,8 @@ class BlackholeInterpreter(object):
 
     def get_portal_runner(self):
         metainterp_sd = self.builder.metainterp_sd
-        fnptr = llmemory.cast_ptr_to_adr(metainterp_sd.portal_runner_ptr)
+        fnptr = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
+        fnptr = llmemory.cast_adr_to_int(fnptr)
         calldescr = metainterp_sd.portal_code.calldescr
         return fnptr, calldescr
 
