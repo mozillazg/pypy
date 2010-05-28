@@ -247,8 +247,8 @@ class BaseCPU(model.AbstractCPU):
         token = llimpl.get_frame_forced_token(self.latest_frame)
         return llmemory.cast_adr_to_int(token)
 
-    def clear_latest_values(self):
-        llimpl.frame_clear_latest_values(self.latest_frame)
+    def clear_latest_values(self, count):
+        llimpl.frame_clear_latest_values(self.latest_frame, count)
 
     # ----------
 

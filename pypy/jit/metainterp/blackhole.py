@@ -550,9 +550,6 @@ class BlackholeInterpreter(object):
     @arguments("f", returns="f")
     def bhimpl_float_abs(a):
         return abs(a)
-    @arguments("f", returns="i")
-    def bhimpl_float_is_true(a):
-        return bool(a)
 
     @arguments("f", "f", returns="f")
     def bhimpl_float_add(a, b):

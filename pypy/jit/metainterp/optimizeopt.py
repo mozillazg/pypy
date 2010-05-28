@@ -757,6 +757,9 @@ class Optimizer(object):
     def optimize_INT_IS_TRUE(self, op):
         self._optimize_nullness(op, op.args[0], True)
 
+    def optimize_INT_IS_ZERO(self, op):
+        self._optimize_nullness(op, op.args[0], False)
+
     def _optimize_oois_ooisnot(self, op, expect_isnot):
         value0 = self.getvalue(op.args[0])
         value1 = self.getvalue(op.args[1])

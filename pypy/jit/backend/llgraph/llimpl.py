@@ -1080,8 +1080,9 @@ def frame_get_value_count(frame):
     frame = _from_opaque(frame)
     return len(frame.fail_args)
 
-def frame_clear_latest_values(frame):
+def frame_clear_latest_values(frame, count):
     frame = _from_opaque(frame)
+    assert count == len(frame.fail_args)
     del frame.fail_args
 
 _last_exception = None
