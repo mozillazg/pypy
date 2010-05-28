@@ -826,17 +826,6 @@ def PyDict_MergeFromSeq2(space, a, seq2, override):
     """
     raise NotImplementedError
 
-@cpython_api([rffi.INT_real], lltype.Void)
-def PyErr_PrintEx(space, set_sys_last_vars):
-    """Print a standard traceback to sys.stderr and clear the error indicator.
-    Call this function only when the error indicator is set.  (Otherwise it will
-    cause a fatal error!)
-    
-    If set_sys_last_vars is nonzero, the variables sys.last_type,
-    sys.last_value and sys.last_traceback will be set to the
-    type, value and traceback of the printed exception, respectively."""
-    raise NotImplementedError
-
 @cpython_api([PyObjectP, PyObjectP, PyObjectP], lltype.Void)
 def PyErr_NormalizeException(space, exc, val, tb):
     """Under certain circumstances, the values returned by PyErr_Fetch() below
@@ -991,17 +980,6 @@ def PyFile_CheckExact(space, p):
     """Return true if its argument is a PyFileObject, but not a subtype of
     PyFileObject.
     """
-    raise NotImplementedError
-
-@cpython_api([rffi.CCHARP, rffi.CCHARP], PyObject)
-def PyFile_FromString(space, filename, mode):
-    """
-    
-    
-    
-    On success, return a new file object that is opened on the file given by
-    filename, with a file mode given by mode, where mode has the same
-    semantics as the standard C routine fopen().  On failure, return NULL."""
     raise NotImplementedError
 
 @cpython_api([FILE, rffi.CCHARP, rffi.CCHARP, rffi.INT_real], PyObject)
@@ -2084,11 +2062,6 @@ def PyInt_ClearFreeList(space, ):
     raise NotImplementedError
 
 @cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyIter_Check(space, o):
-    """Return true if the object o supports the iterator protocol."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
 def PySeqIter_Check(space, seq):
     """Return true if the type of op is PySeqIter_Type.
     """
@@ -2291,19 +2264,6 @@ def PyMarshal_ReadObjectFromString(space, string, len):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject], PyObject)
-def PyMethod_Self(space, meth):
-    """Return the instance associated with the method meth if it is bound, otherwise
-    return NULL."""
-    borrow_from()
-    raise NotImplementedError
-
-@cpython_api([PyObject], PyObject)
-def PyMethod_GET_SELF(space, meth):
-    """Macro version of PyMethod_Self() which avoids error checking."""
-    borrow_from()
-    raise NotImplementedError
-
 @cpython_api([], rffi.INT_real, error=CANNOT_FAIL)
 def PyMethod_ClearFreeList(space, ):
     """Clear the free list. Return the total number of freed items.
@@ -2373,26 +2333,6 @@ def PyNumber_ToBase(space, n, base):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARPP, Py_ssize_t], rffi.INT_real, error=-1)
-def PyObject_AsCharBuffer(space, obj, buffer, buffer_len):
-    """Returns a pointer to a read-only memory location usable as character-based
-    input.  The obj argument must support the single-segment character buffer
-    interface.  On success, returns 0, sets buffer to the memory location
-    and buffer_len to the buffer length.  Returns -1 and sets a
-    TypeError on error.
-    
-    
-    
-    This function used an int * type for buffer_len. This might
-    require changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, rffi.CCHARP], rffi.INT_real, error=-1)
-def PyObject_DelAttrString(space, o, attr_name):
-    """Delete attribute named attr_name, for object o. Returns -1 on failure.
-    This is the equivalent of the Python statement del o.attr_name."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject, rffi.INTP], rffi.INT_real, error=-1)
 def PyObject_Cmp(space, o1, o2, result):
     """
@@ -2421,18 +2361,6 @@ def PyObject_HashNotImplemented(space, o):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject, PyObject], rffi.INT_real, error=-1)
-def PyObject_SetItem(space, o, key, v):
-    """Map the object key to the value v.  Returns -1 on failure.  This is the
-    equivalent of the Python statement o[key] = v."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, PyObject], rffi.INT_real, error=-1)
-def PyObject_DelItem(space, o, key):
-    """Delete the mapping for key from o.  Returns -1 on failure. This is the
-    equivalent of the Python statement del o[key]."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyObject_Dir(space, o):
     """This is equivalent to the Python expression dir(o), returning a (possibly
@@ -2440,27 +2368,6 @@ def PyObject_Dir(space, o):
     was an error.  If the argument is NULL, this is like the Python dir(),
     returning the names of the current locals; in this case, if no execution frame
     is active then NULL is returned but PyErr_Occurred() will return false."""
-    raise NotImplementedError
-
-@cpython_api([], PyObject)
-def PyEval_GetBuiltins(space, ):
-    """Return a dictionary of the builtins in the current execution frame,
-    or the interpreter of the thread state if no frame is currently executing."""
-    borrow_from()
-    raise NotImplementedError
-
-@cpython_api([], PyObject)
-def PyEval_GetLocals(space, ):
-    """Return a dictionary of the local variables in the current execution frame,
-    or NULL if no frame is currently executing."""
-    borrow_from()
-    raise NotImplementedError
-
-@cpython_api([], PyObject)
-def PyEval_GetGlobals(space, ):
-    """Return a dictionary of the global variables in the current execution frame,
-    or NULL if no frame is currently executing."""
-    borrow_from()
     raise NotImplementedError
 
 @cpython_api([], PyFrameObject)
@@ -2539,24 +2446,6 @@ def PySequence_DelItem(space, o, i):
     
     This function used an int type for i. This might require
     changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, Py_ssize_t, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
-def PySequence_SetSlice(space, o, i1, i2, v):
-    """Assign the sequence object v to the slice in sequence object o from i1 to
-    i2.  This is the equivalent of the Python statement o[i1:i2] = v.
-    
-    This function used an int type for i1 and i2. This might
-    require changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([PyObject, Py_ssize_t, Py_ssize_t], rffi.INT_real, error=-1)
-def PySequence_DelSlice(space, o, i1, i2):
-    """Delete the slice in sequence object o from i1 to i2.  Returns -1 on
-    failure.  This is the equivalent of the Python statement del o[i1:i2].
-    
-    This function used an int type for i1 and i2. This might
-    require changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
 @cpython_api([PyObject, PyObject], Py_ssize_t, error=-1)
@@ -2731,15 +2620,6 @@ def PySet_Clear(space, set):
     """Empty an existing set of all elements."""
     raise NotImplementedError
 
-@cpython_api([PyObject, PyObject, PyObject], PyObject)
-def PySlice_New(space, start, stop, step):
-    """Return a new slice object with the given values.  The start, stop, and
-    step parameters are used as the values of the slice object attributes of
-    the same names.  Any of the values may be NULL, in which case the
-    None will be used for the corresponding attribute.  Return NULL if
-    the new object could not be allocated."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, Py_ssize_t, Py_ssize_t, Py_ssize_t, Py_ssize_t], rffi.INT_real, error=-1)
 def PySlice_GetIndices(space, slice, length, start, stop, step):
     """Retrieve the start, stop and step indices from the slice object slice,
@@ -2785,16 +2665,6 @@ def PyString_InternInPlace(space, string):
     though there is a lot of talk about reference counts, think of this function as
     reference-count-neutral; you own the object after the call if and only if you
     owned it before the call.)
-    
-    This function is not available in 3.x and does not have a PyBytes alias."""
-    raise NotImplementedError
-
-@cpython_api([rffi.CCHARP], PyObject)
-def PyString_InternFromString(space, v):
-    """A combination of PyString_FromString() and
-    PyString_InternInPlace(), returning either a new string object that has
-    been interned, or a new ("owned") reference to an earlier interned string object
-    with the same value.
     
     This function is not available in 3.x and does not have a PyBytes alias."""
     raise NotImplementedError
@@ -3709,12 +3579,6 @@ def PyRun_StringFlags(space, str, start, globals, locals, flags):
     
     Returns the result of executing the code as a Python object, or NULL if an
     exception was raised."""
-    raise NotImplementedError
-
-@cpython_api([FILE, rffi.CCHARP, rffi.INT_real, PyObject, PyObject], PyObject)
-def PyRun_File(space, fp, filename, start, globals, locals):
-    """This is a simplified interface to PyRun_FileExFlags() below, leaving
-    closeit set to 0 and flags set to NULL."""
     raise NotImplementedError
 
 @cpython_api([FILE, rffi.CCHARP, rffi.INT_real, PyObject, PyObject, rffi.INT_real], PyObject)

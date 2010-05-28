@@ -249,6 +249,19 @@ class AppTestPosix:
         f = posix.fdopen(fd, "r")
         f.close()
 
+    def test_fdopen_hackedbuiltins(self):
+        "Same test, with __builtins__.file removed"
+        _file = __builtins__.file
+        __builtins__.file = None
+        try:
+            path = self.path
+            posix = self.posix
+            fd = posix.open(path, posix.O_RDONLY, 0777)
+            f = posix.fdopen(fd, "r")
+            f.close()
+        finally:
+            __builtins__.file = _file
+
     def test_getcwd(self):
         assert isinstance(self.posix.getcwd(), str)
         assert isinstance(self.posix.getcwdu(), unicode)
@@ -477,6 +490,12 @@ class AppTestPosix:
 
             if not hasattr(os, "fork"):
                 skip("Need fork() to test wait()")
+            if hasattr(os, "waitpid") and hasattr(os, "WNOHANG"):
+                try:
+                    while os.waitpid(-1, os.WNOHANG)[0]:
+                        pass
+                except OSError:  # until we get "No child processes", hopefully
+                    pass
             child = os.fork()
             if child == 0: # in child
                 os._exit(exit_status)

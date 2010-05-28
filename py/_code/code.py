@@ -23,64 +23,14 @@ class Code(object):
     def __ne__(self, other):
         return not self == other
 
-    def new(self, rec=False, **kwargs): 
-        """ return new code object with modified attributes. 
-            if rec-cursive is true then dive into code 
-            objects contained in co_consts. 
-        """ 
-        if sys.platform.startswith("java"):
-            # XXX jython does not support the below co_filename hack
-            return self.raw 
-        names = [x for x in dir(self.raw) if x[:3] == 'co_']
-        for name in kwargs: 
-            if name not in names: 
-                raise TypeError("unknown code attribute: %r" %(name, ))
-        if rec and hasattr(self.raw, 'co_consts'):  # jython 
-            newconstlist = []
-            co = self.raw
-            cotype = type(co)
-            for c in co.co_consts:
-                if isinstance(c, cotype):
-                    c = self.__class__(c).new(rec=True, **kwargs) 
-                newconstlist.append(c)
-            return self.new(rec=False, co_consts=tuple(newconstlist), **kwargs) 
-        for name in names:
-            if name not in kwargs:
-                kwargs[name] = getattr(self.raw, name)
-        arglist = [
-                 kwargs['co_argcount'],
-                 kwargs['co_nlocals'],
-                 kwargs.get('co_stacksize', 0), # jython
-                 kwargs.get('co_flags', 0), # jython
-                 kwargs.get('co_code', ''), # jython
-                 kwargs.get('co_consts', ()), # jython
-                 kwargs.get('co_names', []), # 
-                 kwargs['co_varnames'],
-                 kwargs['co_filename'],
-                 kwargs['co_name'],
-                 kwargs['co_firstlineno'],
-                 kwargs.get('co_lnotab', ''), #jython
-                 kwargs.get('co_freevars', None), #jython
-                 kwargs.get('co_cellvars', None), # jython
-        ]
-        if sys.version_info >= (3,0):
-            arglist.insert(1, kwargs['co_kwonlyargcount'])
-            return self.raw.__class__(*arglist)
-        else:
-            return py.std.new.code(*arglist)
-
     def path(self):
         """ return a path object pointing to source code"""
-        fn = self.raw.co_filename 
-        try:
-            return fn.__path__
-        except AttributeError:
-            p = py.path.local(self.raw.co_filename)
-            if not p.check():
-                # XXX maybe try harder like the weird logic 
-                # in the standard lib [linecache.updatecache] does? 
-                p = self.raw.co_filename
-            return p
+        p = py.path.local(self.raw.co_filename)
+        if not p.check():
+            # XXX maybe try harder like the weird logic 
+            # in the standard lib [linecache.updatecache] does? 
+            p = self.raw.co_filename
+        return p
                 
     path = property(path, None, None, "path of this code object")
 
@@ -466,7 +416,7 @@ class FormattedExcinfo(object):
                 args.append((argname, self._saferepr(argvalue)))
             return ReprFuncArgs(args)
 
-    def get_source(self, source, line_index=-1, excinfo=None):
+    def get_source(self, source, line_index=-1, excinfo=None, short=False):
         """ return formatted and marked up source lines. """
         lines = []
         if source is None:
@@ -478,6 +428,8 @@ class FormattedExcinfo(object):
             if i == line_index:
                 prefix = self.flow_marker + "   "
             else:
+                if short:
+                    continue
                 prefix = "    "
             line = prefix + source[i]
             lines.append(line)
@@ -532,24 +484,26 @@ class FormattedExcinfo(object):
             line_index = entry.lineno - max(entry.getfirstlinesource(), 0)
 
         lines = []
-        if self.style == "long":
-            reprargs = self.repr_args(entry) 
-            lines.extend(self.get_source(source, line_index, excinfo))
-            message = excinfo and excinfo.typename or ""
+        if self.style in ("short", "long"):
+            short = self.style == "short"
+            reprargs = None
+            if not short:
+                reprargs = self.repr_args(entry) 
+            s = self.get_source(source, line_index, excinfo, short=short)
+            lines.extend(s)
+            if short:
+                message = "in %s" %(entry.name)
+            else:
+                message = excinfo and excinfo.typename or ""
             path = self._makepath(entry.path)
             filelocrepr = ReprFileLocation(path, entry.lineno+1, message)
-            localsrepr =  self.repr_locals(entry.locals)
-            return ReprEntry(lines, reprargs, localsrepr, filelocrepr)
-        else: 
-            if self.style == "short":
-                line = source[line_index].lstrip()
-                basename = os.path.basename(entry.frame.code.filename)
-                lines.append('  File "%s", line %d, in %s' % (
-                    basename, entry.lineno+1, entry.name))
-                lines.append("    " + line) 
-            if excinfo: 
-                lines.extend(self.get_exconly(excinfo, indent=4))
-            return ReprEntry(lines, None, None, None)
+            localsrepr = None
+            if not short:
+                localsrepr =  self.repr_locals(entry.locals)
+            return ReprEntry(lines, reprargs, localsrepr, filelocrepr, short)
+        if excinfo: 
+            lines.extend(self.get_exconly(excinfo, indent=4))
+        return ReprEntry(lines, None, None, None, False)
 
     def _makepath(self, path):
         if not self.abspath:
@@ -645,13 +599,21 @@ class ReprTraceback(TerminalRepr):
 class ReprEntry(TerminalRepr):
     localssep = "_ "
 
-    def __init__(self, lines, reprfuncargs, reprlocals, filelocrepr):
+    def __init__(self, lines, reprfuncargs, reprlocals, filelocrepr, short):
         self.lines = lines
         self.reprfuncargs = reprfuncargs
         self.reprlocals = reprlocals 
         self.reprfileloc = filelocrepr
+        self.short = short
 
     def toterminal(self, tw):
+        if self.short:
+            self.reprfileloc.toterminal(tw)
+            for line in self.lines:
+                red = line.startswith("E   ") 
+                tw.line(line, bold=True, red=red)
+            #tw.line("")
+            return
         if self.reprfuncargs:
             self.reprfuncargs.toterminal(tw)
         for line in self.lines:

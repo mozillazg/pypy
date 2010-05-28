@@ -141,6 +141,20 @@ class TerminalReporter:
         else: 
             return "???", dict(red=True)
 
+    def gettestid(self, item, relative=True):
+        fspath = item.fspath
+        chain = [x for x in item.listchain() if x.fspath == fspath]
+        chain = chain[1:]
+        names = [x.name for x in chain if x.name != "()"]
+        path = item.fspath
+        if relative:
+            relpath = path.relto(self.curdir)
+            if relpath:
+                path = relpath
+        names.insert(0, str(path))
+        return "::".join(names)
+
+
     def pytest_internalerror(self, excrepr):
         for line in str(excrepr).split("\n"):
             self.write_line("INTERNALERROR> " + line)
@@ -270,7 +284,7 @@ class TerminalReporter:
         self._sessionstarttime = py.std.time.time()
 
         verinfo = ".".join(map(str, sys.version_info[:3]))
-        msg = "python: platform %s -- Python %s" % (sys.platform, verinfo)
+        msg = "platform %s -- Python %s" % (sys.platform, verinfo)
         msg += " -- pytest-%s" % (py.__version__)
         if self.config.option.verbose or self.config.option.debug or getattr(self.config.option, 'pastebin', None):
             msg += " -- " + str(sys.executable)
@@ -298,12 +312,14 @@ class TerminalReporter:
         self._keyboardinterrupt_memo = excinfo.getrepr(funcargs=True)
 
     def _report_keyboardinterrupt(self):
-        self.write_sep("!", "KEYBOARD INTERRUPT")
         excrepr = self._keyboardinterrupt_memo
-        if self.config.option.verbose:
-            excrepr.toterminal(self._tw)
-        else:
-            excrepr.reprcrash.toterminal(self._tw)
+        msg = excrepr.reprcrash.message
+        self.write_sep("!", msg)
+        if "KeyboardInterrupt" in msg:
+            if self.config.getvalue("fulltrace"):
+                excrepr.toterminal(self._tw)
+            else:
+                excrepr.reprcrash.toterminal(self._tw)
 
     def _getcrashline(self, report):
         try:

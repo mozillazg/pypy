@@ -17,7 +17,11 @@ from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import ObjSpace, unwrap_spec
-from pypy.interpreter.nestedscope import Cell	
+from pypy.interpreter.nestedscope import Cell
+from pypy.interpreter.module import Module
+from pypy.interpreter.function import StaticMethod
+from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.module.__builtin__.descriptor import W_Property
 from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import specialize
@@ -64,6 +68,23 @@ CONST_WSTRING = lltype.Ptr(lltype.Array(lltype.UniChar,
                                         hints={'nolength': True}))
 assert CONST_STRING is not rffi.CCHARP
 assert CONST_WSTRING is not rffi.CWCHARP
+
+# FILE* interface
+FILEP = rffi.COpaquePtr('FILE')
+fopen = rffi.llexternal('fopen', [CONST_STRING, CONST_STRING], FILEP)
+fclose = rffi.llexternal('fclose', [FILEP], rffi.INT)
+fwrite = rffi.llexternal('fwrite',
+                         [rffi.VOIDP, rffi.SIZE_T, rffi.SIZE_T, FILEP],
+                         rffi.SIZE_T)
+fread = rffi.llexternal('fread',
+                        [rffi.VOIDP, rffi.SIZE_T, rffi.SIZE_T, FILEP],
+                        rffi.SIZE_T)
+feof = rffi.llexternal('feof', [FILEP], rffi.INT)
+if sys.platform == 'win32':
+    fileno = rffi.llexternal('_fileno', [FILEP], rffi.INT)
+else:
+    fileno = rffi.llexternal('fileno', [FILEP], rffi.INT)
+
 
 constant_names = """
 Py_TPFLAGS_READY Py_TPFLAGS_READYING
@@ -262,7 +283,9 @@ SYMBOLS_C = [
     '_PyArg_NoKeywords',
     'PyString_FromFormat', 'PyString_FromFormatV',
     'PyModule_AddObject', 'PyModule_AddIntConstant', 'PyModule_AddStringConstant',
-    'Py_BuildValue', 'PyTuple_Pack', 'PyErr_Format', 'PyErr_NewException',
+    'Py_BuildValue', 'Py_VaBuildValue', 'PyTuple_Pack',
+
+    'PyErr_Format', 'PyErr_NewException',
 
     'PyEval_CallFunction', 'PyEval_CallMethod', 'PyObject_CallFunction',
     'PyObject_CallMethod', 'PyObject_CallFunctionObjArgs', 'PyObject_CallMethodObjArgs',
@@ -312,10 +335,15 @@ def build_exported_objects():
         'None': 'space.type(space.w_None)',
         'NotImplemented': 'space.type(space.w_NotImplemented)',
         'Cell': 'space.gettypeobject(Cell.typedef)',
+        'Module': 'space.gettypeobject(Module.typedef)',
+        'Property': 'space.gettypeobject(W_Property.typedef)',
+        'Slice': 'space.gettypeobject(W_SliceObject.typedef)',
+        'StaticMethod': 'space.gettypeobject(StaticMethod.typedef)',
+        'CFunction': 'space.gettypeobject(cpyext.methodobject.W_PyCFunctionObject.typedef)',
         }.items():
         GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
-    for cpyname in 'Method List Int Long Dict Tuple'.split():
+    for cpyname in 'Method List Int Long Dict Tuple Class'.split():
         FORWARD_DECLS.append('typedef struct { PyObject_HEAD } '
                              'Py%sObject' % (cpyname, ))
 build_exported_objects()
@@ -579,6 +607,7 @@ def build_bridge(space):
 
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
+        from pypy.module import cpyext
         w_obj = eval(expr)
         name = name.replace("#", "")
         INTERPLEVEL_API[name] = w_obj
@@ -751,6 +780,7 @@ def setup_library(space):
     # populate static data
     for name, (type, expr) in GLOBALS.iteritems():
         name = name.replace("#", "")
+        from pypy.module import cpyext
         w_obj = eval(expr)
         struct_ptr = make_ref(space, w_obj)
         struct = rffi.cast(get_structtype_for_ctype(type), struct_ptr)._obj
@@ -811,6 +841,7 @@ def generic_cpy_call_expect_null(space, func, *args):
 @specialize.memo()
 def make_generic_cpy_call(FT, decref_args, expect_null):
     from pypy.module.cpyext.pyobject import make_ref, from_ref, Py_DecRef
+    from pypy.module.cpyext.pyobject import RefcountState
     from pypy.module.cpyext.pyerrors import PyErr_Occurred
     unrolling_arg_types = unrolling_iterable(enumerate(FT.ARGS))
     RESULT_TYPE = FT.RESULT
@@ -856,8 +887,17 @@ def make_generic_cpy_call(FT, decref_args, expect_null):
                     boxed_args += (arg,)
             else:
                 boxed_args += (arg,)
-        result = call_external_function(func, *boxed_args)
+
         try:
+            # create a new container for borrowed references
+            state = space.fromcache(RefcountState)
+            old_container = state.swap_borrow_container(None)
+            try:
+                # Call the function
+                result = call_external_function(func, *boxed_args)
+            finally:
+                state.swap_borrow_container(old_container)
+
             if RESULT_TYPE is PyObject:
                 if result is None:
                     ret = result

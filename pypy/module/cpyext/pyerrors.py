@@ -1,7 +1,7 @@
 import os
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.interpreter.error import OperationError, wrap_oserror
+from pypy.interpreter.error import OperationError
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL, CONST_STRING
 from pypy.module.exceptions.interp_exceptions import W_RuntimeWarning
 from pypy.module.cpyext.pyobject import (
@@ -53,10 +53,11 @@ def PyErr_Fetch(space, ptype, pvalue, ptraceback):
     if operror:
         ptype[0] = make_ref(space, operror.w_type)
         pvalue[0] = make_ref(space, operror.get_w_value(space))
+        ptraceback[0] = make_ref(space, space.wrap(operror.application_traceback))
     else:
         ptype[0] = lltype.nullptr(PyObject.TO)
         pvalue[0] = lltype.nullptr(PyObject.TO)
-    ptraceback[0] = lltype.nullptr(PyObject.TO)
+        ptraceback[0] = lltype.nullptr(PyObject.TO)
 
 @cpython_api([PyObject, PyObject, PyObject], lltype.Void)
 def PyErr_Restore(space, w_type, w_value, w_traceback):
@@ -115,7 +116,9 @@ def PyErr_SetFromErrno(space, w_type):
     Return value: always NULL."""
     # XXX Doesn't actually do anything with PyErr_CheckSignals.
     errno = get_errno()
-    raise wrap_oserror(space, OSError(errno, "PyErr_SetFromErrno"))
+    msg = os.strerror(errno)
+    w_error = space.call_function(w_type, space.wrap(errno), space.wrap(msg))
+    raise OperationError(w_type, w_error)
 
 @cpython_api([], rffi.INT_real, error=-1)
 def PyErr_CheckSignals(space):
@@ -208,4 +211,33 @@ def PyErr_Warn(space, w_category, message):
     Deprecated; use PyErr_WarnEx() instead."""
     return PyErr_WarnEx(space, w_category, message, 1)
 
+@cpython_api([rffi.INT_real], lltype.Void)
+def PyErr_PrintEx(space, set_sys_last_vars):
+    """Print a standard traceback to sys.stderr and clear the error indicator.
+    Call this function only when the error indicator is set.  (Otherwise it will
+    cause a fatal error!)
 
+    If set_sys_last_vars is nonzero, the variables sys.last_type,
+    sys.last_value and sys.last_traceback will be set to the
+    type, value and traceback of the printed exception, respectively."""
+    if not PyErr_Occurred(space):
+        PyErr_BadInternalCall(space)
+    state = space.fromcache(State)
+    operror = state.clear_exception()
+
+    w_type = operror.w_type
+    w_value = operror.get_w_value(space)
+    w_tb = space.wrap(operror.application_traceback)
+
+    if rffi.cast(lltype.Signed, set_sys_last_vars):
+        space.sys.setdictvalue(space, "last_type", w_type)
+        space.sys.setdictvalue(space, "last_value", w_value)
+        space.sys.setdictvalue(space, "last_traceback", w_tb)
+
+    space.call_function(space.sys.get("excepthook"),
+                        w_type, w_value, w_tb)
+
+@cpython_api([], lltype.Void)
+def PyErr_Print(space):
+    """Alias for PyErr_PrintEx(1)."""
+    PyErr_PrintEx(space, 1)

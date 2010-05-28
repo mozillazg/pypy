@@ -647,19 +647,6 @@ class MIFrame(object):
     @arguments("descr", "varargs")
     def opimpl_residual_call_loopinvariant(self, calldescr, varargs):
         return self.execute_varargs(rop.CALL_LOOPINVARIANT, varargs, calldescr, exc=True)
-
-    @arguments("varargs")
-    def opimpl_recursion_leave_prep(self, varargs):
-        warmrunnerstate = self.metainterp.staticdata.state
-        if warmrunnerstate.inlining:
-            num_green_args = self.metainterp.staticdata.num_green_args
-            greenkey = varargs[:num_green_args]
-            if warmrunnerstate.can_inline_callable(greenkey):
-                return False
-        leave_code = self.metainterp.staticdata.leave_code
-        if leave_code is None:
-            return False
-        return self.perform_call(leave_code, varargs)
         
     @arguments("orgpc", "descr", "varargs")
     def opimpl_recursive_call(self, pc, calldescr, varargs):
@@ -860,6 +847,11 @@ class MIFrame(object):
             self.debug_merge_point()
             if self.metainterp.seen_can_enter_jit:
                 self.metainterp.seen_can_enter_jit = False
+                assert not self.metainterp.in_recursion
+                # ^^^ it's impossible to arrive here with in_recursion set
+                # to a non-zero value: seen_can_enter_jit can only be set
+                # to True by opimpl_can_enter_jit, which should be executed
+                # just before opimpl_jit_merge_point (no recursion inbetween).
                 try:
                     self.metainterp.reached_can_enter_jit(self.env)
                 except GiveUp:
@@ -1128,7 +1120,6 @@ class MetaInterpStaticData(object):
         self.jit_starting_line = 'JIT starting (%s)' % backendmodule
 
         self.portal_code = None
-        self.leave_code = None
         self._class_sizes = None
         self._addr2name_keys = []
         self._addr2name_values = []
@@ -1141,10 +1132,9 @@ class MetaInterpStaticData(object):
     def _freeze_(self):
         return True
 
-    def info_from_codewriter(self, portal_code, leave_code, class_sizes,
+    def info_from_codewriter(self, portal_code, class_sizes,
                              list_of_addr2name, portal_runner_ptr):
         self.portal_code = portal_code
-        self.leave_code = leave_code
         self._class_sizes = class_sizes
         self._addr2name_keys   = [key   for key, value in list_of_addr2name]
         self._addr2name_values = [value for key, value in list_of_addr2name]
@@ -1299,7 +1289,6 @@ class MetaInterp(object):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
         self.portal_trace_positions = []
-        self.greenkey_of_huge_function = None
 
     def is_blackholing(self):
         return self.history is None
@@ -1498,15 +1487,20 @@ class MetaInterp(object):
         self.staticdata.stats.aborted()
         self.staticdata.profiler.end_tracing()
         self.staticdata.profiler.start_blackhole()
+        self.resumekey.reset_counter_from_failure()
     switch_to_blackhole._dont_inline_ = True
 
     def switch_to_blackhole_if_trace_too_long(self):
         if not self.is_blackholing():
             warmrunnerstate = self.staticdata.state
             if len(self.history.operations) > warmrunnerstate.trace_limit:
-                self.greenkey_of_huge_function = self.find_biggest_function()
+                greenkey_of_huge_function = self.find_biggest_function()
                 self.portal_trace_positions = None
                 self.switch_to_blackhole(ABORT_TOO_LONG)
+                if greenkey_of_huge_function is not None:
+                    warmrunnerstate = self.staticdata.state
+                    warmrunnerstate.disable_noninlinable_function(
+                        greenkey_of_huge_function)
 
     def _interpret(self):
         # Execute the frames forward until we raise a DoneWithThisFrame,
@@ -1575,7 +1569,6 @@ class MetaInterp(object):
                 debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        from pypy.jit.metainterp.warmspot import ContinueRunningNormallyBase
         original_greenkey = key.original_greenkey
         # notice that here we just put the greenkey
         # use -1 to mark that we will have to give up
@@ -1583,17 +1576,12 @@ class MetaInterp(object):
         self.current_merge_points = [(original_greenkey, -1)]
         self.resumekey = key
         self.seen_can_enter_jit = False
-        started_as_blackhole = self.is_blackholing()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             self.interpret()
             assert False, "should always raise"
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
-        except ContinueRunningNormallyBase:
-            if not started_as_blackhole:
-                key.reset_counter_from_failure(self)
-            raise
 
     def remove_consts_and_duplicates(self, boxes, startindex, endindex,
                                      duplicates):

@@ -89,6 +89,13 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         raises(TypeError, "obj.char_member = 'spam'")
         raises(TypeError, "obj.char_member = 42")
 
+    def test_staticmethod(self):
+        module = self.import_module(name="foo")
+        obj = module.fooType.create()
+        assert obj.foo == 42
+        obj2 = obj.create()
+        assert obj2.foo == 42
+
     def test_new(self):
         module = self.import_module(name='foo')
         obj = module.new()
@@ -127,6 +134,23 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         newobj = Fuu2()
         assert newobj.get_val() == 42
         assert newobj.foobar == 32
+
+    def test_metatype(self):
+        module = self.import_module(name='foo')
+        assert module.MetaType.__mro__ == (module.MetaType, type, object)
+        x = module.MetaType('name', (), {})
+        assert isinstance(x, type)
+        assert isinstance(x, module.MetaType)
+        x()
+
+    def test_metaclass_compatible(self):
+        # metaclasses should not conflict here
+        module = self.import_module(name='foo')
+        assert module.MetaType.__mro__ == (module.MetaType, type, object)
+        assert type(module.fooType).__mro__ == (type, object)
+        y = module.MetaType('other', (module.fooType,), {})
+        assert isinstance(y, module.MetaType)
+        y()
 
     def test_sre(self):
         module = self.import_module(name='_sre')
@@ -173,3 +197,51 @@ class TestTypes(BaseApiTest):
             """)
         ref = make_ref(space, w_class)
         api.Py_DecRef(ref)
+
+    def test_lookup(self, space, api):
+        w_type = space.w_str
+        w_obj = api._PyType_Lookup(w_type, space.wrap("upper"))
+        assert space.is_w(w_obj, space.w_str.getdictvalue(space, "upper"))
+
+        w_obj = api._PyType_Lookup(w_type, space.wrap("__invalid"))
+        assert w_obj is None
+        assert api.PyErr_Occurred() is None
+
+class AppTestSlots(AppTestCpythonExtensionBase):
+    def test_nb_int(self):
+        module = self.import_extension('foo', [
+            ("nb_int", "METH_O",
+             '''
+                 if (!args->ob_type->tp_as_number ||
+                     !args->ob_type->tp_as_number->nb_int)
+                 {
+                     PyErr_SetNone(PyExc_ValueError);
+                     return NULL;
+                 }
+                 return args->ob_type->tp_as_number->nb_int(args);
+             '''
+             )
+            ])
+        assert module.nb_int(10) == 10
+        assert module.nb_int(-12.3) == -12
+        raises(ValueError, module.nb_int, "123")
+
+    def test_tp_call(self):
+        module = self.import_extension('foo', [
+            ("tp_call", "METH_VARARGS",
+             '''
+                 PyObject *obj = PyTuple_GET_ITEM(args, 0);
+                 PyObject *c_args = PyTuple_GET_ITEM(args, 1);
+                 if (!obj->ob_type->tp_call)
+                 {
+                     PyErr_SetNone(PyExc_ValueError);
+                     return NULL;
+                 }
+                 return obj->ob_type->tp_call(obj, c_args, NULL);
+             '''
+             )
+            ])
+        class C:
+            def __call__(self, *args):
+                return args
+        assert module.tp_call(C(), ('x', 2)) == ('x', 2)

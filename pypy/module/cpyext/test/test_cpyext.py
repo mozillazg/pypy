@@ -10,7 +10,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator import platform
 from pypy.translator.gensupp import uniquemodulename
 from pypy.tool.udir import udir
-from pypy.module.cpyext import api, typeobject
+from pypy.module.cpyext import api
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.pyobject import RefcountState
 from pypy.module.cpyext.pyobject import Py_DecRef, InvalidPointerException
@@ -90,6 +90,14 @@ class LeakCheckingTest(object):
         gc.collect()
         lost_objects_w = identity_dict()
         lost_objects_w.update((key, None) for key in self.frozen_refcounts.keys())
+
+        # Clear all lifelines, objects won't resurrect
+        for w_obj, obj in state.lifeline_dict._dict.items():
+            if w_obj not in state.py_objects_w2r:
+                state.lifeline_dict.set(w_obj, None)
+            del obj
+        gc.collect()
+
         for w_obj, obj in state.py_objects_w2r.iteritems():
             base_refcnt = self.frozen_refcounts.get(w_obj)
             delta = obj.c_ob_refcnt
@@ -99,7 +107,7 @@ class LeakCheckingTest(object):
             if delta != 0:
                 leaking = True
                 print >>sys.stderr, "Leaking %r: %i references" % (w_obj, delta)
-                lifeline = typeobject.lifeline_dict.get(w_obj)
+                lifeline = state.lifeline_dict.get(w_obj)
                 if lifeline is not None:
                     refcnt = lifeline.pyo.c_ob_refcnt
                     if refcnt > 0:
@@ -249,14 +257,11 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
 
     def unimport_module(self, name):
         """
-        Remove the named module from the space's sys.modules and discard the
-        reference (owned by "the test") to it.
+        Remove the named module from the space's sys.modules.
         """
         w_modules = self.space.sys.get('modules')
         w_name = self.space.wrap(name)
-        w_mod = self.space.getitem(w_modules, w_name)
         self.space.delitem(w_modules, w_name)
-        Py_DecRef(self.space, w_mod)
 
     def teardown_method(self, func):
         for name in self.imported_module_names:
@@ -301,6 +306,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         assert 'return_pi' in dir(module)
         assert module.return_pi is not None
         assert module.return_pi() == 3.14
+        assert module.return_pi.__module__ == 'foo'
 
 
     def test_export_docstring(self):
@@ -649,3 +655,25 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         h = mod.get_hash()
         assert h != 0
         assert h % 4 == 0 # it's the pointer value
+
+    def test_types(self):
+        """test the presence of random types"""
+
+        mod = self.import_extension('foo', [
+            ('get_names', 'METH_NOARGS',
+             '''
+             /* XXX in tests, the C type is not correct */
+             #define NAME(type) ((PyTypeObject*)&type)->tp_name
+             return Py_BuildValue("sssss",
+                                  NAME(PyCell_Type),
+                                  NAME(PyModule_Type),
+                                  NAME(PyProperty_Type),
+                                  NAME(PyStaticMethod_Type),
+                                  NAME(PyCFunction_Type)
+                                  );
+             '''
+             ),
+            ])
+        assert mod.get_names() == ('cell', 'module', 'property',
+                                   'staticmethod',
+                                   'builtin_function_or_method')

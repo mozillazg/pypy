@@ -20,11 +20,15 @@ Collector = py.test.collect.Collector
 
 class Session(object): 
     nodeid = ""
+    class Interrupted(KeyboardInterrupt):
+        """ signals an interrupted test run. """
+        __module__ = 'builtins' # for py3
+        
     def __init__(self, config):
         self.config = config
         self.pluginmanager = config.pluginmanager # shortcut 
         self.pluginmanager.register(self)
-        self._testsfailed = False
+        self._testsfailed = 0
         self._nomatch = False
         self.shouldstop = False
 
@@ -52,7 +56,7 @@ class Session(object):
                         yield x 
                 self.config.hook.pytest_collectreport(report=rep)
             if self.shouldstop:
-                break
+                raise self.Interrupted(self.shouldstop)
 
     def filteritems(self, colitems):
         """ return items to process (some may be deselected)"""
@@ -86,9 +90,11 @@ class Session(object):
         
     def pytest_runtest_logreport(self, report):
         if report.failed:
-            self._testsfailed = True
-            if self.config.option.exitfirst:
-                self.shouldstop = True
+            self._testsfailed += 1
+            maxfail = self.config.getvalue("maxfail")
+            if maxfail and self._testsfailed >= maxfail:
+                self.shouldstop = "stopping after %d failures" % (
+                    self._testsfailed)
     pytest_collectreport = pytest_runtest_logreport
 
     def sessionfinishes(self, exitstatus):
@@ -122,7 +128,8 @@ class Session(object):
 
     def _mainloop(self, colitems):
         for item in self.collect(colitems): 
-            if self.shouldstop: 
-                break 
             if not self.config.option.collectonly: 
                 item.config.hook.pytest_runtest_protocol(item=item)
+            if self.shouldstop:
+                raise self.Interrupted(self.shouldstop)
+

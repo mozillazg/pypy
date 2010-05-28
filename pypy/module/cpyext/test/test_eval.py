@@ -1,7 +1,12 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.module.cpyext.test.test_api import BaseApiTest
-from pypy.module.cpyext.eval import Py_single_input, Py_file_input, Py_eval_input
+from pypy.module.cpyext.eval import (
+    Py_single_input, Py_file_input, Py_eval_input)
+from pypy.module.cpyext.api import fopen, fclose, fileno, Py_ssize_tP
+from pypy.interpreter.gateway import interp2app
+from pypy.tool.udir import udir
+import sys, os
 
 class TestEval(BaseApiTest):
     def test_eval(self, space, api):
@@ -76,6 +81,75 @@ class TestEval(BaseApiTest):
         assert 42 * 43 == space.unwrap(
             api.PyObject_GetItem(w_globals, space.wrap("a")))
 
+    def test_run_file(self, space, api):
+        filepath = udir / "cpyext_test_runfile.py"
+        filepath.write("raise ZeroDivisionError")
+        fp = fopen(str(filepath), "rb")
+        filename = rffi.str2charp(str(filepath))
+        w_globals = w_locals = space.newdict()
+        api.PyRun_File(fp, filename, Py_file_input, w_globals, w_locals)
+        fclose(fp)
+        assert api.PyErr_Occurred() is space.w_ZeroDivisionError
+        api.PyErr_Clear()
+
+        # try again, but with a closed file
+        fp = fopen(str(filepath), "rb")
+        os.close(fileno(fp))
+        api.PyRun_File(fp, filename, Py_file_input, w_globals, w_locals)
+        fclose(fp)
+        assert api.PyErr_Occurred() is space.w_IOError
+        api.PyErr_Clear()
+
+        rffi.free_charp(filename)
+
+    def test_getbuiltins(self, space, api):
+        assert api.PyEval_GetBuiltins() is space.builtin.w_dict
+
+        def cpybuiltins(space):
+            return api.PyEval_GetBuiltins()
+        w_cpybuiltins = space.wrap(interp2app(cpybuiltins))
+
+        w_result = space.appexec([w_cpybuiltins], """(cpybuiltins):
+            return cpybuiltins() is __builtins__.__dict__
+        """)
+        assert space.is_true(w_result)
+
+        w_result = space.appexec([w_cpybuiltins], """(cpybuiltins):
+            d = dict(__builtins__={'len':len}, cpybuiltins=cpybuiltins)
+            return eval("cpybuiltins()", d, d)
+        """)
+        assert space.int_w(space.len(w_result)) == 1
+
+    def test_getglobals(self, space, api):
+        assert api.PyEval_GetLocals() is None
+        assert api.PyEval_GetGlobals() is None
+
+        def cpyvars(space):
+            return space.newtuple([api.PyEval_GetGlobals(),
+                                   api.PyEval_GetLocals()])
+        w_cpyvars = space.wrap(interp2app(cpyvars))
+
+        w_result = space.appexec([w_cpyvars], """(cpyvars):
+            x = 1
+            return cpyvars()
+        \ny = 2
+        """)
+        globals, locals = space.unwrap(w_result)
+        assert sorted(locals) == ['cpyvars', 'x']
+        assert sorted(globals) == ['__builtins__', 'anonymous', 'y']
+
+    def test_sliceindex(self, space, api):
+        pi = lltype.malloc(Py_ssize_tP.TO, 1, flavor='raw')
+        assert api._PyEval_SliceIndex(space.w_None, pi) == 0
+        api.PyErr_Clear()
+
+        assert api._PyEval_SliceIndex(space.wrap(123), pi) == 1
+        assert pi[0] == 123
+
+        assert api._PyEval_SliceIndex(space.wrap(1 << 66), pi) == 1
+        assert pi[0] == sys.maxint
+
+        lltype.free(pi, flavor='raw')
 
 class AppTestCall(AppTestCpythonExtensionBase):
     def test_CallFunction(self):
