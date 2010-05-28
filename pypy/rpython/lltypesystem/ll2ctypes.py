@@ -512,7 +512,7 @@ def lltype2ctypes(llobj, normalize=True):
     if isinstance(llobj, lltype._uninitialized):
         return uninitialized2ctypes(llobj.TYPE)
     if isinstance(llobj, llmemory.AddressAsInt):
-        llobj = llobj.adr
+        return ctypes.cast(lltype2ctypes(llobj.adr), ctypes.c_void_p).value
     if isinstance(llobj, llmemory.fakeaddress):
         llobj = llobj.ptr or 0
 
