@@ -1,0 +1,7 @@
+This directory plays the role of /usr/lib or /usr/local/lib in a normal
+installation hierarchy.  
+
+It is here so that we can freely use tools like virtualenv without any need to
+install pypy system-wide, but just by using the root directory of the svn
+checkout as sys.prefix: this way, the stdlib can always be found in 
+sys.prefix + '/lib/pypyX.Y'
