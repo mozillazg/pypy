@@ -37,6 +37,8 @@ class Transformer(object):
         if block.operations == ():
             return
         self.immutable_arrays = {}
+        self.vable_array_vars = {}
+        self.vable_flags = {}
         renamings = {}
         renamings_constants = {}    # subset of 'renamings', {Var:Const} only
         newoperations = []
@@ -177,6 +179,7 @@ class Transformer(object):
     def rewrite_op_cast_int_to_unichar(self, op): pass
     def rewrite_op_cast_int_to_uint(self, op): pass
     def rewrite_op_cast_uint_to_int(self, op): pass
+    def rewrite_op_resume_point(self, op): pass
 
     def _rewrite_symmetric(self, op):
         """Rewrite 'c1+v2' into 'v2+c1' in an attempt to avoid generating
@@ -406,6 +409,15 @@ class Transformer(object):
         assert ARRAY._gckind == 'gc'
         if self._array_of_voids(ARRAY):
             return []
+        if op.args[0] in self.vable_array_vars:     # for virtualizables
+            vars = self.vable_array_vars[op.args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            kind = getkind(op.result.concretetype)
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('getarrayitem_vable_%s' % kind,
+                                   [v_base, arrayfielddescr, arraydescr,
+                                    op.args[1]], op.result)]
+        # normal case follows
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.result.concretetype)
         return SpaceOperation('getarrayitem_gc_%s' % kind[0],
@@ -417,6 +429,14 @@ class Transformer(object):
         assert ARRAY._gckind == 'gc'
         if self._array_of_voids(ARRAY):
             return []
+        if op.args[0] in self.vable_array_vars:     # for virtualizables
+            vars = self.vable_array_vars[op.args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            kind = getkind(op.result.concretetype)
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('setarrayitem_vable_%s' % kind,
+                                   [v_base, arrayfielddescr, arraydescr,
+                                    op.args[1], op.args[2]], None)]
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.args[2].concretetype)
         return SpaceOperation('setarrayitem_gc_%s' % kind[0],
@@ -426,6 +446,14 @@ class Transformer(object):
     def rewrite_op_getarraysize(self, op):
         ARRAY = op.args[0].concretetype.TO
         assert ARRAY._gckind == 'gc'
+        if op.args[0] in self.vable_array_vars:     # for virtualizables
+            vars = self.vable_array_vars[op.args[0]]
+            (v_base, arrayfielddescr, arraydescr) = vars
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('arraylen_vable',
+                                   [v_base, arrayfielddescr, arraydescr],
+                                   op.result)]
+        # normal case follows
         arraydescr = self.cpu.arraydescrof(ARRAY)
         return SpaceOperation('arraylen_gc', [op.args[0], arraydescr],
                               op.result)
@@ -445,21 +473,23 @@ class Transformer(object):
         if RESULT is lltype.Void:
             return
         # check for virtualizable
-        #try:
-        #    if self.is_virtualizable_getset(op):
-        #        vinfo = self.codewriter.metainterp_sd.virtualizable_info
-        #        index = vinfo.static_field_to_extra_box[op.args[1].value]
-        #        self.emit('getfield_vable',
-        #                  self.var_position(v_inst),
-        #                  index)
-        #        self.register_var(op.result)
-        #        return
-        #except VirtualizableArrayField:
-        #    # xxx hack hack hack
-        #    vinfo = self.codewriter.metainterp_sd.virtualizable_info
-        #    arrayindex = vinfo.array_field_counter[op.args[1].value]
-        #    self.vable_array_vars[op.result] = (op.args[0], arrayindex)
-        #    return
+        try:
+            if self.is_virtualizable_getset(op):
+                descr = self.get_virtualizable_field_descr(op.args[1].value)
+                kind = getkind(RESULT)[0]
+                return [SpaceOperation('-live-', [], None),
+                        SpaceOperation('getfield_vable_%s' % kind,
+                                       [v_inst, descr], op.result)]
+        except VirtualizableArrayField:
+            # xxx hack hack hack
+            vinfo = self.callcontrol.virtualizable_info
+            arrayindex = vinfo.array_field_counter[op.args[1].value]
+            arrayfielddescr = vinfo.array_field_descrs[arrayindex]
+            arraydescr = vinfo.array_descrs[arrayindex]
+            self.vable_array_vars[op.result] = (op.args[0],
+                                                arrayfielddescr,
+                                                arraydescr)
+            return []
         # check for deepfrozen structures that force constant-folding
         hints = v_inst.concretetype.TO._hints
         accessor = hints.get("immutable_fields")
@@ -488,14 +518,12 @@ class Transformer(object):
         if RESULT is lltype.Void:
             return
         # check for virtualizable
-        #if self.is_virtualizable_getset(op):
-        #    vinfo = self.codewriter.metainterp_sd.virtualizable_info
-        #    index = vinfo.static_field_to_extra_box[op.args[1].value]
-        #    self.emit('setfield_vable',
-        #              self.var_position(v_inst),
-        #              index,
-        #              self.var_position(v_value))
-        #    return
+        if self.is_virtualizable_getset(op):
+            descr = self.get_virtualizable_field_descr(op.args[1].value)
+            kind = getkind(RESULT)[0]
+            return [SpaceOperation('-live-', [], None),
+                    SpaceOperation('setfield_vable_%s' % kind,
+                                   [v_inst, descr, v_value], None)]
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
@@ -507,6 +535,35 @@ class Transformer(object):
     def is_typeptr_getset(self, op):
         return (op.args[1].value == 'typeptr' and
                 op.args[0].concretetype.TO._hints.get('typeptr'))
+
+    def is_virtualizable_getset(self, op):
+        # every access of an object of exactly the type VTYPEPTR is
+        # likely to be a virtualizable access, but we still have to
+        # check it in pyjitpl.py.
+        try:
+            vinfo = self.callcontrol.virtualizable_info
+        except AttributeError:
+            return False
+        if vinfo is None or not vinfo.is_vtypeptr(op.args[0].concretetype):
+            return False
+        res = False
+        if op.args[1].value in vinfo.static_field_to_extra_box:
+            res = True
+        if op.args[1].value in vinfo.array_fields:
+            res = VirtualizableArrayField(self.graph)
+
+        if res:
+            flags = self.vable_flags[op.args[0]]
+            if 'fresh_virtualizable' in flags:
+                return False
+        if isinstance(res, Exception):
+            raise res
+        return res
+
+    def get_virtualizable_field_descr(self, fieldname):
+        vinfo = self.callcontrol.virtualizable_info
+        index = vinfo.static_field_to_extra_box[fieldname]
+        return vinfo.static_field_descrs[index]
 
     def handle_getfield_typeptr(self, op):
         if isinstance(op.args[0], Constant):
@@ -892,10 +949,23 @@ class Transformer(object):
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
 
+    def rewrite_op_jit_force_virtualizable(self, op):
+        # this one is for virtualizables
+        vinfo = self.callcontrol.virtualizable_info
+        assert vinfo is not None
+        assert vinfo.is_vtypeptr(op.args[0].concretetype)
+        self.vable_flags[op.args[0]] = op.args[2].value
+        return []
+
 # ____________________________________________________________
 
 class NotSupported(Exception):
     pass
+
+class VirtualizableArrayField(Exception):
+    def __str__(self):
+        return "using virtualizable array in illegal way in %r" % (
+            self.args[0],)
 
 def _with_prefix(prefix):
     result = {}

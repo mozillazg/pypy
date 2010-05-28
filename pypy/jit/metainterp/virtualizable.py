@@ -72,6 +72,8 @@ class VirtualizableInfo:
                                     for name in static_fields]
         self.array_field_descrs = [cpu.fielddescrof(VTYPE, name)
                                    for name in array_fields]
+        self.static_field_by_descrs = dict(
+            [(descr, i) for (i, descr) in enumerate(self.static_field_descrs)])
         #
         getlength = cpu.ts.getlength
         getarrayitem = cpu.ts.getarrayitem
@@ -101,6 +103,21 @@ class VirtualizableInfo:
                     setarrayitem(lst, j, x)
                     i = i + 1
             assert len(boxes) == i + 1
+        #
+        def write_from_resume_data(virtualizable, reader, nums):
+            # similar to write_boxes(), but works from the end instead
+            i = len(nums) - 1
+            for ARRAYITEMTYPE, fieldname in unroll_array_fields_rev:
+                lst = getattr(virtualizable, fieldname)
+                for j in range(getlength(lst)-1, -1, -1):
+                    i -= 1
+                    x = reader.load_value_of_type(ARRAYITEMTYPE, nums[i])
+                    setarrayitem(lst, j, x)
+            for FIELDTYPE, fieldname in unroll_static_fields_rev:
+                i -= 1
+                x = reader.load_value_of_type(FIELDTYPE, nums[i])
+                setattr(virtualizable, fieldname, x)
+            return i
         #
         def check_boxes(virtualizable, boxes):
             # for debugging
@@ -141,8 +158,13 @@ class VirtualizableInfo:
                                                       static_fields))
         unroll_array_fields = unrolling_iterable(zip(ARRAYITEMTYPES,
                                                      array_fields))
+        unroll_static_fields_rev = unrolling_iterable(
+                                          reversed(list(unroll_static_fields)))
+        unroll_array_fields_rev  = unrolling_iterable(
+                                          reversed(list(unroll_array_fields)))
         self.read_boxes = read_boxes
         self.write_boxes = write_boxes
+        self.write_from_resume_data = write_from_resume_data
         self.check_boxes = check_boxes
         self.get_index_in_array = get_index_in_array
         self.get_array_length = get_array_length
@@ -171,6 +193,9 @@ class VirtualizableInfo:
     def cast_to_vtype(self, virtualizable):
         return self.cpu.ts.cast_to_instance_maybe(self.VTYPEPTR, virtualizable)
     cast_to_vtype._annspecialcase_ = 'specialize:ll'
+
+    def cast_gcref_to_vtype(self, virtualizable):
+        return lltype.cast_opaque_ptr(self.VTYPEPTR, virtualizable)
 
     def is_vtypeptr(self, TYPE):
         return rvirtualizable2.match_virtualizable_type(TYPE, self.VTYPEPTR)

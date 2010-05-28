@@ -62,14 +62,23 @@ class CodeWriter(object):
         self.assembler.assemble(ssarepr, jitcode)
 
     def make_jitcodes(self, verbose=False):
+        log.info("making JitCodes...")
         maingraph = self.portal_graph
         self.mainjitcode = self.callcontrol.get_jitcode(maingraph)
+        count = 0
         for graph, jitcode in self.callcontrol.enum_pending_graphs():
             self.transform_graph_to_jitcode(graph, jitcode,
                                             graph is maingraph, verbose)
+            count += 1
+            if not count % 500:
+                log.info("Produced %d jitcodes" % count)
+        log.info("there are %d JitCode instances." % count)
 
     def setup_vrefinfo(self, vrefinfo):
         self.callcontrol.virtualref_info = vrefinfo
+
+    def setup_virtualizable_info(self, vinfo):
+        self.callcontrol.virtualizable_info = vinfo
 
     def setup_portal_runner_ptr(self, portal_runner_ptr):
         self.callcontrol.portal_runner_ptr = portal_runner_ptr

@@ -349,8 +349,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         from pypy.jit.metainterp.resume import force_from_resumedata
         metainterp_sd = self.metainterp_sd
         expect_virtualizable = metainterp_sd.virtualizable_info is not None
-        all_virtuals = force_from_resumedata(metainterp_sd, self,
-                                            expect_virtualizable)
+        all_virtuals = force_from_resumedata(metainterp_sd, self)
         # Handle virtualizable_boxes: store them on the real virtualizable now
         if expect_virtualizable:
             metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
