@@ -6,6 +6,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from pypy.jit.codewriter import heaptracker
 
@@ -40,7 +41,7 @@ def _get_standard_error(rtyper, Class):
 
 def get_llexception(cpu, e):
     if we_are_translated():
-        return XXX(e)
+        return cast_instance_to_base_ptr(e)
     if isinstance(e, LLException):
         return e.args[1]    # ok
     if isinstance(e, OverflowError):
@@ -376,7 +377,6 @@ class BlackholeInterpreter(object):
             etype = rclass.ll_type(e)
             raise LLException(etype, e)
 
-    # XXX must be specialized
     def copy_constants(self, registers, constants):
         """Copy jitcode.constants[0] to registers[255],
                 jitcode.constants[1] to registers[254],
@@ -389,6 +389,7 @@ class BlackholeInterpreter(object):
             assert j >= 0
             registers[j] = constants[i]
             i -= 1
+    copy_constants._annspecialcase_ = 'specialize:arglistitemtype(1)'
 
     # ----------
 
@@ -1172,6 +1173,7 @@ class BlackholeInterpreter(object):
     # helpers to resume running in blackhole mode when a guard failed
 
     def _resume_mainloop(self, current_exc):
+        assert lltype.typeOf(current_exc) == rclass.OBJECTPTR
         try:
             # if there is a current exception, raise it now
             # (it may be caught by a catch_operation in this frame)
@@ -1201,7 +1203,7 @@ class BlackholeInterpreter(object):
             caller._setup_return_value_f(self.final_result_f())
         else:
             assert kind == 'v'
-        return NULL
+        return lltype.nullptr(rclass.OBJECTPTR.TO)
 
     def _prepare_resume_from_failure(self, opnum):
         from pypy.jit.metainterp.resoperation import rop
@@ -1248,7 +1250,7 @@ class BlackholeInterpreter(object):
         else:
             from pypy.jit.metainterp.resoperation import opname
             raise NotImplementedError(opname[opnum])
-        return NULL
+        return lltype.nullptr(rclass.OBJECTPTR.TO)
 
     # connect the return of values from the called frame to the
     # 'xxx_call_yyy' instructions from the caller frame
@@ -1298,7 +1300,6 @@ class BlackholeInterpreter(object):
 # ____________________________________________________________
 
 def _run_forever(blackholeinterp, current_exc):
-    current_exc = lltype.cast_opaque_ptr(rclass.OBJECTPTR, current_exc)
     while True:
         current_exc = blackholeinterp._resume_mainloop(current_exc)
         blackholeinterp = blackholeinterp.nextblackholeinterp
@@ -1319,7 +1320,7 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
         metainterp_sd.profiler.end_blackhole()
         debug_stop('jit-blackhole')
 
-def convert_and_run_from_pyjitpl(metainterp, current_exc=NULL):
+def convert_and_run_from_pyjitpl(metainterp):
     # Get a chain of blackhole interpreters and fill them by copying
     # 'metainterp.framestack'.  Note that the order is important: the
     # first one we get must be the bottom one, in order to make
@@ -1334,6 +1335,11 @@ def convert_and_run_from_pyjitpl(metainterp, current_exc=NULL):
         curbh.nextblackholeinterp = nextbh
         nextbh = curbh
     firstbh = nextbh
+    #
+    if metainterp.last_exc_value_box is not None:
+        current_exc = metainterp.last_exc_value_box.getref(rclass.OBJECTPTR)
+    else:
+        current_exc = lltype.nullptr(rclass.OBJECTPTR.TO)
     #
     try:
         _run_forever(firstbh, current_exc)

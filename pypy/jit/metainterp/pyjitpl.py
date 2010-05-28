@@ -1,6 +1,5 @@
 import py, os
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.llinterp import LLException
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -28,12 +27,6 @@ def arguments(*args):
         func.argtypes = args
         return func
     return decorate
-
-class FixME:      # XXX marks deprecated ootype-only operations
-    def __init__(self, func):
-        self.func = func
-    def __getattr__(self, _):
-        raise Exception("@FixME: " + self.func.__name__)
 
 # ____________________________________________________________
 
@@ -94,6 +87,7 @@ class MIFrame(object):
             if   argcode == 'I': reg = self.registers_i[index]
             elif argcode == 'R': reg = self.registers_r[index]
             elif argcode == 'F': reg = self.registers_f[index]
+            else: raise AssertionError(argcode)
             outvalue[startindex+i] = reg
     prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
@@ -336,20 +330,20 @@ class MIFrame(object):
         cls = heaptracker.descr2vtable(cpu, sizedescr)
         return self.execute(rop.NEW_WITH_VTABLE, ConstInt(cls))
 
-    @FixME  #arguments("box")
-    def opimpl_runtimenew(self, classbox):
-        self.execute(rop.RUNTIMENEW, classbox)
+##    @FixME  #arguments("box")
+##    def opimpl_runtimenew(self, classbox):
+##        self.execute(rop.RUNTIMENEW, classbox)
 
-    @FixME  #arguments("orgpc", "box", "descr")
-    def opimpl_instanceof(self, pc, objbox, typedescr):
-        clsbox = self.cls_of_box(objbox)
-        if isinstance(objbox, Box):
-            self.generate_guard(pc, rop.GUARD_CLASS, objbox, [clsbox])
-        self.execute_with_descr(rop.INSTANCEOF, typedescr, objbox)
+##    @FixME  #arguments("orgpc", "box", "descr")
+##    def opimpl_instanceof(self, pc, objbox, typedescr):
+##        clsbox = self.cls_of_box(objbox)
+##        if isinstance(objbox, Box):
+##            self.generate_guard(pc, rop.GUARD_CLASS, objbox, [clsbox])
+##        self.execute_with_descr(rop.INSTANCEOF, typedescr, objbox)
 
-    @FixME  #arguments("box", "box")
-    def opimpl_subclassof(self, box1, box2):
-        self.execute(rop.SUBCLASSOF, box1, box2)
+##    @FixME  #arguments("box", "box")
+##    def opimpl_subclassof(self, box1, box2):
+##        self.execute(rop.SUBCLASSOF, box1, box2)
 
     @arguments("descr", "box")
     def opimpl_new_array(self, itemsizedescr, countbox):
@@ -678,21 +672,21 @@ class MIFrame(object):
     opimpl_recursive_call_f = _opimpl_recursive_call
     opimpl_recursive_call_v = _opimpl_recursive_call
 
-    @FixME  #arguments("orgpc", "methdescr", "varargs")
-    def opimpl_oosend(self, pc, methdescr, varargs):
-        objbox = varargs[0]
-        clsbox = self.cls_of_box(objbox)
-        if isinstance(objbox, Box):
-            self.generate_guard(pc, rop.GUARD_CLASS, objbox, [clsbox])
-        oocls = clsbox.getref(ootype.Class)
-        jitcode = methdescr.get_jitcode_for_class(oocls)
-        if jitcode is not None:
-            # we should follow calls to this graph
-            return self.perform_call(jitcode, varargs)
-        else:
-            # but we should not follow calls to that graph
-            return self.execute_varargs(rop.OOSEND, varargs,
-                                        descr=methdescr, exc=True)
+##    @FixME  #arguments("orgpc", "methdescr", "varargs")
+##    def opimpl_oosend(self, pc, methdescr, varargs):
+##        objbox = varargs[0]
+##        clsbox = self.cls_of_box(objbox)
+##        if isinstance(objbox, Box):
+##            self.generate_guard(pc, rop.GUARD_CLASS, objbox, [clsbox])
+##        oocls = clsbox.getref(ootype.Class)
+##        jitcode = methdescr.get_jitcode_for_class(oocls)
+##        if jitcode is not None:
+##            # we should follow calls to this graph
+##            return self.perform_call(jitcode, varargs)
+##        else:
+##            # but we should not follow calls to that graph
+##            return self.execute_varargs(rop.OOSEND, varargs,
+##                                        descr=methdescr, exc=True)
 
     @arguments("box")
     def opimpl_strlen(self, strbox):
@@ -726,20 +720,20 @@ class MIFrame(object):
     def opimpl_newunicode(self, lengthbox):
         return self.execute(rop.NEWUNICODE, lengthbox)
 
-    @FixME  #arguments("descr", "varargs")
-    def opimpl_residual_oosend_canraise(self, methdescr, varargs):
-        return self.execute_varargs(rop.OOSEND, varargs, descr=methdescr,
-                                    exc=True)
+##    @FixME  #arguments("descr", "varargs")
+##    def opimpl_residual_oosend_canraise(self, methdescr, varargs):
+##        return self.execute_varargs(rop.OOSEND, varargs, descr=methdescr,
+##                                    exc=True)
 
-    @FixME  #arguments("descr", "varargs")
-    def opimpl_residual_oosend_noraise(self, methdescr, varargs):
-        return self.execute_varargs(rop.OOSEND, varargs, descr=methdescr,
-                                    exc=False)
+##    @FixME  #arguments("descr", "varargs")
+##    def opimpl_residual_oosend_noraise(self, methdescr, varargs):
+##        return self.execute_varargs(rop.OOSEND, varargs, descr=methdescr,
+##                                    exc=False)
 
-    @FixME  #arguments("descr", "varargs")
-    def opimpl_residual_oosend_pure(self, methdescr, boxes):
-        return self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr,
-                                    exc=False)
+##    @FixME  #arguments("descr", "varargs")
+##    def opimpl_residual_oosend_pure(self, methdescr, boxes):
+##        return self.execute_varargs(rop.OOSEND_PURE, boxes, descr=methdescr,
+##                                    exc=False)
 
     @arguments("orgpc", "box",)
     def _opimpl_guard_value(self, orgpc, box):
@@ -1420,12 +1414,15 @@ class MetaInterp(object):
             op.name = self.framestack[-1].jitcode.name
 
     def execute_raised(self, exception, constant=False):
+        llexception = get_llexception(self.cpu, exception)
+        self.execute_ll_raised(llexception, constant)
+
+    def execute_ll_raised(self, llexception, constant=False):
         # Exception handling: when execute.do_call() gets an exception it
         # calls metainterp.execute_raised(), which puts it into
         # 'self.last_exc_value_box'.  This is used shortly afterwards
         # to generate either GUARD_EXCEPTION or GUARD_NO_EXCEPTION, and also
         # to handle the following opcodes 'goto_if_exception_mismatch'.
-        llexception = get_llexception(self.cpu, exception)
         llexception = self.cpu.ts.cast_to_ref(llexception)
         exc_value_box = self.cpu.ts.get_exc_value_box(llexception)
         if constant:
@@ -1540,10 +1537,7 @@ class MetaInterp(object):
         # run it.
         from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
         self.aborted_tracing(stb.reason)
-        current_exc = lltype.nullptr(llmemory.GCREF.TO)
-        if self.last_exc_value_box is not None:
-            current_exc = self.last_exc_value_box.getref()
-        convert_and_run_from_pyjitpl(self, current_exc)
+        convert_and_run_from_pyjitpl(self)
         assert False    # ^^^ must raise
 
     def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
@@ -1632,11 +1626,7 @@ class MetaInterp(object):
         elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
             exception = self.cpu.grab_exc_value()
             if exception:
-                if not we_are_translated():
-                    from pypy.rpython.lltypesystem import rclass
-                    etype = rclass.ll_type(exception)
-                    exception = LLException(etype, exception)
-                self.execute_raised(exception)
+                self.execute_ll_raised(exception)
             else:
                 self.execute_did_not_raise()
             try:

@@ -349,14 +349,14 @@ def execute(cpu, metainterp, opnum, descr, *argboxes):
     func = get_execute_function(opnum, len(argboxes))
     return func(cpu, metainterp, *argboxes)  # note that the 'argboxes' tuple
                                              # optionally ends with the descr
-execute._annspecialcase_ = 'specialize:arg(1)'
+execute._annspecialcase_ = 'specialize:arg(2)'
 
 def execute_varargs(cpu, metainterp, opnum, argboxes, descr):
     # only for opnums with a variable arity (calls, typically)
     check_descr(descr)
     func = get_execute_function(opnum, -1)
     return func(cpu, metainterp, argboxes, descr)
-execute_varargs._annspecialcase_ = 'specialize:arg(1)'
+execute_varargs._annspecialcase_ = 'specialize:arg(2)'
 
 
 def execute_nonspec(cpu, metainterp, opnum, argboxes, descr=None):
