@@ -794,17 +794,33 @@ class BlackholeInterpreter(object):
         pass
 
     @arguments("self", "I", "R", "F", "I", "R", "F")
-    def bhimpl_jit_merge_point(self, *results):
+    def bhimpl_jit_merge_point(self, *args):
         if self.nextblackholeinterp is None:    # we are the last level
             CRN = self.builder.metainterp_sd.ContinueRunningNormally
-            raise CRN(*results)
+            raise CRN(*args)
+            # Note that the case above is an optimization: the case
+            # below would work too.  But it keeps unnecessary stuff on
+            # the stack; the solution above first gets rid of the blackhole
+            # interpreter completely.
         else:
             # This occurs when we reach 'jit_merge_point' in the portal
             # function called by recursion.  In this case, we can directly
             # call the interpreter main loop from here, and just return its
             # result.
-            XXX
-            raise LeaveFrame
+            sd = self.builder.metainterp_sd
+            if sd.result_type == 'void':
+                self.bhimpl_recursive_call_v(*args)
+                self.bhimpl_void_return()
+            elif sd.result_type == 'int':
+                x = self.bhimpl_recursive_call_i(*args)
+                self.bhimpl_int_return(x)
+            elif sd.result_type == 'ref':
+                x = self.bhimpl_recursive_call_r(*args)
+                self.bhimpl_ref_return(x)
+            elif sd.result_type == 'float':
+                x = self.bhimpl_recursive_call_f(*args)
+                self.bhimpl_float_return(x)
+            assert False
 
     def get_portal_runner(self):
         metainterp_sd = self.builder.metainterp_sd
@@ -1295,7 +1311,6 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
         metainterp_sd.blackholeinterpbuilder,
         resumedescr,
         all_virtuals)
-    # XXX virtualizable
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum)
     try:
