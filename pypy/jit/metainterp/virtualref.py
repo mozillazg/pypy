@@ -61,11 +61,11 @@ class VirtualRefInfo:
 
     # The 'virtual_token' field has the same meaning as the 'vable_token' field
     # of a virtualizable.  It is equal to:
-    #  * -2 (TOKEN_NONE) when tracing, except as described below;
+    #  * -3 (TOKEN_NONE) when tracing, except as described below;
     #  * -1 (TOKEN_TRACING_RESCALL) during tracing when we do a residual call;
     #  * addr in the CPU stack (set by FORCE_TOKEN) when running the assembler;
-    #  * -2 (TOKEN_NONE) after the virtual is forced, if it is forced at all.
-    TOKEN_NONE            = -2
+    #  * -3 (TOKEN_NONE) after the virtual is forced, if it is forced at all.
+    TOKEN_NONE            = -3
     TOKEN_TRACING_RESCALL = -1
 
     def virtual_ref_during_tracing(self, real_object):
@@ -104,16 +104,6 @@ class VirtualRefInfo:
         else:
             # marker "modified during residual call" set.
             return True
-
-    def forced_single_vref(self, gcref, real_object):
-        if not self.is_virtual_ref(gcref):
-            return
-        assert real_object
-        vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
-        assert (vref.virtual_token != self.TOKEN_NONE and
-                vref.virtual_token != self.TOKEN_TRACING_RESCALL)
-        vref.virtual_token = self.TOKEN_NONE
-        vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
 
     def continue_tracing(self, gcref, real_object):
         if not self.is_virtual_ref(gcref):

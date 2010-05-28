@@ -1202,6 +1202,7 @@ class MetaInterpGlobalData(object):
         self.addr2name = None
         self.loopnumbering = 0
         self.resume_virtuals = {}
+        self.resume_virtuals_not_translated = []
         #
         state = staticdata.state
         if state is not None:

@@ -324,17 +324,16 @@ class ResumeGuardDescr(ResumeDescr):
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def handle_fail(self, metainterp_sd):
-        from pypy.jit.metainterp.pyjitpl import MetaInterp
-        metainterp = MetaInterp(metainterp_sd)
+        # Failures of a GUARD_NOT_FORCED are never compiled, but
+        # always just blackholed.  First fish for the data saved when
+        # the virtualrefs and virtualizable have been forced by
+        # handle_async_forcing() just a moment ago.
+        from pypy.jit.metainterp.blackhole import resume_in_blackhole
         token = metainterp_sd.cpu.get_latest_force_token()
         all_virtuals = self.fetch_data(token)
         if all_virtuals is None:
             all_virtuals = []
-        metainterp._already_allocated_resume_virtuals = all_virtuals
-        return metainterp.handle_guard_failure(self)
-
-    def must_compile(self, metainterp_sd, inputargs_and_holes):
-        return False     # never compile GUARD_NOT_FORCED failures
+        resume_in_blackhole(metainterp_sd, self, all_virtuals)
 
     @staticmethod
     def force_now(cpu, token):
@@ -346,27 +345,11 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         faildescr.handle_async_forcing(token)
 
     def handle_async_forcing(self, force_token):
-        from pypy.jit.metainterp.pyjitpl import MetaInterp
         from pypy.jit.metainterp.resume import force_from_resumedata
-        # To handle the forcing itself, we create a temporary MetaInterp
-        # as a convenience to move the various data to its proper place.
         metainterp_sd = self.metainterp_sd
-        metainterp = MetaInterp(metainterp_sd)
-        metainterp.history = None    # blackholing
-        liveboxes = metainterp_sd.cpu.make_boxes_from_latest_values(self)
-        #
         expect_virtualizable = metainterp_sd.virtualizable_info is not None
-        forced_data = force_from_resumedata(metainterp, liveboxes, self,
+        all_virtuals = force_from_resumedata(metainterp_sd, self,
                                             expect_virtualizable)
-        virtualizable_boxes, virtualref_boxes, all_virtuals = forced_data
-        #
-        # Handle virtualref_boxes: mark each JIT_VIRTUAL_REF as forced
-        vrefinfo = metainterp_sd.virtualref_info
-        for i in range(0, len(virtualref_boxes), 2):
-            virtualbox = virtualref_boxes[i]
-            vrefbox = virtualref_boxes[i+1]
-            vrefinfo.forced_single_vref(vrefbox.getref_base(),
-                                        virtualbox.getref_base())
         # Handle virtualizable_boxes: store them on the real virtualizable now
         if expect_virtualizable:
             metainterp_sd.virtualizable_info.forced_vable(virtualizable_boxes)
@@ -376,14 +359,30 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def save_data(self, key, value):
         globaldata = self.metainterp_sd.globaldata
-        assert key not in globaldata.resume_virtuals
-        globaldata.resume_virtuals[key] = value
+        if we_are_translated():
+            assert key not in globaldata.resume_virtuals
+            globaldata.resume_virtuals[key] = value
+        else:
+            rv = globaldata.resume_virtuals_not_translated
+            for key1, value1 in rv:
+                assert key1 != key
+            rv.append((key, value))
 
     def fetch_data(self, key):
         globaldata = self.metainterp_sd.globaldata
-        assert key in globaldata.resume_virtuals
-        data = globaldata.resume_virtuals[key]
-        del globaldata.resume_virtuals[key]
+        if we_are_translated():
+            assert key in globaldata.resume_virtuals
+            data = globaldata.resume_virtuals[key]
+            del globaldata.resume_virtuals[key]
+        else:
+            rv = globaldata.resume_virtuals_not_translated
+            for i in range(len(rv)):
+                if rv[i][0] == key:
+                    data = rv[i][1]
+                    del rv[i]
+                    break
+            else:
+                assert 0, "not found: %r" % (key,)
         return data
 
 
