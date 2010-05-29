@@ -190,6 +190,9 @@ class BaseCallDescr(AbstractDescr):
     def get_extra_info(self):
         return self.extrainfo
 
+    def get_arg_types(self):
+        return self.arg_classes
+
     def get_return_type(self):
         return self._return_type
 

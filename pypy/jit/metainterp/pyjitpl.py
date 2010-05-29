@@ -985,7 +985,38 @@ class MIFrame(object):
 
     def do_residual_call(self, funcbox, descr, argboxes,
                          assembler_call_token=None):
-        allboxes = [funcbox] + argboxes
+        # First build allboxes: it may need some reordering from the
+        # list provided in argboxes, depending on the order in which
+        # the arguments are expected by the function
+        allboxes = [None] * (len(argboxes)+1)
+        allboxes[0] = funcbox
+        src_i = src_r = src_f = 0
+        i = 1
+        for kind in descr.get_arg_types():
+            if kind == history.INT:
+                while True:
+                    box = argboxes[src_i]
+                    src_i += 1
+                    if box.type == history.INT:
+                        break
+            elif kind == history.REF:
+                while True:
+                    box = argboxes[src_r]
+                    src_r += 1
+                    if box.type == history.REF:
+                        break
+            elif kind == history.FLOAT:
+                while True:
+                    box = argboxes[src_f]
+                    src_f += 1
+                    if box.type == history.FLOAT:
+                        break
+            else:
+                raise AssertionError
+            allboxes[i] = box
+            i += 1
+        assert i == len(allboxes)
+        #
         effectinfo = descr.get_extra_info()
         if (effectinfo is None or
                 effectinfo.extraeffect ==
@@ -995,11 +1026,12 @@ class MIFrame(object):
             self.metainterp.vable_and_vrefs_before_residual_call()
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
+            self.metainterp.vrefs_after_residual_call()
             if assembler_call_token is not None:
                 self.metainterp.direct_assembler_call(assembler_call_token)
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
-            self.metainterp.vable_and_vrefs_after_residual_call()
+            self.metainterp.vable_after_residual_call()
             self.generate_guard(rop.GUARD_NOT_FORCED, None)
             self.metainterp.handle_possible_exception()
             return resbox
@@ -1768,7 +1800,7 @@ class MetaInterp(object):
                                                   force_token_box],
                                 None, descr=vinfo.vable_token_descr)
 
-    def vable_and_vrefs_after_residual_call(self):
+    def vrefs_after_residual_call(self):
         vrefinfo = self.staticdata.virtualref_info
         for i in range(0, len(self.virtualref_boxes), 2):
             virtualbox = self.virtualref_boxes[i]
@@ -1780,7 +1812,8 @@ class MetaInterp(object):
                 # generating a VIRTUAL_REF_FINISH on it and replacing
                 # it by ConstPtr(NULL).
                 self.stop_tracking_virtualref(i)
-        #
+
+    def vable_after_residual_call(self):
         vinfo = self.staticdata.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]

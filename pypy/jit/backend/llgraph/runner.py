@@ -23,11 +23,16 @@ class MiniStats:
 
 class Descr(history.AbstractDescr):
 
-    def __init__(self, ofs, typeinfo, extrainfo=None, name=None):
+    def __init__(self, ofs, typeinfo, extrainfo=None, name=None,
+                 arg_types=None):
         self.ofs = ofs
         self.typeinfo = typeinfo
         self.extrainfo = extrainfo
         self.name = name
+        self.arg_types = arg_types
+
+    def get_arg_types(self):
+        return self.arg_types
 
     def get_return_type(self):
         return self.typeinfo
@@ -98,12 +103,13 @@ class BaseCPU(model.AbstractCPU):
         assert self.translate_support_code
         return False
 
-    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None):
-        key = (ofs, typeinfo, extrainfo, name)
+    def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None,
+                 arg_types=None):
+        key = (ofs, typeinfo, extrainfo, name, arg_types)
         try:
             return self._descrs[key]
         except KeyError:
-            descr = Descr(ofs, typeinfo, extrainfo, name)
+            descr = Descr(ofs, typeinfo, extrainfo, name, arg_types)
             self._descrs[key] = descr
             return descr
 
@@ -271,8 +277,14 @@ class LLtypeCPU(BaseCPU):
         return self.getdescr(ofs, token[0], name=fieldname)
 
     def calldescrof(self, FUNC, ARGS, RESULT, extrainfo=None):
+        arg_types = []
+        for ARG in ARGS:
+            token = history.getkind(ARG)
+            if token != 'void':
+                arg_types.append(token[0])
         token = history.getkind(RESULT)
-        return self.getdescr(0, token[0], extrainfo=extrainfo)
+        return self.getdescr(0, token[0], extrainfo=extrainfo,
+                             arg_types=''.join(arg_types))
 
     def grab_exc_value(self):
         return llimpl.grab_exc_value()
