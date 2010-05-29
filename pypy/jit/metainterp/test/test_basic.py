@@ -1519,7 +1519,7 @@ class BaseLLtypeTests(BasicTests):
         if not self.basic:
             py.test.skip("test written in a style that "
                          "means it's frontend only")
-        from pypy.rpython.lltypesystem import lltype, llmemory
+        from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 
         TP = lltype.GcStruct('S1')
         def f(p):
@@ -1528,9 +1528,9 @@ class BaseLLtypeTests(BasicTests):
         x = lltype.malloc(TP)
         xref = lltype.cast_opaque_ptr(llmemory.GCREF, x)
         res = self.interp_operations(f, [xref])
-        y = llmemory.cast_int_to_adr(res)
-        y = llmemory.cast_adr_to_ptr(y, lltype.Ptr(TP))
-        assert x == y
+        y = llmemory.cast_ptr_to_adr(x)
+        y = llmemory.cast_adr_to_int(y)
+        assert rffi.get_real_int(res) == rffi.get_real_int(y)
         #
         TP = lltype.Struct('S2')
         prebuilt = [lltype.malloc(TP, immortal=True),
@@ -1540,9 +1540,9 @@ class BaseLLtypeTests(BasicTests):
             n = lltype.cast_ptr_to_int(p)
             return n
         res = self.interp_operations(f, [1])
-        y = llmemory.cast_int_to_adr(res)
-        y = llmemory.cast_adr_to_ptr(y, lltype.Ptr(TP))
-        assert prebuilt[1] == y
+        y = llmemory.cast_ptr_to_adr(prebuilt[1])
+        y = llmemory.cast_adr_to_int(y)
+        assert rffi.get_real_int(res) == rffi.get_real_int(y)
 
     def test_collapsing_ptr_eq(self):
         S = lltype.GcStruct('S')
