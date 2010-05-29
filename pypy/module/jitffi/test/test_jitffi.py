@@ -16,7 +16,7 @@ class AppTestJitffi(object):
         }
         '''))
 
-        symbols = ["sum"]
+        symbols = ["add_integers"]
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -30,6 +30,6 @@ class AppTestJitffi(object):
 
     def test_raw_callable(self):
         import jitffi
-        lib = jitffi.load(self.lib_name)
+        lib = jitffi.CDLL(self.lib_name)
         res = lib.call('add_integers', 1, 2)
         assert res == 3
