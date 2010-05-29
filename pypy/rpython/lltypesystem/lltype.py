@@ -1840,7 +1840,8 @@ def cast_ptr_to_int(ptr):
 def cast_int_to_ptr(PTRTYPE, oddint):
     if oddint == 0:
         return nullptr(PTRTYPE.TO)
-    assert oddint & 1, "only odd integers can be cast back to ptr"
+    if not (oddint & 1):
+        raise ValueError("only odd integers can be cast back to ptr")
     return _ptr(PTRTYPE, oddint, solid=True)
 
 def attachRuntimeTypeInfo(GCSTRUCT, funcptr=None, destrptr=None):

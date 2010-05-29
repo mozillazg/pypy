@@ -632,7 +632,11 @@ _NONGCREF = lltype.Ptr(lltype.OpaqueType('NONGCREF'))
 def cast_int_to_adr(int):
     if isinstance(int, AddressAsInt):
         return int.adr
-    ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
+    try:
+        ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
+    except ValueError:
+        from pypy.rpython.lltypesystem import ll2ctypes
+        ptr = ll2ctypes._int2obj[int]._as_ptr()
     return cast_ptr_to_adr(ptr)
 
 # ____________________________________________________________
