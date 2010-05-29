@@ -763,18 +763,22 @@ class Frame(object):
         global _last_exception
         assert _last_exception is None, "exception left behind"
         assert _call_args_i == _call_args_r == _call_args_f == []
+        args_in_order = []
         for x in args:
             T = lltype.typeOf(x)
             if T is lltype.Signed:
+                args_in_order.append('i')
                 _call_args_i.append(x)
             elif T == llmemory.GCREF:
+                args_in_order.append('r')
                 _call_args_r.append(x)
             elif T is lltype.Float:
+                args_in_order.append('f')
                 _call_args_f.append(x)
             else:
                 raise TypeError(x)
         try:
-            return _do_call_common(func)
+            return _do_call_common(func, args_in_order)
         except LLException, lle:
             _last_exception = lle
             d = {'v': None,
@@ -1334,11 +1338,12 @@ def do_call_pushptr(x):
 def do_call_pushfloat(x):
     _call_args_f.append(x)
 
-def _do_call_common(f):
+def _do_call_common(f, args_in_order=None):
     ptr = llmemory.cast_int_to_adr(f).ptr
     FUNC = lltype.typeOf(ptr).TO
     ARGS = FUNC.ARGS
-    args = cast_call_args(ARGS, _call_args_i, _call_args_r, _call_args_f)
+    args = cast_call_args(ARGS, _call_args_i, _call_args_r, _call_args_f,
+                          args_in_order)
     del _call_args_i[:]
     del _call_args_r[:]
     del _call_args_f[:]
@@ -1366,25 +1371,39 @@ def do_call_ptr(f):
     x = _do_call_common(f)
     return cast_to_ptr(x)
 
-def cast_call_args(ARGS, args_i, args_r, args_f):
+def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
     argsiter_i = iter(args_i)
     argsiter_r = iter(args_r)
     argsiter_f = iter(args_f)
+    if args_in_order is not None:
+        orderiter = iter(args_in_order)
     args = []
     for TYPE in ARGS:
         if TYPE is lltype.Void:
             x = None
         else:
             if isinstance(TYPE, ootype.OOType):
+                if args_in_order is not None:
+                    n = orderiter.next()
+                    assert n == 'r'
                 x = argsiter_r.next()
                 x = ootype.cast_from_object(TYPE, x)
             elif isinstance(TYPE, lltype.Ptr) and TYPE.TO._gckind == 'gc':
+                if args_in_order is not None:
+                    n = orderiter.next()
+                    assert n == 'r'
                 x = argsiter_r.next()
                 x = cast_from_ptr(TYPE, x)
             elif TYPE is lltype.Float:
+                if args_in_order is not None:
+                    n = orderiter.next()
+                    assert n == 'f'
                 x = argsiter_f.next()
                 x = cast_from_float(TYPE, x)
             else:
+                if args_in_order is not None:
+                    n = orderiter.next()
+                    assert n == 'i'
                 x = argsiter_i.next()
                 x = cast_from_int(TYPE, x)
         args.append(x)
