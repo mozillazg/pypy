@@ -3,7 +3,8 @@ from pypy.rlib.objectmodel import we_are_translated
 
 
 def has_gcstruct_a_vtable(GCSTRUCT):
-    assert isinstance(GCSTRUCT, lltype.GcStruct)
+    if not isinstance(GCSTRUCT, lltype.GcStruct):
+        return False
     while not GCSTRUCT._hints.get('typeptr'):
         _, GCSTRUCT = GCSTRUCT._first_struct()
         if GCSTRUCT is None:
@@ -14,6 +15,7 @@ def get_vtable_for_gcstruct(cpu, GCSTRUCT):
     # xxx hack: from a GcStruct representing an instance's
     # lowleveltype, return the corresponding vtable pointer.
     # Returns None if the GcStruct does not belong to an instance.
+    assert isinstance(GCSTRUCT, lltype.GcStruct)
     if not has_gcstruct_a_vtable(GCSTRUCT):
         return None
     setup_cache_gcstruct2vtable(cpu)
