@@ -1,4 +1,6 @@
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.llinterp import LLException
 from pypy.rlib.objectmodel import we_are_translated
 
@@ -26,3 +28,11 @@ def get_llexception(cpu, e):
     if isinstance(e, OverflowError):
         return _get_standard_error(cpu.rtyper, OverflowError)
     raise   # leave other exceptions to be propagated
+
+def reraise(lle):
+    if we_are_translated():
+        e = cast_base_ptr_to_instance(Exception, lle)
+        raise e
+    else:
+        etype = rclass.ll_type(lle)
+        raise LLException(etype, lle)
