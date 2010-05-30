@@ -38,7 +38,7 @@ class TestTranslationX86(CCompiledMixin):
             return abs(x)
 
         jitdriver = JitDriver(greens = [],
-                              reds = ['frame', 'total', 'j'],
+                              reds = ['total', 'frame', 'j'],
                               virtualizables = ['frame'])
         def f(i, j):
             for param in unroll_parameters:
@@ -72,7 +72,7 @@ class TestTranslationX86(CCompiledMixin):
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
                            get_printable_location = lambda codeno : str(codeno),
                            can_inline = lambda codeno : False)
