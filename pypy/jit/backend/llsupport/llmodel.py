@@ -50,7 +50,7 @@ class AbstractLLCPU(AbstractCPU):
             self._setup_exception_handling_translated()
         else:
             self._setup_exception_handling_untranslated()
-        self.saved_exc_value = lltype.nullptr(rclass.OBJECT)
+        self.saved_exc_value = lltype.nullptr(llmemory.GCREF.TO)
         self.setup()
         if translate_support_code:
             self._setup_on_leave_jitted_translated()
@@ -107,7 +107,7 @@ class AbstractLLCPU(AbstractCPU):
             v_i = _exception_emulator[1]
             _exception_emulator[0] = 0
             _exception_emulator[1] = 0
-            self.saved_exc_value = rffi.cast(rclass.OBJECTPTR, v_i)
+            self.saved_exc_value = rffi.cast(llmemory.GCREF, v_i)
 
         self.pos_exception = pos_exception
         self.pos_exc_value = pos_exc_value
@@ -128,7 +128,7 @@ class AbstractLLCPU(AbstractCPU):
             addr = llop.get_exception_addr(llmemory.Address)
             addr.address[0] = llmemory.NULL
             addr = llop.get_exc_value_addr(llmemory.Address)
-            exc_value = rffi.cast(rclass.OBJECTPTR, addr.address[0])
+            exc_value = rffi.cast(llmemory.GCREF, addr.address[0])
             addr.address[0] = llmemory.NULL
             # from now on, the state is again consistent -- no more RPython
             # exception is set.  The following code produces a write barrier
@@ -172,7 +172,7 @@ class AbstractLLCPU(AbstractCPU):
 
     def grab_exc_value(self):
         exc = self.saved_exc_value
-        self.saved_exc_value = lltype.nullptr(rclass.OBJECT)
+        self.saved_exc_value = lltype.nullptr(llmemory.GCREF.TO)
         return exc
 
     # ------------------- helpers and descriptions --------------------

@@ -1096,9 +1096,9 @@ def grab_exc_value():
     if _last_exception is not None:
         result = _last_exception.args[1]
         _last_exception = None
-        return result
+        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
     else:
-        return lltype.nullptr(rclass.OBJECTPTR.TO)
+        return lltype.nullptr(llmemory.GCREF.TO)
 
 ##_pseudo_exceptions = {}
 
@@ -1519,7 +1519,7 @@ setannotation(frame_float_getvalue, annmodel.SomeFloat())
 setannotation(frame_get_value_count, annmodel.SomeInteger())
 setannotation(frame_clear_latest_values, annmodel.s_None)
 
-setannotation(grab_exc_value, annmodel.SomePtr(rclass.OBJECTPTR))
+setannotation(grab_exc_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())
