@@ -314,7 +314,8 @@ class TestWarmspotDirect(object):
                 return self.no
 
         class FakeDescr:
-            pass
+            def as_vtable_size_descr(self):
+                return self
 
         class FakeCPU(object):
             supports_floats = False
