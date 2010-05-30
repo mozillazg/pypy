@@ -32,6 +32,8 @@ def fake_regallocs():
 class FakeDescr(AbstractDescr):
     def __repr__(self):
         return '<Descr>'
+    def as_vtable_size_descr(self):
+        return self
 
 class FakeDict(object):
     def __getitem__(self, key):
