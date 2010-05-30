@@ -60,9 +60,6 @@ class AbstractLLCPU(AbstractCPU):
     def setup(self):
         pass
 
-    def set_class_sizes(self, class_sizes):
-        self.class_sizes = class_sizes
-
     def _setup_prebuilt_error(self, prefix, Class):
         if self.rtyper is not None:   # normal case
             bk = self.rtyper.annotator.bookkeeper
