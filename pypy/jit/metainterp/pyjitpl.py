@@ -1287,6 +1287,8 @@ class MetaInterp(object):
         self.free_frames_list.append(frame)
 
     def finishframe(self, resultbox):
+        # handle a non-exceptional return from the current frame
+        self.last_exc_value_box = None
         self.popframe()
         if self.framestack:
             self.framestack[-1].make_result_of_lastop(resultbox)
