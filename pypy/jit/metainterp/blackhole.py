@@ -1042,15 +1042,15 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", "d", "d", "i", "i")
     def bhimpl_setarrayitem_vable_i(cpu, vable, fdescr, adescr, index, newval):
         array = cpu.bh_getfield_gc_r(vable, fdescr)
-        cpu.bh_setarrayitem_gc_i(a, array, index, newval)
+        cpu.bh_setarrayitem_gc_i(adescr, array, index, newval)
     @arguments("cpu", "r", "d", "d", "i", "r")
     def bhimpl_setarrayitem_vable_r(cpu, vable, fdescr, adescr, index, newval):
         array = cpu.bh_getfield_gc_r(vable, fdescr)
-        cpu.bh_setarrayitem_gc_r(a, array, index, newval)
+        cpu.bh_setarrayitem_gc_r(adescr, array, index, newval)
     @arguments("cpu", "r", "d", "d", "i", "f")
     def bhimpl_setarrayitem_vable_f(cpu, vable, fdescr, adescr, index, newval):
         array = cpu.bh_getfield_gc_r(vable, fdescr)
-        cpu.bh_setarrayitem_gc_f(a, array, index, newval)
+        cpu.bh_setarrayitem_gc_f(adescr, array, index, newval)
 
     @arguments("cpu", "r", "d", "d", returns="i")
     def bhimpl_arraylen_vable(cpu, vable, fdescr, adescr):
