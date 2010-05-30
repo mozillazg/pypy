@@ -8,7 +8,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from pypy.jit.codewriter import heaptracker
-from pypy.jit.metainterp.jitexc import JitException, get_llexception
+from pypy.jit.metainterp.jitexc import JitException, get_llexception, reraise
 
 
 def arguments(*argtypes, **kwds):
@@ -361,11 +361,7 @@ class BlackholeInterpreter(object):
                 self.position = target
                 return
         # no 'catch_exception' insn follows: just reraise
-        if we_are_translated():
-            raise Exception, e
-        else:
-            etype = rclass.ll_type(e)
-            raise LLException(etype, e)
+        reraise(e)
 
     def copy_constants(self, registers, constants):
         """Copy jitcode.constants[0] to registers[255],
@@ -758,21 +754,13 @@ class BlackholeInterpreter(object):
     def bhimpl_raise(self, excvalue):
         e = lltype.cast_opaque_ptr(rclass.OBJECTPTR, excvalue)
         assert e
-        if we_are_translated():
-            raise Exception, e
-        else:
-            etype = rclass.ll_type(e)
-            raise LLException(etype, e)
+        reraise(e)
 
     @arguments("self")
     def bhimpl_reraise(self):
         e = self.exception_last_value
         assert e
-        if we_are_translated():
-            raise Exception, e
-        else:
-            etype = rclass.ll_type(e)
-            raise LLException(etype, e)
+        reraise(e)
 
     # ----------
     # the main hints and recursive calls
