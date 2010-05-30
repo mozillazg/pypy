@@ -50,7 +50,7 @@ class AbstractLLCPU(AbstractCPU):
             self._setup_exception_handling_translated()
         else:
             self._setup_exception_handling_untranslated()
-        self.clear_exception()
+        self.saved_exc_value = lltype.nullptr(rclass.OBJECT)
         self.setup()
         if translate_support_code:
             self._setup_on_leave_jitted_translated()
@@ -107,12 +107,10 @@ class AbstractLLCPU(AbstractCPU):
 
         def save_exception():
             # copy from _exception_emulator to the real attributes on self
-            tp_i = _exception_emulator[0]
-            v_i  = _exception_emulator[1]
+            v_i = _exception_emulator[1]
             _exception_emulator[0] = 0
             _exception_emulator[1] = 0
-            self.saved_exception = tp_i
-            self.saved_exc_value = self._cast_int_to_gcref(v_i)
+            self.saved_exc_value = rffi.cast(rclass.OBJECTPTR, v_i)
 
         self.pos_exception = pos_exception
         self.pos_exc_value = pos_exc_value
@@ -131,15 +129,13 @@ class AbstractLLCPU(AbstractCPU):
 
         def save_exception():
             addr = llop.get_exception_addr(llmemory.Address)
-            exception = rffi.cast(lltype.Signed, addr.address[0])
             addr.address[0] = llmemory.NULL
             addr = llop.get_exc_value_addr(llmemory.Address)
-            exc_value = rffi.cast(llmemory.GCREF, addr.address[0])
+            exc_value = rffi.cast(rclass.OBJECTPTR, addr.address[0])
             addr.address[0] = llmemory.NULL
             # from now on, the state is again consistent -- no more RPython
             # exception is set.  The following code produces a write barrier
             # in the assignment to self.saved_exc_value, as needed.
-            self.saved_exception = exception
             self.saved_exc_value = exc_value
 
         self.pos_exception = pos_exception
@@ -177,16 +173,10 @@ class AbstractLLCPU(AbstractCPU):
             f = llhelper(self._ON_JIT_LEAVE_FUNC, self.on_leave_jitted_noexc)
         return rffi.cast(lltype.Signed, f)
 
-    def get_exception(self):
-        return self.saved_exception
-
-    def get_exc_value(self):
-        return self.saved_exc_value
-
-    def clear_exception(self):
-        self.saved_exception = 0
-        self.saved_exc_value = lltype.nullptr(llmemory.GCREF.TO)
-
+    def grab_exc_value(self):
+        exc = self.saved_exc_value
+        self.saved_exc_value = lltype.nullptr(rclass.OBJECT)
+        return exc
 
     # ------------------- helpers and descriptions --------------------
 
