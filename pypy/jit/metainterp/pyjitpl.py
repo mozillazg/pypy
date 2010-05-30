@@ -2009,7 +2009,8 @@ class MetaInterp(object):
         if self.staticdata.virtualizable_info is not None:
             vindex = self.staticdata.virtualizable_info.index_of_virtualizable
             vbox = args[vindex - num_green_args]
-            args += self.gen_load_from_other_virtualizable(vbox)
+            args = args + self.gen_load_from_other_virtualizable(vbox)
+            # ^^^ and not "+=", which makes 'args' a resizable list
         op.opnum = rop.CALL_ASSEMBLER
         op.args = args
         op.descr = token
