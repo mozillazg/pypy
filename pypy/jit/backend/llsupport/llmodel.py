@@ -203,20 +203,30 @@ class AbstractLLCPU(AbstractCPU):
 
     def unpack_fielddescr(self, fielddescr):
         assert isinstance(fielddescr, BaseFieldDescr)
+        return fielddescr.offset
+    unpack_fielddescr._always_inline_ = True
+
+    def unpack_fielddescr_size(self, fielddescr):
+        assert isinstance(fielddescr, BaseFieldDescr)
         ofs = fielddescr.offset
         size = fielddescr.get_field_size(self.translate_support_code)
         return ofs, size
-    unpack_fielddescr._always_inline_ = True
+    unpack_fielddescr_size._always_inline_ = True
 
     def arraydescrof(self, A):
         return get_array_descr(self.gc_ll_descr, A)
 
     def unpack_arraydescr(self, arraydescr):
         assert isinstance(arraydescr, BaseArrayDescr)
+        return arraydescr.get_base_size(self.translate_support_code)
+    unpack_arraydescr._always_inline_ = True
+
+    def unpack_arraydescr_size(self, arraydescr):
+        assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_base_size(self.translate_support_code)
         size = arraydescr.get_item_size(self.translate_support_code)
         return ofs, size
-    unpack_arraydescr._always_inline_ = True
+    unpack_arraydescr_size._always_inline_ = True
 
     def calldescrof(self, FUNC, ARGS, RESULT, extrainfo=None):
         return get_call_descr(self.gc_ll_descr, ARGS, RESULT, extrainfo)
@@ -241,7 +251,7 @@ class AbstractLLCPU(AbstractCPU):
         return rffi.cast(rffi.CArrayPtr(lltype.Signed), array)[ofs/WORD]
 
     def bh_getarrayitem_gc_i(self, arraydescr, gcref, itemindex):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs, size = self.unpack_arraydescr_size(arraydescr)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
         for TYPE, itemsize in unroll_basic_sizes:
@@ -254,7 +264,7 @@ class AbstractLLCPU(AbstractCPU):
             raise NotImplementedError("size = %d" % size)
 
     def bh_getarrayitem_gc_r(self, arraydescr, gcref, itemindex):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs = self.unpack_arraydescr(arraydescr)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
         items = rffi.cast(rffi.CArrayPtr(lltype.Signed), items)
@@ -263,7 +273,7 @@ class AbstractLLCPU(AbstractCPU):
         return pval
 
     def bh_getarrayitem_gc_f(self, arraydescr, gcref, itemindex):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs = self.unpack_arraydescr(arraydescr)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
         items = rffi.cast(rffi.CArrayPtr(lltype.Float), items)
@@ -272,7 +282,7 @@ class AbstractLLCPU(AbstractCPU):
         return fval
 
     def bh_setarrayitem_gc_i(self, arraydescr, gcref, itemindex, newvalue):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs, size = self.unpack_arraydescr_size(arraydescr)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
         for TYPE, itemsize in unroll_basic_sizes:
@@ -285,7 +295,7 @@ class AbstractLLCPU(AbstractCPU):
             raise NotImplementedError("size = %d" % size)
 
     def bh_setarrayitem_gc_r(self, arraydescr, gcref, itemindex, newvalue):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs = self.unpack_arraydescr(arraydescr)
         self.gc_ll_descr.do_write_barrier(gcref, newvalue)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
@@ -294,7 +304,7 @@ class AbstractLLCPU(AbstractCPU):
         # --- end of GC unsafe code ---
 
     def bh_setarrayitem_gc_f(self, arraydescr, gcref, itemindex, newvalue):
-        ofs, size = self.unpack_arraydescr(arraydescr)
+        ofs = self.unpack_arraydescr(arraydescr)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
         items = rffi.cast(rffi.CArrayPtr(lltype.Float), items)
@@ -319,7 +329,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_getfield_i(self, struct, fielddescr):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs, size = self.unpack_fielddescr_size(fielddescr)
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         for TYPE, itemsize in unroll_basic_sizes:
@@ -332,7 +342,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_getfield_r(self, struct, fielddescr):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs = self.unpack_fielddescr(fielddescr)
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         pval = rffi.cast(rffi.CArrayPtr(lltype.Signed), fieldptr)[0]
@@ -342,7 +352,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_getfield_f(self, struct, fielddescr):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs = self.unpack_fielddescr(fielddescr)
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         fval = rffi.cast(rffi.CArrayPtr(lltype.Float), fieldptr)[0]
@@ -358,7 +368,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_setfield_i(self, struct, fielddescr, newvalue):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs, size = self.unpack_fielddescr_size(fielddescr)
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         for TYPE, itemsize in unroll_basic_sizes:
@@ -372,7 +382,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_setfield_r(self, struct, fielddescr, newvalue):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs = self.unpack_fielddescr(fielddescr)
         assert lltype.typeOf(struct) is not lltype.Signed, (
             "can't handle write barriers for setfield_raw")
         self.gc_ll_descr.do_write_barrier(struct, newvalue)
@@ -384,7 +394,7 @@ class AbstractLLCPU(AbstractCPU):
 
     @specialize.argtype(1)
     def _base_do_setfield_f(self, struct, fielddescr, newvalue):
-        ofs, size = self.unpack_fielddescr(fielddescr)
+        ofs = self.unpack_fielddescr(fielddescr)
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         fieldptr = rffi.cast(rffi.CArrayPtr(lltype.Float), fieldptr)
