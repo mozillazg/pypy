@@ -211,10 +211,9 @@ class TestRegallocSimple(BaseTestRegalloc):
         '''
         S = lltype.GcStruct('S')
         ptr = lltype.malloc(S)
+        self.cpu.clear_latest_values(2)
         self.interpret(ops, [0, ptr])
         assert self.getptr(0, lltype.Ptr(S)) == ptr
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(0)
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(1)
 
     def test_exception_bridge_no_exception(self):
         ops = '''
@@ -526,16 +525,16 @@ class TestRegallocFloats(BaseTestRegalloc):
         # makes sense any more.
         ops = '''
         [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9]
-        i0 = float_ne(f0, ConstFloat(0.0))
-        i1 = float_ne(f1, ConstFloat(0.0))
-        i2 = float_ne(f2, ConstFloat(0.0))
-        i3 = float_ne(f3, ConstFloat(0.0))
-        i4 = float_ne(f4, ConstFloat(0.0))
-        i5 = float_ne(f5, ConstFloat(0.0))
-        i6 = float_ne(f6, ConstFloat(0.0))
-        i7 = float_ne(f7, ConstFloat(0.0))
-        i8 = float_ne(f8, ConstFloat(0.0))
-        i9 = float_ne(f9, ConstFloat(0.0))
+        i0 = float_ne(f0, 0.0)
+        i1 = float_ne(f1, 0.0)
+        i2 = float_ne(f2, 0.0)
+        i3 = float_ne(f3, 0.0)
+        i4 = float_ne(f4, 0.0)
+        i5 = float_ne(f5, 0.0)
+        i6 = float_ne(f6, 0.0)
+        i7 = float_ne(f7, 0.0)
+        i8 = float_ne(f8, 0.0)
+        i9 = float_ne(f9, 0.0)
         finish(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9)
         '''
         loop = self.interpret(ops, [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9])

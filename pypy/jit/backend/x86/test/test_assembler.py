@@ -215,6 +215,13 @@ def do_failure_recovery_func(withfloats):
         # bits of the float were correctly saved and restored.
         assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
 
+    # verify that until clear_latest_values() is called, reading the
+    # same values multiple times work
+    for i in range(len(content)):
+        assert assembler.fail_boxes_int.getitem(i) == expected_ints[i]
+        assert assembler.fail_boxes_ptr.getitem(i) == expected_ptrs[i]
+        assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
+
 class FakeProfileAgent(object):
     def __init__(self):
         self.functions = []
