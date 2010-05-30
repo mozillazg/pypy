@@ -280,21 +280,28 @@ class ResumeGuardDescr(ResumeDescr):
         else:
             index = self._counter & self.CNT_MASK
             typetag = self._counter & ~ self.CNT_MASK
+            counters = self._counters
             if typetag == self.CNT_INT:
                 intvalue = metainterp_sd.cpu.get_latest_value_int(index)
-                if self._counters is None:
-                    self._counters = ResumeGuardCountersInt()
-                counter = self._counters.see_int(intvalue)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersInt()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersInt)
+                counter = counters.see_int(intvalue)
             elif typetag == self.CNT_REF:
                 refvalue = metainterp_sd.cpu.get_latest_value_ref(index)
-                if self._counters is None:
-                    self._counters = ResumeGuardCountersRef()
-                counter = self._counters.see_ref(refvalue)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersRef()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersRef)
+                counter = counters.see_ref(refvalue)
             elif typetag == self.CNT_FLOAT:
                 floatvalue = metainterp_sd.cpu.get_latest_value_float(index)
-                if self._counters is None:
-                    self._counters = ResumeGuardCountersFloat()
-                counter = self._counters.see_float(floatvalue)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersFloat()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersFloat)
+                counter = counters.see_float(floatvalue)
             else:
                 assert 0, typetag
             return counter >= trace_eagerness
