@@ -152,6 +152,7 @@ class GraphFlattener(object):
         if link.target.operations == () and link.args == [link.last_exception,
                                                           link.last_exc_value]:
             self.emitline("reraise")
+            self.emitline("---")
             return   # done
         if link.last_exception in link.args:
             self.emitline("last_exception",
