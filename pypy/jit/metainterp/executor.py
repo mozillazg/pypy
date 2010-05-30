@@ -15,8 +15,7 @@ from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 
 # ____________________________________________________________
 
-def do_call(cpu, metainterp, argboxes, descr):
-    assert metainterp is not None
+def _prepare_call(argboxes, descr):
     # count the number of arguments of the different types
     count_i = count_r = count_f = 0
     for i in range(1, len(argboxes)):
@@ -48,6 +47,11 @@ def do_call(cpu, metainterp, argboxes, descr):
     func = argboxes[0].getint()
     # do the call using the correct function from the cpu
     rettype = descr.get_return_type()
+    return func, args_i, args_r, args_f, rettype
+
+def do_call(cpu, metainterp, argboxes, descr):
+    assert metainterp is not None
+    func, args_i, args_r, args_f, rettype = _prepare_call(argboxes, descr)
     if rettype == INT:
         try:
             result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
@@ -85,9 +89,23 @@ def do_call(cpu, metainterp, argboxes, descr):
         return None
     raise AssertionError("bad rettype")
 
-do_call_pure = do_call
 do_call_loopinvariant = do_call
 do_call_may_force = do_call
+
+def do_call_pure(cpu, _, argboxes, descr):
+    # this version does not deal with exceptions at all
+    # xxx in case of MemoryError, it crashes the JIT
+    func, args_i, args_r, args_f, rettype = _prepare_call(argboxes, descr)
+    if rettype == INT:
+        return BoxInt(cpu.bh_call_i(func, descr, args_i, args_r, args_f))
+    if rettype == REF:
+        return BoxPtr(cpu.bh_call_r(func, descr, args_i, args_r, args_f))
+    if rettype == FLOAT:
+        return BoxFloat(cpu.bh_call_f(func, descr, args_i, args_r, args_f))
+    if rettype == VOID:
+        cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+        return None
+    raise AssertionError("bad rettype")
 
 def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
     array = arraybox.getref_base()
@@ -253,8 +271,6 @@ def _make_execute_list():
             #
             if execute[value] is not None:
                 raise AssertionError("duplicate entry for op number %d"% value)
-            if key.endswith('_PURE'):
-                key = key[:-5]
             #
             # Fish for a way for the pyjitpl interpreter to delegate
             # really running the operation to the blackhole interpreter
@@ -264,6 +280,15 @@ def _make_execute_list():
             if name in globals():
                 execute[value] = globals()[name]
                 continue
+            #
+            # Maybe the same without the _PURE suffix?
+            if key.endswith('_PURE'):
+                key = key[:-5]
+                name = 'do_' + key.lower()
+                if name in globals():
+                    execute[value] = globals()[name]
+                    continue
+            #
             # If missing, fallback to the bhimpl_xxx() method of the
             # blackhole interpreter.  This only works if there is a
             # method of the exact same name and it accepts simple
