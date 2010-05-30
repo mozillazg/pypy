@@ -70,11 +70,9 @@ class Assembler(object):
                     TYPE = llmemory.Address
                 if TYPE == llmemory.Address:
                     value = llmemory.cast_adr_to_int(value)
-                else:
+                elif not isinstance(value, ComputedIntSymbolic):
                     value = lltype.cast_primitive(lltype.Signed, value)
-                    if isinstance(value, ComputedIntSymbolic):
-                        value = value.compute_fn()
-                    if allow_short and -128 <= value <= 127:  # xxx symbolic
+                    if allow_short and -128 <= value <= 127:
                         # emit the constant as a small integer
                         self.code.append(chr(value & 0xFF))
                         return True
