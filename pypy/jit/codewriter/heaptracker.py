@@ -2,16 +2,20 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 
 
+def has_gcstruct_a_vtable(GCSTRUCT):
+    assert isinstance(GCSTRUCT, lltype.GcStruct)
+    while not GCSTRUCT._hints.get('typeptr'):
+        _, GCSTRUCT = GCSTRUCT._first_struct()
+        if GCSTRUCT is None:
+            return False
+    return True
+
 def get_vtable_for_gcstruct(cpu, GCSTRUCT):
     # xxx hack: from a GcStruct representing an instance's
     # lowleveltype, return the corresponding vtable pointer.
     # Returns None if the GcStruct does not belong to an instance.
-    assert isinstance(GCSTRUCT, lltype.GcStruct)
-    HEAD = GCSTRUCT
-    while not HEAD._hints.get('typeptr'):
-        _, HEAD = HEAD._first_struct()
-        if HEAD is None:
-            return None
+    if not has_gcstruct_a_vtable(GCSTRUCT):
+        return None
     setup_cache_gcstruct2vtable(cpu)
     return cpu._cache_gcstruct2vtable[GCSTRUCT]
 
@@ -42,15 +46,18 @@ VTABLETYPE = rclass.CLASSTYPE
 def register_known_gctype(cpu, vtable, STRUCT):
     # register the correspondance 'vtable' <-> 'STRUCT' in the cpu
     sizedescr = cpu.sizeof(STRUCT)
-    if hasattr(sizedescr, '_corresponding_vtable'):
+    assert sizedescr.as_vtable_size_descr() is sizedescr
+    try:
         assert sizedescr._corresponding_vtable == vtable
-    else:
-        assert lltype.typeOf(vtable) == VTABLETYPE
-        if not hasattr(cpu, '_all_size_descrs_with_vtable'):
-            cpu._all_size_descrs_with_vtable = []
-            cpu._vtable_to_descr_dict = None
-        cpu._all_size_descrs_with_vtable.append(sizedescr)
-        sizedescr._corresponding_vtable = vtable
+        return
+    except AttributeError:
+        pass
+    assert lltype.typeOf(vtable) == VTABLETYPE
+    if not hasattr(cpu, '_all_size_descrs_with_vtable'):
+        cpu._all_size_descrs_with_vtable = []
+        cpu._vtable_to_descr_dict = None
+    cpu._all_size_descrs_with_vtable.append(sizedescr)
+    sizedescr._corresponding_vtable = vtable
 
 def finish_registering(cpu):
     # annotation hack for small examples which have no vtable at all
@@ -84,7 +91,7 @@ def vtable2descr(cpu, vtable):
 def descr2vtable(cpu, descr):
     from pypy.jit.metainterp import history
     assert isinstance(descr, history.AbstractDescr)
-    vtable = descr._corresponding_vtable
+    vtable = descr.as_vtable_size_descr()._corresponding_vtable
     vtable = llmemory.cast_ptr_to_adr(vtable)
     vtable = llmemory.cast_adr_to_int(vtable)
     return vtable

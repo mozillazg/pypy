@@ -59,6 +59,9 @@ class Descr(history.AbstractDescr):
     def is_array_of_floats(self):
         return self.typeinfo == FLOAT
 
+    def as_vtable_size_descr(self):
+        return self
+
     def __lt__(self, other):
         raise TypeError("cannot use comparison on Descrs")
     def __le__(self, other):
