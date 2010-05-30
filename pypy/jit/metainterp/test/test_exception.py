@@ -555,6 +555,26 @@ class ExceptionTests:
                                optimizer=OPTIMIZER_SIMPLE)
         assert res == 8
 
+    def test_bug_1(self):
+        def h(i):
+            if i > 10:
+                raise ValueError
+            if i > 5:
+                raise KeyError
+            return 5
+        def g(i):
+            try:
+                return h(i)
+            except ValueError:
+                return 21
+        def f(i):
+            try:
+                return g(i)
+            except KeyError:
+                return 42
+        res = self.interp_operations(f, [99])
+        assert res == 21
+
 class MyError(Exception):
     def __init__(self, n):
         self.n = n
