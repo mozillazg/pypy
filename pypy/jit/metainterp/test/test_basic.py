@@ -366,6 +366,38 @@ class BasicTests:
         assert res == 42
         self.check_operations_history(int_add=0, int_mul=0, call=0)
 
+    def test_constfold_call_pure(self):
+        myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
+        def externfn(x):
+            return x - 3
+        externfn._pure_function_ = True
+        def f(n, m):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, m=m)
+                myjitdriver.jit_merge_point(n=n, m=m)
+                n -= externfn(m)
+            return n
+        res = self.meta_interp(f, [21, 5])
+        assert res == -1
+
+    def test_constfold_call_pure_2(self):
+        myjitdriver = JitDriver(greens = ['m'], reds = ['n'])
+        def externfn(x):
+            return x - 3
+        externfn._pure_function_ = True
+        class V:
+            def __init__(self, value):
+                self.value = value
+        def f(n, m):
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, m=m)
+                myjitdriver.jit_merge_point(n=n, m=m)
+                v = V(m)
+                n -= externfn(v.value)
+            return n
+        res = self.meta_interp(f, [21, 5])
+        assert res == -1
+
     def test_constant_across_mp(self):
         myjitdriver = JitDriver(greens = [], reds = ['n'])
         class X(object):
