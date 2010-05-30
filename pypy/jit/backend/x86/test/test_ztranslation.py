@@ -5,7 +5,7 @@ from pypy.rlib.jit import PARAMETERS, dont_look_inside
 from pypy.jit.metainterp.jitprof import Profiler
 from pypy.jit.backend.x86.runner import CPU386
 from pypy.jit.backend.test.support import CCompiledMixin
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.translator.translator import TranslationContext
 
 class TestTranslationX86(CCompiledMixin):
