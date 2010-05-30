@@ -17,7 +17,8 @@ class TestRegAlloc:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def check_assembler(self, graph, expected, transform=False):
+    def check_assembler(self, graph, expected, transform=False,
+                        optimize_ssarepr=False):
         # 'transform' can be False only for simple graphs.  More complex
         # graphs must first be transformed by jtransform.py before they can be
         # subjected to register allocation and flattening.
@@ -26,6 +27,9 @@ class TestRegAlloc:
             transform_graph(graph)
         regalloc = perform_register_allocation(graph, 'int')
         ssarepr = flatten_graph(graph, {'int': regalloc})
+        if optimize_ssarepr:
+            from pypy.jit.codewriter.opt import optimize_ssarepr
+            optimize_ssarepr(ssarepr)
         asm = format_assembler(ssarepr)
         assert asm == str(py.code.Source(expected).strip()) + '\n'
 
@@ -240,3 +244,21 @@ class TestRegAlloc:
             L1:
             int_return %i2
         """, transform=True)
+
+    def test_regalloc_if(self):
+        def f(n):
+            if n > 0:
+                n -= 3
+            return n + 1
+        graph = self.make_graphs(f, [10])[0]
+        # this also checks that "L2: goto L1" is optimized
+        self.check_assembler(graph, """
+            int_gt %i0, $0 -> %i1
+            goto_if_not %i1, L1
+            -live- L1
+            int_sub %i0, $3 -> %i0
+            L1:
+            int_add %i0, $1 -> %i1
+            int_return %i1
+            ---
+        """, optimize_ssarepr=True)

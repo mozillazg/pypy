@@ -4,6 +4,7 @@ from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler, JitCode
 from pypy.jit.codewriter.jtransform import transform_graph
 from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.opt import optimize_ssarepr
 from pypy.jit.codewriter.liveness import compute_liveness
 from pypy.jit.codewriter.call import CallControl
 from pypy.jit.codewriter.policy import log
@@ -48,6 +49,7 @@ class CodeWriter(object):
         # inserting jumps or conditional jumps.  This is a list of tuples
         # of the shape ("opname", arg1, ..., argN) or (Label(...),).
         ssarepr = flatten_graph(graph, regallocs)
+        optimize_ssarepr(ssarepr)
         #
         # step 3b: compute the liveness around certain operations
         compute_liveness(ssarepr)
