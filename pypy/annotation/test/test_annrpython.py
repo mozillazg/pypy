@@ -3283,6 +3283,17 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [int])
         assert s.knowntype is int
 
+    def test_cannot_raise_ll_exception(self):
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        #
+        def f():
+            e = OverflowError()
+            lle = cast_instance_to_base_ptr(e)
+            raise Exception, lle
+            # ^^^ instead, must cast back from a base ptr to an instance
+        a = self.RPythonAnnotator()
+        py.test.raises(AssertionError, a.build_types, f, [])
+
 
 def g(n):
     return [0,1,2,n]
