@@ -22,10 +22,11 @@ class ResOperation(object):
         self.setdescr(descr)
 
     def setdescr(self, descr):
-        # for 'call', 'new', 'getfield_gc'...: the descr is a number provided
-        # by the backend holding details about the type of the operation --
-        # actually an instance of a class, typically Descr, that inherits
-        # from AbstractDescr
+        # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
+        # instance provided by the backend holding details about the type
+        # of the operation.  It must inherit from AbstractDescr.  The
+        # backend provides it with cpu.fielddescrof(), cpu.arraydescrof(),
+        # cpu.calldescrof(), and cpu.typedescrof().
         from pypy.jit.metainterp.history import check_descr
         check_descr(descr)
         self.descr = descr
