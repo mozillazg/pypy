@@ -140,6 +140,27 @@ class TestFlatten:
             int_return %i1
         """)
 
+    def test_if(self):
+        def f(n):
+            if n > 0:
+                n -= 3
+            return n + 1
+        self.encoding_test(f, [10], """
+            int_gt %i0, $0 -> %i1
+            goto_if_not %i1, L1
+            -live- L1
+            int_copy %i0 -> %i2
+            int_sub %i2, $3 -> %i3
+            int_copy %i3 -> %i4
+            L2:
+            int_add %i4, $1 -> %i5
+            int_return %i5
+            ---
+            L1:
+            int_copy %i0 -> %i4
+            goto L2
+        """)
+
     def test_loop(self):
         def f(a, b):
             while a > 0:
