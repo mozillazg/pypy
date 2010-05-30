@@ -21,6 +21,8 @@ class FakeFieldDescr(AbstractDescr):
 class FakeSizeDescr(AbstractDescr):
     def __init__(self, STRUCT):
         self.STRUCT = STRUCT
+    def as_vtable_size_descr(self):
+        return self
 
 class FakeCPU:
     def __init__(self, rtyper):

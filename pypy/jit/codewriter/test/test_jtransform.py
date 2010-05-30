@@ -21,7 +21,8 @@ class FakeCPU:
         return FakeDescr(('sizedescr', STRUCT))
 
 class FakeDescr(tuple):
-    pass
+    def as_vtable_size_descr(self):
+        return self
 
 class FakeLink:
     args = []
