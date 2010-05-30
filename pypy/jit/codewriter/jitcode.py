@@ -51,9 +51,10 @@ class JitCode(AbstractDescr):
         # 'pc' gives a position in this bytecode.  This returns an object
         # of class LiveVarsInfo that describes all variables that are live
         # across the instruction boundary at 'pc'.
-        if not we_are_translated() and pc not in self.liveness:
+        try:
+            return self.liveness[pc]    # XXX compactify!!
+        except KeyError:
             self._missing_liveness(pc)
-        return self.liveness[pc]    # XXX compactify!!
 
     def _live_vars(self, pc):
         # for testing only
@@ -67,7 +68,11 @@ class JitCode(AbstractDescr):
         return ' '.join(lst_i + lst_r + lst_f)
 
     def _missing_liveness(self, pc):
-        raise MissingLiveness("missing liveness[%d]\n%s" % (pc, self.dump()))
+        msg = "missing liveness[%d] in %s" % (pc, self.name)
+        if we_are_translated():
+            print msg
+            raise AssertionError
+        raise MissingLiveness("%s\n%s" % (msg, self.dump()))
 
     def follow_jump(self, position):
         """Assuming that 'position' points just after a bytecode
@@ -83,7 +88,7 @@ class JitCode(AbstractDescr):
 
     def dump(self):
         if self._ssarepr is None:
-            return '<no dump available>'
+            return '<no dump available for %r>' % (self.name,)
         else:
             from pypy.jit.codewriter.format import format_assembler
             return format_assembler(self._ssarepr)

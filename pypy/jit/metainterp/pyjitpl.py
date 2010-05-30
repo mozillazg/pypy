@@ -44,7 +44,6 @@ class MIFrame(object):
         assert isinstance(jitcode, JitCode)
         self.jitcode = jitcode
         self.bytecode = jitcode.code
-        self.name = jitcode.name # purely for having name attribute
         # this is not None for frames that are recursive portal calls
         self.greenkey = greenkey
         # copy the constants in place
