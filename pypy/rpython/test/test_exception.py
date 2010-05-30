@@ -3,6 +3,7 @@ from pypy.translator.translator import TranslationContext
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.llinterp import LLException
+from pypy.rpython.error import MissingRTypeOperation 
 
 class MyException(Exception):
     pass
@@ -125,19 +126,18 @@ class BaseTestException(BaseRtypingTest):
 
 
 class TestLLtype(BaseTestException, LLRtypeMixin):
-    def test_raise_ll_exception(self):
+    def test_cannot_raise_ll_exception(self):
         from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
         def g():
             e = OverflowError()
             lle = cast_instance_to_base_ptr(e)
-            raise Exception, lle
+            raise lle  # instead, must cast back from a base ptr to an instance
         def f():
             try:
                 g()
             except OverflowError:
                 return 42
-        res = self.interpret(f, [])
-        assert res == 42
+        py.test.raises(MissingRTypeOperation, self.interpret, f, [])
 
 class TestOOtype(BaseTestException, OORtypeMixin):
     pass
