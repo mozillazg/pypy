@@ -68,6 +68,7 @@ class BlackholeInterpBuilder(object):
         all_funcs = unrolling_iterable(enumerate(all_funcs))
         #
         def dispatch_loop(self, code, position):
+            assert position >= 0
             while True:
                 if (not we_are_translated()
                     and self.jitcode._startpoints is not None):
@@ -207,6 +208,7 @@ class BlackholeInterpBuilder(object):
                 self.registers_f[ord(code[position])] = result
                 position += 1
             elif resulttype == 'L':
+                assert result >= 0
                 position = result
             else:
                 assert resulttype is None
