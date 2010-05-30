@@ -65,7 +65,7 @@ class FakeRegularIndirectCallControl:
         assert graph in ('somegraph1', 'somegraph2')
         return 'somejitcode' + graph[-1]
     def calldescr_canraise(self, calldescr):
-        return True
+        return False
 
 
 def test_optimize_goto_if_not():
@@ -325,6 +325,9 @@ def indirect_regular_call_test(argtypes, restype, expectedkind):
     for v in op.args[1:]:
         kind = getkind(v.concretetype)
         assert kind == 'void' or kind[0] in expectedkind
+    # Note: we still expect a -live- here, even though canraise() returns
+    # False, because this 'residual_call' will likely call further jitcodes
+    # which can do e.g. guard_class or other stuff requiring anyway a -live-.
     assert op1.opname == '-live-'
     assert op1.args == []
 

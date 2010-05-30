@@ -275,14 +275,14 @@ class Transformer(object):
         else: raise AssertionError(kind)
         lst.append(v)
 
-    def handle_residual_call(self, op, extraargs=[]):
+    def handle_residual_call(self, op, extraargs=[], may_call_jitcodes=False):
         """A direct_call turns into the operation 'residual_call_xxx' if it
         is calling a function that we don't want to JIT.  The initial args
         of 'residual_call_xxx' are the function to call, and its calldescr."""
         calldescr = self.callcontrol.getcalldescr(op)
         op1 = self.rewrite_call(op, 'residual_call',
                                 [op.args[0], calldescr] + extraargs)
-        if self.callcontrol.calldescr_canraise(calldescr):
+        if may_call_jitcodes or self.callcontrol.calldescr_canraise(calldescr):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1
 
@@ -338,7 +338,7 @@ class Transformer(object):
             lst.append(jitcode)
         op0 = SpaceOperation('-live-', [], None)
         op1 = SpaceOperation('int_guard_value', [op.args[0]], None)
-        op2 = self.handle_residual_call(op, [IndirectCallTargets(lst)])
+        op2 = self.handle_residual_call(op, [IndirectCallTargets(lst)], True)
         result = [op0, op1]
         if isinstance(op2, list):
             result += op2
