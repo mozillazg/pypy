@@ -98,6 +98,11 @@ class CodeWriter(object):
             elif ssarepr.name and ssarepr.name != '?':
                 name = ssarepr.name
             else:
-                name = 'unnamed_%x' % id(ssarepr)
-            dir.join(name).write(format_assembler(ssarepr))
+                name = 'unnamed' % id(ssarepr)
+            i = 1
+            extra = ''
+            while dir.join(name+extra).check(exists=1):
+                i += 1
+                extra = '.%d' % i
+            dir.join(name+extra).write(format_assembler(ssarepr))
             log.dot()
