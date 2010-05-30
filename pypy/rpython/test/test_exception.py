@@ -125,7 +125,19 @@ class BaseTestException(BaseRtypingTest):
 
 
 class TestLLtype(BaseTestException, LLRtypeMixin):
-    pass
+    def test_raise_ll_exception(self):
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        def g():
+            e = OverflowError()
+            lle = cast_instance_to_base_ptr(e)
+            raise Exception, lle
+        def f():
+            try:
+                g()
+            except OverflowError:
+                return 42
+        res = self.interpret(f, [])
+        assert res == 42
 
 class TestOOtype(BaseTestException, OORtypeMixin):
     pass
