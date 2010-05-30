@@ -106,7 +106,7 @@ class Transformer(object):
 
     def _killed_exception_raising_operation(self, block):
         assert block.exits[0].exitcase is None
-        del block.exits[1:]
+        block.exits = block.exits[:1]
         block.exitswitch = None
 
     # ----------

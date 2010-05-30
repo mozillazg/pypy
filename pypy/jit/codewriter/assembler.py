@@ -3,6 +3,7 @@ from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitcode import SwitchDictDescr, JitCode
+from pypy.rlib.objectmodel import ComputedIntSymbolic
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 
@@ -71,6 +72,8 @@ class Assembler(object):
                     value = llmemory.cast_adr_to_int(value)
                 else:
                     value = lltype.cast_primitive(lltype.Signed, value)
+                    if isinstance(value, ComputedIntSymbolic):
+                        value = value.compute_fn()
                     if allow_short and -128 <= value <= 127:  # xxx symbolic
                         # emit the constant as a small integer
                         self.code.append(chr(value & 0xFF))
