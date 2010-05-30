@@ -6,6 +6,7 @@ import py
 from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
      BoxPtr, ConstPtr, TreeLoop
 from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.codewriter import heaptracker
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.llsupport.gc import GcLLDescription
 from pypy.jit.backend.x86.runner import CPU
@@ -228,7 +229,7 @@ class TestMallocFastpath(BaseTestRegalloc):
         NODE2 = lltype.Struct('node2', ('tid', lltype.Signed),
                                   ('vtable', lltype.Ptr(rclass.OBJECT_VTABLE)))
         descrsize = cpu.sizeof(NODE2)
-        cpu.set_class_sizes({vtable_int: descrsize})
+        heaptracker.register_known_gctype(cpu, vtable, NODE2)
         self.descrsize = descrsize
         self.vtable_int = vtable_int
 
