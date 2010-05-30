@@ -937,6 +937,8 @@ class RegAlloc(object):
                 assert isinstance(val, MODRM)
                 gcrootmap.add_ebp_offset(shape, get_ebp_ofs(val.position))
         for v, reg in self.rm.reg_bindings.items():
+            if reg is eax:
+                continue      # ok to ignore this one
             if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
                 if reg is ebx:
                     gcrootmap.add_ebx(shape)
@@ -945,7 +947,8 @@ class RegAlloc(object):
                 elif reg is edi:
                     gcrootmap.add_edi(shape)
                 else:
-                    assert reg is eax     # ok to ignore this one
+                    print "[get_mark_gc_roots] bogus register", reg
+                    assert False
         return gcrootmap.compress_callshape(shape)
 
     def consider_force_token(self, op):
