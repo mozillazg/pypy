@@ -258,6 +258,9 @@ class BlackholeInterpreter(object):
         self.registers_i = [default_i] * 256
         self.registers_r = [default_r] * 256
         self.registers_f = [default_f] * 256
+        self.tmpreg_i = default_i
+        self.tmpreg_r = default_r
+        self.tmpreg_f = default_f
         self.jitcode = None
 
     def __repr__(self):

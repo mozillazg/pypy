@@ -164,6 +164,12 @@ class AbstractDescr(AbstractValue):
         """
         raise NotImplementedError
 
+    def as_vtable_size_descr(self):
+        """ Implement for size descr representing objects with vtables.
+        Returns self.  (it's an annotation hack)
+        """
+        raise NotImplementedError
+
 class AbstractFailDescr(AbstractDescr):
     index = -1
 

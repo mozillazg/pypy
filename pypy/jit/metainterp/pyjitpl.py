@@ -1038,14 +1038,15 @@ class MIFrame(object):
         else:
             effect = effectinfo.extraeffect
             if effect == effectinfo.EF_CANNOT_RAISE:
-                opnum, exc = rop.CALL, False
+                return self.execute_varargs(rop.CALL, allboxes, descr, False)
             elif effect == effectinfo.EF_PURE:
-                opnum, exc = rop.CALL_PURE, False
+                return self.execute_varargs(rop.CALL_PURE, allboxes,
+                                            descr, False)
             elif effect == effectinfo.EF_LOOPINVARIANT:
-                opnum, exc = rop.CALL_LOOPINVARIANT, True
+                return self.execute_varargs(rop.CALL_LOOPINVARIANT, allboxes,
+                                            descr, True)
             else:
-                opnum, exc = rop.CALL, True
-            return self.execute_varargs(opnum, allboxes, descr, exc)
+                return self.execute_varargs(rop.CALL, allboxes, descr, True)
 
     def do_residual_or_indirect_call(self, funcbox, calldescr, argboxes):
         """The 'residual_call' operation is emitted in two cases:

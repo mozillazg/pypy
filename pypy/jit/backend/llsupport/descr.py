@@ -1,10 +1,11 @@
 import py
-from pypy.rpython.lltypesystem import lltype, rffi, llmemory
+from pypy.rpython.lltypesystem import lltype, rffi, llmemory, rclass
 from pypy.jit.backend.llsupport import symbolic, support
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
 from pypy.jit.metainterp.history import BasicFailDescr, LoopToken, BoxFloat
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.codewriter import heaptracker
 
 # The point of the class organization in this file is to make instances
 # as compact as possible.  This is done by not storing the field size or
@@ -40,6 +41,10 @@ class SizeDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<SizeDescr %s>' % self.size
 
+class SizeDescrWithVTable(SizeDescr):
+    def as_vtable_size_descr(self):
+        return self
+
 BaseSizeDescr = SizeDescr
 
 def get_size_descr(gccache, STRUCT):
@@ -48,7 +53,10 @@ def get_size_descr(gccache, STRUCT):
         return cache[STRUCT]
     except KeyError:
         size = symbolic.get_size(STRUCT, gccache.translate_support_code)
-        sizedescr = SizeDescr(size)
+        if heaptracker.has_gcstruct_a_vtable(STRUCT):
+            sizedescr = SizeDescrWithVTable(size)
+        else:
+            sizedescr = SizeDescr(size)
         gccache.init_size_descr(STRUCT, sizedescr)
         cache[STRUCT] = sizedescr
         return sizedescr
@@ -257,11 +265,12 @@ class BaseIntCallDescr(BaseCallDescr):
     # The inheritance hierarchy is a bit different than with other Descr
     # classes because of the 'call_stub' attribute, which is of type
     #
-    #     lambda args_i, args_r, args_f --> int/ref/float/void
+    #     lambda func, args_i, args_r, args_f --> int/ref/float/void
     #
     # The purpose of BaseIntCallDescr is to be the parent of all classes
     # in which 'call_stub' has a return kind of 'int'.
     _return_type = history.INT
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: 0)
 
 class NonGcPtrCallDescr(BaseIntCallDescr):
     _clsname = 'NonGcPtrCallDescr'
@@ -271,18 +280,22 @@ class NonGcPtrCallDescr(BaseIntCallDescr):
 class GcPtrCallDescr(BaseCallDescr):
     _clsname = 'GcPtrCallDescr'
     _return_type = history.REF
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f:
+                             lltype.nullptr(llmemory.GCREF.TO))
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
 class FloatCallDescr(BaseCallDescr):
     _clsname = 'FloatCallDescr'
     _return_type = history.FLOAT
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: 0.0)
     def get_result_size(self, translate_support_code):
         return symbolic.get_size(lltype.Float, translate_support_code)
 
 class VoidCallDescr(BaseCallDescr):
     _clsname = 'VoidCallDescr'
     _return_type = history.VOID
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: None)
     def get_result_size(self, translate_support_code):
         return 0
 
