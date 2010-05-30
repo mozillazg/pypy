@@ -1163,10 +1163,12 @@ class LLtypeBackendTest(BaseBackendTest):
         x = lltype.cast_opaque_ptr(llmemory.GCREF, x)
         res = self.execute_operation(rop.CAST_PTR_TO_INT,
                                      [BoxPtr(x)],  'int').value
-        assert res == llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        expected = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        assert rffi.get_real_int(res) == rffi.get_real_int(expected)
         res = self.execute_operation(rop.CAST_PTR_TO_INT,
                                      [ConstPtr(x)],  'int').value
-        assert res == llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        expected = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        assert rffi.get_real_int(res) == rffi.get_real_int(expected)
 
     def test_ooops_non_gc(self):
         x = lltype.malloc(lltype.Struct('x'), flavor='raw')
