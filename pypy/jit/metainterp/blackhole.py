@@ -1221,7 +1221,8 @@ class BlackholeInterpreter(object):
         elif (opnum == rop.GUARD_NO_EXCEPTION or
               opnum == rop.GUARD_EXCEPTION or
               opnum == rop.GUARD_NOT_FORCED):
-            return self.cpu.grab_exc_value()
+            return lltype.cast_opaque_ptr(rclass.OBJECTPTR,
+                                          self.cpu.grab_exc_value())
         #
         elif opnum == rop.GUARD_NO_OVERFLOW:
             # Produced by int_xxx_ovf().  The pc is just after the opcode.

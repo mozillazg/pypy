@@ -1,5 +1,5 @@
 import py, os
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -1642,7 +1642,8 @@ class MetaInterp(object):
         elif opnum == rop.GUARD_NO_EXCEPTION or opnum == rop.GUARD_EXCEPTION:
             exception = self.cpu.grab_exc_value()
             if exception:
-                self.execute_ll_raised(exception)
+                self.execute_ll_raised(lltype.cast_opaque_ptr(rclass.OBJECTPTR,
+                                                              exception))
             else:
                 self.execute_did_not_raise()
             try:
