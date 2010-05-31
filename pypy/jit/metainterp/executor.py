@@ -58,8 +58,6 @@ def do_call(cpu, metainterp, argboxes, descr):
         except Exception, e:
             metainterp.execute_raised(e)
             result = 0
-        else:
-            metainterp.execute_did_not_raise()
         return BoxInt(result)
     if rettype == REF:
         try:
@@ -67,8 +65,6 @@ def do_call(cpu, metainterp, argboxes, descr):
         except Exception, e:
             metainterp.execute_raised(e)
             result = NULL
-        else:
-            metainterp.execute_did_not_raise()
         return BoxPtr(result)
     if rettype == FLOAT:
         try:
@@ -76,16 +72,12 @@ def do_call(cpu, metainterp, argboxes, descr):
         except Exception, e:
             metainterp.execute_raised(e)
             result = 0.0
-        else:
-            metainterp.execute_did_not_raise()
         return BoxFloat(result)
     if rettype == VOID:
         try:
             cpu.bh_call_v(func, descr, args_i, args_r, args_f)
         except Exception, e:
             metainterp.execute_raised(e)
-        else:
-            metainterp.execute_did_not_raise()
         return None
     raise AssertionError("bad rettype")
 
@@ -189,8 +181,6 @@ def do_int_add_ovf(cpu, metainterp, box1, box2):
     except OverflowError:
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    else:
-        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 def do_int_sub_ovf(cpu, metainterp, box1, box2):
@@ -202,8 +192,6 @@ def do_int_sub_ovf(cpu, metainterp, box1, box2):
     except OverflowError:
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    else:
-        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 def do_int_mul_ovf(cpu, metainterp, box1, box2):
@@ -215,8 +203,6 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
     except OverflowError:
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    else:
-        metainterp.execute_did_not_raise()
     return BoxInt(z)
 
 def do_same_as(cpu, _, box):
