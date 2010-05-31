@@ -57,6 +57,7 @@ class PyPySandboxedProc(VirtualizedSandboxedProc, SimpleIOSandboxedProc):
                 'pypy-c': RealFile(self.executable),
                 'lib-python': RealDir(os.path.join(pypydist, 'lib-python'),
                                       exclude=exclude),
+                # XXX: fix this (and write a test!)
                 'pypy': Dir({
                     'lib': RealDir(os.path.join(pypydist, 'pypy', 'lib'),
                                    exclude=exclude),
