@@ -137,8 +137,10 @@ class GraphFlattener(object):
         self.emitline("---")
 
     def make_link(self, link):
-        if link.target.exits == ():
-            self.make_return(link.args)
+        if (link.target.exits == ()
+            and link.last_exception not in link.args
+            and link.last_exc_value not in link.args):
+            self.make_return(link.args)     # optimization only
             return
         self.insert_renamings(link)
         self.make_bytecode_block(link.target)
@@ -154,12 +156,6 @@ class GraphFlattener(object):
             self.emitline("reraise")
             self.emitline("---")
             return   # done
-        if link.last_exception in link.args:
-            self.emitline("last_exception",
-                          "->", self.getcolor(link.last_exception))
-        if link.last_exc_value in link.args:
-            self.emitline("last_exc_value",
-                          "->", self.getcolor(link.last_exc_value))
         self.make_link(link)
 
     def insert_exits(self, block):
@@ -298,7 +294,8 @@ class GraphFlattener(object):
         renamings = {}
         lst = [(self.getcolor(v), self.getcolor(link.target.inputargs[i]))
                for i, v in enumerate(link.args)
-               if v.concretetype is not lltype.Void]
+               if v.concretetype is not lltype.Void and
+                  v not in (link.last_exception, link.last_exc_value)]
         lst.sort(key=lambda(v, w): w.index)
         for v, w in lst:
             if v == w:
@@ -321,6 +318,17 @@ class GraphFlattener(object):
                         self.emitline('%s_pop' % kind, "->", w)
                     else:
                         self.emitline('%s_copy' % kind, v, "->", w)
+        self.generate_last_exc(link, link.target.inputargs)
+
+    def generate_last_exc(self, link, inputargs):
+        # Write 'last_exc_xxx' operations that load the last exception
+        # directly into the locations specified by 'inputargs'.  This
+        # must be done at the end of the link renamings.
+        for v, w in zip(link.args, inputargs):
+            if v is link.last_exception:
+                self.emitline("last_exception", "->", self.getcolor(w))
+            if v is link.last_exc_value:
+                self.emitline("last_exc_value", "->", self.getcolor(w))
 
     def emitline(self, *line):
         self.ssarepr.insns.append(line)

@@ -2,11 +2,12 @@ import py, sys
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
-from pypy.jit.codewriter.format import format_assembler
+from pypy.jit.codewriter.format import assert_format
+from pypy.jit.metainterp.history import AbstractDescr
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import c_last_exception
-from pypy.rpython.lltypesystem import lltype, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.objectmodel import keepalive_until_here
 
@@ -17,17 +18,19 @@ class TestRegAlloc:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
-    def check_assembler(self, graph, expected, transform=False):
+    def check_assembler(self, graph, expected, transform=False,
+                        callcontrol=None):
         # 'transform' can be False only for simple graphs.  More complex
         # graphs must first be transformed by jtransform.py before they can be
         # subjected to register allocation and flattening.
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
-            transform_graph(graph)
+            transform_graph(graph, callcontrol=callcontrol)
         regalloc = perform_register_allocation(graph, 'int')
-        ssarepr = flatten_graph(graph, {'int': regalloc})
-        asm = format_assembler(ssarepr)
-        assert asm == str(py.code.Source(expected).strip()) + '\n'
+        regalloc2 = perform_register_allocation(graph, 'ref')
+        ssarepr = flatten_graph(graph, {'int': regalloc,
+                                        'ref': regalloc2})
+        assert_format(ssarepr, expected)
 
     def test_regalloc_simple(self):
         def f(a, b):
@@ -240,3 +243,61 @@ class TestRegAlloc:
             L1:
             int_return %i2
         """, transform=True)
+
+    def test_regalloc_bug_2(self):
+        class FakeDescr(AbstractDescr):
+            def __repr__(self):
+                return '<Descr>'
+        class FakeCallControl:
+            def guess_call_kind(self, op):
+                return 'residual'
+            def getcalldescr(self, op):
+                return FakeDescr()
+            def calldescr_canraise(self, calldescr):
+                return True
+        class FooError(Exception):
+            def __init__(self, num):
+                self.num = num
+        def g(n):
+            if n > 100:
+                raise FooError(n)
+            return lltype.nullptr(llmemory.GCREF.TO)
+        def foo(e):
+            print "hello"
+            return e
+        def bar(e):
+            print "world"
+            return e
+        def f(n, kref):
+            kref2 = bar(kref)
+            try:
+                return g(n)
+            except FooError, e:
+                if foo(e):
+                    return kref
+                else:
+                    return kref2
+        graph = self.make_graphs(f, [5, lltype.nullptr(llmemory.GCREF.TO)])[0]
+        # this used to produce bogus code, containing these two
+        # lines in the following broken order:
+        #    last_exc_value -> %r0
+        #    ref_copy %r0 -> %r2    -- but expect to read the old value of %r0!
+        self.check_assembler(graph, """
+            residual_call_r_r $<* fn bar>, <Descr>, R[%r0] -> %r1
+            -live-
+            residual_call_ir_r $<* fn g>, <Descr>, I[%i0], R[] -> %r2
+            -live-
+            catch_exception L1
+            ref_return %r2
+            ---
+            L1:
+            goto_if_exception_mismatch $<* struct object_vtable>, L2
+            ref_copy %r0 -> %r2
+            last_exc_value -> %r0
+            residual_call_r_r $<* fn foo>, <Descr>, R[%r0] -> %r0
+            -live-
+            ref_return %r2
+            ---
+            L2:
+            reraise
+        """, transform=True, callcontrol=FakeCallControl())

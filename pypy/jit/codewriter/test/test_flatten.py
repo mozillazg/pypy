@@ -372,8 +372,7 @@ class TestFlatten:
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
             last_exc_value -> %r0
-            ref_copy %r0 -> %r1
-            getfield_gc_i %r1, <Descr> -> %i1
+            getfield_gc_i %r0, <Descr> -> %i1
             int_return %i1
             ---
             L2:
@@ -431,13 +430,11 @@ class TestFlatten:
         void_return
         ---
         L1:
-        last_exception -> %i1
         last_exc_value -> %r0
-        int_copy %i1 -> %i2
-        ref_copy %r0 -> %r1
+        last_exception -> %i1
         setfield_gc_i $<* struct test.Foo>, <Descr>, $5
         -live-
-        raise %r1
+        raise %r0
         """, transform=True)
 
     def test_goto_if_not_int_is_true(self):
