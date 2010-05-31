@@ -5,7 +5,8 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.x86.runner import CPU
-from pypy.jit.metainterp.history import LoopToken, BasicFailDescr, BoxInt
+from pypy.jit.metainterp.history import LoopToken, BasicFailDescr
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
@@ -20,8 +21,18 @@ class W_CDLL(Wrappable):
         self.space = space
         self.cpu = CPU(None, None)
 
-    def call(self, space, func, a, b):  # XXX temporary fixed number of func args (ints)
-                                        # result_type argument?
+    def call(self, space, func, a, b, res_type):  # XXX temporary fixed number of func args (ints)
+        if res_type == 'int':
+            bres = BoxInt()
+        elif res_type == 'float':
+            bres = BoxFloat()
+        elif res_type == 'ref':
+            bres = BoxPtr()
+        elif res_type == 'void':
+            bres = None
+        else:
+            raise ValueError(res_type)
+
         try:
             addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
         except KeyError:
@@ -31,7 +42,6 @@ class W_CDLL(Wrappable):
         bfuncaddr = BoxInt(addr)
         barg0 = BoxInt(a)
         barg1 = BoxInt(b)
-        bres = BoxInt()
 
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed, lltype.Signed],
                           lltype.Signed))
@@ -56,8 +66,19 @@ class W_CDLL(Wrappable):
             self.guard_failed = False
         else:
             self.guard_failed = True
-        return space.wrap(BoxInt(self.cpu.get_latest_value_int(0)).getint())
-    call.unwrap_spec = ['self', ObjSpace, str, int, int]
+
+        if res_type == 'int':
+            r = BoxInt(self.cpu.get_latest_value_int(0)).getint()
+        elif res_type == 'float':
+            r = BoxFloat(self.cpu.get_latest_value_float(0)).getfloat()
+        elif res_type == 'ref':
+            r = BoxPtr(self.cpu.get_latest_value_ref(0)).getref()
+        elif res_type == 'void':
+            r = None
+        else:
+            raise ValueError(res_type)
+        return space.wrap(r)
+    call.unwrap_spec = ['self', ObjSpace, str, int, int, str]
 
 def descr_new_cdll(space, w_type, name):
     try:
