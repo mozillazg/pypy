@@ -1473,6 +1473,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
     dic = initfunc(space)
     # and now use the members of the dict
     """
+    from pypy.tool.lib_pypy import get_lib_pypy_dir
     # create something like a module
     if type(sourcetext) is str:
         code = py.code.Source(sourcetext).compile()
@@ -1484,12 +1485,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
         dic['__file__'] = filename
 
     # XXX allow the app-level code to contain e.g. "import _formatting"
-    for pkgdir in pypy.__path__:
-        libdir = os.path.join(pkgdir, "lib")
-        if os.path.isdir(libdir):
-            break
-    else:
-        raise Exception, "cannot find pypy/lib directory"
+    libdir = str(get_lib_pypy_dir())
     sys.path.insert(0, libdir)
     try:
         if faked_set:

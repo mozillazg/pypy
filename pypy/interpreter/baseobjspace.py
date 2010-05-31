@@ -385,6 +385,7 @@ class ObjSpace(object):
 
     def get_builtinmodule_to_install(self):
         """NOT_RPYTHON"""
+        from pypy.tool.lib_pypy import get_lib_pypy_dir
         try:
             return self._builtinmodule_list
         except AttributeError:
@@ -402,11 +403,10 @@ class ObjSpace(object):
         if ('time2' in modules or 'rctime' in modules) and 'time' in modules:
             modules.remove('time')
 
+        lib_pypy = get_lib_pypy_dir()
         if not self.config.objspace.nofaking:
             for modname in self.ALL_BUILTIN_MODULES:
-                if not (os.path.exists(
-                        os.path.join(os.path.dirname(pypy.__file__),
-                                     'lib', modname+'.py'))):
+                if not lib_pypy.join(modname+'.py').check(file=True):
                     modules.append('faked+'+modname)
 
         self._builtinmodule_list = modules
