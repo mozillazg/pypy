@@ -1,4 +1,5 @@
-from pypy.lib import collections
+from __future__ import absolute_import
+from .. import collections
 import py
 
 def test_deque_remove_empty():
