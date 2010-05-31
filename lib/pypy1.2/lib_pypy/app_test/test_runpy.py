@@ -1,12 +1,16 @@
 # Test the runpy module
 from __future__ import absolute_import
+import py
 import unittest
 import os
 import os.path
 import sys
 import tempfile
+from .. import runpy
 from ..runpy import _run_module_code, run_module
 
+sys.modules['my_runpy'] = runpy # so that code in exec can freely import it
+                                # without messing with __name__ and/or sys.path
 
 verbose = 0
 
@@ -14,22 +18,22 @@ verbose = 0
 class TestRunModuleCode:
 
     expected_result = ["Top level assignment", "Lower level reference"]
-    test_source = (
-        "# Check basic code execution\n"
-        "result = ['Top level assignment']\n"
-        "def f():\n"
-        "    result.append('Lower level reference')\n"
-        "f()\n"
-        "# Check the sys module\n"
-        "import sys\n"
-        "run_argv0 = sys.argv[0]\n"
-        "if __name__ in sys.modules:\n"
-        "    run_name = sys.modules[__name__].__name__\n"
-        "# Check nested operation\n"
-        "import pypy.lib.runpy\n"
-        "nested = pypy.lib.runpy._run_module_code('x=1\\n', mod_name='<run>',\n"
-        "                                          alter_sys=True)\n"
-    )
+    test_source = py.code.Source("""
+        # Check basic code execution
+        result = ['Top level assignment']
+        def f():
+            result.append('Lower level reference')
+        f()
+        # Check the sys module
+        import sys
+        run_argv0 = sys.argv[0]
+        if __name__ in sys.modules:
+            run_name = sys.modules[__name__].__name__
+        # Check nested operation
+        import my_runpy # this is imported as ..runpy as manually saved into sys.modules, see above
+        nested = my_runpy._run_module_code('x=1\', mod_name='<run>',
+                                                  alter_sys=True)
+    """).compile()
 
 
     def test_run_module_code(self):
@@ -87,7 +91,7 @@ class TestRunModule:
         self.expect_import_error("..eaten")
 
     def test_library_module(self):
-        run_module("pypy.lib.runpy")
+        run_module("runpy")
 
     def _make_pkg(self, source, depth):
         pkg_name = "__runpy_pkg__"
