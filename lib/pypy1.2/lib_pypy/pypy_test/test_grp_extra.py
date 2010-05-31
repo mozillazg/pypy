@@ -1,6 +1,7 @@
+from __future__ import absolute_import
 import py
 try:
-    from pypy.lib import grp
+    from .. import grp
 except ImportError:
     py.test.skip("No grp module on this platform")
 
