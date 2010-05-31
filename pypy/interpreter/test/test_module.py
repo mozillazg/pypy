@@ -54,7 +54,7 @@ class AppTest_ModuleObject:
         r = repr(sys)
         assert r == "<module 'sys' (built-in)>"
         
-        import _pypy_interact # known to be in pypy/lib
+        import _pypy_interact # known to be in lib_pypy
         r = repr(_pypy_interact)
         assert (r.startswith("<module '_pypy_interact' from ") and
                 ('lib_pypy/_pypy_interact.py' in r or
