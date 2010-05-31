@@ -14,7 +14,13 @@ class AppTestJitffi(object):
         {
            return a+b;
         }
-        '''))
+
+        float return_float(int a, int b)
+        {
+           return a+b;
+        }
+        '''
+        ))
 
         symbols = ["add_integers"]
         eci = ExternalCompilationInfo(export_symbols=symbols)
@@ -32,9 +38,14 @@ class AppTestJitffi(object):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
 
-        res = lib.call('add_integers', 1, 2)
+        res = lib.call('add_integers', 1, 2, 'int')
         assert 3 == res
-        res = lib.call('add_integers', -1, 2)
+        assert isinstance(res, int)
+        res = lib.call('add_integers', -1, 2, 'int')
         assert 1 == res
-        res = lib.call('add_integers', 0, 0)
+        res = lib.call('add_integers', 0, 0, 'int')
         assert 0 == res
+
+        res = lib.call('return_float', 1, 2, 'float')
+        assert 3.0 == res
+        assert isinstance(res, float)
