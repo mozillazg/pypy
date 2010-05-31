@@ -154,6 +154,8 @@ class MIFrame(object):
         if resultbox.type == history.INT:
             self.registers_i[target_index] = resultbox
         elif resultbox.type == history.REF:
+            #debug_print(' ->', 
+            #            llmemory.cast_ptr_to_adr(resultbox.getref_base()))
             self.registers_r[target_index] = resultbox
         elif resultbox.type == history.FLOAT:
             self.registers_f[target_index] = resultbox
@@ -909,6 +911,7 @@ class MIFrame(object):
             while True:
                 pc = self.pc
                 op = ord(self.bytecode[pc])
+                #debug_print(self.jitcode.name, pc)
                 #print staticdata.opcode_names[op]
                 staticdata.opcode_implementations[op](self, pc)
         except ChangeFrame:
