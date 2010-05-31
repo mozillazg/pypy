@@ -1,6 +1,5 @@
 # minimal tests.  See also lib-python/modified-2.4.1/test/test_array.
 
-import autopath
 import py
 from py.test import raises
 import struct
@@ -74,10 +73,11 @@ class TestCPythonsOwnArray(BaseArrayTests):
 class TestArrayOnTopOfCPython(BaseArrayTests):
 
     def setup_class(cls):
+        from pypy.tool.lib_pypy import get_lib_pypy_dir
         if not hasattr(struct, 'pack_into'):
             py.test.skip("requires CPython >= 2.5")
         import new
-        path = py.path.local(autopath.this_dir).dirpath().join('array.py')
+        path = get_lib_pypy_dir().join('array.py')
         myarraymodule = new.module('array')
         execfile(str(path), myarraymodule.__dict__)
         cls.array = myarraymodule
