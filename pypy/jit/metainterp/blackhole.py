@@ -344,7 +344,7 @@ class BlackholeInterpreter(object):
         # these are all prebuilt constants anyway.
         for i in range(self.jitcode.num_regs_r()):
             self.registers_r[i] = NULL
-        self.exception_last_value = None
+        self.exception_last_value = lltype.nullptr(rclass.OBJECT)
 
     def get_current_position_info(self):
         return self.jitcode.get_live_vars_info(self.position)
