@@ -38,8 +38,7 @@ class FakeResultR:
         self.fakeargs = args
 
 class FakeMetaInterp:
-    def execute_did_not_raise(self):
-        self.didraise = False
+    pass
 
 class FakeCPU(AbstractCPU):
     supports_floats = True
@@ -76,15 +75,13 @@ def test_execute():
 
 def test_execute_varargs():
     cpu = FakeCPU()
-    metainterp = FakeMetaInterp()
     descr = FakeCallDescr()
     argboxes = [BoxInt(99999), BoxInt(321), ConstFloat(2.25), ConstInt(123),
                 BoxPtr(), BoxFloat(5.5)]
-    box = execute_varargs(cpu, metainterp, rop.CALL, argboxes, descr)
+    box = execute_varargs(cpu, FakeMetaInterp(), rop.CALL, argboxes, descr)
     assert box.value == 42.5
     assert cpu.fakecalled == (99999, descr, [321, 123],
                               [ConstPtr.value], [2.25, 5.5])
-    assert not metainterp.didraise
 
 def test_execute_nonspec():
     cpu = FakeCPU()

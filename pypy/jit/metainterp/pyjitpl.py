@@ -184,6 +184,7 @@ class MIFrame(object):
         exec py.code.Source('''
             @arguments("box", "box")
             def opimpl_%s(self, b1, b2):
+                self.metainterp.clear_exception()
                 resbox = self.execute(rop.%s, b1, b2)
                 self.make_result_of_lastop(resbox)  # same as execute_varargs()
                 self.metainterp.handle_possible_overflow_error()
@@ -971,6 +972,7 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc):
+        self.metainterp.clear_exception()
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
         self.make_result_of_lastop(resbox)
@@ -1022,6 +1024,7 @@ class MIFrame(object):
                              effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
                 assembler_call_token is not None):
             # residual calls require attention to keep virtualizables in-sync
+            self.metainterp.clear_exception()
             self.metainterp.vable_and_vrefs_before_residual_call()
             resbox = self.metainterp.execute_and_record_varargs(
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
@@ -1451,7 +1454,7 @@ class MetaInterp(object):
         # stored in the exc_value Box can be assumed to be a Const.  This
         # is only True after a GUARD_EXCEPTION or GUARD_CLASS.
 
-    def execute_did_not_raise(self):
+    def clear_exception(self):
         self.last_exc_value_box = None
 
     def aborted_tracing(self, reason):
@@ -1647,7 +1650,7 @@ class MetaInterp(object):
                 self.execute_ll_raised(lltype.cast_opaque_ptr(rclass.OBJECTPTR,
                                                               exception))
             else:
-                self.execute_did_not_raise()
+                self.clear_exception()
             try:
                 self.handle_possible_exception()
             except ChangeFrame:
@@ -1659,7 +1662,7 @@ class MetaInterp(object):
             except ChangeFrame:
                 pass
         elif opnum == rop.GUARD_OVERFLOW:      # no longer overflowing
-            self.execute_did_not_raise()
+            self.clear_exception()
         else:
             from pypy.jit.metainterp.resoperation import opname
             raise NotImplementedError(opname[opnum])
