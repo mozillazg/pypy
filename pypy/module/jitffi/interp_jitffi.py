@@ -2,7 +2,7 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
-from pypy.rlib import libffi
+from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.history import LoopToken, BasicFailDescr, BoxInt
@@ -12,7 +12,7 @@ from pypy.jit.metainterp.typesystem import deref
 class W_CDLL(Wrappable):
     def __init__(self, space, name):
         try:
-            self.cdll = libffi.CDLL(name)
+            self.lib = rdynload.dlopen(name)
         except libffi.DLOpenError, e:
             raise operationerrfmt(space.w_OSError, '%s: %s', name,
                                   e.msg or 'unspecified error')
@@ -23,7 +23,7 @@ class W_CDLL(Wrappable):
     def call(self, space, func, a, b):  # XXX temporary fixed number of func args (ints)
                                         # result_type argument?
         try:
-            addr = rffi.cast(lltype.Signed, self.cdll.getaddressindll(func))
+            addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
         except KeyError:
             raise operationerrfmt(space.w_ValueError,
                                   "Cannot find symbol %s", func)
