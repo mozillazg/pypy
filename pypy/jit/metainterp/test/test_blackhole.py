@@ -2,8 +2,9 @@ import py
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
+from pypy.jit.metainterp.blackhole import BlackholeInterpreter
 from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, pyjitpl
 from pypy.jit.codewriter.assembler import JitCode
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.llinterp import LLException
@@ -140,3 +141,71 @@ def test_convert_and_run_from_pyjitpl():
     d = py.test.raises(MyMetaInterp.staticdata.DoneWithThisFrameInt,
                        convert_and_run_from_pyjitpl, MyMetaInterp())
     assert d.value.args == (42,)
+
+
+class TestBlackhole(LLJitMixin):
+
+    def test_blackholeinterp_cache(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y'])
+        def choices(x):
+            if x == 2: return 10
+            if x == 3: return 199
+            if x == 4: return 124
+            if x == 5: return -521
+            if x == 6: return 8917
+            if x == 7: return -387
+            return 34871
+        def f(x):
+            y = 0
+            while x > 0:
+                myjitdriver.can_enter_jit(x=x, y=y)
+                myjitdriver.jit_merge_point(x=x, y=y)
+                y += choices(x)
+                x -= 1
+            return y
+        #
+        seen = []
+        def my_copy_constants(self, *args):
+            seen.append(1)
+            return org_copy_constants(self, *args)
+        org_copy_constants = BlackholeInterpreter.copy_constants
+        BlackholeInterpreter.copy_constants = my_copy_constants
+        try:
+            res = self.meta_interp(f, [7], repeat=7)
+        finally:
+            BlackholeInterpreter.copy_constants = org_copy_constants
+        #
+        assert res == sum([choices(x) for x in range(1, 8)])
+        builder = pyjitpl._warmrunnerdesc.metainterp_sd.blackholeinterpbuilder
+        assert builder.num_interpreters == 2
+        assert len(seen) == 2 * 3
+
+    def test_blackholeinterp_cache_exc(self):
+        myjitdriver = JitDriver(greens = [], reds = ['x', 'y'])
+        class FooError(Exception):
+            def __init__(self, num):
+                self.num = num
+        def choices(x):
+            if x == 2: raise FooError(10)
+            if x == 3: raise FooError(199)
+            if x == 4: raise FooError(124)
+            if x == 5: raise FooError(-521)
+            if x == 6: raise FooError(8917)
+            if x == 7: raise FooError(-387)
+            raise FooError(34871)
+        def f(x):
+            y = 0
+            while x > 0:
+                myjitdriver.can_enter_jit(x=x, y=y)
+                myjitdriver.jit_merge_point(x=x, y=y)
+                try:
+                    choices(x)
+                except FooError, e:
+                    y += e.num
+                x -= 1
+            return y
+        res = self.meta_interp(f, [7], repeat=7)
+        assert res == sum([py.test.raises(FooError, choices, x).value.num
+                           for x in range(1, 8)])
+        builder = pyjitpl._warmrunnerdesc.metainterp_sd.blackholeinterpbuilder
+        assert builder.num_interpreters == 2

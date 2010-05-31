@@ -1281,7 +1281,10 @@ class BlackholeInterpreter(object):
 
 def _run_forever(blackholeinterp, current_exc):
     while True:
-        current_exc = blackholeinterp._resume_mainloop(current_exc)
+        try:
+            current_exc = blackholeinterp._resume_mainloop(current_exc)
+        finally:
+            blackholeinterp.builder.release_interp(blackholeinterp)
         blackholeinterp = blackholeinterp.nextblackholeinterp
 
 def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
