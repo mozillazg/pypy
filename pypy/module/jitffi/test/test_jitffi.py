@@ -28,8 +28,13 @@ class AppTestJitffi(object):
         cls.w_lib_name = space.wrap(cls.preprare_c_example())
         cls.w_libc_name = space.wrap(get_libc_name())
 
-    def test_raw_callable(self):
+    def test_call(self):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
+
         res = lib.call('add_integers', 1, 2)
-        assert res == 3
+        assert 3 == res
+        res = lib.call('add_integers', -1, 2)
+        assert 1 == res
+        res = lib.call('add_integers', 0, 0)
+        assert 0 == res
