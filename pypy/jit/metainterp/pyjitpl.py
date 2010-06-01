@@ -987,7 +987,7 @@ class MIFrame(object):
         while True:
             pc = self.pc
             op = ord(self.bytecode[pc])
-            #print self.metainterp.opcode_names[op]
+            #print self.jitcode.name, self.metainterp.staticdata.opcode_names[op]
             self.pc = pc + 1
             staticdata = self.metainterp.staticdata
             stop = staticdata.opcode_implementations[op](self, pc)
