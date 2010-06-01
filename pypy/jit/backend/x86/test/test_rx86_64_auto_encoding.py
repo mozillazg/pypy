@@ -15,6 +15,14 @@ class TestRx86_64(test_rx86_32_auto_encoding.TestRx86_32):
                    rx86.R.r8,  rx86.R.r9,  rx86.R.r10, rx86.R.r11,
                    rx86.R.r12, rx86.R.r13, rx86.R.r14, rx86.R.r15]
 
+    def should_skip_instruction(self, instrname, argmodes):
+        return (
+                super(TestRx86_64, self).should_skip_instruction(instrname, argmodes) or
+                ('j' in argmodes) or
+                # Not testing FSTP on 64-bit for now
+                (instrname == 'FSTP')
+        )
+
     def array_tests(self):
         # reduce a little bit -- we spend too long in these tests
         lst = super(TestRx86_64, self).array_tests()
