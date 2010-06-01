@@ -655,39 +655,6 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
             AbstractX86CodeBuilder.MOV_ri(self, R.eax, target)
             AbstractX86CodeBuilder.CALL_r(self, R.eax)
 
-    # unsupported -- must use e.g. MOV tmpreg, immed64; MOV reg, [tmpreg]
-    def MOV_rj(self, reg, mem_immed):
-        py.test.skip("MOV_rj unsupported")
-    def MOV_jr(self, mem_immed, reg):
-        py.test.skip("MOV_jr unsupported")
-    def MOV_ji(self, mem_immed, immed):
-        py.test.skip("MOV_ji unsupported")
-    def XCHG_rj(self, reg, mem_immed):
-        py.test.skip("XCGH_rj unsupported")
-    def CMP_ji(self, addr, immed):
-        py.test.skip("CMP_ji unsupported")
-    def CMP_rj(self, reg, immed):
-        py.test.skip("CMP_rj unsupported")
-    def MOVSD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("MOVSD_rj unsupported")
-    def MOVSD_jx(self, xmm_reg, mem_immed):
-        py.test.skip("MOVSD_jr unsupported")
-    def ADDSD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("ADDSD_rj unsupported")
-    def SUBSD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("SUBSD_rj unsupported")
-    def MULSD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("MULSD_rj unsupported")
-    def DIVSD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("DIVSD_rj unsupported")
-    def UCOMISD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("UCOMISD_rj unsupported")
-    def ANDPD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("ANDPD_rj unsupported")
-    def XORPD_xj(self, xmm_reg, mem_immed):
-        py.test.skip("XORPD_rj unsupported")
-
-
 # ____________________________________________________________
 
 all_instructions = [name for name in AbstractX86CodeBuilder.__dict__

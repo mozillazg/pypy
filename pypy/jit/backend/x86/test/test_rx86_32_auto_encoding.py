@@ -230,16 +230,6 @@ class TestRx86_32(object):
                 return []   # MOV EAX, [immediate]: there is a special encoding
             if methname == 'MOV_jr' and args[1] == rx86.R.eax:
                 return []   # MOV [immediate], EAX: there is a special encoding
-            if methname == 'SET_ir':
-                py.test.skip("SET_ir: must be tested manually")
-            if methname.startswith('SHL') or methname.startswith('SAR') or methname.startswith('SHR'):
-                # XXX: Would be nice to test these automatically
-                py.test.skip('Shifts must be tested manually')
-            if methname == 'FSTP_b':
-                # Doesn't work on 64-bit, skipping for now
-                py.test.skip('Skipping FSTP')
-            if methname == 'CALL_j':
-                py.test.skip("CALL_j is actually relative")
 
             return [args]
 
@@ -248,13 +238,28 @@ class TestRx86_32(object):
             pass
         return X86_CodeBuilder
 
+    def should_skip_instruction(self, instrname, argmodes):
+        is_artificial_instruction = instrname[-1].isdigit() or (argmodes != '' and argmodes[-1].isdigit())
+        return (
+                is_artificial_instruction or
+                # XXX: Can't tests shifts automatically at the moment
+                (instrname[:3] in ('SHL', 'SAR', 'SHR')) or
+                # CALL_j is actually relative, so tricky to test
+                (instrname == 'CALL' and argmodes == 'j') or
+                # SET_ir must be tested manually
+                (instrname == 'SET' and argmodes == 'ir')
+        )
+
+
+
     def complete_test(self, methname):
         if '_' in methname:
             instrname, argmodes = methname.split('_')
         else:
             instrname, argmodes = methname, ''
-        if instrname[-1].isdigit() or (argmodes != '' and argmodes[-1].isdigit()):
-            print "artificial instruction: %r" % (methname,)
+
+        if self.should_skip_instruction(instrname, argmodes):
+            print "Skipping %s" % methname
             return
 
         print "Testing %s with argmodes=%r" % (instrname, argmodes)
