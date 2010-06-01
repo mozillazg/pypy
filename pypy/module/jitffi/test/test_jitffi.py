@@ -19,6 +19,14 @@ class AppTestJitffi(object):
         {
            return a+b;
         }
+
+        int max3(int a, int b, int c)
+        {
+           int max = a;
+           if (b > max) max = b;
+           if (c > max) max = c;
+           return max;
+        }
         '''
         ))
 
@@ -38,14 +46,19 @@ class AppTestJitffi(object):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
 
-        res = lib.call('add_integers', 1, 2, 'int')
+        res = lib.call('add_integers', [1, 2], 'int')
         assert 3 == res
         assert isinstance(res, int)
-        res = lib.call('add_integers', -1, 2, 'int')
+        res = lib.call('add_integers', [-1, 2], 'int')
         assert 1 == res
-        res = lib.call('add_integers', 0, 0, 'int')
+        res = lib.call('add_integers', [0, 0], 'int')
         assert 0 == res
 
-        res = lib.call('return_float', 1, 2, 'float')
+        res = lib.call('max3', [2, 8, 3], 'int')
+        assert 8 == res
+
+        res = lib.call('return_float', [1, 2], 'float')
         assert 3.0 == res
         assert isinstance(res, float)
+        #res = lib.call('return_float', [1.5, 1.2], 'float')
+        #assert 2.7 == res
