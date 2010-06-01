@@ -646,7 +646,7 @@ class Transformer(object):
     def _is_gc(self, v):
         return v.concretetype.TO._gckind == 'gc'
 
-    def _rewrite_nongc_ptrs(self, op):
+    def _rewrite_cmp_ptrs(self, op):
         if self._is_gc(op.args[0]):
             return op
         else:
@@ -664,14 +664,14 @@ class Transformer(object):
 
     def rewrite_op_ptr_eq(self, op):
         op1 = self._rewrite_equality(op, 'ptr_iszero')
-        return self._rewrite_nongc_ptrs(op1)
+        return self._rewrite_cmp_ptrs(op1)
 
     def rewrite_op_ptr_ne(self, op):
         op1 = self._rewrite_equality(op, 'ptr_nonzero')
-        return self._rewrite_nongc_ptrs(op1)
+        return self._rewrite_cmp_ptrs(op1)
 
-    rewrite_op_ptr_iszero = _rewrite_nongc_ptrs
-    rewrite_op_ptr_nonzero = _rewrite_nongc_ptrs
+    rewrite_op_ptr_iszero = _rewrite_cmp_ptrs
+    rewrite_op_ptr_nonzero = _rewrite_cmp_ptrs
 
     def rewrite_op_cast_ptr_to_int(self, op):
         if self._is_gc(op.args[0]):
