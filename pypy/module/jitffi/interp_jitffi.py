@@ -21,7 +21,11 @@ class W_CDLL(Wrappable):
         self.space = space
         self.cpu = CPU(None, None)
 
-    def call(self, space, func, a, b, res_type):  # XXX temporary fixed number of func args (ints)
+    def call(self, space, func, w_func_args, res_type='void'):
+        # only integers are supported for now
+        func_args_w = space.listview(w_func_args)
+        assert isinstance(func_args_w, list)
+
         if res_type == 'int':
             bres = BoxInt()
         elif res_type == 'float':
@@ -38,21 +42,19 @@ class W_CDLL(Wrappable):
         except KeyError:
             raise operationerrfmt(space.w_ValueError,
                                   "Cannot find symbol %s", func)
-
         bfuncaddr = BoxInt(addr)
-        barg0 = BoxInt(a)
-        barg1 = BoxInt(b)
 
-        FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed, lltype.Signed],
-                          lltype.Signed))
+        args_type = [ lltype.Signed for i in func_args_w ]
+        FPTR = lltype.Ptr(lltype.FuncType(args_type, lltype.Signed))
         FUNC = deref(FPTR)
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-        oplist = [ResOperation(rop.CALL, [bfuncaddr, barg0, barg1], bres,
-                               descr=calldescr),
+        bargs = [ BoxInt(x.intval) for x in func_args_w ]
+        inputargs = [bfuncaddr] + bargs
+
+        oplist = [ResOperation(rop.CALL, inputargs, bres, descr=calldescr),
                   ResOperation(rop.FINISH, [bres], None,
                                descr=BasicFailDescr(0))]
-        inputargs = [bfuncaddr, barg0, barg1]
         looptoken = LoopToken()
         self.cpu.compile_loop(inputargs, oplist, looptoken)
 
@@ -78,7 +80,7 @@ class W_CDLL(Wrappable):
         else:
             raise ValueError(res_type)
         return space.wrap(r)
-    call.unwrap_spec = ['self', ObjSpace, str, int, int, str]
+    call.unwrap_spec = ['self', ObjSpace, str, W_Root, str]
 
 def descr_new_cdll(space, w_type, name):
     try:
