@@ -36,11 +36,9 @@ class AppTestJitffi(object):
         return str(platform.compile([c_file], eci, 'x', standalone=False))
 
     def setup_class(cls):
-        from pypy.rlib.libffi import get_libc_name
         space = gettestobjspace(usemodules=('jitffi',))
         cls.space = space
         cls.w_lib_name = space.wrap(cls.preprare_c_example())
-        cls.w_libc_name = space.wrap(get_libc_name())
 
     def test_call(self):
         import jitffi
