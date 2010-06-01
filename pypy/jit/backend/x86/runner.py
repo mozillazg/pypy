@@ -7,7 +7,7 @@ from pypy.jit.backend.x86.regalloc import FORCE_INDEX_OFS
 from pypy.jit.backend.x86.profagent import ProfileAgent
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
-class CPU386(AbstractLLCPU):
+class AbstractX86CPU(AbstractLLCPU):
     debug = True
     supports_floats = True
 
@@ -129,10 +129,14 @@ class CPU386(AbstractLLCPU):
         assert fail_index == fail_index_2
         return faildescr
 
+class CPU386(AbstractX86CPU):
+    pass
 
 class CPU386_NO_SSE2(CPU386):
     supports_floats = False
 
+class CPU_X86_64(AbstractX86CPU):
+    pass
 
 CPU = CPU386
 
