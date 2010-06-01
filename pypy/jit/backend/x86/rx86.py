@@ -116,7 +116,10 @@ def encode_immediate(mc, immediate, width, orbyte):
     elif width == 'q' and mc.WORD == 8:
         mc.writeimm64(immediate)
     else:
-        mc.writeimm32(immediate)
+        if mc._use_16_bit_immediate:
+            mc.writeimm16(immediate)
+        else:
+            mc.writeimm32(immediate)
     return 0
 
 def immediate(argnum, width='i'):
@@ -384,6 +387,9 @@ def shifts(mod_field):
 
 class AbstractX86CodeBuilder(object):
     """Abstract base class."""
+
+    # Used by the 16-bit version of instructions
+    _use_16_bit_immediate = False
 
     def writechar(self, char):
         raise NotImplementedError

@@ -178,6 +178,17 @@ class LocationCodeBuilder(object):
 
         return INSN
 
+    def _16_bit_binaryop(name):
+        def INSN(self, loc1, loc2):
+            # Select 16-bit operand mode
+            self.writechar('\x66')
+            # XXX: Hack to let immediate() in rx86 know to do a 16-bit encoding
+            self._use_16_bit_immediate = True
+            getattr(self, name)(loc1, loc2)
+            self._use_16_bit_immediate = False
+
+        return INSN
+
     AND = _binaryop('AND')
     OR  = _binaryop('OR')
     XOR = _binaryop('XOR')
@@ -193,8 +204,10 @@ class LocationCodeBuilder(object):
     NEG = _unaryop('NEG')
 
     CMP = _binaryop('CMP')
+    CMP16 = _16_bit_binaryop('CMP')
     MOV = _binaryop('MOV')
     MOV8 = _binaryop('MOV8')
+    MOV16 = _16_bit_binaryop('MOV')
     MOVZX8 = _binaryop('MOVZX8')
     MOVZX16 = _binaryop('MOVZX16')
 
@@ -213,16 +226,6 @@ class LocationCodeBuilder(object):
     CVTTSD2SI = _binaryop('CVTTSD2SI')
 
     CALL = _unaryop('CALL')
-
-    def MOV16(self, dest_loc, src_loc):
-        # Select 16-bit operand mode
-        self.writechar('\x66')
-        self.MOV(dest_loc, src_loc)
-
-    def CMP16(self, a_loc, b_loc):
-        # Select 16-bit operand mode
-        self.writechar('\x66')
-        self.CMP(a_loc, b_loc)
 
 def imm(x):
     # XXX: ri386 migration shim
