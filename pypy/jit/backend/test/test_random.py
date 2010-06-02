@@ -20,8 +20,6 @@ class DummyLoop(object):
 class FakeMetaInterp(object):
     def execute_raised(self, exc, constant=False):
         self._got_exc = exc
-    def execute_did_not_raise(self):
-        self._got_exc = None
 
 class OperationBuilder(object):
     def __init__(self, cpu, loop, vars):
@@ -47,6 +45,7 @@ class OperationBuilder(object):
         return fork
 
     def do(self, opnum, argboxes, descr=None):
+        self.fakemetainterp._got_exc = None
         v_result = execute_nonspec(self.cpu, self.fakemetainterp,
                                    opnum, argboxes, descr)
         if isinstance(v_result, Const):
@@ -285,7 +284,6 @@ class AbstractOvfOperation(AbstractOperation):
             builder.intvars[:] = original_intvars
         else:
             op = ResOperation(rop.GUARD_NO_OVERFLOW, [], None)
-        del builder.fakemetainterp._got_exc
         op.descr = BasicFailDescr()
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
