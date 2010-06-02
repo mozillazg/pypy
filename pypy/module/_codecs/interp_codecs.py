@@ -218,11 +218,8 @@ def encode(space, w_obj, w_encoding=NoneNotWrapped, errors='strict'):
     else:
         encoding = space.str_w(w_encoding)
     w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
-    if space.is_true(w_encoder):
-        w_res = space.call_function(w_encoder, w_obj, space.wrap(errors))
-        return space.getitem(w_res, space.wrap(0))
-    else:
-        assert 0, "XXX, what to do here?"
+    w_res = space.call_function(w_encoder, w_obj, space.wrap(errors))
+    return space.getitem(w_res, space.wrap(0))
 encode.unwrap_spec = [ObjSpace, W_Root, W_Root, str]
 
 def buffer_encode(space, s, errors='strict'):
