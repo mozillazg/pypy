@@ -1,4 +1,3 @@
-#from pypy.conftest import gettestobjspace
 from pypy.rlib import jitffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
@@ -37,9 +36,6 @@ class TestJitffi(object):
         return str(platform.compile([c_file], eci, 'x', standalone=False))
 
     def setup_class(cls):
-        #space = gettestobjspace(usemodules=('jitffi',))
-        #cls.space = space
-        #cls.w_lib_name = space.wrap(cls.preprare_c_example())
         cls.lib_name = cls.preprare_c_example()
 
     def test_call(self):
