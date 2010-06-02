@@ -1,6 +1,4 @@
 from pypy.interpreter.error import operationerrfmt
-from pypy.interpreter.gateway import interp2app
-from pypy.interpreter.typedef import TypeDef
 from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.x86.runner import CPU
