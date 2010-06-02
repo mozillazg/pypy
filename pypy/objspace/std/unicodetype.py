@@ -3,7 +3,8 @@ from pypy.interpreter import gateway
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.basestringtype import basestring_typedef
-from pypy.rlib.runicode import str_decode_utf_8, str_decode_ascii
+from pypy.rlib.runicode import str_decode_utf_8, str_decode_ascii,\
+     unicode_encode_utf_8, unicode_encode_ascii
 
 from sys import maxint
 
@@ -184,13 +185,27 @@ def _get_encoding_and_errors(space, w_encoding, w_errors):
     return encoding, errors
 
 def encode_object(space, w_object, encoding, errors):
-    # XXX write down shortcuts for performance for common encodings,
-    #     just like CPython
     if encoding is None:
         # Get the encoder functions as a wrapped object.
         # This lookup is cached.
         w_encoder = space.sys.get_w_default_encoder()
     else:
+        if errors is None or errors == 'strict':
+            try:
+                if encoding == 'ascii':
+                    u = space.unicode_w(w_object)
+                    return space.wrap(unicode_encode_ascii(u, len(u), None))
+                if encoding == 'utf-8':
+                    u = space.unicode_w(w_object)
+                    return space.wrap(unicode_encode_utf_8(u, len(u), None))
+            except UnicodeEncodeError, uee:
+                raise OperationError(space.w_UnicodeEncodeError,
+                                     space.newtuple([
+                                         space.wrap(uee.encoding),
+                                         space.wrap(uee.object),
+                                         space.wrap(uee.start),
+                                         space.wrap(uee.end),
+                                         space.wrap(uee.reason)]))
         from pypy.module._codecs.interp_codecs import lookup_codec
         w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
     if errors is None:
