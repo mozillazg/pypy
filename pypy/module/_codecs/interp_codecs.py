@@ -52,6 +52,9 @@ class CodecState(object):
                 return replace, newpos
         return unicode_call_errorhandler
 
+    def _freeze_(self):
+        assert not self.codec_search_path
+        return False
 
 def register_codec(space, w_search_function):
     """register(search_function)
