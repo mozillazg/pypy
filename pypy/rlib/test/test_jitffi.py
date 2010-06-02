@@ -58,3 +58,23 @@ class TestJitffi(object):
         #res = lib.call('return_float', [1.5, 1.2], 'float')
         #assert 2.7 == res
 
+    def test_get_with_same_type(self):
+        lib = jitffi.CDLL(self.lib_name)
+
+        func = lib.get('add_integers', ['int', 'int'], 'int')
+        assert 3 == func(1,2)
+        func = lib.get('add_integers', ['int', 'int'], 'int')
+        assert 1 == func(-1,2)
+        func = lib.get('add_integers', ['int', 'int'], 'int')
+        assert 0 == func(0,0)
+
+        func = lib.get('max3', ['int', 'int', 'int'], 'int')
+        assert 8 == func(2, 8, 3)
+
+        #res = lib.get('return_float', ['float', 'float'], 'float')
+        #assert 2.7 == func(1.5, 1.2)
+
+    def test_get_void(self):
+        lib = jitffi.CDLL(self.lib_name)
+        py.test.raises(ValueError, lib.get,
+                       'add_integers', ['void', 'int'], 'int')
