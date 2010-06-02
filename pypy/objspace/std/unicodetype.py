@@ -3,6 +3,7 @@ from pypy.interpreter import gateway
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.basestringtype import basestring_typedef
+from pypy.rlib.runicode import str_decode_utf_8, str_decode_ascii
 
 from sys import maxint
 
@@ -205,9 +206,23 @@ def encode_object(space, w_object, encoding, errors):
     return w_retval
 
 def decode_object(space, w_obj, encoding, errors):
-    w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
         encoding = getdefaultencoding(space)
+    if errors is None or errors == 'strict':
+        try:
+            if encoding == 'ascii':
+                # XXX error handling
+                s = space.bufferstr_w(w_obj)
+                return space.wrap(str_decode_ascii(s, len(s), None)[0])
+            if encoding == 'utf-8':
+                s = space.bufferstr_w(w_obj)
+                return space.wrap(str_decode_utf_8(s, len(s), None)[0])
+        except UnicodeDecodeError, ude:
+            raise OperationError(space.w_UnicodeDecodeError, space.newtuple(
+                [space.wrap(ude.encoding), space.wrap(ude.object),
+                 space.wrap(ude.start), space.wrap(ude.end),
+                 space.wrap(ude.reason)]))
+    w_codecs = space.getbuiltinmodule("_codecs")
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
         w_retval = space.call_function(w_decode, w_obj, space.wrap(encoding))
