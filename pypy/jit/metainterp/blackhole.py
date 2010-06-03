@@ -718,6 +718,10 @@ class BlackholeInterpreter(object):
         except KeyError:
             return pc
 
+    @arguments()
+    def bhimpl_unreachable():
+        raise AssertionError("unreachable")
+
     # ----------
     # exception handling operations
 
@@ -1305,9 +1309,7 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
 
 def convert_and_run_from_pyjitpl(metainterp):
     # Get a chain of blackhole interpreters and fill them by copying
-    # 'metainterp.framestack'.  Note that the order is important: the
-    # first one we get must be the bottom one, in order to make
-    # the comment in BlackholeInterpreter.setposition() valid.
+    # 'metainterp.framestack'.
     debug_start('jit-blackhole')
     metainterp_sd = metainterp.staticdata
     metainterp_sd.profiler.start_blackhole()

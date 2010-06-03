@@ -245,6 +245,7 @@ class GraphFlattener(object):
                 if block.exits[-1].exitcase == 'default':
                     self.make_link(block.exits[-1])
                 else:
+                    self.emitline("unreachable")
                     self.emitline("---")
             #
             self.emitline('-live-')
