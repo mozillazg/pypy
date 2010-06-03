@@ -1307,7 +1307,7 @@ def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
         metainterp_sd.profiler.end_blackhole()
         debug_stop('jit-blackhole')
 
-def convert_and_run_from_pyjitpl(metainterp):
+def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
     # Get a chain of blackhole interpreters and fill them by copying
     # 'metainterp.framestack'.
     debug_start('jit-blackhole')
@@ -1324,6 +1324,9 @@ def convert_and_run_from_pyjitpl(metainterp):
     if metainterp.last_exc_value_box is not None:
         current_exc = metainterp.last_exc_value_box.getref(rclass.OBJECTPTR)
     else:
+        current_exc = lltype.nullptr(rclass.OBJECTPTR.TO)
+    if not raising_exception:
+        firstbh.exception_last_value = current_exc
         current_exc = lltype.nullptr(rclass.OBJECTPTR.TO)
     #
     try:

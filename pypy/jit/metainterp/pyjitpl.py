@@ -1565,7 +1565,7 @@ class MetaInterp(object):
         # run it.
         from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
         self.aborted_tracing(stb.reason)
-        convert_and_run_from_pyjitpl(self)
+        convert_and_run_from_pyjitpl(self, stb.raising_exception)
         assert False    # ^^^ must raise
 
     def remove_consts_and_duplicates(self, boxes, endindex, duplicates):
@@ -1834,7 +1834,10 @@ class MetaInterp(object):
             if vinfo.tracing_after_residual_call(virtualizable):
                 # the virtualizable escaped during CALL_MAY_FORCE.
                 self.load_fields_from_virtualizable()
-                raise SwitchToBlackhole(ABORT_ESCAPE)
+                raise SwitchToBlackhole(ABORT_ESCAPE, raising_exception=True)
+                # ^^^ we set 'raising_exception' to True because we must still
+                # have the eventual exception raised (this is normally done
+                # after the call to vable_after_residual_call()).
 
     def stop_tracking_virtualref(self, i):
         virtualbox = self.virtualref_boxes[i]
@@ -2040,8 +2043,13 @@ class ChangeFrame(JitException):
     it to reload the current top-of-stack frame that gets interpreted."""
 
 class SwitchToBlackhole(JitException):
-    def __init__(self, reason):
+    def __init__(self, reason, raising_exception=False):
         self.reason = reason
+        self.raising_exception = raising_exception
+        # ^^^ must be set to True if the SwitchToBlackhole is raised at a
+        #     point where the exception on metainterp.last_exc_value_box
+        #     is supposed to be raised.  The default False means that it
+        #     should just be copied into the blackhole interp, but not raised.
 
 # ____________________________________________________________
 
