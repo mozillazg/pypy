@@ -2,6 +2,7 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped, applevel
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
+from pypy.rlib.objectmodel import we_are_translated
 
 class CodecState(object):
     def __init__(self, space):
@@ -78,6 +79,8 @@ def lookup_codec(space, encoding):
     Looks up a codec tuple in the Python codec registry and returns
     a tuple of functions.
     """
+    assert not (space.config.translating and not we_are_translated()), \
+        "lookup_codec() should not be called during translation"
     state = space.fromcache(CodecState)
     normalized_encoding = encoding.replace(" ", "-").lower()    
     w_result = state.codec_search_cache.get(normalized_encoding, None)
