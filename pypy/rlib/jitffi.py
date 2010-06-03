@@ -138,9 +138,7 @@ class _Get(object):
             elif tp == 'ref':
                 bargs.append(BoxPtr(value))
             elif tp == 'void':
-                bargs
-            
-        bargs = [ BoxInt(x) for x in func_args ]
+                assert False #XXX
         inputargs = [self.bfuncaddr] + bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
@@ -150,10 +148,15 @@ class _Get(object):
         looptoken = LoopToken()
         self.cpu.compile_loop(inputargs, oplist, looptoken)
 
-        i = 0
-        for box in inputargs:
-            self.cpu.set_future_value_int(i, box.getint())
-            i += 1
+        for i, box in enumerate(inputargs):
+            if i == 0: # func address
+                self.cpu.set_future_value_int(i, box.getint())
+            elif self.args_type[i-1] == 'int':
+                self.cpu.set_future_value_int(i, box.getint())
+            elif self.args_type[i-1] == 'float':
+                self.cpu.set_future_value_float(i, box.getfloat())
+            elif self.args_type[i-1] == 'ref':
+                self.cpu.set_future_value_ref(i, box.getref())
 
         res = self.cpu.execute_token(looptoken)
         if res is oplist[-1].descr:
