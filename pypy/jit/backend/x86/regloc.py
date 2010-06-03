@@ -25,12 +25,19 @@ class AssemblerLocation(object):
 
 class StackLoc(AssemblerLocation):
     _immutable_ = True
-    def __init__(self, position, ebp_offset, num_words):
+    def __init__(self, position, ebp_offset, num_words, type):
         assert ebp_offset < 0   # so no confusion with RegLoc.value
         self.position = position
         self.value = ebp_offset
         # XXX: Word size hardcoded
         self.width = num_words * 4
+        # One of INT, REF, FLOAT
+        self.type = type
+
+    def frame_size(self):
+        # XXX: word size
+        return self.width // 4
+
     def __repr__(self):
         return '%d(%%ebp)' % (self.value,)
 

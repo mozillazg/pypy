@@ -81,7 +81,6 @@ class X86XMMRegisterManager(RegisterManager):
     all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
     # we never need lower byte I hope
     save_around_call_regs = all_regs
-    reg_width = 2
 
     def __init__(self, longevity, frame_manager=None, assembler=None):
         RegisterManager.__init__(self, longevity, frame_manager=frame_manager,
@@ -101,16 +100,17 @@ class X86XMMRegisterManager(RegisterManager):
         # the result is stored in st0, but we don't have this around,
         # so genop_call will move it to some frame location immediately
         # after the call
-        return self.frame_manager.loc(v, 2)
+        return self.frame_manager.loc(v)
 
 class X86FrameManager(FrameManager):
 
     @staticmethod
-    def frame_pos(i, size):
+    def frame_pos(i, box_type):
+        size = width_of_type[box_type]
         if size == 1:
-            return StackLoc(i, get_ebp_ofs(i), size)
+            return StackLoc(i, get_ebp_ofs(i), size, box_type)
         elif size == 2:
-            return StackLoc(i, get_ebp_ofs(i+1), size)
+            return StackLoc(i, get_ebp_ofs(i+1), size, box_type)
         else:
             print "Unimplemented size %d" % i
             raise NotImplementedError("unimplemented size %d" % i)
@@ -183,7 +183,7 @@ class RegAlloc(object):
             if reg:
                 loc = reg
             else:
-                loc = self.fm.loc(arg, width_of_type[arg.type])
+                loc = self.fm.loc(arg)
             if arg.type == FLOAT:
                 floatlocs[i] = loc
             else:
@@ -656,7 +656,7 @@ class RegAlloc(object):
         vable_index = self.assembler.cpu.index_of_virtualizable
         if vable_index != -1:
             self.rm._sync_var(op.args[vable_index])
-            vable = self.fm.loc(op.args[vable_index], 1)
+            vable = self.fm.loc(op.args[vable_index])
         else:
             vable = imm(0)
         self._call(op, [imm(size), vable] +
