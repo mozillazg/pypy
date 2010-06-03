@@ -9,7 +9,7 @@ from pypy.rlib.unroll import unrolling_iterable
 # mc.ADD_rr()/ADD_rb()/ADD_ri().
 #
 
-class AssemblerLocation(AbstractValue):
+class AssemblerLocation(object):
     # XXX: Is adding "width" here correct?
     __slots__ = ('value', 'width')
     _immutable_ = True
