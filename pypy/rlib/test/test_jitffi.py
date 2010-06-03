@@ -43,6 +43,9 @@ class TestJitffi(object):
     def setup_class(cls):
         cls.lib_name = cls.preprare_c_example()
 
+    def test_missing_lib(self):
+        py.test.raises(OSError, jitffi.CDLL, 'xxxfoo888baryyy')
+
     def test_call(self):
         lib = jitffi.CDLL(self.lib_name)
 
@@ -83,3 +86,9 @@ class TestJitffi(object):
         lib = jitffi.CDLL(self.lib_name)
         py.test.raises(ValueError, lib.get,
                        'add_integers', ['void', 'int'], 'int')
+
+    def test_undefined_func(self):
+        lib = jitffi.CDLL(self.lib_name)
+        # xxxfoo888baryyy - not existed function
+        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
+        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')

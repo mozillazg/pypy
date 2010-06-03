@@ -1,4 +1,3 @@
-from pypy.interpreter.error import operationerrfmt
 from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.x86.runner import CPU
@@ -11,9 +10,9 @@ class CDLL(object):
     def __init__(self, name):
         try:
             self.lib = rdynload.dlopen(name)
-        except libffi.DLOpenError, e:
-            raise operationerrfmt(space.w_OSError, '%s: %s', name,
-                                  e.msg or 'unspecified error')
+        except rdynload.DLOpenError, e:
+            raise OSError('%s: %s', name, e.msg or 'unspecified error')
+
         self.name = name
         self.cpu = CPU(None, None)
 
@@ -35,8 +34,7 @@ class CDLL(object):
         try:
             addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
         except KeyError:
-            raise operationerrfmt(space.w_ValueError,
-                                  "Cannot find symbol %s", func)
+            raise ValueError("Cannot find symbol %s", func)
         bfuncaddr = BoxInt(addr)
 
         args_type = [ lltype.Signed for i in func_args ]
@@ -107,8 +105,7 @@ class _Get(object):
         try:
             addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
         except KeyError:
-            raise operationerrfmt(space.w_ValueError,
-                                  "Cannot find symbol %s", func)
+            raise ValueError("Cannot find symbol %s", func)
         self.bfuncaddr = BoxInt(addr)
 
         args = []
