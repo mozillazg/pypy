@@ -15,7 +15,12 @@ class TestJitffi(object):
            return a+b;
         }
 
-        float return_float(int a, int b)
+        double add_floats(double a, double b)
+        {
+           return a+b;
+        }
+
+        double return_float(int a, int b)
         {
            return a+b;
         }
@@ -30,7 +35,7 @@ class TestJitffi(object):
         '''
         ))
 
-        symbols = ["add_integers"]
+        symbols = ['add_integers', 'add_floats', 'return_float', 'max3']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -71,8 +76,8 @@ class TestJitffi(object):
         func = lib.get('max3', ['int', 'int', 'int'], 'int')
         assert 8 == func(2, 8, 3)
 
-        #res = lib.get('return_float', ['float', 'float'], 'float')
-        #assert 2.7 == func(1.5, 1.2)
+        func = lib.get('add_floats', ['float', 'float'], 'float')
+        assert 2.7 == func(1.2, 1.5)
 
     def test_get_void(self):
         lib = jitffi.CDLL(self.lib_name)
