@@ -324,6 +324,10 @@ class MIFrame(object):
         except KeyError:
             pass
 
+    @arguments()
+    def opimpl_unreachable(self):
+        raise AssertionError("unreachable")
+
     @arguments("descr")
     def opimpl_new(self, sizedescr):
         return self.execute_with_descr(rop.NEW, sizedescr)
