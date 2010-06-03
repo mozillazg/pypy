@@ -1118,6 +1118,7 @@ class Assembler386(object):
 
     def rebuild_faillocs_from_descr(self, bytecode):
         from pypy.jit.backend.x86.regalloc import X86FrameManager
+        descr_to_box_type = [REF, INT, FLOAT]
         bytecode = rffi.cast(rffi.UCHARP, bytecode)
         arglocs = []
         while 1:
@@ -1142,7 +1143,7 @@ class Assembler386(object):
                     size = 2
                 else:
                     size = 1
-                loc = X86FrameManager.frame_pos(code, size)
+                loc = X86FrameManager.frame_pos(code, descr_to_box_type[kind])
             elif code == self.CODE_STOP:
                 break
             elif code == self.CODE_HOLE:
