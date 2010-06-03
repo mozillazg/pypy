@@ -1,5 +1,6 @@
 import py
 from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE, hint
+from pypy.rlib.jit import unroll_safe
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
@@ -394,6 +395,33 @@ class RecursiveTests:
         self.check_max_trace_length(TRACE_LIMIT)
         self.check_aborted_count(8)
         self.check_enter_count_at_most(30)
+
+    def test_trace_limit_with_exception_bug(self):
+        myjitdriver = JitDriver(greens=[], reds=['n'])
+        @unroll_safe
+        def do_stuff(n):
+            while n > 0:
+                n -= 1
+            raise ValueError
+        def loop(n):
+            pc = 0
+            while n > 80:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                try:
+                    do_stuff(n)
+                except ValueError:
+                    # the trace limit is checked when we arrive here, and we
+                    # have the exception still in last_exc_value_box at this
+                    # point -- so when we abort because of a trace too long,
+                    # the exception is passed to the blackhole interp and
+                    # incorrectly re-raised from here
+                    pass
+                n -= 1
+            return n
+        TRACE_LIMIT = 66
+        res = self.meta_interp(loop, [100], trace_limit=TRACE_LIMIT)
+        assert res == 80
 
     def test_max_failure_args(self):
         FAILARGS_LIMIT = 10
