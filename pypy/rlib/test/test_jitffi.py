@@ -102,8 +102,11 @@ class TestJitffi(object):
 
         func = lib.get('fvoid', ['void'], 'int')
         assert 1 == func('void')
+        assert 1 == func()
 
         func = lib.get('return_void', ['int', 'int'], 'void')
+        assert func(1, 2) is None
+        func = lib.get('return_void', ['int', 'int'])
         assert func(1, 2) is None
 
     def test_undefined_func(self):
