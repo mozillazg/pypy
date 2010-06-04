@@ -793,9 +793,9 @@ class LLFrame(object):
         checkptr(ptr)
         return llmemory.cast_ptr_to_adr(ptr)
 
-    def op_cast_adr_to_int(self, adr):
+    def op_cast_adr_to_int(self, adr, mode):
         checkadr(adr)
-        return llmemory.cast_adr_to_int(adr)
+        return llmemory.cast_adr_to_int(adr, mode)
 
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py
