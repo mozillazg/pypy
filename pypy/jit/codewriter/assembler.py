@@ -3,6 +3,7 @@ from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.format import format_assembler
 from pypy.jit.codewriter.jitcode import SwitchDictDescr, JitCode
+from pypy.jit.codewriter import heaptracker
 from pypy.rlib.objectmodel import ComputedIntSymbolic
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
@@ -69,7 +70,7 @@ class Assembler(object):
                     value = llmemory.cast_ptr_to_adr(value)
                     TYPE = llmemory.Address
                 if TYPE == llmemory.Address:
-                    value = llmemory.cast_adr_to_int(value)
+                    value = heaptracker.adr2int(value)
                 elif not isinstance(value, ComputedIntSymbolic):
                     value = lltype.cast_primitive(lltype.Signed, value)
                     if allow_short and -128 <= value <= 127:

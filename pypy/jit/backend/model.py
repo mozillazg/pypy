@@ -217,9 +217,6 @@ class AbstractCPU(object):
     def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
         raise NotImplementedError
 
-    def bh_cast_ptr_to_int(self, ptr):
-        raise NotImplementedError
-
     def bh_strlen(self, string):
         raise NotImplementedError
     def bh_strgetitem(self, string, index):

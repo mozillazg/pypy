@@ -4,6 +4,7 @@ from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llstr, oostr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_instance_to_base_obj
 from pypy.jit.metainterp import history
+from pypy.jit.codewriter import heaptracker
 from pypy.rlib.objectmodel import r_dict
 
 def deref(T):
@@ -74,7 +75,7 @@ class LLTypeHelper(TypeSystemHelper):
     def cls_of_box(self, box):
         obj = box.getref(lltype.Ptr(rclass.OBJECT))
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
-        return history.ConstInt(llmemory.cast_adr_to_int(cls))
+        return history.ConstInt(heaptracker.adr2int(cls))
 
     def instanceOf(self, instbox, clsbox):
         adr = clsbox.getaddr()
@@ -119,7 +120,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     def cast_vtable_to_hashable(self, cpu, ptr):
         adr = llmemory.cast_ptr_to_adr(ptr)
-        return llmemory.cast_adr_to_int(adr)
+        return heaptracker.adr2int(adr)
 
     def cast_from_ref(self, TYPE, value):
         return lltype.cast_opaque_ptr(TYPE, value)

@@ -9,6 +9,7 @@ from pypy.tool.uid import uid
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.codewriter import heaptracker
 
 # ____________________________________________________________
 
@@ -202,7 +203,7 @@ class Const(AbstractValue):
         kind = getkind(T)
         if kind == "int":
             if isinstance(T, lltype.Ptr):
-                intval = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+                intval = heaptracker.adr2int(llmemory.cast_ptr_to_adr(x))
             else:
                 intval = lltype.cast_primitive(lltype.Signed, x)
             return ConstInt(intval)
@@ -265,7 +266,7 @@ class ConstInt(Const):
         return self.value
 
     def getaddr(self):
-        return llmemory.cast_int_to_adr(self.value)
+        return heaptracker.int2adr(self.value)
 
     def _get_hash_(self):
         return make_hashable_int(self.value)
@@ -506,7 +507,7 @@ class BoxInt(Box):
         return self.value
 
     def getaddr(self):
-        return llmemory.cast_int_to_adr(self.value)
+        return heaptracker.int2adr(self.value)
 
     def _get_hash_(self):
         return make_hashable_int(self.value)
@@ -675,8 +676,8 @@ def dc_hash(c):
 def make_hashable_int(i):
     if not we_are_translated() and isinstance(i, llmemory.AddressAsInt):
         # Warning: such a hash changes at the time of translation
-        adr = llmemory.cast_int_to_adr(i)
-        return lltype.cast_ptr_to_int(adr.ptr)
+        adr = heaptracker.int2adr(i)
+        return llmemory.cast_adr_to_int(adr, "emulated")
     return i
 
 # ____________________________________________________________

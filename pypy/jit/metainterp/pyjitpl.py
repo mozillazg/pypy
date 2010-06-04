@@ -20,6 +20,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_PROFILE, DEBUG_STEPS, DEBUG_DETAILED
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
+from pypy.jit.codewriter import heaptracker
 
 # ____________________________________________________________
 
@@ -194,8 +195,8 @@ class MIFrame(object):
         ''' % (_opimpl, _opimpl.upper())).compile()
 
     for _opimpl in ['int_is_true', 'int_is_zero', 'int_neg', 'int_invert',
-                    'cast_ptr_to_int', 'cast_float_to_int',
-                    'cast_int_to_float', 'float_neg', 'float_abs',
+                    'cast_float_to_int', 'cast_int_to_float',
+                    'float_neg', 'float_abs',
                     ]:
         exec py.code.Source('''
             @arguments("box")
@@ -334,7 +335,6 @@ class MIFrame(object):
 
     @arguments("descr")
     def opimpl_new_with_vtable(self, sizedescr):
-        from pypy.jit.codewriter import heaptracker
         cpu = self.metainterp.cpu
         cls = heaptracker.descr2vtable(cpu, sizedescr)
         return self.execute(rop.NEW_WITH_VTABLE, ConstInt(cls))
@@ -672,7 +672,7 @@ class MIFrame(object):
             self.verify_green_args(greenboxes)
         #
         k = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
-        funcbox = ConstInt(llmemory.cast_adr_to_int(k))
+        funcbox = ConstInt(heaptracker.adr2int(k))
         return self.do_residual_call(funcbox, portal_code.calldescr,
                                      allboxes, assembler_call_token=token)
 

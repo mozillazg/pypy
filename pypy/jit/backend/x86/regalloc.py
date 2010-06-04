@@ -871,7 +871,7 @@ class RegAlloc(object):
         self.possibly_free_var(op.args[0])
         resloc = self.force_allocate_reg(op.result)
         self.Perform(op, [argloc], resloc)
-    consider_cast_ptr_to_int = consider_same_as
+    #consider_cast_ptr_to_int = consider_same_as
 
     def consider_strlen(self, op):
         base_loc = self.rm.make_sure_var_in_reg(op.args[0], op.args)

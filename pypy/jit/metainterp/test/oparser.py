@@ -8,6 +8,7 @@ from pypy.jit.metainterp.history import TreeLoop, BoxInt, ConstInt,\
      LoopToken
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.typesystem import llhelper
+from pypy.jit.codewriter.heaptracker import adr2int
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llstr
@@ -74,8 +75,7 @@ class OpParser(object):
                 return ConstPtr(obj)
             else:
                 assert typ == 'class'
-                return ConstInt(llmemory.cast_adr_to_int(
-                    llmemory.cast_ptr_to_adr(obj)))
+                return ConstInt(adr2int(llmemory.cast_ptr_to_adr(obj)))
         else:
             if typ == 'ptr':
                 return ConstObj(obj)

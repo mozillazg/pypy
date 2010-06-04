@@ -2,7 +2,7 @@ import os
 from pypy.rlib.debug import have_debug_prints
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rpython.lltypesystem import llmemory, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import Const, ConstInt, Box, \
      BoxInt, ConstFloat, BoxFloat, AbstractFailDescr
@@ -108,7 +108,7 @@ class Logger(object):
 
 def int_could_be_an_address(x):
     if we_are_translated():
-        x = rffi.get_real_int(x)
+        x = rffi.cast(lltype.Signed, x)       # force it
         return not (-32768 <= x <= 32767)
     else:
         return isinstance(x, llmemory.AddressAsInt)

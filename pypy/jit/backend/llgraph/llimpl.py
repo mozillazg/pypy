@@ -970,9 +970,9 @@ class OOFrame(Frame):
 def cast_to_int(x):
     TP = lltype.typeOf(x)
     if isinstance(TP, lltype.Ptr):
-        return llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+        return heaptracker.adr2int(llmemory.cast_ptr_to_adr(x))
     if TP == llmemory.Address:
-        return llmemory.cast_adr_to_int(x)
+        return heaptracker.adr2int(x)
     return lltype.cast_primitive(lltype.Signed, x)
 
 def cast_from_int(TYPE, x):
@@ -987,7 +987,7 @@ def cast_from_int(TYPE, x):
         return x
     else:
         if lltype.typeOf(x) == llmemory.Address:
-            x = llmemory.cast_adr_to_int(x)
+            x = heaptracker.adr2int(x)
         return lltype.cast_primitive(TYPE, x)
 
 def cast_to_ptr(x):

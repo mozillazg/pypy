@@ -182,7 +182,7 @@ class LLtypeOperationBuilder(test_random.OperationBuilder):
 # ____________________________________________________________
 
 def ConstAddr(addr, cpu):
-    return ConstInt(llmemory.cast_adr_to_int(addr))
+    return ConstInt(heaptracker.adr2int(addr))
 
 class GuardClassOperation(test_random.GuardOperation):
     def gen_guard(self, builder, r):

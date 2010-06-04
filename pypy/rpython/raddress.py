@@ -57,9 +57,7 @@ class AddressRepr(Repr):
     get_ll_fasthash_function = get_ll_hash_function
 
 def ll_addrhash(addr1):
-    # we don't want to have an AddressAsInt instance in this case
-    from pypy.rpython.lltypesystem import rffi
-    return rffi.get_real_int(cast_adr_to_int(addr1))
+    return cast_adr_to_int(addr1, "forced")
 
 address_repr = AddressRepr()
 

@@ -1,4 +1,5 @@
 from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.codewriter import heaptracker
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import llmemory
 
@@ -33,7 +34,7 @@ class JitCode(AbstractDescr):
         self._alllabels = alllabels       # debugging
 
     def get_fnaddr_as_int(self):
-        return llmemory.cast_adr_to_int(self.fnaddr)
+        return heaptracker.adr2int(self.fnaddr)
 
     def num_regs_i(self):
         return self.num_regs_encoded >> 16

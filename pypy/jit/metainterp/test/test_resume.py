@@ -7,6 +7,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr, ConstInt
 from pypy.jit.metainterp.history import ConstPtr, ConstFloat
 from pypy.jit.metainterp.test.test_optimizefindnode import LLtypeMixin
 from pypy.jit.metainterp import executor
+from pypy.jit.codewriter import heaptracker
 
 class Storage:
     rd_frame_info_list = None
@@ -444,8 +445,8 @@ class FakeOptimizer_VirtualValue(object):
         pass
 fakeoptimizer = FakeOptimizer_VirtualValue()
 
-def ConstAddr(addr, cpu=None):   # compatibility
-    return ConstInt(llmemory.cast_adr_to_int(addr))
+def ConstAddr(addr, cpu):   # compatibility
+    return ConstInt(heaptracker.adr2int(addr))
 
 def virtual_value(keybox, value, next):
     vv = VirtualValue(fakeoptimizer, ConstAddr(LLtypeMixin.node_vtable_adr,

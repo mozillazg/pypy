@@ -1,7 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rpython.lltypesystem.rffi import get_real_int
 
 class OPERAND(object):
     _attrs_ = []
@@ -286,6 +285,10 @@ imm8 = IMM8
 imm16 = IMM16
 rel32 = REL32
 rel8 = REL8
+
+def get_real_int(x):
+    from pypy.rpython.lltypesystem import rffi, lltype
+    return rffi.cast(lltype.Signed, x)    # force as a real int
 
 def imm(value):
     if isinstance(value, ComputedIntSymbolic):
