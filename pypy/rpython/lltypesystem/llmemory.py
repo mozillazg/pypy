@@ -479,9 +479,14 @@ class fakeaddress(object):
         else:
             return lltype.nullptr(EXPECTED_TYPE.TO)
 
-    def _cast_to_int(self):
+    def _cast_to_int(self, symbolic=False):
         if self:
-            return AddressAsInt(self)
+            if symbolic:
+                return AddressAsInt(self)
+            else:
+                # This is a bit annoying. We want this method to still work
+                # when the pointed-to object is dead
+                return self.ptr._cast_to_int(False)
         else:
             return 0
 
@@ -625,8 +630,21 @@ def cast_ptr_to_adr(obj):
 def cast_adr_to_ptr(adr, EXPECTED_TYPE):
     return adr._cast_to_ptr(EXPECTED_TYPE)
 
-def cast_adr_to_int(adr):
-    return adr._cast_to_int()
+def cast_adr_to_int(adr, mode="emulated"):
+    # The following modes are supported before translation (after
+    # translation, it's all just a cast):
+    # * mode="emulated": goes via lltype.cast_ptr_to_int(), which returns some
+    #     number based on id().  The difference is that it works even if the
+    #     address is that of a dead object.
+    # * mode="symbolic": returns an AddressAsInt instance, which can only be
+    #     cast back to an address later.
+    # * mode="forced": uses rffi.cast() to return a real number.
+    assert mode in ("emulated", "symbolic", "forced")
+    res = adr._cast_to_int(symbolic = (mode != "emulated"))
+    if mode == "forced":
+        from pypy.rpython.lltypesystem.rffi import cast
+        res = cast(lltype.Signed, res)
+    return res
 
 _NONGCREF = lltype.Ptr(lltype.OpaqueType('NONGCREF'))
 def cast_int_to_adr(int):
