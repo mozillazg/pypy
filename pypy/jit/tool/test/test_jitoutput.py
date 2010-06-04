@@ -59,8 +59,6 @@ recorded ops:           6
   calls:                3
   pure calls:           2
 guards:                 1
-blackholed ops:         5
-  pure calls:           3
 opt ops:                6
 opt guards:             1
 forcings:               1
@@ -87,8 +85,6 @@ def test_parse():
     assert info.recorded_ops.calls == 3
     assert info.recorded_ops.pure_calls == 2
     assert info.guards == 1
-    assert info.blackholed_ops.total == 5
-    assert info.blackholed_ops.pure_calls == 3
     assert info.opt_ops == 6
     assert info.opt_guards == 1
     assert info.forcings == 1
