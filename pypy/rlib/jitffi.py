@@ -2,7 +2,7 @@ from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.history import LoopToken, BasicFailDescr
-from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
@@ -97,8 +97,8 @@ class _Get(object):
             self.bres = BoxPtr()
             res = lltype.Signed
         elif self.res_type == 'void':
-            self.bres = None
-            res = None
+            self.bres = NULLBOX
+            res = lltype.Void
         else:
             raise ValueError(self.res_type)
 
