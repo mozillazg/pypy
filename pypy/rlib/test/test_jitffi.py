@@ -32,10 +32,15 @@ class TestJitffi(object):
            if (c > max) max = c;
            return max;
         }
+
+        int fvoid(void)
+        {
+           return 1;
+        }
         '''
         ))
 
-        symbols = ['add_integers', 'add_floats', 'return_float', 'max3']
+        symbols = ['add_integers', 'add_floats', 'return_float', 'max3', 'fvoid']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -66,7 +71,7 @@ class TestJitffi(object):
         #res = lib.call('return_float', [1.5, 1.2], 'float')
         #assert 2.7 == res
 
-    def test_get_with_same_type(self):
+    def test_get(self):
         lib = jitffi.CDLL(self.lib_name)
 
         func = lib.get('add_integers', ['int', 'int'], 'int')
@@ -84,8 +89,12 @@ class TestJitffi(object):
 
     def test_get_void(self):
         lib = jitffi.CDLL(self.lib_name)
+
         py.test.raises(ValueError, lib.get,
                        'add_integers', ['void', 'int'], 'int')
+
+        func = lib.get('fvoid', ['void'], 'int')
+        assert 1 == func('void')
 
     def test_undefined_func(self):
         lib = jitffi.CDLL(self.lib_name)

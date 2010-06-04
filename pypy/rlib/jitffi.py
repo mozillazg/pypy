@@ -117,7 +117,7 @@ class _Get(object):
             elif arg == 'ref':
                 args.append(lltype.Signed)
             elif arg == 'void':
-                args.append(None)
+                break
             else:
                 raise ValueError(arg)
 
@@ -135,7 +135,7 @@ class _Get(object):
             elif tp == 'ref':
                 bargs.append(BoxPtr(value))
             elif tp == 'void':
-                assert False #XXX
+                break
         inputargs = [self.bfuncaddr] + bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
