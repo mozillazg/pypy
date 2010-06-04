@@ -37,10 +37,17 @@ class TestJitffi(object):
         {
            return 1;
         }
+
+        void return_void(int a, int b)
+        {
+            int c;
+            c = a + b;
+        }
         '''
         ))
 
-        symbols = ['add_integers', 'add_floats', 'return_float', 'max3', 'fvoid']
+        symbols = ['add_integers', 'add_floats', 'return_float',
+                   'max3', 'fvoid', 'return_void']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -95,6 +102,9 @@ class TestJitffi(object):
 
         func = lib.get('fvoid', ['void'], 'int')
         assert 1 == func('void')
+
+        func = lib.get('return_void', ['int', 'int'], 'void')
+        assert func(1, 2) is None
 
     def test_undefined_func(self):
         lib = jitffi.CDLL(self.lib_name)
