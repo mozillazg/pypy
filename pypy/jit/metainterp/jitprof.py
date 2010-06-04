@@ -34,7 +34,7 @@ def _setup():
     ncounters = len(names)
 _setup()
 
-JITPROF_LINES = ncounters + 1 + 5 # one for TOTAL, 5 for calls, update if needed
+JITPROF_LINES = ncounters + 1 + 4 # one for TOTAL, 4 for calls, update if needed
 
 class BaseProfiler(object):
     pass
