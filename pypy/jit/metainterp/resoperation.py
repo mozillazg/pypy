@@ -138,7 +138,6 @@ _oplist = [
     #'OOSEND_PURE',    # ootype operation
     'CALL_PURE',
     #
-    'CAST_PTR_TO_INT/1',
     'INT_ADD/2',
     'INT_SUB/2',
     'INT_MUL/2',

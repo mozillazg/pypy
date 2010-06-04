@@ -15,6 +15,7 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import llimpl, symbolic
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
+from pypy.jit.codewriter import heaptracker
 from pypy.rlib import rgc
 
 class MiniStats:
@@ -254,7 +255,7 @@ class BaseCPU(model.AbstractCPU):
 
     def get_latest_force_token(self):
         token = llimpl.get_frame_forced_token(self.latest_frame)
-        return llmemory.cast_adr_to_int(token)
+        return heaptracker.adr2int(token)
 
     def clear_latest_values(self, count):
         llimpl.frame_clear_latest_values(self.latest_frame, count)
@@ -357,7 +358,7 @@ class LLtypeCPU(BaseCPU):
         struct = lltype.cast_opaque_ptr(rclass.OBJECTPTR, struct)
         result = struct.typeptr
         result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
-        return llmemory.cast_adr_to_int(result_adr)
+        return heaptracker.adr2int(result_adr)
 
     def bh_new_array(self, arraydescr, length):
         assert isinstance(arraydescr, Descr)
@@ -436,9 +437,6 @@ class LLtypeCPU(BaseCPU):
         if args_f is not None:
             for x in args_f:
                 llimpl.do_call_pushfloat(x)
-
-    def bh_cast_ptr_to_int(self, ptr):
-        return llimpl.cast_to_int(ptr)
 
     def force(self, force_token):
         token = llmemory.cast_int_to_adr(force_token)

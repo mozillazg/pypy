@@ -2,6 +2,16 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 
 
+def adr2int(addr):
+    # Cast an address to an int.  Returns an AddressAsInt object which
+    # can be cast back to an address.
+    return llmemory.cast_adr_to_int(addr, "symbolic")
+
+def int2adr(int):
+    return llmemory.cast_int_to_adr(int)
+
+# ____________________________________________________________
+
 def has_gcstruct_a_vtable(GCSTRUCT):
     if not isinstance(GCSTRUCT, lltype.GcStruct):
         return False
@@ -69,7 +79,7 @@ def finish_registering(cpu):
 
 def vtable2descr(cpu, vtable):
     assert lltype.typeOf(vtable) is lltype.Signed
-    vtable = llmemory.cast_int_to_adr(vtable)
+    vtable = int2adr(vtable)
     if we_are_translated():
         # Build the dict {vtable: sizedescr} at runtime.
         # This is necessary because the 'vtables' are just pointers to
@@ -94,5 +104,4 @@ def descr2vtable(cpu, descr):
     assert isinstance(descr, history.AbstractDescr)
     vtable = descr.as_vtable_size_descr()._corresponding_vtable
     vtable = llmemory.cast_ptr_to_adr(vtable)
-    vtable = llmemory.cast_adr_to_int(vtable)
-    return vtable
+    return adr2int(vtable)

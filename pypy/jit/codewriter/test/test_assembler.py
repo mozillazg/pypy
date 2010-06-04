@@ -3,6 +3,7 @@ from pypy.jit.codewriter.assembler import Assembler
 from pypy.jit.codewriter.flatten import SSARepr, Label, TLabel, Register
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.jitcode import MissingLiveness
+from pypy.jit.codewriter import heaptracker
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory
@@ -83,7 +84,7 @@ def test_assemble_cast_consts():
     assert assembler.insns == {'int_return/c': 0,
                                'int_return/i': 1,
                                'ref_return/r': 2}
-    f_int = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(f))
+    f_int = heaptracker.adr2int(llmemory.cast_ptr_to_adr(f))
     assert jitcode.constants_i == [0x1234, f_int]
     s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
     assert jitcode.constants_r == [s_gcref]

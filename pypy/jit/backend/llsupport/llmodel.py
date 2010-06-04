@@ -7,6 +7,7 @@ from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, set_future_values,\
      BoxFloat
 from pypy.jit.metainterp import history
+from pypy.jit.codewriter import heaptracker
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
@@ -18,7 +19,6 @@ from pypy.jit.backend.llsupport.descr import BaseIntCallDescr, GcPtrCallDescr
 from pypy.jit.backend.llsupport.descr import FloatCallDescr, VoidCallDescr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 
-empty_int_box = BoxInt(0)
 
 class AbstractLLCPU(AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
@@ -118,11 +118,11 @@ class AbstractLLCPU(AbstractCPU):
 
         def pos_exception():
             addr = llop.get_exception_addr(llmemory.Address)
-            return llmemory.cast_adr_to_int(addr)
+            return heaptracker.adr2int(addr)
 
         def pos_exc_value():
             addr = llop.get_exc_value_addr(llmemory.Address)
-            return llmemory.cast_adr_to_int(addr)
+            return heaptracker.adr2int(addr)
 
         def save_exception():
             addr = llop.get_exception_addr(llmemory.Address)
@@ -422,7 +422,7 @@ class AbstractLLCPU(AbstractCPU):
         struct = lltype.cast_opaque_ptr(rclass.OBJECTPTR, struct)
         result = struct.typeptr
         result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
-        return llmemory.cast_adr_to_int(result_adr)
+        return heaptracker.adr2int(result_adr)
 
     def bh_new_array(self, arraydescr, length):
         return self.gc_ll_descr.gc_malloc_array(arraydescr, length)
@@ -464,6 +464,3 @@ class AbstractLLCPU(AbstractCPU):
         if not we_are_translated():
             calldescr.verify_types(args_i, args_r, args_f, history.VOID)
         return calldescr.call_stub(func, args_i, args_r, args_f)
-
-    def bh_cast_ptr_to_int(self, ptr):
-        return self.cast_gcref_to_int(ptr)

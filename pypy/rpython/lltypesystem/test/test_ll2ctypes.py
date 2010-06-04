@@ -1208,9 +1208,9 @@ class TestLL2Ctypes(object):
         S = lltype.Struct('S')
         p = lltype.malloc(S, flavor='raw')
         a = llmemory.cast_ptr_to_adr(p)
-        i = rffi.get_real_int(llmemory.cast_adr_to_int(a))
+        i = llmemory.cast_adr_to_int(a, "forced")
         assert type(i) is int
-        assert i == rffi.get_real_int(llmemory.cast_adr_to_int(a))
+        assert i == llmemory.cast_adr_to_int(a, "forced")
         lltype.free(p, flavor='raw')
 
 class TestPlatform(object):

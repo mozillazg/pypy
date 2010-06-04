@@ -1,6 +1,7 @@
 from pypy.rpython.rmodel import inputconst, log
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass
 from pypy.jit.metainterp import history
+from pypy.jit.codewriter import heaptracker
 
 
 class VirtualRefInfo:
@@ -20,7 +21,7 @@ class VirtualRefInfo:
             'jit_virtual_ref')
         # build some constants
         adr = llmemory.cast_ptr_to_adr(self.jit_virtual_ref_vtable)
-        adr = llmemory.cast_adr_to_int(adr)
+        adr = heaptracker.adr2int(adr)
         self.jit_virtual_ref_const_class = history.ConstInt(adr)
         fielddescrof = self.cpu.fielddescrof
         self.descr_virtual_token = fielddescrof(self.JIT_VIRTUAL_REF,

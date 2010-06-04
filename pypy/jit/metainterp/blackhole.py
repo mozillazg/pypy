@@ -734,7 +734,7 @@ class BlackholeInterpreter(object):
 
     @arguments("self", "i", "L", "pc", returns="L")
     def bhimpl_goto_if_exception_mismatch(self, vtable, target, pc):
-        adr = llmemory.cast_int_to_adr(vtable)
+        adr = heaptracker.int2adr(vtable)
         bounding_class = llmemory.cast_adr_to_ptr(adr, rclass.CLASSTYPE)
         real_instance = self.exception_last_value
         assert real_instance
@@ -748,7 +748,7 @@ class BlackholeInterpreter(object):
         real_instance = self.exception_last_value
         assert real_instance
         adr = llmemory.cast_ptr_to_adr(real_instance.typeptr)
-        return llmemory.cast_adr_to_int(adr)
+        return heaptracker.adr2int(adr)
 
     @arguments("self", returns="r")
     def bhimpl_last_exc_value(self):
@@ -807,7 +807,7 @@ class BlackholeInterpreter(object):
     def get_portal_runner(self):
         metainterp_sd = self.builder.metainterp_sd
         fnptr = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
-        fnptr = llmemory.cast_adr_to_int(fnptr)
+        fnptr = heaptracker.adr2int(fnptr)
         calldescr = metainterp_sd.portal_code.calldescr
         return fnptr, calldescr
 
@@ -1119,10 +1119,6 @@ class BlackholeInterpreter(object):
     @arguments("cpu", "r", returns="i")
     def bhimpl_guard_class(cpu, struct):
         return cpu.bh_classof(struct)
-
-    @arguments("cpu", "r", returns="i")
-    def bhimpl_cast_ptr_to_int(cpu, p):
-        return cpu.bh_cast_ptr_to_int(p)
 
     @arguments("cpu", "i", returns="r")
     def bhimpl_newstr(cpu, length):

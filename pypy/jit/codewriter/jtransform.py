@@ -675,7 +675,8 @@ class Transformer(object):
 
     def rewrite_op_cast_ptr_to_int(self, op):
         if self._is_gc(op.args[0]):
-            return op
+            #return op
+            raise NotImplementedError("cast_ptr_to_int")
 
     # ----------
     # Renames, from the _old opname to the _new one.

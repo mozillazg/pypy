@@ -7,6 +7,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt,\
      TreeLoop
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.executor import execute
+from pypy.jit.codewriter import heaptracker
 from pypy.jit.backend.test.runner_test import LLtypeBackendTest
 
 class TestLLTypeLLGraph(LLtypeBackendTest):
@@ -24,12 +25,12 @@ def test_cast_adr_to_int_and_back():
     x = lltype.malloc(X, immortal=True)
     x.foo = 42
     a = llmemory.cast_ptr_to_adr(x)
-    i = llmemory.cast_adr_to_int(a)
+    i = heaptracker.adr2int(a)
     assert lltype.typeOf(i) is lltype.Signed
-    a2 = llmemory.cast_int_to_adr(i)
+    a2 = heaptracker.int2adr(i)
     assert llmemory.cast_adr_to_ptr(a2, lltype.Ptr(X)) == x
-    assert llmemory.cast_adr_to_int(llmemory.NULL) == 0
-    assert llmemory.cast_int_to_adr(0) == llmemory.NULL
+    assert heaptracker.adr2int(llmemory.NULL) == 0
+    assert heaptracker.int2adr(0) == llmemory.NULL
 
 ## these tests never worked
 ## class TestOOTypeLLGraph(LLGraphTest):

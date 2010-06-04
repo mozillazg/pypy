@@ -424,7 +424,7 @@ def test_malloc_new_with_vtable():
     assert op1.opname == 'new_with_vtable'
     assert op1.args == [('sizedescr', S)]
     #assert heaptracker.descr2vtable(cpu, op1.args[0]) == vtable [type check]
-    vtable_int = llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(vtable))
+    vtable_int = heaptracker.adr2int(llmemory.cast_ptr_to_adr(vtable))
     assert heaptracker.vtable2descr(cpu, vtable_int) == op1.args[0]
 
 def test_malloc_new_with_destructor():
