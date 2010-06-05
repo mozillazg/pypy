@@ -63,28 +63,28 @@ class TestJitffi(object):
         lib = jitffi.CDLL(self.lib_name)
 
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 3 == func(1,2)
+        assert 3 == func.call(1,2)
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 1 == func(-1,2)
+        assert 1 == func.call(-1,2)
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 0 == func(0,0)
+        assert 0 == func.call(0,0)
 
         func = lib.get('max3', ['int', 'int', 'int'], 'int')
-        assert 8 == func(2, 8, 3)
+        assert 8 == func.call(2, 8, 3)
 
         func = lib.get('add_floats', ['float', 'float'], 'float')
-        assert 2.7 == func(1.2, 1.5)
+        assert 2.7 == func.call(1.2, 1.5)
 
     def test_get_void(self):
         lib = jitffi.CDLL(self.lib_name)
 
         func = lib.get('fvoid', [], 'int')
-        assert 1 == func()
+        assert 1 == func.call()
 
         func = lib.get('return_void', ['int', 'int'], 'void')
-        assert func(1, 2) is None
+        assert func.call(1, 2) is None
         func = lib.get('return_void', ['int', 'int'])
-        assert func(1, 2) is None
+        assert func.call(1, 2) is None
 
     def test_undefined_func(self):
         lib = jitffi.CDLL(self.lib_name)
