@@ -1,6 +1,7 @@
 from pypy.rlib import jitffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
+from pypy.rpython.lltypesystem import rffi, lltype
 
 import py
 
@@ -97,11 +98,7 @@ class TestJitffi(object):
     def test_get_void(self):
         lib = jitffi.CDLL(self.lib_name)
 
-        py.test.raises(ValueError, lib.get,
-                       'add_integers', ['void', 'int'], 'int')
-
-        func = lib.get('fvoid', ['void'], 'int')
-        assert 1 == func('void')
+        func = lib.get('fvoid', [], 'int')
         assert 1 == func()
 
         func = lib.get('return_void', ['int', 'int'], 'void')

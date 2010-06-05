@@ -80,13 +80,11 @@ class CDLL(object):
 class _Get(object):
     def __init__(self, cpu, lib, func, args_type, res_type='void'):
         assert isinstance(args_type, list)
-        if 'void' in args_type and len(args_type) > 1:
-            raise ValueError("'void' must be the only parameter")
         self.args_type = args_type
         self.res_type = res_type
         self.cpu = cpu
         self.lib = lib
-        # XXX add 'void' handling
+
         if self.res_type == 'int':
             self.bres = BoxInt()
             res = lltype.Signed
@@ -116,8 +114,6 @@ class _Get(object):
                 args.append(lltype.Float)
             elif arg == 'ref':
                 args.append(lltype.Signed)
-            elif arg == 'void':
-                break
             else:
                 raise ValueError(arg)
 
@@ -134,8 +130,6 @@ class _Get(object):
                 bargs.append(BoxFloat(value))
             elif tp == 'ref':
                 bargs.append(BoxPtr(value))
-            elif tp == 'void':
-                break
         inputargs = [self.bfuncaddr] + bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
