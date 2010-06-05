@@ -59,26 +59,6 @@ class TestJitffi(object):
     def test_missing_lib(self):
         py.test.raises(OSError, jitffi.CDLL, 'xxxfoo888baryyy')
 
-    def test_call(self):
-        lib = jitffi.CDLL(self.lib_name)
-
-        res = lib.call('add_integers', [1, 2], 'int')
-        assert 3 == res
-        assert isinstance(res, int)
-        res = lib.call('add_integers', [-1, 2], 'int')
-        assert 1 == res
-        res = lib.call('add_integers', [0, 0], 'int')
-        assert 0 == res
-
-        res = lib.call('max3', [2, 8, 3], 'int')
-        assert 8 == res
-
-        res = lib.call('return_float', [1, 2], 'float')
-        assert 3.0 == res
-        assert isinstance(res, float)
-        #res = lib.call('return_float', [1.5, 1.2], 'float')
-        #assert 2.7 == res
-
     def test_get(self):
         lib = jitffi.CDLL(self.lib_name)
 
