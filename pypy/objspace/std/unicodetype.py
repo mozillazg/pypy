@@ -201,11 +201,11 @@ def encode_object(space, w_object, encoding, errors):
             except UnicodeEncodeError, uee:
                 raise OperationError(space.w_UnicodeEncodeError,
                                      space.newtuple([
-                                         space.wrap(uee.args[0]),
-                                         space.wrap(uee.args[1]),
-                                         space.wrap(uee.args[2]),
-                                         space.wrap(uee.args[3]),
-                                         space.wrap(uee.args[4])]))
+                                         space.wrap(uee.encoding),
+                                         space.wrap(uee.object),
+                                         space.wrap(uee.start),
+                                         space.wrap(uee.end),
+                                         space.wrap(uee.reason)]))
         from pypy.module._codecs.interp_codecs import lookup_codec
         w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
     if errors is None:
@@ -234,9 +234,9 @@ def decode_object(space, w_obj, encoding, errors):
                 return space.wrap(str_decode_utf_8(s, len(s), None)[0])
         except UnicodeDecodeError, ude:
             raise OperationError(space.w_UnicodeDecodeError, space.newtuple(
-                [space.wrap(ude.args[0]), space.wrap(ude.args[1]),
-                 space.wrap(ude.args[2]), space.wrap(ude.args[3]),
-                 space.wrap(ude.args[4])]))
+                [space.wrap(ude.encoding), space.wrap(ude.object),
+                 space.wrap(ude.start), space.wrap(ude.end),
+                 space.wrap(ude.reason)]))
     w_codecs = space.getbuiltinmodule("_codecs")
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
