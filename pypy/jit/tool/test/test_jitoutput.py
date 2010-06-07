@@ -41,8 +41,6 @@ def test_really_run():
     assert info.recorded_ops.calls == 0
     assert info.recorded_ops.pure_calls == 0
     assert info.guards == 1
-    assert info.blackholed_ops.total == 0
-    assert info.blackholed_ops.pure_calls == 0
     assert info.opt_ops == 6
     assert info.opt_guards == 1
     assert info.forcings == 0
