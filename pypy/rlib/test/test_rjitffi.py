@@ -1,4 +1,4 @@
-from pypy.rlib import jitffi
+from pypy.rlib import rjitffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 from pypy.rpython.lltypesystem import rffi, lltype
@@ -57,10 +57,10 @@ class TestJitffi(object):
         cls.lib_name = cls.preprare_c_example()
 
     def test_missing_lib(self):
-        py.test.raises(OSError, jitffi.CDLL, 'xxxfoo888baryyy')
+        py.test.raises(OSError, rjitffi.CDLL, 'xxxfoo888baryyy')
 
     def test_get(self):
-        lib = jitffi.CDLL(self.lib_name)
+        lib = rjitffi.CDLL(self.lib_name)
 
         func = lib.get('add_integers', ['int', 'int'], 'int')
         assert 3 == func.call(1,2)
@@ -76,7 +76,7 @@ class TestJitffi(object):
         assert 2.7 == func.call(1.2, 1.5)
 
     def test_get_void(self):
-        lib = jitffi.CDLL(self.lib_name)
+        lib = rjitffi.CDLL(self.lib_name)
 
         func = lib.get('fvoid', [], 'int')
         assert 1 == func.call()
@@ -87,7 +87,7 @@ class TestJitffi(object):
         assert func.call(1, 2) is None
 
     def test_undefined_func(self):
-        lib = jitffi.CDLL(self.lib_name)
+        lib = rjitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not existed function
         py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
         py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')
