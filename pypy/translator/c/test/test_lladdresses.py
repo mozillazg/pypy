@@ -198,7 +198,7 @@ def test_cast_int_to_adr():
     S = lltype.Struct("S", ("x", lltype.Signed))
     s = lltype.malloc(S, immortal=True)
     s.x = 42
-    integer = cast_adr_to_int(cast_ptr_to_adr(s))
+    integer = cast_adr_to_int(cast_ptr_to_adr(s), mode="symbolic")
     def f(n):
         if n > 1:
             i = integer
