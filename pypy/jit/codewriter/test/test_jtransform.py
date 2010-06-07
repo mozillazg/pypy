@@ -429,7 +429,7 @@ def test_malloc_new_with_vtable():
 
 def test_malloc_new_with_destructor():
     vtable = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
-    S = lltype.GcStruct('S', ('parent', rclass.OBJECT))
+    S = lltype.GcStruct('S', ('parent', rclass.OBJECT), rtti=True)
     DESTRUCTOR = lltype.FuncType([lltype.Ptr(S)], lltype.Void)
     destructor = lltype.functionptr(DESTRUCTOR, 'destructor')
     lltype.attachRuntimeTypeInfo(S, destrptr=destructor)
