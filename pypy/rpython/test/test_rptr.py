@@ -36,8 +36,7 @@ def test_cast_pointer():
     assert s.ll_ptrtype == PS2
 
 def test_runtime_type_info():
-    S = GcStruct('s', ('x', Signed))
-    attachRuntimeTypeInfo(S)
+    S = GcStruct('s', ('x', Signed), rtti=True)
     def ll_example(p):
         return (runtime_type_info(p),
                 runtime_type_info(p) == getRuntimeTypeInfo(S))

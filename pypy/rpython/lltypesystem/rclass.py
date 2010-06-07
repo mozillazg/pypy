@@ -13,7 +13,7 @@ from pypy.rpython.lltypesystem.lltype import \
      Ptr, Struct, GcStruct, malloc, \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
-     Array, Char, Void, attachRuntimeTypeInfo, \
+     Array, Char, Void, \
      FuncType, Bool, Signed, functionptr, FuncType, PyObject
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
@@ -60,7 +60,8 @@ OBJECT_VTABLE = lltype.ForwardReference()
 CLASSTYPE = Ptr(OBJECT_VTABLE)
 OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
                   hints = {'immutable': True, 'shouldntbenull': True,
-                           'typeptr': True})
+                           'typeptr': True},
+                  rtti = True)
 OBJECTPTR = Ptr(OBJECT)
 OBJECT_VTABLE.become(Struct('object_vtable',
                             #('parenttypeptr', CLASSTYPE),
@@ -348,18 +349,20 @@ class InstanceRepr(AbstractInstanceRepr):
             if hints is None:
                 hints = {}
             hints = self._check_for_immutable_hints(hints)
+            kwds = {}
+            if self.gcflavor == 'gc':
+                kwds['rtti'] = True
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    hints=hints,
                                    adtmeths=adtmeths,
-                                   *llfields)
+                                   *llfields,
+                                   **kwds)
             self.object_type.become(object_type)
             allinstancefields.update(self.rbase.allinstancefields)
         allinstancefields.update(fields)
         self.fields = fields
         self.allinstancefields = allinstancefields
-        if self.gcflavor == 'gc':
-            attachRuntimeTypeInfo(self.object_type)
 
     def _setup_repr_final(self):
         AbstractInstanceRepr._setup_repr_final(self)
