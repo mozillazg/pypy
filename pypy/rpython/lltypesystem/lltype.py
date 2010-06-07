@@ -64,29 +64,16 @@ class frozendict(dict):
 
 
 class LowLevelType(object):
+    # the following line prevents '__cached_hash' to be in the __dict__ of
+    # the instance, which is needed for __eq__() and __hash__() to work.
+    __slots__ = ['__dict__', '__cached_hash']
 
     def __eq__(self, other):
-        if self.__class__ is not other.__class__:
-            return False
-        if self is other:
-            return True
-        items1 = self._get_dict_as_list()
-        items2 = other._get_dict_as_list()
-        if len(items1) != len(items2):
-            return False
-        for (k1, v1), (k2, v2) in zip(items1, items2):
-            if k1 != k2 or not safe_equal(v1, v2):
-                return False
-        return True
+        return self.__class__ is other.__class__ and (
+            self is other or safe_equal(self.__dict__, other.__dict__))
 
     def __ne__(self, other):
         return not (self == other)
-
-    def _get_dict_as_list(self):
-        result = [(key, value) for (key, value) in self.__dict__.items()
-                               if not key.startswith('_HIDDEN_')]
-        result.sort()
-        return result
 
     _is_compatible = __eq__
 
@@ -97,26 +84,27 @@ class LowLevelType(object):
 
     def __hash__(self):
         # cannot use saferecursive() -- see test_lltype.test_hash().
-        # NB. the _cached_hash should neither be used nor updated
+        # NB. the __cached_hash should neither be used nor updated
         # if we enter with hash_level > 0, because the computed
         # __hash__ can be different in this situation.
         hash_level = 0
         try:
             hash_level = TLS.nested_hash_level
             if hash_level == 0:
-                return self._HIDDEN_cached_hash
+                return self.__cached_hash
         except AttributeError:
             pass
         if hash_level >= 3:
             return 0
-        items = self._get_dict_as_list()
+        items = self.__dict__.items()
+        items.sort()
         TLS.nested_hash_level = hash_level + 1
         try:
             result = hash((self.__class__,) + tuple(items))
         finally:
             TLS.nested_hash_level = hash_level
         if hash_level == 0:
-            self._HIDDEN_cached_hash = result
+            self.__cached_hash = result
         return result
 
     # due to this dynamic hash value, we should forbid
@@ -295,13 +283,11 @@ class Struct(ContainerType):
         return _struct(self, n, initialization='example')
 
 class RttiStruct(Struct):
-    _HIDDEN_runtime_type_info = None
+    _runtime_type_info = None
 
     def _attach_runtime_type_info_funcptr(self, funcptr, destrptr):
-        if self._HIDDEN_runtime_type_info is None:
-            self._HIDDEN_runtime_type_info = opaqueptr(RuntimeTypeInfo,
-                                                       name=self._name,
-                                                       about=self)._obj
+        if self._runtime_type_info is None:
+            self._runtime_type_info = opaqueptr(RuntimeTypeInfo, name=self._name, about=self)._obj
         if funcptr is not None:
             T = typeOf(funcptr)
             if (not isinstance(T, Ptr) or
@@ -311,7 +297,7 @@ class RttiStruct(Struct):
                 castable(T.TO.ARGS[0], Ptr(self)) < 0):
                 raise TypeError("expected a runtime type info function "
                                 "implementation, got: %s" % funcptr)
-            self._HIDDEN_runtime_type_info.query_funcptr = funcptr
+            self._runtime_type_info.query_funcptr = funcptr
         if destrptr is not None :
             T = typeOf(destrptr)
             if (not isinstance(T, Ptr) or
@@ -321,7 +307,7 @@ class RttiStruct(Struct):
                 castable(T.TO.ARGS[0], Ptr(self)) < 0):
                 raise TypeError("expected a destructor function "
                                 "implementation, got: %s" % destrptr)
-            self._HIDDEN_runtime_type_info.destructor_funcptr = destrptr
+            self._runtime_type_info.destructor_funcptr = destrptr
 
 class GcStruct(RttiStruct):
     _gckind = 'gc'
@@ -1862,15 +1848,15 @@ def attachRuntimeTypeInfo(GCSTRUCT, funcptr=None, destrptr=None):
     if not isinstance(GCSTRUCT, RttiStruct):
         raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
     GCSTRUCT._attach_runtime_type_info_funcptr(funcptr, destrptr)
-    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._HIDDEN_runtime_type_info)
+    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
 
 def getRuntimeTypeInfo(GCSTRUCT):
     if not isinstance(GCSTRUCT, RttiStruct):
         raise TypeError, "expected a RttiStruct: %s" % GCSTRUCT
-    if GCSTRUCT._HIDDEN_runtime_type_info is None:
+    if GCSTRUCT._runtime_type_info is None:
         raise ValueError, ("no attached runtime type info for GcStruct %s" % 
                            GCSTRUCT._name)
-    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._HIDDEN_runtime_type_info)
+    return _ptr(Ptr(RuntimeTypeInfo), GCSTRUCT._runtime_type_info)
 
 def runtime_type_info(p):
     T = typeOf(p)

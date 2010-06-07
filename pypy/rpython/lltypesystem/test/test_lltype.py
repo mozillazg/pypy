@@ -373,13 +373,7 @@ def test_getRuntimeTypeInfo():
     Sbis = GcStruct('s', ('x', Signed))
     attachRuntimeTypeInfo(Sbis)
     assert getRuntimeTypeInfo(Sbis) != pinf0
-    #assert Sbis != S # the attached runtime type info distinguishes them
-    # --- disabled for now, not really useful.  Instead we have the more
-    #     important property:
-    Ster = GcStruct('s', ('x', Signed))
-    h = hash(Ptr(Ster))
-    attachRuntimeTypeInfo(Ster)
-    assert h == hash(Ptr(Ster))
+    assert Sbis != S # the attached runtime type info distinguishes them
 
 def test_getRuntimeTypeInfo_destrpointer():
     S = GcStruct('s', ('x', Signed))
