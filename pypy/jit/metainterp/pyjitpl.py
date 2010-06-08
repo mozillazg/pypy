@@ -1729,7 +1729,7 @@ class MetaInterp(object):
         target_loop_token = compile.compile_new_bridge(self, loop_tokens,
                                                        self.resumekey)
         if target_loop_token is not loop_tokens[0]:
-            raise GiveUp
+            compile.giveup()
 
     def compile_exit_frame_with_exception(self, valuebox):
         self.gen_store_back_in_virtualizable()
@@ -1740,7 +1740,7 @@ class MetaInterp(object):
         target_loop_token = compile.compile_new_bridge(self, loop_tokens,
                                                        self.resumekey)
         if target_loop_token is not loop_tokens[0]:
-            raise GiveUp
+            compile.giveup()
 
     def get_residual_args(self, specnodes, args):
         if specnodes is None:     # it is None only for tests
