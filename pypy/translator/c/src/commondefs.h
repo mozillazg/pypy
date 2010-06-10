@@ -82,7 +82,5 @@
 #define Py_HUGE_VAL HUGE_VAL
 
 #ifdef _WIN32
-#ifndef MS_WINDOWS
 #  define MS_WINDOWS    /* a synonym */
-#endif
 #endif
