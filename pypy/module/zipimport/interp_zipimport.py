@@ -242,7 +242,7 @@ class W_ZipImporter(Wrappable):
                 pass
             else:
                 if is_package:
-                    pkgpath = self.name + os.path.sep + filename
+                    pkgpath = self.name + '/' + filename
                 else:
                     pkgpath = None
                 try:

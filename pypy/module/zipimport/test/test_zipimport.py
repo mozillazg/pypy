@@ -118,18 +118,6 @@ class AppTestZipimport:
         finally:
             del _zip_directory_cache[self.zipfile]
 
-    def test_cache_subdir(self):
-        self.writefile(self, 'x.py', '')
-        self.writefile(self, 'sub/__init__.py', '')
-        self.writefile(self, 'sub/yy.py', '')
-        from zipimport import _zip_directory_cache, zipimporter
-        sub_importer = zipimporter(self.zipfile + '/sub')
-        main_importer = zipimporter(self.zipfile)
-
-        assert main_importer is not sub_importer
-        assert main_importer.prefix == ""
-        assert sub_importer.prefix == "sub\\"
-
     def test_good_bad_arguments(self):
         from zipimport import zipimporter
         import os
@@ -213,7 +201,7 @@ class AppTestZipimport:
         self.writefile(self, "xxuuu/__init__.py", "")
         self.writefile(self, "xxuuu/yy.py", "def f(x): return x")
         mod = __import__("xxuuu", globals(), locals(), ['yy'])
-        assert mod.__path__ == [self.zipfile + os.path.sep + "xxuuu"]
+        assert mod.__path__ == [self.zipfile + "/xxuuu"]
         assert mod.__file__ == (self.zipfile + os.path.sep
                                 + "xxuuu" + os.path.sep
                                 + "__init__.py")
