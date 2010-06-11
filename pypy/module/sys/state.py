@@ -36,19 +36,19 @@ def getinitialpath(srcdir):
     # build the initial path from the srcdir, which is the path of
     # the "dist" directory of a PyPy checkout.
     from pypy.module.sys.version import CPYTHON_VERSION, PYPY_VERSION
+    libdir = os.path.join(srcdir, 'lib')
+    pypyxy_dir = os.path.join(libdir, 'pypy%d.%d' % PYPY_VERSION[:2])
 
     dirname = '%d.%d.%d' % (CPYTHON_VERSION[0],
                             CPYTHON_VERSION[1],
                             CPYTHON_VERSION[2])
-    lib_python = os.path.join(srcdir, 'lib-python')
+    lib_python = os.path.join(pypyxy_dir, 'lib-python')
 
     python_std_lib = os.path.join(lib_python, dirname)
     checkdir(python_std_lib)
     python_std_lib_modified = os.path.join(lib_python, 'modified-' + dirname)
     checkdir(python_std_lib_modified)
     
-    libdir = os.path.join(srcdir, 'lib')
-    pypyxy_dir = os.path.join(libdir, 'pypy%d.%d' % PYPY_VERSION[:2])
     lib_pypy = os.path.join(pypyxy_dir, 'lib_pypy')
     checkdir(lib_pypy)
 

@@ -1,13 +1,19 @@
 import py
 import pypy
-from pypy.module.sys.version import PYPY_VERSION
+import pypy.module
+from pypy.module.sys.version import PYPY_VERSION, CPYTHON_VERSION
 
-def get_lib_pypy_dir():
-    prefix = py.path.local(pypy.__path__[0]).dirpath()
-    pypy_ver = 'pypy%d.%d' % PYPY_VERSION[:2]
-    return prefix.join('lib', pypy_ver, 'lib_pypy')
+prefix = py.path.local(pypy.__path__[0]).dirpath()
+pypy_ver = 'pypy%d.%d' % PYPY_VERSION[:2]
+
+LIB_PYPY = prefix.join('lib', pypy_ver, 'lib_pypy')
+LIB_PYTHON = prefix.join('lib', pypy_ver, 'lib-python')
+LIB_PYTHON_VANILLA = LIB_PYTHON.join('%d.%d.%d' % CPYTHON_VERSION[:3])
+LIB_PYTHON_MODIFIED = LIB_PYTHON.join('modified-%d.%d.%d' % CPYTHON_VERSION[:3])
+
+del prefix
+del pypy_ver
 
 def import_from_lib_pypy(modname):
-    dirname = get_lib_pypy_dir()
-    modname = dirname.join(modname+'.py')
+    modname = LIB_PYPY.join(modname+'.py')
     return modname.pyimport()
