@@ -37,6 +37,7 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
         portal_graph = graphs[0]
         virtualizable_info = None
         result_type = result_kind
+        portal_runner_ptr = "???"
 
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)

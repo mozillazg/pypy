@@ -659,6 +659,7 @@ class MIFrame(object):
     def _opimpl_recursive_call(self, greenboxes, redboxes):
         allboxes = greenboxes + redboxes
         metainterp_sd = self.metainterp.staticdata
+        xxxx
         portal_code = metainterp_sd.portal_code
         warmrunnerstate = metainterp_sd.state
         token = None
@@ -1344,14 +1345,17 @@ class MetaInterp(object):
         in_recursion = -1
         for frame in self.framestack:
             jitcode = frame.jitcode
-            if jitcode is self.staticdata.portal_code:
+            assert jitcode.is_portal == len([
+                jd for jd in self.staticdata.jitdrivers_sd
+                   if jd.mainjitcode is jitcode])
+            if jitcode.is_portal:
                 in_recursion += 1
         if in_recursion != self.in_recursion:
             print "in_recursion problem!!!"
             print in_recursion, self.in_recursion
             for frame in self.framestack:
                 jitcode = frame.jitcode
-                if jitcode is self.staticdata.portal_code:
+                if jitcode.is_portal:
                     print "P",
                 else:
                     print " ",
