@@ -141,10 +141,15 @@ class AddressLoc(AssemblerLocation):
     def value_m(self):
         return self.loc_m
 
-REGLOCS = [RegLoc(i, is_xmm=False) for i in range(8)]
-XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(8)]
-eax, ecx, edx, ebx, esp, ebp, esi, edi = REGLOCS
-xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7 = XMMREGLOCS
+REGLOCS = [RegLoc(i, is_xmm=False) for i in range(16)]
+XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(16)]
+eax, ecx, edx, ebx, esp, ebp, esi, edi, r8, r9, r10, r11, r12, r13, r14, r15 = REGLOCS
+xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = XMMREGLOCS
+
+X86_64_SCRATCH_REG = r11
+# XXX: a GPR scratch register is definitely needed, but we could probably do
+# without an xmm scratch reg.
+X86_64_XMM_SCRATCH_REG = xmm15
 
 unrolling_location_codes = unrolling_iterable(list("rbsmajix"))
 
@@ -159,14 +164,23 @@ class LocationCodeBuilder(object):
                 if code1 == possible_code1:
                     for possible_code2 in unrolling_location_codes:
                         if code2 == possible_code2:
-                            methname = name + "_" + possible_code1 + possible_code2
-                            if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                val1 = getattr(loc1, "value_" + possible_code1)()
-                                val2 = getattr(loc2, "value_" + possible_code2)()
-                                getattr(self, methname)(val1, val2)
-                                return
+                            # FIXME: Not RPython anymore!
+                            # Fake out certain operations for x86_64
+                            val1 = getattr(loc1, "value_" + possible_code1)()
+                            val2 = getattr(loc2, "value_" + possible_code2)()
+                            # XXX: Could use RIP+disp32 in some cases
+                            if self.WORD == 8 and possible_code1 == 'j':
+                                self.MOV_ri(X86_64_SCRATCH_REG.value, val1)
+                                getattr(self, name + "_" + "m" + possible_code2)((X86_64_SCRATCH_REG.value, 0), val2)
+                            elif self.WORD == 8 and possible_code2 == 'j':
+                                self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
+                                getattr(self, name + "_" + possible_code1 + "m")(val1, (X86_64_SCRATCH_REG.value, 0))
+                            elif self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2) and name != 'MOV':
+                                self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
+                                getattr(self, name + "_" + possible_code1 + "r")(val1, X86_64_SCRATCH_REG.value)
                             else:
-                                raise AssertionError("Instruction not defined: " + methname)
+                                methname = name + "_" + possible_code1 + possible_code2
+                                getattr(self, methname)(val1, val2)
 
         return INSN
 
@@ -176,7 +190,8 @@ class LocationCodeBuilder(object):
             for possible_code in unrolling_location_codes:
                 if code == possible_code:
                     methname = name + "_" + possible_code
-                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                    # if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                    if hasattr(self, methname):
                         val = getattr(loc, "value_" + possible_code)()
                         getattr(self, methname)(val)
                         return
@@ -217,9 +232,11 @@ class LocationCodeBuilder(object):
     MOV16 = _16_bit_binaryop('MOV')
     MOVZX8 = _binaryop('MOVZX8')
     MOVZX16 = _binaryop('MOVZX16')
+    MOV32 = _binaryop('MOV32')
+    XCHG = _binaryop('XCHG')
 
-    PUSH = _unaryop("PUSH")
-    POP = _unaryop("POP")
+    PUSH = _unaryop('PUSH')
+    POP = _unaryop('POP')
 
     LEA = _binaryop('LEA')
 
@@ -231,6 +248,9 @@ class LocationCodeBuilder(object):
     UCOMISD = _binaryop('UCOMISD')
     CVTSI2SD = _binaryop('CVTSI2SD')
     CVTTSD2SI = _binaryop('CVTTSD2SI')
+
+    ANDPD = _binaryop('ANDPD')
+    XORPD = _binaryop('XORPD')
 
     CALL = _unaryop('CALL')
 

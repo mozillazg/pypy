@@ -2,13 +2,19 @@
 import os, sys
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder
+from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder, X86_64_CodeBuilder
 from pypy.jit.backend.x86.regloc import LocationCodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 from pypy.rlib.debug import make_sure_not_resized
+from pypy.jit.backend.x86.regalloc import WORD
 
+# XXX: Seems nasty to change the superclass of InMemoryCodeBuilder like this
+if WORD == 4:
+    codebuilder_cls = X86_32_CodeBuilder
+elif WORD == 8:
+    codebuilder_cls = X86_64_CodeBuilder
 
-class InMemoryCodeBuilder(X86_32_CodeBuilder, LocationCodeBuilder):
+class InMemoryCodeBuilder(codebuilder_cls, LocationCodeBuilder):
     _last_dump_start = 0
 
     def __init__(self, start, end):
@@ -53,11 +59,6 @@ class InMemoryCodeBuilder(X86_32_CodeBuilder, LocationCodeBuilder):
         self._pos = pos
         self._last_dump_start = pos
 
-    def execute(self, arg1, arg2):
-        # XXX old testing stuff
-        fnptr = rffi.cast(lltype.Ptr(BINARYFN), self._data)
-        return fnptr(arg1, arg2)
-
     def done(self):
         # normally, no special action is needed here
         if machine_code_dumper.enabled:
@@ -78,9 +79,6 @@ class InMemoryCodeBuilder(X86_32_CodeBuilder, LocationCodeBuilder):
         # mark the range of the InMemoryCodeBuilder as invalidated for Valgrind
         from pypy.jit.backend.x86 import valgrind
         valgrind.discard_translations(self._data, self._size)
-
-
-BINARYFN = lltype.FuncType([lltype.Signed, lltype.Signed], lltype.Signed)
 
 
 class MachineCodeDumper:
@@ -110,7 +108,10 @@ class MachineCodeDumper:
                 return False
             # log the executable name
             from pypy.jit.backend.hlinfo import highleveljitinfo
-            os.write(self.log_fd, 'BACKEND i386\n')
+            if WORD == 4:
+                os.write(self.log_fd, 'BACKEND x86\n')
+            elif WORD == 8:
+                os.write(self.log_fd, 'BACKEND x86_64\n')
             if highleveljitinfo.sys_executable:
                 os.write(self.log_fd, 'SYS_EXECUTABLE %s\n' % (
                     highleveljitinfo.sys_executable,))

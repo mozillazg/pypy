@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
 from pypy.jit.metainterp.history import ResOperation, LoopToken
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
                                          Box, BasicFailDescr)
-from pypy.jit.backend.x86.runner import CPU
+from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.backend.x86.regalloc import WORD
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.resoperation import rop
@@ -11,6 +11,8 @@ from pypy.jit.metainterp.executor import execute
 from pypy.jit.backend.test.runner_test import LLtypeBackendTest
 import ctypes
 import sys
+
+CPU = getcpuclass()
 
 class FakeStats(object):
     pass
@@ -56,7 +58,7 @@ class TestX86(LLtypeBackendTest):
         assert u.chars[3] == u'd'
 
     @staticmethod
-    def _resbuf(res, item_tp=ctypes.c_int):
+    def _resbuf(res, item_tp=ctypes.c_long):
         return ctypes.cast(res.value._obj.intval, ctypes.POINTER(item_tp))
 
     def test_allocations(self):

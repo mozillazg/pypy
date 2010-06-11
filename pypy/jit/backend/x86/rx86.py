@@ -32,10 +32,13 @@ class R(object):
     xmmnames = ['xmm%d' % i for i in range(16)]
 
 def low_byte(reg):
-    assert 0 <= reg < 4
+    # XXX: On 32-bit, this only works for 0 <= reg < 4
+    # Maybe we should check this?
     return reg | BYTE_REG_FLAG
 
 def high_byte(reg):
+    # This probably shouldn't be called in 64-bit mode, since to use the
+    # high-byte registers you have to make sure that there is no REX-prefix
     assert 0 <= reg < 4
     return (reg + 4) | BYTE_REG_FLAG
 
@@ -83,13 +86,18 @@ def register(argnum, factor=1):
     return encode_register, argnum, factor, rex_register
 
 @specialize.arg(2)
+def rex_byte_register(mc, reg, factor):
+    assert reg & BYTE_REG_FLAG
+    return rex_register(mc, reg & ~BYTE_REG_FLAG, factor)
+
+@specialize.arg(2)
 def encode_byte_register(mc, reg, factor, orbyte):
     assert reg & BYTE_REG_FLAG
     return encode_register(mc, reg & ~BYTE_REG_FLAG, factor, orbyte)
 
 def byte_register(argnum, factor=1):
     assert factor in (1, 8)
-    return encode_byte_register, argnum, factor, rex_register
+    return encode_byte_register, argnum, factor, rex_byte_register
 
 
 # ____________________________________________________________
@@ -310,6 +318,7 @@ def insn(*encoding):
                 arg = args[arg]
             orbyte = encode_step(mc, arg, extra, orbyte)
         assert orbyte == 0
+
     #
     encoding_steps = []
     for step in encoding:
@@ -431,25 +440,28 @@ class AbstractX86CodeBuilder(object):
                                  mem_reg_plus_scaled_reg_plus_const(1))
     MOV_ai = insn(rex_w, '\xC7', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2))
 
-    # "MOV reg1, [immediate2]" and the opposite direction
-    MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
-    MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
-    MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
 
     MOV8_mr = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_const(1))
     MOV8_ar = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_scaled_reg_plus_const(1))
     MOV8_mi = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
     MOV8_ai = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2, 'b'))
-    MOV8_ji = insn(rex_w, '\xC6', orbyte(0<<3), '\x05', immediate(1), immediate(2, 'b'))
-    MOV8_jr = insn(rex_w, '\x88', byte_register(2, 8), '\x05', immediate(1))
 
     MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2), '\xC0')
     MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
     MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
-    MOVZX8_rj = insn(rex_w, '\x0F\xB6', register(1,8), '\x05', immediate(2))
 
     MOVZX16_rm = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_const(2))
     MOVZX16_ra = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
+
+    # FIXME: Only difference between MOV32 and MOV instructions is rex_nw instead of rex_w
+    MOV32_ra = insn(rex_nw, '\x8B', register(1,8),
+                                   mem_reg_plus_scaled_reg_plus_const(2))
+    MOV32_ar = insn(rex_nw, '\x89', register(2,8),
+                                   mem_reg_plus_scaled_reg_plus_const(1))
+    MOV32_rm = insn(rex_nw, '\x8B', register(1,8), mem_reg_plus_const(2))
+    MOV32_mr = insn(rex_nw, '\x89', register(2,8), mem_reg_plus_const(1))
+    MOV32_mi = insn(rex_nw, '\xC7', orbyte(0<<3), mem_reg_plus_const(1),
+                                                immediate(2, 'i'))
 
     # ------------------------------ Arithmetic ------------------------------
 
@@ -464,11 +476,7 @@ class AbstractX86CodeBuilder(object):
     CMP_mi32 = insn(rex_w, '\x81', orbyte(7<<3), mem_reg_plus_const(1), immediate(2))
     CMP_mi = select_8_or_32_bit_immed(CMP_mi8, CMP_mi32)
 
-    CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
-    CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
-    CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
-
-    CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
+    CMP_rm = insn(rex_w, '\x3B', register(1, 8), mem_reg_plus_const(2))
 
     AND8_rr = insn(rex_w, '\x20', byte_register(1), byte_register(2,8), '\xC0')
 
@@ -515,12 +523,9 @@ class AbstractX86CodeBuilder(object):
     CALL_l = insn('\xE8', relative(1))
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
-    # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
-    # displacement is always enough to encode any address
-    CALL_j = CALL_l
 
     XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
-    XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
+    XCHG_rr = insn(rex_w, '\x87', register(1), register(2,8), '\xC0')
 
     JMP_l = insn('\xE9', relative(1))
     # FIXME: J_il8 and JMP_l8 assume the caller will do the appropriate
@@ -530,7 +535,7 @@ class AbstractX86CodeBuilder(object):
     J_il8 = insn(immediate(1, 'o'), '\x70', immediate(2, 'b'))
     J_il = insn('\x0F', immediate(1,'o'), '\x80', relative(2))
 
-    SET_ir = insn('\x0F', immediate(1,'o'),'\x90', byte_register(2), '\xC0')
+    SET_ir = insn(rex_w, '\x0F', immediate(1,'o'),'\x90', byte_register(2), '\xC0')
 
     # The 64-bit version of this, CQO, is defined in X86_64_CodeBuilder
     CDQ = insn(rex_nw, '\x99')
@@ -556,30 +561,28 @@ class AbstractX86CodeBuilder(object):
                                                      mem_reg_plus_const(1))
     MOVSD_ax = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), mem_reg_plus_scaled_reg_plus_const(1))
 
-    MOVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
-    MOVSD_jx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
 
     # Arithmetic
     ADDSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), register(2), '\xC0')
     ADDSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), stack_bp(2))
-    ADDSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
+    ADDSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), mem_reg_plus_const(2))
 
     SUBSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), register(2), '\xC0')
     SUBSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), stack_bp(2))
-    SUBSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
+    SUBSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), mem_reg_plus_const(2))
 
     MULSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), register(2), '\xC0')
     MULSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), stack_bp(2))
-    MULSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
+    MULSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), mem_reg_plus_const(2))
 
     DIVSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), register(2), '\xC0')
     DIVSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), stack_bp(2))
-    DIVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
+    DIVSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), mem_reg_plus_const(2))
 
     # Comparision
     UCOMISD_xx = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), register(2), '\xC0')
     UCOMISD_xb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
-    UCOMISD_xj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
+    UCOMISD_xm = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), mem_reg_plus_const(2))
 
     # Conversion
     CVTSI2SD_xr = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), register(2), '\xC0')
@@ -589,10 +592,11 @@ class AbstractX86CodeBuilder(object):
     CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
 
     # Bitwise
-    ANDPD_xj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
 
     XORPD_xx = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), register(2), '\xC0')
-    XORPD_xj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
+    XORPD_xm = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), mem_reg_plus_const(2))
+
+    ANDPD_xm = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), mem_reg_plus_const(2))
 
     # ------------------------------------------------------------
 
@@ -618,6 +622,35 @@ Conditions = {
 
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
+
+    # We can do direct memory references on 32-bit
+    MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
+    MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
+    MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
+    MOV8_ji = insn(rex_w, '\xC6', orbyte(0<<3), '\x05', immediate(1), immediate(2, 'b'))
+    MOV8_jr = insn(rex_w, '\x88', byte_register(2, 8), '\x05', immediate(1))
+    MOVZX8_rj = insn(rex_w, '\x0F\xB6', register(1,8), '\x05', immediate(2))
+
+    CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
+    CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
+    CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
+    CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
+
+    # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
+    # displacement is always enough to encode any address
+    CALL_j = AbstractX86CodeBuilder.CALL_l
+
+    XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
+
+    MOVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
+    MOVSD_jx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
+    ADDSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
+    SUBSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
+    MULSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
+    DIVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
+    UCOMISD_xj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
+    ANDPD_xj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
+    XORPD_xj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
 
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
@@ -655,8 +688,18 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
             AbstractX86CodeBuilder.MOV_ri(self, R.eax, target)
             AbstractX86CodeBuilder.CALL_r(self, R.eax)
 
+    # XXX
+    CALL_j = CALL_l
+
 # ____________________________________________________________
 
-all_instructions = [name for name in AbstractX86CodeBuilder.__dict__
-                    if name.split('_')[0].isupper()]
+# FIXME: What about 32-bit only or 64-bit only instructions?
+# This is used to build the MachineCodeBlockWrapper. Missing
+# some instructions could possibly lead to subtle bugs.
+
+# FIXME: hack hack hack
+all_instructions = ([name for name in AbstractX86CodeBuilder.__dict__
+                     if name.split('_')[0].isupper()] +
+                    [name for name in X86_64_CodeBuilder.__dict__
+                     if name.split('_')[0].isupper()])
 all_instructions.sort()
