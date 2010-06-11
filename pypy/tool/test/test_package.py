@@ -2,6 +2,7 @@
 import py
 from pypy.tool.autopath import pypydir
 from pypy.tool.package import main
+from pypy.module.sys.version import PYPY_VERSION, CPYTHON_VERSION
 import tarfile, os
 
 def test_dir_structure():
@@ -14,15 +15,18 @@ def test_dir_structure():
         fake_pypy_c = False
     try:
         builddir = main(py.path.local(pypydir).dirpath(), 'test')
-        assert builddir.join('test', 'lib-python', '2.5.2', 'test').check()
-        assert builddir.join('test', 'bin', 'pypy-c').check()
-        assert builddir.join('test', 'pypy', 'lib', 'syslog.py').check()
-        assert not builddir.join('test', 'pypy', 'lib', 'py').check()
-        assert not builddir.join('test', 'pypy', 'lib', 'ctypes_configure').check()
-        assert builddir.join('test', 'LICENSE').check()
-        assert builddir.join('test', 'README').check()
+        prefix = builddir.join('test')
+        pypyxy = 'pypy%d.%d' % PYPY_VERSION[:2]
+        cpyver = '%d.%d.%d' % CPYTHON_VERSION[:3]
+        assert prefix.join('lib', pypyxy, 'lib-python', cpyver, 'test').check()
+        assert prefix.join('bin', 'pypy-c').check()
+        assert prefix.join('lib', pypyxy, 'lib_pypy', 'syslog.py').check()
+        assert not prefix.join('lib', pypyxy, 'lib_pypy', 'py').check()
+        assert not prefix.join('lib', pypyxy, 'lib_pypy', 'ctypes_configure').check()
+        assert prefix.join('LICENSE').check()
+        assert prefix.join('README').check()
         th = tarfile.open(str(builddir.join('test.tar.bz2')))
-        assert th.getmember('test/pypy/lib/syslog.py')
+        assert th.getmember('test/lib/%s/lib_pypy/syslog.py' % pypyxy)
     finally:
         if fake_pypy_c:
             pypy_c.remove()
