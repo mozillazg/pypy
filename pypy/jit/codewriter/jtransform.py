@@ -13,12 +13,12 @@ from pypy.rlib.jit import _we_are_jitted
 from pypy.translator.simplify import get_funcobj
 
 
-def transform_graph(graph, cpu=None, callcontrol=None, portal=True):
+def transform_graph(graph, cpu=None, callcontrol=None):
     """Transform a control flow graph to make it suitable for
     being flattened in a JitCode.
     """
     t = Transformer(cpu, callcontrol)
-    t.transform(graph, portal)
+    t.transform(graph)
 
 
 class Transformer(object):
@@ -27,9 +27,8 @@ class Transformer(object):
         self.cpu = cpu
         self.callcontrol = callcontrol
 
-    def transform(self, graph, portal):
+    def transform(self, graph):
         self.graph = graph
-        self.portal = portal
         for block in list(graph.iterblocks()):
             self.optimize_block(block)
 
@@ -317,10 +316,12 @@ class Transformer(object):
         return op1
 
     def handle_recursive_call(self, op):
-        ops = self.promote_greens(op.args[1:])
-        targetgraph = self.callcontrol.portal_graph
-        num_green_args = len(self.callcontrol.getjitdriver().greens)
-        args = (self.make_three_lists(op.args[1:1+num_green_args]) +
+        jitdriver_sd = self.callcontrol.jitdriver_sd_from_portal_runner_ptr(
+            op.args[0])
+        ops = self.promote_greens(op.args[1:], jitdriver_sd.jitdriver)
+        num_green_args = len(jitdriver_sd.jitdriver.greens)
+        args = ([Constant(jitdriver_sd.index, lltype.Signed)] +
+                self.make_three_lists(op.args[1:1+num_green_args]) +
                 self.make_three_lists(op.args[1+num_green_args:]))
         kind = getkind(op.result.concretetype)[0]
         op0 = SpaceOperation('recursive_call_%s' % kind, args, op.result)
@@ -475,14 +476,14 @@ class Transformer(object):
         # check for virtualizable
         try:
             if self.is_virtualizable_getset(op):
-                descr = self.get_virtualizable_field_descr(op.args[1].value)
+                descr = self.get_virtualizable_field_descr(op)
                 kind = getkind(RESULT)[0]
                 return [SpaceOperation('-live-', [], None),
                         SpaceOperation('getfield_vable_%s' % kind,
                                        [v_inst, descr], op.result)]
-        except VirtualizableArrayField:
+        except VirtualizableArrayField, e:
             # xxx hack hack hack
-            vinfo = self.callcontrol.virtualizable_info
+            vinfo = e.args[1]
             arrayindex = vinfo.array_field_counter[op.args[1].value]
             arrayfielddescr = vinfo.array_field_descrs[arrayindex]
             arraydescr = vinfo.array_descrs[arrayindex]
@@ -519,7 +520,7 @@ class Transformer(object):
             return
         # check for virtualizable
         if self.is_virtualizable_getset(op):
-            descr = self.get_virtualizable_field_descr(op.args[1].value)
+            descr = self.get_virtualizable_field_descr(op)
             kind = getkind(RESULT)[0]
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('setfield_vable_%s' % kind,
@@ -536,21 +537,23 @@ class Transformer(object):
         return (op.args[1].value == 'typeptr' and
                 op.args[0].concretetype.TO._hints.get('typeptr'))
 
+    def get_vinfo(self, v_virtualizable):
+        if self.callcontrol is None:      # for tests
+            return None
+        return self.callcontrol.get_vinfo(v_virtualizable.concretetype)
+
     def is_virtualizable_getset(self, op):
         # every access of an object of exactly the type VTYPEPTR is
         # likely to be a virtualizable access, but we still have to
         # check it in pyjitpl.py.
-        try:
-            vinfo = self.callcontrol.virtualizable_info
-        except AttributeError:
-            return False
-        if vinfo is None or not vinfo.is_vtypeptr(op.args[0].concretetype):
+        vinfo = self.get_vinfo(op.args[0])
+        if vinfo is None:
             return False
         res = False
         if op.args[1].value in vinfo.static_field_to_extra_box:
             res = True
         if op.args[1].value in vinfo.array_fields:
-            res = VirtualizableArrayField(self.graph)
+            res = VirtualizableArrayField(self.graph, vinfo)
 
         if res:
             flags = self.vable_flags[op.args[0]]
@@ -560,8 +563,9 @@ class Transformer(object):
             raise res
         return res
 
-    def get_virtualizable_field_descr(self, fieldname):
-        vinfo = self.callcontrol.virtualizable_info
+    def get_virtualizable_field_descr(self, op):
+        fieldname = op.args[1].value
+        vinfo = self.get_vinfo(op.args[0])
         index = vinfo.static_field_to_extra_box[fieldname]
         return vinfo.static_field_descrs[index]
 
@@ -751,9 +755,10 @@ class Transformer(object):
             return Constant(value, lltype.Bool)
         return op
 
-    def promote_greens(self, args):
+    def promote_greens(self, args, jitdriver):
         ops = []
-        num_green_args = len(self.callcontrol.getjitdriver().greens)
+        num_green_args = len(jitdriver.greens)
+        assert len(args) == num_green_args + len(jitdriver.reds)
         for v in args[:num_green_args]:
             if isinstance(v, Variable) and v.concretetype is not lltype.Void:
                 kind = getkind(v.concretetype)
@@ -763,20 +768,19 @@ class Transformer(object):
         return ops
 
     def rewrite_op_jit_marker(self, op):
-        self.callcontrol.found_jitdriver(op.args[1].value)
         key = op.args[0].value
-        return getattr(self, 'handle_jit_marker__%s' % key)(op)
+        jitdriver = op.args[1].value
+        return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
 
-    def handle_jit_marker__jit_merge_point(self, op):
-        assert self.portal, "jit_merge_point in non-main graph!"
-        ops = self.promote_greens(op.args[2:])
-        num_green_args = len(self.callcontrol.getjitdriver().greens)
+    def handle_jit_marker__jit_merge_point(self, op, jitdriver):
+        ops = self.promote_greens(op.args[2:], jitdriver)
+        num_green_args = len(jitdriver.greens)
         args = (self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
         op1 = SpaceOperation('jit_merge_point', args, None)
         return ops + [op1]
 
-    def handle_jit_marker__can_enter_jit(self, op):
+    def handle_jit_marker__can_enter_jit(self, op, jitdriver):
         return SpaceOperation('can_enter_jit', [], None)
 
     def rewrite_op_debug_assert(self, op):
@@ -975,9 +979,8 @@ class Transformer(object):
 
     def rewrite_op_jit_force_virtualizable(self, op):
         # this one is for virtualizables
-        vinfo = self.callcontrol.virtualizable_info
+        vinfo = self.get_vinfo(op.args[0])
         assert vinfo is not None
-        assert vinfo.is_vtypeptr(op.args[0].concretetype)
         self.vable_flags[op.args[0]] = op.args[2].value
         return []
 
