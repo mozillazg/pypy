@@ -777,7 +777,8 @@ class RecursiveTests:
             # Note that in order for that test to catch failures, it needs
             # three levels of recursion: the vable_token of the subframe
             # at the level 2 is set to a non-zero value when doing the
-            # call to the level 3 only.
+            # call to the level 3 only.  This used to fail when the test
+            # is run via pypy.jit.backend.x86.test.test_recursive.
             assert ll_subframe.vable_token == 0
 
         def main(codeno):
