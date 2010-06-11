@@ -775,8 +775,8 @@ class BlackholeInterpreter(object):
     def bhimpl_can_enter_jit():
         pass
 
-    @arguments("self", "I", "R", "F", "I", "R", "F")
-    def bhimpl_jit_merge_point(self, *args):
+    @arguments("self", "i", "I", "R", "F", "I", "R", "F")
+    def bhimpl_jit_merge_point(self, jdindex, *args):
         if self.nextblackholeinterp is None:    # we are the last level
             CRN = self.builder.metainterp_sd.ContinueRunningNormally
             raise CRN(*args)
@@ -791,54 +791,55 @@ class BlackholeInterpreter(object):
             # result.
             sd = self.builder.metainterp_sd
             if sd.result_type == 'void':
-                self.bhimpl_recursive_call_v(*args)
+                self.bhimpl_recursive_call_v(jdindex, *args)
                 self.bhimpl_void_return()
             elif sd.result_type == 'int':
-                x = self.bhimpl_recursive_call_i(*args)
+                x = self.bhimpl_recursive_call_i(jdindex, *args)
                 self.bhimpl_int_return(x)
             elif sd.result_type == 'ref':
-                x = self.bhimpl_recursive_call_r(*args)
+                x = self.bhimpl_recursive_call_r(jdindex, *args)
                 self.bhimpl_ref_return(x)
             elif sd.result_type == 'float':
-                x = self.bhimpl_recursive_call_f(*args)
+                x = self.bhimpl_recursive_call_f(jdindex, *args)
                 self.bhimpl_float_return(x)
             assert False
 
-    def get_portal_runner(self):
+    def get_portal_runner(self, jdindex):
         metainterp_sd = self.builder.metainterp_sd
-        fnptr = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
+        jitdriver_sd = metainterp_sd.jitdrivers_sd[jdindex]
+        fnptr = llmemory.cast_ptr_to_adr(jitdriver_sd.portal_runner_ptr)
         fnptr = heaptracker.adr2int(fnptr)
-        calldescr = metainterp_sd.portal_code.calldescr
+        calldescr = jitdriver_sd.mainjitcode.calldescr
         return fnptr, calldescr
 
-    @arguments("self", "I", "R", "F", "I", "R", "F", returns="i")
-    def bhimpl_recursive_call_i(self, greens_i, greens_r, greens_f,
-                                      reds_i,   reds_r,   reds_f):
-        fnptr, calldescr = self.get_portal_runner()
+    @arguments("self", "i", "I", "R", "F", "I", "R", "F", returns="i")
+    def bhimpl_recursive_call_i(self, jdindex, greens_i, greens_r, greens_f,
+                                               reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner(jdindex)
         return self.cpu.bh_call_i(fnptr, calldescr,
                                   greens_i + reds_i,
                                   greens_r + reds_r,
                                   greens_f + reds_f)
-    @arguments("self", "I", "R", "F", "I", "R", "F", returns="r")
-    def bhimpl_recursive_call_r(self, greens_i, greens_r, greens_f,
-                                      reds_i,   reds_r,   reds_f):
-        fnptr, calldescr = self.get_portal_runner()
+    @arguments("self", "i", "I", "R", "F", "I", "R", "F", returns="r")
+    def bhimpl_recursive_call_r(self, jdindex, greens_i, greens_r, greens_f,
+                                               reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner(jdindex)
         return self.cpu.bh_call_r(fnptr, calldescr,
                                   greens_i + reds_i,
                                   greens_r + reds_r,
                                   greens_f + reds_f)
-    @arguments("self", "I", "R", "F", "I", "R", "F", returns="f")
-    def bhimpl_recursive_call_f(self, greens_i, greens_r, greens_f,
-                                      reds_i,   reds_r,   reds_f):
-        fnptr, calldescr = self.get_portal_runner()
+    @arguments("self", "i", "I", "R", "F", "I", "R", "F", returns="f")
+    def bhimpl_recursive_call_f(self, jdindex, greens_i, greens_r, greens_f,
+                                               reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner(jdindex)
         return self.cpu.bh_call_f(fnptr, calldescr,
                                   greens_i + reds_i,
                                   greens_r + reds_r,
                                   greens_f + reds_f)
-    @arguments("self", "I", "R", "F", "I", "R", "F")
-    def bhimpl_recursive_call_v(self, greens_i, greens_r, greens_f,
-                                      reds_i,   reds_r,   reds_f):
-        fnptr, calldescr = self.get_portal_runner()
+    @arguments("self", "i", "I", "R", "F", "I", "R", "F")
+    def bhimpl_recursive_call_v(self, jdindex, greens_i, greens_r, greens_f,
+                                               reds_i,   reds_r,   reds_f):
+        fnptr, calldescr = self.get_portal_runner(jdindex)
         return self.cpu.bh_call_v(fnptr, calldescr,
                                   greens_i + reds_i,
                                   greens_r + reds_r,

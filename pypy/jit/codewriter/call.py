@@ -147,6 +147,7 @@ class CallControl(object):
     def grab_initial_jitcodes(self):
         for jd in self.jitdrivers_sd:
             jd.mainjitcode = self.get_jitcode(jd.portal_graph)
+            jd.mainjitcode.is_portal = True
 
     def enum_pending_graphs(self):
         while self.unfinished_graphs:

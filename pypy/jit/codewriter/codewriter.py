@@ -37,7 +37,7 @@ class CodeWriter(object):
         #
         # step 1: mangle the graph so that it contains the final instructions
         # that we want in the JitCode, but still as a control flow graph
-        transform_graph(graph, self.cpu, self.callcontrol)
+        transform_graph(graph, self.cpu, self.callcontrol, portal_jd)
         #
         # step 2: perform register allocation on it
         regallocs = {}
