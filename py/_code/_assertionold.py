@@ -138,28 +138,28 @@ class Name(Interpretable):
     __view__ = ast.Name
 
     def is_local(self, frame):
-        source = '%r in locals() is not globals()' % self.name
+        co = compile('%r in locals() is not globals()' % self.name, '?', 'eval')
         try:
-            return frame.is_true(frame.eval(source))
+            return frame.is_true(frame.eval(co))
         except passthroughex:
             raise
         except:
             return False
 
     def is_global(self, frame):
-        source = '%r in globals()' % self.name
+        co = compile('%r in globals()' % self.name, '?', 'eval')
         try:
-            return frame.is_true(frame.eval(source))
+            return frame.is_true(frame.eval(co))
         except passthroughex:
             raise
         except:
             return False
 
     def is_builtin(self, frame):
-        source = '%r not in locals() and %r not in globals()' % (
-            self.name, self.name)
+        co = compile('%r not in locals() and %r not in globals()' % (
+            self.name, self.name), '?', 'eval')
         try:
-            return frame.is_true(frame.eval(source))
+            return frame.is_true(frame.eval(co))
         except passthroughex:
             raise
         except:
@@ -185,11 +185,11 @@ class Compare(Interpretable):
             expr2.eval(frame)
             self.explanation = "%s %s %s" % (
                 expr.explanation, operation, expr2.explanation)
-            source = "__exprinfo_left %s __exprinfo_right" % operation
+            co = compile("__exprinfo_left %s __exprinfo_right" % operation,
+                         '?', 'eval')
             try:
-                self.result = frame.eval(source,
-                                         __exprinfo_left=expr.result,
-                                         __exprinfo_right=expr2.result)
+                self.result = frame.eval(co, __exprinfo_left=expr.result,
+                                             __exprinfo_right=expr2.result)
             except passthroughex:
                 raise
             except:
@@ -235,14 +235,14 @@ for astclass, astpattern in {
     class UnaryArith(Interpretable):
         __view__ = astclass
 
-        def eval(self, frame, astpattern=astpattern):
+        def eval(self, frame, astpattern=astpattern,
+                              co=compile(astpattern, '?', 'eval')):
             expr = Interpretable(self.expr)
             expr.eval(frame)
             self.explanation = astpattern.replace('__exprinfo_expr',
                                                   expr.explanation)
             try:
-                self.result = frame.eval(astpattern,
-                                         __exprinfo_expr=expr.result)
+                self.result = frame.eval(co, __exprinfo_expr=expr.result)
             except passthroughex:
                 raise
             except:
@@ -263,7 +263,8 @@ for astclass, astpattern in {
     class BinaryArith(Interpretable):
         __view__ = astclass
 
-        def eval(self, frame, astpattern=astpattern):
+        def eval(self, frame, astpattern=astpattern,
+                              co=compile(astpattern, '?', 'eval')):
             left = Interpretable(self.left)
             left.eval(frame)
             right = Interpretable(self.right)
@@ -272,9 +273,8 @@ for astclass, astpattern in {
                                 .replace('__exprinfo_left',  left .explanation)
                                 .replace('__exprinfo_right', right.explanation))
             try:
-                self.result = frame.eval(astpattern,
-                                         __exprinfo_left=left.result,
-                                         __exprinfo_right=right.result)
+                self.result = frame.eval(co, __exprinfo_left=left.result,
+                                             __exprinfo_right=right.result)
             except passthroughex:
                 raise
             except:
@@ -287,10 +287,9 @@ class CallFunc(Interpretable):
     __view__ = ast.CallFunc
 
     def is_bool(self, frame):
-        source = 'isinstance(__exprinfo_value, bool)'
+        co = compile('isinstance(__exprinfo_value, bool)', '?', 'eval')
         try:
-            return frame.is_true(frame.eval(source,
-                                            __exprinfo_value=self.result))
+            return frame.is_true(frame.eval(co, __exprinfo_value=self.result))
         except passthroughex:
             raise
         except:
@@ -337,8 +336,9 @@ class CallFunc(Interpretable):
         if source.endswith(','):
             source = source[:-1]
         source += ')'
+        co = compile(source, '?', 'eval')
         try:
-            self.result = frame.eval(source, **vars)
+            self.result = frame.eval(co, **vars)
         except passthroughex:
             raise
         except:
@@ -353,20 +353,21 @@ class Getattr(Interpretable):
     def eval(self, frame):
         expr = Interpretable(self.expr)
         expr.eval(frame)
-        source = '__exprinfo_expr.%s' % self.attrname
+        co = compile('__exprinfo_expr.%s' % self.attrname, '?', 'eval')
         try:
-            self.result = frame.eval(source, __exprinfo_expr=expr.result)
+            self.result = frame.eval(co, __exprinfo_expr=expr.result)
         except passthroughex:
             raise
         except:
             raise Failure(self)
         self.explanation = '%s.%s' % (expr.explanation, self.attrname)
         # if the attribute comes from the instance, its value is interesting
-        source = ('hasattr(__exprinfo_expr, "__dict__") and '
-                  '%r in __exprinfo_expr.__dict__' % self.attrname)
+        co = compile('hasattr(__exprinfo_expr, "__dict__") and '
+                     '%r in __exprinfo_expr.__dict__' % self.attrname,
+                     '?', 'eval')
         try:
             from_instance = frame.is_true(
-                frame.eval(source, __exprinfo_expr=expr.result))
+                frame.eval(co, __exprinfo_expr=expr.result))
         except passthroughex:
             raise
         except:

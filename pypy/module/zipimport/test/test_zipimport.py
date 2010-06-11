@@ -118,18 +118,6 @@ class AppTestZipimport:
         finally:
             del _zip_directory_cache[self.zipfile]
 
-    def test_cache_subdir(self):
-        self.writefile(self, 'x.py', '')
-        self.writefile(self, 'sub/__init__.py', '')
-        self.writefile(self, 'sub/yy.py', '')
-        from zipimport import _zip_directory_cache, zipimporter
-        sub_importer = zipimporter(self.zipfile + '/sub')
-        main_importer = zipimporter(self.zipfile)
-
-        assert main_importer is not sub_importer
-        assert main_importer.prefix == ""
-        assert sub_importer.prefix == "sub\\"
-
     def test_good_bad_arguments(self):
         from zipimport import zipimporter
         import os
@@ -213,10 +201,7 @@ class AppTestZipimport:
         self.writefile(self, "xxuuu/__init__.py", "")
         self.writefile(self, "xxuuu/yy.py", "def f(x): return x")
         mod = __import__("xxuuu", globals(), locals(), ['yy'])
-        assert mod.__path__ == [self.zipfile + os.path.sep + "xxuuu"]
-        assert mod.__file__ == (self.zipfile + os.path.sep
-                                + "xxuuu" + os.path.sep
-                                + "__init__.py")
+        assert mod.__path__ == [self.zipfile + "/xxuuu"]
         assert mod.yy.f(3) == 3
 
     def test_package_bug(self):
@@ -229,26 +214,8 @@ class AppTestZipimport:
         self.writefile(self, "xxuuv/__init__.py", "")
         self.writefile(self, "xxuuv/yy.py", "def f(x): return x")
         mod = __import__("xxuuv.yy", globals(), locals(), ['__doc__'])
-        assert mod.__file__ == (self.zipfile + os.path.sep
-                                + "xxuuv" + os.path.sep
-                                + "yy.py")
+        assert mod.__file__ == self.zipfile + "/xxuuv/yy.py"
         assert mod.f(3) == 3
-
-    def test_pyc_in_package(self):
-        import os, sys
-        import new
-        mod = new.module('xxuuw')
-        mod.__path__ = [self.zipfile + '/xxuuw']
-        sys.modules['xxuuw'] = mod
-        #
-        self.writefile(self, "xxuuw/__init__.py", "")
-        self.writefile(self, "xxuuw/zz.pyc", self.test_pyc)
-        mod = __import__("xxuuw.zz", globals(), locals(), ['__doc__'])
-        assert mod.__file__ == (self.zipfile + os.path.sep
-                                + "xxuuw" + os.path.sep
-                                + "zz.pyc")
-        assert mod.get_file() == mod.__file__
-        assert mod.get_name() == mod.__name__
 
     def test_functions(self):
         import os
