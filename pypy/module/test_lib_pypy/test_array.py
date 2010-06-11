@@ -73,11 +73,11 @@ class TestCPythonsOwnArray(BaseArrayTests):
 class TestArrayOnTopOfCPython(BaseArrayTests):
 
     def setup_class(cls):
-        from pypy.tool.lib_pypy import get_lib_pypy_dir
+        from pypy.tool.lib_pypy import LIB_PYPY
         if not hasattr(struct, 'pack_into'):
             py.test.skip("requires CPython >= 2.5")
         import new
-        path = get_lib_pypy_dir().join('array.py')
+        path = LIB_PYPY.join('array.py')
         myarraymodule = new.module('array')
         execfile(str(path), myarraymodule.__dict__)
         cls.array = myarraymodule

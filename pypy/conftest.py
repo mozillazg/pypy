@@ -10,7 +10,7 @@ from pypy.tool.autopath import pypydir
 
 # pytest settings
 pytest_plugins = "resultlog",
-rsyncdirs = ['.', '../lib-python', '../demo']
+rsyncdirs = ['.', '../lib', '../demo']
 rsyncignore = ['_cache']
 
 collect_ignore = ['./lib/py']
