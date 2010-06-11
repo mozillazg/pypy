@@ -465,6 +465,25 @@ class BaseBackendTest(Runner):
                                          [funcbox] + args,
                                          'float', descr=calldescr)
             assert abs(res.value - 4.6) < 0.0001
+
+    def test_call_many_arguments(self):
+        # Test calling a function with a large number of arguments (more than
+        # 6, which will force passing some arguments on the stack on 64-bit)
+
+        def func(*args):
+            assert len(args) == 16
+            # Try to sum up args in a way that would probably detect a
+            # transposed argument
+            return sum(arg * (2**i) for i, arg in enumerate(args))
+
+        FUNC = self.FuncType([lltype.Signed]*16, lltype.Signed)
+        FPTR = self.Ptr(FUNC)
+        calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+        func_ptr = llhelper(FPTR, func)
+        args = range(16)
+        funcbox = self.get_funcbox(self.cpu, func_ptr)
+        res = self.execute_operation(rop.CALL, [funcbox] + map(BoxInt, args), 'int', descr=calldescr)
+        assert res.value == func(*args)
         
     def test_call_stack_alignment(self):
         # test stack alignment issues, notably for Mac OS/X.

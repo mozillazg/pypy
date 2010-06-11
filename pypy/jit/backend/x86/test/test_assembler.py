@@ -4,11 +4,15 @@ from pypy.jit.backend.x86.regalloc import X86FrameManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, INT, REF, FLOAT
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.jit.backend.x86.regalloc import WORD
+from pypy.jit.backend.detect_cpu import getcpuclass 
 
+ACTUAL_CPU = getcpuclass()
 
 class FakeCPU:
     rtyper = None
     supports_floats = True
+    NUM_REGS = ACTUAL_CPU.NUM_REGS
 
 class FakeMC:
     def __init__(self, base_address=0):
@@ -46,12 +50,12 @@ def test_write_failure_recovery_description():
             xmm2]
     assert len(failargs) == len(locs)
     assembler.write_failure_recovery_description(mc, failargs, locs)
-    nums = [Assembler386.DESCR_INT   + 4*(8+0),
-            Assembler386.DESCR_REF   + 4*(8+1),
-            Assembler386.DESCR_FLOAT + 4*(8+10),
-            Assembler386.DESCR_INT   + 4*(8+100),
-            Assembler386.DESCR_REF   + 4*(8+101),
-            Assembler386.DESCR_FLOAT + 4*(8+110),
+    nums = [Assembler386.DESCR_INT   + 4*(16+0),
+            Assembler386.DESCR_REF   + 4*(16+1),
+            Assembler386.DESCR_FLOAT + 4*(16+10),
+            Assembler386.DESCR_INT   + 4*(16+100),
+            Assembler386.DESCR_REF   + 4*(16+101),
+            Assembler386.DESCR_FLOAT + 4*(16+110),
             Assembler386.CODE_HOLE,
             Assembler386.CODE_HOLE,
             Assembler386.DESCR_INT   + 4*ebx.value,
@@ -169,8 +173,8 @@ def do_failure_recovery_func(withfloats):
         assert loc >= 0
         ofs = get_ebp_ofs(loc)
         assert ofs < 0
-        assert (ofs % 4) == 0
-        stack[stacklen + ofs//4] = value
+        assert (ofs % WORD) == 0
+        stack[stacklen + ofs//WORD] = value
 
     descr_bytecode = []
     for i, (kind, loc) in enumerate(content):
@@ -207,7 +211,7 @@ def do_failure_recovery_func(withfloats):
             if isinstance(loc, RegLoc):
                 num = kind + 4*loc.value
             else:
-                num = kind + 4*(8+loc)
+                num = kind + Assembler386.CODE_FROMSTACK + (4*loc)
             while num >= 0x80:
                 descr_bytecode.append((num & 0x7F) | 0x80)
                 num >>= 7

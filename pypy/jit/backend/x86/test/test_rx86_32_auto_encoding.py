@@ -226,6 +226,8 @@ class TestRx86_32(object):
                             'SUB_ri', 'XOR_ri'):
                 if args[0] == rx86.R.eax:
                     return []     # ADD EAX, constant: there is a special encoding
+            if methname == 'XCHG_rr' and rx86.R.eax in args:
+                return [] # special encoding
             if methname == 'MOV_rj' and args[0] == rx86.R.eax:
                 return []   # MOV EAX, [immediate]: there is a special encoding
             if methname == 'MOV_jr' and args[1] == rx86.R.eax:
@@ -262,9 +264,18 @@ class TestRx86_32(object):
             print "Skipping %s" % methname
             return
 
+        # XXX: ugly way to deal with the differences between 32 and 64 bit
+        if not hasattr(self.X86_CodeBuilder, methname):
+            return
+
+        # XXX: hack hack hack
+        if methname == 'WORD':
+            return
+
+
         print "Testing %s with argmodes=%r" % (instrname, argmodes)
         self.methname = methname
-        self.is_xmm_insn = getattr(getattr(rx86.AbstractX86CodeBuilder,
+        self.is_xmm_insn = getattr(getattr(self.X86_CodeBuilder,
                                            methname), 'is_xmm_insn', False)
         ilist = self.make_all_tests(methname, argmodes)
         oplist, as_code = self.run_test(methname, instrname, argmodes, ilist)

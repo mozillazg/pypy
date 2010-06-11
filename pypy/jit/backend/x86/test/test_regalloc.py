@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
      BoxPtr, ConstPtr, LoopToken, BasicFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
-from pypy.jit.backend.x86.runner import CPU
+from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager,\
      FloatConstants
 from pypy.jit.metainterp.test.oparser import parse
@@ -16,6 +16,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
 from pypy.jit.backend.x86.rx86 import *
 
+CPU = getcpuclass()
 class MockGcDescr(GcCache):
     def get_funcptr_for_new(self):
         return 123
