@@ -1394,15 +1394,26 @@ class Assembler386(object):
         if isinstance(result_loc, MODRM64):
             mc.FSTP(result_loc)
         #else: result_loc is already either eax or None, checked below
+        mc.JMP(rel8_patched_later)     # done
+        jmp_location = mc.get_relative_pos()
+        #
+        # Path B: fast path.  Must load the return value, and reset the token
+        offset = jmp_location - je_location
+        assert 0 < offset <= 127
+        mc.overwrite(je_location - 1, [chr(offset)])
+        #
+        # Reset the vable token --- XXX really too much special logic here:-(
+        if self.cpu.index_of_virtualizable >= 0:
+            from pypy.jit.backend.llsupport.descr import BaseFieldDescr
+            fielddescr = self.cpu.vable_token_descr
+            assert isinstance(fielddescr, BaseFieldDescr)
+            ofs = fielddescr.offset
+            mc.MOV(eax, arglocs[1])
+            mc.MOV(addr_add(eax, imm(ofs)), imm(0))
+            # in the line above, TOKEN_NONE = 0
+        #
         if op.result is not None:
-            mc.JMP(rel8_patched_later)     # done
-            jmp_location = mc.get_relative_pos()
-            #
-            # Path B: load the return value directly from fail_boxes_xxx[0]
-            offset = jmp_location - je_location
-            assert 0 < offset <= 127
-            mc.overwrite(je_location - 1, [chr(offset)])
-            #
+            # load the return value from fail_boxes_xxx[0]
             kind = op.result.type
             if kind == FLOAT:
                 xmmtmp = X86XMMRegisterManager.all_regs[0]
@@ -1420,14 +1431,10 @@ class Assembler386(object):
                     mc.XCHG(eax, heap(adr))
                 else:
                     raise AssertionError(kind)
-        else:
-            # in that case, don't generate a JMP at all,
-            # because "Path B" is empty
-            jmp_location = je_location
         #
         # Here we join Path A and Path B again
         offset = mc.get_relative_pos() - jmp_location
-        assert 0 < offset <= 127
+        assert 0 <= offset <= 127
         mc.overwrite(jmp_location - 1, [chr(offset)])
         self._stop_block()
         self.mc.CMP(mem(ebp, FORCE_INDEX_OFS), imm(0))
