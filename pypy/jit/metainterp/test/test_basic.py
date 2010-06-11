@@ -16,9 +16,17 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
     from pypy.jit.codewriter import support, codewriter
     from pypy.jit.metainterp import simple_optimize
 
+    class FakeJitCell:
+        compiled_merge_points = None
+
     class FakeWarmRunnerState:
         def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
             pass
+
+        def jit_cell_at_key(self, greenkey):
+            assert greenkey == []
+            return self._cell
+        _cell = FakeJitCell()
 
         # pick the optimizer this way
         optimize_loop = staticmethod(simple_optimize.optimize_loop)
@@ -45,7 +53,7 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
     testself.cw = cw
     cw.find_all_graphs(JitPolicy())
     #
-    testself.warmrunnerstate = FakeWarmRunnerState()
+    testself.warmrunnerstate = FakeJitDriverSD._state = FakeWarmRunnerState()
     testself.warmrunnerstate.cpu = cpu
     if hasattr(testself, 'finish_setup_for_interp_operations'):
         testself.finish_setup_for_interp_operations()
@@ -88,15 +96,13 @@ def _run_with_pyjitpl(testself, args):
     cw = testself.cw
     opt = history.Options(listops=True)
     metainterp_sd = pyjitpl.MetaInterpStaticData(cw.cpu, opt)
-    metainterp_sd.finish_setup(cw, optimizer="bogus")
-    metainterp_sd.state = testself.warmrunnerstate
-    metainterp_sd.state.cpu = metainterp_sd.cpu
-    metainterp = pyjitpl.MetaInterp(metainterp_sd)
+    metainterp_sd.finish_setup(cw)
+    [jitdriver_sd] = metainterp_sd.jitdrivers_sd
+    metainterp = pyjitpl.MetaInterp(metainterp_sd, jitdriver_sd)
     metainterp_sd.DoneWithThisFrameInt = DoneWithThisFrame
     metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
     metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrame
     testself.metainterp = metainterp
-    [jitdriver_sd] = cw.callcontrol.jitdrivers_sd
     try:
         metainterp.compile_and_run_once(jitdriver_sd, *args)
     except DoneWithThisFrame, e:
@@ -802,8 +808,9 @@ class BasicTests:
         translator.config.translation.gc = "boehm"
         warmrunnerdesc = WarmRunnerDesc(translator,
                                         CPUClass=self.CPUClass)
-        warmrunnerdesc.state.set_param_threshold(3)          # for tests
-        warmrunnerdesc.state.set_param_trace_eagerness(0)    # for tests
+        state = warmrunnerdesc.jitdrivers_sd[0]._state
+        state.set_param_threshold(3)          # for tests
+        state.set_param_trace_eagerness(0)    # for tests
         warmrunnerdesc.finish()
         for n, k in [(20, 0), (20, 1)]:
             interp.eval_graph(graph, [n, k])

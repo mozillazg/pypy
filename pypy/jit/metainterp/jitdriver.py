@@ -13,5 +13,7 @@ class JitDriverStaticData:
     #    self.index             ... pypy.jit.codewriter.call
     #    self.mainjitcode       ... pypy.jit.codewriter.call
 
+    # warmspot sets extra attributes starting with '_' for its own use.
+
     def _freeze_(self):
         return True
