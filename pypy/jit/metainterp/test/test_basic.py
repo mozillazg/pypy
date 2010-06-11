@@ -30,9 +30,17 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
     func._jit_unroll_safe_ = True
     rtyper = support.annotate(func, values, type_system=type_system)
     graphs = rtyper.annotator.translator.graphs
+    result_kind = history.getkind(graphs[0].getreturnvar().concretetype)[0]
+
+    class FakeJitDriverSD:
+        num_green_args = 0
+        portal_graph = graphs[0]
+        virtualizable_info = None
+        result_type = result_kind
+
     stats = history.Stats()
     cpu = CPUClass(rtyper, stats, None, False)
-    cw = codewriter.CodeWriter(cpu, graphs[0])
+    cw = codewriter.CodeWriter(cpu, [FakeJitDriverSD()])
     testself.cw = cw
     cw.find_all_graphs(JitPolicy())
     #
@@ -62,7 +70,8 @@ def _run_with_blackhole(testself, args):
             count_f += 1
         else:
             raise TypeError(T)
-    blackholeinterp.setposition(cw.mainjitcode, 0)
+    [jitdriver_sd] = cw.callcontrol.jitdrivers_sd
+    blackholeinterp.setposition(jitdriver_sd.mainjitcode, 0)
     blackholeinterp.run()
     return blackholeinterp._final_result_anytype()
 
@@ -86,8 +95,9 @@ def _run_with_pyjitpl(testself, args):
     metainterp_sd.DoneWithThisFrameRef = DoneWithThisFrameRef
     metainterp_sd.DoneWithThisFrameFloat = DoneWithThisFrame
     testself.metainterp = metainterp
+    [jitdriver_sd] = cw.callcontrol.jitdrivers_sd
     try:
-        metainterp.compile_and_run_once(*args)
+        metainterp.compile_and_run_once(jitdriver_sd, *args)
     except DoneWithThisFrame, e:
         #if conftest.option.view:
         #    metainterp.stats.view()

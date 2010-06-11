@@ -13,19 +13,20 @@ from pypy.rlib.jit import _we_are_jitted
 from pypy.translator.simplify import get_funcobj
 
 
-def transform_graph(graph, cpu=None, callcontrol=None):
+def transform_graph(graph, cpu=None, callcontrol=None, portal_jd=None):
     """Transform a control flow graph to make it suitable for
     being flattened in a JitCode.
     """
-    t = Transformer(cpu, callcontrol)
+    t = Transformer(cpu, callcontrol, portal_jd)
     t.transform(graph)
 
 
 class Transformer(object):
 
-    def __init__(self, cpu=None, callcontrol=None):
+    def __init__(self, cpu=None, callcontrol=None, portal_jd=None):
         self.cpu = cpu
         self.callcontrol = callcontrol
+        self.portal_jd = portal_jd   # non-None only for the portal graph(s)
 
     def transform(self, graph):
         self.graph = graph
@@ -773,9 +774,14 @@ class Transformer(object):
         return getattr(self, 'handle_jit_marker__%s' % key)(op, jitdriver)
 
     def handle_jit_marker__jit_merge_point(self, op, jitdriver):
+        assert self.portal_jd is not None, (
+            "'jit_merge_point' in non-portal graph!")
+        assert jitdriver is self.portal_jd.jitdriver, (
+            "general mix-up of jitdrivers?")
         ops = self.promote_greens(op.args[2:], jitdriver)
         num_green_args = len(jitdriver.greens)
-        args = (self.make_three_lists(op.args[2:2+num_green_args]) +
+        args = ([Constant(self.portal_jd.index, lltype.Signed)] +
+                self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
         op1 = SpaceOperation('jit_merge_point', args, None)
         return ops + [op1]
