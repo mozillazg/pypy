@@ -496,21 +496,22 @@ else:
             need_extra_path = True
         name = self.uniquename('mod_%s' % value.__name__)
         if need_extra_path:
-            self.initcode.append1('import pypy')
-            self.initcode.append1('import sys')
-            self.initcode.append1('import os')
-            self.initcode.append1('for pkgdir in pypy.__path__:\n'
-                                  '    libdir = os.path.join(pkgdir, "lib")\n'
-                                  '    if os.path.isdir(libdir):\n'
-                                  '        break\n'
-                                  'else:\n'
-                                  '    raise Exception, "cannot find pypy/lib directory"\n'
-                                  'sys.path.insert(0, libdir)\n')
-            self.initcode.append1('try:\n'
-                                  '    import %s as _tmp\n'
-                                  'finally:\n'
-                                  '    if libdir in sys.path:\n'
-                                  '        sys.path.remove(libdir)\n' % value.__name__)
+            assert False
+            ## self.initcode.append1('import pypy')
+            ## self.initcode.append1('import sys')
+            ## self.initcode.append1('import os')
+            ## self.initcode.append1('for pkgdir in pypy.__path__:\n'
+            ##                       '    libdir = os.path.join(pkgdir, "lib")\n'
+            ##                       '    if os.path.isdir(libdir):\n'
+            ##                       '        break\n'
+            ##                       'else:\n'
+            ##                       '    raise Exception, "cannot find pypy/lib directory"\n'
+            ##                       'sys.path.insert(0, libdir)\n')
+            ## self.initcode.append1('try:\n'
+            ##                       '    import %s as _tmp\n'
+            ##                       'finally:\n'
+            ##                       '    if libdir in sys.path:\n'
+            ##                       '        sys.path.remove(libdir)\n' % value.__name__)
         else:
             self.initcode.append1('import %s as _tmp' % value.__name__)
         self.initcode.append1('%s = space.wrap(_tmp)' % (name))
