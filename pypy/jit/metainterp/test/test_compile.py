@@ -58,7 +58,7 @@ class FakeMetaInterpStaticData:
 
 class FakeMetaInterp:
     class jitdriver_sd:
-        _state = FakeState()
+        warmstate = FakeState()
 
 def test_compile_new_loop():
     cpu = FakeCPU()

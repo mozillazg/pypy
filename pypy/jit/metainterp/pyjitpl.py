@@ -659,11 +659,10 @@ class MIFrame(object):
 
     @arguments("int", "boxes3", "boxes3")
     def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes):
+        targetjitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         allboxes = greenboxes + redboxes
-        metainterp_sd = self.metainterp.staticdata
-        xxxx
-        portal_code = metainterp_sd.portal_code
-        warmrunnerstate = metainterp_sd.state
+        portal_code = targetjitdriver_sd.mainjitcode
+        warmrunnerstate = targetjitdriver_sd.warmstate
         token = None
         if warmrunnerstate.inlining:
             if warmrunnerstate.can_inline_callable(greenboxes):
@@ -672,12 +671,13 @@ class MIFrame(object):
             token = warmrunnerstate.get_assembler_token(greenboxes)
             # verify that we have all green args, needed to make sure
             # that assembler that we call is still correct
-            self.verify_green_args(greenboxes)
+            self.verify_green_args(targetjitdriver_sd, greenboxes)
         #
-        k = llmemory.cast_ptr_to_adr(metainterp_sd._portal_runner_ptr)
+        k = llmemory.cast_ptr_to_adr(targetjitdriver_sd.portal_runner_ptr)
         funcbox = ConstInt(heaptracker.adr2int(k))
         return self.do_residual_call(funcbox, portal_code.calldescr,
-                                     allboxes, assembler_call_token=token)
+                                     allboxes, assembler_call_token=token,
+                                     assembler_call_jd=targetjitdriver_sd)
 
     opimpl_recursive_call_i = _opimpl_recursive_call
     opimpl_recursive_call_r = _opimpl_recursive_call
@@ -768,18 +768,18 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    def verify_green_args(self, jdindex, varargs):
-        jitdriver = self.metainterp.staticdata.jitdrivers_sd[jdindex]
-        num_green_args = jitdriver.num_green_args
+    def verify_green_args(self, jitdriver_sd, varargs):
+        num_green_args = jitdriver_sd.num_green_args
         assert len(varargs) == num_green_args
         for i in range(num_green_args):
             assert isinstance(varargs[i], Const)
 
     @arguments("orgpc", "int", "boxes3", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, jdindex, greenboxes, redboxes):
-        self.verify_green_args(jdindex, greenboxes)
+        jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
+        self.verify_green_args(jitdriver_sd, greenboxes)
         # xxx we may disable the following line in some context later
-        self.debug_merge_point(jdindex, greenboxes)
+        self.debug_merge_point(jitdriver_sd, greenboxes)
         if self.metainterp.seen_can_enter_jit:
             self.metainterp.seen_can_enter_jit = False
             # Assert that it's impossible to arrive here with in_recursion
@@ -787,7 +787,7 @@ class MIFrame(object):
             # to True by opimpl_can_enter_jit, which should be executed
             # just before opimpl_jit_merge_point (no recursion inbetween).
             assert not self.metainterp.in_recursion
-            assert jdindex == self.metainterp.jitdriver_sd.index
+            assert jitdriver_sd is self.metainterp.jitdriver_sd
             # Set self.pc to point to jit_merge_point instead of just after:
             # if reached_can_enter_jit() raises SwitchToBlackhole, then the
             # pc is still at the jit_merge_point, which is a point that is
@@ -797,10 +797,9 @@ class MIFrame(object):
             self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
             self.pc = saved_pc
 
-    def debug_merge_point(self, jdindex, greenkey):
+    def debug_merge_point(self, jitdriver_sd, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
-        jitdriver = self.metainterp.staticdata.jitdrivers_sd[jdindex]
-        loc = jitdriver._state.get_location_str(greenkey)
+        loc = jitdriver_sd.warmstate.get_location_str(greenkey)
         debug_print(loc)
         constloc = self.metainterp.cpu.ts.conststr(loc)
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT,
@@ -1002,7 +1001,8 @@ class MIFrame(object):
         return resbox
 
     def do_residual_call(self, funcbox, descr, argboxes,
-                         assembler_call_token=None):
+                         assembler_call_token=None,
+                         assembler_call_jd=None):
         # First build allboxes: it may need some reordering from the
         # list provided in argboxes, depending on the order in which
         # the arguments are expected by the function
@@ -1047,7 +1047,8 @@ class MIFrame(object):
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
             self.metainterp.vrefs_after_residual_call()
             if assembler_call_token is not None:
-                self.metainterp.direct_assembler_call(assembler_call_token)
+                self.metainterp.direct_assembler_call(assembler_call_token,
+                                                      assembler_call_jd)
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
             self.metainterp.vable_after_residual_call()
@@ -1135,7 +1136,7 @@ class MetaInterpStaticData(object):
     def setup_jitdrivers_sd(self, optimizer):
         if optimizer is not None:
             for jd in self.jitdrivers_sd:
-                jd._state.set_param_optimizer(optimizer)
+                jd.warmstate.set_param_optimizer(optimizer)
 
     def finish_setup(self, codewriter, optimizer=None):
         from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
@@ -1468,7 +1469,7 @@ class MetaInterp(object):
         self.resumekey.reset_counter_from_failure()
 
     def blackhole_if_trace_too_long(self):
-        warmrunnerstate = self.jitdriver_sd._state
+        warmrunnerstate = self.jitdriver_sd.warmstate
         if len(self.history.operations) > warmrunnerstate.trace_limit:
             greenkey_of_huge_function = self.find_biggest_function()
             self.portal_trace_positions = None
@@ -1678,7 +1679,7 @@ class MetaInterp(object):
             raise NotImplementedError(opname[opnum])
 
     def get_compiled_merge_points(self, greenkey):
-        cell = self.jitdriver_sd._state.jit_cell_at_key(greenkey)
+        cell = self.jitdriver_sd.warmstate.jit_cell_at_key(greenkey)
         if cell.compiled_merge_points is None:
             cell.compiled_merge_points = []
         return cell.compiled_merge_points
@@ -1975,8 +1976,7 @@ class MetaInterp(object):
                                             abox, ConstInt(j), itembox)
             assert i + 1 == len(self.virtualizable_boxes)
 
-    def gen_load_from_other_virtualizable(self, vbox):
-        vinfo = self.jitdriver_sd.virtualizable_info
+    def gen_load_from_other_virtualizable(self, vinfo, vbox):
         boxes = []
         assert vinfo is not None
         for i in range(vinfo.num_static_extra_boxes):
@@ -2048,19 +2048,19 @@ class MetaInterp(object):
         op.args = [resbox_as_const] + op.args
         return resbox
 
-    def direct_assembler_call(self, token):
+    def direct_assembler_call(self, token, targetjitdriver_sd):
         """ Generate a direct call to assembler for portal entry point,
         patching the CALL_MAY_FORCE that occurred just now.
         """
         op = self.history.operations.pop()
         assert op.opnum == rop.CALL_MAY_FORCE
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = targetjitdriver_sd.num_green_args
         args = op.args[num_green_args + 1:]
-        vinfo = self.jitdriver_sd.virtualizable_info
+        vinfo = targetjitdriver_sd.virtualizable_info
         if vinfo is not None:
             vindex = vinfo.index_of_virtualizable
             vbox = args[vindex - num_green_args]
-            args = args + self.gen_load_from_other_virtualizable(vbox)
+            args = args + self.gen_load_from_other_virtualizable(vinfo, vbox)
             # ^^^ and not "+=", which makes 'args' a resizable list
         op.opnum = rop.CALL_ASSEMBLER
         op.args = args

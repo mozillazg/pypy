@@ -71,11 +71,11 @@ def jittify_and_run(interp, graph, args, repeat=1,
     translator.config.translation.list_comprehension_operations = True
     warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt, **kwds)
     for jd in warmrunnerdesc.jitdrivers_sd:
-        jd._state.set_param_threshold(3)          # for tests
-        jd._state.set_param_trace_eagerness(2)    # for tests
-        jd._state.set_param_trace_limit(trace_limit)
-        jd._state.set_param_inlining(inline)
-        jd._state.set_param_debug(debug_level)
+        jd.warmstate.set_param_threshold(3)          # for tests
+        jd.warmstate.set_param_trace_eagerness(2)    # for tests
+        jd.warmstate.set_param_trace_limit(trace_limit)
+        jd.warmstate.set_param_inlining(inline)
+        jd.warmstate.set_param_debug(debug_level)
     warmrunnerdesc.finish()
     res = interp.eval_graph(graph, args)
     if not kwds.get('translate_support_code', False):
@@ -361,7 +361,7 @@ class WarmRunnerDesc(object):
         from pypy.jit.metainterp.warmstate import WarmEnterState
         state = WarmEnterState(self, jd)
         maybe_compile_and_run = state.make_entry_point()
-        jd._state = state
+        jd.warmstate = state
 
         def crash_in_jit(e):
             if not we_are_translated():
@@ -699,7 +699,7 @@ class WarmRunnerDesc(object):
         _, PTR_SET_PARAM_FUNCTYPE = self.cpu.ts.get_FuncType([lltype.Signed],
                                                              lltype.Void)
         def make_closure(jd, fullfuncname):
-            state = jd._state
+            state = jd.warmstate
             def closure(i):
                 getattr(state, fullfuncname)(i)
             funcptr = self.helper_func(PTR_SET_PARAM_FUNCTYPE, closure)

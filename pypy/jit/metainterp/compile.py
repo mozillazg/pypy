@@ -68,7 +68,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop.token = loop_token
     loop.operations[-1].descr = loop_token     # patch the target of the JUMP
     try:
-        old_loop_token = jitdriver_sd._state.optimize_loop(
+        old_loop_token = jitdriver_sd.warmstate.optimize_loop(
             metainterp_sd, old_loop_tokens, loop)
     except InvalidLoop:
         return None
@@ -279,7 +279,7 @@ class ResumeGuardDescr(ResumeDescr):
     _trace_and_compile_from_bridge._dont_inline_ = True
 
     def must_compile(self, metainterp_sd, jitdriver_sd):
-        trace_eagerness = jitdriver_sd._state.trace_eagerness
+        trace_eagerness = jitdriver_sd.warmstate.trace_eagerness
         if self._counter >= 0:
             self._counter += 1
             return self._counter >= trace_eagerness
@@ -478,7 +478,7 @@ class ResumeFromInterpDescr(ResumeDescr):
         new_loop.token = new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
-        jitdriver_sd._state.attach_unoptimized_bridge_from_interp(
+        jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
             self.original_greenkey,
             new_loop_token)
         # store the new loop in compiled_merge_points too
@@ -506,11 +506,11 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     # clone ops, as optimize_bridge can mutate the ops
     new_loop.operations = [op.clone() for op in metainterp.history.operations]
     metainterp_sd = metainterp.staticdata
-    jitdriver_sd = metainterp.jitdriver_sd
+    state = metainterp.jitdriver_sd.warmstate
     try:
-        target_loop_token = jitdriver_sd._state.optimize_bridge(metainterp_sd,
-                                                                old_loop_tokens,
-                                                                new_loop)
+        target_loop_token = state.optimize_bridge(metainterp_sd,
+                                                  old_loop_tokens,
+                                                  new_loop)
     except InvalidLoop:
         # XXX I am fairly convinced that optimize_bridge cannot actually raise
         # InvalidLoop
