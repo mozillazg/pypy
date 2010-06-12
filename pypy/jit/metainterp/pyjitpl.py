@@ -56,6 +56,7 @@ class MIFrame(object):
         self.parent_resumedata_snapshot = None
         self.parent_resumedata_frame_info_list = None
 
+    @specialize.arg(3)
     def copy_constants(self, registers, constants, ConstClass):
         """Copy jitcode.constants[0] to registers[255],
                 jitcode.constants[1] to registers[254],
@@ -68,7 +69,6 @@ class MIFrame(object):
             assert j >= 0
             registers[j] = ConstClass(constants[i])
             i -= 1
-    copy_constants._annspecialcase_ = 'specialize:arg(3)'
 
     def cleanup_registers(self):
         # To avoid keeping references alive, this cleans up the registers_r.
@@ -80,6 +80,7 @@ class MIFrame(object):
     # ------------------------------
     # Decoding of the JitCode
 
+    @specialize.arg(4)
     def prepare_list_of_boxes(self, outvalue, startindex, position, argcode):
         assert argcode in 'IRF'
         code = self.bytecode
@@ -92,7 +93,6 @@ class MIFrame(object):
             elif argcode == 'F': reg = self.registers_f[index]
             else: raise AssertionError(argcode)
             outvalue[startindex+i] = reg
-    prepare_list_of_boxes._annspecialcase_ = 'specialize:arg(4)'
 
     def get_current_position_info(self):
         return self.jitcode.get_live_vars_info(self.pc)
@@ -518,15 +518,15 @@ class MIFrame(object):
         return not isstandard
 
     def _get_virtualizable_field_index(self, fielddescr):
-        vinfo = self.metainterp.staticdata.virtualizable_info
+        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
         return vinfo.static_field_by_descrs[fielddescr]
 
     def _get_virtualizable_array_field_descr(self, index):
-        vinfo = self.metainterp.staticdata.virtualizable_info
+        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
         return vinfo.array_field_descrs[index]
 
     def _get_virtualizable_array_descr(self, index):
-        vinfo = self.metainterp.staticdata.virtualizable_info
+        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
         return vinfo.array_descrs[index]
 
     @arguments("orgpc", "box", "descr")
@@ -557,7 +557,8 @@ class MIFrame(object):
 
     def _get_arrayitem_vable_index(self, pc, arrayfielddescr, indexbox):
         indexbox = self.implement_guard_value(pc, indexbox)
-        vinfo = self.metainterp.staticdata.virtualizable_info
+        xxxxxxx
+        vinfo = self.metainterp.jitdriver_sd.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
         arrayindex = vinfo.array_field_by_descrs[arrayfielddescr]
@@ -606,7 +607,8 @@ class MIFrame(object):
             arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
                                                           fdescr, box)
             return self.execute_with_descr(rop.ARRAYLEN_GC, adescr, arraybox)
-        vinfo = self.metainterp.staticdata.virtualizable_info
+        xxxxxxx
+        vinfo = self.metainterp.jitdriver_sd.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
         arrayindex = vinfo.array_field_by_descrs[fdescr]
@@ -655,10 +657,11 @@ class MIFrame(object):
     opimpl_residual_call_irf_f = _opimpl_residual_call3
     opimpl_residual_call_irf_v = _opimpl_residual_call3
 
-    @arguments("boxes3", "boxes3")
-    def _opimpl_recursive_call(self, greenboxes, redboxes):
+    @arguments("int", "boxes3", "boxes3")
+    def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes):
         allboxes = greenboxes + redboxes
         metainterp_sd = self.metainterp.staticdata
+        xxxx
         portal_code = metainterp_sd.portal_code
         warmrunnerstate = metainterp_sd.state
         token = None
@@ -765,17 +768,18 @@ class MIFrame(object):
             raise CannotInlineCanEnterJit()
         self.metainterp.seen_can_enter_jit = True
 
-    def verify_green_args(self, varargs):
-        num_green_args = self.metainterp.staticdata.num_green_args
+    def verify_green_args(self, jdindex, varargs):
+        jitdriver = self.metainterp.staticdata.jitdrivers_sd[jdindex]
+        num_green_args = jitdriver.num_green_args
         assert len(varargs) == num_green_args
         for i in range(num_green_args):
             assert isinstance(varargs[i], Const)
 
-    @arguments("orgpc", "boxes3", "boxes3")
-    def opimpl_jit_merge_point(self, orgpc, greenboxes, redboxes):
-        self.verify_green_args(greenboxes)
+    @arguments("orgpc", "int", "boxes3", "boxes3")
+    def opimpl_jit_merge_point(self, orgpc, jdindex, greenboxes, redboxes):
+        self.verify_green_args(jdindex, greenboxes)
         # xxx we may disable the following line in some context later
-        self.debug_merge_point(greenboxes)
+        self.debug_merge_point(jdindex, greenboxes)
         if self.metainterp.seen_can_enter_jit:
             self.metainterp.seen_can_enter_jit = False
             # Assert that it's impossible to arrive here with in_recursion
@@ -783,6 +787,7 @@ class MIFrame(object):
             # to True by opimpl_can_enter_jit, which should be executed
             # just before opimpl_jit_merge_point (no recursion inbetween).
             assert not self.metainterp.in_recursion
+            assert jdindex == self.metainterp.jitdriver_sd.index
             # Set self.pc to point to jit_merge_point instead of just after:
             # if reached_can_enter_jit() raises SwitchToBlackhole, then the
             # pc is still at the jit_merge_point, which is a point that is
@@ -792,10 +797,10 @@ class MIFrame(object):
             self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
             self.pc = saved_pc
 
-    def debug_merge_point(self, greenkey):
+    def debug_merge_point(self, jdindex, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
-        sd = self.metainterp.staticdata
-        loc = sd.state.get_location_str(greenkey)
+        jitdriver = self.metainterp.staticdata.jitdrivers_sd[jdindex]
+        loc = jitdriver._state.get_location_str(greenkey)
         debug_print(loc)
         constloc = self.metainterp.cpu.ts.conststr(loc)
         self.metainterp.history.record(rop.DEBUG_MERGE_POINT,
@@ -945,7 +950,7 @@ class MIFrame(object):
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)       
         virtualizable_boxes = None
-        if metainterp.staticdata.virtualizable_info is not None:
+        if metainterp.jitdriver_sd.virtualizable_info is not None:
             virtualizable_boxes = metainterp.virtualizable_boxes
         saved_pc = self.pc
         if resumepc >= 0:
@@ -1127,6 +1132,11 @@ class MetaInterpStaticData(object):
         self._addr2name_keys = [key for key, value in list_of_addr2name]
         self._addr2name_values = [value for key, value in list_of_addr2name]
 
+    def setup_jitdrivers_sd(self, optimizer):
+        if optimizer is not None:
+            for jd in self.jitdrivers_sd:
+                jd._state.set_param_optimizer(optimizer)
+
     def finish_setup(self, codewriter, optimizer=None):
         from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
         self.blackholeinterpbuilder = BlackholeInterpBuilder(codewriter, self)
@@ -1137,28 +1147,21 @@ class MetaInterpStaticData(object):
         self.setup_indirectcalltargets(asm.indirectcalltargets)
         self.setup_list_of_addr2name(asm.list_of_addr2name)
         #
-        self.portal_code = codewriter.mainjitcode
-        self._portal_runner_ptr = codewriter.callcontrol.portal_runner_ptr
+        self.jitdrivers_sd = codewriter.callcontrol.jitdrivers_sd
         self.virtualref_info = codewriter.callcontrol.virtualref_info
-        self.virtualizable_info = codewriter.callcontrol.virtualizable_info
-        RESULT = codewriter.portal_graph.getreturnvar().concretetype
-        self.result_type = history.getkind(RESULT)
+        self.setup_jitdrivers_sd(optimizer)
         #
         # store this information for fastpath of call_assembler
-        name = self.result_type
-        tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
-        num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
-        setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
+        # (only the paths that can actually be taken)
+        for jd in self.jitdrivers_sd:
+            name = {history.INT: 'int',
+                    history.REF: 'ref',
+                    history.FLOAT: 'float',
+                    history.VOID: 'void'}[jd.result_type]
+            tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
+            num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
+            setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
         #
-        warmrunnerdesc = self.warmrunnerdesc
-        if warmrunnerdesc is not None:
-            self.num_green_args = warmrunnerdesc.num_green_args
-            self.state = warmrunnerdesc.state
-            if optimizer is not None:
-                self.state.set_param_optimizer(optimizer)
-        else:
-            self.num_green_args = 0
-            self.state = None
         self.globaldata = MetaInterpGlobalData(self)
 
     def _setup_once(self):
@@ -1179,8 +1182,7 @@ class MetaInterpStaticData(object):
                 # Build the dictionary at run-time.  This is needed
                 # because the keys are function/class addresses, so they
                 # can change from run to run.
-                k = llmemory.cast_ptr_to_adr(self._portal_runner_ptr)
-                d = {k: 'recursive call'}
+                d = {}
                 keys = self._addr2name_keys
                 values = self._addr2name_values
                 for i in range(len(keys)):
@@ -1238,47 +1240,31 @@ class MetaInterpGlobalData(object):
         self.loopnumbering = 0
         self.resume_virtuals = {}
         self.resume_virtuals_not_translated = []
-        #
-        state = staticdata.state
-        if state is not None:
-            self.jit_cell_at_key = state.jit_cell_at_key
-        else:
-            # for tests only; not RPython
-            class JitCell:
-                compiled_merge_points = None
-            _jitcell_dict = {}
-            def jit_cell_at_key(greenkey):
-                greenkey = tuple(greenkey)
-                return _jitcell_dict.setdefault(greenkey, JitCell())
-            self.jit_cell_at_key = jit_cell_at_key
-
-    def get_compiled_merge_points(self, greenkey):
-        cell = self.jit_cell_at_key(greenkey)
-        if cell.compiled_merge_points is None:
-            cell.compiled_merge_points = []
-        return cell.compiled_merge_points
 
 # ____________________________________________________________
 
 class MetaInterp(object):
     in_recursion = 0
 
-    def __init__(self, staticdata):
+    def __init__(self, staticdata, jitdriver_sd):
         self.staticdata = staticdata
         self.cpu = staticdata.cpu
+        self.jitdriver_sd = jitdriver_sd
+        # Note: self.jitdriver_sd is the JitDriverStaticData that corresponds
+        # to the current loop -- the outermost one.  Be careful, because
+        # during recursion we can also see other jitdrivers.
         self.portal_trace_positions = []
         self.free_frames_list = []
         self.last_exc_value_box = None
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
-        # with a special case for recursive portal calls
         f = self.newframe(jitcode, greenkey)
         f.setup_call(boxes)
         raise ChangeFrame
 
     def newframe(self, jitcode, greenkey=None):
-        if jitcode is self.staticdata.portal_code:
+        if jitcode.is_portal:
             self.in_recursion += 1
         if greenkey is not None:
             self.portal_trace_positions.append(
@@ -1293,7 +1279,7 @@ class MetaInterp(object):
 
     def popframe(self):
         frame = self.framestack.pop()
-        if frame.jitcode is self.staticdata.portal_code:
+        if frame.jitcode.is_portal:
             self.in_recursion -= 1
         if frame.greenkey is not None:
             self.portal_trace_positions.append(
@@ -1317,14 +1303,15 @@ class MetaInterp(object):
             except SwitchToBlackhole, stb:
                 self.aborted_tracing(stb.reason)
             sd = self.staticdata
-            if sd.result_type == 'void':
+            result_type = self.jitdriver_sd.result_type
+            if result_type == history.VOID:
                 assert resultbox is None
                 raise sd.DoneWithThisFrameVoid()
-            elif sd.result_type == 'int':
+            elif result_type == history.INT:
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
-            elif sd.result_type == 'ref':
+            elif result_type == history.REF:
                 raise sd.DoneWithThisFrameRef(self.cpu, resultbox.getref_base())
-            elif sd.result_type == 'float':
+            elif result_type == history.FLOAT:
                 raise sd.DoneWithThisFrameFloat(resultbox.getfloat())
             else:
                 assert False
@@ -1354,14 +1341,17 @@ class MetaInterp(object):
         in_recursion = -1
         for frame in self.framestack:
             jitcode = frame.jitcode
-            if jitcode is self.staticdata.portal_code:
+            assert jitcode.is_portal == len([
+                jd for jd in self.staticdata.jitdrivers_sd
+                   if jd.mainjitcode is jitcode])
+            if jitcode.is_portal:
                 in_recursion += 1
         if in_recursion != self.in_recursion:
             print "in_recursion problem!!!"
             print in_recursion, self.in_recursion
             for frame in self.framestack:
                 jitcode = frame.jitcode
-                if jitcode is self.staticdata.portal_code:
+                if jitcode.is_portal:
                     print "P",
                 else:
                     print " ",
@@ -1369,7 +1359,6 @@ class MetaInterp(object):
             raise AssertionError
 
     def create_empty_history(self):
-        warmrunnerstate = self.staticdata.state
         self.history = history.History()
         self.staticdata.stats.set_history(self.history)
 
@@ -1479,12 +1468,11 @@ class MetaInterp(object):
         self.resumekey.reset_counter_from_failure()
 
     def blackhole_if_trace_too_long(self):
-        warmrunnerstate = self.staticdata.state
+        warmrunnerstate = self.jitdriver_sd._state
         if len(self.history.operations) > warmrunnerstate.trace_limit:
             greenkey_of_huge_function = self.find_biggest_function()
             self.portal_trace_positions = None
             if greenkey_of_huge_function is not None:
-                warmrunnerstate = self.staticdata.state
                 warmrunnerstate.disable_noninlinable_function(
                     greenkey_of_huge_function)
             raise SwitchToBlackhole(ABORT_TOO_LONG)
@@ -1511,21 +1499,27 @@ class MetaInterp(object):
                     self.staticdata.log(sys.exc_info()[0].__name__)
                 raise
 
-    def compile_and_run_once(self, *args):
+    @specialize.arg(1)
+    def compile_and_run_once(self, jitdriver_sd, *args):
+        # NB. we pass explicity 'jitdriver_sd' around here, even though it
+        # is also available as 'self.jitdriver_sd', because we need to
+        # specialize this function and a few other ones for the '*args'.
         debug_start('jit-tracing')
         self.staticdata._setup_once()
         self.staticdata.profiler.start_tracing()
+        assert jitdriver_sd is self.jitdriver_sd
         self.create_empty_history()
         try:
-            return self._compile_and_run_once(*args)
+            original_boxes = self.initialize_original_boxes(jitdriver_sd,*args)
+            return self._compile_and_run_once(original_boxes)
         finally:
             self.staticdata.profiler.end_tracing()
             debug_stop('jit-tracing')
 
-    def _compile_and_run_once(self, *args):
-        original_boxes = self.initialize_state_from_start(*args)
+    def _compile_and_run_once(self, original_boxes):
+        self.initialize_state_from_start(original_boxes)
         self.current_merge_points = [(original_boxes, 0)]
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         redkey = original_boxes[num_green_args:]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
@@ -1592,7 +1586,7 @@ class MetaInterp(object):
         self.remove_consts_and_duplicates(redboxes, len(redboxes),
                                           duplicates)
         live_arg_boxes = greenboxes + redboxes
-        if self.staticdata.virtualizable_info is not None:
+        if self.jitdriver_sd.virtualizable_info is not None:
             # we use pop() to remove the last item, which is the virtualizable
             # itself
             self.remove_consts_and_duplicates(self.virtualizable_boxes,
@@ -1614,11 +1608,12 @@ class MetaInterp(object):
         # Search in current_merge_points for original_boxes with compatible
         # green keys, representing the beginning of the same loop as the one
         # we end now. 
-       
+
+        num_green_args = self.jitdriver_sd.num_green_args
         for j in range(len(self.current_merge_points)-1, -1, -1):
             original_boxes, start = self.current_merge_points[j]
             assert len(original_boxes) == len(live_arg_boxes) or start < 0
-            for i in range(self.staticdata.num_green_args):
+            for i in range(num_green_args):
                 box1 = original_boxes[i]
                 box2 = live_arg_boxes[i]
                 assert isinstance(box1, Const)
@@ -1641,7 +1636,7 @@ class MetaInterp(object):
 
     def designate_target_loop(self, gmp):
         loop_token = gmp.target_loop_token
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = self.jitdriver_sd.num_green_args
         residual_args = self.get_residual_args(loop_token.specnodes,
                                                gmp.argboxes[num_green_args:])
         history.set_future_values(self.cpu, residual_args)
@@ -1682,12 +1677,17 @@ class MetaInterp(object):
             from pypy.jit.metainterp.resoperation import opname
             raise NotImplementedError(opname[opnum])
 
+    def get_compiled_merge_points(self, greenkey):
+        cell = self.jitdriver_sd._state.jit_cell_at_key(greenkey)
+        if cell.compiled_merge_points is None:
+            cell.compiled_merge_points = []
+        return cell.compiled_merge_points
+
     def compile(self, original_boxes, live_arg_boxes, start):
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = self.jitdriver_sd.num_green_args
         self.history.inputargs = original_boxes[num_green_args:]
         greenkey = original_boxes[:num_green_args]
-        glob = self.staticdata.globaldata
-        old_loop_tokens = glob.get_compiled_merge_points(greenkey)
+        old_loop_tokens = self.get_compiled_merge_points(greenkey)
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
         loop_token = compile.compile_new_loop(self, old_loop_tokens,
                                               greenkey, start)
@@ -1696,10 +1696,9 @@ class MetaInterp(object):
         self.history.operations.pop()     # remove the JUMP
 
     def compile_bridge(self, live_arg_boxes):
-        num_green_args = self.staticdata.num_green_args
+        num_green_args = self.jitdriver_sd.num_green_args
         greenkey = live_arg_boxes[:num_green_args]
-        glob = self.staticdata.globaldata
-        old_loop_tokens = glob.get_compiled_merge_points(greenkey)
+        old_loop_tokens = self.get_compiled_merge_points(greenkey)
         if len(old_loop_tokens) == 0:
             return
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
@@ -1713,17 +1712,18 @@ class MetaInterp(object):
         self.gen_store_back_in_virtualizable()
         # temporarily put a JUMP to a pseudo-loop
         sd = self.staticdata
-        if sd.result_type == 'void':
+        result_type = self.jitdriver_sd.result_type
+        if result_type == history.VOID:
             assert exitbox is None
             exits = []
             loop_tokens = sd.loop_tokens_done_with_this_frame_void
-        elif sd.result_type == 'int':
+        elif result_type == history.INT:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_int
-        elif sd.result_type == 'ref':
+        elif result_type == history.REF:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_ref
-        elif sd.result_type == 'float':
+        elif result_type == history.FLOAT:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_float
         else:
@@ -1755,26 +1755,32 @@ class MetaInterp(object):
             specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
         return expanded_args
 
-    def _initialize_from_start(self, original_boxes, num_green_args, *args):
+    @specialize.arg(1)
+    def initialize_original_boxes(self, jitdriver_sd, *args):
+        original_boxes = []
+        self._fill_original_boxes(jitdriver_sd, original_boxes,
+                                  jitdriver_sd.num_green_args, *args)
+        return original_boxes
+
+    @specialize.arg(1)
+    def _fill_original_boxes(self, jitdriver_sd, original_boxes,
+                             num_green_args, *args):
         if args:
             from pypy.jit.metainterp.warmstate import wrap
             box = wrap(self.cpu, args[0], num_green_args > 0)
             original_boxes.append(box)
-            self._initialize_from_start(original_boxes, num_green_args-1,
-                                        *args[1:])
+            self._fill_original_boxes(jitdriver_sd, original_boxes,
+                                      num_green_args-1, *args[1:])
 
-    def initialize_state_from_start(self, *args):
-        self.in_recursion = -1 # always one portal around
-        num_green_args = self.staticdata.num_green_args
-        original_boxes = []
-        self._initialize_from_start(original_boxes, num_green_args, *args)
+    def initialize_state_from_start(self, original_boxes):
         # ----- make a new frame -----
+        self.in_recursion = -1 # always one portal around
         self.framestack = []
-        f = self.newframe(self.staticdata.portal_code)
+        f = self.newframe(self.jitdriver_sd.mainjitcode)
         f.setup_call(original_boxes)
+        assert self.in_recursion == 0
         self.virtualref_boxes = []
         self.initialize_virtualizable(original_boxes)
-        return original_boxes
 
     def initialize_state_from_guard_failure(self, resumedescr):
         # guard failure: rebuild a complete MIFrame stack
@@ -1784,7 +1790,7 @@ class MetaInterp(object):
         self.history.inputargs = [box for box in inputargs_and_holes if box]
 
     def initialize_virtualizable(self, original_boxes):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             virtualizable_box = original_boxes[vinfo.index_of_virtualizable]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -1797,7 +1803,7 @@ class MetaInterp(object):
             self.initialize_virtualizable_enter()
 
     def initialize_virtualizable_enter(self):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         virtualizable_box = self.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
         vinfo.clear_vable_token(virtualizable)
@@ -1811,7 +1817,7 @@ class MetaInterp(object):
             # the FORCE_TOKEN is already set at runtime in each vref when
             # it is created, by optimizeopt.py.
         #
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -1837,7 +1843,7 @@ class MetaInterp(object):
                 self.stop_tracking_virtualref(i)
 
     def vable_after_residual_call(self):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -1888,7 +1894,7 @@ class MetaInterp(object):
         assert self.last_exc_value_box is None
 
     def rebuild_state_after_failure(self, resumedescr):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         self.framestack = []
         boxlists = resume.rebuild_from_resumedata(self, resumedescr, vinfo)
         inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
@@ -1924,13 +1930,13 @@ class MetaInterp(object):
 
     def check_synchronized_virtualizable(self):
         if not we_are_translated():
-            vinfo = self.staticdata.virtualizable_info
+            vinfo = self.jitdriver_sd.virtualizable_info
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             vinfo.check_boxes(virtualizable, self.virtualizable_boxes)
 
     def synchronize_virtualizable(self):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         virtualizable_box = self.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
         vinfo.write_boxes(virtualizable, self.virtualizable_boxes)
@@ -1939,7 +1945,7 @@ class MetaInterp(object):
         # Force a reload of the virtualizable fields into the local
         # boxes (called only in escaping cases).  Only call this function
         # just before SwitchToBlackhole.
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -1948,7 +1954,7 @@ class MetaInterp(object):
             self.virtualizable_boxes.append(virtualizable_box)
 
     def gen_store_back_in_virtualizable(self):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
             # xxx only write back the fields really modified
             vbox = self.virtualizable_boxes[-1]
@@ -1970,7 +1976,7 @@ class MetaInterp(object):
             assert i + 1 == len(self.virtualizable_boxes)
 
     def gen_load_from_other_virtualizable(self, vbox):
-        vinfo = self.staticdata.virtualizable_info
+        vinfo = self.jitdriver_sd.virtualizable_info
         boxes = []
         assert vinfo is not None
         for i in range(vinfo.num_static_extra_boxes):
@@ -1994,7 +2000,7 @@ class MetaInterp(object):
         for i in range(len(boxes)):
             if boxes[i] is oldbox:
                 boxes[i] = newbox
-        if self.staticdata.virtualizable_info is not None:
+        if self.jitdriver_sd.virtualizable_info is not None:
             boxes = self.virtualizable_boxes
             for i in range(len(boxes)):
                 if boxes[i] is oldbox:
@@ -2050,8 +2056,9 @@ class MetaInterp(object):
         assert op.opnum == rop.CALL_MAY_FORCE
         num_green_args = self.staticdata.num_green_args
         args = op.args[num_green_args + 1:]
-        if self.staticdata.virtualizable_info is not None:
-            vindex = self.staticdata.virtualizable_info.index_of_virtualizable
+        vinfo = self.jitdriver_sd.virtualizable_info
+        if vinfo is not None:
+            vindex = vinfo.index_of_virtualizable
             vbox = args[vindex - num_green_args]
             args = args + self.gen_load_from_other_virtualizable(vbox)
             # ^^^ and not "+=", which makes 'args' a resizable list
@@ -2156,6 +2163,16 @@ def _get_opimpl_method(name, argcodes):
                 position = position3 + 1 + length3
             elif argtype == "orgpc":
                 value = orgpc
+            elif argtype == "int":
+                argcode = argcodes[next_argcode]
+                next_argcode = next_argcode + 1
+                if argcode == 'i':
+                    value = ord(code[position])
+                elif argcode == 'c':
+                    value = signedord(code[position])
+                else:
+                    raise AssertionError("bad argcode")
+                position += 1
             else:
                 raise AssertionError("bad argtype: %r" % (argtype,))
             args += (value,)
