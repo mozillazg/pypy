@@ -53,7 +53,7 @@
    Note that the following line only works if a <= c in the first place,
    which we assume is true. */
 #define OP_INT_BETWEEN(a,b,c,r)   r = (((unsigned long)b - (unsigned long)a) \
-                                    <= ((unsigned long)c - (unsigned long)a))
+                                     < ((unsigned long)c - (unsigned long)a))
 
 /* addition, subtraction */
 

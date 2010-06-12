@@ -201,7 +201,7 @@ def op_int_between(a, b, c):
     assert lltype.typeOf(a) is lltype.Signed
     assert lltype.typeOf(b) is lltype.Signed
     assert lltype.typeOf(c) is lltype.Signed
-    return a <= b <= c
+    return a <= b < c
 
 def op_int_and(x, y):
     if not isinstance(x, int):
