@@ -581,30 +581,30 @@ class BasicTests:
             assert res == expect_result
             self.check_operations_history(expect_operations)
         #
-        check('n', 'm', 'p', True,  int_sub=2, uint_le=1)
-        check('n', 'p', 'm', False, int_sub=2, uint_le=1)
+        check('n', 'm', 'p', True,  int_sub=2, uint_lt=1)
+        check('n', 'p', 'm', False, int_sub=2, uint_lt=1)
         #
-        check('n', 'm', 6, True, int_sub=2, uint_le=1)
+        check('n', 'm', 6, False, int_sub=2, uint_lt=1)
         #
-        check('n', 4, 'p', False, int_sub=2, uint_le=1)
-        check('n', 5, 'p', True,  int_sub=2, uint_le=1)
-        check('n', 8, 'p', False, int_sub=2, uint_le=1)
+        check('n', 4, 'p', False, int_sub=2, uint_lt=1)
+        check('n', 5, 'p', True,  int_sub=2, uint_lt=1)
+        check('n', 8, 'p', False, int_sub=2, uint_lt=1)
         #
-        check('n', 6, 7, True, int_sub=2, uint_le=1)
+        check('n', 6, 7, True, int_sub=2, uint_lt=1)
         #
-        check(-2, 'n', 'p', True,  int_sub=2, uint_le=1)
-        check(-2, 'm', 'p', True,  int_sub=2, uint_le=1)
-        check(-2, 'p', 'm', False, int_sub=2, uint_le=1)
-        #check(0, 'n', 'p', True,  uint_le=1)   xxx implement me
-        #check(0, 'm', 'p', True,  uint_le=1)
-        #check(0, 'p', 'm', False, uint_le=1)
+        check(-2, 'n', 'p', True,  int_sub=2, uint_lt=1)
+        check(-2, 'm', 'p', True,  int_sub=2, uint_lt=1)
+        check(-2, 'p', 'm', False, int_sub=2, uint_lt=1)
+        #check(0, 'n', 'p', True,  uint_lt=1)   xxx implement me
+        #check(0, 'm', 'p', True,  uint_lt=1)
+        #check(0, 'p', 'm', False, uint_lt=1)
         #
-        check(2, 'n', 6, True,  int_sub=1, uint_le=1)
-        check(2, 'm', 6, True,  int_sub=1, uint_le=1)
-        check(2, 'p', 6, False, int_sub=1, uint_le=1)
+        check(2, 'n', 6, True,  int_sub=1, uint_lt=1)
+        check(2, 'm', 6, False, int_sub=1, uint_lt=1)
+        check(2, 'p', 6, False, int_sub=1, uint_lt=1)
         #
-        check(2, 6, 'n', False, int_sub=1, uint_le=1)
-        check(2, 6, 'm', True,  int_sub=1, uint_le=1)
+        check(2, 6, 'm', False, int_sub=1, uint_lt=1)
+        check(2, 6, 'p', True,  int_sub=1, uint_lt=1)
         #
         check(2, 40, 6,  False)
         check(2, 40, 60, True)

@@ -227,7 +227,7 @@ LL_OPERATIONS = {
     'int_rshift':           LLOp(canfold=True),
     'int_xor':              LLOp(canfold=True),
 
-    'int_between':          LLOp(canfold=True),   # a <= b <= c
+    'int_between':          LLOp(canfold=True),   # a <= b < c
 
     'int_add_ovf':          LLOp(canraise=(OverflowError,), tryfold=True),
     'int_add_nonneg_ovf':   LLOp(canraise=(OverflowError,), tryfold=True),
