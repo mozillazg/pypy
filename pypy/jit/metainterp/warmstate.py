@@ -207,6 +207,7 @@ class WarmEnterState(object):
         metainterp_sd = self.warmrunnerdesc.metainterp_sd
         jitdriver_sd = self.jitdriver_sd
         vinfo = jitdriver_sd.virtualizable_info
+        index_of_virtualizable = jitdriver_sd.index_of_virtualizable
         num_green_args = jitdriver_sd.num_green_args
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
@@ -224,7 +225,7 @@ class WarmEnterState(object):
                 self.set_param_optimizer(OPTIMIZER_FULL)
 
             if vinfo is not None:
-                virtualizable = args[vinfo.index_of_virtualizable]
+                virtualizable = args[num_green_args + index_of_virtualizable]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
             else:
                 virtualizable = None
@@ -433,6 +434,7 @@ class WarmEnterState(object):
         if vinfo is not None:
             i0 = len(jitdriver_sd._red_args_types)
             num_green_args = jitdriver_sd.num_green_args
+            index_of_virtualizable = jitdriver_sd.index_of_virtualizable
             vable_static_fields = unrolling_iterable(
                 zip(vinfo.static_extra_types, vinfo.static_fields))
             vable_array_fields = unrolling_iterable(
@@ -442,8 +444,7 @@ class WarmEnterState(object):
             #
             def set_future_values_from_vinfo(*redargs):
                 i = i0
-                virtualizable = redargs[vinfo.index_of_virtualizable -
-                                        num_green_args]
+                virtualizable = redargs[index_of_virtualizable]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
                 for typecode, fieldname in vable_static_fields:
                     x = getattr(virtualizable, fieldname)
