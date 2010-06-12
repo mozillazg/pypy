@@ -279,15 +279,25 @@ class WarmRunnerDesc(object):
                                                   warmrunnerdesc=self)
 
     def make_virtualizable_infos(self):
+        vinfos = {}
         for jd in self.jitdrivers_sd:
-            if jd.jitdriver.virtualizables:
-                XXX
+            if not jd.jitdriver.virtualizables:
+                jd.virtualizable_info = None
+                jd.index_of_virtualizable = -1
+                continue
+            #
+            jitdriver = jd.jitdriver
+            assert len(jitdriver.virtualizables) == 1    # for now
+            [vname] = jitdriver.virtualizables
+            # XXX skip the Voids here too
+            jd.index_of_virtualizable = jitdriver.reds.index(vname)
+            #
+            index = jd.num_green_args + jd.index_of_virtualizable
+            VTYPEPTR = jd._JIT_ENTER_FUNCTYPE.ARGS[index]
+            if VTYPEPTR not in vinfos:
                 from pypy.jit.metainterp.virtualizable import VirtualizableInfo
-                vinfo = VirtualizableInfo(self)
-                YYY  # share!
-            else:
-                vinfo = None
-            jd.virtualizable_info = vinfo
+                vinfos[VTYPEPTR] = VirtualizableInfo(self, VTYPEPTR)
+            jd.virtualizable_info = vinfos[VTYPEPTR]
 
     def make_exception_classes(self):
 
@@ -654,12 +664,7 @@ class WarmRunnerDesc(object):
         jd.assembler_helper_adr = llmemory.cast_ptr_to_adr(
             jd._assembler_helper_ptr)
         if vinfo is not None:
-            jd.index_of_virtualizable = (vinfo.index_of_virtualizable -
-                                         self.num_green_args)
             jd.vable_token_descr = vinfo.vable_token_descr
-        else:
-            jd.index_of_virtualizable = -1
-            jd.vable_token_descr = None
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr

@@ -518,16 +518,10 @@ class MIFrame(object):
         return not isstandard
 
     def _get_virtualizable_field_index(self, fielddescr):
-        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
+        # Get the index of a fielddescr.  Must only be called for
+        # the "standard" virtualizable.
+        vinfo = self.metainterp.jitdriver_sd.virtualizable_info
         return vinfo.static_field_by_descrs[fielddescr]
-
-    def _get_virtualizable_array_field_descr(self, index):
-        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
-        return vinfo.array_field_descrs[index]
-
-    def _get_virtualizable_array_descr(self, index):
-        vinfo = self.metainterp.jitdrivers_sd.virtualizable_info
-        return vinfo.array_descrs[index]
 
     @arguments("orgpc", "box", "descr")
     def _opimpl_getfield_vable(self, pc, box, fielddescr):
@@ -556,8 +550,10 @@ class MIFrame(object):
     opimpl_setfield_vable_f = _opimpl_setfield_vable
 
     def _get_arrayitem_vable_index(self, pc, arrayfielddescr, indexbox):
+        # Get the index of an array item: the index'th of the array
+        # described by arrayfielddescr.  Must only be called for
+        # the "standard" virtualizable.
         indexbox = self.implement_guard_value(pc, indexbox)
-        xxxxxxx
         vinfo = self.metainterp.jitdriver_sd.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -607,7 +603,6 @@ class MIFrame(object):
             arraybox = self.metainterp.execute_and_record(rop.GETFIELD_GC,
                                                           fdescr, box)
             return self.execute_with_descr(rop.ARRAYLEN_GC, adescr, arraybox)
-        xxxxxxx
         vinfo = self.metainterp.jitdriver_sd.virtualizable_info
         virtualizable_box = self.metainterp.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
@@ -1795,7 +1790,9 @@ class MetaInterp(object):
     def initialize_virtualizable(self, original_boxes):
         vinfo = self.jitdriver_sd.virtualizable_info
         if vinfo is not None:
-            virtualizable_box = original_boxes[vinfo.index_of_virtualizable]
+            index = (self.jitdriver_sd.num_green_args +
+                     self.jitdriver_sd.index_of_virtualizable)
+            virtualizable_box = original_boxes[index]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             # The field 'virtualizable_boxes' is not even present
             # if 'virtualizable_info' is None.  Check for that first.
@@ -1922,13 +1919,8 @@ class MetaInterp(object):
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             assert not virtualizable.vable_token
-            if 0:  ## self._already_allocated_resume_virtuals is not None:
-                # resuming from a ResumeGuardForcedDescr: load the new values
-                # currently stored on the virtualizable fields
-                self.load_fields_from_virtualizable()
-            else:
-                # normal case: fill the virtualizable with the local boxes
-                self.synchronize_virtualizable()
+            # fill the virtualizable with the local boxes
+            self.synchronize_virtualizable()
         return inputargs_and_holes
 
     def check_synchronized_virtualizable(self):
@@ -2060,8 +2052,8 @@ class MetaInterp(object):
         args = op.args[num_green_args + 1:]
         vinfo = targetjitdriver_sd.virtualizable_info
         if vinfo is not None:
-            vindex = vinfo.index_of_virtualizable
-            vbox = args[vindex - num_green_args]
+            index = targetjitdriver_sd.index_of_virtualizable
+            vbox = args[index]
             args = args + self.gen_load_from_other_virtualizable(vinfo, vbox)
             # ^^^ and not "+=", which makes 'args' a resizable list
         op.opnum = rop.CALL_ASSEMBLER
