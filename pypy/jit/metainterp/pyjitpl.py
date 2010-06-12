@@ -939,7 +939,8 @@ class MIFrame(object):
         original_greenkey = metainterp.resumekey.original_greenkey
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                         original_greenkey)
+                                                   original_greenkey,
+                                                   metainterp.jitdriver_sd)
         else:
             resumedescr = compile.ResumeGuardDescr(metainterp_sd,
                                                    original_greenkey)

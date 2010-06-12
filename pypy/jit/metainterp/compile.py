@@ -212,8 +212,6 @@ def make_done_loop_tokens():
 class ResumeDescr(AbstractFailDescr):
     def __init__(self, original_greenkey):
         self.original_greenkey = original_greenkey
-    def _clone_if_mutable(self):
-        raise NotImplementedError
 
 class ResumeGuardDescr(ResumeDescr):
     _counter = 0        # if < 0, there is one counter per value;
@@ -327,8 +325,7 @@ class ResumeGuardDescr(ResumeDescr):
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
                                new_loop.operations)
 
-    def _clone_if_mutable(self):
-        res = self.__class__(self.metainterp_sd, self.original_greenkey)
+    def copy_all_attrbutes_into(self, res):
         # XXX a bit ugly to have to list them all here
         res.rd_snapshot = self.rd_snapshot
         res.rd_frame_info_list = self.rd_frame_info_list
@@ -336,9 +333,17 @@ class ResumeGuardDescr(ResumeDescr):
         res.rd_consts = self.rd_consts
         res.rd_virtuals = self.rd_virtuals
         res.rd_pendingfields = self.rd_pendingfields
+
+    def _clone_if_mutable(self):
+        res = ResumeGuardDescr(self.metainterp_sd, self.original_greenkey)
+        self.copy_all_attrbutes_into(res)
         return res
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
+
+    def __init__(self, metainterp_sd, original_greenkey, jitdriver_sd):
+        ResumeGuardDescr.__init__(self, metainterp_sd, original_greenkey)
+        self.jitdriver_sd = jitdriver_sd
 
     def handle_fail(self, metainterp_sd, jitdriver_sd):
         # Failures of a GUARD_NOT_FORCED are never compiled, but
@@ -350,6 +355,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         all_virtuals = self.fetch_data(token)
         if all_virtuals is None:
             all_virtuals = []
+        assert jitdriver_sd is self.jitdriver_sd
         resume_in_blackhole(metainterp_sd, jitdriver_sd, self, all_virtuals)
         assert 0, "unreachable"
 
@@ -365,7 +371,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
     def handle_async_forcing(self, force_token):
         from pypy.jit.metainterp.resume import force_from_resumedata
         metainterp_sd = self.metainterp_sd
-        all_virtuals = force_from_resumedata(metainterp_sd, self)
+        vinfo = self.jitdriver_sd.virtualizable_info
+        all_virtuals = force_from_resumedata(metainterp_sd, self, vinfo)
         # The virtualizable data was stored on the real virtualizable above.
         # Handle all_virtuals: keep them for later blackholing from the
         # future failure of the GUARD_NOT_FORCED
@@ -398,6 +405,13 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
             else:
                 assert 0, "not found: %r" % (key,)
         return data
+
+    def _clone_if_mutable(self):
+        res = ResumeGuardForcedDescr(self.metainterp_sd,
+                                     self.original_greenkey,
+                                     self.jitdriver_sd)
+        self.copy_all_attrbutes_into(res)
+        return res
 
 
 class AbstractResumeGuardCounters(object):
