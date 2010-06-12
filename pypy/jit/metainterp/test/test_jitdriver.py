@@ -23,7 +23,7 @@ class MultipleJitDriversTests:
                 r += loop1(r, g) - 1
             return r
         #
-        res = self.meta_interp(loop2, [4, 40])
+        res = self.meta_interp(loop2, [4, 40], repeat=7)
         assert res == loop2(4, 40)
 
 
