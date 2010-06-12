@@ -187,8 +187,7 @@ class WarmEnterState(object):
         cell = self.jit_cell_at_key(greenkey)
         cell.dont_trace_here = True
         debug_start("jit-disableinlining")
-        sd = self.warmrunnerdesc.metainterp_sd
-        loc = sd.state.get_location_str(greenkey)
+        loc = self.get_location_str(greenkey)
         debug_print("disabled inlining", loc)
         debug_stop("jit-disableinlining")
 

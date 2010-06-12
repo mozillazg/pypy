@@ -326,7 +326,8 @@ class Transformer(object):
 
     def handle_recursive_call(self, op):
         jitdriver_sd = self.callcontrol.jitdriver_sd_from_portal_runner_ptr(
-            op.args[0])
+            op.args[0].value)
+        assert jitdriver_sd is not None
         ops = self.promote_greens(op.args[1:], jitdriver_sd.jitdriver)
         num_green_args = len(jitdriver_sd.jitdriver.greens)
         args = ([Constant(jitdriver_sd.index, lltype.Signed)] +

@@ -775,24 +775,23 @@ class BlackholeInterpreter(object):
             # call the interpreter main loop from here, and just return its
             # result.
             sd = self.builder.metainterp_sd
-            xxxxxxxxxxxx
-            if sd.result_type == 'void':
+            result_type = sd.jitdrivers_sd[jdindex].result_type
+            if result_type == 'v':
                 self.bhimpl_recursive_call_v(jdindex, *args)
                 self.bhimpl_void_return()
-            elif sd.result_type == 'int':
+            elif result_type == 'i':
                 x = self.bhimpl_recursive_call_i(jdindex, *args)
                 self.bhimpl_int_return(x)
-            elif sd.result_type == 'ref':
+            elif result_type == 'r':
                 x = self.bhimpl_recursive_call_r(jdindex, *args)
                 self.bhimpl_ref_return(x)
-            elif sd.result_type == 'float':
+            elif result_type == 'f':
                 x = self.bhimpl_recursive_call_f(jdindex, *args)
                 self.bhimpl_float_return(x)
             assert False
 
     def get_portal_runner(self, jdindex):
-        metainterp_sd = self.builder.metainterp_sd
-        jitdriver_sd = metainterp_sd.jitdrivers_sd[jdindex]
+        jitdriver_sd = self.builder.metainterp_sd.jitdrivers_sd[jdindex]
         fnptr = llmemory.cast_ptr_to_adr(jitdriver_sd.portal_runner_ptr)
         fnptr = heaptracker.adr2int(fnptr)
         calldescr = jitdriver_sd.mainjitcode.calldescr

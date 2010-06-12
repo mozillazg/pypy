@@ -53,8 +53,9 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
     testself.cw = cw
     cw.find_all_graphs(JitPolicy())
     #
-    testself.warmrunnerstate = FakeJitDriverSD._state = FakeWarmRunnerState()
+    testself.warmrunnerstate = FakeWarmRunnerState()
     testself.warmrunnerstate.cpu = cpu
+    FakeJitDriverSD.warmstate = testself.warmrunnerstate
     if hasattr(testself, 'finish_setup_for_interp_operations'):
         testself.finish_setup_for_interp_operations()
     #
@@ -831,7 +832,7 @@ class BasicTests:
         translator.config.translation.gc = "boehm"
         warmrunnerdesc = WarmRunnerDesc(translator,
                                         CPUClass=self.CPUClass)
-        state = warmrunnerdesc.jitdrivers_sd[0]._state
+        state = warmrunnerdesc.jitdrivers_sd[0].warmstate
         state.set_param_threshold(3)          # for tests
         state.set_param_trace_eagerness(0)    # for tests
         warmrunnerdesc.finish()
