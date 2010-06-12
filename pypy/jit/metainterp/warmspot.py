@@ -45,8 +45,9 @@ def apply_jit(translator, backend_name="auto", debug_level=DEBUG_STEPS,
                                     no_stats = True,
                                     ProfilerClass = ProfilerClass,
                                     **kwds)
-    warmrunnerdesc.state.set_param_inlining(inline)
-    warmrunnerdesc.state.set_param_debug(debug_level)
+    for jd in warmrunnerdesc.jitdrivers_sd:
+        jd.warmstate.set_param_inlining(inline)
+        jd.warmstate.set_param_debug(debug_level)
     warmrunnerdesc.finish()
     translator.warmrunnerdesc = warmrunnerdesc    # for later debugging
 
