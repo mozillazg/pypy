@@ -386,6 +386,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         the latter is added to `sys.modules` for the `"apple.banana"` key.
         """
         # Build the extensions.
+        import cpyext
         banana = self.compile_module(
             "apple.banana", separate_module_files=[self.here + 'banana.c'])
         self.record_imported_module("apple.banana")

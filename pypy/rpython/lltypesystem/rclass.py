@@ -14,7 +14,7 @@ from pypy.rpython.lltypesystem.lltype import \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
      Array, Char, Void, \
-     FuncType, Bool, Signed, functionptr, FuncType, PyObject
+     FuncType, Bool, Signed, functionptr, PyObject
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -22,6 +22,7 @@ from pypy.annotation import model as annmodel
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import objectmodel
 from pypy.lib.identity_dict import identity_dict
+from pypy.rpython.lltypesystem.lloperation import llop
 
 #
 #  There is one "vtable" per user class, with the following structure:
@@ -645,10 +646,12 @@ def ll_type(obj):
     return cast_pointer(OBJECTPTR, obj).typeptr
 
 def ll_issubclass(subcls, cls):
-    return cls.subclassrange_min <= subcls.subclassrange_min <= cls.subclassrange_max
+    return llop.int_between(Bool, cls.subclassrange_min,
+                                  subcls.subclassrange_min,
+                                  cls.subclassrange_max)
 
 def ll_issubclass_const(subcls, minid, maxid):
-    return minid <= subcls.subclassrange_min <= maxid
+    return llop.int_between(Bool, minid, subcls.subclassrange_min, maxid)
 
 
 def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT

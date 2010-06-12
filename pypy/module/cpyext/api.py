@@ -315,7 +315,7 @@ GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
     '_Py_TrueStruct#': ('PyObject*', 'space.w_True'),
     '_Py_ZeroStruct#': ('PyObject*', 'space.w_False'),
     '_Py_NotImplementedStruct#': ('PyObject*', 'space.w_NotImplemented'),
-    'PyDateTimeAPI': ('PyDateTime_CAPI*', 'cpyext.datetime.build_datetime_api(space)'),
+    'PyDateTimeAPI': ('PyDateTime_CAPI*', 'cpyext.cdatetime.build_datetime_api(space)'),
     }
 FORWARD_DECLS = []
 INIT_FUNCTIONS = []
@@ -361,7 +361,7 @@ build_exported_objects()
 
 def get_structtype_for_ctype(ctype):
     from pypy.module.cpyext.typeobjectdefs import PyTypeObjectPtr
-    from pypy.module.cpyext.datetime import PyDateTime_CAPI
+    from pypy.module.cpyext.cdatetime import PyDateTime_CAPI
     return {"PyObject*": PyObject, "PyTypeObject*": PyTypeObjectPtr,
             "PyDateTime_CAPI*": lltype.Ptr(PyDateTime_CAPI)}[ctype]
 
@@ -801,7 +801,7 @@ def build_eci(building_bridge, export_symbols, code):
         if sys.platform == "win32":
             # '%s' undefined; assuming extern returning int
             compile_extra.append("/we4013")
-        else:
+        elif sys.platform == 'linux2':
             compile_extra.append("-Werror=implicit-function-declaration")
         export_symbols_eci.append('pypyAPI')
     else:
