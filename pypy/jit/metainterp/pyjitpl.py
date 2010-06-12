@@ -761,11 +761,13 @@ class MIFrame(object):
         self.generate_guard(rop.GUARD_CLASS, box, [clsbox], resumepc=orgpc)
         return clsbox
 
-    @arguments()
-    def opimpl_can_enter_jit(self):
+    @arguments("int")
+    def opimpl_can_enter_jit(self, jdindex):
         if self.metainterp.in_recursion:
             from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit
             raise CannotInlineCanEnterJit()
+        assert jdindex == self.metainterp.jitdriver_sd.index, (
+            "found a can_enter_jit that does not match the current jitdriver")
         self.metainterp.seen_can_enter_jit = True
 
     def verify_green_args(self, jitdriver_sd, varargs):

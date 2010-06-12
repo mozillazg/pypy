@@ -681,6 +681,18 @@ class WarmRunnerDesc(object):
         origblock.operations.append(newop)
         origblock.exitswitch = None
         origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
+        #
+        # Also kill any can_enter_jit left behind (example: see
+        # test_jitdriver.test_simple, which has a can_enter_jit in
+        # loop1's origportalgraph)
+        can_enter_jits = _find_jit_marker([origportalgraph], 'can_enter_jit')
+        for _, block, i in can_enter_jits:
+            op = block.operations[i]
+            assert op.opname == 'jit_marker'
+            block.operations[i] = SpaceOperation('same_as',
+                                                 [Constant(None, lltype.Void)],
+                                                 op.result)
+        #
         checkgraph(origportalgraph)
 
     def add_finish(self):

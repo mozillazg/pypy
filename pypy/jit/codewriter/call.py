@@ -259,6 +259,12 @@ class CallControl(object):
                 return jd
         return None
 
+    def jitdriver_sd_from_jitdriver(self, jitdriver):
+        for jd in self.jitdrivers_sd:
+            if jd.jitdriver is jitdriver:
+                return jd
+        return None
+
     def get_vinfo(self, VTYPEPTR):
         seen = set()
         for jd in self.jitdrivers_sd:

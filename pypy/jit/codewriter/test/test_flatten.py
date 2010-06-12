@@ -584,13 +584,18 @@ class TestFlatten:
         class FakeJitDriverSD:
             jitdriver = myjitdriver
             index = 27
+        jd = FakeJitDriverSD()
+        class MyFakeCallControl(FakeCallControl):
+            def jitdriver_sd_from_jitdriver(self, jitdriver):
+                assert jitdriver == myjitdriver
+                return jd
         self.encoding_test(f, [4, 5], """
             -live- %i0, %i1
             int_guard_value %i0
             jit_merge_point $27, I[%i0], R[], F[], I[%i1], R[], F[]
-            can_enter_jit
+            can_enter_jit $27
             void_return
-        """, transform=True, liveness=True, jd=FakeJitDriverSD())
+        """, transform=True, liveness=True, cc=MyFakeCallControl(), jd=jd)
 
     def test_keepalive(self):
         S = lltype.GcStruct('S')
