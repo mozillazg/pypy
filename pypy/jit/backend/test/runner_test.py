@@ -1703,7 +1703,6 @@ class LLtypeBackendTest(BaseBackendTest):
                                              lltype.Signed))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
-            vable_token_descr = None
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
             assembler_helper_adr = llmemory.cast_ptr_to_adr(
                 _assembler_helper_ptr)
@@ -1751,7 +1750,6 @@ class LLtypeBackendTest(BaseBackendTest):
                                              lltype.Float))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
-            vable_token_descr = None
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
             assembler_helper_adr = llmemory.cast_ptr_to_adr(
                 _assembler_helper_ptr)
