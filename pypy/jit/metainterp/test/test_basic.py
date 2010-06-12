@@ -602,6 +602,8 @@ class BasicTests:
         check(2, 'n', 6, True,  int_sub=1, uint_lt=1)
         check(2, 'm', 6, False, int_sub=1, uint_lt=1)
         check(2, 'p', 6, False, int_sub=1, uint_lt=1)
+        check(5, 'n', 6, True,  int_eq=1)    # 6 == 5+1
+        check(5, 'm', 6, False, int_eq=1)    # 6 == 5+1
         #
         check(2, 6, 'm', False, int_sub=1, uint_lt=1)
         check(2, 6, 'p', True,  int_sub=1, uint_lt=1)
