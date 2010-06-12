@@ -53,9 +53,18 @@ def find_modtype(space, filepart):
             return PY_COMPILED, ".pyc", "rb"
 
     if space.config.objspace.usemodules.cpyext:
-        pydfile = filepart + so_extension
-        if os.path.exists(pydfile) and case_ok(pydfile):
-            return C_EXTENSION, so_extension, "rb"
+        try:
+            space.getitem(space.getattr(space.sys,
+                                        space.wrap('modules')),
+                          space.wrap('cpyext'))
+        except OperationError, o:
+            if not o.match(space, space.w_KeyError):
+                raise
+        else:
+            # cpyext was loaded, try to load cpython extensions
+            pydfile = filepart + so_extension
+            if os.path.exists(pydfile) and case_ok(pydfile):
+                return C_EXTENSION, so_extension, "rb"
 
     return SEARCH_ERROR, None, None
 
