@@ -613,14 +613,12 @@ class WarmRunnerDesc(object):
         def assembler_call_helper(failindex, virtualizableref):
             fail_descr = self.cpu.get_fail_descr_from_number(failindex)
             while True:
+                if vinfo is not None:
+                    virtualizable = lltype.cast_opaque_ptr(
+                        vinfo.VTYPEPTR, virtualizableref)
+                    vinfo.reset_vable_token(virtualizable)
                 try:
-                    if vinfo is not None:
-                        virtualizable = lltype.cast_opaque_ptr(
-                            vinfo.VTYPEPTR, virtualizableref)
-                        vinfo.reset_vable_token(virtualizable)
-                    XXX   # careful here, we must pass the correct jitdriver_sd
-                    loop_token = fail_descr.handle_fail(self.metainterp_sd)
-                    fail_descr = self.cpu.execute_token(loop_token)
+                    loop_token = fail_descr.handle_fail(self.metainterp_sd, jd)
                 except self.ContinueRunningNormally, e:
                     args = ()
                     for ARGTYPE, attrname, count in portalfunc_ARGS:
@@ -647,21 +645,21 @@ class WarmRunnerDesc(object):
                     else:
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
+                fail_descr = self.cpu.execute_token(loop_token)
 
         jd._assembler_call_helper = assembler_call_helper # for debugging
-        # XXX rewrite me, ugly sticking does not work any more
-        self.cpu.assembler_helper_ptr = self.helper_func(
+        jd._assembler_helper_ptr = self.helper_func(
             jd._PTR_ASSEMBLER_HELPER_FUNCTYPE,
             assembler_call_helper)
-        # XXX a bit ugly sticking
+        jd.assembler_helper_adr = llmemory.cast_ptr_to_adr(
+            jd._assembler_helper_ptr)
         if vinfo is not None:
-            XXX     # rewrite me, ugly sticking does not work any more
-            self.cpu.index_of_virtualizable = (vinfo.index_of_virtualizable -
-                                               self.num_green_args)
-            self.cpu.vable_token_descr = vinfo.vable_token_descr
+            jd.index_of_virtualizable = (vinfo.index_of_virtualizable -
+                                         self.num_green_args)
+            jd.vable_token_descr = vinfo.vable_token_descr
         else:
-            self.cpu.index_of_virtualizable = -1
-            self.cpu.vable_token_descr = None
+            jd.index_of_virtualizable = -1
+            jd.vable_token_descr = None
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
