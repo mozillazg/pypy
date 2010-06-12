@@ -233,8 +233,8 @@ class BasicTests:
             b = r_uint(b)
             return a/b
 
-        res = self.interp_operations(f, [4, 3])
-        assert res == 1
+        res = self.interp_operations(f, [-4, 3])
+        assert res == long(r_uint(-4)) // 3
 
     def test_direct_call(self):
         def g(n):
@@ -537,6 +537,29 @@ class BasicTests:
             return y
         res = self.meta_interp(f, [10])
         assert res == 0
+
+    def test_uint_operations(self):
+        from pypy.rlib.rarithmetic import r_uint
+        def f(n):
+            return ((r_uint(n) - 123) >> 1) <= r_uint(456)
+        res = self.interp_operations(f, [50])
+        assert res == False
+        self.check_operations_history(int_rshift=0, uint_rshift=1,
+                                      int_le=0, uint_le=1,
+                                      int_sub=1)
+
+    def test_uint_condition(self):
+        from pypy.rlib.rarithmetic import r_uint
+        def f(n):
+            if ((r_uint(n) - 123) >> 1) <= r_uint(456):
+                return 24
+            else:
+                return 12
+        res = self.interp_operations(f, [50])
+        assert res == 12
+        self.check_operations_history(int_rshift=0, uint_rshift=1,
+                                      int_le=0, uint_le=1,
+                                      int_sub=1)
 
     def test_getfield(self):
         class A:
