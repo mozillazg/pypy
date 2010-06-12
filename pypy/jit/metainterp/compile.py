@@ -39,9 +39,10 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(nb_args):
+def make_loop_token(nb_args, jitdriver_sd):
     loop_token = LoopToken()
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
+    loop_token.outermost_jitdriver_sd = jitdriver_sd
     return loop_token
 
 # ____________________________________________________________
@@ -64,7 +65,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop.operations = [op.clone() for op in ops]
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
-    loop_token = make_loop_token(len(loop.inputargs))
+    loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd)
     loop.token = loop_token
     loop.operations[-1].descr = loop_token     # patch the target of the JUMP
     try:
@@ -472,7 +473,7 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd = metainterp.staticdata
         jitdriver_sd = metainterp.jitdriver_sd
         metainterp.history.inputargs = self.redkey
-        new_loop_token = make_loop_token(len(self.redkey))
+        new_loop_token = make_loop_token(len(self.redkey), jitdriver_sd)
         new_loop.greenkey = self.original_greenkey
         new_loop.inputargs = self.redkey
         new_loop.token = new_loop_token
