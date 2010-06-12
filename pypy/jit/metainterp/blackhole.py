@@ -319,7 +319,7 @@ class BlackholeInterpreter(object):
         "NOT_RPYTHON"
         if self._return_type == 'i': return self.get_tmpreg_i()
         if self._return_type == 'r': return self.get_tmpreg_r()
-        if self._return_type == 'f': return self.get_tmpreg_v()
+        if self._return_type == 'f': return self.get_tmpreg_f()
         if self._return_type == 'v': return None
         raise ValueError(self._return_type)
 
