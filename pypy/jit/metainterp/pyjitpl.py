@@ -2162,7 +2162,7 @@ def _get_opimpl_method(name, argcodes):
                 argcode = argcodes[next_argcode]
                 next_argcode = next_argcode + 1
                 if argcode == 'i':
-                    value = ord(code[position])
+                    value = self.registers_i[ord(code[position])].getint()
                 elif argcode == 'c':
                     value = signedord(code[position])
                 else:
