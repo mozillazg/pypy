@@ -6,7 +6,8 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 class MultipleJitDriversTests:
 
     def test_simple(self):
-        myjitdriver1 = JitDriver(greens=[], reds=['n', 'm'])
+        myjitdriver1 = JitDriver(greens=[], reds=['n', 'm'],
+                                 can_inline = lambda *args: False)
         myjitdriver2 = JitDriver(greens=['g'], reds=['r'])
         #
         def loop1(n, m):
@@ -23,7 +24,7 @@ class MultipleJitDriversTests:
                 r += loop1(r, g) - 1
             return r
         #
-        res = self.meta_interp(loop2, [4, 40], repeat=7)
+        res = self.meta_interp(loop2, [4, 40], repeat=7, inline=True)
         assert res == loop2(4, 40)
 
 
