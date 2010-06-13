@@ -158,6 +158,21 @@ def min(space, __args__):
     return min_max(space, __args__, "min")
 min.unwrap_spec = [ObjSpace, Arguments]
 
+def map_single_collection(space, w_func, w_collection):
+    """Special case for 'map(func, coll)', where 'func' is not None and there
+    is only one 'coll' argument."""
+    w_iter = space.iter(w_collection)
+    result_w = []
+    while True:
+        try:
+            w_item = space.next(w_iter)
+        except OperationError, e:
+            if not e.match(space, space.w_StopIteration):
+                raise
+            break
+        result_w.append(space.call_function(w_func, w_item))
+    return space.newlist(result_w)
+
 def map(space, w_func, collections_w):
     """does 3 separate things, hence this enormous docstring.
        1.  if function is None, return a list of tuples, each with one
@@ -176,10 +191,13 @@ def map(space, w_func, collections_w):
     if not collections_w:
         msg = "map() requires at least two arguments"
         raise OperationError(space.w_TypeError, space.wrap(msg))
-    num_collections = len(collections_w)
     none_func = space.is_w(w_func, space.w_None)
-    if none_func and num_collections == 1:
-        return space.call_function(space.w_list, collections_w[0])
+    if len(collections_w) == 1:
+        w_collection = collections_w[0]
+        if none_func:
+            return space.call_function(space.w_list, w_collection)
+        else:
+            return map_single_collection(space, w_func, w_collection)
     result_w = []
     iterators_w = [space.iter(w_seq) for w_seq in collections_w]
     num_iterators = len(iterators_w)
@@ -199,10 +217,10 @@ def map(space, w_func, collections_w):
         if cont:
             w_args = space.newtuple(args_w)
             if none_func:
-                result_w.append(w_args)
+                w_res = w_args
             else:
                 w_res = space.call(w_func, w_args)
-                result_w.append(w_res)
+            result_w.append(w_res)
         else:
             return space.newlist(result_w)
 map.unwrap_spec = [ObjSpace, W_Root, "args_w"]
