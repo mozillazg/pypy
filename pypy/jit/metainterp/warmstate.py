@@ -470,6 +470,7 @@ class WarmEnterState(object):
         #
         can_inline_ptr = self.jitdriver_sd._can_inline_ptr
         unwrap_greenkey = self.make_unwrap_greenkey()
+        jit_getter = self.make_jitcell_getter()
         if can_inline_ptr is None:
             def can_inline_callable(*greenargs):
                 # XXX shouldn't it be False by default?
@@ -481,7 +482,7 @@ class WarmEnterState(object):
                 fn = support.maybe_on_top_of_llinterp(rtyper, can_inline_ptr)
                 return fn(*greenargs)
         def can_inline(*greenargs):
-            cell = self.jit_getter(*greenargs)
+            cell = jit_getter(*greenargs)
             if cell.dont_trace_here:
                 return False
             return can_inline_callable(*greenargs)
@@ -490,11 +491,10 @@ class WarmEnterState(object):
             greenargs = unwrap_greenkey(greenkey)
             return can_inline(*greenargs)
         self.can_inline_callable = can_inline_greenkey
-        
-        get_jitcell = self.make_jitcell_getter()
+
         def get_assembler_token(greenkey):
             greenargs = unwrap_greenkey(greenkey)
-            cell = get_jitcell(*greenargs)
+            cell = jit_getter(*greenargs)
             if cell.counter >= 0:
                 return None
             return cell.entry_loop_token
