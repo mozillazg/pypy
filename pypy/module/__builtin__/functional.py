@@ -204,6 +204,9 @@ def map_single_collection(space, w_func, w_collection):
             assert isinstance(code, pycode.PyCode)
             return map_single_user_function(code, w_func, w_iter)
     # /xxx end of special hacks
+    return map_single_other_callable(space, w_func, w_iter)
+
+def map_single_other_callable(space, w_func, w_iter):
     result_w = []
     while True:
         try:
@@ -214,14 +217,19 @@ def map_single_collection(space, w_func, w_collection):
             break
         result_w.append(space.call_function(w_func, w_item))
     return result_w
+map_single_other_callable._dont_inline_ = True
 
 from pypy.rlib.jit import JitDriver
-mapjitdriver = JitDriver(greens = ['code'], reds = ['w_func', 'w_iter'])
+mapjitdriver = JitDriver(greens = ['code'],
+                         reds = ['w_func', 'w_iter', 'result_w'],
+                         can_inline = lambda *args: False)
 def map_single_user_function(code, w_func, w_iter):
     result_w = []
     while True:
-        mapjitdriver.can_enter_jit(code=code, w_func=w_func, w_iter=w_iter)
-        mapjitdriver.jit_merge_point(code=code, w_func=w_func, w_iter=w_iter)
+        mapjitdriver.can_enter_jit(code=code, w_func=w_func,
+                                   w_iter=w_iter, result_w=result_w)
+        mapjitdriver.jit_merge_point(code=code, w_func=w_func,
+                                     w_iter=w_iter, result_w=result_w)
         space = w_func.space
         try:
             w_item = space.next(w_iter)
