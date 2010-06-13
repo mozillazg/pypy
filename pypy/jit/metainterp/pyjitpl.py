@@ -668,7 +668,7 @@ class MIFrame(object):
             # that assembler that we call is still correct
             self.verify_green_args(targetjitdriver_sd, greenboxes)
         #
-        k = llmemory.cast_ptr_to_adr(targetjitdriver_sd.portal_runner_ptr)
+        k = targetjitdriver_sd.portal_runner_adr
         funcbox = ConstInt(heaptracker.adr2int(k))
         return self.do_residual_call(funcbox, portal_code.calldescr,
                                      allboxes, assembler_call_token=token,

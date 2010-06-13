@@ -614,6 +614,7 @@ class WarmRunnerDesc(object):
         jd._ll_portal_runner = ll_portal_runner # for debugging
         jd.portal_runner_ptr = self.helper_func(jd._PTR_PORTAL_FUNCTYPE,
                                                 ll_portal_runner)
+        jd.portal_runner_adr = llmemory.cast_ptr_to_adr(jd.portal_runner_ptr)
         self.cpu.portal_calldescr = self.cpu.calldescrof(
             jd._PTR_PORTAL_FUNCTYPE.TO,
             jd._PTR_PORTAL_FUNCTYPE.TO.ARGS,

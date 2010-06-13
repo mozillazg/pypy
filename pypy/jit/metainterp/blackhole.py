@@ -792,8 +792,7 @@ class BlackholeInterpreter(object):
 
     def get_portal_runner(self, jdindex):
         jitdriver_sd = self.builder.metainterp_sd.jitdrivers_sd[jdindex]
-        fnptr = llmemory.cast_ptr_to_adr(jitdriver_sd.portal_runner_ptr)
-        fnptr = heaptracker.adr2int(fnptr)
+        fnptr = heaptracker.adr2int(jitdriver_sd.portal_runner_adr)
         calldescr = jitdriver_sd.mainjitcode.calldescr
         return fnptr, calldescr
 
