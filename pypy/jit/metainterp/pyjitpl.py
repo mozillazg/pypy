@@ -506,6 +506,8 @@ class MIFrame(object):
     def _nonstandard_virtualizable(self, pc, box):
         # returns True if 'box' is actually not the "standard" virtualizable
         # that is stored in metainterp.virtualizable_boxes[-1]
+        if self.metainterp.jitdriver_sd.virtualizable_info is None:
+            return True      # can occur in case of multiple JITs
         standard_box = self.metainterp.virtualizable_boxes[-1]
         if standard_box is box:
             return False
