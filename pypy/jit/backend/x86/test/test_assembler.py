@@ -4,11 +4,12 @@ from pypy.jit.backend.x86.regalloc import X86FrameManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, INT, REF, FLOAT
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.backend.x86.regalloc import WORD
+from pypy.jit.backend.x86.arch import WORD
 from pypy.jit.backend.detect_cpu import getcpuclass 
 
 ACTUAL_CPU = getcpuclass()
 
+py.test.skip()
 class FakeCPU:
     rtyper = None
     supports_floats = True

@@ -1,7 +1,7 @@
 import py
 from pypy.jit.backend.llsupport.symbolic import *
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.jit.backend.x86.regalloc import WORD
+from pypy.jit.backend.x86.arch import WORD
 
 # This test file is here and not in llsupport/test/ because it checks
 # that we get correct numbers for a 32-bit machine.

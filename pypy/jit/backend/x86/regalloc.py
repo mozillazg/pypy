@@ -16,28 +16,13 @@ from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import BaseCallDescr, BaseSizeDescr
 from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
      TempBox
+from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE, IS_X86_32, IS_X86_64
 
-# XXX
-import sys
-if sys.maxint == (2**31 - 1):
-    WORD = 4
-    FRAME_FIXED_SIZE = 5     # ebp + ebx + esi + edi + force_index = 5 words
-    FORCE_INDEX_OFS = -4*WORD
-    width_of_type = {
-        INT : 1,
-        REF : 1,
-        FLOAT : 2,
-    }
-else:
-    WORD = 8
-    FRAME_FIXED_SIZE = 7
-    FORCE_INDEX_OFS = -6*WORD
-    width_of_type = {
-        INT : 1,
-        REF : 1,
-        FLOAT : 1,
-    }
-
+width_of_type = {
+    INT : 1,
+    REF : 1,
+    FLOAT : (2 if IS_X86_32 else 1),
+}
 
 class X86RegisterManager(RegisterManager):
 
