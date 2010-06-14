@@ -12,6 +12,7 @@ Core routines for regular expression matching and searching.
 from pypy.rlib.rsre import rsre_char
 from pypy.rlib.rsre.rsre_char import SRE_INFO_PREFIX, SRE_INFO_LITERAL
 from pypy.rlib.rsre.rsre_char import OPCODE_INFO, MAXREPEAT
+from pypy.rlib.rsre.rsre_char import OPCODE_SUCCESS, OPCODE_LITERAL
 from pypy.rlib.unroll import unrolling_iterable
 
 #### Core classes
@@ -456,7 +457,7 @@ def op_repeat_one(ctx):
         if count < mincount:
             ctx.has_matched = ctx.NOT_MATCHED
             return True
-        if ctx.peek_code(ctx.peek_code(1) + 1) == 1: # 1 == OPCODES["success"]
+        if ctx.peek_code(ctx.peek_code(1) + 1) == OPCODE_SUCCESS:
             # tail is empty.  we're finished
             ctx.state.string_position = ctx.string_position
             ctx.has_matched = ctx.MATCHED
@@ -480,7 +481,7 @@ def op_repeat_one(ctx):
         # <optimization_only>
         ok = True
         nextidx = ctx.peek_code(1)
-        if ctx.peek_code(nextidx + 1) == 19: # 19 == OPCODES["literal"]
+        if ctx.peek_code(nextidx + 1) == OPCODE_LITERAL:
             # tail starts with a literal. skip positions where
             # the rest of the pattern cannot possibly match
             chr = ctx.peek_code(nextidx + 2)
@@ -528,7 +529,7 @@ def op_min_repeat_one(ctx):
                 ctx.has_matched = ctx.NOT_MATCHED
                 return True
             ctx.skip_char(count)
-        if ctx.peek_code(ctx.peek_code(1) + 1) == 1: # OPCODES["success"]
+        if ctx.peek_code(ctx.peek_code(1) + 1) == OPCODE_SUCCESS:
             # tail is empty.  we're finished
             ctx.state.string_position = ctx.string_position
             ctx.has_matched = ctx.MATCHED
