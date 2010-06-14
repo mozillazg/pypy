@@ -1,5 +1,6 @@
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.rsre import rsre
+from pypy.rlib.nonconst import NonConstant
 import os, time
 
 
@@ -24,9 +25,13 @@ def read(filename):
 def search_in_file(filename):
     data = read(filename)
     p = 0
+    if NonConstant(True):
+        r = r_code1
+    else:
+        r = []
     while True:
         state = rsre.SimpleStringState(data, p)
-        res = state.search(r_code1)
+        res = state.search(r)
         if not res:
             break
         groups = state.create_regs(1)
@@ -49,6 +54,10 @@ def entry_point(argv):
 
 def target(*args):
     return entry_point, None
+
+from pypy.jit.codewriter.policy import JitPolicy
+def jitpolicy(driver):
+    return JitPolicy()
 
 # _____ Pure Python equivalent _____
 

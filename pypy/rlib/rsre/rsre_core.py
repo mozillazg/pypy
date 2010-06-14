@@ -14,6 +14,7 @@ from pypy.rlib.rsre.rsre_char import SRE_INFO_PREFIX, SRE_INFO_LITERAL
 from pypy.rlib.rsre.rsre_char import OPCODE_INFO, MAXREPEAT
 from pypy.rlib.rsre.rsre_char import OPCODE_SUCCESS, OPCODE_LITERAL
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.debug import make_sure_not_modified
 
 #### Core classes
 
@@ -212,42 +213,59 @@ def search(state, pattern_codes):
         string_position += 1
     return False
 
+from pypy.rlib.jit import JitDriver, unroll_safe
+rsrejitdriver = JitDriver(greens=['i', 'overlap_offset', 'pattern_codes'],
+                          reds=['string_position', 'end', 'state'],
+                          can_inline=lambda *args: False)
+
 def fast_search(state, pattern_codes):
     """Skips forward in a string as fast as possible using information from
     an optimization info block."""
     # pattern starts with a known prefix
     # <5=length> <6=skip> <7=prefix data> <overlap data>
-    flags = pattern_codes[2]
     prefix_len = pattern_codes[5]
-    assert prefix_len >= 0
-    prefix_skip = pattern_codes[6] # don't really know what this is good for
-    assert prefix_skip >= 0
-    prefix = pattern_codes[7:7 + prefix_len]
     overlap_offset = 7 + prefix_len - 1
     assert overlap_offset >= 0
-    pattern_offset = pattern_codes[1] + 1
-    assert pattern_offset >= 0
     i = 0
     string_position = state.string_position
     end = state.end
     while string_position < end:
         while True:
+            rsrejitdriver.can_enter_jit(
+                pattern_codes=pattern_codes,
+                i=i,
+                string_position=string_position,
+                end=end,
+                state=state,
+                overlap_offset=overlap_offset)
+            rsrejitdriver.jit_merge_point(
+                pattern_codes=pattern_codes,
+                i=i,
+                string_position=string_position,
+                end=end,
+                state=state,
+                overlap_offset=overlap_offset)
             char_ord = state.get_char_ord(string_position)
-            if char_ord != prefix[i]:
+            if char_ord != pattern_codes[7+i]:
                 if i == 0:
                     break
                 else:
                     i = pattern_codes[overlap_offset + i]
             else:
                 i += 1
+                prefix_len = pattern_codes[5]
                 if i == prefix_len:
                     # found a potential match
+                    prefix_skip = pattern_codes[6]
                     state.start = string_position + 1 - prefix_len
                     state.string_position = string_position + 1 \
                                                  - prefix_len + prefix_skip
+                    flags = pattern_codes[2]
                     if flags & SRE_INFO_LITERAL:
                         return True # matched all of pure literal pattern
+                    pattern_offset = pattern_codes[1] + 1
                     start = pattern_offset + 2 * prefix_skip
+                    assert start >= 0
                     if match(state, pattern_codes, start):
                         return True
                     i = pattern_codes[overlap_offset + i]
@@ -255,9 +273,11 @@ def fast_search(state, pattern_codes):
         string_position += 1
     return False
 
+@unroll_safe
 def match(state, pattern_codes, pstart=0):
     # Optimization: Check string length. pattern_codes[3] contains the
     # minimum length for a string to possibly match.
+    make_sure_not_modified(pattern_codes)
     if pattern_codes[pstart] == OPCODE_INFO and pattern_codes[pstart+3] > 0:
         # <INFO> <1=skip> <2=flags> <3=min>
         if state.end - state.string_position < pattern_codes[pstart+3]:
@@ -275,6 +295,7 @@ def match(state, pattern_codes, pstart=0):
             state.context_stack.pop()
     return has_matched == MatchContext.MATCHED
 
+@unroll_safe
 def dispatch_loop(context):
     """Returns MATCHED if the current context matches, NOT_MATCHED if it doesn't
     and UNDECIDED if matching is not finished, ie must be resumed after child
@@ -478,26 +499,8 @@ def op_repeat_one(ctx):
 
     # Initialize the actual backtracking
     if count >= mincount:
-        # <optimization_only>
-        ok = True
-        nextidx = ctx.peek_code(1)
-        if ctx.peek_code(nextidx + 1) == OPCODE_LITERAL:
-            # tail starts with a literal. skip positions where
-            # the rest of the pattern cannot possibly match
-            chr = ctx.peek_code(nextidx + 2)
-            if ctx.at_end():
-                ctx.skip_char(-1)
-                count -= 1
-                ok = count >= mincount
-            while ok:
-                if ctx.peek_char() == chr:
-                    break
-                ctx.skip_char(-1)
-                count -= 1
-                ok = count >= mincount
-        # </optimization_only>
-
-        if ok:
+        count = quickly_skip_unmatchable_positions(ctx, count, mincount)
+        if count >= mincount:
             ctx.state.string_position = ctx.string_position
             ctx.push_new_context(ctx.peek_code(1) + 1)
             ctx.backup_value(mincount)
@@ -508,6 +511,23 @@ def op_repeat_one(ctx):
     ctx.state.marks_pop_discard()
     ctx.has_matched = ctx.NOT_MATCHED
     return True
+
+def quickly_skip_unmatchable_positions(ctx, count, mincount):
+    # this is only an optimization
+    nextidx = ctx.peek_code(1)
+    if ctx.peek_code(nextidx + 1) == OPCODE_LITERAL:
+        # tail starts with a literal. skip positions where
+        # the rest of the pattern cannot possibly match
+        chr = ctx.peek_code(nextidx + 2)
+        if ctx.at_end():
+            ctx.skip_char(-1)
+            count -= 1
+        while count >= mincount:
+            if ctx.peek_char() == chr:
+                break
+            ctx.skip_char(-1)
+            count -= 1
+    return count
 
 def op_min_repeat_one(ctx):
     # match repeated sequence (minimizing)
@@ -859,22 +879,26 @@ def count_repetitions(ctx, maxcount):
             count = function(ctx, real_maxcount)
             break
     else:
-        # This is a general solution, a bit hackisch, but works
-        code_position = ctx.code_position
-        count = 0
-        ctx.skip_code(4)
-        reset_position = ctx.code_position
-        while count < real_maxcount:
-            # this works because the single character pattern is followed by
-            # a success opcode
-            ctx.code_position = reset_position
-            opcode_dispatch_table[code](ctx)
-            if ctx.has_matched == ctx.NOT_MATCHED:
-                break
-            count += 1
-        ctx.has_matched = ctx.UNDECIDED
-        ctx.code_position = code_position
+        count = general_count_repetitions(ctx, real_maxcount, code)
     ctx.string_position = string_position
+    return count
+
+def general_count_repetitions(ctx, real_maxcount, code):
+    # This is a general solution, a bit hackisch, but works
+    code_position = ctx.code_position
+    count = 0
+    ctx.skip_code(4)
+    reset_position = ctx.code_position
+    while count < real_maxcount:
+        # this works because the single character pattern is followed by
+        # a success opcode
+        ctx.code_position = reset_position
+        opcode_dispatch_table[code](ctx)
+        if ctx.has_matched == ctx.NOT_MATCHED:
+            break
+        count += 1
+    ctx.has_matched = ctx.UNDECIDED
+    ctx.code_position = code_position
     return count
 
 opcode_dispatch_table = [
