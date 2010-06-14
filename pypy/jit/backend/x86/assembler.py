@@ -7,9 +7,10 @@ from pypy.rpython.lltypesystem import lltype, rffi, rstr, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.tool.uid import fixid
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD,\
-     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs, FRAME_FIXED_SIZE,\
-     FORCE_INDEX_OFS
+from pypy.jit.backend.x86.regalloc import RegAlloc, \
+     X86RegisterManager, X86XMMRegisterManager, get_ebp_ofs
+
+from pypy.jit.backend.x86.arch import FRAME_FIXED_SIZE, FORCE_INDEX_OFS, WORD, IS_X86_32, IS_X86_64
 
 from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          esp, ebp, esi, edi,
@@ -226,9 +227,9 @@ class Assembler386(object):
             for i in range(self.cpu.NUM_REGS):# the *caller* frame, from esp+8
                 mc.MOVSD_sx((WORD*2)+8*i, i)
         mc.SUB(edx, eax)                      # compute the size we want
-        if WORD == 4:
+        if IS_X86_32:
             mc.MOV_sr(WORD, edx.value)        # save it as the new argument
-        elif WORD == 8:
+        elif IS_X86_64:
             # FIXME: We can't just clobber rdi like this, can we?
             mc.MOV_rr(edi.value, edx.value)
 
@@ -390,7 +391,7 @@ class Assembler386(object):
         mc.RET()
 
     def _assemble_bootstrap_direct_call(self, arglocs, jmpadr, stackdepth):
-        if WORD == 8:
+        if IS_X86_64:
             return self._assemble_bootstrap_direct_call_64(arglocs, jmpadr, stackdepth)
         # XXX pushing ebx esi and edi is a bit pointless, since we store
         #     all regsiters anyway, for the case of guard_not_forced
@@ -607,9 +608,9 @@ class Assembler386(object):
         def genop_cmp(self, op, arglocs, result_loc):
             self.mc.UCOMISD(arglocs[0], arglocs[1])
             tmp1 = result_loc.lowest8bits()
-            if WORD == 4:
+            if IS_X86_32:
                 tmp2 = result_loc.higher8bits()
-            elif WORD == 8:
+            elif IS_X86_64:
                 tmp2 = X86_64_SCRATCH_REG.lowest8bits()
 
             self.mc.SET_ir(rx86.Conditions[cond], tmp1.value)
@@ -662,7 +663,7 @@ class Assembler386(object):
     @specialize.arg(5)
     def _emit_call(self, x, arglocs, start=0, tmp=eax, force_mc=False,
                    mc=None):
-        if WORD == 8:
+        if IS_X86_64:
             return self._emit_call_64(x, arglocs, start, tmp, force_mc, mc)
 
         if not force_mc:
@@ -912,12 +913,10 @@ class Assembler386(object):
     genop_virtual_ref = genop_same_as
 
     def genop_int_mod(self, op, arglocs, resloc):
-        if WORD == 4:
+        if IS_X86_32:
             self.mc.CDQ()
-        elif WORD == 8:
+        elif IS_X86_64:
             self.mc.CQO()
-        else:
-            raise AssertionError("Can't happen")
 
         self.mc.IDIV_r(ecx.value)
 
@@ -1482,9 +1481,9 @@ class Assembler386(object):
         # it's ok because failure_recovery_func is not calling anything more
 
         # XXX
-        if mc.WORD == 4:
+        if IS_X86_32:
             mc.PUSH(ebx)
-        elif mc.WORD == 8:
+        elif IS_X86_64:
             mc.MOV(edi, ebx)
             # XXX: Correct to only align the stack on 64-bit?
             mc.AND_ri(esp.value, -16)
@@ -1570,7 +1569,7 @@ class Assembler386(object):
         
         self._emit_call(x, arglocs, 2, tmp=tmp)
 
-        if isinstance(resloc, StackLoc) and resloc.width == 8 and WORD == 4:
+        if isinstance(resloc, StackLoc) and resloc.width == 8 and IS_X86_32:
             self.mc.FSTP_b(resloc.value)
         elif size == 1:
             self.mc.AND(eax, imm(0xff))
@@ -1614,7 +1613,7 @@ class Assembler386(object):
         assert 0 < offset <= 127
         mc.overwrite(jmp_location - 1, [chr(offset)])
         self._stop_block()
-        if WORD == 4 and isinstance(result_loc, StackLoc) and result_loc.type == FLOAT:
+        if IS_X86_32 and isinstance(result_loc, StackLoc) and result_loc.type == FLOAT:
             self.mc.FSTP_b(result_loc.value)
         else:
             assert result_loc is eax or result_loc is xmm0 or result_loc is None
@@ -1639,7 +1638,11 @@ class Assembler386(object):
         for i in range(len(arglocs)-1, -1, -1):
             mc.PUSH(arglocs[i])
         
-        if WORD == 8:
+        if IS_X86_64:
+            # We clobber these registers to pass the arguments, but that's
+            # okay, because consider_cond_call_gc_wb makes sure that any
+            # caller-save registers with values in them are present in arglocs,
+            # so they are saved on the stack above and restored below 
             mc.MOV_rs(edi.value, 0)
             mc.MOV_rs(esi.value, 8)
 

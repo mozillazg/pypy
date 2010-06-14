@@ -9,7 +9,8 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.llsupport.gc import GcLLDescription
 from pypy.jit.backend.detect_cpu import getcpuclass
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, FRAME_FIXED_SIZE
+from pypy.jit.backend.x86.regalloc import RegAlloc
+from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper

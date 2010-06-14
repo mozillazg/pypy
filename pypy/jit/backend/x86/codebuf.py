@@ -6,12 +6,12 @@ from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder, X86_64_CodeBuilder
 from pypy.jit.backend.x86.regloc import LocationCodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.jit.backend.x86.regalloc import WORD
+from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
 
 # XXX: Seems nasty to change the superclass of InMemoryCodeBuilder like this
-if WORD == 4:
+if IS_X86_32:
     codebuilder_cls = X86_32_CodeBuilder
-elif WORD == 8:
+elif IS_X86_64:
     codebuilder_cls = X86_64_CodeBuilder
 
 class InMemoryCodeBuilder(codebuilder_cls, LocationCodeBuilder):
@@ -108,9 +108,9 @@ class MachineCodeDumper:
                 return False
             # log the executable name
             from pypy.jit.backend.hlinfo import highleveljitinfo
-            if WORD == 4:
+            if IS_X86_32:
                 os.write(self.log_fd, 'BACKEND x86\n')
-            elif WORD == 8:
+            elif IS_X86_64:
                 os.write(self.log_fd, 'BACKEND x86_64\n')
             if highleveljitinfo.sys_executable:
                 os.write(self.log_fd, 'SYS_EXECUTABLE %s\n' % (
