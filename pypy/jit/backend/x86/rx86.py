@@ -420,48 +420,6 @@ class AbstractX86CodeBuilder(object):
     # ------------------------------ MOV ------------------------------
 
     MOV_ri = insn(rex_w, register(1), '\xB8', immediate(2, 'q'))
-    MOV_rr = insn(rex_w, '\x89', register(2,8), register(1), '\xC0')
-    MOV_bi = insn(rex_w, '\xC7', stack_bp(1), immediate(2))
-    MOV_br = insn(rex_w, '\x89', register(2,8), stack_bp(1))
-    MOV_rb = insn(rex_w, '\x8B', register(1,8), stack_bp(2))
-    MOV_sr = insn(rex_w, '\x89', register(2,8), stack_sp(1))
-    MOV_rs = insn(rex_w, '\x8B', register(1,8), stack_sp(2))
-
-    # "MOV reg1, [reg2+offset]" and the opposite direction
-    MOV_rm = insn(rex_w, '\x8B', register(1,8), mem_reg_plus_const(2))
-    MOV_mr = insn(rex_w, '\x89', register(2,8), mem_reg_plus_const(1))
-    MOV_mi = insn(rex_w, '\xC7', orbyte(0<<3), mem_reg_plus_const(1),
-                                               immediate(2, 'i'))
-
-    # "MOV reg1, [reg2+reg3*scale+offset]" and the opposite direction
-    MOV_ra = insn(rex_w, '\x8B', register(1,8),
-                                 mem_reg_plus_scaled_reg_plus_const(2))
-    MOV_ar = insn(rex_w, '\x89', register(2,8),
-                                 mem_reg_plus_scaled_reg_plus_const(1))
-    MOV_ai = insn(rex_w, '\xC7', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2))
-
-
-    MOV8_mr = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_const(1))
-    MOV8_ar = insn(rex_w, '\x88', byte_register(2, 8), mem_reg_plus_scaled_reg_plus_const(1))
-    MOV8_mi = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_const(1), immediate(2, 'b'))
-    MOV8_ai = insn(rex_w, '\xC6', orbyte(0<<3), mem_reg_plus_scaled_reg_plus_const(1), immediate(2, 'b'))
-
-    MOVZX8_rr = insn(rex_w, '\x0F\xB6', register(1,8), byte_register(2), '\xC0')
-    MOVZX8_rm = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_const(2))
-    MOVZX8_ra = insn(rex_w, '\x0F\xB6', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
-
-    MOVZX16_rm = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_const(2))
-    MOVZX16_ra = insn(rex_w, '\x0F\xB7', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
-
-    # FIXME: Only difference between MOV32 and MOV instructions is rex_nw instead of rex_w
-    MOV32_ra = insn(rex_nw, '\x8B', register(1,8),
-                                   mem_reg_plus_scaled_reg_plus_const(2))
-    MOV32_ar = insn(rex_nw, '\x89', register(2,8),
-                                   mem_reg_plus_scaled_reg_plus_const(1))
-    MOV32_rm = insn(rex_nw, '\x8B', register(1,8), mem_reg_plus_const(2))
-    MOV32_mr = insn(rex_nw, '\x89', register(2,8), mem_reg_plus_const(1))
-    MOV32_mi = insn(rex_nw, '\xC7', orbyte(0<<3), mem_reg_plus_const(1),
-                                                immediate(2, 'i'))
 
     # ------------------------------ Arithmetic ------------------------------
 
@@ -524,7 +482,9 @@ class AbstractX86CodeBuilder(object):
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
 
-    XCHG_rm = insn(rex_w, '\x87', register(1,8), mem_reg_plus_const(2))
+    # XXX: Only here for testing purposes..."as" happens the encode the
+    # registers in the opposite order that we would otherwise do in a
+    # register-register exchange
     XCHG_rr = insn(rex_w, '\x87', register(1), register(2,8), '\xC0')
 
     JMP_l = insn('\xE9', relative(1))
@@ -548,55 +508,12 @@ class AbstractX86CodeBuilder(object):
 
     # ------------------------------ SSE2 ------------------------------
 
-    MOVSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), register(2),
-                                                              '\xC0')
-    MOVSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_bp(2))
-    MOVSD_bx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_bp(1))
-    MOVSD_xs = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), stack_sp(2))
-    MOVSD_sx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), stack_sp(1))
-    MOVSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8),
-                                                     mem_reg_plus_const(2))
-    MOVSD_xa = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1,8), mem_reg_plus_scaled_reg_plus_const(2))
-    MOVSD_mx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8),
-                                                     mem_reg_plus_const(1))
-    MOVSD_ax = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2,8), mem_reg_plus_scaled_reg_plus_const(1))
-
-
-    # Arithmetic
-    ADDSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), register(2), '\xC0')
-    ADDSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), stack_bp(2))
-    ADDSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), mem_reg_plus_const(2))
-
-    SUBSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), register(2), '\xC0')
-    SUBSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), stack_bp(2))
-    SUBSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), mem_reg_plus_const(2))
-
-    MULSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), register(2), '\xC0')
-    MULSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), stack_bp(2))
-    MULSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), mem_reg_plus_const(2))
-
-    DIVSD_xx = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), register(2), '\xC0')
-    DIVSD_xb = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), stack_bp(2))
-    DIVSD_xm = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), mem_reg_plus_const(2))
-
-    # Comparision
-    UCOMISD_xx = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), register(2), '\xC0')
-    UCOMISD_xb = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), stack_bp(2))
-    UCOMISD_xm = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), mem_reg_plus_const(2))
-
     # Conversion
     CVTSI2SD_xr = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), register(2), '\xC0')
     CVTSI2SD_xb = xmminsn('\xF2', rex_w, '\x0F\x2A', register(1, 8), stack_bp(2))
 
     CVTTSD2SI_rx = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), register(2), '\xC0')
     CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
-
-    # Bitwise
-
-    XORPD_xx = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), register(2), '\xC0')
-    XORPD_xm = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), mem_reg_plus_const(2))
-
-    ANDPD_xm = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), mem_reg_plus_const(2))
 
     # ------------------------------------------------------------
 
@@ -623,14 +540,6 @@ Conditions = {
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
 
-    # We can do direct memory references on 32-bit
-    MOV_rj = insn(rex_w, '\x8B', register(1,8), '\x05', immediate(2))
-    MOV_jr = insn(rex_w, '\x89', register(2,8), '\x05', immediate(1))
-    MOV_ji = insn(rex_w, '\xC7', '\x05', immediate(1), immediate(2))
-    MOV8_ji = insn(rex_w, '\xC6', orbyte(0<<3), '\x05', immediate(1), immediate(2, 'b'))
-    MOV8_jr = insn(rex_w, '\x88', byte_register(2, 8), '\x05', immediate(1))
-    MOVZX8_rj = insn(rex_w, '\x0F\xB6', register(1,8), '\x05', immediate(2))
-
     CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
     CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
     CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
@@ -639,18 +548,6 @@ class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
     # displacement is always enough to encode any address
     CALL_j = AbstractX86CodeBuilder.CALL_l
-
-    XCHG_rj = insn(rex_w, '\x87', register(1,8), '\x05', immediate(2))
-
-    MOVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x10', register(1, 8), '\x05', immediate(2))
-    MOVSD_jx = xmminsn('\xF2', rex_nw, '\x0F\x11', register(2, 8), '\x05', immediate(1))
-    ADDSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x58', register(1, 8), '\x05', immediate(2))
-    SUBSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5C', register(1, 8), '\x05', immediate(2))
-    MULSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x59', register(1, 8), '\x05', immediate(2))
-    DIVSD_xj = xmminsn('\xF2', rex_nw, '\x0F\x5E', register(1, 8), '\x05', immediate(2))
-    UCOMISD_xj = xmminsn('\x66', rex_nw, '\x0F\x2E', register(1, 8), '\x05', immediate(2))
-    ANDPD_xj = xmminsn('\x66', rex_nw, '\x0F\x54', register(1, 8), '\x05', immediate(2))
-    XORPD_xj = xmminsn('\x66', rex_nw, '\x0F\x57', register(1, 8), '\x05', immediate(2))
 
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
@@ -690,6 +587,64 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
 
     # XXX
     CALL_j = CALL_l
+
+def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR'):
+    def add_insn(code, *modrm):
+        args = before_modrm + list(modrm) + after_modrm
+        methname = insnname_template.replace('*', code)
+        if methname.endswith('_rr') or methname.endswith('_xx'):
+            args.append('\xC0')
+
+        if regtype == 'XMM':
+            insn_func = xmminsn(*args)
+        else:
+            insn_func = insn(*args)
+
+        if not hasattr(AbstractX86CodeBuilder, methname):
+            setattr(AbstractX86CodeBuilder, methname, insn_func)
+
+    modrm_argnum = insnname_template.split('_')[1].index('*')+1
+
+    if regtype == 'GPR':
+        add_insn('r', register(modrm_argnum))
+    elif regtype == 'BYTE':
+        add_insn('r', byte_register(modrm_argnum))
+    elif regtype == 'XMM':
+        add_insn('x', register(modrm_argnum))
+    else:
+        raise AssertionError("Invalid type")
+
+    add_insn('b', stack_bp(modrm_argnum))
+    add_insn('s', stack_sp(modrm_argnum))
+    add_insn('m', mem_reg_plus_const(modrm_argnum))
+    add_insn('a', mem_reg_plus_scaled_reg_plus_const(modrm_argnum))
+    add_insn('j', '\x05', immediate(modrm_argnum))
+
+# Define a regular MOV, and a variant MOV32 that only uses the low 4 bytes of a
+# register
+for insnname, rex_type in [('MOV', rex_w), ('MOV32', rex_nw)]:
+    define_modrm_modes(insnname + '_*r', [rex_type, '\x89', register(2, 8)])
+    define_modrm_modes(insnname + '_r*', [rex_type, '\x8B', register(1, 8)])
+    define_modrm_modes(insnname + '_*i', [rex_type, '\xC7', orbyte(0<<3)], [immediate(2)])
+
+define_modrm_modes('MOV8_*r', [rex_w, '\x88', byte_register(2, 8)], regtype='BYTE')
+define_modrm_modes('MOV8_*i', [rex_w, '\xC6', orbyte(0<<3)], [immediate(2, 'b')], regtype='BYTE')
+
+define_modrm_modes('MOVZX8_r*', [rex_w, '\x0F\xB6', register(1, 8)], regtype='BYTE')
+define_modrm_modes('MOVZX16_r*', [rex_w, '\x0F\xB7', register(1, 8)])
+
+define_modrm_modes('MOVSD_x*', ['\xF2', rex_nw, '\x0F\x10', register(1,8)], regtype='XMM')
+define_modrm_modes('MOVSD_*x', ['\xF2', rex_nw, '\x0F\x11', register(2,8)], regtype='XMM')
+
+define_modrm_modes('XCHG_r*', [rex_w, '\x87', register(1, 8)])
+
+define_modrm_modes('ADDSD_x*', ['\xF2', rex_nw, '\x0F\x58', register(1, 8)], regtype='XMM')
+define_modrm_modes('SUBSD_x*', ['\xF2', rex_nw, '\x0F\x5C', register(1, 8)], regtype='XMM')
+define_modrm_modes('MULSD_x*', ['\xF2', rex_nw, '\x0F\x59', register(1, 8)], regtype='XMM')
+define_modrm_modes('DIVSD_x*', ['\xF2', rex_nw, '\x0F\x5E', register(1, 8)], regtype='XMM')
+define_modrm_modes('UCOMISD_x*', ['\x66', rex_nw, '\x0F\x2E', register(1, 8)], regtype='XMM')
+define_modrm_modes('XORPD_x*', ['\x66', rex_nw, '\x0F\x57', register(1, 8)], regtype='XMM')
+define_modrm_modes('ANDPD_x*', ['\x66', rex_nw, '\x0F\x54', register(1, 8)], regtype='XMM')
 
 # ____________________________________________________________
 
