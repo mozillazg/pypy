@@ -4,8 +4,9 @@ from pypy.jit.backend.x86.regalloc import X86FrameManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, INT, REF, FLOAT
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.backend.x86.arch import WORD
+from pypy.jit.backend.x86.arch import WORD, IS_X86_32, IS_X86_64
 from pypy.jit.backend.detect_cpu import getcpuclass 
+from pypy.jit.backend.x86.regalloc import X86RegisterManager, X86_64_RegisterManager, X86XMMRegisterManager, X86_64_XMMRegisterManager
 
 ACTUAL_CPU = getcpuclass()
 
@@ -127,6 +128,9 @@ def do_failure_recovery_func(withfloats):
         return lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
 
     def get_random_float():
+        # Returns <float>, <low word>, <high word>
+        # NB: on 64-bit, <low word> will be the entire float and <high word>
+        # will be random garbage from malloc!
         assert withfloats
         value = random.random() - 0.5
         # make sure it fits into 64 bits
@@ -134,9 +138,16 @@ def do_failure_recovery_func(withfloats):
         rffi.cast(rffi.DOUBLEP, tmp)[0] = value
         return rffi.cast(rffi.DOUBLEP, tmp)[0], tmp[0], tmp[1]
 
+    if IS_X86_32:
+        main_registers = X86RegisterManager.all_regs
+        xmm_registers = X86XMMRegisterManager.all_regs
+    elif IS_X86_64:
+        main_registers = X86_64_RegisterManager.all_regs
+        xmm_registers = X86_64_XMMRegisterManager.all_regs
+
     # memory locations: 26 integers, 26 pointers, 26 floats
     # main registers: half of them as signed and the other half as ptrs
-    # xmm registers: all floats, from xmm0 to xmm7
+    # xmm registers: all floats, from xmm0 to xmm(7|15)
     # holes: 8
     locations = []
     baseloc = 4
@@ -150,18 +161,17 @@ def do_failure_recovery_func(withfloats):
     content = ([('int', locations.pop()) for _ in range(26)] +
                [('ptr', locations.pop()) for _ in range(26)] +
                [(['int', 'ptr'][random.randrange(0, 2)], reg)
-                         for reg in [eax, ecx, edx, ebx, esi, edi]])
+                         for reg in main_registers])
     if withfloats:
         content += ([('float', locations.pop()) for _ in range(26)] +
-                    [('float', reg) for reg in [xmm0, xmm1, xmm2, xmm3,
-                                                xmm4, xmm5, xmm6, xmm7]])
+                    [('float', reg) for reg in xmm_registers])
     for i in range(8):
         content.append(('hole', None))
     random.shuffle(content)
 
     # prepare the expected target arrays, the descr_bytecode,
     # the 'registers' and the 'stack' arrays according to 'content'
-    xmmregisters = lltype.malloc(rffi.LONGP.TO, 16+9, flavor='raw')
+    xmmregisters = lltype.malloc(rffi.LONGP.TO, 16+ACTUAL_CPU.NUM_REGS+1, flavor='raw')
     registers = rffi.ptradd(xmmregisters, 16)
     stacklen = baseloc + 10
     stack = lltype.malloc(rffi.LONGP.TO, stacklen, flavor='raw')
@@ -186,11 +196,17 @@ def do_failure_recovery_func(withfloats):
                 expected_floats[i] = value
                 kind = Assembler386.DESCR_FLOAT
                 if isinstance(loc, RegLoc):
-                    xmmregisters[2*loc.value] = lo
-                    xmmregisters[2*loc.value+1] = hi
+                    if WORD == 4:
+                        xmmregisters[2*loc.value] = lo
+                        xmmregisters[2*loc.value+1] = hi
+                    elif WORD == 8:
+                        xmmregisters[loc.value] = lo
                 else:
-                    write_in_stack(loc, hi)
-                    write_in_stack(loc+1, lo)
+                    if WORD == 4:
+                        write_in_stack(loc, hi)
+                        write_in_stack(loc+1, lo)
+                    elif WORD == 8:
+                        write_in_stack(loc, lo)
             else:
                 if kind == 'int':
                     value = get_random_int()
@@ -228,8 +244,8 @@ def do_failure_recovery_func(withfloats):
     for i in range(len(descr_bytecode)):
         assert 0 <= descr_bytecode[i] <= 255
         descr_bytes[i] = rffi.cast(rffi.UCHAR, descr_bytecode[i])
-    registers[8] = rffi.cast(rffi.LONG, descr_bytes)
-    registers[ebp.value] = rffi.cast(rffi.LONG, stack) + 4*stacklen
+    registers[ACTUAL_CPU.NUM_REGS] = rffi.cast(rffi.LONG, descr_bytes)
+    registers[ebp.value] = rffi.cast(rffi.LONG, stack) + WORD*stacklen
 
     # run!
     assembler = Assembler386(FakeCPU())
