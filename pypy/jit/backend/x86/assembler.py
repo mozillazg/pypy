@@ -532,7 +532,7 @@ class Assembler386(object):
         if isinstance(loc, RegLoc) and loc.is_xmm:
             self.mc.SUB_ri(esp.value, 2*WORD)
             self.mc.MOVSD_sx(0, loc.value)
-        elif isinstance(loc, StackLoc) and loc.width == 8:
+        elif WORD == 4 and isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
             self.mc.PUSH_b(get_ebp_ofs(loc.position))
             self.mc.PUSH_b(get_ebp_ofs(loc.position + 1))
@@ -543,7 +543,7 @@ class Assembler386(object):
         if isinstance(loc, RegLoc) and loc.is_xmm:
             self.mc.MOVSD_xs(loc.value, 0)
             self.mc.ADD(esp, imm(2*WORD))
-        elif isinstance(loc, StackLoc) and loc.width == 8:
+        elif WORD == 4 and isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
             self.mc.POP_b(get_ebp_ofs(loc.position + 1))
             self.mc.POP_b(get_ebp_ofs(loc.position))
@@ -1517,8 +1517,7 @@ class Assembler386(object):
         for i in range(len(locs)):
             loc = locs[i]
             if not isinstance(loc, RegLoc):
-                if loc.width == 8:
-                    assert isinstance(loc, StackLoc)
+                if isinstance(loc, StackLoc) and loc.type == FLOAT:
                     mc.MOVSD_xb(xmm0.value, loc.value)
                     adr = self.fail_boxes_float.get_addr_for_num(i)
                     mc.MOVSD(heap(adr), xmm0)

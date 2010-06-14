@@ -1,6 +1,7 @@
 from pypy.jit.metainterp.history import AbstractValue, ConstInt
 from pypy.jit.backend.x86 import rx86
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.backend.x86.arch import WORD
 
 #
 # This module adds support for "locations", which can be either in a Const,
@@ -30,13 +31,13 @@ class StackLoc(AssemblerLocation):
         self.position = position
         self.value = ebp_offset
         # XXX: Word size hardcoded
-        self.width = num_words * 4
+        self.width = num_words * WORD
         # One of INT, REF, FLOAT
         self.type = type
 
     def frame_size(self):
         # XXX: word size
-        return self.width // 4
+        return self.width // WORD
 
     def __repr__(self):
         return '%d(%%ebp)' % (self.value,)
@@ -58,7 +59,7 @@ class RegLoc(AssemblerLocation):
         if self.is_xmm:
             self.width = 8
         else:
-            self.width = 4
+            self.width = WORD
     def __repr__(self):
         if self.is_xmm:
             return rx86.R.xmmnames[self.value]
@@ -85,8 +86,8 @@ class RegLoc(AssemblerLocation):
 
 class ImmedLoc(AssemblerLocation):
     _immutable_ = True
-    # XXX: word size hardcoded. And does this even make sense for an immediate?
-    width = 4
+    # XXX: Does this even make sense for an immediate?
+    width = WORD
     def __init__(self, value):
         self.value = value
 
@@ -108,8 +109,7 @@ class ImmedLoc(AssemblerLocation):
 class AddressLoc(AssemblerLocation):
     _immutable_ = True
 
-    # XXX
-    width = 4
+    width = WORD
     # The address is base_loc + (scaled_loc << scale) + static_offset
     def __init__(self, base_loc, scaled_loc, scale=0, static_offset=0):
         assert 0 <= scale < 4
@@ -175,7 +175,7 @@ class LocationCodeBuilder(object):
                             elif self.WORD == 8 and possible_code2 == 'j':
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
                                 getattr(self, name + "_" + possible_code1 + "m")(val1, (X86_64_SCRATCH_REG.value, 0))
-                            elif self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2) and name != 'MOV':
+                            elif self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2):
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
                                 getattr(self, name + "_" + possible_code1 + "r")(val1, X86_64_SCRATCH_REG.value)
                             else:
