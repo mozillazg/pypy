@@ -9,7 +9,6 @@ from pypy.jit.backend.detect_cpu import getcpuclass
 
 ACTUAL_CPU = getcpuclass()
 
-py.test.skip()
 class FakeCPU:
     rtyper = None
     supports_floats = True
