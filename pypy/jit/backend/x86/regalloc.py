@@ -18,12 +18,6 @@ from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
      TempBox
 from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE, IS_X86_32, IS_X86_64
 
-width_of_type = {
-    INT : 1,
-    REF : 1,
-    FLOAT : (2 if IS_X86_32 else 1),
-}
-
 class X86RegisterManager(RegisterManager):
 
     box_types = [INT, REF]
@@ -120,17 +114,12 @@ class X86_64_XMMRegisterManager(X86XMMRegisterManager):
         return RegisterManager.after_call(self, v)
 
 class X86FrameManager(FrameManager):
-
     @staticmethod
     def frame_pos(i, box_type):
-        size = width_of_type[box_type]
-        if size == 1:
-            return StackLoc(i, get_ebp_ofs(i), size, box_type)
-        elif size == 2:
-            return StackLoc(i, get_ebp_ofs(i+1), size, box_type)
+        if IS_X86_32 and box_type == FLOAT:
+            return StackLoc(i, get_ebp_ofs(i+1), 2, box_type)
         else:
-            print "Unimplemented size %d" % i
-            raise NotImplementedError("unimplemented size %d" % i)
+            return StackLoc(i, get_ebp_ofs(i), 1, box_type)
 
 class RegAlloc(object):
     exc = False
