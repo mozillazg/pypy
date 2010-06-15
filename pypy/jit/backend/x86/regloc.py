@@ -30,13 +30,11 @@ class StackLoc(AssemblerLocation):
         assert ebp_offset < 0   # so no confusion with RegLoc.value
         self.position = position
         self.value = ebp_offset
-        # XXX: Word size hardcoded
         self.width = num_words * WORD
         # One of INT, REF, FLOAT
         self.type = type
 
     def frame_size(self):
-        # XXX: word size
         return self.width // WORD
 
     def __repr__(self):
@@ -55,7 +53,6 @@ class RegLoc(AssemblerLocation):
         assert regnum >= 0
         self.value = regnum
         self.is_xmm = is_xmm
-        # XXX: Word size
         if self.is_xmm:
             self.width = 8
         else:
@@ -169,15 +166,24 @@ class LocationCodeBuilder(object):
                             val1 = getattr(loc1, "value_" + possible_code1)()
                             val2 = getattr(loc2, "value_" + possible_code2)()
                             # XXX: Could use RIP+disp32 in some cases
-                            if self.WORD == 8 and possible_code1 == 'j':
+                            if self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2):
+                                if possible_code1 == 'j':
+                                    # This is the worst case: MOV_ji, and both operands are 64-bit
+                                    # Hopefully this doesn't happen too often
+                                    self.PUSH_r(eax.value)
+                                    self.MOV_ri(eax.value, val1)
+                                    self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
+                                    self.MOV_mr((eax.value, 0), X86_64_SCRATCH_REG.value)
+                                    self.POP_r(eax.value)
+                                else:
+                                    self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
+                                    getattr(self, name + "_" + possible_code1 + "r")(val1, X86_64_SCRATCH_REG.value)
+                            elif self.WORD == 8 and possible_code1 == 'j':
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val1)
                                 getattr(self, name + "_" + "m" + possible_code2)((X86_64_SCRATCH_REG.value, 0), val2)
                             elif self.WORD == 8 and possible_code2 == 'j':
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
                                 getattr(self, name + "_" + possible_code1 + "m")(val1, (X86_64_SCRATCH_REG.value, 0))
-                            elif self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2):
-                                self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
-                                getattr(self, name + "_" + possible_code1 + "r")(val1, X86_64_SCRATCH_REG.value)
                             else:
                                 methname = name + "_" + possible_code1 + possible_code2
                                 getattr(self, methname)(val1, val2)
