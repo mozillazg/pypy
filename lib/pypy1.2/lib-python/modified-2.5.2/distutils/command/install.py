@@ -67,8 +67,8 @@ INSTALL_SCHEMES = {
         'data'   : '$base',
         },
     'pypy': {
-        'purelib': '$base/site-packages',
-        'platlib': '$base/site-packages',
+        'purelib': '$base/lib/pypy$pypy_version_short/site-packages',
+        'platlib': '$base/lib/pypy$pypy_version_short/site-packages',
         'headers': '$base/include',
         'scripts': '$base/bin',
         'data'   : '$base',
@@ -283,6 +283,7 @@ class install (Command):
                             'dist_fullname': self.distribution.get_fullname(),
                             'py_version': py_version,
                             'py_version_short': py_version[0:3],
+                            'pypy_version_short': '%d.%d' % sys.pypy_version_info[:2],
                             'sys_prefix': prefix,
                             'prefix': prefix,
                             'sys_exec_prefix': exec_prefix,
