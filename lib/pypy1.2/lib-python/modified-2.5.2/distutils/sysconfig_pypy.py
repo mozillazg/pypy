@@ -44,7 +44,8 @@ def get_python_lib(plat_specific=0, standard_lib=0, prefix=None):
             "calls to get_python_lib(standard_lib=1) cannot succeed")
     if prefix is None:
         prefix = PYPY_PREFIX
-    return os.path.join(prefix, "site-packages")
+    pypylib = 'pypy%d.%d' % sys.pypy_version_info[:2]
+    return os.path.join(prefix, 'lib', pypylib, 'site-packages')
 
 
 _config_vars = None
