@@ -64,8 +64,6 @@ def pypy_initial_path(space, srcdir):
     except OSError:
         return space.w_None
     else:
-        space.setitem(space.sys.w_dict, space.wrap('pypy_prefix'), # XXX remove me
-                                        space.wrap(srcdir))
         space.setitem(space.sys.w_dict, space.wrap('prefix'),
                                         space.wrap(srcdir))
         space.setitem(space.sys.w_dict, space.wrap('exec_prefix'),
