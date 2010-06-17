@@ -7,7 +7,7 @@ from pypy.interpreter.typedef import TypeDef
 class W_CDLL(Wrappable, rjitffi.CDLL):
     def __init__(self, space, name):
         self.space = space
-        super(W_CDLL, self).__init__(name)
+        self._init(name)
 
     def get_w(self, func, w_args_type, res_type='void'):
         args_type_w = [ self.space.str_w(w_x)
