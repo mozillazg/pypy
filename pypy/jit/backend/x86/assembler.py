@@ -183,26 +183,6 @@ class Assembler386(object):
                 self._build_malloc_fixedsize_slowpath()
 
     def _build_float_constants(self):
-        """
-        # 11 words: 8 words for the data, and up to 3 words for alignment
-        addr = lltype.malloc(rffi.CArray(lltype.Signed), 11, flavor='raw')
-        if not we_are_translated():
-            self._keepalive_malloced_float_consts = addr
-        float_constants = rffi.cast(lltype.Signed, addr)
-        float_constants = (float_constants + 15) & ~15    # align to 16 bytes
-        addr = rffi.cast(rffi.CArrayPtr(lltype.Signed), float_constants)
-        addr[0] = 0                # \
-        addr[1] = -2147483648      # / for neg
-        addr[2] = 0                #
-        addr[3] = 0                #
-        addr[4] = -1               # \
-        addr[5] = 2147483647       # / for abs
-        addr[6] = 0                #
-        addr[7] = 0                #
-        self.float_const_neg_addr = float_constants
-        self.float_const_abs_addr = float_constants + 16
-        """
-
         # 44 bytes: 32 bytes for the data, and up to 12 bytes for alignment
         addr = lltype.malloc(rffi.CArray(lltype.Char), 44, flavor='raw')
         if not we_are_translated():
@@ -214,8 +194,8 @@ class Assembler386(object):
         neg_const = '\x00\x00\x00\x00\x00\x00\x00\x80'
         abs_const = '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x7F'
         data = neg_const + qword_padding + abs_const + qword_padding
-        for i, char in enumerate(data):
-            addr[i] = char
+        for i in range(len(data)):
+            addr[i] = data[i]
         self.float_const_neg_addr = float_constants
         self.float_const_abs_addr = float_constants + 16
 
@@ -384,8 +364,8 @@ class Assembler386(object):
     def _call_footer(self, mc):
         mc.LEA_rb(esp.value, -len(self.cpu.CALLEE_SAVE_REGISTERS) * WORD)
 
-        for regloc in reversed(self.cpu.CALLEE_SAVE_REGISTERS):
-            mc.POP(regloc)
+        for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)-1, -1, -1):
+            mc.POP(self.cpu.CALLEE_SAVE_REGISTERS[i])
 
         mc.POP(ebp)
         mc.RET()
@@ -426,6 +406,9 @@ class Assembler386(object):
         return adr_stackadjust
 
     def _assemble_bootstrap_direct_call_64(self, arglocs, jmpadr, stackdepth):
+        # XXX: Is this even remotely correct? Might arglocs contain some of
+        # the same locations that the calling convention uses?
+
         # In reverse order for use with pop()
         unused_gpr = [r9, r8, ecx, edx, esi, edi]
         unused_xmm = [xmm7, xmm6, xmm5, xmm4, xmm3, xmm2, xmm1, xmm0]
@@ -434,18 +417,24 @@ class Assembler386(object):
         adr_stackadjust = self._call_header()
         self._patch_stackadjust(adr_stackadjust, stackdepth)
 
-        for i, loc in enumerate(nonfloatlocs):
-            if loc != None:
+        for i in range(len(nonfloatlocs)):
+            loc = nonfloatlocs[i]
+            if loc is not None:
                 if len(unused_gpr) > 0:
                     self.mc.MOV(loc, unused_gpr.pop())
                 else:
                     self.mc.MOV_rb(X86_64_SCRATCH_REG.value, (2 + i) * WORD)
                     self.mc.MOV(loc, X86_64_SCRATCH_REG)
 
-        for i, loc in enumerate(floatlocs):
-            if loc != None:
+        for i in range(len(floatlocs)):
+            loc = floatlocs[i]
+            if loc is not None:
                 if len(unused_xmm) > 0:
                     self.mc.MOVSD(loc, unused_xmm.pop())
+                else:
+                    self.mc.MOVSD_xb(X86_64_XMM_SCRATCH_REG.value, (2 + i) * WORD)
+                    self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
+
 
         self.mc.JMP_l(jmpadr)
 
@@ -660,6 +649,9 @@ class Assembler386(object):
                 return self.implement_guard(addr, false_cond)
         return genop_cmp_guard_float
 
+    # We need to specialize on force_mc because if force_mc is True, "mc" will
+    # be a MachineCodeBlock, whereas if it is False, "mc" will be a
+    # MachineCodeBlockWrapper
     @specialize.arg(5)
     def _emit_call(self, x, arglocs, start=0, tmp=eax, force_mc=False,
                    mc=None):
@@ -694,6 +686,7 @@ class Assembler386(object):
         mc.CALL(x)
         self.mark_gc_roots()
 
+    @specialize.arg(5)
     def _emit_call_64(self, x, arglocs, start=0, tmp=eax, force_mc=False, mc=None):
         if not force_mc:
             mc = self.mc
@@ -721,7 +714,8 @@ class Assembler386(object):
                     pass_on_stack.append(loc)
         
         # Emit instructions to pass the stack arguments
-        for i, loc in enumerate(pass_on_stack):
+        for i in range(len(pass_on_stack)):
+            loc = pass_on_stack[i]
             if isinstance(loc, StackLoc):
                 if loc.type == FLOAT:
                     mc.MOVSD(X86_64_XMM_SCRATCH_REG, loc)
@@ -767,7 +761,8 @@ class Assembler386(object):
             for reg, loc in items:
                 mc.PUSH(loc)
 
-            for reg, loc in reversed(items):
+            for i in range(len(items)-1, -1, -1):
+                reg, loc = items[i]
                 mc.POP(reg)
 
         self._regalloc.reserve_param(len(pass_on_stack))
@@ -1451,7 +1446,7 @@ class Assembler386(object):
         recovery_addr = mc.tell()
 
         # Push all general purpose registers
-        for gpr in reversed(range(self.cpu.NUM_REGS)):
+        for gpr in range(self.cpu.NUM_REGS-1, -1, -1):
             mc.PUSH_r(gpr)
 
         # ebx/rbx is callee-save in both i386 and x86-64
@@ -1496,7 +1491,9 @@ class Assembler386(object):
         # now we return from the complete frame, which starts from
         # _assemble_bootstrap_code().  The LEA below throws away most
         # of the frame, including all the PUSHes that we did just above.
-        self._call_footer(mc)
+
+        # XXX: using self.mc2 instead of mc to make translation pass
+        self._call_footer(self.mc2)
         self.mc2.done()
         self.failure_recovery_code[exc + 2 * withfloats] = recovery_addr
 

@@ -2,6 +2,7 @@ from pypy.jit.metainterp.history import AbstractValue, ConstInt
 from pypy.jit.backend.x86 import rx86
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.backend.x86.arch import WORD
+from pypy.tool.sourcetools import func_with_new_name
 
 #
 # This module adds support for "locations", which can be either in a Const,
@@ -23,6 +24,8 @@ class AssemblerLocation(object):
     def value_j(self): return self.value
     def value_i(self): return self.value
     def value_x(self): return self.value
+    def value_a(self): raise AssertionError("value_a undefined")
+    def value_m(self): raise AssertionError("value_m undefined")
 
 class StackLoc(AssemblerLocation):
     _immutable_ = True
@@ -177,18 +180,33 @@ class LocationCodeBuilder(object):
                                     self.POP_r(eax.value)
                                 else:
                                     self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
-                                    getattr(self, name + "_" + possible_code1 + "r")(val1, X86_64_SCRATCH_REG.value)
+                                    methname = name + "_" + possible_code1 + "r"
+                                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                                        getattr(self, methname)(val1, X86_64_SCRATCH_REG.value)
+                                    else:
+                                        assert False, "a"
                             elif self.WORD == 8 and possible_code1 == 'j':
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val1)
-                                getattr(self, name + "_" + "m" + possible_code2)((X86_64_SCRATCH_REG.value, 0), val2)
+                                methname = name + "_" + "m" + possible_code2
+                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                                    getattr(self, methname)((X86_64_SCRATCH_REG.value, 0), val2)
+                                else:
+                                    assert False, "b"
                             elif self.WORD == 8 and possible_code2 == 'j':
                                 self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
-                                getattr(self, name + "_" + possible_code1 + "m")(val1, (X86_64_SCRATCH_REG.value, 0))
+                                methname = name + "_" + possible_code1 + "m"
+                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                                    getattr(self, methname)(val1, (X86_64_SCRATCH_REG.value, 0))
+                                else:
+                                    assert False, "c"
                             else:
                                 methname = name + "_" + possible_code1 + possible_code2
-                                getattr(self, methname)(val1, val2)
+                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
+                                    getattr(self, methname)(val1, val2)
+                                else:
+                                    assert False, "d"
 
-        return INSN
+        return func_with_new_name(INSN, "INSN_" + name)
 
     def _unaryop(name):
         def INSN(self, loc):
@@ -196,15 +214,14 @@ class LocationCodeBuilder(object):
             for possible_code in unrolling_location_codes:
                 if code == possible_code:
                     methname = name + "_" + possible_code
-                    # if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                    if hasattr(self, methname):
+                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
                         val = getattr(loc, "value_" + possible_code)()
                         getattr(self, methname)(val)
                         return
                     else:
                         raise AssertionError("Instruction not defined: " + methname)
 
-        return INSN
+        return func_with_new_name(INSN, "INSN_" + name)
 
     def _16_bit_binaryop(name):
         def INSN(self, loc1, loc2):
