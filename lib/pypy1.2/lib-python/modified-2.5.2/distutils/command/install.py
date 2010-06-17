@@ -392,13 +392,9 @@ class install (Command):
                 if self.exec_prefix is not None:
                     raise DistutilsOptionError, \
                           "must not supply exec-prefix without prefix"
-
-                if hasattr(sys, 'pypy_prefix'):
-                    self.prefix = os.path.normpath(sys.pypy_prefix)
-                    self.exec_prefix = self.prefix
-                else:
-                    self.prefix = os.path.normpath(sys.prefix)
-                    self.exec_prefix = os.path.normpath(sys.exec_prefix)
+                
+                self.prefix = os.path.normpath(sys.prefix)
+                self.exec_prefix = os.path.normpath(sys.exec_prefix)
 
             else:
                 if self.exec_prefix is None:
@@ -418,10 +414,7 @@ class install (Command):
             self.select_scheme("unix_home")
         else:
             if self.prefix is None:
-                if hasattr(sys, 'pypy_prefix'):
-                    self.prefix = os.path.normpath(sys.pypy_prefix)
-                else:
-                    self.prefix = os.path.normpath(sys.prefix)
+                self.prefix = os.path.normpath(sys.prefix)
 
             self.install_base = self.install_platbase = self.prefix
             try:
@@ -435,7 +428,7 @@ class install (Command):
 
     def select_scheme (self, name):
         # it's the caller's problem if they supply a bad name!
-        if hasattr(sys, 'pypy_prefix'):
+        if hasattr(sys, 'pypy_version_info'):
             name = 'pypy'
         scheme = INSTALL_SCHEMES[name]
         for key in SCHEME_KEYS:
