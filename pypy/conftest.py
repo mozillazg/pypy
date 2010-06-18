@@ -13,8 +13,6 @@ pytest_plugins = "resultlog",
 rsyncdirs = ['.', '../lib', '../demo']
 rsyncignore = ['_cache']
 
-collect_ignore = ['./lib/py']
-
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
 #
