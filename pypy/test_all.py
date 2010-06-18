@@ -13,9 +13,12 @@ def fix_lib_python_path():
     However, now lib-python is under lib/pypy1.2/lib-python.  We cannot just
     change buildbot, as it would break all the other current branches, so
     instead we replace lib-python with the correct path here.
+
+    Note: instead of passing lib/pypy1.2/lib-python, but pass lib/pyyp1.2/ as
+    an argument: this way, the tests under lib_pypy are also run.
     """
     import sys
-    from pypy.tool.lib_pypy import LIB_PYTHON
+    from pypy.tool.lib_pypy import LIB_ROOT
     if sys.argv and sys.argv[-1].endswith('lib-python'):
         libpython = py.path.local(sys.argv[-1])
         if libpython.check(dir=True):
@@ -24,7 +27,7 @@ def fix_lib_python_path():
             return
         else:
             # patch it with the correct path
-            sys.argv[-1] = str(LIB_PYTHON)
+            sys.argv[-1] = str(LIB_ROOT)
 
     
 if __name__ == '__main__':
