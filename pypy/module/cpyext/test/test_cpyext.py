@@ -271,6 +271,8 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
             Py_DecRef(self.space, w_obj)
         state.non_heaptypes_w[:] = []
         state.reset_borrowed_references()
+        from pypy.module.cpyext import cdatetime
+        cdatetime.datetimeAPI_dealloc(self.space)
         if self.check_and_print_leaks():
             assert False, "Test leaks or loses object(s)."
 
@@ -582,8 +584,8 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
             Py_InitModule("foo", methods);
         """
         body = """
-        PyObject* PyPy_Crash1(void);
-        long PyPy_Crash2(void);
+        PyAPI_FUNC(PyObject*) PyPy_Crash1(void);
+        PyAPI_FUNC(long) PyPy_Crash2(void);
         static PyObject* foo_crash1(PyObject* self, PyObject *args)
         {
             return PyPy_Crash1();

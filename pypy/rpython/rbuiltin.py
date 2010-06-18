@@ -7,6 +7,7 @@ from pypy.rlib import rarithmetic, objectmodel
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, IntegerRepr, inputconst
 from pypy.rpython.rrange import rtype_builtin_range, rtype_builtin_xrange
+from pypy.rpython.rrange import rtype_builtin_enumerate
 from pypy.rpython import rstr
 from pypy.rpython import rptr
 from pypy.rpython.robject import pyobj_repr
@@ -228,6 +229,8 @@ def rtype_builtin_list(hop):
 #def rtype_builtin_range(hop): see rrange.py
 
 #def rtype_builtin_xrange(hop): see rrange.py
+
+#def rtype_builtin_enumerate(hop): see rrange.py
 
 #def rtype_r_dict(hop): see rdict.py
 
@@ -529,8 +532,6 @@ BUILTIN_TYPER[objectmodel.hlinvoke] = rtype_hlinvoke
 # _________________________________________________________________
 # memory addresses
 
-from pypy.rpython.lltypesystem import llmemory
-
 def rtype_raw_malloc(hop):
     v_size, = hop.inputargs(lltype.Signed)
     return hop.genop('raw_malloc', [v_size], resulttype=llmemory.Address)
@@ -604,9 +605,14 @@ def rtype_cast_adr_to_ptr(hop):
 
 def rtype_cast_adr_to_int(hop):
     assert isinstance(hop.args_r[0], raddress.AddressRepr)
-    adr, = hop.inputargs(hop.args_r[0])
+    adr = hop.inputarg(hop.args_r[0], arg=0)
+    if len(hop.args_s) == 1:
+        mode = "emulated"
+    else:
+        mode = hop.args_s[1].const
     hop.exception_cannot_occur()
-    return hop.genop('cast_adr_to_int', [adr],
+    return hop.genop('cast_adr_to_int',
+                     [adr, hop.inputconst(lltype.Void, mode)],
                      resulttype = lltype.Signed)
 
 def rtype_cast_int_to_adr(hop):

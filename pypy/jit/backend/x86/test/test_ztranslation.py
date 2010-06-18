@@ -5,7 +5,7 @@ from pypy.rlib.jit import PARAMETERS, dont_look_inside
 from pypy.jit.metainterp.jitprof import Profiler
 from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.backend.test.support import CCompiledMixin
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.translator.translator import TranslationContext
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
 
@@ -39,7 +39,7 @@ class TestTranslationX86(CCompiledMixin):
             return abs(x)
 
         jitdriver = JitDriver(greens = [],
-                              reds = ['frame', 'total', 'j'],
+                              reds = ['total', 'frame', 'j'],
                               virtualizables = ['frame'])
         def f(i, j):
             for param in unroll_parameters:
@@ -73,7 +73,7 @@ class TestTranslationX86(CCompiledMixin):
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
                            get_printable_location = lambda codeno : str(codeno),
                            can_inline = lambda codeno : False)
@@ -132,8 +132,14 @@ class TestTranslationRemoveTypePtrX86(CCompiledMixin):
 
         jitdriver = JitDriver(greens = [], reds = ['n', 'total'])
 
+        class ImDone(Exception):
+            def __init__(self, resvalue):
+                self.resvalue = resvalue
+
         @dont_look_inside
-        def f(x):
+        def f(x, total):
+            if x <= 3:
+                raise ImDone(total * 10)
             if x > 20:
                 return 2
             raise ValueError
@@ -154,16 +160,16 @@ class TestTranslationRemoveTypePtrX86(CCompiledMixin):
                 return Sub()
             else:
                 return Base()
-        def main(i):
+        def myportal(i):
             jitdriver.set_param("threshold", 3)
             jitdriver.set_param("trace_eagerness", 2)
             total = 0
             n = i
-            while n > 3:
+            while True:
                 jitdriver.can_enter_jit(n=n, total=total)
                 jitdriver.jit_merge_point(n=n, total=total)
                 try:
-                    total += f(n)
+                    total += f(n, total)
                 except ValueError:
                     total += 1
                 try:
@@ -171,7 +177,11 @@ class TestTranslationRemoveTypePtrX86(CCompiledMixin):
                 except ValueError:
                     total -= 1
                 n -= h(n).meth()   # this is to force a GUARD_CLASS
-            return total * 10
+        def main(i):
+            try:
+                myportal(i)
+            except ImDone, e:
+                return e.resvalue
 
         # XXX custom fishing, depends on the exact env var and format
         logfile = udir.join('test_ztranslation.log')

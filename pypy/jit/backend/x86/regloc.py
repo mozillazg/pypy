@@ -89,7 +89,9 @@ class ImmedLoc(AssemblerLocation):
     # XXX: Does this even make sense for an immediate?
     width = WORD
     def __init__(self, value):
-        self.value = value
+        from pypy.rpython.lltypesystem import rffi, lltype
+        # force as a real int
+        self.value = rffi.cast(lltype.Signed, value)
 
     def location_code(self):
         return 'i'

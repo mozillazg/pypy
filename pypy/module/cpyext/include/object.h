@@ -70,6 +70,9 @@ not implemented for a given type combination.
 #define Py_NotImplemented (&_Py_NotImplementedStruct)
 
 /* Rich comparison opcodes */
+/*
+    XXX: Also defined in slotdefs.py
+*/
 #define Py_LT 0
 #define Py_LE 1
 #define Py_EQ 2
@@ -471,6 +474,9 @@ manually remove this flag though!
                                 return vret;                            \
                 }                                                       \
         } while (0)
+
+#define PyObject_TypeCheck(ob, tp) \
+    ((ob)->ob_type == (tp) || PyType_IsSubtype((ob)->ob_type, (tp)))
 
 /* Copied from CPython ----------------------------- */
 int PyObject_AsReadBuffer(PyObject *, const void **, Py_ssize_t *);
