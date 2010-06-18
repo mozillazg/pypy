@@ -15,7 +15,12 @@
 #else
 # define MS_WIN32 1
 # define MS_WINDOWS 1
-# include <crtdefs.h>
+# ifdef _MSC_VER
+#  include <crtdefs.h>
+# endif
+# ifdef __MINGW32__
+#  include <limits.h>
+# endif
 # include <io.h>
 # define Py_DEPRECATED(VERSION_UNUSED)
 # ifdef Py_BUILD_CORE
@@ -27,15 +32,20 @@
 # endif
 # define Py_LOCAL_INLINE(type) static __inline type __fastcall
 #endif
+#define DL_IMPORT(RTYPE) PyAPI_FUNC(RTYPE)
 
-#define Py_ssize_t long
+#include <stdlib.h>
+
+#ifndef _WIN32
+typedef intptr_t Py_ssize_t;
+#else
+typedef long Py_ssize_t;
+#endif
 #define PY_SSIZE_T_MAX ((Py_ssize_t)(((size_t)-1)>>1))
 #define PY_SSIZE_T_MIN (-PY_SSIZE_T_MAX-1)
 #define Py_SAFE_DOWNCAST(VALUE, WIDE, NARROW) (NARROW)(VALUE)
 
 #define Py_USING_UNICODE
-
-#include <stdlib.h>
 
 /* Convert a possibly signed character to a nonnegative int */
 /* XXX This assumes characters are 8 bits wide */
@@ -91,12 +101,15 @@
 #include "pycobject.h"
 #include "bufferobject.h"
 #include "sliceobject.h"
+#include "datetime.h"
 #include "pystate.h"
 
 // XXX This shouldn't be included here
 #include "structmember.h"
 
 #include <pypy_decl.h>
+
+#include "modsupport.inl"
 
 /* Define macros for inline documentation. */
 #define PyDoc_VAR(name) static char name[]

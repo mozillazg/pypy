@@ -129,7 +129,6 @@ def newcode(fromcode, **kwargs):
     for name in names:
         if name not in kwargs:
             kwargs[name] = getattr(fromcode, name)
-    import new
     return new.code(
              kwargs['co_argcount'],
              kwargs['co_nlocals'],
@@ -226,6 +225,12 @@ def func_with_new_name(func, newname):
         f.func_dict = {}
         f.func_dict.update(func.func_dict)
     return f
+
+def func_renamer(newname):
+    """A function decorator which changes the name of a function."""
+    def decorate(func):
+        return func_with_new_name(func, newname)
+    return decorate
 
 PY_IDENTIFIER = ''.join([(('0' <= chr(i) <= '9' or
                            'a' <= chr(i) <= 'z' or

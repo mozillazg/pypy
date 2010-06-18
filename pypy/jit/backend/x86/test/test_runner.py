@@ -264,9 +264,11 @@ class TestX86(LLtypeBackendTest):
                     self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
-                        assert result == execute(self.cpu, op, None, b).value
+                        assert result == execute(self.cpu, None,
+                                                 op, None, b).value
                     else:
-                        assert result != execute(self.cpu, op, None, b).value
+                        assert result != execute(self.cpu, None,
+                                                 op, None, b).value
                     
 
     def test_stuff_followed_by_guard(self):
@@ -309,7 +311,7 @@ class TestX86(LLtypeBackendTest):
                         self.cpu.set_future_value_int(i, box.value)
                     self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
-                    expected = execute(self.cpu, op, None, a, b).value
+                    expected = execute(self.cpu, None, op, None, a, b).value
                     if guard == rop.GUARD_FALSE:
                         assert result == expected
                     else:

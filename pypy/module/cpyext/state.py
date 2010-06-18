@@ -1,11 +1,12 @@
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.lib.identity_dict import identity_dict
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import lltype
 
 
 class State:
+    datetimeAPI = None # used in tests
+
     def __init__(self, space):
         self.space = space
         self.reset()
