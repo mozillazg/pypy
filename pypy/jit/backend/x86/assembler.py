@@ -1563,7 +1563,7 @@ class Assembler386(object):
         self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx, force_mc=True, mc=mc)
         if IS_X86_32 and isinstance(result_loc, StackLoc) and result_loc.type == FLOAT:
-            mc.FSTP(result_loc)
+            mc.FSTP_b(result_loc.value)
         #else: result_loc is already either eax or None, checked below
         mc.JMP_l8(0) # jump to done, patched later
         jmp_location = mc.get_relative_pos()
