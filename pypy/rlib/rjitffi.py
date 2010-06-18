@@ -8,9 +8,6 @@ from pypy.jit.metainterp.typesystem import deref
 
 class CDLL(object):
     def __init__(self, name):
-        self._init(name)
-
-    def _init(self, name):
         try:
             self.lib = rdynload.dlopen(name)
         except rdynload.DLOpenError, e:
