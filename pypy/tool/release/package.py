@@ -31,9 +31,13 @@ def ignore_patterns(*patterns):
 class PyPyCNotFound(Exception):
     pass
 
-def main(basedir, name='pypy-nightly', rename_pypy_c='pypy-c'):
+def package(basedir, name='pypy-nightly', rename_pypy_c='pypy-c',
+            copy_to_dir = None, override_pypy_c = None):
     basedir = py.path.local(basedir)
-    pypy_c = basedir.join('pypy', 'translator', 'goal', 'pypy-c')
+    if override_pypy_c is None:
+        pypy_c = basedir.join('pypy', 'translator', 'goal', 'pypy-c')
+    else:
+        pypy_c = py.path.local(override_pypy_c)
     if not pypy_c.check():
         raise PyPyCNotFound('Please compile pypy first, using translate.py')
     builddir = udir.ensure("build", dir=True)
@@ -60,11 +64,14 @@ def main(basedir, name='pypy-nightly', rename_pypy_c='pypy-c'):
                   " " + name)
     finally:
         os.chdir(old_dir)
+    if copy_to_dir is not None:
+        print "Copying to %s" % copy_to_dir
+        shutil.copy(str(builddir.join(name + '.tar.bz2')), copy_to_dir)
     return builddir # for tests
 
 if __name__ == '__main__':
-    if len(sys.argv) == 1 or len(sys.argv) > 4:
+    if len(sys.argv) == 1:
         print >>sys.stderr, __doc__
         sys.exit(1)
     else:
-        main(*sys.argv[1:])
+        package(*sys.argv[1:])
