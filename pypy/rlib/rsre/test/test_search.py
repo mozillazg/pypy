@@ -24,8 +24,8 @@ class TestSearch:
         r_code1 = self.get_code(r'<item>\s*<title>(.*?)</title>')
         state = rsre.SimpleStringState("foo<item>  <title>abc</title>def")
         res = state.search(r_code1)
-        assert res is True
-        groups = state.create_regs(1)
+        assert res is not None
+        groups = res.create_regs(1)
         assert groups[0] == (3, 29)
         assert groups[1] == (18, 21)
 

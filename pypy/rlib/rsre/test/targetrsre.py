@@ -32,9 +32,9 @@ def search_in_file(filename):
     while True:
         state = rsre.SimpleStringState(data, p)
         res = state.search(r)
-        if not res:
+        if res is None:
             break
-        groups = state.create_regs(1)
+        groups = res.create_regs(1)
         matchstart, matchstop = groups[1]
         assert 0 <= matchstart <= matchstop
         print '%s: %s' % (filename, data[matchstart:matchstop])

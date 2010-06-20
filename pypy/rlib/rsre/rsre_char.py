@@ -155,11 +155,9 @@ category_dispatch_unroll = unrolling_iterable(category_dispatch_table)
 SET_OK = -1
 SET_NOT_OK = -2
 
-def check_charset(char_code, context):
+def check_charset(char_code, pattern_codes, index):
     """Checks whether a character matches set of arbitrary length. Currently
     assumes the set starts at the first member of pattern_codes."""
-    pattern_codes = context.pattern_codes
-    index = context.code_position
     negated = SET_OK
     while index >= 0:
         opcode = pattern_codes[index]
