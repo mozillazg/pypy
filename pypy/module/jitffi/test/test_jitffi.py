@@ -65,7 +65,7 @@ class AppTestJitffi(object):
         lib = jitffi.CDLL(self.lib_name)
 
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 3 == func.call(1,2)
+        assert 3 == func.call([1,2])
         func = lib.get('add_integers', ['int', 'int'], 'int')
         assert 1 == func.call(-1,2)
         func = lib.get('add_integers', ['int', 'int'], 'int')
