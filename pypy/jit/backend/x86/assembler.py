@@ -447,6 +447,7 @@ class Assembler386(object):
         adr_stackadjust = self._call_header()
         tmp = X86RegisterManager.all_regs[0]
         xmmtmp = X86XMMRegisterManager.all_regs[0]
+        self.mc._mc.begin_reuse_scratch_register()
         for i in range(len(nonfloatlocs)):
             loc = nonfloatlocs[i]
             if loc is None:
@@ -478,6 +479,7 @@ class Assembler386(object):
                 self.mc.MOVSD(xmmtmp, heap(adr))
                 assert isinstance(loc, StackLoc)
                 self.mc.MOVSD_bx(loc.value, xmmtmp.value)
+        self.mc._mc.end_reuse_scratch_register()
         return adr_stackadjust
 
     def dump(self, text):
@@ -1444,6 +1446,7 @@ class Assembler386(object):
 
     def generate_failure(self, fail_index, locs, exc, locs_are_ref):
         mc = self.mc
+        mc._mc.begin_reuse_scratch_register()
         for i in range(len(locs)):
             loc = locs[i]
             if isinstance(loc, RegLoc):
@@ -1470,6 +1473,7 @@ class Assembler386(object):
                         adr = self.fail_boxes_int.get_addr_for_num(i)
                     mc.MOV(eax, loc)
                     mc.MOV(heap(adr), eax)
+        mc._mc.end_reuse_scratch_register()
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
