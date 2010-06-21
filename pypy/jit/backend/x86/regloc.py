@@ -158,6 +158,10 @@ unrolling_location_codes = unrolling_iterable(list("rbsmajix"))
 class LocationCodeBuilder(object):
     _mixin_ = True
 
+    _reuse_scratch_register = False
+    _scratch_register_known = False
+    _scratch_register_value = 0
+
     def _binaryop(name):
         def INSN(self, loc1, loc2):
             code1 = loc1.location_code()
@@ -188,17 +192,17 @@ class LocationCodeBuilder(object):
                                     else:
                                         assert False, "a"
                             elif self.WORD == 8 and possible_code1 == 'j':
-                                self.MOV_ri(X86_64_SCRATCH_REG.value, val1)
+                                reg_offset = self._addr_as_reg_offset(val1)
                                 methname = name + "_" + "m" + possible_code2
                                 if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                    getattr(self, methname)((X86_64_SCRATCH_REG.value, 0), val2)
+                                    getattr(self, methname)(reg_offset, val2)
                                 else:
                                     assert False, "b"
                             elif self.WORD == 8 and possible_code2 == 'j':
-                                self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
+                                reg_offset = self._addr_as_reg_offset(val2)
                                 methname = name + "_" + possible_code1 + "m"
                                 if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                    getattr(self, methname)(val1, (X86_64_SCRATCH_REG.value, 0))
+                                    getattr(self, methname)(val1, reg_offset)
                                 else:
                                     assert False, "c"
                             else:
@@ -235,6 +239,36 @@ class LocationCodeBuilder(object):
             self._use_16_bit_immediate = False
 
         return INSN
+
+    def _addr_as_reg_offset(self, addr):
+        # Encodes a (64-bit) address as an offset from the scratch register.
+        # If we are within a "reuse_scratch_register" block, we remember the
+        # last value we loaded to the scratch register and encode the address
+        # as an offset from that if we can
+        if self._scratch_register_known:
+            offset = addr - self._scratch_register_value
+            if rx86.fits_in_32bits(offset):
+                return (X86_64_SCRATCH_REG.value, offset)
+            # else: fall through
+
+        if self._reuse_scratch_register:
+            self._scratch_register_known = True
+            self._scratch_register_value = addr
+
+        self.MOV_ri(X86_64_SCRATCH_REG.value, addr)
+        return (X86_64_SCRATCH_REG.value, 0)
+
+    def begin_reuse_scratch_register(self):
+        # Flag the beginning of a block where it is okay to reuse the value
+        # of the scratch register. In theory we shouldn't have to do this if
+        # we were careful to mark all possible targets of a jump or call, and
+        # "forget" the value of the scratch register at those positions, but
+        # for now this seems safer.
+        self._reuse_scratch_register = True
+
+    def end_reuse_scratch_register(self):
+        self._reuse_scratch_register = False
+        self._scratch_register_known = False
 
     AND = _binaryop('AND')
     OR  = _binaryop('OR')
