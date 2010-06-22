@@ -37,7 +37,7 @@ def getinitialpath(prefix):
     libdir = os.path.join(prefix, 'lib')
     pypyxy_dir = os.path.join(libdir, 'pypy%d.%d' % PYPY_VERSION[:2])
     # search for the stdlib both in $PREFIX/lib/pypy1.2 and $PREFIX
-    for lib_prefix in (pypyxy_dir, prefix):
+    for lib_prefix in [pypyxy_dir, prefix]:
         try:
             return get_importlist(lib_prefix)
         except OSError:
