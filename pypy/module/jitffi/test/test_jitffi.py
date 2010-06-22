@@ -57,8 +57,9 @@ class AppTestJitffi(object):
         cls.space = space
         cls.w_lib_name = space.wrap(cls.preprare_c_example())
 
-    #def test_missing_lib(self):
-    #    py.test.raises(OSError, rjitffi.CDLL, 'xxxfoo888baryyy')
+    def test_missing_lib(self):
+        import jitffi
+        raises(OSError, jitffi.CDLL, 'xxxfoo888baryyy')
 
     def test_get(self):
         import jitffi
