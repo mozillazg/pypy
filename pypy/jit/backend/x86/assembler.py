@@ -647,7 +647,8 @@ class Assembler386(object):
                     mc = self.mc._mc
                     mc.J_il8(rx86.Conditions['P'], 2)
                     mc.J_il8(rx86.Conditions[cond], 5)
-                    return self.implement_guard(addr)
+                    mc.JMP_l(addr)
+                    return mc.tell() - 4
                 return self.implement_guard(addr, false_cond)
         return genop_cmp_guard_float
 
@@ -844,7 +845,8 @@ class Assembler386(object):
         else:
             mc.J_il8(rx86.Conditions['P'], 2)
             mc.J_il8(rx86.Conditions['E'], 5)
-            return self.implement_guard(addr)
+            mc.JMP_l(addr)
+            return mc.tell() - 4
 
     def genop_float_neg(self, op, arglocs, resloc):
         # Following what gcc does: res = x ^ 0x8000000000000000
