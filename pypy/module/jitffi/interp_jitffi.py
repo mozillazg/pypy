@@ -68,10 +68,15 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
         # XXX we load a library twice (in super-class and below)
         self.lib_w = W_Lib(self.space, name)
 
-    def get_w(self, func, w_args_type, res_type='void'):
-        args_type_w = [ self.space.str_w(w_x)
-                        for w_x in self.space.listview(w_args_type) ]
-        return self.space.wrap(W_Get(self.space, self.cpu, self.space.wrap(self.lib_w), func, args_type_w, res_type))
+    def get_w(self, space, func, w_args_type, res_type='void'):
+        args_type_w = [ space.str_w(w_x)
+                        for w_x in space.listview(w_args_type) ]
+        return space.wrap(W_Get(space,
+                                self.cpu, 
+                                space.wrap(self.lib_w),
+                                func,
+                                args_type_w,
+                                res_type))
 
 def descr_new_cdll(space, w_type, name):
     try:
@@ -84,7 +89,7 @@ W_CDLL.typedef = TypeDef(
         'CDLL',
         __new__ = interp2app(descr_new_cdll),
         get     = interp2app(W_CDLL.get_w, unwrap_spec=['self',
-                                                        str, W_Root, str]),
+                                                        ObjSpace, str, W_Root, str]),
         __doc__ = """ C Dynamically loaded library
 use CDLL(libname) to create a handle to a C library (the argument is processed
 the same way as dlopen processes it)."""
