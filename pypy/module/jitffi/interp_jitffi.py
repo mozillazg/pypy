@@ -32,18 +32,21 @@ class W_Get(Wrappable, rjitffi._Get):
         self.space = space
         rjitffi._Get.__init__(self, cpu, lib, func, args_type, res_type)
 
-    def call_w(self, space, w_args):
-        if self.args_type[0] == 'int':
-            args_w = [ space.int_w(w_x) for w_x in space.listview(w_args) ]
-        elif self.args_type[0] == 'float':
-            args_w = [ space.float_w(w_x) for w_x in space.listview(w_args) ]
+    def call_w(self, space, w_args=None):
+        if space.is_w(w_args, space.w_None):
+            return space.wrap(self.call())
         else:
-            raise OperationError(
-                    space.w_TypeError,
-                    space.wrap('Unsupported type of argument: %s'
-                                % self.args_type[0]))
+            if self.args_type[0] == 'int':
+                args_w = [ space.int_w(w_x) for w_x in space.listview(w_args) ]
+            elif self.args_type[0] == 'float':
+                args_w = [ space.float_w(w_x) for w_x in space.listview(w_args) ]
+            else:
+                raise OperationError(
+                        space.w_TypeError,
+                        space.wrap('Unsupported type of argument: %s'
+                                    % self.args_type[0]))
 
-        return self.space.wrap(self.call(args_w))
+        return space.wrap(self.call(args_w))
 
 
 def descr_new_get(space, w_type, cpu, lib, func, args_type, res_type):

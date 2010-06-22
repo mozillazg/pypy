@@ -85,9 +85,9 @@ class AppTestJitffi(object):
         assert 1 == func.call()
 
         func = lib.get('return_void', ['int', 'int'], 'void')
-        assert func.call(1, 2) is None
+        assert func.call([1, 2]) is None
         func = lib.get('return_void', ['int', 'int'])
-        assert func.call(1, 2) is None
+        assert func.call([1, 2]) is None
 
     def test_undefined_func(self):
         import jitffi

@@ -63,7 +63,10 @@ class _Get(object):
         FUNC = deref(FPTR)
         self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-    def call(self, func_args):
+    def call(self, func_args=None):
+        if func_args is None:
+            func_args = []
+
         bargs = []
         for tp, value in zip(self.args_type, func_args):
             if tp == 'int':
