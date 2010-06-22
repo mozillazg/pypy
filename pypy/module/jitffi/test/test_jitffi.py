@@ -96,3 +96,12 @@ class AppTestJitffi(object):
         # xxxfoo888baryyy - not existed function
         raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
         raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')
+
+    def test_unknown_types(self):
+        import jitffi
+        lib = jitffi.CDLL(self.lib_name)
+        # xxxfoo888baryyy - not defined types (args_type, res_type etc.)
+        raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'])
+        raises(ValueError, lib.get, 'fvoid', ['int','xxxfoo888baryyy'])
+        raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'int')
+        raises(ValueError, lib.get, 'fvoid', [], 'xxxfoo888baryyy')
