@@ -127,7 +127,7 @@ _myname = 'autopath.py'
 
 pypydir, this_dir = __dirinfo('pypy')
 import py # note: py is imported only AFTER the path has been set
-libpythondir = str(py.path.local(pypydir).dirpath().join('lib', 'pypy1.2', 'lib-python', '2.5.2'))
+libpythondir = str(py.path.local(pypydir).dirpath().join('lib-python', '2.5.2'))
 libpythonmodifieddir = str(py.path.local(libpythondir).dirpath().join('modified-2.5.2'))
 
 if __name__ == '__main__':

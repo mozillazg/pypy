@@ -20,7 +20,7 @@ from pypy.tool.pytest.confpath import pypydir, libpythondir, \
                                       regrtestdir, modregrtestdir, testresultdir
 
 pytest_plugins = "resultlog",
-rsyncdirs = ['.', '../../../pypy/']
+rsyncdirs = ['.', '../pypy/']
 
 # 
 # Interfacing/Integrating with py.test's collection process 
