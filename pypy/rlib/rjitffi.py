@@ -28,7 +28,11 @@ class _Get(object):
         self.args_type = args_type
         self.res_type = res_type
         self.cpu = cpu
-        self.lib = lib.handler
+
+        if hasattr(lib, 'handler'):
+            self.lib = lib.handler
+        else:
+            self.lib = lib
 
         if self.res_type == 'int':
             self.bres = BoxInt()
