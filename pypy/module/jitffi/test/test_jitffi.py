@@ -93,5 +93,5 @@ class AppTestJitffi(object):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not existed function
-        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
-        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')
+        raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
+        raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')

@@ -70,12 +70,12 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
     def get_w(self, space, func, w_args_type, res_type='void'):
         args_type_w = [ space.str_w(w_x)
                         for w_x in space.listview(w_args_type) ]
-        return space.wrap(W_Get(space,
-                                self.cpu, 
-                                space.wrap(self.lib_w),
-                                func,
-                                args_type_w,
-                                res_type))
+        try:
+            ret = W_Get(space, self.cpu, space.wrap(self.lib_w),
+                        func, args_type_w, res_type)
+        except ValueError, e:
+            raise OperationError(space.w_ValueError, space.wrap(str(e)))
+        return space.wrap(ret)
 
 def W_CDLL___new__(space, w_type, name):
     try:
