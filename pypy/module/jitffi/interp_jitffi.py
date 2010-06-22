@@ -1,5 +1,4 @@
 from pypy.rlib import rdynload
-from pypy.jit.backend.x86.runner import CPU
 from pypy.rlib import rjitffi
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import OperationError, wrap_oserror
@@ -65,14 +64,14 @@ W_Get.typedef = TypeDef(
 class W_CDLL(Wrappable, rjitffi.CDLL):
     def __init__(self, space, name):
         self.space = space
-        self.lib = space.wrap(W_Lib(self.space, name))
-        self.name = name
-        self.cpu = CPU(None, None)
+        rjitffi.CDLL.__init__(self, name)
+        # XXX we load a library twice (in super-class and below)
+        self.lib_w = W_Lib(self.space, name)
 
     def get_w(self, func, w_args_type, res_type='void'):
         args_type_w = [ self.space.str_w(w_x)
                         for w_x in self.space.listview(w_args_type) ]
-        return self.space.wrap(W_Get(self.space, self.cpu, self.space.wrap(self.lib), func, args_type_w, res_type))
+        return self.space.wrap(W_Get(self.space, self.cpu, self.space.wrap(self.lib_w), func, args_type_w, res_type))
 
 def descr_new_cdll(space, w_type, name):
     try:
