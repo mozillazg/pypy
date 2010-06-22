@@ -183,9 +183,6 @@ def get_argument(option, argv, i):
         return argv[i], i
 
 def get_library_path(executable):
-    AUTOSUBPATH = 'share' + os.sep + 'pypy-%d.%d'
-    # set up a sys.path that depends on the local machine
-    autosubpath = AUTOSUBPATH % sys.pypy_version_info[:2]
     search = executable
     while 1:
         dirname = resolvedirof(search)
@@ -197,10 +194,8 @@ def get_library_path(executable):
             break
         newpath = sys.pypy_initial_path(dirname)
         if newpath is None:
-            newpath = sys.pypy_initial_path(os.path.join(dirname, autosubpath))
-            if newpath is None:
-                search = dirname    # walk to the parent directory
-                continue
+            search = dirname    # walk to the parent directory
+            continue
         break      # found!
     return newpath
 

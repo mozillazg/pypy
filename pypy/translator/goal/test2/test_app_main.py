@@ -486,6 +486,7 @@ class AppTestAppMain:
         self.w_goal_dir = self.space.wrap(goal_dir)
         self.w_fake_exe = self.space.wrap(str(fake_exe))
         self.w_expected_path = self.space.wrap(expected_path)
+        self.w_trunkdir = self.space.wrap(os.path.dirname(autopath.pypydir))
 
     def test_get_library_path(self):
         import sys
@@ -498,5 +499,20 @@ class AppTestAppMain:
             assert newpath == sys.path
             newpath = app_main.get_library_path(self.fake_exe)
             assert newpath == self.expected_path
+        finally:
+            sys.path.pop()
+
+    def test_trunk_can_be_prefix(self):
+        import sys
+        import os
+        sys.path.append(self.goal_dir)
+        try:
+            import app_main
+            app_main.os = os
+            pypy_c = os.path.join(self.trunkdir, 'pypy', 'translator', 'goal', 'pypy-c')
+            newpath = app_main.get_library_path(pypy_c)
+            assert len(newpath) == 3
+            for p in newpath:
+                assert p.startswith(self.trunkdir)
         finally:
             sys.path.pop()

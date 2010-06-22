@@ -32,24 +32,30 @@ def checkdir(path):
     if not stat.S_ISDIR(st[0]):
         raise OSError(errno.ENOTDIR, path)
 
-def getinitialpath(srcdir):
-    # build the initial path from the srcdir, which is the path of
-    # the "dist" directory of a PyPy checkout.
-    from pypy.module.sys.version import CPYTHON_VERSION, PYPY_VERSION
-    libdir = os.path.join(srcdir, 'lib')
+def getinitialpath(prefix):
+    from pypy.module.sys.version import PYPY_VERSION
+    libdir = os.path.join(prefix, 'lib')
     pypyxy_dir = os.path.join(libdir, 'pypy%d.%d' % PYPY_VERSION[:2])
+    # search for the stdlib both in $PREFIX/lib/pypy1.2 and $PREFIX
+    for lib_prefix in (pypyxy_dir, prefix):
+        try:
+            return get_importlist(lib_prefix)
+        except OSError:
+            pass
+    raise OSError # stdlib not foud
 
+def get_importlist(lib_prefix):
+    from pypy.module.sys.version import CPYTHON_VERSION
     dirname = '%d.%d.%d' % (CPYTHON_VERSION[0],
                             CPYTHON_VERSION[1],
                             CPYTHON_VERSION[2])
-    lib_python = os.path.join(pypyxy_dir, 'lib-python')
-
+    lib_python = os.path.join(lib_prefix, 'lib-python')
     python_std_lib = os.path.join(lib_python, dirname)
     checkdir(python_std_lib)
     python_std_lib_modified = os.path.join(lib_python, 'modified-' + dirname)
     checkdir(python_std_lib_modified)
     
-    lib_pypy = os.path.join(pypyxy_dir, 'lib_pypy')
+    lib_pypy = os.path.join(lib_prefix, 'lib_pypy')
     checkdir(lib_pypy)
 
     importlist = []
