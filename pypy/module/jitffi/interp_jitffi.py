@@ -14,16 +14,15 @@ class W_Lib(Wrappable):
 
         self.space = space
 
-def descr_new_lib(space, w_type, name):
+def W_Lib___new__(space, w_type, name):
     try:
         return space.wrap(W_Lib(space, name))
     except OSError, e:
         raise wrap_oserror(space, e)
-descr_new_lib.unwrap_spec = [ObjSpace, W_Root, str]
 
 W_Lib.typedef = TypeDef(
         'Lib',
-        __new__ = interp2app(descr_new_lib)
+        __new__ = interp2app(W_Lib___new__, unwrap_spec=[ObjSpace,W_Root,str])
 )
 
 class W_Get(Wrappable, rjitffi._Get):
@@ -47,17 +46,15 @@ class W_Get(Wrappable, rjitffi._Get):
 
         return space.wrap(self.call(args_w))
 
-
-def descr_new_get(space, w_type, cpu, lib, func, args_type, res_type):
+def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
     try:
         return space.wrap(W_Get(space, w_type, cpu, lib, func, args_type, res_type))
     except OSError, e:
         raise wrap_oserror(space, e)
-descr_new_get.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root, str, W_Root, str]
 
 W_Get.typedef = TypeDef(
         'Get',
-        #__new__ = interp2app(descr_new_get)
+        #__new__ = interp2app(W_Get___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, str, W_Root, str]),
         call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root])
 )
 
@@ -78,16 +75,15 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
                                 args_type_w,
                                 res_type))
 
-def descr_new_cdll(space, w_type, name):
+def W_CDLL___new__(space, w_type, name):
     try:
         return space.wrap(W_CDLL(space, name))
     except OSError, e:
         raise wrap_oserror(space, e)
-descr_new_cdll.unwrap_spec = [ObjSpace, W_Root, str]
 
 W_CDLL.typedef = TypeDef(
         'CDLL',
-        __new__ = interp2app(descr_new_cdll),
+        __new__ = interp2app(W_CDLL___new__,unwrap_spec=[ObjSpace,W_Root,str]),
         get     = interp2app(W_CDLL.get_w, unwrap_spec=['self',
                                                         ObjSpace, str, W_Root, str]),
         __doc__ = """ C Dynamically loaded library
