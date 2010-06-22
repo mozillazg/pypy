@@ -5,7 +5,7 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
 
-class W_Lib(Wrappable):
+class W_LibHandler(Wrappable):
     def __init__(self, space, name):
         try:
             self.handler = rdynload.dlopen(name)
@@ -14,16 +14,18 @@ class W_Lib(Wrappable):
 
         self.space = space
 
-def W_Lib___new__(space, w_type, name):
+def W_LibHandler___new__(space, w_type, name):
     try:
         return space.wrap(W_Lib(space, name))
     except OSError, e:
         raise wrap_oserror(space, e)
 
-W_Lib.typedef = TypeDef(
-        'Lib',
-        __new__ = interp2app(W_Lib___new__, unwrap_spec=[ObjSpace,W_Root,str])
+W_LibHandler.typedef = TypeDef(
+        'LibHandler',
+        __new__ = interp2app(W_LibHandler___new__, unwrap_spec=[ObjSpace,
+                                                                W_Root, str])
 )
+
 
 class W_Get(Wrappable, rjitffi._Get):
     def __init__(self, space, cpu, lib, func, args_type, res_type='void'):
@@ -58,12 +60,12 @@ W_Get.typedef = TypeDef(
         call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root])
 )
 
+
 class W_CDLL(Wrappable, rjitffi.CDLL):
     def __init__(self, space, name):
         self.space = space
-        rjitffi.CDLL.__init__(self, name)
-        # XXX we load a library twice (in super-class and below)
-        self.lib_w = W_Lib(self.space, name)
+        rjitffi.CDLL.__init__(self, name, load=False)
+        self.lib_w = W_LibHandler(self.space, name)
 
     def get_w(self, space, func, w_args_type, res_type='void'):
         args_type_w = [ space.str_w(w_x)
