@@ -67,15 +67,15 @@ class AppTestJitffi(object):
         func = lib.get('add_integers', ['int', 'int'], 'int')
         assert 3 == func.call([1,2])
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 1 == func.call(-1,2)
+        assert 1 == func.call([-1,2])
         func = lib.get('add_integers', ['int', 'int'], 'int')
-        assert 0 == func.call(0,0)
+        assert 0 == func.call([0,0])
 
         func = lib.get('max3', ['int', 'int', 'int'], 'int')
-        assert 8 == func.call(2, 8, 3)
+        assert 8 == func.call([2, 8, 3])
 
         func = lib.get('add_floats', ['float', 'float'], 'float')
-        assert 2.7 == func.call(1.2, 1.5)
+        assert 2.7 == func.call([1.2, 1.5])
 
     def test_get_void(self):
         import jitffi

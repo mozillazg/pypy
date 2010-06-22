@@ -2,7 +2,7 @@ from pypy.rlib import rdynload
 from pypy.jit.backend.x86.runner import CPU
 from pypy.rlib import rjitffi
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
-from pypy.interpreter.error import wrap_oserror
+from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
 
@@ -32,8 +32,17 @@ class W_Get(Wrappable, rjitffi._Get):
         self.space = space
         rjitffi._Get.__init__(self, cpu, lib, func, args_type, res_type)
 
-    def call_w(self, w_args):
-        args_w = [ self.space.int_w(w_x) for w_x in self.space.listview(w_args) ] # XXX only int!
+    def call_w(self, space, w_args):
+        if self.args_type[0] == 'int':
+            args_w = [ space.int_w(w_x) for w_x in space.listview(w_args) ]
+        elif self.args_type[0] == 'float':
+            args_w = [ space.float_w(w_x) for w_x in space.listview(w_args) ]
+        else:
+            raise OperationError(
+                    space.w_TypeError,
+                    space.wrap('Unsupported type of argument: %s'
+                                % self.args_type[0]))
+
         return self.space.wrap(self.call(args_w))
 
 
@@ -47,7 +56,7 @@ descr_new_get.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root, str, W_Root, str]
 W_Get.typedef = TypeDef(
         'Get',
         #__new__ = interp2app(descr_new_get)
-        call = interp2app(W_Get.call_w, unwrap_spec=['self', W_Root])
+        call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root])
 )
 
 class W_CDLL(Wrappable, rjitffi.CDLL):
