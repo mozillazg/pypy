@@ -7,11 +7,14 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
 class CDLL(object):
-    def __init__(self, name):
-        try:
-            self.lib = rdynload.dlopen(name)
-        except rdynload.DLOpenError, e:
-            raise OSError('%s: %s', name, e.msg or 'unspecified error')
+    def __init__(self, name, load=True):
+        if load:
+            try:
+                self.lib = rdynload.dlopen(name)
+            except rdynload.DLOpenError, e:
+                raise OSError('%s: %s', name, e.msg or 'unspecified error')
+        else:
+            self.lib = None
 
         self.name = name
         self.cpu = CPU(None, None)

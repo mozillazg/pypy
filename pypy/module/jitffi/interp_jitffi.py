@@ -64,8 +64,7 @@ W_Get.typedef = TypeDef(
 class W_CDLL(Wrappable, rjitffi.CDLL):
     def __init__(self, space, name):
         self.space = space
-        rjitffi.CDLL.__init__(self, name)
-        # XXX we load a library twice (in super-class and below)
+        rjitffi.CDLL.__init__(self, name, load=False)
         self.lib_w = W_LibHandler(self.space, name)
 
     def get_w(self, space, func, w_args_type, res_type='void'):
