@@ -65,7 +65,10 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
     def __init__(self, space, name):
         self.space = space
         rjitffi.CDLL.__init__(self, name, load=False)
-        self.lib_w = W_LibHandler(self.space, name)
+        try:
+            self.lib_w = W_LibHandler(self.space, name)
+        except OSError, e:
+            raise OperationError(space.w_OSError, space.wrap(str(e)))
 
     def get_w(self, space, func, w_args_type, res_type='void'):
         args_type_w = [ space.str_w(w_x)
