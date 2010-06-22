@@ -29,7 +29,7 @@ class _Get(object):
         self.res_type = res_type
         self.cpu = cpu
 
-        if hasattr(lib, 'handler'):
+        if hasattr(lib, 'handler'): # XXX dirty hack for pypy.module.jitffi
             self.lib = lib.handler
         else:
             self.lib = lib
