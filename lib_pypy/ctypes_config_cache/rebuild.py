@@ -6,7 +6,7 @@
 # get the correct path
 import os.path
 this_dir = os.path.dirname(__file__)
-autopath_py = os.path.join(this_dir, '../../../../pypy/tool/autopath.py')
+autopath_py = os.path.join(this_dir, '../../pypy/tool/autopath.py')
 autopath_py = os.path.abspath(autopath_py)
 execfile(autopath_py, dict(__name__='autopath', __file__=autopath_py))
 
