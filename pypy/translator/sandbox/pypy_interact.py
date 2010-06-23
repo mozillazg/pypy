@@ -51,15 +51,18 @@ class PyPySandboxedProc(VirtualizedSandboxedProc, SimpleIOSandboxedProc):
             tmpdirnode = Dir({})
         else:
             tmpdirnode = RealDir(self.tmpdir, exclude=exclude)
-        libpath = str(LIB_ROOT.dirpath())
+        libroot = str(LIB_ROOT)
 
         return Dir({
             'bin': Dir({
                 'pypy-c': RealFile(self.executable),
-                'lib': RealDir(libpath, exclude=exclude),
-                    }),
-            'tmp': tmpdirnode,
-            })
+                'lib-python': RealDir(os.path.join(libroot, 'lib-python'),
+                                      exclude=exclude), 
+                'lib_pypy': RealDir(os.path.join(libroot, 'lib_pypy'),
+                                      exclude=exclude),
+                }),
+             'tmp': tmpdirnode,
+             })
 
 
 if __name__ == '__main__':
