@@ -7,6 +7,7 @@ from pypy.jit.backend.x86.regloc import LocationCodeBuilder
 from pypy.rlib.rmmap import PTR, alloc, free
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
+from pypy.rlib.objectmodel import we_are_translated
 
 # XXX: Seems nasty to change the superclass of InMemoryCodeBuilder like this
 if IS_X86_32:
@@ -141,6 +142,12 @@ class MachineCodeBlock(InMemoryCodeBuilder):
 
     def __init__(self, map_size):
         data = alloc(map_size)
+        if IS_X86_64 and not we_are_translated():
+            # Hack to make sure that mcs are not within 32-bits of one
+            # another for testing purposes
+            from pypy.rlib.rmmap import hint
+            hint.pos += 0xFFFFFFFF
+            
         self._init(data, map_size)
 
     def __del__(self):
