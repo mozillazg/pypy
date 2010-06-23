@@ -9,10 +9,7 @@ from pypy.jit.metainterp.typesystem import deref
 class CDLL(object):
     def __init__(self, name, load=True):
         if load:
-            try:
-                self.lib = rdynload.dlopen(name)
-            except rdynload.DLOpenError, e:
-                raise OSError('%s: %s', name, e.msg or 'unspecified error')
+            self.lib = _LibHandler(name)
         else:
             self.lib = None
 
@@ -22,17 +19,20 @@ class CDLL(object):
     def get(self, func, args_type, res_type='void'):
         return _Get(self.cpu, self.lib, func, args_type, res_type)
 
+class _LibHandler(object):
+    def __init__(self, name):
+        try:
+            self.handler = rdynload.dlopen(name)
+        except rdynload.DLOpenError, e:
+            raise OSError('%s: %s', name, e.msg or 'unspecified error')
+
 class _Get(object):
     def __init__(self, cpu, lib, func, args_type, res_type='void'):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
         self.cpu = cpu
-
-        if hasattr(lib, 'handler'): # XXX dirty hack for pypy.module.jitffi
-            self.lib = lib.handler
-        else:
-            self.lib = lib
+        self.lib = lib.handler
 
         if self.res_type == 'int':
             self.bres = BoxInt()
