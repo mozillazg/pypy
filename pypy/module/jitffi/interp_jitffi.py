@@ -1,18 +1,16 @@
-from pypy.rlib import rdynload
 from pypy.rlib import rjitffi
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
 
-class W_LibHandler(Wrappable):
+class W_LibHandler(Wrappable, rjitffi._LibHandler):
     def __init__(self, space, name):
-        try:
-            self.handler = rdynload.dlopen(name)
-        except rdynload.DLOpenError, e:
-            raise OSError('%s: %s', name, e.msg or 'unspecified error')
-
         self.space = space
+        try:
+            rjitffi._LibHandler.__init__(self, name)
+        except OSError, e:
+            raise OperationError(space.w_OSError, space.wrap(str(e)))
 
 def W_LibHandler___new__(space, w_type, name):
     try:
