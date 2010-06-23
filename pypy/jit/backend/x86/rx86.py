@@ -435,6 +435,7 @@ class AbstractX86CodeBuilder(object):
     CMP_mi = select_8_or_32_bit_immed(CMP_mi8, CMP_mi32)
 
     CMP_rm = insn(rex_w, '\x3B', register(1, 8), mem_reg_plus_const(2))
+    CMP_mr = insn(rex_w, '\x39', register(2, 8), mem_reg_plus_const(1))
 
     AND8_rr = insn(rex_w, '\x20', byte_register(1), byte_register(2,8), '\xC0')
 
@@ -488,6 +489,7 @@ class AbstractX86CodeBuilder(object):
     XCHG_rr = insn(rex_w, '\x87', register(1), register(2,8), '\xC0')
 
     JMP_l = insn('\xE9', relative(1))
+    JMP_r = insn(rex_nw, '\xFF', orbyte(4<<3), register(1), '\xC0')
     # FIXME: J_il8 and JMP_l8 assume the caller will do the appropriate
     # calculation to find the displacement, but J_il does it for the caller.
     # We need to be consistent.
@@ -540,6 +542,8 @@ Conditions = {
                 'NLE': 15,     'G': 15,
 }
 
+def invert_condition(cond_num):
+    return cond_num ^ 1
 
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
@@ -572,6 +576,7 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     # MOV_ri from the parent class is not wrong, but here is a better encoding
     # for the common case where the immediate fits in 32 bits
     _MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
+    MOV_ri64 = AbstractX86CodeBuilder.MOV_ri
 
     def MOV_ri(self, reg, immed):
         if fits_in_32bits(immed):
