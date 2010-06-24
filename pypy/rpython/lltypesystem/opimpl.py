@@ -18,13 +18,20 @@ ops_unary = {'is_true': True, 'neg': True, 'abs': True, 'invert': True}
 
 # global synonyms for some types
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
 
-type_by_name = {
+if r_longlong is r_int:
+    r_longlong_arg = (r_longlong, int)
+    r_longlong_result = int
+else:
+    r_longlong_arg = r_longlong
+    r_longlong_result = r_longlong
+
+argtype_by_name = {
     'int': int,
     'float': float,
     'uint': r_uint,
-    'llong': r_longlong,
+    'llong': r_longlong_arg,
     'ullong': r_ulonglong,
     }
 
@@ -56,9 +63,9 @@ def get_primitive_op_src(fullopname):
             adjust_result = intmask
         else:
             adjust_result = no_op
-        assert typname in type_by_name, "%s: not a primitive op" % (
+        assert typname in argtype_by_name, "%s: not a primitive op" % (
             fullopname,)
-        argtype = type_by_name[typname]
+        argtype = argtype_by_name[typname]
 
         if opname in ops_unary:
             def op_function(x):
@@ -190,6 +197,12 @@ def op_int_sub(x, y):
     assert isinstance(y, int)
     return intmask(x - y)
 
+def op_int_between(a, b, c):
+    assert lltype.typeOf(a) is lltype.Signed
+    assert lltype.typeOf(b) is lltype.Signed
+    assert lltype.typeOf(c) is lltype.Signed
+    return a <= b < c
+
 def op_int_and(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
@@ -210,32 +223,32 @@ def op_int_mul(x, y):
     return intmask(x * y)
 
 def op_int_floordiv(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, (int, llmemory.AddressOffset))
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_int_mod(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, (int, llmemory.AddressOffset))
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
     return r
 
 def op_llong_floordiv(x, y):
-    assert isinstance(x, r_longlong)
-    assert isinstance(y, r_longlong)
+    assert isinstance(x, r_longlong_arg)
+    assert isinstance(y, r_longlong_arg)
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_llong_mod(x, y):
-    assert isinstance(x, r_longlong)
-    assert isinstance(y, r_longlong)
+    assert isinstance(x, r_longlong_arg)
+    assert isinstance(y, r_longlong_arg)
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
@@ -258,7 +271,7 @@ def op_cast_uint_to_float(u):
     return float(u)
 
 def op_cast_longlong_to_float(i):
-    assert type(i) is r_longlong
+    assert isinstance(i, r_longlong_arg)
     # take first 31 bits
     li = float(int(i & r_longlong(0x7fffffff)))
     ui = float(int(i >> 31)) * float(0x80000000)
@@ -290,7 +303,7 @@ def op_cast_float_to_longlong(f):
     small = f / r
     high = int(small)
     truncated = int((small - high) * r)
-    return r_longlong(high) * 0x100000000 + truncated
+    return r_longlong_result(high) * 0x100000000 + truncated
 
 def op_cast_char_to_int(b):
     assert type(b) is str and len(b) == 1
@@ -314,10 +327,10 @@ def op_cast_uint_to_int(b):
 
 def op_cast_int_to_longlong(b):
     assert type(b) is int
-    return r_longlong(b)
+    return r_longlong_result(b)
 
 def op_truncate_longlong_to_int(b):
-    assert type(b) is r_longlong
+    assert isinstance(b, r_longlong_arg)
     return intmask(b)
 
 def op_cast_pointer(RESTYPE, obj):
@@ -394,6 +407,14 @@ def op_adr_delta(addr1, addr2):
     checkadr(addr2)
     return addr1 - addr2
 
+def op_gc_writebarrier_before_copy(source, dest):
+    A = lltype.typeOf(source)
+    assert A == lltype.typeOf(dest)
+    assert isinstance(A.TO, lltype.GcArray)
+    assert isinstance(A.TO.OF, lltype.Ptr)
+    assert A.TO.OF.TO._gckind == 'gc'
+    return True
+
 def op_getfield(p, name):
     checkptr(p)
     TYPE = lltype.typeOf(p).TO
@@ -436,8 +457,11 @@ def op_have_debug_prints():
 def op_gc_stack_bottom():
     pass       # marker for trackgcroot.py
 
-def op_promote_virtualizable(object, fieldname, flags):
-    pass # XXX should do something
+def op_jit_force_virtualizable(*args):
+    pass
+
+def op_jit_force_virtual(x):
+    return x
 
 def op_get_group_member(TYPE, grpptr, memberoffset):
     from pypy.rpython.lltypesystem import llgroup
@@ -482,6 +506,15 @@ def op_gc_gettypeptr_group(TYPE, obj, grpptr, skipoffset, vtableinfo):
         typeid = op_extract_ushort(typeid)
     return op_get_next_group_member(TYPE, grpptr, typeid, skipoffset)
 op_gc_gettypeptr_group.need_result_type = True
+
+def op_get_member_index(memberoffset):
+    raise NotImplementedError
+
+def op_gc_assume_young_pointers(addr):
+    pass
+
+def op_shrink_array(array, smallersize):
+    return False
 
 # ____________________________________________________________
 

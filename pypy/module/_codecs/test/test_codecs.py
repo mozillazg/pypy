@@ -1,7 +1,7 @@
 import autopath
 from pypy.conftest import gettestobjspace
 from pypy.module._codecs.app_codecs import unicode_escape_encode,\
-     charmap_encode, charmap_decode, unicode_escape_decode
+     charmap_encode, unicode_escape_decode
 
 
 class AppTestCodecs:
@@ -84,7 +84,7 @@ class AppTestCodecs:
         assert str(UnicodeTranslateError(
             u"g\uffffrk", 1, 2, "ouch"))== "can't translate character u'\\uffff' in position 1: ouch"
         
-        if sys.maxunicode > 0xffff:
+        if sys.maxunicode > 0xffff and len(unichr(0x10000)) == 1:
             assert str(UnicodeTranslateError(
                 u"g\U00010000rk", 1, 2, "ouch"))== "can't translate character u'\\U00010000' in position 1: ouch"
             
@@ -107,7 +107,7 @@ class AppTestCodecs:
        
         assert str(UnicodeEncodeError(
             "ascii", u"\uffffx", 0, 1, "ouch"))=="'ascii' codec can't encode character u'\\uffff' in position 0: ouch"
-        if sys.maxunicode > 0xffff:
+        if sys.maxunicode > 0xffff and len(unichr(0x10000)) == 1:
             assert str(UnicodeEncodeError(
                 "ascii", u"\U00010000x", 0, 1, "ouch")) =="'ascii' codec can't encode character u'\\U00010000' in position 0: ouch"
     
@@ -115,6 +115,15 @@ class AppTestCodecs:
         test =   "\\"     # trailing backslash
              
         raises (ValueError, test.decode,'string-escape')
+
+    def test_charmap_decode(self):
+        from _codecs import charmap_decode
+        assert charmap_decode('', 'strict', 'blablabla') == ('', 0)
+        assert charmap_decode('xxx') == ('xxx', 3)
+        assert charmap_decode('xxx', 'strict', {ord('x'): u'XX'}) == ('XXXXXX', 3)
+        map = tuple([unichr(i) for i in range(256)])
+        assert charmap_decode('xxx\xff', 'strict', map) == (u'xxx\xff', 4)
+
 
 class AppTestPartialEvaluation:
 
@@ -220,7 +229,9 @@ class AppTestPartialEvaluation:
 
     def test_unicode_internal_encode(self):
         import sys
-        enc = u"a".encode("unicode_internal")
+        class U(unicode):
+            pass
+        enc = U(u"a").encode("unicode_internal")
         if sys.maxunicode == 65535: # UCS2 build
             if sys.byteorder == "big":
                 assert enc == "\x00a"
@@ -364,7 +375,7 @@ class AppTestPartialEvaluation:
         decoded = _codecs.unicode_escape_decode(s)[0]
         assert decoded == ''
 
-    def test_charmap_decode(self):
+    def test_charmap_decode_1(self):
         import codecs
         res = codecs.charmap_decode("\x00\x01\x02", "replace", u"ab")
         assert res == (u"ab\ufffd", 3)
@@ -516,7 +527,7 @@ class AppTestPartialEvaluation:
     def test_charmap_encode(self):
         assert 'xxx'.encode('charmap') == 'xxx'
 
-    def test_charmap_decode(self):
+    def test_charmap_decode_2(self):
         assert 'foo'.decode('charmap') == 'foo'
 
     def test_utf7_start_end_in_exception(self):
@@ -550,10 +561,6 @@ class TestDirect:
     def test_charmap_encode(self):
         assert charmap_encode(u'xxx') == ('xxx', 3)
         assert charmap_encode(u'xxx', 'strict', {ord('x'): 'XX'}) ==  ('XXXXXX', 6)
-
-    def test_charmap_decode(self):
-        assert charmap_decode('xxx') == ('xxx', 3)
-        assert charmap_decode('xxx', 'strict', {ord('x'): u'XX'}) == ('XXXXXX', 3)
 
     def test_unicode_escape(self):
         assert unicode_escape_encode(u'abc') == (u'abc'.encode('unicode_escape'), 3)

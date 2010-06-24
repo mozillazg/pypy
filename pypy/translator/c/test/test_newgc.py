@@ -20,6 +20,7 @@ class TestUsingFramework(object):
     taggedpointers = False
     GC_CAN_MOVE = False
     GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_SHRINK_ARRAY = False
 
     _isolated_func = None
 
@@ -65,6 +66,12 @@ class TestUsingFramework(object):
         for fullname in dir(cls):
             if not fullname.startswith('define'):
                 continue
+            keyword = conftest.option.keyword
+            if keyword:
+                if keyword.startswith('test_'):
+                    keyword = keyword[len('test_'):]
+                if keyword not in fullname:
+                    continue
             prefix, name = fullname.split('_', 1)
             definefunc = getattr(cls, fullname)
             func = definefunc.im_func(cls)
@@ -620,40 +627,40 @@ class TestUsingFramework(object):
              CDLL, ffi_type_void, CallbackFuncPtr, ffi_type_sint
         from pypy.rpython.lltypesystem import rffi, ll2ctypes
         import gc
-        slong = cast_type_to_ffitype(rffi.LONG)
+        ffi_size_t = cast_type_to_ffitype(rffi.SIZE_T)
 
-        from pypy.rpython.lltypesystem.ll2ctypes import libc_name
+        from pypy.rlib.libffi import get_libc_name
 
         def callback(ll_args, ll_res, stuff):
             gc.collect()
             p_a1 = rffi.cast(rffi.VOIDPP, ll_args[0])[0]
             p_a2 = rffi.cast(rffi.VOIDPP, ll_args[1])[0]
-            a1 = rffi.cast(rffi.INTP, p_a1)[0]
-            a2 = rffi.cast(rffi.INTP, p_a2)[0]
+            a1 = rffi.cast(rffi.LONGP, p_a1)[0]
+            a2 = rffi.cast(rffi.LONGP, p_a2)[0]
             res = rffi.cast(rffi.INTP, ll_res)
             if a1 > a2:
-                res[0] = 1
+                res[0] = rffi.cast(rffi.INT, 1)
             else:
-                res[0] = -1
+                res[0] = rffi.cast(rffi.INT, -1)
 
         def f():
-            libc = CDLL(libc_name)
-            qsort = libc.getpointer('qsort', [ffi_type_pointer, slong,
-                                              slong, ffi_type_pointer],
-                                ffi_type_void)
+            libc = CDLL(get_libc_name())
+            qsort = libc.getpointer('qsort', [ffi_type_pointer, ffi_size_t,
+                                              ffi_size_t, ffi_type_pointer],
+                                    ffi_type_void)
 
             ptr = CallbackFuncPtr([ffi_type_pointer, ffi_type_pointer],
                                   ffi_type_sint, callback)
 
-            TP = rffi.CArray(rffi.INT)
+            TP = rffi.CArray(rffi.LONG)
             to_sort = lltype.malloc(TP, 4, flavor='raw')
             to_sort[0] = 4
             to_sort[1] = 3
             to_sort[2] = 1
             to_sort[3] = 2
             qsort.push_arg(rffi.cast(rffi.VOIDP, to_sort))
-            qsort.push_arg(rffi.sizeof(rffi.INT))
-            qsort.push_arg(4)
+            qsort.push_arg(rffi.cast(rffi.SIZE_T, 4))
+            qsort.push_arg(rffi.cast(rffi.SIZE_T, rffi.sizeof(rffi.LONG)))
             qsort.push_arg(rffi.cast(rffi.VOIDP, ptr.ll_closure))
             qsort.call(lltype.Void)
             result = [to_sort[i] for i in range(4)] == [1,2,3,4]
@@ -697,19 +704,28 @@ class TestUsingFramework(object):
 
     def define_resizable_buffer(cls):
         from pypy.rpython.lltypesystem.rstr import STR
-        from pypy.rpython.annlowlevel import hlstr
 
         def f():
-            ptr = rgc.resizable_buffer_of_shape(STR, 2)
-            ptr.chars[0] = 'a'
-            ptr = rgc.resize_buffer(ptr, 1, 200)
-            ptr.chars[1] = 'b'
-            return hlstr(rgc.finish_building_buffer(ptr, 2)) == "ab"
-
+            ptr = lltype.malloc(STR, 3)
+            ptr.hash = 0x62
+            ptr.chars[0] = '0'
+            ptr.chars[1] = 'B'
+            ptr.chars[2] = 'C'
+            ptr2 = rgc.ll_shrink_array(ptr, 2)
+            return ((ptr == ptr2)             +
+                     ord(ptr2.chars[0])       +
+                    (ord(ptr2.chars[1]) << 8) +
+                    (len(ptr2.chars)   << 16) +
+                    (ptr2.hash         << 24))
         return f
 
     def test_resizable_buffer(self):
-        assert self.run('resizable_buffer')
+        res = self.run('resizable_buffer')
+        if self.GC_CAN_SHRINK_ARRAY:
+            expected = 0x62024231
+        else:
+            expected = 0x62024230
+        assert res == expected
 
     def define_hash_preservation(cls):
         from pypy.rlib.objectmodel import compute_hash
@@ -835,11 +851,54 @@ class TestUsingFramework(object):
         res = self.run('hash_varsized')
         assert res != 0
 
+
+    def define_arraycopy_writebarrier_int(cls):
+        TP = lltype.GcArray(lltype.Signed)
+        S = lltype.GcStruct('S')
+        def fn():
+            l = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = i * 3
+            l2 = lltype.malloc(TP, 50)
+            rgc.ll_arraycopy(l, l2, 40, 0, 50)
+            # force a nursery collect
+            x = []
+            for i in range(20):
+                x.append((1, lltype.malloc(S)))
+            for i in range(50):
+                assert l2[i] == (40 + i) * 3
+            return 0
+
+        return fn
+
+    def test_arraycopy_writebarrier_int(self):
+        self.run("arraycopy_writebarrier_int")
+
+    def define_arraycopy_writebarrier_ptr(cls):
+        TP = lltype.GcArray(lltype.Ptr(lltype.GcArray(lltype.Signed)))
+        def fn():
+            l = lltype.malloc(TP, 100)
+            for i in range(100):
+                l[i] = lltype.malloc(TP.OF.TO, i)
+            l2 = lltype.malloc(TP, 50)
+            rgc.ll_arraycopy(l, l2, 40, 0, 50)
+            rgc.collect()
+            for i in range(50):
+                assert l2[i] == l[40 + i]
+            return 0
+
+        return fn
+
+    def test_arraycopy_writebarrier_ptr(self):
+        self.run("arraycopy_writebarrier_ptr")
+
+
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
     GC_CAN_MOVE = True
     GC_CANNOT_MALLOC_NONMOVABLE = True
+    GC_CAN_SHRINK_ARRAY = True
 
     # for snippets
     large_tests_ok = True
@@ -851,7 +910,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         def f():
             from pypy.rpython.lltypesystem import lltype, rffi
             alist = [A() for i in range(50000)]
-            idarray = lltype.malloc(rffi.INTP.TO, len(alist), flavor='raw')
+            idarray = lltype.malloc(rffi.LONGP.TO, len(alist), flavor='raw')
             # Compute the id of all elements of the list.  The goal is
             # to not allocate memory, so that if the GC needs memory to
             # remember the ids, it will trigger some collections itself
@@ -898,7 +957,41 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     def test_gc_set_max_heap_size(self):
         res = self.run('gc_set_max_heap_size')
         assert res == 2
+
+    def define_gc_heap_stats(cls):
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+        l1 = []
+        l2 = []
+        l3 = []
         
+        def f():
+            for i in range(10):
+                s = lltype.malloc(S)
+                l1.append(s)
+                l2.append(s)
+                l3.append(s)
+            tb = rgc._heap_stats()
+            a = 0
+            nr = 0
+            b = 0
+            c = 0
+            for i in range(len(tb)):
+                if tb[i].count == 10:
+                    a += 1
+                    nr = i
+            for i in range(len(tb)):
+                if tb[i].count == 3:
+                    b += 1
+                    c += tb[i].links[nr]
+            # we don't count b here since there can be more singletons,
+            # important one is c, a is for check
+            return c * 100 + b * 10 + a
+        return f
+
+    def test_gc_heap_stats(self):
+        res = self.run("gc_heap_stats")
+        assert res == 3011
+
     def definestr_string_builder(cls):
         def fn(_):
             s = StringBuilder()
@@ -932,6 +1025,30 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         res = self.run('string_builder_over_allocation')
         assert res[1000] == 'y'
 
+    def define_nursery_hash_base(cls):
+        from pypy.rlib.objectmodel import compute_identity_hash
+        class A:
+            pass
+        def fn():
+            objects = []
+            hashes = []
+            for i in range(200):
+                rgc.collect(0)     # nursery-only collection, if possible
+                obj = A()
+                objects.append(obj)
+                hashes.append(compute_identity_hash(obj))
+            unique = {}
+            for i in range(len(objects)):
+                assert compute_identity_hash(objects[i]) == hashes[i]
+                unique[hashes[i]] = None
+            return len(unique)
+        return fn
+
+    def test_nursery_hash_base(self):
+        res = self.run('nursery_hash_base')
+        assert res >= 195
+
+
 class TestGenerationalGC(TestSemiSpaceGC):
     gcpolicy = "generation"
     should_be_moving = True
@@ -953,6 +1070,7 @@ class TestHybridGCRemoveTypePtr(TestHybridGC):
 class TestMarkCompactGC(TestSemiSpaceGC):
     gcpolicy = "markcompact"
     should_be_moving = True
+    GC_CAN_SHRINK_ARRAY = False
 
     def setup_class(cls):
         py.test.skip("Disabled for now")

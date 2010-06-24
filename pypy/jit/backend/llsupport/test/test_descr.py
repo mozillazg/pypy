@@ -2,7 +2,9 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.jit.backend.llsupport.descr import *
 from pypy.jit.backend.llsupport import symbolic
 from pypy.rlib.objectmodel import Symbolic
-
+from pypy.rpython.annlowlevel import llhelper
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr
+from pypy.jit.metainterp import history
 
 def test_get_size_descr():
     c0 = GcCache(False)
@@ -144,24 +146,28 @@ def test_get_call_descr_not_translated():
     c0 = GcCache(False)
     descr1 = get_call_descr(c0, [lltype.Char, lltype.Signed], lltype.Char)
     assert descr1.get_result_size(False) == rffi.sizeof(lltype.Char)
-    assert not descr1.returns_a_pointer()
-    assert not descr1.returns_a_float()
+    assert descr1.get_return_type() == history.INT
     assert descr1.arg_classes == "ii"
     #
     T = lltype.GcStruct('T')
     descr2 = get_call_descr(c0, [lltype.Ptr(T)], lltype.Ptr(T))
     assert descr2.get_result_size(False) == rffi.sizeof(lltype.Ptr(T))
-    assert descr2.returns_a_pointer()
-    assert not descr2.returns_a_float()
+    assert descr2.get_return_type() == history.REF
     assert descr2.arg_classes == "r"
     #
     U = lltype.GcStruct('U', ('x', lltype.Signed))
     assert descr2 == get_call_descr(c0, [lltype.Ptr(U)], lltype.Ptr(U))
     #
+    V = lltype.Struct('V', ('x', lltype.Signed))
+    assert (get_call_descr(c0, [], lltype.Ptr(V)).get_return_type() ==
+            history.INT)
+    #
+    assert (get_call_descr(c0, [], lltype.Void).get_return_type() ==
+            history.VOID)
+    #
     descr4 = get_call_descr(c0, [lltype.Float, lltype.Float], lltype.Float)
     assert descr4.get_result_size(False) == rffi.sizeof(lltype.Float)
-    assert not descr4.returns_a_pointer()
-    assert descr4.returns_a_float()
+    assert descr4.get_return_type() == history.FLOAT
     assert descr4.arg_classes == "ff"
 
 def test_get_call_descr_translated():
@@ -170,15 +176,27 @@ def test_get_call_descr_translated():
     U = lltype.GcStruct('U', ('x', lltype.Signed))
     descr3 = get_call_descr(c1, [lltype.Ptr(T)], lltype.Ptr(U))
     assert isinstance(descr3.get_result_size(True), Symbolic)
-    assert descr3.returns_a_pointer()
-    assert not descr3.returns_a_float()
+    assert descr3.get_return_type() == history.REF
     assert descr3.arg_classes == "r"
     #
     descr4 = get_call_descr(c1, [lltype.Float, lltype.Float], lltype.Float)
     assert isinstance(descr4.get_result_size(True), Symbolic)
-    assert not descr4.returns_a_pointer()
-    assert descr4.returns_a_float()
+    assert descr4.get_return_type() == history.FLOAT
     assert descr4.arg_classes == "ff"
+
+def test_call_descr_extra_info():
+    c1 = GcCache(True)
+    T = lltype.GcStruct('T')
+    U = lltype.GcStruct('U', ('x', lltype.Signed))
+    descr1 = get_call_descr(c1, [lltype.Ptr(T)], lltype.Ptr(U), "hello")
+    extrainfo = descr1.get_extra_info()
+    assert extrainfo == "hello"
+    descr2 = get_call_descr(c1, [lltype.Ptr(T)], lltype.Ptr(U), "hello")
+    assert descr1 is descr2
+    descr3 = get_call_descr(c1, [lltype.Ptr(T)], lltype.Ptr(U))
+    extrainfo = descr3.get_extra_info()
+    assert extrainfo is None
+
 
 def test_repr_of_descr():
     c0 = GcCache(False)
@@ -213,3 +231,33 @@ def test_repr_of_descr():
     #
     descr4f = get_call_descr(c0, [lltype.Char, lltype.Ptr(S)], lltype.Float)
     assert 'FloatCallDescr' in descr4f.repr_of_descr()
+
+def test_call_stubs():
+    c0 = GcCache(False)
+    ARGS = [lltype.Char, lltype.Signed]
+    RES = lltype.Char
+    descr1 = get_call_descr(c0, ARGS, RES)
+    def f(a, b):
+        return 'c'
+
+    call_stub = descr1.call_stub
+    fnptr = llhelper(lltype.Ptr(lltype.FuncType(ARGS, RES)), f)
+
+    res = call_stub(rffi.cast(lltype.Signed, fnptr), [1, 2], None, None)
+    assert res == ord('c')
+
+    ARRAY = lltype.GcArray(lltype.Signed)
+    ARGS = [lltype.Float, lltype.Ptr(ARRAY)]
+    RES = lltype.Float
+
+    def f(a, b):
+        return float(b[0]) + a
+
+    fnptr = llhelper(lltype.Ptr(lltype.FuncType(ARGS, RES)), f)
+    descr2 = get_call_descr(c0, ARGS, RES)
+    a = lltype.malloc(ARRAY, 3)
+    opaquea = lltype.cast_opaque_ptr(llmemory.GCREF, a)
+    a[0] = 1
+    res = descr2.call_stub(rffi.cast(lltype.Signed, fnptr),
+                           [], [opaquea], [3.5])
+    assert res == 4.5

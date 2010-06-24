@@ -4,8 +4,12 @@ from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool.rffi_platform import CompilationError
 
-import os, pyexpat
+import os
 import py
+try:
+    import pyexpat
+except ImportError:
+    py.test.skip("No module expat")
 
 try:
    from pypy.module.pyexpat import interp_pyexpat
@@ -14,6 +18,8 @@ except (ImportError, CompilationError):
 
 def test_build():
     def entry_point(argv):
+        parser = interp_pyexpat.XML_ParserCreate("test")
+        interp_pyexpat.XML_ParserFree(parser)
         res = interp_pyexpat.XML_ErrorString(3)
         os.write(1, rffi.charp2str(res))
         return 0

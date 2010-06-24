@@ -227,6 +227,8 @@ LL_OPERATIONS = {
     'int_rshift':           LLOp(canfold=True),
     'int_xor':              LLOp(canfold=True),
 
+    'int_between':          LLOp(canfold=True),   # a <= b < c
+
     'int_add_ovf':          LLOp(canraise=(OverflowError,), tryfold=True),
     'int_add_nonneg_ovf':   LLOp(canraise=(OverflowError,), tryfold=True),
               # ^^^ more efficient version when 2nd arg is nonneg
@@ -263,7 +265,7 @@ LL_OPERATIONS = {
     'uint_rshift':          LLOp(canfold=True),
     'uint_xor':             LLOp(canfold=True),
 
-    'float_is_true':        LLOp(canfold=True),
+    'float_is_true':        LLOp(canfold=True),  # it really means "x != 0.0"
     'float_neg':            LLOp(canfold=True),
     'float_abs':            LLOp(canfold=True),
 
@@ -354,9 +356,7 @@ LL_OPERATIONS = {
     'malloc_varsize':       LLOp(canraise=(MemoryError,), canunwindgc=True),
     'malloc_nonmovable':    LLOp(canraise=(MemoryError,), canunwindgc=True),
     'malloc_nonmovable_varsize':LLOp(canraise=(MemoryError,),canunwindgc=True),
-    'malloc_resizable_buffer': LLOp(canraise=(MemoryError,),canunwindgc=True),
-    'resize_buffer':        LLOp(canraise=(MemoryError,), canunwindgc=True),
-    'finish_building_buffer' : LLOp(canraise=(MemoryError,), canunwindgc=True),
+    'shrink_array':         LLOp(canrun=True),
     'zero_gc_pointers_inside': LLOp(),
     'free':                 LLOp(),
     'getfield':             LLOp(sideeffects=False, canrun=True),
@@ -391,8 +391,6 @@ LL_OPERATIONS = {
     'boehm_register_finalizer': LLOp(),
     'boehm_disappearing_link': LLOp(),
     'raw_malloc':           LLOp(),
-    'raw_realloc_grow':     LLOp(),
-    'raw_realloc_shrink':   LLOp(),
     'raw_malloc_usage':     LLOp(sideeffects=False),
     'raw_free':             LLOp(),
     'raw_memclear':         LLOp(),
@@ -414,7 +412,7 @@ LL_OPERATIONS = {
     'cast_ptr_to_adr':      LLOp(sideeffects=False),
     'cast_adr_to_ptr':      LLOp(canfold=True),
     'cast_adr_to_int':      LLOp(sideeffects=False),
-    'cast_int_to_adr':      LLOp(canfold=True),   # not implemented in llinterp
+    'cast_int_to_adr':      LLOp(canfold=True),
 
     'get_group_member':     LLOp(canfold=True),
     'get_next_group_member':LLOp(canfold=True),
@@ -422,15 +420,17 @@ LL_OPERATIONS = {
     'extract_ushort':       LLOp(canfold=True),
     'combine_ushort':       LLOp(canfold=True),
     'gc_gettypeptr_group':  LLOp(canfold=True),
+    'get_member_index':     LLOp(canfold=True),
 
     # __________ used by the JIT ________
 
     'jit_marker':           LLOp(),
-    'promote_virtualizable':LLOp(canrun=True),
+    'jit_force_virtualizable':LLOp(canrun=True),
+    'jit_force_virtual':    LLOp(canrun=True),
     'get_exception_addr':   LLOp(),
     'get_exc_value_addr':   LLOp(),
-    'do_malloc_fixedsize_clear': LLOp(canunwindgc=True),
-    'do_malloc_varsize_clear': LLOp(canunwindgc=True),
+    'do_malloc_fixedsize_clear':LLOp(canraise=(MemoryError,),canunwindgc=True),
+    'do_malloc_varsize_clear':  LLOp(canraise=(MemoryError,),canunwindgc=True),
     'get_write_barrier_failing_case': LLOp(sideeffects=False),
     'gc_get_type_info_group': LLOp(sideeffects=False),
 
@@ -459,7 +459,9 @@ LL_OPERATIONS = {
                                  # allocating non-GC structures only
     'gc_thread_run'       : LLOp(),
     'gc_thread_die'       : LLOp(),
-    'gc_assume_young_pointers': LLOp(),
+    'gc_assume_young_pointers': LLOp(canrun=True),
+    'gc_writebarrier_before_copy': LLOp(canrun=True),
+    'gc_heap_stats'       : LLOp(canunwindgc=True),
 
     # ------- JIT & GC interaction, only for some GCs ----------
     
@@ -532,6 +534,11 @@ LL_OPERATIONS = {
     'debug_fatalerror':     LLOp(),
     'debug_llinterpcall':   LLOp(), # Python func call 'res=arg[0](*arg[1:])'
                                     # in backends, abort() or whatever is fine
+    'debug_start_traceback':   LLOp(),
+    'debug_record_traceback':  LLOp(),
+    'debug_catch_exception':   LLOp(),
+    'debug_reraise_traceback': LLOp(),
+    'debug_print_traceback':   LLOp(),
 
     # __________ instrumentation _________
     'instrument_count':     LLOp(),

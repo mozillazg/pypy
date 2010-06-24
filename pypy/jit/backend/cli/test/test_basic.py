@@ -30,6 +30,7 @@ class TestBasic(CliJitMixin, test_basic.TestOOtype):
     test_instantiate_classes = skip
     test_zerodivisionerror = skip
     test_isinstance = skip
+    test_isinstance_2 = skip
     test_oois = skip
     test_oostring_instance = skip
     test_long_long = skip
@@ -44,13 +45,15 @@ class TestBasic(CliJitMixin, test_basic.TestOOtype):
     test_instantiate_does_not_call = skip
     test_listcomp = skip
     test_tuple_immutable = skip
-
-
-def test_fielddescr_ootype():
-    from pypy.rpython.ootypesystem import ootype
-    from pypy.jit.backend.cli.runner import CliCPU
-    A = ootype.Instance("A", ootype.ROOT, {"foo": ootype.Signed})
-    B = ootype.Instance("B", A)
-    descr1 = CliCPU.fielddescrof(A, "foo")
-    descr2 = CliCPU.fielddescrof(B, "foo")
-    assert descr1 is descr2
+    test_oosend_look_inside_only_one = skip
+    test_residual_external_call = skip
+    test_merge_guardclass_guardvalue = skip
+    test_merge_guardnonnull_guardclass = skip
+    test_merge_guardnonnull_guardvalue = skip
+    test_merge_guardnonnull_guardvalue_2 = skip
+    test_merge_guardnonnull_guardclass_guardvalue = skip
+    test_residual_call_doesnt_lose_info = skip
+    test_oohash = skip
+    test_identityhash = skip
+    test_guard_isnull_nonnull = skip
+    test_r_dict = skip

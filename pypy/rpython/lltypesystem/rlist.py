@@ -15,10 +15,10 @@ from pypy.rpython.lltypesystem import rstr
 from pypy.rpython import robject
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr, raw_memclear,\
-     raw_memcopy, sizeof, itemoffsetof, offsetof
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib.objectmodel import keepalive_until_here
+from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib import rgc
 
 # ____________________________________________________________
 #
@@ -185,8 +185,6 @@ def _ll_list_resize_really(l, newsize):
     l.length to newsize.  Note that l.items may change, and even if
     newsize is less than l.length on entry.
     """
-    allocated = len(l.items)
-
     # This over-allocates proportional to the list size, making room
     # for additional growth.  The over-allocation is mild, but is
     # enough to give linear-time amortized behavior over a long
@@ -208,26 +206,17 @@ def _ll_list_resize_really(l, newsize):
             new_allocated = ovfcheck(newsize + some)
         except OverflowError:
             raise MemoryError
-    # XXX consider to have a real realloc
+    # new_allocated is a bit more than newsize, enough to ensure an amortized
+    # linear complexity for e.g. repeated usage of l.append().
     items = l.items
     newitems = malloc(typeOf(l).TO.items.TO, new_allocated)
     before_len = l.length
-    if before_len < new_allocated:
-        p = before_len - 1
-    else:
-        p = new_allocated - 1
-    ITEM = typeOf(l).TO.ITEM
-    if isinstance(ITEM, Ptr):
-        while p >= 0:
-            newitems[p] = items[p]
-            items[p] = nullptr(ITEM.TO)
-            p -= 1
-    else:
-        source = cast_ptr_to_adr(items) + itemoffsetof(typeOf(l.items).TO, 0)
-        dest = cast_ptr_to_adr(newitems) + itemoffsetof(typeOf(l.items).TO, 0)
-        s = p + 1
-        raw_memcopy(source, dest, sizeof(ITEM) * s)
-        keepalive_until_here(items)
+    if before_len:   # avoids copying GC flags from the prebuilt_empty_array
+        if before_len < newsize:
+            p = before_len
+        else:
+            p = newsize
+        rgc.ll_arraycopy(items, newitems, 0, 0, p)
     l.length = newsize
     l.items = newitems
 _ll_list_resize_really._annenforceargs_ = (None, int)
@@ -378,8 +367,7 @@ def ll_list2fixed(l):
     else:
         LIST = typeOf(l).TO
         newitems = malloc(LIST.items.TO, n)
-        for i in range(n):
-            newitems[i] = olditems[i]
+        rgc.ll_arraycopy(olditems, newitems, 0, 0, n)
         return newitems
 ll_list2fixed.oopspec = 'list.list2fixed(l)'
 
@@ -400,6 +388,7 @@ class ListIteratorRepr(AbstractListIteratorRepr):
                                          ('index', Signed)))
         self.ll_listiter = ll_listiter
         self.ll_listnext = ll_listnext
+        self.ll_getnextindex = ll_getnextindex
 
 def ll_listiter(ITERPTR, lst):
     iter = malloc(ITERPTR.TO)
@@ -414,3 +403,6 @@ def ll_listnext(iter):
         raise StopIteration
     iter.index = index + 1      # cannot overflow because index < l.length
     return l.ll_getitem_fast(index)
+
+def ll_getnextindex(iter):
+    return iter.index

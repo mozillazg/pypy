@@ -186,16 +186,18 @@ def map(space, w_func, collections_w):
     while True:
         cont = False
         args_w = [space.w_None] * num_iterators
-        for i in range(len(iterators_w)):
-            try:
-                args_w[i] = space.next(iterators_w[i])
-            except OperationError, e:
-                if not e.match(space, space.w_StopIteration):
-                    raise
-            else:
-                cont = True
-        w_args = space.newtuple(args_w)
+        for i in range(num_iterators):
+            if iterators_w[i] is not None:
+                try:
+                    args_w[i] = space.next(iterators_w[i])
+                except OperationError, e:
+                    if not e.match(space, space.w_StopIteration):
+                        raise
+                    iterators_w[i] = None
+                else:
+                    cont = True
         if cont:
+            w_args = space.newtuple(args_w)
             if none_func:
                 result_w.append(w_args)
             else:
@@ -531,13 +533,9 @@ class W_XRange(Wrappable):
                                                 self.len, -self.step))
 
 def _toint(space, w_obj):
-    # trying to support float arguments, just because CPython still does
-    try:
-        return space.int_w(space.int(w_obj))
-    except OperationError, e:
-        if space.is_true(space.isinstance(w_obj, space.w_float)):
-            return space.int_w(space.int(w_obj))
-        raise
+    # this also supports float arguments.  CPython still does, too.
+    # needs a bit more thinking in general...
+    return space.int_w(space.int(w_obj))
 
 W_XRange.typedef = TypeDef("xrange",
     __new__          = interp2app(W_XRange.descr_new.im_func),

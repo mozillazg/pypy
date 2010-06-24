@@ -110,7 +110,7 @@ def simplify_dfa(dfa):
                     del dfa[j]
                     for sub_state in dfa:
                         sub_state.unify_state(other_state, state)
-                    changes = True
+                    changed = True
                     break
 
 
@@ -128,6 +128,7 @@ class ParserGenerator(object):
 
     def build_grammar(self, grammar_cls):
         gram = grammar_cls()
+        gram.start = self.start_symbol
         names = self.dfas.keys()
         names.sort()
         names.remove(self.start_symbol)
@@ -146,8 +147,8 @@ class ParserGenerator(object):
                 for label, next in state.arcs.iteritems():
                     arcs.append((self.make_label(gram, label), dfa.index(next)))
                 states.append((arcs, state.is_final))
-            our_id = gram.symbol_ids[name]
-            gram.dfas[our_id] = (states, self.make_first(gram, name))
+            gram.dfas.append((states, self.make_first(gram, name)))
+            assert len(gram.dfas) - 1 == gram.symbol_ids[name] - 256
         gram.start = gram.symbol_ids[self.start_symbol]
         return gram
 
@@ -229,7 +230,8 @@ class ParserGenerator(object):
         for label, their_first in overlap_check.iteritems():
             for sub_label in their_first:
                 if sub_label in inverse:
-                    raise PgenError("ambiguous symbol %s" % (symbol,))
+                    raise PgenError("ambiguous symbol with label %s"
+                                    % (label,))
                 inverse[sub_label] = label
         self.first[name] = all_labels
         return all_labels

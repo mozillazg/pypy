@@ -38,7 +38,7 @@ class BaseStringFormatter(object):
                space.wrap('not all arguments converted '
                             'during string formatting'))
 
-    def std_wp_int(self, r, prefix=''):
+    def std_wp_int(self, r, prefix='', keep_zero=False):
         # use self.prec to add some '0' on the left of the number
         if self.prec >= 0:
             sign = r[0] == '-'
@@ -48,7 +48,7 @@ class BaseStringFormatter(object):
                     r = '-' + '0'*padding + r[1:]
                 else:
                     r = '0'*padding + r
-            elif self.prec == 0 and r == '0':
+            elif self.prec == 0 and r == '0' and not keep_zero:
                 r = ''
         self.std_wp_number(r, prefix)
 
@@ -78,11 +78,15 @@ class BaseStringFormatter(object):
     def fmt_o(self, w_value):
         "oct formatting"
         r = oct_num_helper(self.space, w_value)
-        if self.f_alt and (r != '0' or self.prec == 0):
-            prefix = '0'
-        else:
-            prefix = ''
-        self.std_wp_int(r, prefix)
+        keep_zero = False
+        if self.f_alt:
+            if r == '0':
+                keep_zero = True
+            elif r.startswith('-'):
+                r = '-0' + r[1:]
+            else:
+                r = '0' + r
+        self.std_wp_int(r, keep_zero=keep_zero)
 
     fmt_i = fmt_d
     fmt_u = fmt_d
@@ -318,14 +322,15 @@ def make_formatter_subclass(do_unicode):
             else:
                 s = c
             msg = "unsupported format character '%s' (0x%x) at index %d" % (
-                s, ord(c), self.fmtpos)
+                s, ord(c), self.fmtpos - 1)
             raise OperationError(space.w_ValueError, space.wrap(msg))
 
         def std_wp(self, r):
             length = len(r)
             if do_unicode and isinstance(r, str):
                 # convert string to unicode explicitely here
-                r = unicode(r)
+                from pypy.objspace.std.unicodetype import plain_str2unicode
+                r = plain_str2unicode(self.space, r)
             prec = self.prec
             if prec == -1 and self.width == 0:
                 # fast path
@@ -469,12 +474,6 @@ FORMATTER_CHARS = unrolling_iterable(
     [_name[-1] for _name in dir(StringFormatter)
                if len(_name) == 5 and _name.startswith('fmt_')])
 
-def is_list_of_chars_or_unichars(ann, bk):
-    from pypy.annotation.model import SomeChar, SomeUnicodeCodePoint
-    if not isinstance(ann.listdef.listitem.s_value,
-                      (SomeChar, SomeUnicodeCodePoint)):
-        raise TypeError("Formatter should return as a result a list of chars or unichars, otherwise we miss important optimization")
-
 def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
     "Entry point"
     if not do_unicode:
@@ -484,7 +483,8 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
             result = formatter.format()
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
-            fmt = unicode(fmt)
+            from pypy.objspace.std.unicodetype import plain_str2unicode
+            fmt = plain_str2unicode(space, fmt)
         else:
             return space.wrap(result)
     else:
@@ -495,7 +495,7 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
 
 def mod_format(space, w_format, w_values, do_unicode=False):
     if space.is_true(space.isinstance(w_values, space.w_tuple)):
-        values_w = space.unpackiterable(w_values)
+        values_w = space.fixedview(w_values)
         return format(space, w_format, values_w, None, do_unicode)
     else:
         # we check directly for dict to avoid obscure checking

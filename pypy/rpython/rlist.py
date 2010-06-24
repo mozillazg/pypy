@@ -11,6 +11,7 @@ from pypy.rlib.objectmodel import malloc_zero_filled
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck, widen
 from pypy.rpython.annlowlevel import ADTInterface
+from pypy.rlib import rgc
 
 ADTIFixedList = ADTInterface(None, {
     'll_newlist':      (['SELF', Signed        ], 'self'),
@@ -246,12 +247,14 @@ class __extend__(pairtype(AbstractBaseListRepr, IntegerRepr)):
             spec = dum_nocheck
         v_func = hop.inputconst(Void, spec)
         v_lst, v_index = hop.inputargs(r_lst, Signed)
-        if hop.args_s[0].listdef.listitem.mutated:
+        if hop.args_s[0].listdef.listitem.mutated or checkidx:
             if hop.args_s[1].nonneg:
                 llfn = ll_getitem_nonneg
             else:
                 llfn = ll_getitem
         else:
+            # this is the 'foldable' version, which is not used when
+            # we check for IndexError
             if hop.args_s[1].nonneg:
                 llfn = ll_getitem_foldable_nonneg
             else:
@@ -358,10 +361,6 @@ def rtype_newlist(hop):
 
 def rtype_alloc_and_set(hop):
     r_list = hop.r_result
-    # XXX the special case for pyobj_repr needs to be implemented here as well
-    # will probably happen during NFS
-    if r_list == robject.pyobj_repr:
-        raise Exception, 'please implement this!'
     v_count, v_item = hop.inputargs(Signed, r_list.item_repr)
     cLIST = hop.inputconst(Void, r_list.LIST)
     return hop.gendirectcall(ll_alloc_and_set, cLIST, v_count, v_item)
@@ -525,13 +524,25 @@ def listItemType(lst):
     return LIST.ITEM
 
 
+def ll_arraycopy(source, dest, source_start, dest_start, length):
+    SRCTYPE = typeOf(source)
+    if isinstance(SRCTYPE, Ptr):
+        # lltype
+        rgc.ll_arraycopy(source.ll_items(), dest.ll_items(),
+                         source_start, dest_start, length)
+    else:
+        # ootype -- XXX improve the case of array->array copy?
+        i = 0
+        while i < length:
+            item = source.ll_getitem_fast(source_start + i)
+            dest.ll_setitem_fast(dest_start + i, item)
+            i += 1
+ll_arraycopy._annenforceargs_ = [None, None, int, int, int]
+
 def ll_copy(RESLIST, l):
     length = l.ll_length()
     new_lst = RESLIST.ll_newlist(length)
-    i = 0
-    while i < length:
-        new_lst.ll_setitem_fast(i, l.ll_getitem_fast(i))
-        i += 1
+    ll_arraycopy(l, new_lst, 0, 0, length)
     return new_lst
 
 def ll_len(l):
@@ -574,15 +585,8 @@ def ll_concat(RESLIST, l1, l2):
     except OverflowError:
         raise MemoryError
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    while j < len1:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(j))
-        j += 1
-    i = 0
-    while i < len2:
-        l.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    ll_arraycopy(l1, l, 0, 0, len1)
+    ll_arraycopy(l2, l, 0, len1, len2)
     return l
 
 def ll_insert_nonneg(l, index, newitem):
@@ -769,12 +773,7 @@ def ll_extend(l1, l2):
     except OverflowError:
         raise MemoryError
     l1._ll_resize_ge(newlength)
-    i = 0
-    j = len1
-    while i < len2:
-        l1.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    ll_arraycopy(l2, l1, 0, len1, len2)
 ll_extend.oopspec = 'list.extend(l1, l2)'
 
 def ll_extend_with_str(lst, s, getstrlen, getstritem):
@@ -867,12 +866,7 @@ def ll_listslice_startonly(RESLIST, l1, start):
     ll_assert(start <= len1, "list slice start larger than list length")
     newlength = len1 - start
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    i = start
-    while i < len1:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    ll_arraycopy(l1, l, start, 0, newlength)
     return l
 ll_listslice_startonly._annenforceargs_ = (None, None, int)
 
@@ -885,22 +879,14 @@ def ll_listslice_startstop(RESLIST, l1, start, stop):
         stop = length
     newlength = stop - start
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    i = start
-    while i < stop:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    ll_arraycopy(l1, l, start, 0, newlength)
     return l
 
 def ll_listslice_minusone(RESLIST, l1):
     newlength = l1.ll_length() - 1
     ll_assert(newlength >= 0, "empty list is sliced with [:-1]")
     l = RESLIST.ll_newlist(newlength)
-    j = 0
-    while j < newlength:
-        l.ll_setitem_fast(j, l1.ll_getitem_fast(j))
-        j += 1
+    ll_arraycopy(l1, l, 0, 0, newlength)
     return l
 
 def ll_listdelslice_startonly(l, start):
@@ -945,13 +931,8 @@ def ll_listsetslice(l1, start, stop, l2):
     ll_assert(start <= l1.ll_length(), "l[start:x] = l with start > len(l)")
     ll_assert(count == stop - start,
                  "setslice cannot resize lists in RPython")
-    # XXX but it should be easy enough to support, soon
-    j = start
-    i = 0
-    while i < count:
-        l1.ll_setitem_fast(j, l2.ll_getitem_fast(i))
-        i += 1
-        j += 1
+    # XXX ...but it would be easy enough to support if really needed
+    ll_arraycopy(l2, l1, 0, start, count)
 ll_listsetslice.oopspec = 'list.setslice(l1, start, stop, l2)'
 
 # ____________________________________________________________

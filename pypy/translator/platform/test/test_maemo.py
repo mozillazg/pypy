@@ -13,6 +13,7 @@ class TestMaemo(BasicTest):
     strict_on_stderr = False
 
     def setup_class(cls):
+        py.test.skip("TestMaemo: tests skipped for now")
         check_scratchbox()
 
     def test_includes_outside_scratchbox(self):
@@ -26,7 +27,7 @@ class TestMaemo(BasicTest):
             return 0;
         }
         ''')
-        includedir = py.magic.autopath().dirpath().join('include')
+        includedir = py.path.local(__file__).dirpath().join('include')
         eci = ExternalCompilationInfo(include_dirs=(includedir,))
         executable = self.platform.compile([cfile], eci)
         res = self.platform.execute(executable)

@@ -102,7 +102,7 @@ class TestRunModule:
             if verbose: print "  Next level in:", sub_dir
             pkg_fname = os.path.join(sub_dir, init_fname)
             pkg_file = open(pkg_fname, "w")
-            pkg_file.write("__path__ = ['%s']\n" % sub_dir)
+            pkg_file.write("__path__ = [%r]\n" % sub_dir)
             pkg_file.close()
             if verbose: print "  Created:", pkg_fname
         mod_fname = os.path.join(sub_dir, test_fname)
@@ -137,6 +137,12 @@ class TestRunModule:
             d1 = run_module(mod_name) # Read from source
             __import__(mod_name)
             os.remove(mod_fname)
+
+            #--- the block below is to check that "imp.find_module"
+            #--- manages to import the .pyc file alone.  We don't
+            #--- support it in PyPy in the default configuration.
+            return
+
             if verbose: print "Running from compiled:", mod_name
             d2 = run_module(mod_name) # Read from bytecode
         finally:

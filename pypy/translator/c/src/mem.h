@@ -2,11 +2,11 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
+#ifndef _MSC_VER
 extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
-extern void *__gcrootanchor;
-extern long pypy_asm_stackwalk(void*);
+extern long pypy_asm_stackwalk(void*, void*);
 #define __gcnoreorderhack __gcmapend
 
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
@@ -17,18 +17,24 @@ extern long pypy_asm_stackwalk(void*);
    could make two copies of the local variable (e.g. one in the stack
    and one in a register), pass one to GCROOT, and later use the other
    one.  In practice the pypy_asm_gcroot() is often a no-op in the final
-   machine code and doesn't prevent most optimizations.  Getting the
-   asm() right was tricky, though.  The asm() is not volatile so that
-   gcc is free to delete it if the output variable is not used at all.
-   We need to prevent gcc from moving the asm() *before* the call that
-   could cause a collection; this is the purpose of the (unused)
-   __gcnoreorderhack input argument.  Any memory input argument would
-   have this effect: as far as gcc knows the call instruction can modify
-   arbitrary memory, thus creating the order dependency that we want. */
+   machine code and doesn't prevent most optimizations. */
+
+/* With gcc, getting the asm() right was tricky, though.  The asm() is
+   not volatile so that gcc is free to delete it if the output variable
+   is not used at all.  We need to prevent gcc from moving the asm()
+   *before* the call that could cause a collection; this is the purpose
+   of the (unused) __gcnoreorderhack input argument.  Any memory input
+   argument would have this effect: as far as gcc knows the call
+   instruction can modify arbitrary memory, thus creating the order
+   dependency that we want. */
+
 #define pypy_asm_gcroot(p) ({void*_r; \
                asm ("/* GCROOT %0 */" : "=g" (_r) : \
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
+
+#define pypy_asm_gc_nocollect(f) asm volatile ("/* GC_NOCOLLECT " #f " */" \
+                                               : : )
 
 #define pypy_asm_keepalive(v)  asm volatile ("/* keepalive %0 */" : : \
                                              "g" (v))
@@ -40,8 +46,44 @@ extern long pypy_asm_stackwalk(void*);
                i == 0 ? (void*)&__gcmapstart :         \
                i == 1 ? (void*)&__gcmapend :           \
                i == 2 ? (void*)&__gccallshapes :       \
-               i == 3 ? (void*)&__gcrootanchor :       \
                NULL
+
+#else
+extern void* __gcmapstart;
+extern void* __gcmapend;
+extern char* __gccallshapes;
+extern long pypy_asm_stackwalk(void*, void*);
+
+/* With the msvc Microsoft Compiler, the optimizer seems free to move
+   any code (even asm) that involves local memory (registers and stack).
+   The _ReadWriteBarrier function has an effect only where the content
+   of a global variable is *really* used.  trackgcroot.py will remove
+   the extra instructions: the access to _constant_always_one_ is
+   removed, and the multiplication is replaced with a simple move. */
+
+static __forceinline void*
+pypy_asm_gcroot(void* _r1)
+{
+	static volatile int _constant_always_one_ = 1;
+	(long)_r1 *= _constant_always_one_;
+	_ReadWriteBarrier();
+    return _r1;
+}
+
+#define pypy_asm_gc_nocollect(f) "/* GC_NOCOLLECT " #f " */"
+
+#define pypy_asm_keepalive(v)    __asm { }
+static __declspec(noinline) void pypy_asm_stack_bottom() { }
+
+#define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
+               i == 0 ? (void*)__gcmapstart :         \
+               i == 1 ? (void*)__gcmapend :           \
+               i == 2 ? (void*)&__gccallshapes :       \
+               NULL
+
+#endif
+
+
 
 #define RAW_MALLOC_ZERO_FILLED 0
 
@@ -71,10 +113,6 @@ extern long pypy_asm_stackwalk(void*);
 #define OP_RAW_MEMCLEAR(p, size, r) memset((void*)p, 0, size)
 
 #define OP_RAW_MALLOC_USAGE(size, r) r = size
-
-#define OP_RAW_REALLOC_SHRINK(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
-
-#define OP_RAW_REALLOC_GROW(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
 
 #ifdef MS_WINDOWS
 #define alloca  _alloca

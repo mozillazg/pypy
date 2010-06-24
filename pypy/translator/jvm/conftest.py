@@ -1,6 +1,12 @@
 
+import py, sys
+
+def pytest_runtest_setup(item):
+    if sys.maxint > 2147483647: # 64bit platform
+        py.test.skip("jvm backend on 64bit unsupported")
+
 def pytest_addoption(parser):
-    group = parser.addgroup("pypy-jvm options")
+    group = parser.getgroup("pypy-jvm options")
     group.addoption('--java', action='store', dest='java', default='java',
             help='Define the java executable to use')
     group.addoption('--javac', action='store', dest='javac',

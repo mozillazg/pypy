@@ -2,7 +2,7 @@
  PyJitPl5
 ==========
 
-This document describes the fith generation of PyPy's JIT.
+This document describes the fifth generation of PyPy's JIT.
 
 
 Implementation of the JIT
@@ -31,7 +31,8 @@ jit_merge_point is supposed to go at the start of opcode dispatch.  It allows
 the JIT to bail back to the interpreter in case running machine code is no
 longer suitable.  can_enter_jit goes at the end of a application level loop.  In
 the Python interpreter, this is the JUMP_ABSOLUTE bytecode.  The Python
-interpreter defines its hints in pypy/module/pypyjit/interp_jit.py.
+interpreter defines its hints in pypy/module/pypyjit/interp_jit.py in a few
+overriden methods of the defaut interpreter loop.
 
 The interpreter wishing to use the PyPy's JIT must define a list of *green*
 variables and a list of *red* variables.  The *green* variables are loop
@@ -81,7 +82,7 @@ times, the JIT enters tracing mode.
 *Tracing* is where JIT interprets the bytecode, generated at translation time,
 of the interpreter interpreting the application level code.  This allows it to
 see the exact operations that make up the application level loop.  Tracing is
-preformed by MetaInterp and MIFrame classes in metainterp/pyjitpl.py.
+performed by MetaInterp and MIFrame classes in metainterp/pyjitpl.py.
 maybe_compile_and_run() creates a MetaInterp and calls its
 compile_and_run_once() method.  This initializes the MIFrame for the input
 arguments of the loop, the red and green variables passed from the
@@ -97,7 +98,8 @@ constants.  All values which are "promoted", assumed to be constant by the JIT
 for optimization purposes, are also stored in constant boxes.  Normal boxes
 contain values that may change during the running of a loop.  There are three
 kinds of normal boxes: BoxInt, BoxPtr, and BoxFloat, and four kinds of constant
-boxes: ConstInt, ConstPtr, ConstFloat, and ConstAddr.
+boxes: ConstInt, ConstPtr, ConstFloat, and ConstAddr.  (ConstAddr is only used
+to get around a limitation in the translation toolchain.)
 
 The meta-interpreter starts interpreting the JIT bytecode.  Each operation is
 executed and then recorded in a list of operations, called the trace.
@@ -170,7 +172,7 @@ article:
 
 * `Tracing the Meta-Level: PyPy's Tracing JIT Compiler`__
 
-.. __: http://codespeak.net/svn/pypy/extradoc/talk/ipcoolps2009/bolz-tracing-jit.pdf
+.. __: http://codespeak.net/svn/pypy/extradoc/talk/icooolps2009/bolz-tracing-jit-final.pdf
 
 as well as the `blog posts with the JIT tag.`__
 

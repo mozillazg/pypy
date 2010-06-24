@@ -12,7 +12,7 @@ from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.annotation import model as annmodel
-from pypy.rpython import rmodel, annlowlevel
+from pypy.rpython import rmodel
 from pypy.rpython.memory import gc
 from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
@@ -380,6 +380,16 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
+    def gct_gc_writebarrier_before_copy(self, hop):
+        # We take the conservative default and return False here, meaning
+        # that rgc.ll_arraycopy() will do the copy by hand (i.e. with a
+        # 'for' loop).  Subclasses that have their own logic, or that don't
+        # need any kind of write barrier, may return True.
+        op = hop.spaceop
+        hop.genop("same_as",
+                  [rmodel.inputconst(lltype.Bool, False)],
+                  resultvar=op.result)
+
     def gct_gc_identityhash(self, hop):
         # must be implemented in the various GCs
         raise NotImplementedError
@@ -388,6 +398,11 @@ class BaseGCTransformer(object):
         # this assumes a non-moving GC.  Moving GCs need to override this
         hop.rename('cast_ptr_to_int')
 
+    def gct_gc_heap_stats(self, hop):
+        from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
+        
+        return hop.cast_result(rmodel.inputconst(lltype.Ptr(ARRAY_TYPEID_MAP),
+                                        lltype.nullptr(ARRAY_TYPEID_MAP)))
 
 class MinimalGCTransformer(BaseGCTransformer):
     def __init__(self, parenttransformer):
@@ -470,15 +485,6 @@ def mallocHelpers():
         return result
     mh.ll_malloc_varsize_no_length_zero = _ll_malloc_varsize_no_length_zero
 
-    def ll_realloc(ptr, length, constsize, itemsize, lengthoffset):
-        size = constsize + length * itemsize
-        result = mh.realloc(ptr, size)
-        if not result:
-            raise MemoryError()
-        (result + lengthoffset).signed[0] = length
-        return result
-    mh.ll_realloc = ll_realloc
-
     return mh
 
 class GCTransformer(BaseGCTransformer):
@@ -551,81 +557,6 @@ class GCTransformer(BaseGCTransformer):
     def gct_malloc_nonmovable_varsize(self, *args, **kwds):
         return self.gct_malloc_varsize(*args, **kwds)
 
-    def gct_malloc_resizable_buffer(self, hop):
-        flags = hop.spaceop.args[1].value
-        flags['varsize'] = True
-        flags['nonmovable'] = True
-        flags['resizable'] = True
-        flavor = flags['flavor']
-        assert flavor != 'cpy', "cannot malloc CPython objects directly"
-        meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
-        return self.varsize_malloc_helper(hop, flags, meth, [])
-
-    def gct_resize_buffer(self, hop):
-        op = hop.spaceop
-        if self._can_realloc():
-            self._gct_resize_buffer_realloc(hop, op.args[2], True)
-        else:
-            self._gct_resize_buffer_no_realloc(hop, op.args[1])
-
-    def _can_realloc(self):
-        return False
-
-    def _gct_resize_buffer_realloc(self, hop, v_newsize, grow=True):
-        def intconst(c): return rmodel.inputconst(lltype.Signed, c)
-        op = hop.spaceop
-        flags = {'flavor':'gc', 'varsize': True}
-        TYPE = op.args[0].concretetype.TO
-        ARRAY = TYPE._flds[TYPE._arrayfld]
-        offset_to_length = llmemory.FieldOffset(TYPE, TYPE._arrayfld) + \
-                           llmemory.ArrayLengthOffset(ARRAY)
-        c_const_size = intconst(llmemory.sizeof(TYPE, 0))
-        c_item_size = intconst(llmemory.sizeof(ARRAY.OF))
-
-        c_lengthofs = intconst(offset_to_length)
-        v_ptr = op.args[0]
-        v_ptr = gen_cast(hop.llops, llmemory.GCREF, v_ptr)
-        c_grow = rmodel.inputconst(lltype.Bool, grow)
-        v_raw = self.perform_realloc(hop, v_ptr, v_newsize, c_const_size,
-                                     c_item_size, c_lengthofs, c_grow)
-        hop.cast_result(v_raw)
-
-    def _gct_resize_buffer_no_realloc(self, hop, v_lgt):
-        op = hop.spaceop
-        meth = self.gct_fv_gc_malloc_varsize
-        flags = {'flavor':'gc', 'varsize': True, 'keep_current_args': True}
-        self.varsize_malloc_helper(hop, flags, meth, [])
-        # fish resvar
-        v_newbuf = hop.llops[-1].result
-        v_src = op.args[0]
-        TYPE = v_src.concretetype.TO
-        c_fldname = rmodel.inputconst(lltype.Void, TYPE._arrayfld)
-        v_adrsrc = hop.genop('cast_ptr_to_adr', [v_src],
-                             resulttype=llmemory.Address)
-        v_adrnewbuf = hop.genop('cast_ptr_to_adr', [v_newbuf],
-                                resulttype=llmemory.Address)
-        ofs = (llmemory.offsetof(TYPE, TYPE._arrayfld) +
-               llmemory.itemoffsetof(getattr(TYPE, TYPE._arrayfld), 0))
-        v_ofs = rmodel.inputconst(lltype.Signed, ofs)
-        v_adrsrc = hop.genop('adr_add', [v_adrsrc, v_ofs],
-                             resulttype=llmemory.Address)
-        v_adrnewbuf = hop.genop('adr_add', [v_adrnewbuf, v_ofs],
-                                resulttype=llmemory.Address)
-        size = llmemory.sizeof(getattr(TYPE, TYPE._arrayfld).OF)
-        c_size = rmodel.inputconst(lltype.Signed, size)
-        v_lgtsym = hop.genop('int_mul', [c_size, v_lgt],
-                             resulttype=lltype.Signed) 
-        vlist = [v_adrsrc, v_adrnewbuf, v_lgtsym]
-        hop.genop('raw_memcopy', vlist)
-
-    def gct_finish_building_buffer(self, hop):
-        op = hop.spaceop
-        if self._can_realloc():
-            return self._gct_resize_buffer_realloc(hop, op.args[1], False)
-        else:
-            return self._gct_resize_buffer_no_realloc(hop, op.args[1])
-
     def varsize_malloc_helper(self, hop, flags, meth, extraargs):
         def intconst(c): return rmodel.inputconst(lltype.Signed, c)
         op = hop.spaceop
@@ -685,4 +616,7 @@ class GCTransformer(BaseGCTransformer):
             assert False, "%s has no support for free with flavor %r" % (self, flavor)           
 
     def gct_gc_can_move(self, hop):
+        return hop.cast_result(rmodel.inputconst(lltype.Bool, False))
+
+    def gct_shrink_array(self, hop):
         return hop.cast_result(rmodel.inputconst(lltype.Bool, False))

@@ -2,9 +2,9 @@
 Arguments objects.
 """
 
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib.jit import purefunction, unroll_safe
+from pypy.rlib import jit
 
 
 class Signature(object):
@@ -17,7 +17,7 @@ class Signature(object):
         self.varargname = varargname
         self.kwargname = kwargname
 
-    @purefunction
+    @jit.purefunction
     def find_argname(self, name):
         try:
             return self.argnames.index(name)
@@ -99,8 +99,14 @@ class Arguments(object):
             make_sure_not_resized(self.keywords_w)
 
         make_sure_not_resized(self.arguments_w)
-        if w_stararg is not None or w_starstararg is not None:
+        if ((w_stararg is not None and w_stararg) or
+            (w_starstararg is not None and w_starstararg)):
             self._combine_wrapped(w_stararg, w_starstararg)
+            # if we have a call where * or ** args are used at the callsite
+            # we shouldn't let the JIT see the argument matching
+            self._dont_jit = True
+        else:
+            self._dont_jit = False
         
     def __repr__(self):
         """ NOT_RPYTHON """
@@ -135,7 +141,7 @@ class Arguments(object):
         # unpack the * arguments 
         if w_stararg is not None:
             self.arguments_w = (self.arguments_w +
-                                self.space.viewiterable(w_stararg))
+                                self.space.fixedview(w_stararg))
         # unpack the ** arguments
         if w_starstararg is not None:
             space = self.space
@@ -155,10 +161,10 @@ class Arguments(object):
                     raise OperationError(space.w_TypeError,
                                          space.wrap("keywords must be strings"))
                 if self.keywords and key in self.keywords:
-                    raise OperationError(self.space.w_TypeError,
-                                         self.space.wrap("got multiple values "
-                                                         "for keyword argument "
-                                                         "'%s'" % key))
+                    raise operationerrfmt(self.space.w_TypeError,
+                                          "got multiple values "
+                                          "for keyword argument "
+                                          "'%s'", key)
                 keywords[i] = key
                 keywords_w[i] = space.getitem(w_starstararg, w_key)
                 i += 1
@@ -188,13 +194,28 @@ class Arguments(object):
         
     ###  Parsing for function calls  ###
 
-    @unroll_safe # XXX not true always, but for now
     def _match_signature(self, w_firstarg, scope_w, signature, defaults_w=[],
                          blindargs=0):
         """Parse args and kwargs according to the signature of a code object,
         or raise an ArgErr in case of failure.
         Return the number of arguments filled in.
         """
+        if jit.we_are_jitted() and self._dont_jit:
+            return self._match_signature_jit_opaque(w_firstarg, scope_w,
+                                                    signature, defaults_w,
+                                                    blindargs)
+        return self._really_match_signature(w_firstarg, scope_w, signature,
+                                            defaults_w, blindargs)
+
+    @jit.dont_look_inside
+    def _match_signature_jit_opaque(self, w_firstarg, scope_w, signature,
+                                    defaults_w, blindargs):
+        return self._really_match_signature(w_firstarg, scope_w, signature,
+                                            defaults_w, blindargs)
+
+    @jit.unroll_safe
+    def _really_match_signature(self, w_firstarg, scope_w, signature, defaults_w=[],
+                                blindargs=0):
         #
         #   args_w = list of the normal actual parameters, wrapped
         #   kwds_w = real dictionary {'keyword': wrapped parameter}

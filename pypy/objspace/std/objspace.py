@@ -1,417 +1,124 @@
-from pypy.objspace.std.register_all import register_all
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable, UnpackValueError
-from pypy.interpreter.error import OperationError, debug_print
+import __builtin__
+import types
+from pypy.interpreter import pyframe, function, special
+from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import get_unique_interplevel_subclass
-from pypy.interpreter import pyframe
-from pypy.interpreter import function
-from pypy.interpreter.pyopcode import unrolling_compare_dispatch_table, \
-     BytecodeCorruption
-from pypy.rlib.objectmodel import instantiate
+from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
+                               transparent, callmethod, proxyobject)
+from pypy.objspace.descroperation import DescrOperation, raiseattrerror
+from pypy.rlib.objectmodel import instantiate, r_dict
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.interpreter.gateway import PyPyCacheDir
-from pypy.tool.cache import Cache 
-from pypy.tool.sourcetools import func_with_new_name
-from pypy.objspace.std.model import W_Object, UnwrapError
-from pypy.objspace.std.model import W_ANY, StdObjSpaceMultiMethod, StdTypeModel
-from pypy.objspace.std.multimethod import FailedToImplement
-from pypy.objspace.descroperation import DescrOperation
-from pypy.objspace.std import stdtypedef
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
-from pypy.rlib.unroll import unrolling_iterable
-import sys
-import os
-import __builtin__
+from pypy.tool.sourcetools import func_with_new_name
 
-#check for sets
-try:
-    s = set()
-    del s
-except NameError:
-    try:
-        from sets import Set as set
-        from sets import ImmutableSet as frozenset
-    except ImportError:
-        class DummySet(object):pass
-        set = DummySet
-        frozenset = DummySet
+# Object imports
+from pypy.objspace.std.boolobject import W_BoolObject
+from pypy.objspace.std.complexobject import W_ComplexObject
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+from pypy.objspace.std.floatobject import W_FloatObject
+from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.listobject import W_ListObject
+from pypy.objspace.std.longobject import W_LongObject
+from pypy.objspace.std.noneobject import W_NoneObject
+from pypy.objspace.std.ropeobject import W_RopeObject
+from pypy.objspace.std.iterobject import W_SeqIterObject
+from pypy.objspace.std.setobject import W_SetObject, W_FrozensetObject
+from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.smallintobject import W_SmallIntObject
+from pypy.objspace.std.stringobject import W_StringObject
+from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.objspace.std.typeobject import W_TypeObject
 
-_registered_implementations = {}
-def registerimplementation(implcls):
-    # hint to objspace.std.model to register the implementation class
-    assert issubclass(implcls, W_Object)
-    _registered_implementations[implcls] = True
+# types
+from pypy.objspace.std.inttype import wrapint
+from pypy.objspace.std.stringtype import wrapstr
+from pypy.objspace.std.unicodetype import wrapunicode
 
-
-compare_table = [
-    "lt",   # "<"
-    "le",   # "<="
-    "eq",   # "=="
-    "ne",   # "!="
-    "gt",   # ">"
-    "ge",   # ">="
-    ]
-
-unrolling_compare_ops = unrolling_iterable(
-    enumerate(compare_table))
-
-##################################################################
 
 class StdObjSpace(ObjSpace, DescrOperation):
     """The standard object space, implementing a general-purpose object
     library in Restricted Python."""
 
-    PACKAGE_PATH = 'objspace.std'
-
     def initialize(self):
         "NOT_RPYTHON: only for initializing the space."
-        self._typecache = Cache()
+        # setup all the object types and implementations
+        self.model = model.StdTypeModel(self.config)
 
-        # Import all the object types and implementations
-        self.model = StdTypeModel(self.config)
+        self.FrameClass = frame.build_frame(self)
 
-        from pypy.objspace.std.celldict import get_global_cache
-
-        class StdObjSpaceFrame(pyframe.PyFrame):
-            if self.config.objspace.std.withcelldict:
-                def __init__(self, space, code, w_globals, closure):
-                    pyframe.PyFrame.__init__(self, space, code, w_globals, closure)
-                    self.cache_for_globals = get_global_cache(space, code, w_globals)
-
-                from pypy.objspace.std.celldict import LOAD_GLOBAL
-
-            if self.config.objspace.std.optimized_int_add:
-                if self.config.objspace.std.withsmallint:
-                    def BINARY_ADD(f, oparg, *ignored):
-                        from pypy.objspace.std.smallintobject import \
-                             W_SmallIntObject, add__SmallInt_SmallInt
-                        w_2 = f.popvalue()
-                        w_1 = f.popvalue()
-                        if type(w_1) is W_SmallIntObject and type(w_2) is W_SmallIntObject:
-                            try:
-                                w_result = add__SmallInt_SmallInt(f.space, w_1, w_2)
-                            except FailedToImplement:
-                                w_result = f.space.add(w_1, w_2)
-                        else:
-                            w_result = f.space.add(w_1, w_2)
-                        f.pushvalue(w_result)
-                else:
-                    def BINARY_ADD(f, oparg, *ignored):
-                        from pypy.objspace.std.intobject import \
-                             W_IntObject, add__Int_Int
-                        w_2 = f.popvalue()
-                        w_1 = f.popvalue()
-                        if type(w_1) is W_IntObject and type(w_2) is W_IntObject:
-                            try:
-                                w_result = add__Int_Int(f.space, w_1, w_2)
-                            except FailedToImplement:
-                                w_result = f.space.add(w_1, w_2)
-                        else:
-                            w_result = f.space.add(w_1, w_2)
-                        f.pushvalue(w_result)
-
-            if self.config.objspace.std.optimized_list_getitem:
-                def BINARY_SUBSCR(f, *ignored):
-                    w_2 = f.popvalue()
-                    w_1 = f.popvalue()
-                    if type(w_1) is W_ListObject and type(w_2) is W_IntObject:
-                        try:
-                            w_result = w_1.wrappeditems[w_2.intval]
-                        except IndexError:
-                            raise OperationError(f.space.w_IndexError,
-                                f.space.wrap("list index out of range"))
-                    else:
-                        w_result = f.space.getitem(w_1, w_2)
-                    f.pushvalue(w_result)
-
-            def LIST_APPEND(f, *ignored):
-                w = f.popvalue()
-                v = f.popvalue()
-                if type(v) is W_ListObject:
-                    v.append(w)
-                else:
-                    f.space.call_method(v, 'append', w)
-
-            if self.config.objspace.opcodes.CALL_LIKELY_BUILTIN:
-                def CALL_LIKELY_BUILTIN(f, oparg, *ignored):
-                    from pypy.module.__builtin__ import OPTIMIZED_BUILTINS, Module
-                    from pypy.objspace.std.dictmultiobject import W_DictMultiObject
-                    w_globals = f.w_globals
-                    num = oparg >> 8
-                    assert isinstance(w_globals, W_DictMultiObject)
-                    w_value = w_globals.get_builtin_indexed(num)
-                    if w_value is None:
-                        builtins = f.get_builtin()
-                        assert isinstance(builtins, Module)
-                        w_builtin_dict = builtins.w_dict
-                        assert isinstance(w_builtin_dict, W_DictMultiObject)
-                        w_value = w_builtin_dict.get_builtin_indexed(num)
-        ##                 if w_value is not None:
-        ##                     print "CALL_LIKELY_BUILTIN fast"
-                    if w_value is None:
-                        varname = OPTIMIZED_BUILTINS[num]
-                        message = "global name '%s' is not defined" % varname
-                        raise OperationError(f.space.w_NameError,
-                                             f.space.wrap(message))
-                    nargs = oparg & 0xff
-                    w_function = w_value
-                    try:
-                        w_result = f.call_likely_builtin(w_function, nargs)
-                        # XXX XXX fix the problem of resume points!
-                        #rstack.resume_point("CALL_FUNCTION", f, nargs, returns=w_result)
-                    finally:
-                        f.dropvalues(nargs)
-                    f.pushvalue(w_result)
-
-                def call_likely_builtin(f, w_function, nargs):
-                    if isinstance(w_function, function.Function):
-                        executioncontext = self.getexecutioncontext()
-                        executioncontext.c_call_trace(f, w_function)
-                        res = w_function.funccall_valuestack(nargs, f)
-                        executioncontext.c_return_trace(f, w_function)
-                        return res
-                    args = f.make_arguments(nargs)
-                    return f.space.call_args(w_function, args)
-
-            if self.config.objspace.opcodes.CALL_METHOD:
-                # def LOOKUP_METHOD(...):
-                from pypy.objspace.std.callmethod import LOOKUP_METHOD
-                # def CALL_METHOD(...):
-                from pypy.objspace.std.callmethod import CALL_METHOD
-
-            if self.config.objspace.std.optimized_comparison_op:
-                def COMPARE_OP(f, testnum, *ignored):
-                    import operator
-                    w_2 = f.popvalue()
-                    w_1 = f.popvalue()
-                    w_result = None
-                    if (type(w_2) is W_IntObject and type(w_1) is W_IntObject
-                        and testnum < len(compare_table)):
-                        for i, attr in unrolling_compare_ops:
-                            if i == testnum:
-                                op = getattr(operator, attr)
-                                w_result = f.space.newbool(op(w_1.intval,
-                                                              w_2.intval))
-                                break
-                    else:
-                        for i, attr in unrolling_compare_dispatch_table:
-                            if i == testnum:
-                                w_result = getattr(f, attr)(w_1, w_2)
-                                break
-                        else:
-                            raise BytecodeCorruption, "bad COMPARE_OP oparg"
-                    f.pushvalue(w_result)
-
-            if self.config.objspace.std.logspaceoptypes:
-                _space_op_types = []
-                for name, func in pyframe.PyFrame.__dict__.iteritems():
-                    if hasattr(func, 'binop'):
-                        operationname = func.binop
-                        def make_opimpl(operationname):
-                            def opimpl(f, *ignored):
-                                operation = getattr(f.space, operationname)
-                                w_2 = f.popvalue()
-                                w_1 = f.popvalue()
-                                if we_are_translated():
-                                    s = operationname + ' ' + str(w_1) + ' ' + str(w_2)
-                                else:
-                                    s = operationname + ' ' + w_1.__class__.__name__ + ' ' + w_2.__class__.__name__
-                                f._space_op_types.append(s)
-                                w_result = operation(w_1, w_2)
-                                f.pushvalue(w_result)
-                            return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
-                        locals()[name] = make_opimpl(operationname)
-                    elif hasattr(func, 'unaryop'):
-                        operationname = func.unaryop
-                        def make_opimpl(operationname):
-                            def opimpl(f, *ignored):
-                                operation = getattr(f.space, operationname)
-                                w_1 = f.popvalue()
-                                if we_are_translated():
-                                    s = operationname + ' ' + str(w_1)
-                                else:
-                                    s = operationname + ' ' + w_1.__class__.__name__
-                                f._space_op_types.append(s)
-                                w_result = operation(w_1)
-                                f.pushvalue(w_result)
-                            return func_with_new_name(opimpl, "opcode_impl_for_%s" % operationname)
-                        locals()[name] = make_opimpl(operationname)                    
-
-        self.FrameClass = StdObjSpaceFrame
-
-        # store the dict class on the space to access it in various places
-        from pypy.objspace.std import dictmultiobject
-        self.DictObjectCls = dictmultiobject.W_DictMultiObject
-
-        from pypy.objspace.std import tupleobject
-        self.TupleObjectCls = tupleobject.W_TupleObject
-
-        if not self.config.objspace.std.withrope:
-            from pypy.objspace.std import stringobject
-            self.StringObjectCls = stringobject.W_StringObject
+        if self.config.objspace.std.withrope:
+            self.StringObjectCls = W_RopeObject
         else:
-            from pypy.objspace.std import ropeobject
-            self.StringObjectCls = ropeobject.W_RopeObject
-        assert self.StringObjectCls in self.model.typeorder
+            self.StringObjectCls = W_StringObject
 
-        # install all the MultiMethods into the space instance
-        for name, mm in self.MM.__dict__.items():
-            if not isinstance(mm, StdObjSpaceMultiMethod):
-                continue
-            if not hasattr(self, name):
-                if name.endswith('_w'): # int_w, str_w...: these do not return a wrapped object
-                    func = mm.install_not_sliced(self.model.typeorder, baked_perform_call=True)
-                else:               
-                    exprargs, expr, miniglobals, fallback = (
-                        mm.install_not_sliced(self.model.typeorder, baked_perform_call=False))
-
-                    func = stdtypedef.make_perform_trampoline('__mm_'+name,
-                                                              exprargs, expr, miniglobals,
-                                                              mm)
-                
-                                                  # e.g. add(space, w_x, w_y)
-                def make_boundmethod(func=func):
-                    def boundmethod(*args):
-                        return func(self, *args)
-                    return func_with_new_name(boundmethod, 'boundmethod_'+name)
-                boundmethod = make_boundmethod()
-                setattr(self, name, boundmethod)  # store into 'space' instance
-            elif self.config.objspace.std.builtinshortcut:
-                from pypy.objspace.std import builtinshortcut
-                if name.startswith('inplace_'):
-                    fallback_name = name[len('inplace_'):]
-                    if fallback_name in ('or', 'and'):
-                        fallback_name += '_'
-                    fallback_mm = self.MM.__dict__[fallback_name]
-                else:
-                    fallback_mm = None
-                builtinshortcut.install(self, mm, fallback_mm)
-
-        if self.config.objspace.std.builtinshortcut:
-            from pypy.objspace.std import builtinshortcut
-            builtinshortcut.install_is_true(self, self.MM.nonzero, self.MM.len)
-
-        # set up the method cache
-        if self.config.objspace.std.withmethodcache:
-            SIZE = 1 << self.config.objspace.std.methodcachesizeexp
-            self.method_cache_versions = [None] * SIZE
-            self.method_cache_names = [None] * SIZE
-            self.method_cache_lookup_where = [(None, None)] * SIZE
-            if self.config.objspace.std.withmethodcachecounter:
-                self.method_cache_hits = {}
-                self.method_cache_misses = {}
-
-        # hack to avoid imports in the time-critical functions below
-        for cls in self.model.typeorder:
-            globals()[cls.__name__] = cls
-        for cls in self.model.imported_but_not_registered:
-            globals()[cls.__name__] = cls
+        self._install_multimethods()
 
         # singletons
-        self.w_None  = W_NoneObject.w_None
+        self.w_None = W_NoneObject.w_None
         self.w_False = W_BoolObject.w_False
-        self.w_True  = W_BoolObject.w_True
-        from pypy.interpreter.special import NotImplemented, Ellipsis
-        self.w_NotImplemented = self.wrap(NotImplemented(self))  
-        self.w_Ellipsis = self.wrap(Ellipsis(self))  
+        self.w_True = W_BoolObject.w_True
+        self.w_NotImplemented = self.wrap(special.NotImplemented(self))
+        self.w_Ellipsis = self.wrap(special.Ellipsis(self))
 
         # types
+        self.builtin_types = {}
         for typedef in self.model.pythontypes:
             w_type = self.gettypeobject(typedef)
+            self.builtin_types[typedef.name] = w_type
             setattr(self, 'w_' + typedef.name, w_type)
+        self.builtin_types["NotImplemented"] = self.w_NotImplemented
+        self.builtin_types["Ellipsis"] = self.w_Ellipsis
 
         # exceptions & builtins
-        w_mod = self.setup_exceptions()
         self.make_builtins()
-        self.sys.setmodule(w_mod)
 
         # the type of old-style classes
         self.w_classobj = self.builtin.get('__metaclass__')
-
-        # fix up a problem where multimethods apparently don't 
-        # like to define this at interp-level 
-        # HACK HACK HACK
-        from pypy.objspace.std.typeobject import _HEAPTYPE
-        old_flags = self.w_dict.__flags__
-        self.w_dict.__flags__ |= _HEAPTYPE
-        self.appexec([self.w_dict], """
-            (dict): 
-                def fromkeys(cls, seq, value=None):
-                    r = cls()
-                    for s in seq:
-                        r[s] = value
-                    return r
-                dict.fromkeys = classmethod(fromkeys)
-        """)
-        self.w_dict.__flags__ = old_flags
 
         # final setup
         self.setup_builtin_modules()
         # Adding transparent proxy call
         if self.config.objspace.std.withtproxy:
-            w___pypy__ = self.getbuiltinmodule("__pypy__")
-            from pypy.objspace.std.transparent import app_proxy, app_proxy_controller
-        
-            self.setattr(w___pypy__, self.wrap('tproxy'),
-                          self.wrap(app_proxy))
-            self.setattr(w___pypy__, self.wrap('get_tproxy_controller'),
-                          self.wrap(app_proxy_controller))
+            transparent.setup(self)
 
-    def create_builtin_module(self, pyname, publicname):
-        """NOT_RPYTHON
-        helper function which returns the wrapped module and its dict.
-        """
-        # generate on-the-fly
-        class Fake: pass
-        fake = Fake()
-        from pypy import lib
-        fname = os.path.join(os.path.split(lib.__file__)[0], pyname)
-        fake.filename = fname
-        fake.code = compile(file(fname).read(), fname, "exec")
-        fake.modname = publicname
-        w_dic = PyPyCacheDir.build_applevelinterp_dict(fake, self)
-        from pypy.interpreter.module import Module
-        mod = Module(self, self.wrap(publicname), w_dic)
-        w_mod = self.wrap(mod)
-        return w_mod, w_dic
+    def get_builtin_types(self):
+        return self.builtin_types
 
-    def setup_exceptions(self):
-        """NOT_RPYTHON"""
-        ## hacking things in
-        def call(w_type, w_args):
-            space = self
-            # too early for unpackiterable as well :-(
-            name  = space.unwrap(space.getitem(w_args, space.wrap(0)))
-            bases = space.viewiterable(space.getitem(w_args, space.wrap(1)))
-            dic   = space.unwrap(space.getitem(w_args, space.wrap(2)))
-            dic = dict([(key,space.wrap(value)) for (key, value) in dic.items()])
-            bases = list(bases)
-            if not bases:
-                bases = [space.w_object]
-            res = W_TypeObject(space, name, bases, dic)
-            res.ready()
-            return res
-        try:
-            # note that we hide the real call method by an instance variable!
-            self.call = call
-            mod, w_dic = self.create_builtin_module('_exceptions.py', 'exceptions')
+    def _install_multimethods(self):
+        """Install all the MultiMethods into the space instance."""
+        for name, mm in model.MM.__dict__.items():
+            if not isinstance(mm, model.StdObjSpaceMultiMethod):
+                continue
+            if not hasattr(self, name):
+                # int_w, str_w...: these do not return a wrapped object
+                if name.endswith('_w'):
+                    func = mm.install_not_sliced(self.model.typeorder,
+                                                 baked_perform_call=True)
+                else:
+                    unsliced = mm.install_not_sliced(self.model.typeorder,
+                                                     baked_perform_call=False)
+                    exprargs, expr, miniglobals, fallback = unsliced
+                    func = stdtypedef.make_perform_trampoline('__mm_'+name,
+                                                              exprargs, expr,
+                                                              miniglobals, mm)
 
-            self.w_IndexError = self.getitem(w_dic, self.wrap("IndexError"))
-            self.w_StopIteration = self.getitem(w_dic, self.wrap("StopIteration"))
-        finally:
-            del self.call # revert
-
-        names_w = self.unpackiterable(self.call_function(self.getattr(w_dic, self.wrap("keys"))))
-
-        for w_name in names_w:
-            name = self.str_w(w_name)
-            if not name.startswith('__'):
-                excname = name
-                w_exc = self.getitem(w_dic, w_name)
-                setattr(self, "w_"+excname, w_exc)
-
-        return mod
+                boundmethod = types.MethodType(func, self, self.__class__)
+                setattr(self, name, boundmethod)  # store into 'space' instance
+            elif self.config.objspace.std.builtinshortcut:
+                if name.startswith('inplace_'):
+                    fallback_name = name[len('inplace_'):]
+                    if fallback_name in ('or', 'and'):
+                        fallback_name += '_'
+                    fallback_mm = model.MM.__dict__[fallback_name]
+                else:
+                    fallback_mm = None
+                builtinshortcut.install(self, mm, fallback_mm)
+        if self.config.objspace.std.builtinshortcut:
+            builtinshortcut.install_is_true(self, model.MM.nonzero,
+                                            model.MM.len)
 
     def createexecutioncontext(self):
         # add space specific fields to execution context
@@ -426,7 +133,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if not we_are_translated() and isinstance(code, CPythonFakeCode):
             return CPythonFakeFrame(self, code, w_globals)
         else:
-            return self.FrameClass(self, code, w_globals, closure)
+            return ObjSpace.createframe(self, code, w_globals, closure)
 
     def gettypefor(self, cls):
         return self.gettypeobject(cls.typedef)
@@ -447,7 +154,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         # annotation (see pypy/annotation/builtin.py)
         if x is None:
             return self.w_None
-        if isinstance(x, W_Object):
+        if isinstance(x, model.W_Object):
             raise TypeError, "attempt to wrap already wrapped object: %s"%(x,)
         if isinstance(x, OperationError):
             raise TypeError, ("attempt to wrap already wrapped exception: %s"%
@@ -458,10 +165,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
             else:
                 return self.newint(x)
         if isinstance(x, str):
-            from pypy.objspace.std.stringtype import wrapstr
             return wrapstr(self, x)
         if isinstance(x, unicode):
-            from pypy.objspace.std.unicodetype import wrapunicode
             return wrapunicode(self, x)
         if isinstance(x, float):
             return W_FloatObject(x)
@@ -501,8 +206,11 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return W_ComplexObject(x.real, x.imag)
 
         if isinstance(x, set):
-            wrappeditems = [self.wrap(item) for item in x]
-            return W_SetObject(self, wrappeditems)
+            rdict_w = r_dict(self.eq_w, self.hash_w)
+            for item in x:
+                rdict_w[self.wrap(item)] = None
+            res = W_SetObject(self, rdict_w)
+            return res
 
         if isinstance(x, frozenset):
             wrappeditems = [self.wrap(item) for item in x]
@@ -523,7 +231,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
             w_result = self.wrap_exception_cls(x)
             if w_result is not None:
                 return w_result
-        #print "fake-wrapping", x 
         from fake import fake_object
         return fake_object(self, x)
 
@@ -532,23 +239,19 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def wrap_exception_cls(self, x):
         """NOT_RPYTHON"""
         if hasattr(self, 'w_' + x.__name__):
-            w_result = getattr(self, 'w_' + x.__name__)            
+            w_result = getattr(self, 'w_' + x.__name__)
             return w_result
         return None
     wrap_exception_cls._annspecialcase_ = "override:wrap_exception_cls"
-        
+
     def unwrap(self, w_obj):
         if isinstance(w_obj, Wrappable):
             return w_obj
-        if isinstance(w_obj, W_Object):
+        if isinstance(w_obj, model.W_Object):
             return w_obj.unwrap(self)
-        raise UnwrapError, "cannot unwrap: %r" % w_obj
+        raise model.UnwrapError, "cannot unwrap: %r" % w_obj
 
     def newint(self, intval):
-        # this time-critical and circular-imports-funny method was stored
-        # on 'self' by initialize()
-        # not sure how bad this is:
-        from pypy.objspace.std.inttype import wrapint
         return wrapint(self, intval)
 
     def newfloat(self, floatval):
@@ -561,22 +264,20 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
-        from pypy.objspace.std.tupletype import wraptuple
         assert isinstance(list_w, list)
         make_sure_not_resized(list_w)
-        return wraptuple(self, list_w)
+        return W_TupleObject(list_w)
 
     def newlist(self, list_w):
-        from pypy.objspace.std.listobject import W_ListObject
         return W_ListObject(list_w)
 
     def newdict(self, module=False, instance=False, classofinstance=None,
-                from_strdict_shared=None):
-        from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+                from_strdict_shared=None, strdict=False):
         return W_DictMultiObject.allocate_and_init_instance(
                 self, module=module, instance=instance,
                 classofinstance=classofinstance,
-                from_strdict_shared=from_strdict_shared)
+                from_strdict_shared=from_strdict_shared,
+                strdict=strdict)
 
     def newslice(self, w_start, w_end, w_step):
         return W_SliceObject(w_start, w_end, w_step)
@@ -615,22 +316,28 @@ class StdObjSpace(ObjSpace, DescrOperation):
             # the purpose of the above check is to avoid the code below
             # to be annotated at all for 'cls' if it is not necessary
             w_subtype = w_type.check_user_subclass(w_subtype)
+            if cls.typedef.applevel_subclasses_base is not None:
+                cls = cls.typedef.applevel_subclasses_base
             subcls = get_unique_interplevel_subclass(
                     self.config, cls, w_subtype.hasdict, w_subtype.nslots != 0,
                     w_subtype.needsdel, w_subtype.weakrefable)
             instance = instantiate(subcls)
+            assert isinstance(instance, cls)
             instance.user_setup(self, w_subtype)
         else:
-            raise OperationError(self.w_TypeError,
-                self.wrap("%s.__new__(%s): only for the type %s" % (
-                    w_type.name, w_subtype.getname(self, '?'), w_type.name)))
-        assert isinstance(instance, cls)
+            raise operationerrfmt(self.w_TypeError,
+                "%s.__new__(%s): only for the type %s",
+                w_type.name, w_subtype.getname(self, '?'), w_type.name)
         return instance
     allocate_instance._annspecialcase_ = "specialize:arg(1)"
 
     # two following functions are almost identical, but in fact they
     # have different return type. First one is a resizable list, second
     # one is not
+
+    def _wrap_expected_length(self, expected, got):
+        return OperationError(self.w_ValueError,
+                self.wrap("Expected length %d, got %d" % (expected, got)))
 
     def unpackiterable(self, w_obj, expected_length=-1):
         if isinstance(w_obj, W_TupleObject):
@@ -640,10 +347,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             return ObjSpace.unpackiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise self._wrap_expected_length(expected_length, len(t))
         return t
 
-    def viewiterable(self, w_obj, expected_length=-1):
+    def fixedview(self, w_obj, expected_length=-1):
         """ Fast paths
         """
         if isinstance(w_obj, W_TupleObject):
@@ -651,9 +358,20 @@ class StdObjSpace(ObjSpace, DescrOperation):
         elif isinstance(w_obj, W_ListObject):
             t = w_obj.wrappeditems[:]
         else:
-            return ObjSpace.viewiterable(self, w_obj, expected_length)
+            return ObjSpace.fixedview(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:
-            raise UnpackValueError("Expected length %d, got %d" % (expected_length, len(t)))
+            raise self._wrap_expected_length(expected_length, len(t))
+        return t
+
+    def listview(self, w_obj, expected_length=-1):
+        if isinstance(w_obj, W_ListObject):
+            t = w_obj.wrappeditems
+        elif isinstance(w_obj, W_TupleObject):
+            t = w_obj.wrappeditems[:]
+        else:
+            return ObjSpace.listview(self, w_obj, expected_length)
+        if expected_length != -1 and len(t) != expected_length:
+            raise self._wrap_expected_length(expected_length, len(t))
         return t
 
     def sliceindices(self, w_slice, w_length):
@@ -689,16 +407,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
             return DescrOperation.getattr(self, w_obj, w_name)
 
         # an optional shortcut for performance
-        from pypy.objspace.descroperation import raiseattrerror
-        from pypy.objspace.descroperation import object_getattribute
         w_type = self.type(w_obj)
-        if not w_type.uses_object_getattribute:
-            # slow path: look for a custom __getattribute__ on the class
-            w_descr = w_type.lookup('__getattribute__')
-            # if it was not actually overriden in the class, we remember this
-            # fact for the next time.
-            if w_descr is object_getattribute(self):
-                w_type.uses_object_getattribute = True
+        w_descr = w_type.getattribute_if_not_from_object()
+        if w_descr is not None:
             return self._handle_getattribute(w_descr, w_obj, w_name)
 
         # fast path: XXX this is duplicating most of the logic
@@ -707,15 +418,27 @@ class StdObjSpace(ObjSpace, DescrOperation):
         w_descr = w_type.lookup(name)
         e = None
         if w_descr is not None:
-            if not self.is_data_descr(w_descr):
+            w_get = None
+            is_data = self.is_data_descr(w_descr)
+            if is_data:
+                w_get = self.lookup(w_descr, "__get__")
+            if w_get is None:
                 w_value = w_obj.getdictvalue_attr_is_in_class(self, name)
                 if w_value is not None:
                     return w_value
-            try:
-                return self.get(w_descr, w_obj)
-            except OperationError, e:
-                if not e.match(self, self.w_AttributeError):
-                    raise
+                if not is_data:
+                    w_get = self.lookup(w_descr, "__get__")
+            if w_get is not None:
+                # __get__ is allowed to raise an AttributeError to trigger
+                # use of __getattr__.
+                try:
+                    return self.get_and_call_function(w_get, w_descr, w_obj,
+                                                      w_type)
+                except OperationError, e:
+                    if not e.match(self, self.w_AttributeError):
+                        raise
+            else:
+                return w_descr
         else:
             w_value = w_obj.getdictvalue(self, name)
             if w_value is not None:
@@ -730,24 +453,36 @@ class StdObjSpace(ObjSpace, DescrOperation):
             raiseattrerror(self, w_obj, name)
 
     def finditem_str(self, w_obj, key):
-        # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+        """ Perform a getitem on w_obj with key (string). Returns found
+        element or None on element not found.
+
+        performance shortcut to avoid creating the OperationError(KeyError)
+        and allocating W_StringObject
+        """
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
             return w_obj.getitem_str(key)
         return ObjSpace.finditem_str(self, w_obj, key)
 
     def finditem(self, w_obj, w_key):
-        # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+        """ Perform a getitem on w_obj with w_key (any object). Returns found
+        element or None on element not found.
+
+        performance shortcut to avoid creating the OperationError(KeyError).
+        """
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
             return w_obj.getitem(w_key)
         return ObjSpace.finditem(self, w_obj, w_key)
 
-    def set_str_keyed_item(self, w_obj, key, w_value, shadows_type=True):
-        # performance shortcut to avoid creating the OperationError(KeyError)
-        if (isinstance(w_obj, self.DictObjectCls) and
+    def setitem_str(self, w_obj, key, w_value, shadows_type=True):
+        """ Same as setitem, but takes string instead of any wrapped object
+
+        XXX what shadows_type means???
+        """
+        if (isinstance(w_obj, W_DictMultiObject) and
                 not w_obj.user_overridden_class):
-            w_obj.set_str_keyed_item(key, w_value, shadows_type)
+            w_obj.setitem_str(key, w_value, shadows_type)
         else:
             self.setitem(w_obj, self.wrap(key), w_value)
 
@@ -766,37 +501,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def call_method(self, w_obj, methname, *arg_w):
         if self.config.objspace.opcodes.CALL_METHOD:
-            from pypy.objspace.std.callmethod import call_method_opt
-            return call_method_opt(self, w_obj, methname, *arg_w)
+            return callmethod.call_method_opt(self, w_obj, methname, *arg_w)
         else:
             return ObjSpace.call_method(self, w_obj, methname, *arg_w)
 
     def raise_key_error(self, w_key):
         e = self.call_function(self.w_KeyError, w_key)
         raise OperationError(self.w_KeyError, e)
-
-    class MM:
-        "Container for multimethods."
-        call    = StdObjSpaceMultiMethod('call', 1, ['__call__'], general__args__=True)
-        init    = StdObjSpaceMultiMethod('__init__', 1, general__args__=True)
-        getnewargs = StdObjSpaceMultiMethod('__getnewargs__', 1)
-        # special visible multimethods
-        int_w   = StdObjSpaceMultiMethod('int_w', 1, [])     # returns an unwrapped int
-        str_w   = StdObjSpaceMultiMethod('str_w', 1, [])     # returns an unwrapped string
-        float_w = StdObjSpaceMultiMethod('float_w', 1, [])   # returns an unwrapped float
-        uint_w  = StdObjSpaceMultiMethod('uint_w', 1, [])    # returns an unwrapped unsigned int (r_uint)
-        unicode_w = StdObjSpaceMultiMethod('unicode_w', 1, [])    # returns an unwrapped list of unicode characters
-        bigint_w = StdObjSpaceMultiMethod('bigint_w', 1, []) # returns an unwrapped rbigint
-        # NOTE: when adding more sometype_w() methods, you need to write a
-        # stub in default.py to raise a space.w_TypeError
-        marshal_w = StdObjSpaceMultiMethod('marshal_w', 1, [], extra_args=['marshaller'])
-        log     = StdObjSpaceMultiMethod('log', 1, [], extra_args=['base'])
-
-        # add all regular multimethods here
-        for _name, _symbol, _arity, _specialnames in ObjSpace.MethodTable:
-            if _name not in locals():
-                mm = StdObjSpaceMultiMethod(_symbol, _arity, _specialnames)
-                locals()[_name] = mm
-                del mm
-
-        pow.extras['defaults'] = (None,)

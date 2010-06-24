@@ -1,5 +1,5 @@
 from pypy.rpython.test.test_llinterp import gengraph, interpret
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib import rgc # Force registration of gc.collect
 import gc
 import py, sys
@@ -56,15 +56,100 @@ def test_can_move():
     
     assert res == True
     
-def test_resizable_buffer():
-    from pypy.rpython.lltypesystem.rstr import STR
-    from pypy.rpython.annlowlevel import hlstr
-    
-    def f():
-        ptr = rgc.resizable_buffer_of_shape(STR, 1)
-        ptr.chars[0] = 'a'
-        ptr = rgc.resize_buffer(ptr, 1, 2)
-        ptr.chars[1] = 'b'
-        return hlstr(rgc.finish_building_buffer(ptr, 2))
+def test_ll_arraycopy_1():
+    TYPE = lltype.GcArray(lltype.Signed)
+    a1 = lltype.malloc(TYPE, 10)
+    a2 = lltype.malloc(TYPE, 6)
+    for i in range(10): a1[i] = 100 + i
+    for i in range(6):  a2[i] = 200 + i
+    rgc.ll_arraycopy(a1, a2, 4, 2, 3)
+    for i in range(10):
+        assert a1[i] == 100 + i
+    for i in range(6):
+        if 2 <= i < 5:
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == 200 + i
 
-    assert f() == 'ab'
+def test_ll_arraycopy_2():
+    TYPE = lltype.GcArray(lltype.Void)
+    a1 = lltype.malloc(TYPE, 10)
+    a2 = lltype.malloc(TYPE, 6)
+    rgc.ll_arraycopy(a1, a2, 4, 2, 3)
+    # nothing to assert here, should not crash...
+
+def test_ll_arraycopy_3():
+    S = lltype.Struct('S')    # non-gc
+    TYPE = lltype.GcArray(lltype.Ptr(S))
+    a1 = lltype.malloc(TYPE, 10)
+    a2 = lltype.malloc(TYPE, 6)
+    org1 = [None] * 10
+    org2 = [None] * 6
+    for i in range(10): a1[i] = org1[i] = lltype.malloc(S, immortal=True)
+    for i in range(6):  a2[i] = org2[i] = lltype.malloc(S, immortal=True)
+    rgc.ll_arraycopy(a1, a2, 4, 2, 3)
+    for i in range(10):
+        assert a1[i] == org1[i]
+    for i in range(6):
+        if 2 <= i < 5:
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == org2[i]
+
+def test_ll_arraycopy_4():
+    S = lltype.GcStruct('S')
+    TYPE = lltype.GcArray(lltype.Ptr(S))
+    a1 = lltype.malloc(TYPE, 10)
+    a2 = lltype.malloc(TYPE, 6)
+    org1 = [None] * 10
+    org2 = [None] * 6
+    for i in range(10): a1[i] = org1[i] = lltype.malloc(S)
+    for i in range(6):  a2[i] = org2[i] = lltype.malloc(S)
+    rgc.ll_arraycopy(a1, a2, 4, 2, 3)
+    for i in range(10):
+        assert a1[i] == org1[i]
+    for i in range(6):
+        if 2 <= i < 5:
+            assert a2[i] == a1[i+2]
+        else:
+            assert a2[i] == org2[i]
+
+def test_ll_arraycopy_5(monkeypatch):
+    S = lltype.GcStruct('S')
+    TYPE = lltype.GcArray(lltype.Ptr(S))
+    def f():
+        a1 = lltype.malloc(TYPE, 10)
+        a2 = lltype.malloc(TYPE, 6)
+        rgc.ll_arraycopy(a2, a1, 0, 1, 5)
+
+    CHK = lltype.Struct('CHK', ('called', lltype.Bool))
+    check = lltype.malloc(CHK, immortal=True)
+
+    def raw_memcopy(*args):
+        check.called = True
+
+    monkeypatch.setattr(llmemory, "raw_memcopy", raw_memcopy)
+
+    interpret(f, [])
+
+    assert check.called
+
+
+
+def test_ll_shrink_array_1():
+    py.test.skip("implement ll_shrink_array for GcStructs or GcArrays that "
+                 "don't have the shape of STR or UNICODE")
+
+def test_ll_shrink_array_2():
+    S = lltype.GcStruct('S', ('x', lltype.Signed),
+                             ('vars', lltype.Array(lltype.Signed)))
+    s1 = lltype.malloc(S, 5)
+    s1.x = 1234
+    for i in range(5):
+        s1.vars[i] = 50 + i
+    s2 = rgc.ll_shrink_array(s1, 3)
+    assert lltype.typeOf(s2) == lltype.Ptr(S)
+    assert s2.x == 1234
+    assert len(s2.vars) == 3
+    for i in range(3):
+        assert s2.vars[i] == 50 + i

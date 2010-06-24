@@ -19,7 +19,7 @@ for extra in ['\r\r', '\r\n', '\n\r', '\n\n']:
 
 
 def setup_module(mod):
-    udir.join('sample').write(SAMPLE)
+    udir.join('sample').write(SAMPLE, 'wb')
 
 
 class BaseROTests:
@@ -70,12 +70,6 @@ class BaseROTests:
     def test_iter(self):
         inputlines = list(self.file)
         assert inputlines == self.expected_lines
-
-    def test_repr(self):
-        r = repr(self.file)
-        assert r.find('open file') >= 0
-        assert r.find(self.file.name) >= 0
-        assert r.find(self.file.mode) >= 0
 
     def test_isatty(self):
         assert not self.file.isatty()

@@ -10,10 +10,25 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.jit import PARAMETERS, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.jit import DEBUG_PROFILE
 from pypy.rlib.jit import BaseJitCell
-from pypy.rlib.debug import debug_start, debug_stop
-from pypy.jit.metainterp import support, history
+from pypy.rlib.debug import debug_start, debug_stop, debug_print
+from pypy.jit.metainterp import history
+from pypy.jit.codewriter import support, heaptracker
 
 # ____________________________________________________________
+
+@specialize.arg(0)
+def specialize_value(TYPE, x):
+    """'x' must be a Signed, a GCREF or a Float.
+    This function casts it to a more specialized type, like Char or Ptr(..).
+    """
+    INPUT = lltype.typeOf(x)
+    if INPUT is lltype.Signed:
+        return lltype.cast_primitive(TYPE, x)    # XXX missing: Ptr(non-gc)
+    elif INPUT is lltype.Float:
+        assert TYPE is lltype.Float
+        return x
+    else:
+        return lltype.cast_opaque_ptr(TYPE, x)
 
 @specialize.arg(0)
 def unwrap(TYPE, box):
@@ -39,7 +54,7 @@ def wrap(cpu, value, in_const_box=False):
                 return history.BoxPtr(value)
         else:
             adr = llmemory.cast_ptr_to_adr(value)
-            value = cpu.cast_adr_to_int(adr)
+            value = heaptracker.adr2int(adr)
             # fall through to the end of the function
     elif isinstance(lltype.typeOf(value), ootype.OOType):
         value = ootype.cast_to_object(value)
@@ -157,12 +172,14 @@ class WarmEnterState(object):
         if self.profiler is not None:
             self.profiler.set_printing(value >= DEBUG_PROFILE)
 
-    def must_compile_from_failure(self, key):
-        key.counter += 1
-        return key.counter >= self.trace_eagerness
-
-    def reset_counter_from_failure(self, key):
-        key.counter = 0
+    def disable_noninlinable_function(self, greenkey):
+        cell = self.jit_cell_at_key(greenkey)
+        cell.dont_trace_here = True
+        debug_start("jit-disableinlining")
+        sd = self.warmrunnerdesc.metainterp_sd
+        loc = sd.state.get_location_str(greenkey)
+        debug_print("disabled inlining", loc)
+        debug_stop("jit-disableinlining")
 
     def attach_unoptimized_bridge_from_interp(self, greenkey,
                                               entry_loop_token):
@@ -178,12 +195,12 @@ class WarmEnterState(object):
             return self.maybe_compile_and_run
 
         metainterp_sd = self.warmrunnerdesc.metainterp_sd
-        vinfo = metainterp_sd.virtualizable_info
-        ContinueRunningNormally = self.warmrunnerdesc.ContinueRunningNormally
+        vinfo = self.warmrunnerdesc.virtualizable_info
         num_green_args = self.warmrunnerdesc.num_green_args
         get_jitcell = self.make_jitcell_getter()
         set_future_values = self.make_set_future_values()
         self.make_jitdriver_callbacks()
+        confirm_enter_jit = self.confirm_enter_jit
 
         def maybe_compile_and_run(*args):
             """Entry point to the JIT.  Called at the point with the
@@ -199,8 +216,8 @@ class WarmEnterState(object):
             if vinfo is not None:
                 virtualizable = args[vinfo.index_of_virtualizable]
                 virtualizable = vinfo.cast_to_vtype(virtualizable)
-                assert virtualizable != globaldata.blackhole_virtualizable, (
-                    "reentering same frame via blackhole")
+            else:
+                virtualizable = None
 
             # look for the cell corresponding to the current greenargs
             greenargs = args[:num_green_args]
@@ -212,16 +229,27 @@ class WarmEnterState(object):
                 if n <= self.THRESHOLD_LIMIT:       # bound not reached
                     cell.counter = n
                     return
+                if not confirm_enter_jit(*args):
+                    cell.counter = 0
+                    return
                 # bound reached; start tracing
                 from pypy.jit.metainterp.pyjitpl import MetaInterp
                 metainterp = MetaInterp(metainterp_sd)
+                # set counter to -2, to mean "tracing in effect"
+                cell.counter = -2
                 try:
                     loop_token = metainterp.compile_and_run_once(*args)
-                except ContinueRunningNormally:
-                    # the trace got too long, reset the counter
-                    cell.counter = 0
-                    raise
+                finally:
+                    if cell.counter == -2:
+                        cell.counter = 0
             else:
+                if cell.counter == -2:
+                    # tracing already happening in some outer invocation of
+                    # this function. don't trace a second time.
+                    return
+                assert cell.counter == -1
+                if not confirm_enter_jit(*args):
+                    return
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
                 set_future_values(*args[num_green_args:])
@@ -231,12 +259,13 @@ class WarmEnterState(object):
             while True:     # until interrupted by an exception
                 metainterp_sd.profiler.start_running()
                 debug_start("jit-running")
-                fail_index = metainterp_sd.cpu.execute_token(loop_token)
+                fail_descr = metainterp_sd.cpu.execute_token(loop_token)
                 debug_stop("jit-running")
                 metainterp_sd.profiler.end_running()
-                fail_descr = globaldata.get_fail_descr_from_number(fail_index)
+                if vinfo is not None:
+                    vinfo.reset_vable_token(virtualizable)
                 loop_token = fail_descr.handle_fail(metainterp_sd)
-
+       
         maybe_compile_and_run._dont_inline_ = True
         self.maybe_compile_and_run = maybe_compile_and_run
         return maybe_compile_and_run
@@ -255,7 +284,9 @@ class WarmEnterState(object):
             greenargs = ()
             i = 0
             for TYPE in green_args_spec:
-                value = unwrap(TYPE, greenkey[i])
+                greenbox = greenkey[i]
+                assert isinstance(greenbox, history.Const)
+                value = unwrap(TYPE, greenbox)
                 greenargs += (value,)
                 i = i + 1
             return greenargs
@@ -272,8 +303,14 @@ class WarmEnterState(object):
             return self.jit_getter
         #
         class JitCell(BaseJitCell):
+            # the counter can mean the following things:
+            #     counter >=  0: not yet traced, wait till threshold is reached
+            #     counter == -1: there is an entry bridge for this cell
+            #     counter == -2: tracing is currently going on for this cell
             counter = 0
             compiled_merge_points = None
+            dont_trace_here = False
+            entry_loop_token = None
         #
         if self.warmrunnerdesc.get_jitcell_at_ptr is None:
             jit_getter = self._make_jitcell_getter_default(JitCell)
@@ -379,7 +416,7 @@ class WarmEnterState(object):
 
         warmrunnerdesc = self.warmrunnerdesc
         cpu = warmrunnerdesc.cpu
-        vinfo = warmrunnerdesc.metainterp_sd.virtualizable_info
+        vinfo = warmrunnerdesc.virtualizable_info
         red_args_types = unrolling_iterable(warmrunnerdesc.red_args_types)
         #
         def set_future_values(*redargs):
@@ -428,18 +465,37 @@ class WarmEnterState(object):
             return
         #
         can_inline_ptr = self.warmrunnerdesc.can_inline_ptr
+        unwrap_greenkey = self.make_unwrap_greenkey()
         if can_inline_ptr is None:
-            def can_inline_callable(greenkey):
+            def can_inline_callable(*greenargs):
+                # XXX shouldn't it be False by default?
                 return True
         else:
             rtyper = self.warmrunnerdesc.rtyper
-            unwrap_greenkey = self.make_unwrap_greenkey()
             #
-            def can_inline_callable(greenkey):
-                greenargs = unwrap_greenkey(greenkey)
+            def can_inline_callable(*greenargs):
                 fn = support.maybe_on_top_of_llinterp(rtyper, can_inline_ptr)
                 return fn(*greenargs)
-        self.can_inline_callable = can_inline_callable
+        def can_inline(*greenargs):
+            cell = self.jit_getter(*greenargs)
+            if cell.dont_trace_here:
+                return False
+            return can_inline_callable(*greenargs)
+        self.can_inline_greenargs = can_inline
+        def can_inline_greenkey(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            return can_inline(*greenargs)
+        self.can_inline_callable = can_inline_greenkey
+        
+        get_jitcell = self.make_jitcell_getter()
+        def get_assembler_token(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            cell = get_jitcell(*greenargs)
+            if cell.counter >= 0:
+                return None
+            return cell.entry_loop_token
+        self.get_assembler_token = get_assembler_token
+        
         #
         get_location_ptr = self.warmrunnerdesc.get_printable_location_ptr
         if get_location_ptr is None:
@@ -457,3 +513,16 @@ class WarmEnterState(object):
                     res = hlstr(res)
                 return res
         self.get_location_str = get_location_str
+        #
+        confirm_enter_jit_ptr = self.warmrunnerdesc.confirm_enter_jit_ptr
+        if confirm_enter_jit_ptr is None:
+            def confirm_enter_jit(*args):
+                return True
+        else:
+            rtyper = self.warmrunnerdesc.rtyper
+            #
+            def confirm_enter_jit(*args):
+                fn = support.maybe_on_top_of_llinterp(rtyper,
+                                                      confirm_enter_jit_ptr)
+                return fn(*args)
+        self.confirm_enter_jit = confirm_enter_jit

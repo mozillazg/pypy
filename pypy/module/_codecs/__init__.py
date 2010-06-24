@@ -1,11 +1,11 @@
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib import runicode
+from pypy.module._codecs import interp_codecs
 
 class Module(MixedModule):
     appleveldefs = {
          '__doc__' :  'app_codecs.__doc__',
          '__name__' :  'app_codecs.__name__',
-         'charmap_decode' :  'app_codecs.charmap_decode',
          'charmap_encode' :  'app_codecs.charmap_encode',
          'escape_decode' :  'app_codecs.escape_decode',
          'escape_encode' :  'app_codecs.escape_encode',
@@ -17,7 +17,6 @@ class Module(MixedModule):
          'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
          'utf_7_decode' :  'app_codecs.utf_7_decode',
          'utf_7_encode' :  'app_codecs.utf_7_encode',
-         '_register_existing_errors': 'app_codecs._register_existing_errors',
          'charmap_build' : 'app_codecs.charmap_build'
     }
     interpleveldefs = {
@@ -44,6 +43,7 @@ class Module(MixedModule):
          'utf_16_ex_decode' : 'interp_codecs.utf_16_ex_decode',
          'charbuffer_encode': 'interp_codecs.buffer_encode',
          'readbuffer_encode': 'interp_codecs.buffer_encode',
+         'charmap_decode'   : 'interp_codecs.charmap_decode',
     }
 
     def __init__(self, space, *args):
@@ -57,9 +57,4 @@ class Module(MixedModule):
 
         MixedModule.__init__(self, space, *args)
 
-    def setup_after_space_initialization(self):
-        "NOT_RPYTHON"
-        self.space.appexec([], """():
-            import _codecs
-            _codecs._register_existing_errors()
-        """)
+        interp_codecs.register_builtin_error_handlers(space)

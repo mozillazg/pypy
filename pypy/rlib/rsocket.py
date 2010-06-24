@@ -42,13 +42,15 @@ def ntohs(x):
     return rffi.cast(lltype.Signed, _c.ntohs(x))
 
 def ntohl(x):
-    return rffi.cast(lltype.Signed, _c.ntohl(x))
+    # accepts and returns an Unsigned
+    return rffi.cast(lltype.Unsigned, _c.ntohl(x))
 
 def htons(x):
     return rffi.cast(lltype.Signed, _c.htons(x))
 
 def htonl(x):
-    return rffi.cast(lltype.Signed, _c.htonl(x))
+    # accepts and returns an Unsigned
+    return rffi.cast(lltype.Unsigned, _c.htonl(x))
 
 
 _FAMILIES = {}
@@ -504,6 +506,10 @@ def make_null_address(family):
     klass = familyclass(family)
     result = instantiate(klass)
     buf = lltype.malloc(rffi.CCHARP.TO, klass.maxlen, flavor='raw', zero=True)
+    # Initialize the family to the correct value.  Avoids surprizes on
+    # Windows when calling a function that unexpectedly does not set
+    # the output address (e.g. recvfrom() on a connected IPv4 socket).
+    rffi.setintfield(rffi.cast(_c.sockaddr_ptr, buf), 'c_sa_family', family)
     result.setdata(buf, 0)
     return result, klass.maxlen
 
@@ -1040,8 +1046,7 @@ def last_error():
 class GAIError(SocketErrorWithErrno):
     applevelerrcls = 'gaierror'
     def get_msg(self):
-        # this method may be patched below
-        return rffi.charp2str(_c.gai_strerror(self.errno))
+        return _c.gai_strerror_str(self.errno)
 
 class HSocketError(SocketError):
     applevelerrcls = 'herror'
@@ -1334,17 +1339,3 @@ def setdefaulttimeout(timeout):
     if timeout < 0.0:
         timeout = -1.0
     defaults.timeout = timeout
-
-# _______________________________________________________________
-#
-# Patch module, for platforms without getaddrinfo / getnameinfo
-#
-
-if not getattr(_c, 'getaddrinfo', None):
-    from pypy.rlib.getaddrinfo import getaddrinfo
-    from pypy.rlib.getaddrinfo import GAIError_getmsg
-    GAIError.get_msg = GAIError_getmsg
-
-if not getattr(_c, 'getnameinfo', None):
-    from pypy.rlib.getnameinfo import getnameinfo
-    from pypy.rlib.getnameinfo import NI_NUMERICHOST, NI_NUMERICSERV

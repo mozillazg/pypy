@@ -11,8 +11,8 @@ a callback and a state variable.
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.register_all import register_all
 from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.objspace.std import longobject, model
 from pypy.objspace.std.longobject import SHIFT as long_bits
-from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter.special import Ellipsis
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter import gateway, unicodehelper
@@ -31,8 +31,6 @@ from pypy.objspace.std.typeobject    import W_TypeObject
 from pypy.objspace.std.longobject    import W_LongObject
 from pypy.objspace.std.noneobject    import W_NoneObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
-
-import longobject
 
 from pypy.module.marshal.interp_marshal import register
 
@@ -125,7 +123,7 @@ register(TYPE_STOPITER, unmarshal_Type)
 def marshal_w_Ellipsis(space, w_ellipsis, m):
     m.atom(TYPE_ELLIPSIS)
 
-StdObjSpace.MM.marshal_w.register(marshal_w_Ellipsis, Ellipsis)
+model.MM.marshal_w.register(marshal_w_Ellipsis, Ellipsis)
 
 def unmarshal_Ellipsis(space, u, tc):
     return space.w_Ellipsis
@@ -356,7 +354,7 @@ register(TYPE_LIST, unmarshal_List)
 def marshal_w__DictMulti(space, w_dict, m):
     m.start(TYPE_DICT)
     for w_tuple in w_dict.items():
-        w_key, w_value = space.viewiterable(w_tuple, 2)
+        w_key, w_value = space.fixedview(w_tuple, 2)
         m.put_w_obj(w_key)
         m.put_w_obj(w_value)
     m.atom(TYPE_NULL)
@@ -399,7 +397,7 @@ def marshal_w_pycode(space, w_pycode, m):
     m.put_int(x.co_firstlineno)
     m.atom_str(TYPE_STRING, x.co_lnotab)
 
-StdObjSpace.MM.marshal_w.register(marshal_w_pycode, PyCode)
+model.MM.marshal_w.register(marshal_w_pycode, PyCode)
 
 # helper for unmarshalling string lists of code objects.
 # unfortunately they now can be interned or referenced,
@@ -469,14 +467,14 @@ tuple_to_set = app.interphook('tuple_to_set')
 def marshal_w_set(space, w_set, m):
     # cannot access this list directly, because it's
     # type is not exactly known through applevel.
-    lis_w = space.viewiterable(w_set)
+    lis_w = space.fixedview(w_set)
     m.put_tuple_w(TYPE_SET, lis_w)
 
 handled_by_any.append( ('set', marshal_w_set) )
 
 # not directly supported:
 def marshal_w_frozenset(space, w_frozenset, m):
-    lis_w = space.viewiterable(w_frozenset)
+    lis_w = space.fixedview(w_frozenset)
     m.put_tuple_w(TYPE_FROZENSET, lis_w)
 
 handled_by_any.append( ('frozenset', marshal_w_frozenset) )

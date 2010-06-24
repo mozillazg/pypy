@@ -9,6 +9,9 @@ see as the list of roots (stack and prebuilt objects).
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.memory.gctypelayout import TypeLayoutBuilder
+from pypy.rlib.rarithmetic import LONG_BIT
+
+WORD = LONG_BIT // 8
 
 ADDR_ARRAY = lltype.Array(llmemory.Address)
 S = lltype.GcForwardReference()
@@ -264,9 +267,70 @@ class DirectGCTest(object):
         self.gc.collect()
         verify()
 
+    def test_identityhash(self):
+        # a "does not crash" kind of test
+        p_const = lltype.malloc(S, immortal=True)
+        self.consider_constant(p_const)
+        # (1) p is in the nursery
+        self.gc.collect()
+        p = self.malloc(S)
+        hash = self.gc.identityhash(p)
+        print hash
+        assert isinstance(hash, (int, long))
+        assert hash == self.gc.identityhash(p)
+        self.stackroots.append(p)
+        for i in range(6):
+            self.gc.collect()
+            assert hash == self.gc.identityhash(self.stackroots[-1])
+        self.stackroots.pop()
+        # (2) p is an older object
+        p = self.malloc(S)
+        self.stackroots.append(p)
+        self.gc.collect()
+        hash = self.gc.identityhash(self.stackroots[-1])
+        print hash
+        assert isinstance(hash, (int, long))
+        for i in range(6):
+            self.gc.collect()
+            assert hash == self.gc.identityhash(self.stackroots[-1])
+        self.stackroots.pop()
+        # (3) p is a gen3 object (for hybrid)
+        p = self.malloc(S)
+        self.stackroots.append(p)
+        for i in range(6):
+            self.gc.collect()
+        hash = self.gc.identityhash(self.stackroots[-1])
+        print hash
+        assert isinstance(hash, (int, long))
+        for i in range(2):
+            self.gc.collect()
+            assert hash == self.gc.identityhash(self.stackroots[-1])
+        self.stackroots.pop()
+        # (4) p is a prebuilt object
+        hash = self.gc.identityhash(p_const)
+        print hash
+        assert isinstance(hash, (int, long))
+        assert hash == self.gc.identityhash(p_const)
+
 
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
+
+    def test_shrink_array(self):
+        S1 = lltype.GcStruct('S1', ('h', lltype.Char),
+                                   ('v', lltype.Array(lltype.Char)))
+        p1 = self.malloc(S1, 2)
+        p1.h = '?'
+        for i in range(2):
+            p1.v[i] = chr(50 + i)
+        addr = llmemory.cast_ptr_to_adr(p1)
+        ok = self.gc.shrink_array(addr, 1)
+        assert ok
+        assert p1.h == '?'
+        assert len(p1.v) == 1
+        for i in range(1):
+            assert p1.v[i] == chr(50 + i)
+
 
 class TestGenerationGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.generation import GenerationGC as GCClass
@@ -317,11 +381,11 @@ class TestGenerationGC(TestSemiSpaceGC):
 class TestHybridGC(TestGenerationGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
 
-    GC_PARAMS = {'space_size': 192,
-                 'min_nursery_size': 48,
-                 'nursery_size': 48,
-                 'large_object': 12,
-                 'large_object_gcptrs': 12,
+    GC_PARAMS = {'space_size': 48*WORD,
+                 'min_nursery_size': 12*WORD,
+                 'nursery_size': 12*WORD,
+                 'large_object': 3*WORD,
+                 'large_object_gcptrs': 3*WORD,
                  'generation3_collect_threshold': 5,
                  }
 
@@ -358,7 +422,10 @@ class TestHybridGC(TestGenerationGC):
 
         gc.collect(9)
         assert calls == [('semispace_collect', True)]
-        calls = []                        
+        calls = []
+
+    def test_identityhash(self):
+        py.test.skip("does not support raw_mallocs(sizeof(S)+sizeof(hash))")
 
 
 class TestMarkCompactGC(DirectGCTest):

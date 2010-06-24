@@ -1,4 +1,6 @@
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import delegate_String2Unicode
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
@@ -143,7 +145,7 @@ def str_endswith__StringSlice_String_ANY_ANY(space, w_self, w_suffix, w_start, w
 def str_endswith__StringSlice_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, w_end):
     (u_self, _, start, end) = _convert_idx_params(space, w_self,
                                                   space.wrap(''), w_start, w_end)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         suffix = space.str_w(w_suffix) 
         if stringendswith(u_self, suffix, start, end):
             return space.w_True
@@ -157,7 +159,7 @@ def str_startswith__StringSlice_String_ANY_ANY(space, w_self, w_prefix, w_start,
 def str_startswith__StringSlice_Tuple_ANY_ANY(space, w_self, w_prefixes, w_start, w_end):
     (u_self, _, start, end) = _convert_idx_params(space, w_self, space.wrap(''),
                                                   w_start, w_end)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         prefix = space.str_w(w_prefix)
         if stringstartswith(u_self, prefix, start, end):
             return space.w_True

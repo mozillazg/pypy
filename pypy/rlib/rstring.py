@@ -1,10 +1,48 @@
-
-""" String builder interface
+""" String builder interface and string functions
 """
 
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation.model import SomeObject, SomeString, s_None,\
      SomeChar, SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString
+
+
+# -------------- public API for string functions -----------------------
+def split(value, by, maxsplit=-1):
+    bylen = len(by)
+    if bylen == 0:
+        raise ValueError("empty separator")
+
+    res = []
+    start = 0
+    while maxsplit != 0:
+        next = value.find(by, start)
+        if next < 0:
+            break
+        res.append(value[start:next])
+        start = next + bylen
+        maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+    res.append(value[start:len(value)])
+    return res
+
+def rsplit(value, by, maxsplit=-1):
+    res = []
+    end = len(value)
+    bylen = len(by)
+    if bylen == 0:
+        raise ValueError("empty separator")
+
+    while maxsplit != 0:
+        next = value.rfind(by, 0, end)
+        if next < 0:
+            break
+        res.append(value[next+bylen:end])
+        end = next
+        maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+    res.append(value[:end])
+    res.reverse()
+    return res
 
 # -------------- public API ---------------------------------
 
@@ -30,6 +68,28 @@ class StringBuilder(AbstractStringBuilder):
 class UnicodeBuilder(AbstractStringBuilder):
     def build(self):
         return u''.join(self.l)
+
+
+# XXX: This does log(mul) mallocs, the GCs probably make that efficient, but
+# some measurement should be done at some point.
+def string_repeat(s, mul):
+    """Repeat a string or unicode.  Note that this assumes that 'mul' > 0."""
+    result = None
+    factor = 1
+    assert mul > 0
+    limit = mul >> 1
+    while True:
+        if mul & factor:
+            if result is None:
+                result = s
+            else:
+                result = s + result
+            if factor > limit:
+                break
+        s += s
+        factor *= 2
+    return result
+string_repeat._annspecialcase_ = 'specialize:argtype(0)'
 
 # ------------------------------------------------------------
 # ----------------- implementation details -------------------

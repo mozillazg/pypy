@@ -1,4 +1,6 @@
 import sys
+import re
+import py
 from pypy.translator.translator import TranslationContext
 from pypy.rpython.error import TyperError
 from pypy.rpython.lltypesystem.lltype import *
@@ -8,10 +10,8 @@ from pypy.rpython.lltypesystem.rlist import ListRepr, FixedSizeListRepr, ll_newl
 from pypy.rpython.lltypesystem import rlist as ll_rlist
 from pypy.rpython.ootypesystem import rlist as oo_rlist
 from pypy.rpython.rint import signed_repr
-from pypy.translator.translator import TranslationContext
 from pypy.objspace.flow.model import Constant, Variable
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
-import re
 
 # undo the specialization parameter
 for n1 in 'get set del'.split():
@@ -410,13 +410,18 @@ class BaseTestRlist(BaseRtypingTest):
         assert res.item2 == 9
 
     def test_bltn_list(self):
-        def dummyfn():
-            l1 = [42]
-            l2 = list(l1)
-            l2[0] = 0
-            return l1[0]
-        res = self.interpret(dummyfn, ())
-        assert res == 42
+        # test for ll_copy()
+        for resize1 in [False, True]:
+            for resize2 in [False, True]:
+                def dummyfn():
+                    l1 = [42]
+                    if resize1: l1.append(43)
+                    l2 = list(l1)
+                    if resize2: l2.append(44)
+                    l2[0] = 0
+                    return l1[0]
+                res = self.interpret(dummyfn, ())
+                assert res == 42
 
     def test_is_true(self):
         def is_true(lst):
@@ -1064,7 +1069,7 @@ class BaseTestRlist(BaseRtypingTest):
         assert res == 0
 
 
-    def test_getitem_exc(self):
+    def test_getitem_exc_1(self):
         def f(x):
             l = [1]
             return l[x]
@@ -1109,7 +1114,7 @@ class BaseTestRlist(BaseRtypingTest):
         res = self.interpret(f, [0])
         assert res == 1
         
-    def test_getitem_exc(self):
+    def test_getitem_exc_2(self):
         def f(x):
             l = [1]
             return l[x]
@@ -1305,6 +1310,22 @@ class BaseTestRlist(BaseRtypingTest):
             return rarithmetic.widen(l[i])
         res = self.interpret(f, [3])
         assert res == 0
+
+    def test_make_new_list(self):
+        class A:
+            def _freeze_(self):
+                return True
+        a1 = A()
+        a2 = A()
+        def f(i):
+            lst = [a1, a1]
+            lst2 = list(lst)
+            lst2.append(a2)
+            return lst2[i] is a2
+        res = self.interpret(f, [1])
+        assert res == False
+        res = self.interpret(f, [2])
+        assert res == True
 
 
 class TestLLtype(BaseTestRlist, LLRtypeMixin):

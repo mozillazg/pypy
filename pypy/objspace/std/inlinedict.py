@@ -45,7 +45,7 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             # XXX sucky
             items = []
             for w_item in self.impl_items():
-                w_key, w_value = self.space.viewiterable(w_item)
+                w_key, w_value = self.space.fixedview(w_item)
                 items.append((w_key, w_value))
             return IndirectionIterImplementation(self.space, self, items)
 
@@ -96,7 +96,9 @@ def make_inlinedict_mixin(dictimplclass, attrname):
 
         def setdictvalue(self, space, attr, w_value, shadows_type=True):
             if self._inlined_dict_valid():
-                # XXX don't ignore shadows_type
+                # XXX so far we ignore shadows_type, which is a small
+                # performance-degradation if the JIT is not used (i.e. shadow
+                # tracking does not work). Maybe we don't care.
                 self.impl_setitem_str(attr, w_value)
                 return True
             w_dict = self.getdict()
@@ -118,6 +120,10 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             return True
 
         def setdict(self, space, w_dict):
+            # if somebody asked for the __dict__, and it did not devolve, it
+            # needs to stay valid even if we set a new __dict__ on this object
+            if self.w__dict__ is not None and self._inlined_dict_valid():
+                make_rdict(self)
             self._clear_fields() # invalidate attributes on self
             self.w__dict__ = check_new_dictionary(space, w_dict)
 

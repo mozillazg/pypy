@@ -62,7 +62,7 @@ from pypy.tool.sourcetools import render_docstr, NiceCompile
 
 from pypy.translator.gensupp import ordered_blocks, UniqueList, builtin_base, \
      uniquemodulename, C_IDENTIFIER, NameManager
-
+from pypy.lib.identity_dict import identity_dict
 
 import pypy # __path__
 import py.path
@@ -71,7 +71,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.2.6'  # bump this for substantial changes
+GI_VERSION = '1.2.8'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -161,11 +161,11 @@ class GenRpy:
                          Constant(OperationError).key: late_OperationError,
                          Constant(Arguments).key: late_Arguments,
                        }
-        u = UniqueList
-        self.initcode = u()    # list of lines for the module's initxxx()
-        self.latercode = u()   # list of generators generating extra lines
-                               #   for later in initxxx() -- for recursive
-                               #   objects
+        self.initcode = UniqueList() # list of lines for the module's initxxx()
+        self.latercode = UniqueList()
+        # list of generators generating extra lines
+        #   for later in initxxx() -- for recursive
+        #   objects
         self.namespace = NameManager()
         self.namespace.make_reserved_names('__doc__ __args__ space goto')
         self.globaldecl = []
@@ -194,8 +194,9 @@ class GenRpy:
             def __repr__(self):
                 return '<%s>' % self.__name__
             
-        self.builtin_ids = dict( [
-            (id(value), bltinstub(key))
+        self.ibuiltin_ids = identity_dict()
+        self.ibuiltin_ids.update([
+            (value, bltinstub(key))
             for key, value in __builtin__.__dict__.items()
             if callable(value) and type(value) not in [types.ClassType, type] ] )
         
@@ -391,8 +392,8 @@ class GenRpy:
                 name = self.nameof_instance(obj)
             else:
                 # shortcutting references to __builtin__
-                if id(obj) in self.builtin_ids:
-                    func = self.builtin_ids[id(obj)]
+                if obj in self.ibuiltin_ids:
+                    func = self.ibuiltin_ids[obj]
                     #name = self.get_nameof_builtin_func(func)
                     # the above is quicker in principle, but pulls more
                     # stuff in, so it is slower right now.
@@ -705,8 +706,8 @@ else:
         return self._space_arities
         
     def try_space_shortcut_for_builtin(self, v, nargs, args):
-        if isinstance(v, Constant) and id(v.value) in self.builtin_ids:
-            name = self.builtin_ids[id(v.value)].__name__
+        if isinstance(v, Constant) and v.value in self.ibuiltin_ids:
+            name = self.ibuiltin_ids[v.value].__name__
             if hasattr(self.space, name):
                 if self.space_arities().get(name, -1) == nargs:
                     if name != 'isinstance':
@@ -726,8 +727,8 @@ else:
 
     def nameof_builtin_function(self, func):
         # builtin function
-        if id(func) in self.builtin_ids:
-            func = self.builtin_ids[id(func)]
+        if func in self.ibuiltin_ids:
+            func = self.ibuiltin_ids[func]
             return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
         # where does it come from? Python2.2 doesn't have func.__module__
         for modname, module in sys.modules.items():
@@ -1366,7 +1367,7 @@ else:
                     q = "elif"
                     for op in self.gen_link(link, localscope, blocknum, block, {
                                 link.last_exception: 'e.w_type',
-                                link.last_exc_value: 'e.w_value'}):
+                                link.last_exc_value: 'e.get_w_value(space)'}):
                         yield "        %s" % op
                 yield "    else:raise # unhandled case, should not happen"
             else:
@@ -1474,10 +1475,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
     """
     # create something like a module
     if type(sourcetext) is str:
-        if filename is None: 
-            code = py.code.Source(sourcetext).compile()
-        else: 
-            code = NiceCompile(filename)(sourcetext)
+        code = py.code.Source(sourcetext).compile()
     else:
         # assume we got an already compiled source
         code = sourcetext

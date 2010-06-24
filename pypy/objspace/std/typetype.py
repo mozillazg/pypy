@@ -1,8 +1,9 @@
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter import gateway
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.typedef import weakref_descr
-from pypy.objspace.std.stdtypedef import *
+from pypy.interpreter.typedef import (GetSetProperty, descr_get_dict,
+                                      weakref_descr)
+from pypy.objspace.std.stdtypedef import StdTypeDef
 
 def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
     "This is used to create user-defined classes only."
@@ -10,8 +11,8 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
     # XXX check types
 
     w_typetype = _precheck_for_new(space, w_typetype)
-    
-    bases_w = space.viewiterable(w_bases)
+
+    bases_w = space.fixedview(w_bases)
 
     w_winner = w_typetype
     for base in bases_w:
@@ -34,11 +35,11 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
         if not space.is_w(newfunc, space.getattr(space.w_type, space.wrap('__new__'))):
             return space.call_function(newfunc, w_winner, w_name, w_bases, w_dict)
         w_typetype = w_winner
-        
+
     name = space.str_w(w_name)
     assert isinstance(name, str)
     dict_w = {}
-    dictkeys_w = space.unpackiterable(w_dict)
+    dictkeys_w = space.listview(w_dict)
     for w_key in dictkeys_w:
         key = space.str_w(w_key)
         dict_w[key] = space.getitem(w_dict, w_key)
@@ -51,18 +52,19 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
 def _precheck_for_new(space, w_type):
     from pypy.objspace.std.typeobject import W_TypeObject
     if not isinstance(w_type, W_TypeObject):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("X is not a type object (%s)" %
-                                     (space.type(w_type).getname(space, '?'))))
+        raise operationerrfmt(space.w_TypeError,
+                              "X is not a type object (%s)",
+                              space.type(w_type).getname(space, '?'))
     return w_type
 
 # ____________________________________________________________
 
-def _check(space, w_type, msg=None):
+def _check(space, w_type, w_msg=None):
     from pypy.objspace.std.typeobject import W_TypeObject
     if not isinstance(w_type, W_TypeObject):
-        raise OperationError(space.w_TypeError, 
-                             space.wrap(msg or "descriptor is for 'type'"))
+        if w_msg is None:
+            w_msg = space.wrap("descriptor is for 'type'")
+        raise OperationError(space.w_TypeError, w_msg)
     return w_type
 
 
@@ -73,9 +75,8 @@ def descr_get__name__(space, w_type):
 def descr_set__name__(space, w_type, w_value):
     w_type = _check(space, w_type)    
     if not w_type.is_heaptype():
-        raise OperationError(space.w_TypeError, 
-                             space.wrap("can't set %s.__name__" %
-                                        w_type.name))
+        raise operationerrfmt(space.w_TypeError, 
+                              "can't set %s.__name__", w_type.name)
     w_type.name = space.str_w(w_value)
 
 def descr_get__mro__(space, w_type):
@@ -84,7 +85,7 @@ def descr_get__mro__(space, w_type):
 
 def descr_mro(space, w_type):
     """Return a type's method resolution order."""
-    w_type = _check(space, w_type,"expected type")
+    w_type = _check(space, w_type, space.wrap("expected type"))
     return space.newlist(w_type.compute_default_mro())
 
 def descr_get__bases__(space, w_type):
@@ -104,23 +105,21 @@ def descr_set__bases__(space, w_type, w_value):
     from pypy.objspace.std.typeobject import W_TypeObject
     from pypy.objspace.std.typeobject import check_and_find_best_base
     from pypy.objspace.std.typeobject import get_parent_layout
+    from pypy.objspace.std.typeobject import is_mro_purely_of_types
     w_type = _check(space, w_type)
     if not w_type.is_heaptype():
-        raise OperationError(space.w_TypeError,
-                             space.wrap("can't set %s.__bases__" %
-                                        (w_type.name,)))
+        raise operationerrfmt(space.w_TypeError,
+                              "can't set %s.__bases__", w_type.name)
     if not space.is_true(space.isinstance(w_value, space.w_tuple)):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("can only assign tuple"
-                                        " to %s.__bases__, not %s"%
-                                    (w_type.name,
-                                     space.type(w_value).getname(space, '?'))))
-    newbases_w = space.viewiterable(w_value)
+        raise operationerrfmt(space.w_TypeError,
+                              "can only assign tuple to %s.__bases__, not %s",
+                              w_type.name,
+                              space.type(w_value).getname(space, '?'))
+    newbases_w = space.fixedview(w_value)
     if len(newbases_w) == 0:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("can only assign non-empty tuple"
-                                        " to %s.__bases__, not ()"%
-                                        (w_type.name,)))
+        raise operationerrfmt(space.w_TypeError,
+                    "can only assign non-empty tuple to %s.__bases__, not ()",
+                              w_type.name)
 
     for w_newbase in newbases_w:
         if isinstance(w_newbase, W_TypeObject):
@@ -135,11 +134,11 @@ def descr_set__bases__(space, w_type, w_value):
     newlayout = w_newbestbase.get_full_instance_layout()
 
     if oldlayout != newlayout:
-        raise OperationError(space.w_TypeError,
-                space.wrap("__bases__ assignment: '%s' object layout"
-                           " differs from '%s'" %
-                           (w_newbestbase.getname(space, '?'),
-                            w_oldbestbase.getname(space, '?'))))
+        raise operationerrfmt(space.w_TypeError,
+                           "__bases__ assignment: '%s' object layout"
+                           " differs from '%s'",
+                           w_newbestbase.getname(space, '?'),
+                           w_oldbestbase.getname(space, '?'))
 
     # invalidate the version_tag of all the current subclasses
     w_type.mutated()
@@ -162,6 +161,14 @@ def descr_set__bases__(space, w_type, w_value):
             cls.mro_w = old_mro
         w_type.bases_w = saved_bases_w
         raise
+    if (space.config.objspace.std.withtypeversion and
+        w_type.version_tag() is not None and
+        not is_mro_purely_of_types(w_type.mro_w)):
+        # Disable method cache if the hierarchy isn't pure.
+        w_type._version_tag = None
+        for w_subclass in w_type.get_subclasses():
+            if isinstance(w_subclass, W_TypeObject):
+                w_subclass._version_tag = None
     assert w_type.w_same_layout_as is get_parent_layout(w_type)  # invariant
 
 def descr__base(space, w_type):
@@ -181,7 +188,7 @@ type(name, bases, dict) -> a new type""")
         return space.get(w_result, space.w_None, w_type)
 
 def descr__flags(space, w_type):
-    w_type = _check(space, w_type)    
+    w_type = _check(space, w_type)
     return space.wrap(w_type.__flags__)
 
 def descr_get__module(space, w_type):
@@ -189,11 +196,12 @@ def descr_get__module(space, w_type):
     return w_type.get_module()
 
 def descr_set__module(space, w_type, w_value):
-    w_type = _check(space, w_type)    
+    w_type = _check(space, w_type)
     if not w_type.is_heaptype():
-        raise OperationError(space.w_TypeError, 
-                             space.wrap("can't set %s.__module__" %
-                                        w_type.name))
+        raise operationerrfmt(space.w_TypeError,
+                              "can't set %s.__module__",
+                              w_type.name)
+    w_type.mutated()
     w_type.dict_w['__module__'] = w_value
 
 def descr___subclasses__(space, w_type):
@@ -204,7 +212,7 @@ def descr___subclasses__(space, w_type):
 # ____________________________________________________________
 
 type_typedef = StdTypeDef("type",
-    __new__ = newmethod(descr__new__),
+    __new__ = gateway.interp2app(descr__new__),
     __name__ = GetSetProperty(descr_get__name__, descr_set__name__),
     __bases__ = GetSetProperty(descr_get__bases__, descr_set__bases__),
     __base__ = GetSetProperty(descr__base),

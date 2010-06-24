@@ -113,9 +113,9 @@ namespace pypy.runtime
     public delegate void LoopDelegate(InputArgs args);
 
     public class InputArgs {
-      public int[] ints = new int[32];
-      public double[] floats = new double[32];
-      public object[] objs = new object[32];
+      public int[] ints = new int[256];
+      public double[] floats = new double[256];
+      public object[] objs = new object[256];
       public object exc_value = null;
       public int failed_op = -1;
 
@@ -382,31 +382,6 @@ namespace pypy.runtime
     public class Utils
     {
 
-        public static void debug_fatalerror(string msg)
-        {
-          throw new Exception("debug_fatalerror: " + msg);
-        }
-
-        public static void debug_print(object a)
-        {
-            Console.Error.WriteLine(a);
-        }
-
-        public static void debug_print(object a, object b)
-        {
-            Console.Error.WriteLine("{0} {1}", a, b);
-        }
-
-        public static void debug_print(object a, object b, object c)
-        {
-            Console.Error.WriteLine("{0} {1} {2}", a, b, c);
-        }
-
-        public static void debug_print(object a, object b, object c, object d)
-        {
-            Console.Error.WriteLine("{0} {1} {2} {3}", a, b, c, d);
-        }
-
         public static DynamicMethod CreateDynamicMethod(string name, Type res, Type[] args)
         {
             return new DynamicMethod(name, res, args, typeof(Utils).Module);
@@ -445,6 +420,16 @@ namespace pypy.runtime
             if (base_ == -1)
                 base_ = 10;
             return Convert.ToString(n, base_);
+        }
+
+        public static string OOString(long n, int base_)
+        {
+            if (base_ == -1)
+                base_ = 10;
+            if (n<0 && base_ != 10)
+                return "-" + Convert.ToString(-n, base_);
+            else
+                return Convert.ToString(n, base_);
         }
 
         public static string OOString(double d, int base_)

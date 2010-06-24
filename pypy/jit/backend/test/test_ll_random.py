@@ -3,7 +3,9 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi, rstr
 from pypy.jit.backend.test import test_random
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import ConstInt, ConstPtr
-from pypy.jit.metainterp.history import ConstAddr, BoxPtr, BoxInt
+from pypy.jit.metainterp.history import BoxPtr, BoxInt
+from pypy.jit.metainterp.history import BasicFailDescr
+from pypy.jit.codewriter import heaptracker
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.rarithmetic import intmask
 from pypy.rpython.llinterp import LLException
@@ -18,13 +20,11 @@ class LLtypeOperationBuilder(test_random.OperationBuilder):
         self.runicodes = []
         self.structure_types = []
         self.structure_types_and_vtables = []
-        self.class_sizes_cache = []
 
     def fork(self, cpu, loop, vars):
         fork = test_random.OperationBuilder.fork(self, cpu, loop, vars)
         fork.structure_types = self.structure_types
         fork.structure_types_and_vtables = self.structure_types_and_vtables
-        fork.class_sizes_cache = self.class_sizes_cache
         return fork
 
     def get_structptr_var(self, r, must_have_vtable=False, type=lltype.Struct):
@@ -106,11 +106,7 @@ class LLtypeOperationBuilder(test_random.OperationBuilder):
         vtable.name[len(name)] = '\x00'
         self.structure_types_and_vtables.append((S, vtable))
         #
-        vtable_adr = llmemory.cast_ptr_to_adr(vtable)
-        vtable_int = self.cpu.cast_adr_to_int(vtable_adr)
-        descr = self.cpu.sizeof(S)
-        self.class_sizes_cache.append((vtable_int, descr))
-        self.cpu.set_class_sizes(dict(self.class_sizes_cache))
+        heaptracker.register_known_gctype(self.cpu, vtable, S)
         #
         return S, vtable
 
@@ -185,6 +181,9 @@ class LLtypeOperationBuilder(test_random.OperationBuilder):
 
 # ____________________________________________________________
 
+def ConstAddr(addr, cpu):
+    return ConstInt(heaptracker.adr2int(addr))
+
 class GuardClassOperation(test_random.GuardOperation):
     def gen_guard(self, builder, r):
         ptrvars = [(v, S) for (v, S) in builder.ptrvars
@@ -202,6 +201,21 @@ class GuardClassOperation(test_random.GuardOperation):
         c_vtable2 = ConstAddr(llmemory.cast_ptr_to_adr(vtable2), builder.cpu)
         op = ResOperation(self.opnum, [v, c_vtable2], None)
         return op, (vtable == vtable2)
+
+class GuardNonNullClassOperation(GuardClassOperation):
+    def gen_guard(self, builder, r):
+        if r.random() < 0.5:
+            return GuardClassOperation.gen_guard(self, builder, r)
+        else:
+            v = BoxPtr(lltype.nullptr(llmemory.GCREF.TO))
+            op = ResOperation(rop.SAME_AS, [ConstPtr(v.value)], v)
+            builder.loop.operations.append(op)
+            v2, S2 = builder.get_structptr_var(r, must_have_vtable=True)
+            vtable2 = S2._hints['vtable']._as_ptr()
+            c_vtable2 = ConstAddr(llmemory.cast_ptr_to_adr(vtable2),
+                                  builder.cpu)
+            op = ResOperation(self.opnum, [v, c_vtable2], None)
+            return op, False
 
 class GetFieldOperation(test_random.AbstractOperation):
     def field_descr(self, builder, r):
@@ -449,7 +463,7 @@ class CallOperation(BaseCallOperation):
         descr = builder.cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         self.put(builder, args, descr)
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -471,7 +485,7 @@ class CallOperationException(BaseCallOperation):
         _, vtableptr = builder.get_random_structure_type_and_vtable(r)
         exc_box = ConstAddr(llmemory.cast_ptr_to_adr(vtableptr), builder.cpu)
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = builder.subset_of_intvars(r)
         op._exc_box = None
         builder.should_fail_by = op
@@ -491,10 +505,8 @@ class RaisingCallOperation(BaseCallOperation):
         descr = builder.cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         self.put(builder, args, descr)
         exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
-        assert builder.cpu.get_exception()
-        builder.cpu.clear_exception()
         op = ResOperation(rop.GUARD_EXCEPTION, [exc_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -509,10 +521,8 @@ class RaisingCallOperationGuardNoException(BaseCallOperation):
         args = [c_addr] + subset
         descr = builder.cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         self.put(builder, args, descr)
-        assert builder.cpu.get_exception()
-        builder.cpu.clear_exception()
         op = ResOperation(rop.GUARD_NO_EXCEPTION, [], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         op.fail_args = builder.subset_of_intvars(r)
         builder.should_fail_by = op
@@ -530,15 +540,13 @@ class RaisingCallOperationWrongGuardException(BaseCallOperation):
         args = [c_addr] + subset
         descr = builder.cpu.calldescrof(TP, TP.ARGS, TP.RESULT)
         self.put(builder, args, descr)
-        assert builder.cpu.get_exception()
-        builder.cpu.clear_exception()
         while True:
             _, vtableptr = builder.get_random_structure_type_and_vtable(r)
             if vtableptr != exc:
                 break
         other_box = ConstAddr(llmemory.cast_ptr_to_adr(vtableptr), builder.cpu)
         op = ResOperation(rop.GUARD_EXCEPTION, [other_box], BoxPtr(),
-                          descr=builder.make_fail_descr())
+                          descr=BasicFailDescr())
         op._exc_box = ConstAddr(llmemory.cast_ptr_to_adr(exc), builder.cpu)
         op.fail_args = builder.subset_of_intvars(r)
         builder.should_fail_by = op
@@ -577,6 +585,7 @@ for i in range(2):
     OPERATIONS.append(RaisingCallOperationGuardNoException(rop.CALL))
     OPERATIONS.append(RaisingCallOperationWrongGuardException(rop.CALL))
     OPERATIONS.append(CallOperationException(rop.CALL))
+OPERATIONS.append(GuardNonNullClassOperation(rop.GUARD_NONNULL_CLASS))
 
 LLtypeOperationBuilder.OPERATIONS = OPERATIONS
 

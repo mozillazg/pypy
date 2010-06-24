@@ -9,7 +9,7 @@ from pypy.jit.metainterp.gc import get_description
 
 
 def test_boehm():
-    gc_ll_descr = GcLLDescr_boehm(None, None)
+    gc_ll_descr = GcLLDescr_boehm(None, None, None)
     #
     record = []
     prev_funcptr_for_new = gc_ll_descr.funcptr_for_new
@@ -61,32 +61,36 @@ def test_GcRefList():
         assert addrs[i].address[0] == llmemory.cast_ptr_to_adr(allocs[i])
 
 def test_GcRootMap_asmgcc():
-    def stack_pos(n):
+    def frame_pos(n):
         return -4*(4+n)
     gcrootmap = GcRootMap_asmgcc()
-    num1 = stack_pos(1)
-    num2 = stack_pos(55)
+    num1 = frame_pos(-5)
+    num1a = num1|2
+    num2 = frame_pos(55)
+    num2a = ((-num2|3) >> 7) | 128
+    num2b = (-num2|3) & 127
     shape = gcrootmap.get_basic_shape()
     gcrootmap.add_ebp_offset(shape, num1)
     gcrootmap.add_ebp_offset(shape, num2)
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2]
+    assert shape == map(chr, [6, 7, 11, 15, 2, 0, num1a, num2b, num2a])
     gcrootmap.add_ebx(shape)
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1]
+    assert shape == map(chr, [6, 7, 11, 15, 2, 0, num1a, num2b, num2a,
+                              4])
     gcrootmap.add_esi(shape)
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1]
+    assert shape == map(chr, [6, 7, 11, 15, 2, 0, num1a, num2b, num2a,
+                              4, 8])
     gcrootmap.add_edi(shape)
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1, 8|1]
+    assert shape == map(chr, [6, 7, 11, 15, 2, 0, num1a, num2b, num2a,
+                              4, 8, 12])
     gcrootmap.add_ebp(shape)
-    assert shape == [6, -2, -6, -10, 2, 0, num1|2, num2|2, 0|1, 4|1, 8|1, 12|1]
+    assert shape == map(chr, [6, 7, 11, 15, 2, 0, num1a, num2b, num2a,
+                              4, 8, 12, 16])
     #
     shapeaddr = gcrootmap.compress_callshape(shape)
     PCALLSHAPE = lltype.Ptr(GcRootMap_asmgcc.CALLSHAPE_ARRAY)
     p = llmemory.cast_adr_to_ptr(shapeaddr, PCALLSHAPE)
-    num1a = -2*(num1|2)-1
-    num2a = ((-2*(num2|2)-1) >> 7) | 128
-    num2b = (-2*(num2|2)-1) & 127
-    for i, expected in enumerate([26, 18, 10, 2,
-                                  num2a, num2b, num1a, 0, 4, 19, 11, 3, 12]):
+    for i, expected in enumerate([16, 12, 8, 4,
+                                  num2a, num2b, num1a, 0, 2, 15, 11, 7, 6]):
         assert p[i] == expected
     #
     retaddr = rffi.cast(llmemory.Address, 1234567890)
@@ -97,14 +101,14 @@ def test_GcRootMap_asmgcc():
     #
     # the same as before, but enough times to trigger a few resizes
     expected_shapeaddr = {}
-    for i in range(1, 600):
+    for i in range(1, 700):
         shape = gcrootmap.get_basic_shape()
-        gcrootmap.add_ebp_offset(shape, stack_pos(i))
+        gcrootmap.add_ebp_offset(shape, frame_pos(i))
         shapeaddr = gcrootmap.compress_callshape(shape)
         expected_shapeaddr[i] = shapeaddr
         retaddr = rffi.cast(llmemory.Address, 123456789 + i)
         gcrootmap.put(retaddr, shapeaddr)
-    for i in range(1, 600):
+    for i in range(1, 700):
         expected_retaddr = rffi.cast(llmemory.Address, 123456789 + i)
         assert gcrootmap._gcmap[i*2+0] == expected_retaddr
         assert gcrootmap._gcmap[i*2+1] == expected_shapeaddr[i]
@@ -163,7 +167,8 @@ class TestFramework:
         gcdescr = get_description(config_)
         translator = FakeTranslator()
         llop1 = FakeLLOp()
-        gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(), llop1)
+        gc_ll_descr = GcLLDescr_framework(gcdescr, FakeTranslator(), None,
+                                          llop1)
         gc_ll_descr.initialize()
         self.llop1 = llop1
         self.gc_ll_descr = gc_ll_descr
@@ -250,21 +255,17 @@ class TestFramework:
         newops = []
         v_base = BoxPtr()
         v_value = BoxPtr()
-        gc_ll_descr._gen_write_barrier(self.fake_cpu, newops, v_base, v_value)
+        gc_ll_descr._gen_write_barrier(newops, v_base, v_value)
         assert llop1.record == []
-        assert len(newops) == 2
-        assert newops[0].opnum == rop.GETFIELD_RAW
-        assert newops[0].args == [v_base]
-        assert newops[0].descr == gc_ll_descr.fielddescr_tid
-        v_tid = newops[0].result
-        assert newops[1].opnum == rop.COND_CALL_GC_WB
-        assert newops[1].args[0] == v_tid
-        assert newops[1].args[1] ==ConstInt(gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
-        assert newops[1].args[2] == ConstInt(42)     # func ptr
-        assert newops[1].args[3] == v_base
-        assert newops[1].args[4] == v_value
-        assert newops[1].descr == gc_ll_descr.calldescr_jit_wb
-        assert newops[1].result is None
+        assert len(newops) == 1
+        assert newops[0].opnum == rop.COND_CALL_GC_WB
+        assert newops[0].args[0] == v_base
+        assert newops[0].args[1] == v_value
+        assert newops[0].result is None
+        wbdescr = newops[0].descr
+        assert isinstance(wbdescr.jit_wb_if_flag, int)
+        assert isinstance(wbdescr.jit_wb_if_flag_byteofs, int)
+        assert isinstance(wbdescr.jit_wb_if_flag_singlebyte, int)
 
     def test_get_rid_of_debug_merge_point(self):
         operations = [
@@ -278,19 +279,23 @@ class TestFramework:
         # check rewriting of ConstPtrs
         class MyFakeCPU:
             def cast_adr_to_int(self, adr):
-                stored_addr = adr.address[0]
-                assert stored_addr == llmemory.cast_ptr_to_adr(s_gcref)
+                assert adr == "some fake address"
                 return 43
+        class MyFakeGCRefList:
+            def get_address_of_gcref(self, s_gcref1):
+                assert s_gcref1 == s_gcref
+                return "some fake address"
         S = lltype.GcStruct('S')
         s = lltype.malloc(S)
         s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
         v_random_box = BoxPtr()
         v_result = BoxInt()
         operations = [
-            ResOperation(rop.OOIS, [v_random_box, ConstPtr(s_gcref)],
+            ResOperation(rop.PTR_EQ, [v_random_box, ConstPtr(s_gcref)],
                          v_result),
             ]
         gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.gcrefs = MyFakeGCRefList()
         gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
         assert len(operations) == 2
         assert operations[0].opnum == rop.GETFIELD_RAW
@@ -298,9 +303,45 @@ class TestFramework:
         assert operations[0].descr == gc_ll_descr.single_gcref_descr
         v_box = operations[0].result
         assert isinstance(v_box, BoxPtr)
-        assert operations[1].opnum == rop.OOIS
+        assert operations[1].opnum == rop.PTR_EQ
         assert operations[1].args == [v_random_box, v_box]
         assert operations[1].result == v_result
+
+    def test_rewrite_assembler_1_cannot_move(self):
+        # check rewriting of ConstPtrs
+        class MyFakeCPU:
+            def cast_adr_to_int(self, adr):
+                xxx    # should not be called
+        class MyFakeGCRefList:
+            def get_address_of_gcref(self, s_gcref1):
+                seen.append(s_gcref1)
+                assert s_gcref1 == s_gcref
+                return "some fake address"
+        seen = []
+        S = lltype.GcStruct('S')
+        s = lltype.malloc(S)
+        s_gcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+        v_random_box = BoxPtr()
+        v_result = BoxInt()
+        operations = [
+            ResOperation(rop.PTR_EQ, [v_random_box, ConstPtr(s_gcref)],
+                         v_result),
+            ]
+        gc_ll_descr = self.gc_ll_descr
+        gc_ll_descr.gcrefs = MyFakeGCRefList()
+        old_can_move = rgc.can_move
+        try:
+            rgc.can_move = lambda s: False
+            gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
+        finally:
+            rgc.can_move = old_can_move
+        assert len(operations) == 1
+        assert operations[0].opnum == rop.PTR_EQ
+        assert operations[0].args == [v_random_box, ConstPtr(s_gcref)]
+        assert operations[0].result == v_result
+        # check that s_gcref gets added to the list anyway, to make sure
+        # that the GC sees it
+        assert seen == [s_gcref]
 
     def test_rewrite_assembler_2(self):
         # check write barriers before SETFIELD_GC
@@ -313,26 +354,16 @@ class TestFramework:
             ]
         gc_ll_descr = self.gc_ll_descr
         gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
-        assert len(operations) == 3
+        assert len(operations) == 2
         #
-        assert operations[0].opnum == rop.GETFIELD_RAW
-        assert operations[0].args == [v_base]
-        assert operations[0].descr == gc_ll_descr.fielddescr_tid
-        v_tid = operations[0].result
+        assert operations[0].opnum == rop.COND_CALL_GC_WB
+        assert operations[0].args[0] == v_base
+        assert operations[0].args[1] == v_value
+        assert operations[0].result is None
         #
-        assert operations[1].opnum == rop.COND_CALL_GC_WB
-        assert operations[1].args[0] == v_tid
-        assert operations[1].args[1] == ConstInt(
-                                            gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
-        assert operations[1].args[2] == ConstInt(42)     # func ptr
-        assert operations[1].args[3] == v_base
-        assert operations[1].args[4] == v_value
-        assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
-        assert operations[1].result is None
-        #
-        assert operations[2].opnum == rop.SETFIELD_RAW
-        assert operations[2].args == [v_base, v_value]
-        assert operations[2].descr == field_descr
+        assert operations[1].opnum == rop.SETFIELD_RAW
+        assert operations[1].args == [v_base, v_value]
+        assert operations[1].descr == field_descr
 
     def test_rewrite_assembler_3(self):
         # check write barriers before SETARRAYITEM_GC
@@ -346,23 +377,13 @@ class TestFramework:
             ]
         gc_ll_descr = self.gc_ll_descr
         gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
-        assert len(operations) == 3
+        assert len(operations) == 2
         #
-        assert operations[0].opnum == rop.GETFIELD_RAW
-        assert operations[0].args == [v_base]
-        assert operations[0].descr == gc_ll_descr.fielddescr_tid
-        v_tid = operations[0].result
+        assert operations[0].opnum == rop.COND_CALL_GC_WB
+        assert operations[0].args[0] == v_base
+        assert operations[0].args[1] == v_value
+        assert operations[0].result is None
         #
-        assert operations[1].opnum == rop.COND_CALL_GC_WB
-        assert operations[1].args[0] == v_tid
-        assert operations[1].args[1] == ConstInt(
-                                            gc_ll_descr.GCClass.JIT_WB_IF_FLAG)
-        assert operations[1].args[2] == ConstInt(42)     # func ptr
-        assert operations[1].args[3] == v_base
-        assert operations[1].args[4] == v_value
-        assert operations[1].descr == gc_ll_descr.calldescr_jit_wb
-        assert operations[1].result is None
-        #
-        assert operations[2].opnum == rop.SETARRAYITEM_RAW
-        assert operations[2].args == [v_base, v_index, v_value]
-        assert operations[2].descr == array_descr
+        assert operations[1].opnum == rop.SETARRAYITEM_RAW
+        assert operations[1].args == [v_base, v_index, v_value]
+        assert operations[1].descr == array_descr

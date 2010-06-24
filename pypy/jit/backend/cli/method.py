@@ -1,5 +1,6 @@
 import py
 import os
+from pypy.rlib.debug import debug_start, debug_stop
 from pypy.tool.pairtype import extendabletype
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.cli import dotnet
@@ -164,15 +165,20 @@ class Method(object):
 
     def compile(self):
         # ----
+        debug_start('jit-backend-emit_ops')
         if self.nocast:
             self.compute_types()
         self.emit_load_inputargs()
-        self.emit_preamble()
+        self.emit_preamble()        
         self.emit_operations(self.cliloop.operations)
         self.emit_branches()
         self.emit_end()
+        debug_stop('jit-backend-emit_ops')
         # ----
-        return self.finish_code()
+        debug_start('jit-backend-finish_code')
+        res = self.finish_code()
+        debug_stop('jit-backend-finish_code')
+        return res
 
     def _parseopt(self, text):
         text = text.lower()
@@ -253,6 +259,7 @@ class Method(object):
             return v
 
     def match_var_fox_boxes(self, failargs, inputargs):
+        failargs = [arg for arg in failargs if arg is not None]
         assert len(failargs) == len(inputargs)
         for i in range(len(failargs)):
             v = self.boxes[failargs[i]]
@@ -262,9 +269,6 @@ class Method(object):
         try:
             return self.cpu.failing_ops.index(op)
         except ValueError:
-            descr = op.descr
-            assert isinstance(descr, history.AbstractFailDescr)            
-            descr.get_index()
             self.cpu.failing_ops.append(op)
             return len(self.cpu.failing_ops)-1
 
@@ -456,7 +460,8 @@ class Method(object):
         # store the latest values
         i = 0
         for box in args:
-            self.store_inputarg(i, box.type, box.getCliType(self), box)
+            if box is not None:
+                self.store_inputarg(i, box.type, box.getCliType(self), box)
             i+=1
 
     def emit_guard_bool(self, op, opcode):
@@ -471,6 +476,12 @@ class Method(object):
     def emit_op_guard_false(self, op):
         self.emit_guard_bool(op, OpCodes.Brtrue)
 
+    def emit_op_guard_nonnull(self, op):
+        self.emit_guard_bool(op, OpCodes.Brfalse)
+        
+    def emit_op_guard_isnull(self, op):
+        self.emit_guard_bool(op, OpCodes.Brtrue)
+
     def emit_op_guard_value(self, op):
         assert len(op.args) == 2
         il_label = self.newbranch(op)
@@ -480,6 +491,19 @@ class Method(object):
     def emit_op_guard_class(self, op):
         assert len(op.args) == 2
         il_label = self.newbranch(op)
+        self.push_arg(op, 0)
+        meth = dotnet.typeof(System.Object).GetMethod("GetType")
+        self.il.Emit(OpCodes.Callvirt, meth)
+        self.push_arg(op, 1)
+        self.il.Emit(OpCodes.Bne_Un, il_label)
+
+    def emit_op_guard_nonnull_class(self, op):
+        assert len(op.args) == 2
+        il_label = self.newbranch(op)
+        # nonnull check
+        self.push_arg(op, 0)
+        self.il.Emit(OpCodes.Brfalse, il_label)
+        # class check
         self.push_arg(op, 0)
         meth = dotnet.typeof(System.Object).GetMethod("GetType")
         self.il.Emit(OpCodes.Callvirt, meth)
@@ -715,7 +739,6 @@ class Method(object):
     emit_op_unicodelen = lltype_only
     emit_op_unicodegetitem = lltype_only
     emit_op_cond_call_gc_wb = lltype_only
-    emit_op_cond_call_gc_malloc = lltype_only
     emit_op_setarrayitem_raw = lltype_only
 
 

@@ -17,7 +17,7 @@ def render_docstr(func, indent_str='', closing_str=''):
         indentation. The shorter triple quotes are
         choosen automatically.
         The result is returned as a 1-tuple."""
-    if type(func) is not str:
+    if not isinstance(func, str):
         doc = func.__doc__
     else:
         doc = func
@@ -129,7 +129,6 @@ def newcode(fromcode, **kwargs):
     for name in names:
         if name not in kwargs:
             kwargs[name] = getattr(fromcode, name)
-    import new
     return new.code(
              kwargs['co_argcount'],
              kwargs['co_nlocals'],
@@ -217,31 +216,33 @@ def compile_template(source, resultname):
 
 # ____________________________________________________________
 
-if sys.version_info >= (2, 3):
-    def func_with_new_name(func, newname):
-        """Make a renamed copy of a function."""
-        f = new.function(func.func_code, func.func_globals,
-                            newname, func.func_defaults,
-                            func.func_closure)
-        if func.func_dict: 
-            f.func_dict = {}
-            f.func_dict.update(func.func_dict) 
-        return f 
-else:
-    raise Exception("sorry, Python 2.2 not supported")
-    # because we need to return a new function object -- impossible in 2.2,
-    # cannot create functions with closures without using veeeery strange code
+def func_with_new_name(func, newname):
+    """Make a renamed copy of a function."""
+    f = new.function(func.func_code, func.func_globals,
+                        newname, func.func_defaults,
+                        func.func_closure)
+    if func.func_dict:
+        f.func_dict = {}
+        f.func_dict.update(func.func_dict)
+    return f
+
+def func_renamer(newname):
+    """A function decorator which changes the name of a function."""
+    def decorate(func):
+        return func_with_new_name(func, newname)
+    return decorate
 
 PY_IDENTIFIER = ''.join([(('0' <= chr(i) <= '9' or
                            'a' <= chr(i) <= 'z' or
                            'A' <= chr(i) <= 'Z') and chr(i) or '_')
                          for i in range(256)])
+PY_IDENTIFIER_MAX = 120
 
 def valid_identifier(stuff):
     stuff = str(stuff).translate(PY_IDENTIFIER)
     if not stuff or ('0' <= stuff[0] <= '9'):
         stuff = '_' + stuff
-    return stuff
+    return stuff[:PY_IDENTIFIER_MAX]
 
 CO_VARARGS      = 0x0004
 CO_VARKEYWORDS  = 0x0008

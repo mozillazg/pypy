@@ -1,6 +1,8 @@
-import py
-from pypy.objspace.std.objspace import *
+import py, sys
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.argument import Signature
 from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX, OPTIMIZED_BUILTINS
 
@@ -30,7 +32,7 @@ class W_DictMultiObject(W_Object):
     @staticmethod
     def allocate_and_init_instance(space, w_type=None, module=False,
                                    instance=False, classofinstance=None,
-                                   from_strdict_shared=None):
+                                   from_strdict_shared=None, strdict=False):
         if from_strdict_shared is not None:
             assert w_type is None
             assert not module and not instance and classofinstance is None
@@ -55,7 +57,7 @@ class W_DictMultiObject(W_Object):
                 classofinstance is not None):
             assert w_type is None
             return ShadowDetectingDictImplementation(space, classofinstance)
-        elif instance:
+        elif instance or strdict or module:
             assert w_type is None
             return StrDictImplementation(space)
         else:
@@ -99,9 +101,6 @@ class W_DictMultiObject(W_Object):
             return space.call_function(w_missing, w_dict, w_key)
         else:
             return None
-
-    def set_str_keyed_item(w_dict, key, w_value, shadows_type=True):
-        w_dict.setitem_str(key, w_value, shadows_type)
 
     # _________________________________________________________________ 
     # implementation methods
@@ -393,7 +392,7 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
     def __init__(self, space, w_type):
         StrDictImplementation.__init__(self, space)
         self.w_type = w_type
-        self.original_version_tag = w_type.version_tag
+        self.original_version_tag = w_type.version_tag()
         if self.original_version_tag is None:
             self._shadows_anything = True
         else:
@@ -419,7 +418,7 @@ class ShadowDetectingDictImplementation(StrDictImplementation):
 
     def impl_shadows_anything(self):
         return (self._shadows_anything or 
-                self.w_type.version_tag is not self.original_version_tag)
+                self.w_type.version_tag() is not self.original_version_tag)
 
     def impl_set_shadows_anything(self):
         self._shadows_anything = True
@@ -468,7 +467,7 @@ class RDictIteratorImplementation(IteratorImplementation):
 
 
 # XXX fix this thing
-import time, py
+import time
 
 class DictInfo(object):
     _dict_infos = []
@@ -513,7 +512,7 @@ class DictInfo(object):
         self._dict_infos.append(self)
     def __repr__(self):
         args = []
-        for k in py.builtin.sorted(self.__dict__):
+        for k in sorted(self.__dict__):
             v = self.__dict__[k]
             if v != 0:
                 args.append('%s=%r'%(k, v))
@@ -614,7 +613,7 @@ _example = DictInfo()
 del DictInfo._dict_infos[-1]
 tmpl = 'os.write(fd, "%(attr)s" + ": " + str(info.%(attr)s) + "\\n")'
 bodySrc = []
-for attr in py.builtin.sorted(_example.__dict__):
+for attr in sorted(_example.__dict__):
     if attr == 'sig':
         continue
     bodySrc.append(tmpl%locals())
@@ -650,9 +649,9 @@ def init__DictMulti(space, w_dict, __args__):
     if w_src is None:
         pass
     elif space.findattr(w_src, space.wrap("keys")) is None:
-        list_of_w_pairs = space.unpackiterable(w_src)
+        list_of_w_pairs = space.listview(w_src)
         for w_pair in list_of_w_pairs:
-            pair = space.unpackiterable(w_pair)
+            pair = space.fixedview(w_pair)
             if len(pair)!=2:
                 raise OperationError(space.w_ValueError,
                              space.wrap("dict() takes a sequence of pairs"))
@@ -793,10 +792,12 @@ def dict_get__DictMulti_ANY_ANY(space, w_dict, w_key, w_default):
         return w_default
 
 def dict_pop__DictMulti_ANY(space, w_dict, w_key, w_defaults):
-    defaults = space.unpackiterable(w_defaults)
+    defaults = space.listview(w_defaults)
     len_defaults = len(defaults)
     if len_defaults > 1:
-        raise OperationError(space.w_TypeError, space.wrap("pop expected at most 2 arguments, got %d" % (1 + len_defaults, )))
+        raise operationerrfmt(space.w_TypeError,
+                              "pop expected at most 2 arguments, got %d",
+                              1 + len_defaults)
     w_item = w_dict.getitem(w_key)
     if w_item is None:
         if len_defaults > 0:

@@ -11,6 +11,7 @@ from pypy.rlib import jit
 from pypy.interpreter.error import OperationError
 from pypy.module.__builtin__.interp_classobj import W_ClassObject
 from pypy.module.__builtin__.interp_classobj import W_InstanceObject
+from pypy.interpreter.baseobjspace import ObjSpace as BaseObjSpace
 
 def _get_bases(space, w_cls):
     """Returns 'cls.__bases__'.  Returns None if there is
@@ -43,7 +44,7 @@ def abstract_getclass(space, w_obj):
             raise       # propagate other errors
         return space.type(w_obj)
 
-
+@jit.unroll_safe
 def abstract_isinstance_w(space, w_obj, w_klass_or_tuple):
     """Implementation for the full 'isinstance(obj, klass_or_tuple)'."""
 
@@ -77,16 +78,17 @@ def abstract_isinstance_w(space, w_obj, w_klass_or_tuple):
         oldstyleinst = space.interpclass_w(w_obj)
         if isinstance(oldstyleinst, W_InstanceObject):
             return oldstyleinst.w_class.is_subclass_of(oldstyleclass)
+    # -- case (anything, tuple)
+    # XXX it might be risky that the JIT sees this
+    if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
+        for w_klass in space.fixedview(w_klass_or_tuple):
+            if abstract_isinstance_w(space, w_obj, w_klass):
+                return True
+        return False
     return _abstract_isinstance_w_helper(space, w_obj, w_klass_or_tuple)
 
 @jit.dont_look_inside
 def _abstract_isinstance_w_helper(space, w_obj, w_klass_or_tuple):
-    # -- case (anything, tuple)
-    if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
-        for w_klass in space.viewiterable(w_klass_or_tuple):
-            if abstract_isinstance_w(space, w_obj, w_klass):
-                return True
-        return False
 
     # -- case (anything, abstract-class)
     check_class(space, w_klass_or_tuple,
@@ -109,7 +111,7 @@ def _issubclass_recurse(space, w_derived, w_top):
         return True
     w_bases = _get_bases(space, w_derived)
     if w_bases is not None:
-        for w_base in space.viewiterable(w_bases):
+        for w_base in space.fixedview(w_bases):
             if _issubclass_recurse(space, w_base, w_top):
                 return True
     return False
@@ -141,7 +143,7 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
     # -- case (class-like-object, tuple-of-classes)
     # XXX it might be risky that the JIT sees this
     if space.is_true(space.isinstance(w_klass_or_tuple, space.w_tuple)):
-        for w_klass in space.viewiterable(w_klass_or_tuple):
+        for w_klass in space.fixedview(w_klass_or_tuple):
             if abstract_issubclass_w(space, w_derived, w_klass):
                 return True
         return False
@@ -152,6 +154,37 @@ def abstract_issubclass_w(space, w_derived, w_klass_or_tuple):
                 " or tuple of classes and types")
     return _issubclass_recurse(space, w_derived, w_klass_or_tuple)
 
+# ------------------------------------------------------------
+# Exception helpers
+
+def exception_is_valid_obj_as_class_w(space, w_obj):
+    obj = space.interpclass_w(w_obj)
+    if isinstance(obj, W_ClassObject):
+        return True
+    return BaseObjSpace.exception_is_valid_obj_as_class_w(space, w_obj)
+
+def exception_is_valid_class_w(space, w_cls):
+    cls = space.interpclass_w(w_cls)
+    if isinstance(cls, W_ClassObject):
+        return True
+    return BaseObjSpace.exception_is_valid_class_w(space, w_cls)
+
+def exception_getclass(space, w_obj):
+    obj = space.interpclass_w(w_obj)
+    if isinstance(obj, W_InstanceObject):
+        return obj.w_class
+    return BaseObjSpace.exception_getclass(space, w_obj)
+
+def exception_issubclass_w(space, w_cls1, w_cls2):
+    cls1 = space.interpclass_w(w_cls1)
+    cls2 = space.interpclass_w(w_cls2)
+    if isinstance(cls1, W_ClassObject):
+        if isinstance(cls2, W_ClassObject):
+            return cls1.is_subclass_of(cls2)
+        return False
+    if isinstance(cls2, W_ClassObject):
+        return False
+    return BaseObjSpace.exception_issubclass_w(space, w_cls1, w_cls2)
 
 # ____________________________________________________________
 # App-level interface

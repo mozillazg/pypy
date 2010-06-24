@@ -1,5 +1,5 @@
 import py
-py.magic.autopath()
+py.path.local(__file__)
 from pypy.jit.tl.tla import tla
 
 
@@ -28,7 +28,7 @@ def load_bytecode(filename):
 def target(driver, args):
     return entry_point, None
 
-from pypy.jit.metainterp.policy import JitPolicy
+from pypy.jit.codewriter.policy import JitPolicy
 
 def jitpolicy(driver):
     return JitPolicy()

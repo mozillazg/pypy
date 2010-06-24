@@ -25,8 +25,8 @@ class TestX86(LLtypeBackendTest):
     # for the individual tests see
     # ====> ../../test/runner_test.py
     
-    def setup_class(cls):
-        cls.cpu = CPU(rtyper=None, stats=FakeStats())
+    def setup_method(self, meth):
+        self.cpu = CPU(rtyper=None, stats=FakeStats())
 
     def test_execute_ptr_operation(self):
         cpu = self.cpu
@@ -72,45 +72,41 @@ class TestX86(LLtypeBackendTest):
         func = ctypes.CFUNCTYPE(ctypes.c_int, ctypes.c_int)(f)
         addr = ctypes.cast(func, ctypes.c_void_p).value
         
-        try:
-            saved_addr = self.cpu.assembler.malloc_func_addr
-            self.cpu.assembler.malloc_func_addr = addr
-            ofs = symbolic.get_field_token(rstr.STR, 'chars', False)[0]
+        self.cpu.assembler.make_sure_mc_exists()
+        self.cpu.assembler.malloc_func_addr = addr
+        ofs = symbolic.get_field_token(rstr.STR, 'chars', False)[0]
 
-            res = self.execute_operation(rop.NEWSTR, [ConstInt(7)], 'ref')
-            assert allocs[0] == 7 + ofs + WORD
-            resbuf = self._resbuf(res)
-            assert resbuf[ofs/WORD] == 7
-            
-            # ------------------------------------------------------------
+        res = self.execute_operation(rop.NEWSTR, [ConstInt(7)], 'ref')
+        assert allocs[0] == 7 + ofs + WORD
+        resbuf = self._resbuf(res)
+        assert resbuf[ofs/WORD] == 7
 
-            res = self.execute_operation(rop.NEWSTR, [BoxInt(7)], 'ref')
-            assert allocs[0] == 7 + ofs + WORD
-            resbuf = self._resbuf(res)
-            assert resbuf[ofs/WORD] == 7
+        # ------------------------------------------------------------
 
-            # ------------------------------------------------------------
+        res = self.execute_operation(rop.NEWSTR, [BoxInt(7)], 'ref')
+        assert allocs[0] == 7 + ofs + WORD
+        resbuf = self._resbuf(res)
+        assert resbuf[ofs/WORD] == 7
 
-            TP = lltype.GcArray(lltype.Signed)
-            ofs = symbolic.get_field_token(TP, 'length', False)[0]
-            descr = self.cpu.arraydescrof(TP)
+        # ------------------------------------------------------------
 
-            res = self.execute_operation(rop.NEW_ARRAY, [ConstInt(10)],
-                                             'ref', descr)
-            assert allocs[0] == 10*WORD + ofs + WORD
-            resbuf = self._resbuf(res)            
-            assert resbuf[ofs/WORD] == 10
+        TP = lltype.GcArray(lltype.Signed)
+        ofs = symbolic.get_field_token(TP, 'length', False)[0]
+        descr = self.cpu.arraydescrof(TP)
 
-            # ------------------------------------------------------------
+        res = self.execute_operation(rop.NEW_ARRAY, [ConstInt(10)],
+                                         'ref', descr)
+        assert allocs[0] == 10*WORD + ofs + WORD
+        resbuf = self._resbuf(res)            
+        assert resbuf[ofs/WORD] == 10
 
-            res = self.execute_operation(rop.NEW_ARRAY, [BoxInt(10)],
-                                             'ref', descr)
-            assert allocs[0] == 10*WORD + ofs + WORD
-            resbuf = self._resbuf(res)                        
-            assert resbuf[ofs/WORD] == 10
-            
-        finally:
-            self.cpu.assembler.malloc_func_addr = saved_addr
+        # ------------------------------------------------------------
+
+        res = self.execute_operation(rop.NEW_ARRAY, [BoxInt(10)],
+                                         'ref', descr)
+        assert allocs[0] == 10*WORD + ofs + WORD
+        resbuf = self._resbuf(res)                        
+        assert resbuf[ofs/WORD] == 10
 
     def test_stringitems(self):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -229,7 +225,7 @@ class TestX86(LLtypeBackendTest):
         assert c.value == 3
 
     def test_nullity_with_guard(self):
-        allops = [rop.OONONNULL, rop.OOISNULL, rop.INT_IS_TRUE]
+        allops = [rop.INT_IS_TRUE]
         guards = [rop.GUARD_TRUE, rop.GUARD_FALSE]
         p = lltype.cast_opaque_ptr(llmemory.GCREF,
                                    lltype.malloc(lltype.GcStruct('x')))
@@ -260,12 +256,14 @@ class TestX86(LLtypeBackendTest):
                         self.cpu.set_future_value_int(0, b.value)
                     else:
                         self.cpu.set_future_value_ref(0, b.value)
-                    r = self.cpu.execute_token(looptoken)
+                    self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
                     if guard == rop.GUARD_FALSE:
-                        assert result == execute(self.cpu, op, None, b).value
+                        assert result == execute(self.cpu, None,
+                                                 op, None, b).value
                     else:
-                        assert result != execute(self.cpu, op, None, b).value
+                        assert result != execute(self.cpu, None,
+                                                 op, None, b).value
                     
 
     def test_stuff_followed_by_guard(self):
@@ -306,39 +304,89 @@ class TestX86(LLtypeBackendTest):
                     self.cpu.compile_loop(inputargs, ops, looptoken)
                     for i, box in enumerate(inputargs):
                         self.cpu.set_future_value_int(i, box.value)
-                    r = self.cpu.execute_token(looptoken)
+                    self.cpu.execute_token(looptoken)
                     result = self.cpu.get_latest_value_int(0)
-                    expected = execute(self.cpu, op, None, a, b).value
+                    expected = execute(self.cpu, None, op, None, a, b).value
                     if guard == rop.GUARD_FALSE:
                         assert result == expected
                     else:
                         assert result != expected
 
-    def test_overflow_mc(self):
-        from pypy.jit.backend.x86.assembler import MachineCodeBlockWrapper
+    def test_compile_bridge_check_profile_info(self):
+        from pypy.jit.backend.x86.test.test_assembler import FakeProfileAgent
+        self.cpu.profile_agent = agent = FakeProfileAgent()
 
-        orig_size = MachineCodeBlockWrapper.MC_SIZE
-        MachineCodeBlockWrapper.MC_SIZE = 1024
-        old_mc = self.cpu.assembler.mc
-        old_mc2 = self.cpu.assembler.mc2
-        self.cpu.assembler.mc = None
-        try:
-            ops = []
-            base_v = BoxInt()
-            v = base_v
-            for i in range(1024):
-                next_v = BoxInt()
-                ops.append(ResOperation(rop.INT_ADD, [v, ConstInt(1)], next_v))
-                v = next_v
-            ops.append(ResOperation(rop.FINISH, [v], None,
-                                    descr=BasicFailDescr()))
-            looptoken = LoopToken()
-            self.cpu.compile_loop([base_v], ops, looptoken)
-            assert self.cpu.assembler.mc != old_mc   # overflowed
-            self.cpu.set_future_value_int(0, base_v.value)
-            self.cpu.execute_token(looptoken)
-            assert self.cpu.get_latest_value_int(0) == 1024
-        finally:
-            MachineCodeBlockWrapper.MC_SIZE = orig_size
-            self.cpu.assembler.mc = old_mc
-            self.cpu.assembler.mc2 = old_mc2
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
+        looptoken = LoopToken()
+        class FakeString(object):
+            def __init__(self, val):
+                self.val = val
+
+            def _get_str(self):
+                return self.val
+
+        operations = [
+            ResOperation(rop.DEBUG_MERGE_POINT, [FakeString("hello")], None),
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
+            ResOperation(rop.JUMP, [i1], None, descr=looptoken),
+            ]
+        inputargs = [i0]
+        operations[3].fail_args = [i1]
+        self.cpu.compile_loop(inputargs, operations, looptoken)
+        name, loopaddress, loopsize = agent.functions[0]
+        assert name == "Loop # 0: hello"
+        assert loopaddress <= looptoken._x86_loop_code
+        assert loopsize >= 40 # randomish number
+
+        i1b = BoxInt()
+        i3 = BoxInt()
+        bridge = [
+            ResOperation(rop.INT_LE, [i1b, ConstInt(19)], i3),
+            ResOperation(rop.GUARD_TRUE, [i3], None, descr=faildescr2),
+            ResOperation(rop.DEBUG_MERGE_POINT, [FakeString("bye")], None),
+            ResOperation(rop.JUMP, [i1b], None, descr=looptoken),
+        ]
+        bridge[1].fail_args = [i1b]
+
+        self.cpu.compile_bridge(faildescr1, [i1b], bridge)        
+        name, address, size = agent.functions[1]
+        assert name == "Bridge # 0: bye"
+        assert address == loopaddress + loopsize
+        assert size >= 10 # randomish number
+
+        self.cpu.set_future_value_int(0, 2)
+        fail = self.cpu.execute_token(looptoken)
+        assert fail.identifier == 2
+        res = self.cpu.get_latest_value_int(0)
+        assert res == 20
+
+class TestX86OverflowMC(TestX86):
+
+    def setup_method(self, meth):
+        self.cpu = CPU(rtyper=None, stats=FakeStats())
+        self.cpu.assembler.mc_size = 1024
+
+    def test_overflow_mc(self):
+        ops = []
+        base_v = BoxInt()
+        v = base_v
+        for i in range(1024):
+            next_v = BoxInt()
+            ops.append(ResOperation(rop.INT_ADD, [v, ConstInt(1)], next_v))
+            v = next_v
+        ops.append(ResOperation(rop.FINISH, [v], None,
+                                descr=BasicFailDescr()))
+        looptoken = LoopToken()
+        self.cpu.assembler.make_sure_mc_exists()
+        old_mc_mc = self.cpu.assembler.mc._mc
+        self.cpu.compile_loop([base_v], ops, looptoken)
+        assert self.cpu.assembler.mc._mc != old_mc_mc   # overflowed
+        self.cpu.set_future_value_int(0, base_v.value)
+        self.cpu.execute_token(looptoken)
+        assert self.cpu.get_latest_value_int(0) == 1024

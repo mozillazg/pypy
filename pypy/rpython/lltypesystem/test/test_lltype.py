@@ -1,4 +1,7 @@
+import py
 from pypy.rpython.lltypesystem.lltype import *
+from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.lib.identity_dict import identity_dict
 
 def isweak(p, T):
     try:
@@ -360,22 +363,25 @@ def test_immortal_parent():
 def test_getRuntimeTypeInfo():
     S = GcStruct('s', ('x', Signed))
     py.test.raises(ValueError, "getRuntimeTypeInfo(S)")
-    pinf0 = attachRuntimeTypeInfo(S)
+    S = GcStruct('s', ('x', Signed), rtti=True)
+    pinfx = getRuntimeTypeInfo(S)
+    pinf0 = attachRuntimeTypeInfo(S)   # no-op, really
     assert pinf0._obj.about == S
+    assert pinf0 == pinfx
     pinf = getRuntimeTypeInfo(S)
     assert pinf == pinf0
     pinf1 = getRuntimeTypeInfo(S)
     assert pinf == pinf1
-    Z = GcStruct('z', ('x', Unsigned))
-    attachRuntimeTypeInfo(Z)
+    Z = GcStruct('z', ('x', Unsigned), rtti=True)
     assert getRuntimeTypeInfo(Z) != pinf0
-    Sbis = GcStruct('s', ('x', Signed))
-    attachRuntimeTypeInfo(Sbis)
+    Sbis = GcStruct('s', ('x', Signed), rtti=True)
     assert getRuntimeTypeInfo(Sbis) != pinf0
     assert Sbis != S # the attached runtime type info distinguishes them
+    Ster = GcStruct('s', ('x', Signed), rtti=True)
+    assert Sbis != Ster # the attached runtime type info distinguishes them
 
 def test_getRuntimeTypeInfo_destrpointer():
-    S = GcStruct('s', ('x', Signed))
+    S = GcStruct('s', ('x', Signed), rtti=True)
     def f(s):
         s.x = 1
     def type_info_S(p):
@@ -396,12 +402,12 @@ def test_getRuntimeTypeInfo_destrpointer():
     assert pinf._obj.query_funcptr == qp
 
 def test_runtime_type_info():
-    S = GcStruct('s', ('x', Signed))
+    S = GcStruct('s', ('x', Signed), rtti=True)
     attachRuntimeTypeInfo(S)
     s = malloc(S)
     s.x = 0
     assert runtime_type_info(s) == getRuntimeTypeInfo(S)
-    S1 = GcStruct('s1', ('sub', S), ('x', Signed))
+    S1 = GcStruct('s1', ('sub', S), ('x', Signed), rtti=True)
     attachRuntimeTypeInfo(S1)
     s1 = malloc(S1)
     s1.sub.x = 0
@@ -620,7 +626,7 @@ def test_dissect_ll_instance():
     b_expected = [(Ptr(B), b), (B, b._obj)]
     assert list(dissect_ll_instance(b)) == b_expected + r_expected
 
-    memo = {}
+    memo = identity_dict()
     assert list(dissect_ll_instance(r, None, memo)) == r_expected
     assert list(dissect_ll_instance(b, None, memo)) == b_expected
 
@@ -716,7 +722,6 @@ def test_pyobject():
 
 def test_name_clash():
     import re
-    from pypy.rpython.lltypesystem import lltype
     fn = lltype.__file__
     if fn.lower().endswith('pyc') or fn.lower().endswith('pyo'):
         fn = fn[:-1]
@@ -775,3 +780,42 @@ def test_identityhash():
     assert hash1 == identityhash(a)
     p = cast_opaque_ptr(llmemory.GCREF, a)
     assert hash1 == identityhash(p)
+
+class TestTrackAllocation:
+    def setup_method(self, func):
+        start_tracking_allocations()
+
+    def teardown_method(self, func):
+        assert not lltype.ALLOCATED, "Memory was not correctly freed"
+        stop_tracking_allocations()
+
+    def test_track_allocation(self):
+        """A malloc'd buffer fills the ALLOCATED dictionary"""
+        assert lltype.TRACK_ALLOCATIONS
+        assert not lltype.ALLOCATED
+        buf = malloc(Array(Signed), 1, flavor="raw")
+        assert len(lltype.ALLOCATED) == 1
+        assert lltype.ALLOCATED.keys() == [buf._obj]
+        free(buf, flavor="raw")
+        assert not lltype.ALLOCATED
+
+    def test_str_from_buffer(self):
+        """gc-managed memory does not need to be freed"""
+        size = 50
+        raw_buf, gc_buf = rffi.alloc_buffer(size)
+        for i in range(size): raw_buf[i] = 'a'
+        rstr = rffi.str_from_buffer(raw_buf, gc_buf, size, size)
+        rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
+        assert not lltype.ALLOCATED
+
+    def test_leak_traceback(self):
+        """Test info stored for allocated items"""
+        buf = malloc(Array(Signed), 1, flavor="raw")
+        traceback = lltype.ALLOCATED.keys()[0]._traceback
+        lines = traceback.splitlines()
+        assert 'malloc(' in lines[-1] and 'flavor="raw")' in lines[-1]
+
+        # XXX The traceback should not be too long
+        print traceback
+
+        free(buf, flavor="raw")

@@ -4,7 +4,7 @@ from pypy.rpython import rint
 from pypy.rpython.lltypesystem import rdict, rstr
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rlib.objectmodel import r_dict
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
 
 import py
 py.log.setconsumer("rtyper", py.log.STDOUT)
@@ -567,6 +567,8 @@ class BaseTestRdict(BaseRtypingTest):
 
     def test_dict_of_r_uint(self):
         for r_t in [r_uint, r_longlong, r_ulonglong]:
+            if r_t is r_int:
+                continue    # for 64-bit platforms: skip r_longlong
             d = {r_t(2): 3, r_t(4): 5}
             def fn(x, y):
                 d[r_t(x)] = 123
@@ -778,6 +780,24 @@ class TestLLtype(BaseTestRdict, LLRtypeMixin):
         # all three dicts should use the same low-level type
         assert lltype.typeOf(res.item1) == lltype.typeOf(res.item2)
         assert lltype.typeOf(res.item1) == lltype.typeOf(res.item3)
+
+    def test_dict_of_addresses(self):
+        from pypy.rpython.lltypesystem import llmemory
+        TP = lltype.Struct('x')
+        a = lltype.malloc(TP, flavor='raw', immortal=True)
+        b = lltype.malloc(TP, flavor='raw', immortal=True)
+
+        def func(i):
+            d = {}
+            d[llmemory.cast_ptr_to_adr(a)] = 123
+            d[llmemory.cast_ptr_to_adr(b)] = 456
+            if i > 5:
+                key = llmemory.cast_ptr_to_adr(a)
+            else:
+                key = llmemory.cast_ptr_to_adr(b)
+            return d[key]
+
+        assert self.interpret(func, [3]) == 456
 
     def test_prebuilt_list_of_addresses(self):
         from pypy.rpython.lltypesystem import llmemory

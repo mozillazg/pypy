@@ -28,6 +28,8 @@ class CompilationTestCase:
     def compilefunc(self, t, func):
         from pypy.translator.c import genc
         self.builder = builder = genc.CExtModuleBuilder(t, func, config=t.config)
+        if hasattr(self, 'include_also_eci'):
+            builder.merge_eci(self.include_also_eci)
         builder.generate_source()
         builder.compile()
         return builder.get_entry_point()
@@ -77,11 +79,6 @@ class TestTypedTestCase(CompilationTestCase):
         nested_whiles = self.getcompiled(snippet.nested_whiles, [int, int])
         assert nested_whiles(5,3) == '!!!!!'
 
-    def test_call_five(self):
-        call_five = self.getcompiled(snippet.call_five, [int])
-        result = call_five()
-        assert result == [5]
-
     def test_call_unpack_56(self):
         call_unpack_56 = self.getcompiled(snippet.call_unpack_56, [])
         result = call_unpack_56()
@@ -113,13 +110,6 @@ class TestTypedTestCase(CompilationTestCase):
         assert fn(3) == 789
         assert fn(4) == 789
         assert fn(5) == 101112
-
-    def test_get_set_del_slice(self):
-        fn = self.getcompiled(snippet.get_set_del_slice, [list])
-        l = list('abcdefghij')
-        result = fn(l)
-        assert l == [3, 'c', 8, 11, 'h', 9]
-        assert result == ([3, 'c'], [9], [11, 'h'])
 
     def test_type_conversion(self):
         # obfuscated test case specially for typer.insert_link_conversions()
@@ -212,6 +202,18 @@ class TestTypedTestCase(CompilationTestCase):
         assert fn(-12) == -42
         assert fn(sys.maxint) == -42
 
+    def test_UNICHR(self):
+        from pypy.rlib.runicode import UNICHR
+        def f(x):
+            try:
+                return ord(UNICHR(x))
+            except ValueError:
+                return -42
+        fn = self.getcompiled(f, [int])
+        assert fn(65) == 65
+        assert fn(-12) == -42
+        assert fn(sys.maxint) == -42
+
     def test_list_indexerror(self):
         def f(i):
             lst = [123, 456]
@@ -230,12 +232,12 @@ class TestTypedTestCase(CompilationTestCase):
         def f(i):
             return 4*i
         fn = self.getcompiled(f, [r_ulonglong], view=False)
-        assert fn(sys.maxint) == 4*sys.maxint
+        assert fn(2147483647) == 4*2147483647
 
         def g(i):
             return 4*i
         gn = self.getcompiled(g, [r_longlong], view=False)
-        assert gn(sys.maxint) == 4*sys.maxint
+        assert gn(2147483647) == 4*2147483647
 
     def test_specializing_int_functions(self):
         def f(i):
@@ -781,3 +783,9 @@ class TestTypedTestCase(CompilationTestCase):
                 del a[:]
     
         f = self.getcompiled(func_swap, [])
+
+    def test_returns_unicode(self):
+        def func(i):
+            return u'hello' + unichr(i)
+        f = self.getcompiled(func, [int])
+        assert f(0x1234) == u'hello\u1234'

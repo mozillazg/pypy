@@ -2,7 +2,6 @@ import py
 
 import os, sys
 
-from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
@@ -11,7 +10,7 @@ from pypy.config.config import ConflictConfigError
 from pypy.tool.option import make_objspace
 from pypy.translator.goal.nanos import setup_nanos
 
-thisdir = py.magic.autopath().dirpath()
+thisdir = py.path.local(__file__).dirpath()
 
 try:
     this_dir = os.path.dirname(__file__)
@@ -62,7 +61,7 @@ def create_entry_point(space, w_dict):
             except OperationError, e:
                 debug("OperationError:")
                 debug(" operror-type: " + e.w_type.getname(space, '?'))
-                debug(" operror-value: " + space.str_w(space.str(e.w_value)))
+                debug(" operror-value: " + space.str_w(space.str(e.get_w_value(space))))
                 return 1
         finally:
             try:
@@ -72,7 +71,7 @@ def create_entry_point(space, w_dict):
             except OperationError, e:
                 debug("OperationError:")
                 debug(" operror-type: " + e.w_type.getname(space, '?'))
-                debug(" operror-value: " + space.str_w(space.str(e.w_value)))
+                debug(" operror-value: " + space.str_w(space.str(e.get_w_value(space))))
                 return 1
         space.timer.stop("Entrypoint")
         space.timer.dump()
@@ -101,6 +100,13 @@ class PyPyTarget(object):
         return parser
 
     def handle_config(self, config, translateconfig):
+        if config.translation.type_system == 'ootype':
+            print
+            print 'Translation to cli and jvm is known to be broken at the moment'
+            print 'Please try the "cli-jit" branch at:'
+            print 'http://codespeak.net/svn/pypy/branch/cli-jit/'
+            sys.exit(1)
+
         self.translateconfig = translateconfig
         # set up the objspace optimizations based on the --opt argument
         from pypy.config.pypyoption import set_pypy_opt_level
@@ -186,8 +192,11 @@ class PyPyTarget(object):
         #elif config.objspace.usemodules.clr:
         #    config.translation.backend == "cli"
 
+        if config.translation.sandbox:
+            config.objspace.lonepycfiles = False
+            config.objspace.usepycfiles = False
+
         config.objspace.nofaking = True
-        config.objspace.compiler = "ast"
         config.translating = True
 
         import translate
@@ -216,19 +225,24 @@ class PyPyTarget(object):
         return PyPyJitPolicy()
     
     def get_entry_point(self, config):
+        from pypy.lib.ctypes_config_cache import rebuild
+        rebuild.try_rebuild()
+
         space = make_objspace(config)
 
         # manually imports app_main.py
         filename = os.path.join(this_dir, 'app_main.py')
-        w_dict = space.newdict()
-        space.exec_(open(filename).read(), w_dict, w_dict)
+        app = gateway.applevel(open(filename).read(), 'app_main.py', 'app_main')
+        app.hidden_applevel = False
+        app.can_use_geninterp = False
+        w_dict = app.getwdict(space)
         entry_point = create_entry_point(space, w_dict)
 
         return entry_point, None, PyPyAnnotatorPolicy(single_space = space)
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'jitpolicy',
+                     'jitpolicy', 'get_entry_point',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 

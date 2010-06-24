@@ -2,7 +2,7 @@
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rpython.module.ll_os import RegisterOs
 
-import os
+import os, sys
 exec 'import %s as posix' % os.name
 
 class Module(MixedModule):
@@ -26,6 +26,9 @@ corresponding Unix manual entries for more information on calls."""
                 'popen3' : 'app_posix.popen3',
                 'popen4' : 'app_posix.popen4',
                 })
+
+    if hasattr(os, 'wait'):
+        appleveldefs['wait'] = 'app_posix.wait'
         
     interpleveldefs = {
     'open'      : 'interp_posix.open',
@@ -47,6 +50,7 @@ corresponding Unix manual entries for more information on calls."""
     'unlink'    : 'interp_posix.unlink',
     'remove'    : 'interp_posix.remove',
     'getcwd'    : 'interp_posix.getcwd',
+    'getcwdu'   : 'interp_posix.getcwdu',
     'chdir'     : 'interp_posix.chdir',
     'mkdir'     : 'interp_posix.mkdir',
     'rmdir'     : 'interp_posix.rmdir',
@@ -77,7 +81,7 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['putenv'] = 'interp_posix.putenv'
     if hasattr(posix, 'unsetenv'): # note: emulated in os
         interpleveldefs['unsetenv'] = 'interp_posix.unsetenv'
-    if hasattr(os, 'kill'):
+    if hasattr(os, 'kill') and sys.platform != 'win32':
         interpleveldefs['kill'] = 'interp_posix.kill'
         interpleveldefs['abort'] = 'interp_posix.abort'
     if hasattr(os, 'getpid'):
@@ -90,6 +94,8 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['readlink'] = 'interp_posix.readlink'
     if hasattr(os, 'fork'):
         interpleveldefs['fork'] = 'interp_posix.fork'
+    if hasattr(os, 'openpty'):
+        interpleveldefs['openpty'] = 'interp_posix.openpty'
     if hasattr(os, 'waitpid'):
         interpleveldefs['waitpid'] = 'interp_posix.waitpid'
     if hasattr(os, 'execv'):

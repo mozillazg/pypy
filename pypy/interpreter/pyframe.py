@@ -4,21 +4,21 @@
 from pypy.tool.pairtype import extendabletype
 from pypy.interpreter import eval, baseobjspace, pycode
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter import pytraceback
-import opcode
 from pypy.rlib.objectmodel import we_are_translated, instantiate
-from pypy.rlib.jit import we_are_jitted, hint
+from pypy.rlib.jit import hint
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib import jit
+from pypy.rlib import jit, rstack
+from pypy.tool import stdlib_opcode
 
 # Define some opcodes used
 g = globals()
 for op in '''DUP_TOP POP_TOP SETUP_LOOP SETUP_EXCEPT SETUP_FINALLY
 POP_BLOCK END_FINALLY'''.split():
-    g[op] = opcode.opmap[op]
-HAVE_ARGUMENT = opcode.HAVE_ARGUMENT
+    g[op] = stdlib_opcode.opmap[op]
+HAVE_ARGUMENT = stdlib_opcode.HAVE_ARGUMENT
 
 class PyFrame(eval.Frame):
     """Represents a frame for a regular Python function
@@ -34,13 +34,13 @@ class PyFrame(eval.Frame):
      * 'builtin' is the attached built-in module
      * 'valuestack_w', 'blockstack', control the interpretation
     """
-    
 
     __metaclass__ = extendabletype
 
     frame_finished_execution = False
     last_instr               = -1
     last_exception           = None
+    f_backref                = jit.vref_None
     w_f_trace                = None
     # For tracing
     instr_lb                 = 0
@@ -56,7 +56,6 @@ class PyFrame(eval.Frame):
         self.valuestack_w = [None] * code.co_stacksize
         self.valuestackdepth = 0
         self.lastblock = None
-        self.blockcount = 0
         if space.config.objspace.honor__builtins__:
             self.builtin = space.builtin.pick_builtin(w_globals)
         # regular functions always have CO_OPTIMIZED and CO_NEWLOCALS.
@@ -65,36 +64,35 @@ class PyFrame(eval.Frame):
         self.fastlocals_w = [None]*self.numlocals
         make_sure_not_resized(self.fastlocals_w)
         self.f_lineno = code.co_firstlineno
-        ExecutionContext._init_chaining_attributes(self)
+        # Keep from having to call space.wrap in a RuntimeError
+        self._recursion_error = space.wrap("maximum recursion depth exceeded")
 
     def append_block(self, block):
         block.previous = self.lastblock
         self.lastblock = block
-        self.blockcount += 1
 
     def pop_block(self):
         block = self.lastblock
         self.lastblock = block.previous
-        self.blockcount -= 1
         return block
+
+    def blockstack_non_empty(self):
+        return self.lastblock is not None
 
     def get_blocklist(self):
         """Returns a list containing all the blocks in the frame"""
-        lst = [None] * self.blockcount
+        lst = []
         block = self.lastblock
-        i = 0
         while block is not None:
-            lst[i] = block
-            i += 1
+            lst.append(block)
             block = block.previous
         return lst
 
     def set_blocklist(self, lst):
         self.lastblock = None
-        self.blockcount = 0
-        i = len(lst)
-        while i > 0:
-            block = lst[i-1]
+        i = len(lst) - 1
+        while i >= 0:
+            block = lst[i]
             i -= 1
             self.append_block(block)
 
@@ -114,7 +112,7 @@ class PyFrame(eval.Frame):
         if flags & pycode.CO_OPTIMIZED: 
             return 
         if flags & pycode.CO_NEWLOCALS:
-            self.w_locals = self.space.newdict()
+            self.w_locals = self.space.newdict(module=True)
         else:
             assert self.w_globals is not None
             self.w_locals = self.w_globals
@@ -128,25 +126,20 @@ class PyFrame(eval.Frame):
             return self.execute_frame()
 
     def execute_generator_frame(self, w_inputvalue, ex=False):
-        # opcode semantic change in CPython 2.5: we must pass an input value
-        # when resuming a generator, which goes into the value stack.
-        # It's not working because the value of magic must be changed in PyCode
-        if self.pycode.magic >= 0xa0df294 and self.last_instr != -1 and not ex:
+        if self.last_instr != -1 and not ex:
             self.pushvalue(w_inputvalue)
         return self.execute_frame()
 
     def execute_frame(self):
         """Execute this frame.  Main entry point to the interpreter."""
-        from pypy.rlib import rstack
         # the following 'assert' is an annotation hint: it hides from
         # the annotator all methods that are defined in PyFrame but
-        # overridden in the FrameClass subclass of PyFrame.
+        # overridden in the {,Host}FrameClass subclasses of PyFrame.
         assert isinstance(self, self.space.FrameClass)
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
         try:
-            if not we_are_jitted():
-                executioncontext.call_trace(self)
+            executioncontext.call_trace(self)
             # Execution starts just after the last_instr.  Initially,
             # last_instr is -1.  After a generator suspends it points to
             # the YIELD_VALUE instruction.
@@ -157,13 +150,11 @@ class PyFrame(eval.Frame):
                 rstack.resume_point("execute_frame", self, executioncontext,
                                     returns=w_exitvalue)
             except Exception:
-                if not we_are_jitted():
-                    executioncontext.return_trace(self, self.space.w_None)
+                executioncontext.return_trace(self, self.space.w_None)
                 raise
-            if not we_are_jitted():
-                executioncontext.return_trace(self, w_exitvalue)
-            # on exit, we try to release self.last_exception -- breaks an
-            # obvious reference cycle, so it helps refcounting implementations
+            executioncontext.return_trace(self, w_exitvalue)
+            # clean up the exception, might be useful for not
+            # allocating exception objects in some cases
             self.last_exception = None
         finally:
             executioncontext.leave(self)
@@ -174,14 +165,14 @@ class PyFrame(eval.Frame):
     def pushvalue(self, w_object):
         depth = self.valuestackdepth
         self.valuestack_w[depth] = w_object
-        self.valuestackdepth = hint(depth + 1, promote=True)
+        self.valuestackdepth = depth + 1
 
     def popvalue(self):
         depth = self.valuestackdepth - 1
         assert depth >= 0, "pop from empty value stack"
         w_object = self.valuestack_w[depth]
         self.valuestack_w[depth] = None
-        self.valuestackdepth = hint(depth, promote=True)
+        self.valuestackdepth = depth
         return w_object
 
 
@@ -246,6 +237,8 @@ class PyFrame(eval.Frame):
             self.pushvalue(w_value)
         
     def peekvalue(self, index_from_top=0):
+        # NOTE: top of the stack is peekvalue(0).
+        # Contrast this with CPython where it's PEEK(-1).
         index_from_top = hint(index_from_top, promote=True)
         index = self.valuestackdepth + ~index_from_top
         assert index >= 0, "peek past the bottom of the stack"
@@ -310,11 +303,11 @@ class PyFrame(eval.Frame):
             w_exc_value = space.w_None
             w_tb = space.w_None
         else:
-            w_exc_value = self.last_exception.w_value
+            w_exc_value = self.last_exception.get_w_value(space)
             w_tb = w(self.last_exception.application_traceback)
         
         tup_state = [
-            w(self.f_back()),
+            w(self.f_backref()),
             w(self.get_builtin()),
             w(self.pycode),
             w_valuestack,
@@ -366,8 +359,8 @@ class PyFrame(eval.Frame):
         # do not use the instance's __init__ but the base's, because we set
         # everything like cells from here
         PyFrame.__init__(self, space, pycode, w_globals, closure)
-        new_frame.f_back_some = space.interp_w(PyFrame, w_f_back, can_be_None=True)
-        new_frame.f_back_forced = True
+        f_back = space.interp_w(PyFrame, w_f_back, can_be_None=True)
+        new_frame.f_backref = jit.non_virtual_ref(f_back)
 
         new_frame.builtin = space.interp_w(Module, w_builtin)
         new_frame.set_blocklist([unpickle_block(space, w_blk)
@@ -398,6 +391,7 @@ class PyFrame(eval.Frame):
         new_frame.instr_prev = space.int_w(w_instr_prev)
 
         self._setcellvars(cellvars)
+        # XXX what if the frame is in another thread??
         space.frame_trace_action.fire()
 
     def hide(self):
@@ -437,12 +431,6 @@ class PyFrame(eval.Frame):
     def _setcellvars(self, cellvars):
         pass
 
-    def f_back(self):
-        return ExecutionContext._extract_back_from_frame(self)
-
-    def force_f_back(self):
-        return ExecutionContext._force_back_of_frame(self)
-
     ### line numbers ###
 
     # for f*_f_* unwrapping through unwrap_spec in typedef.py
@@ -464,11 +452,11 @@ class PyFrame(eval.Frame):
             
         if self.w_f_trace is None:
             raise OperationError(space.w_ValueError,
-                  space.wrap("f_lineo can only be set by a trace function."))
+                  space.wrap("f_lineno can only be set by a trace function."))
 
         if new_lineno < self.pycode.co_firstlineno:
-            raise OperationError(space.w_ValueError,
-                  space.wrap("line %d comes before the current code." % new_lineno))
+            raise operationerrfmt(space.w_ValueError,
+                  "line %d comes before the current code.", new_lineno)
         code = self.pycode.co_code
         addr = 0
         line = self.pycode.co_firstlineno
@@ -484,8 +472,8 @@ class PyFrame(eval.Frame):
                 break
 
         if new_lasti == -1:
-            raise OperationError(space.w_ValueError,
-                  space.wrap("line %d comes after the current code." % new_lineno))
+            raise operationerrfmt(space.w_ValueError,
+                  "line %d comes after the current code.", new_lineno)
 
         # Don't jump to a line with an except in it.
         if ord(code[new_lasti]) in (DUP_TOP, POP_TOP):
@@ -531,9 +519,9 @@ class PyFrame(eval.Frame):
         assert len(blockstack) == 0
 
         if new_lasti_setup_addr != f_lasti_setup_addr:
-            raise OperationError(space.w_ValueError,
-                  space.wrap("can't jump into or out of a 'finally' block %d -> %d" %
-                             (f_lasti_setup_addr, new_lasti_setup_addr)))
+            raise operationerrfmt(space.w_ValueError,
+                  "can't jump into or out of a 'finally' block %d -> %d",
+                  f_lasti_setup_addr, new_lasti_setup_addr)
 
         if new_lasti < self.last_instr:
             min_addr = new_lasti
@@ -554,12 +542,16 @@ class PyFrame(eval.Frame):
                 if delta_iblock < min_delta_iblock:
                     min_delta_iblock = delta_iblock
 
-            if op >= opcode.HAVE_ARGUMENT:
+            if op >= stdlib_opcode.HAVE_ARGUMENT:
                 addr += 3
             else:
                 addr += 1
 
-        f_iblock = self.blockcount
+        f_iblock = 0
+        block = self.lastblock
+        while block:
+            f_iblock += 1
+            block = block.previous
         min_iblock = f_iblock + min_delta_iblock
         if new_lasti > self.last_instr:
             new_iblock = f_iblock + delta_iblock
@@ -586,7 +578,7 @@ class PyFrame(eval.Frame):
         return self.get_builtin().getdict()
 
     def fget_f_back(space, self):
-        return self.space.wrap(self.f_back())
+        return self.space.wrap(self.f_backref())
 
     def fget_f_lasti(space, self):
         return self.space.wrap(self.last_instr)
@@ -607,27 +599,27 @@ class PyFrame(eval.Frame):
 
     def fget_f_exc_type(space, self):
         if self.last_exception is not None:
-            f = self.f_back()
+            f = self.f_backref()
             while f is not None and f.last_exception is None:
-                f = f.f_back()
+                f = f.f_backref()
             if f is not None:
                 return f.last_exception.w_type
         return space.w_None
          
     def fget_f_exc_value(space, self):
         if self.last_exception is not None:
-            f = self.f_back()
+            f = self.f_backref()
             while f is not None and f.last_exception is None:
-                f = f.f_back()
+                f = f.f_backref()
             if f is not None:
-                return f.last_exception.w_value
+                return f.last_exception.get_w_value(space)
         return space.w_None
 
     def fget_f_exc_traceback(space, self):
         if self.last_exception is not None:
-            f = self.f_back()
+            f = self.f_backref()
             while f is not None and f.last_exception is None:
-                f = f.f_back()
+                f = f.f_backref()
             if f is not None:
                 return space.wrap(f.last_exception.application_traceback)
         return space.w_None

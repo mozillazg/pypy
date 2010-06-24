@@ -5,7 +5,7 @@ from pypy.config.config import OptionDescription, BoolOption, IntOption, Arbitra
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 from pypy.config.config import ConflictConfigError
 
-modulepath = py.magic.autopath().dirpath().dirpath().join("module")
+modulepath = py.path.local(__file__).dirpath().dirpath().join("module")
 all_modules = [p.basename for p in modulepath.listdir()
                if p.check(dir=True, dotfile=False)
                and p.join('__init__.py').check()]
@@ -16,7 +16,7 @@ essential_modules = dict.fromkeys(
 
 default_modules = essential_modules.copy()
 default_modules.update(dict.fromkeys(
-    ["_codecs", "gc", "_weakref", "marshal", "errno",
+    ["_codecs", "gc", "_weakref", "marshal", "errno", "imp",
      "math", "_sre", "_pickle_support", "operator",
      "parser", "symbol", "token", "_ast", "_random", "__pypy__",
      "_testing"]))
@@ -29,7 +29,7 @@ working_modules.update(dict.fromkeys(
       "rctime" , "select", "zipimport", "_lsprof",
      "crypt", "signal", "_rawffi", "termios", "zlib",
      "struct", "md5", "sha", "bz2", "_minimal_curses", "cStringIO",
-     "thread", "itertools", "pyexpat", "_ssl"]
+     "thread", "itertools", "pyexpat", "_ssl", "cpyext"]
 ))
 
 working_oo_modules = default_modules.copy()
@@ -62,11 +62,14 @@ if sys.platform == "sunos5":
 
 
 module_dependencies = {}
-module_suggests = {    # the reason you want _rawffi is for ctypes, which
-                       # itself needs the interp-level struct module
-                       # because 'P' is missing from the app-level one
-                       '_rawffi': [("objspace.usemodules.struct", True)],
-                       }
+module_suggests = {
+    # the reason you want _rawffi is for ctypes, which
+    # itself needs the interp-level struct module
+    # because 'P' is missing from the app-level one
+    "_rawffi": [("objspace.usemodules.struct", True)],
+    "cpyext": [("translation.secondaryentrypoints", "cpyext"),
+               ("translation.shared", sys.platform == "win32")],
+    }
 
 module_import_dependencies = {
     # no _rawffi if importing pypy.rlib.libffi raises ImportError
@@ -77,6 +80,7 @@ module_import_dependencies = {
     "bz2"       : ["pypy.module.bz2.interp_bz2"],
     "pyexpat"   : ["pypy.module.pyexpat.interp_pyexpat"],
     "_ssl"      : ["pypy.module._ssl.interp_ssl"],
+    "_minimal_curses": ["pypy.module._minimal_curses.fficurses"],
     }
 
 def get_module_validator(modname):
@@ -105,14 +109,6 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                  ["std", "flow", "thunk", "dump", "taint"],
                  "std",
                  cmdline='--objspace -o'),
-
-    ChoiceOption("parser", "which parser to use for app-level code",
-                 ["pypy", "cpython"], "pypy",
-                 cmdline='--parser'),
-
-    ChoiceOption("compiler", "which compiler to use for app-level code",
-                 ["cpython", "ast"], "ast",
-                 cmdline='--compiler'),
 
     OptionDescription("opcodes", "opcodes to enable in the interpreter", [
         BoolOption("CALL_LIKELY_BUILTIN", "emit a special bytecode for likely calls to builtin functions",
@@ -324,7 +320,6 @@ def set_pypy_opt_level(config, level):
         config.objspace.opcodes.suggest(CALL_LIKELY_BUILTIN=True)
     if level in ['2', '3', 'jit']:
         config.objspace.opcodes.suggest(CALL_METHOD=True)
-        config.objspace.std.suggest(withshadowtracking=True)
         config.objspace.std.suggest(withrangelist=True)
         config.objspace.std.suggest(withmethodcache=True)
         config.objspace.std.suggest(withprebuiltchar=True)
@@ -332,6 +327,9 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(optimized_list_getitem=True)
         config.objspace.std.suggest(getattributeshortcut=True)
         config.objspace.std.suggest(newshortcut=True)        
+        if type_system != 'ootype':
+            config.objspace.std.suggest(withsharingdict=True)
+        config.objspace.std.suggest(withinlineddict=True)
 
     # extra costly optimizations only go in level 3
     if level == '3':
@@ -344,7 +342,7 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(withprebuiltint=True)
         config.objspace.std.suggest(withrangelist=True)
         config.objspace.std.suggest(withprebuiltchar=True)
-        config.objspace.std.suggest(withsharingdict=True)
+        config.objspace.std.suggest(withinlineddict=True)
         config.objspace.std.suggest(withstrslice=True)
         config.objspace.std.suggest(withstrjoin=True)
         # xxx other options? ropes maybe?
@@ -359,10 +357,7 @@ def set_pypy_opt_level(config, level):
 
     # extra optimizations with the JIT
     if level == 'jit':
-        if type_system != 'ootype':
-            config.objspace.std.suggest(withsharingdict=True)
         config.objspace.std.suggest(withcelldict=True)
-        config.objspace.std.suggest(withinlineddict=True)
 
 
 def enable_allworkingmodules(config):

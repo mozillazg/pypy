@@ -1,5 +1,5 @@
 import array, weakref
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import llmemory
 
 # An "arena" is a large area of memory which can hold a number of
 # objects, not necessarily all of the same type or size.  It's used by
@@ -102,6 +102,21 @@ class Arena(object):
         container = objaddr.ptr._obj
         Arena.object_arena_location[container] = self, offset
         Arena.old_object_arena_location[container] = self, offset
+
+    def shrink_obj(self, offset, newsize):
+        oldbytes = self.objectsizes[offset]
+        newbytes = llmemory.raw_malloc_usage(newsize)
+        assert newbytes <= oldbytes
+        # fix self.objectsizes
+        for i in range(newbytes):
+            adr = offset + i
+            if adr in self.objectsizes:
+                assert self.objectsizes[adr] == oldbytes - i
+                self.objectsizes[adr] = newbytes - i
+        # fix self.usagemap
+        for i in range(offset + newbytes, offset + oldbytes):
+            assert self.usagemap[i] == 'x'
+            self.usagemap[i] = '#'
 
 class fakearenaaddress(llmemory.fakeaddress):
 
@@ -208,11 +223,12 @@ class fakearenaaddress(llmemory.fakeaddress):
         else:
             return self.arena._getid() < arena._getid()
 
-    def _cast_to_int(self):
+    def _cast_to_int(self, symbolic=False):
+        assert not symbolic
         return self.arena._getid() + self.offset
 
 
-def _getfakearenaaddress(addr):
+def getfakearenaaddress(addr):
     """Logic to handle test_replace_object_with_stub()."""
     if isinstance(addr, fakearenaaddress):
         return addr
@@ -291,7 +307,7 @@ def arena_reset(arena_addr, size, zero):
       * 1: clear, optimized for a very large area of memory
       * 2: clear, optimized for a small or medium area of memory
     """
-    arena_addr = _getfakearenaaddress(arena_addr)
+    arena_addr = getfakearenaaddress(arena_addr)
     arena_addr.arena.reset(zero, arena_addr.offset, size)
 
 def arena_reserve(addr, size, check_alignment=True):
@@ -300,11 +316,17 @@ def arena_reserve(addr, size, check_alignment=True):
     overlap.  The size must be symbolic; in non-translated version
     this is used to know what type of lltype object to allocate."""
     from pypy.rpython.memory.lltypelayout import memory_alignment
-    addr = _getfakearenaaddress(addr)
+    addr = getfakearenaaddress(addr)
     if check_alignment and (addr.offset & (memory_alignment-1)) != 0:
         raise ArenaError("object at offset %d would not be correctly aligned"
                          % (addr.offset,))
     addr.arena.allocate_object(addr.offset, size)
+
+def arena_shrink_obj(addr, newsize):
+    """ Mark object as shorter than it was
+    """
+    addr = getfakearenaaddress(addr)
+    addr.arena.shrink_obj(addr.offset, newsize)
 
 def round_up_for_allocation(size, minsize=0):
     """Round up the size in order to preserve alignment of objects
@@ -336,12 +358,15 @@ if sys.platform == 'linux2':
     # usage hint but a real command.  It guarantees that after MADV_DONTNEED
     # the pages are cleared again.
     from pypy.rpython.tool import rffi_platform
+    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    _eci = ExternalCompilationInfo(includes=['sys/mman.h'])
     MADV_DONTNEED = rffi_platform.getconstantinteger('MADV_DONTNEED',
                                                      '#include <sys/mman.h>')
     linux_madvise = rffi.llexternal('madvise',
                                     [llmemory.Address, rffi.SIZE_T, rffi.INT],
                                     rffi.INT,
-                                    sandboxsafe=True, _nowrapper=True)
+                                    sandboxsafe=True, _nowrapper=True,
+                                    compilation_info=_eci)
     linux_getpagesize = rffi.llexternal('getpagesize', [], rffi.INT,
                                         sandboxsafe=True, _nowrapper=True)
 
@@ -460,6 +485,14 @@ register_external(arena_reserve, [llmemory.Address, int], None,
                   llfakeimpl=arena_reserve,
                   sandboxsafe=True)
 
+def llimpl_arena_shrink_obj(addr, newsize):
+    pass
+register_external(arena_shrink_obj, [llmemory.Address, int], None,
+                  'll_arena.arena_shrink_obj',
+                  llimpl=llimpl_arena_shrink_obj,
+                  llfakeimpl=arena_shrink_obj,
+                  sandboxsafe=True)
+
 llimpl_round_up_for_allocation = rffi.llexternal('ROUND_UP_FOR_ALLOCATION',
                                                 [lltype.Signed, lltype.Signed],
                                                  lltype.Signed,
@@ -476,3 +509,11 @@ def llimpl_arena_new_view(addr):
 register_external(arena_new_view, [llmemory.Address], llmemory.Address,
                   'll_arena.arena_new_view', llimpl=llimpl_arena_new_view,
                   llfakeimpl=arena_new_view, sandboxsafe=True)
+
+def llimpl_getfakearenaaddress(addr):
+    return addr
+register_external(getfakearenaaddress, [llmemory.Address], llmemory.Address,
+                  'll_arena.getfakearenaaddress',
+                  llimpl=llimpl_getfakearenaaddress,
+                  llfakeimpl=getfakearenaaddress,
+                  sandboxsafe=True)

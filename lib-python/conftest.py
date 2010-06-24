@@ -14,7 +14,6 @@ from pypy.interpreter.main import run_string, run_file
 
 # the following adds command line options as a side effect! 
 from pypy.conftest import gettestobjspace, option as pypy_option 
-from test import pystone
 
 from pypy.tool.pytest import appsupport 
 from pypy.tool.pytest.confpath import pypydir, libpythondir, \
@@ -28,7 +27,7 @@ rsyncdirs = ['.', '../pypy']
 #
 
 def pytest_addoption(parser):
-    group = parser.addgroup("complicance testing options") 
+    group = parser.getgroup("complicance testing options") 
     group.addoption('-T', '--timeout', action="store", type="string", 
        default="1000", dest="timeout", 
        help="fail a test module after the given timeout. "
@@ -40,6 +39,7 @@ def pytest_addoption(parser):
 option = py.test.config.option 
 
 def gettimeout(): 
+    from test import pystone
     timeout = option.timeout.lower()
     if timeout.endswith('mp'): 
         megapystone = float(timeout[:-2])
@@ -282,7 +282,7 @@ testmap = [
     RegrTest('test_largefile.py'),
     RegrTest('test_linuxaudiodev.py', skip="unsupported extension module"),
     RegrTest('test_list.py', core=True),
-    RegrTest('test_locale.py'),
+    RegrTest('test_locale.py', usemodules="_locale"),
     RegrTest('test_logging.py', usemodules='thread'),
     RegrTest('test_long.py', core=True),
     RegrTest('test_long_future.py', core=True),
@@ -311,7 +311,7 @@ testmap = [
     RegrTest('test_normalization.py'),
     RegrTest('test_ntpath.py'),
     RegrTest('test_opcodes.py', core=True),
-    RegrTest('test_openpty.py', skip="unsupported extension module"),
+    RegrTest('test_openpty.py'),
     RegrTest('test_operations.py', core=True),
     RegrTest('test_operator.py', core=True),
     RegrTest('test_optparse.py'),
@@ -479,7 +479,7 @@ testmap = [
     RegrTest('test_pep352.py'),
     RegrTest('test_platform.py'),
     RegrTest('test_runpy.py'),
-    RegrTest('test_sqlite.py', usemodules="thread"),
+    RegrTest('test_sqlite.py', usemodules="thread _rawffi zlib"),
     RegrTest('test_startfile.py', skip="bogus test"),
     RegrTest('test_structmembers.py', skip="depends on _testcapi"),
     RegrTest('test_urllib2_localnet.py', usemodules="thread"),
@@ -520,18 +520,29 @@ class RegrDirectory(py.test.collect.Directory):
         return cache.get(name, None)
         
     def collect(self): 
+        we_are_in_modified = self.fspath == modregrtestdir
         l = []
-        for x in testmap:
+        for x in self.fspath.listdir():
             name = x.basename
             regrtest = self.get(name)
-            if regrtest is not None: 
+            if regrtest is not None:
+                if bool(we_are_in_modified) ^ regrtest.ismodified():
+                    continue
                 #if option.extracttests:  
                 #    l.append(InterceptedRunModule(name, self, regrtest))
                 #else:
                 l.append(RunFileExternal(name, parent=self, regrtest=regrtest))
         return l 
 
-Directory = RegrDirectory
+def pytest_collect_directory(parent, path):
+    # use RegrDirectory collector for both modified and unmodified tests
+    if path in (modregrtestdir, regrtestdir):
+        return RegrDirectory(path, parent)
+
+def pytest_ignore_collect(path):
+    # ignore all files - only RegrDirectory generates tests in lib-python
+    if path.check(file=1):
+        return True
 
 class RunFileExternal(py.test.collect.File):
     def __init__(self, name, parent, regrtest): 

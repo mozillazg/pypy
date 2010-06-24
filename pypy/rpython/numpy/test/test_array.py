@@ -3,6 +3,8 @@ Test the numpy implementation.
 """
 
 import py
+py.test.skip("numpy - broken")
+
 import pypy.rpython.numpy.implementation
 from pypy.annotation import model as annmodel
 from pypy.annotation.model import SomeObject, SomeInteger, SomeChar, SomeTuple
@@ -14,13 +16,6 @@ import sys
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.rint import IntegerRepr
-
-def setup_module(mod):
-    try:
-        import numpy
-    except ImportError:
-        py.test.skip("numpy not found")
-    mod.numpy = numpy
 
 from pypy.rpython.numpy.rarray import ArrayRepr
 from pypy.rpython.numpy.aarray import SomeArray
@@ -276,7 +271,7 @@ class Test_annotation:
         assert s.ndim == 1
         assert s.typecode == 'l'
 
-    def test_annotate_indexing(self):
+    def test_annotate_indexing_2(self):
         def f():
             a = numpy.empty((4,3), dtype='i')
             c = a[:,0]

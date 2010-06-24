@@ -1,7 +1,3 @@
-# NOT_RPYTHON
-# Note:
-# This *is* now explicitly RPython.
-# Please make sure not to break this.
 
 """
 
@@ -39,9 +35,9 @@ Written by Marc-Andre Lemburg (mal@lemburg.com).
 Copyright (c) Corporation for National Research Initiatives.
 
 """
-#from unicodecodec import *
 
-import sys
+# XXX move some of these functions to RPython (like charmap_encode,
+# charmap_build) to make them faster
 
 def escape_encode( obj, errors='strict'):
     """None
@@ -86,36 +82,36 @@ def charmap_encode(obj, errors='strict', mapping=None):
     res = ''.join(res)
     return res, len(res)
 
-if sys.maxunicode == 65535:
-    unicode_bytes = 2
-else:
-    unicode_bytes = 4
-
 def unicode_internal_encode( obj, errors='strict'):
     """None
     """
-    if type(obj) == unicode:
-        p = []
-        t = [ord(x) for x in obj]
-        for i in t:
-            bytes = []
-            for j in xrange(unicode_bytes):
-                bytes += chr(i%256)
-                i >>= 8
-            if sys.byteorder == "big":
-                bytes.reverse()
-            p += bytes
-        res = ''.join(p)
-        return res, len(res)
+    import sys
+    if sys.maxunicode == 65535:
+        unicode_bytes = 2
     else:
-        res = "You can do better than this" # XXX make this right
-        return res, len(res)
+        unicode_bytes = 4
+    p = []
+    for x in obj:
+        i = ord(x)
+        bytes = []
+        for j in xrange(unicode_bytes):
+            bytes += chr(i%256)
+            i >>= 8
+        if sys.byteorder == "big":
+            bytes.reverse()
+        p += bytes
+    res = ''.join(p)
+    return res, len(res)
 
 def unicode_internal_decode( unistr, errors='strict'):
-    import sys
     if type(unistr) == unicode:
         return unistr, len(unistr)
     else:
+        import sys
+        if sys.maxunicode == 65535:
+            unicode_bytes = 2
+        else:
+            unicode_bytes = 4
         p = []
         i = 0
         if sys.byteorder == "big":
@@ -201,13 +197,6 @@ def escape_decode(data, errors='strict'):
     res = ''.join(res)    
     return res, len(data)
 
-def charmap_decode( data, errors='strict', mapping=None):
-    """None
-    """
-    res = PyUnicode_DecodeCharmap(data, mapping, errors)
-    res = u''.join(res)
-    return res, len(data)
-
 
 def utf_7_encode( obj, errors='strict'):
     """None
@@ -222,79 +211,6 @@ def raw_unicode_escape_encode( obj, errors='strict'):
     res = PyUnicode_EncodeRawUnicodeEscape(obj, len(obj))
     res = ''.join(res)
     return res, len(res)
-
-def check_exception(exc):
-    try:
-        delta = exc.end - exc.start
-        if delta < 0 or not isinstance(exc.object, (unicode, str)):
-            raise TypeError("wrong exception")
-    except AttributeError:
-        raise TypeError("wrong exception")
-
-def strict_errors(exc):
-    if isinstance(exc, Exception):
-        raise exc
-    else:
-        raise TypeError("codec must pass exception instance")
-    
-def ignore_errors(exc):
-    check_exception(exc)
-    if isinstance(exc, UnicodeEncodeError):
-        return u'', exc.end
-    elif isinstance(exc, (UnicodeDecodeError, UnicodeTranslateError)):
-        return u'', exc.end
-    else: 
-        raise TypeError("don't know how to handle %.400s in error callback"%exc)
-
-Py_UNICODE_REPLACEMENT_CHARACTER = u"\ufffd"
-
-def replace_errors(exc):
-    check_exception(exc)
-    if isinstance(exc, UnicodeEncodeError):
-        return u'?'*(exc.end-exc.start), exc.end
-    elif isinstance(exc, (UnicodeTranslateError, UnicodeDecodeError)):
-        return Py_UNICODE_REPLACEMENT_CHARACTER*(exc.end-exc.start), exc.end
-    else:
-        raise TypeError("don't know how to handle %.400s in error callback"%exc)
-
-def xmlcharrefreplace_errors(exc):
-    if isinstance(exc, UnicodeEncodeError):
-        res = []
-        for ch in exc.object[exc.start:exc.end]:
-            res += '&#'
-            res += str(ord(ch))
-            res += ';'
-        return u''.join(res), exc.end
-    else:
-        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
-    
-def backslashreplace_errors(exc):
-    if isinstance(exc, UnicodeEncodeError):
-        p = []
-        for c in exc.object[exc.start:exc.end]:
-            p += '\\'
-            oc = ord(c)
-            if (oc >= 0x00010000):
-                p += 'U'
-                p += "%.8x" % ord(c)
-            elif (oc >= 0x100):
-                p += 'u'
-                p += "%.4x" % ord(c)
-            else:
-                p += 'x'
-                p += "%.2x" % ord(c)
-        return u''.join(p), exc.end
-    else:
-        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
-
-
-def _register_existing_errors():
-    import _codecs
-    _codecs.register_error("strict", strict_errors)
-    _codecs.register_error("ignore", ignore_errors)
-    _codecs.register_error("replace", replace_errors)
-    _codecs.register_error("xmlcharrefreplace", xmlcharrefreplace_errors)
-    _codecs.register_error("backslashreplace", backslashreplace_errors)
 
 #  ----------------------------------------------------------------------
 
@@ -361,6 +277,7 @@ def PyUnicode_DecodeUTF7(s, size, errors):
     bitsleft = 0
     charsleft = 0
     surrogate = 0
+    startinpos = 0
     p = []
     errorHandler = None
     exc = None
@@ -622,6 +539,7 @@ def unicode_call_errorhandler(errors,  encoding,
 hexdigits = [hex(i)[-1] for i in range(16)]+[hex(i)[-1].upper() for i in range(10, 16)]
 
 def hexescape(s, pos, digits, message, errors):
+    import sys
     chr = 0
     p = []
     if (pos+digits>len(s)):
@@ -661,6 +579,7 @@ def hexescape(s, pos, digits, message, errors):
     return res, pos
 
 def PyUnicode_DecodeUnicodeEscape(s, size, errors):
+    import sys
 
     if (size == 0):
         return u''
@@ -841,46 +760,9 @@ def PyUnicode_EncodeCharmap(p, mapping='latin-1', errors='strict'):
         inpos += 1
     return res
 
-def PyUnicode_DecodeCharmap(s, mapping, errors):
-
-    size = len(s)
-##    /* Default to Latin-1 */
-    if mapping is None:
-        import _codecs
-        return _codecs.latin_1_decode(s, errors)[0]
-
-    if (size == 0):
-        return u''
-    p = []
-    inpos = 0
-    while (inpos< len(s)):
-        
-        #/* Get mapping (char ordinal -> integer, Unicode char or None) */
-        ch = s[inpos]
-        try:
-            x = mapping[ord(ch)]
-            if isinstance(x, int):
-                if x < 65536:
-                    p += unichr(x)
-                else:
-                    raise TypeError("character mapping must be in range(65536)")
-            elif isinstance(x, unicode):
-                if x == u"\ufffe":
-                    raise KeyError
-                p += x
-            elif not x:
-                raise KeyError
-            else:
-                raise TypeError
-            inpos += 1
-        except (KeyError, IndexError):
-            next, inpos = unicode_call_errorhandler(errors, "charmap",
-                       "character maps to <undefined>", s, inpos, inpos+1)
-            p += next
-            inpos
-    return p
 
 def PyUnicode_DecodeRawUnicodeEscape(s, size, errors):
+    import sys
 
     if (size == 0):
         return u''

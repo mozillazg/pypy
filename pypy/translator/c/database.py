@@ -16,6 +16,8 @@ from pypy.translator.c.support import log, barebonearray
 from pypy.translator.c.extfunc import do_the_getting
 from pypy import conftest
 from pypy.translator.c import gc
+from pypy.lib.identity_dict import identity_dict
+
 
 class NoCorrespondingNode(Exception):
     pass
@@ -42,7 +44,7 @@ class LowLevelDatabase(object):
         self.pendingsetupnodes = []
         self.containernodes = {}
         self.containerlist = []
-        self.delayedfunctionnames = {}
+        self.idelayedfunctionnames = identity_dict()
         self.delayedfunctionptrs = []
         self.completedcontainers = 0
         self.containerstats = {}
@@ -99,6 +101,9 @@ class LowLevelDatabase(object):
         if isinstance(T, Primitive) or T == GCREF:
             return PrimitiveType[T]
         elif isinstance(T, Ptr):
+            if (isinstance(T.TO, OpaqueType) and
+                T.TO.hints.get('c_pointer_typedef') is not None):
+                return '%s @' % T.TO.hints['c_pointer_typedef']
             try:
                 node = self.gettypedefnode(T.TO)
             except NoCorrespondingNode:
@@ -172,58 +177,56 @@ class LowLevelDatabase(object):
         return node
 
     def get(self, obj):
-        # XXX extra indent is preserve svn blame - kind of important IMHO (rxe)
-        if 1:
-            if isinstance(obj, CConstant):
-                return obj.c_name  # without further checks
-            T = typeOf(obj)
-            if isinstance(T, Primitive) or T == GCREF:
-                return PrimitiveName[T](obj, self)
-            elif isinstance(T, Ptr):
-                if obj:   # test if the ptr is non-NULL
-                    try:
-                        container = obj._obj
-                    except lltype.DelayedPointer:
-                        # hack hack hack
-                        name = obj._obj0
-                        assert name.startswith('delayed!')
-                        n = len('delayed!')
-                        if len(name) == n:
-                            raise
-                        if isinstance(lltype.typeOf(obj).TO, lltype.FuncType):
-                            if id(obj) in self.delayedfunctionnames:
-                                return self.delayedfunctionnames[id(obj)][0]
-                            funcname = name[n:]
-                            funcname = self.namespace.uniquename('g_'+funcname)
-                            self.delayedfunctionnames[id(obj)] = funcname, obj
-                        else:
-                            funcname = None      # can't use the name of a
-                                                 # delayed non-function ptr
-                        self.delayedfunctionptrs.append(obj)
-                        return funcname
-                        # /hack hack hack
+        if isinstance(obj, CConstant):
+            return obj.c_name  # without further checks
+        T = typeOf(obj)
+        if isinstance(T, Primitive) or T == GCREF:
+            return PrimitiveName[T](obj, self)
+        elif isinstance(T, Ptr):
+            if obj:   # test if the ptr is non-NULL
+                try:
+                    container = obj._obj
+                except lltype.DelayedPointer:
+                    # hack hack hack
+                    name = obj._obj0
+                    assert name.startswith('delayed!')
+                    n = len('delayed!')
+                    if len(name) == n:
+                        raise
+                    if isinstance(lltype.typeOf(obj).TO, lltype.FuncType):
+                        if obj in self.idelayedfunctionnames:
+                            return self.idelayedfunctionnames[obj][0]
+                        funcname = name[n:]
+                        funcname = self.namespace.uniquename('g_'+funcname)
+                        self.idelayedfunctionnames[obj] = funcname, obj
                     else:
-                        # hack hack hack
-                        if id(obj) in self.delayedfunctionnames:
-                            # this used to be a delayed function,
-                            # make sure we use the same name
-                            forcename = self.delayedfunctionnames[id(obj)][0]
-                            node = self.getcontainernode(container,
-                                                         forcename=forcename)
-                            assert node.ptrname == forcename
-                            return forcename
-                        # /hack hack hack
-
-                    if isinstance(container, int):
-                        # special case for tagged odd-valued pointers
-                        return '((%s) %d)' % (cdecl(self.gettype(T), ''),
-                                              obj._obj)
-                    node = self.getcontainernode(container)
-                    return node.ptrname
+                        funcname = None      # can't use the name of a
+                                             # delayed non-function ptr
+                    self.delayedfunctionptrs.append(obj)
+                    return funcname
+                    # /hack hack hack
                 else:
-                    return '((%s) NULL)' % (cdecl(self.gettype(T), ''), )
+                    # hack hack hack
+                    if obj in self.idelayedfunctionnames:
+                        # this used to be a delayed function,
+                        # make sure we use the same name
+                        forcename = self.idelayedfunctionnames[obj][0]
+                        node = self.getcontainernode(container,
+                                                     forcename=forcename)
+                        assert node.ptrname == forcename
+                        return forcename
+                    # /hack hack hack
+
+                if isinstance(container, int):
+                    # special case for tagged odd-valued pointers
+                    return '((%s) %d)' % (cdecl(self.gettype(T), ''),
+                                          obj._obj)
+                node = self.getcontainernode(container)
+                return node.ptrname
             else:
-                raise Exception("don't know about %r" % (obj,))
+                return '((%s) NULL)' % (cdecl(self.gettype(T), ''), )
+        else:
+            raise Exception("don't know about %r" % (obj,))
 
     def complete(self, show_progress=True):
         assert not self.completed
@@ -299,7 +302,7 @@ class LowLevelDatabase(object):
                     self.getcontainernode(value)
                 else:
                     self.get(value)
-        
+
         while True:
             while True:
                 while self.pendingsetupnodes:

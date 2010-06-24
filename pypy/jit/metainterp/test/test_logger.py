@@ -6,6 +6,8 @@ from pypy.jit.metainterp.typesystem import llhelper
 from StringIO import StringIO
 from pypy.jit.metainterp.test.test_optimizeopt import equaloplists
 from pypy.jit.metainterp.history import AbstractDescr, LoopToken, BasicFailDescr
+from pypy.jit.backend.model import AbstractCPU
+
 
 class Descr(AbstractDescr):
     pass
@@ -34,6 +36,14 @@ class Logger(logger.Logger):
 class TestLogger(object):
     ts = llhelper
 
+    def make_metainterp_sd(self):
+        class FakeMetaInterpSd:
+            cpu = AbstractCPU()
+            cpu.ts = self.ts
+            def get_name_from_address(self, addr):
+                return 'Name'
+        return FakeMetaInterpSd()
+
     def reparse(self, inp, namespace=None, check_equal=True):
         """ parse loop once, then log it and parse again.
         Checks that we get the same thing.
@@ -41,7 +51,7 @@ class TestLogger(object):
         if namespace is None:
             namespace = {}
         loop = pure_parse(inp, namespace=namespace)
-        logger = Logger(self.ts)
+        logger = Logger(self.make_metainterp_sd())
         output = logger.log_loop(loop, namespace)
         oloop = pure_parse(output, namespace=namespace)
         if check_equal:
@@ -75,6 +85,15 @@ class TestLogger(object):
         '''
         self.reparse(inp)
 
+    def test_guard_w_hole(self):
+        inp = '''
+        [i0]
+        i1 = int_add(i0, 1)
+        guard_true(i0) [i0, None, i1]
+        finish(i1)
+        '''
+        self.reparse(inp)
+
     def test_debug_merge_point(self):
         inp = '''
         []
@@ -99,38 +118,53 @@ class TestLogger(object):
         jump(i0, descr=target)
         '''
         loop = pure_parse(inp, namespace=namespace)
-        logger = Logger(self.ts)
+        logger = Logger(self.make_metainterp_sd())
         output = logger.log_loop(loop)
         assert output.splitlines()[-1] == "jump(i0, descr=<Loop3>)"
         pure_parse(output)
         
-    def test_guard(self):
-        namespace = {'fdescr': BasicFailDescr(4)}
+    def test_guard_descr(self):
+        namespace = {'fdescr': BasicFailDescr()}
         inp = '''
         [i0]
         guard_true(i0, descr=fdescr) [i0]
         '''
         loop = pure_parse(inp, namespace=namespace)
-        logger = Logger(self.ts, guard_number=True)
+        logger = Logger(self.make_metainterp_sd(), guard_number=True)
         output = logger.log_loop(loop)
-        assert output.splitlines()[-1] == "guard_true(i0, descr=<Guard4>) [i0]"
+        assert output.splitlines()[-1] == "guard_true(i0, descr=<Guard0>) [i0]"
         pure_parse(output)
         
-        def boom():
-            raise Exception
-        namespace['fdescr'].get_index = boom
-        logger = Logger(self.ts, guard_number=False)
+        logger = Logger(self.make_metainterp_sd(), guard_number=False)
         output = logger.log_loop(loop)
-        assert output.splitlines()[-1].startswith("guard_true(i0, descr=<")
+        lastline = output.splitlines()[-1]
+        assert lastline.startswith("guard_true(i0, descr=<")
+        assert not lastline.startswith("guard_true(i0, descr=<Guard")
+
+    def test_class_name(self):
+        from pypy.rpython.lltypesystem import lltype
+        AbcVTable = lltype.Struct('AbcVTable')
+        abcvtable = lltype.malloc(AbcVTable, immortal=True)
+        namespace = {'Name': abcvtable}
+        inp = '''
+        [i0]
+        p = new_with_vtable(ConstClass(Name))
+        '''
+        loop = pure_parse(inp, namespace=namespace)
+        logger = Logger(self.make_metainterp_sd())
+        output = logger.log_loop(loop)
+        assert output.splitlines()[-1].endswith(
+            " = new_with_vtable(ConstClass(Name))")
+        pure_parse(output, namespace=namespace)
 
     def test_intro_loop(self):
-        bare_logger = logger.Logger(self.ts)
+        bare_logger = logger.Logger(self.make_metainterp_sd())
         output = capturing(bare_logger.log_loop, [], [], 1, "foo")
         assert output.splitlines()[0] == "# Loop 1 : foo with 0 ops"
         pure_parse(output)
 
     def test_intro_bridge(self):
-        bare_logger = logger.Logger(self.ts)
+        bare_logger = logger.Logger(self.make_metainterp_sd())
         output = capturing(bare_logger.log_bridge, [], [], 3)
         assert output.splitlines()[0] == "# bridge out of Guard 3 with 0 ops"
         pure_parse(output)

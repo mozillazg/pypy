@@ -13,6 +13,8 @@ from pypy.rpython.lltypesystem.lltype import ForwardReference, FuncType
 from pypy.rpython.lltypesystem.llmemory import Address
 from pypy.translator.backendopt.ssa import SSI_to_SSA
 from pypy.translator.backendopt.innerloop import find_inner_loops
+from pypy.lib.identity_dict import identity_dict
+
 
 PyObjPtr = Ptr(PyObject)
 LOCALVAR = 'l_%s'
@@ -30,7 +32,7 @@ class FunctionCodeGenerator(object):
                        exception_policy
                        more_ll_values
                        vars all_cached_consts 
-                       lltypes
+                       illtypes
                        functionname
                        blocknum
                        innerloops
@@ -63,7 +65,7 @@ class FunctionCodeGenerator(object):
                 continue
             db.gettype(T)  # force the type to be considered by the database
        
-        self.lltypes = None
+        self.illtypes = None
 
     def collect_var_and_types(self):
         #
@@ -95,11 +97,11 @@ class FunctionCodeGenerator(object):
                 mix.append(cleanupop.result)
              
         uniquemix = []
-        seen = {}
+        seen = identity_dict()
         for v in mix:
-            if id(v) not in seen:
+            if v not in seen:
                 uniquemix.append(v)
-                seen[id(v)] = True
+                seen[v] = True
         self.vars = uniquemix
 
     def name(self, cname):  #virtual
@@ -122,12 +124,12 @@ class FunctionCodeGenerator(object):
         for block in self.graph.iterblocks():
             self.blocknum[block] = len(self.blocknum)
         db = self.db
-        lltypes = {}
+        lltypes = identity_dict()
         for v in self.vars:
             T = getattr(v, 'concretetype', PyObjPtr)
             typename = db.gettype(T)
-            lltypes[id(v)] = T, typename
-        self.lltypes = lltypes
+            lltypes[v] = T, typename
+        self.illtypes = lltypes
         self.innerloops = {}    # maps the loop's header block to a Loop()
         for loop in find_inner_loops(self.graph, Bool):
             self.innerloops[loop.headblock] = loop
@@ -137,7 +139,7 @@ class FunctionCodeGenerator(object):
 
     def implementation_end(self):
         self.all_cached_consts = list(self.allconstantvalues())
-        self.lltypes = None
+        self.illtypes = None
         self.vars = None
         self.blocknum = None
         self.innerloops = None
@@ -161,11 +163,11 @@ class FunctionCodeGenerator(object):
             yield llvalue
 
     def lltypemap(self, v):
-        T, typename = self.lltypes[id(v)]
+        T, typename = self.illtypes[v]
         return T
 
     def lltypename(self, v):
-        T, typename = self.lltypes[id(v)]
+        T, typename = self.illtypes[v]
         return typename
 
     def expr(self, v, special_case_void=True):
@@ -207,6 +209,7 @@ class FunctionCodeGenerator(object):
 
     def cfunction_body(self):
         graph = self.graph
+        yield 'goto block0;'    # to avoid a warning "this label is not used"
 
         # generate the body of each block
         for block in graph.iterblocks():
@@ -298,7 +301,7 @@ class FunctionCodeGenerator(object):
         is_alive = {}
         assignments = []
         for a1, a2 in zip(link.args, link.target.inputargs):
-            a2type, a2typename = self.lltypes[id(a2)]
+            a2type, a2typename = self.illtypes[a2]
             if a2type is Void:
                 continue
             src = self.expr(a1)
@@ -315,6 +318,7 @@ class FunctionCodeGenerator(object):
 
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
+        line = None
         if op.opname.startswith('gc_'):
             meth = getattr(self.gcpolicy, macro, None)
             if meth:
@@ -323,7 +327,7 @@ class FunctionCodeGenerator(object):
             meth = getattr(self, macro, None)
             if meth:
                 line = meth(op)
-        if meth is None:
+        if line is None:
             lst = [self.expr(v) for v in op.args]
             lst.append(self.expr(op.result))
             line = '%s(%s);' % (macro, ', '.join(lst))
@@ -465,17 +469,15 @@ class FunctionCodeGenerator(object):
     def generic_get(self, op, sourceexpr):
         T = self.lltypemap(op.result)
         newvalue = self.expr(op.result, special_case_void=False)
-        result = ['%s = %s;' % (newvalue, sourceexpr)]
-        result = '\n'.join(result)
+        result = '%s = %s;' % (newvalue, sourceexpr)
         if T is Void:
             result = '/* %s */' % result
         return result
 
     def generic_set(self, op, targetexpr):
         newvalue = self.expr(op.args[-1], special_case_void=False)
-        result = ['%s = %s;' % (targetexpr, newvalue)]
+        result = '%s = %s;' % (targetexpr, newvalue)
         T = self.lltypemap(op.args[-1])
-        result = '\n'.join(result)
         if T is Void:
             result = '/* %s */' % result
         return result
@@ -484,16 +486,20 @@ class FunctionCodeGenerator(object):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
+        baseexpr_is_const = isinstance(op.args[0], Constant)
         expr = ampersand + structdef.ptr_access_expr(self.expr(op.args[0]),
-                                                     op.args[1].value)
+                                                     op.args[1].value,
+                                                     baseexpr_is_const)
         return self.generic_get(op, expr)
 
     def OP_BARE_SETFIELD(self, op):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
+        baseexpr_is_const = isinstance(op.args[0], Constant)
         expr = structdef.ptr_access_expr(self.expr(op.args[0]),
-                                         op.args[1].value)
+                                         op.args[1].value,
+                                         baseexpr_is_const)
         return self.generic_set(op, expr)
 
     def OP_GETSUBSTRUCT(self, op):
@@ -726,7 +732,7 @@ class FunctionCodeGenerator(object):
                     free_line = "RPyString_FreeCache();"
                 continue
             elif T == Signed:
-                format.append('%d')
+                format.append('%ld')
             elif T == Float:
                 format.append('%f')
             elif isinstance(T, Ptr) or T == Address:
@@ -778,7 +784,13 @@ class FunctionCodeGenerator(object):
         return 'fprintf(stderr, "%%s\\n", %s); abort();' % msg
 
     def OP_DEBUG_LLINTERPCALL(self, op):
-        return 'abort();  /* debug_llinterpcall should be unreachable */'
+        result = 'abort();  /* debug_llinterpcall should be unreachable */'
+        TYPE = self.lltypemap(op.result)
+        if TYPE is not Void:
+            typename = self.db.gettype(TYPE)
+            result += '\n%s = (%s)0;' % (self.expr(op.result),
+                                         cdecl(typename, ''))
+        return result
 
     def OP_INSTRUMENT_COUNT(self, op):
         counter_label = op.args[1].value
@@ -793,8 +805,12 @@ class FunctionCodeGenerator(object):
     def OP_JIT_MARKER(self, op):
         return '/* JIT_MARKER %s */' % op
 
-    def OP_PROMOTE_VIRTUALIZABLE(self, op):
-        return '/* PROMOTE_VIRTUALIZABLE %s */' % op
+    def OP_JIT_FORCE_VIRTUALIZABLE(self, op):
+        return '/* JIT_FORCE_VIRTUALIZABLE %s */' % op
+
+    def OP_JIT_FORCE_VIRTUAL(self, op):
+        return '%s = %s; /* JIT_FORCE_VIRTUAL */' % (self.expr(op.result),
+                                                     self.expr(op.args[0]))
 
     def OP_GET_GROUP_MEMBER(self, op):
         typename = self.db.gettype(op.result.concretetype)
@@ -813,5 +829,37 @@ class FunctionCodeGenerator(object):
             self.expr(op.args[1]),
             self.expr(op.args[2]))
 
+    def getdebugfunctionname(self):
+        name = self.functionname
+        if not name:
+            return "?"
+        if name.startswith('pypy_g_'):
+            name = name[7:]
+        return name
+
+    def OP_DEBUG_RECORD_TRACEBACK(self, op):
+        #if self.functionname is None, we print "?" as the argument */
+        return 'PYPY_DEBUG_RECORD_TRACEBACK("%s");' % (
+            self.getdebugfunctionname(),)
+
+    def OP_DEBUG_CATCH_EXCEPTION(self, op):
+        gottype = self.expr(op.args[0])
+        exprs = []
+        for c_limited_type in op.args[1:]:
+            exprs.append('%s == %s' % (gottype, self.expr(c_limited_type)))
+        return 'PYPY_DEBUG_CATCH_EXCEPTION("%s", %s, %s);' % (
+            self.getdebugfunctionname(), gottype, ' || '.join(exprs))
+
+    def OP_INT_BETWEEN(self, op):
+        if (isinstance(op.args[0], Constant) and
+            isinstance(op.args[2], Constant) and
+            op.args[2].value - op.args[0].value == 1):
+            # (a <= b < a+1) ----> (b == a)
+            return '%s = (%s == %s);  /* was INT_BETWEEN */' % (
+                self.expr(op.result),
+                self.expr(op.args[1]),
+                self.expr(op.args[0]))
+        else:
+            return None    # use the default
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

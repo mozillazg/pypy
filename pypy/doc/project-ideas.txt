@@ -21,35 +21,28 @@ JIT back-ends
 --------------------------------
 
 PyPy's Just-In-Time compiler relies on backends for actual code
-generation.  Right now we are working on the ``pyjitpl5`` branch, which
-is not stable.  Working on the JIT backends should be soon possible.
-Open ideas are to write a backend for AMD64 (Intel 64); or .NET or
-Java (requires porting the JIT frontend to ootype too, which is not too
-hard); or trying to use LLVM-JIT.
-
-CTypes
-------
-
-Support ctypes on more backends.  Right now ctypes is supported only
-when compiling PyPy to C.  A nice project would be to support it when
-compiling to .NET or the JVM. That's not too hard, the only thing needed
-is to port a small module that does the actual invocation of external
-libraries (a related project would be to port this module to Jython or
-IronPython to get support for ctypes there).
-
+generation.  We have so far a 32-bit Intel backend, and a CLI one. There is
+Summer of Code project for 64bit (x86_64) backend, but other options
+(ARM, llvm) remain open.
 
 .. _distribution:
 .. _persistence:
 
-Experiment with distribution and persistence
---------------------------------------------
+Extensions of the Python language
+---------------------------------
+
++----------------------------------------------------------------------+
+| :NOTE:                                                               |
+|                                                                      |
+|   The ideas in this paragraph are marked as "experimental".  We may  |
+|   or may not be interested in helping you out.  You are warned :-)   |
+|                                                                      |
++----------------------------------------------------------------------+
 
 One of the advantages of PyPy's implementation is that the Python-level type
 of an object and its implementation are completely independent.  This should
 allow a much more intuitive interface to, for example, objects that are backed
-by a persistent store.
-
-The `transparent proxy`_ objects are a key step in this
+by a persistent store.  The `transparent proxy`_ objects are a key step in this
 direction; now all that remains is to implement the interesting bits :-)
 
 An example project might be to implement functionality akin to the `ZODB's
@@ -59,15 +52,22 @@ Python code (should be relatively easy on top of transparent proxy).
 Another example would be to implement a multi-CPU extension that internally
 uses several processes and uses transparent proxies to share object views.
 
+Other ideas are to do something interesting with sandboxing_; or to
+work more on the Stackless_ features (e.g. integrate it with the JIT);
+or revive the logic object space, which tried to bring unification-like
+features to Python.
 
-Various Ideas
--------------
+.. _sandboxing: sandbox.html
+.. _Stackless: stackless.html
 
-- improve one of the existing interpreters (e.g. the Prolog, the Scheme or
-  the JavaScript interpreter or the Smalltalk VM), or start a new one
 
-- revive the logic object space, which tried to bring unification-like
-  features to Python
+Other languages
+---------------
+
+Improve one of the `existing interpreters`__, or start a new one.
+Experiment with the JIT compiler generator.
+
+.. __: http://codespeak.net/svn/pypy/lang/
 
 
 Or else...
@@ -83,8 +83,6 @@ You can also have a look around our documentation_.
 .. _`efficient propagators for specialized finite domains`: http://codespeak.net/svn/pypy/extradoc/soc-2006/constraints.txt
 .. _`py.test`: http://codespeak.net/py/current/doc/test.html
 .. _`py.execnet`: http://codespeak.net/py/current/doc/execnet.html
-.. _`Prolog interpreter`: http://codespeak.net/svn/user/cfbolz/hack/prolog/interpreter
-.. _`JavaScript interpreter`: ../../pypy/lang/js
 .. _`object spaces`: objspace.html
 .. _`code templating solution`: http://codespeak.net/svn/pypy/extradoc/soc-2006/code-templating.txt
 

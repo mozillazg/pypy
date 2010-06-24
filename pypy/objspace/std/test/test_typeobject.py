@@ -1,5 +1,5 @@
-from pypy.objspace.std.objspace import *
-from pypy.objspace.std.stdtypedef import *
+from pypy.objspace.std.model import W_Object
+from pypy.objspace.std.stdtypedef import StdTypeDef
 from pypy.conftest import gettestobjspace
 
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -15,7 +15,7 @@ class TestTypeObject:
         def descr__new__(space, w_subtype):
             return space.allocate_instance(W_Stuff, w_subtype)
         W_Stuff.typedef = StdTypeDef("stuff",
-                                     __new__ = newmethod(descr__new__))
+                                     __new__ = interp2app(descr__new__))
         W_Stuff.typedef.acceptable_as_base_class = False
         w_stufftype = space.gettypeobject(W_Stuff.typedef)
         space.appexec([w_stufftype], """(stufftype):
@@ -705,6 +705,20 @@ class AppTestTypeObject:
             pass
         raises(TypeError, "class D(A, C): pass")
 
+    def test_data_descriptor_without_get(self):
+        class Descr(object):
+            def __init__(self, name):
+                self.name = name
+            def __set__(self, obj, what):
+                pass
+        class Meta(type):
+            pass
+        class X(object):
+            __metaclass__ = Meta
+        X.a = 42
+        Meta.a = Descr("a")
+        assert X.a == 42
+
     def test_user_defined_mro_cls_access(self):
         d = []
         class T(type):
@@ -931,6 +945,12 @@ class AppTestMutableBuiltintypes:
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.immutable_builtintypes": False})
 
+    def test_del_type_mro(self):
+        del type.mro
+        # Make sure the default mro function is used.
+        class X(object):
+            pass
+
     def test_mutate_builtintype(self):
         list.a = 1
         def doublelen(self):
@@ -981,12 +1001,12 @@ class AppTestGetattributeShortcut:
         y.x = 3
         assert y.x == 3
 
-        def ga(self, name):
-            return 'GA'
+        def ga2(self, name):
+            return 'GA2'
 
-        X.__getattribute__ = ga
+        X.__getattribute__ = ga2
 
-        assert y.x == 'GA'
+        assert y.x == 'GA2'
 
 class TestNewShortcut:
 

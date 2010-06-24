@@ -1,6 +1,7 @@
 from pypy.interpreter import gateway
-from pypy.objspace.std.objspace import W_Object, OperationError
-from pypy.objspace.std.objspace import registerimplementation, register_all
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.floatobject import W_FloatObject, _hash_float
 
 import math
@@ -8,8 +9,8 @@ import math
 class W_ComplexObject(W_Object):
     """This is a reimplementation of the CPython "PyComplexObject"
     """
-
     from pypy.objspace.std.complextype import complex_typedef as typedef
+    _immutable_ = True
 
     def __init__(w_self, realval=0.0, imgval=0.0):
         w_self.realval = float(realval)
@@ -252,9 +253,10 @@ def complex_conjugate__Complex(space, w_self):
 
 app = gateway.applevel(""" 
     import math
+    import sys
     def possint(f):
         ff = math.floor(f)
-        if f == ff:
+        if f == ff and abs(f) < sys.maxint:
             return int(ff)
         return f
 

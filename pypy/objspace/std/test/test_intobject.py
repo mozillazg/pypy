@@ -1,7 +1,7 @@
 import py
 import sys
 from pypy.objspace.std import intobject as iobj
-from pypy.objspace.std.objspace import FailedToImplement
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib.rbigint import rbigint
 
@@ -25,7 +25,7 @@ class TestW_IntObject:
             res = func(*args, **kwds)
             raise Exception, "should have failed but returned '%s'!" %repr(res)
         except FailedToImplement, arg:
-            return arg.w_type
+            return arg.get_w_type(self.space)
 
     def test_int_w(self):
         assert self.space.int_w(self.space.wrap(42)) == 42

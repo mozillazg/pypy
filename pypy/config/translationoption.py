@@ -1,5 +1,5 @@
 import autopath
-import py, os
+import py, os, sys
 from pypy.config.config import OptionDescription, BoolOption, IntOption, ArbitraryOption, FloatOption
 from pypy.config.config import ChoiceOption, StrOption, to_optparse, Config
 from pypy.config.config import ConfigError
@@ -11,6 +11,8 @@ DEFL_PROF_BASED_INLINE_THRESHOLD = 32.4
 DEFL_CLEVER_MALLOC_REMOVAL_INLINE_THRESHOLD = 32.4
 DEFL_LOW_INLINE_THRESHOLD = DEFL_INLINE_THRESHOLD / 2.0
 
+IS_64_BITS = sys.maxint > 2147483647
+
 PLATFORMS = [
     'maemo',
     'host',
@@ -21,7 +23,8 @@ translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
     BoolOption("stackless", "enable stackless features during compilation",
                default=False, cmdline="--stackless",
-               requires=[("translation.type_system", "lltype")]),
+               requires=[("translation.type_system", "lltype"),
+                         ("translation.gcremovetypeptr", False)]),  # XXX?
     ChoiceOption("type_system", "Type system to use when RTyping",
                  ["lltype", "ootype"], cmdline=None, default="lltype",
                  requires={
@@ -39,6 +42,9 @@ translation_optiondescription = OptionDescription(
                      "jvm":    [("translation.type_system", "ootype")],
                      },
                  cmdline="-b --backend"),
+
+    BoolOption("shared", "Build as a shared library",
+               default=False, cmdline="--shared"),
 
     BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
                default=True, cmdline="--log"),
@@ -73,7 +79,7 @@ translation_optiondescription = OptionDescription(
                               ("translation.gcremovetypeptr", False)],
                  }),
     BoolOption("gcremovetypeptr", "Remove the typeptr from every object",
-               default=False, cmdline="--gcremovetypeptr"),
+               default=IS_64_BITS, cmdline="--gcremovetypeptr"),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "asmgcc"],
@@ -98,8 +104,7 @@ translation_optiondescription = OptionDescription(
     # JIT generation: use -Ojit to enable it
     BoolOption("jit", "generate a JIT",
                default=False,
-               requires=[("translation.thread", False)],
-               suggests=[("translation.gc", "hybrid"),     # or "boehm"
+               suggests=[("translation.gc", "hybrid"),
                          ("translation.gcrootfinder", "asmgcc"),
                          ("translation.list_comprehension_operations", True)]),
     ChoiceOption("jit_backend", "choose the backend for the JIT",
@@ -109,6 +114,9 @@ translation_optiondescription = OptionDescription(
                  ["off", "profile", "steps", "detailed"],
                  default="profile",      # XXX for now
                  cmdline="--jit-debug"),
+    ChoiceOption("jit_profiler", "integrate profiler support into the JIT",
+                 ["off", "oprofile"],
+                 default="off"),
 
     # misc
     BoolOption("verbose", "Print extra information", default=False),
@@ -134,6 +142,9 @@ translation_optiondescription = OptionDescription(
     ArbitraryOption("instrumentctl", "internal",
                default=None),
     StrOption("output", "Output file name", cmdline="--output"),
+    StrOption("secondaryentrypoints",
+            "Comma separated list of keys choosing secondary entrypoints",
+            cmdline="--entrypoints", default=""),
 
     BoolOption("dump_static_data_info", "Dump static data info",
                cmdline="--dump_static_data_info",
@@ -152,6 +163,12 @@ translation_optiondescription = OptionDescription(
                cmdline="--cflags"),
     StrOption("linkerflags", "Specify flags for the linker (C backend only)",
                cmdline="--ldflags"),
+    BoolOption("force_make", "Force execution of makefile instead of"
+               " calling platform", cmdline="--force-make",
+               default=False, negation=False),
+    IntOption("make_jobs", "Specify -j argument to make for compilation"
+              " (C backend only)",
+              cmdline="--make-jobs", default=1),
 
     # Flags of the TranslationContext:
     BoolOption("simplifying", "Simplify flow graphs", default=True),
@@ -246,7 +263,7 @@ translation_optiondescription = OptionDescription(
                    "Tranform graphs in SSI form into graphs tailored for "
                    "stack based virtual machines (only for backends that support it)",
                    default=True),
-
+        BoolOption("storesink", "Perform store sinking", default=True),
         BoolOption("none",
                    "Do not run any backend optimizations",
                    requires=[('translation.backendopt.inline', False),
@@ -359,6 +376,8 @@ def set_opt_level(config, level):
             config.translation.suggest(withsmallfuncsets=5)
         elif word == 'jit':
             config.translation.suggest(jit=True)
+            if config.translation.stackless:
+                raise NotImplementedError("JIT conflicts with stackless for now")
         elif word == 'removetypeptr':
             config.translation.suggest(gcremovetypeptr=True)
         else:

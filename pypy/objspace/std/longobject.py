@@ -1,5 +1,9 @@
 import sys
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std import model
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.rlib.rbigint import rbigint, SHIFT
@@ -7,7 +11,8 @@ from pypy.rlib.rbigint import rbigint, SHIFT
 class W_LongObject(W_Object):
     """This is a wrapper of rbigint."""
     from pypy.objspace.std.longtype import long_typedef as typedef
-    
+    _immutable_ = True
+
     def __init__(w_self, l):
         w_self.num = l # instance of rbigint
 
@@ -119,11 +124,46 @@ def repr__Long(space, w_long):
 def str__Long(space, w_long):
     return space.wrap(w_long.num.str())
 
-def eq__Long_Long(space, w_long1, w_long2):
-    return space.newbool(w_long1.num.eq(w_long2.num))
 
 def lt__Long_Long(space, w_long1, w_long2):
     return space.newbool(w_long1.num.lt(w_long2.num))
+def le__Long_Long(space, w_long1, w_long2):
+    return space.newbool(w_long1.num.le(w_long2.num))
+def eq__Long_Long(space, w_long1, w_long2):
+    return space.newbool(w_long1.num.eq(w_long2.num))
+def ne__Long_Long(space, w_long1, w_long2):
+    return space.newbool(w_long1.num.ne(w_long2.num))
+def gt__Long_Long(space, w_long1, w_long2):
+    return space.newbool(w_long1.num.gt(w_long2.num))
+def ge__Long_Long(space, w_long1, w_long2):
+    return space.newbool(w_long1.num.ge(w_long2.num))
+
+def lt__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.lt(rbigint.fromint(w_int2.intval)))
+def le__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.le(rbigint.fromint(w_int2.intval)))
+def eq__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.eq(rbigint.fromint(w_int2.intval)))
+def ne__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.ne(rbigint.fromint(w_int2.intval)))
+def gt__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.gt(rbigint.fromint(w_int2.intval)))
+def ge__Long_Int(space, w_long1, w_int2):
+    return space.newbool(w_long1.num.ge(rbigint.fromint(w_int2.intval)))
+
+def lt__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).lt(w_long2.num))
+def le__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).le(w_long2.num))
+def eq__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).eq(w_long2.num))
+def ne__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).ne(w_long2.num))
+def gt__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).gt(w_long2.num))
+def ge__Int_Long(space, w_int1, w_long2):
+    return space.newbool(rbigint.fromint(w_int1.intval).ge(w_long2.num))
+
 
 def hash__Long(space, w_value):
     return space.wrap(w_value.num.hash())
@@ -194,7 +234,7 @@ def pow__Long_Long_Long(space, w_long1, w_long2, w_long3):
 def pow__Long_Long_None(space, w_long1, w_long2, w_long3):
     # XXX need to replicate some of the logic, to get the errors right
     if w_long2.num.lt(rbigint.fromint(0)):
-        raise FailedToImplement(
+        raise FailedToImplementArgs(
             space.w_ValueError,
             space.wrap("long pow() too negative"))
     return W_LongObject(w_long1.num.pow(w_long2.num, None))
@@ -269,7 +309,8 @@ def %(opname)s_ovr__Int_Int(space, w_int1, w_int2):
     return %(opname)s__Long_Long(space, w_long1, w_long2)
 """ % {'opname': opname}, '', 'exec')
 
-    getattr(StdObjSpace.MM, opname).register(globals()['%s_ovr__Int_Int' % opname], W_IntObject, W_IntObject, order=1)
+    getattr(model.MM, opname).register(globals()['%s_ovr__Int_Int' % opname],
+                                       W_IntObject, W_IntObject, order=1)
 
 # unary ops
 for opname in ['neg', 'abs']:
@@ -279,7 +320,8 @@ def %(opname)s_ovr__Int(space, w_int1):
     return %(opname)s__Long(space, w_long1)
 """ % {'opname': opname}
 
-    getattr(StdObjSpace.MM, opname).register(globals()['%s_ovr__Int' % opname], W_IntObject, order=1)
+    getattr(model.MM, opname).register(globals()['%s_ovr__Int' % opname],
+                                       W_IntObject, order=1)
 
 # pow
 def pow_ovr__Int_Int_None(space, w_int1, w_int2, w_none3):
@@ -292,7 +334,9 @@ def pow_ovr__Int_Int_Long(space, w_int1, w_int2, w_long3):
     w_long2 = delegate_Int2Long(space, w_int2)
     return pow__Long_Long_Long(space, w_long1, w_long2, w_long3)
 
-StdObjSpace.MM.pow.register(pow_ovr__Int_Int_None, W_IntObject, W_IntObject, W_NoneObject, order=1)
-StdObjSpace.MM.pow.register(pow_ovr__Int_Int_Long, W_IntObject, W_IntObject, W_LongObject, order=1)
+model.MM.pow.register(pow_ovr__Int_Int_None, W_IntObject, W_IntObject,
+                      W_NoneObject, order=1)
+model.MM.pow.register(pow_ovr__Int_Int_Long, W_IntObject, W_IntObject,
+                      W_LongObject, order=1)
 
 

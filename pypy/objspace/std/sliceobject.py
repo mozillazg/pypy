@@ -1,18 +1,16 @@
-"""
-Reviewed 03-06-21
+"""Slice object"""
 
-slice object construction   tested, OK
-indices method              tested, OK
-"""
-
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
 from pypy.interpreter import gateway
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.slicetype import _Eval_SliceIndex
 
 
 class W_SliceObject(W_Object):
     from pypy.objspace.std.slicetype import slice_typedef as typedef
-    
+    _immutable_ = True
+
     def __init__(w_self, w_start, w_stop, w_step):
         assert w_start is not None
         assert w_stop is not None

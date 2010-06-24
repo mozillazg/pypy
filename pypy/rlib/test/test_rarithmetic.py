@@ -114,7 +114,10 @@ class Test_r_uint:
         #self.binary_test(lambda x, y: pow(x, y, 42), (2, 3, 5, 1000))
 
     def test_back_to_int(self):
-        assert int(r_uint(-1)) == -1
+        #assert int(r_uint(-1)) == -1
+        # ^^^ that looks wrong IMHO: int(x) should not by itself return
+        #     an integer that has a different value than x, especially
+        #     if x is a subclass of long.
         assert int(r_uint(1)) == 1
 
     def unary_test(self, f):
@@ -196,6 +199,10 @@ def test_intmask_small():
                rffi.r_ulong, rffi.r_ulonglong]:
         x = intmask(tp(5))
         assert (type(x), x) == (int, 5)
+
+def test_bug_creating_r_int():
+    minint = -sys.maxint-1
+    assert r_int(r_int(minint)) == minint
 
 def test_ovfcheck():
     one = 1
@@ -361,3 +368,7 @@ def test_isinf():
 
 def test_isnan():
     assert isnan(NAN)
+
+def test_int_real_union():
+    from pypy.rpython.lltypesystem.rffi import r_int_real
+    assert compute_restype(r_int_real, r_int_real) is r_int_real
