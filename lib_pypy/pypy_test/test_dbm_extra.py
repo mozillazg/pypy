@@ -44,3 +44,7 @@ def test_multiple_sets():
     d['xyz'] = '546'
     assert dict(d) == {'xyz': '546'}
     assert d['xyz'] == '546'
+
+def test_extra():
+    py.test.raises(TypeError, dbm.datum, 123)
+    py.test.raises(TypeError, dbm.datum, False)
