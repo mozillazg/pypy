@@ -14,6 +14,7 @@ class CallFamily:
     """
     overridden = False
     normalized = False
+    modified   = True
     
     def __init__(self, desc):
         self.descs = { desc: True }
@@ -21,6 +22,7 @@ class CallFamily:
         self.total_calltable_size = 0
 
     def update(self, other):
+        self.modified = True
         self.normalized = self.normalized or other.normalized
         self.descs.update(other.descs)
         for shape, table in other.calltables.items():
@@ -33,7 +35,7 @@ class CallFamily:
         # call at which call site.  Each call site gets a row of graphs,
         # sharable with other call sites.  Each column is a FunctionDesc.
         # There is one such table per "call shape".
-        table = self.calltables.setdefault(callshape, [])
+        table = self.calltables.get(callshape, [])
         for i, existing_row in enumerate(table):
             if existing_row == row:   # XXX maybe use a dict again here?
                 return i
@@ -43,6 +45,7 @@ class CallFamily:
         try:
             self.calltable_lookup_row(callshape, row)
         except LookupError:
+            self.modified = True
             table = self.calltables.setdefault(callshape, [])
             table.append(row)
             self.total_calltable_size += 1
@@ -199,12 +202,16 @@ class FunctionDesc(Desc):
             graph.name = alt_name
         return graph
 
+    def getgraphs(self):
+        return self._cache.values()
+
     def getuniquegraph(self):
         if len(self._cache) != 1:
             raise NoStandardGraph(self)
         [graph] = self._cache.values()
+        relax_sig_check = getattr(self.pyobj, "relax_sig_check", False)
         if (graph.signature != self.signature or
-            graph.defaults  != self.defaults):
+            graph.defaults  != self.defaults) and not relax_sig_check:
             raise NoStandardGraph(self)
         return graph
 
@@ -450,7 +457,7 @@ class ClassDesc(Desc):
             # is of type FunctionType.  But bookkeeper.immutablevalue()
             # will do the right thing in s_get_value().
 
-        if type(value) is MemberDescriptorType:
+        if type(value) in MemberDescriptorTypes:
             # skip __slots__, showing up in the class as 'member' objects
             return
         if name == '__init__' and self.is_builtin_exception_class():
@@ -532,9 +539,18 @@ class ClassDesc(Desc):
                 try:
                     args.fixedunpack(0)
                 except ValueError:
-
                     raise Exception("default __init__ takes no argument"
                                     " (class %s)" % (self.name,))
+            elif self.pyobj is Exception:
+                # check explicitly against "raise Exception, x" where x
+                # is a low-level exception pointer
+                try:
+                    [s_arg] = args.fixedunpack(1)
+                except ValueError:
+                    pass
+                else:
+                    from pypy.annotation.model import SomePtr
+                    assert not isinstance(s_arg, SomePtr)
         else:
             # call the constructor
             args = args.prepend(s_instance)
@@ -549,7 +565,7 @@ class ClassDesc(Desc):
         if self.is_exception_class():
             if self.pyobj.__module__ == 'exceptions':
                 return True
-            if self.pyobj is py.magic.AssertionError:
+            if self.pyobj is py.code._AssertionError:
                 return True
         return False
 
@@ -589,6 +605,8 @@ class ClassDesc(Desc):
             if isinstance(value, staticmethod):   # special case
                 value = value.__get__(42)
                 classdef = None   # don't bind
+            elif isinstance(value, classmethod):
+                raise AssertionError("classmethods are not supported")
             s_value = self.bookkeeper.immutablevalue(value)
             if classdef is not None:
                 s_value = s_value.bind_callables_under(classdef, name)
@@ -802,6 +820,15 @@ class FrozenDesc(Desc):
         self.knowntype = new_or_old_class(pyobj)
         assert bool(pyobj), "__nonzero__ unsupported on frozen PBC %r" %(pyobj,)
 
+    def has_attribute(self, attr):
+        if attr in self.attrcache:
+            return True
+        try:
+            self._read_attribute(attr)
+            return True
+        except AttributeError:
+            return False
+
     def read_attribute(self, attr):
         try:
             return self.attrcache[attr]
@@ -884,5 +911,9 @@ class MethodOfFrozenDesc(Desc):
 
 class Sample(object):
     __slots__ = 'x'
-MemberDescriptorType = type(Sample.x)
+MemberDescriptorTypes = [type(Sample.x)]
 del Sample
+try:
+    MemberDescriptorTypes.append(type(OSError.errno))
+except AttributeError:    # on CPython <= 2.4
+    pass

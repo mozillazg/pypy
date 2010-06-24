@@ -62,13 +62,16 @@ class stat_result:
         if self.st_ctime is None:
             self.__dict__['st_ctime'] = self[9]
 
+# Capture file.fdopen at import time, as some code replaces
+# __builtins__.file with a custom function.
+_fdopen = file.fdopen
 
 def fdopen(fd, mode='r', buffering=-1):
     """fdopen(fd [, mode='r' [, buffering]]) -> file_object
 
     Return an open file object connected to a file descriptor."""
 
-    return file.fdopen(fd, mode, buffering)
+    return _fdopen(fd, mode, buffering)
 
 
 def tmpfile():
@@ -153,6 +156,13 @@ if osname == 'posix':
             try_close(read_end)
             raise Exception, e     # bare 'raise' does not work here :-(
 
+    def wait():
+        """ wait() -> (pid, status)
+    
+        Wait for completion of a child process.
+        """
+        return posix.waitpid(-1, 0)
+
 else:
     # Windows implementations
     
@@ -170,6 +180,7 @@ else:
         univ_nl = ('b' not in mode)
 
         import subprocess
+
         if mode.startswith('r'):
             proc = subprocess.Popen(cmd,
                                     shell=True,
@@ -194,7 +205,6 @@ else:
             raise ValueError("invalid mode %r" % (mode,))
 
         import subprocess
-        
         p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE,
@@ -210,7 +220,6 @@ else:
             raise ValueError("invalid mode %r" % (mode,))
 
         import subprocess
-        
         p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE,
@@ -228,7 +237,6 @@ else:
             raise ValueError("invalid mode %r" % (mode,))
 
         import subprocess
-        
         p = subprocess.Popen(cmd, shell=True, bufsize=bufsize,
                              stdin=subprocess.PIPE,
                              stdout=subprocess.PIPE,

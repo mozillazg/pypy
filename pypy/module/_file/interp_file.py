@@ -4,7 +4,7 @@ from pypy.rlib import streamio
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.module._file.interp_stream import W_AbstractStream
 from pypy.module._file.interp_stream import StreamErrors, wrap_streamerror
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, W_Root, Arguments
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.typedef import interp_attrproperty, make_weakref_descr
@@ -24,9 +24,10 @@ class W_File(W_AbstractStream):
 
     # Default values until the file is successfully opened
     stream   = None
-    name     = "<uninitialized file>"
+    w_name   = None
     mode     = "<uninitialized file>"
-    encoding = None
+    softspace= 0     # Required according to file object docs
+    encoding = None  # This is not used internally by file objects
     fd       = -1
 
     def __init__(self, space):
@@ -38,12 +39,11 @@ class W_File(W_AbstractStream):
         self.clear_all_weakrefs()
         self.direct_close()
 
-    def fdopenstream(self, stream, fd, mode, w_name):
+    def fdopenstream(self, stream, fd, mode, w_name=None):
         self.fd = fd
-        self.w_name = w_name
-        self.softspace = 0    # Required according to file object docs
-        self.encoding = None  # This is not used internally by file objects
         self.mode = mode
+        if w_name is not None:
+            self.w_name = w_name
         self.stream = stream
         if stream.flushable():
             getopenstreams(self.space)[stream] = None
@@ -52,8 +52,8 @@ class W_File(W_AbstractStream):
         if (not mode or mode[0] not in ['r', 'w', 'a', 'U'] or
             ('U' in mode and ('w' in mode or 'a' in mode))):
             space = self.space
-            raise OperationError(space.w_ValueError,
-                                 space.wrap('invalid mode : "%s"' % mode))
+            raise operationerrfmt(space.w_ValueError,
+                                  "invalid mode: '%s'", mode)
 
     def getstream(self):
         """Return self.stream or raise an app-level ValueError if missing
@@ -83,10 +83,11 @@ class W_File(W_AbstractStream):
     def direct___init__(self, w_name, mode='r', buffering=-1):
         name = self.space.str_w(w_name)
         self.direct_close()
+        self.w_name = w_name
         self.check_mode_ok(mode)
         stream = streamio.open_file_as_stream(name, mode, buffering)
         fd = stream.try_to_find_file_descriptor()
-        self.fdopenstream(stream, fd, mode, w_name)
+        self.fdopenstream(stream, fd, mode)
 
     def direct___enter__(self):
         if self.stream is None:
@@ -102,9 +103,10 @@ class W_File(W_AbstractStream):
 
     def direct_fdopen(self, fd, mode='r', buffering=-1):
         self.direct_close()
+        self.w_name = self.space.wrap('<fdopen>')
         self.check_mode_ok(mode)
         stream = streamio.fdopen_as_stream(fd, mode, buffering)
-        self.fdopenstream(stream, fd, mode, self.space.wrap('<fdopen>'))
+        self.fdopenstream(stream, fd, mode)
 
     def direct_close(self):
         space = self.space
@@ -239,7 +241,7 @@ class W_File(W_AbstractStream):
         try:
             self.direct_fdopen(fd, mode, buffering)
         except StreamErrors, e:
-            raise wrap_streamerror(self.space, e)
+            raise wrap_streamerror(self.space, e, self.w_name)
 
     _exposed_method_names = []
 
@@ -275,7 +277,7 @@ class W_File(W_AbstractStream):
                     try:
                         result = self.direct_%(name)s(%(callsig)s)
                     except StreamErrors, e:
-                        raise wrap_streamerror(space, e)
+                        raise wrap_streamerror(space, e, self.w_name)
                 finally:
                     self.unlock()
                 return %(wrapresult)s
@@ -387,18 +389,22 @@ optimizations previously implemented in the xreadlines module.""")
             head = "closed"
         else:
             head = "open"
-        if self.space.abstract_isinstance_w(self.w_name, self.space.w_str):
-            info = "%s file '%s', mode '%s'" % (
-                head,
-                self.space.str_w(self.w_name),
-                self.mode)
-        else:
-            info = "%s file %s, mode '%s'" % (
-                head,
-                self.space.str_w(self.space.repr(self.w_name)),
-                self.mode)
+        info = "%s file %s, mode '%s'" % (
+            head,
+            self.getdisplayname(),
+            self.mode)
         return self.getrepr(self.space, info)
     file__repr__.unwrap_spec = ['self']
+
+    def getdisplayname(self):
+        w_name = self.w_name
+        if w_name is None:
+            return '?'
+        elif self.space.is_true(self.space.isinstance(w_name,
+                                                      self.space.w_str)):
+            return "'%s'" % self.space.str_w(w_name) 
+        else:
+            return self.space.str_w(self.space.repr(w_name))
 
     def file_readinto(self, w_rwbuffer):
         """readinto() -> Undocumented.  Don't use this; it may go away."""

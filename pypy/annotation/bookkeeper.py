@@ -22,6 +22,7 @@ from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import extregistry
+from pypy.lib.identity_dict import identity_dict
 
 class Stats:
 
@@ -174,7 +175,7 @@ class Bookkeeper:
         self.stats = Stats(self)
 
         # used in SomeObject.__new__ for keeping debugging info
-        self._someobject_coming_from = {}
+        self._isomeobject_coming_from = identity_dict()
 
         delayed_imports()
 
@@ -538,7 +539,7 @@ class Bookkeeper:
         # this might need to expand some more.
         if x in self.descs:
             return True
-        elif x in self.seen_mutable:
+        elif (x.__class__, x) in self.seen_mutable:
             return True
         else:
             return False
@@ -564,10 +565,11 @@ class Bookkeeper:
             return result
 
     def see_mutable(self, x):
-        if x in self.seen_mutable:
+        key = (x.__class__, x)
+        if key in self.seen_mutable:
             return
         clsdef = self.getuniqueclassdef(x.__class__)        
-        self.seen_mutable[x] = True
+        self.seen_mutable[key] = True
         self.event('mutable', x)
         source = InstanceSource(self, x)
         for attr in source.all_instance_attributes():
@@ -757,7 +759,8 @@ class RPythonCallsSpace:
             getattr(s_obj, 'from_ellipsis', False)):    # see newtuple()
             return [Ellipsis]
         raise CallPatternTooComplex, "'*' argument must be SomeTuple"
-    viewiterable = unpackiterable
+    fixedview = unpackiterable
+    listview  = unpackiterable
 
     def is_w(self, one, other):
         return one is other

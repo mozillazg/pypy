@@ -21,7 +21,7 @@ class TestRecompilation(BaseTestRegalloc):
         bridge = self.attach_bridge(ops, loop, -2)
         self.cpu.set_future_value_int(0, 0)
         fail = self.run(loop)
-        assert fail == 2
+        assert fail.identifier == 2
         assert self.getint(0) == 21
     
     def test_compile_bridge_deeper(self):
@@ -33,7 +33,8 @@ class TestRecompilation(BaseTestRegalloc):
         jump(i1)
         '''
         loop = self.interpret(ops, [0])
-        previous = loop.token._x86_stack_depth
+        previous = loop.token._x86_frame_depth
+        assert loop.token._x86_param_depth == 0
         assert self.getint(0) == 20
         ops = '''
         [i1]
@@ -48,11 +49,12 @@ class TestRecompilation(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
         descr = loop.operations[2].descr
-        new = descr._x86_bridge_stack_depth
+        new = descr._x86_bridge_frame_depth
+        assert descr._x86_bridge_param_depth == 0        
         assert new > previous
         self.cpu.set_future_value_int(0, 0)
         fail = self.run(loop)
-        assert fail == 2
+        assert fail.identifier == 2
         assert self.getint(0) == 21
         assert self.getint(1) == 22
         assert self.getint(2) == 23
@@ -78,7 +80,7 @@ class TestRecompilation(BaseTestRegalloc):
         bridge = self.attach_bridge(ops, other_loop, 0, looptoken=loop.token)
         self.cpu.set_future_value_int(0, 1)
         fail = self.run(other_loop)
-        assert fail == 1
+        assert fail.identifier == 1
 
     def test_bridge_jumps_to_self_deeper(self):
         loop = self.interpret('''
@@ -107,8 +109,10 @@ class TestRecompilation(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, 5, looptoken=loop.token)
         guard_op = loop.operations[5]
-        loop_stack_depth = loop.token._x86_stack_depth
-        assert guard_op.descr._x86_bridge_stack_depth > loop_stack_depth
+        loop_frame_depth = loop.token._x86_frame_depth
+        assert loop.token._x86_param_depth == 0
+        assert guard_op.descr._x86_bridge_frame_depth > loop_frame_depth
+        assert guard_op.descr._x86_bridge_param_depth == 0
         self.cpu.set_future_value_int(0, 0)
         self.cpu.set_future_value_int(1, 0)
         self.cpu.set_future_value_int(2, 0)

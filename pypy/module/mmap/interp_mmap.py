@@ -54,7 +54,11 @@ class W_MMap(Wrappable):
     tell.unwrap_spec = ['self']
     
     def descr_size(self):
-        return self.space.wrap(self.mmap.file_size())
+        try:
+            return self.space.wrap(self.mmap.file_size())
+        except OSError, e:
+            raise wrap_oserror(self.space, e,
+                               exception_name='w_EnvironmentError')
     descr_size.unwrap_spec = ['self']
     
     def write(self, data):
@@ -83,6 +87,9 @@ class W_MMap(Wrappable):
         except RValueError, v:
             raise OperationError(self.space.w_ValueError,
                                  self.space.wrap(v.message))
+        except OSError, e:
+            raise wrap_oserror(self.space, e,
+                               exception_name='w_EnvironmentError')
     flush.unwrap_spec = ['self', int, int]
     
     def move(self, dest, src, count):
@@ -96,7 +103,11 @@ class W_MMap(Wrappable):
     def resize(self, newsize):
         self.check_valid()
         self.check_resizeable()
-        self.mmap.resize(newsize)
+        try:
+            self.mmap.resize(newsize)
+        except OSError, e:
+            raise wrap_oserror(self.space, e,
+                               exception_name='w_EnvironmentError')
     resize.unwrap_spec = ['self', int]
     
     def __len__(self):
@@ -216,7 +227,7 @@ if rmmap._POSIX:
             return space.wrap(W_MMap(space, rmmap.mmap(fileno, length,
                                                        flags, prot, access)))
         except OSError, e:
-            raise wrap_oserror(space, e, 'w_EnvironmentError')
+            raise wrap_oserror(space, e, exception_name='w_EnvironmentError')
         except RValueError, e:
             raise OperationError(space.w_ValueError, space.wrap(e.message))
         except RTypeError, e:
@@ -230,7 +241,7 @@ elif rmmap._MS_WINDOWS:
             return space.wrap(W_MMap(space, rmmap.mmap(fileno, length,
                                                        tagname, access)))
         except OSError, e:
-            raise wrap_oserror(space, e, 'w_EnvironmentError')
+            raise wrap_oserror(space, e, exception_name='w_EnvironmentError')
         except RValueError, e:
             raise OperationError(space.w_ValueError, space.wrap(e.message))
         except RTypeError, e:

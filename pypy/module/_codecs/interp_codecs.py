@@ -1,6 +1,8 @@
-from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped
+from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped, applevel
 from pypy.interpreter.baseobjspace import W_Root
+from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
+from pypy.rlib.objectmodel import we_are_translated
 
 class CodecState(object):
     def __init__(self, space):
@@ -30,20 +32,19 @@ class CodecState(object):
             w_res = space.call_function(w_errorhandler, w_exc)
             if (not space.is_true(space.isinstance(w_res, space.w_tuple))
                 or space.int_w(space.len(w_res)) != 2):
-                raise OperationError(
+                raise operationerrfmt(
                     space.w_TypeError,
-                    space.wrap("encoding error handler must return "
-                               "(unicode, int) tuple, not %s" % (
-                                   space.str_w(space.repr(w_res)))))
-            w_replace, w_newpos = space.viewiterable(w_res, 2)
+                    "encoding error handler must return "
+                    "(unicode, int) tuple, not %s",
+                    space.str_w(space.repr(w_res)))
+            w_replace, w_newpos = space.fixedview(w_res, 2)
             newpos = space.int_w(w_newpos)
             if (newpos < 0):
                 newpos = len(input) + newpos
             if newpos < 0 or newpos > len(input):
-                raise OperationError(
+                raise operationerrfmt(
                     space.w_IndexError,
-                    space.wrap("position %d from error handler "
-                               "out of bounds" % newpos))
+                    "position %d from error handler out of bounds", newpos)
             if decode:
                 replace = space.unicode_w(w_replace)
                 return replace, newpos
@@ -52,6 +53,9 @@ class CodecState(object):
                 return replace, newpos
         return unicode_call_errorhandler
 
+    def _freeze_(self):
+        assert not self.codec_search_path
+        return False
 
 def register_codec(space, w_search_function):
     """register(search_function)
@@ -75,6 +79,8 @@ def lookup_codec(space, encoding):
     Looks up a codec tuple in the Python codec registry and returns
     a tuple of functions.
     """
+    assert not (space.config.translating and not we_are_translated()), \
+        "lookup_codec() should not be called during translation"
     state = space.fromcache(CodecState)
     normalized_encoding = encoding.replace(" ", "-").lower()    
     w_result = state.codec_search_cache.get(normalized_encoding, None)
@@ -103,11 +109,84 @@ def lookup_codec(space, encoding):
             else:
                 state.codec_search_cache[normalized_encoding] = w_result 
                 return w_result
-    raise OperationError(
+    raise operationerrfmt(
         space.w_LookupError,
-        space.wrap("unknown encoding: %s" % encoding))
+        "unknown encoding: %s", encoding)
 lookup_codec.unwrap_spec = [ObjSpace, str]
-    
+
+app_errors = applevel("""
+def check_exception(exc):
+    try:
+        delta = exc.end - exc.start
+        if delta < 0 or not isinstance(exc.object, (unicode, str)):
+            raise TypeError("wrong exception")
+    except AttributeError:
+        raise TypeError("wrong exception")
+
+def strict_errors(exc):
+    if isinstance(exc, Exception):
+        raise exc
+    else:
+        raise TypeError("codec must pass exception instance")
+
+def ignore_errors(exc):
+    check_exception(exc)
+    if isinstance(exc, UnicodeEncodeError):
+        return u'', exc.end
+    elif isinstance(exc, (UnicodeDecodeError, UnicodeTranslateError)):
+        return u'', exc.end
+    else: 
+        raise TypeError("don't know how to handle %.400s in error callback"%exc)
+
+Py_UNICODE_REPLACEMENT_CHARACTER = u"\ufffd"
+
+def replace_errors(exc):
+    check_exception(exc)
+    if isinstance(exc, UnicodeEncodeError):
+        return u'?'*(exc.end-exc.start), exc.end
+    elif isinstance(exc, (UnicodeTranslateError, UnicodeDecodeError)):
+        return Py_UNICODE_REPLACEMENT_CHARACTER*(exc.end-exc.start), exc.end
+    else:
+        raise TypeError("don't know how to handle %.400s in error callback"%exc)
+
+def xmlcharrefreplace_errors(exc):
+    if isinstance(exc, UnicodeEncodeError):
+        res = []
+        for ch in exc.object[exc.start:exc.end]:
+            res += '&#'
+            res += str(ord(ch))
+            res += ';'
+        return u''.join(res), exc.end
+    else:
+        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
+
+def backslashreplace_errors(exc):
+    if isinstance(exc, UnicodeEncodeError):
+        p = []
+        for c in exc.object[exc.start:exc.end]:
+            p += '\\\\'
+            oc = ord(c)
+            if (oc >= 0x00010000):
+                p += 'U'
+                p += "%.8x" % ord(c)
+            elif (oc >= 0x100):
+                p += 'u'
+                p += "%.4x" % ord(c)
+            else:
+                p += 'x'
+                p += "%.2x" % ord(c)
+        return u''.join(p), exc.end
+    else:
+        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
+""")
+
+def register_builtin_error_handlers(space):
+    state = space.fromcache(CodecState)
+    for error in ("strict", "ignore", "replace", "xmlcharrefreplace",
+                  "backslashreplace"):
+        name = error + "_errors"
+        state.codec_error_registry[error] = app_errors.wget(space, name)
+
 
 def lookup_error(space, errors):
     """lookup_error(errors) -> handler
@@ -120,9 +199,9 @@ def lookup_error(space, errors):
     try:
         w_err_handler = state.codec_error_registry[errors]
     except KeyError:
-        raise OperationError(
+        raise operationerrfmt(
             space.w_LookupError,
-            space.wrap("unknown error handler name %s" % errors))
+            "unknown error handler name %s", errors)
     return w_err_handler
 lookup_error.unwrap_spec = [ObjSpace, str]
 
@@ -142,11 +221,8 @@ def encode(space, w_obj, w_encoding=NoneNotWrapped, errors='strict'):
     else:
         encoding = space.str_w(w_encoding)
     w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
-    if space.is_true(w_encoder):
-        w_res = space.call_function(w_encoder, w_obj, space.wrap(errors))
-        return space.getitem(w_res, space.wrap(0))
-    else:
-        assert 0, "XXX, what to do here?"
+    w_res = space.call_function(w_encoder, w_obj, space.wrap(errors))
+    return space.getitem(w_res, space.wrap(0))
 encode.unwrap_spec = [ObjSpace, W_Root, W_Root, str]
 
 def buffer_encode(space, s, errors='strict'):
@@ -273,3 +349,77 @@ def utf_16_ex_decode(space, data, errors='strict', byteorder=0, w_final=False):
                            space.wrap(byteorder)])
 utf_16_ex_decode.unwrap_spec = [ObjSpace, str, str, int, W_Root]
 
+def _extract_from_mapping(space, mapping_w, w_mapping, ch):
+    if mapping_w is not None:
+        try:
+            return mapping_w[ord(ch)]
+        except IndexError:
+            pass
+    else:
+        try:
+            return space.getitem(w_mapping, space.newint(ord(ch)))
+        except OperationError, e:
+            if (not e.match(space, space.w_KeyError) and
+                not e.match(space, space.w_IndexError)):
+                raise
+            pass
+
+def _append_unicode(space, builder, w_x):
+    try:
+        x = space.unicode_w(w_x)
+    except OperationError, e:
+        if not e.match(space, space.w_TypeError):
+            raise
+    else:
+        if x != u"\ufffe":
+            builder.append(x)
+            return True
+        return False
+    try:
+        x = space.int_w(w_x)
+    except OperationError:
+        if not e.match(space, space.w_TypeError):
+            raise
+    else:
+        if x < 65536:
+            builder.append(unichr(x))
+        else:
+            raise OperationError(space.w_TypeError, space.wrap("character mapping must be in range(65536)"))
+        return True
+    if not space.is_true(w_x):
+        return False
+    else:
+        raise OperationError(space.w_TypeError, space.w_None)
+
+
+def charmap_decode(space, s, errors="strict", w_mapping=None):
+    size = len(s)
+    # Default to Latin-1
+    if space.is_true(space.is_(w_mapping, space.w_None)):
+        return latin_1_decode(space, s, errors, space.w_False)
+
+    if (size == 0):
+        return space.newtuple([space.wrap(u''), space.wrap(0)])
+    
+    # fast path for all the stuff in the encodings module
+    if space.is_true(space.isinstance(w_mapping, space.w_tuple)):
+        mapping_w = space.fixedview(w_mapping)
+    else:
+        mapping_w = None
+
+    builder = UnicodeBuilder(size)
+    inpos = 0
+    while (inpos < len(s)):
+        #/* Get mapping_w (char ordinal -> integer, Unicode char or None) */
+        ch = s[inpos]
+        w_x = _extract_from_mapping(space, mapping_w, w_mapping, ch)
+        if w_x is not None and _append_unicode(space, builder, w_x):
+            inpos += 1
+            continue
+        state = space.fromcache(CodecState)
+        next, inpos = state.decode_error_handler(errors, "charmap",
+                   "character maps to <undefined>", s, inpos, inpos+1)
+        builder.append(next)
+    res = builder.build()
+    return space.newtuple([space.wrap(res), space.wrap(size)])
+charmap_decode.unwrap_spec = [ObjSpace, str, str, W_Root]

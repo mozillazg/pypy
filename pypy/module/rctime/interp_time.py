@@ -1,6 +1,6 @@
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem import rffi
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.rarithmetic import ovfcheck_float_to_int
@@ -222,11 +222,11 @@ def _gettmarg(space, w_tup, allowNone=True):
                 space.wrap(_get_error_msg()))
         return pbuf
 
-    tup_w = space.unpackiterable(w_tup)
+    tup_w = space.fixedview(w_tup)
     if len(tup_w) != 9:
-        raise OperationError(space.w_TypeError, 
-                             space.wrap("argument must be sequence of "
-                                        "length 9, not %d" % len(tup_w)))
+        raise operationerrfmt(space.w_TypeError, 
+                              "argument must be sequence of "
+                              "length 9, not %d", len(tup_w))
 
     y = space.int_w(tup_w[0])
     tm_mon = space.int_w(tup_w[1])
@@ -452,20 +452,18 @@ def strftime(space, format, w_tup=None):
 
     i = 1024
     while True:
-        outbuf = lltype.malloc(rffi.CCHARP.TO, i + 1, flavor='raw')
-        buflen = c_strftime(outbuf, i, format, buf_value)
-        
-        if buflen > 0 or i >= 256 * len(format):
-            # if the buffer is 256 times as long as the format,
-            # it's probably not failing for lack of room!
-            # More likely, the format yields an empty result,
-            # e.g. an empty format, or %Z when the timezone
-            # is unknown.
-            if buflen < 0: buflen = 0    # should not occur
-            outbuf[buflen] = '\x00'
-            result = rffi.charp2str(outbuf)
+        outbuf = lltype.malloc(rffi.CCHARP.TO, i, flavor='raw')
+        try:
+            buflen = c_strftime(outbuf, i, format, buf_value)
+            if buflen > 0 or i >= 256 * len(format):
+                # if the buffer is 256 times as long as the format,
+                # it's probably not failing for lack of room!
+                # More likely, the format yields an empty result,
+                # e.g. an empty format, or %Z when the timezone
+                # is unknown.
+                result = rffi.charp2strn(outbuf, buflen)
+                return space.wrap(result)
+        finally:
             lltype.free(outbuf, flavor='raw')
-            return space.wrap(result)
-
         i += i
 strftime.unwrap_spec = [ObjSpace, str, W_Root]

@@ -126,6 +126,10 @@ def ovfcheck_float_to_int(x):
     raise OverflowError
 
 def compute_restype(self_type, other_type):
+    if self_type is other_type:
+        if self_type is bool:
+            return int
+        return self_type
     if other_type in (bool, int, long):
         if self_type is bool:
             return int
@@ -173,12 +177,6 @@ class base_int(long):
             raise TypeError("abstract base!")
         else:
             return super(base_int, klass).__new__(klass, val)
-
-    def __int__(self):
-        if self < LONG_TEST:
-            return long.__int__(self)
-        else:
-            return intmask(self)
 
     def __add__(self, other):
         x = long(self)
@@ -307,7 +305,7 @@ class signed_int(base_int):
         if val > klass.MASK>>1 or val < -(klass.MASK>>1)-1:
             raise OverflowError("%s does not fit in signed %d-bit integer"%(val, klass.BITS))
         if val < 0:
-            val = - ((-val) & klass.MASK)
+            val = ~ ((~val) & klass.MASK)
         return super(signed_int, klass).__new__(klass, val)
     typemap = {}
 
@@ -321,12 +319,13 @@ class unsigned_int(base_int):
 
 _inttypes = {}
 
-def build_int(name, sign, bits):
+def build_int(name, sign, bits, force_creation=False):
     sign = bool(sign)
-    try:
-        return _inttypes[sign, bits]
-    except KeyError:
-        pass
+    if not force_creation:
+        try:
+            return _inttypes[sign, bits]
+        except KeyError:
+            pass
     if sign:
         base_int_type = signed_int
     else:
@@ -334,8 +333,11 @@ def build_int(name, sign, bits):
     mask = (2 ** bits) - 1
     if name is None:
         raise TypeError('No predefined %sint%d'%(['u', ''][sign], bits))
-    int_type = _inttypes[sign, bits] = type(name, (base_int_type,), {'MASK': mask,
-                                                           'BITS': bits})
+    int_type = type(name, (base_int_type,), {'MASK': mask,
+                                             'BITS': bits,
+                                             'SIGN': sign})
+    if not force_creation:
+        _inttypes[sign, bits] = int_type
     class ForValuesEntry(extregistry.ExtRegistryEntry):
         _type_ = int_type
 

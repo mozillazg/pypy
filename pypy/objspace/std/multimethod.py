@@ -25,9 +25,35 @@ from pypy.tool.sourcetools import compile2
 
 
 class FailedToImplement(Exception):
+    def __new__(cls, *args):
+        if cls is FailedToImplement:
+            assert not args, "use FailedToImplementArgs!"
+        return Exception.__new__(cls, *args)
+
+    def get_w_value(self, space):
+        return None
+    
+    def get_w_type(self, space):
+        return None
+    
+    def __str__(self):
+        return '<FailedToImplement(None, None)>'
+
+class FailedToImplementArgs(FailedToImplement):
     def __init__(self, w_type=None, w_value=None):
         self.w_type  = w_type
         self.w_value = w_value
+
+    def get_w_value(self, space):
+        # convenience: same semantics as with OperationError
+        return self.w_value
+    
+    def get_w_type(self, space):
+        return self.w_type
+
+    def __str__(self):
+        return '<FailedToImplement(%s, %s)>' % (self.w_type, self.w_value)
+    
 
 
 def raiseFailedToImplement():

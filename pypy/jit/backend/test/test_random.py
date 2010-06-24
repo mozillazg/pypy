@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import llmemory
 from pypy.jit.backend.test import conftest as demo_conftest
 from pypy.jit.metainterp.history import BasicFailDescr, TreeLoop
 from pypy.jit.metainterp.history import BoxInt, ConstInt, LoopToken
-from pypy.jit.metainterp.history import BoxPtr, ConstPtr, ConstAddr
+from pypy.jit.metainterp.history import BoxPtr, ConstPtr
 from pypy.jit.metainterp.history import BoxFloat, ConstFloat, Const
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.executor import execute_nonspec
@@ -17,11 +17,14 @@ class DummyLoop(object):
     def __init__(self, subops):
         self.operations = subops
 
+class FakeMetaInterp(object):
+    def execute_raised(self, exc, constant=False):
+        self._got_exc = exc
+
 class OperationBuilder(object):
-    failnumbering = 0
-    
     def __init__(self, cpu, loop, vars):
         self.cpu = cpu
+        self.fakemetainterp = FakeMetaInterp()
         self.loop = loop
         self.intvars = [box for box in vars if isinstance(box, BoxInt)]
         self.boolvars = []   # subset of self.intvars
@@ -36,19 +39,15 @@ class OperationBuilder(object):
         self.counter = 0
         assert len(self.intvars) == len(dict.fromkeys(self.intvars))
 
-    @classmethod
-    def make_fail_descr(cls):
-        descr = BasicFailDescr(cls.failnumbering)
-        cls.failnumbering += 1
-        return descr
-        
     def fork(self, cpu, loop, vars):
         fork = self.__class__(cpu, loop, vars)
         fork.prebuilt_ptr_consts = self.prebuilt_ptr_consts
         return fork
 
     def do(self, opnum, argboxes, descr=None):
-        v_result = execute_nonspec(self.cpu, opnum, argboxes, descr)
+        self.fakemetainterp._got_exc = None
+        v_result = execute_nonspec(self.cpu, self.fakemetainterp,
+                                   opnum, argboxes, descr)
         if isinstance(v_result, Const):
             v_result = v_result.clonebox()
         self.loop.operations.append(ResOperation(opnum, argboxes, v_result,
@@ -57,27 +56,21 @@ class OperationBuilder(object):
 
     def get_bool_var(self, r):
         if self.boolvars and r.random() < 0.8:
-            v = r.choice(self.boolvars)
+            return r.choice(self.boolvars)
         elif self.ptrvars and r.random() < 0.4:
             v, S = r.choice(self.ptrvars + self.prebuilt_ptr_consts)[:2]
             v2, S2 = r.choice(self.ptrvars + self.prebuilt_ptr_consts)[:2]
             if S == S2 and not (isinstance(v, ConstPtr) and
                                 isinstance(v2, ConstPtr)):
                 if r.random() < 0.5:
-                    v = self.do(rop.OOIS, [v, v2])
+                    return self.do(rop.PTR_EQ, [v, v2])
                 else:
-                    v = self.do(rop.OOISNOT, [v, v2])
-            else:
-                if isinstance(v, ConstPtr):
-                    v, S = r.choice(self.ptrvars)
-                if r.random() < 0.5:
-                    v = self.do(rop.OONONNULL, [v])
-                else:
-                    v = self.do(rop.OOISNULL, [v])
+                    return self.do(rop.PTR_NE, [v, v2])
+        v = r.choice(self.intvars)
+        if r.random() < 0.7:
+            return self.do(rop.INT_IS_TRUE, [v])
         else:
-            v = r.choice(self.intvars)
-            v = self.do(rop.INT_IS_TRUE, [v])
-        return v
+            return self.do(rop.INT_IS_ZERO, [v])
 
     def subset_of_intvars(self, r):
         subset = []
@@ -96,16 +89,16 @@ class OperationBuilder(object):
         for v in op.args:
             if v in names:
                 args.append(names[v])
-            elif isinstance(v, ConstAddr):
-                try:
-                    name = ''.join([v.value.ptr.name[i]
-                                    for i in range(len(v.value.ptr.name)-1)])
-                except AttributeError:
-                    args.append('ConstAddr(...)')
-                else:
-                    args.append(
-                        'ConstAddr(llmemory.cast_ptr_to_adr(%s_vtable), cpu)'
-                        % name)
+##            elif isinstance(v, ConstAddr):
+##                try:
+##                    name = ''.join([v.value.ptr.name[i]
+##                                    for i in range(len(v.value.ptr.name)-1)])
+##                except AttributeError:
+##                    args.append('ConstAddr(...)')
+##                else:
+##                    args.append(
+##                        'ConstAddr(llmemory.cast_ptr_to_adr(%s_vtable), cpu)'
+##                        % name)
             elif isinstance(v, ConstFloat):
                 args.append('ConstFloat(%r)' % v.value)
             elif isinstance(v, ConstInt):
@@ -246,7 +239,9 @@ class BooleanUnaryOperation(UnaryOperation):
 
 class ConstUnaryOperation(UnaryOperation):
     def produce_into(self, builder, r):
-        if r.random() < 0.75 or not builder.cpu.supports_floats:
+        if r.random() < 0.4:
+            UnaryOperation.produce_into(self, builder, r)
+        elif r.random() < 0.75 or not builder.cpu.supports_floats:
             self.put(builder, [ConstInt(r.random_integer())])
         else:
             self.put(builder, [ConstFloat(r.random_float())])
@@ -279,8 +274,8 @@ class AbstractOvfOperation(AbstractOperation):
         fail_subset = builder.subset_of_intvars(r)
         original_intvars = builder.intvars[:]
         super(AbstractOvfOperation, self).produce_into(builder, r)
-        if builder.cpu._overflow_flag:   # overflow detected
-            del builder.cpu._overflow_flag
+        if builder.fakemetainterp._got_exc:   # overflow detected
+            assert isinstance(builder.fakemetainterp._got_exc, OverflowError)
             op = ResOperation(rop.GUARD_OVERFLOW, [], None)
             # the overflowed result should not be used any more, but can
             # be used on the failure path: recompute fail_subset including
@@ -289,7 +284,7 @@ class AbstractOvfOperation(AbstractOperation):
             builder.intvars[:] = original_intvars
         else:
             op = ResOperation(rop.GUARD_NO_OVERFLOW, [], None)
-        op.descr = builder.make_fail_descr()
+        op.descr = BasicFailDescr()
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -350,11 +345,21 @@ class GuardOperation(AbstractOperation):
     def produce_into(self, builder, r):
         op, passing = self.gen_guard(builder, r)
         builder.loop.operations.append(op)
-        op.descr = builder.make_fail_descr()
+        op.descr = BasicFailDescr()
         op.fail_args = builder.subset_of_intvars(r)
         if not passing:
             builder.should_fail_by = op
             builder.guard_op = op
+
+class GuardPtrOperation(GuardOperation):
+    def gen_guard(self, builder, r):
+        if not builder.ptrvars:
+            raise CannotProduceOperation
+        box = r.choice(builder.ptrvars)[0]
+        op = ResOperation(self.opnum, [box], None)
+        passing = ((self.opnum == rop.GUARD_NONNULL and box.value) or
+                   (self.opnum == rop.GUARD_ISNULL and not box.value))
+        return op, passing
 
 class GuardValueOperation(GuardOperation):
     def gen_guard(self, builder, r):
@@ -408,6 +413,8 @@ OPERATIONS.append(GuardOperation(rop.GUARD_TRUE))
 OPERATIONS.append(GuardOperation(rop.GUARD_TRUE))
 OPERATIONS.append(GuardOperation(rop.GUARD_FALSE))
 OPERATIONS.append(GuardOperation(rop.GUARD_FALSE))
+OPERATIONS.append(GuardPtrOperation(rop.GUARD_NONNULL))
+OPERATIONS.append(GuardPtrOperation(rop.GUARD_ISNULL))
 OPERATIONS.append(GuardValueOperation(rop.GUARD_VALUE))
 
 for _op in [rop.INT_NEG,
@@ -416,7 +423,7 @@ for _op in [rop.INT_NEG,
     OPERATIONS.append(UnaryOperation(_op))
 
 OPERATIONS.append(UnaryOperation(rop.INT_IS_TRUE, boolres=True))
-OPERATIONS.append(BooleanUnaryOperation(rop.BOOL_NOT, boolres=True))
+OPERATIONS.append(UnaryOperation(rop.INT_IS_ZERO, boolres=True))
 OPERATIONS.append(ConstUnaryOperation(rop.SAME_AS, boolres='sometimes'))
 
 for _op in [rop.INT_ADD_OVF,
@@ -434,7 +441,6 @@ for _op in [rop.FLOAT_ADD,
 
 for _op in [rop.FLOAT_NEG,
             rop.FLOAT_ABS,
-            rop.FLOAT_IS_TRUE,
             ]:
     OPERATIONS.append(UnaryFloatOperation(_op))
 
@@ -554,7 +560,7 @@ class RandomLoop(object):
                 endvars.append(v)
         r.shuffle(endvars)
         loop.operations.append(ResOperation(rop.FINISH, endvars, None,
-                                            descr=BasicFailDescr(-2)))
+                                            descr=BasicFailDescr()))
         if builder.should_fail_by:
             self.should_fail_by = builder.should_fail_by
             self.guard_op = builder.guard_op
@@ -589,8 +595,8 @@ class RandomLoop(object):
     def run_loop(self):
         cpu = self.builder.cpu
         self.clear_state()
-        assert not cpu.get_exception()
-        assert not cpu.get_exc_value()
+        exc = cpu.grab_exc_value()
+        assert not exc
 
         for i, box in enumerate(self.startvars):
             if isinstance(box, BoxInt):
@@ -600,7 +606,7 @@ class RandomLoop(object):
             else:
                 raise NotImplementedError(box)
         fail = cpu.execute_token(self.loop.token)
-        assert fail == self.should_fail_by.descr.index
+        assert fail is self.should_fail_by.descr
         for i, v in enumerate(self.get_fail_args()):
             if isinstance(v, (BoxFloat, ConstFloat)):
                 value = cpu.get_latest_value_float(i)
@@ -611,15 +617,13 @@ class RandomLoop(object):
                                                        self.expected[v],
                                                        i)
                 )
+        exc = cpu.grab_exc_value()
         if (self.guard_op is not None and
             self.guard_op.is_guard_exception()):
             if self.guard_op.opnum == rop.GUARD_NO_EXCEPTION:
-                assert cpu.get_exception()
-                assert cpu.get_exc_value()
-            cpu.clear_exception()
+                assert exc
         else:
-            assert not cpu.get_exception()
-            assert not cpu.get_exc_value()
+            assert not exc
 
     def build_bridge(self):
         def exc_handling(guard_op):
@@ -629,7 +633,7 @@ class RandomLoop(object):
             else:
                 op = ResOperation(rop.GUARD_EXCEPTION, [guard_op._exc_box],
                                   BoxPtr())
-            op.descr = self.builder.make_fail_descr()
+            op.descr = BasicFailDescr()
             op.fail_args = []
             return op
 

@@ -27,9 +27,9 @@ def unpack_str_tuple(space,w_str_tuple):
 
 
 # Magic numbers for the bytecode version in code objects.
-# See comments in pypy/module/__builtin__/importing.
+# See comments in pypy/module/imp/importing.
 cpython_magic, = struct.unpack("<i", imp.get_magic())   # host magic number
-default_magic = (62131+2) | 0x0a0d0000                  # this PyPy's magic
+default_magic = (62141+2) | 0x0a0d0000                  # this PyPy's magic
                                                         # (62131=CPython 2.5.1)
 
 # cpython_code_signature helper
@@ -117,9 +117,10 @@ class PyCode(eval.Code):
 
         self._compute_flatcall()
 
-        if self.space.config.objspace.std.withcelldict:
-            from pypy.objspace.std.celldict import init_code
-            init_code(self)
+    def _freeze_(self):
+        if self.magic == cpython_magic:
+            raise Exception("CPython host codes should not be rendered")
+        return False
 
     def _init_flags(self):
         co_code = self.co_code
@@ -223,15 +224,10 @@ class PyCode(eval.Code):
 
     def getdocstring(self, space):
         if self.co_consts_w:   # it is probably never empty
-            return self.co_consts_w[0]
-        else:
-            return space.w_None
-
-    def getjoinpoints(self):
-        """Compute the bytecode positions that are potential join points
-        (for FlowObjSpace)"""
-        # first approximation
-        return dis.findlabels(self.co_code)
+            w_first = self.co_consts_w[0]
+            if space.is_true(space.isinstance(w_first, space.w_basestring)):
+                return w_first
+        return space.w_None
 
     def _to_code(self):
         """For debugging only."""
@@ -349,7 +345,7 @@ class PyCode(eval.Code):
         if not space.is_true(space.isinstance(w_constants, space.w_tuple)):
             raise OperationError(space.w_TypeError,
                                  space.wrap("Expected tuple for constants"))
-        consts_w   = space.viewiterable(w_constants)
+        consts_w   = space.fixedview(w_constants)
         names      = unpack_str_tuple(space, w_names)
         varnames   = unpack_str_tuple(space, w_varnames)
         if w_freevars is not None:

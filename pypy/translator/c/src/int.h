@@ -47,6 +47,14 @@
 #define OP_INT_LT(x,y,r)	  r = ((x) <  (y))
 #define OP_INT_GE(x,y,r)	  r = ((x) >= (y))
 
+/* Implement INT_BETWEEN by optimizing for the common case where a and c
+   are constants (the 2nd subtraction below is then constant-folded), or
+   for the case of a == 0 (both subtractions are then constant-folded).
+   Note that the following line only works if a <= c in the first place,
+   which we assume is true. */
+#define OP_INT_BETWEEN(a,b,c,r)   r = (((unsigned long)b - (unsigned long)a) \
+                                     < ((unsigned long)c - (unsigned long)a))
+
 /* addition, subtraction */
 
 #define OP_INT_ADD(x,y,r)     r = (x) + (y)
@@ -57,11 +65,11 @@
 	else FAIL_OVF("integer addition")
 
 #define OP_INT_ADD_NONNEG_OVF(x,y,r)  /* y can be assumed >= 0 */ \
-    OP_INT_ADD(x,y,r); \
+    r = (long)((unsigned long)x + (unsigned long)y); \
     if (r >= (x)); \
     else FAIL_OVF("integer addition")
-/* XXX can a C compiler be too clever and think it can "prove" that
- * r >= x always hold above? */
+/* Can a C compiler be too clever and think it can "prove" that
+ * r >= x always holds above?  Yes.  Hence the casting. */
 
 #define OP_INT_SUB(x,y,r)     r = (x) - (y)
 

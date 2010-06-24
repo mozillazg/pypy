@@ -10,6 +10,10 @@ def test_bigint():
     from pypy.rlib.rbigint import rbigint
     assert not pypypolicy.look_inside_function(rbigint.lt.im_func)
 
+def test_rlocale():
+    from pypy.rlib.rlocale import setlocale
+    assert not pypypolicy.look_inside_function(setlocale)    
+
 def test_geninterp():
     d = {'_geninterp_': True}
     exec """def f():
@@ -30,13 +34,12 @@ def test_pypy_module():
     assert not pypypolicy.look_inside_pypy_module('posix.interp_expat')
     assert pypypolicy.look_inside_pypy_module('__builtin__.operation')
     assert pypypolicy.look_inside_pypy_module('__builtin__.abstractinst')
-    for modname in 'pypyjit', 'signal', 'micronumpy', 'math':
+    assert pypypolicy.look_inside_pypy_module('__builtin__.functional')
+    assert pypypolicy.look_inside_pypy_module('exceptions.interp_exceptions')
+    for modname in 'pypyjit', 'signal', 'micronumpy', 'math', 'imp':
         assert pypypolicy.look_inside_pypy_module(modname)
         assert pypypolicy.look_inside_pypy_module(modname + '.foo')
 
 def test_see_jit_module():
     assert pypypolicy.look_inside_pypy_module('pypyjit.interp_jit')
 
-def test_module_with_stuff_in_init():
-    from pypy.module.sys import Module
-    assert not pypypolicy.look_inside_function(Module.getdictvalue.im_func)

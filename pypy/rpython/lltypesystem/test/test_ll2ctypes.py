@@ -15,7 +15,6 @@ from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
-from pypy.tool.udir import udir
 
 class TestLL2Ctypes(object):
 
@@ -343,6 +342,17 @@ class TestLL2Ctypes(object):
         lltype.free(ll_timevalp, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
+    def test_opaque_obj_2(self):
+        FILEP = rffi.COpaquePtr('FILE')
+        fopen = rffi.llexternal('fopen', [rffi.CCHARP, rffi.CCHARP], FILEP)
+        fclose = rffi.llexternal('fclose', [FILEP], rffi.INT)
+        tmppath = udir.join('test_ll2ctypes.test_opaque_obj_2')
+        ll_file = fopen(str(tmppath), "w")
+        assert ll_file
+        fclose(ll_file)
+        assert tmppath.check(file=1)
+        assert not ALLOCATED     # detects memory leaks in the test
+
     def test_simple_cast(self):
         assert rffi.cast(rffi.SIGNEDCHAR, 0x123456) == 0x56
         assert rffi.cast(rffi.SIGNEDCHAR, 0x123481) == -127
@@ -431,6 +441,29 @@ class TestLL2Ctypes(object):
         assert res == 8
         rffi.free_charp(p)
         assert not ALLOCATED     # detects memory leaks in the test
+
+    def test_funcptr_cast(self):
+        eci = ExternalCompilationInfo(
+            separate_module_sources=["""
+            long mul(long x, long y) { return x*y; }
+            long(*get_mul(long x)) () { return &mul; }
+            """],
+            export_symbols=['get_mul'])
+        get_mul = rffi.llexternal(
+            'get_mul', [],
+            lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed)),
+            compilation_info=eci)
+        # This call returns a pointer to a function taking one argument
+        funcptr = get_mul()
+        # cast it to the "real" function type
+        FUNCTYPE2 = lltype.FuncType([lltype.Signed, lltype.Signed],
+                                    lltype.Signed)
+        cmul = rffi.cast(lltype.Ptr(FUNCTYPE2), funcptr)
+        # and it can be called with the expected number of arguments
+        res = cmul(41, 42)
+        assert res == 41 * 42
+        raises(TypeError, cmul, 41)
+        raises(TypeError, cmul, 41, 42, 43)
 
     def test_qsort(self):
         CMPFUNC = lltype.FuncType([rffi.VOIDP, rffi.VOIDP], rffi.INT)
@@ -928,34 +961,6 @@ class TestLL2Ctypes(object):
         assert op.args[1].value == pypy.rpython.lltypesystem.rstr.LLHelpers
         assert op.args[3].value == -2
 
-    def test_pass_around_t_object(self):
-        from pypy.rpython.annlowlevel import base_ptr_lltype
-        T = base_ptr_lltype()
-        
-        class X(object):
-            _TYPE = T
-            x = 10
-
-        def callback(x):
-            return x.x
-
-        c_source = py.code.Source("""
-        long eating_callback(void *arg, long(*call)(void*))
-        {
-            return call(arg);
-        }
-        """)
-
-        eci = ExternalCompilationInfo(separate_module_sources=[c_source],
-                                      export_symbols=['eating_callback'])
-
-        args = [T, rffi.CCallback([T], rffi.LONG)]
-        eating_callback = rffi.llexternal('eating_callback', args, rffi.LONG,
-                                          compilation_info=eci)
-
-        res = eating_callback(X(), callback)
-        assert res == 10
-
     def test_recursive_struct_more(self):
         NODE = lltype.ForwardReference()
         NODE.become(lltype.Struct('NODE', ('value', lltype.Signed),
@@ -1069,6 +1074,10 @@ class TestLL2Ctypes(object):
 
         #assert lltype.cast_ptr_to_int(ref1) == intval
 
+    def test_ptr_truth(self):
+        abc = rffi.cast(lltype.Ptr(lltype.FuncType([], lltype.Void)), 0)
+        assert not abc
+
     def test_mixed_gcref_comparison(self):
         NODE = lltype.GcStruct('NODE')
         node = lltype.malloc(NODE)
@@ -1134,7 +1143,113 @@ class TestLL2Ctypes(object):
         #import pdb; pdb.set_trace()
         assert adr1_2 == adr1
         assert adr1 == adr1_2
-        
+
+    def test_object_subclass(self):
+        from pypy.rpython.lltypesystem import rclass
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            pass
+        def f(n):
+            s = S()
+            s.x = n
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(rclass.OBJECTPTR, as_num)
+            u = cast_base_ptr_to_instance(S, t)
+            return u.x
+        res = interpret(f, [123])
+        assert res == 123
+
+    def test_object_subclass_2(self):
+        from pypy.rpython.lltypesystem import rclass
+        SCLASS = lltype.GcStruct('SCLASS',
+                                 ('parent', rclass.OBJECT),
+                                 ('n', lltype.Signed))
+        sclass_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
+                                      immortal=True)
+        sclass_vtable.name = rclass.alloc_array_name('SClass')
+        def f(n):
+            rclass.declare_type_for_typeptr(sclass_vtable, SCLASS)
+            s = lltype.malloc(SCLASS)
+            s.parent.typeptr = sclass_vtable
+            s.n = n
+            as_num = rffi.cast(lltype.Signed, s)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(lltype.Ptr(SCLASS), as_num)
+            return t.n
+        res = interpret(f, [123])
+        assert res == 123
+
+    def test_object_subclass_3(self):
+        from pypy.rpython.lltypesystem import rclass
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            pass
+        def f(n):
+            s = S()
+            s.x = n
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            r = rffi.cast(llmemory.GCREF, as_num)
+            t = lltype.cast_opaque_ptr(rclass.OBJECTPTR, r)
+            u = cast_base_ptr_to_instance(S, t)
+            return u.x
+        res = interpret(f, [123])
+        assert res == 123
+
+    def test_object_subclass_4(self):
+        from pypy.rpython.lltypesystem import rclass
+        SCLASS = lltype.GcStruct('SCLASS',
+                                 ('parent', rclass.OBJECT),
+                                 ('n', lltype.Signed))
+        sclass_vtable = lltype.malloc(rclass.OBJECT_VTABLE, zero=True,
+                                      immortal=True)
+        sclass_vtable.name = rclass.alloc_array_name('SClass')
+        def f(n):
+            rclass.declare_type_for_typeptr(sclass_vtable, SCLASS)
+            s = lltype.malloc(SCLASS)
+            s.parent.typeptr = sclass_vtable
+            s.n = n
+            as_num = rffi.cast(lltype.Signed, s)
+            # --- around this point, only 'as_num' is passed
+            r = rffi.cast(llmemory.GCREF, as_num)
+            t = lltype.cast_opaque_ptr(lltype.Ptr(SCLASS), r)
+            return t.n
+        res = interpret(f, [123])
+        assert res == 123
+
+    def test_object_subclass_5(self):
+        from pypy.rpython.lltypesystem import rclass
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        class S:
+            x = 5      # entry in the vtable
+        class T(S):
+            x = 6
+        def f():
+            s = T()
+            ls = cast_instance_to_base_ptr(s)
+            as_num = rffi.cast(lltype.Signed, ls)
+            # --- around this point, only 'as_num' is passed
+            t = rffi.cast(rclass.OBJECTPTR, as_num)
+            u = cast_base_ptr_to_instance(S, t)
+            return u.x
+        res = interpret(f, [])
+        assert res == 6
+
+    def test_force_to_int(self):
+        S = lltype.Struct('S')
+        p = lltype.malloc(S, flavor='raw')
+        a = llmemory.cast_ptr_to_adr(p)
+        i = llmemory.cast_adr_to_int(a, "forced")
+        assert type(i) is int
+        assert i == llmemory.cast_adr_to_int(a, "forced")
+        lltype.free(p, flavor='raw')
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform

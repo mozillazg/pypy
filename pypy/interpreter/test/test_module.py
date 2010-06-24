@@ -54,13 +54,14 @@ class AppTest_ModuleObject:
         r = repr(sys)
         assert r == "<module 'sys' (built-in)>"
         
-        import _exceptions # known to be in pypy/lib
-        r = repr(_exceptions)
-        assert r.startswith("<module '_exceptions' from ") and \
-               'pypy/lib/_exceptions.py' in r and \
-               r.endswith('>')
-        nofile = type(_exceptions)('nofile', 'foo')
+        import _pypy_interact # known to be in pypy/lib
+        r = repr(_pypy_interact)
+        assert (r.startswith("<module '_pypy_interact' from ") and
+                ('pypy/lib/_pypy_interact.py' in r or
+                 r'pypy\\lib\\_pypy_interact.py' in r.lower()) and
+                r.endswith('>'))
+        nofile = type(_pypy_interact)('nofile', 'foo')
         assert repr(nofile) == "<module 'nofile' from ?>"
 
-        m = type(_exceptions).__new__(type(_exceptions))
+        m = type(_pypy_interact).__new__(type(_pypy_interact))
         assert repr(m).startswith("<module '?'")

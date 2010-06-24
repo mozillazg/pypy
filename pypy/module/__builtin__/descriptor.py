@@ -3,8 +3,8 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
 from pypy.interpreter.gateway import interp2app
-from pypy.interpreter.error import OperationError
-from pypy.objspace.descroperation import object_getattribute
+from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.objspace.descroperation import object_getattribute, object_setattr
 from pypy.interpreter.function import StaticMethod, ClassMethod
 from pypy.interpreter.typedef import GetSetProperty, descr_get_dict, \
      descr_set_dict, interp_attrproperty_w
@@ -96,7 +96,7 @@ class C(B):
 )
 
 class W_Property(Wrappable):
-    def __init__(self, space, w_fget, w_fset, w_fdel, w_doc):
+    def init(self, space, w_fget=None, w_fset=None, w_fdel=None, w_doc=None):
         self.w_fget = w_fget
         self.w_fset = w_fset
         self.w_fdel = w_fdel
@@ -106,10 +106,10 @@ class W_Property(Wrappable):
             w_getter_doc = space.findattr(self.w_fget, space.wrap("__doc__"))
             if w_getter_doc is not None:
                 self.w_doc = w_getter_doc
+    init.unwrap_spec = ['self', ObjSpace, W_Root, W_Root, W_Root, W_Root]
 
     def new(space, w_subtype, w_fget=None, w_fset=None, w_fdel=None, w_doc=None):
         w_result = space.allocate_instance(W_Property, w_subtype)
-        W_Property.__init__(w_result, space, w_fget, w_fset, w_fdel, w_doc)
         return w_result
     new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root, W_Root, W_Root]
 
@@ -153,8 +153,11 @@ class W_Property(Wrappable):
         # XXX kill me?  This is mostly to make tests happy, raising
         # a TypeError instead of an AttributeError and using "readonly"
         # instead of "read-only" in the error message :-/
-        raise OperationError(space.w_TypeError, space.wrap(
-            "Trying to set readonly attribute %s on property" % (attr,)))
+        if attr in ["__doc__", "fget", "fset", "fdel"]:
+            raise operationerrfmt(space.w_TypeError,
+                "Trying to set readonly attribute %s on property", attr)
+        return space.call_function(object_setattr(space),
+                                   space.wrap(self), space.wrap(attr), w_value)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
 W_Property.typedef = TypeDef(
@@ -170,6 +173,7 @@ class C(object):
     def delx(self): del self.__x
     x = property(getx, setx, delx, "I am the 'x' property.")''',
     __new__ = interp2app(W_Property.new.im_func),
+    __init__ = interp2app(W_Property.init),
     __get__ = interp2app(W_Property.get),
     __set__ = interp2app(W_Property.set),
     __delete__ = interp2app(W_Property.delete),

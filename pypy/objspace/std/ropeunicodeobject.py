@@ -1,4 +1,7 @@
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter import gateway
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.unicodeobject import _normalize_index
@@ -24,11 +27,10 @@ def unicode_from_string(space, w_str):
     encoding = getdefaultencoding(space)
     w_retval = decode_string(space, w_str, encoding, "strict")
     if not space.is_true(space.isinstance(w_retval, space.w_unicode)):
-        raise OperationError(
+        raise operationerrfmt(
             space.w_TypeError,
-            space.wrap(
-                "decoder did not return an unicode object (type=%s)" %
-                        space.type(w_retval).getname(space, '?')))
+            "decoder did not return an unicode object (type '%s')",
+            space.type(w_retval).getname(space, '?'))
     assert isinstance(w_retval, W_RopeUnicodeObject)
     return w_retval
 
@@ -73,6 +75,7 @@ def encode_unicode(space, w_unistr, encoding, errors):
 
 class W_RopeUnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
+    _immutable_ = True
 
     def __init__(w_self, node):
         w_self._node = node
@@ -142,7 +145,7 @@ def unicode_to_decimal_w(space, w_unistr):
                 w_start = space.wrap(i)
                 w_end = space.wrap(i+1)
                 w_reason = space.wrap('invalid decimal Unicode string')
-                raise OperationError(space.w_UnicodeEncodeError,space.newtuple ([w_encoding, w_unistr, w_start, w_end, w_reason]))
+                raise OperationError(space.w_UnicodeEncodeError, space.newtuple([w_encoding, w_unistr, w_start, w_end, w_reason]))
     return ''.join(result)
 
 # string-to-unicode delegation
@@ -233,7 +236,7 @@ def contains__Rope_RopeUnicode(space, w_container, w_item):
     return space.contains(unicode_from_string(space, w_container), w_item )
 
 def unicode_join__RopeUnicode_ANY(space, w_self, w_list):
-    l_w = space.unpackiterable(w_list)
+    l_w = space.listview(w_list)
     delim = w_self._node
     totlen = 0
     if len(l_w) == 0:
@@ -251,9 +254,8 @@ def unicode_join__RopeUnicode_ANY(space, w_self, w_list):
         elif space.is_true(space.isinstance(w_item, space.w_str)):
             item = unicode_from_string(space, w_item)._node
         else:
-            w_msg = space.mod(space.wrap('sequence item %d: expected string or Unicode'),
-                              space.wrap(i))
-            raise OperationError(space.w_TypeError, w_msg)
+            msg = 'sequence item %d: expected string or Unicode'
+            raise operationerrfmt(space.w_TypeError, msg, i)
         values_list.append(item)
     try:
         return W_RopeUnicodeObject(rope.join(w_self._node, values_list))
@@ -504,7 +506,7 @@ def unicode_startswith__RopeUnicode_RopeUnicode_ANY_ANY(space, w_self, w_substr,
 def unicode_startswith__RopeUnicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         prefix = ropeunicode_w(space, w_prefix)
         if rope.startswith(unistr, prefix, start, end):
             return space.w_True
@@ -513,7 +515,7 @@ def unicode_startswith__RopeUnicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
 def unicode_endswith__RopeUnicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, start, end = _convert_idx_params(space, w_unistr, w_start, w_end)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         suffix = ropeunicode_w(space, w_suffix)
         if rope.endswith(unistr, suffix, start, end):
             return space.w_True

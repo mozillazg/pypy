@@ -7,9 +7,9 @@ from pypy.interpreter.gateway import interp2app, BuiltinCode
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace, \
     DescrMismatch
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.tool.sourcetools import compile2, func_with_new_name
-from pypy.rlib.objectmodel import instantiate, compute_identity_hash
+from pypy.rlib.objectmodel import instantiate, compute_identity_hash, specialize
 from pypy.rlib.jit import hint
 
 class TypeDef:
@@ -24,6 +24,7 @@ class TypeDef:
             self.weakrefable |= __base.weakrefable
         self.rawdict = {}
         self.acceptable_as_base_class = True
+        self.applevel_subclasses_base = None
         # xxx used by faking
         self.fakedcpytype = None
         self.add_entries(**rawdict)
@@ -51,8 +52,8 @@ def default_identity_hash(space, w_obj):
 
 def descr__hash__unhashable(space, w_obj):
     typename = space.type(w_obj).getname(space, '?')
-    msg = "%s objects are unhashable" % (typename,)
-    raise OperationError(space.w_TypeError,space.wrap(msg))
+    raise operationerrfmt(space.w_TypeError,
+                          "'%s' objects are unhashable", typename)
 
 no_hash_descr = interp2app(descr__hash__unhashable)
 
@@ -300,44 +301,63 @@ check_new_dictionary._dont_inline_ = True
 
 # ____________________________________________________________
 
-def make_descr_typecheck_wrapper(func, extraargs=(), cls=None):
+@specialize.arg(0)
+def make_descr_typecheck_wrapper(tag, func, extraargs=(), cls=None,
+                                 use_closure=False):
     if func is None:
         return None
-    if cls is None:
+    return _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure)
+
+@specialize.memo()
+def _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure):
+    # - if cls is None, the wrapped object is passed to the function
+    # - if cls is a class, an unwrapped instance is passed
+    # - if cls is a string, XXX unused?
+    if cls is None and use_closure:
         return func
     if hasattr(func, 'im_func'):
         assert func.im_class is cls
         func = func.im_func
-    
+
     miniglobals = {
          func.__name__: func,
         'OperationError': OperationError
         }
     if isinstance(cls, str):
+        assert 0, "unused?"
         #print "<CHECK", func.__module__ or '?', func.__name__
         assert cls.startswith('<'),"pythontype typecheck should begin with <"
         source = """
-        def descr_typecheck_%(name)s(space, w_obj, %(extra)s):
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
             if not space.is_true(space.isinstance(w_obj, space.w_%(cls_name)s)):
                 # xxx improve msg
                 msg =  "descriptor is for '%(expected)s'"
                 raise OperationError(space.w_TypeError, space.wrap(msg))
-            return %(name)s(space, w_obj, %(extra)s)
+            return %(name)s(%(closure)s space, w_obj, %(extra)s)
         """
         cls_name = cls[1:]
         expected = repr(cls_name)
+    elif cls is None:
+        source = """
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
+            return %(name)s(%(closure)s space, w_obj, %(extra)s)
+        """
     else:
         cls_name = cls.__name__
         assert issubclass(cls, Wrappable)
         source = """
-        def descr_typecheck_%(name)s(space, w_obj, %(extra)s):
+        def descr_typecheck_%(name)s(closure, space, w_obj, %(extra)s):
             obj = space.descr_self_interp_w(%(cls_name)s, w_obj)
-            return %(name)s(space, obj, %(extra)s)
+            return %(name)s(%(closure)s space, obj, %(extra)s)
         """
         miniglobals[cls_name] = cls
     
     name = func.__name__
     extra = ', '.join(extraargs)
+    if use_closure:
+        closure = "closure,"
+    else:
+        closure = ""
     source = py.code.Source(source % locals())
     exec source.compile() in miniglobals
     return miniglobals['descr_typecheck_%s' % func.__name__]
@@ -347,16 +367,17 @@ def unknown_objclass_getter(space):
     raise OperationError(space.w_AttributeError,
                          space.wrap("generic property has no __objclass__"))
 
-def make_objclass_getter(func, cls, cache={}):
-    if hasattr(func, 'im_func'):
+@specialize.arg(0)
+def make_objclass_getter(tag, func, cls):
+    if func and hasattr(func, 'im_func'):
         assert not cls or cls is func.im_class
         cls = func.im_class
+    return _make_objclass_getter(cls)
+
+@specialize.memo()
+def _make_objclass_getter(cls):
     if not cls:
         return unknown_objclass_getter, cls
-    try:
-        return cache[cls]
-    except KeyError:
-        pass
     miniglobals = {}
     if isinstance(cls, str):
         assert cls.startswith('<'),"pythontype typecheck should begin with <"
@@ -371,16 +392,19 @@ def make_objclass_getter(func, cls, cache={}):
         \n""" % (typeexpr,)
     exec compile2(source) in miniglobals
     res = miniglobals['objclass_getter'], cls
-    cache[cls] = res
     return res
 
 class GetSetProperty(Wrappable):
-    def __init__(self, fget, fset=None, fdel=None, doc=None, cls=None):
-        "NOT_RPYTHON: initialization-time only"
-        objclass_getter, cls = make_objclass_getter(fget, cls)
-        fget = make_descr_typecheck_wrapper(fget, cls=cls)
-        fset = make_descr_typecheck_wrapper(fset, ('w_value',), cls=cls)
-        fdel = make_descr_typecheck_wrapper(fdel, cls=cls)
+    @specialize.arg(7)
+    def __init__(self, fget, fset=None, fdel=None, doc=None,
+                 cls=None, use_closure=False, tag=None):
+        objclass_getter, cls = make_objclass_getter(tag, fget, cls)
+        fget = make_descr_typecheck_wrapper((tag, 0), fget,
+                                            cls=cls, use_closure=use_closure)
+        fset = make_descr_typecheck_wrapper((tag, 1), fset, ('w_value',),
+                                            cls=cls, use_closure=use_closure)
+        fdel = make_descr_typecheck_wrapper((tag, 2), fdel,
+                                            cls=cls, use_closure=use_closure)
         self.fget = fget
         self.fset = fset
         self.fdel = fdel
@@ -388,7 +412,8 @@ class GetSetProperty(Wrappable):
         self.reqcls = cls
         self.name = '<generic property>'
         self.objclass_getter = objclass_getter
-    
+        self.use_closure = use_closure
+
     def descr_property_get(space, property, w_obj, w_cls=None):
         """property.__get__(obj[, type]) -> value
         Read the value of the property of the given obj."""
@@ -399,7 +424,7 @@ class GetSetProperty(Wrappable):
             return space.wrap(property)
         else:
             try:
-                return property.fget(space, w_obj)
+                return property.fget(property, space, w_obj)
             except DescrMismatch, e:
                 return w_obj.descr_call_mismatch(space, '__getattribute__',\
                     property.reqcls, Arguments(space, [w_obj,
@@ -413,7 +438,7 @@ class GetSetProperty(Wrappable):
             raise OperationError(space.w_TypeError,
                                  space.wrap("readonly attribute"))
         try:
-            fset(space, w_obj, w_value)
+            fset(property, space, w_obj, w_value)
         except DescrMismatch, e:
             w_obj.descr_call_mismatch(space, '__setattr__',\
                 property.reqcls, Arguments(space, [w_obj,
@@ -427,7 +452,7 @@ class GetSetProperty(Wrappable):
             raise OperationError(space.w_AttributeError,
                                  space.wrap("cannot delete attribute"))
         try:
-            fdel(space, w_obj)
+            fdel(property, space, w_obj)
         except DescrMismatch, e:
             w_obj.descr_call_mismatch(space, '__delattr__',\
                 property.reqcls, Arguments(space, [w_obj,
@@ -481,12 +506,12 @@ class Member(Wrappable):
     
     def typecheck(self, space, w_obj):
         if not space.is_true(space.isinstance(w_obj, self.w_cls)):
-            raise OperationError(space.w_TypeError,
-                              space.wrap("descriptor '%s' for '%s'"
-                              " objects doesn't apply to '%s' object" %
-                                   (self.name,
-                                    self.w_cls.name,
-                                    space.type(w_obj).getname(space, '?'))))
+            raise operationerrfmt(space.w_TypeError,
+                                  "descriptor '%s' for '%s'"
+                                  " objects doesn't apply to '%s' object",
+                                  self.name,
+                                  self.w_cls.name,
+                                  space.type(w_obj).getname(space, '?'))
     
     def descr_member_get(space, member, w_obj, w_w_cls=None):
         """member.__get__(obj[, type]) -> value
@@ -553,13 +578,16 @@ def descr_get_dict(space, w_obj):
     w_dict = w_obj.getdict()
     if w_dict is None:
         typename = space.type(w_obj).getname(space, '?')
-        raise OperationError(space.w_TypeError,
-                             space.wrap("descriptor '__dict__' doesn't apply to"
-                                        " '%s' objects" % typename))
+        raise operationerrfmt(space.w_TypeError,
+                              "descriptor '__dict__' doesn't apply to"
+                              " '%s' objects", typename)
     return w_dict
 
 def descr_set_dict(space, w_obj, w_dict):
     w_obj.setdict(space, w_dict)
+
+def descr_del_dict(space, w_obj): # blame CPython for the existence of this one
+    w_obj.setdict(space, space.newdict())
 
 def descr_get_weakref(space, w_obj):
     lifeline = w_obj.getweakref()
@@ -825,7 +853,7 @@ PyTraceback.typedef = TypeDef("traceback",
                               unwrap_spec=['self', ObjSpace, W_Root]),
     tb_frame  = interp_attrproperty('frame', cls=PyTraceback),
     tb_lasti  = interp_attrproperty('lasti', cls=PyTraceback),
-    tb_lineno = interp_attrproperty('lineno', cls=PyTraceback),
+    tb_lineno = GetSetProperty(PyTraceback.descr_tb_lineno),
     tb_next   = interp_attrproperty('next', cls=PyTraceback),
     )
 PyTraceback.typedef.acceptable_as_base_class = False
@@ -876,6 +904,3 @@ NotImplemented.typedef.acceptable_as_base_class = False
 
 SuspendedUnroller.typedef = TypeDef("SuspendedUnroller")
 SuspendedUnroller.typedef.acceptable_as_base_class = False
-
-
-interptypes = [ val.typedef for name,val in globals().items() if hasattr(val,'__bases__') and hasattr(val,'typedef')  ]

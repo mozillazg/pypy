@@ -12,7 +12,18 @@ import sys
 INT32_MAX = 2147483648
 
 
-class TestObjSpace: 
+class TestObjSpace:
+
+    def test_isinstance(self):
+        space = self.space
+        w_i = space.wrap(4)
+        w_result = space.isinstance(w_i, space.w_int)
+        assert space.is_true(w_result)
+        assert space.isinstance_w(w_i, space.w_int)
+        w_result = space.isinstance(w_i, space.w_str)
+        assert not space.is_true(w_result)
+        assert not space.isinstance_w(w_i, space.w_str)
+
     def test_newlist(self):
         w = self.space.wrap
         l = range(10)
@@ -50,22 +61,40 @@ class TestObjSpace:
         assert self.space.newbool(1) == self.space.w_True
 
     def test_unpackiterable(self):
-        w = self.space.wrap
+        space = self.space
+        w = space.wrap
         l = [w(1), w(2), w(3), w(4)]
-        w_l = self.space.newlist(l)
-        assert self.space.unpackiterable(w_l) == l
-        assert self.space.unpackiterable(w_l, 4) == l
-        raises(ValueError, self.space.unpackiterable, w_l, 3)
-        raises(ValueError, self.space.unpackiterable, w_l, 5)
+        w_l = space.newlist(l)
+        assert space.unpackiterable(w_l) == l
+        assert space.unpackiterable(w_l, 4) == l
+        err = raises(OperationError, space.unpackiterable, w_l, 3)
+        assert err.value.match(space, space.w_ValueError)
+        err = raises(OperationError, space.unpackiterable, w_l, 5)
+        assert err.value.match(space, space.w_ValueError)
 
-    def test_viewiterable(self):
-        w = self.space.wrap
+    def test_fixedview(self):
+        space = self.space
+        w = space.wrap
         l = [w(1), w(2), w(3), w(4)]
-        w_l = self.space.newtuple(l)
-        assert self.space.viewiterable(w_l) == l
-        assert self.space.viewiterable(w_l, 4) == l
-        raises(ValueError, self.space.viewiterable, w_l, 3)
-        raises(ValueError, self.space.viewiterable, w_l, 5)
+        w_l = space.newtuple(l)
+        assert space.fixedview(w_l) == l
+        assert space.fixedview(w_l, 4) == l
+        err = raises(OperationError, space.fixedview, w_l, 3)
+        assert err.value.match(space, space.w_ValueError)
+        err = raises(OperationError, space.fixedview, w_l, 5)
+        assert err.value.match(space, space.w_ValueError)
+
+    def test_listview(self):
+        space = self.space
+        w = space.wrap
+        l = [w(1), w(2), w(3), w(4)]
+        w_l = space.newtuple(l)
+        assert space.listview(w_l) == l
+        assert space.listview(w_l, 4) == l
+        err = raises(OperationError, space.listview, w_l, 3)
+        assert err.value.match(space, space.w_ValueError)
+        err = raises(OperationError, space.listview, w_l, 5)
+        assert err.value.match(space, space.w_ValueError)
 
     def test_exception_match(self):
         assert self.space.exception_match(self.space.w_ValueError,
@@ -207,7 +236,7 @@ class TestObjSpace:
 
         w_res = space.call_obj_args(w_f, w_9, Arguments(space, [w_1]))
 
-        w_x, w_y = space.viewiterable(w_res, 2)
+        w_x, w_y = space.fixedview(w_res, 2)
         assert w_x is w_9
         assert w_y is w_1
 

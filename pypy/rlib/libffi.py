@@ -1,5 +1,4 @@
-
-""" Various rpython-level functions for dlopen and libffi wrapping
+""" Libffi wrapping
 """
 
 from pypy.rpython.tool import rffi_platform
@@ -7,19 +6,17 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.rmmap import alloc
+from pypy.rlib.rdynload import dlopen, dlclose, dlsym, dlsym_byordinal
+from pypy.rlib.rdynload import DLOpenError
 from pypy.tool.autopath import pypydir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rlib.rmmap import alloc
+from pypy.translator.platform import platform
 import py
 import os
 import sys
 import ctypes.util
 
-DEBUG = False # writes dlerror() messages to stderr
-# XXX this need solving rather than hacking. We need to raise something else
-#     than OSError, something capable of delivering a message
-
-from pypy.translator.platform import platform
 
 # maaaybe isinstance here would be better. Think
 _MSVC = platform.name == "msvc"
@@ -53,21 +50,35 @@ else:
     separate_module_sources = []
 
 if not _MSVC:
+    # On some platforms, we try to link statically libffi, which is small
+    # anyway and avoids endless troubles for installing.  On other platforms
+    # libffi.a is typically not there, so we link dynamically.
     if _MINGW:
         includes = ['windows.h', 'ffi.h']
     else:
-        includes = ['dlfcn.h', 'ffi.h']
-    include_dirs = platform.include_dirs_for_libffi()
+        includes = ['ffi.h']
 
     if _MAC_OS:
         pre_include_bits = ['#define MACOSX']
     else: 
         pre_include_bits = []
 
-    if _FREEBSD_7 or _MINGW:
-        libraries = ['ffi']
+    def find_libffi_a():
+        dirlist = platform.library_dirs_for_libffi_a()
+        for dir in dirlist:
+            result = os.path.join(dir, 'libffi.a')
+            if os.path.exists(result):
+                return result
+        raise ImportError("'libffi.a' not found in %s" % (dirlist,))
+
+    if hasattr(platform, 'library_dirs_for_libffi_a'):
+        # platforms on which we want static linking
+        libraries = []
+        link_files = [find_libffi_a()]
     else:
-        libraries = ['ffi', 'dl']
+        # platforms on which we want dynamic linking
+        libraries = ['ffi']
+        link_files = []
 
     eci = ExternalCompilationInfo(
         pre_include_bits = pre_include_bits,
@@ -76,6 +87,8 @@ if not _MSVC:
         separate_module_sources = separate_module_sources,
         include_dirs = platform.include_dirs_for_libffi(),
         library_dirs = platform.library_dirs_for_libffi(),
+        link_files = link_files,
+        testonly_libraries = ['ffi'],
     )
 else:
     libffidir = py.path.local(pypydir).join('translator', 'c', 'src', 'libffi_msvc')
@@ -99,10 +112,6 @@ FFI_TYPE_PP = rffi.CArrayPtr(FFI_TYPE_P)
 class CConfig:
     _compilation_info_ = eci
 
-    RTLD_LOCAL = rffi_platform.DefinedConstantInteger('RTLD_LOCAL')
-    RTLD_GLOBAL = rffi_platform.DefinedConstantInteger('RTLD_GLOBAL')
-    RTLD_NOW = rffi_platform.DefinedConstantInteger('RTLD_NOW')
-
     FFI_OK = rffi_platform.ConstantInteger('FFI_OK')
     FFI_BAD_TYPEDEF = rffi_platform.ConstantInteger('FFI_BAD_TYPEDEF')
     FFI_DEFAULT_ABI = rffi_platform.ConstantInteger('FFI_DEFAULT_ABI')
@@ -112,6 +121,7 @@ class CConfig:
     FFI_TYPE_STRUCT = rffi_platform.ConstantInteger('FFI_TYPE_STRUCT')
 
     size_t = rffi_platform.SimpleType("size_t", rffi.ULONG)
+    ffi_abi = rffi_platform.SimpleType("ffi_abi", rffi.USHORT)
 
     ffi_type = rffi_platform.Struct('ffi_type', [('size', rffi.ULONG),
                                                  ('alignment', rffi.USHORT),
@@ -155,6 +165,7 @@ for k, v in rffi_platform.configure(CConfig).items():
 
 FFI_TYPE_P.TO.become(cConfig.ffi_type)
 size_t = cConfig.size_t
+ffi_abi = cConfig.ffi_abi
 
 for name in type_names:
     locals()[name] = configure_simple_type(name)
@@ -198,59 +209,8 @@ def external(name, args, result, **kwds):
 def winexternal(name, args, result):
     return rffi.llexternal(name, args, result, compilation_info=eci, calling_conv='win')
 
+
 if not _WIN32:
-    c_dlopen = external('dlopen', [rffi.CCHARP, rffi.INT], rffi.VOIDP)
-    c_dlclose = external('dlclose', [rffi.VOIDP], rffi.INT)
-    c_dlerror = external('dlerror', [], rffi.CCHARP)
-    c_dlsym = external('dlsym', [rffi.VOIDP, rffi.CCHARP], rffi.VOIDP)
-
-    RTLD_LOCAL = cConfig.RTLD_LOCAL
-    RTLD_GLOBAL = cConfig.RTLD_GLOBAL
-    RTLD_NOW = cConfig.RTLD_NOW
-
-    def dlerror():
-        # XXX this would never work on top of ll2ctypes, because
-        # ctypes are calling dlerror itself, unsure if I can do much in this
-        # area (nor I would like to)
-        res = c_dlerror()
-        if not res:
-            return ""
-        return rffi.charp2str(res)
-
-    def dlopen(name, mode=-1):
-        """ Wrapper around C-level dlopen
-        """
-        if mode == -1:
-            if RTLD_LOCAL is not None:
-                mode = RTLD_LOCAL | RTLD_NOW
-            else:
-                mode = RTLD_NOW
-        res = c_dlopen(name, rffi.cast(rffi.INT, mode))
-        if not res:
-            err = dlerror()
-            # because the message would be lost in a translated program (OSError only has an errno),
-            # we offer a way to write it to stderr
-            if DEBUG:
-                import os
-                os.write(2, err)
-            raise OSError(-1, err)
-        return res
-
-    dlclose = c_dlclose
-
-    def dlsym(libhandle, name):
-        """ Wrapper around C-level dlsym
-        """
-        res = c_dlsym(libhandle, name)
-        if not res:
-            raise KeyError(name)
-        # XXX rffi.cast here...
-        return res
-
-    def dlsym_byordinal(handle, index):
-        # Never called
-        raise KeyError(index)
-
     def check_fficall_result(result, flags):
         pass # No check
     
@@ -261,36 +221,6 @@ if not _WIN32:
         return libc_name
 
 if _WIN32:
-    def dlopen(name):
-        res = rwin32.LoadLibrary(name)
-        if not res:
-            # XXX format error message
-            raise WindowsError(2, rwin32.GetLastError())
-        return res
-
-    def dlclose(handle):
-        res = rwin32.FreeLibrary(handle)
-        if res:
-            return -1
-        else:
-            return 0
-
-    def dlsym(handle, name):
-        res = rwin32.GetProcAddress(handle, name)
-        if not res:
-            raise KeyError(name)
-        # XXX rffi.cast here...
-        return res
-
-    def dlsym_byordinal(handle, index):
-        # equivalent to MAKEINTRESOURCEA
-        intresource = rffi.cast(rffi.CCHARP, r_uint(index) & 0xFFFF)
-        res = rwin32.GetProcAddress(handle, intresource)
-        if not res:
-            raise KeyError(name)
-        # XXX rffi.cast here...
-        return res
-    
     def check_fficall_result(result, flags):
         if result == 0:
             return
@@ -334,7 +264,7 @@ FFI_CLOSUREP = lltype.Ptr(cConfig.ffi_closure)
 
 VOIDPP = rffi.CArrayPtr(rffi.VOIDP)
 
-c_ffi_prep_cif = external('ffi_prep_cif', [FFI_CIFP, rffi.USHORT, rffi.UINT,
+c_ffi_prep_cif = external('ffi_prep_cif', [FFI_CIFP, ffi_abi, rffi.UINT,
                                            FFI_TYPE_P, FFI_TYPE_PP], rffi.INT)
 if _WIN32:
     c_ffi_call_return_type = rffi.INT
@@ -348,13 +278,26 @@ c_ffi_prep_closure = external('ffi_prep_closure', [FFI_CLOSUREP, FFI_CIFP,
                                                    CALLBACK_TP, rffi.VOIDP],
                               rffi.INT)            
 
-def make_struct_ffitype(size, aligment):
-    tp = lltype.malloc(FFI_TYPE_P.TO, flavor='raw')
-    tp.c_type = FFI_TYPE_STRUCT
-    tp.c_size = rffi.cast(rffi.SIZE_T, size)
-    tp.c_alignment = rffi.cast(rffi.USHORT, aligment)
-    tp.c_elements = lltype.nullptr(FFI_TYPE_PP.TO)
-    return tp
+FFI_STRUCT_P = lltype.Ptr(lltype.Struct('FFI_STRUCT',
+                                        ('ffistruct', FFI_TYPE_P.TO),
+                                        ('members', lltype.Array(FFI_TYPE_P))))
+
+def make_struct_ffitype_e(size, aligment, field_types):
+    """Compute the type of a structure.  Returns a FFI_STRUCT_P out of
+       which the 'ffistruct' member is a regular FFI_TYPE.
+    """
+    tpe = lltype.malloc(FFI_STRUCT_P.TO, len(field_types)+1, flavor='raw')
+    tpe.ffistruct.c_type = FFI_TYPE_STRUCT
+    tpe.ffistruct.c_size = rffi.cast(rffi.SIZE_T, size)
+    tpe.ffistruct.c_alignment = rffi.cast(rffi.USHORT, aligment)
+    tpe.ffistruct.c_elements = rffi.cast(FFI_TYPE_PP,
+                                         lltype.direct_arrayitems(tpe.members))
+    n = 0
+    while n < len(field_types):
+        tpe.members[n] = field_types[n]
+        n += 1
+    tpe.members[n] = lltype.nullptr(FFI_TYPE_P.TO)
+    return tpe
 
 def cast_type_to_ffitype(tp):
     """ This function returns ffi representation of rpython type tp
@@ -606,6 +549,7 @@ class FuncPtr(AbstractFuncPtr):
 
 class CDLL:
     def __init__(self, libname, unload_on_finalization=True):
+        """Load the library, or raises DLOpenError."""
         self.unload_on_finalization = unload_on_finalization
         self.lib = lltype.nullptr(rffi.CCHARP.TO)
         ll_libname = rffi.str2charp(libname)

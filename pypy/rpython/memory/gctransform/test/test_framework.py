@@ -1,17 +1,19 @@
 from pypy.objspace.flow.model import Constant, SpaceOperation
 from pypy.annotation.model import SomeInteger
+from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.memory.gc.marksweep import MarkSweepGC
 from pypy.rpython.memory.gctransform.test.test_transform import rtype, \
     rtype_and_transform
 from pypy.rpython.memory.gctransform.transform import GcHighLevelOp
 from pypy.rpython.memory.gctransform.framework import FrameworkGCTransformer, \
-    CollectAnalyzer, find_initializing_stores
-from pypy.rpython.lltypesystem import lltype
+    CollectAnalyzer, find_initializing_stores, find_clean_setarrayitems
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.translator.c.gc import FrameworkGcPolicy
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.translator.unsimplify import varoftype
 from pypy.translator.exceptiontransform import ExceptionTransformer
+from pypy.translator.backendopt.all import backend_optimizations
 from pypy import conftest
 
 import py
@@ -33,7 +35,6 @@ def test_framework_simple():
     from pypy.rpython.llinterp import LLInterpreter
     from pypy.translator.c.genc import CStandaloneBuilder
     from pypy.translator.c import gc
-    from pypy.annotation.listdef import s_list_of_strings
 
     t = rtype(entrypoint, [s_list_of_strings])
     cbuild = CStandaloneBuilder(t, entrypoint, t.config,
@@ -86,11 +87,84 @@ def test_cancollect_stack_check():
     can_collect = CollectAnalyzer(t).analyze_direct_call(with_check_graph)
     assert can_collect
 
+def test_cancollect_external():
+    fext1 = rffi.llexternal('fext1', [], lltype.Void, threadsafe=False)
+    def g():
+        fext1()
+    t = rtype(g, [])
+    gg = graphof(t, g)
+    assert not CollectAnalyzer(t).analyze_direct_call(gg)
+
+    fext2 = rffi.llexternal('fext2', [], lltype.Void, threadsafe=True)
+    def g():
+        fext2()
+    t = rtype(g, [])
+    gg = graphof(t, g)
+    assert CollectAnalyzer(t).analyze_direct_call(gg)
+
+    S = lltype.GcStruct('S', ('x', lltype.Signed))
+    FUNC = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
+    fext3 = rffi.llexternal('fext3', [FUNC], lltype.Void, threadsafe=False)
+    def h(x):
+        lltype.malloc(S, zero=True)
+    def g():
+        fext3(h)
+    t = rtype(g, [])
+    gg = graphof(t, g)
+    assert CollectAnalyzer(t).analyze_direct_call(gg)
+
+def test_no_collect():
+    from pypy.rlib import rgc
+    from pypy.translator.c.genc import CStandaloneBuilder
+    from pypy.translator.c import gc
+
+    @rgc.no_collect
+    def g():
+        return 1
+
+    assert g._dont_inline_
+    assert g._gc_no_collect_
+
+    def entrypoint(argv):
+        return g() + 2
+    
+    t = rtype(entrypoint, [s_list_of_strings])
+    cbuild = CStandaloneBuilder(t, entrypoint, t.config,
+                                gcpolicy=FrameworkGcPolicy2)
+    db = cbuild.generate_graphs_for_llinterp()
+
+def test_no_collect_detection():
+    from pypy.rlib import rgc
+    from pypy.translator.c.genc import CStandaloneBuilder
+    from pypy.translator.c import gc
+
+    class A(object):
+        def __init__(self, x):
+            self.x = x
+
+    @rgc.no_collect
+    def g():
+        return A(1).x
+
+    assert g._dont_inline_
+    assert g._gc_no_collect_
+
+    def entrypoint(argv):
+        return g() + 2
+    
+    t = rtype(entrypoint, [s_list_of_strings])
+    cbuild = CStandaloneBuilder(t, entrypoint, t.config,
+                                gcpolicy=FrameworkGcPolicy2)
+    f = py.test.raises(Exception, cbuild.generate_graphs_for_llinterp)
+    assert str(f.value) == 'no_collect function can trigger collection: g'
+
 class WriteBarrierTransformer(FrameworkGCTransformer):
-    initializing_stores = {}
+    clean_sets = {}
     GC_PARAMS = {}
     class GCClass(MarkSweepGC):
         needs_write_barrier = True
+        def writebarrier_before_copy(self, source, dest):
+            return True
 
 def write_barrier_check(spaceop, needs_write_barrier=True):
     t = TranslationContext()
@@ -188,3 +262,88 @@ def test_find_initializing_stores_across_blocks():
     collect_analyzer = CollectAnalyzer(t)
     init_stores = find_initializing_stores(collect_analyzer, t.graphs[0])
     assert len(init_stores) == 5
+
+def test_find_clean_setarrayitems():
+    S = lltype.GcStruct('S')
+    A = lltype.GcArray(lltype.Ptr(S))
+    
+    def f():
+        l = lltype.malloc(A, 3)
+        l[0] = lltype.malloc(S)
+        l[1] = lltype.malloc(S)
+        l[2] = lltype.malloc(S)
+        x = l[1]
+        l[0] = x
+        return len(l)
+
+    t = rtype(f, [])
+    etrafo = ExceptionTransformer(t)
+    graph = etrafo.transform_completely()
+    collect_analyzer = CollectAnalyzer(t)
+    clean_setarrayitems = find_clean_setarrayitems(collect_analyzer,
+                                                   t.graphs[0])
+    assert len(clean_setarrayitems) == 1
+
+def test_find_clean_setarrayitems_2():
+    S = lltype.GcStruct('S')
+    A = lltype.GcArray(lltype.Ptr(S))
+    
+    def f():
+        l = lltype.malloc(A, 3)
+        l[0] = lltype.malloc(S)
+        l[1] = lltype.malloc(S)
+        l[2] = lltype.malloc(S)
+        x = l[1]
+        l[2] = lltype.malloc(S) # <- this can possibly collect
+        l[0] = x
+        return len(l)
+
+    t = rtype(f, [])
+    etrafo = ExceptionTransformer(t)
+    graph = etrafo.transform_completely()
+    collect_analyzer = CollectAnalyzer(t)
+    clean_setarrayitems = find_clean_setarrayitems(collect_analyzer,
+                                                   t.graphs[0])
+    assert len(clean_setarrayitems) == 0
+
+def test_find_clean_setarrayitems_3():
+    S = lltype.GcStruct('S')
+    A = lltype.GcArray(lltype.Ptr(S))
+    
+    def f():
+        l = lltype.malloc(A, 3)
+        l[0] = lltype.malloc(S)
+        l[1] = lltype.malloc(S)
+        l[2] = lltype.malloc(S)
+        l2 = lltype.malloc(A, 4)
+        x = l[1]
+        l2[0] = x # <- different list
+        return len(l)
+
+    t = rtype(f, [])
+    etrafo = ExceptionTransformer(t)
+    graph = etrafo.transform_completely()
+    collect_analyzer = CollectAnalyzer(t)
+    clean_setarrayitems = find_clean_setarrayitems(collect_analyzer,
+                                                   t.graphs[0])
+    assert len(clean_setarrayitems) == 0
+
+def test_list_operations():
+
+    class A(object):
+        pass
+
+    def f():
+        l = [A(), A()]
+        l.append(A())
+        l[1] = l[0]
+        return len(l)
+
+    t = rtype(f, [])
+    backend_optimizations(t, clever_malloc_removal=False, storesink=True)
+    etrafo = ExceptionTransformer(t)
+    graph = etrafo.transform_completely()
+    collect_analyzer = CollectAnalyzer(t)
+    clean_setarrayitems = find_clean_setarrayitems(collect_analyzer,
+                                                   t.graphs[0])
+    assert len(clean_setarrayitems) == 1

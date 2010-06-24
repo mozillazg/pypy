@@ -1,17 +1,14 @@
 import collections
+import sys
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter.error import OperationError
-from pypy.interpreter import pyframe
+from pypy.interpreter import pyframe, nestedscope
 from pypy.interpreter.argument import ArgumentsForTranslation
+from pypy.objspace.flow import operation
 from pypy.objspace.flow.model import *
 from pypy.objspace.flow.framestate import FrameState
-
-
-class OperationThatShouldNotBePropagatedError(OperationError):
-    pass
-
-class ImplicitOperationError(OperationError):
-    pass
+from pypy.rlib import jit
+from pypy.tool.stdlib_opcode import host_bytecode_spec
 
 class StopFlowing(Exception):
     pass
@@ -199,8 +196,8 @@ class FlowExecutionContext(ExecutionContext):
         if closure is None:
             self.closure = None
         else:
-            from pypy.interpreter.nestedscope import Cell
-            self.closure = [Cell(Constant(value)) for value in closure]
+            self.closure = [nestedscope.Cell(Constant(value))
+                            for value in closure]
         frame = self.create_frame()
         formalargcount = code.getformalargcount()
         arg_list = [Variable() for i in range(formalargcount)]
@@ -208,8 +205,6 @@ class FlowExecutionContext(ExecutionContext):
             arg_list[position] = Constant(value)
         frame.setfastscope(arg_list)
         self.joinpoints = {}
-        #for joinpoint in code.getjoinpoints():
-        #    self.joinpoints[joinpoint] = []  # list of blocks
         initialblock = SpamBlock(FrameState(frame).copy())
         self.pendingblocks = collections.deque([initialblock])
         self.graph = FunctionGraph(name or code.co_name, initialblock)
@@ -260,8 +255,8 @@ class FlowExecutionContext(ExecutionContext):
             except StopFlowing:
                 continue   # restarting a dead SpamBlock
             try:
-                old_frame = self.some_frame
-                self.some_frame = frame
+                old_frameref = self.topframeref
+                self.topframeref = jit.non_virtual_ref(frame)
                 self.crnt_frame = frame
                 try:
                     w_result = frame.dispatch(frame.pycode,
@@ -269,15 +264,15 @@ class FlowExecutionContext(ExecutionContext):
                                               self)
                 finally:
                     self.crnt_frame = None
-                    self.some_frame = old_frame
+                    self.topframeref = old_frameref
 
-            except OperationThatShouldNotBePropagatedError, e:
+            except operation.OperationThatShouldNotBePropagatedError, e:
                 raise Exception(
                     'found an operation that always raises %s: %s' % (
                         self.space.unwrap(e.w_type).__name__,
-                        self.space.unwrap(e.w_value)))
+                        self.space.unwrap(e.get_w_value(self.space))))
 
-            except ImplicitOperationError, e:
+            except operation.ImplicitOperationError, e:
                 if isinstance(e.w_type, Constant):
                     exc_cls = e.w_type.value
                 else:
@@ -289,12 +284,13 @@ class FlowExecutionContext(ExecutionContext):
                 self.recorder.crnt_block.closeblock(link)
 
             except OperationError, e:
-                #print "OE", e.w_type, e.w_value
+                #print "OE", e.w_type, e.get_w_value(self.space)
                 if (self.space.do_imports_immediately and
                     e.w_type is self.space.w_ImportError):
                     raise ImportError('import statement always raises %s' % (
                         e,))
-                link = self.make_link([e.w_type, e.w_value], self.graph.exceptblock)
+                w_value = e.get_w_value(self.space)
+                link = self.make_link([e.w_type, w_value], self.graph.exceptblock)
                 self.recorder.crnt_block.closeblock(link)
 
             except StopFlowing:
@@ -379,23 +375,121 @@ class FlowExecutionContext(ExecutionContext):
 
     def sys_exc_info(self):
         operr = ExecutionContext.sys_exc_info(self)
-        if isinstance(operr, ImplicitOperationError):
+        if isinstance(operr, operation.ImplicitOperationError):
             # re-raising an implicit operation makes it an explicit one
-            operr = OperationError(operr.w_type, operr.w_value)
+            w_value = operr.get_w_value(self.space)
+            operr = OperationError(operr.w_type, w_value)
         return operr
+
+    def exception_trace(self, frame, operationerr):
+        pass    # overridden for performance only
 
     # hack for unrolling iterables, don't use this
     def replace_in_stack(self, oldvalue, newvalue):
         w_new = Constant(newvalue)
         stack_items_w = self.crnt_frame.valuestack_w
-        for i in range(self.crnt_frame.valuestackdepth):
+        for i in range(self.crnt_frame.valuestackdepth-1, -1, -1):
             w_v = stack_items_w[i]
             if isinstance(w_v, Constant):
                 if w_v.value is oldvalue:
+                    # replace the topmost item of the stack that is equal
+                    # to 'oldvalue' with 'newvalue'.
                     stack_items_w[i] = w_new
+                    break
 
 class FlowSpaceFrame(pyframe.PyFrame):
+    """
+    Execution of host (CPython) opcodes.
+    """
+    bytecode_spec = host_bytecode_spec
+    opcode_method_names = host_bytecode_spec.method_names
+    opcodedesc = host_bytecode_spec.opcodedesc
+    opdescmap = host_bytecode_spec.opdescmap
+    HAVE_ARGUMENT = host_bytecode_spec.HAVE_ARGUMENT
+
+    def BUILD_MAP(self, itemcount, next_instr):
+        if sys.version_info >= (2, 6):
+            # We could pre-allocate a dict here
+            # but for the moment this code is not translated.
+            pass
+        else:
+            if itemcount != 0:
+                raise BytecodeCorruption
+        w_dict = self.space.newdict()
+        self.pushvalue(w_dict)
+
+    def STORE_MAP(self, zero, next_instr):
+        if sys.version_info >= (2, 6):
+            w_key = self.popvalue()
+            w_value = self.popvalue()
+            w_dict = self.peekvalue()
+            self.space.setitem(w_dict, w_key, w_value)
+        else:
+            raise BytecodeCorruption
+
+    def POP_JUMP_IF_FALSE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if not self.space.is_true(w_cond):
+            next_instr = jumpto
+        return next_instr
+
+    def POP_JUMP_IF_TRUE(self, jumpto, next_instr):
+        w_cond = self.popvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        return next_instr
+
+    def JUMP_IF_FALSE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if not self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def JUMP_IF_TRUE_OR_POP(self, jumpto, next_instr):
+        w_cond = self.peekvalue()
+        if self.space.is_true(w_cond):
+            return jumpto
+        self.popvalue()
+        return next_instr
+
+    def LIST_APPEND(self, oparg, next_instr):
+        w = self.popvalue()
+        if sys.version_info < (2, 7):
+            v = self.popvalue()
+        else:
+            v = self.peekvalue(oparg - 1)
+        self.space.call_method(v, 'append', w)
+    
+    # XXX Unimplemented 2.7 opcodes ----------------
+
+    # Set literals, set comprehensions
+
+    def BUILD_SET(self, oparg, next_instr):
+        raise NotImplementedError("BUILD_SET")
+
+    def SET_ADD(self, oparg, next_instr):
+        raise NotImplementedError("SET_ADD")
+
+    # Dict comprehensions
+
+    def MAP_ADD(self, oparg, next_instr):
+        raise NotImplementedError("MAP_ADD")
+
+    # `with` statement
+
+    def SETUP_WITH(self, oparg, next_instr):
+        raise NotImplementedError("SETUP_WITH")
+
+    
     def make_arguments(self, nargs):
         return ArgumentsForTranslation(self.space, self.peekvalues(nargs))
     def argument_factory(self, *args):
         return ArgumentsForTranslation(self.space, *args)
+
+    def handle_operation_error(self, ec, operr, *args, **kwds):
+        # see test_propagate_attribute_error for why this is here
+        if isinstance(operr, operation.OperationThatShouldNotBePropagatedError):
+            raise operr
+        return pyframe.PyFrame.handle_operation_error(self, ec, operr,
+                                                      *args, **kwds)

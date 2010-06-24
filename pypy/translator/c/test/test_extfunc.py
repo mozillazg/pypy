@@ -141,7 +141,7 @@ def test_largefile():
     os.unlink(filename)
 
 def test_os_access():
-    filename = str(py.magic.autopath())
+    filename = str(py.path.local(__file__))
     def call_access(path, mode):
         return os.access(path, mode)
     f = compile(call_access, [str, int])
@@ -150,7 +150,7 @@ def test_os_access():
 
 
 def test_os_stat():
-    filename = str(py.magic.autopath())
+    filename = str(py.path.local(__file__))
     has_blksize = hasattr(os.stat_result, 'st_blksize')
     has_blocks = hasattr(os.stat_result, 'st_blocks')
     def call_stat():
@@ -189,7 +189,7 @@ def test_os_stat_raises_winerror():
 def test_os_fstat():
     if os.environ.get('PYPY_CC', '').startswith('tcc'):
         py.test.skip("segfault with tcc :-(")
-    filename = str(py.magic.autopath())
+    filename = str(py.path.local(__file__))
     def call_fstat():
         fd = os.open(filename, os.O_RDONLY, 0777)
         st = os.fstat(fd)
@@ -221,106 +221,12 @@ def test_getcwd():
     res = f1()
     assert res == os.getcwd()
 
-def test_strerror():
-    def does_stuff():
-        return os.strerror(2)
-    f1 = compile(does_stuff, [])
-    res = f1()
-    assert res == os.strerror(2)
-
 def test_system():
     def does_stuff(cmd):
         return os.system(cmd)
     f1 = compile(does_stuff, [str])
     res = f1("echo hello")
     assert res == 0
-
-def test_math_pow():
-    import math
-    def fn(x, y):
-        return math.pow(x, y)
-    f = compile(fn, [float, float])
-    assert f(2.0, 3.0) == math.pow(2.0, 3.0)
-    assert f(3.0, 2.0) == math.pow(3.0, 2.0)
-    assert f(2.3, 0.0) == math.pow(2.3, 0.0)
-    assert f(2.3, -1.0) == math.pow(2.3, -1.0)
-    assert f(2.3, -2.0) == math.pow(2.3, -2.0)
-    assert f(2.3, 0.5) == math.pow(2.3, 0.5)
-    assert f(4.0, 0.5) == math.pow(4.0, 0.5)
-
-def test_math_frexp():
-    from math import frexp
-    def fn(x):
-        return frexp(x)
-    f = compile(fn, [float])
-    assert f(10.123) == frexp(10.123)
-
-def test_math_modf():
-    from math import modf
-    def fn(x):
-        return modf(x)
-    f = compile(fn, [float])
-    assert f(10.123) == modf(10.123)
-
-def test_math_hypot():
-    from math import hypot
-    def fn(x, y):
-        return hypot(x, y)
-    f = compile(fn, [float, float])
-    assert f(9812.231, 1234) == hypot(9812.231, 1234)
-
-simple_math_functions = [
-    'acos', 'asin', 'atan', 'ceil', 'cos', 'cosh', 'exp', 'fabs',
-    'floor', 'log', 'log10', 'sin', 'sinh', 'sqrt', 'tan', 'tanh'
-    ]
-
-def math_function_test(funcname):
-    import random
-    import math
-    mathfn = getattr(math, funcname)
-    print funcname,
-    def fn(x):
-        return mathfn(x)
-    f = compile(fn, [float])
-    for x in [0.12334, 0.3, 0.5, 0.9883]:
-        print x
-        assert (funcname, f(x)) == (funcname, mathfn(x))
-
-def test_simple_math_functions():
-    for funcname in simple_math_functions:
-        yield math_function_test, funcname
-
-def test_math_errors():
-    import math
-    def fn(x):
-        return math.log(x)
-    f = compile(fn, [float])
-    assert f(math.e) == math.log(math.e)
-    # this is a platform specific mess
-    def check(mathf, f, v):
-        try:
-            r = mathf(v)
-        except (OverflowError, ValueError), e:
-            #print mathf, v, e.__class__
-            py.test.raises(e.__class__, f, v)
-        else:
-            if r != r: # nans
-                #print mathf, v, "NAN?", r
-                u = f(v)
-                assert u != u
-            else:
-                #print mathf, v, r
-                u = f(v)
-                assert u == r
-
-    check(math.log, f, -1.0)
-    check(math.log, f, 0.0)
-
-    def fmod1_0(y):
-        return math.fmod(1.0, y)
-    f = compile(fmod1_0, [float])
-    check(fmod1_0, f, 0.0)
-
 
 def test_os_path_exists():
     tmpfile = str(udir.join('test_os_path_exists.TMP'))

@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
-from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof, raw_memcopy
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
@@ -11,17 +11,12 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import llmemory
 import os, sys
-
-class UnhandledRPythonException(Exception):
-    pass
 
 class CConstant(Symbolic):
     """ A C-level constant, maybe #define, rendered directly.
@@ -52,12 +47,13 @@ class _IsLLPtrEntry(ExtRegistryEntry):
         result = isinstance(s_p, annmodel.SomePtr)
         return self.bookkeeper.immutablevalue(result)
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.inputconst(lltype.Bool, hop.s_result.const)
 
 def llexternal(name, args, result, _callable=None,
                compilation_info=ExternalCompilationInfo(),
                sandboxsafe=False, threadsafe='auto',
-               canraise=False, _nowrapper=False, calling_conv='c',
+               _nowrapper=False, calling_conv='c',
                oo_primitive=None, pure_function=False):
     """Build an external function that will invoke the C function 'name'
     with the given 'args' types and 'result' type.
@@ -67,6 +63,10 @@ def llexternal(name, args, result, _callable=None,
     CCHARP argument is expected, and the C function receives a 'const char*'
     pointing to a read-only null-terminated character of arrays, as usual
     for C.
+
+    The C function can have callbacks, but they must be specified explicitly
+    as constant RPython functions.  We don't support yet C functions that
+    invoke callbacks passed otherwise (e.g. set by a previous C call).
 
     threadsafe: whether it's ok to release the GIL around the call.
                 Default is yes, unless sandboxsafe is set, in which case
@@ -84,12 +84,22 @@ def llexternal(name, args, result, _callable=None,
     kwds = {}
     if oo_primitive:
         kwds['oo_primitive'] = oo_primitive
+
+    has_callback = False
+    for ARG in args:
+        if _isfunctype(ARG):
+            has_callback = True
+    if has_callback:
+        kwds['_callbacks'] = callbackholder = CallbackHolder()
+    else:
+        callbackholder = None
+
     funcptr = lltype.functionptr(ext_type, name, external='C',
                                  compilation_info=compilation_info,
                                  _callable=_callable,
                                  _safe_not_sandboxed=sandboxsafe,
                                  _debugexc=True, # on top of llinterp
-                                 canraise=canraise,
+                                 canraise=False,
                                  **kwds)
     if isinstance(_callable, ll2ctypes.LL2CtypesCallable):
         _callable.funcptr = funcptr
@@ -170,9 +180,11 @@ def llexternal(name, args, result, _callable=None,
                 # XXX pass additional arguments
                 if invoke_around_handlers:
                     arg = llhelper(TARGET, _make_wrapper_for(TARGET, arg,
+                                                             callbackholder,
                                                              aroundstate))
                 else:
-                    arg = llhelper(TARGET, _make_wrapper_for(TARGET, arg))
+                    arg = llhelper(TARGET, _make_wrapper_for(TARGET, arg,
+                                                             callbackholder))
             else:
                 SOURCE = lltype.typeOf(arg)
                 if SOURCE != TARGET:
@@ -202,7 +214,11 @@ def llexternal(name, args, result, _callable=None,
 
     return func_with_new_name(wrapper, name)
 
-def _make_wrapper_for(TP, callable, aroundstate=None):
+class CallbackHolder:
+    def __init__(self):
+        self.callbacks = {}
+
+def _make_wrapper_for(TP, callable, callbackholder, aroundstate=None):
     """ Function creating wrappers for callbacks. Note that this is
     cheating as we assume constant callbacks and we just memoize wrappers
     """
@@ -213,6 +229,7 @@ def _make_wrapper_for(TP, callable, aroundstate=None):
     else:
         errorcode = TP.TO.RESULT._example()
     callable_name = getattr(callable, '__name__', '?')
+    callbackholder.callbacks[callable] = True
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
@@ -336,10 +353,9 @@ else:
     MODE_T = lltype.Signed
     PID_T = lltype.Signed
 
-def setup():
-    """ creates necessary c-level types
-    """
-    result = []
+def populate_inttypes():
+    names = []
+    populatelist = []
     for name in TYPES:
         c_name = name
         if name.startswith('unsigned'):
@@ -348,7 +364,18 @@ def setup():
         else:
             signed = (name != 'size_t')
         name = name.replace(' ', '')
-        tp = platform.inttype(name.upper(), c_name, signed)
+        names.append(name)
+        populatelist.append((name.upper(), c_name, signed))
+    platform.populate_inttypes(populatelist)
+    return names
+
+def setup():
+    """ creates necessary c-level types
+    """
+    names = populate_inttypes()
+    result = []
+    for name in names:
+        tp = platform.types[name.upper()]
         globals()['r_' + name] = platform.numbertype_to_rclass[tp]
         globals()[name.upper()] = tp
         tpp = lltype.Ptr(lltype.Array(tp, hints={'nolength': True}))
@@ -358,6 +385,11 @@ def setup():
 
 NUMBER_TYPES = setup()
 platform.numbertype_to_rclass[lltype.Signed] = int     # avoid "r_long" for common cases
+r_int_real = rarithmetic.build_int("r_int_real", r_int.SIGN, r_int.BITS, True)
+INT_real = lltype.build_number("INT", r_int_real)
+platform.numbertype_to_rclass[INT_real] = r_int_real
+NUMBER_TYPES.append(INT_real)
+
 # ^^^ this creates at least the following names:
 # --------------------------------------------------------------------
 #        Type           RPython integer class doing wrap-around
@@ -414,7 +446,7 @@ def CCallback(args, res):
     return lltype.Ptr(lltype.FuncType(args, res))
 CCallback._annspecialcase_ = 'specialize:memo'
 
-def COpaque(name, hints=None, compilation_info=None):
+def COpaque(name=None, ptr_typedef=None, hints=None, compilation_info=None):
     if compilation_info is None:
         compilation_info = ExternalCompilationInfo()
     if hints is None:
@@ -422,7 +454,10 @@ def COpaque(name, hints=None, compilation_info=None):
     else:
         hints = hints.copy()
     hints['external'] = 'C'
-    hints['c_name'] = name
+    if name is not None:
+        hints['c_name'] = name
+    if ptr_typedef is not None:
+        hints['c_pointer_typedef'] = ptr_typedef
     def lazy_getsize(cache={}):
         from pypy.rpython.tool import rffi_platform
         try:
@@ -436,7 +471,8 @@ def COpaque(name, hints=None, compilation_info=None):
     return lltype.OpaqueType(name, hints)
 
 def COpaquePtr(*args, **kwds):
-    return lltype.Ptr(COpaque(*args, **kwds))
+    typedef = kwds.pop('typedef', None)
+    return lltype.Ptr(COpaque(ptr_typedef=typedef, *args, **kwds))
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
                     sandboxsafe=False, _nowrapper=False,
@@ -500,6 +536,7 @@ r_singlefloat = rarithmetic.r_singlefloat
 
 # void *   - for now, represented as char *
 VOIDP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
+VOIDP_real = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True, 'render_as_void': True}))
 
 # void **
 VOIDPP = CArrayPtr(VOIDP)
@@ -747,7 +784,6 @@ def sizeof(tp):
         # the hint is present in structures probed by rffi_platform.
         size = tp._hints.get('size')
         if size is None:
-            from pypy.rpython.lltypesystem import llmemory
             size = llmemory.sizeof(tp)    # a symbolic result in this case
         return size
     if isinstance(tp, lltype.Ptr):
@@ -776,9 +812,15 @@ def offsetof(STRUCT, fieldname):
             if name == fieldname:
                 return fieldoffsets[index]
     # a symbolic result as a fallback
-    from pypy.rpython.lltypesystem import llmemory
     return llmemory.offsetof(STRUCT, fieldname)
 offsetof._annspecialcase_ = 'specialize:memo'
+
+# check that we have a sane configuration
+assert sys.maxint == (1 << (8 * sizeof(lltype.Signed) - 1)) - 1, (
+    "Mixed configuration of the word size of the machine:\n\t"
+    "the underlying Python was compiled with maxint=%d,\n\t"
+    "but the C compiler says that 'long' is %d bytes" % (
+    sys.maxint, sizeof(lltype.Signed)))
 
 # ********************** some helpers *******************
 

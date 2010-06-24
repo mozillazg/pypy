@@ -7,7 +7,7 @@ attribute.
 """
 
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.eval import Code
 from pypy.interpreter.argument import Arguments
@@ -16,7 +16,7 @@ from pypy.rlib.debug import make_sure_not_resized
 
 funccallunrolling = unrolling_iterable(range(4))
 
-@jit.purefunction
+@jit.purefunction_promote()
 def _get_immutable_code(func):
     assert not func.can_change_code
     return func.code
@@ -58,7 +58,6 @@ class Function(Wrappable):
     def getcode(self):
         if jit.we_are_jitted():
             if not self.can_change_code:
-                self = jit.hint(self, promote=True)
                 return _get_immutable_code(self)
             return jit.hint(self.code, promote=True)
         return self.code
@@ -179,7 +178,7 @@ class Function(Wrappable):
 
     def getdict(self):
         if self.w_func_dict is None:
-            self.w_func_dict = self.space.newdict()
+            self.w_func_dict = self.space.newdict(instance=True)
         return self.w_func_dict
 
     def setdict(self, space, w_dict):
@@ -199,7 +198,7 @@ class Function(Wrappable):
         else:
             name = None
         if not space.is_w(w_argdefs, space.w_None):
-            defs_w = space.viewiterable(w_argdefs)
+            defs_w = space.fixedview(w_argdefs)
         else:
             defs_w = []
         nfreevars = 0
@@ -236,14 +235,16 @@ class Function(Wrappable):
     def _freeze_(self):
         from pypy.interpreter.gateway import BuiltinCode
         if isinstance(self.code, BuiltinCode):
-            identifier = self.code.identifier
-            if Function._all.get(identifier, self) is not self:
-                print "builtin code identifier %s used twice: %s and %s" % (
-                    identifier, self, Function._all[identifier])
             # we have been seen by other means so rtyping should not choke
             # on us
-            Function._all[identifier] = self
+            identifier = self.code.identifier
+            assert Function._all.get(identifier, self) is self, ("duplicate "
+                                                                 "function ids")
+            self.add_to_table()
         return False
+
+    def add_to_table(self):
+        Function._all[self.code.identifier] = self
 
     def find(identifier):
         return Function._all[identifier]
@@ -296,8 +297,13 @@ class Function(Wrappable):
     def descr_function__setstate__(self, space, w_args):
         from pypy.interpreter.pycode import PyCode
         args_w = space.unpackiterable(w_args)
-        (w_name, w_doc, w_code, w_func_globals, w_closure, w_defs_w,
-         w_func_dict, w_module) = args_w
+        try:
+            (w_name, w_doc, w_code, w_func_globals, w_closure, w_defs_w,
+             w_func_dict, w_module) = args_w
+        except ValueError:
+            # wrong args
+            raise OperationError(space.w_ValueError,
+                         space.wrap("Wrong arguments to function.__setstate__"))
 
         self.space = space
         self.name = space.str_w(w_name)
@@ -317,7 +323,7 @@ class Function(Wrappable):
         if space.is_w(w_func_dict, space.w_None):
             w_func_dict = None
         self.w_func_dict = w_func_dict
-        self.defs_w    = space.viewiterable(w_defs_w)
+        self.defs_w    = space.fixedview(w_defs_w)
         self.w_module = w_module
 
     def fget_func_defaults(space, self):
@@ -332,7 +338,7 @@ class Function(Wrappable):
             return
         if not space.is_true(space.isinstance(w_defaults, space.w_tuple)):
             raise OperationError( space.w_TypeError, space.wrap("func_defaults must be set to a tuple object or None") )
-        self.defs_w = space.viewiterable(w_defaults)
+        self.defs_w = space.fixedview(w_defaults)
 
     def fdel_func_defaults(space, self):
         self.defs_w = []
@@ -389,7 +395,9 @@ class Function(Wrappable):
         if self.closure:
             closure_len = len(self.closure)
         if isinstance(code, PyCode) and closure_len != len(code.co_freevars):
-            raise OperationError(space.w_ValueError, space.wrap("%s() requires a code object with %s free vars, not %s " % (self.name, closure_len, len(code.co_freevars))))
+            raise operationerrfmt(space.w_ValueError,
+                "%s() requires a code object with %d free vars, not %d",
+                self.name, closure_len, len(code.co_freevars))
         self.code = code
 
     def fget_func_closure(space, self):
@@ -459,9 +467,9 @@ class Method(Wrappable):
                     instname += " "
                 instdescr = "%sinstance" %instname
             msg = ("unbound method %s() must be called with %s"
-                   "instance as first argument (got %s instead)")  % (myname, clsdescr, instdescr)
-            raise OperationError(space.w_TypeError,
-                                 space.wrap(msg))
+                   "instance as first argument (got %s instead)")
+            raise operationerrfmt(space.w_TypeError, msg,
+                                  myname, clsdescr, instdescr)
         return space.call_args(self.w_function, args)
 
     def descr_method_get(self, w_obj, w_cls=None):
@@ -554,6 +562,7 @@ class Method(Wrappable):
         
 class StaticMethod(Wrappable):
     """The staticmethod objects."""
+    _immutable_ = True
 
     def __init__(self, w_function):
         self.w_function = w_function
@@ -567,6 +576,7 @@ class StaticMethod(Wrappable):
 
 class ClassMethod(Wrappable):
     """The classmethod objects."""
+    _immutable_ = True
 
     def __init__(self, w_function):
         self.w_function = w_function
@@ -579,8 +589,8 @@ class ClassMethod(Wrappable):
     def descr_classmethod__new__(space, w_type, w_function):
         if not space.is_true(space.callable(w_function)):
             typename = space.type(w_function).getname(space, '?')
-            raise OperationError(space.w_TypeError, space.wrap(
-                                 "'%s' object is not callable" % typename))
+            raise operationerrfmt(space.w_TypeError,
+                                  "'%s' object is not callable", typename)
         return space.wrap(ClassMethod(w_function))
 
 class FunctionWithFixedCode(Function):

@@ -71,9 +71,13 @@ NEWSTR    = 8
 
 # ____________________________________________________________
 
-jitdriver = JitDriver(greens=['bytecode', 'pc'],
+def get_printable_location(pc, bytecode):
+    return str(pc)
+
+jitdriver = JitDriver(greens=['pc', 'bytecode'],
                       reds=['self'],
-                      virtualizables=['self'])
+                      virtualizables=['self'],
+                      get_printable_location=get_printable_location)
 
 class Frame(object):
     _virtualizable2_ = ['stackpos', 'stack[*]']
@@ -91,7 +95,9 @@ class Frame(object):
         stackpos = self.stackpos - 1
         assert stackpos >= 0
         self.stackpos = stackpos
-        return self.stack[stackpos]
+        res = self.stack[stackpos]
+        self.stack[stackpos] = None
+        return res
 
     def interp(self):
         bytecode = self.bytecode

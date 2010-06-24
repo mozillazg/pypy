@@ -2,6 +2,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.rlib.rarithmetic import intmask
+from pypy.rlib import jit
 from pypy.interpreter.pyopcode import LoopBlock
 
 
@@ -43,7 +44,10 @@ return next yielded value or raise StopIteration."""
                                  space.wrap('generator already executing'))
         if self.frame.frame_finished_execution:
             raise OperationError(space.w_StopIteration, space.w_None)
-        if self.frame.last_instr == -1:
+        # XXX it's not clear that last_instr should be promoted at all
+        # but as long as it is necessary for call_assembler, let's do it early
+        last_instr = jit.hint(self.frame.last_instr, promote=True)
+        if last_instr == -1:
             if w_arg and not space.is_w(w_arg, space.w_None):
                 msg = "can't send non-None value to a just-started generator"
                 raise OperationError(space.w_TypeError, space.wrap(msg))
@@ -64,7 +68,7 @@ return next yielded value or raise StopIteration."""
             else:
                 return w_result     # YIELDed
         finally:
-            self.frame.f_back_some = None
+            self.frame.f_backref = jit.vref_None
             self.running = False
 
     def descr_throw(self, w_type, w_val=None, w_tb=None):

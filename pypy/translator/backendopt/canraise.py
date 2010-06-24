@@ -2,6 +2,7 @@ from pypy.translator.simplify import get_graph
 from pypy.rpython.lltypesystem.lloperation import llop, LL_OPERATIONS
 from pypy.rpython.lltypesystem import lltype
 from pypy.translator.backendopt import graphanalyze
+from pypy.translator.simplify import get_funcobj
 
 import py
 from pypy.tool.ansi_print import ansi_log
@@ -16,9 +17,8 @@ class RaiseAnalyzer(graphanalyze.BoolGraphAnalyzer):
             log.WARNING("Unknown operation: %s" % op.opname)
             return True
 
-    def analyze_external_call(self, op):
-        deref = self.translator.rtyper.type_system_deref
-        fnobj = deref(op.args[0].value)
+    def analyze_external_call(self, op, seen=None):
+        fnobj = get_funcobj(op.args[0].value)
         return getattr(fnobj, 'canraise', True)
 
     def analyze_external_method(self, op, TYPE, meth):

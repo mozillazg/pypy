@@ -1,16 +1,20 @@
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.function import Function, StaticMethod
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import weakref_descr
 from pypy.objspace.std.stdtypedef import std_dict_descr, issubtypedef, Member
 from pypy.objspace.std.objecttype import object_typedef
 from pypy.objspace.std.dictproxyobject import W_DictProxyObject
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.objectmodel import current_object_addr_as_int, compute_hash
-from pypy.rlib.jit import hint, purefunction, we_are_jitted, dont_look_inside
+from pypy.rlib.jit import hint, purefunction_promote, we_are_jitted
+from pypy.rlib.jit import dont_look_inside, purefunction
 from pypy.rlib.rarithmetic import intmask, r_uint
 
 from copy_reg import _HEAPTYPE
+_CPYTYPE = 1 # used for non-heap types defined in C
 
 # from compiler/misc.py
 
@@ -44,11 +48,27 @@ def _mangle(name, klass):
 class VersionTag(object):
     pass
 
+class MethodCache(object):
+
+    def __init__(self, space):
+        assert space.config.objspace.std.withmethodcache
+        SIZE = 1 << space.config.objspace.std.methodcachesizeexp
+        self.versions = [None] * SIZE
+        self.names = [None] * SIZE
+        self.lookup_where = [(None, None)] * SIZE
+        if space.config.objspace.std.withmethodcachecounter:
+            self.hits = {}
+            self.misses = {}
+
+
 class W_TypeObject(W_Object):
     from pypy.objspace.std.typetype import type_typedef as typedef
 
     lazyloaders = {} # can be overridden by specific instances
-    version_tag = None
+
+    # the version_tag changes if the dict or the inheritance hierarchy changes
+    # other changes to the type (e.g. the name) leave it unchanged
+    _version_tag = None
 
     _immutable_fields_ = ["__flags__",
                           'needsdel',
@@ -76,9 +96,8 @@ class W_TypeObject(W_Object):
         w_self.hasdict = False
         w_self.needsdel = False
         w_self.weakrefable = False
-        w_self.w_same_layout_as = None
         w_self.weak_subclasses = []
-        w_self.__flags__ = 0           # or _HEAPTYPE
+        w_self.__flags__ = 0           # or _HEAPTYPE or _CPYTYPE
         w_self.instancetypedef = overridetypedef
 
         if overridetypedef is not None:
@@ -87,15 +106,20 @@ class W_TypeObject(W_Object):
         else:
             setup_user_defined_type(w_self)
             custom_metaclass = not space.is_w(space.type(w_self), space.w_type)
+        w_self.w_same_layout_as = get_parent_layout(w_self)
 
         if space.config.objspace.std.withtypeversion:
-            if w_self.instancetypedef.hasdict or custom_metaclass:
+            if custom_metaclass or not is_mro_purely_of_types(w_self.mro_w):
                 pass
             else:
-                w_self.version_tag = VersionTag()
+                # the _version_tag should change, whenever the content of
+                # dict_w of any of the types in the mro changes, or if the mro
+                # itself changes
+                w_self._version_tag = VersionTag()
 
     def mutated(w_self):
         space = w_self.space
+        assert w_self.is_heaptype() or not space.config.objspace.std.immutable_builtintypes
         if (not space.config.objspace.std.withtypeversion and
             not space.config.objspace.std.getattributeshortcut and
             not space.config.objspace.std.newshortcut):
@@ -109,13 +133,50 @@ class W_TypeObject(W_Object):
             w_self.w_bltin_new = None
 
         if (space.config.objspace.std.withtypeversion
-            and w_self.version_tag is not None):
-            w_self.version_tag = VersionTag()
+            and w_self._version_tag is not None):
+            w_self._version_tag = VersionTag()
 
         subclasses_w = w_self.get_subclasses()
         for w_subclass in subclasses_w:
             assert isinstance(w_subclass, W_TypeObject)
             w_subclass.mutated()
+
+    def version_tag(w_self):
+        if (not we_are_jitted() or w_self.is_heaptype() or not
+            w_self.space.config.objspace.std.immutable_builtintypes):
+            return w_self._version_tag
+        # heap objects cannot get their version_tag changed
+        return w_self._pure_version_tag()
+
+    @purefunction_promote()
+    def _pure_version_tag(w_self):
+        return w_self._version_tag
+
+    def getattribute_if_not_from_object(w_self):
+        """ this method returns the applevel __getattribute__ if that is not
+        the one from object, in which case it returns None """
+        from pypy.objspace.descroperation import object_getattribute
+        if not we_are_jitted():
+            shortcut = w_self.space.config.objspace.std.getattributeshortcut
+            if not shortcut or not w_self.uses_object_getattribute:
+                # slow path: look for a custom __getattribute__ on the class
+                w_descr = w_self.lookup('__getattribute__')
+                # if it was not actually overriden in the class, we remember this
+                # fact for the next time.
+                if w_descr is object_getattribute(w_self.space):
+                    if shortcut:
+                        w_self.uses_object_getattribute = True
+                else:
+                    return w_descr
+            return None
+        # in the JIT case, just use a lookup, because it is folded away
+        # correctly using the version_tag
+        w_descr = w_self.lookup('__getattribute__')
+        if w_descr is not object_getattribute(w_self.space):
+            return w_descr
+
+    def has_object_getattribute(w_self):
+        return w_self.getattribute_if_not_from_object() is None
 
     def ready(w_self):
         for w_base in w_self.bases_w:
@@ -175,7 +236,6 @@ class W_TypeObject(W_Object):
         return None
                 
 
-    @dont_look_inside
     def _lookup(w_self, key):
         space = w_self.space
         for w_class in w_self.mro_w:
@@ -184,7 +244,6 @@ class W_TypeObject(W_Object):
                 return w_value
         return None
 
-    @dont_look_inside
     def _lookup_where(w_self, key):
         # like lookup() but also returns the parent class in which the
         # attribute was found
@@ -195,32 +254,34 @@ class W_TypeObject(W_Object):
                 return w_class, w_value
         return None, None
 
-    @purefunction
-    def _pure_lookup_where_builtin_type(w_self, name):
-        assert not w_self.is_heaptype()
-        return w_self._lookup_where(name)
+    def _lookup_where_all_typeobjects(w_self, key):
+        # like _lookup_where(), but when we know that w_self.mro_w only
+        # contains W_TypeObjects.  (It differs from _lookup_where() mostly
+        # from a JIT point of view: it cannot invoke arbitrary Python code.)
+        space = w_self.space
+        for w_class in w_self.mro_w:
+            assert isinstance(w_class, W_TypeObject)
+            w_value = w_class.getdictvalue(space, key)
+            if w_value is not None:
+                return w_class, w_value
+        return None, None
 
     def lookup_where_with_method_cache(w_self, name):
         space = w_self.space
         w_self = hint(w_self, promote=True)
         assert space.config.objspace.std.withmethodcache
-        if (space.config.objspace.std.immutable_builtintypes and
-                we_are_jitted() and not w_self.is_heaptype()):
-            w_self = hint(w_self, promote=True)
-            name = hint(name, promote=True)
-            return w_self._pure_lookup_where_builtin_type(name)
-        version_tag = w_self.version_tag
-        version_tag = hint(version_tag, promote=True)
+        version_tag = hint(w_self.version_tag(), promote=True)
         if version_tag is None:
             tup = w_self._lookup_where(name)
             return tup
-        name = hint(name, promote=True)
         return w_self._pure_lookup_where_with_method_cache(name, version_tag)
 
     @purefunction
     def _pure_lookup_where_with_method_cache(w_self, name, version_tag):
         space = w_self.space
-        SHIFT = r_uint.BITS - space.config.objspace.std.methodcachesizeexp
+        cache = space.fromcache(MethodCache)
+        SHIFT2 = r_uint.BITS - space.config.objspace.std.methodcachesizeexp
+        SHIFT1 = SHIFT2 - 5
         version_tag_as_int = current_object_addr_as_int(version_tag)
         # ^^^Note: if the version_tag object is moved by a moving GC, the
         # existing method cache entries won't be found any more; new
@@ -229,41 +290,44 @@ class W_TypeObject(W_Object):
         # the time - so using the fast current_object_addr_as_int() instead
         # of a slower solution like hash() is still a good trade-off.
         hash_name = compute_hash(name)
-        method_hash = r_uint(intmask(version_tag_as_int * hash_name)) >> SHIFT
-        cached_version_tag = space.method_cache_versions[method_hash]
+        product = intmask(version_tag_as_int * hash_name)
+        method_hash = (r_uint(product) ^ (r_uint(product) << SHIFT1)) >> SHIFT2
+        # ^^^Note2: we used to just take product>>SHIFT2, but on 64-bit
+        # platforms SHIFT2 is really large, and we loose too much information
+        # that way (as shown by failures of the tests that typically have
+        # method names like 'f' who hash to a number that has only ~33 bits).
+        cached_version_tag = cache.versions[method_hash]
         if cached_version_tag is version_tag:
-            cached_name = space.method_cache_names[method_hash]
+            cached_name = cache.names[method_hash]
             if cached_name is name:
-                tup = space.method_cache_lookup_where[method_hash]
+                tup = cache.lookup_where[method_hash]
                 if space.config.objspace.std.withmethodcachecounter:
-                    space.method_cache_hits[name] = \
-                            space.method_cache_hits.get(name, 0) + 1
+                    cache.hits[name] = cache.hits.get(name, 0) + 1
 #                print "hit", w_self, name
                 return tup
-        tup = w_self._lookup_where(name)
-        space.method_cache_versions[method_hash] = version_tag
-        space.method_cache_names[method_hash] = name
-        space.method_cache_lookup_where[method_hash] = tup
+        tup = w_self._lookup_where_all_typeobjects(name)
+        cache.versions[method_hash] = version_tag
+        cache.names[method_hash] = name
+        cache.lookup_where[method_hash] = tup
         if space.config.objspace.std.withmethodcachecounter:
-            space.method_cache_misses[name] = \
-                    space.method_cache_misses.get(name, 0) + 1
+            cache.misses[name] = cache.misses.get(name, 0) + 1
 #        print "miss", w_self, name
         return tup
 
     def check_user_subclass(w_self, w_subtype):
         space = w_self.space
         if not isinstance(w_subtype, W_TypeObject):
-            raise OperationError(space.w_TypeError,
-                space.wrap("X is not a type object (%s)" % (
-                    space.type(w_subtype).getname(space, '?'))))
+            raise operationerrfmt(space.w_TypeError,
+                "X is not a type object ('%s')",
+                space.type(w_subtype).getname(space, '?'))
         if not space.is_true(space.issubtype(w_subtype, w_self)):
-            raise OperationError(space.w_TypeError,
-                space.wrap("%s.__new__(%s): %s is not a subtype of %s" % (
-                    w_self.name, w_subtype.name, w_subtype.name, w_self.name)))
+            raise operationerrfmt(space.w_TypeError,
+                "%s.__new__(%s): %s is not a subtype of %s",
+                w_self.name, w_subtype.name, w_subtype.name, w_self.name)
         if w_self.instancetypedef is not w_subtype.instancetypedef:
-            raise OperationError(space.w_TypeError,
-                space.wrap("%s.__new__(%s) is not safe, use %s.__new__()" % (
-                    w_self.name, w_subtype.name, w_subtype.name)))
+            raise operationerrfmt(space.w_TypeError,
+                "%s.__new__(%s) is not safe, use %s.__new__()",
+                w_self.name, w_subtype.name, w_subtype.name)
         return w_subtype
 
     def _freeze_(w_self):
@@ -288,7 +352,10 @@ class W_TypeObject(W_Object):
         raise UnwrapError(w_self)
 
     def is_heaptype(w_self):
-        return w_self.__flags__&_HEAPTYPE
+        return w_self.__flags__ & _HEAPTYPE
+
+    def is_cpytype(w_self):
+        return w_self.__flags__ & _CPYTYPE
 
     def get_module(w_self):
         space = w_self.space
@@ -414,10 +481,10 @@ def check_and_find_best_base(space, bases_w):
                              space.wrap("a new-style class can't have "
                                         "only classic bases"))
     if not w_bestbase.instancetypedef.acceptable_as_base_class:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("type '%s' is not an "
-                                        "acceptable base class" %
-                                        w_bestbase.instancetypedef.name))
+        raise operationerrfmt(space.w_TypeError,
+                              "type '%s' is not an "
+                              "acceptable base class",
+                              w_bestbase.instancetypedef.name)
 
     # check that all other bases' layouts are superclasses of the bestbase
     w_bestlayout = w_bestbase.w_same_layout_as or w_bestbase
@@ -514,11 +581,14 @@ def setup_user_defined_type(w_self):
     w_bestbase = check_and_find_best_base(w_self.space, w_self.bases_w)
     w_self.instancetypedef = w_bestbase.instancetypedef
     w_self.__flags__ = _HEAPTYPE
+    for w_base in w_self.bases_w:
+        if not isinstance(w_base, W_TypeObject):
+            continue
+        w_self.__flags__ |= w_base.__flags__
 
     hasoldstylebase = copy_flags_from_bases(w_self, w_bestbase)
     create_all_slots(w_self, hasoldstylebase)
 
-    w_self.w_same_layout_as = get_parent_layout(w_self)
     ensure_common_attributes(w_self)
 
 def setup_builtin_type(w_self):
@@ -562,11 +632,10 @@ def compute_mro(w_self):
         space = w_self.space
         w_metaclass = space.type(w_self)
         w_where, w_mro_func = space.lookup_in_type_where(w_metaclass, 'mro')
-        assert w_mro_func is not None      # because there is one in 'type'
-        if not space.is_w(w_where, space.w_type):
+        if w_mro_func is not None and not space.is_w(w_where, space.w_type):
             w_mro_meth = space.get(w_mro_func, w_self)
             w_mro = space.call_function(w_mro_meth)
-            mro_w = space.viewiterable(w_mro)
+            mro_w = space.fixedview(w_mro)
             w_self.mro_w = validate_custom_mro(space, mro_w)
             return    # done
     w_self.mro_w = w_self.compute_default_mro()[:]
@@ -581,6 +650,12 @@ def validate_custom_mro(space, mro_w):
                                  space.wrap("mro() returned a non-class"))
     return mro_w
 
+def is_mro_purely_of_types(mro_w):
+    for w_class in mro_w:
+        if not isinstance(w_class, W_TypeObject):
+            return False
+    return True
+
 # ____________________________________________________________
 
 def call__Type(space, w_type, __args__):
@@ -594,7 +669,15 @@ def call__Type(space, w_type, __args__):
         else:
             return space.type(w_obj)
     # invoke the __new__ of the type
-    w_bltin_new = w_type.w_bltin_new
+    if not we_are_jitted():
+        # note that the annotator will figure out that w_type.w_bltin_new can
+        # only be None if the newshortcut config option is not set
+        w_bltin_new = w_type.w_bltin_new
+    else:
+        # for the JIT it is better to take the slow path because normal lookup
+        # is nicely optimized, but the w_type.w_bltin_new attribute is not
+        # known to the JIT
+        w_bltin_new = None
     call_init = True
     if w_bltin_new is not None:
         w_newobject = space.call_obj_args(w_bltin_new, w_type, __args__)
@@ -602,6 +685,7 @@ def call__Type(space, w_type, __args__):
         w_newtype, w_newdescr = w_type.lookup_where('__new__')
         w_newfunc = space.get(w_newdescr, w_type)
         if (space.config.objspace.std.newshortcut and
+            not we_are_jitted() and
             isinstance(w_newtype, W_TypeObject) and
             not w_newtype.is_heaptype() and
             not space.is_w(w_newtype, space.w_type)):
@@ -621,11 +705,7 @@ def call__Type(space, w_type, __args__):
 def _issubtype(w_type1, w_type2):
     return w_type2 in w_type1.mro_w
 
-@purefunction
-def _pure_issubtype_builtin(w_type1, w_type2):
-    return _issubtype(w_type1, w_type2)
-
-@purefunction
+@purefunction_promote()
 def _pure_issubtype(w_type1, w_type2, version_tag1, version_tag2):
     return _issubtype(w_type1, w_type2)
 
@@ -633,19 +713,11 @@ def issubtype__Type_Type(space, w_type1, w_type2):
     w_type1 = hint(w_type1, promote=True)
     w_type2 = hint(w_type2, promote=True)
     if space.config.objspace.std.withtypeversion and we_are_jitted():
-        if (space.config.objspace.std.immutable_builtintypes and
-            not w_type1.is_heaptype() and
-            not w_type2.is_heaptype()):
-            res = _pure_issubtype_builtin(w_type1, w_type2)
+        version_tag1 = w_type1.version_tag()
+        version_tag2 = w_type2.version_tag()
+        if version_tag1 is not None and version_tag2 is not None:
+            res = _pure_issubtype(w_type1, w_type2, version_tag1, version_tag2)
             return space.newbool(res)
-        else:
-            version_tag1 = w_type1.version_tag
-            version_tag2 = w_type2.version_tag
-            version_tag1 = hint(version_tag1, promote=True)
-            version_tag2 = hint(version_tag2, promote=True)
-            if version_tag1 is not None and version_tag2 is not None:
-                res = _pure_issubtype(w_type1, w_type2, version_tag1, version_tag2)
-                return space.newbool(res)
     res = _issubtype(w_type1, w_type2)
     return space.newbool(res)
 
@@ -670,21 +742,24 @@ def getattr__Type_ANY(space, w_type, w_name):
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
         if space.is_data_descr(w_descr):
-            return space.get(w_descr,w_type)
+            w_get = space.lookup(w_descr, "__get__")
+            if w_get is not None:
+                return space.get_and_call_function(w_get, w_descr, w_type,
+                                                   space.type(w_type))
     w_value = w_type.lookup(name)
     if w_value is not None:
         # __get__(None, type): turns e.g. functions into unbound methods
         return space.get(w_value, space.w_None, w_type)
     if w_descr is not None:
         return space.get(w_descr,w_type)
-    msg = "type object '%s' has no attribute '%s'" %(w_type.name, name)
-    raise OperationError(space.w_AttributeError, space.wrap(msg))
+    raise operationerrfmt(space.w_AttributeError,
+                          "type object '%s' has no attribute '%s'",
+                          w_type.name, name)
 
 def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     # Note. This is exactly the same thing as descroperation.descr__setattr__,
     # but it is needed at bootstrap to avoid a call to w_type.getdict() which
     # would un-lazify the whole type.
-    w_type.mutated()
     name = space.str_w(w_name)
     w_descr = space.lookup(w_type, name)
     if w_descr is not None:
@@ -694,15 +769,15 @@ def setattr__Type_ANY_ANY(space, w_type, w_name, w_value):
     
     if (space.config.objspace.std.immutable_builtintypes
             and not w_type.is_heaptype()):
-        msg = "can't set attributes on type object '%s'" %(w_type.name,)
-        raise OperationError(space.w_TypeError, space.wrap(msg))
+        msg = "can't set attributes on type object '%s'"
+        raise operationerrfmt(space.w_TypeError, msg, w_type.name)
     if name == "__del__" and name not in w_type.dict_w:
         msg = "a __del__ method added to an existing type will not be called"
         space.warn(msg, space.w_RuntimeWarning)
+    w_type.mutated()
     w_type.dict_w[name] = w_value
 
 def delattr__Type_ANY(space, w_type, w_name):
-    w_type.mutated()
     if w_type.lazyloaders:
         w_type._freeze_()    # force un-lazification
     name = space.str_w(w_name)
@@ -713,13 +788,15 @@ def delattr__Type_ANY(space, w_type, w_name):
             return
     if (space.config.objspace.std.immutable_builtintypes
             and not w_type.is_heaptype()):
-        msg = "can't delete attributes on type object '%s'" %(w_type.name,)
-        raise OperationError(space.w_TypeError, space.wrap(msg))
+        msg = "can't delete attributes on type object '%s'"
+        raise operationerrfmt(space.w_TypeError, msg, w_type.name)
     try:
         del w_type.dict_w[name]
-        return
     except KeyError:
         raise OperationError(space.w_AttributeError, w_name)
+    else:
+        w_type.mutated()
+        return
 
 
 # ____________________________________________________________
@@ -779,8 +856,9 @@ def mro_error(space, orderlists):
     candidate = orderlists[-1][0]
     if candidate in orderlists[-1][1:]:
         # explicit error message for this specific case
-        raise OperationError(space.w_TypeError,
-            space.wrap("duplicate base class " + candidate.getname(space,"?")))
+        raise operationerrfmt(space.w_TypeError,
+                              "duplicate base class '%s'",
+                              candidate.getname(space,"?"))
     while candidate not in cycle:
         cycle.append(candidate)
         nextblockinglist = mro_blockinglist(candidate, orderlists)

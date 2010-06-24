@@ -36,7 +36,8 @@ class ArrayMeta(_CDataMeta):
                 res.value = property(getvalue, setvalue)
 
                 def getraw(self):
-                    return "".join([self[i] for i in range(self._length_)])
+                    return _rawffi.charp2rawstring(self._buffer.buffer,
+                                                   self._length_)
 
                 def setraw(self, buffer):
                     for i in range(len(buffer)):
@@ -90,7 +91,7 @@ class ArrayMeta(_CDataMeta):
     def _CData_retval(self, resbuffer):
         raise NotImplementedError
 
-    def _CData_value(self, value):
+    def from_param(self, value):
         # array accepts very strange parameters as part of structure
         # or function argument...
         from ctypes import c_char, c_wchar
@@ -104,7 +105,7 @@ class ArrayMeta(_CDataMeta):
                 if len(value) > self._length_:
                     raise RuntimeError("Invalid length")
                 value = self(*value)
-        return _CDataMeta._CData_value(self, value)
+        return _CDataMeta.from_param(self, value)
 
 def array_get_slice_params(self, index):
     if index.step is not None:

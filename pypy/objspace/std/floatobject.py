@@ -1,19 +1,27 @@
-from pypy.objspace.std.objspace import *
+import operator, new
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std import model
+from pypy.objspace.std.multimethod import FailedToImplementArgs
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.longobject import W_LongObject
-from pypy.rlib.rarithmetic import ovfcheck_float_to_int, intmask, isinf
-from pypy.rlib.rarithmetic import formatd
+from pypy.rlib.rarithmetic import ovfcheck_float_to_int, intmask, isinf, isnan
+from pypy.rlib.rarithmetic import formatd, LONG_BIT
+from pypy.rlib.rbigint import rbigint
+from pypy.tool.sourcetools import func_with_new_name
 
 import math
 from pypy.objspace.std.intobject import W_IntObject
 
 class W_FloatObject(W_Object):
-    """This is a reimplementation of the CPython "PyFloatObject" 
+    """This is a reimplementation of the CPython "PyFloatObject"
        it is assumed that the constructor takes a real Python float as
        an argument"""
     from pypy.objspace.std.floattype import float_typedef as typedef
-    
+    _immutable_ = True
+
     def __init__(w_self, floatval):
         w_self.floatval = floatval
 
@@ -69,133 +77,153 @@ def long__Float(space, w_floatobj):
 def float_w__Float(space, w_float):
     return w_float.floatval
 
-def should_not_look_like_an_int(s):
-    for c in s:
-        if c in '.eE':
-            break
+def float2string(space, w_float, format):
+    x = w_float.floatval
+    # we special-case explicitly inf and nan here
+    if isinf(x):
+        if x > 0.0:
+            s = "inf"
+        else:
+            s = "-inf"
+    elif isnan(x):
+        s = "nan"
     else:
-        s += '.0'
-    return s
+        s = formatd(format, x)
+        # We want float numbers to be recognizable as such,
+        # i.e., they should contain a decimal point or an exponent.
+        # However, %g may print the number as an integer;
+        # in such cases, we append ".0" to the string.
+        for c in s:
+            if c in '.eE':
+                break
+        else:
+            s += '.0'
+    return space.wrap(s)
 
 def repr__Float(space, w_float):
-    x = w_float.floatval
-    s = formatd("%.17g", x)
-    return space.wrap(should_not_look_like_an_int(s))
+    return float2string(space, w_float, "%.17g")
 
 def str__Float(space, w_float):
-    x = w_float.floatval
-    s = formatd("%.12g", x)
-    return space.wrap(should_not_look_like_an_int(s))
+    return float2string(space, w_float, "%.12g")
+
+# ____________________________________________________________
+# A mess to handle all cases of float comparison without relying
+# on delegation, which can unfortunately loose precision when
+# casting an int or a long to a float.
+
+def list_compare_funcs(declarator):
+    for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
+        func, name = declarator(op)
+        globals()[name] = func_with_new_name(func, name)
+
+def _reverse(opname):
+    if opname[0] == 'l': return 'g' + opname[1:]
+    elif opname[0] == 'g': return 'l' + opname[1:]
+    else: return opname
 
 
-def declare_new_float_comparison(opname):
-    import operator
-    from pypy.tool.sourcetools import func_with_new_name
+def declare_compare_bigint(opname):
+    """Return a helper function that implements a float-bigint comparison."""
     op = getattr(operator, opname)
-    def f(space, w_int1, w_int2):
-        i = w_int1.floatval
-        j = w_int2.floatval
-        return space.newbool(op(i, j))
-    name = opname + "__Float_Float"
-    return func_with_new_name(f, name), name
-
-def declare_new_int_float_comparison(opname):
-    import operator
-    from pypy.tool.sourcetools import func_with_new_name
-    op = getattr(operator, opname)
-    def f(space, w_int1, w_float2):
-        i = w_int1.intval
-        j = w_float2.floatval
-        return space.newbool(op(float(i), j))
-    name = opname + "__Int_Float"
-    return func_with_new_name(f, name), name
-
-def declare_new_float_int_comparison(opname):
-    import operator
-    from pypy.tool.sourcetools import func_with_new_name
-    op = getattr(operator, opname)
-    def f(space, w_float1, w_int2):
-        i = w_float1.floatval
-        j = w_int2.intval
-        return space.newbool(op(i, float(j)))
-    name = opname + "__Float_Int"
-    return func_with_new_name(f, name), name
-
-for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
-    func, name = declare_new_float_comparison(op)
-    globals()[name] = func
-    # XXX shortcuts disabled: see r54171 and issue #384.
-    #func, name = declare_new_int_float_comparison(op)
-    #globals()[name] = func
-    #func, name = declare_new_float_int_comparison(op)
-    #globals()[name] = func
-
-# for overflowing comparisons between longs and floats
-# XXX we might have to worry (later) about eq__Float_Int, for the case
-#     where int->float conversion may lose precision :-(
-def eq__Float_Long(space, w_float1, w_long2):
-    # XXX naive implementation
-    x = w_float1.floatval
-    if isinf(x) or math.floor(x) != x:
-        return space.w_False
-    try:
-        w_long1 = W_LongObject.fromfloat(x)
-    except OverflowError:
-        return space.w_False
-    return space.eq(w_long1, w_long2)
-
-def eq__Long_Float(space, w_long1, w_float2):
-    return eq__Float_Long(space, w_float2, w_long1)
-
-def ne__Float_Long(space, w_float1, w_long2):
-    return space.not_(eq__Float_Long(space, w_float1, w_long2))
-
-def ne__Long_Float(space, w_long1, w_float2):
-    return space.not_(eq__Float_Long(space, w_float2, w_long1))
-
-def lt__Float_Long(space, w_float1, w_long2):
-    # XXX naive implementation
-    x = w_float1.floatval
-    if isinf(x):
-        return space.newbool(x < 0.0)
-    x_floor = math.floor(x)
-    try:
-        w_long1 = W_LongObject.fromfloat(x_floor)
-    except OverflowError:
-        return space.newbool(x < 0.0)
-    return space.lt(w_long1, w_long2)
-
-def lt__Long_Float(space, w_long1, w_float2):
-    return space.not_(le__Float_Long(space, w_float2, w_long1))
-
-def le__Float_Long(space, w_float1, w_long2):
-    # XXX it's naive anyway
-    if space.is_true(space.lt(w_float1, w_long2)):
-        return space.w_True
+    #
+    if opname == 'eq' or opname == 'ne':
+        def do_compare_bigint(f1, b2):
+            """f1 is a float.  b2 is a bigint."""
+            if isinf(f1) or isnan(f1) or math.floor(f1) != f1:
+                return opname == 'ne'
+            b1 = rbigint.fromfloat(f1)
+            res = b1.eq(b2)
+            if opname == 'ne':
+                res = not res
+            return res
     else:
-        return space.eq(w_float1, w_long2)
+        def do_compare_bigint(f1, b2):
+            """f1 is a float.  b2 is a bigint."""
+            if isinf(f1) or isnan(f1):
+                return op(f1, 0.0)
+            if opname == 'gt' or opname == 'le':
+                # 'float > long'   <==>  'ceil(float) > long'
+                # 'float <= long'  <==>  'ceil(float) <= long'
+                f1 = math.ceil(f1)
+            else:
+                # 'float < long'   <==>  'floor(float) < long'
+                # 'float >= long'  <==>  'floor(float) >= long'
+                f1 = math.floor(f1)
+            b1 = rbigint.fromfloat(f1)
+            return getattr(b1, opname)(b2)
+    #
+    return do_compare_bigint, 'compare_bigint_' + opname
+list_compare_funcs(declare_compare_bigint)
 
-def le__Long_Float(space, w_long1, w_float2):
-    return space.not_(lt__Float_Long(space, w_float2, w_long1))
 
-def gt__Float_Long(space, w_float1, w_long2):
-    return space.not_(le__Float_Long(space, w_float1, w_long2))
+def declare_cmp_float_float(opname):
+    op = getattr(operator, opname)
+    def f(space, w_float1, w_float2):
+        f1 = w_float1.floatval
+        f2 = w_float2.floatval
+        return space.newbool(op(f1, f2))
+    return f, opname + "__Float_Float"
+list_compare_funcs(declare_cmp_float_float)
 
-def gt__Long_Float(space, w_long1, w_float2):
-    return lt__Float_Long(space, w_float2, w_long1)
+def declare_cmp_float_int(opname):
+    op = getattr(operator, opname)
+    compare = globals()['compare_bigint_' + opname]
+    def f(space, w_float1, w_int2):
+        f1 = w_float1.floatval
+        i2 = w_int2.intval
+        f2 = float(i2)
+        if LONG_BIT > 32 and int(f2) != i2:
+            res = compare(f1, rbigint.fromint(i2))
+        else:
+            res = op(f1, f2)
+        return space.newbool(res)
+    return f, opname + "__Float_Int"
+list_compare_funcs(declare_cmp_float_int)
 
-def ge__Float_Long(space, w_float1, w_long2):
-    return space.not_(lt__Float_Long(space, w_float1, w_long2))
+def declare_cmp_float_long(opname):
+    compare = globals()['compare_bigint_' + opname]
+    def f(space, w_float1, w_long2):
+        f1 = w_float1.floatval
+        b2 = w_long2.num
+        return space.newbool(compare(f1, b2))
+    return f, opname + "__Float_Long"
+list_compare_funcs(declare_cmp_float_long)
 
-def ge__Long_Float(space, w_long1, w_float2):
-    return le__Float_Long(space, w_float2, w_long1)
+def declare_cmp_int_float(opname):
+    op = getattr(operator, opname)
+    revcompare = globals()['compare_bigint_' + _reverse(opname)]
+    def f(space, w_int1, w_float2):
+        f2 = w_float2.floatval
+        i1 = w_int1.intval
+        f1 = float(i1)
+        if LONG_BIT > 32 and int(f1) != i1:
+            res = revcompare(f2, rbigint.fromint(i1))
+        else:
+            res = op(f1, f2)
+        return space.newbool(res)
+    return f, opname + "__Int_Float"
+list_compare_funcs(declare_cmp_int_float)
 
+def declare_cmp_long_float(opname):
+    revcompare = globals()['compare_bigint_' + _reverse(opname)]
+    def f(space, w_long1, w_float2):
+        f2 = w_float2.floatval
+        b1 = w_long1.num
+        return space.newbool(revcompare(f2, b1))
+    return f, opname + "__Long_Float"
+list_compare_funcs(declare_cmp_long_float)
+
+
+# ____________________________________________________________
 
 def hash__Float(space, w_value):
     return space.wrap(_hash_float(space, w_value.floatval))
 
 def _hash_float(space, v):
     from pypy.objspace.std.longobject import hash__Long
+
+    if isnan(v):
+        return 0
 
     # This is designed so that Python numbers of different types
     # that compare equal hash to the same value; otherwise comparisons
@@ -264,7 +292,7 @@ def div__Float_Float(space, w_float1, w_float2):
     x = w_float1.floatval
     y = w_float2.floatval
     if y == 0.0:
-        raise FailedToImplement(space.w_ZeroDivisionError, space.wrap("float division"))    
+        raise FailedToImplementArgs(space.w_ZeroDivisionError, space.wrap("float division"))    
     return W_FloatObject(x / y)
 
 truediv__Float_Float = div__Float_Float
@@ -277,7 +305,7 @@ def mod__Float_Float(space, w_float1, w_float2):
     x = w_float1.floatval
     y = w_float2.floatval
     if y == 0.0:
-        raise FailedToImplement(space.w_ZeroDivisionError, space.wrap("float modulo"))
+        raise FailedToImplementArgs(space.w_ZeroDivisionError, space.wrap("float modulo"))
     mod = math.fmod(x, y)
     if (mod and ((y < 0.0) != (mod < 0.0))):
         mod += y
@@ -288,7 +316,7 @@ def _divmod_w(space, w_float1, w_float2):
     x = w_float1.floatval
     y = w_float2.floatval
     if y == 0.0:
-        raise FailedToImplement(space.w_ZeroDivisionError, space.wrap("float modulo"))
+        raise FailedToImplementArgs(space.w_ZeroDivisionError, space.wrap("float modulo"))
     mod = math.fmod(x, y)
     # fmod is typically exact, so vx-mod is *mathematically* an
     # exact multiple of wx.  But this is fp arithmetic, and fp
@@ -325,9 +353,6 @@ def divmod__Float_Float(space, w_float1, w_float2):
     return space.newtuple(_divmod_w(space, w_float1, w_float2))
 
 def pow__Float_Float_ANY(space, w_float1, w_float2, thirdArg):
-    # XXX it makes sense to do more here than in the backend
-    # about sorting out errors!
-
     # This raises FailedToImplement in cases like overflow where a
     # (purely theoretical) big-precision float implementation would have
     # a chance to give a result, and directly OperationError for errors
@@ -337,34 +362,31 @@ def pow__Float_Float_ANY(space, w_float1, w_float2, thirdArg):
             "pow() 3rd argument not allowed unless all arguments are integers"))
     x = w_float1.floatval
     y = w_float2.floatval
-    z = 1.0
-    if y == 0.0:
-        z = 1.0
-    elif x == 0.0:
-        if y < 0.0:
-            raise OperationError(space.w_ZeroDivisionError,
-                                    space.wrap("0.0 cannot be raised to a negative power"))
-        z = 0.0
-    else:
+    try:
+        # We delegate to our implementation of math.pow() the error detection.
+        z = math.pow(x,y)
+    except OverflowError:
+        raise FailedToImplementArgs(space.w_OverflowError,
+                                    space.wrap("float power"))
+    except ValueError:
+        # special case: "(-1.0) ** bignum" should not raise ValueError,
+        # unlike "math.pow(-1.0, bignum)".  See http://mail.python.org/
+        # -           pipermail/python-bugs-list/2003-March/016795.html
         if x < 0.0:
             if math.floor(y) != y:
                 raise OperationError(space.w_ValueError,
-                                        space.wrap("negative number "
-                                                   "cannot be raised to a fractional power"))
+                                     space.wrap("negative number cannot be "
+                                                "raised to a fractional power"))
             if x == -1.0:
-                # xxx what if y is infinity or a NaN
                 if math.floor(y * 0.5) * 2.0 == y:
-                    return space.wrap(1.0)
+                     return space.wrap(1.0)
                 else:
-                    return space.wrap( -1.0)
-#        else:
-        try:
-            z = math.pow(x,y)
-        except OverflowError:
-            raise FailedToImplement(space.w_OverflowError, space.wrap("float power"))
-        except ValueError:
-            raise FailedToImplement(space.w_ValueError, space.wrap("float power")) # xxx
-
+                     return space.wrap( -1.0)
+        elif x == 0.0 and y < 0.0:
+            raise OperationError(space.w_ZeroDivisionError,
+                space.wrap("0.0 cannot be raised to a negative power"))
+        raise OperationError(space.w_ValueError,
+                             space.wrap("float power"))
     return W_FloatObject(z)
 
 
@@ -391,11 +413,13 @@ def pow_neg__Long_Long_None(space, w_int1, w_int2, thirdarg):
     w_float2 = delegate_Long2Float(space, w_int2)
     return pow__Float_Float_ANY(space, w_float1, w_float2, thirdarg)
 
-StdObjSpace.MM.pow.register(pow_neg__Long_Long_None, W_LongObject, W_LongObject, W_NoneObject, order=1)
+model.MM.pow.register(pow_neg__Long_Long_None, W_LongObject, W_LongObject,
+                      W_NoneObject, order=1)
 
 def pow_neg__Int_Int_None(space, w_int1, w_int2, thirdarg):
     w_float1 = delegate_Int2Float(space, w_int1)
     w_float2 = delegate_Int2Float(space, w_int2)
     return pow__Float_Float_ANY(space, w_float1, w_float2, thirdarg)
 
-StdObjSpace.MM.pow.register(pow_neg__Int_Int_None, W_IntObject, W_IntObject, W_NoneObject, order=2)
+model.MM.pow.register(pow_neg__Int_Int_None, W_IntObject, W_IntObject,
+                      W_NoneObject, order=2)

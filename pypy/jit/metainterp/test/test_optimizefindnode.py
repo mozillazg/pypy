@@ -1,12 +1,12 @@
 import py, random
 
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         Const, ConstAddr, TreeLoop, BoxObj,
+                                         Const, TreeLoop, BoxObj,
                                          ConstObj, AbstractDescr)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 from pypy.jit.metainterp.optimizefindnode import BridgeSpecializationFinder
@@ -16,6 +16,8 @@ from pypy.jit.metainterp.specnode import VirtualInstanceSpecNode
 from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.specnode import ConstantSpecNode
+from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.codewriter.heaptracker import register_known_gctype, adr2int
 from pypy.jit.metainterp.test.oparser import parse
 
 def test_sort_descrs():
@@ -37,12 +39,13 @@ class LLtypeMixin(object):
     type_system = 'lltype'
 
     def get_class_of_box(self, box):
-        from pypy.rpython.lltypesystem import rclass
         return box.getref(rclass.OBJECTPTR).typeptr
 
     node_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable.name = rclass.alloc_array_name('node')
     node_vtable_adr = llmemory.cast_ptr_to_adr(node_vtable)
     node_vtable2 = lltype.malloc(OBJECT_VTABLE, immortal=True)
+    node_vtable2.name = rclass.alloc_array_name('node2')
     node_vtable_adr2 = llmemory.cast_ptr_to_adr(node_vtable2)
     cpu = runner.LLtypeCPU(None)
 
@@ -65,6 +68,12 @@ class LLtypeMixin(object):
     floatdescr = cpu.fielddescrof(NODE, 'floatval')
     nextdescr = cpu.fielddescrof(NODE, 'next')
     otherdescr = cpu.fielddescrof(NODE2, 'other')
+
+    NODEOBJ = lltype.GcStruct('NODEOBJ', ('parent', OBJECT),
+                                         ('ref', lltype.Ptr(OBJECT)))
+    nodeobj = lltype.malloc(NODEOBJ)
+    nodeobjvalue = lltype.cast_opaque_ptr(llmemory.GCREF, nodeobj)
+    refdescr = cpu.fielddescrof(NODEOBJ, 'ref')
 
     arraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Signed))
     floatarraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Float))
@@ -93,76 +102,109 @@ class LLtypeMixin(object):
     usize = cpu.sizeof(U)
     onedescr = cpu.fielddescrof(U, 'one')
 
-    cpu.class_sizes = {cpu.cast_adr_to_int(node_vtable_adr): cpu.sizeof(NODE),
-                      cpu.cast_adr_to_int(node_vtable_adr2): cpu.sizeof(NODE2),
-                       cpu.cast_adr_to_int(u_vtable_adr): cpu.sizeof(U)}
+    FUNC = lltype.FuncType([lltype.Signed], lltype.Signed)
+    plaincalldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+    nonwritedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                                    EffectInfo([], [], []))
+    writeadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                                  EffectInfo([], [adescr], []))
+    writearraydescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                                      EffectInfo([], [adescr], [arraydescr]))
+    readadescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                                 EffectInfo([adescr], [], []))
+    mayforcevirtdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([nextdescr], [], [],
+                            EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE))
+    class LoopToken(AbstractDescr):
+        pass
+    asmdescr = LoopToken() # it can be whatever, it's not a descr though
+
+    from pypy.jit.metainterp.virtualref import VirtualRefInfo
+    class FakeWarmRunnerDesc:
+        pass
+    FakeWarmRunnerDesc.cpu = cpu
+    vrefinfo = VirtualRefInfo(FakeWarmRunnerDesc)
+    virtualtokendescr = vrefinfo.descr_virtual_token
+    virtualrefindexdescr = vrefinfo.descr_virtualref_index
+    virtualforceddescr = vrefinfo.descr_forced
+    jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
+    jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)
+
+    register_known_gctype(cpu, node_vtable,  NODE)
+    register_known_gctype(cpu, node_vtable2, NODE2)
+    register_known_gctype(cpu, u_vtable,     U)
+    register_known_gctype(cpu, jit_virtual_ref_vtable,vrefinfo.JIT_VIRTUAL_REF)
+
     namespace = locals()
 
-class OOtypeMixin(object):
+class OOtypeMixin_xxx_disabled(object):
     type_system = 'ootype'
 
-    def get_class_of_box(self, box):
-        root = box.getref(ootype.ROOT)
-        return ootype.classof(root)
+##    def get_class_of_box(self, box):
+##        root = box.getref(ootype.ROOT)
+##        return ootype.classof(root)
     
-    cpu = runner.OOtypeCPU(None)
-    NODE = ootype.Instance('NODE', ootype.ROOT, {})
-    NODE._add_fields({'value': ootype.Signed,
-                      'floatval' : ootype.Float,
-                      'next': NODE})
-    NODE2 = ootype.Instance('NODE2', NODE, {'other': NODE})
+##    cpu = runner.OOtypeCPU(None)
+##    NODE = ootype.Instance('NODE', ootype.ROOT, {})
+##    NODE._add_fields({'value': ootype.Signed,
+##                      'floatval' : ootype.Float,
+##                      'next': NODE})
+##    NODE2 = ootype.Instance('NODE2', NODE, {'other': NODE})
 
-    node_vtable = ootype.runtimeClass(NODE)
-    node_vtable_adr = ootype.cast_to_object(node_vtable)
-    node_vtable2 = ootype.runtimeClass(NODE2)
-    node_vtable_adr2 = ootype.cast_to_object(node_vtable2)
+##    node_vtable = ootype.runtimeClass(NODE)
+##    node_vtable_adr = ootype.cast_to_object(node_vtable)
+##    node_vtable2 = ootype.runtimeClass(NODE2)
+##    node_vtable_adr2 = ootype.cast_to_object(node_vtable2)
 
-    node = ootype.new(NODE)
-    nodebox = BoxObj(ootype.cast_to_object(node))
-    myptr = nodebox.value
-    myptr2 = ootype.cast_to_object(ootype.new(NODE))
-    nodebox2 = BoxObj(ootype.cast_to_object(node))
-    valuedescr = cpu.fielddescrof(NODE, 'value')
-    floatdescr = cpu.fielddescrof(NODE, 'floatval')
-    nextdescr = cpu.fielddescrof(NODE, 'next')
-    otherdescr = cpu.fielddescrof(NODE2, 'other')
-    nodesize = cpu.typedescrof(NODE)
-    nodesize2 = cpu.typedescrof(NODE2)
+##    node = ootype.new(NODE)
+##    nodebox = BoxObj(ootype.cast_to_object(node))
+##    myptr = nodebox.value
+##    myptr2 = ootype.cast_to_object(ootype.new(NODE))
+##    nodebox2 = BoxObj(ootype.cast_to_object(node))
+##    valuedescr = cpu.fielddescrof(NODE, 'value')
+##    floatdescr = cpu.fielddescrof(NODE, 'floatval')
+##    nextdescr = cpu.fielddescrof(NODE, 'next')
+##    otherdescr = cpu.fielddescrof(NODE2, 'other')
+##    nodesize = cpu.typedescrof(NODE)
+##    nodesize2 = cpu.typedescrof(NODE2)
 
-    arraydescr = cpu.arraydescrof(ootype.Array(ootype.Signed))
-    floatarraydescr = cpu.arraydescrof(ootype.Array(ootype.Float))
+##    arraydescr = cpu.arraydescrof(ootype.Array(ootype.Signed))
+##    floatarraydescr = cpu.arraydescrof(ootype.Array(ootype.Float))
 
-    # a plain Record
-    S = ootype.Record({'a': ootype.Signed, 'b': NODE})
-    ssize = cpu.typedescrof(S)
-    adescr = cpu.fielddescrof(S, 'a')
-    bdescr = cpu.fielddescrof(S, 'b')
-    sbox = BoxObj(ootype.cast_to_object(ootype.new(S)))
-    arraydescr2 = cpu.arraydescrof(ootype.Array(S))
+##    # a plain Record
+##    S = ootype.Record({'a': ootype.Signed, 'b': NODE})
+##    ssize = cpu.typedescrof(S)
+##    adescr = cpu.fielddescrof(S, 'a')
+##    bdescr = cpu.fielddescrof(S, 'b')
+##    sbox = BoxObj(ootype.cast_to_object(ootype.new(S)))
+##    arraydescr2 = cpu.arraydescrof(ootype.Array(S))
 
-    T = ootype.Record({'c': ootype.Signed,
-                       'd': ootype.Array(NODE)})
-    tsize = cpu.typedescrof(T)
-    cdescr = cpu.fielddescrof(T, 'c')
-    ddescr = cpu.fielddescrof(T, 'd')
-    arraydescr3 = cpu.arraydescrof(ootype.Array(NODE))
+##    T = ootype.Record({'c': ootype.Signed,
+##                       'd': ootype.Array(NODE)})
+##    tsize = cpu.typedescrof(T)
+##    cdescr = cpu.fielddescrof(T, 'c')
+##    ddescr = cpu.fielddescrof(T, 'd')
+##    arraydescr3 = cpu.arraydescrof(ootype.Array(NODE))
 
-    U = ootype.Instance('U', ootype.ROOT, {'one': ootype.Array(NODE)})
-    usize = cpu.typedescrof(U)
-    onedescr = cpu.fielddescrof(U, 'one')
-    u_vtable = ootype.runtimeClass(U)
-    u_vtable_adr = ootype.cast_to_object(u_vtable)
+##    U = ootype.Instance('U', ootype.ROOT, {'one': ootype.Array(NODE)})
+##    usize = cpu.typedescrof(U)
+##    onedescr = cpu.fielddescrof(U, 'one')
+##    u_vtable = ootype.runtimeClass(U)
+##    u_vtable_adr = ootype.cast_to_object(u_vtable)
 
-    # force a consistent order
-    valuedescr.sort_key()
-    nextdescr.sort_key()
-    adescr.sort_key()
-    bdescr.sort_key()
+##    # force a consistent order
+##    valuedescr.sort_key()
+##    nextdescr.sort_key()
+##    adescr.sort_key()
+##    bdescr.sort_key()
 
-    cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE),
-                       node_vtable_adr2: cpu.typedescrof(NODE2),
-                       u_vtable_adr: cpu.typedescrof(U)}
-    namespace = locals()
+##    FUNC = lltype.FuncType([lltype.Signed], lltype.Signed)
+##    nonwritedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT) # XXX fix ootype
+
+##    cpu.class_sizes = {node_vtable_adr: cpu.typedescrof(NODE),
+##                       node_vtable_adr2: cpu.typedescrof(NODE2),
+##                       u_vtable_adr: cpu.typedescrof(U)}
+##    namespace = locals()
 
 class BaseTest(object):
     invent_fail_descr = None
@@ -177,8 +219,7 @@ class BaseTest(object):
         #
         def constclass(cls_vtable):
             if self.type_system == 'lltype':
-                return ConstAddr(llmemory.cast_ptr_to_adr(cls_vtable),
-                                 self.cpu)
+                return ConstInt(adr2int(llmemory.cast_ptr_to_adr(cls_vtable)))
             else:
                 return ConstObj(ootype.cast_to_object(cls_vtable))
         def constant(value):
@@ -258,8 +299,8 @@ class BaseTestOptimizeFindNode(BaseTest):
         boxes, getnode = self.find_nodes(ops,
                                          'Virtual(node_vtable, nextdescr=Not)')
         assert not getnode(boxes.p0).escaped
-        assert not getnode(boxes.p1).escaped
-        assert not getnode(boxes.p2).escaped
+        assert getnode(boxes.p1).escaped
+        assert getnode(boxes.p2).escaped
         assert getnode(boxes.p0).fromstart
         assert getnode(boxes.p1).fromstart
         assert getnode(boxes.p2).fromstart
@@ -314,7 +355,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         assert not boxp2.fromstart
 
         assert boxp1.knownclsbox is None
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
+        assert boxp2.knownclsbox.getaddr() == self.node_vtable_adr
 
     def test_find_nodes_new_2(self):
         ops = """
@@ -370,8 +411,8 @@ class BaseTestOptimizeFindNode(BaseTest):
         assert not boxp2.fromstart
         assert not boxp3.fromstart
 
-        assert boxp2.knownclsbox.value == self.node_vtable_adr
-        assert boxp3.knownclsbox.value == self.node_vtable_adr2
+        assert boxp2.knownclsbox.getaddr() == self.node_vtable_adr
+        assert boxp3.knownclsbox.getaddr() == self.node_vtable_adr2
 
     def test_find_nodes_new_aliasing_0(self):
         ops = """
@@ -460,34 +501,31 @@ class BaseTestOptimizeFindNode(BaseTest):
                     nextdescr=Virtual(node_vtable,
                                       nextdescr=Virtual(node_vtable)))''')
 
-    def test_find_nodes_oois(self):
+    def test_find_nodes_ptr_eq(self):
         ops = """
         [p3, p4, p2]
         p0 = new_with_vtable(ConstClass(node_vtable))
         p1 = new_with_vtable(ConstClass(node_vtable))
-        i1 = oononnull(p0)
-        guard_true(i1) []
-        i2 = ooisnull(p0)
-        guard_false(i2) []
-        i3 = ooisnot(p0, NULL)
+        guard_nonnull(p0) []
+        i3 = ptr_ne(p0, NULL)
         guard_true(i3) []
-        i4 = oois(p0, NULL)
+        i4 = ptr_eq(p0, NULL)
         guard_false(i4) []
-        i5 = ooisnot(NULL, p0)
+        i5 = ptr_ne(NULL, p0)
         guard_true(i5) []
-        i6 = oois(NULL, p0)
+        i6 = ptr_eq(NULL, p0)
         guard_false(i6) []
-        i7 = ooisnot(p0, p1)
+        i7 = ptr_ne(p0, p1)
         guard_true(i7) []
-        i8 = oois(p0, p1)
+        i8 = ptr_eq(p0, p1)
         guard_false(i8) []
-        i9 = ooisnot(p0, p2)
+        i9 = ptr_ne(p0, p2)
         guard_true(i9) []
-        i10 = oois(p0, p2)
+        i10 = ptr_eq(p0, p2)
         guard_false(i10) []
-        i11 = ooisnot(p2, p1)
+        i11 = ptr_ne(p2, p1)
         guard_true(i11) []
-        i12 = oois(p2, p1)
+        i12 = ptr_eq(p2, p1)
         guard_false(i12) []
         jump(p0, p1, p2)
         """
@@ -818,14 +856,12 @@ class BaseTestOptimizeFindNode(BaseTest):
     def test_find_nodes_bug_1(self):
         ops = """
         [p12]
-        i16 = ooisnull(p12)
-        guard_false(i16) []
+        guard_nonnull(p12) []
         guard_class(p12, ConstClass(node_vtable)) []
         guard_class(p12, ConstClass(node_vtable)) []
         i22 = getfield_gc_pure(p12, descr=valuedescr)
         escape(i22)
-        i25 = ooisnull(p12)
-        guard_false(i25) []
+        guard_nonnull(p12) []
         guard_class(p12, ConstClass(node_vtable)) []
         guard_class(p12, ConstClass(node_vtable)) []
         i29 = getfield_gc_pure(p12, descr=valuedescr)
@@ -838,10 +874,8 @@ class BaseTestOptimizeFindNode(BaseTest):
         setarrayitem_gc(p35, 0, p33, descr=arraydescr3)
         p38 = new_with_vtable(ConstClass(u_vtable))         # U
         setfield_gc(p38, p35, descr=onedescr)
-        i39 = ooisnull(p38)
-        guard_false(i39) []
-        i40 = oononnull(p38)
-        guard_true(i40) []
+        guard_nonnull(p38) []
+        guard_nonnull(p38) []
         guard_class(p38, ConstClass(u_vtable)) []
         p42 = getfield_gc(p38, descr=onedescr)              # Array(NODE)
         i43 = arraylen_gc(p42, descr=arraydescr3)
@@ -862,8 +896,7 @@ class BaseTestOptimizeFindNode(BaseTest):
         guard_false(i55) []
         p56 = getfield_gc(p46, descr=ddescr)                # Array(NODE)
         p58 = getarrayitem_gc(p56, 0, descr=arraydescr3)    # NODE
-        i59 = ooisnull(p38)
-        guard_false(i59) []
+        guard_nonnull(p38) []
         jump(p58)
         """
         self.find_nodes(ops, 'Virtual(node_vtable, valuedescr=Not)')
@@ -1125,14 +1158,13 @@ class BaseTestOptimizeFindNode(BaseTest):
 class TestLLtype(BaseTestOptimizeFindNode, LLtypeMixin):
     pass
 
-class TestOOtype(BaseTestOptimizeFindNode, OOtypeMixin):
-
-    def test_find_nodes_instanceof(self):
-        ops = """
-        [i0]
-        p0 = new_with_vtable(ConstClass(node_vtable))
-        i1 = instanceof(p0, descr=nodesize)
-        jump(i1)
-        """
-        boxes, getnode = self.find_nodes(ops, 'Not')
-        assert not getnode(boxes.p0).escaped
+##class TestOOtype(BaseTestOptimizeFindNode, OOtypeMixin):
+##    def test_find_nodes_instanceof(self):
+##        ops = """
+##        [i0]
+##        p0 = new_with_vtable(ConstClass(node_vtable))
+##        i1 = instanceof(p0, descr=nodesize)
+##        jump(i1)
+##        """
+##        boxes, getnode = self.find_nodes(ops, 'Not')
+##        assert not getnode(boxes.p0).escaped

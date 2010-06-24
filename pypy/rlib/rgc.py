@@ -1,5 +1,7 @@
 import gc
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rlib.objectmodel import we_are_translated
+
 # ____________________________________________________________
 # General GC features
 
@@ -184,6 +186,24 @@ class CanMoveEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop('gc_can_move', hop.args_v, resulttype=hop.r_result)
 
+def _heap_stats():
+    raise NotImplementedError # can't be run directly
+
+class DumpHeapEntry(ExtRegistryEntry):
+    _about_ = _heap_stats
+
+    def compute_result_annotation(self):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
+        from pypy.rpython.lltypesystem import lltype
+        return annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP))
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
+        hop.exception_is_here()
+        return hop.genop('gc_heap_stats', [], resulttype=hop.r_result)
+
 def malloc_nonmovable(TP, n=None, zero=False):
     """ Allocate a non-moving buffer or return nullptr.
     When running directly, will pretend that gc is always
@@ -221,91 +241,75 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
-def resizable_buffer_of_shape(T, init_size):
-    """ Pre-allocates structure of type T (varsized) with possibility
-    to reallocate it further by resize_buffer.
-    """
-    from pypy.rpython.lltypesystem import lltype
-    return lltype.malloc(T, init_size)
+def ll_arraycopy(source, dest, source_start, dest_start, length):
+    from pypy.rpython.lltypesystem.lloperation import llop
+    from pypy.rpython.lltypesystem import lltype, llmemory
+    from pypy.rlib.objectmodel import keepalive_until_here
 
-class ResizableBufferOfShapeEntry(ExtRegistryEntry):
-    _about_ = resizable_buffer_of_shape
+    # supports non-overlapping copies only
+    if not we_are_translated():
+        if source == dest:
+            assert (source_start + length <= dest_start or
+                    dest_start + length <= source_start)
 
-    def compute_result_annotation(self, s_T, s_init_size):
-        from pypy.annotation import model as annmodel
-        from pypy.rpython.lltypesystem import rffi, lltype
-        assert s_T.is_constant()
-        assert isinstance(s_init_size, annmodel.SomeInteger)
-        T = s_T.const
-        # limit ourselves to structs and to a fact that var-sized element
-        # does not contain pointers.
-        assert isinstance(T, lltype.Struct)
-        assert isinstance(getattr(T, T._arrayfld).OF, lltype.Primitive)
-        return annmodel.SomePtr(lltype.Ptr(T))
+    TP = lltype.typeOf(source).TO
+    assert TP == lltype.typeOf(dest).TO
+    if isinstance(TP.OF, lltype.Ptr) and TP.OF.TO._gckind == 'gc':
+        # perform a write barrier that copies necessary flags from
+        # source to dest
+        if not llop.gc_writebarrier_before_copy(lltype.Bool, source, dest):
+            # if the write barrier is not supported, copy by hand
+            for i in range(length):
+                dest[i + dest_start] = source[i + source_start]
+            return
+    source_addr = llmemory.cast_ptr_to_adr(source)
+    dest_addr   = llmemory.cast_ptr_to_adr(dest)
+    cp_source_addr = (source_addr + llmemory.itemoffsetof(TP, 0) +
+                      llmemory.sizeof(TP.OF) * source_start)
+    cp_dest_addr = (dest_addr + llmemory.itemoffsetof(TP, 0) +
+                    llmemory.sizeof(TP.OF) * dest_start)
+    
+    llmemory.raw_memcopy(cp_source_addr, cp_dest_addr,
+                         llmemory.sizeof(TP.OF) * length)
+    keepalive_until_here(source)
+    keepalive_until_here(dest)
+ll_arraycopy._annenforceargs_ = [None, None, int, int, int]
+ll_arraycopy._annspecialcase_ = 'specialize:ll'
+ll_arraycopy.oopspec = 'list.ll_arraycopy(source, dest, source_start, dest_start, length)'
 
-    def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
-        flags = {'flavor': 'gc'}
-        vlist = [hop.inputarg(lltype.Void, 0),
-                 hop.inputconst(lltype.Void, flags),
-                 hop.inputarg(lltype.Signed, 1)]
-        hop.exception_is_here()
-        return hop.genop('malloc_resizable_buffer', vlist,
-                         resulttype=hop.r_result.lowleveltype)
+def ll_shrink_array(p, smallerlength):
+    from pypy.rpython.lltypesystem.lloperation import llop
+    from pypy.rpython.lltypesystem import lltype, llmemory
+    from pypy.rlib.objectmodel import keepalive_until_here
 
-def resize_buffer(ptr, old_size, new_size):
-    """ Resize raw buffer returned by resizable_buffer_of_shape to new size
-    """
-    from pypy.rpython.lltypesystem import lltype
-    T = lltype.typeOf(ptr).TO
-    arrayfld = T._arrayfld
-    arr = getattr(ptr, arrayfld)
-    # we don't have any realloc on top of cpython
-    new_ptr = lltype.malloc(T, new_size)
-    new_ar = getattr(new_ptr, arrayfld)
-    for i in range(old_size):
-        new_ar[i] = arr[i]
-    return new_ptr
+    if llop.shrink_array(lltype.Bool, p, smallerlength):
+        return p    # done by the GC
+    # XXX we assume for now that the type of p is GcStruct containing a
+    # variable array, with no further pointers anywhere, and exactly one
+    # field in the fixed part -- like STR and UNICODE.
 
-class ResizeBufferEntry(ExtRegistryEntry):
-    _about_ = resize_buffer
+    TP = lltype.typeOf(p).TO
+    newp = lltype.malloc(TP, smallerlength)
 
-    def compute_result_annotation(self, s_ptr, s_old_size, s_new_size):
-        from pypy.annotation import model as annmodel
-        from pypy.rpython.lltypesystem import rffi
-        assert isinstance(s_ptr, annmodel.SomePtr)
-        assert isinstance(s_new_size, annmodel.SomeInteger)
-        assert isinstance(s_old_size, annmodel.SomeInteger)
-        return s_ptr
+    assert len(TP._names) == 2
+    field = getattr(p, TP._names[0])
+    setattr(newp, TP._names[0], field)
 
-    def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
-        vlist = [hop.inputarg(hop.args_r[0], 0),
-                 hop.inputarg(lltype.Signed, 1),
-                 hop.inputarg(lltype.Signed, 2)]
-        hop.exception_is_here()
-        return hop.genop('resize_buffer', vlist,
-                         resulttype=hop.r_result.lowleveltype)
+    ARRAY = getattr(TP, TP._arrayfld)
+    offset = (llmemory.offsetof(TP, TP._arrayfld) +
+              llmemory.itemoffsetof(ARRAY, 0))
+    source_addr = llmemory.cast_ptr_to_adr(p)    + offset
+    dest_addr   = llmemory.cast_ptr_to_adr(newp) + offset
+    llmemory.raw_memcopy(source_addr, dest_addr, 
+                         llmemory.sizeof(ARRAY.OF) * smallerlength)
 
-def finish_building_buffer(ptr, final_size):
-    """ Finish building resizable buffer returned by resizable_buffer_of_shape
-    """
-    return ptr
+    keepalive_until_here(p)
+    keepalive_until_here(newp)
+    return newp
+ll_shrink_array._annspecialcase_ = 'specialize:ll'
+ll_shrink_array._jit_look_inside_ = False
 
-class FinishBuildingBufferEntry(ExtRegistryEntry):
-    _about_ = finish_building_buffer
-
-    def compute_result_annotation(self, s_arr, s_final_size):
-        from pypy.annotation.model import SomePtr, s_ImpossibleValue,\
-             SomeInteger
-        assert isinstance(s_arr, SomePtr)
-        assert isinstance(s_final_size, SomeInteger)
-        return s_arr
-
-    def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
-        vlist = [hop.inputarg(hop.args_r[0], 0),
-                 hop.inputarg(hop.args_r[1], 1)]
-        hop.exception_cannot_occur()
-        return hop.genop('finish_building_buffer', vlist,
-                         resulttype=hop.r_result.lowleveltype)
+def no_collect(func):
+    func._dont_inline_ = True
+    func._gc_no_collect_ = True
+    return func

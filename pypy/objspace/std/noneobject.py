@@ -2,12 +2,14 @@
   None Object implementation
 
   ok and tested
-""" 
+"""
 
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 
 class W_NoneObject(W_Object):
     from pypy.objspace.std.nonetype import none_typedef as typedef
+    _immutable_ = True
 
     def unwrap(w_self, space):
         return None

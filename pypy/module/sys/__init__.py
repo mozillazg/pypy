@@ -1,5 +1,7 @@
-from pypy.interpreter.mixedmodule import MixedModule 
+from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.error import OperationError
+from pypy.rlib.objectmodel import we_are_translated
+import sys
 
 class Module(MixedModule):
     """Sys Builtin Module. """
@@ -10,6 +12,7 @@ class Module(MixedModule):
         self.recursionlimit = 100
         self.w_default_encoder = None
         self.defaultencoding = "ascii"
+        self.filesystemencoding = None
         
     interpleveldefs = {
         '__name__'              : '(space.wrap("sys"))', 
@@ -68,13 +71,18 @@ class Module(MixedModule):
         
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding', 
         'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
-}
+        'getfilesystemencoding' : 'interp_encoding.getfilesystemencoding',
+        }
+
+    if sys.platform == 'win32':
+        interpleveldefs['winver'] = 'version.get_winver(space)'
+        interpleveldefs['getwindowsversion'] = 'vm.getwindowsversion'
+    
     appleveldefs = {
         'excepthook'            : 'app.excepthook', 
         '__excepthook__'        : 'app.excepthook', 
         'exit'                  : 'app.exit', 
         'exitfunc'              : 'app.exitfunc',
-        'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
         'copyright'             : 'app.copyright_str', 
     }
@@ -84,7 +92,12 @@ class Module(MixedModule):
         w_modules = self.get('modules')
         self.space.setitem(w_modules, w_name, w_module)
 
-    def getmodule(self, name): 
+    def startup(self, space):
+        if space.config.translating and not we_are_translated():
+            # don't get the filesystemencoding at translation time
+            assert self.filesystemencoding is None
+
+    def getmodule(self, name):
         space = self.space
         w_modules = self.get('modules') 
         try: 
@@ -116,7 +129,7 @@ class Module(MixedModule):
             if operror is None:
                 return space.w_None
             else:
-                return operror.w_value
+                return operror.get_w_value(space)
         elif attr == 'exc_traceback':
             operror = space.getexecutioncontext().sys_exc_info()
             if operror is None:

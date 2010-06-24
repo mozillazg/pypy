@@ -4,6 +4,7 @@ from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop
 from pypy.conftest import option
+from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.history import TreeLoop, Box, History, LoopToken
@@ -14,8 +15,10 @@ from pypy.jit.metainterp.specnode import NotSpecNode, more_general_specnodes
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 
-class GiveUp(Exception):
-    pass
+def giveup():
+    from pypy.jit.metainterp.pyjitpl import SwitchToBlackhole
+    from pypy.jit.metainterp.jitprof import ABORT_BRIDGE
+    raise SwitchToBlackhole(ABORT_BRIDGE)
 
 def show_loop(metainterp_sd, loop=None, error=None):
     # debugging
@@ -54,9 +57,11 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     for box in loop.inputargs:
         assert isinstance(box, Box)
     if start > 0:
-        loop.operations = history.operations[start:]
+        ops = history.operations[start:]
     else:
-        loop.operations = history.operations
+        ops = history.operations
+    # make a copy, because optimize_loop can mutate the ops and descrs
+    loop.operations = [op.clone() for op in ops]
     metainterp_sd = metainterp.staticdata
     loop_token = make_loop_token(len(loop.inputargs))
     loop.token = loop_token
@@ -113,7 +118,7 @@ def send_loop_to_backend(metainterp_sd, loop, type):
     metainterp_sd.log("compiled new " + type)
 
 def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
-    n = faildescr.get_index()
+    n = metainterp_sd.cpu.get_fail_descr_number(faildescr)
     metainterp_sd.logger_ops.log_bridge(inputargs, operations, n)
     if not we_are_translated():
         show_loop(metainterp_sd)
@@ -133,14 +138,7 @@ def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
 # ____________________________________________________________
 
 class _DoneWithThisFrameDescr(AbstractFailDescr):
-
-    def __init__(self, lst):
-        "NOT_RPYTHON"        
-        self.index = len(lst)
-        lst.append(self)
-
-    def get_index(self):
-        return self.index
+    pass
 
 class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd):
@@ -158,6 +156,7 @@ class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
         assert metainterp_sd.result_type == 'ref'
         cpu = metainterp_sd.cpu
         result = cpu.get_latest_value_ref(0)
+        cpu.clear_latest_values(1)
         raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
 class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
@@ -170,20 +169,9 @@ class ExitFrameWithExceptionDescrRef(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd):
         cpu = metainterp_sd.cpu
         value = cpu.get_latest_value_ref(0)
+        cpu.clear_latest_values(1)
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, value)
 
-
-done_with_this_frame_descrs = []
-done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid(
-                                           done_with_this_frame_descrs)
-done_with_this_frame_descr_int = DoneWithThisFrameDescrInt(
-                                           done_with_this_frame_descrs)
-done_with_this_frame_descr_ref = DoneWithThisFrameDescrRef(
-                                           done_with_this_frame_descrs)
-done_with_this_frame_descr_float = DoneWithThisFrameDescrFloat(
-                                           done_with_this_frame_descrs)
-exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef(
-                                           done_with_this_frame_descrs)
 
 prebuiltNotSpecNode = NotSpecNode()
 
@@ -194,51 +182,134 @@ class TerminatingLoopToken(LoopToken):
         self.specnodes = [prebuiltNotSpecNode]*nargs
         self.finishdescr = finishdescr
 
-# pseudo loop tokens to make the life of optimize.py easier
-loop_tokens_done_with_this_frame_int = [
-    TerminatingLoopToken(1, done_with_this_frame_descr_int)
-    ]
-loop_tokens_done_with_this_frame_ref = [
-    TerminatingLoopToken(1, done_with_this_frame_descr_ref)
-    ]
-loop_tokens_done_with_this_frame_float = [
-    TerminatingLoopToken(1, done_with_this_frame_descr_float)
-    ]
-loop_tokens_done_with_this_frame_void = [
-    TerminatingLoopToken(0, done_with_this_frame_descr_void)
-    ]
-loop_tokens_exit_frame_with_exception_ref = [
-    TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
-    ]
+def make_done_loop_tokens():
+    done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
+    done_with_this_frame_descr_int = DoneWithThisFrameDescrInt()
+    done_with_this_frame_descr_ref = DoneWithThisFrameDescrRef()
+    done_with_this_frame_descr_float = DoneWithThisFrameDescrFloat()
+    exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef()
+
+    # pseudo loop tokens to make the life of optimize.py easier
+    return {'loop_tokens_done_with_this_frame_int': [
+                TerminatingLoopToken(1, done_with_this_frame_descr_int)
+                ],
+            'loop_tokens_done_with_this_frame_ref': [
+                TerminatingLoopToken(1, done_with_this_frame_descr_ref)
+                ],
+            'loop_tokens_done_with_this_frame_float': [
+                TerminatingLoopToken(1, done_with_this_frame_descr_float)
+                ],
+            'loop_tokens_done_with_this_frame_void': [
+                TerminatingLoopToken(0, done_with_this_frame_descr_void)
+                ],
+            'loop_tokens_exit_frame_with_exception_ref': [
+                TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
+                ],
+            }
 
 class ResumeDescr(AbstractFailDescr):
     def __init__(self, original_greenkey):
         self.original_greenkey = original_greenkey
+    def _clone_if_mutable(self):
+        raise NotImplementedError
 
 class ResumeGuardDescr(ResumeDescr):
-    counter = 0
-    # this class also gets attributes stored by resume.py code
+    _counter = 0        # if < 0, there is one counter per value;
+    _counters = None    # they get stored in _counters then.
+
+    # this class also gets the following attributes stored by resume.py code
+    rd_snapshot = None
+    rd_frame_info_list = None
+    rd_numb = None
+    rd_consts = None
+    rd_virtuals = None
+    rd_pendingfields = None
+
+    CNT_INT   = -0x20000000
+    CNT_REF   = -0x40000000
+    CNT_FLOAT = -0x60000000
+    CNT_MASK  =  0x1FFFFFFF
 
     def __init__(self, metainterp_sd, original_greenkey):
         ResumeDescr.__init__(self, original_greenkey)
         self.metainterp_sd = metainterp_sd
-        self.index = -1
-
-    def get_index(self):
-        if self.index == -1:
-            globaldata = self.metainterp_sd.globaldata
-            self.index = globaldata.get_fail_descr_number(self)
-        return self.index
 
     def store_final_boxes(self, guard_op, boxes):
         guard_op.fail_args = boxes
         self.guard_opnum = guard_op.opnum
-        self.fail_arg_types = [box.type for box in boxes]
+
+    def make_a_counter_per_value(self, guard_value_op):
+        assert guard_value_op.opnum == rop.GUARD_VALUE
+        box = guard_value_op.args[0]
+        try:
+            i = guard_value_op.fail_args.index(box)
+        except ValueError:
+            return     # xxx probably very rare
+        else:
+            if box.type == history.INT:
+                cnt = self.CNT_INT
+            elif box.type == history.REF:
+                cnt = self.CNT_REF
+            elif box.type == history.FLOAT:
+                cnt = self.CNT_FLOAT
+            else:
+                assert 0, box.type
+            # we build the following value for _counter, which is always
+            # a negative value
+            self._counter = cnt | i
 
     def handle_fail(self, metainterp_sd):
+        if self.must_compile(metainterp_sd):
+            return self._trace_and_compile_from_bridge(metainterp_sd)
+        else:
+            from pypy.jit.metainterp.blackhole import resume_in_blackhole
+            resume_in_blackhole(metainterp_sd, self)
+            assert 0, "unreachable"
+
+    def _trace_and_compile_from_bridge(self, metainterp_sd):
         from pypy.jit.metainterp.pyjitpl import MetaInterp
         metainterp = MetaInterp(metainterp_sd)
         return metainterp.handle_guard_failure(self)
+    _trace_and_compile_from_bridge._dont_inline_ = True
+
+    def must_compile(self, metainterp_sd):
+        trace_eagerness = metainterp_sd.state.trace_eagerness
+        if self._counter >= 0:
+            self._counter += 1
+            return self._counter >= trace_eagerness
+        else:
+            index = self._counter & self.CNT_MASK
+            typetag = self._counter & ~ self.CNT_MASK
+            counters = self._counters
+            if typetag == self.CNT_INT:
+                intvalue = metainterp_sd.cpu.get_latest_value_int(index)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersInt()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersInt)
+                counter = counters.see_int(intvalue)
+            elif typetag == self.CNT_REF:
+                refvalue = metainterp_sd.cpu.get_latest_value_ref(index)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersRef()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersRef)
+                counter = counters.see_ref(refvalue)
+            elif typetag == self.CNT_FLOAT:
+                floatvalue = metainterp_sd.cpu.get_latest_value_float(index)
+                if counters is None:
+                    self._counters = counters = ResumeGuardCountersFloat()
+                else:
+                    assert isinstance(counters, ResumeGuardCountersFloat)
+                counter = counters.see_float(floatvalue)
+            else:
+                assert 0, typetag
+            return counter >= trace_eagerness
+
+    def reset_counter_from_failure(self):
+        if self._counter >= 0:
+            self._counter = 0
+        self._counters = None
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
@@ -248,6 +319,139 @@ class ResumeGuardDescr(ResumeDescr):
             self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
                                new_loop.operations)
+
+    def _clone_if_mutable(self):
+        res = self.__class__(self.metainterp_sd, self.original_greenkey)
+        # XXX a bit ugly to have to list them all here
+        res.rd_snapshot = self.rd_snapshot
+        res.rd_frame_info_list = self.rd_frame_info_list
+        res.rd_numb = self.rd_numb
+        res.rd_consts = self.rd_consts
+        res.rd_virtuals = self.rd_virtuals
+        res.rd_pendingfields = self.rd_pendingfields
+        return res
+
+class ResumeGuardForcedDescr(ResumeGuardDescr):
+
+    def handle_fail(self, metainterp_sd):
+        # Failures of a GUARD_NOT_FORCED are never compiled, but
+        # always just blackholed.  First fish for the data saved when
+        # the virtualrefs and virtualizable have been forced by
+        # handle_async_forcing() just a moment ago.
+        from pypy.jit.metainterp.blackhole import resume_in_blackhole
+        token = metainterp_sd.cpu.get_latest_force_token()
+        all_virtuals = self.fetch_data(token)
+        if all_virtuals is None:
+            all_virtuals = []
+        resume_in_blackhole(metainterp_sd, self, all_virtuals)
+        assert 0, "unreachable"
+
+    @staticmethod
+    def force_now(cpu, token):
+        # Called during a residual call from the assembler, if the code
+        # actually needs to force one of the virtualrefs or the virtualizable.
+        # Implemented by forcing *all* virtualrefs and the virtualizable.
+        faildescr = cpu.force(token)
+        assert isinstance(faildescr, ResumeGuardForcedDescr)
+        faildescr.handle_async_forcing(token)
+
+    def handle_async_forcing(self, force_token):
+        from pypy.jit.metainterp.resume import force_from_resumedata
+        metainterp_sd = self.metainterp_sd
+        all_virtuals = force_from_resumedata(metainterp_sd, self)
+        # The virtualizable data was stored on the real virtualizable above.
+        # Handle all_virtuals: keep them for later blackholing from the
+        # future failure of the GUARD_NOT_FORCED
+        self.save_data(force_token, all_virtuals)
+
+    def save_data(self, key, value):
+        globaldata = self.metainterp_sd.globaldata
+        if we_are_translated():
+            assert key not in globaldata.resume_virtuals
+            globaldata.resume_virtuals[key] = value
+        else:
+            rv = globaldata.resume_virtuals_not_translated
+            for key1, value1 in rv:
+                assert key1 != key
+            rv.append((key, value))
+
+    def fetch_data(self, key):
+        globaldata = self.metainterp_sd.globaldata
+        if we_are_translated():
+            assert key in globaldata.resume_virtuals
+            data = globaldata.resume_virtuals[key]
+            del globaldata.resume_virtuals[key]
+        else:
+            rv = globaldata.resume_virtuals_not_translated
+            for i in range(len(rv)):
+                if rv[i][0] == key:
+                    data = rv[i][1]
+                    del rv[i]
+                    break
+            else:
+                assert 0, "not found: %r" % (key,)
+        return data
+
+
+class AbstractResumeGuardCounters(object):
+    # Completely custom algorithm for now: keep 5 pairs (value, counter),
+    # and when we need more, we discard the middle pair (middle in the
+    # current value of the counter).  That way, we tend to keep the
+    # values with a high counter, but also we avoid always throwing away
+    # the most recently added value.  **THIS ALGO MUST GO AWAY AT SOME POINT**
+    pass
+
+def _see(self, newvalue):
+    # find and update an existing counter
+    unused = -1
+    for i in range(5):
+        cnt = self.counters[i]
+        if cnt:
+            if self.values[i] == newvalue:
+                cnt += 1
+                self.counters[i] = cnt
+                return cnt
+        else:
+            unused = i
+    # not found.  Use a previously unused entry, if there is one
+    if unused >= 0:
+        self.counters[unused] = 1
+        self.values[unused] = newvalue
+        return 1
+    # no unused entry.  Overwrite the middle one.  Computed with indices
+    # a, b, c meaning the highest, second highest, and third highest
+    # entries.
+    a = 0
+    b = c = -1
+    for i in range(1, 5):
+        if self.counters[i] > self.counters[a]:
+            c = b; b = a; a = i
+        elif b < 0 or self.counters[i] > self.counters[b]:
+            c = b; b = i
+        elif c < 0 or self.counters[i] > self.counters[c]:
+            c = i
+    self.counters[c] = 1
+    self.values[c] = newvalue
+    return 1
+
+class ResumeGuardCountersInt(AbstractResumeGuardCounters):
+    def __init__(self):
+        self.counters = [0] * 5
+        self.values = [0] * 5
+    see_int = func_with_new_name(_see, 'see_int')
+
+class ResumeGuardCountersRef(AbstractResumeGuardCounters):
+    def __init__(self):
+        self.counters = [0] * 5
+        self.values = [history.ConstPtr.value] * 5
+    see_ref = func_with_new_name(_see, 'see_ref')
+
+class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
+    def __init__(self):
+        self.counters = [0] * 5
+        self.values = [0.0] * 5
+    see_float = func_with_new_name(_see, 'see_float')
+
 
 class ResumeFromInterpDescr(ResumeDescr):
     def __init__(self, original_greenkey, redkey):
@@ -278,6 +482,9 @@ class ResumeFromInterpDescr(ResumeDescr):
         # general loop token
         old_loop_tokens.append(new_loop_token)
 
+    def reset_counter_from_failure(self):
+        pass
+
 
 def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     """Try to compile a new bridge leading from the beginning of the history
@@ -290,13 +497,16 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_loop = create_empty_loop(metainterp)
     new_loop.inputargs = metainterp.history.inputargs
-    new_loop.operations = metainterp.history.operations
+    # clone ops, as optimize_bridge can mutate the ops
+    new_loop.operations = [op.clone() for op in metainterp.history.operations]
     metainterp_sd = metainterp.staticdata
     try:
         target_loop_token = metainterp_sd.state.optimize_bridge(metainterp_sd,
                                                                 old_loop_tokens,
                                                                 new_loop)
     except InvalidLoop:
+        # XXX I am fairly convinced that optimize_bridge cannot actually raise
+        # InvalidLoop
         return None
     # Did it work?
     if target_loop_token is not None:

@@ -3,13 +3,13 @@
 """
 
 import py
-from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
+from pypy.jit.metainterp.history import BoxInt, ConstInt,\
      BoxPtr, ConstPtr, LoopToken, BasicFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager,\
-     BASE_CONSTANT_SIZE
+     FloatConstants
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
@@ -28,6 +28,7 @@ class MockGcDescr(GcCache):
 
 class MockAssembler(object):
     gcrefs = None
+    _float_constants = None
 
     def __init__(self, cpu=None, gc_ll_descr=None):
         self.movs = []
@@ -84,6 +85,20 @@ class BaseTestRegalloc(object):
     fdescr1 = BasicFailDescr(1)
     fdescr2 = BasicFailDescr(2)
     fdescr3 = BasicFailDescr(3)
+
+    def f1(x):
+        return x+1
+
+    def f2(x, y):
+        return x*y
+
+    F1PTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
+    F2PTR = lltype.Ptr(lltype.FuncType([lltype.Signed]*2, lltype.Signed))
+    f1ptr = llhelper(F1PTR, f1)
+    f2ptr = llhelper(F2PTR, f2)
+
+    f1_calldescr = cpu.calldescrof(F1PTR.TO, F1PTR.TO.ARGS, F1PTR.TO.RESULT)
+    f2_calldescr = cpu.calldescrof(F2PTR.TO, F2PTR.TO.ARGS, F2PTR.TO.RESULT)
 
     namespace = locals().copy()
     type_system = 'lltype'
@@ -196,10 +211,9 @@ class TestRegallocSimple(BaseTestRegalloc):
         '''
         S = lltype.GcStruct('S')
         ptr = lltype.malloc(S)
+        self.cpu.clear_latest_values(2)
         self.interpret(ops, [0, ptr])
         assert self.getptr(0, lltype.Ptr(S)) == ptr
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(0)
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(1)
 
     def test_exception_bridge_no_exception(self):
         ops = '''
@@ -437,20 +451,6 @@ class TestRegallocMoreRegisters(BaseTestRegalloc):
         self.interpret(ops, [0, 1, 2, 3, 4, 5, 6])
         assert self.getints(6) == [1, 1, 0, 0, 1, 1]
 
-    def test_nullity(self):
-        ops = '''
-        [i0, i1, i2, i3, i4, i5, i6]
-        i10 = oononnull(i0)
-        i11 = ooisnull(i1)
-        i12 = oononnull(i2)
-        i13 = oononnull(i3)
-        i14 = ooisnull(i6)
-        i15 = ooisnull(i5)
-        finish(i10, i11, i12, i13, i14, i15)
-        '''
-        self.interpret(ops, [0, 1, 2, 3, 4, 5, 6])
-        assert self.getints(6) == [0, 0, 1, 1, 0, 0]
-
     def test_strsetitem(self):
         ops = '''
         [p0, i]
@@ -503,6 +503,7 @@ class TestRegallocFloats(BaseTestRegalloc):
 
     def test_float_overflow_const_list(self):
         ops = ['[f0]']
+        BASE_CONSTANT_SIZE = FloatConstants.BASE_CONSTANT_SIZE
         for i in range(BASE_CONSTANT_SIZE * 2):
             ops.append('f%d = float_add(f%d, 3.5)' % (i + 1, i))
         ops.append('finish(f%d)' % (BASE_CONSTANT_SIZE * 2))
@@ -520,19 +521,91 @@ class TestRegallocFloats(BaseTestRegalloc):
         assert self.getint(0) == 0
 
     def test_bug_float_is_true_stack(self):
+        # NB. float_is_true no longer exists.  Unsure if keeping this test
+        # makes sense any more.
         ops = '''
         [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9]
-        i0 = float_is_true(f0)
-        i1 = float_is_true(f1)
-        i2 = float_is_true(f2)
-        i3 = float_is_true(f3)
-        i4 = float_is_true(f4)
-        i5 = float_is_true(f5)
-        i6 = float_is_true(f6)
-        i7 = float_is_true(f7)
-        i8 = float_is_true(f8)
-        i9 = float_is_true(f9)
+        i0 = float_ne(f0, 0.0)
+        i1 = float_ne(f1, 0.0)
+        i2 = float_ne(f2, 0.0)
+        i3 = float_ne(f3, 0.0)
+        i4 = float_ne(f4, 0.0)
+        i5 = float_ne(f5, 0.0)
+        i6 = float_ne(f6, 0.0)
+        i7 = float_ne(f7, 0.0)
+        i8 = float_ne(f8, 0.0)
+        i9 = float_ne(f9, 0.0)
         finish(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9)
         '''
         loop = self.interpret(ops, [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9])
         assert self.getints(9) == [0, 1, 1, 1, 1, 1, 1, 1, 1]
+
+class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
+
+    def test_one_call(self):
+        ops = '''
+        [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
+        i10 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
+        finish(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9)
+        '''
+        loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
+        assert self.getints(11) == [5, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
+        assert loop.token._x86_param_depth == 1
+
+    def test_two_calls(self):
+        ops = '''
+        [i0, i1,  i2, i3, i4, i5, i6, i7, i8, i9]
+        i10 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
+        i11 = call(ConstClass(f2ptr), i10, i1, descr=f2_calldescr)        
+        finish(i11, i1,  i2, i3, i4, i5, i6, i7, i8, i9)
+        '''
+        loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
+        assert self.getints(11) == [5*7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
+        assert loop.token._x86_param_depth == 2
+        
+    def test_bridge_calls_1(self):
+        ops = '''
+        [i0, i1]
+        i2 = call(ConstClass(f1ptr), i0, descr=f1_calldescr)
+        guard_value(i2, 0, descr=fdescr1) [i2, i1]
+        finish(i1)
+        '''
+        loop = self.interpret(ops, [4, 7])
+        assert self.getint(0) == 5
+        ops = '''
+        [i2, i1]
+        i3 = call(ConstClass(f2ptr), i2, i1, descr=f2_calldescr)        
+        finish(i3, descr=fdescr2)        
+        '''
+        bridge = self.attach_bridge(ops, loop, -2)
+
+        assert loop.operations[-2].descr._x86_bridge_param_depth == 2
+
+        self.cpu.set_future_value_int(0, 4)
+        self.cpu.set_future_value_int(1, 7)        
+        self.run(loop)
+        assert self.getint(0) == 5*7
+
+    def test_bridge_calls_2(self):
+        ops = '''
+        [i0, i1]
+        i2 = call(ConstClass(f2ptr), i0, i1, descr=f2_calldescr)
+        guard_value(i2, 0, descr=fdescr1) [i2]
+        finish(i1)
+        '''
+        loop = self.interpret(ops, [4, 7])
+        assert self.getint(0) == 4*7
+        ops = '''
+        [i2]
+        i3 = call(ConstClass(f1ptr), i2, descr=f1_calldescr)        
+        finish(i3, descr=fdescr2)        
+        '''
+        bridge = self.attach_bridge(ops, loop, -2)
+
+        assert loop.operations[-2].descr._x86_bridge_param_depth == 2        
+
+        self.cpu.set_future_value_int(0, 4)
+        self.cpu.set_future_value_int(1, 7)        
+        self.run(loop)
+        assert self.getint(0) == 29
+

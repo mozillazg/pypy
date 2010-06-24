@@ -130,10 +130,10 @@ class StructureMeta(_CDataMeta):
     def _alignmentofinstances(self):
         return self._ffistruct.alignment
 
-    def _CData_value(self, value):
+    def from_param(self, value):
         if isinstance(value, tuple):
             value = self(*value)
-        return _CDataMeta._CData_value(self, value)
+        return _CDataMeta.from_param(self, value)
 
     def _CData_output(self, resarray, base=None, index=-1):
         res = self.__new__(self)
@@ -180,13 +180,15 @@ class Structure(_CData):
 
     def __setattr__(self, name, value):
         try:
-            fieldtype = self._fieldtypes[name].ctype
+            field = self._fieldtypes[name]
         except KeyError:
             return _CData.__setattr__(self, name, value)
-        if ensure_objects(value) is not None:
-            key = keepalive_key(getattr(self.__class__, name).num)
-            store_reference(self, key, value._objects)
-        arg = fieldtype._CData_value(value)
+        fieldtype = field.ctype
+        cobj = fieldtype.from_param(value)
+        if ensure_objects(cobj) is not None:
+            key = keepalive_key(field.num)
+            store_reference(self, key, cobj._objects)
+        arg = cobj._get_buffer_value()
         if fieldtype._fficompositesize is not None:
             from ctypes import memmove
             dest = self._buffer.fieldaddress(name)
@@ -198,10 +200,11 @@ class Structure(_CData):
         if name == '_fieldtypes':
             return _CData.__getattribute__(self, '_fieldtypes')
         try:
-            fieldtype = self._fieldtypes[name].ctype
+            field = self._fieldtypes[name]
         except KeyError:
             return _CData.__getattribute__(self, name)
-        offset = self.__class__._fieldtypes[name].num
+        fieldtype = field.ctype
+        offset = field.num
         suba = self._subarray(fieldtype, name)
         return fieldtype._CData_output(suba, self, offset)
 

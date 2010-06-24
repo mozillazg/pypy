@@ -22,6 +22,8 @@ from pypy.interpreter.baseobjspace import Wrappable, SpaceCache, DescrMismatch
 from pypy.interpreter.argument import Arguments, Signature
 from pypy.tool.sourcetools import NiceCompile, compile2
 from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
+from pypy.rlib import rstackovf
+from pypy.rlib.objectmodel import we_are_translated
 
 # internal non-translatable parts: 
 import py
@@ -126,6 +128,18 @@ class UnwrapSpec_Check(UnwrapSpecRecipe):
     def visit_nonnegint(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
+    def visit_c_int(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_c_uint(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_c_nonnegint(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
+    def visit_path(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
     def visit__Wrappable(self, el, app_sig):
         name = el.__name__
         argname = self.orig_arg()
@@ -210,7 +224,7 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
                              % (self.scopenext(), self.scopenext()))
 
     def visit_args_w(self, el):
-        self.run_args.append("space.viewiterable(%s)" % self.scopenext())
+        self.run_args.append("space.fixedview(%s)" % self.scopenext())
 
     def visit_w_args(self, el):
         self.run_args.append(self.scopenext())
@@ -227,8 +241,20 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
     def visit_bufferstr(self, typ):
         self.run_args.append("space.bufferstr_w(%s)" % (self.scopenext(),))
 
+    def visit_path(self, typ):
+        self.run_args.append("space.path_w(%s)" % (self.scopenext(),))
+
     def visit_nonnegint(self, typ):
         self.run_args.append("space.nonnegint_w(%s)" % (self.scopenext(),))
+
+    def visit_c_int(self, typ):
+        self.run_args.append("space.c_int_w(%s)" % (self.scopenext(),))
+
+    def visit_c_uint(self, typ):
+        self.run_args.append("space.c_uint_w(%s)" % (self.scopenext(),))
+
+    def visit_c_nonnegint(self, typ):
+        self.run_args.append("space.c_nonnegint_w(%s)" % (self.scopenext(),))
 
     def _make_unwrap_activation_class(self, unwrap_spec, cache={}):
         try:
@@ -257,6 +283,7 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
 
             activation_cls = type("BuiltinActivation_UwS_%s" % label,
                              (BuiltinActivation,), d)
+            activation_cls._immutable_ = True
 
             cache[key] = activation_cls, self.run_args
             return activation_cls
@@ -270,6 +297,7 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
 
 
 class BuiltinActivation(object):
+    _immutable_ = True
 
     def __init__(self, behavior):
         """NOT_RPYTHON"""
@@ -343,8 +371,20 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
     def visit_bufferstr(self, typ):
         self.unwrap.append("space.bufferstr_w(%s)" % (self.nextarg(),))
 
+    def visit_path(self, typ):
+        self.unwrap.append("space.path_w(%s)" % (self.nextarg(),))
+
     def visit_nonnegint(self, typ):
         self.unwrap.append("space.nonnegint_w(%s)" % (self.nextarg(),))
+
+    def visit_c_int(self, typ):
+        self.unwrap.append("space.c_int_w(%s)" % (self.nextarg(),))
+
+    def visit_c_uint(self, typ):
+        self.unwrap.append("space.c_uint_w(%s)" % (self.nextarg(),))
+
+    def visit_c_nonnegint(self, typ):
+        self.unwrap.append("space.c_nonnegint_w(%s)" % (self.nextarg(),))
 
     def make_fastfunc(unwrap_spec, func):
         unwrap_info = UnwrapSpec_FastFunc_Unwrap()
@@ -384,6 +424,15 @@ def int_unwrapping_space_method(typ):
     else:
         return typ.__name__ + '_w'
 
+
+def unwrap_spec(*spec):
+    """A decorator which attaches the unwrap_spec attribute."""
+    def decorator(func):
+        func.unwrap_spec = spec
+        return func
+    return decorator
+
+
 class BuiltinCode(eval.Code):
     "The code object implementing a built-in (interpreter-level) hook."
     _immutable_ = True
@@ -414,7 +463,7 @@ class BuiltinCode(eval.Code):
         #  baseobjspace.W_Root is for wrapped arguments to keep wrapped
         #  baseobjspace.Wrappable subclasses imply interp_w and a typecheck
         #  argument.Arguments is for a final rest arguments Arguments object
-        # 'args_w' for viewiterable applied to rest arguments
+        # 'args_w' for fixedview applied to rest arguments
         # 'w_args' for rest arguments passed as wrapped tuple
         # str,int,float: unwrap argument as such type
         # (function, cls) use function to check/unwrap argument of type cls
@@ -510,26 +559,34 @@ class BuiltinCode(eval.Code):
                                  func.defs_w, self.minargs)
         try:
             w_result = activation._run(space, scope_w)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt,
-                                 space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             if w_obj is not None:
                 args = args.prepend(w_obj)
             return scope_w[0].descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args)
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
+
+    def handle_exception(self, space, e):
+        try:
+            if not we_are_translated():
+                raise
+            raise e
+        except KeyboardInterrupt: 
+            raise OperationError(space.w_KeyboardInterrupt,
+                                 space.w_None) 
+        except MemoryError: 
+            raise OperationError(space.w_MemoryError, space.w_None)
+        except rstackovf.StackOverflow, e:
+            rstackovf.check_stack_overflow()
+            raise space.prebuilt_recursion_error
+        except RuntimeError:   # not on top of py.py
+            raise OperationError(space.w_RuntimeError, space.w_None)
 
 # (verbose) performance hack below
 
@@ -540,20 +597,13 @@ class BuiltinCodePassThroughArguments0(BuiltinCode):
         space = func.space
         try:
             w_result = self.func__args__(space, args)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return args.firstarg().descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args)
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -566,20 +616,13 @@ class BuiltinCodePassThroughArguments1(BuiltinCode):
         space = func.space
         try:
             w_result = self.func__args__(space, w_obj, args)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return args.firstarg().descr_call_mismatch(space,
                                                   self.descrmismatch_op,
                                                   self.descr_reqcls,
                                                   args.prepend(w_obj))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -591,15 +634,11 @@ class BuiltinCode0(BuiltinCode):
     def fastcall_0(self, space, w_func):
         try:
             w_result = self.fastfunc_0(space)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except (RuntimeError, DescrMismatch), e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
+        except DescrMismatch:
+            raise OperationError(space.w_SystemError,
+                                 space.wrap("unexpected DescrMismatch error"))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -611,20 +650,13 @@ class BuiltinCode1(BuiltinCode):
     def fastcall_1(self, space, w_func, w1):
         try:
             w_result = self.fastfunc_1(space, w1)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -636,20 +668,13 @@ class BuiltinCode2(BuiltinCode):
     def fastcall_2(self, space, w_func, w1, w2):
         try:
             w_result = self.fastfunc_2(space, w1, w2)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e))) 
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1, w2]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -661,20 +686,13 @@ class BuiltinCode3(BuiltinCode):
     def fastcall_3(self, space, func, w1, w2, w3):
         try:
             w_result = self.fastfunc_3(space, w1, w2, w3)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space, [w1, w2, w3]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -686,21 +704,14 @@ class BuiltinCode4(BuiltinCode):
     def fastcall_4(self, space, func, w1, w2, w3, w4):
         try:
             w_result = self.fastfunc_4(space, w1, w2, w3, w4)
-        except KeyboardInterrupt: 
-            raise OperationError(space.w_KeyboardInterrupt, space.w_None) 
-        except MemoryError: 
-            raise OperationError(space.w_MemoryError, space.w_None)
-        except NotImplementedError, e:
-            raise
-        except RuntimeError, e: 
-            raise OperationError(space.w_RuntimeError, 
-                                 space.wrap("internal error: " + str(e)))
-        except DescrMismatch, e:
+        except DescrMismatch:
             return  w1.descr_call_mismatch(space,
                                            self.descrmismatch_op,
                                            self.descr_reqcls,
                                            Arguments(space,
                                                      [w1, w2, w3, w4]))
+        except Exception, e:
+            raise self.handle_exception(space, e)
         if w_result is None:
             w_result = space.w_None
         return w_result
@@ -790,8 +801,8 @@ class GatewayCache(SpaceCache):
         defs = gateway._getdefaults(space) # needs to be implemented by subclass
         code = gateway._code
         fn = FunctionWithFixedCode(space, code, None, defs, forcename = gateway.name)
-        if not space.config.translating: # for tests and py.py
-            fn._freeze_()
+        if not space.config.translating:
+            fn.add_to_table()
         if gateway.as_classmethod:
             fn = ClassMethod(space.wrap(fn))
         return fn
@@ -819,12 +830,13 @@ class ApplevelClass:
 
     hidden_applevel = True
 
-    def __init__(self, source, filename = None, modname = '__builtin__'):
+    def __init__(self, source, filename=None, modname='__builtin__'):
+        # HAAACK (but a good one)
+        if filename is None:
+            f = sys._getframe(1)
+            filename = '<%s:%d>' % (f.f_code.co_filename, f.f_lineno)
         self.filename = filename
-        if self.filename is None:
-            self.code = py.code.Source(source).compile()
-        else:
-            self.code = NiceCompile(self.filename)(source)
+        self.source = str(py.code.Source(source).deindent())
         self.modname = modname
         # look at the first three lines for a NOT_RPYTHON tag
         first = "\n".join(source.split("\n", 3)[:3])
@@ -832,6 +844,9 @@ class ApplevelClass:
             self.can_use_geninterp = False
         else:
             self.can_use_geninterp = True
+        # make source code available for tracebacks
+        lines = [x + "\n" for x in source.split("\n")]
+        py.std.linecache.cache[filename] = (1, None, lines, filename)
 
     def __repr__(self):
         return "<ApplevelClass filename=%r can_use_geninterp=%r>" % (self.filename, self.can_use_geninterp)
@@ -905,11 +920,11 @@ class ApplevelCache(SpaceCache):
 
 def build_applevel_dict(self, space):
     "NOT_RPYTHON"
-    from pypy.interpreter.pycode import PyCode
-    w_glob = space.newdict()
+    w_glob = space.newdict(module=True)
     space.setitem(w_glob, space.wrap('__name__'), space.wrap(self.modname))
-    space.exec_(self.code, w_glob, w_glob,
-                hidden_applevel=self.hidden_applevel)
+    space.exec_(self.source, w_glob, w_glob,
+                hidden_applevel=self.hidden_applevel,
+                filename=self.filename)
     return w_glob
 
 # __________ geninterplevel version __________
@@ -929,7 +944,7 @@ class PyPyCacheDir:
         from pypy.translator.geninterplevel import translate_as_module
         import marshal
         scramble = md5(cls.seed)
-        scramble.update(marshal.dumps(self.code))
+        scramble.update(marshal.dumps(self.source))
         key = scramble.hexdigest()
         initfunc = cls.known_code.get(key)
         if not initfunc:
@@ -950,7 +965,7 @@ class PyPyCacheDir:
         if not initfunc:
             # build it and put it into a file
             initfunc, newsrc = translate_as_module(
-                self.code, self.filename, self.modname)
+                self.source, self.filename, self.modname)
             fname = cls.cache_path.join(name+".py").strpath
             f = file(get_tmp_file_name(fname), "w")
             print >> f, """\
@@ -1065,21 +1080,30 @@ def rename_tmp_to_eventual_file_name(fname):
 
 # ____________________________________________________________
 
-def appdef(source, applevel=ApplevelClass):
+def appdef(source, applevel=ApplevelClass, filename=None):
     """ NOT_RPYTHON: build an app-level helper function, like for example:
     myfunc = appdef('''myfunc(x, y):
                            return x+y
                     ''')
     """ 
     if not isinstance(source, str): 
-        source = str(py.code.Source(source).strip())
+        source = py.std.inspect.getsource(source).lstrip()
+        while source.startswith('@py.test.mark.'):
+            # these decorators are known to return the same function
+            # object, we may ignore them
+            assert '\n' in source
+            source = source[source.find('\n') + 1:]
         assert source.startswith("def "), "can only transform functions" 
         source = source[4:]
     p = source.find('(')
     assert p >= 0
     funcname = source[:p].strip()
     source = source[p:]
-    return applevel("def %s%s\n" % (funcname, source)).interphook(funcname)
+    assert source.strip()
+    funcsource = "def %s%s\n"  % (funcname, source)
+    #for debugging of wrong source code: py.std.parser.suite(funcsource)
+    a = applevel(funcsource, filename=filename)
+    return a.interphook(funcname)
 
 applevel = ApplevelClass   # backward compatibility
 app2interp = appdef   # backward compatibility
@@ -1097,6 +1121,6 @@ class applevelinterp_temp(ApplevelClass):
         return PyPyCacheDir.build_applevelinterp_dict(self, space)
 
 # app2interp_temp is used for testing mainly
-def app2interp_temp(func, applevel_temp=applevel_temp):
+def app2interp_temp(func, applevel_temp=applevel_temp, filename=None):
     """ NOT_RPYTHON """
-    return appdef(func, applevel_temp)
+    return appdef(func, applevel_temp, filename=filename)

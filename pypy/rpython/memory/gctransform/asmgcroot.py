@@ -8,6 +8,7 @@ from pypy.objspace.flow.model import Constant, Variable, Block, Link, copygraph
 from pypy.objspace.flow.model import SpaceOperation
 from pypy.translator.unsimplify import copyvar
 from pypy.rlib.debug import ll_assert
+import sys
 
 
 #
@@ -38,6 +39,9 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
 
     def build_root_walker(self):
         return AsmStackRootWalker(self)
+
+    def mark_call_cannotcollect(self, hop, name):
+        hop.genop("direct_call", [c_asm_nocollect, name])
 
     def gct_direct_call(self, hop):
         fnptr = hop.spaceop.args[0].value
@@ -110,12 +114,14 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                                     fnptr._obj._name + '_reload',
                                     graph=graph2)
         c_fnptr2 = Constant(fnptr2, lltype.Ptr(FUNC2))
-        HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2)], FUNC1.RESULT)
+        HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2),
+                                      ASM_FRAMEDATA_HEAD_PTR], FUNC1.RESULT)
         #
         v_asm_stackwalk = hop.genop("cast_pointer", [c_asm_stackwalk],
                                     resulttype=lltype.Ptr(HELPERFUNC))
         hop.genop("indirect_call",
-                  [v_asm_stackwalk, c_fnptr2, Constant(None, lltype.Void)],
+                  [v_asm_stackwalk, c_fnptr2, c_gcrootanchor,
+                   Constant(None, lltype.Void)],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
@@ -147,7 +153,8 @@ class AsmStackRootWalker(BaseRootWalker):
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
         gcdata._gc_collect_stack_root = collect_stack_root
-        pypy_asm_stackwalk(llhelper(ASM_CALLBACK_PTR, self._asm_callback))
+        pypy_asm_stackwalk(llhelper(ASM_CALLBACK_PTR, self._asm_callback),
+                           gcrootanchor)
 
     def walk_stack_from(self):
         curframe = lltype.malloc(WALKFRAME, flavor='raw')
@@ -156,7 +163,7 @@ class AsmStackRootWalker(BaseRootWalker):
         # Walk over all the pieces of stack.  They are in a circular linked
         # list of structures of 7 words, the 2 first words being prev/next.
         # The anchor of this linked list is:
-        anchor = llop.gc_asmgcroot_static(llmemory.Address, 3)
+        anchor = llmemory.cast_ptr_to_adr(gcrootanchor)
         initialframedata = anchor.address[1]
         stackscount = 0
         while initialframedata != anchor:     # while we have not looped back
@@ -296,6 +303,7 @@ class AsmStackRootWalker(BaseRootWalker):
                 return
         # the item may have been not found because the main array was
         # not sorted.  Sort it and try again.
+        win32_follow_gcmap_jmp(gcmapstart, gcmapend)
         sort_gcmap(gcmapstart, gcmapend)
         item = search_in_gcmap(gcmapstart, gcmapend, retaddr)
         if item:
@@ -308,29 +316,32 @@ class AsmStackRootWalker(BaseRootWalker):
         on the integer 'location' that describes it.  All locations are
         computed based on information saved by the 'callee'.
         """
+        ll_assert(location >= 0, "negative location")
         kind = location & LOC_MASK
+        offset = location & ~ LOC_MASK
         if kind == LOC_REG:   # register
-            reg = location >> 2
-            ll_assert(0 <= reg < CALLEE_SAVED_REGS, "bad register location")
+            if location == LOC_NOWHERE:
+                return llmemory.NULL
+            reg = (location >> 2) - 1
+            ll_assert(reg < CALLEE_SAVED_REGS, "bad register location")
             return callee.regs_stored_at[reg]
-        elif kind == LOC_ESP_BASED:   # in the caller stack frame at N(%esp)
-            offset = location & ~ LOC_MASK
-            ll_assert(offset >= 0, "bad %esp-based location")
+        elif kind == LOC_ESP_PLUS:    # in the caller stack frame at N(%esp)
             esp_in_caller = callee.frame_address + 4
             return esp_in_caller + offset
-        elif kind == LOC_EBP_BASED:   # in the caller stack frame at N(%ebp)
-            offset = location & ~ LOC_MASK
+        elif kind == LOC_EBP_PLUS:    # in the caller stack frame at N(%ebp)
             ebp_in_caller = callee.regs_stored_at[INDEX_OF_EBP].address[0]
             return ebp_in_caller + offset
-        else:
-            return llmemory.NULL
+        else:  # kind == LOC_EBP_MINUS:   at -N(%ebp)
+            ebp_in_caller = callee.regs_stored_at[INDEX_OF_EBP].address[0]
+            return ebp_in_caller - offset
 
 
-LOC_NOWHERE   = 0
-LOC_REG       = 1
-LOC_EBP_BASED = 2
-LOC_ESP_BASED = 3
+LOC_REG       = 0
+LOC_ESP_PLUS  = 1
+LOC_EBP_PLUS  = 2
+LOC_EBP_MINUS = 3
 LOC_MASK      = 0x03
+LOC_NOWHERE   = LOC_REG | 0
 
 # ____________________________________________________________
 
@@ -384,6 +395,22 @@ def sort_gcmap(gcmapstart, gcmapend):
           rffi.cast(rffi.SIZE_T, arrayitemsize),
           llhelper(QSORT_CALLBACK_PTR, _compare_gcmap_entries))
 
+if sys.platform == 'win32':
+    def win32_follow_gcmap_jmp(start, end):
+        # The initial gcmap table contains addresses to a JMP
+        # instruction that jumps indirectly to the real code.
+        # Replace them with the target addresses.
+        while start < end:
+            code = rffi.cast(rffi.CCHARP, start.address[0])[0]
+            if code == '\xe9': # jmp
+                rel32 = rffi.cast(rffi.LONGP, start.address[0]+1)[0]
+                target = start.address[0] + (rel32 + 5)
+                start.address[0] = target
+            start += arrayitemsize
+else:
+    def win32_follow_gcmap_jmp(start, end):
+        pass
+
 def _compare_gcmap_entries(addr1, addr2):
     key1 = addr1.address[0]
     key2 = addr2.address[0]
@@ -419,9 +446,6 @@ class ShapeDecompressor:
                 break
             value = (value - 0x80) << 7
         self.addr = addr
-        if value & 1:
-            value = ~ value
-        value = value >> 1
         return value
 
 # ____________________________________________________________
@@ -454,8 +478,22 @@ WALKFRAME = lltype.Struct('WALKFRAME',
              llmemory.Address),
     )
 
+# We have a circular doubly-linked list of all the ASM_FRAMEDATAs currently
+# alive.  The list's starting point is given by 'gcrootanchor', which is not
+# a full ASM_FRAMEDATA but only contains the prev/next pointers:
+ASM_FRAMEDATA_HEAD_PTR = lltype.Ptr(lltype.ForwardReference())
+ASM_FRAMEDATA_HEAD_PTR.TO.become(lltype.Struct('ASM_FRAMEDATA_HEAD',
+        ('prev', ASM_FRAMEDATA_HEAD_PTR),
+        ('next', ASM_FRAMEDATA_HEAD_PTR)
+    ))
+gcrootanchor = lltype.malloc(ASM_FRAMEDATA_HEAD_PTR.TO, immortal=True)
+gcrootanchor.prev = gcrootanchor
+gcrootanchor.next = gcrootanchor
+c_gcrootanchor = Constant(gcrootanchor, ASM_FRAMEDATA_HEAD_PTR)
+
 pypy_asm_stackwalk = rffi.llexternal('pypy_asm_stackwalk',
-                                     [ASM_CALLBACK_PTR],
+                                     [ASM_CALLBACK_PTR,
+                                      ASM_FRAMEDATA_HEAD_PTR],
                                      lltype.Signed,
                                      sandboxsafe=True,
                                      _nowrapper=True)
@@ -468,6 +506,12 @@ pypy_asm_gcroot = rffi.llexternal('pypy_asm_gcroot',
                                   sandboxsafe=True,
                                   _nowrapper=True)
 c_asm_gcroot = Constant(pypy_asm_gcroot, lltype.typeOf(pypy_asm_gcroot))
+
+pypy_asm_nocollect = rffi.llexternal('pypy_asm_gc_nocollect',
+                                     [rffi.CCHARP], lltype.Void,
+                                     sandboxsafe=True,
+                                     _nowrapper=True)
+c_asm_nocollect = Constant(pypy_asm_nocollect, lltype.typeOf(pypy_asm_nocollect))
 
 QSORT_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([llmemory.Address,
                                                  llmemory.Address], rffi.INT))

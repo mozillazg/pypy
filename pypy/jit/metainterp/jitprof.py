@@ -5,6 +5,7 @@
 import os
 import time
 from pypy.rlib.debug import debug_print
+from pypy.jit.metainterp.jitexc import JitException
 
 counters="""
 TRACING
@@ -13,13 +14,16 @@ RUNNING
 BLACKHOLE
 OPS
 RECORDED_OPS
-BLACKHOLED_OPS
 GUARDS
 OPT_OPS
 OPT_GUARDS
 OPT_FORCINGS
 ABORT_TOO_LONG
 ABORT_BRIDGE
+ABORT_ESCAPE
+NVIRTUALS
+NVHOLES
+NVREUSED
 """
 
 def _setup():
@@ -30,7 +34,7 @@ def _setup():
     ncounters = len(names)
 _setup()
 
-JITPROF_LINES = ncounters + 1 + 5 # one for TOTAL, 5 for calls, update if needed
+JITPROF_LINES = ncounters + 1 + 1 # one for TOTAL, 1 for calls, update if needed
 
 class BaseProfiler(object):
     pass
@@ -84,7 +88,7 @@ class Profiler(BaseProfiler):
     t1 = 0
     times = None
     counters = None
-    calls = None
+    calls = 0
     current = None
     printing = True
 
@@ -93,7 +97,7 @@ class Profiler(BaseProfiler):
         self.t1 = self.starttime
         self.times = [0, 0]
         self.counters = [0] * ncounters
-        self.calls = [[0, 0], [0, 0], [0, 0]]
+        self.calls = 0
         self.current = []
 
     def finish(self):
@@ -146,10 +150,8 @@ class Profiler(BaseProfiler):
     def count_ops(self, opnum, kind=OPS):
         from pypy.jit.metainterp.resoperation import rop
         self.counters[kind] += 1
-        if opnum == rop.CALL or opnum == rop.OOSEND:
-            self.calls[kind-OPS][0] += 1
-        elif opnum == rop.CALL_PURE or opnum == rop.OOSEND_PURE:
-            self.calls[kind-OPS][1] += 1        
+        if opnum == rop.CALL and kind == RECORDED_OPS:# or opnum == rop.OOSEND:
+            self.calls += 1
 
     def print_stats(self):
         cnt = self.counters
@@ -162,19 +164,18 @@ class Profiler(BaseProfiler):
         line = "TOTAL:      \t\t%f\n" % (self.tk - self.starttime, )
         os.write(2, line)
         self._print_intline("ops", cnt[OPS])
-        self._print_intline("  calls", calls[0][0])
-        self._print_intline("  pure calls", calls[0][1])
         self._print_intline("recorded ops", cnt[RECORDED_OPS])
-        self._print_intline("  calls", calls[1][0])
-        self._print_intline("  pure calls", calls[1][1])
+        self._print_intline("  calls", calls)
         self._print_intline("guards", cnt[GUARDS])
-        self._print_intline("blackholed ops", calls[2][0])
-        self._print_intline("  pure calls", calls[2][1])
         self._print_intline("opt ops", cnt[OPT_OPS])
         self._print_intline("opt guards", cnt[OPT_GUARDS])
         self._print_intline("forcings", cnt[OPT_FORCINGS])
-        self._print_intline("trace too long", cnt[ABORT_TOO_LONG])
-        self._print_intline("bridge abort", cnt[ABORT_BRIDGE])
+        self._print_intline("abort: trace too long", cnt[ABORT_TOO_LONG])
+        self._print_intline("abort: compiling", cnt[ABORT_BRIDGE])
+        self._print_intline("abort: vable escape", cnt[ABORT_ESCAPE])
+        self._print_intline("nvirtuals", cnt[NVIRTUALS])
+        self._print_intline("nvholes", cnt[NVHOLES])
+        self._print_intline("nvreused", cnt[NVREUSED])
 
     def _print_line_time(self, string, i, tim):
         final = "%s:%s\t%d\t%f\n" % (string, " " * max(0, 13-len(string)), i, tim)
@@ -187,5 +188,5 @@ class Profiler(BaseProfiler):
         
         
 
-class BrokenProfilerData(Exception):
+class BrokenProfilerData(JitException):
     pass

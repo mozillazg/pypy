@@ -14,8 +14,12 @@ from pypy.interpreter.argument import Signature
 
 def normalize_call_familes(annotator):
     for callfamily in annotator.bookkeeper.pbc_maximal_call_families.infos():
+        if not callfamily.modified:
+            assert callfamily.normalized
+            continue
         normalize_calltable(annotator, callfamily)
         callfamily.normalized = True
+        callfamily.modified = False
 
 def normalize_calltable(annotator, callfamily):
     """Try to normalize all rows of a table."""
@@ -287,6 +291,13 @@ class TotalOrderSymbolic(ComputedIntSymbolic):
             return cmp(self.compute_fn(), other)
         else:
             return cmp(self.orderwitness, other.orderwitness)
+
+    # support for implementing int_between: (a<=b<c) with (b-a<c-a)
+    # see pypy.jit.metainterp.pyjitpl.opimpl_int_between
+    def __sub__(self, other):
+        return self.compute_fn() - other
+    def __rsub__(self, other):
+        return other - self.compute_fn()
 
     def compute_fn(self):
         if self.value is None:

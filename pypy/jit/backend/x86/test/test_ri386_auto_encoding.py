@@ -4,8 +4,7 @@ from pypy.jit.backend.x86 import ri386 as i386
 from pypy.jit.backend.x86.ri386setup import all_instructions
 from pypy.tool.udir import udir
 
-INPUTNAME = str(udir.join('checkfile.s'))
-FILENAME = str(udir.join('checkfile.tmp'))
+FILEBASE = str(udir.join('checkfile'))
 BEGIN_TAG = '<<<ri386-test-begin>>>'
 END_TAG =   '<<<ri386-test-end>>>'
 
@@ -40,7 +39,7 @@ sizes = {
     i386.MODRM8: 1,
     i386.IMM8: 1,
     i386.IMM16: 2,
-    #i386.REL8: 1,
+    i386.REL8: 1,
     i386.REL32: 4,
 }
 
@@ -55,6 +54,10 @@ def reg8_tests():
 def imm8_tests():
     v = [-128,-1,0,1,127] + [random.randrange(-127, 127) for i in range(COUNT1)]
     return map(i386.imm8, v)
+
+def rel8_tests():
+    v = [-128,-1,0,1,127] + [random.randrange(-127, 127) for i in range(COUNT1)]
+    return map(i386.rel8, v)    
 
 def imm16_tests():
     v = [-32768,32767] + [random.randrange(-32767, -128) for i in range(COUNT1)] \
@@ -92,7 +95,7 @@ def modrm64_tests():
     return [pick1(i386.memSIB64) for i in range(COUNT2)]
 
 def xmm_tests():
-    return i386.xmm_registers
+    return i386.xmm_registers[:]
 
 def modrm8_tests():
     return i386.registers8 + [pick1(i386.memSIB8) for i in range(COUNT2)]
@@ -125,7 +128,7 @@ tests = {
     i386.MODRM8: modrm8_tests,
     i386.IMM8: imm8_tests,
     i386.IMM16: imm16_tests,
-    #i386.REL8: imm8_tests,
+    i386.REL8: rel8_tests,
     i386.REL32: lambda: [], # XXX imm32_tests,
     }
 
@@ -134,7 +137,7 @@ def run_test(instrname, instr, args_lists):
     instrname = instr.as_alias or instrname
     labelcount = 0
     oplist = []
-    g = open(INPUTNAME, 'w')
+    g = open(FILEBASE + instrname + '.s', 'w')
     g.write('\x09.string "%s"\n' % BEGIN_TAG)
     for args in args_lists:
         suffix = ""
@@ -148,9 +151,11 @@ def run_test(instrname, instr, args_lists):
         following = ""
         if instr.indirect:
             suffix = ""
-            if args[-1][0] == i386.REL32: #in (i386.REL8,i386.REL32):
+            if args[-1][0] in (i386.REL8,i386.REL32):
                 labelcount += 1
-                following = "\nL%d:" % labelcount
+                labelname = "L%d" % labelcount
+                following = "\n%s:" % labelname
+                args[-1][1].nextlabel = labelname
             elif args[-1][0] in (i386.IMM8,i386.IMM32):
                 args = list(args)
                 args[-1] = ("%d", args[-1][1])  # no '$' sign
@@ -160,7 +165,7 @@ def run_test(instrname, instr, args_lists):
         else:
             k = len(args)
         for m, extra in args[:k]:
-            assert m != i386.REL32  #not in (i386.REL8,i386.REL32)
+            assert m not in (i386.REL8,i386.REL32)
         ops = [extra.assembler() for m, extra in args]
         ops.reverse()
         op = '\x09%s%s %s%s' % (instrname, suffix, string.join(ops, ", "),
@@ -169,9 +174,10 @@ def run_test(instrname, instr, args_lists):
         oplist.append(op)
     g.write('\x09.string "%s"\n' % END_TAG)
     g.close()
-    os.system('as "%s" -o "%s"' % (INPUTNAME, FILENAME))
+    os.system('as "%s.s" -o "%s.tmp"' % (FILEBASE + instrname,
+                                         FILEBASE + instrname))
     try:
-        f = open(FILENAME, 'rb')
+        f = open(FILEBASE + instrname + '.tmp', 'rb')
     except IOError:
         raise Exception("Assembler error")
     data = f.read()
@@ -256,7 +262,8 @@ class CodeChecker(i386.I386CodeBuilder):
         self.op = op
         self.instrindex = self.index
 
-    def write(self, data):
+    def write(self, listofchars):
+        data = ''.join(listofchars)
         end = self.index+len(data)
         if data != self.expected[self.index:end]:
             print self.op

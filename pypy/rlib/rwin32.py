@@ -3,10 +3,12 @@ Common types, functions from core win32 libraries, such as kernel32
 """
 
 from pypy.rpython.tool import rffi_platform
+from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import intmask
-import os, sys
+from pypy.rlib import jit
+import os, sys, errno
 
 # This module can be imported on any platform,
 # but most symbols are not usable...
@@ -49,6 +51,15 @@ class CConfig:
         SYSTEMTIME = rffi_platform.Struct('SYSTEMTIME',
                                           [])
 
+        OSVERSIONINFO = rffi_platform.Struct(
+            'OSVERSIONINFO',
+            [('dwOSVersionInfoSize', rffi.UINT),
+             ('dwMajorVersion', rffi.UINT),
+             ('dwMinorVersion', rffi.UINT),
+             ('dwBuildNumber',  rffi.UINT),
+             ('dwPlatformId',  rffi.UINT),
+             ('szCSDVersion', rffi.CFixedArray(lltype.Char, 1))])
+
         LPSECURITY_ATTRIBUTES = rffi_platform.SimpleType(
             "LPSECURITY_ATTRIBUTES", rffi.CCHARP)
 
@@ -59,7 +70,6 @@ class CConfig:
                        MAX_PATH
                     """.split():
             locals()[name] = rffi_platform.ConstantInteger(name)
-
 
 for k, v in rffi_platform.configure(CConfig).items():
     globals()[k] = v
@@ -93,6 +103,40 @@ if WIN32:
 
     _get_osfhandle = rffi.llexternal('_get_osfhandle', [rffi.INT], HANDLE)
 
+    def build_winerror_to_errno():
+        """Build a dictionary mapping windows error numbers to POSIX errno.
+        The function returns the dict, and the default value for codes not
+        in the dict."""
+        # Prior to Visual Studio 8, the MSVCRT dll doesn't export the
+        # _dosmaperr() function, which is available only when compiled
+        # against the static CRT library.
+        from pypy.translator.platform import platform, Windows
+        static_platform = Windows()
+        if static_platform.name == 'msvc':
+            static_platform.cflags = ['/MT']  # static CRT
+            static_platform.version = 0       # no manifest
+        cfile = udir.join('dosmaperr.c')
+        cfile.write(r'''
+                #include <errno.h>
+                int main()
+                {
+                    int i;
+                    for(i=1; i < 65000; i++) {
+                        _dosmaperr(i);
+                        if (errno == EINVAL)
+                            continue;
+                        printf("%d\t%d\n", i, errno);
+                    }
+                    return 0;
+                }''')
+        exename = static_platform.compile(
+            [cfile], ExternalCompilationInfo(),
+            outputfilename = "dosmaperr",
+            standalone=True)
+        output = os.popen(str(exename))
+        errors = dict(map(int, line.split())
+                      for line in output)
+        return errors, errno.EINVAL
 
     # A bit like strerror...
     def FormatError(code):
@@ -150,3 +194,24 @@ if WIN32:
                 return ''.join([buf[i] for i in range(res)])
         finally:
             lltype.free(buf, flavor='raw')
+
+    _GetVersionEx = winexternal('GetVersionExA',
+                                [lltype.Ptr(OSVERSIONINFO)],
+                                DWORD)
+
+    @jit.dont_look_inside
+    def GetVersionEx():
+        info = lltype.malloc(OSVERSIONINFO, flavor='raw')
+        rffi.setintfield(info, 'c_dwOSVersionInfoSize',
+                         rffi.sizeof(OSVERSIONINFO))
+        try:
+            if not _GetVersionEx(info):
+                raise lastWindowsError()
+            return (rffi.cast(lltype.Signed, info.c_dwMajorVersion),
+                    rffi.cast(lltype.Signed, info.c_dwMinorVersion),
+                    rffi.cast(lltype.Signed, info.c_dwBuildNumber),
+                    rffi.cast(lltype.Signed, info.c_dwPlatformId),
+                    rffi.charp2str(rffi.cast(rffi.CCHARP,
+                                             info.c_szCSDVersion)))
+        finally:
+            lltype.free(info, flavor='raw')

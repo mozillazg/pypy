@@ -1,17 +1,16 @@
 from pypy.interpreter import gateway, baseobjspace, argument
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
 from pypy.interpreter.typedef import descr_get_dict, descr_set_dict
-from pypy.interpreter.typedef import no_hash_descr
+from pypy.interpreter.typedef import no_hash_descr, descr_del_dict
 from pypy.interpreter.baseobjspace import SpaceCache
+from pypy.objspace.std import model
 from pypy.objspace.std.model import StdObjSpaceMultiMethod
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib import jit
 from pypy.tool.sourcetools import compile2
 
-__all__ = ['StdTypeDef', 'newmethod', 'gateway',
-           'GetSetProperty', 'Member',
-           'SMM', 'descr_get_dict', 'no_hash_descr']
+__all__ = ['StdTypeDef', 'SMM', 'no_hash_descr']
 
 SMM = StdObjSpaceMultiMethod
 
@@ -39,16 +38,8 @@ def issubtypedef(a, b):
         a = a.base
     return True
 
-def descr_del_dict(space, w_obj): # blame CPython for the existence of this one
-    w_obj.setdict(space, space.newdict())
-
 std_dict_descr = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict)
 std_dict_descr.name = '__dict__'
-
-def newmethod(descr_new, unwrap_spec=None):
-    "NOT_RPYTHON: initialization-time only."
-    # this is turned into a static method by the constructor of W_TypeObject.
-    return gateway.interp2app(descr_new, unwrap_spec=unwrap_spec)
 
 # ____________________________________________________________
 #
@@ -91,8 +82,12 @@ class TypeCache(SpaceCache):
         for descrname, descrvalue in rawdict.items():
             dict_w[descrname] = w(descrvalue)
 
+        if typedef.applevel_subclasses_base is not None:
+            overridetypedef = typedef.applevel_subclasses_base.typedef
+        else:
+            overridetypedef = typedef
         w_type = W_TypeObject(space, typedef.name, bases_w, dict_w,
-                              overridetypedef=typedef)
+                              overridetypedef=overridetypedef)
         w_type.lazyloaders = lazyloaders
         return w_type
 
@@ -140,16 +135,27 @@ def sliced_typeorders(typeorder, multimethod, typedef, i, local=False):
         prefix = typedef.name +'_mth'+prefix
     return prefix, list_of_typeorders
 
-def typeerrormsg(space, operatorsymbol, args_w):
-    type_names = [ space.type(w_arg).getname(space, '?') for w_arg in args_w ]
-    if len(args_w) > 1:
+def _gettypeerrormsg(nbargs):
+    if nbargs > 1:
         plural = 's'
     else:
         plural = ''
-    msg = "unsupported operand type%s for %s (%s)" % (
-                    plural, operatorsymbol,
-                    ', '.join(type_names))    
-    return space.wrap(msg)
+    return "unsupported operand type%s for %%s: %s" % (
+        plural, ', '.join(["'%s'"] * nbargs))
+_gettypeerrormsg._annspecialcase_ = 'specialize:memo'
+
+def _gettypenames(space, *args_w):
+    if args_w:
+        typename = space.type(args_w[-1]).getname(space, '?')
+        return _gettypenames(space, *args_w[:-1]) + (typename,)
+    return ()
+_gettypenames._always_inline_ = True
+
+def gettypeerror(space, operatorsymbol, *args_w):
+    msg = _gettypeerrormsg(len(args_w))
+    type_names = _gettypenames(space, *args_w)
+    return operationerrfmt(space.w_TypeError, msg,
+                           operatorsymbol, *type_names)
 
 def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, selfindex=0,
                             allow_NotImplemented_results=False):
@@ -171,7 +177,7 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
     wrapper_arglist += multimethod.extras.get('extra_args', ())
 
     miniglobals.update({ 'OperationError': OperationError,
-                         'typeerrormsg': typeerrormsg})
+                         'gettypeerror': gettypeerror})
     
     app_defaults = multimethod.extras.get('defaults', ())
     i = len(argnames) - len(app_defaults)
@@ -207,8 +213,8 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
                       try:
                           return %s
                       except FailedToImplement, e:
-                          if e.w_type is not None:
-                              raise OperationError(e.w_type, e.w_value)
+                          if e.get_w_type(space) is not None:
+                              raise OperationError(e.w_type, e.get_w_value(space))
                           else:
                               return space.w_NotImplemented
 """        % (prefix, wrapper_sig, renaming, expr)
@@ -219,11 +225,10 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
                       try:
                           w_res = %s
                       except FailedToImplement, e:
-                          if e.w_type is not None:
-                              raise OperationError(e.w_type, e.w_value)
+                          if e.get_w_type(space) is not None:
+                              raise OperationError(e.w_type, e.get_w_value(space))
                           else:
-                              raise OperationError(space.w_TypeError,
-                                  typeerrormsg(space, %r, [%s]))
+                              raise gettypeerror(space, %r, %s)
                       if w_res is None:
                           w_res = space.w_None
                       return w_res
@@ -277,8 +282,8 @@ def slicemultimethod(space, multimethod, typedef, result, local=False):
 def slicemultimethods(space, typedef):
     """NOT_RPYTHON"""
     result = {}
-    # import and slice all multimethods of the space.MM container
-    for multimethod in hack_out_multimethods(space.MM.__dict__):
+    # import and slice all multimethods of the MM container
+    for multimethod in hack_out_multimethods(model.MM.__dict__):
         slicemultimethod(space, multimethod, typedef, result)
     # import all multimethods defined directly on the type without slicing
     for multimethod in typedef.local_multimethods:
@@ -290,9 +295,8 @@ def multimethods_defined_on(cls):
     multimethods that have an implementation whose first typed argument
     is 'cls'.
     """
-    from pypy.objspace.std.objspace import StdObjSpace   # XXX for now
     typedef = cls.typedef
-    for multimethod in hack_out_multimethods(StdObjSpace.MM.__dict__):
+    for multimethod in hack_out_multimethods(model.MM.__dict__):
         if cls in multimethod.dispatch_tree:
             yield multimethod, False
     for multimethod in typedef.local_multimethods:

@@ -18,7 +18,7 @@
 #
 
 import autopath
-import os
+import os, sys
 import py
 
 from py.path import local 
@@ -30,13 +30,17 @@ def svn_info(url):
     else:
         return basename.split('/')[-2]
 
+PYPY_KEEP = int(os.environ.get('PYPY_USESSION_KEEP', '3'))
+
 def make_udir(dir=None, basename=None):
     if dir is not None:
         dir = local(dir)
     if basename is None:
         try:
-            p = py.magic.autopath().dirpath()
+            p = py.path.local(__file__).dirpath()
             basename = svn_info(py.path.svnwc(p).info().url)
+            if isinstance(basename, unicode):
+                basename = basename.encode(sys.getdefaultencoding())
         except:
             basename = ''
     if not basename.startswith('-'):
@@ -45,7 +49,7 @@ def make_udir(dir=None, basename=None):
         basename = basename + '-'
     return local.make_numbered_dir(rootdir = dir,
                                    prefix = 'usession' + basename,
-                                   keep = 3)
+                                   keep = PYPY_KEEP)
 
 udir = make_udir(dir      = os.environ.get('PYPY_USESSION_DIR'),
                  basename = os.environ.get('PYPY_USESSION_BASENAME'))

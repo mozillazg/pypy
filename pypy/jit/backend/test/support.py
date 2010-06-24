@@ -1,7 +1,8 @@
 import py
 import sys
 from pypy.rlib.debug import debug_print
-from pypy.translator.translator import TranslationContext
+from pypy.rlib.jit import OPTIMIZER_FULL
+from pypy.translator.translator import TranslationContext, graphof
 
 class BaseCompiledMixin(object):
 
@@ -31,27 +32,32 @@ class BaseCompiledMixin(object):
         if listcomp:
             t.config.translation.list_comprehension_operations = True
 
+        arglist = ", ".join(['int(argv[%d])' % (i + 1) for i in range(len(args))])
+        if len(args) == 1:
+            arglist += ','
+        arglist = '(%s)' % arglist
         if repeat != 1:
             src = py.code.Source("""
             def entry_point(argv):
-                args = (%s,)
+                args = %s
                 res = function(*args)
                 for k in range(%d - 1):
                     res = function(*args)
                 print res
                 return 0
-            """ % (", ".join(['int(argv[%d])' % (i + 1) for i in range(len(args))]), repeat))
+            """ % (arglist, repeat))
         else:
             src = py.code.Source("""
             def entry_point(argv):
-                args = (%s,)
+                args = %s
                 res = function(*args)
                 print res
                 return 0
-            """ % (", ".join(['int(argv[%d])' % (i + 1) for i in range(len(args))]),))
+            """ % (arglist,))
         exec src.compile() in locals()
 
-        t.buildannotator().build_types(function, [int] * len(args))
+        t.buildannotator().build_types(function, [int] * len(args),
+                                       main_entry_point=True)
         t.buildrtyper(type_system=self.type_system).specialize()
         warmrunnerdesc = WarmRunnerDesc(t, translate_support_code=True,
                                         CPUClass=self.CPUClass,
@@ -60,6 +66,7 @@ class BaseCompiledMixin(object):
         warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
         warmrunnerdesc.state.set_param_trace_limit(trace_limit)
         warmrunnerdesc.state.set_param_inlining(inline)
+        warmrunnerdesc.state.set_param_optimizer(OPTIMIZER_FULL)
         mixlevelann = warmrunnerdesc.annhelper
         entry_point_graph = mixlevelann.getgraph(entry_point, [s_list_of_strings],
                                                  annmodel.SomeInteger())
@@ -94,6 +101,9 @@ class BaseCompiledMixin(object):
     def check_aborted_count(self, *args, **kwds):
         pass
 
+    def check_aborted_count_at_least(self, *args, **kwds):
+        pass
+
     def interp_operations(self, *args, **kwds):
         py.test.skip("interp_operations test skipped")
 
@@ -111,6 +121,7 @@ class CCompiledMixin(BaseCompiledMixin):
     def _get_TranslationContext(self):
         t = TranslationContext()
         t.config.translation.gc = 'boehm'
+        t.config.translation.list_comprehension_operations = True
         return t
 
     def _compile_and_run(self, t, entry_point, entry_point_graph, args):
@@ -118,12 +129,16 @@ class CCompiledMixin(BaseCompiledMixin):
         # XXX patch exceptions
         cbuilder = CBuilder(t, entry_point, config=t.config)
         cbuilder.generate_source()
+        self._check_cbuilder(cbuilder)
         exe_name = cbuilder.compile()
         debug_print('---------- Test starting ----------')
         stdout = cbuilder.cmdexec(" ".join([str(arg) for arg in args]))
         res = int(stdout)
         debug_print('---------- Test done (%d) ----------' % (res,))
         return res
+
+    def _check_cbuilder(self, cbuilder):
+        pass
 
 class CliCompiledMixin(BaseCompiledMixin):
     type_system = 'ootype'

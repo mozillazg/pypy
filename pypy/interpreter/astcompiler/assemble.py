@@ -227,7 +227,7 @@ class PythonCodeMaker(ast.ASTVisitor):
             self.lineno_set = False
 
     def _resolve_block_targets(self, blocks):
-        """"Compute the arguments of jump instructions."""
+        """Compute the arguments of jump instructions."""
         last_extended_arg_count = 0
         # The reason for this loop is extended jumps.  EXTENDED_ARG extends the
         # bytecode size, so it might invalidate the offsets we've already given.
@@ -400,7 +400,8 @@ class PythonCodeMaker(ast.ASTVisitor):
                              self.first_lineno,
                              lnotab,
                              free_names,
-                             cell_names)
+                             cell_names,
+                             self.compile_info.hidden_applevel)
 
 
 def _list_from_dict(d, offset=0):

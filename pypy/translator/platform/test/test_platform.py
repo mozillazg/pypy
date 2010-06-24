@@ -5,6 +5,14 @@ from pypy.translator.platform import CompilationError, Platform
 from pypy.translator.platform import host
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
+def test_compilationerror_repr():
+    # compilation error output/stdout may be large, make sure
+    # repr creates a limited version
+    c = CompilationError('', '*'*1000)
+    assert len(repr(c)) < 500
+    c = CompilationError('*'*1000, '')
+    assert len(repr(c)) < 500
+
 class TestPlatform(object):
     platform = host
     strict_on_stderr = True
@@ -105,7 +113,7 @@ class TestPlatform(object):
     def test_environment_inheritance(self):
         # make sure that environment is inherited
         cmd = 'import os; print os.environ["_SOME_VARIABLE_%d"]'
-        res = self.platform.execute('python', ['-c', cmd % 1],
+        res = self.platform.execute(sys.executable, ['-c', cmd % 1],
                                     env={'_SOME_VARIABLE_1':'xyz'})
         assert 'xyz' in res.out
         os.environ['_SOME_VARIABLE_2'] = 'zyz'
@@ -114,6 +122,16 @@ class TestPlatform(object):
             assert 'zyz' in res.out
         finally:
             del os.environ['_SOME_VARIABLE_2']
+
+    def test_key(self):
+        class XPlatform(Platform):
+            relevant_environ = ['CPATH']
+            
+            def __init__(self):
+                self.cc = 'xcc'
+        x = XPlatform()
+        res = x.key()
+        assert res.startswith('XPlatform cc=xcc CPATH=')
 
 def test_equality():
     class X(Platform):

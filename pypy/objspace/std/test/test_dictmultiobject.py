@@ -372,6 +372,12 @@ class AppTest_DictObject:
         assert {}.fromkeys([]) == {}
         assert {1: 0, 2: 0, 3: 0}.fromkeys([1, '1'], 'j') == (
                           {1: 'j', '1': 'j'})
+        class D(dict):
+            def __new__(cls):
+                return E()
+        class E(dict):
+            pass
+        assert isinstance(D.fromkeys([1, 2]), E)
 
     def test_str_uses_repr(self):
         class D(dict):
@@ -607,8 +613,8 @@ class FakeSpace:
     StringObjectCls = FakeString
     w_dict = None
     iter = iter
-    viewiterable = list
-
+    fixedview = list
+    listview  = list
 
 class Config:
     class objspace:
@@ -770,4 +776,9 @@ class TestDevolvedModuleDictImplementationWithBuiltinNames(BaseTestDevolvedDictI
 
 class TestDevolvedSharedDictImplementation(BaseTestDevolvedDictImplementation):
     ImplementionClass = SharedDictImplementation
+
+def test_module_uses_strdict():
+    fakespace = FakeSpace()
+    d = fakespace.newdict(module=True)
+    assert isinstance(d, StrDictImplementation)
 

@@ -12,6 +12,7 @@ from pypy.tool.udir import udir
 from pypy.translator.gensupp import uniquemodulename
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.interactive import Translation
+from pypy.rlib.entrypoint import entrypoint
 
 def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
             annotatorpolicy=None):
@@ -143,10 +144,8 @@ def test_empty_string():
     assert f1() == '\x00'
 
 def test_runtime_type_info():
-    S = GcStruct('s', ('is_actually_s1', Bool))
-    S1 = GcStruct('s1', ('sub', S))
-    attachRuntimeTypeInfo(S)
-    attachRuntimeTypeInfo(S1)
+    S = GcStruct('s', ('is_actually_s1', Bool), rtti=True)
+    S1 = GcStruct('s1', ('sub', S), rtti=True)
     def rtti_S(p):
         if p.is_actually_s1:
             return getRuntimeTypeInfo(S1)
@@ -334,6 +333,7 @@ def test_refcount_pyobj():
     f = compile(prob_with_pyobj, [object])
     from sys import getrefcount as g
     obj = None
+    import gc; gc.collect()
     before = g(obj)
     f(obj)
     after = g(obj)
@@ -395,3 +395,85 @@ def test_name():
     if py.test.config.option.view:
         t.view()
     assert 'pypy_xyz_f' in t.driver.cbuilder.c_source_filename.read()
+
+def test_entrypoints():
+    def f():
+        return 3
+
+    key = "test_entrypoints42"
+    @entrypoint(key, [int], "foobar")
+    def g(x):
+        return x + 42
+
+    t = Translation(f, [], backend="c", secondaryentrypoints="test_entrypoints42")
+    t.annotate()
+    compiled_fn = t.compile_c()
+    if py.test.config.option.view:
+        t.view()
+    assert 'foobar' in t.driver.cbuilder.c_source_filename.read()
+
+def test_exportstruct():
+    from pypy.rlib.exports import export_struct
+    def f():
+        return 42
+    FOO = Struct("FOO", ("field1", Signed))
+    foo = malloc(FOO, flavor="raw")
+    foo.field1 = 43
+    export_struct("BarStruct", foo._obj)
+    t = Translation(f, [], backend="c")
+    t.annotate()
+    compiled_fn = t.compile_c()
+    if py.test.config.option.view:
+        t.view()
+    assert ' BarStruct ' in t.driver.cbuilder.c_source_filename.read()
+
+def test_recursive_llhelper():
+    from pypy.rpython.annlowlevel import llhelper
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.rlib.objectmodel import specialize
+    from pypy.rlib.nonconst import NonConstant
+    FT = lltype.ForwardReference()
+    FTPTR = lltype.Ptr(FT)
+    STRUCT = lltype.Struct("foo", ("bar", FTPTR))
+    FT.become(lltype.FuncType([lltype.Ptr(STRUCT)], lltype.Signed))
+
+    class A:
+        def __init__(self, func, name):
+            self.func = func
+            self.name = name
+        def _freeze_(self):
+            return True
+        @specialize.memo()
+        def make_func(self):
+            f = getattr(self, "_f", None)
+            if f is not None:
+                return f
+            f = lambda *args: self.func(*args)
+            f.c_name = self.name
+            f.relax_sig_check = True
+            f.__name__ = "WRAP%s" % (self.name, )
+            self._f = f
+            return f
+        def get_llhelper(self):
+            return llhelper(FTPTR, self.make_func())
+    def f(s):
+        if s.bar == t.bar:
+            lltype.free(s, flavor="raw")
+            return 1
+        lltype.free(s, flavor="raw")
+        return 0
+    def g(x):
+        return 42
+    def chooser(x):
+        s = lltype.malloc(STRUCT, flavor="raw")
+        if x:
+            s.bar = llhelper(FTPTR, a_f.make_func())
+        else:
+            s.bar = llhelper(FTPTR, a_g.make_func())
+        return f(s)
+    a_f = A(f, "f")
+    a_g = A(g, "g")
+    t = lltype.malloc(STRUCT, flavor="raw")
+    t.bar = llhelper(FTPTR, a_f.make_func())
+    fn = compile(chooser, [bool])
+    assert fn(True)

@@ -1,5 +1,8 @@
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std.stringobject import W_StringObject, make_rsplit_with_delim
 from pypy.objspace.std.ropeobject import W_RopeObject
 from pypy.objspace.std.noneobject import W_NoneObject
@@ -8,6 +11,7 @@ from pypy.objspace.std import slicetype
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.rlib.objectmodel import compute_hash
+from pypy.rlib.rstring import string_repeat
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.tool.sourcetools import func_with_new_name
 
@@ -16,6 +20,7 @@ from pypy.objspace.std.stringtype import stringstartswith, stringendswith
 
 class W_UnicodeObject(W_Object):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
+    _immutable_ = True
 
     def __init__(w_self, unistr):
         assert isinstance(unistr, unicode)
@@ -41,8 +46,9 @@ registerimplementation(W_UnicodeObject)
 # Helper for converting int/long
 def unicode_to_decimal_w(space, w_unistr):
     if not isinstance(w_unistr, W_UnicodeObject):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("expected unicode"))
+        raise operationerrfmt(space.w_TypeError,
+                              "expected unicode, got '%s'",
+                              space.type(w_unistr).getname(space, '?'))
     unistr = w_unistr._value
     result = ['\0'] * len(unistr)
     digits = [ '0', '1', '2', '3', '4',
@@ -62,7 +68,7 @@ def unicode_to_decimal_w(space, w_unistr):
                 w_start = space.wrap(i)
                 w_end = space.wrap(i+1)
                 w_reason = space.wrap('invalid decimal Unicode string')
-                raise OperationError(space.w_UnicodeEncodeError,space.newtuple ([w_encoding, w_unistr, w_start, w_end, w_reason]))
+                raise OperationError(space.w_UnicodeEncodeError, space.newtuple([w_encoding, w_unistr, w_start, w_end, w_reason]))
     return ''.join(result)
 
 # string-to-unicode delegation
@@ -79,11 +85,11 @@ def _unicode_string_comparison(space, w_uni, w_str, inverse, uni_from_str):
     except OperationError, e:
         if e.match(space, space.w_UnicodeDecodeError):
             if inverse:
-                word = "unequal" 
+                msg = "Unicode unequal comparison failed to convert both "  \
+                      "arguments to Unicode - interpreting them as being unequal"
             else :
-                word = "equal"
-            msg = "Unicode %s comparison failed to convert both arguments\
-                    to Unicode - interpreting them as being unequal" % word
+                msg = "Unicode equal comparison failed to convert both "    \
+                      "arguments to Unicode - interpreting them as being unequal"
             space.warn(msg, space.w_UnicodeWarning)
             return space.newbool(inverse)
         raise
@@ -126,7 +132,9 @@ def lt__Unicode_Unicode(space, w_left, w_right):
 
 def ord__Unicode(space, w_uni):
     if len(w_uni._value) != 1:
-        raise OperationError(space.w_TypeError, space.wrap('ord() expected a character'))
+        raise operationerrfmt(space.w_TypeError,
+            "ord() expected a character, got a unicode of length %d",
+            len(w_uni._value))
     return space.wrap(ord(w_uni._value[0]))
 
 def getnewargs__Unicode(space, w_uni):
@@ -182,7 +190,7 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
         space.is_w(space.type(l[0]), space.w_unicode)):
         return l[0]
     
-    values_list = []
+    values_list = [None] * len(l)
     for i in range(len(l)):
         item = l[i]
         if isinstance(item, W_UnicodeObject):
@@ -191,10 +199,9 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
         elif space.is_true(space.isinstance(item, space.w_str)):
             item = space.unicode_w(item)
         else:
-            w_msg = space.mod(space.wrap('sequence item %d: expected string or Unicode'),
-                              space.wrap(i))
-            raise OperationError(space.w_TypeError, w_msg)
-        values_list.append(item)
+            raise operationerrfmt(space.w_TypeError,
+                "sequence item %d: expected string or Unicode", i)
+        values_list[i] = item
     return W_UnicodeObject(w_self._value.join(values_list))
 
 def hash__Unicode(space, w_uni):
@@ -254,15 +261,13 @@ def mul__Unicode_ANY(space, w_uni, w_times):
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
-    uni = w_uni._value
-    length = len(uni)
-    if times <= 0 or length == 0:
+    if times <= 0:
         return W_UnicodeObject.EMPTY
-    try:
-        result_size = ovfcheck(length * times)
-        result = u''.join([uni] * times)
-    except OverflowError:
-        raise OperationError(space.w_OverflowError, space.wrap('repeated string is too long'))
+    input = w_uni._value
+    if len(input) == 1:
+        result = input[0] * times
+    else:
+        result = string_repeat(input, times)
     return W_UnicodeObject(result)
 
 def mul__ANY_Unicode(space, w_times, w_uni):
@@ -489,7 +494,7 @@ def unicode_startswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_prefixes,
                                               w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                                 w_start, w_end, True)
-    for w_prefix in space.viewiterable(w_prefixes):
+    for w_prefix in space.fixedview(w_prefixes):
         prefix = space.unicode_w(w_prefix)
         if stringstartswith(unistr, prefix, start, end):
             return space.w_True
@@ -499,7 +504,7 @@ def unicode_endswith__Unicode_Tuple_ANY_ANY(space, w_unistr, w_suffixes,
                                             w_start, w_end):
     unistr, _, start, end = _convert_idx_params(space, w_unistr, space.wrap(u''),
                                              w_start, w_end, True)
-    for w_suffix in space.viewiterable(w_suffixes):
+    for w_suffix in space.fixedview(w_suffixes):
         suffix = space.unicode_w(w_suffix)
         if stringendswith(unistr, suffix, start, end):
             return space.w_True

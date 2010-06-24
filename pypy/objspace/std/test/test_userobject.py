@@ -1,4 +1,6 @@
+import py
 from pypy.interpreter import gateway
+from pypy.objspace.test import test_descriptor
 
 
 class AppTestUserObject:
@@ -283,6 +285,8 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
 
         cls.prev_installer = multimethod.Installer
         multimethod.Installer = multimethod.InstallerVersion2
+        if conftest.option.runappdirect:
+            py.test.skip("Cannot run different installers when runappdirect")
         config = conftest.make_config(conftest.option, **cls.OPTIONS)
         cls.space = conftest.maketestobjspace(config)
 
@@ -294,3 +298,10 @@ class AppTestWithMultiMethodVersion2(AppTestUserObject):
 class AppTestWithGetAttributeShortcut(AppTestUserObject):
     OPTIONS = {"objspace.std.getattributeshortcut": True}
 
+
+class AppTestDescriptorWithGetAttributeShortcut(
+    test_descriptor.AppTest_Descriptor):
+    # for the individual tests see
+    # ====> ../../test/test_descriptor.py
+
+    OPTIONS = {"objspace.std.getattributeshortcut": True}

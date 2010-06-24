@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rlib import rstackovf
 
 import sys, os
 import math
@@ -110,16 +111,14 @@ class LLInterpreter(object):
         self.traceback_frames = []
         lines = []
         for frame in frames:
-            logline = frame.graph.name
+            logline = frame.graph.name + "()"
             if frame.curr_block is None:
                 logline += " <not running yet>"
                 lines.append(logline)
                 continue
             try:
-                logline += " " + self.typer.annotator.annotated[frame.curr_block].__module__
-            except (KeyError, AttributeError):
-                # if the graph is from the GC it was not produced by the same
-                # translator :-(
+                logline += " " + self.typer.annotator.annotated[frame.curr_block].func.__module__
+            except (KeyError, AttributeError, TypeError):
                 logline += " <unknown module>"
             lines.append(logline)
             for i, operation in enumerate(frame.curr_block.operations):
@@ -321,6 +320,18 @@ class LLFrame(object):
         except LLException, e:
             if not (catch_exception and op is block.operations[-1]):
                 raise
+        except RuntimeError, e:
+            rstackovf.check_stack_overflow()
+            # xxx fish fish fish for proper etype and evalue to use
+            rtyper = self.llinterpreter.typer
+            bk = rtyper.annotator.bookkeeper
+            classdef = bk.getuniqueclassdef(rstackovf._StackOverflow)
+            exdata = rtyper.getexceptiondata()
+            evalue = exdata.get_standard_ll_exc_instance(rtyper, classdef)
+            etype = exdata.fn_type_of_exc_inst(evalue)
+            e = LLException(etype, evalue)
+            if not (catch_exception and op is block.operations[-1]):
+                raise e
 
         # determine nextblock and/or return value
         if len(block.exits) == 0:
@@ -543,10 +554,22 @@ class LLFrame(object):
     def op_debug_llinterpcall(self, pythonfunction, *args_ll):
         return pythonfunction(*args_ll)
 
-    def op_jit_marker(self, *args):
-        pass
+    def op_debug_start_traceback(self, *args):
+        pass    # xxx write debugging code here?
 
-    def op_promote_virtualizable(self, *args):
+    def op_debug_reraise_traceback(self, *args):
+        pass    # xxx write debugging code here?
+
+    def op_debug_record_traceback(self, *args):
+        pass    # xxx write debugging code here?
+
+    def op_debug_print_traceback(self, *args):
+        pass    # xxx write debugging code here?
+
+    def op_debug_catch_exception(self, *args):
+        pass    # xxx write debugging code here?
+
+    def op_jit_marker(self, *args):
         pass
 
     def op_get_exception_addr(self, *args):
@@ -724,26 +747,17 @@ class LLFrame(object):
         except MemoryError:
             self.make_llexception()
             
-    def op_malloc_nonmovable(self, obj, flags):
+    def op_malloc_nonmovable(self, TYPE, flags):
         flavor = flags['flavor']
         assert flavor == 'gc'
         zero = flags.get('zero', False)
-        return self.heap.malloc_nonmovable(obj, zero=zero)
+        return self.heap.malloc_nonmovable(TYPE, zero=zero)
         
-    def op_malloc_nonmovable_varsize(self, obj, flags, size):
+    def op_malloc_nonmovable_varsize(self, TYPE, flags, size):
         flavor = flags['flavor']
         assert flavor == 'gc'
         zero = flags.get('zero', False)
-        return self.heap.malloc_nonmovable(obj, size, zero=zero)
-
-    def op_malloc_resizable_buffer(self, obj, flags, size):
-        return self.heap.malloc_resizable_buffer(obj, size)
-
-    def op_resize_buffer(self, obj, old_size, new_size):
-        return self.heap.resize_buffer(obj, old_size, new_size)
-
-    def op_finish_building_buffer(self, obj, size):
-        return self.heap.finish_building_buffer(obj, size)
+        return self.heap.malloc_nonmovable(TYPE, size, zero=zero)
 
     def op_free(self, obj, flavor):
         assert isinstance(flavor, str)
@@ -751,8 +765,17 @@ class LLFrame(object):
             self.llinterpreter.remember_free(obj)
         self.heap.free(obj, flavor=flavor)
 
+    def op_shrink_array(self, obj, smallersize):
+        return self.heap.shrink_array(obj, smallersize)
+
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")
+
+    def op_gc_writebarrier_before_copy(self, source, dest):
+        if hasattr(self.heap, 'writebarrier_before_copy'):
+            return self.heap.writebarrier_before_copy(source, dest)
+        else:
+            return True
 
     def op_getfield(self, obj, field):
         checkptr(obj)
@@ -783,9 +806,9 @@ class LLFrame(object):
         checkptr(ptr)
         return llmemory.cast_ptr_to_adr(ptr)
 
-    def op_cast_adr_to_int(self, adr):
+    def op_cast_adr_to_int(self, adr, mode):
         checkadr(adr)
-        return llmemory.cast_adr_to_int(adr)
+        return llmemory.cast_adr_to_int(adr, mode)
 
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py
@@ -807,7 +830,7 @@ class LLFrame(object):
     def op_gc__collect(self, *gen):
         self.heap.collect(*gen)
 
-    def op_gc_assume_young_pointers(self, addr):
+    def op_gc_heap_stats(self):
         raise NotImplementedError
 
     def op_gc_obtain_free_space(self, size):
@@ -951,14 +974,6 @@ class LLFrame(object):
     def op_raw_malloc(self, size):
         assert lltype.typeOf(size) == lltype.Signed
         return llmemory.raw_malloc(size)
-
-    def op_raw_realloc_grow(self, addr, old_size, size):
-        assert lltype.typeOf(size) == lltype.Signed
-        return llmemory.raw_realloc_grow(addr, old_size, size)
-
-    def op_raw_realloc_shrink(self, addr, old_size, size):
-        assert lltype.typeOf(size) == lltype.Signed
-        return llmemory.raw_realloc_shrink(addr, old_size, size)
 
     op_boehm_malloc = op_boehm_malloc_atomic = op_raw_malloc
 
@@ -1333,7 +1348,7 @@ def wrap_callable(llinterpreter, fn, obj, method_name):
         # obj is an instance, we want to call 'method_name' on it
         assert fn is None        
         self_arg = [obj]
-        func_graph = obj._TYPE._methods[method_name].graph
+        func_graph = obj._TYPE._methods[method_name._str].graph
 
     return wrap_graph(llinterpreter, func_graph, self_arg)
 

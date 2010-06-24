@@ -1,6 +1,6 @@
 import __future__
 import py, sys
-from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
+from pypy.interpreter.pycompiler import PythonAstCompiler
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments
@@ -53,6 +53,14 @@ class BaseTestCompiler:
                            'if 1:\n  x x', '?', mode, 0)
             space.raises_w(space.w_SyntaxError, self.compiler.compile_command,
                            ')', '?', mode, 0)
+
+    def test_hidden_applevel(self):
+        code = self.compiler.compile("def f(x): pass", "<test>", "exec", 0,
+                                     True)
+        assert code.hidden_applevel
+        for w_const in code.co_consts_w:
+            if isinstance(w_const, PyCode):
+                assert code.hidden_applevel
 
     def test_indentation_error(self):
         space = self.space
@@ -634,24 +642,8 @@ def test():
         ex = e.value
         space = self.space
         assert ex.match(space, space.w_SyntaxError)
-        assert 'hello_world' in space.str_w(space.str(ex.w_value))
+        assert 'hello_world' in space.str_w(space.str(ex.get_w_value(space)))
 
-
-class TestPyCCompiler(BaseTestCompiler):
-    def setup_method(self, method):
-        self.compiler = CPythonCompiler(self.space)
-
-    if sys.version_info < (2, 5):
-        def skip_on_2_4(self):
-            py.test.skip("syntax not supported by the CPython 2.4 compiler")
-        _unicode_error_kind = "w_UnicodeError"
-        test_continue_in_nested_finally = skip_on_2_4
-        test_try_except_finally = skip_on_2_4
-        test_yield_in_finally = skip_on_2_4
-    elif sys.version_info < (2, 6):
-        _unicode_error_kind = "w_UnicodeDecodeError"
-    else:
-        _unicode_error_kind = "w_SyntaxError"
 
 class TestPythonAstCompiler_25_grammar(BaseTestCompiler):
     def setup_method(self, method):

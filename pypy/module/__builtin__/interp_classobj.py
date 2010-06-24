@@ -1,5 +1,5 @@
 import new
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, W_Root, NoneNotWrapped, applevel
 from pypy.interpreter.gateway import interp2app, ObjSpace
 from pypy.interpreter.typedef import TypeDef, make_weakref_descr
@@ -7,14 +7,15 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.objectmodel import compute_identity_hash
+from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib import jit
 
 
 def raise_type_err(space, argument, expected, w_obj):
     type_name = space.type(w_obj).getname(space, '?')
-    w_error = space.wrap("argument %s must be %s, not %s" % (
-        argument, expected, type_name))
-    raise OperationError(space.w_TypeError,
-                         w_error)
+    raise operationerrfmt(space.w_TypeError,
+                          "argument %s must be %s, not %s",
+                          argument, expected, type_name)
 
 def unwrap_attr(space, w_attr):
     try:
@@ -22,7 +23,8 @@ def unwrap_attr(space, w_attr):
     except OperationError, e:
         if not e.match(space, space.w_TypeError):
             raise
-        return ""
+        return "?"    # any string different from "__dict__" & co. is fine
+        # XXX it's not clear that we have to catch the TypeError...
 
 def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
     if not space.is_true(space.isinstance(w_bases, space.w_tuple)):
@@ -36,7 +38,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 
     # XXX missing: lengthy and obscure logic about "__module__"
         
-    bases_w = space.viewiterable(w_bases)
+    bases_w = space.fixedview(w_bases)
     for w_base in bases_w:
         if not isinstance(w_base, W_ClassObject):
             w_metaclass = space.type(w_base)
@@ -51,6 +53,7 @@ def descr_classobj_new(space, w_subtype, w_name, w_bases, w_dict):
 class W_ClassObject(Wrappable):
     def __init__(self, space, w_name, bases, w_dict):
         self.name = space.str_w(w_name)
+        make_sure_not_resized(bases)
         self.bases_w = bases
         self.w_dict = w_dict
  
@@ -79,7 +82,7 @@ class W_ClassObject(Wrappable):
             raise OperationError(
                     space.w_TypeError,
                     space.wrap("__bases__ must be a tuple object"))
-        bases_w = space.viewiterable(w_bases)
+        bases_w = space.fixedview(w_bases)
         for w_base in bases_w:
             if not isinstance(w_base, W_ClassObject):
                 raise OperationError(space.w_TypeError,
@@ -96,6 +99,7 @@ class W_ClassObject(Wrappable):
                 return True
         return False
 
+    @jit.unroll_safe
     def lookup(self, space, w_attr):
         # returns w_value or interplevel None
         w_result = space.finditem(self.w_dict, w_attr)
@@ -120,10 +124,10 @@ class W_ClassObject(Wrappable):
                 return space.newtuple(self.bases_w)
         w_value = self.lookup(space, w_attr)
         if w_value is None:
-            raise OperationError(
+            raise operationerrfmt(
                 space.w_AttributeError,
-                space.wrap("class %s has no attribute %s" % (
-                    self.name, space.str_w(space.str(w_attr)))))
+                "class %s has no attribute '%s'",
+                self.name, name)
 
         w_descr_get = space.lookup(w_value, '__get__')
         if w_descr_get is None:
@@ -152,36 +156,18 @@ class W_ClassObject(Wrappable):
     def descr_delattr(self, space, w_attr):
         name = unwrap_attr(space, w_attr)
         if name in ("__dict__", "__name__", "__bases__"):
-            raise OperationError(
+            raise operationerrfmt(
                 space.w_TypeError,
-                space.wrap("cannot delete attribute %s" % (name,)))
+                "cannot delete attribute '%s'", name)
         try:
             space.delitem(self.w_dict, w_attr)
         except OperationError, e:
             if not e.match(space, space.w_KeyError):
                 raise
-            raise OperationError(
+            raise operationerrfmt(
                 space.w_AttributeError,
-                space.wrap("class %s has no attribute %s" % (
-                    self.name, space.str_w(space.str(w_attr)))))
-
-    def descr_call(self, space, __args__):
-        if self.lookup(space, space.wrap('__del__')) is not None:
-            w_inst = W_InstanceObjectWithDel(space, self)
-        else:
-            w_inst = W_InstanceObject(space, self)
-        w_init = w_inst.getattr(space, space.wrap('__init__'), False)
-        if w_init is not None:
-            w_result = space.call_args(w_init, __args__)
-            if not space.is_w(w_result, space.w_None):
-                raise OperationError(
-                    space.w_TypeError,
-                    space.wrap("__init__() should return None"))
-        elif __args__.arguments_w or __args__.keywords:
-            raise OperationError(
-                    space.w_TypeError,
-                    space.wrap("this constructor takes no arguments"))
-        return w_inst
+                "class %s has no attribute '%s'",
+                self.name, name)
 
     def descr_repr(self, space):
         mod = self.get_module_string(space)
@@ -205,14 +191,37 @@ class W_ClassObject(Wrappable):
             return space.str_w(w_mod)
         return "?"
 
+    def __repr__(self):
+        # NOT_RPYTHON
+        return '<W_ClassObject(%s)>' % self.name
+
+def class_descr_call(space, w_self, __args__):
+    self = space.interp_w(W_ClassObject, w_self)
+    if self.lookup(space, space.wrap('__del__')) is not None:
+        w_inst = W_InstanceObjectWithDel(space, self)
+    else:
+        w_inst = W_InstanceObject(space, self)
+    w_init = w_inst.getattr(space, space.wrap('__init__'), False)
+    if w_init is not None:
+        w_result = space.call_args(w_init, __args__)
+        if not space.is_w(w_result, space.w_None):
+            raise OperationError(
+                space.w_TypeError,
+                space.wrap("__init__() should return None"))
+    elif __args__.arguments_w or __args__.keywords:
+        raise OperationError(
+                space.w_TypeError,
+                space.wrap("this constructor takes no arguments"))
+    return w_inst
+
 W_ClassObject.typedef = TypeDef("classobj",
     __new__ = interp2app(descr_classobj_new),
     __repr__ = interp2app(W_ClassObject.descr_repr,
                           unwrap_spec=['self', ObjSpace]),
     __str__ = interp2app(W_ClassObject.descr_str,
                          unwrap_spec=['self', ObjSpace]),
-    __call__ = interp2app(W_ClassObject.descr_call,
-                          unwrap_spec=['self', ObjSpace, Arguments]),
+    __call__ = interp2app(class_descr_call,
+                          unwrap_spec=[ObjSpace, W_Root, Arguments]),
     __getattribute__ = interp2app(W_ClassObject.descr_getattribute,
                              unwrap_spec=['self', ObjSpace, W_Root]),
     __setattr__ = interp2app(W_ClassObject.descr_setattr,
@@ -285,7 +294,7 @@ def _coerce_helper(space, w_self, w_other):
         if not e.match(space, space.w_TypeError):
             raise
         return [None, None]
-    return space.viewiterable(w_tup, 2)
+    return space.fixedview(w_tup, 2)
 
 def descr_instance_new(space, w_type, w_class, w_dict=None):
     # w_type is not used at all
@@ -336,10 +345,10 @@ class W_InstanceObject(Wrappable):
         w_value = self.w_class.lookup(space, w_name)
         if w_value is None:
             if exc:
-                raise OperationError(
+                raise operationerrfmt(
                     space.w_AttributeError,
-                    space.wrap("%s instance has no attribute %s" % (
-                        self.w_class.name, space.str_w(w_name))))
+                    "%s instance has no attribute '%s'",
+                    self.w_class.name, space.str_w(w_name))
             else:
                 return None
         w_descr_get = space.lookup(w_value, '__get__')
@@ -401,10 +410,10 @@ class W_InstanceObject(Wrappable):
             space.call_function(w_meth, w_name)
         else:
             if not self.deldictvalue(space, w_name):
-                raise OperationError(
+                raise operationerrfmt(
                     space.w_AttributeError,
-                    space.wrap("%s instance has no attribute %s" % (
-                        self.w_class.name, space.str_w(space.str(w_name)))))
+                    "%s instance has no attribute '%s'",
+                    self.w_class.name, name)
 
     def descr_repr(self, space):
         w_meth = self.getattr(space, space.wrap('__repr__'), False)

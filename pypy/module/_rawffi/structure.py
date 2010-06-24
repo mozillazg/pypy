@@ -9,11 +9,12 @@ from pypy.interpreter.typedef import interp_attrproperty
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.interpreter.error import OperationError, wrap_oserror
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.module._rawffi.interp_rawffi import segfault_exception
 from pypy.module._rawffi.interp_rawffi import W_DataShape, W_DataInstance
 from pypy.module._rawffi.interp_rawffi import wrap_value, unwrap_value
-from pypy.module._rawffi.interp_rawffi import unpack_to_size_alignment
+from pypy.module._rawffi.interp_rawffi import unpack_shape_with_length
+from pypy.module._rawffi.interp_rawffi import size_alignment
 from pypy.rlib import libffi
 from pypy.rlib.rarithmetic import intmask, r_uint
 
@@ -26,7 +27,7 @@ def unpack_fields(space, w_fields):
             raise OperationError(space.w_ValueError, space.wrap(
                 "Expected list of 2-size tuples"))
         name = space.str_w(l_w[0])
-        tp = unpack_to_size_alignment(space, l_w[1])
+        tp = unpack_shape_with_length(space, l_w[1])
         fields.append((name, tp))
     return fields
 
@@ -37,7 +38,10 @@ def size_alignment_pos(fields):
     size = 0
     alignment = 1
     pos = []
-    for fieldname, (letter, fieldsize, fieldalignment) in fields:
+    for fieldname, fieldtype in fields:
+        # fieldtype is a W_Array
+        fieldsize = fieldtype.size
+        fieldalignment = fieldtype.alignment
         size = round_up(size, fieldalignment)
         alignment = max(alignment, fieldalignment)
         pos.append(size)
@@ -53,8 +57,8 @@ class W_Structure(W_DataShape):
             for i in range(len(fields)):
                 name, tp = fields[i]
                 if name in name_to_index:
-                    raise OperationError(space.w_ValueError, space.wrap(
-                        "duplicate field name %s" % (name, )))
+                    raise operationerrfmt(space.w_ValueError,
+                        "duplicate field name %s", name)
                 name_to_index[name] = i
             size, alignment, pos = size_alignment_pos(fields)
         else: # opaque case
@@ -76,8 +80,8 @@ class W_Structure(W_DataShape):
         try:
             return self.name_to_index[attr]
         except KeyError:
-            raise OperationError(space.w_AttributeError, space.wrap(
-                "C Structure has no attribute %s" % attr))
+            raise operationerrfmt(space.w_AttributeError,
+                "C Structure has no attribute %s", attr)
 
     def descr_call(self, space, autofree=False):
         return space.wrap(self.allocate(space, 1, autofree))
@@ -99,27 +103,39 @@ class W_Structure(W_DataShape):
         return space.wrap(self.ll_positions[index])
     descr_fieldoffset.unwrap_spec = ['self', ObjSpace, str]
 
-    def _size_alignment(self):
-        return self.size, self.alignment
-
     # get the corresponding ffi_type
-    ffi_type = lltype.nullptr(libffi.FFI_TYPE_P.TO)
+    ffi_struct = lltype.nullptr(libffi.FFI_STRUCT_P.TO)
 
-    def get_ffi_type(self):
-        if not self.ffi_type:
-            self.ffi_type = libffi.make_struct_ffitype(self.size,
-                                                       self.alignment)
-        return self.ffi_type
+    def get_basic_ffi_type(self):
+        if not self.ffi_struct:
+            # Repeated fields are delicate.  Consider for example
+            #     struct { int a[5]; }
+            # or  struct { struct {int x;} a[5]; }
+            # Seeing no corresponding doc in libffi, let's just repeat
+            # the field 5 times...
+            fieldtypes = []
+            for name, tp in self.fields:
+                basic_ffi_type = tp.get_basic_ffi_type()
+                basic_size, _ = size_alignment(basic_ffi_type)
+                total_size = tp.size
+                count = 0
+                while count + basic_size <= total_size:
+                    fieldtypes.append(basic_ffi_type)
+                    count += basic_size
+            self.ffi_struct = libffi.make_struct_ffitype_e(self.size,
+                                                           self.alignment,
+                                                           fieldtypes)
+        return self.ffi_struct.ffistruct
     
     def __del__(self):
-        if self.ffi_type:
-            lltype.free(self.ffi_type, flavor='raw')
+        if self.ffi_struct:
+            lltype.free(self.ffi_struct, flavor='raw')
     
 
 
 def descr_new_structure(space, w_type, w_shapeinfo):
     if space.is_true(space.isinstance(w_shapeinfo, space.w_tuple)):
-        w_size, w_alignment = space.viewiterable(w_shapeinfo, expected_length=2)
+        w_size, w_alignment = space.fixedview(w_shapeinfo, expected_length=2)
         S = W_Structure(space, None, space.int_w(w_size),
                                      space.int_w(w_alignment))
     else:
@@ -168,7 +184,7 @@ class W_StructureInstance(W_DataInstance):
             raise segfault_exception(space, "accessing NULL pointer")
         i = self.shape.getindex(space, attr)
         _, tp = self.shape.fields[i]
-        return wrap_value(space, cast_pos, self, i, tp)
+        return wrap_value(space, cast_pos, self, i, tp.itemcode)
     getattr.unwrap_spec = ['self', ObjSpace, str]
 
     def setattr(self, space, attr, w_value):
@@ -176,7 +192,7 @@ class W_StructureInstance(W_DataInstance):
             raise segfault_exception(space, "accessing NULL pointer")
         i = self.shape.getindex(space, attr)
         _, tp = self.shape.fields[i]
-        unwrap_value(space, push_field, self, i, tp[0], w_value)
+        unwrap_value(space, push_field, self, i, tp.itemcode, w_value)
     setattr.unwrap_spec = ['self', ObjSpace, str, W_Root]
 
     def descr_fieldaddress(self, space, attr):

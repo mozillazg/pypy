@@ -3,6 +3,7 @@ import autopath
 from pypy.conftest import option
 from py.test import raises
 from pypy.interpreter.gateway import app2interp_temp
+import sys
 
 def init_globals_via_builtins_hack(space):
     space.appexec([], """():
@@ -24,6 +25,7 @@ class AppTestAppSysTests:
 
     def setup_class(cls):
         cls.w_appdirect = cls.space.wrap(option.runappdirect)
+        cls.w_filesystemenc = cls.space.wrap(sys.getfilesystemencoding())
     
     def test_sys_in_modules(self):
         import sys
@@ -108,6 +110,10 @@ class AppTestAppSysTests:
         assert isinstance(sys.stderr, file)
         assert isinstance(sys.stdin, file)
 
+    def test_getfilesystemencoding(self):
+        import sys
+        assert sys.getfilesystemencoding() == self.filesystemenc
+
 class AppTestSysModulePortedFromCPython:
 
     def setup_class(cls):
@@ -170,6 +176,26 @@ class AppTestSysModulePortedFromCPython:
 
         sys.stderr = savestderr
         assert err.getvalue().endswith("ValueError: 42\n")
+
+    def test_excepthook_failsafe_path(self):
+        import traceback
+        original_print_exception = traceback.print_exception
+        import cStringIO
+        savestderr = sys.stderr
+        err = cStringIO.StringIO()
+        sys.stderr = err
+        try:
+            traceback.print_exception = "foo"
+            eh = sys.__excepthook__
+            try:
+                raise ValueError(42)
+            except ValueError, exc:
+                eh(*sys.exc_info())
+        finally:
+            traceback.print_exception = original_print_exception
+            sys.stderr = savestderr
+
+        assert err.getvalue() == "ValueError: 42\n"
 
     # FIXME: testing the code for a lost or replaced excepthook in
     # Python/pythonrun.c::PyErr_PrintEx() is tricky.
@@ -324,6 +350,10 @@ class AppTestSysModulePortedFromCPython:
             assert isinstance(v[2], int)
             assert isinstance(v[3], int)
             assert isinstance(v[4], str)
+
+    def test_winver(self):
+        if hasattr(sys, "winver"):
+            assert sys.winver == sys.version[:3]
 
     def test_dlopenflags(self):
         if hasattr(sys, "setdlopenflags"):

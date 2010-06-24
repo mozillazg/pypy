@@ -1,9 +1,7 @@
 import autopath
 import py
-from py.__.magic import exprinfo
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
-from py.__.test.outcome import ExceptionFailure
 
 # ____________________________________________________________
 
@@ -13,7 +11,8 @@ class AppCode(object):
         self.raw = pycode
         self.w_file = space.getattr(pycode, space.wrap('co_filename'))
         self.name = space.getattr(pycode, space.wrap('co_name'))
-        self.firstlineno = space.unwrap(space.getattr(pycode, space.wrap('co_firstlineno')))
+        self.firstlineno = space.unwrap(
+            space.getattr(pycode, space.wrap('co_firstlineno'))) - 1
         #try:
         #    self.path = space.unwrap(space.getattr(self.w_file, space.wrap('__path__')))
         #except OperationError:
@@ -22,13 +21,14 @@ class AppCode(object):
         self.space = space
     
     def fullsource(self):
+        filename = self.space.str_w(self.w_file)
+        source = py.code.Source(py.std.linecache.getlines(filename))
+        if source.lines:
+            return source
         try:
-            return self.space.str_w(self.w_file).__source__
-        except AttributeError:
-            try:
-                return py.code.Source(self.path.read(mode="rU"))
-            except py.error.Error:
-                return None
+            return py.code.Source(self.path.read(mode="rU"))
+        except py.error.Error:
+            return None
     fullsource = property(fullsource, None, None, "Full source of AppCode")
 
     def getargs(self):
@@ -86,11 +86,18 @@ class AppExceptionInfo(py.code.ExceptionInfo):
         if debug_excs:
             self._excinfo = debug_excs[0]
 
-    def exconly(self, tryshort=True): 
+    def __repr__(self):
+        return "<AppExceptionInfo %s>" % self.operr.errorstr(self.space)
+
+    def exconly(self, tryshort=True):
         return '(application-level) ' + self.operr.errorstr(self.space)
 
     def errisinstance(self, exc): 
         clsname = exc.__name__ 
+        # we can only check for builtin exceptions
+        # as there is no canonical applevel one for custom interplevel ones
+        if exc.__module__ != "exceptions":
+            return False 
         try: 
             w_exc = getattr(self.space, 'w_' + clsname) 
         except KeyboardInterrupt: 
@@ -157,7 +164,7 @@ def build_pytest_assertion(space):
                 source = None
             from pypy import conftest
             if source and not conftest.option.nomagic: 
-                msg = exprinfo.interpret(source, runner, should_fail=True)
+                msg = py.code._reinterpret_old(source, runner, should_fail=True)
                 space.setattr(w_self, space.wrap('args'),
                             space.newtuple([space.wrap(msg)]))
                 w_msg = space.wrap(msg)
@@ -213,11 +220,19 @@ def pypyraises(space, w_ExpectedException, w_expr, __args__):
         source = py.code.Source(expr)
         frame = space.getexecutioncontext().gettopframe()
         w_locals = frame.getdictscope()
+        pycode = frame.pycode
+        filename = "<%s:%s>" %(pycode.co_filename, frame.f_lineno)
+        lines = [x + "\n" for x in expr.split("\n")]
+        py.std.linecache.cache[filename] = (1, None, lines, filename)
         w_locals = space.call_method(w_locals, 'copy')
         for key, w_value in kwds_w.items():
             space.setitem(w_locals, space.wrap(key), w_value)
+        #filename = __file__
+        #if filename.endswith("pyc"):
+        #    filename = filename[:-1]
         try:
-            space.exec_(source.compile(), frame.w_globals, w_locals)
+            space.exec_(str(source), frame.w_globals, w_locals,
+                        filename=filename)
         except OperationError, e:
             if e.match(space, w_ExpectedException):
                 return _exc_info(space, e)
@@ -252,7 +267,7 @@ def raises_w(space, w_ExpectedException, *args, **kwds):
         if not value.match(space, w_ExpectedException):
             raise type, value, tb
         return excinfo
-    except ExceptionFailure, e:
+    except py.test.raises.Exception, e:
         e.tbindex = getattr(e, 'tbindex', -1) - 1
         raise
 
