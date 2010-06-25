@@ -483,9 +483,6 @@ class AbstractX86CodeBuilder(object):
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
 
-    def CALL_i(self, addr):
-        self.CALL_l(addr)
-
     # XXX: Only here for testing purposes..."as" happens the encode the
     # registers in the opposite order that we would otherwise do in a
     # register-register exchange
@@ -551,11 +548,6 @@ class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
     CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
     CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
-
-    # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
-    # displacement is always enough to encode any address
-    CALL_i = AbstractX86CodeBuilder.CALL_l
-
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
