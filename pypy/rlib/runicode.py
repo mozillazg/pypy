@@ -2,6 +2,7 @@ import sys
 from pypy.rlib.bitmanipulation import splitter
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 
 if rffi.sizeof(lltype.UniChar) == 4:
     MAXUNICODE = 0x10ffff
@@ -42,8 +43,6 @@ else:
     UNICHR = unichr
     ORD = ord
 
-# XXX review the functions below and think about using stringbuilders for them
-
 
 def raise_unicode_exception_decode(errors, encoding, msg, s,
                                    startingpos, endingpos):
@@ -83,7 +82,8 @@ def str_decode_utf_8(s, size, errors, final=False,
         errorhandler = raise_unicode_exception_decode
     if (size == 0):
         return u'', 0
-    result = []
+
+    result = UnicodeBuilder(size)
     pos = 0
     while pos < size:
         ch = s[pos]
@@ -197,7 +197,7 @@ def str_decode_utf_8(s, size, errors, final=False,
                                   s,  pos, pos + n)
             result.append(r)
 
-    return u"".join(result), pos
+    return result.build(), pos
 
 def _encodeUCS4(result, ch):
     # Encode UCS4 Unicode ordinals
@@ -208,7 +208,7 @@ def _encodeUCS4(result, ch):
 
 def unicode_encode_utf_8(s, size, errors, errorhandler=None):
     assert(size >= 0)
-    result = []
+    result = StringBuilder(size)
     i = 0
     while i < size:
         ch = ord(s[i])
@@ -240,7 +240,7 @@ def unicode_encode_utf_8(s, size, errors, errorhandler=None):
                 continue
             else:
                 _encodeUCS4(result, ch)
-    return "".join(result)
+    return result.build()
 
 # ____________________________________________________________
 # utf-16
@@ -283,7 +283,6 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     #  mark is skipped, in all other modes, it is copied to the output
     #  stream as-is (giving a ZWNBSP character).
     pos = 0
-    result = []
     if byteorder == 'native':
         if (size >= 2):
             bom = (ord(s[ihi]) << 8) | ord(s[ilo])
@@ -316,6 +315,8 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
         # force big endian
         ihi = 0
         ilo = 1
+
+    result = UnicodeBuilder(size // 2)
 
     #XXX I think the errors are not correctly handled here
     while (pos < len(s)):
@@ -363,7 +364,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
                                   "illegal encoding",
                                   s, pos - 2, pos)
             result.append(r)
-    return u"".join(result), pos, bo
+    return result.build(), pos, bo
 
 def _STORECHAR(result, CH, byteorder):
     hi = chr(((CH) >> 8) & 0xff)
@@ -378,13 +379,13 @@ def _STORECHAR(result, CH, byteorder):
 def unicode_encode_utf_16_helper(s, size, errors,
                                  errorhandler=None,
                                  byteorder='little'):
-    result = []
+    if size == 0:
+        return ""
+
+    result = StringBuilder(size * 2 + 2)
     if (byteorder == 'native'):
         _STORECHAR(result, 0xFEFF, BYTEORDER)
         byteorder = BYTEORDER
-        
-    if size == 0:
-        return ""
 
     i = 0
     while i < size:
@@ -399,7 +400,7 @@ def unicode_encode_utf_16_helper(s, size, errors,
         if ch2:
             _STORECHAR(result, ch2, byteorder)
 
-    return "".join(result)
+    return result.build()
 
 def unicode_encode_utf_16(s, size, errors,
                           errorhandler=None):
@@ -423,11 +424,11 @@ def str_decode_latin_1(s, size, errors, final=False,
                        errorhandler=None):
     # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
-    result = []
+    result = UnicodeBuilder(size)
     while (pos < size):
         result.append(unichr(ord(s[pos])))
         pos += 1
-    return u"".join(result), pos
+    return result.build(), pos
 
 
 def str_decode_ascii(s, size, errors, final=False,
@@ -435,7 +436,7 @@ def str_decode_ascii(s, size, errors, final=False,
     if errorhandler is None:
         errorhandler = raise_unicode_exception_decode
     # ASCII is equivalent to the first 128 ordinals in Unicode.
-    result = []
+    result = UnicodeBuilder(size)
     pos = 0
     while pos < len(s):
         c = s[pos]
@@ -446,7 +447,7 @@ def str_decode_ascii(s, size, errors, final=False,
             r, pos = errorhandler(errors, "ascii", "ordinal not in range(128)",
                                   s,  pos, pos + 1)
             result.append(r)
-    return u"".join(result), pos
+    return result.build(), pos
 
 
 def unicode_encode_ucs1_helper(p, size, errors,
@@ -462,7 +463,7 @@ def unicode_encode_ucs1_helper(p, size, errors,
     
     if (size == 0):
         return ''
-    result = []
+    result = StringBuilder(size)
     pos = 0
     while pos < len(p):
         ch = p[pos]
@@ -478,9 +479,9 @@ def unicode_encode_ucs1_helper(p, size, errors,
                 collend += 1
             r, pos = errorhandler(errors, encoding, reason, p,
                                   collstart, collend)
-            result += r   # extend 'result' as a list of characters
+            result.append(r)
     
-    return "".join(result)
+    return result.build()
 
 def unicode_encode_latin_1(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 256)
