@@ -3,6 +3,7 @@ from pypy.jit.backend.x86 import rx86
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.backend.x86.arch import WORD
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.objectmodel import specialize
 
 #
 # This module adds support for "locations", which can be either in a Const,
@@ -155,6 +156,13 @@ X86_64_XMM_SCRATCH_REG = xmm15
 
 unrolling_location_codes = unrolling_iterable(list("rbsmajix"))
 
+@specialize.arg(1)
+def _rx86_getattr(obj, methname):
+    if hasattr(rx86.AbstractX86CodeBuilder, methname):
+        return getattr(obj, methname)
+    else:
+        raise AssertionError(methname + " undefined")
+
 class LocationCodeBuilder(object):
     _mixin_ = True
 
@@ -170,47 +178,34 @@ class LocationCodeBuilder(object):
                 if code1 == possible_code1:
                     for possible_code2 in unrolling_location_codes:
                         if code2 == possible_code2:
-                            # FIXME: Not RPython anymore!
-                            # Fake out certain operations for x86_64
                             val1 = getattr(loc1, "value_" + possible_code1)()
                             val2 = getattr(loc2, "value_" + possible_code2)()
-                            # XXX: Could use RIP+disp32 in some cases
+                            # Fake out certain operations for x86_64
                             if self.WORD == 8 and possible_code2 == 'i' and not rx86.fits_in_32bits(val2):
                                 if possible_code1 == 'j':
-                                    # This is the worst case: MOV_ji, and both operands are 64-bit
+                                    # This is the worst case: INSN_ji, and both operands are 64-bit
                                     # Hopefully this doesn't happen too often
                                     self.PUSH_r(eax.value)
                                     self.MOV_ri(eax.value, val1)
                                     self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
-                                    self.MOV_mr((eax.value, 0), X86_64_SCRATCH_REG.value)
+                                    methname = name + "_mr"
+                                    _rx86_getattr(self, methname)((eax.value, 0), X86_64_SCRATCH_REG.value)
                                     self.POP_r(eax.value)
                                 else:
                                     self.MOV_ri(X86_64_SCRATCH_REG.value, val2)
                                     methname = name + "_" + possible_code1 + "r"
-                                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                        getattr(self, methname)(val1, X86_64_SCRATCH_REG.value)
-                                    else:
-                                        assert False, "a"
+                                    _rx86_getattr(self, methname)(val1, X86_64_SCRATCH_REG.value)
                             elif self.WORD == 8 and possible_code1 == 'j':
                                 reg_offset = self._addr_as_reg_offset(val1)
                                 methname = name + "_" + "m" + possible_code2
-                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                    getattr(self, methname)(reg_offset, val2)
-                                else:
-                                    assert False, "b"
+                                _rx86_getattr(self, methname)(reg_offset, val2)
                             elif self.WORD == 8 and possible_code2 == 'j':
                                 reg_offset = self._addr_as_reg_offset(val2)
                                 methname = name + "_" + possible_code1 + "m"
-                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                    getattr(self, methname)(val1, reg_offset)
-                                else:
-                                    assert False, "c"
+                                _rx86_getattr(self, methname)(val1, reg_offset)
                             else:
                                 methname = name + "_" + possible_code1 + possible_code2
-                                if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                                    getattr(self, methname)(val1, val2)
-                                else:
-                                    assert False, "d"
+                                _rx86_getattr(self, methname)(val1, val2)
 
         return func_with_new_name(INSN, "INSN_" + name)
 
@@ -219,13 +214,13 @@ class LocationCodeBuilder(object):
             code = loc.location_code()
             for possible_code in unrolling_location_codes:
                 if code == possible_code:
-                    methname = name + "_" + possible_code
-                    if hasattr(rx86.AbstractX86CodeBuilder, methname):
-                        val = getattr(loc, "value_" + possible_code)()
-                        getattr(self, methname)(val)
-                        return
+                    val = getattr(loc, "value_" + possible_code)()
+                    if self.WORD == 8 and possible_code == 'i' and not rx86.fits_in_32bits(val):
+                        self.MOV_ri(X86_64_SCRATCH_REG.value, val)
+                        _rx86_getattr(self, name + "_r")(X86_64_SCRATCH_REG.value)
                     else:
-                        raise AssertionError("Instruction not defined: " + methname)
+                        methname = name + "_" + possible_code
+                        _rx86_getattr(self, methname)(val)
 
         return func_with_new_name(INSN, "INSN_" + name)
 
@@ -312,6 +307,7 @@ class LocationCodeBuilder(object):
     XORPD = _binaryop('XORPD')
 
     CALL = _unaryop('CALL')
+    JMP = _unaryop('JMP')
 
 def imm(x):
     # XXX: ri386 migration shim
@@ -319,10 +315,6 @@ def imm(x):
         return ImmedLoc(x.getint())
     else:
         return ImmedLoc(x)
-
-def rel32(x):
-    # XXX: ri386 migration shim
-    return AddressLoc(ImmedLoc(x), ImmedLoc(0))
 
 all_extra_instructions = [name for name in LocationCodeBuilder.__dict__
                           if name[0].isupper()]
