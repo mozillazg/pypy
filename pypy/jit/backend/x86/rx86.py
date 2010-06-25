@@ -483,14 +483,15 @@ class AbstractX86CodeBuilder(object):
     CALL_r = insn(rex_nw, '\xFF', register(1), chr(0xC0 | (2<<3)))
     CALL_b = insn('\xFF', orbyte(2<<3), stack_bp(1))
 
+    def CALL_i(self, addr):
+        self.CALL_l(addr)
+
     # XXX: Only here for testing purposes..."as" happens the encode the
     # registers in the opposite order that we would otherwise do in a
     # register-register exchange
     XCHG_rr = insn(rex_w, '\x87', register(1), register(2,8), '\xC0')
 
     JMP_l = insn('\xE9', relative(1))
-    # FIXME
-    JMP_i = JMP_l
     JMP_r = insn(rex_nw, '\xFF', orbyte(4<<3), register(1), '\xC0')
     # FIXME: J_il8 and JMP_l8 assume the caller will do the appropriate
     # calculation to find the displacement, but J_il does it for the caller.
@@ -518,10 +519,6 @@ class AbstractX86CodeBuilder(object):
 
     CVTTSD2SI_rx = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), register(2), '\xC0')
     CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
-
-    # XXX: hack
-    def CALL_i(self):
-        assert False
 
     # ------------------------------------------------------------
 
@@ -577,12 +574,12 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
 
     # MOV_ri from the parent class is not wrong, but here is a better encoding
     # for the common case where the immediate fits in 32 bits
-    _MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
+    MOV_ri32 = insn(rex_w, '\xC7', register(1), '\xC0', immediate(2, 'i'))
     MOV_ri64 = AbstractX86CodeBuilder.MOV_ri
 
     def MOV_ri(self, reg, immed):
         if fits_in_32bits(immed):
-            self._MOV_ri32(reg, immed)
+            self.MOV_ri32(reg, immed)
         else:
             AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
 
@@ -593,11 +590,9 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         if fits_in_32bits(offset):
             AbstractX86CodeBuilder.CALL_l(self, target)
         else:
-            AbstractX86CodeBuilder.MOV_ri(self, R.eax, target)
-            AbstractX86CodeBuilder.CALL_r(self, R.eax)
+            self.MOV_ri(R.eax, target)
+            self.CALL_r(R.eax)
 
-    # XXX
-    CALL_i = CALL_l
 
 def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR'):
     def add_insn(code, *modrm):
