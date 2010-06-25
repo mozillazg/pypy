@@ -21,7 +21,7 @@ from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          X86_64_SCRATCH_REG,
                                          X86_64_XMM_SCRATCH_REG,
                                          RegLoc, StackLoc,
-                                         ImmedLoc, AddressLoc, imm, rel32)
+                                         ImmedLoc, AddressLoc, imm)
 
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import rx86, regloc, codebuf
@@ -217,7 +217,7 @@ class Assembler386(object):
             mc.MOV_rr(edi.value, edx.value)
 
         addr = self.cpu.gc_ll_descr.get_malloc_fixedsize_slowpath_addr()
-        mc.JMP_l(addr)                        # tail call to the real malloc
+        mc.JMP(imm(addr))                    # tail call to the real malloc
         # ---------- second helper for the slow path of malloc ----------
         self.malloc_fixedsize_slowpath2 = mc.tell()
         if self.cpu.supports_floats:          # restore the XMM registers
@@ -784,7 +784,7 @@ class Assembler386(object):
         self.mark_gc_roots()
 
     def call(self, addr, args, res):
-        self._emit_call(rel32(addr), args)
+        self._emit_call(imm(addr), args)
         assert res is eax
 
     genop_int_neg = _unaryop("NEG")
@@ -893,7 +893,7 @@ class Assembler386(object):
             return self.implement_guard(guard_token, 'Z')
 
     def genop_int_is_zero(self, op, arglocs, resloc):
-        self.mc.CMP(arglocs[0], imm8(0))
+        self.mc.CMP(arglocs[0], imm(0))
         rl = resloc.lowest8bits()
         self.mc.SET_ir(rx86.Conditions['E'], rl.value)
         self.mc.MOVZX8(resloc, rl)
@@ -976,11 +976,11 @@ class Assembler386(object):
         assert isinstance(ofs, ImmedLoc)
         assert isinstance(scale, ImmedLoc)
         if op.result.type == FLOAT:
-            self.mc.MOVSD(resloc, addr64_add(base_loc, ofs_loc, ofs.value,
+            self.mc.MOVSD(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                              scale.value))
         else:
             if scale.value == 0:
-                self.mc.MOVZX8(resloc, addr8_add(base_loc, ofs_loc, ofs.value,
+                self.mc.MOVZX8(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                                 scale.value))
             elif (1 << scale.value) == WORD:
                 self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
@@ -1172,7 +1172,7 @@ class Assembler386(object):
     def genop_guard_guard_nonnull_class(self, ign_1, guard_op,
                                         guard_token, locs, ign_2):
         mc = self._start_block()
-        mc.CMP(locs[0], imm8(1))
+        mc.CMP(locs[0], imm(1))
         # Patched below
         mc.J_il8(rx86.Conditions['B'], 0)
         jb_location = mc.get_relative_pos()
@@ -1515,7 +1515,7 @@ class Assembler386(object):
         size = sizeloc.value
 
         if isinstance(op.args[0], Const):
-            x = rel32(op.args[0].getint())
+            x = imm(op.args[0].getint())
         else:
             x = arglocs[1]
         if x is eax:
@@ -1551,7 +1551,7 @@ class Assembler386(object):
         assert len(arglocs) - 2 == len(descr._x86_arglocs[0])
         #
         # Write a call to the direct_bootstrap_code of the target assembler
-        self._emit_call(rel32(descr._x86_direct_bootstrap_code), arglocs, 2,
+        self._emit_call(imm(descr._x86_direct_bootstrap_code), arglocs, 2,
                         tmp=eax)
         mc = self._start_block()
         if op.result is None:
@@ -1575,7 +1575,7 @@ class Assembler386(object):
         je_location = mc.get_relative_pos()
         #
         # Path A: use assembler_helper_adr
-        self._emit_call(rel32(self.assembler_helper_adr), [eax, arglocs[1]], 0,
+        self._emit_call(imm(self.assembler_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx, force_mc=True, mc=mc)
         if IS_X86_32 and isinstance(result_loc, StackLoc) and result_loc.type == FLOAT:
             mc.FSTP_b(result_loc.value)
@@ -1655,7 +1655,7 @@ class Assembler386(object):
         # misaligned stack in the call, but it's ok because the write barrier
         # is not going to call anything more.  Also, this assumes that the
         # write barrier does not touch the xmm registers.
-        mc.CALL(heap(descr.get_write_barrier_fn(self.cpu)))
+        mc.CALL(imm(descr.get_write_barrier_fn(self.cpu)))
         for i in range(len(arglocs)):
             loc = arglocs[i]
             assert isinstance(loc, RegLoc)
@@ -1759,11 +1759,8 @@ def round_up_to_4(size):
     return size
 
 # XXX: ri386 migration shims:
-
 def addr_add(reg_or_imm1, reg_or_imm2, offset=0, scale=0):
     return AddressLoc(reg_or_imm1, reg_or_imm2, scale, offset)
-addr64_add = addr_add
-addr8_add = addr_add
 
 def addr_add_const(reg_or_imm1, offset):
     return AddressLoc(reg_or_imm1, ImmedLoc(0), 0, offset)
@@ -1773,5 +1770,3 @@ def mem(loc, offset):
 
 def heap(addr):
     return AddressLoc(ImmedLoc(addr), ImmedLoc(0), 0, 0)
-
-imm8 = imm

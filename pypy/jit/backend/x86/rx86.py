@@ -489,6 +489,8 @@ class AbstractX86CodeBuilder(object):
     XCHG_rr = insn(rex_w, '\x87', register(1), register(2,8), '\xC0')
 
     JMP_l = insn('\xE9', relative(1))
+    # FIXME
+    JMP_i = JMP_l
     JMP_r = insn(rex_nw, '\xFF', orbyte(4<<3), register(1), '\xC0')
     # FIXME: J_il8 and JMP_l8 assume the caller will do the appropriate
     # calculation to find the displacement, but J_il does it for the caller.
@@ -518,7 +520,7 @@ class AbstractX86CodeBuilder(object):
     CVTTSD2SI_rb = xmminsn('\xF2', rex_w, '\x0F\x2C', register(1, 8), stack_bp(2))
 
     # XXX: hack
-    def CALL_j(self):
+    def CALL_i(self):
         assert False
 
     # ------------------------------------------------------------
@@ -555,7 +557,7 @@ class X86_32_CodeBuilder(AbstractX86CodeBuilder):
 
     # XXX: Bit of kludge, but works in 32-bit because the relative 32-bit
     # displacement is always enough to encode any address
-    CALL_j = AbstractX86CodeBuilder.CALL_l
+    CALL_i = AbstractX86CodeBuilder.CALL_l
 
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
@@ -595,7 +597,7 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
             AbstractX86CodeBuilder.CALL_r(self, R.eax)
 
     # XXX
-    CALL_j = CALL_l
+    CALL_i = CALL_l
 
 def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR'):
     def add_insn(code, *modrm):
