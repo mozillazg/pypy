@@ -11,8 +11,6 @@ class Module(MixedModule):
          'escape_encode' :  'app_codecs.escape_encode',
          'unicode_internal_decode' :  'app_codecs.unicode_internal_decode',
          'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
-         'utf_7_decode' :  'app_codecs.utf_7_decode',
-         'utf_7_encode' :  'app_codecs.utf_7_encode',
          'charmap_build' : 'app_codecs.charmap_build'
     }
     interpleveldefs = {
@@ -28,6 +26,8 @@ class Module(MixedModule):
          'ascii_encode'     : 'interp_codecs.ascii_encode',
          'latin_1_decode'   : 'interp_codecs.latin_1_decode',
          'latin_1_encode'   : 'interp_codecs.latin_1_encode',
+         'utf_7_decode'     : 'interp_codecs.utf_7_decode',
+         'utf_7_encode'     : 'interp_codecs.utf_7_encode',
          'utf_8_decode'     : 'interp_codecs.utf_8_decode',
          'utf_8_encode'     : 'interp_codecs.utf_8_encode',
          'utf_16_be_decode' : 'interp_codecs.utf_16_be_decode',

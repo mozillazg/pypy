@@ -418,6 +418,228 @@ def unicode_encode_utf_16_le(s, size, errors,
 
 
 # ____________________________________________________________
+# utf-7
+
+## indicate whether a UTF-7 character is special i.e. cannot be directly
+##       encoded:
+##         0 - not special
+##         1 - special
+##         2 - whitespace (optional)
+##         3 - RFC2152 Set O (optional)
+
+_utf7_special = [
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2, 1, 1, 2, 1, 1,
+    1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+    2, 3, 3, 3, 3, 3, 3, 0, 0, 0, 3, 1, 0, 0, 0, 1,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 3, 0,
+    3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 1, 3, 3, 3,
+    3, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 3, 3, 3, 1, 1,
+]
+
+def _utf7_SPECIAL(oc, encodeO=False, encodeWS=False):
+    return (oc > 127 or _utf7_special[oc] == 1 or
+            (encodeWS and _utf7_special[oc] == 2) or
+            (encodeO and _utf7_special[oc] == 3))
+
+def _utf7_B64CHAR(oc):
+    if oc > 127:
+        return False
+    c = chr(oc)
+    return c.isalnum() or c == '+' or c == '/'
+def _utf7_TO_BASE64(n):
+    "Returns the base-64 character of the bottom 6 bits of n"
+    return "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"[n & 0x3f]
+def _utf7_FROM_BASE64(c):
+    "Retuns the base-64 value of a base-64 character"
+    if c == '+':
+        return 62
+    elif c == '/':
+        return 63
+    elif c >= 'a':
+        return ord(c) - 71
+    elif c >= 'A':
+        return ord(c) - 65
+    else:
+        return ord(c) + 4
+
+def _utf7_ENCODE(result, ch, bits) :
+    while (bits >= 6):
+        result.append(_utf7_TO_BASE64(ch >> (bits - 6)))
+        bits -= 6
+    return bits
+
+def str_decode_utf_7(s, size, errors, final=False,
+                     errorhandler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
+    if (size == 0):
+        return u'', 0
+
+    inShift = False
+    bitsleft = 0
+    startinpos = 0
+    charsleft = 0
+    surrogate = False
+
+    result = UnicodeBuilder(size)
+    pos = 0
+    while pos < size:
+        ch = s[pos]
+        oc = ord(ch)
+
+        if inShift:
+            if ch == '-' or not _utf7_B64CHAR(oc):
+                inShift = 0
+                pos += 1
+
+                while bitsleft >= 16:
+                    outCh =  (charsleft >> (bitsleft-16)) & 0xffff
+                    bitsleft -= 16
+
+                    if surrogate:
+                        ##  We have already generated an error for the high
+                        ##  surrogate so let's not bother seeing if the low
+                        ##  surrogate is correct or not
+                        surrogate = False
+                    elif 0xDC00 <= outCh <= 0xDFFF:
+                        ## This is a surrogate pair. Unfortunately we can't
+                        ## represent it in a 16-bit character
+                        surrogate = True
+                        msg = "code pairs are not supported"
+                        res, pos = errorhandler(errors, 'utf-7',
+                                                msg, s, pos-1, pos)
+                        result.append(res)
+                        bitsleft = 0
+                        break
+                    else:
+                        result.append(unichr(outCh))
+                if bitsleft >= 6:
+                    ## The shift sequence has a partial character in it. If
+                    ## bitsleft < 6 then we could just classify it as padding
+                    ## but that is not the case here
+                    msg = "partial character in shift sequence"
+                    res, pos = errorhandler(errors, 'utf-7',
+                                            msg, s, pos-1, pos)
+                    result.append(res)
+                    ## According to RFC2152 the remaining bits should be
+                    ## zero. We choose to signal an error/insert a replacement
+                    ## character here so indicate the potential of a
+                    ## misencoded character.
+                if ch == '-':
+                    if pos < size and s[pos] == '-':
+                        result.append(u'-')
+                        inShift = True
+
+                elif _utf7_SPECIAL(oc) :
+                    msg = "unexpected special character"
+                    res, pos = errorhandler(errors, 'utf-7',
+                                            msg, s, pos-1, pos)
+                    result.append(res)
+                else:
+                    result.append(unichr(ord(ch)))
+            else:
+                charsleft = (charsleft << 6) | _utf7_FROM_BASE64(ch)
+                bitsleft += 6
+                pos += 1
+        elif ch == '+':
+            startinpos = pos
+            pos += 1
+            if pos < size and s[pos] == '-':
+                pos += 1
+                result.append(u'+')
+            else:
+                inShift = 1
+                bitsleft = 0
+
+        elif _utf7_SPECIAL(oc):
+            pos += 1
+            msg = "unexpected special character"
+            res, pos = errorhandler(errors, 'utf-7', msg, s, pos-1, pos)
+            result.append(res)
+        else:
+            result.append(unichr(oc))
+            pos += 1
+
+    if inShift:
+        endinpos = size
+        msg = "unterminated shift sequence"
+        res, pos = errorhandler(errors, 'utf-7', msg, s, startinpos, pos)
+        result.append(res)
+
+    return result.build(), pos
+
+def unicode_encode_utf_7(s, size, errors, errorhandler=None):
+    if (size == 0):
+        return ''
+    result = StringBuilder(size)
+
+    encodeSetO = encodeWhiteSpace = False
+
+    inShift = False
+    bitsleft = 0
+    charsleft = 0
+
+    pos = 0
+    while pos < size:
+        ch = s[pos]
+        oc = ord(ch)
+        if not inShift:
+            if ch == u'+':
+                result.append('+-')
+            elif _utf7_SPECIAL(oc, encodeSetO, encodeWhiteSpace):
+                charsleft = oc
+                bitsleft = 16
+                result.append('+')
+                bitsleft = _utf7_ENCODE(result, charsleft, bitsleft)
+                inShift = bitsleft > 0
+            else:
+                result.append(chr(oc))
+        else:
+            if not _utf7_SPECIAL(oc, encodeSetO, encodeWhiteSpace):
+                result.append(_utf7_TO_BASE64(charsleft << (6-bitsleft)))
+                charsleft = 0
+                bitsleft = 0
+                ## Characters not in the BASE64 set implicitly unshift the
+                ## sequence so no '-' is required, except if the character is
+                ## itself a '-'
+                if _utf7_B64CHAR(oc) or ch == u'-':
+                    result.append('-')
+                inShift = False
+                result.append(chr(oc))
+            else:
+                bitsleft += 16
+                charsleft = (charsleft << 16) | oc
+                bitsleft =  _utf7_ENCODE(result, charsleft, bitsleft)
+                ## If the next character is special then we dont' need to
+                ## terminate the shift sequence. If the next character is not
+                ## a BASE64 character or '-' then the shift sequence will be
+                ## terminated implicitly and we don't have to insert a '-'.
+                if bitsleft == 0:
+                    if pos + 1 < size:
+                        ch2 = s[pos + 1]
+                        oc2 = ord(ch2)
+
+                        if (_utf7_SPECIAL(oc2, encodeSetO, encodeWhiteSpace)):
+                            pass
+                        elif (_utf7_B64CHAR(oc2) or ch2 == u'-'):
+                            result.append('-')
+                            inShift = False
+                        else:
+                            inShift = False
+                    else:
+                        result.append('-')
+                        inShift = False
+        pos += 1
+
+    if bitsleft:
+        result.append(_utf7_TO_BASE64(charsleft << (6 - bitsleft)))
+        result.append('-')
+
+    return result.build()
+
+# ____________________________________________________________
 # ascii and latin-1
 
 def str_decode_latin_1(s, size, errors, final=False,
@@ -563,7 +785,7 @@ def str_decode_unicode_escape(s, size, errors, final=False,
 
         ch = s[pos]
         pos += 1
-        # \x escapes */
+        # \x escapes
         if ch == '\n': pass
         elif ch == '\\': builder.append(u'\\')
         elif ch == '\'': builder.append(u'\'')
@@ -697,7 +919,7 @@ def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=Fal
             pos += 1
             oc2 = ord(s[pos])
 
-            if 0xDC00 <= oc2 < 0xDFFF:
+            if 0xDC00 <= oc2 <= 0xDFFF:
                 ucs = (((oc & 0x03FF) << 10) | (oc2 & 0x03FF)) + 0x00010000
                 raw_unicode_escape_helper(result, ucs)
                 pos += 1

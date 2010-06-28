@@ -368,6 +368,7 @@ def make_decoder_wrapper(name):
 for encoders in [
          "ascii_encode",
          "latin_1_encode",
+         "utf_7_encode",
          "utf_8_encode",
          "utf_16_encode",
          "utf_16_be_encode",
@@ -380,6 +381,7 @@ for encoders in [
 for decoders in [
          "ascii_decode",
          "latin_1_decode",
+         "utf_7_decode",
          "utf_8_decode",
          "utf_16_decode",
          "utf_16_be_decode",
