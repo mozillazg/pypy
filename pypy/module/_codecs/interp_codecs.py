@@ -1,5 +1,5 @@
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped, applevel
+from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped, interp2app
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 from pypy.rlib.objectmodel import we_are_translated
@@ -114,78 +114,124 @@ def lookup_codec(space, encoding):
         "unknown encoding: %s", encoding)
 lookup_codec.unwrap_spec = [ObjSpace, str]
 
-app_errors = applevel("""
-def check_exception(exc):
+# ____________________________________________________________
+# Register standard error handlers
+
+def check_exception(space, w_exc):
     try:
-        delta = exc.end - exc.start
-        if delta < 0 or not isinstance(exc.object, (unicode, str)):
-            raise TypeError("wrong exception")
-    except AttributeError:
-        raise TypeError("wrong exception")
+        w_start = space.getattr(w_exc, space.wrap('start'))
+        w_end = space.getattr(w_exc, space.wrap('end'))
+        w_obj = space.getattr(w_exc, space.wrap('object'))
+    except OperationError, e:
+        if not e.match(space, space.w_AttributeError):
+            raise
+        raise OperationError(space.w_TypeError, space.wrap(
+            "wrong exception"))
 
-def strict_errors(exc):
-    if isinstance(exc, Exception):
-        raise exc
+    delta = space.int_w(w_end) - space.int_w(w_start)
+    if delta < 0 or not (space.isinstance_w(w_obj, space.w_str) or
+                         space.isinstance_w(w_obj, space.w_unicode)):
+        raise OperationError(space.w_TypeError, space.wrap(
+            "wrong exception"))
+
+def strict_errors(space, w_exc):
+    check_exception(space, w_exc)
+    if space.isinstance_w(w_exc, space.w_BaseException):
+        raise OperationError(space.type(w_exc), w_exc)
     else:
-        raise TypeError("codec must pass exception instance")
+        raise OperationError(space.w_TypeError, space.wrap(
+            "codec must pass exception instance"))
 
-def ignore_errors(exc):
-    check_exception(exc)
-    if isinstance(exc, UnicodeEncodeError):
-        return u'', exc.end
-    elif isinstance(exc, (UnicodeDecodeError, UnicodeTranslateError)):
-        return u'', exc.end
-    else: 
-        raise TypeError("don't know how to handle %.400s in error callback"%exc)
-
-Py_UNICODE_REPLACEMENT_CHARACTER = u"\ufffd"
-
-def replace_errors(exc):
-    check_exception(exc)
-    if isinstance(exc, UnicodeEncodeError):
-        return u'?'*(exc.end-exc.start), exc.end
-    elif isinstance(exc, (UnicodeTranslateError, UnicodeDecodeError)):
-        return Py_UNICODE_REPLACEMENT_CHARACTER*(exc.end-exc.start), exc.end
+def ignore_errors(space, w_exc):
+    check_exception(space, w_exc)
+    w_end = space.getattr(w_exc, space.wrap('end'))
+    if space.isinstance_w(w_exc, space.w_UnicodeEncodeError):
+        return space.newtuple([space.wrap(''), w_end])
+    elif (space.isinstance_w(w_exc, space.w_UnicodeDecodeError) or
+          space.isinstance_w(w_exc, space.w_UnicodeTranslateError)):
+        return space.newtuple([space.wrap(u''), w_end])
     else:
-        raise TypeError("don't know how to handle %.400s in error callback"%exc)
+        typename = space.type(w_exc).getname(space, '?')
+        raise operationerrfmt(space.w_TypeError,
+            "don't know how to handle %s in error callback", typename)
 
-def xmlcharrefreplace_errors(exc):
-    if isinstance(exc, UnicodeEncodeError):
-        res = []
-        for ch in exc.object[exc.start:exc.end]:
-            res += '&#'
-            res += str(ord(ch))
-            res += ';'
-        return u''.join(res), exc.end
+def replace_errors(space, w_exc):
+    check_exception(space, w_exc)
+    w_start = space.getattr(w_exc, space.wrap('start'))
+    w_end = space.getattr(w_exc, space.wrap('end'))
+    size = space.int_w(w_end) - space.int_w(w_start)
+    if space.isinstance_w(w_exc, space.w_UnicodeEncodeError):
+        text = '?' * size
+        return space.newtuple([space.wrap(text), w_end])
+    elif (space.isinstance_w(w_exc, space.w_UnicodeDecodeError) or
+          space.isinstance_w(w_exc, space.w_UnicodeTranslateError)):
+        text = u'\ufffd' * size
+        return space.newtuple([space.wrap(text), w_end])
     else:
-        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
+        typename = space.type(w_exc).getname(space, '?')
+        raise operationerrfmt(space.w_TypeError,
+            "don't know how to handle %s in error callback", typename)
 
-def backslashreplace_errors(exc):
-    if isinstance(exc, UnicodeEncodeError):
-        p = []
-        for c in exc.object[exc.start:exc.end]:
-            p += '\\\\'
-            oc = ord(c)
-            if (oc >= 0x00010000):
-                p += 'U'
-                p += "%.8x" % ord(c)
+def xmlcharrefreplace_errors(space, w_exc):
+    check_exception(space, w_exc)
+    if space.isinstance_w(w_exc, space.w_UnicodeEncodeError):
+        obj = space.realunicode_w(space.getattr(w_exc, space.wrap('object')))
+        start = space.int_w(space.getattr(w_exc, space.wrap('start')))
+        w_end = space.getattr(w_exc, space.wrap('end'))
+        end = space.int_w(w_end)
+        builder = UnicodeBuilder()
+        pos = start
+        while pos < end:
+            ch = obj[pos]
+            builder.append(u"&#")
+            builder.append(unicode(ord(ch)))
+            builder.append(u";")
+            pos += 1
+        return space.newtuple([space.wrap(builder.build()), w_end])
+    else:
+        typename = space.type(w_exc).getname(space, '?')
+        raise operationerrfmt(space.w_TypeError,
+            "don't know how to handle %s in error callback", typename)
+
+def backslashreplace_errors(space, w_exc):
+    check_exception(space, w_exc)
+    if space.isinstance_w(w_exc, space.w_UnicodeEncodeError):
+        obj = space.realunicode_w(space.getattr(w_exc, space.wrap('object')))
+        start = space.int_w(space.getattr(w_exc, space.wrap('start')))
+        w_end = space.getattr(w_exc, space.wrap('end'))
+        end = space.int_w(w_end)
+        builder = UnicodeBuilder()
+        pos = start
+        while pos < end:
+            oc = ord(obj[pos])
+            num = hex(oc)
+            if (oc >= 0x10000):
+                builder.append(u"\\U")
+                zeros = 8
             elif (oc >= 0x100):
-                p += 'u'
-                p += "%.4x" % ord(c)
+                builder.append(u"\\u")
+                zeros = 4
             else:
-                p += 'x'
-                p += "%.2x" % ord(c)
-        return u''.join(p), exc.end
+                builder.append(u"\\x")
+                zeros = 2
+            nb = zeros + 2 - len(num) # num starts with '0x'
+            if nb > 0:
+                builder.append_multiple_char(u'0', nb)
+            builder.append_slice(unicode(num), 2, 8)
+            pos += 1
+        return space.newtuple([space.wrap(builder.build()), w_end])
     else:
-        raise TypeError("don't know how to handle %.400s in error callback"%type(exc))
-""")
+        typename = space.type(w_exc).getname(space, '?')
+        raise operationerrfmt(space.w_TypeError,
+            "don't know how to handle %s in error callback", typename)
 
 def register_builtin_error_handlers(space):
+    "NOT_RPYTHON"
     state = space.fromcache(CodecState)
     for error in ("strict", "ignore", "replace", "xmlcharrefreplace",
                   "backslashreplace"):
         name = error + "_errors"
-        state.codec_error_registry[error] = app_errors.wget(space, name)
+        state.codec_error_registry[error] = space.wrap(interp2app(globals()[name]))
 
 
 def lookup_error(space, errors):
@@ -312,6 +358,7 @@ for encoders in [
          "utf_16_encode",
          "utf_16_be_encode",
          "utf_16_le_encode",
+         "raw_unicode_escape_encode",
         ]:
     make_encoder_wrapper(encoders)
 
@@ -322,6 +369,7 @@ for decoders in [
          "utf_16_decode",
          "utf_16_be_decode",
          "utf_16_le_decode",
+         "raw_unicode_escape_decode",
          ]:
     make_decoder_wrapper(decoders)
 

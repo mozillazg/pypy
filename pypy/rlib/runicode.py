@@ -491,6 +491,104 @@ def unicode_encode_ascii(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 128)
     return res
 
+# ____________________________________________________________
+# Raw unicode escape
+
+def str_decode_raw_unicode_escape(s, size, errors, final=False,
+                                  errorhandler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
+    if (size == 0):
+        return u'', 0
+
+    result = UnicodeBuilder(size)
+    pos = 0
+    while pos < len(s):
+        ch = s[pos]
+
+        # Non-escape characters are interpreted as Unicode ordinals
+        if (ch != '\\'):
+            result.append(unichr(ord(ch)))
+            pos += 1
+            continue
+
+        startinpos = pos
+        # \u-escapes are only interpreted iff the number of leading
+        # backslashes is odd
+        bs = pos
+        while pos < size:
+            pos += 1
+            if (s[pos] != '\\'):
+                break
+            result.append(u'\\')
+
+        # we have a backslash at the end of the string, stop here
+        if pos >= size:
+            result.append(u'\\')
+            break
+
+        if (((pos - bs) & 1) == 0 or
+            pos >= size or
+            (s[pos] != 'u' and s[pos] != 'U')) :
+            result.append(u'\\')
+            result.append(unichr(ord(s[pos])))
+            pos += 1
+            continue
+
+        if s[pos] == 'u':
+            count = 4
+        else:
+            count = 8
+        pos += 1
+
+        # \uXXXX with 4 hex digits, \Uxxxxxxxx with 8
+        x = 0
+        try:
+            x = int(s[pos:pos+count], 16)
+        except ValueError:
+            res, pos = errorhandler(errors, "rawunicodeescape",
+                                    "truncated \\uXXXX",
+                                    s,  pos, size)
+            result.append(res)
+            continue
+
+        if (x > MAXUNICODE):
+            res, pos = errorhandler(errors, "rawunicodeescape",
+                                    "\\Uxxxxxxxx out of range",
+                                    s,  pos, size)
+            result.append(res)
+            continue
+
+        result.append(unichr(x))
+        pos += count
+
+    return result.build(), pos
+
+def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
+    # errorhandler is not used: this function cannot cause Unicode errors
+    if (size == 0):
+        return ''
+    result = StringBuilder(size)
+    pos = 0
+    while pos < size:
+        oc = ord(s[pos])
+        if oc < 0x100:
+            result.append(chr(oc))
+        else:
+            num = hex(oc)
+            if (oc >= 0x10000):
+                result.append("\\U")
+                zeros = 8
+            else:
+                result.append("\\u")
+                zeros = 4
+            nb = zeros + 2 - len(num) # num starts with '0x'
+            if nb > 0:
+                result.append_multiple_char('0', nb)
+            result.append_slice(num, 2, 8)
+        pos += 1
+
+    return result.build()
 
 # ____________________________________________________________
 # MBCS codecs for Windows
