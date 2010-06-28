@@ -15,7 +15,6 @@ class AppTestCodecs:
 
     def test_bigU_codecs(self):
         import sys
-        oldmaxunicode = sys.maxunicode
         if sys.maxunicode <= 0xffff:
             return # this test cannot run on UCS2 builds
         u = u'\U00010001\U00020002\U00030003\U00040004\U00050005'
@@ -23,17 +22,14 @@ class AppTestCodecs:
                          'raw_unicode_escape',
                          'unicode_escape', 'unicode_internal'):
             assert unicode(u.encode(encoding),encoding) == u
-        sys.maxunicode = oldmaxunicode
 
     def test_ucs4(self):
         import sys
-        oldmaxunicode = sys.maxunicode
         if sys.maxunicode <= 0xffff:
-            sys.maxunicode = 0xffffffff
+            return # this test cannot run on UCS2 builds
         x = u'\U00100000'
         y = x.encode("raw-unicode-escape").decode("raw-unicode-escape")
         assert x == y 
-        sys.maxunicode = oldmaxunicode
 
     def test_named_unicode(self):
         assert unicode('\\N{SPACE}','unicode-escape') == u" "

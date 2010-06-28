@@ -46,13 +46,6 @@ def escape_encode( obj, errors='strict'):
     v = s[1:-1]
     return v, len(v)
 
-def raw_unicode_escape_decode( data, errors='strict'):
-    """None
-    """
-    res = PyUnicode_DecodeRawUnicodeEscape(data, len(data), errors)
-    res = u''.join(res)
-    return res, len(data)
-
 def utf_7_decode( data, errors='strict'):
     """None
     """
@@ -204,13 +197,6 @@ def utf_7_encode( obj, errors='strict'):
     res = PyUnicode_EncodeUTF7(obj, len(obj), 0, 0, errors)
     res = ''.join(res)
     return res, len(res)    
-
-def raw_unicode_escape_encode( obj, errors='strict'):
-    """None
-    """
-    res = PyUnicode_EncodeRawUnicodeEscape(obj, len(obj))
-    res = ''.join(res)
-    return res, len(res)
 
 #  ----------------------------------------------------------------------
 
@@ -690,30 +676,6 @@ def PyUnicode_DecodeUnicodeEscape(s, size, errors):
                 p += ch
     return p
 
-def PyUnicode_EncodeRawUnicodeEscape(s, size):
-    
-    if (size == 0):
-        return ''
-
-    p = []
-    for ch in s:
-#       /* Map 32-bit characters to '\Uxxxxxxxx' */
-        if (ord(ch) >= 0x10000):
-            p += '\\'
-            p += 'U'
-            p += '%08x' % (ord(ch))
-        elif (ord(ch) >= 256) :
-#       /* Map 16-bit characters to '\uxxxx' */
-            p += '\\'
-            p += 'u'
-            p += '%04x' % (ord(ch))
-#       /* Copy everything else as-is */
-        else:
-            p += chr(ord(ch))
-    
-    #p += '\0'
-    return p
-
 def charmapencode_output(c, mapping):
 
     rep = mapping[c]
@@ -760,85 +722,6 @@ def PyUnicode_EncodeCharmap(p, mapping='latin-1', errors='strict'):
         inpos += 1
     return res
 
-
-def PyUnicode_DecodeRawUnicodeEscape(s, size, errors):
-    import sys
-
-    if (size == 0):
-        return u''
-    pos = 0
-    p = []
-    while (pos < len(s)):
-        ch = s[pos]
-    #/* Non-escape characters are interpreted as Unicode ordinals */
-        if (ch != '\\'):
-            p += unichr(ord(ch))
-            pos += 1
-            continue        
-        startinpos = pos
-##      /* \u-escapes are only interpreted iff the number of leading
-##         backslashes is odd */
-        bs = pos
-        while pos < size:
-            if (s[pos] != '\\'):
-                break
-            p += unichr(ord(s[pos]))
-            pos += 1
-
-        # we have a backlash at the end of the string, stop here
-        if pos >= size:
-            break
-    
-        if (((pos - bs) & 1) == 0 or
-            pos >= size or
-            (s[pos] != 'u' and s[pos] != 'U')) :
-            p += unichr(ord(s[pos]))
-            pos += 1
-            continue
-        
-        p.pop(-1)
-        if s[pos] == 'u':
-            count = 4 
-        else: 
-            count = 8
-        pos += 1
-
-        #/* \uXXXX with 4 hex digits, \Uxxxxxxxx with 8 */
-        x = 0
-        try:
-            x = int(s[pos:pos+count], 16)
-        except ValueError:
-            res = unicode_call_errorhandler(
-                    errors, "rawunicodeescape", "truncated \\uXXXX",
-                    s, size, pos, pos+count)
-            p += res[0]
-            pos = res[1]
-        else:
-    #ifndef Py_UNICODE_WIDE
-            if sys.maxunicode > 0xffff:
-                if (x > sys.maxunicode):
-                    res = unicode_call_errorhandler(
-                        errors, "rawunicodeescape", "\\Uxxxxxxxx out of range",
-                        s, size, pos, pos+1)
-                    pos = res[1]
-                    p += res[0]
-                else:
-                    p += unichr(x)
-                    pos += count
-            else:
-                if (x > 0x10000):
-                    res = unicode_call_errorhandler(
-                        errors, "rawunicodeescape", "\\Uxxxxxxxx out of range",
-                        s, size, pos, pos+1)
-                    pos = res[1]
-                    p += res[0]
-
-    #endif
-                else:
-                    p += unichr(x)
-                    pos += count
-
-    return p
 
 def charmap_build(somestring):
     m = {}
