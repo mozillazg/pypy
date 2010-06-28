@@ -1,5 +1,6 @@
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, NoneNotWrapped, interp2app
+from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 from pypy.rlib.objectmodel import we_are_translated
@@ -12,6 +13,8 @@ class CodecState(object):
         self.codec_need_encodings = True
         self.decode_error_handler = self.make_errorhandler(space, True)
         self.encode_error_handler = self.make_errorhandler(space, False)
+
+        self.unicodedata_getcode = None
 
     def make_errorhandler(self, space, decode):
         def unicode_call_errorhandler(errors,  encoding, reason, input,
@@ -52,6 +55,17 @@ class CodecState(object):
                 replace = space.str_w(w_replace)
                 return replace, newpos
         return unicode_call_errorhandler
+
+    def get_unicodedata_function(self, space):
+        if self.unicodedata_getcode:
+            return self.unicodedata_getcode
+        w_builtin = space.getbuiltinmodule('__builtin__')
+        w_import = space.getattr(w_builtin, space.wrap("__import__"))
+        w_unicodedata = space.call_function(w_import,
+                                            space.wrap("unicodedata"))
+        self.unicodedata_getcode = space.getattr(w_unicodedata,
+                                                 space.wrap("_get_code"))
+        return self.unicodedata_getcode
 
     def _freeze_(self):
         assert not self.codec_search_path
@@ -184,7 +198,7 @@ def xmlcharrefreplace_errors(space, w_exc):
         while pos < end:
             ch = obj[pos]
             builder.append(u"&#")
-            builder.append(unicode(ord(ch)))
+            builder.append(unicode(str(ord(ch))))
             builder.append(u";")
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
@@ -358,6 +372,7 @@ for encoders in [
          "utf_16_encode",
          "utf_16_be_encode",
          "utf_16_le_encode",
+         "unicode_escape_encode",
          "raw_unicode_escape_encode",
         ]:
     make_encoder_wrapper(encoders)
@@ -471,3 +486,40 @@ def charmap_decode(space, s, errors="strict", w_mapping=None):
     res = builder.build()
     return space.newtuple([space.wrap(res), space.wrap(size)])
 charmap_decode.unwrap_spec = [ObjSpace, str, str, W_Root]
+
+# ____________________________________________________________
+# Unicode escape
+
+class UnicodeData_Handler:
+    def __init__(self, space):
+        self.space = space
+        state = space.fromcache(CodecState)
+        self.get_code = state.get_unicodedata_function(space)
+
+    def call(self, name):
+        space = self.space
+        try:
+            w_code = space.call_function(self.get_code, space.wrap(name))
+        except OperationError, e:
+            if not e.match(space, space.w_KeyError):
+                raise
+            return -1
+        return space.int_w(w_code)
+
+@unwrap_spec(ObjSpace, 'bufferstr', str, W_Root)
+def unicode_escape_decode(space, string, errors="strict", w_final=False):
+    final = space.is_true(w_final)
+    state = space.fromcache(CodecState)
+    errorhandler=state.decode_error_handler
+
+    try:
+        unicode_name_handler = UnicodeData_Handler(space)
+    except OperationError:
+        unicode_name_handler = None
+
+    result, consumed = runicode.str_decode_unicode_escape(
+        string, len(string), errors,
+        final, state.decode_error_handler,
+        unicode_name_handler)
+
+    return space.newtuple([space.wrap(result), space.wrap(consumed)])

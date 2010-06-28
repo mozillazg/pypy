@@ -319,7 +319,7 @@ def str_decode_utf_16_helper(s, size, errors, final=True,
     result = UnicodeBuilder(size // 2)
 
     #XXX I think the errors are not correctly handled here
-    while (pos < len(s)):
+    while pos < size:
         # remaining bytes at the end? (size should be even)
         if len(s) - pos < 2:
             if not final:
@@ -425,7 +425,7 @@ def str_decode_latin_1(s, size, errors, final=False,
     # latin1 is equivalent to the first 256 ordinals in Unicode.
     pos = 0
     result = UnicodeBuilder(size)
-    while (pos < size):
+    while pos < size:
         result.append(unichr(ord(s[pos])))
         pos += 1
     return result.build(), pos
@@ -438,7 +438,7 @@ def str_decode_ascii(s, size, errors, final=False,
     # ASCII is equivalent to the first 128 ordinals in Unicode.
     result = UnicodeBuilder(size)
     pos = 0
-    while pos < len(s):
+    while pos < size:
         c = s[pos]
         if ord(c) < 128:
             result.append(unichr(ord(c)))
@@ -465,7 +465,7 @@ def unicode_encode_ucs1_helper(p, size, errors,
         return ''
     result = StringBuilder(size)
     pos = 0
-    while pos < len(p):
+    while pos < size:
         ch = p[pos]
         
         if ord(ch) < limit:
@@ -492,6 +492,248 @@ def unicode_encode_ascii(p, size, errors, errorhandler=None):
     return res
 
 # ____________________________________________________________
+# Unicode escape
+
+hexdigits = "0123456789ABCDEFabcdef"
+
+def hexescape(builder, s, pos, digits, errorhandler, message, errors):
+    import sys
+    chr = 0
+    if (pos+digits>len(s)):
+        message = "end of string in escape sequence"
+        res, pos = errorhandler(errors, "unicodeescape",
+                                message, s, pos-2, len(s))
+        builder.append(res)
+    else:
+        try:
+            chr = int(s[pos:pos+digits], 16)
+        except ValueError:
+            endinpos = pos
+            while s[endinpos] in hexdigits:
+                endinpos += 1
+            res, pos = errorhandler(errors, "unicodeescape",
+                                    message, s, pos-2, endinpos+1)
+            builder.append(res)
+        else:
+            # when we get here, chr is a 32-bit unicode character
+            if chr <= MAXUNICODE:
+                builder.append(unichr(chr))
+                pos += digits
+
+            elif (chr <= 0x10ffff):
+                chr -= 0x10000L
+                builder.append(unichr(0xD800 + (chr >> 10)))
+                builder.append(unichr(0xDC00 +  (chr & 0x03FF)))
+                pos += digits
+            else:
+                message = "illegal Unicode character"
+                res, pos = errorhandler(errors, "unicodeescape",
+                                        message, s, pos-2, pos+1)
+                builder.append(res)
+    return pos
+
+def str_decode_unicode_escape(s, size, errors, final=False,
+                              errorhandler=False,
+                              unicodedata_handler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
+
+    if (size == 0):
+        return u'', 0
+
+    builder = UnicodeBuilder(size)
+    pos = 0
+    while pos < size:
+        ch = s[pos]
+
+        # Non-escape characters are interpreted as Unicode ordinals
+        if (ch != '\\') :
+            builder.append(unichr(ord(ch)))
+            pos += 1
+            continue
+
+        # - Escapes
+        pos += 1
+        if pos >= size:
+            message = "\\ at end of string"
+            res, pos = errorhandler(errors, "unicodeescape",
+                                    message, s, pos-1, size)
+            builder.append(res)
+            continue
+
+        ch = s[pos]
+        pos += 1
+        # \x escapes */
+        if ch == '\n': pass
+        elif ch == '\\': builder.append(u'\\')
+        elif ch == '\'': builder.append(u'\'')
+        elif ch == '\"': builder.append(u'\"')
+        elif ch == 'b' : builder.append(u'\b')
+        elif ch == 'f' : builder.append(u'\f')
+        elif ch == 't' : builder.append(u'\t')
+        elif ch == 'n' : builder.append(u'\n')
+        elif ch == 'r' : builder.append(u'\r')
+        elif ch == 'v' : builder.append(u'\v')
+        elif ch == 'a' : builder.append(u'\a')
+        elif '0' <= ch <= '7':
+            x = ord(ch) - ord('0')
+            if pos < size:
+                ch = s[pos]
+                if '0' <= ch <= '7':
+                    pos += 1
+                    x = (x<<3) + ord(ch) - ord('0')
+                    if pos < size:
+                        ch = s[pos]
+                        if '0' <= ch <= '7':
+                            pos += 1
+                            x = (x<<3) + ord(ch) - ord('0')
+            builder.append(unichr(x))
+        # hex escapes
+        # \xXX
+        elif ch == 'x':
+            digits = 2
+            message = "truncated \\xXX escape"
+            pos = hexescape(builder, s, pos, digits,
+                            errorhandler, message, errors)
+
+        # \uXXXX
+        elif ch == 'u':
+            digits = 4
+            message = "truncated \\uXXXX escape"
+            pos = hexescape(builder, s, pos, digits,
+                            errorhandler, message, errors)
+
+        #  \UXXXXXXXX
+        elif ch == 'U':
+            digits = 8
+            message = "truncated \\UXXXXXXXX escape"
+            pos = hexescape(builder, s, pos, digits,
+                            errorhandler, message, errors)
+
+        # \N{name}
+        elif ch == 'N':
+            message = "malformed \\N character escape"
+            #pos += 1
+            look = pos
+            if unicodedata_handler is None:
+                message = ("\\N escapes not supported "
+                           "(can't load unicodedata module)")
+                res, pos = errorhandler(errors, "unicodeescape",
+                                        message, s, pos-1, size)
+                builder.append(res)
+                continue
+
+            if look < size and s[look] == '{':
+                # look for the closing brace
+                while (look < size and s[look] != '}'):
+                    look += 1
+                if (look > pos+1 and look < size and s[look] == '}'):
+                    # found a name.  look it up in the unicode database
+                    message = "unknown Unicode character name"
+                    name = s[pos+1:look]
+                    code = unicodedata_handler.call(name)
+                    if code < 0:
+                        res, pos = errorhandler(errors, "unicodeescape",
+                                                message, s, pos-1, look+1)
+                        builder.append(res)
+                        continue
+                    pos = look + 1
+                    if code <= MAXUNICODE:
+                        builder.append(unichr(code))
+                    else:
+                        code -= 0x10000L
+                        builder.append(unichr(0xD800 + (code >> 10)))
+                        builder.append(unichr(0xDC00 + (code & 0x03FF)))
+                else:
+                    res, pos = errorhandler(errors, "unicodeescape",
+                                            message, s, pos-1, look+1)
+                    builder.append(res)
+            else:
+                res, pos = errorhandler(errors, "unicodeescape",
+                                        message, s, pos-1, look+1)
+                builder.append(res)
+        else:
+            builder.append(u'\\')
+            builder.append(unichr(ord(ch)))
+
+    return builder.build(), pos
+
+def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=False):
+    # errorhandler is not used: this function cannot cause Unicode errors
+    result = StringBuilder(size)
+
+    if quotes:
+        if s.find(u'\'') != -1 and s.find(u'\"') == -1:
+            quote = ord('\"')
+            result.append('u"')
+        else:
+            quote = ord('\'')
+            result.append('u\'')
+    else:
+        quote = 0
+
+        if size == 0:
+            return ''
+
+    pos = 0
+    while pos < size:
+        ch = s[pos]
+        oc = ord(ch)
+
+        # Escape quotes
+        if quotes and (oc == quote or ch == '\\'):
+            result.append('\\')
+            result.append(chr(oc))
+            pos += 1
+            continue
+
+        if oc > 0x10000:
+            raw_unicode_escape_helper(result, oc)
+            pos += 1
+            continue
+
+        if 0xD800 <= oc < 0xDC00 and pos + 1 < size:
+            # Map UTF-16 surrogate pairs to Unicode \UXXXXXXXX escapes
+            pos += 1
+            oc2 = ord(s[pos])
+
+            if 0xDC00 <= oc2 < 0xDFFF:
+                ucs = (((oc & 0x03FF) << 10) | (oc2 & 0x03FF)) + 0x00010000
+                raw_unicode_escape_helper(result, ucs)
+                pos += 1
+                continue
+            # Fall through: isolated surrogates are copied as-is
+            pos -= 1
+
+        # Map 16-bit characters to '\uxxxx'
+        if oc >= 0x100:
+            raw_unicode_escape_helper(result, oc)
+            pos += 1
+            continue
+
+        # Map special whitespace to '\t', \n', '\r'
+        if ch == '\t':
+            result.append('\\t')
+        elif ch == '\n':
+            result.append('\\n')
+        elif ch == '\r':
+            result.append('\\r')
+        elif ch == '\\':
+            result.append('\\\\')
+
+        # Map non-printable US ASCII to '\xhh'
+        elif (oc < 32 or oc >= 0x7F) :
+            raw_unicode_escape_helper(result, oc)
+        # Copy everything else as-is
+        else:
+            result.append(chr(oc))
+        pos += 1
+
+    if quotes:
+        result.append(chr(quote))
+    return result.build()
+
+# ____________________________________________________________
 # Raw unicode escape
 
 def str_decode_raw_unicode_escape(s, size, errors, final=False,
@@ -503,7 +745,7 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
 
     result = UnicodeBuilder(size)
     pos = 0
-    while pos < len(s):
+    while pos < size:
         ch = s[pos]
 
         # Non-escape characters are interpreted as Unicode ordinals
@@ -518,7 +760,7 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
         bs = pos
         while pos < size:
             pos += 1
-            if (s[pos] != '\\'):
+            if pos == size or s[pos] != '\\':
                 break
             result.append(u'\\')
 
@@ -564,6 +806,19 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
 
     return result.build(), pos
 
+def raw_unicode_escape_helper(result, char):
+    num = hex(char)
+    if char >= 0x10000:
+        result.append("\\U")
+        zeros = 8
+    else:
+        result.append("\\u")
+        zeros = 4
+    nb = zeros + 2 - len(num) # num starts with '0x'
+    if nb > 0:
+        result.append_multiple_char('0', nb)
+    result.append_slice(num, 2, 8)
+
 def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
     # errorhandler is not used: this function cannot cause Unicode errors
     if (size == 0):
@@ -575,17 +830,7 @@ def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
         if oc < 0x100:
             result.append(chr(oc))
         else:
-            num = hex(oc)
-            if (oc >= 0x10000):
-                result.append("\\U")
-                zeros = 8
-            else:
-                result.append("\\u")
-                zeros = 4
-            nb = zeros + 2 - len(num) # num starts with '0x'
-            if nb > 0:
-                result.append_multiple_char('0', nb)
-            result.append_slice(num, 2, 8)
+            raw_unicode_escape_helper(result, oc)
         pos += 1
 
     return result.build()

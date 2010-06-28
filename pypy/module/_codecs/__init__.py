@@ -9,8 +9,6 @@ class Module(MixedModule):
          'charmap_encode' :  'app_codecs.charmap_encode',
          'escape_decode' :  'app_codecs.escape_decode',
          'escape_encode' :  'app_codecs.escape_encode',
-         'unicode_escape_decode' :  'app_codecs.unicode_escape_decode',
-         'unicode_escape_encode' :  'app_codecs.unicode_escape_encode',
          'unicode_internal_decode' :  'app_codecs.unicode_internal_decode',
          'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
          'utf_7_decode' :  'app_codecs.utf_7_decode',
@@ -42,6 +40,8 @@ class Module(MixedModule):
          'charbuffer_encode': 'interp_codecs.buffer_encode',
          'readbuffer_encode': 'interp_codecs.buffer_encode',
          'charmap_decode'   : 'interp_codecs.charmap_decode',
+         'unicode_escape_decode'     :  'interp_codecs.unicode_escape_decode',
+         'unicode_escape_encode'     :  'interp_codecs.unicode_escape_encode',
          'raw_unicode_escape_decode' :  'interp_codecs.raw_unicode_escape_decode',
          'raw_unicode_escape_encode' :  'interp_codecs.raw_unicode_escape_encode',
     }
