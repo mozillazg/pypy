@@ -1,7 +1,6 @@
 import autopath
 from pypy.conftest import gettestobjspace
-from pypy.module._codecs.app_codecs import unicode_escape_encode,\
-     charmap_encode, unicode_escape_decode
+from pypy.module._codecs.app_codecs import charmap_encode
 
 
 class AppTestCodecs:
@@ -120,6 +119,11 @@ class AppTestCodecs:
         map = tuple([unichr(i) for i in range(256)])
         assert charmap_decode('xxx\xff', 'strict', map) == (u'xxx\xff', 4)
 
+    def test_unicode_escape(self):
+        from _codecs import unicode_escape_encode, unicode_escape_decode
+        assert unicode_escape_encode(u'abc') == (u'abc'.encode('unicode_escape'), 3)
+        assert unicode_escape_decode('abc') == (u'abc'.decode('unicode_escape'), 3)
+        assert unicode_escape_decode('\\x61\\x62\\x63') == (u'abc', 12)
 
 class AppTestPartialEvaluation:
 
@@ -542,6 +546,7 @@ class AppTestPartialEvaluation:
     def test_unicode_escape(self):        
         assert u'\\'.encode('unicode-escape') == '\\\\'
         assert '\\\\'.decode('unicode-escape') == u'\\'
+        assert u'\ud801'.encode('unicode-escape') == '\\ud801'
 
     def test_mbcs(self):
         import sys
@@ -557,8 +562,3 @@ class TestDirect:
     def test_charmap_encode(self):
         assert charmap_encode(u'xxx') == ('xxx', 3)
         assert charmap_encode(u'xxx', 'strict', {ord('x'): 'XX'}) ==  ('XXXXXX', 6)
-
-    def test_unicode_escape(self):
-        assert unicode_escape_encode(u'abc') == (u'abc'.encode('unicode_escape'), 3)
-        assert unicode_escape_decode('abc') == (u'abc'.decode('unicode_escape'), 3)
-        assert unicode_escape_decode('\\x61\\x62\\x63') == (u'abc', 12)
