@@ -208,12 +208,3 @@ def test_mov_rm_negative_64():
     s = CodeBuilder64()
     s.MOV_rm(edx, (edi, -1))
     assert s.getvalue() == '\x48\x8B\x57\xFF'
-
-def test_call_l_64():
-    # first check that it works there too
-    test_call_l(CodeBuilder64())
-    # then check the other case
-    s = CodeBuilder64()
-    target = 0x0123456789ABCDEF
-    s.CALL_l(target)     # becomes indirect, via RAX
-    assert s.getvalue() == '\x48\xB8' + struct.pack("<q", target) + '\xFF\xD0'

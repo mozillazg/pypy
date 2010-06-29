@@ -399,8 +399,6 @@ class TestX86OverflowMC(TestX86):
         assert self.cpu.get_latest_value_int(0) == 1024
 
     def test_overflow_guard_float_cmp(self):
-        # FIXME: Skipping for now
-        import py.test; py.test.skip()
         # The float comparisons on x86 tend to use small relative jumps,
         # which may run into trouble if they fall on the edge of a
         # MachineCodeBlock change.

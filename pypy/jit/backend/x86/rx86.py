@@ -575,17 +575,6 @@ class X86_64_CodeBuilder(AbstractX86CodeBuilder):
         else:
             AbstractX86CodeBuilder.MOV_ri(self, reg, immed)
 
-    # case of a 64-bit immediate: encode via RAX (assuming it's ok to
-    # randomly change this register at that point in time)
-    def CALL_l(self, target):
-        offset = target - (self.tell() + 5)
-        if fits_in_32bits(offset):
-            AbstractX86CodeBuilder.CALL_l(self, target)
-        else:
-            self.MOV_ri(R.eax, target)
-            self.CALL_r(R.eax)
-
-
 def define_modrm_modes(insnname_template, before_modrm, after_modrm=[], regtype='GPR'):
     def add_insn(code, *modrm):
         args = before_modrm + list(modrm) + after_modrm
