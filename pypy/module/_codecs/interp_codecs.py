@@ -396,8 +396,6 @@ if hasattr(runicode, 'str_decode_mbcs'):
     make_decoder_wrapper('mbcs_decode')
 
 def utf_16_ex_decode(space, data, errors='strict', byteorder=0, w_final=False):
-    """None
-    """
     final = space.is_true(w_final)
     state = space.fromcache(CodecState)
     if byteorder == 0:
@@ -606,3 +604,18 @@ def unicode_internal_decode(space, w_string, errors="strict"):
         final, state.decode_error_handler)
     return space.newtuple([space.wrap(result), space.wrap(consumed)])
 
+# ____________________________________________________________
+# support for the "string escape" codec
+# This is a bytes-to bytes transformation
+
+@unwrap_spec(ObjSpace, W_Root, str)
+def escape_encode(space, w_string, errors='strict'):
+    w_repr = space.repr(w_string)
+    w_result = space.getslice(w_repr, space.wrap(1), space.wrap(-1))
+    return space.newtuple([w_result, space.len(w_string)])
+
+@unwrap_spec(ObjSpace, str, str)
+def escape_decode(space, data, errors='strict'):
+    from pypy.interpreter.pyparser.parsestring import PyString_DecodeEscape
+    result = PyString_DecodeEscape(space, data, False, False)
+    return space.newtuple([space.wrap(result), space.wrap(len(data))])

@@ -5,9 +5,6 @@ from pypy.module._codecs import interp_codecs
 class Module(MixedModule):
     appleveldefs = {
          '__doc__' :  'app_codecs.__doc__',
-         '__name__' :  'app_codecs.__name__',
-         'escape_decode' :  'app_codecs.escape_decode',
-         'escape_encode' :  'app_codecs.escape_encode',
     }
     interpleveldefs = {
          'encode':         'interp_codecs.encode',
@@ -38,6 +35,8 @@ class Module(MixedModule):
          'readbuffer_encode': 'interp_codecs.buffer_encode',
          'charmap_decode'   : 'interp_codecs.charmap_decode',
          'charmap_encode'   : 'interp_codecs.charmap_encode',
+         'escape_encode'    : 'interp_codecs.escape_encode',
+         'escape_decode'    : 'interp_codecs.escape_decode',
          'unicode_escape_decode'     :  'interp_codecs.unicode_escape_decode',
          'unicode_escape_encode'     :  'interp_codecs.unicode_escape_encode',
          'raw_unicode_escape_decode' :  'interp_codecs.raw_unicode_escape_decode',
