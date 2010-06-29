@@ -10,7 +10,6 @@ class Module(MixedModule):
          'escape_encode' :  'app_codecs.escape_encode',
          'unicode_internal_decode' :  'app_codecs.unicode_internal_decode',
          'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
-         'charmap_build' : 'app_codecs.charmap_build'
     }
     interpleveldefs = {
          'encode':         'interp_codecs.encode',
@@ -19,6 +18,7 @@ class Module(MixedModule):
          'lookup_error':   'interp_codecs.lookup_error',
          'register':       'interp_codecs.register_codec',
          'register_error': 'interp_codecs.register_error',
+         'charmap_build' : 'interp_codecs.charmap_build',
 
          # encoders and decoders
          'ascii_decode'     : 'interp_codecs.ascii_decode',

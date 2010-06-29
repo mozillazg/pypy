@@ -180,13 +180,3 @@ def unicode_call_errorhandler(errors,  encoding,
     else:
         raise TypeError("encoding error handler must return (unicode, int) tuple, not %s" % repr(res))
 
-
-def charmap_build(somestring):
-    m = {}
-    num = 0
-    for elem in somestring:
-        m[ord(elem)] = num
-        num += 1
-    return m
-
-    

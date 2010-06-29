@@ -532,6 +532,11 @@ class AppTestPartialEvaluation:
     def test_charmap_decode_2(self):
         assert 'foo'.decode('charmap') == 'foo'
 
+    def test_charmap_build(self):
+        import codecs
+        assert codecs.charmap_build(u'123456') == {49: 0, 50: 1, 51: 2,
+                                                   52: 3, 53: 4, 54: 5}
+
     def test_utf7_start_end_in_exception(self):
         try:
             '+IC'.decode('utf-7')
