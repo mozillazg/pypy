@@ -1,7 +1,7 @@
 import sys
 from pypy.rlib.bitmanipulation import splitter
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 
 if rffi.sizeof(lltype.UniChar) == 4:
@@ -712,6 +712,65 @@ def unicode_encode_latin_1(p, size, errors, errorhandler=None):
 def unicode_encode_ascii(p, size, errors, errorhandler=None):
     res = unicode_encode_ucs1_helper(p, size, errors, errorhandler, 128)
     return res
+
+# ____________________________________________________________
+# Charmap
+
+ERROR_CHAR = u'\ufffe'
+
+@specialize.argtype(5)
+def str_decode_charmap(s, size, errors, final=False,
+                       errorhandler=None, mapping=None):
+    "mapping can be a rpython dictionary, or a dict-like object."
+
+    # Default to Latin-1
+    if mapping is None:
+        return str_decode_latin_1(s, size, errors, final=final,
+                                  errorhandler=errorhandler)
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
+    if size == 0:
+        return u'', 0
+
+    pos = 0
+    result = UnicodeBuilder(size)
+    while pos < size:
+        ch = s[pos]
+
+        c = mapping.get(ch, ERROR_CHAR)
+        if c == ERROR_CHAR:
+            r, pos = errorhandler(errors, "charmap",
+                                  "character maps to <undefined>",
+                                  s,  pos, pos + 1)
+            result.append(r)
+            continue
+        result.append(c)
+        pos += 1
+    return result.build(), pos
+
+def unicode_encode_charmap(s, size, errors, errorhandler=None,
+                           mapping=None):
+    if mapping is None:
+        return unicode_encode_latin_1(s, size, errors,
+                                      errorhandler=errorhandler)
+
+    if size == 0:
+        return ''
+    result = StringBuilder(size)
+    pos = 0
+    while pos < size:
+        ch = s[pos]
+
+        c = mapping.get(ch, '')
+        if len(c) == 0:
+            r, pos = errorhandler(errors, "charmap",
+                                  "character maps to <undefined>",
+                                  s, pos, pos + 1)
+            result.append(r)
+            continue
+        result.append(c)
+        pos += 1
+    return result.build()
 
 # ____________________________________________________________
 # Unicode escape
