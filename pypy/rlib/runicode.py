@@ -754,6 +754,9 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
         return unicode_encode_latin_1(s, size, errors,
                                       errorhandler=errorhandler)
 
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_encode
+
     if size == 0:
         return ''
     result = StringBuilder(size)
