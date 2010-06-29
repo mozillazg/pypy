@@ -8,8 +8,6 @@ class Module(MixedModule):
          '__name__' :  'app_codecs.__name__',
          'escape_decode' :  'app_codecs.escape_decode',
          'escape_encode' :  'app_codecs.escape_encode',
-         'unicode_internal_decode' :  'app_codecs.unicode_internal_decode',
-         'unicode_internal_encode' :  'app_codecs.unicode_internal_encode',
     }
     interpleveldefs = {
          'encode':         'interp_codecs.encode',
@@ -44,6 +42,8 @@ class Module(MixedModule):
          'unicode_escape_encode'     :  'interp_codecs.unicode_escape_encode',
          'raw_unicode_escape_decode' :  'interp_codecs.raw_unicode_escape_decode',
          'raw_unicode_escape_encode' :  'interp_codecs.raw_unicode_escape_encode',
+         'unicode_internal_decode'   :  'interp_codecs.unicode_internal_decode',
+         'unicode_internal_encode'   :  'interp_codecs.unicode_internal_encode',
     }
 
     def __init__(self, space, *args):
