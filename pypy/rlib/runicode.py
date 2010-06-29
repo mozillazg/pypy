@@ -1117,6 +1117,90 @@ def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
     return result.build()
 
 # ____________________________________________________________
+# unicode-internal
+
+def str_decode_unicode_internal(s, size, errors, final=False,
+                                errorhandler=None):
+    if errorhandler is None:
+        errorhandler = raise_unicode_exception_decode
+    if (size == 0):
+        return u'', 0
+
+    if MAXUNICODE < 65536:
+        unicode_bytes = 2
+    else:
+        unicode_bytes = 4
+    if BYTEORDER == "little":
+        start = 0
+        stop = unicode_bytes
+        step = 1
+    else:
+        start = unicode_bytes - 1
+        stop = -1
+        step = -1
+
+    result = UnicodeBuilder(size // unicode_bytes)
+    pos = 0
+    while pos < size:
+        if pos > size - unicode_bytes:
+            res, pos = errorhandler(errors, "unicode_internal",
+                                    "truncated input",
+                                    s, pos, size)
+            result.append(res)
+            if pos > size - unicode_bytes:
+                break
+            continue
+        t = 0
+        h = 0
+        for j in range(start, stop, step):
+            t += ord(s[pos + j]) << (h*8)
+            h += 1
+        if t > MAXUNICODE:
+            res, pos = errorhandler(errors, "unicode_internal",
+                                    "unichr(%d) not in range" % (t,),
+                                    s, pos, pos + unicode_bytes)
+            result.append(res)
+            continue
+        result.append(unichr(t))
+        pos += unicode_bytes
+    return result.build(), pos
+
+def unicode_encode_unicode_internal(s, size, errors, errorhandler=None):
+    if (size == 0):
+        return ''
+
+    if MAXUNICODE < 65536:
+        unicode_bytes = 2
+    else:
+        unicode_bytes = 4
+
+    result = StringBuilder(size * unicode_bytes)
+    pos = 0
+    while pos < size:
+        oc = ord(s[pos])
+        if MAXUNICODE < 65536:
+            if BYTEORDER == "little":
+                result.append(chr(oc       & 0xFF))
+                result.append(chr(oc >>  8 & 0xFF))
+            else:
+                result.append(chr(oc >>  8 & 0xFF))
+                result.append(chr(oc       & 0xFF))
+        else:
+            if BYTEORDER == "little":
+                result.append(chr(oc       & 0xFF))
+                result.append(chr(oc >>  8 & 0xFF))
+                result.append(chr(oc >> 16 & 0xFF))
+                result.append(chr(oc >> 24 & 0xFF))
+            else:
+                result.append(chr(oc >> 24 & 0xFF))
+                result.append(chr(oc >> 16 & 0xFF))
+                result.append(chr(oc >>  8 & 0xFF))
+                result.append(chr(oc       & 0xFF))
+        pos += 1
+
+    return result.build()
+
+# ____________________________________________________________
 # MBCS codecs for Windows
 
 if sys.platform == 'win32':

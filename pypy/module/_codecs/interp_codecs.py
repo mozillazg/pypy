@@ -375,6 +375,7 @@ for encoders in [
          "utf_16_le_encode",
          "unicode_escape_encode",
          "raw_unicode_escape_encode",
+         "unicode_internal_encode",
         ]:
     make_encoder_wrapper(encoders)
 
@@ -583,3 +584,25 @@ def unicode_escape_decode(space, string, errors="strict", w_final=False):
         unicode_name_handler)
 
     return space.newtuple([space.wrap(result), space.wrap(consumed)])
+
+# ____________________________________________________________
+# Unicode-internal
+
+@unwrap_spec(ObjSpace, W_Root, str)
+def unicode_internal_decode(space, w_string, errors="strict"):
+    # special case for this codec: unicodes are returned as is
+    if space.isinstance_w(w_string, space.w_unicode):
+        return space.newtuple([w_string, space.len(w_string)])
+
+    string = space.str_w(w_string)
+
+    if len(string) == 0:
+        return space.newtuple([space.wrap(u''), space.wrap(0)])
+
+    final = True
+    state = space.fromcache(CodecState)
+    result, consumed = runicode.str_decode_unicode_internal(
+        string, len(string), errors,
+        final, state.decode_error_handler)
+    return space.newtuple([space.wrap(result), space.wrap(consumed)])
+
