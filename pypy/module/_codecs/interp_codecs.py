@@ -537,6 +537,16 @@ def charmap_encode(space, uni, errors="strict", w_mapping=None):
         state.encode_error_handler, mapping)
     return space.newtuple([space.wrap(result), space.wrap(len(uni))])
 
+
+@unwrap_spec(ObjSpace, unicode)
+def charmap_build(space, chars):
+    # XXX CPython sometimes uses a three-level trie
+    w_charmap = space.newdict()
+    for num in range(len(chars)):
+        elem = chars[num]
+        space.setitem(w_charmap, space.newint(ord(elem)), space.newint(num))
+    return w_charmap
+
 # ____________________________________________________________
 # Unicode escape
 
