@@ -96,7 +96,7 @@ def parsestr(space, encoding, s):
     enc = None
     if need_encoding:
          enc = encoding
-    v = PyString_DecodeEscape(space, substr, unicode, enc)
+    v = PyString_DecodeEscape(space, substr, enc)
     return space.wrap(v)
 
 def hexbyte(val):
@@ -105,10 +105,9 @@ def hexbyte(val):
         result = "0" + result
     return result
 
-def PyString_DecodeEscape(space, s, unicode, recode_encoding):
+def PyString_DecodeEscape(space, s, recode_encoding):
     """
-    Unescape a backslash-escaped string. If unicode is non-zero,
-    the string is a u-literal. If recode_encoding is non-zero,
+    Unescape a backslash-escaped string. If recode_encoding is non-zero,
     the string is UTF-8 encoded and should be re-encoded in the
     specified encoding.
     """
@@ -171,9 +170,6 @@ def PyString_DecodeEscape(space, s, unicode, recode_encoding):
                 raise_app_valueerror(space, 'invalid \\x escape')
             # ignored replace and ignore for now
 
-        elif unicode and (ch == 'u' or ch == 'U' or ch == 'N'):
-            raise_app_valueerror(space, 'Unicode escapes not legal '
-                                        'when Unicode disabled')
         else:
             # this was not an escape, so the backslash
             # has to be added, and we start over in
