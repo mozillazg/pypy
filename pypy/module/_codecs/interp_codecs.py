@@ -14,7 +14,7 @@ class CodecState(object):
         self.decode_error_handler = self.make_errorhandler(space, True)
         self.encode_error_handler = self.make_errorhandler(space, False)
 
-        self.unicodedata_getcode = None
+        self.unicodedata_handler = None
 
     def make_errorhandler(self, space, decode):
         def unicode_call_errorhandler(errors,  encoding, reason, input,
@@ -56,16 +56,20 @@ class CodecState(object):
                 return replace, newpos
         return unicode_call_errorhandler
 
-    def get_unicodedata_function(self, space):
-        if self.unicodedata_getcode:
-            return self.unicodedata_getcode
-        w_builtin = space.getbuiltinmodule('__builtin__')
-        w_import = space.getattr(w_builtin, space.wrap("__import__"))
-        w_unicodedata = space.call_function(w_import,
-                                            space.wrap("unicodedata"))
-        self.unicodedata_getcode = space.getattr(w_unicodedata,
-                                                 space.wrap("_get_code"))
-        return self.unicodedata_getcode
+    def get_unicodedata_handler(self, space):
+        if self.unicodedata_handler:
+            return self.unicodedata_handler
+        try:
+            w_builtin = space.getbuiltinmodule('__builtin__')
+            w_import = space.getattr(w_builtin, space.wrap("__import__"))
+            w_unicodedata = space.call_function(w_import,
+                                                space.wrap("unicodedata"))
+            w_getcode = space.getattr(w_unicodedata, space.wrap("_get_code"))
+        except OperationError:
+            return None
+        else:
+            self.unicodedata_handler = UnicodeData_Handler(space, w_getcode)
+            return self.unicodedata_handler
 
     def _freeze_(self):
         assert not self.codec_search_path
@@ -358,8 +362,15 @@ def make_raw_decoder(name):
         errors = "strict"
         state = space.fromcache(CodecState)
         func = getattr(runicode, rname)
-        result, consumed = func(string, len(string), errors,
-                                final, state.decode_error_handler)
+        kwargs = {}
+        if name == 'unicode_escape':
+            unicodedata_handler = state.get_unicodedata_handler(space)
+            result, consumed = func(string, len(string), errors,
+                                    final, state.decode_error_handler,
+                                    unicodedata_handler=unicodedata_handler)
+        else:
+            result, consumed = func(string, len(string), errors,
+                                    final, state.decode_error_handler)
         return result
     raw_decoder.func_name = rname
     return raw_decoder
@@ -575,15 +586,14 @@ def charmap_build(space, chars):
 # Unicode escape
 
 class UnicodeData_Handler:
-    def __init__(self, space):
+    def __init__(self, space, w_getcode):
         self.space = space
-        state = space.fromcache(CodecState)
-        self.get_code = state.get_unicodedata_function(space)
+        self.w_getcode = w_getcode
 
     def call(self, name):
         space = self.space
         try:
-            w_code = space.call_function(self.get_code, space.wrap(name))
+            w_code = space.call_function(self.w_getcode, space.wrap(name))
         except OperationError, e:
             if not e.match(space, space.w_KeyError):
                 raise
@@ -596,10 +606,7 @@ def unicode_escape_decode(space, string, errors="strict", w_final=False):
     state = space.fromcache(CodecState)
     errorhandler=state.decode_error_handler
 
-    try:
-        unicode_name_handler = UnicodeData_Handler(space)
-    except OperationError:
-        unicode_name_handler = None
+    unicode_name_handler = state.get_unicodedata_handler(space)
 
     result, consumed = runicode.str_decode_unicode_escape(
         string, len(string), errors,
