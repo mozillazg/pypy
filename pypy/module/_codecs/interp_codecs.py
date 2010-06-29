@@ -414,80 +414,128 @@ def utf_16_ex_decode(space, data, errors='strict', byteorder=0, w_final=False):
                            space.wrap(byteorder)])
 utf_16_ex_decode.unwrap_spec = [ObjSpace, str, str, int, W_Root]
 
-def _extract_from_mapping(space, mapping_w, w_mapping, ch):
-    if mapping_w is not None:
-        try:
-            return mapping_w[ord(ch)]
-        except IndexError:
-            pass
-    else:
-        try:
-            return space.getitem(w_mapping, space.newint(ord(ch)))
-        except OperationError, e:
-            if (not e.match(space, space.w_KeyError) and
-                not e.match(space, space.w_IndexError)):
-                raise
-            pass
+# ____________________________________________________________
+# Charmap
 
-def _append_unicode(space, builder, w_x):
-    try:
-        x = space.unicode_w(w_x)
-    except OperationError, e:
-        if not e.match(space, space.w_TypeError):
-            raise
-    else:
-        if x != u"\ufffe":
-            builder.append(x)
-            return True
-        return False
-    try:
-        x = space.int_w(w_x)
-    except OperationError:
-        if not e.match(space, space.w_TypeError):
-            raise
-    else:
-        if x < 65536:
-            builder.append(unichr(x))
+class Charmap_Decode:
+    def __init__(self, space, w_mapping):
+        self.space = space
+        self.w_mapping = w_mapping
+
+        # fast path for all the stuff in the encodings module
+        if space.is_true(space.isinstance(w_mapping, space.w_tuple)):
+            self.mapping_w = space.fixedview(w_mapping)
         else:
-            raise OperationError(space.w_TypeError, space.wrap("character mapping must be in range(65536)"))
-        return True
-    if not space.is_true(w_x):
-        return False
-    else:
-        raise OperationError(space.w_TypeError, space.w_None)
+            self.mapping_w = None
+
+    def get(self, ch, errorchar):
+        space = self.space
+
+        # get the character from the mapping
+        if self.mapping_w is not None:
+            w_ch = self.mapping_w[ord(ch)]
+        else:
+            try:
+                w_ch = space.getitem(self.w_mapping, space.newint(ord(ch)))
+            except OperationError, e:
+                if not e.match(space, space.w_LookupError):
+                    raise
+                return errorchar
+
+        # Charmap may return a unicode string
+        try:
+            x = space.unicode_w(w_ch)
+        except OperationError, e:
+            if not e.match(space, space.w_TypeError):
+                raise
+        else:
+            return x
+
+        # Charmap may return a number
+        try:
+            x = space.int_w(w_ch)
+        except OperationError:
+            if not e.match(space, space.w_TypeError):
+                raise
+        else:
+            return unichr(x)
+
+        # Charmap may return None
+        if space.is_w(w_ch, space.w_None):
+            return errorchar
+
+        raise OperationError(space.w_TypeError, space.wrap("invalid mapping"))
+
+class Charmap_Encode:
+    def __init__(self, space, w_mapping):
+        self.space = space
+        self.w_mapping = w_mapping
+
+    def get(self, ch, errorchar):
+        space = self.space
+
+        # get the character from the mapping
+        try:
+            w_ch = space.getitem(self.w_mapping, space.newint(ord(ch)))
+        except OperationError, e:
+            if not e.match(space, space.w_LookupError):
+                raise
+            return errorchar
+
+        # Charmap may return a string
+        try:
+            x = space.realstr_w(w_ch)
+        except OperationError, e:
+            if not e.match(space, space.w_TypeError):
+                raise
+        else:
+            return x
+
+        # Charmap may return a number
+        try:
+            x = space.int_w(w_ch)
+        except OperationError:
+            if not e.match(space, space.w_TypeError):
+                raise
+        else:
+            return chr(x)
+
+        # Charmap may return None
+        if space.is_w(w_ch, space.w_None):
+            return errorchar
+
+        raise OperationError(space.w_TypeError, space.wrap("invalid mapping"))
 
 
-def charmap_decode(space, s, errors="strict", w_mapping=None):
-    size = len(s)
-    # Default to Latin-1
-    if space.is_true(space.is_(w_mapping, space.w_None)):
-        return latin_1_decode(space, s, errors, space.w_False)
-
-    if (size == 0):
+@unwrap_spec(ObjSpace, str, str, W_Root)
+def charmap_decode(space, string, errors="strict", w_mapping=None):
+    if len(string) == 0:
         return space.newtuple([space.wrap(u''), space.wrap(0)])
-    
-    # fast path for all the stuff in the encodings module
-    if space.is_true(space.isinstance(w_mapping, space.w_tuple)):
-        mapping_w = space.fixedview(w_mapping)
-    else:
-        mapping_w = None
 
-    builder = UnicodeBuilder(size)
-    inpos = 0
-    while (inpos < len(s)):
-        #/* Get mapping_w (char ordinal -> integer, Unicode char or None) */
-        ch = s[inpos]
-        w_x = _extract_from_mapping(space, mapping_w, w_mapping, ch)
-        if w_x is not None and _append_unicode(space, builder, w_x):
-            inpos += 1
-            continue
-        state = space.fromcache(CodecState)
-        next, inpos = state.decode_error_handler(errors, "charmap",
-                   "character maps to <undefined>", s, inpos, inpos+1)
-        builder.append(next)
-    res = builder.build()
-    return space.newtuple([space.wrap(res), space.wrap(size)])
-charmap_decode.unwrap_spec = [ObjSpace, str, str, W_Root]
+    if space.is_w(w_mapping, space.w_None):
+        mapping = None
+    else:
+        mapping = Charmap_Decode(space, w_mapping)
+
+    final = True
+    state = space.fromcache(CodecState)
+    result, consumed = runicode.str_decode_charmap(
+        string, len(string), errors,
+        final, state.decode_error_handler, mapping)
+    return space.newtuple([space.wrap(result), space.wrap(consumed)])
+
+@unwrap_spec(ObjSpace, unicode, str, W_Root)
+def charmap_encode(space, uni, errors="strict", w_mapping=None):
+    if space.is_w(w_mapping, space.w_None):
+        mapping = None
+    else:
+        mapping = Charmap_Encode(space, w_mapping)
+
+    state = space.fromcache(CodecState)
+    result = runicode.unicode_encode_charmap(
+        uni, len(uni), errors,
+        state.encode_error_handler, mapping)
+    return space.newtuple([space.wrap(result), space.wrap(len(uni))])
 
 # ____________________________________________________________
 # Unicode escape

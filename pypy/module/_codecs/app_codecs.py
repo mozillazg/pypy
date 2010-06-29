@@ -36,22 +36,12 @@ Copyright (c) Corporation for National Research Initiatives.
 
 """
 
-# XXX move some of these functions to RPython (like charmap_encode,
-# charmap_build) to make them faster
-
 def escape_encode( obj, errors='strict'):
     """None
     """
     s = repr(obj)
     v = s[1:-1]
     return v, len(v)
-
-def charmap_encode(obj, errors='strict', mapping=None):
-    """None
-    """
-    res = PyUnicode_EncodeCharmap(obj, mapping, errors)
-    res = ''.join(res)
-    return res, len(res)
 
 def unicode_internal_encode( obj, errors='strict'):
     """None
@@ -189,54 +179,6 @@ def unicode_call_errorhandler(errors,  encoding,
         return res[0], newpos
     else:
         raise TypeError("encoding error handler must return (unicode, int) tuple, not %s" % repr(res))
-
-
-
-def charmapencode_output(c, mapping):
-
-    rep = mapping[c]
-    if isinstance(rep, int) or isinstance(rep, long):
-        if rep < 256:
-            return chr(rep)
-        else:
-            raise TypeError("character mapping must be in range(256)")
-    elif isinstance(rep, str):
-        return rep
-    elif rep == None:
-        raise KeyError("character maps to <undefined>")
-    else:
-        raise TypeError("character mapping must return integer, None or str")
-
-def PyUnicode_EncodeCharmap(p, mapping='latin-1', errors='strict'):
-
-##    /* the following variable is used for caching string comparisons
-##     * -1=not initialized, 0=unknown, 1=strict, 2=replace,
-##     * 3=ignore, 4=xmlcharrefreplace */
-
-#    /* Default to Latin-1 */
-    if mapping == None:
-        import _codecs
-        return _codecs.latin_1_encode(p, errors)[0]
-    size = len(p)
-    if (size == 0):
-        return ''
-    inpos = 0
-    res = []
-    while (inpos<size):
-        #/* try to encode it */
-        try:
-            x = charmapencode_output(ord(p[inpos]), mapping)
-            res += x
-        except KeyError:
-            x = unicode_call_errorhandler(errors, "charmap",
-            "character maps to <undefined>", p, inpos, inpos+1, False)
-            try:
-                res += [charmapencode_output(ord(y), mapping) for y in x[0]]
-            except KeyError:
-                raise UnicodeEncodeError("charmap", p, inpos, inpos+1,
-                                        "character maps to <undefined>")
-        inpos += 1
-    return res
 
 
 def charmap_build(somestring):

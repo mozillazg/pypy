@@ -1,6 +1,5 @@
 import autopath
 from pypy.conftest import gettestobjspace
-from pypy.module._codecs.app_codecs import charmap_encode
 
 
 class AppTestCodecs:
@@ -377,6 +376,9 @@ class AppTestPartialEvaluation:
 
     def test_charmap_decode_1(self):
         import codecs
+        assert codecs.charmap_encode(u'xxx') == ('xxx', 3)
+        assert codecs.charmap_encode(u'xxx', 'strict', {ord('x'): 'XX'}) == ('XXXXXX', 3)
+
         res = codecs.charmap_decode("\x00\x01\x02", "replace", u"ab")
         assert res == (u"ab\ufffd", 3)
         res = codecs.charmap_decode("\x00\x01\x02", "replace", u"ab\ufffe")
@@ -556,9 +558,3 @@ class AppTestPartialEvaluation:
         assert u'caf\xe9'.encode('mbcs') == 'caf\xe9'
         assert u'\u040a'.encode('mbcs') == '?' # some cyrillic letter
         assert 'cafx\e9'.decode('mbcs') == u'cafx\e9'
-
-
-class TestDirect:
-    def test_charmap_encode(self):
-        assert charmap_encode(u'xxx') == ('xxx', 3)
-        assert charmap_encode(u'xxx', 'strict', {ord('x'): 'XX'}) ==  ('XXXXXX', 6)
