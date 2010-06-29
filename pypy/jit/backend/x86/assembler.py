@@ -43,16 +43,30 @@ def align_stack_words(words):
 class MachineCodeBlockWrapper(object):
     MC_DEFAULT_SIZE = 1024*1024
 
-    def __init__(self, bigsize, profile_agent=None):
+    def __init__(self, assembler, bigsize, profile_agent=None):
+        self.assembler = assembler
         self.old_mcs = [] # keepalive
         self.bigsize = bigsize
         self._mc = self._instantiate_mc()
         self.function_name = None
         self.profile_agent = profile_agent
+        self.reset_reserved_bytes()
 
     def _instantiate_mc(self): # hook for testing
         return codebuf.MachineCodeBlock(self.bigsize)
 
+    def ensure_bytes_available(self, num_bytes):
+        if self.bytes_free() <= (self._reserved_bytes + num_bytes):
+            self.make_new_mc()
+
+    def reserve_bytes(self, num_bytes):
+        self.ensure_bytes_available(num_bytes)
+        self._reserved_bytes += num_bytes
+
+    def reset_reserved_bytes(self):
+        # XXX er.... pretty random number, just to be sure
+        #     not to write half-instruction
+        self._reserved_bytes = 64
 
     def bytes_free(self):
         return self._mc._size - self._mc.get_relative_pos()
@@ -74,11 +88,13 @@ class MachineCodeBlockWrapper(object):
     def make_new_mc(self):
         new_mc = self._instantiate_mc()
         debug_print('[new machine code block at', new_mc.tell(), ']')
-        self._mc.JMP_l(new_mc.tell())
+        self._mc.JMP(imm(new_mc.tell()))
 
         if self.function_name is not None:
             self.end_function(done=False)
             self.start_pos = new_mc.get_relative_pos()
+
+        self.assembler.write_pending_failure_recoveries()
 
         self._mc.done()
         self.old_mcs.append(self._mc)
@@ -93,9 +109,7 @@ class MachineCodeBlockWrapper(object):
 
 def _new_method(name):
     def method(self, *args):
-        # XXX er.... pretty random number, just to be sure
-        #     not to write half-instruction
-        if self.bytes_free() < 64:
+        if self.bytes_free() < self._reserved_bytes:
             self.make_new_mc()
         getattr(self._mc, name)(*args)    
     method.func_name = name
@@ -109,11 +123,16 @@ for name in dir(codebuf.MachineCodeBlock):
         setattr(MachineCodeBlockWrapper, name, _new_method(name))
 
 class GuardToken(object):
-    def __init__(self, faildescr, failargs, fail_locs, exc):
+    def __init__(self, faildescr, failargs, fail_locs, exc, desc_bytes):
         self.faildescr = faildescr
         self.failargs = failargs
         self.fail_locs = fail_locs
         self.exc = exc
+        self.desc_bytes = desc_bytes
+
+    def recovery_stub_size(self):
+        # XXX: 32 is pulled out of the air
+        return 32 + len(self.desc_bytes)
 
 class Assembler386(object):
     mc = None
@@ -174,7 +193,7 @@ class Assembler386(object):
                     self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
                         self.cpu.assembler_helper_ptr)
         
-            self.mc = MachineCodeBlockWrapper(self.mc_size, self.cpu.profile_agent)
+            self.mc = MachineCodeBlockWrapper(self, self.mc_size, self.cpu.profile_agent)
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
             if self.cpu.supports_floats:
@@ -244,9 +263,6 @@ class Assembler386(object):
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         arglocs = regalloc.prepare_loop(inputargs, operations, looptoken)
         looptoken._x86_arglocs = arglocs
-        needed_mem = len(arglocs[0]) * 16 + 16
-        if needed_mem >= self.mc.bytes_free():
-            self.mc.make_new_mc()
 
         # profile support
         name = "Loop # %s: %s" % (looptoken.number, funcname)
@@ -261,11 +277,7 @@ class Assembler386(object):
         self._patch_stackadjust(adr_stackadjust, frame_depth+param_depth)
         looptoken._x86_frame_depth = frame_depth
         looptoken._x86_param_depth = param_depth
-        # we need to make sure here that we don't overload an mc badly.
-        # a safe estimate is that we need at most 16 bytes per arg
-        needed_mem = len(arglocs[0]) * 16 + 16
-        if needed_mem >= self.mc.bytes_free():
-            self.mc.make_new_mc()
+
         looptoken._x86_direct_bootstrap_code = self.mc.tell()
         self._assemble_bootstrap_direct_call(arglocs, curadr,
                                              frame_depth+param_depth)
@@ -311,10 +323,15 @@ class Assembler386(object):
 
     def write_pending_failure_recoveries(self):
         for tok in self.pending_guard_tokens:
-            addr = self.generate_quick_failure(tok.faildescr, tok.failargs, tok.fail_locs, tok.exc)
+            # Okay to write to _mc because we've already made sure that
+            # there's enough space by "reserving" bytes.
+            addr = self.generate_quick_failure(self.mc._mc, tok.faildescr, tok.failargs, tok.fail_locs, tok.exc, tok.desc_bytes)
+            tok.faildescr._x86_adr_recovery_stub = addr
             self.patch_jump_for_descr(tok.faildescr, addr)
 
         self.pending_guard_tokens = []
+        self.mc.reset_reserved_bytes()
+        self.mc.done()
 
     def _find_debug_merge_point(self, operations):
         for op in operations:
@@ -324,8 +341,21 @@ class Assembler386(object):
         
     def patch_jump_for_descr(self, faildescr, adr_new_target):
         adr_jump_offset = faildescr._x86_adr_jump_offset
-        mc = codebuf.InMemoryCodeBuilder(adr_jump_offset, adr_jump_offset + 4)
-        mc.writeimm32(adr_new_target - adr_jump_offset - 4)
+        adr_recovery_stub = faildescr._x86_adr_recovery_stub
+        offset = adr_new_target - (adr_jump_offset + 4)
+        # If the new target fits within a rel32 of the jump, just patch
+        # that. Otherwise, leave the original rel32 to the recovery stub in
+        # place, but clobber the recovery stub with a jump to the real
+        # target.
+        if rx86.fits_in_32bits(offset):
+            mc = codebuf.InMemoryCodeBuilder(adr_jump_offset, adr_jump_offset + 4)
+            mc.writeimm32(offset)
+        else:
+            # "mov r11, addr; jmp r11" is 13 bytes
+            mc = codebuf.InMemoryCodeBuilder(adr_recovery_stub, adr_recovery_stub + 13)
+            mc.MOV_ri(X86_64_SCRATCH_REG.value, adr_new_target)
+            mc.JMP_r(X86_64_SCRATCH_REG.value)
+
         mc.valgrind_invalidated()
         mc.done()
 
@@ -434,6 +464,7 @@ class Assembler386(object):
                 if len(unused_gpr) > 0:
                     self.mc.MOV(loc, unused_gpr.pop())
                 else:
+                    self.mc.ensure_bytes_available(32)
                     self.mc.MOV_rb(X86_64_SCRATCH_REG.value, (2 + i) * WORD)
                     self.mc.MOV(loc, X86_64_SCRATCH_REG)
 
@@ -446,8 +477,7 @@ class Assembler386(object):
                     self.mc.MOVSD_xb(X86_64_XMM_SCRATCH_REG.value, (2 + i) * WORD)
                     self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
 
-
-        self.mc.JMP_l(jmpadr)
+        self.mc.JMP(imm(jmpadr))
 
         return adr_stackadjust
 
@@ -568,7 +598,6 @@ class Assembler386(object):
         guard_token = self.implement_guard_recovery(guard_opnum,
                                                     faildescr, failargs,
                                                     faillocs)
-        self.pending_guard_tokens.append(guard_token)
         if op is None:
             dispatch_opnum = guard_opnum
         else:
@@ -615,6 +644,9 @@ class Assembler386(object):
                 tmp2 = result_loc.higher8bits()
             elif IS_X86_64:
                 tmp2 = X86_64_SCRATCH_REG.lowest8bits()
+                # We can't do a jump in the middle below, because that could
+                # clobber the scratch register
+                self.mc.ensure_bytes_available(32)
 
             self.mc.SET_ir(rx86.Conditions[cond], tmp1.value)
             if is_ne:
@@ -648,16 +680,17 @@ class Assembler386(object):
                                   result_loc):
             guard_opnum = guard_op.opnum
             self.mc.UCOMISD(arglocs[0], arglocs[1])
+            # 16 is enough space for the rel8 jumps below and the rel32
+            # jump in implement_guard
+            self.mc.ensure_bytes_available(16 + guard_token.recovery_stub_size())
             if guard_opnum == rop.GUARD_FALSE:
-                mc = self.mc._mc
                 if need_jp:
-                    mc.J_il8(rx86.Conditions['P'], 6)
+                    self.mc.J_il8(rx86.Conditions['P'], 6)
                 return self.implement_guard(guard_token, cond)
             else:
                 if need_jp:
-                    mc = self.mc._mc
-                    mc.J_il8(rx86.Conditions['P'], 2)
-                    mc.J_il8(rx86.Conditions[cond], 5)
+                    self.mc.J_il8(rx86.Conditions['P'], 2)
+                    self.mc.J_il8(rx86.Conditions[cond], 5)
                     return self.implement_guard(guard_token)
                 return self.implement_guard(guard_token, false_cond)
         return genop_cmp_guard_float
@@ -734,6 +767,8 @@ class Assembler386(object):
                     mc.MOVSD(X86_64_XMM_SCRATCH_REG, loc)
                     mc.MOVSD_sx(i*WORD, X86_64_XMM_SCRATCH_REG.value)
                 else:
+                    if not force_mc:
+                        mc.ensure_bytes_available(32)
                     mc.MOV(X86_64_SCRATCH_REG, loc)
                     mc.MOV_sr(i*WORD, X86_64_SCRATCH_REG.value)
             else:
@@ -847,13 +882,15 @@ class Assembler386(object):
     def genop_guard_float_ne(self, op, guard_op, guard_token, arglocs, result_loc):
         guard_opnum = guard_op.opnum
         self.mc.UCOMISD(arglocs[0], arglocs[1])
-        mc = self.mc._mc
+        # 16 is enough space for the rel8 jumps below and the rel32
+        # jump in implement_guard
+        self.mc.ensure_bytes_available(16 + guard_token.recovery_stub_size())
         if guard_opnum == rop.GUARD_TRUE:
-            mc.J_il8(rx86.Conditions['P'], 6)
+            self.mc.J_il8(rx86.Conditions['P'], 6)
             return self.implement_guard(guard_token, 'E')
         else:
-            mc.J_il8(rx86.Conditions['P'], 2)
-            mc.J_il8(rx86.Conditions['E'], 5)
+            self.mc.J_il8(rx86.Conditions['P'], 2)
+            self.mc.J_il8(rx86.Conditions['E'], 5)
             return self.implement_guard(guard_token)
 
     def genop_float_neg(self, op, arglocs, resloc):
@@ -1190,9 +1227,10 @@ class Assembler386(object):
         exc = (guard_opnum == rop.GUARD_EXCEPTION or
                guard_opnum == rop.GUARD_NO_EXCEPTION or
                guard_opnum == rop.GUARD_NOT_FORCED)
-        return GuardToken(faildescr, failargs, fail_locs, exc)
+        desc_bytes = self.failure_recovery_description(failargs, fail_locs)
+        return GuardToken(faildescr, failargs, fail_locs, exc, desc_bytes)
 
-    def generate_quick_failure(self, faildescr, failargs, fail_locs, exc):
+    def generate_quick_failure(self, mc, faildescr, failargs, fail_locs, exc, desc_bytes):
         """Generate the initial code for handling a failure.  We try to
         keep it as compact as possible.  The idea is that this code is
         executed at most once (and very often, zero times); when
@@ -1200,20 +1238,17 @@ class Assembler386(object):
         really handle recovery from this particular failure.
         """
         fail_index = self.cpu.get_fail_descr_number(faildescr)
-        bytes_needed = 20 + 5 * len(failargs)    # conservative estimate
-        if self.mc.bytes_free() < bytes_needed:
-            self.mc.make_new_mc()
-        mc = self.mc._mc
         addr = mc.tell()
         withfloats = False
         for box in failargs:
             if box is not None and box.type == FLOAT:
                 withfloats = True
                 break
-        mc.CALL_l(self.failure_recovery_code[exc + 2 * withfloats])
+        mc.CALL(imm(self.failure_recovery_code[exc + 2 * withfloats]))
         # write tight data that describes the failure recovery
         faildescr._x86_failure_recovery_bytecode = mc.tell()
-        self.write_failure_recovery_description(mc, failargs, fail_locs)
+        for byte in desc_bytes:
+            mc.writechr(ord(byte))
         # write the fail_index too
         mc.writeimm32(fail_index)
         # for testing the decoding, write a final byte 0xCC
@@ -1221,6 +1256,12 @@ class Assembler386(object):
             mc.writechr(0xCC)
             faildescr._x86_debug_faillocs = [loc for loc in fail_locs
                                                  if loc is not None]
+
+        # Make sure the recovery stub is at least 16 bytes long (for the
+        # case where we overwrite the recovery stub with a 64-bit absolute
+        # jump)
+        while mc.tell() - addr < 16:
+            mc.writechr(0x00)
         return addr
 
     DESCR_REF       = 0x00
@@ -1232,7 +1273,8 @@ class Assembler386(object):
     CODE_STOP       = 0 | DESCR_SPECIAL
     CODE_HOLE       = 4 | DESCR_SPECIAL
 
-    def write_failure_recovery_description(self, mc, failargs, locs):
+    def failure_recovery_description(self, failargs, locs):
+        desc_bytes = []
         for i in range(len(failargs)):
             arg = failargs[i]
             if arg is not None:
@@ -1252,14 +1294,19 @@ class Assembler386(object):
                     n = loc.value
                 n = kind + 4*n
                 while n > 0x7F:
-                    mc.writechr((n & 0x7F) | 0x80)
+                    desc_bytes.append(chr((n & 0x7F) | 0x80))
                     n >>= 7
             else:
                 n = self.CODE_HOLE
-            mc.writechr(n)
-        mc.writechr(self.CODE_STOP)
+            desc_bytes.append(chr(n))
+        desc_bytes.append(chr(self.CODE_STOP))
         # assert that the fail_boxes lists are big enough
         assert len(failargs) <= self.fail_boxes_int.SIZE
+        return desc_bytes
+
+    def write_failure_recovery_description(self, mc, failargs, locs):
+        for byte in self.failure_recovery_description(failargs, locs):
+            mc.writechr(ord(byte))
 
     def rebuild_faillocs_from_descr(self, bytecode):
         from pypy.jit.backend.x86.regalloc import X86FrameManager
@@ -1421,7 +1468,7 @@ class Assembler386(object):
         #   avoid unwarranted freeing
         # - optionally save exception depending on the flag
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
-        mc.CALL_l(addr)
+        mc.CALL(imm(addr))
 
         # the following call saves all values from the stack and from
         # registers to the right 'fail_boxes_<type>' location.
@@ -1442,7 +1489,7 @@ class Assembler386(object):
         else:
             raise AssertionError("Shouldn't happen")
 
-        mc.CALL_l(failure_recovery_func)
+        mc.CALL(imm(failure_recovery_func))
         # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
@@ -1491,7 +1538,7 @@ class Assembler386(object):
         #   avoid unwarranted freeing
         # - optionally save exception depending on the flag
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
-        mc.CALL_l(addr)
+        mc.CALL(imm(addr))
 
         mc.MOV(eax, imm(fail_index))
 
@@ -1502,7 +1549,10 @@ class Assembler386(object):
     # what to do with @specialize
     @specialize.arg(2)
     def implement_guard(self, guard_token, condition=None):
-        # These jumps are patched later
+        self.mc.reserve_bytes(guard_token.recovery_stub_size())
+        self.pending_guard_tokens.append(guard_token)
+        # XXX: These jumps are patched later, the self.mc.tell() are just
+        # dummy values
         if condition:
             self.mc.J_il(rx86.Conditions[condition], self.mc.tell())
         else:
@@ -1697,7 +1747,7 @@ class Assembler386(object):
         return loop_token._x86_arglocs
 
     def closing_jump(self, loop_token):
-        self.mc.JMP_l(loop_token._x86_loop_code)
+        self.mc.JMP(imm(loop_token._x86_loop_code))
 
     def malloc_cond_fixedsize(self, nursery_free_adr, nursery_top_adr,
                               size, tid):
@@ -1723,10 +1773,10 @@ class Assembler386(object):
         # reserve room for the argument to the real malloc and the
         # 8 saved XMM regs
         self._regalloc.reserve_param(1+16)
-        mc.CALL_l(slowpath_addr1)
+        mc.CALL(imm(slowpath_addr1))
         self.mark_gc_roots()
         slowpath_addr2 = self.malloc_fixedsize_slowpath2
-        mc.CALL_l(slowpath_addr2)
+        mc.CALL(imm(slowpath_addr2))
 
         offset = mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127

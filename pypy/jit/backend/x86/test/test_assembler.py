@@ -26,11 +26,14 @@ class FakeMC:
         return self.base_address + len(self.content)
     def get_relative_pos(self):
         return len(self.content)
-    def JMP_l(self, *args):
+    def JMP(self, *args):
         self.content.append(("JMP", args))
     def done(self):
         pass
 
+class FakeAssembler:
+    def write_pending_failure_recoveries(self):
+        pass
 
 def test_write_failure_recovery_description():
     assembler = Assembler386(FakeCPU())
@@ -257,7 +260,8 @@ class FakeMCWrapper(MachineCodeBlockWrapper):
 
 def test_mc_wrapper_profile_agent():
     agent = FakeProfileAgent()
-    mc = FakeMCWrapper(100, agent)
+    assembler = FakeAssembler()
+    mc = FakeMCWrapper(assembler, 100, agent)
     mc.start_function("abc")
     mc.writechr("x")
     mc.writechr("x")

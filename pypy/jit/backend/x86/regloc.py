@@ -224,6 +224,25 @@ class LocationCodeBuilder(object):
 
         return func_with_new_name(INSN, "INSN_" + name)
 
+    def _relative_unaryop(name):
+        def INSN(self, loc):
+            code = loc.location_code()
+            for possible_code in unrolling_location_codes:
+                if code == possible_code:
+                    val = getattr(loc, "value_" + possible_code)()
+                    if self.WORD == 8 and possible_code == 'i':
+                        offset = val - (self.tell() + 5)
+                        if rx86.fits_in_32bits(offset):
+                            _rx86_getattr(self, name + "_l")(val)
+                        else:
+                            self.MOV_ri(X86_64_SCRATCH_REG.value, val)
+                            _rx86_getattr(self, name + "_r")(X86_64_SCRATCH_REG.value)
+                    else:
+                        methname = name + "_" + possible_code
+                        _rx86_getattr(self, methname)(val)
+
+        return func_with_new_name(INSN, "INSN_" + name)
+
     def _16_bit_binaryop(name):
         def INSN(self, loc1, loc2):
             # Select 16-bit operand mode
@@ -306,8 +325,8 @@ class LocationCodeBuilder(object):
     ANDPD = _binaryop('ANDPD')
     XORPD = _binaryop('XORPD')
 
-    CALL = _unaryop('CALL')
-    JMP = _unaryop('JMP')
+    CALL = _relative_unaryop('CALL')
+    JMP = _relative_unaryop('JMP')
 
 def imm(x):
     # XXX: ri386 migration shim
