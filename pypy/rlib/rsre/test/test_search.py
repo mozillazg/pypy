@@ -47,3 +47,9 @@ class TestSearch:
                 assert groups[i] == (0, 1)
             else:
                 assert groups[i] == (-1, -1)
+
+    def test_code3(self):
+        r_code3 = self.get_code(r'xy(?:ab)+c')
+        state = rsre.SimpleStringState("xyababababcd")
+        res = state.search(r_code3)
+        assert res is not None
