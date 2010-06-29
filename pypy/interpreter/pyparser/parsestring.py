@@ -72,12 +72,12 @@ def parsestr(space, encoding, s):
             bufp = 0
             bufq = len(buf)
         assert 0 <= bufp <= bufq
-        w_substr = space.wrap(buf[bufp : bufq])
+        substr = buf[bufp:bufq]
         if rawmode:
-            w_v = unicodehelper.PyUnicode_DecodeRawUnicodeEscape(space, w_substr)
+            v = unicodehelper.PyUnicode_DecodeRawUnicodeEscape(space, substr)
         else:
-            w_v = unicodehelper.PyUnicode_DecodeUnicodeEscape(space, w_substr)
-        return w_v
+            v = unicodehelper.PyUnicode_DecodeUnicodeEscape(space, substr)
+        return space.wrap(v)
 
     need_encoding = (encoding is not None and
                      encoding != "utf-8" and encoding != "iso-8859-1")
@@ -86,7 +86,7 @@ def parsestr(space, encoding, s):
     substr = s[ps : q]
     if rawmode or '\\' not in s[ps:]:
         if need_encoding:
-            w_u = unicodehelper.PyUnicode_DecodeUTF8(space, space.wrap(substr))
+            w_u = space.wrap(unicodehelper.PyUnicode_DecodeUTF8(space, substr))
             #w_v = space.wrap(space.unwrap(w_u).encode(encoding)) this works
             w_v = unicodehelper.PyUnicode_AsEncodedString(space, w_u, space.wrap(encoding))
             return w_v
@@ -200,7 +200,7 @@ def decode_utf8(space, s, ps, end, encoding):
     # while (s < end && *s != '\\') s++; */ /* inefficient for u".."
     while ps < end and ord(s[ps]) & 0x80:
         ps += 1
-    w_u = unicodehelper.PyUnicode_DecodeUTF8(space, space.wrap(s[pt : ps]))
+    w_u = space.wrap(unicodehelper.PyUnicode_DecodeUTF8(space, s[pt:ps]))
     w_v = unicodehelper.PyUnicode_AsEncodedString(space, w_u, space.wrap(encoding))
     v = space.str_w(w_v)
     return v, ps
