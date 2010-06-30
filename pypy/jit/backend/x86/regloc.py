@@ -230,11 +230,12 @@ class LocationCodeBuilder(object):
             for possible_code in unrolling_location_codes:
                 if code == possible_code:
                     val = getattr(loc, "value_" + possible_code)()
-                    if self.WORD == 8 and possible_code == 'i':
+                    if possible_code == 'i':
                         offset = val - (self.tell() + 5)
                         if rx86.fits_in_32bits(offset):
                             _rx86_getattr(self, name + "_l")(val)
                         else:
+                            assert self.WORD == 8
                             self.MOV_ri(X86_64_SCRATCH_REG.value, val)
                             _rx86_getattr(self, name + "_r")(X86_64_SCRATCH_REG.value)
                     else:
