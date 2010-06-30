@@ -437,6 +437,11 @@ class AbstractX86CodeBuilder(object):
     CMP_rm = insn(rex_w, '\x3B', register(1, 8), mem_reg_plus_const(2))
     CMP_mr = insn(rex_w, '\x39', register(2, 8), mem_reg_plus_const(1))
 
+    CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
+    CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
+    CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
+    CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
+
     AND8_rr = insn(rex_w, '\x20', byte_register(1), byte_register(2,8), '\xC0')
 
     OR8_rr = insn(rex_w, '\x08', byte_register(1), byte_register(2,8), '\xC0')
@@ -543,11 +548,6 @@ def invert_condition(cond_num):
 
 class X86_32_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 4
-
-    CMP_ji8 = insn(rex_w, '\x83', '\x3D', immediate(1), immediate(2, 'b'))
-    CMP_ji32 = insn(rex_w, '\x81', '\x3D', immediate(1), immediate(2))
-    CMP_ji = select_8_or_32_bit_immed(CMP_ji8, CMP_ji32)
-    CMP_rj = insn(rex_w, '\x3B', register(1, 8), '\x05', immediate(2))
 
 class X86_64_CodeBuilder(AbstractX86CodeBuilder):
     WORD = 8
