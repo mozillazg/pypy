@@ -995,7 +995,7 @@ def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=Fal
             result.append('\\\\')
 
         # Map non-printable or non-ascii to '\xhh' or '\uhhhh'
-        elif oc < 32 or oc > 0x7F:
+        elif oc < 32 or oc >= 0x7F:
             raw_unicode_escape_helper(result, oc)
 
         # Copy everything else as-is
