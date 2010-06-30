@@ -1091,10 +1091,11 @@ def raw_unicode_escape_helper(result, char):
     else:
         result.append("\\x")
         zeros = 2
-    nb = zeros + 2 - len(num) # num starts with '0x'
+    lnum = len(num)
+    nb = zeros + 2 - lnum # num starts with '0x'
     if nb > 0:
         result.append_multiple_char('0', nb)
-    result.append_slice(num, 2, 8)
+    result.append_slice(num, 2, lnum)
 
 def unicode_encode_raw_unicode_escape(s, size, errors, errorhandler=None):
     # errorhandler is not used: this function cannot cause Unicode errors
