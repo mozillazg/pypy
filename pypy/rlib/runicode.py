@@ -971,11 +971,6 @@ def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=Fal
             pos += 1
             continue
 
-        if oc > 0x10000:
-            raw_unicode_escape_helper(result, oc)
-            pos += 1
-            continue
-
         if 0xD800 <= oc < 0xDC00 and pos + 1 < size:
             # Map UTF-16 surrogate pairs to Unicode \UXXXXXXXX escapes
             pos += 1
@@ -989,12 +984,6 @@ def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=Fal
             # Fall through: isolated surrogates are copied as-is
             pos -= 1
 
-        # Map 16-bit characters to '\uxxxx'
-        if oc >= 0x100:
-            raw_unicode_escape_helper(result, oc)
-            pos += 1
-            continue
-
         # Map special whitespace to '\t', \n', '\r'
         if ch == '\t':
             result.append('\\t')
@@ -1005,9 +994,10 @@ def unicode_encode_unicode_escape(s, size, errors, errorhandler=None, quotes=Fal
         elif ch == '\\':
             result.append('\\\\')
 
-        # Map non-printable US ASCII to '\xhh'
-        elif (oc < 32 or oc >= 0x7F) :
+        # Map non-printable or non-ascii to '\xhh' or '\uhhhh'
+        elif oc < 32 or oc > 0x7F:
             raw_unicode_escape_helper(result, oc)
+
         # Copy everything else as-is
         else:
             result.append(chr(oc))
