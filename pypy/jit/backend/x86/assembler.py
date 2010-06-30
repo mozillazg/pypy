@@ -234,7 +234,7 @@ class Assembler386(object):
         if self.cpu.supports_floats:          # save the XMM registers in
             for i in range(self.cpu.NUM_REGS):# the *caller* frame, from esp+8
                 self.mc.MOVSD_sx((WORD*2)+8*i, i)
-        self.mc.SUB(edx, eax)                      # compute the size we want
+        self.mc.SUB_rr(edx.value, eax.value)       # compute the size we want
         if IS_X86_32:
             self.mc.MOV_sr(WORD, edx.value)        # save it as the new argument
         elif IS_X86_64:
@@ -399,10 +399,10 @@ class Assembler386(object):
         mc.done()
 
     def _call_header(self):
-        self.mc.PUSH(ebp)
+        self.mc.PUSH_r(ebp.value)
         self.mc.MOV_rr(ebp.value, esp.value)
         for regloc in self.cpu.CALLEE_SAVE_REGISTERS:
-            self.mc.PUSH(regloc)
+            self.mc.PUSH_r(regloc.value)
 
         # NB. the shape of the frame is hard-coded in get_basic_shape() too.
         # Also, make sure this is consistent with FRAME_FIXED_SIZE.
@@ -412,9 +412,9 @@ class Assembler386(object):
         self.mc.LEA_rb(esp.value, -len(self.cpu.CALLEE_SAVE_REGISTERS) * WORD)
 
         for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)-1, -1, -1):
-            self.mc.POP(self.cpu.CALLEE_SAVE_REGISTERS[i])
+            self.mc.POP_r(self.cpu.CALLEE_SAVE_REGISTERS[i].value)
 
-        self.mc.POP(ebp)
+        self.mc.POP_r(ebp.value)
         self.mc.RET()
 
     def _assemble_bootstrap_direct_call(self, arglocs, jmpadr, stackdepth):
@@ -563,7 +563,7 @@ class Assembler386(object):
     def regalloc_pop(self, loc):
         if isinstance(loc, RegLoc) and loc.is_xmm:
             self.mc.MOVSD_xs(loc.value, 0)
-            self.mc.ADD(esp, imm(2*WORD))
+            self.mc.ADD_ri(esp.value, 2*WORD)
         elif WORD == 4 and isinstance(loc, StackLoc) and loc.width == 8:
             # XXX evil trick
             self.mc.POP_b(get_ebp_ofs(loc.position + 1))
@@ -904,7 +904,7 @@ class Assembler386(object):
     genop_int_floordiv = genop_int_mod
 
     def genop_uint_floordiv(self, op, arglocs, resloc):
-        self.mc.XOR(edx, edx)
+        self.mc.XOR_rr(edx.value, edx.value)
         self.mc.DIV_r(ecx.value)
 
     def genop_new_with_vtable(self, op, arglocs, result_loc):
@@ -1433,9 +1433,9 @@ class Assembler386(object):
 
         # XXX
         if IS_X86_32:
-            mc.PUSH(ebx)
+            mc.PUSH_r(ebx.value)
         elif IS_X86_64:
-            mc.MOV(edi, ebx)
+            mc.MOV_rr(edi.value, ebx.value)
             # XXX: Correct to only align the stack on 64-bit?
             mc.AND_ri(esp.value, -16)
         else:
@@ -1490,7 +1490,7 @@ class Assembler386(object):
         addr = self.cpu.get_on_leave_jitted_int(save_exception=exc)
         self.mc.CALL(imm(addr))
 
-        self.mc.MOV(eax, imm(fail_index))
+        self.mc.MOV_ri(eax.value, fail_index)
 
         # exit function
         self._call_footer()
@@ -1528,9 +1528,9 @@ class Assembler386(object):
         if isinstance(resloc, StackLoc) and resloc.width == 8 and IS_X86_32:
             self.mc.FSTP_b(resloc.value)
         elif size == 1:
-            self.mc.AND(eax, imm(0xff))
+            self.mc.AND_ri(eax.value, 0xff)
         elif size == 2:
-            self.mc.AND(eax, imm(0xffff))
+            self.mc.AND_ri(eax.value, 0xffff)
     
     def genop_guard_call_may_force(self, op, guard_op, guard_token,
                                    arglocs, result_loc):
@@ -1569,7 +1569,7 @@ class Assembler386(object):
                 value = self.cpu.done_with_this_frame_float_v
             else:
                 raise AssertionError(kind)
-        self.mc.CMP(eax, imm(value))
+        self.mc.CMP_ri(eax.value, value)
         # patched later
         self.mc.J_il8(rx86.Conditions['E'], 0) # goto B if we get 'done_with_this_frame'
         je_location = self.mc.get_relative_pos()
@@ -1595,7 +1595,7 @@ class Assembler386(object):
             assert isinstance(fielddescr, BaseFieldDescr)
             ofs = fielddescr.offset
             self.mc.MOV(eax, arglocs[1])
-            self.mc.MOV(addr_add(eax, imm(ofs)), imm(0))
+            self.mc.MOV_mi((eax.value, ofs), 0)
             # in the line above, TOKEN_NONE = 0
         #
         if op.result is not None:
@@ -1613,7 +1613,7 @@ class Assembler386(object):
                     self.mc.MOV(eax, heap(adr))
                 elif kind == REF:
                     adr = self.fail_boxes_ptr.get_addr_for_num(0)
-                    self.mc.XOR(eax, eax)
+                    self.mc.XOR_rr(eax.value, eax.value)
                     self.mc.XCHG(eax, heap(adr))
                 else:
                     raise AssertionError(kind)
@@ -1701,7 +1701,7 @@ class Assembler386(object):
                               size, tid):
         self.mc.ensure_bytes_available(256)
         self.mc.MOV(eax, heap(nursery_free_adr))
-        self.mc.LEA(edx, addr_add(eax, imm(size)))
+        self.mc.LEA_rm(edx.value, (eax.value, size))
         self.mc.CMP(edx, heap(nursery_top_adr))
         self.mc.J_il8(rx86.Conditions['NA'], 0) # patched later
         jmp_adr = self.mc.get_relative_pos()
@@ -1728,7 +1728,7 @@ class Assembler386(object):
         offset = self.mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127
         self.mc.overwrite(jmp_adr-1, [chr(offset)])
-        self.mc.MOV(addr_add(eax, imm(0)), imm(tid))
+        self.mc.MOV_mi((eax.value, 0), tid)
         self.mc.MOV(heap(nursery_free_adr), edx)
         
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
