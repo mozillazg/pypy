@@ -749,8 +749,8 @@ class Assembler386(object):
         # and I don't know if it's worth it.
         for i in range(len(pass_on_stack)):
             loc = pass_on_stack[i]
-            if isinstance(loc, StackLoc):
-                if loc.type == FLOAT:
+            if not isinstance(loc, RegLoc):
+                if isinstance(loc, StackLoc) and loc.type == FLOAT:
                     self.mc.MOVSD(X86_64_XMM_SCRATCH_REG, loc)
                     self.mc.MOVSD_sx(i*WORD, X86_64_XMM_SCRATCH_REG.value)
                 else:
@@ -758,7 +758,7 @@ class Assembler386(object):
                     self.mc.MOV(X86_64_SCRATCH_REG, loc)
                     self.mc.MOV_sr(i*WORD, X86_64_SCRATCH_REG.value)
             else:
-                assert isinstance(loc, RegLoc)
+                # It's a register
                 if loc.is_xmm:
                     self.mc.MOVSD_sx(i*WORD, loc.value)
                 else:
