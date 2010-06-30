@@ -579,12 +579,15 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         assert loop.token._x86_param_depth == self.expected_param_depth(2)
 
     def test_call_many_arguments(self):
+        # NB: The first and last arguments in the call are constants. This
+        # is primarily for x86-64, to ensure that loading a constant to an
+        # argument register or to the stack works correctly
         ops = '''
-        [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
-        i10 = call(ConstClass(f10ptr), i0, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=f10_calldescr)
-        finish(i10)
+        [i0, i1, i2, i3, i4, i5, i6, i7]
+        i8 = call(ConstClass(f10ptr), 1, i0, i1, i2, i3, i4, i5, i6, i7, 10, descr=f10_calldescr)
+        finish(i8)
         '''
-        loop = self.interpret(ops, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+        loop = self.interpret(ops, [2, 3, 4, 5, 6, 7, 8, 9])
         assert self.getint(0) == 55
         assert loop.token._x86_param_depth == self.expected_param_depth(10)
 
