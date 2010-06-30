@@ -554,6 +554,7 @@ class AppTestPartialEvaluation:
         assert u'\\'.encode('unicode-escape') == '\\\\'
         assert '\\\\'.decode('unicode-escape') == u'\\'
         assert u'\ud801'.encode('unicode-escape') == '\\ud801'
+        assert u'\u0013'.encode('unicode-escape') == '\\x13'
 
     def test_mbcs(self):
         import sys

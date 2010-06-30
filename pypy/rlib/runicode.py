@@ -1095,9 +1095,12 @@ def raw_unicode_escape_helper(result, char):
     if char >= 0x10000:
         result.append("\\U")
         zeros = 8
-    else:
+    elif char >= 0x100:
         result.append("\\u")
         zeros = 4
+    else:
+        result.append("\\x")
+        zeros = 2
     nb = zeros + 2 - len(num) # num starts with '0x'
     if nb > 0:
         result.append_multiple_char('0', nb)
