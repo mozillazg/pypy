@@ -526,6 +526,9 @@ class AppTestPartialEvaluation:
     def test_charmap_encode(self):
         assert 'xxx'.encode('charmap') == 'xxx'
 
+        import codecs
+        raises(TypeError, codecs.charmap_encode, u'\xff', "replace",  {0xff: 300})
+
     def test_charmap_encode_replace(self):
         charmap = dict([ (ord(c), 2*c.upper()) for c in "abcdefgh"])
         charmap[ord("?")] = "XYZ"
