@@ -779,10 +779,17 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 
         c = mapping.get(ch, '')
         if len(c) == 0:
-            r, pos = errorhandler(errors, "charmap",
-                                  "character maps to <undefined>",
-                                  s, pos, pos + 1)
-            result.append(r)
+            res, pos = errorhandler(errors, "charmap",
+                                    "character maps to <undefined>",
+                                    s, pos, pos + 1)
+            for ch2 in res:
+                c2 = mapping.get(unichr(ord(ch2)), '')
+                if len(c2) == 0:
+                    raise_unicode_exception_encode(
+                        errors, "charmap",
+                        "character maps to <undefined>",
+                        s,  pos, pos + 1)
+                result.append(c2)
             continue
         result.append(c)
         pos += 1
