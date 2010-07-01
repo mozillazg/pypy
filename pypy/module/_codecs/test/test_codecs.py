@@ -460,6 +460,9 @@ class AppTestPartialEvaluation:
         assert '\xff'.decode('utf-7', 'ignore') == ''
         assert '\x00'.decode('unicode-internal', 'ignore') == ''
 
+    def test_backslahreplace(self):
+        assert u'a\xac\u1234\u20ac\u8000'.encode('ascii', 'backslashreplace') == 'a\\xac\u1234\u20ac\u8000'
+
     def test_badhandler(self):
         import codecs
         results = ( 42, u"foo", (1,2,3), (u"foo", 1, 3), (u"foo", None), (u"foo",), ("foo", 1, 3), ("foo", None), ("foo",) )

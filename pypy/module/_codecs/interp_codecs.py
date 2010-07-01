@@ -232,10 +232,11 @@ def backslashreplace_errors(space, w_exc):
             else:
                 builder.append(u"\\x")
                 zeros = 2
-            nb = zeros + 2 - len(num) # num starts with '0x'
+            lnum = len(num)
+            nb = zeros + 2 - lnum # num starts with '0x'
             if nb > 0:
                 builder.append_multiple_char(u'0', nb)
-            builder.append_slice(unicode(num), 2, 8)
+            builder.append_slice(unicode(num), 2, lnum)
             pos += 1
         return space.newtuple([space.wrap(builder.build()), w_end])
     else:
