@@ -526,6 +526,14 @@ class AppTestPartialEvaluation:
     def test_charmap_encode(self):
         assert 'xxx'.encode('charmap') == 'xxx'
 
+    def test_charmap_encode_replace(self):
+        charmap = dict([ (ord(c), 2*c.upper()) for c in "abcdefgh"])
+        charmap[ord("?")] = "XYZ"
+        import codecs
+        sin = u"abcDEF"
+        sout = codecs.charmap_encode(sin, "replace", charmap)[0]
+        assert sout == "AABBCCXYZXYZXYZ"
+
     def test_charmap_decode_2(self):
         assert 'foo'.decode('charmap') == 'foo'
 
