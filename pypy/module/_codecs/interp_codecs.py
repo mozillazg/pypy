@@ -534,7 +534,11 @@ class Charmap_Encode:
             if not e.match(space, space.w_TypeError):
                 raise
         else:
-            return chr(x)
+            if 0 <= x < 256:
+                return chr(x)
+            else:
+                raise OperationError(space.w_TypeError, space.wrap(
+                    "character mapping must be in range(256)"))
 
         # Charmap may return None
         if space.is_w(w_ch, space.w_None):
