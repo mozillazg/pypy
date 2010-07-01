@@ -531,6 +531,7 @@ class AppTestPartialEvaluation:
 
         import codecs
         raises(TypeError, codecs.charmap_encode, u'\xff', "replace",  {0xff: 300})
+        raises(UnicodeError, codecs.charmap_encode, u"\xff", "replace", {0xff: None})
 
     def test_charmap_encode_replace(self):
         charmap = dict([ (ord(c), 2*c.upper()) for c in "abcdefgh"])
