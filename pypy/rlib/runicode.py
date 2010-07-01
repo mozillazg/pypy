@@ -3,6 +3,7 @@ from pypy.rlib.bitmanipulation import splitter
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
+from pypy.rlib.rarithmetic import r_uint
 
 if rffi.sizeof(lltype.UniChar) == 4:
     MAXUNICODE = 0x10ffff
@@ -780,7 +781,8 @@ def unicode_encode_charmap(s, size, errors, errorhandler=None,
 
 hexdigits = "0123456789ABCDEFabcdef"
 
-def hexescape(builder, s, pos, digits, errorhandler, message, errors):
+def hexescape(builder, s, pos, digits,
+              encoding, errorhandler, message, errors):
     import sys
     chr = 0
     if (pos+digits>len(s)):
@@ -790,12 +792,12 @@ def hexescape(builder, s, pos, digits, errorhandler, message, errors):
         builder.append(res)
     else:
         try:
-            chr = int(s[pos:pos+digits], 16)
+            chr = r_uint(int(s[pos:pos+digits], 16))
         except ValueError:
             endinpos = pos
             while s[endinpos] in hexdigits:
                 endinpos += 1
-            res, pos = errorhandler(errors, "unicodeescape",
+            res, pos = errorhandler(errors, encoding,
                                     message, s, pos-2, endinpos+1)
             builder.append(res)
         else:
@@ -811,8 +813,8 @@ def hexescape(builder, s, pos, digits, errorhandler, message, errors):
                 pos += digits
             else:
                 message = "illegal Unicode character"
-                res, pos = errorhandler(errors, "unicodeescape",
-                                        message, s, pos-2, pos+1)
+                res, pos = errorhandler(errors, encoding,
+                                        message, s, pos-2, pos+digits)
                 builder.append(res)
     return pos
 
@@ -878,21 +880,21 @@ def str_decode_unicode_escape(s, size, errors, final=False,
             digits = 2
             message = "truncated \\xXX escape"
             pos = hexescape(builder, s, pos, digits,
-                            errorhandler, message, errors)
+                            "unicodeescape", errorhandler, message, errors)
 
         # \uXXXX
         elif ch == 'u':
             digits = 4
             message = "truncated \\uXXXX escape"
             pos = hexescape(builder, s, pos, digits,
-                            errorhandler, message, errors)
+                            "unicodeescape", errorhandler, message, errors)
 
         #  \UXXXXXXXX
         elif ch == 'U':
             digits = 8
             message = "truncated \\UXXXXXXXX escape"
             pos = hexescape(builder, s, pos, digits,
-                            errorhandler, message, errors)
+                            "unicodeescape", errorhandler, message, errors)
 
         # \N{name}
         elif ch == 'N':
@@ -1052,31 +1054,14 @@ def str_decode_raw_unicode_escape(s, size, errors, final=False,
             continue
 
         if s[pos] == 'u':
-            count = 4
+            digits = 4
+            message = "truncated \\uXXXX escape"
         else:
-            count = 8
+            digits = 8
+            message = "truncated \\UXXXXXXXX escape"
         pos += 1
-
-        # \uXXXX with 4 hex digits, \Uxxxxxxxx with 8
-        x = 0
-        try:
-            x = int(s[pos:pos+count], 16)
-        except ValueError:
-            res, pos = errorhandler(errors, "rawunicodeescape",
-                                    "truncated \\uXXXX",
-                                    s,  pos, size)
-            result.append(res)
-            continue
-
-        if (x > MAXUNICODE):
-            res, pos = errorhandler(errors, "rawunicodeescape",
-                                    "\\Uxxxxxxxx out of range",
-                                    s,  pos, size)
-            result.append(res)
-            continue
-
-        result.append(unichr(x))
-        pos += count
+        pos = hexescape(result, s, pos, digits,
+                        "rawunicodeescape", errorhandler, message, errors)
 
     return result.build(), pos
 
@@ -1147,10 +1132,10 @@ def str_decode_unicode_internal(s, size, errors, final=False,
             if pos > size - unicode_bytes:
                 break
             continue
-        t = 0
+        t = r_uint(0)
         h = 0
         for j in range(start, stop, step):
-            t += ord(s[pos + j]) << (h*8)
+            t += r_uint(ord(s[pos + j])) << (h*8)
             h += 1
         if t > MAXUNICODE:
             res, pos = errorhandler(errors, "unicode_internal",
