@@ -471,6 +471,32 @@ def _utf7_ENCODE(result, ch, bits):
         bits -= 6
     return bits
 
+def _utf7_DECODE(s, result, errorhandler, errors,
+                 pos, charsleft, bitsleft, surrogate):
+    while bitsleft >= 16:
+        outCh =  (charsleft >> (bitsleft-16)) & 0xffff
+        bitsleft -= 16
+
+        if surrogate:
+            ## We have already generated an error for the high
+            ## surrogate so let's not bother seeing if the low
+            ## surrogate is correct or not
+            surrogate = False
+        elif 0xDC00 <= outCh <= 0xDFFF:
+            ## This is a surrogate pair. Unfortunately we can't
+            ## represent it in a 16-bit character
+            surrogate = True
+            msg = "code pairs are not supported"
+            res, pos = errorhandler(errors, 'utf-7',
+                                    msg, s, pos-1, pos)
+            result.append(res)
+            bitsleft = 0
+            break
+        else:
+            result.append(unichr(outCh))
+    return pos, charsleft, bitsleft, surrogate
+
+
 def str_decode_utf_7(s, size, errors, final=False,
                      errorhandler=None):
     if errorhandler is None:
@@ -495,27 +521,9 @@ def str_decode_utf_7(s, size, errors, final=False,
                 inShift = 0
                 pos += 1
 
-                while bitsleft >= 16:
-                    outCh =  (charsleft >> (bitsleft-16)) & 0xffff
-                    bitsleft -= 16
-
-                    if surrogate:
-                        ##  We have already generated an error for the high
-                        ##  surrogate so let's not bother seeing if the low
-                        ##  surrogate is correct or not
-                        surrogate = False
-                    elif 0xDC00 <= outCh <= 0xDFFF:
-                        ## This is a surrogate pair. Unfortunately we can't
-                        ## represent it in a 16-bit character
-                        surrogate = True
-                        msg = "code pairs are not supported"
-                        res, pos = errorhandler(errors, 'utf-7',
-                                                msg, s, pos-1, pos)
-                        result.append(res)
-                        bitsleft = 0
-                        break
-                    else:
-                        result.append(unichr(outCh))
+                pos, charsleft, bitsleft, surrogate = _utf7_DECODE(
+                    s, result, errorhandler, errors,
+                    pos, charsleft, bitsleft, surrogate)
                 if bitsleft >= 6:
                     ## The shift sequence has a partial character in it. If
                     ## bitsleft < 6 then we could just classify it as padding
@@ -544,6 +552,10 @@ def str_decode_utf_7(s, size, errors, final=False,
                 charsleft = (charsleft << 6) | _utf7_FROM_BASE64(ch)
                 bitsleft += 6
                 pos += 1
+
+                pos, charsleft, bitsleft, surrogate = _utf7_DECODE(
+                    s, result, errorhandler, errors,
+                    pos, charsleft, bitsleft, surrogate)
         elif ch == '+':
             startinpos = pos
             pos += 1
