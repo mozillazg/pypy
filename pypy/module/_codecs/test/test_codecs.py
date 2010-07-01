@@ -106,11 +106,14 @@ class AppTestCodecs:
 
     def test_charmap_decode(self):
         from _codecs import charmap_decode
+        import sys
         assert charmap_decode('', 'strict', 'blablabla') == ('', 0)
         assert charmap_decode('xxx') == ('xxx', 3)
         assert charmap_decode('xxx', 'strict', {ord('x'): u'XX'}) == ('XXXXXX', 3)
         map = tuple([unichr(i) for i in range(256)])
         assert charmap_decode('xxx\xff', 'strict', map) == (u'xxx\xff', 4)
+
+        raises(TypeError, charmap_decode, '\xff', "replace",  {0xff: 0x10001})
 
     def test_unicode_escape(self):
         from _codecs import unicode_escape_encode, unicode_escape_decode
