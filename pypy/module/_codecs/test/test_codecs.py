@@ -541,6 +541,9 @@ class AppTestPartialEvaluation:
             assert exc.start == 0
             assert exc.end == 3
 
+    def test_utf7_surrogate(self):
+        raises(UnicodeDecodeError, '+3ADYAA-'.decode, 'utf-7')
+
     def test_utf_16_encode_decode(self):
         import codecs
         x = u'123abc'
