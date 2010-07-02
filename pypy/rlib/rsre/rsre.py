@@ -235,6 +235,14 @@ def sre_match(ctx, ppos, ptr, marks):
             ppos += 1
             ptr += 1
 
+        elif op == OPCODE_NOT_LITERAL_IGNORE:
+            # match if it's not a literal string, ignoring case
+            # <NOT_LITERAL> <code>
+            if ptr >= ctx.end or ctx.lowstr(ptr) == ctx.pat(ppos):
+                return False
+            ppos += 1
+            ptr += 1
+
         elif op == OPCODE_REPEAT:
             # general repeat.  in this version of the re module, all the work
             # is done here, and not on the later UNTIL operator.
@@ -408,6 +416,11 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
     elif op == OPCODE_NOT_LITERAL:
         chr = ctx.pat(ppos+1)
         while ptr < end and ctx.str(ptr) != chr:
+            ptr += 1
+
+    elif op == OPCODE_NOT_LITERAL_IGNORE:
+        chr = ctx.pat(ppos+1)
+        while ptr < end and ctx.lowstr(ptr) != chr:
             ptr += 1
 
     else:
