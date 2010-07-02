@@ -135,9 +135,19 @@ class TestMatch:
         assert not rsre.match(r, "aaagaaa")
 
     def test_not_literal(self):
-        r, _ = get_code(r"[^a-f]")
-        assert rsre.match(r, "B")
-        assert not rsre.match(r, "b")
-        r, _ = get_code(r"[^a-f]+$")
+        r, _ = get_code(r"[^a]")
+        assert rsre.match(r, "A")
+        assert not rsre.match(r, "a")
+        r, _ = get_code(r"[^a]+$")
         assert rsre.match(r, "Bx123")
-        assert not rsre.match(r, "--f--")
+        assert not rsre.match(r, "--a--")
+
+    def test_not_literal_ignore(self):
+        import py; py.test.skip("in-progress")
+        r, _ = get_code(r"(?i)[^a]")
+        assert rsre.match(r, "G")
+        assert not rsre.match(r, "a")
+        assert not rsre.match(r, "A")
+        r, _ = get_code(r"(?i)[^a]+$")
+        assert rsre.match(r, "Gx123")
+        assert not rsre.match(r, "--A--")
