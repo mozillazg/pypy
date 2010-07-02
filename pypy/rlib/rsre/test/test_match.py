@@ -112,3 +112,14 @@ class TestMatch:
         assert not rsre.match(r, "xxxxxxx")
         assert     rsre.match(r, "xxxxxxxx")
         assert     rsre.match(r, "xxxxxxxxx")
+
+    def test_groupref_ignore(self):
+        r, _ = get_code(r"(?i)(xx+)\1+$")     # match non-prime numbers of x
+        assert not rsre.match(r, "xX")
+        assert not rsre.match(r, "xxX")
+        assert     rsre.match(r, "Xxxx")
+        assert not rsre.match(r, "xxxXx")
+        assert     rsre.match(r, "xXxxxx")
+        assert not rsre.match(r, "xxxXxxx")
+        assert     rsre.match(r, "xxxxxxXx")
+        assert     rsre.match(r, "xxxXxxxxx")
