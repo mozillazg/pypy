@@ -444,8 +444,13 @@ class Assembler386(object):
         return adr_stackadjust
 
     def _assemble_bootstrap_direct_call_64(self, arglocs, jmpadr, stackdepth):
-        # XXX: Is this even remotely correct? Might arglocs contain some of
-        # the same locations that the calling convention uses?
+        # XXX: Very similar to _emit_call_64
+
+        src_locs = []
+        dst_locs = []
+        xmm_src_locs = []
+        xmm_dst_locs = []
+        get_from_stack = []
 
         # In reverse order for use with pop()
         unused_gpr = [r9, r8, ecx, edx, esi, edi]
@@ -455,30 +460,42 @@ class Assembler386(object):
         adr_stackadjust = self._call_header()
         self._patch_stackadjust(adr_stackadjust, stackdepth)
 
+        # The lists are padded with Nones
+        assert len(nonfloatlocs) == len(floatlocs)
+
         for i in range(len(nonfloatlocs)):
             loc = nonfloatlocs[i]
             if loc is not None:
                 if len(unused_gpr) > 0:
-                    self.mc.MOV(loc, unused_gpr.pop())
+                    src_locs.append(unused_gpr.pop())
+                    dst_locs.append(loc)
                 else:
-                    self.mc.ensure_bytes_available(32)
-                    self.mc.MOV_rb(X86_64_SCRATCH_REG.value, (2 + i) * WORD)
-                    self.mc.MOV(loc, X86_64_SCRATCH_REG)
+                    get_from_stack.append((loc, False))
 
-        for i in range(len(floatlocs)):
-            loc = floatlocs[i]
-            if loc is not None:
+            floc = floatlocs[i]
+            if floc is not None:
                 if len(unused_xmm) > 0:
-                    self.mc.MOVSD(loc, unused_xmm.pop())
+                    xmm_src_locs.append(unused_xmm.pop())
+                    xmm_dst_locs.append(floc)
                 else:
-                    self.mc.MOVSD_xb(X86_64_XMM_SCRATCH_REG.value, (2 + i) * WORD)
-                    self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
+                    get_from_stack.append((floc, True))
+
+        remap_frame_layout(self, src_locs, dst_locs, X86_64_SCRATCH_REG)
+        remap_frame_layout(self, xmm_src_locs, xmm_dst_locs, X86_64_XMM_SCRATCH_REG)
+
+        for i in range(len(get_from_stack)):
+            loc, is_xmm = get_from_stack[i]
+            self.mc.ensure_bytes_available(32)
+            if is_xmm:
+                self.mc.MOVSD_xb(X86_64_XMM_SCRATCH_REG.value, (2 + i) * WORD)
+                self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
+            else:
+                self.mc.MOV_rb(X86_64_SCRATCH_REG.value, (2 + i) * WORD)
+                self.mc.MOV(loc, X86_64_SCRATCH_REG)
 
         self.mc.JMP(imm(jmpadr))
 
         return adr_stackadjust
-
-
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
         nonfloatlocs, floatlocs = arglocs
