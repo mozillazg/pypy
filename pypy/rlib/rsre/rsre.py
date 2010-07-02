@@ -10,7 +10,10 @@ OPCODE_ASSERT_NOT         = 5
 OPCODE_AT                 = 6
 OPCODE_BRANCH             = 7
 #OPCODE_CALL              = 8
-OPCODE_CATEGORY           = 9
+#OPCODE_CATEGORY          = 9
+#OPCODE_CHARSET           = 10
+#OPCODE_BIGCHARSET        = 11
+OPCODE_GROUPREF           = 12
 OPCODE_IN                 = 15
 OPCODE_INFO               = 17
 OPCODE_JUMP               = 18
@@ -42,12 +45,7 @@ class MatchContext(object):
 
     def get_mark(self, gid):
         """Use this for testing."""
-        mark = self.match_marks
-        while mark is not None:
-            if mark.gid == gid:
-                return mark.position
-            mark = mark.prev
-        return -1
+        return find_mark(self.match_marks, gid)
 
 
 class Mark(object):
@@ -57,6 +55,13 @@ class Mark(object):
         self.gid = gid
         self.position = position
         self.prev = prev      # chained list
+
+def find_mark(mark, gid):
+    while mark is not None:
+        if mark.gid == gid:
+            return mark.position
+        mark = mark.prev
+    return -1
 
 
 def match(pattern, string):
@@ -125,6 +130,22 @@ def sre_match(ctx, ppos, ptr, marks):
 
         #elif op == OPCODE_CATEGORY:
         #   seems to be never produced
+
+        elif op == OPCODE_GROUPREF:
+            # match backreference
+            # <GROUPREF> <groupnum>
+            gid = ctx.pat(ppos) * 2
+            startptr = find_mark(marks, gid)
+            if startptr < 0:
+                return False
+            endptr = find_mark(marks, gid + 1)
+            if endptr < startptr:   # also includes the case "endptr == -1"
+                return False
+            for i in range(startptr, endptr):
+                if ptr >= ctx.end or ctx.str(ptr) != ctx.str(i):
+                    return False
+                ptr += 1
+            ppos += 1
 
         elif op == OPCODE_IN:
             # match set member (or non_member)
