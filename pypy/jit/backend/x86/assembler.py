@@ -156,7 +156,6 @@ class Assembler386(object):
         self.malloc_array_func_addr = 0
         self.malloc_str_func_addr = 0
         self.malloc_unicode_func_addr = 0
-        self.assembler_helper_adr = 0
         self.fail_boxes_int = values_array(lltype.Signed, failargs_limit)
         self.fail_boxes_ptr = values_array(llmemory.GCREF, failargs_limit)
         self.fail_boxes_float = values_array(lltype.Float, failargs_limit)
@@ -192,14 +191,6 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
-            if we_are_translated():
-                self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
-                    self.cpu.assembler_helper_ptr)
-            else:
-                if getattr(self.cpu, 'assembler_helper_ptr', None):
-                    self.assembler_helper_adr = self.cpu.cast_ptr_to_int(
-                        self.cpu.assembler_helper_ptr)
-        
             self.mc = MachineCodeBlockWrapper(self, self.mc_size, self.cpu.profile_agent)
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
@@ -1575,7 +1566,10 @@ class Assembler386(object):
         je_location = self.mc.get_relative_pos()
         #
         # Path A: use assembler_helper_adr
-        self._emit_call(imm(self.assembler_helper_adr), [eax, arglocs[1]], 0,
+        jd = descr.outermost_jitdriver_sd
+        assert jd is not None
+        asm_helper_adr = self.cpu.cast_adr_to_int(jd.assembler_helper_adr)
+        self._emit_call(imm(asm_helper_adr), [eax, arglocs[1]], 0,
                         tmp=ecx)
         if IS_X86_32 and isinstance(result_loc, StackLoc) and result_loc.type == FLOAT:
             self.mc.FSTP_b(result_loc.value)
@@ -1589,9 +1583,9 @@ class Assembler386(object):
         self.mc.overwrite(je_location - 1, [chr(offset)])
         #
         # Reset the vable token --- XXX really too much special logic here:-(
-        if self.cpu.index_of_virtualizable >= 0:
+        if jd.index_of_virtualizable >= 0:
             from pypy.jit.backend.llsupport.descr import BaseFieldDescr
-            fielddescr = self.cpu.vable_token_descr
+            fielddescr = jd.vable_token_descr
             assert isinstance(fielddescr, BaseFieldDescr)
             ofs = fielddescr.offset
             self.mc.MOV(eax, arglocs[1])

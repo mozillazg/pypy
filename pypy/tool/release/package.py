@@ -32,27 +32,37 @@ class PyPyCNotFound(Exception):
     pass
 
 def package(basedir, name='pypy-nightly', rename_pypy_c='pypy-c',
-         override_pypy_c = None):
+            copy_to_dir = None, override_pypy_c = None):
     basedir = py.path.local(basedir)
+    if sys.platform == 'win32':
+        basename = 'pypy-c.exe'
+    else:
+        basename = 'pypy-c'
     if override_pypy_c is None:
-        pypy_c = basedir.join('pypy', 'translator', 'goal', 'pypy-c')
+        pypy_c = basedir.join('pypy', 'translator', 'goal', basename)
     else:
         pypy_c = py.path.local(override_pypy_c)
     if not pypy_c.check():
         raise PyPyCNotFound('Please compile pypy first, using translate.py')
     builddir = udir.ensure("build", dir=True)
     pypydir = builddir.ensure(name, dir=True)
+    # Careful: to copy lib_pypy, copying just the svn-tracked files
+    # would not be enough: there are also ctypes_config_cache/_*_cache.py.
     shutil.copytree(str(basedir.join('lib-python')),
                     str(pypydir.join('lib-python')),
-                    ignore=ignore_patterns('.svn', '*.pyc', '*~'))
-    # Careful: to copy pypy/lib, copying just the svn-tracked files
-    # would not be enough: there are also ctypes_config_cache/_*_cache.py.
-    pypydir.ensure('pypy', dir=True)
-    shutil.copytree(str(basedir.join('pypy', 'lib')),
-                    str(pypydir.join('pypy', 'lib')),
+                    ignore=ignore_patterns('.svn', 'py', '*.pyc', '*~'))
+    shutil.copytree(str(basedir.join('lib_pypy')),
+                    str(pypydir.join('lib_pypy')),
                     ignore=ignore_patterns('.svn', 'py', '*.pyc', '*~'))
     for file in ['LICENSE', 'README']:
         shutil.copy(str(basedir.join(file)), str(pypydir))
+    pypydir.ensure('include', dir=True)
+    # we want to put there all *.h and *.inl from trunk/include
+    # and from pypy/_interfaces
+    includedir = basedir.join('include')
+    headers = includedir.listdir('*.h') + includedir.listdir('*.inl')
+    for n in headers:
+        shutil.copy(str(n), str(pypydir.join('include')))
     pypydir.ensure('bin', dir=True)
     archive_pypy_c = pypydir.join('bin', rename_pypy_c)
     shutil.copy(str(pypy_c), str(archive_pypy_c))
@@ -64,10 +74,13 @@ def package(basedir, name='pypy-nightly', rename_pypy_c='pypy-c',
                   " " + name)
     finally:
         os.chdir(old_dir)
+    if copy_to_dir is not None:
+        print "Copying to %s" % copy_to_dir
+        shutil.copy(str(builddir.join(name + '.tar.bz2')), copy_to_dir)
     return builddir # for tests
 
 if __name__ == '__main__':
-    if len(sys.argv) == 1 or len(sys.argv) > 4:
+    if len(sys.argv) == 1:
         print >>sys.stderr, __doc__
         sys.exit(1)
     else:

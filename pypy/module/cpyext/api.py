@@ -45,11 +45,9 @@ ADDR = lltype.Signed
 pypydir = py.path.local(autopath.pypydir)
 include_dir = pypydir / 'module' / 'cpyext' / 'include'
 source_dir = pypydir / 'module' / 'cpyext' / 'src'
-interfaces_dir = pypydir / "_interfaces"
 include_dirs = [
     include_dir,
     udir,
-    interfaces_dir,
     ]
 
 class CConfig:
@@ -100,9 +98,16 @@ udir.join('pypy_decl.h').write("/* Will be filled later */")
 udir.join('pypy_macros.h').write("/* Will be filled later */")
 globals().update(rffi_platform.configure(CConfig_constants))
 
-def copy_header_files():
+def copy_header_files(dstdir):
+    assert dstdir.check(dir=True)
+    headers = include_dir.listdir('*.h') + include_dir.listdir('*.inl')
     for name in ("pypy_decl.h", "pypy_macros.h"):
-        udir.join(name).copy(interfaces_dir / name)
+        headers.append(udir.join(name))
+    for header in headers:
+        header.copy(dstdir)
+        target = dstdir.join(header.basename)
+        target.chmod(0444) # make the file read-only, to make sure that nobody
+                           # edits it by mistake
 
 _NOT_SPECIFIED = object()
 CANNOT_FAIL = object()
@@ -809,7 +814,6 @@ def build_eci(building_bridge, export_symbols, code):
         kwds["includes"] = ['Python.h'] # this is our Python.h
 
     # Generate definitions for global structures
-    struct_file = udir.join('pypy_structs.c')
     structs = ["#include <Python.h>"]
     for name, (typ, expr) in GLOBALS.iteritems():
         if name.endswith('#'):
@@ -819,7 +823,7 @@ def build_eci(building_bridge, export_symbols, code):
             structs.append('PyObject* %s = (PyObject*)&_%s;' % (name, name))
         elif typ == 'PyDateTime_CAPI*':
             structs.append('%s %s = NULL;' % (typ, name))
-    struct_file.write('\n'.join(structs))
+    struct_source = '\n'.join(structs)
 
     eci = ExternalCompilationInfo(
         include_dirs=include_dirs,
@@ -833,9 +837,8 @@ def build_eci(building_bridge, export_symbols, code):
                                source_dir / "bufferobject.c",
                                source_dir / "object.c",
                                source_dir / "cobject.c",
-                               struct_file,
                                ],
-        separate_module_sources = [code],
+        separate_module_sources = [code, struct_source],
         export_symbols=export_symbols_eci,
         compile_extra=compile_extra,
         **kwds
@@ -883,7 +886,8 @@ def setup_library(space):
         deco(func.get_wrapper(space))
 
     setup_init_functions(eci)
-    copy_header_files()
+    trunk_include = pypydir.dirpath() / 'include'
+    copy_header_files(trunk_include)
 
 initfunctype = lltype.Ptr(lltype.FuncType([], lltype.Void))
 @unwrap_spec(ObjSpace, str, str)
