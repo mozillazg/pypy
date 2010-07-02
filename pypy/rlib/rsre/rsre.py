@@ -1,5 +1,5 @@
 from pypy.rlib.debug import check_nonneg
-from rsre_char import check_charset, is_linebreak, is_word
+import rsre_char
 
 
 OPCODE_SUCCESS            = 1
@@ -14,10 +14,13 @@ OPCODE_BRANCH             = 7
 #OPCODE_CHARSET           = 10
 #OPCODE_BIGCHARSET        = 11
 OPCODE_GROUPREF           = 12
+OPCODE_GROUPREF_EXISTS    = 13
+OPCODE_GROUPREF_IGNORE    = 14
 OPCODE_IN                 = 15
 OPCODE_INFO               = 17
 OPCODE_JUMP               = 18
 OPCODE_LITERAL            = 19
+OPCODE_LITERAL_IGNORE     = 20
 OPCODE_MARK               = 21
 OPCODE_MAX_UNTIL          = 22
 OPCODE_MIN_UNTIL          = 23
@@ -30,10 +33,11 @@ class MatchContext(object):
     match_end = 0
     match_marks = None
 
-    def __init__(self, pattern, string):
+    def __init__(self, pattern, string, flags):
         self.pattern = pattern
         self.string = string
         self.end = len(string)
+        self.flags = flags
 
     def pat(self, index):
         check_nonneg(index)
@@ -42,6 +46,10 @@ class MatchContext(object):
     def str(self, index):
         check_nonneg(index)
         return ord(self.string[index])
+
+    def lowstr(self, index):
+        c = self.str(index)
+        return rsre_char.getlower(c, self.flags)
 
     def get_mark(self, gid):
         """Use this for testing."""
@@ -64,8 +72,8 @@ def find_mark(mark, gid):
     return -1
 
 
-def match(pattern, string):
-    ctx = MatchContext(pattern, string)
+def match(pattern, string, flags=0):
+    ctx = MatchContext(pattern, string, flags)
     if sre_match(ctx, 0, 0, None):
         return ctx
     return None
@@ -85,7 +93,7 @@ def sre_match(ctx, ppos, ptr, marks):
         elif op == OPCODE_ANY:
             # match anything (except a newline)
             # <ANY>
-            if ptr >= ctx.end or is_linebreak(ctx.str(ptr)):
+            if ptr >= ctx.end or rsre_char.is_linebreak(ctx.str(ptr)):
                 return False
             ptr += 1
 
@@ -147,11 +155,28 @@ def sre_match(ctx, ppos, ptr, marks):
                 ptr += 1
             ppos += 1
 
+        elif op == OPCODE_GROUPREF_IGNORE:
+            # match backreference
+            # <GROUPREF> <groupnum>
+            gid = ctx.pat(ppos) * 2
+            startptr = find_mark(marks, gid)
+            if startptr < 0:
+                return False
+            endptr = find_mark(marks, gid + 1)
+            if endptr < startptr:   # also includes the case "endptr == -1"
+                return False
+            for i in range(startptr, endptr):
+                if ptr >= ctx.end or ctx.lowstr(ptr) != ctx.lowstr(i):
+                    return False
+                ptr += 1
+            ppos += 1
+
         elif op == OPCODE_IN:
             # match set member (or non_member)
             # <IN> <skip> <set>
-            if (ptr >= ctx.end
-                or not check_charset(ctx.pattern, ppos+1, ctx.str(ptr))):
+            if ptr >= ctx.end or not rsre_char.check_charset(ctx.pattern,
+                                                             ppos+1,
+                                                             ctx.str(ptr)):
                 return False
             ppos += ctx.pat(ppos)
             ptr += 1
@@ -170,6 +195,14 @@ def sre_match(ctx, ppos, ptr, marks):
             # match literal string
             # <LITERAL> <code>
             if ptr >= ctx.end or ctx.str(ptr) != ctx.pat(ppos):
+                return False
+            ppos += 1
+            ptr += 1
+
+        elif op == OPCODE_LITERAL_IGNORE:
+            # match literal string, ignoring case
+            # <LITERAL_IGNORE> <code>
+            if ptr >= ctx.end or ctx.lowstr(ptr) != ctx.pat(ppos):
                 return False
             ppos += 1
             ptr += 1
@@ -321,7 +354,7 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
 
     if op == OPCODE_ANY:
         # repeated dot wildcard.
-        while ptr < end and not is_linebreak(ctx.str(ptr)):
+        while ptr < end and not rsre_char.is_linebreak(ctx.str(ptr)):
             ptr += 1
 
     elif op == OPCODE_ANY_ALL:
@@ -331,12 +364,18 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
 
     elif op == OPCODE_IN:
         # repeated set
-        while ptr < end and check_charset(ctx.pattern, ppos+2, ctx.str(ptr)):
+        while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
+                                                    ctx.str(ptr)):
             ptr += 1
 
     elif op == OPCODE_LITERAL:
         chr = ctx.pat(ppos+1)
         while ptr < end and ctx.str(ptr) == chr:
+            ptr += 1
+
+    elif op == OPCODE_LITERAL_IGNORE:
+        chr = ctx.pat(ppos+1)
+        while ptr < end and ctx.lowstr(ptr) == chr:
             ptr += 1
 
     else:
@@ -367,7 +406,7 @@ def sre_at(ctx, atcode, ptr):
 
     elif atcode == AT_BEGINNING_LINE:
         prevptr = ptr - 1
-        return prevptr < 0 or is_linebreak(ctx.str(prevptr))
+        return prevptr < 0 or rsre_char.is_linebreak(ctx.str(prevptr))
 
     elif atcode == AT_BOUNDARY:
         if ctx.end == 0:
@@ -388,10 +427,10 @@ def sre_at(ctx, atcode, ptr):
     elif atcode == AT_END:
         remaining_chars = ctx.end - ptr
         return remaining_chars <= 0 or (
-            remaining_chars == 1 and is_linebreak(ctx.str(ptr)))
+            remaining_chars == 1 and rsre_char.is_linebreak(ctx.str(ptr)))
 
     elif atcode == AT_END_LINE:
-        return ptr == ctx.end or is_linebreak(ctx.str(ptr))
+        return ptr == ctx.end or rsre_char.is_linebreak(ctx.str(ptr))
 
     elif atcode == AT_END_STRING:
         return ptr == ctx.end
