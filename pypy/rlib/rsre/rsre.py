@@ -2,6 +2,7 @@ from pypy.rlib.debug import check_nonneg
 import rsre_char
 
 
+OPCODE_FAILURE            = 0
 OPCODE_SUCCESS            = 1
 OPCODE_ANY                = 2
 OPCODE_ANY_ALL            = 3
@@ -27,8 +28,11 @@ OPCODE_MAX_UNTIL          = 22
 OPCODE_MIN_UNTIL          = 23
 OPCODE_NOT_LITERAL        = 24
 OPCODE_NOT_LITERAL_IGNORE = 25
+#OPCODE_NEGATE            = 26
+#OPCODE_RANGE             = 27
 OPCODE_REPEAT             = 28
 OPCODE_REPEAT_ONE         = 29
+#OPCODE_SUBPATTERN        = 30
 OPCODE_MIN_REPEAT_ONE     = 31
 
 
@@ -85,6 +89,9 @@ def sre_match(ctx, ppos, ptr, marks):
     while True:
         op = ctx.pat(ppos)
         ppos += 1
+
+        if op == OPCODE_FAILURE:
+            return False
 
         if (op == OPCODE_SUCCESS or
             op == OPCODE_MAX_UNTIL or
