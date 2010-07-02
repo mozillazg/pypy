@@ -123,3 +123,13 @@ class TestMatch:
         assert not rsre.match(r, "xxxXxxx")
         assert     rsre.match(r, "xxxxxxXx")
         assert     rsre.match(r, "xxxXxxxxx")
+
+    def test_in_ignore(self):
+        r, _ = get_code(r"(?i)[a-f]")
+        assert rsre.match(r, "b")
+        assert rsre.match(r, "C")
+        assert not rsre.match(r, "g")
+        r, _ = get_code(r"(?i)[a-f]+$")
+        assert rsre.match(r, "bCdEf")
+        assert not rsre.match(r, "g")
+        assert not rsre.match(r, "aaagaaa")
