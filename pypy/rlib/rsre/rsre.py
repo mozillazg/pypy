@@ -17,6 +17,7 @@ OPCODE_GROUPREF           = 12
 OPCODE_GROUPREF_EXISTS    = 13
 OPCODE_GROUPREF_IGNORE    = 14
 OPCODE_IN                 = 15
+OPCODE_IN_IGNORE          = 16
 OPCODE_INFO               = 17
 OPCODE_JUMP               = 18
 OPCODE_LITERAL            = 19
@@ -177,6 +178,16 @@ def sre_match(ctx, ppos, ptr, marks):
             if ptr >= ctx.end or not rsre_char.check_charset(ctx.pattern,
                                                              ppos+1,
                                                              ctx.str(ptr)):
+                return False
+            ppos += ctx.pat(ppos)
+            ptr += 1
+
+        elif op == OPCODE_IN_IGNORE:
+            # match set member (or non_member), ignoring case
+            # <IN> <skip> <set>
+            if ptr >= ctx.end or not rsre_char.check_charset(ctx.pattern,
+                                                             ppos+1,
+                                                             ctx.lowstr(ptr)):
                 return False
             ppos += ctx.pat(ppos)
             ptr += 1
@@ -366,6 +377,12 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
         # repeated set
         while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
                                                     ctx.str(ptr)):
+            ptr += 1
+
+    elif op == OPCODE_IN_IGNORE:
+        # repeated set
+        while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
+                                                    ctx.lowstr(ptr)):
             ptr += 1
 
     elif op == OPCODE_LITERAL:
