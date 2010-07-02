@@ -230,7 +230,7 @@ def sre_match(ctx, ppos, ptr, marks):
         elif op == OPCODE_NOT_LITERAL:
             # match if it's not a literal string
             # <NOT_LITERAL> <code>
-            if ptr >= ctx.end or ctx.lowstr(ptr) == ctx.pat(ppos):
+            if ptr >= ctx.end or ctx.str(ptr) == ctx.pat(ppos):
                 return False
             ppos += 1
             ptr += 1
