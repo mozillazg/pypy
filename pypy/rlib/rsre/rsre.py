@@ -123,13 +123,17 @@ def sre_match(ctx, ppos, ptr, marks):
                 ppos += ctx.pat(ppos)
             return False
 
-        elif op == OPCODE_CATEGORY:
-            # match at given category (a single char)
-            # <CATEGORY> <code>
-            xxx #if (ptr >= end || !sre_category(pattern[0], ptr[0]))
-            #    return 0;
-            #pattern++;
-            #ptr++;
+        #elif op == OPCODE_CATEGORY:
+        #   seems to be never produced
+
+        elif op == OPCODE_IN:
+            # match set member (or non_member)
+            # <IN> <skip> <set>
+            if (ptr >= ctx.end
+                or not check_charset(ctx.pattern, ppos+1, ctx.str(ptr))):
+                return False
+            ppos += ctx.pat(ppos)
+            ptr += 1
 
         elif op == OPCODE_INFO:
             # optimization info block
