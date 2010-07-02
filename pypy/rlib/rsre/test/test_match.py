@@ -133,3 +133,11 @@ class TestMatch:
         assert rsre.match(r, "bCdEf")
         assert not rsre.match(r, "g")
         assert not rsre.match(r, "aaagaaa")
+
+    def test_not_literal(self):
+        r, _ = get_code(r"[^a-f]")
+        assert rsre.match(r, "B")
+        assert not rsre.match(r, "b")
+        r, _ = get_code(r"[^a-f]+$")
+        assert rsre.match(r, "Bx123")
+        assert not rsre.match(r, "--f--")

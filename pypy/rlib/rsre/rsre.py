@@ -25,6 +25,8 @@ OPCODE_LITERAL_IGNORE     = 20
 OPCODE_MARK               = 21
 OPCODE_MAX_UNTIL          = 22
 OPCODE_MIN_UNTIL          = 23
+OPCODE_NOT_LITERAL        = 24
+OPCODE_NOT_LITERAL_IGNORE = 25
 OPCODE_REPEAT             = 28
 OPCODE_REPEAT_ONE         = 29
 OPCODE_MIN_REPEAT_ONE     = 31
@@ -225,6 +227,14 @@ def sre_match(ctx, ppos, ptr, marks):
             marks = Mark(gid, ptr, marks)
             ppos += 1
 
+        elif op == OPCODE_NOT_LITERAL:
+            # match if it's not a literal string
+            # <NOT_LITERAL> <code>
+            if ptr >= ctx.end or ctx.lowstr(ptr) == ctx.pat(ppos):
+                return False
+            ppos += 1
+            ptr += 1
+
         elif op == OPCODE_REPEAT:
             # general repeat.  in this version of the re module, all the work
             # is done here, and not on the later UNTIL operator.
@@ -393,6 +403,11 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
     elif op == OPCODE_LITERAL_IGNORE:
         chr = ctx.pat(ppos+1)
         while ptr < end and ctx.lowstr(ptr) == chr:
+            ptr += 1
+
+    elif op == OPCODE_NOT_LITERAL:
+        chr = ctx.pat(ppos+1)
+        while ptr < end and ctx.str(ptr) != chr:
             ptr += 1
 
     else:
