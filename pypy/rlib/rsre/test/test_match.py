@@ -6,6 +6,7 @@ def get_code(regexp):
     class GotIt(Exception):
         pass
     def my_compile(pattern, flags, code, *args):
+        print code
         raise GotIt(code)
     saved = _sre.compile
     try:
@@ -14,6 +15,8 @@ def get_code(regexp):
             re.compile(regexp)
         except GotIt, e:
             pass
+        else:
+            raise ValueError("did not reach _sre.compile()!")
     finally:
         _sre.compile = saved
     return e.args[0], re.compile(regexp)
@@ -88,9 +91,13 @@ class TestMatch:
         assert not rsre.match(r, "abcd")
         assert not rsre.match(r, "ab")
 
+    def test_repeated_set(self):
+        r, _ = get_code(r"[a0x]+f")
+        assert rsre.match(r, "a0af")
+        assert not rsre.match(r, "a0yaf")
+
     def test_category(self):
-        r, _ = get_code(r"ab\dcd")
-        assert rsre.match(r, "ab0cd")
-        assert rsre.match(r, "ab9cd")
-        assert not rsre.match(r, "abXcd")
-        assert not rsre.match(r, "ab+cd")
+        r, _ = get_code(r"[\sx]")
+        assert rsre.match(r, "x")
+        assert rsre.match(r, " ")
+        assert not rsre.match(r, "n")
