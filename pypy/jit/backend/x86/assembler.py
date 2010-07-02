@@ -255,7 +255,7 @@ class Assembler386(object):
         """
         if not we_are_translated():
             # Arguments should be unique
-            assert len(dict.fromkeys(inputargs)) == len(inputargs)
+            assert len(set(inputargs)) == len(inputargs)
 
         funcname = self._find_debug_merge_point(operations)
 
@@ -290,7 +290,7 @@ class Assembler386(object):
     def assemble_bridge(self, faildescr, inputargs, operations):
         if not we_are_translated():
             # Arguments should be unique
-            assert len(dict.fromkeys(inputargs)) == len(inputargs)
+            assert len(set(inputargs)) == len(inputargs)
 
         funcname = self._find_debug_merge_point(operations)
 
