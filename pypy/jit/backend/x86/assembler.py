@@ -253,6 +253,10 @@ class Assembler386(object):
                _x86_param_depth
                _x86_arglocs
         """
+        if not we_are_translated():
+            # Arguments should be unique
+            assert len(dict.fromkeys(inputargs)) == len(inputargs)
+
         funcname = self._find_debug_merge_point(operations)
 
         self.make_sure_mc_exists()
@@ -284,6 +288,10 @@ class Assembler386(object):
         self.write_pending_failure_recoveries()
         
     def assemble_bridge(self, faildescr, inputargs, operations):
+        if not we_are_translated():
+            # Arguments should be unique
+            assert len(dict.fromkeys(inputargs)) == len(inputargs)
+
         funcname = self._find_debug_merge_point(operations)
 
         self.make_sure_mc_exists()
