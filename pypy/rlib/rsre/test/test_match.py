@@ -150,3 +150,13 @@ class TestMatch:
         r, _ = get_code(r"(?i)[^a]+$")
         assert rsre.match(r, "Gx123")
         assert not rsre.match(r, "--A--")
+
+    def test_repeated_single_character_pattern(self):
+        r, _ = get_code(r"foo(?:(?<=foo)x)+$")
+        assert rsre.match(r, "foox")
+
+    def test_flatten_marks(self):
+        r, _ = get_code(r"a(b)c((d)(e))+$")
+        res = rsre.match(r, "abcdedede")
+        assert res.flatten_marks() == [0, 9, 1, 2, 7, 9, 7, 8, 8, 9]
+        assert res.flatten_marks() == [0, 9, 1, 2, 7, 9, 7, 8, 8, 9]

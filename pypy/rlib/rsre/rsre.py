@@ -37,8 +37,10 @@ OPCODE_MIN_REPEAT_ONE     = 31
 
 
 class MatchContext(object):
+    match_start = 0
     match_end = 0
     match_marks = None
+    match_marks_flat = None
 
     def __init__(self, pattern, string, flags):
         self.pattern = pattern
@@ -59,8 +61,22 @@ class MatchContext(object):
         return rsre_char.getlower(c, self.flags)
 
     def get_mark(self, gid):
-        """Use this for testing."""
         return find_mark(self.match_marks, gid)
+
+    def flatten_marks(self):
+        # for testing
+        if self.match_marks_flat is None:
+            self.match_marks_flat = [self.match_start, self.match_end]
+            mark = self.match_marks
+            while mark is not None:
+                index = mark.gid + 2
+                while index >= len(self.match_marks_flat):
+                    self.match_marks_flat.append(-1)
+                if self.match_marks_flat[index] == -1:
+                    self.match_marks_flat[index] = mark.position
+                mark = mark.prev
+            self.match_marks = None    # clear
+        return self.match_marks_flat
 
 
 class Mark(object):
