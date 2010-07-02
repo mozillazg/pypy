@@ -143,7 +143,6 @@ class TestMatch:
         assert not rsre.match(r, "--a--")
 
     def test_not_literal_ignore(self):
-        import py; py.test.skip("in-progress")
         r, _ = get_code(r"(?i)[^a]")
         assert rsre.match(r, "G")
         assert not rsre.match(r, "a")
