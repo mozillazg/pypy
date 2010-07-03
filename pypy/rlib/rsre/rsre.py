@@ -82,12 +82,13 @@ class MatchContext(object):
     def span(self, groupnum=0):
         # compatibility
         lst = self.flatten_marks()[groupnum*2:groupnum*2+2]
-        if not lst: raise IndexError
-        return tuple(lst)
+        return tuple(lst) or (-1, -1)
 
     def group(self, group=0):
         # compatibility
         frm, to = self.span(group)
+        if frm < 0 or to < frm:
+            return None
         return self.string[frm:to]
 
 
@@ -492,16 +493,16 @@ def sre_at(ctx, atcode, ptr):
         if ctx.end == 0:
             return False
         prevptr = ptr - 1
-        that = prevptr >= 0 and is_word(ctx.str(prevptr))
-        this = ptr < ctx.end and is_word(ctx.str(ptr))
+        that = prevptr >= 0 and rsre_char.is_word(ctx.str(prevptr))
+        this = ptr < ctx.end and rsre_char.is_word(ctx.str(ptr))
         return this != that
 
     elif atcode == AT_NON_BOUNDARY:
         if ctx.end == 0:
             return False
         prevptr = ptr - 1
-        that = prevptr >= 0 and is_word(ctx.str(prevptr))
-        this = ptr < ctx.end and is_word(ctx.str(ptr))
+        that = prevptr >= 0 and rsre_char.is_word(ctx.str(prevptr))
+        this = ptr < ctx.end and rsre_char.is_word(ctx.str(ptr))
         return this == that
 
     elif atcode == AT_END:

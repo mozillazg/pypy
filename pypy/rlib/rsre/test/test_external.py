@@ -62,5 +62,5 @@ def run_external(t):
         #    vardict[i] = gi
         repl = eval(repl, vardict)
         if repl != expected:
-            raise Exception("grouping error: %r should be %r" % (repr,
+            raise Exception("grouping error: %r should be %r" % (repl,
                                                                  expected))
