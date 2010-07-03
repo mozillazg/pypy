@@ -1,5 +1,5 @@
 from pypy.rlib.debug import check_nonneg
-import rsre_char
+from pypy.rlib.rsre import rsre_char
 
 
 OPCODE_FAILURE            = 0
@@ -42,10 +42,11 @@ class MatchContext(object):
     match_marks = None
     match_marks_flat = None
 
-    def __init__(self, pattern, string, flags):
+    def __init__(self, pattern, string, match_start, flags):
         self.pattern = pattern
         self.string = string
         self.end = len(string)
+        self.match_start = match_start
         self.flags = flags
 
     def pat(self, index):
@@ -78,6 +79,17 @@ class MatchContext(object):
             self.match_marks = None    # clear
         return self.match_marks_flat
 
+    def span(self, groupnum=0):
+        # compatibility
+        lst = self.flatten_marks()[groupnum*2:groupnum*2+2]
+        if not lst: raise IndexError
+        return tuple(lst)
+
+    def group(self, group=0):
+        # compatibility
+        frm, to = self.span(group)
+        return self.string[frm:to]
+
 
 class Mark(object):
     _immutable_ = True
@@ -95,9 +107,9 @@ def find_mark(mark, gid):
     return -1
 
 
-def match(pattern, string, flags=0):
-    ctx = MatchContext(pattern, string, flags)
-    if sre_match(ctx, 0, 0, None):
+def match(pattern, string, start=0, flags=0):
+    ctx = MatchContext(pattern, string, start, flags)
+    if sre_match(ctx, 0, start, None):
         return ctx
     return None
 
