@@ -1,15 +1,15 @@
 import re
-from test.re_tests import SUCCEED, FAIL, SYNTAX_ERROR
 from pypy.rlib.rsre.test.test_match import get_code
 from pypy.rlib.rsre import rsre
 
 
 def test_external():
-    from test.re_tests import tests
+    from pypy.rlib.rsre.test.re_tests import tests
     for t in tests:
         yield run_external, t
 
 def run_external(t):
+    from pypy.rlib.rsre.test.re_tests import SUCCEED, FAIL, SYNTAX_ERROR
     pattern, s, outcome = t[:3]
     if len(t) == 5:
         repl, expected = t[3:5]
