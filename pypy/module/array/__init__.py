@@ -7,6 +7,7 @@ class Module(MixedModule):
     }
     
     interpleveldefs = {
-        'array'    : 'interp_array.array',
+        'array'          : 'interp_array.array',
+        'sized_array'    : 'interp_array.sized_array',
     }
 
