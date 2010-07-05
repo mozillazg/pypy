@@ -3,5 +3,6 @@
 
 #include "Reflex/Type.h"
 #include "Reflex/Member.h"
+#include "Reflex/Object.h"
 
 #endif // CPPYY_CPPYY
