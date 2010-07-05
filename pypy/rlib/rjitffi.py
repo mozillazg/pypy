@@ -71,16 +71,7 @@ class _Get(object):
         FUNC = deref(FPTR)
         self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-    def call(self, func_args=None):
-        if func_args is not None:
-            for tp, value in zip(self.args_type, func_args):
-                if tp == 'int':
-                    self.push_int(value)
-                elif tp == 'float':
-                    self.push_float(value)
-                elif tp == 'ref':
-                    self.push_ref(value)
-
+    def call(self):
         inputargs = [self.bfuncaddr] + self.bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
