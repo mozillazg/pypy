@@ -48,6 +48,8 @@ class W_Get(Wrappable, rjitffi._Get):
                     self.push_int(space.int_w(w_arg))
                 elif self.args_type[i] == 'float':
                     self.push_float(space.float_w(w_arg))
+                elif self.args_type[i] == 'ref':
+                    self.push_ref(space.int_w(w_arg))
                 else:
                     raise OperationError(
                             space.w_TypeError,

@@ -78,6 +78,8 @@ class _Get(object):
                     self.push_int(value)
                 elif tp == 'float':
                     self.push_float(value)
+                elif tp == 'ref':
+                    self.push_ref(value)
 
         inputargs = [self.bfuncaddr] + self.bargs
 
@@ -121,4 +123,9 @@ class _Get(object):
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
         self.bargs.append(BoxFloat(value))
+        self.esp += 1
+
+    def push_ref(self, value):
+        self.cpu.set_future_value_ref(self.esp, value)
+        self.bargs.append(BoxPtr(value))
         self.esp += 1
