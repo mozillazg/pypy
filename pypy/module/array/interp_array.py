@@ -172,10 +172,13 @@ class W_Array(Wrappable):
         if len(s)%self.itemsize !=0:
             msg = 'string length not a multiple of item size'
             raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
-        for i in range(len(s)/self.itemsize):
+        oldlen = self.len
+        new = len(s) / self.itemsize
+        self.setlen(oldlen + new)
+        for i in range(new):
             p = i * self.itemsize
             item=struct.unpack(self.typecode, s[p:p + self.itemsize])[0]
-            self.descr_append(self.space.wrap(item))
+            self.descr_setitem(oldlen + i, self.space.wrap(item))
     descr_fromstring.unwrap_spec = ['self', str]
 
     def descr_fromfile(self, w_f, n):
@@ -196,10 +199,15 @@ class W_Array(Wrappable):
     descr_fromfile.unwrap_spec = ['self', W_Root, int]
 
     def descr_fromlist(self, w_lst):
+        space=self.space
         oldbuf = self.buffer
         oldlen = self.len
         try:
-            self.descr_extend(w_lst)
+            new=space.int_w(space.len(w_lst))
+            self.setlen(oldlen+new)
+            for i in range(new):
+                w_item=space.getitem(w_lst, space.wrap(i))
+                self.descr_setitem(oldlen + i, w_item)
         except OperationError:
             self.buffer = oldbuf
             self.len = oldlen
