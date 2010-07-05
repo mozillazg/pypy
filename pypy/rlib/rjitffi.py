@@ -73,7 +73,14 @@ class _Get(object):
 
         self.bargs = []
 
-    def call(self):
+    def call(self, func_args=None):
+        if func_args is not None:
+            for tp, value in zip(self.args_type, func_args):
+                if tp == 'int':
+                    self.push_int(value)
+                elif tp == 'float':
+                    self.push_float(value)
+
         inputargs = [self.bfuncaddr] + self.bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
