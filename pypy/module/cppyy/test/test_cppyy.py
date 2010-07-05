@@ -19,6 +19,13 @@ class AppTestCPPYY:
 
     def test_example01method(self):
         t = self.example01.type_byname("example01")
+        count = t.invoke("getcount")
+        assert count == 0
         instance = t.construct(7)
+        count = t.invoke("getcount")
+        assert count == 1
         res = instance.invoke("add", 4)
         assert res == 11
+        instance.destruct()
+        count = t.invoke("getcount")
+        assert count == 0
