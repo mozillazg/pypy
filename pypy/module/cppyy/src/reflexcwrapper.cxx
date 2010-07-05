@@ -33,12 +33,9 @@ void* construct(const char* class_name, int numargs, void* args[]) {
     Reflex::Type constructor_type = Reflex::FunctionTypeBuilder(
 	    Reflex::Type::ByName("void"), argtypes);
     return t.Construct(constructor_type, arguments).Address();
-    void* mem = t.Allocate();
-    memset(mem, 41, t.SizeOf());
-    Reflex::Object r = Reflex::Object(t, mem);
-    int i = 1;
-    std::cout << t.FunctionMemberAt(i).Name() << std::endl;
-    t.FunctionMemberAt(i).Invoke(r, 0, arguments);
-    return r.Address();
 }
 
+void destruct(const char* class_name, void* self) {
+    Reflex::Type t = Reflex::Type::ByName(class_name);
+    t.Destruct(self, true);
+}

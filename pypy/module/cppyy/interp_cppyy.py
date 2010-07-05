@@ -36,6 +36,10 @@ callmethod_l = rffi.llexternal(
     "callmethod_l",
     [rffi.CCHARP, rffi.CCHARP, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
+destruct = rffi.llexternal(
+    "destruct",
+    [rffi.CCHARP, rffi.VOIDP], lltype.Void,
+    compilation_info=eci)
 
 
 
@@ -111,8 +115,11 @@ class W_CPPObject(Wrappable):
         free_arguments(args, len(args_w))
         return self.space.wrap(result)
 
+    def destruct(self):
+        destruct(self.cppclass.name, self.rawobject)
 
 W_CPPObject.typedef = TypeDef(
     'CPPObject',
     invoke = interp2app(W_CPPObject.invoke, unwrap_spec=['self', str, 'args_w']),
+    destruct = interp2app(W_CPPObject.destruct, unwrap_spec=['self']),
 )
