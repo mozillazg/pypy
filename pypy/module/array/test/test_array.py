@@ -187,6 +187,18 @@ class AppTestArray:
         a = self.array('b', [1, 2])
         assert len(a) == 2 and a[0] == 1 and a[1] == 2
 
+        a = self.array('b')
+        raises(OverflowError, a.fromlist, (1, 2, 400))
+        assert len(a) == 0
+
+        raises(OverflowError, a.extend, (1, 2, 400))
+        assert len(a) == 2 and a[0] == 1 and a[1] == 2
+
+        raises(OverflowError, self.array, 'b', (1, 2, 400))
+
+        a = self.array('b', (1, 2))
+        assert len(a) == 2 and a[0] == 1 and a[1] == 2
+
     def test_fromunicode(self):
         raises(ValueError, self.array('i').fromunicode, unicode('hi'))
         a = self.array('u')
