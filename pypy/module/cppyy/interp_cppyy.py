@@ -28,12 +28,35 @@ callstatic_l = rffi.llexternal(
     "callstatic_l",
     [rffi.CCHARP, rffi.CCHARP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
+construct = rffi.llexternal(
+    "construct",
+    [rffi.CCHARP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
+    compilation_info=eci)
+callmethod_l = rffi.llexternal(
+    "callmethod_l",
+    [rffi.CCHARP, rffi.CCHARP, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
+    compilation_info=eci)
+
 
 
 def load_lib(space, name):
     cdll = CDLL(name)
     return W_CPPLibrary(space, cdll)
 load_lib.unwrap_spec = [ObjSpace, str]
+
+def prepare_arguments(space, args_w):
+    args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
+    for i in range(len(args_w)):
+        arg = space.int_w(args_w[i])
+        x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
+        x[0] = arg
+        args[i] = rffi.cast(rffi.VOIDP, x)
+    return args
+
+def free_arguments(args, numargs):
+    for i in range(numargs):
+        lltype.free(args[i], flavor='raw')
+    lltype.free(args, flavor='raw')
 
 class W_CPPLibrary(Wrappable):
     def __init__(self, space, cdll):
@@ -56,23 +79,40 @@ class W_CPPType(Wrappable):
         self.name = name
 
     def invoke(self, name, args_w):
-        args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
-        for i in range(len(args_w)):
-            arg = self.space.int_w(args_w[i])
-            x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
-            x[0] = arg
-            args[i] = rffi.cast(rffi.VOIDP, x)
+        args = prepare_arguments(self.space, args_w)
         result = callstatic_l(self.name, name, len(args_w), args)
-        for i in range(len(args_w)):
-            lltype.free(args[i], flavor='raw')
-        lltype.free(args, flavor='raw')
+        free_arguments(args, len(args_w))
         return self.space.wrap(result)
 
     def construct(self, args_w):
-        xxx
+        args = prepare_arguments(self.space, args_w)
+        result = construct(self.name, len(args_w), args)
+        free_arguments(args, len(args_w))
+        return W_CPPObject(self, result)
 
 W_CPPType.typedef = TypeDef(
     'CPPType',
     invoke = interp2app(W_CPPType.invoke, unwrap_spec=['self', str, 'args_w']),
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
+)
+
+
+
+class W_CPPObject(Wrappable):
+    def __init__(self, cppclass, rawobject):
+        self.space = cppclass.space
+        self.cppclass = cppclass
+        self.rawobject = rawobject
+
+    def invoke(self, method_name, args_w):
+        args = prepare_arguments(self.space, args_w)
+        result = callmethod_l(self.cppclass.name, method_name,
+                              self.rawobject, len(args_w), args)
+        free_arguments(args, len(args_w))
+        return self.space.wrap(result)
+
+
+W_CPPObject.typedef = TypeDef(
+    'CPPObject',
+    invoke = interp2app(W_CPPObject.invoke, unwrap_spec=['self', str, 'args_w']),
 )
