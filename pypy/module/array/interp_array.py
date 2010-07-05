@@ -1,10 +1,11 @@
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.typedef import TypeDef
+from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
 from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
+from pypy.rlib.rbigint import rbigint
 
 FloatArray=lltype.GcArray(lltype.Float)
 
@@ -43,9 +44,12 @@ sized_array.unwrap_spec=(ObjSpace, int)
 
 
 class TypeCode(object):
-    def __init__(self, itemtype, unwrap, bytes,  canoverflow=False, signed=False):
+    def __init__(self, itemtype, unwrap, canoverflow=False, signed=False):
         self.itemtype=itemtype
-        self.bytes = bytes
+        if itemtype is lltype.SingleFloat:
+            self.bytes=4
+        else:
+            self.bytes = rffi.sizeof(itemtype)
         self.unwrap=unwrap
         self.signed = signed
         self.canoverflow = canoverflow
@@ -53,27 +57,19 @@ class TypeCode(object):
 
 
 types = {
-    'c': TypeCode(lltype.Char,        'str_w',     1),
-    'u': TypeCode(lltype.UniChar,     'unicode_w', 4), # FIXME: is unicode always 4 bytes?
-    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w',     1, True, True),
-    'B': TypeCode(rffi.UCHAR,         'int_w',     1, True),
-    'h': TypeCode(rffi.SHORT,         'int_w',     2, True, True),
-    'H': TypeCode(rffi.USHORT,        'int_w',     2, True),
-    'i': TypeCode(lltype.Signed,      'int_w',     4, True, True),
-    'I': TypeCode(lltype.Unsigned,    'int_w',     4, True),
-    'l': TypeCode(lltype.Signed,      'int_w',     8, True, True),
-    'L': TypeCode(lltype.Unsigned,    'int_w',     8, True),
-    'f': TypeCode(lltype.SingleFloat, 'float_w',   4),
-    'd': TypeCode(lltype.Float,       'float_w',   8),
+    'c': TypeCode(lltype.Char,        'str_w'),
+    'u': TypeCode(lltype.UniChar,     'unicode_w'),
+    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
+    'B': TypeCode(rffi.UCHAR,         'int_w', True),
+    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
+    'H': TypeCode(rffi.USHORT,        'int_w', True),
+    'i': TypeCode(rffi.INT,           'int_w', True, True),
+    'I': TypeCode(rffi.UINT,          'int_w', True),
+    'l': TypeCode(rffi.LONG,          'int_w', True, True),
+    'L': TypeCode(rffi.ULONG,         'bigint_w', True),
+    'f': TypeCode(lltype.SingleFloat, 'float_w'),
+    'd': TypeCode(lltype.Float,       'float_w'),
     }
-## def array(space, typecode, w_initializer=None):
-##     if 
-##     self.len=0
-##     self.buffer=None
-##     if w_initializer is not None and not space.is_w(w_size, space.w_None):
-##         self.extend(w_initializer) #FIXME: use fromlist, fromstring, ...
-        
-##     return W_SizedFloatArray(space, size)
 
 class W_Array(Wrappable):
     def __init__(self, space, typecode):
@@ -87,12 +83,21 @@ class W_Array(Wrappable):
         self.typecode=typecode
         self.len=0
         self.buffer=None
+        self.itemsize = types[typecode].bytes
 
     def item_w(self, w_item):        
         space=self.space
         tc=types[self.typecode]
         unwrap=getattr(space, tc.unwrap)
         item=unwrap(w_item)
+        if  tc.unwrap=='bigint_w':
+            try:
+                if tc.signed: item=item.tolonglong()
+                else: item=item.toulonglong()
+            except (ValueError, OverflowError):
+                msg='unsigned %d-byte integer out of range'%tc.bytes
+                raise OperationError(space.w_OverflowError, space.wrap(msg))    
+
         if tc.canoverflow:
             msg=None
             if tc.signed:
@@ -108,77 +113,6 @@ class W_Array(Wrappable):
             if msg is not None:
                 raise OperationError(space.w_OverflowError, space.wrap(msg))
         return rffi.cast(tc.itemtype, item)
-
-
-    def olditem_w(self, w_item):
-        space=self.space
-        if self.typecode == 'c':
-            return self.space.str_w(w_item)
-        elif self.typecode == 'u':
-            return self.space.unicode_w(w_item)
-        
-        elif self.typecode == 'b':
-            item=self.space.int_w(w_item)
-            if item<-128:
-                msg='signed char is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>127:
-                msg='signed char is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(rffi.SIGNEDCHAR, item)
-        elif self.typecode == 'B':
-            item=self.space.int_w(w_item)
-            if item<0:
-                msg='unsigned byte integer is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>255:
-                msg='unsigned byte integer is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(rffi.UCHAR, item)
-
-        elif self.typecode == 'h':
-            item=self.space.int_w(w_item)
-            if item<-32768:
-                msg='signed short integer is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>32767:
-                msg='signed short integer is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(rffi.SHORT, item)
-        elif self.typecode == 'H':
-            item=self.space.int_w(w_item)
-            if item<0:
-                msg='unsigned short integer is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>65535:
-                msg='unsigned short integer is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(rffi.USHORT, item)
-
-        elif self.typecode in ('i', 'l'):
-            item=self.space.int_w(w_item)
-            if item<-2147483648:
-                msg='signed integer is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>2147483647:
-                msg='signed integer is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(lltype.Signed, item)
-        elif self.typecode in ('I', 'L'):
-            item=self.space.int_w(w_item)
-            if item<0:
-                msg='unsigned integer is less than minimum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif item>4294967295:
-                msg='unsigned integer is greater than maximum'
-                raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(lltype.Unsigned, item)
-
-        elif self.typecode == 'f':
-            item=self.space.float_w(w_item)
-            return rffi.cast(lltype.SingleFloat, item)
-        elif self.typecode == 'd':
-            return self.space.float_w(w_item)
 
     def setlen(self, size):
         new_buffer=lltype.malloc(lltype.GcArray(types[self.typecode].itemtype), size)
@@ -225,6 +159,13 @@ class W_Array(Wrappable):
         return self.space.wrap(self.len)
     descr_len.unwrap_spec = ['self']
 
+    def descr_fromstring(self, s):
+        import struct
+        
+
+def descr_itemsize(space, self):
+    return space.wrap(self.itemsize)
+
 W_Array.typedef=TypeDef(
     'Array',
     append      = interp2app(W_Array.descr_append),
@@ -232,6 +173,7 @@ W_Array.typedef=TypeDef(
     __len__     = interp2app(W_Array.descr_len),
     __getitem__ = interp2app(W_Array.descr_getitem),
     __setitem__ = interp2app(W_Array.descr_setitem),
+    itemsize    = GetSetProperty(descr_itemsize, cls=W_Array)
 )
 
 def array(space, typecode, w_initializer=None):

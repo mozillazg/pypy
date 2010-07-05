@@ -51,6 +51,10 @@ class AppTestArray:
                 -32768, 32767, -32769, 32768, 65535, 65536,
                 -2147483647, -2147483648, 2147483647, 4294967295, 4294967296,
                 )
+        for bb in (8, 16, 32, 64, 128, 256, 512, 1024):
+            for b in (bb-1, bb, bb+1):
+                values += ( 2**b, 2**b+1, 2**b-1, -2**b, -2**b+1, -2**b-1)
+                
         for tc,ok,pt in (('b',(  -128,    34,   127),  int),
                          ('B',(     0,    23,   255),  int),
                          ('h',(-32768, 30535, 32767),  int),
@@ -95,6 +99,31 @@ class AppTestArray:
             assert a[1]==10.125
             assert a[2]==2.5
             assert len(a)==len(values)
+
+    def test_itemsize(self):
+        for t in 'cbB': assert(self.array(t).itemsize>=1)
+        for t in 'uhHiI': assert(self.array(t).itemsize>=2)
+        for t in 'lLf': assert(self.array(t).itemsize>=4)
+        for t in 'd': assert(self.array(t).itemsize>=8)
+        
+        inttypes='bhil'
+        for t in inttypes:
+            a=self.array(t, [1,2,3])
+            b=a.itemsize
+            for v in (-2**(8*b)/2, 2**(8*b)/2-1):
+                a[1]=v
+                assert a[0]==1 and a[1]==v and a[2]==3
+            raises(OverflowError, a.append, -2**(8*b)/2-1)
+            raises(OverflowError, a.append, 2**(8*b)/2)
+
+            a=self.array(t.upper(), [1,2,3])
+            b=a.itemsize
+            for v in (0, 2**(8*b)-1):
+                print b, v
+                a[1]=v
+                assert a[0]==1 and a[1]==v and a[2]==3
+            raises(OverflowError, a.append, -1)
+            raises(OverflowError, a.append, 2**(8*b))
 
 
 ## space.sys.get('modules')
