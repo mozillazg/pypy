@@ -169,7 +169,52 @@ class W_Array(Wrappable):
 
     def descr_fromstring(self, s):
         import struct
+        if len(s)%self.itemsize !=0:
+            msg = 'string length not a multiple of item size'
+            raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
+        for i in range(len(s)/self.itemsize):
+            p = i * self.itemsize
+            item=struct.unpack(self.typecode, s[p:p + self.itemsize])[0]
+            self.descr_append(self.space.wrap(item))
+    descr_fromstring.unwrap_spec = ['self', str]
+
+    def descr_fromfile(self, w_f, n):
+        space=self.space
+        size = n*self.itemsize
+        w_s = space.call_function(
+            space.getattr(w_f, space.wrap('read')),
+            space.wrap(size))
+        s=space.str_w(w_s)
+        if len(s) != size:
+            n = len(s) % self.itemsize
+            if n != 0: s = s[0:-(len(s) % self.itemsize)]
+            self.descr_fromstring(s)
+            msg='not enough items in file'
+            raise OperationError(self.space.w_EOFError, self.space.wrap(msg))
+        else:
+            self.descr_fromstring(s)
+    descr_fromfile.unwrap_spec = ['self', W_Root, int]
+
+    def descr_fromlist(self, w_lst):
+        oldbuf = self.buffer
+        oldlen = self.len
+        try:
+            self.descr_extend(w_lst)
+        except OperationError:
+            self.buffer = oldbuf
+            self.len = oldlen
+            raise
+    descr_fromlist.unwrap_spec = ['self', W_Root]
+
+    def descr_fromunicode(self, s):
+        if self.typecode != 'u':
+            msg = "fromunicode() may only be called on type 'u' arrays"
+            raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
+        self.descr_extend(self.space.wrap(s))
+    descr_fromunicode.unwrap_spec = ['self', unicode]
+
         
+            
 
 def descr_itemsize(space, self):
     return space.wrap(self.itemsize)
@@ -181,14 +226,24 @@ W_Array.typedef = TypeDef(
     __len__     = interp2app(W_Array.descr_len),
     __getitem__ = interp2app(W_Array.descr_getitem),
     __setitem__ = interp2app(W_Array.descr_setitem),
-    itemsize    = GetSetProperty(descr_itemsize, cls=W_Array)
+    itemsize    = GetSetProperty(descr_itemsize, cls=W_Array),
+    fromstring  = interp2app(W_Array.descr_fromstring),
+    fromfile    = interp2app(W_Array.descr_fromfile),
+    fromlist    = interp2app(W_Array.descr_fromlist),
+    fromunicode = interp2app(W_Array.descr_fromunicode),
 )
 
 
 def array(space, typecode, w_initializer=None):
     a = W_Array(space, typecode)
     if w_initializer is not None:
-        if not space.is_w(w_initializer, space.w_None):
+        if space.is_w(space.type(w_initializer), space.w_str):
+            a.descr_fromstring(space.str_w(w_initializer))
+        elif space.is_w(space.type(w_initializer), space.w_unicode):
+            a.descr_fromunicode(space.unicode_w(w_initializer))
+        elif space.is_w(space.type(w_initializer), space.w_list):
+            a.descr_fromlist(w_initializer)
+        elif not space.is_w(w_initializer, space.w_None):
             a.descr_extend(w_initializer)  # FIXME: use fromlist, fromstring, ...
 
     return a
