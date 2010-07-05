@@ -127,3 +127,72 @@ class AppTestArray:
                 assert a[0] == 1 and a[1] == v and a[2] == 3
             raises(OverflowError, a.append, -1)
             raises(OverflowError, a.append, 2 ** (8 * b))
+            
+    def test_fromstring(self):
+        a = self.array('c')
+        a.fromstring('Hi!')
+        assert a[0] == 'H' and a[1] == 'i' and a[2] == '!' and len(a) == 3
+
+        for t in 'bBhHiIlLfd':
+            a = self.array(t)
+            a.fromstring('\x00' * a.itemsize*2)
+            assert len(a) == 2 and a[0] == 0 and a[1] == 0
+            if a.itemsize > 1:
+                raises(ValueError, a.fromstring, '\x00' * (a.itemsize-1))
+                raises(ValueError, a.fromstring, '\x00' * (a.itemsize+1))
+                raises(ValueError, a.fromstring, '\x00' * (2*a.itemsize-1))
+                raises(ValueError, a.fromstring, '\x00' * (2*a.itemsize+1))
+            b = self.array(t, '\x00' * a.itemsize*2)
+            assert len(b) == 2 and b[0] == 0 and b[1] == 0            
+
+    def test_fromfile(self):
+        
+        class myfile(object):
+            def __init__(self, c, s):
+                self.c = c
+                self.s = s
+            def read(self,n):
+                return self.c*min(n,self.s)
+
+        f=myfile('\x00', 20)
+        for t in 'bBhHiIlLfd':
+            a = self.array(t)
+            a.fromfile(f,2)
+            assert len(a)==2 and a[0]==0 and a[1]==0
+
+        a = self.array('b')
+        a.fromfile(myfile('\x01', 20),2)
+        assert len(a)==2 and a[0]==1 and a[1]==1
+
+        a = self.array('h')
+        a.fromfile(myfile('\x01', 20),2)
+        assert len(a)==2 and a[0]==257 and a[1]==257
+
+        for i in (0,1):
+            a = self.array('h')
+            raises(EOFError, a.fromfile, myfile('\x01', 2+i),2)
+            assert len(a)==1 and a[0]==257
+
+
+    def test_fromlist(self):
+        a = self.array('b')
+        raises(OverflowError, a.fromlist, [1, 2, 400])
+        assert len(a) == 0
+
+        raises(OverflowError, a.extend, [1, 2, 400])
+        assert len(a) == 2 and a[0] == 1 and a[1] == 2
+
+        raises(OverflowError, self.array, 'b', [1, 2, 400])
+
+        a = self.array('b', [1, 2])
+        assert len(a) == 2 and a[0] == 1 and a[1] == 2
+
+    def test_fromunicode(self):
+        raises(ValueError, self.array('i').fromunicode, unicode('hi'))
+        a = self.array('u')
+        a.fromunicode(unicode('hi'))
+        assert len(a) == 2 and a[0] == 'h' and a[1]=='i'
+
+        b = self.array('u', unicode('hi'))
+        assert len(b) == 2 and b[0] == 'h' and b[1]=='i'
+        
