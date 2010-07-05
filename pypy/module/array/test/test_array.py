@@ -208,3 +208,58 @@ class AppTestArray:
         b = self.array('u', unicode('hi'))
         assert len(b) == 2 and b[0] == 'h' and b[1]=='i'
         
+    def test_sequence(self):
+        a=self.array('i', [1,2,3,4])
+        assert len(a)==4
+        assert a[0] == 1 and a[1] == 2 and a[2] == 3 and a[3] == 4
+        assert a[-4] == 1 and a[-3] == 2 and a[-2] == 3 and a[-1] == 4
+        a[-2]=5
+        assert a[0] == 1 and a[1] == 2 and a[2] == 5 and a[3] == 4
+
+        for i in (4, -5): raises(IndexError, a.__getitem__, i)
+
+        b = a[0:2]
+        assert len(b) == 2 and b[0] == 1 and b[1] == 2
+        b[0]=6
+        assert len(b) == 2 and b[0] == 6 and b[1] == 2
+        assert a[0] == 1 and a[1] == 2 and a[2] == 5 and a[3] == 4
+        assert a.itemsize == b.itemsize
+
+        b = a[0:100]
+        assert len(b)==4
+        assert b[0] == 1 and b[1] == 2 and b[2] == 5 and b[3] == 4
+
+        l1 = [2 * i + 1 for i in range(10)]
+        a1 = self.array('i', l1)
+        for start in range(10):
+            for stop in range(start, 10):
+                for step in range(1,10):
+                    l2 = l1[start:stop:step]
+                    a2 = a1[start:stop:step]
+                    assert len(l2) == len(a2)
+                    for i in range(len(l2)): assert l2[i] == a2[i]
+
+        a=self.array('i', [1,2,3,4])
+        a[1:3]=self.array('i', [5,6])
+        assert len(a)==4
+        assert a[0] == 1 and a[1] == 5 and a[2] == 6 and a[3] == 4
+        a[0:-1:2]=self.array('i', [7,8])
+        assert a[0] == 7 and a[1] == 5 and a[2] == 8 and a[3] == 4
+
+        try:
+            a[1:2:4]=self.array('i', [5,6,7])
+            assert False
+        except ValueError:
+            pass
+
+        try:
+            a[1:3]=self.array('I', [5,6])
+            assert False
+        except TypeError:
+            pass
+
+        try:
+            a[1:3]=[5,6]
+            assert False
+        except TypeError:
+            pass

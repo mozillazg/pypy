@@ -149,19 +149,52 @@ class W_Array(Wrappable):
             self.descr_append(w_item)
     descr_extend.unwrap_spec = ['self', W_Root]
 
-    def descr_getitem(self, idx):
-        item = self.buffer[idx]
-        if self.typecode in ('b', 'B', 'h', 'H', 'i', 'l'):
-            item = rffi.cast(lltype.Signed, item)
-        if self.typecode == 'f':
-            item = float(item)
-        return self.space.wrap(item)
-    descr_getitem.unwrap_spec = ['self', int]
+    def descr_getitem(self, w_idx):
+        space=self.space
+        start, stop, step = space.decode_index(w_idx, self.len)
+        if step==0:
+            item = self.buffer[start]
+            if self.typecode in ('b', 'B', 'h', 'H', 'i', 'l'):
+                item = rffi.cast(lltype.Signed, item)
+            elif self.typecode == 'f':
+                item = float(item)
+            return self.space.wrap(item)
+        else:
+            size = (stop - start) / step
+            if (stop - start) % step > 0: size += 1
+            w_a=W_Array(self.space, self.typecode)
+            w_a.setlen(size)
+            j=0
+            for i in range(start, stop, step):
+                w_a.buffer[j]=self.buffer[i]
+                j+=1
+            return w_a
+    descr_getitem.unwrap_spec = ['self', W_Root]
 
-    def descr_setitem(self, idx, w_item):
-        item = self.item_w(w_item)
-        self.buffer[idx] = item
-    descr_setitem.unwrap_spec = ['self', int, W_Root]
+    def descr_setitem(self, w_idx, w_item):
+        start, stop, step = self.space.decode_index(w_idx, self.len)
+        if step==0:
+            item = self.item_w(w_item)
+            self.buffer[start] = item
+        else:
+            if isinstance(w_item, W_Array):
+                if self.typecode == w_item.typecode:
+                    size = (stop - start) / step
+                    if (stop - start) % step > 0: size += 1
+                    if w_item.len != size:
+                        msg = ('attempt to assign array of size %d to ' + 
+                               'slice of size %d') % (w_item.len, size)
+                        raise OperationError(self.space.w_ValueError,
+                                             self.space.wrap(msg))
+                    j=0
+                    for i in range(start, stop, step):
+                        self.buffer[i]=w_item.buffer[j]
+                        j+=1
+                    return
+            msg='can only assign array to array slice'
+            raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
+                
+    descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
     def descr_len(self):
         return self.space.wrap(self.len)
@@ -178,7 +211,7 @@ class W_Array(Wrappable):
         for i in range(new):
             p = i * self.itemsize
             item=struct.unpack(self.typecode, s[p:p + self.itemsize])[0]
-            self.descr_setitem(oldlen + i, self.space.wrap(item))
+            self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
     descr_fromstring.unwrap_spec = ['self', str]
 
     def descr_fromfile(self, w_f, n):
@@ -207,7 +240,7 @@ class W_Array(Wrappable):
             self.setlen(oldlen+new)
             for i in range(new):
                 w_item=space.getitem(w_lst, space.wrap(i))
-                self.descr_setitem(oldlen + i, w_item)
+                self.buffer[oldlen + i] = self.item_w(w_item)
         except OperationError:
             self.buffer = oldbuf
             self.len = oldlen
