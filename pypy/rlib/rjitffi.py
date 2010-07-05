@@ -22,7 +22,7 @@ class CDLL(object):
 class _LibHandler(object):
     def __init__(self, name):
         try:
-            self.handler = rdynload.dlopen(name)
+            self.handler = rdynload.dlopen(rffi.str2charp(name))
         except rdynload.DLOpenError, e:
             raise OSError('%s: %s', name, e.msg or 'unspecified error')
 
