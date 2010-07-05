@@ -41,19 +41,30 @@ def sized_array(space,size):
     return W_SizedFloatArray(space, size)
 sized_array.unwrap_spec=(ObjSpace, int)
 
+
+class TypeCode(object):
+    def __init__(self, itemtype, unwrap, bytes,  canoverflow=False, signed=False):
+        self.itemtype=itemtype
+        self.bytes = bytes
+        self.unwrap=unwrap
+        self.signed = signed
+        self.canoverflow = canoverflow
+        
+
+
 types = {
-    'c': lltype.GcArray(lltype.Char),
-    'u': lltype.GcArray(lltype.UniChar),
-    'b': lltype.GcArray(rffi.SIGNEDCHAR),
-    'B': lltype.GcArray(rffi.UCHAR),
-    'h': lltype.GcArray(rffi.SHORT),
-    'H': lltype.GcArray(rffi.USHORT),
-    'i': lltype.GcArray(lltype.Signed),
-    'I': lltype.GcArray(lltype.Unsigned),
-    'l': lltype.GcArray(lltype.Signed),
-    'L': lltype.GcArray(lltype.Unsigned),
-    'f': lltype.GcArray(lltype.SingleFloat),
-    'd': lltype.GcArray(lltype.Float),
+    'c': TypeCode(lltype.Char,        'str_w',     1),
+    'u': TypeCode(lltype.UniChar,     'unicode_w', 4), # FIXME: is unicode always 4 bytes?
+    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w',     1, True, True),
+    'B': TypeCode(rffi.UCHAR,         'int_w',     1, True),
+    'h': TypeCode(rffi.SHORT,         'int_w',     2, True, True),
+    'H': TypeCode(rffi.USHORT,        'int_w',     2, True),
+    'i': TypeCode(lltype.Signed,      'int_w',     4, True, True),
+    'I': TypeCode(lltype.Unsigned,    'int_w',     4, True),
+    'l': TypeCode(lltype.Signed,      'int_w',     8, True, True),
+    'L': TypeCode(lltype.Unsigned,    'int_w',     8, True),
+    'f': TypeCode(lltype.SingleFloat, 'float_w',   4),
+    'd': TypeCode(lltype.Float,       'float_w',   8),
     }
 ## def array(space, typecode, w_initializer=None):
 ##     if 
@@ -77,7 +88,29 @@ class W_Array(Wrappable):
         self.len=0
         self.buffer=None
 
-    def item_w(self, w_item):
+    def item_w(self, w_item):        
+        space=self.space
+        tc=types[self.typecode]
+        unwrap=getattr(space, tc.unwrap)
+        item=unwrap(w_item)
+        if tc.canoverflow:
+            msg=None
+            if tc.signed:
+                if item<-2**(tc.bytes*8)/2:
+                    msg='signed %d-byte integer is less than minimum'%tc.bytes
+                elif item>2**(tc.bytes*8)/2-1:
+                    msg='signed %d-byte integer is greater than maximum'%tc.bytes
+            else:
+                if item<0:
+                    msg='unsigned %d-byte integer is less than minimum'%tc.bytes
+                elif item>2**(tc.bytes*8)-1:
+                    msg='unsigned %d-byte integer is greater than maximum'%tc.bytes
+            if msg is not None:
+                raise OperationError(space.w_OverflowError, space.wrap(msg))
+        return rffi.cast(tc.itemtype, item)
+
+
+    def olditem_w(self, w_item):
         space=self.space
         if self.typecode == 'c':
             return self.space.str_w(w_item)
@@ -148,7 +181,7 @@ class W_Array(Wrappable):
             return self.space.float_w(w_item)
 
     def setlen(self, size):
-        new_buffer=lltype.malloc(types[self.typecode], size, zero=True)
+        new_buffer=lltype.malloc(lltype.GcArray(types[self.typecode].itemtype), size)
         for i in range(self.len):
             new_buffer[i]=self.buffer[i]
         self.buffer=new_buffer
