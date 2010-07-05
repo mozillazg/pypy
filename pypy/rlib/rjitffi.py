@@ -33,6 +33,7 @@ class _Get(object):
         self.res_type = res_type
         self.cpu = cpu
         self.lib = lib.handler
+        self.esp = 1 # 0 is a func addr
 
         if self.res_type == 'int':
             self.bres = BoxInt()
@@ -70,19 +71,10 @@ class _Get(object):
         FUNC = deref(FPTR)
         self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-    def call(self, func_args=None):
-        if func_args is None:
-            func_args = []
+        self.bargs = []
 
-        bargs = []
-        for tp, value in zip(self.args_type, func_args):
-            if tp == 'int':
-                bargs.append(BoxInt(value))
-            elif tp == 'float':
-                bargs.append(BoxFloat(value))
-            elif tp == 'ref':
-                bargs.append(BoxPtr(value))
-        inputargs = [self.bfuncaddr] + bargs
+    def call(self):
+        inputargs = [self.bfuncaddr] + self.bargs
 
         oplist = [ResOperation(rop.CALL, inputargs, self.bres,
                                descr=self.calldescr),
@@ -90,16 +82,7 @@ class _Get(object):
                                descr=BasicFailDescr(0))]
         looptoken = LoopToken()
         self.cpu.compile_loop(inputargs, oplist, looptoken)
-
-        for i, box in enumerate(inputargs):
-            if i == 0: # func address
-                self.cpu.set_future_value_int(i, box.getint())
-            elif self.args_type[i-1] == 'int':
-                self.cpu.set_future_value_int(i, box.getint())
-            elif self.args_type[i-1] == 'float':
-                self.cpu.set_future_value_float(i, box.getfloat())
-            elif self.args_type[i-1] == 'ref':
-                self.cpu.set_future_value_ref(i, box.getref())
+        self.cpu.set_future_value_int(0, self.bfuncaddr.getint())
 
         res = self.cpu.execute_token(looptoken)
         if res is oplist[-1].descr:
@@ -118,3 +101,13 @@ class _Get(object):
         else:
             raise ValueError(self.res_type)
         return r
+
+    def push_int(self, value):
+        self.cpu.set_future_value_int(self.esp, value)
+        self.bargs.append(BoxInt(value))
+        self.esp += 1
+
+    def push_float(self, value):
+        self.cpu.set_future_value_float(self.esp, value)
+        self.bargs.append(BoxFloat(value))
+        self.esp += 1

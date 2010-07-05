@@ -21,6 +21,12 @@ class TestJitffi(object):
            return a+b;
         }
 
+        int add_intfloat(int a, double b)
+        {
+           int rb = (int)b;
+           return a+rb;
+        }
+
         double return_float(int a, int b)
         {
            return a+b;
@@ -47,8 +53,8 @@ class TestJitffi(object):
         '''
         ))
 
-        symbols = ['add_integers', 'add_floats', 'return_float',
-                   'max3', 'fvoid', 'return_void']
+        symbols = ['add_integers', 'add_floats', 'add_intfloat',
+                   'return_float', 'max3', 'fvoid', 'return_void']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -85,6 +91,12 @@ class TestJitffi(object):
         assert func.call([1, 2]) is None
         func = lib.get('return_void', ['int', 'int'])
         assert func.call([1, 2]) is None
+
+    def test_various_type_args(self):
+        lib = rjitffi.CDLL(self.lib_name)
+
+        func = lib.get('add_intfloat', ['int', 'float'], 'int')
+        assert func.call([1, 2.9]) == 3
 
     def test_undefined_func(self):
         lib = rjitffi.CDLL(self.lib_name)
