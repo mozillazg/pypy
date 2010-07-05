@@ -26,7 +26,7 @@ W_LibHandler.typedef = TypeDef(
 
 
 class W_Get(Wrappable, rjitffi._Get):
-    def __init__(self, space, cpu, lib, func, args_type, res_type='void'):
+    def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
         self.space = space
         rjitffi._Get.__init__(self, cpu, lib, func, args_type, res_type)
 
@@ -44,11 +44,11 @@ class W_Get(Wrappable, rjitffi._Get):
                         raise
                     break # done
 
-                if self.args_type[i] == 'int':
+                if self.args_type[i] == 'i':
                     self.push_int(space.int_w(w_arg))
-                elif self.args_type[i] == 'float':
+                elif self.args_type[i] == 'f':
                     self.push_float(space.float_w(w_arg))
-                elif self.args_type[i] == 'ref':
+                elif self.args_type[i] == 'p':
                     self.push_ref(space.int_w(w_arg))
                 else:
                     raise OperationError(
@@ -80,7 +80,7 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
         except OSError, e:
             raise OperationError(space.w_OSError, space.wrap(str(e)))
 
-    def get_w(self, space, func, w_args_type, res_type='void'):
+    def get_w(self, space, func, w_args_type, res_type='v'):
         args_type_w = [ space.str_w(w_x)
                         for w_x in space.listview(w_args_type) ]
         try:

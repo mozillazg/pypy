@@ -16,7 +16,7 @@ class CDLL(object):
         self.name = name
         self.cpu = CPU(None, None)
 
-    def get(self, func, args_type, res_type='void'):
+    def get(self, func, args_type, res_type='v'):
         return _Get(self.cpu, self.lib, func, args_type, res_type)
 
 class _LibHandler(object):
@@ -27,7 +27,7 @@ class _LibHandler(object):
             raise OSError('%s: %s', name, e.msg or 'unspecified error')
 
 class _Get(object):
-    def __init__(self, cpu, lib, func, args_type, res_type='void'):
+    def __init__(self, cpu, lib, func, args_type, res_type='v'):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
@@ -35,16 +35,16 @@ class _Get(object):
         self.lib = lib.handler
         self.setup_stack()
 
-        if self.res_type == 'int':
+        if self.res_type == 'i':
             self.bres = BoxInt()
             res = lltype.Signed
-        elif self.res_type == 'float':
+        elif self.res_type == 'f':
             self.bres = BoxFloat()
             res = lltype.Float
-        elif self.res_type == 'ref':
+        elif self.res_type == 'p':
             self.bres = BoxPtr()
             res = lltype.Signed
-        elif self.res_type == 'void':
+        elif self.res_type == 'v':
             self.bres = NULLBOX
             res = lltype.Void
         else:
@@ -58,11 +58,11 @@ class _Get(object):
 
         args = []
         for arg in self.args_type:
-            if arg == 'int':
+            if arg == 'i':
                 args.append(lltype.Signed)
-            elif arg == 'float':
+            elif arg == 'f':
                 args.append(lltype.Float)
-            elif arg == 'ref':
+            elif arg == 'p':
                 args.append(lltype.Signed)
             else:
                 raise ValueError(arg)
@@ -90,13 +90,13 @@ class _Get(object):
 
         self.setup_stack() # clean up the stack
 
-        if self.res_type == 'int':
+        if self.res_type == 'i':
             r = BoxInt(self.cpu.get_latest_value_int(0)).getint()
-        elif self.res_type == 'float':
+        elif self.res_type == 'f':
             r = BoxFloat(self.cpu.get_latest_value_float(0)).getfloat()
-        elif self.res_type == 'ref':
+        elif self.res_type == 'p':
             r = BoxPtr(self.cpu.get_latest_value_ref(0)).getref()
-        elif self.res_type == 'void':
+        elif self.res_type == 'v':
             r = None
         else:
             raise ValueError(self.res_type)

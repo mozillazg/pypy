@@ -68,28 +68,28 @@ class TestJitffi(object):
     def test_get(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(1)
         func.push_int(2)
         assert func.call() == 3
 
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(-1)
         func.push_int(2)
         assert func.call() == 1
 
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(0)
         func.push_int(0)
         assert func.call() == 0
 
-        func = lib.get('max3', ['int', 'int', 'int'], 'int')
+        func = lib.get('max3', ['i', 'i', 'i'], 'i')
         func.push_int(2)
         func.push_int(8)
         func.push_int(3)
         assert func.call() == 8
 
-        func = lib.get('add_floats', ['float', 'float'], 'float')
+        func = lib.get('add_floats', ['f', 'f'], 'f')
         func.push_float(1.2)
         func.push_float(1.5)
         assert func.call() == 2.7
@@ -97,15 +97,15 @@ class TestJitffi(object):
     def test_get_void(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('fvoid', [], 'int')
+        func = lib.get('fvoid', [], 'i')
         assert func.call() == 1
 
-        func = lib.get('return_void', ['int', 'int'], 'void')
+        func = lib.get('return_void', ['i', 'i'], 'v')
         func.push_int(1)
         func.push_int(2)
         assert func.call() is None
 
-        func = lib.get('return_void', ['int', 'int'])
+        func = lib.get('return_void', ['i', 'i'])
         func.push_int(1)
         func.push_int(2)
         assert func.call() is None
@@ -113,7 +113,7 @@ class TestJitffi(object):
     def test_various_type_args(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_intfloat', ['int', 'float'], 'int')
+        func = lib.get('add_intfloat', ['i', 'f'], 'i')
         func.push_int(1)
         func.push_float(2.9)
         assert func.call() == 3
@@ -127,12 +127,12 @@ class TestJitffi(object):
         lib = rjitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not existed function
         py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
-        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')
+        py.test.raises(ValueError, lib.get, 'xxxfoo888baryyy', ['i'], 'i')
 
     def test_unknown_types(self):
         lib = rjitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not defined types (args_type, res_type etc.)
         py.test.raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'])
-        py.test.raises(ValueError, lib.get, 'fvoid', ['int','xxxfoo888baryyy'])
-        py.test.raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'int')
+        py.test.raises(ValueError, lib.get, 'fvoid', ['i','xxxfoo888baryyy'])
+        py.test.raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'i')
         py.test.raises(ValueError, lib.get, 'fvoid', [], 'xxxfoo888baryyy')
