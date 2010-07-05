@@ -4,13 +4,14 @@ from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
 
-class W_LibHandler(Wrappable, rjitffi._LibHandler):
+class W_LibHandler(Wrappable):
     def __init__(self, space, name):
         self.space = space
         try:
-            rjitffi._LibHandler.__init__(self, name)
+            self.rlibhandler = rjitffi._LibHandler(name)
         except OSError, e:
             raise OperationError(space.w_OSError, space.wrap(str(e)))
+        self.handler = self.rlibhandler.handler
 
 def W_LibHandler___new__(space, w_type, name):
     try:
@@ -25,14 +26,14 @@ W_LibHandler.typedef = TypeDef(
 )
 
 
-class W_Get(Wrappable, rjitffi._Get):
+class W_Get(Wrappable):
     def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
         self.space = space
-        rjitffi._Get.__init__(self, cpu, lib, func, args_type, res_type)
+        self.rget = rjitffi._Get(cpu, lib, func, args_type, res_type)
 
     def call_w(self, space, w_args=None):
         if space.is_w(w_args, space.w_None):
-            return space.wrap(self.call())
+            return space.wrap(self.rget.call())
         else:
             i = 0
             w_iterator = space.iter(w_args)
@@ -44,19 +45,19 @@ class W_Get(Wrappable, rjitffi._Get):
                         raise
                     break # done
 
-                if self.args_type[i] == 'i':
-                    self.push_int(space.int_w(w_arg))
-                elif self.args_type[i] == 'f':
-                    self.push_float(space.float_w(w_arg))
-                elif self.args_type[i] == 'p':
-                    self.push_ref(space.int_w(w_arg))
+                if self.rget.args_type[i] == 'i':
+                    self.rget.push_int(space.int_w(w_arg))
+                elif self.rget.args_type[i] == 'f':
+                    self.rget.push_float(space.float_w(w_arg))
+                elif self.rget.args_type[i] == 'p':
+                    self.rget.push_ref(space.int_w(w_arg))
                 else:
                     raise OperationError(
                             space.w_TypeError,
                             space.wrap('Unsupported type of argument: %s'
                                         % self.args_type[0]))
                 i += 1
-        return space.wrap(self.call())
+        return space.wrap(self.rget.call())
 
 def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
     try:
@@ -71,10 +72,10 @@ W_Get.typedef = TypeDef(
 )
 
 
-class W_CDLL(Wrappable, rjitffi.CDLL):
+class W_CDLL(Wrappable):
     def __init__(self, space, name):
         self.space = space
-        rjitffi.CDLL.__init__(self, name, load=False)
+        self.rcdll = rjitffi.CDLL(name, load=False)
         try:
             self.lib_w = W_LibHandler(self.space, name)
         except OSError, e:
@@ -84,7 +85,7 @@ class W_CDLL(Wrappable, rjitffi.CDLL):
         args_type_w = [ space.str_w(w_x)
                         for w_x in space.listview(w_args_type) ]
         try:
-            ret = W_Get(space, self.cpu, space.wrap(self.lib_w),
+            ret = W_Get(space, self.rcdll.cpu, space.wrap(self.lib_w),
                         func, args_type_w, res_type)
         except ValueError, e:
             raise OperationError(space.w_ValueError, space.wrap(str(e)))
