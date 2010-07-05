@@ -97,6 +97,7 @@ class TestJitffi(object):
 
         func = lib.get('add_intfloat', ['int', 'float'], 'int')
         assert func.call([1, 2.9]) == 3
+        assert func.call([0, 1.3]) == 1
 
     def test_undefined_func(self):
         lib = rjitffi.CDLL(self.lib_name)

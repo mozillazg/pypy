@@ -33,7 +33,7 @@ class _Get(object):
         self.res_type = res_type
         self.cpu = cpu
         self.lib = lib.handler
-        self.esp = 1 # 0 is a func addr
+        self.setup_stack()
 
         if self.res_type == 'int':
             self.bres = BoxInt()
@@ -71,8 +71,6 @@ class _Get(object):
         FUNC = deref(FPTR)
         self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-        self.bargs = []
-
     def call(self, func_args=None):
         if func_args is not None:
             for tp, value in zip(self.args_type, func_args):
@@ -97,6 +95,8 @@ class _Get(object):
         else:
             self.guard_failed = True
 
+        self.setup_stack() # clean up the stack
+
         if self.res_type == 'int':
             r = BoxInt(self.cpu.get_latest_value_int(0)).getint()
         elif self.res_type == 'float':
@@ -108,6 +108,10 @@ class _Get(object):
         else:
             raise ValueError(self.res_type)
         return r
+
+    def setup_stack(self):
+        self.bargs = []
+        self.esp = 1 # 0 is a func addr
 
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
