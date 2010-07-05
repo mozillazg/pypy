@@ -4,6 +4,7 @@ class Module(MixedModule):
     """    """
 
     interpleveldefs = {
+        'load_lib': 'interp_cppyy.load_lib',
     }
 
     appleveldefs = {
