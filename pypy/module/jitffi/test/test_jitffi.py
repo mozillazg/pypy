@@ -71,36 +71,36 @@ class AppTestJitffi(object):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         assert 3 == func.call([1,2])
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         assert 1 == func.call([-1,2])
-        func = lib.get('add_integers', ['int', 'int'], 'int')
+        func = lib.get('add_integers', ['i', 'i'], 'i')
         assert 0 == func.call([0,0])
 
-        func = lib.get('max3', ['int', 'int', 'int'], 'int')
+        func = lib.get('max3', ['i', 'i', 'i'], 'i')
         assert 8 == func.call([2, 8, 3])
 
-        func = lib.get('add_floats', ['float', 'float'], 'float')
+        func = lib.get('add_floats', ['f', 'f'], 'f')
         assert 2.7 == func.call([1.2, 1.5])
 
     def test_get_void(self):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
 
-        func = lib.get('fvoid', [], 'int')
+        func = lib.get('fvoid', [], 'i')
         assert 1 == func.call()
 
-        func = lib.get('return_void', ['int', 'int'], 'void')
+        func = lib.get('return_void', ['i', 'i'], 'v')
         assert func.call([1, 2]) is None
-        func = lib.get('return_void', ['int', 'int'])
+        func = lib.get('return_void', ['i', 'i'])
         assert func.call([1, 2]) is None
 
     def test_various_type_args(self):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_intfloat', ['int', 'float'], 'int')
+        func = lib.get('add_intfloat', ['i', 'f'], 'i')
         assert func.call([1, 2.9]) == 3
         assert func.call([0, 1.3]) == 1
 
@@ -109,13 +109,13 @@ class AppTestJitffi(object):
         lib = jitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not existed function
         raises(ValueError, lib.get, 'xxxfoo888baryyy', [])
-        raises(ValueError, lib.get, 'xxxfoo888baryyy', ['int'], 'int')
+        raises(ValueError, lib.get, 'xxxfoo888baryyy', ['i'], 'i')
 
     def test_unknown_types(self):
         import jitffi
         lib = jitffi.CDLL(self.lib_name)
         # xxxfoo888baryyy - not defined types (args_type, res_type etc.)
         raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'])
-        raises(ValueError, lib.get, 'fvoid', ['int','xxxfoo888baryyy'])
-        raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'int')
+        raises(ValueError, lib.get, 'fvoid', ['i','xxxfoo888baryyy'])
+        raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'i')
         raises(ValueError, lib.get, 'fvoid', [], 'xxxfoo888baryyy')
