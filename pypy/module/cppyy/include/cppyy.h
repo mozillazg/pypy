@@ -4,5 +4,6 @@
 #include "Reflex/Type.h"
 #include "Reflex/Member.h"
 #include "Reflex/Object.h"
+#include "Reflex/Builder/TypeBuilder.h"
 
 #endif // CPPYY_CPPYY
