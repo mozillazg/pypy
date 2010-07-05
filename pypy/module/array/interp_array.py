@@ -218,7 +218,7 @@ class W_Array(Wrappable):
         if self.typecode != 'u':
             msg = "fromunicode() may only be called on type 'u' arrays"
             raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
-        self.descr_extend(self.space.wrap(s))
+        self.descr_fromlist(self.space.wrap(s))
     descr_fromunicode.unwrap_spec = ['self', unicode]
 
         
@@ -252,7 +252,7 @@ def array(space, typecode, w_initializer=None):
         elif space.is_w(space.type(w_initializer), space.w_list):
             a.descr_fromlist(w_initializer)
         elif not space.is_w(w_initializer, space.w_None):
-            a.descr_extend(w_initializer)  # FIXME: use fromlist, fromstring, ...
+            a.descr_extend(w_initializer)  
 
     return a
 array.unwrap_spec = (ObjSpace, str, W_Root)
