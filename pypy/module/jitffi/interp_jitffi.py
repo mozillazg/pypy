@@ -51,7 +51,7 @@ class W_LibHandler(Wrappable):
 
 def W_LibHandler___new__(space, w_type, name):
     try:
-        return space.wrap(W_Lib(space, name))
+        return space.wrap(W_LibHandler(space, name))
     except OSError, e:
         raise wrap_oserror(space, e)
 
