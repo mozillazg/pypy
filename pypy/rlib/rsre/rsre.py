@@ -107,73 +107,81 @@ def find_mark(mark, gid):
         mark = mark.prev
     return -1
 
+def any(enum):
+    for _ in enum:
+        return True
+    return False
+
 
 def match(pattern, string, start=0, flags=0):
     ctx = MatchContext(pattern, string, start, flags)
-    if sre_match(ctx, 0, start, None):
+    for match_end, match_marks in sre_match(ctx, 0, start, None):
+        ctx.match_end = match_end
+        ctx.match_marks = match_marks
         return ctx
     return None
 
 def sre_match(ctx, ppos, ptr, marks):
+    """Enumerate answers.  Usually we only need the first one, but
+    there is the case of REPEAT...UNTIL where we need all of them."""
     while True:
         op = ctx.pat(ppos)
         ppos += 1
 
         if op == OPCODE_FAILURE:
-            return False
+            return
 
         if (op == OPCODE_SUCCESS or
             op == OPCODE_MAX_UNTIL or
             op == OPCODE_MIN_UNTIL):
-            ctx.match_end = ptr
-            ctx.match_marks = marks
-            return True
+            yield (ptr, marks)
+            return
 
         elif op == OPCODE_ANY:
             # match anything (except a newline)
             # <ANY>
             if ptr >= ctx.end or rsre_char.is_linebreak(ctx.str(ptr)):
-                return False
+                return
             ptr += 1
 
         elif op == OPCODE_ANY_ALL:
             # match anything
             # <ANY_ALL>
             if ptr >= ctx.end:
-                return False
+                return
             ptr += 1
 
         elif op == OPCODE_ASSERT:
             # assert subpattern
             # <ASSERT> <0=skip> <1=back> <pattern>
             ptr1 = ptr - ctx.pat(ppos+1)
-            if ptr1 < 0 or not sre_match(ctx, ppos + 2, ptr1, marks):
-                return False
+            if ptr1 < 0 or not any(sre_match(ctx, ppos + 2, ptr1, marks)):
+                return
             ppos += ctx.pat(ppos)
 
         elif op == OPCODE_ASSERT_NOT:
             # assert not subpattern
             # <ASSERT_NOT> <0=skip> <1=back> <pattern>
             ptr1 = ptr - ctx.pat(ppos+1)
-            if ptr1 >= 0 and sre_match(ctx, ppos + 2, ptr1, marks):
-                return False
+            if ptr1 >= 0 and any(sre_match(ctx, ppos + 2, ptr1, marks)):
+                return
             ppos += ctx.pat(ppos)
 
         elif op == OPCODE_AT:
             # match at given position (e.g. at beginning, at boundary, etc.)
             # <AT> <code>
             if not sre_at(ctx, ctx.pat(ppos), ptr):
-                return False
+                return
             ppos += 1
 
         elif op == OPCODE_BRANCH:
             # alternation
             # <BRANCH> <0=skip> code <JUMP> ... <NULL>
             while ctx.pat(ppos):
-                if sre_match(ctx, ppos + 1, ptr, marks):
-                    return True
+                for answer in sre_match(ctx, ppos + 1, ptr, marks):
+                    yield answer
                 ppos += ctx.pat(ppos)
-            return False
+            return
 
         #elif op == OPCODE_CATEGORY:
         #   seems to be never produced
@@ -184,13 +192,13 @@ def sre_match(ctx, ppos, ptr, marks):
             gid = ctx.pat(ppos) * 2
             startptr = find_mark(marks, gid)
             if startptr < 0:
-                return False
+                return
             endptr = find_mark(marks, gid + 1)
             if endptr < startptr:   # also includes the case "endptr == -1"
-                return False
+                return
             for i in range(startptr, endptr):
                 if ptr >= ctx.end or ctx.str(ptr) != ctx.str(i):
-                    return False
+                    return
                 ptr += 1
             ppos += 1
 
@@ -200,13 +208,13 @@ def sre_match(ctx, ppos, ptr, marks):
             gid = ctx.pat(ppos) * 2
             startptr = find_mark(marks, gid)
             if startptr < 0:
-                return False
+                return
             endptr = find_mark(marks, gid + 1)
             if endptr < startptr:   # also includes the case "endptr == -1"
-                return False
+                return
             for i in range(startptr, endptr):
                 if ptr >= ctx.end or ctx.lowstr(ptr) != ctx.lowstr(i):
-                    return False
+                    return
                 ptr += 1
             ppos += 1
 
@@ -216,7 +224,7 @@ def sre_match(ctx, ppos, ptr, marks):
             if ptr >= ctx.end or not rsre_char.check_charset(ctx.pattern,
                                                              ppos+1,
                                                              ctx.str(ptr)):
-                return False
+                return
             ppos += ctx.pat(ppos)
             ptr += 1
 
@@ -226,7 +234,7 @@ def sre_match(ctx, ppos, ptr, marks):
             if ptr >= ctx.end or not rsre_char.check_charset(ctx.pattern,
                                                              ppos+1,
                                                              ctx.lowstr(ptr)):
-                return False
+                return
             ppos += ctx.pat(ppos)
             ptr += 1
 
@@ -234,7 +242,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # optimization info block
             # <INFO> <0=skip> <1=flags> <2=min> ...
             if (ctx.end - ptr) < ctx.pat(ppos+2):
-                return False
+                return
             ppos += ctx.pat(ppos)
 
         elif op == OPCODE_JUMP:
@@ -244,7 +252,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # match literal string
             # <LITERAL> <code>
             if ptr >= ctx.end or ctx.str(ptr) != ctx.pat(ppos):
-                return False
+                return
             ppos += 1
             ptr += 1
 
@@ -252,7 +260,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # match literal string, ignoring case
             # <LITERAL_IGNORE> <code>
             if ptr >= ctx.end or ctx.lowstr(ptr) != ctx.pat(ppos):
-                return False
+                return
             ppos += 1
             ptr += 1
 
@@ -267,7 +275,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # match if it's not a literal string
             # <NOT_LITERAL> <code>
             if ptr >= ctx.end or ctx.str(ptr) == ctx.pat(ppos):
-                return False
+                return
             ppos += 1
             ptr += 1
 
@@ -275,7 +283,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # match if it's not a literal string, ignoring case
             # <NOT_LITERAL> <code>
             if ptr >= ctx.end or ctx.lowstr(ptr) == ctx.pat(ppos):
-                return False
+                return
             ppos += 1
             ptr += 1
 
@@ -286,15 +294,8 @@ def sre_match(ctx, ppos, ptr, marks):
             itemppos = ppos + 3
             # FIXME: we probably need to deal with zero-width matches in here..
 
-            # first match 'min' repetitions of 'item'
+            # get the minimum and maximum number of repetitions allowed
             min = ctx.pat(ppos+1)
-            for i in range(min):
-                if not sre_match(ctx, itemppos, ptr, marks):
-                    return False
-                ptr = ctx.match_end
-                marks = ctx.match_marks
-
-            # get the maximum number of repetitions allowed
             max = ctx.pat(ppos+2)
 
             # decode the later UNTIL operator to see if it is actually
@@ -307,42 +308,64 @@ def sre_match(ctx, ppos, ptr, marks):
                 # possible, followed by the 'tail'.  we do this by
                 # remembering each state for each possible number of
                 # 'item' matching.
-                pending_ptr = []
-                pending_marks = []
-                # match as many repetitions of 'item' as possible,
-                # bounded by 'max'
-                count = min
-                while max == 65535 or count < max:
-                    if not sre_match(ctx, itemppos, ptr, marks):
+                pending = []
+                #
+                while True:
+                    if max == 65535 or len(pending) < max:
+                        # try to match one more 'item'
+                        enum = sre_match(ctx, itemppos, ptr, marks)
+                    else:
+                        enum = iter(())      # 'max' reached, no more matches
+
+                    while True:
+                        for next in enum:
+                            # matched one more 'item'.  record it and continue
+                            pending.append((ptr, marks, enum))
+                            ptr, marks = next
+                            break
+                        else:
+                            # 'item' no longer matches.
+                            if len(pending) >= min:
+                                # try to match 'tail' if we have enough 'item'
+                                for answer in sre_match(ctx, tailppos,
+                                                        ptr, marks):
+                                    yield answer
+                            if len(pending) == 0:
+                                return
+                            ptr, marks, enum = pending.pop()
+                            continue
                         break
-                    pending_ptr.append(ptr)
-                    pending_marks.append(marks)
-                    ptr = ctx.match_end
-                    marks = ctx.match_marks
-                    count += 1
-                # for each pending_ptr in the chain, try to match 'tail';
-                # return the first match found.  'ptr' is currently set
-                # to where the last match of 'item' failed.
-                while not sre_match(ctx, tailppos, ptr, marks):
-                    if len(pending_ptr) == 0:
-                        return False
-                    ptr = pending_ptr.pop()
-                    marks = pending_marks.pop()
-                return True
 
             elif op == OPCODE_MIN_UNTIL:
                 # first try to match the 'tail', and if it fails, try
                 # to match one more 'item' and try again
-                count = min
-                while not sre_match(ctx, tailppos, ptr, marks):
-                    if max != 65535 and count >= max:
-                        return False
-                    if not sre_match(ctx, itemppos, ptr, marks):
-                        return False
-                    ptr = ctx.match_end
-                    marks = ctx.match_marks
-                    count += 1
-                return True
+                pending = []
+                #
+                while True:
+                    # try to match 'tail' if we have enough 'item'
+                    if len(pending) >= min:
+                        for answer in sre_match(ctx, tailppos, ptr, marks):
+                            yield answer
+
+                    if max == 65535 or len(pending) < max:
+                        # try to match one more 'item'
+                        enum = sre_match(ctx, itemppos, ptr, marks)
+                    else:
+                        enum = iter(())      # 'max' reached, no more matches
+
+                    while True:
+                        for next in enum:
+                            # matched one more 'item'.  record it and continue
+                            pending.append((ptr, marks, enum))
+                            ptr, marks = next
+                            break
+                        else:
+                            # 'item' no longer matches.
+                            if len(pending) == 0:
+                                return
+                            ptr, marks, enum = pending.pop()
+                            continue
+                        break
 
             else:
                 raise AssertionError("missing UNTIL after REPEAT")
@@ -357,17 +380,17 @@ def sre_match(ctx, ppos, ptr, marks):
             start = ptr
             minptr = start + ctx.pat(ppos+1)
             if minptr > ctx.end:
-                return False    # cannot match
+                return    # cannot match
             ptr = find_repetition_end(ctx, ppos+3, start, ctx.pat(ppos+2))
             # when we arrive here, ptr points to the tail of the target
             # string.  check if the rest of the pattern matches,
             # and backtrack if not.
             nextppos = ppos + ctx.pat(ppos)
             while ptr >= minptr:
-                if sre_match(ctx, nextppos, ptr, marks):
-                    return True
+                for answer in sre_match(ctx, nextppos, ptr, marks):
+                    yield answer
                 ptr -= 1
-            return False
+            return
 
         elif op == OPCODE_MIN_REPEAT_ONE:
             # match repeated sequence (minimizing regexp).
@@ -381,11 +404,11 @@ def sre_match(ctx, ppos, ptr, marks):
             if min > 0:
                 minptr = ptr + min
                 if minptr > ctx.end:
-                    return False   # cannot match
+                    return   # cannot match
                 # count using pattern min as the maximum
                 ptr = find_repetition_end(ctx, ppos+3, ptr, min)
                 if ptr < minptr:
-                    return False   # did not match minimum number of times
+                    return   # did not match minimum number of times
 
             maxptr = ctx.end
             max = ctx.pat(ppos+2)
@@ -395,13 +418,13 @@ def sre_match(ctx, ppos, ptr, marks):
                     maxptr = maxptr1
             nextppos = ppos + ctx.pat(ppos)
             while ptr <= maxptr:
-                if sre_match(ctx, nextppos, ptr, marks):
-                    return True
+                for answer in sre_match(ctx, nextppos, ptr, marks):
+                    yield answer
                 ptr1 = find_repetition_end(ctx, ppos+3, ptr, 1)
                 if ptr1 == ptr:
                     break
                 ptr = ptr1
-            return False
+            return
 
         else:
             assert 0, "bad pattern code %d" % op
