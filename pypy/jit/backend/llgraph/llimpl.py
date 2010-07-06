@@ -10,7 +10,7 @@ from pypy.jit.metainterp.history import (ConstInt, ConstPtr,
                                          BoxInt, BoxPtr, BoxObj, BoxFloat,
                                          REF, INT, FLOAT)
 from pypy.jit.codewriter import heaptracker
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLException
@@ -972,10 +972,12 @@ def cast_to_int(x):
         return heaptracker.adr2int(x)
     return lltype.cast_primitive(lltype.Signed, x)
 
-def cast_from_int(TYPE, x):
+def cast_from_int(TYPE, x, unsafe=False):
     if isinstance(TYPE, lltype.Ptr):
         if isinstance(x, (int, long, llmemory.AddressAsInt)):
             x = llmemory.cast_int_to_adr(x)
+        if unsafe:
+            return rffi.cast(TYPE, x)
         return llmemory.cast_adr_to_ptr(x, TYPE)
     elif TYPE == llmemory.Address:
         if isinstance(x, (int, long, llmemory.AddressAsInt)):
@@ -1262,7 +1264,7 @@ def do_setarrayitem_gc_int(array, index, newvalue):
 def do_setarrayitem_raw_int(array, index, newvalue):
     array = array.adr.ptr
     ITEMTYPE = lltype.typeOf(array).TO.OF
-    newvalue = cast_from_int(ITEMTYPE, newvalue)
+    newvalue = cast_from_int(ITEMTYPE, newvalue, unsafe=True)
     array._obj.setitem(index, newvalue)
 
 def do_setarrayitem_gc_float(array, index, newvalue):
