@@ -91,11 +91,18 @@ def prepare_arguments(space, args_w, argtypes):
     if len(args_w) != len(argtypes):
         raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
     args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
-    for i in range(len(args_w)):
-        argtype = argtypes[i]
-        conv = converter.get_converter(argtype)
-        # XXX this can leak so far
-        args[i] = conv.convert_argument(space, args_w[i])
+    try:
+        i = 0 # appease RPython: i is used below
+        for i in range(len(args_w)):
+            argtype = argtypes[i]
+            conv = converter.get_converter(argtype)
+            args[i] = conv.convert_argument(space, args_w[i])
+    except:
+        # fun :-(
+        for j in range(i):
+            lltype.free(args[j])
+        lltype.free(args, flavor='raw')
+        raise
     return args
 
 def free_arguments(args, numargs):
@@ -178,6 +185,8 @@ class CPPOverload(object):
             except OperationError, e:
                 if not e.match(space, space.w_TypeError):
                     raise
+            except KeyError:
+                pass
         # XXX better error reporting
         raise OperationError(space.w_TypeError, space.wrap("none of the overloads matched"))
 
