@@ -1,4 +1,5 @@
 #include <iostream>
+#include <stdlib.h>
 
 class example01 {
 public:
@@ -34,6 +35,9 @@ public:
     }
     static double adddouble(double a) {
         return a + 0.01;
+    }
+    static int atoi(const char* str) {
+        return ::atoi(str);
     }
     static int getcount() {
         std::cout << "getcount called" << std::endl;

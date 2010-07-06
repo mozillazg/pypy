@@ -145,14 +145,16 @@ class CPPMethod(object):
         except:
             # fun :-(
             for j in range(i):
-                lltype.free(args[j], flavor='raw')
+                conv = self.arg_converters[j]
+                conv.free_argument(args[j])
             lltype.free(args, flavor='raw')
             raise
         return args
 
     def free_arguments(self, args):
         for i in range(len(self.arg_types)):
-            lltype.free(args[i], flavor='raw')
+            conv = self.arg_converters[i]
+            conv.free_argument(args[i])
         lltype.free(args, flavor='raw')
 
     def __repr__(self):

@@ -44,6 +44,11 @@ class AppTestCPPYY:
         res = t.invoke("adddouble", 0.09)
         assert res == 0.09 + 0.01
 
+    def test_example01static_constcharp(self):
+        t = self.example01.type_byname("example01")
+        res = t.invoke("atoi", "1")
+        assert res == 1
+
     def test_example01method(self):
         t = self.example01.type_byname("example01")
         count = t.invoke("getcount")
@@ -56,4 +61,5 @@ class AppTestCPPYY:
         instance.destruct()
         count = t.invoke("getcount")
         assert count == 0
+
 
