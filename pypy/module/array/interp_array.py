@@ -6,6 +6,7 @@ from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
 from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.rstruct.runpack import runpack
 
 FloatArray = lltype.GcArray(lltype.Float)
 
@@ -54,6 +55,7 @@ class TypeCode(object):
             self.bytes = 4
         else:
             self.bytes = rffi.sizeof(itemtype)
+        self.arraytype = lltype.GcArray(itemtype)
         self.unwrap = unwrap
         self.signed = signed
         self.canoverflow = canoverflow
@@ -84,6 +86,7 @@ class W_Array(Wrappable):
         if typecode not in  'cbBuhHiIlLfd':
             msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
             raise OperationError(space.w_ValueError, space.wrap(msg))
+        typecode = typecode[0]
         self.space = space
         self.typecode = typecode
         self.len = 0
@@ -124,7 +127,9 @@ class W_Array(Wrappable):
                 return rffi.cast(tc.itemtype, item)
 
     def setlen(self, size):
-        new_buffer = lltype.malloc(lltype.GcArray(types[self.typecode].itemtype), size)
+        for tc in unroll_typecodes:
+            if self.typecode == tc:
+                new_buffer = lltype.malloc(types[tc].arraytype, size)
         for i in range(self.len):
             new_buffer[i] = self.buffer[i]
         self.buffer = new_buffer
@@ -201,7 +206,6 @@ class W_Array(Wrappable):
     descr_len.unwrap_spec = ['self']
 
     def descr_fromstring(self, s):
-        import struct
         if len(s)%self.itemsize !=0:
             msg = 'string length not a multiple of item size'
             raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
@@ -210,8 +214,10 @@ class W_Array(Wrappable):
         self.setlen(oldlen + new)
         for i in range(new):
             p = i * self.itemsize
-            item=struct.unpack(self.typecode, s[p:p + self.itemsize])[0]
-            self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
+            for tc in unroll_typecodes:
+                if self.typecode == tc:
+                    item=runpack(tc, s[p:p + self.itemsize])
+                    self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
     descr_fromstring.unwrap_spec = ['self', str]
 
     def descr_fromfile(self, w_f, n):
@@ -259,8 +265,10 @@ class W_Array(Wrappable):
     descr_tolist.unwrap_spec = ['self']
 
     def descr_tostring(self):
-        import struct
-        return self.space.wrap(''.join([struct.pack(self.typecode, i) for i in self.buffer]))
+        #import struct
+        #return self.space.wrap(''.join([struct.pack(self.typecode, i) for i in self.buffer]))
+        return self.space.wrap('FIXME')
+    
     descr_tostring.unwrap_spec = ['self']
 
     def descr_tofile(self, w_f):
