@@ -49,6 +49,9 @@ class AppTestCPPYY:
         res = t.invoke("atoi", "1")
         assert res == 1
 
+        res = t.invoke("strcpy", "aap")
+        assert res == "aap"
+
     def test_example01method(self):
         t = self.example01.type_byname("example01")
         count = t.invoke("getcount")
