@@ -91,6 +91,24 @@ class MatchContext(object):
             return None
         return self.string[frm:to]
 
+    def at_boundary(self, ptr, word_checker):
+        if self.end == 0:
+            return False
+        prevptr = ptr - 1
+        that = prevptr >= 0 and word_checker(self.str(prevptr))
+        this = ptr < self.end and word_checker(self.str(ptr))
+        return this != that
+    at_boundary._annspecialcase_ = 'specialize:arg(2)'
+
+    def at_non_boundary(self, ptr, word_checker):
+        if self.end == 0:
+            return False
+        prevptr = ptr - 1
+        that = prevptr >= 0 and word_checker(self.str(prevptr))
+        this = ptr < self.end and word_checker(self.str(ptr))
+        return this == that
+    at_non_boundary._annspecialcase_ = 'specialize:arg(2)'
+
 
 class Mark(object):
     _immutable_ = True
@@ -483,7 +501,7 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
             ptr += 1
 
     else:
-        assert 0, "XXX %d" % op
+        raise NotImplementedError("rsre.find_repetition_end[%d]" % op)
 
     return ptr
 
@@ -513,20 +531,10 @@ def sre_at(ctx, atcode, ptr):
         return prevptr < 0 or rsre_char.is_linebreak(ctx.str(prevptr))
 
     elif atcode == AT_BOUNDARY:
-        if ctx.end == 0:
-            return False
-        prevptr = ptr - 1
-        that = prevptr >= 0 and rsre_char.is_word(ctx.str(prevptr))
-        this = ptr < ctx.end and rsre_char.is_word(ctx.str(ptr))
-        return this != that
+        return ctx.at_boundary(ptr, rsre_char.is_word)
 
     elif atcode == AT_NON_BOUNDARY:
-        if ctx.end == 0:
-            return False
-        prevptr = ptr - 1
-        that = prevptr >= 0 and rsre_char.is_word(ctx.str(prevptr))
-        this = ptr < ctx.end and rsre_char.is_word(ctx.str(ptr))
-        return this == that
+        return ctx.at_non_boundary(ptr, rsre_char.is_word)
 
     elif atcode == AT_END:
         remaining_chars = ctx.end - ptr
@@ -540,15 +548,15 @@ def sre_at(ctx, atcode, ptr):
         return ptr == ctx.end
 
     elif atcode == AT_LOC_BOUNDARY:
-        XXX
+        return ctx.at_boundary(ptr, rsre_char.is_loc_word)
 
     elif atcode == AT_LOC_NON_BOUNDARY:
-        XXX
+        return ctx.at_non_boundary(ptr, rsre_char.is_loc_word)
 
     elif atcode == AT_UNI_BOUNDARY:
-        XXX
+        return ctx.at_boundary(ptr, rsre_char.is_uni_word)
 
     elif atcode == AT_UNI_NON_BOUNDARY:
-        XXX
+        return ctx.at_non_boundary(ptr, rsre_char.is_uni_word)
 
     return False
