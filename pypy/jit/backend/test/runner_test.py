@@ -997,6 +997,8 @@ class BaseBackendTest(Runner):
             else:
                 assert 0
             operations.append(ResOperation(opnum, boxargs, boxres))
+        # Unique-ify inputargs
+        inputargs = list(set(inputargs))
         faildescr = BasicFailDescr(1)
         operations.append(ResOperation(rop.FINISH, [], None,
                                        descr=faildescr))
@@ -1069,7 +1071,8 @@ class BaseBackendTest(Runner):
                                          descr=BasicFailDescr(5))]
                         operations[1].fail_args = []
                         looptoken = LoopToken()
-                        self.cpu.compile_loop(list(testcase), operations,
+                        # Use "set" to unique-ify inputargs
+                        self.cpu.compile_loop(list(set(testcase)), operations,
                                               looptoken)
                         for i, box in enumerate(testcase):
                             self.cpu.set_future_value_float(i, box.value)
