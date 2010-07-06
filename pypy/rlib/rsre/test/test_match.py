@@ -170,5 +170,21 @@ class TestMatch:
         assert res.flatten_marks() == [0, 9, 1, 2, 7, 9, 7, 8, 8, 9]
 
     def test_bug1(self):
+        # REPEAT_ONE instead REPEAT
         r = get_code(r"(?:.+)?B")
         assert rsre.match(r, "AB") is not None
+        r = get_code(r"(?:AA+?)+B")
+        assert rsre.match(r, "AAAB") is not None
+        r = get_code(r"(?:AA+)+?B")
+        assert rsre.match(r, "AAAB") is not None
+        r = get_code(r"(?:AA+?)+?B")
+        assert rsre.match(r, "AAAB") is not None
+        # REPEAT instead REPEAT
+        r = get_code(r"(?:(?:xy)+)?B")
+        assert rsre.match(r, "xyB") is not None
+        r = get_code(r"(?:xy(?:xy)+?)+B")
+        assert rsre.match(r, "xyxyxyB") is not None
+        r = get_code(r"(?:xy(?:xy)+)+?B")
+        assert rsre.match(r, "xyxyxyB") is not None
+        r = get_code(r"(?:xy(?:xy)+?)+?B")
+        assert rsre.match(r, "xyxyxyB") is not None
