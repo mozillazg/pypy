@@ -168,3 +168,7 @@ class TestMatch:
         res = rsre.match(r, "abcdedede")
         assert res.flatten_marks() == [0, 9, 1, 2, 7, 9, 7, 8, 8, 9]
         assert res.flatten_marks() == [0, 9, 1, 2, 7, 9, 7, 8, 8, 9]
+
+    def test_bug1(self):
+        r = get_code(r"(?:.+)?B")
+        assert rsre.match(r, "AB") is not None
