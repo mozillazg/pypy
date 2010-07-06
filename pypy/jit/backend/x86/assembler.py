@@ -31,9 +31,6 @@ from pypy.rlib.debug import debug_print
 from pypy.rlib import rgc
 from pypy.jit.backend.x86.jump import remap_frame_layout
 
-# our calling convention - we pass first 6 args in registers
-# and the rest stays on the stack
-
 # darwin requires the stack to be 16 bytes aligned on calls. Same for gcc 4.5.0,
 # better safe than sorry
 CALL_ALIGN = 16 // WORD
@@ -499,6 +496,8 @@ class Assembler386(object):
                 self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
             else:
                 self.mc.MOV_rb(X86_64_SCRATCH_REG.value, (2 + i) * WORD)
+                # XXX: We're assuming that "loc" won't require regloc to
+                # clobber the scratch register
                 self.mc.MOV(loc, X86_64_SCRATCH_REG)
 
         self.mc.JMP(imm(jmpadr))
