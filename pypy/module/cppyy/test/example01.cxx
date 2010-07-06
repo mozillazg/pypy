@@ -29,6 +29,9 @@ public:
     static int add1(int a) {
         return a + 1;
     }
+    static double adddouble(double a) {
+        return a + 0.01;
+    }
     static int getcount() {
         std::cout << "getcount called" << std::endl;
         return count;
