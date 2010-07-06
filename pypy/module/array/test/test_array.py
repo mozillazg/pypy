@@ -263,3 +263,25 @@ class AppTestArray:
             assert False
         except TypeError:
             pass
+
+    def test_toxxx(self):
+        a = self.array('i', [1,2,3])
+        l  = a.tolist()
+        assert type(l) is list and len(l)==3
+        assert a[0] == 1 and a[1] == 2 and a[2] == 3
+
+        b = self.array('i', a.tostring())
+        assert len(b) == 3 and b[0] == 1 and b[1] == 2 and b[2] == 3
+
+        assert self.array('c', ('h', 'i')).tostring() == 'hi'
+        a = self.array('i',[0,0,0])
+        assert a.tostring() == '\x00'*3*a.itemsize
+
+        from cStringIO import StringIO
+        f=StringIO()
+        self.array('c', ('h', 'i')).tofile(f)
+        assert f.getvalue() == 'hi'
+
+        raises(ValueError, self.array('i').tounicode)
+        assert self.array('u', unicode('hello')).tounicode() == unicode('hello')
+        

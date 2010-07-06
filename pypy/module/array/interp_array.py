@@ -254,8 +254,29 @@ class W_Array(Wrappable):
         self.descr_fromlist(self.space.wrap(s))
     descr_fromunicode.unwrap_spec = ['self', unicode]
 
-        
-            
+    def descr_tolist(self):
+        return self.space.newlist([self.space.wrap(i) for i in self.buffer])
+    descr_tolist.unwrap_spec = ['self']
+
+    def descr_tostring(self):
+        import struct
+        return self.space.wrap(''.join([struct.pack(self.typecode, i) for i in self.buffer]))
+    descr_tostring.unwrap_spec = ['self']
+
+    def descr_tofile(self, w_f):
+        space=self.space
+        w_s = space.call_function(
+            space.getattr(w_f, space.wrap('write')),
+            self.descr_tostring())
+    descr_tofile.unwrap_spec = ['self', W_Root]
+
+    def descr_tounicode(self):
+        if self.typecode != 'u':
+            msg = "tounicode() may only be called on type 'u' arrays"
+            raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
+        return self.space.wrap(u''.join([i for i in self.buffer]))
+    descr_tounicode.unwrap_spec = ['self']
+
 
 def descr_itemsize(space, self):
     return space.wrap(self.itemsize)
@@ -268,10 +289,15 @@ W_Array.typedef = TypeDef(
     __getitem__ = interp2app(W_Array.descr_getitem),
     __setitem__ = interp2app(W_Array.descr_setitem),
     itemsize    = GetSetProperty(descr_itemsize, cls=W_Array),
+
     fromstring  = interp2app(W_Array.descr_fromstring),
     fromfile    = interp2app(W_Array.descr_fromfile),
     fromlist    = interp2app(W_Array.descr_fromlist),
     fromunicode = interp2app(W_Array.descr_fromunicode),
+    tostring    = interp2app(W_Array.descr_tostring),
+    tolist      = interp2app(W_Array.descr_tolist),
+    tofile      = interp2app(W_Array.descr_tofile),
+    tounicode   = interp2app(W_Array.descr_tounicode),
 )
 
 
