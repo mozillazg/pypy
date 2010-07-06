@@ -135,7 +135,17 @@ class MatchResult(object):
     def move_to_next_result(self, ctx):
         return False
 
-class BranchMatchResult(MatchResult):
+class AbstractMultipleMatchResult(MatchResult):
+
+    def move_to_next_result(self, ctx):
+        result = self.subresult
+        if result.move_to_next_result(ctx):
+            self.end = result.end
+            self.marks = result.marks
+            return True
+        return self.find_next_result(ctx)
+    
+class BranchMatchResult(AbstractMultipleMatchResult):
 
     def __init__(self, ppos, ptr, marks):
         self.ppos = ppos
@@ -154,13 +164,9 @@ class BranchMatchResult(MatchResult):
                 self.ppos = ppos
                 return True
         return False
+    find_next_result = find_first_result
 
-    def move_to_next_result(self, ctx):
-        if self.subresult.move_to_next_result(ctx):
-            return True
-        return self.find_first_result(ctx)
-
-class RepeatOneMatchResult(MatchResult):
+class RepeatOneMatchResult(AbstractMultipleMatchResult):
 
     def __init__(self, nextppos, minptr, ptr, marks):
         self.nextppos = nextppos
@@ -180,12 +186,150 @@ class RepeatOneMatchResult(MatchResult):
                 self.start_ptr = ptr
                 return True
         return False
+    find_next_result = find_first_result
 
-    def move_to_next_result(self, ctx):
-        if self.subresult.move_to_next_result(ctx):
-            return True
+
+class MinRepeatOneMatchResult(AbstractMultipleMatchResult):
+
+    def __init__(self, nextppos, ppos3, maxptr, ptr, marks):
+        self.nextppos = nextppos
+        self.ppos3 = ppos3
+        self.maxptr = maxptr
+        self.start_ptr = ptr
+        self.start_marks = marks
+
+    def find_first_result(self, ctx):
+        ptr = self.start_ptr
+        while ptr <= self.maxptr:
+            result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
+            if result is not None:
+                self.subresult = result
+                self.end = result.end
+                self.marks = result.marks
+                self.start_ptr = ptr
+                return True
+            ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
+            if ptr1 == ptr:
+                break
+            ptr = ptr1
+        return False
+
+    def find_next_result(self, ctx):
+        ptr = self.start_ptr
+        ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
+        if ptr1 == ptr:
+            return False
+        self.start_ptr = ptr1
         return self.find_first_result(ctx)
 
+class AbstractUntilMatchResult(AbstractMultipleMatchResult):
+
+    def __init__(self, ppos, tailppos, ptr, marks):
+        self.ppos = ppos
+        self.tailppos = tailppos
+        self.cur_ptr = ptr
+        self.cur_marks = marks
+        self.pending = []
+
+class MaxUntilMatchResult(AbstractUntilMatchResult):
+
+    def find_first_result(self, ctx):
+        enum = sre_match(ctx, self.ppos + 3, self.cur_ptr, self.cur_marks)
+        return self.search_next(ctx, enum, resume=False)
+
+    def find_next_result(self, ctx):
+        return self.search_next(ctx, None, resume=True)
+
+    def search_next(self, ctx, enum, resume):
+        ppos = self.ppos
+        min = ctx.pat(ppos+1)
+        max = ctx.pat(ppos+2)
+        ptr = self.cur_ptr
+        marks = self.cur_marks
+        while True:
+            while True:
+                if enum is not None:
+                    # matched one more 'item'.  record it and continue
+                    self.pending.append((ptr, marks, enum))
+                    ptr = enum.end
+                    marks = enum.marks
+                    break
+                else:
+                    # 'item' no longer matches.
+                    if not resume and len(self.pending) >= min:
+                        # try to match 'tail' if we have enough 'item'
+                        result = sre_match(ctx, self.tailppos, ptr, marks)
+                        if result is not None:
+                            self.subresult = result
+                            self.end = result.end
+                            self.marks = result.marks
+                            self.cur_ptr = ptr
+                            self.cur_marks = marks
+                            return True
+                    resume = False
+                    if len(self.pending) == 0:
+                        return False
+                    ptr, marks, enum = self.pending.pop()
+                    if not enum.move_to_next_result(ctx):
+                        enum = None
+            #
+            if max == 65535 or len(self.pending) < max:
+                # try to match one more 'item'
+                enum = sre_match(ctx, ppos + 3, ptr, marks)
+            else:
+                enum = None    # 'max' reached, no more matches
+
+class MinUntilMatchResult(AbstractUntilMatchResult):
+
+    def find_first_result(self, ctx):
+        return self.search_next(ctx, resume=False)
+
+    def find_next_result(self, ctx):
+        return self.search_next(ctx, resume=True)
+
+    def search_next(self, ctx, resume):
+        ppos = self.ppos
+        min = ctx.pat(ppos+1)
+        max = ctx.pat(ppos+2)
+        ptr = self.cur_ptr
+        marks = self.cur_marks
+        while True:
+            # try to match 'tail' if we have enough 'item'
+            if not resume and len(self.pending) >= min:
+                result = sre_match(ctx, self.tailppos, ptr, marks)
+                if result is not None:
+                    self.subresult = result
+                    self.end = result.end
+                    self.marks = result.marks
+                    self.cur_ptr = ptr
+                    self.cur_marks = marks
+                    return True
+            resume = False
+
+            if max == 65535 or len(self.pending) < max:
+                # try to match one more 'item'
+                enum = sre_match(ctx, ppos + 3, ptr, marks)
+            else:
+                enum = None    # 'max' reached, no more matches
+
+            while True:
+                if enum is not None:
+                    # matched one more 'item'.  record it and continue
+                    self.pending.append((ptr, marks, enum))
+                    ptr = enum.end
+                    marks = enum.marks
+                    break
+                else:
+                    # 'item' no longer matches.
+                    if len(self.pending) == 0:
+                        return False
+                    ptr, marks, enum = self.pending.pop()
+                    if not enum.move_to_next_result(ctx):
+                        enum = None
+                    continue
+                break
+
+# ____________________________________________________________
 
 def match(pattern, string, start=0, flags=0):
     ctx = MatchContext(pattern, string, start, flags)
@@ -366,12 +510,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # general repeat.  in this version of the re module, all the work
             # is done here, and not on the later UNTIL operator.
             # <REPEAT> <skip> <1=min> <2=max> item <UNTIL> tail
-            itemppos = ppos + 3
             # FIXME: we probably need to deal with zero-width matches in here..
-
-            # get the minimum and maximum number of repetitions allowed
-            min = ctx.pat(ppos+1)
-            max = ctx.pat(ppos+2)
 
             # decode the later UNTIL operator to see if it is actually
             # a MAX_UNTIL or MIN_UNTIL
@@ -383,64 +522,18 @@ def sre_match(ctx, ppos, ptr, marks):
                 # possible, followed by the 'tail'.  we do this by
                 # remembering each state for each possible number of
                 # 'item' matching.
-                pending = []
-                #
-                while True:
-                    if max == 65535 or len(pending) < max:
-                        # try to match one more 'item'
-                        enum = sre_match(ctx, itemppos, ptr, marks)
-                    else:
-                        enum = iter(())      # 'max' reached, no more matches
-
-                    while True:
-                        for next in enum:
-                            # matched one more 'item'.  record it and continue
-                            pending.append((ptr, marks, enum))
-                            ptr, marks = next
-                            break
-                        else:
-                            # 'item' no longer matches.
-                            if len(pending) >= min:
-                                # try to match 'tail' if we have enough 'item'
-                                for answer in sre_match(ctx, tailppos,
-                                                        ptr, marks):
-                                    yield_answer
-                            if len(pending) == 0:
-                                return
-                            ptr, marks, enum = pending.pop()
-                            continue
-                        break
+                result = MaxUntilMatchResult(ppos, tailppos, ptr, marks)
+                if not result.find_first_result(ctx):
+                    result = None
+                return result
 
             elif op == OPCODE_MIN_UNTIL:
                 # first try to match the 'tail', and if it fails, try
                 # to match one more 'item' and try again
-                pending = []
-                #
-                while True:
-                    # try to match 'tail' if we have enough 'item'
-                    if len(pending) >= min:
-                        for answer in sre_match(ctx, tailppos, ptr, marks):
-                            yield_answer
-
-                    if max == 65535 or len(pending) < max:
-                        # try to match one more 'item'
-                        enum = sre_match(ctx, itemppos, ptr, marks)
-                    else:
-                        enum = iter(())      # 'max' reached, no more matches
-
-                    while True:
-                        for next in enum:
-                            # matched one more 'item'.  record it and continue
-                            pending.append((ptr, marks, enum))
-                            ptr, marks = next
-                            break
-                        else:
-                            # 'item' no longer matches.
-                            if len(pending) == 0:
-                                return
-                            ptr, marks, enum = pending.pop()
-                            continue
-                        break
+                result = MinUntilMatchResult(ppos, tailppos, ptr, marks)
+                if not result.find_first_result(ctx):
+                    result = None
+                return result
 
             else:
                 raise AssertionError("missing UNTIL after REPEAT")
@@ -491,14 +584,11 @@ def sre_match(ctx, ppos, ptr, marks):
                 if maxptr1 <= maxptr:
                     maxptr = maxptr1
             nextppos = ppos + ctx.pat(ppos)
-            while ptr <= maxptr:
-                for answer in sre_match(ctx, nextppos, ptr, marks):
-                    yield_answer
-                ptr1 = find_repetition_end(ctx, ppos+3, ptr, 1)
-                if ptr1 == ptr:
-                    break
-                ptr = ptr1
-            return
+            result = MinRepeatOneMatchResult(nextppos, ppos+3, maxptr,
+                                             ptr, marks)
+            if not result.find_first_result(ctx):
+                result = None
+            return result
 
         else:
             assert 0, "bad pattern code %d" % op
