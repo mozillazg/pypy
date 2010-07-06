@@ -136,19 +136,20 @@ class CPPMethod(object):
         if self.arg_converters is None:
             self._build_converters()
         args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
-        try:
-            i = 0 # appease RPython: i is used below
-            for i in range(len(args_w)):
-                argtype = self.arg_types[i]
-                conv = self.arg_converters[i]
-                args[i] = conv.convert_argument(space, args_w[i])
-        except:
-            # fun :-(
-            for j in range(i):
-                conv = self.arg_converters[j]
-                conv.free_argument(args[j])
-            lltype.free(args, flavor='raw')
-            raise
+        for i in range(len(args_w)):
+            argtype = self.arg_types[i]
+            conv = self.arg_converters[i]
+            w_arg = args_w[i]
+            try:
+                 arg = conv.convert_argument(space, w_arg)
+            except:
+                # fun :-(
+                for j in range(i):
+                    conv = self.arg_converters[j]
+                    conv.free_argument(args[j])
+                lltype.free(args, flavor='raw')
+                raise
+            args[i] = arg
         return args
 
     def free_arguments(self, args):
