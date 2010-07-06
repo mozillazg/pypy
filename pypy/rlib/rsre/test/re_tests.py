@@ -266,8 +266,8 @@ tests = [
     # Test symbolic groups
 
     ('(?P<i d>aaa)a', 'aaaa', SYNTAX_ERROR),
-    ('(?P<id>aaa)a', 'aaaa', SUCCEED, 'found+"-"+id', 'aaaa-aaa'),
-    ('(?P<id>aa)(?P=id)', 'aaaa', SUCCEED, 'found+"-"+id', 'aaaa-aa'),
+    #('(?P<id>aaa)a', 'aaaa', SUCCEED, 'found+"-"+id', 'aaaa-aaa'),
+    #('(?P<id>aa)(?P=id)', 'aaaa', SUCCEED, 'found+"-"+id', 'aaaa-aa'),
     ('(?P<id>aa)(?P=xd)', 'aaaa', SYNTAX_ERROR),
 
     # Test octal escapes/memory references
