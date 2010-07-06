@@ -36,6 +36,8 @@ class AppTestCPPYY:
         assert res == 2
         res = t.invoke("add1", 1, 2)
         assert res == 4
+        raises(TypeError, 't.invoke("add1", 1, [])')
+
 
     def test_example01static_double(self):
         t = self.example01.type_byname("example01")
@@ -54,3 +56,4 @@ class AppTestCPPYY:
         instance.destruct()
         count = t.invoke("getcount")
         assert count == 0
+
