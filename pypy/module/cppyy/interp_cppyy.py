@@ -82,6 +82,8 @@ myfree = rffi.llexternal(
     compilation_info=eci)
 
 
+NULL_VOIDP = lltype.nullptr(rffi.VOIDP.TO)
+
 def load_lib(space, name):
     cdll = CDLL(name)
     return W_CPPLibrary(space, cdll)
@@ -100,7 +102,7 @@ def prepare_arguments(space, args_w, argtypes):
     except:
         # fun :-(
         for j in range(i):
-            lltype.free(args[j])
+            lltype.free(args[j], flavor='raw')
         lltype.free(args, flavor='raw')
         raise
     return args
@@ -146,7 +148,7 @@ class CPPMethod(object):
 
 class CPPFunction(CPPMethod):
     def call(self, cppthis, args_w):
-        assert cppthis is None
+        assert not cppthis
         args = prepare_arguments(self.space, args_w, self.arg_types)
         if self.result_type == "int":
             result = callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
@@ -161,7 +163,7 @@ class CPPFunction(CPPMethod):
 
 class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
-        assert cppthis is None
+        assert not cppthis
         args = prepare_arguments(self.space, args_w, self.arg_types)
         result = construct(self.cpptype.name, len(args_w), args)
         free_arguments(args, len(args_w))
@@ -234,11 +236,11 @@ class W_CPPType(Wrappable):
 
     def invoke(self, name, args_w):
         overload = self.function_members[name]
-        return overload.call(None, args_w)
+        return overload.call(NULL_VOIDP, args_w)
 
     def construct(self, args_w):
         overload = self.function_members[self.name]
-        return W_CPPObject(self, overload.call(None, args_w))
+        return W_CPPObject(self, overload.call(NULL_VOIDP, args_w))
 
 W_CPPType.typedef = TypeDef(
     'CPPType',
