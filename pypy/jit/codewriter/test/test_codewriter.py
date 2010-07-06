@@ -2,7 +2,7 @@ import py
 from pypy.jit.codewriter.codewriter import CodeWriter
 from pypy.jit.codewriter import support
 from pypy.jit.metainterp.history import AbstractDescr
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 
 class FakeCallDescr(AbstractDescr):
     def __init__(self, FUNC, ARGS, RESULT, effectinfo=None):
@@ -24,12 +24,17 @@ class FakeSizeDescr(AbstractDescr):
     def as_vtable_size_descr(self):
         return self
 
+class FakeArrayDescr(AbstractDescr):
+    def __init__(self, ARRAY):
+        self.ARRAY = ARRAY
+
 class FakeCPU:
     def __init__(self, rtyper):
         self.rtyper = rtyper
     calldescrof = FakeCallDescr
     fielddescrof = FakeFieldDescr
     sizeof = FakeSizeDescr
+    arraydescrof = FakeArrayDescr
 
 class FakePolicy:
     def look_inside_graph(self, graph):
@@ -157,3 +162,25 @@ def test_int_abs():
     #
     s = jitdriver_sd.mainjitcode.dump()
     assert "inline_call_ir_i <JitCode '_ll_1_int_abs__Signed'>" in s
+
+def test_raw_malloc_and_access():
+    TP = rffi.CArray(lltype.Signed)
+    
+    def f(n):
+        a = lltype.malloc(TP, n, flavor='raw')
+        a[0] = n
+        res = a[0]
+        lltype.free(a, flavor='raw')
+        return res
+
+    rtyper = support.annotate(f, [35])
+    jitdriver_sd = FakeJitDriverSD(rtyper.annotator.translator.graphs[0])
+    cw = CodeWriter(FakeCPU(rtyper), [jitdriver_sd])
+    cw.find_all_graphs(FakePolicy())
+    cw.make_jitcodes(verbose=True)
+    #
+    s = jitdriver_sd.mainjitcode.dump()
+    assert 'residual_call_ir_i $<* fn _ll_1_raw_malloc__Signed>' in s
+    assert 'setarrayitem_raw_i' in s
+    assert 'getarrayitem_raw_i' in s
+    assert 'residual_call_ir_v $<* fn _ll_1_raw_free__arrayPtr>' in s

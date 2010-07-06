@@ -1562,6 +1562,35 @@ class BasicTests:
         res = self.interp_operations(f, [3, 2])
         assert res == 1
 
+    def test_raw_malloc_and_access(self):
+        from pypy.rpython.lltypesystem import rffi
+        
+        TP = rffi.CArray(lltype.Signed)
+        
+        def f(n):
+            a = lltype.malloc(TP, n, flavor='raw')
+            a[0] = n
+            res = a[0]
+            lltype.free(a, flavor='raw')
+            return res
+
+        res = self.interp_operations(f, [10])
+        assert res == 10
+
+    def test_raw_malloc_and_access_float(self):
+        from pypy.rpython.lltypesystem import rffi
+        
+        TP = rffi.CArray(lltype.Float)
+        
+        def f(n, f):
+            a = lltype.malloc(TP, n, flavor='raw')
+            a[0] = f
+            res = a[0]
+            lltype.free(a, flavor='raw')
+            return res
+
+        res = self.interp_operations(f, [10, 3.5])
+        assert res == 3.5
 
 class TestOOtype(BasicTests, OOJitMixin):
 

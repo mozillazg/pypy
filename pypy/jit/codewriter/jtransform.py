@@ -403,7 +403,12 @@ class Transformer(object):
             log.WARNING('ignoring hint %r at %r' % (hints, self.graph))
 
     def rewrite_op_malloc_varsize(self, op):
-        assert op.args[1].value == {'flavor': 'gc'}
+        if op.args[1].value['flavor'] == 'raw':
+            ARRAY = op.args[0].value
+            return self._do_builtin_call(op, 'raw_malloc',
+                                         [op.args[2]],
+                                         extra = (ARRAY,),
+                                         extrakey = ARRAY)
         if op.args[0].value == rstr.STR:
             return SpaceOperation('newstr', [op.args[2]], op.result)
         elif op.args[0].value == rstr.UNICODE:
@@ -415,9 +420,14 @@ class Transformer(object):
             return SpaceOperation('new_array', [arraydescr, op.args[2]],
                                   op.result)
 
+    def rewrite_op_free(self, op):
+        assert op.args[1].value == 'raw'
+        ARRAY = op.args[0].concretetype.TO
+        return self._do_builtin_call(op, 'raw_free', [op.args[0]],
+                                     extra = (ARRAY,), extrakey = ARRAY)
+
     def rewrite_op_getarrayitem(self, op):
         ARRAY = op.args[0].concretetype.TO
-        assert ARRAY._gckind == 'gc'
         if self._array_of_voids(ARRAY):
             return []
         if op.args[0] in self.vable_array_vars:     # for virtualizables
@@ -431,13 +441,12 @@ class Transformer(object):
         # normal case follows
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.result.concretetype)
-        return SpaceOperation('getarrayitem_gc_%s' % kind[0],
+        return SpaceOperation('getarrayitem_%s_%s' % (ARRAY._gckind, kind[0]),
                               [op.args[0], arraydescr, op.args[1]],
                               op.result)
 
     def rewrite_op_setarrayitem(self, op):
         ARRAY = op.args[0].concretetype.TO
-        assert ARRAY._gckind == 'gc'
         if self._array_of_voids(ARRAY):
             return []
         if op.args[0] in self.vable_array_vars:     # for virtualizables
@@ -450,7 +459,7 @@ class Transformer(object):
                                     op.args[1], op.args[2]], None)]
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.args[2].concretetype)
-        return SpaceOperation('setarrayitem_gc_%s' % kind[0],
+        return SpaceOperation('setarrayitem_%s_%s' % (ARRAY._gckind, kind[0]),
                               [op.args[0], arraydescr, op.args[1], op.args[2]],
                               None)
 
@@ -658,7 +667,7 @@ class Transformer(object):
             return self._rewrite_symmetric(op)
 
     def _is_gc(self, v):
-        return v.concretetype.TO._gckind == 'gc'
+        return getattr(getattr(v.concretetype, "TO", None), "_gckind", "?") == 'gc'
 
     def _rewrite_cmp_ptrs(self, op):
         if self._is_gc(op.args[0]):
@@ -691,6 +700,17 @@ class Transformer(object):
         if self._is_gc(op.args[0]):
             #return op
             raise NotImplementedError("cast_ptr_to_int")
+
+    def rewrite_op_force_cast(self, op):
+        from pypy.rpython.lltypesystem.rffi import size_and_sign
+        from pypy.rlib.rarithmetic import intmask
+        assert not self._is_gc(op.args[0])
+        size1, unsigned1 = size_and_sign(op.args[0].concretetype)
+        size2, unsigned2 = size_and_sign(op.result.concretetype)
+        if size1 == size2 and unsigned1 == unsigned2:
+            return
+        raise NotImplementedError("cast not supported yet: %s" % (op, ))
+
 
     # ----------
     # Renames, from the _old opname to the _new one.
