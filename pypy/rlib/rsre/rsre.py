@@ -711,6 +711,13 @@ def match(pattern, string, start=0, flags=0):
 
 def search(pattern, string, start=0, flags=0):
     ctx = MatchContext(pattern, string, start, flags)
+    if ctx.pat(0) == OPCODE_INFO:
+        if ctx.pat(2) & rsre_char.SRE_INFO_PREFIX and ctx.pat(5) > 1:
+            return fast_search(ctx)
+    return regular_search(ctx)
+
+def regular_search(ctx):
+    start = ctx.match_start
     while start <= ctx.end:
         result = sre_match(ctx, 0, start, None)
         if result is not None:
@@ -719,4 +726,49 @@ def search(pattern, string, start=0, flags=0):
             ctx.match_marks = result.marks
             return ctx
         start += 1
+    return None
+
+def fast_search(ctx):
+    # skips forward in a string as fast as possible using information from
+    # an optimization info block
+    # <INFO> <1=skip> <2=flags> <3=min> <4=...>
+    #        <5=length> <6=skip> <7=prefix data> <overlap data>
+    flags = ctx.pat(2)
+    prefix_len = ctx.pat(5)
+    assert prefix_len >= 0
+    prefix_skip = ctx.pat(6)
+    assert prefix_skip >= 0
+    overlap_offset = 7 + prefix_len - 1
+    assert overlap_offset >= 0
+    pattern_offset = ctx.pat(1) + 1
+    assert pattern_offset >= 0
+    i = 0
+    string_position = ctx.match_start
+    end = ctx.end
+    while string_position < end:
+        while True:
+            char_ord = ctx.str(string_position)
+            if char_ord != ctx.pat(7 + i):
+                if i == 0:
+                    break
+                else:
+                    i = ctx.pat(overlap_offset + i)
+            else:
+                i += 1
+                if i == prefix_len:
+                    # found a potential match
+                    if flags & rsre_char.SRE_INFO_LITERAL:
+                        return True # matched all of pure literal pattern
+                    start = string_position + 1 - prefix_len
+                    ptr = start + prefix_skip
+                    ppos = pattern_offset + 2 * prefix_skip
+                    result = sre_match(ctx, ppos, ptr, None)
+                    if result is not None:
+                        ctx.match_start = start
+                        ctx.match_end = result.end
+                        ctx.match_marks = result.marks
+                        return ctx
+                    i = ctx.pat(overlap_offset + i)
+                break
+        string_position += 1
     return None
