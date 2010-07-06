@@ -54,10 +54,10 @@ class _Get(object):
             raise ValueError(self.res_type)
 
         try:
-            self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
+            addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
         except KeyError:
             raise ValueError("Cannot find symbol %s", func)
-        self.bfuncaddr = BoxInt(self.funcaddr)
+        self.bfuncaddr = BoxInt(addr)
 
         args = []
         for arg in self.args_type:
@@ -74,25 +74,19 @@ class _Get(object):
         FUNC = deref(FPTR)
         self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
-        self.looptoken = LoopToken()
-        self.inputargs = [ BoxInt(), BoxInt(), BoxInt() ]
-
-        self.oplist = [ResOperation(rop.CALL, self.inputargs, self.bres,
-                                    descr=self.calldescr),
-                       ResOperation(rop.FINISH, [self.bres], None,
-                                    descr=BasicFailDescr(0))]
-        self.cpu.compile_loop(self.inputargs, self.oplist, self.looptoken)
-
     def call(self):
-        self.inputargs[0].value = self.funcaddr
-        self.cpu.set_future_value_int(0, self.funcaddr)
-        self.inputargs[1].value = 1
-        self.cpu.set_future_value_int(1, 1)
-        self.inputargs[2].value = 2
-        self.cpu.set_future_value_int(2, 2)
+        inputargs = [self.bfuncaddr] + self.bargs
 
-        res = self.cpu.execute_token(self.looptoken)
-        if res is self.oplist[-1].descr:
+        oplist = [ResOperation(rop.CALL, inputargs, self.bres,
+                               descr=self.calldescr),
+                  ResOperation(rop.FINISH, [self.bres], None,
+                               descr=BasicFailDescr(0))]
+        looptoken = LoopToken()
+        self.cpu.compile_loop(inputargs, oplist, looptoken)
+        self.cpu.set_future_value_int(0, self.bfuncaddr.getint())
+
+        res = self.cpu.execute_token(looptoken)
+        if res is oplist[-1].descr:
             self.guard_failed = False
         else:
             self.guard_failed = True
@@ -113,12 +107,7 @@ class _Get(object):
 
     def setup_stack(self):
         self.bargs = []
-        self.esp = 0
-
-    def push_funcaddr(self, value):
-        self.cpu.set_future_value_int(self.esp, value)
-        self.bargs.append(BoxInt(value)) # insert(0, )? 
-        self.esp += 1
+        self.esp = 1 # 0 is a func addr
 
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
