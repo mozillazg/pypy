@@ -21,10 +21,13 @@ class CDLL(object):
 
 class _LibHandler(object):
     def __init__(self, name):
+        name_ptr = rffi.str2charp(name)
         try:
-            self.handler = rdynload.dlopen(rffi.str2charp(name))
+            self.handler = rdynload.dlopen(name_ptr)
         except rdynload.DLOpenError, e:
             raise OSError('%s: %s', name, e.msg or 'unspecified error')
+        finally:
+            rffi.free_charp(name_ptr)
 
 class _Get(object):
     def __init__(self, cpu, lib, func, args_type, res_type='v'):
