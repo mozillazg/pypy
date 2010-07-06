@@ -128,6 +128,7 @@ class CPPMethod(object):
         self.arg_converters = [converter.get_converter(arg_type)
                                    for arg_type in self.arg_types]
 
+    @jit.unroll_safe
     def prepare_arguments(self, args_w):
         space = self.space
         if len(args_w) != len(self.arg_types):
@@ -278,7 +279,8 @@ class W_CPPObject(Wrappable):
         self.rawobject = rawobject
 
     def invoke(self, method_name, args_w):
-        overload = self.cppclass.get_overload(method_name)
+        cppclass = jit.hint(self.cppclass, promote=True)
+        overload = cppclass.get_overload(method_name)
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
