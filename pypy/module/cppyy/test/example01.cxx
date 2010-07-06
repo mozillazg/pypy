@@ -29,6 +29,9 @@ public:
     static int add1(int a) {
         return a + 1;
     }
+    static int add1(int a, int b) {
+        return a + b + 1;
+    }
     static double adddouble(double a) {
         return a + 0.01;
     }

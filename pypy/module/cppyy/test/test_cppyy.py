@@ -8,6 +8,9 @@ shared_lib = str(currpath.join("example01Dict.so"))
 
 space = gettestobjspace(usemodules=['cppyy'])
 
+def setup_module(mod):
+    os.system("make")
+
 class TestCPPYYImplementation:
     def test_class_query(self):
         lib = interp_cppyy.load_lib(space, shared_lib)
@@ -28,8 +31,11 @@ class AppTestCPPYY:
 
     def test_example01static(self):
         t = self.example01.type_byname("example01")
+        # also tests overloading by number of args
         res = t.invoke("add1", 1)
         assert res == 2
+        res = t.invoke("add1", 1, 2)
+        assert res == 4
 
     def test_example01static_double(self):
         t = self.example01.type_byname("example01")
