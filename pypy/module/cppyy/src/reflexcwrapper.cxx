@@ -52,10 +52,10 @@ void destruct(const char* class_name, void* self) {
 
 int num_methods(const char* class_name) {
     Reflex::Type t = Reflex::Type::ByName(class_name);
-    for (int i = 0; i < t.FunctionMemberSize(); i++) {
+    for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
         Reflex::Member m = t.FunctionMemberAt(i);
         std::cout << i << " " << m.Name() << std::endl;
-        for (int j = 0; j < m.FunctionParameterSize(); j++) {
+        for (int j = 0; j < (int)m.FunctionParameterSize(); j++) {
             Reflex::Type at = m.TypeOf().FunctionParameterAt(j);
             std::cout << "    " << j << " " << at.Name() << std::endl;
         }
@@ -76,7 +76,7 @@ char* result_type_method(const char* class_name, int method_index) {
     Reflex::Type t = Reflex::Type::ByName(class_name);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type rt = m.TypeOf().ReturnType();
-    std::string name = rt.Name(Reflex::FINAL);
+    std::string name = rt.Name(Reflex::FINAL|Reflex::SCOPED|Reflex::QUALIFIED);
     char* name_char = (char*)malloc(name.size() + 1);
     strcpy(name_char, name.c_str());
     return name_char;
@@ -93,7 +93,7 @@ char* arg_type_method(const char* class_name, int method_index, int arg_index) {
     Reflex::Type t = Reflex::Type::ByName(class_name);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type at = m.TypeOf().FunctionParameterAt(arg_index);
-    std::string name = at.Name(Reflex::FINAL);
+    std::string name = at.Name(Reflex::FINAL|Reflex::SCOPED|Reflex::QUALIFIED);
     char* name_char = (char*)malloc(name.size() + 1);
     strcpy(name_char, name.c_str());
     return name_char;
