@@ -331,15 +331,6 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
 
 # ____________________________________________________________
 
-def match(pattern, string, start=0, flags=0):
-    ctx = MatchContext(pattern, string, start, flags)
-    result = sre_match(ctx, 0, start, None)
-    if result is not None:
-        ctx.match_end = result.end
-        ctx.match_marks = result.marks
-        return ctx
-    return None
-
 def sre_match(ctx, ppos, ptr, marks):
     """Returns either None or a MatchResult object.  Usually we only need
     the first result, but there is the case of REPEAT...UNTIL where we
@@ -706,3 +697,26 @@ def sre_at(ctx, atcode, ptr):
         return ctx.at_non_boundary(ptr, rsre_char.is_uni_word)
 
     return False
+
+# ____________________________________________________________
+
+def match(pattern, string, start=0, flags=0):
+    ctx = MatchContext(pattern, string, start, flags)
+    result = sre_match(ctx, 0, start, None)
+    if result is not None:
+        ctx.match_end = result.end
+        ctx.match_marks = result.marks
+        return ctx
+    return None
+
+def search(pattern, string, start=0, flags=0):
+    ctx = MatchContext(pattern, string, start, flags)
+    while start <= ctx.end:
+        result = sre_match(ctx, 0, start, None)
+        if result is not None:
+            ctx.match_start = start
+            ctx.match_end = result.end
+            ctx.match_marks = result.marks
+            return ctx
+        start += 1
+    return None
