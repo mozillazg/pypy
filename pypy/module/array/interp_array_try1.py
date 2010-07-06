@@ -83,10 +83,10 @@ class W_Array(Wrappable):
         if len(typecode) != 1:
             msg = 'array() argument 1 must be char, not str'
             raise OperationError(space.w_TypeError, space.wrap(msg))
+        typecode = typecode[0]
         if typecode not in  'cbBuhHiIlLfd':
             msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
             raise OperationError(space.w_ValueError, space.wrap(msg))
-        typecode = typecode[0]
         self.space = space
         self.typecode = typecode
         self.len = 0
