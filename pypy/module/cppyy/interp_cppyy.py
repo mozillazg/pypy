@@ -26,57 +26,57 @@ eci = ExternalCompilationInfo(
     use_cpp_linker=True,
 )
 
-callstatic_l = rffi.llexternal(
+c_callstatic_l = rffi.llexternal(
     "callstatic_l",
     [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
-callstatic_d = rffi.llexternal(
+c_callstatic_d = rffi.llexternal(
     "callstatic_d",
     [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
     compilation_info=eci)
-construct = rffi.llexternal(
+c_construct = rffi.llexternal(
     "construct",
     [rffi.CCHARP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
     compilation_info=eci)
-callmethod_l = rffi.llexternal(
+c_callmethod_l = rffi.llexternal(
     "callmethod_l",
     [rffi.CCHARP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
-destruct = rffi.llexternal(
+c_destruct = rffi.llexternal(
     "destruct",
     [rffi.CCHARP, rffi.VOIDP], lltype.Void,
     compilation_info=eci)
 
 
-num_methods = rffi.llexternal(
+c_num_methods = rffi.llexternal(
     "num_methods",
     [rffi.CCHARP], rffi.INT,
     compilation_info=eci)
-method_name = rffi.llexternal(
+c_method_name = rffi.llexternal(
     "method_name",
     [rffi.CCHARP, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
-result_type_method = rffi.llexternal(
+c_result_type_method = rffi.llexternal(
     "result_type_method",
     [rffi.CCHARP, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
-num_args_method = rffi.llexternal(
+c_num_args_method = rffi.llexternal(
     "num_args_method",
     [rffi.CCHARP, rffi.INT], rffi.INT,
     compilation_info=eci)
-arg_type_method = rffi.llexternal(
+c_arg_type_method = rffi.llexternal(
     "arg_type_method",
     [rffi.CCHARP, rffi.INT, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
-is_constructor = rffi.llexternal(
+c_is_constructor = rffi.llexternal(
     "is_constructor",
     [rffi.CCHARP, rffi.INT], rffi.INT,
     compilation_info=eci)
-is_static = rffi.llexternal(
+c_is_static = rffi.llexternal(
     "is_static",
     [rffi.CCHARP, rffi.INT], rffi.INT,
     compilation_info=eci)
-myfree = rffi.llexternal(
+c_myfree = rffi.llexternal(
     "myfree",
     [rffi.VOIDP], lltype.Void,
     compilation_info=eci)
@@ -137,10 +137,10 @@ class CPPMethod(object):
 
     def call(self, cppthis, args_w):
         args = prepare_arguments(self.space, args_w, self.arg_types)
-        result = callmethod_l(self.cpptype.name, self.method_index,
+        result = c_callmethod_l(self.cpptype.name, self.method_index,
                               cppthis, len(args_w), args)
         free_arguments(args, len(args_w))
-        return result
+        return self.space.wrap(result)
 
     def __repr__(self):
         return "CPPFunction(%s, %s, %s, %s)" % (
@@ -150,24 +150,26 @@ class CPPFunction(CPPMethod):
     def call(self, cppthis, args_w):
         assert not cppthis
         args = prepare_arguments(self.space, args_w, self.arg_types)
-        if self.result_type == "int":
-            result = callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
-            return self.space.wrap(result)
-        if self.result_type == "double":
-            result = callstatic_d(self.cpptype.name, self.method_index, len(args_w), args)
-            return self.space.wrap(result)
-        else:
-            raise NotImplementedError
-        free_arguments(args, len(args_w))
+        try:
+            if self.result_type == "int":
+                result = c_callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
+                return self.space.wrap(result)
+            if self.result_type == "double":
+                result = c_callstatic_d(self.cpptype.name, self.method_index, len(args_w), args)
+                return self.space.wrap(result)
+            else:
+                raise NotImplementedError
+        finally:
+            free_arguments(args, len(args_w))
  
 
 class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
         assert not cppthis
         args = prepare_arguments(self.space, args_w, self.arg_types)
-        result = construct(self.cpptype.name, len(args_w), args)
+        result = c_construct(self.cpptype.name, len(args_w), args)
         free_arguments(args, len(args_w))
-        return result
+        return W_CPPObject(self.cpptype, result)
 
 
 class CPPOverload(object):
@@ -197,7 +199,7 @@ class CPPOverload(object):
 
 def charp2str(charp):
     string = rffi.charp2str(charp)
-    myfree(charp)
+    c_myfree(charp)
     return string
 
 class W_CPPType(Wrappable):
@@ -209,9 +211,9 @@ class W_CPPType(Wrappable):
         self._find_func_members()
     
     def _find_func_members(self):
-        num_func_members = num_methods(self.name)
+        num_func_members = c_num_methods(self.name)
         for i in range(num_func_members):
-            func_member_name = charp2str(method_name(self.name, i))
+            func_member_name = charp2str(c_method_name(self.name, i))
             cppfunction = self._make_cppfunction(i)
             overload = self.function_members.get(func_member_name, None)
             if overload is None:
@@ -220,15 +222,15 @@ class W_CPPType(Wrappable):
             overload.add_function(cppfunction)
 
     def _make_cppfunction(self, method_index):
-        result_type = charp2str(result_type_method(self.name, method_index))
-        num_args = num_args_method(self.name, method_index)
+        result_type = charp2str(c_result_type_method(self.name, method_index))
+        num_args = c_num_args_method(self.name, method_index)
         argtypes = []
         for i in range(num_args):
-            argtype = charp2str(arg_type_method(self.name, method_index, i))
+            argtype = charp2str(c_arg_type_method(self.name, method_index, i))
             argtypes.append(argtype)
-        if is_constructor(self.name, method_index):
+        if c_is_constructor(self.name, method_index):
             cls = CPPConstructor
-        elif is_static(self.name, method_index):
+        elif c_is_static(self.name, method_index):
             cls = CPPFunction
         else:
             cls = CPPMethod
@@ -240,15 +242,13 @@ class W_CPPType(Wrappable):
 
     def construct(self, args_w):
         overload = self.function_members[self.name]
-        return W_CPPObject(self, overload.call(NULL_VOIDP, args_w))
+        return overload.call(NULL_VOIDP, args_w)
 
 W_CPPType.typedef = TypeDef(
     'CPPType',
     invoke = interp2app(W_CPPType.invoke, unwrap_spec=['self', str, 'args_w']),
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
 )
-
-
 
 class W_CPPObject(Wrappable):
     def __init__(self, cppclass, rawobject):
@@ -258,11 +258,10 @@ class W_CPPObject(Wrappable):
 
     def invoke(self, method_name, args_w):
         overload = self.cppclass.function_members[method_name]
-        result = overload.call(self.rawobject, args_w)
-        return self.space.wrap(result)
+        return overload.call(self.rawobject, args_w)
 
     def destruct(self):
-        destruct(self.cppclass.name, self.rawobject)
+        c_destruct(self.cppclass.name, self.rawobject)
 
 W_CPPObject.typedef = TypeDef(
     'CPPObject',
