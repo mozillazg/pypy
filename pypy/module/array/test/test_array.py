@@ -122,7 +122,6 @@ class AppTestArray:
             a = self.array(t.upper(), [1, 2, 3])
             b = a.itemsize
             for v in (0, 2 ** (8 * b) - 1):
-                print b, v
                 a[1] = v
                 assert a[0] == 1 and a[1] == v and a[2] == 3
             raises(OverflowError, a.append, -1)
@@ -285,3 +284,14 @@ class AppTestArray:
         raises(ValueError, self.array('i').tounicode)
         assert self.array('u', unicode('hello')).tounicode() == unicode('hello')
         
+    def test_type(self):
+        for t in 'bBhHiIlLfdcu':
+            assert type(self.array(t)) is self.array
+
+class AppTestAppArray(AppTestArray):
+    def setup_class(cls):
+        cls.space = gettestobjspace(usemodules=('array',))
+        cls.w_array = cls.space.appexec([], """():
+            import apparray
+            return apparray.array
+        """)
