@@ -38,11 +38,11 @@
 ## print t2 - t1
 
 from array import array
-img=array(4)
-def f():
+def f(img):
     sa=0
     for i in xrange(4):
         sa+=img[i]
     return sa
 
-print f()
+img=array(4)
+print f(img)
