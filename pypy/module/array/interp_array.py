@@ -134,6 +134,7 @@ for thetypecode, thetype in types.items():
                 return w_a
         descr_getitem.unwrap_spec = ['self', W_Root]
 
+    W_Array.__name__ = 'W_ArrayType_'+thetypecode
     W_Array.typedef = TypeDef(
         'ArrayType_'+thetypecode,
         append      = interp2app(W_Array.descr_append),
