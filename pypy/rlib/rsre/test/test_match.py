@@ -32,6 +32,13 @@ def test_get_code_repetition():
 
 class TestMatch:
 
+    def test_or(self):
+        r = get_code(r"a|bc|def")
+        assert rsre.match(r, "a")
+        assert rsre.match(r, "bc")
+        assert rsre.match(r, "def")
+        assert not rsre.match(r, "ghij")
+
     def test_any(self):
         r = get_code(r"ab.cd")
         assert rsre.match(r, "abXcdef")
