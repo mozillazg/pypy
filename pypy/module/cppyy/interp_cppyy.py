@@ -172,6 +172,11 @@ class CPPFunction(CPPMethod):
             if self.result_type == "double":
                 result = c_callstatic_d(self.cpptype.name, self.method_index, len(args_w), args)
                 return self.space.wrap(result)
+            if self.result_type == "char*":
+                lresult = c_callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
+                ccpresult = rffi.cast(rffi.CCHARP, lresult)
+                result = charp2str_free(ccpresult)
+                return self.space.wrap(result)
             else:
                 raise NotImplementedError
         finally:
@@ -213,7 +218,7 @@ class CPPOverload(object):
     def __repr__(self):
         return "CPPOverload(%s, %s)" % (self.func_name, self.functions)
 
-def charp2str(charp):
+def charp2str_free(charp):
     string = rffi.charp2str(charp)
     c_myfree(charp)
     return string
@@ -232,7 +237,7 @@ class W_CPPType(Wrappable):
         num_func_members = c_num_methods(self.name)
         args_temp = {}
         for i in range(num_func_members):
-            func_member_name = charp2str(c_method_name(self.name, i))
+            func_member_name = charp2str_free(c_method_name(self.name, i))
             cppfunction = self._make_cppfunction(i)
             overload = args_temp.setdefault(func_member_name, [])
             overload.append(cppfunction)
@@ -241,11 +246,11 @@ class W_CPPType(Wrappable):
             self.function_members[name] = overload
 
     def _make_cppfunction(self, method_index):
-        result_type = charp2str(c_result_type_method(self.name, method_index))
+        result_type = charp2str_free(c_result_type_method(self.name, method_index))
         num_args = c_num_args_method(self.name, method_index)
         argtypes = []
         for i in range(num_args):
-            argtype = charp2str(c_arg_type_method(self.name, method_index, i))
+            argtype = charp2str_free(c_arg_type_method(self.name, method_index, i))
             argtypes.append(argtype)
         if c_is_constructor(self.name, method_index):
             cls = CPPConstructor

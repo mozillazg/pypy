@@ -1,5 +1,6 @@
 #include <iostream>
 #include <stdlib.h>
+#include <string.h>
 
 class example01 {
 public:
@@ -39,6 +40,12 @@ public:
     static int atoi(const char* str) {
         return ::atoi(str);
     }
+    static char* strcpy(const char* strin) {
+        char* strout = (char*)malloc(::strlen(strin + 1));
+        ::strcpy(strout, strin);
+        return strout;
+    }
+
     static int getcount() {
         std::cout << "getcount called" << std::endl;
         return count;
