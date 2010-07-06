@@ -9,6 +9,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import rffi, lltype
 
 from pypy.rlib.libffi import CDLL
+from pypy.rlib import jit, debug
 
 from pypy.module.cppyy import converter
 
@@ -89,30 +90,8 @@ def load_lib(space, name):
     return W_CPPLibrary(space, cdll)
 load_lib.unwrap_spec = [ObjSpace, str]
 
-def prepare_arguments(space, args_w, argtypes):
-    if len(args_w) != len(argtypes):
-        raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
-    args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
-    try:
-        i = 0 # appease RPython: i is used below
-        for i in range(len(args_w)):
-            argtype = argtypes[i]
-            conv = converter.get_converter(argtype)
-            args[i] = conv.convert_argument(space, args_w[i])
-    except:
-        # fun :-(
-        for j in range(i):
-            lltype.free(args[j], flavor='raw')
-        lltype.free(args, flavor='raw')
-        raise
-    return args
-
-def free_arguments(args, numargs):
-    for i in range(numargs):
-        lltype.free(args[i], flavor='raw')
-    lltype.free(args, flavor='raw')
-
 class W_CPPLibrary(Wrappable):
+    _immutable_ = True
     def __init__(self, space, cdll):
         self.cdll = cdll
         self.space = space
@@ -127,6 +106,8 @@ W_CPPLibrary.typedef = TypeDef(
 
 class CPPMethod(object):
     """ A concrete function after overloading has been resolved """
+    _immutable_ = True
+    _immutable_fields_ = ["arg_types[*]", "arg_converters[*]"]
     
     def __init__(self, cpptype, method_index, result_type, arg_types):
         self.cpptype = cpptype
@@ -134,13 +115,44 @@ class CPPMethod(object):
         self.method_index = method_index
         self.result_type = result_type
         self.arg_types = arg_types
+        self.arg_converters = None
 
     def call(self, cppthis, args_w):
-        args = prepare_arguments(self.space, args_w, self.arg_types)
+        args = self.prepare_arguments(args_w)
         result = c_callmethod_l(self.cpptype.name, self.method_index,
                               cppthis, len(args_w), args)
-        free_arguments(args, len(args_w))
+        self.free_arguments(args)
         return self.space.wrap(result)
+
+    def _build_converters(self):
+        self.arg_converters = [converter.get_converter(arg_type)
+                                   for arg_type in self.arg_types]
+
+    def prepare_arguments(self, args_w):
+        space = self.space
+        if len(args_w) != len(self.arg_types):
+            raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
+        if self.arg_converters is None:
+            self._build_converters()
+        args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
+        try:
+            i = 0 # appease RPython: i is used below
+            for i in range(len(args_w)):
+                argtype = self.arg_types[i]
+                conv = self.arg_converters[i]
+                args[i] = conv.convert_argument(space, args_w[i])
+        except:
+            # fun :-(
+            for j in range(i):
+                lltype.free(args[j], flavor='raw')
+            lltype.free(args, flavor='raw')
+            raise
+        return args
+
+    def free_arguments(self, args):
+        for i in range(len(self.arg_types)):
+            lltype.free(args[i], flavor='raw')
+        lltype.free(args, flavor='raw')
 
     def __repr__(self):
         return "CPPFunction(%s, %s, %s, %s)" % (
@@ -149,7 +161,7 @@ class CPPMethod(object):
 class CPPFunction(CPPMethod):
     def call(self, cppthis, args_w):
         assert not cppthis
-        args = prepare_arguments(self.space, args_w, self.arg_types)
+        args = self.prepare_arguments(args_w)
         try:
             if self.result_type == "int":
                 result = c_callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
@@ -160,30 +172,31 @@ class CPPFunction(CPPMethod):
             else:
                 raise NotImplementedError
         finally:
-            free_arguments(args, len(args_w))
+            self.free_arguments(args)
  
 
 class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
         assert not cppthis
-        args = prepare_arguments(self.space, args_w, self.arg_types)
+        args = self.prepare_arguments(args_w)
         result = c_construct(self.cpptype.name, len(args_w), args)
-        free_arguments(args, len(args_w))
+        self.free_arguments(args)
         return W_CPPObject(self.cpptype, result)
 
 
 class CPPOverload(object):
-    def __init__(self, space, func_name):
+    _immutable_ = True
+    _immutable_fields_ = ["functions[*]"]
+    def __init__(self, space, func_name, functions):
         self.space = space
         self.func_name = func_name
-        self.functions = []
+        self.functions = debug.make_sure_not_resized(functions)
 
-    def add_function(self, cppfunc):
-        self.functions.append(cppfunc)
-
+    @jit.unroll_safe
     def call(self, cppthis, args_w):
         space = self.space
-        for cppyyfunc in self.functions:
+        for i in range(len(self.functions)):
+            cppyyfunc = self.functions[i]
             try:
                 return cppyyfunc.call(cppthis, args_w)
             except OperationError, e:
@@ -203,6 +216,8 @@ def charp2str(charp):
     return string
 
 class W_CPPType(Wrappable):
+    _immutable_fields_ = ["cpplib", "name"]
+
     def __init__(self, cpplib, name):
         self.space = cpplib.space
         self.cpplib = cpplib
@@ -212,14 +227,15 @@ class W_CPPType(Wrappable):
     
     def _find_func_members(self):
         num_func_members = c_num_methods(self.name)
+        args_temp = {}
         for i in range(num_func_members):
             func_member_name = charp2str(c_method_name(self.name, i))
             cppfunction = self._make_cppfunction(i)
-            overload = self.function_members.get(func_member_name, None)
-            if overload is None:
-                overload = CPPOverload(self.space, func_member_name)
-                self.function_members[func_member_name] = overload
-            overload.add_function(cppfunction)
+            overload = args_temp.setdefault(func_member_name, [])
+            overload.append(cppfunction)
+        for name, functions in args_temp.iteritems():
+            overload = CPPOverload(self.space, name, functions[:])
+            self.function_members[name] = overload
 
     def _make_cppfunction(self, method_index):
         result_type = charp2str(c_result_type_method(self.name, method_index))
@@ -236,12 +252,16 @@ class W_CPPType(Wrappable):
             cls = CPPMethod
         return cls(self, method_index, result_type, argtypes)
 
+    @jit.purefunction
+    def get_overload(self, name):
+        return self.function_members[name]
+
     def invoke(self, name, args_w):
-        overload = self.function_members[name]
+        overload = self.get_overload(name)
         return overload.call(NULL_VOIDP, args_w)
 
     def construct(self, args_w):
-        overload = self.function_members[self.name]
+        overload = self.get_overload(self.name)
         return overload.call(NULL_VOIDP, args_w)
 
 W_CPPType.typedef = TypeDef(
@@ -251,13 +271,14 @@ W_CPPType.typedef = TypeDef(
 )
 
 class W_CPPObject(Wrappable):
+    _immutable_ = True
     def __init__(self, cppclass, rawobject):
         self.space = cppclass.space
         self.cppclass = cppclass
         self.rawobject = rawobject
 
     def invoke(self, method_name, args_w):
-        overload = self.cppclass.function_members[method_name]
+        overload = self.cppclass.get_overload(method_name)
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
