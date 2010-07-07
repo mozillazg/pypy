@@ -6,6 +6,8 @@ from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
+cache = [] # XXX global!
+
 class CDLL(object):
     def __init__(self, name, load=True):
         if load:
@@ -37,56 +39,75 @@ class _Get(object):
         self.cpu = cpu
         self.lib = lib.handler
         self.setup_stack()
-
-        if self.res_type == 'i':
-            self.bres = BoxInt()
-            res = lltype.Signed
-        elif self.res_type == 'f':
-            self.bres = BoxFloat()
-            res = lltype.Float
-        elif self.res_type == 'p':
-            self.bres = BoxPtr()
-            res = lltype.Signed
-        elif self.res_type == 'v':
-            self.bres = NULLBOX
-            res = lltype.Void
-        else:
-            raise ValueError(self.res_type)
+        self.looptoken = None
 
         try:
-            addr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib, func))
+            self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib,
+                                                                    func))
         except KeyError:
             raise ValueError("Cannot find symbol %s", func)
-        self.bfuncaddr = BoxInt(addr)
+        self.bargs.append(BoxInt())
 
-        args = []
-        for arg in self.args_type:
-            if arg == 'i':
-                args.append(lltype.Signed)
-            elif arg == 'f':
-                args.append(lltype.Float)
-            elif arg == 'p':
-                args.append(lltype.Signed)
+        # check if it's not already compiled
+        for func in cache:
+            if self.args_type == func.args_type and \
+               self.res_type == func.res_type:
+                self.looptoken = func.looptoken
+                self.oplist = func.oplist
+                break
+
+        if self.looptoken is None:
+            args = []
+            for arg in self.args_type:
+                if arg == 'i':
+                    self.bargs.append(BoxInt())
+                    args.append(lltype.Signed)
+                elif arg == 'f':
+                    self.bargs.append(BoxFloat())
+                    args.append(lltype.Float)
+                elif arg == 'p':
+                    self.bargs.append(BoxPtr())
+                    args.append(lltype.Signed)
+                else:
+                    raise ValueError(arg)
+
+            if self.res_type == 'i':
+                self.bres = BoxInt()
+                res = lltype.Signed
+            elif self.res_type == 'f':
+                self.bres = BoxFloat()
+                res = lltype.Float
+            elif self.res_type == 'p':
+                self.bres = BoxPtr()
+                res = lltype.Signed
+            elif self.res_type == 'v':
+                self.bres = NULLBOX
+                res = lltype.Void
             else:
-                raise ValueError(arg)
+                raise ValueError(self.res_type)
 
-        FPTR = lltype.Ptr(lltype.FuncType(args, res))
-        FUNC = deref(FPTR)
-        self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            FPTR = lltype.Ptr(lltype.FuncType(args, res))
+            FUNC = deref(FPTR)
+            self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+
+            self.looptoken = LoopToken()
+            inputargs = self.bargs # [ self.bfuncaddr ] + self.bargs
+
+            self.oplist = [ResOperation(rop.CALL, inputargs, self.bres,
+                                        descr=self.calldescr),
+                           ResOperation(rop.FINISH, [self.bres], None,
+                                        descr=BasicFailDescr(0))]
+            self.cpu.compile_loop(inputargs, self.oplist, self.looptoken)
+
+            # add to the cache
+            cache.append(_Func(self.args_type, self.res_type, self.looptoken,
+                               self.oplist))
 
     def call(self):
-        inputargs = [self.bfuncaddr] + self.bargs
+        self.push_funcaddr(self.funcaddr)
 
-        oplist = [ResOperation(rop.CALL, inputargs, self.bres,
-                               descr=self.calldescr),
-                  ResOperation(rop.FINISH, [self.bres], None,
-                               descr=BasicFailDescr(0))]
-        looptoken = LoopToken()
-        self.cpu.compile_loop(inputargs, oplist, looptoken)
-        self.cpu.set_future_value_int(0, self.bfuncaddr.getint())
-
-        res = self.cpu.execute_token(looptoken)
-        if res is oplist[-1].descr:
+        res = self.cpu.execute_token(self.looptoken)
+        if res is self.oplist[-1].descr:
             self.guard_failed = False
         else:
             self.guard_failed = True
@@ -107,19 +128,27 @@ class _Get(object):
 
     def setup_stack(self):
         self.bargs = []
-        self.esp = 1 # 0 is a func addr
+        self.esp = 1 # 0 is funcaddr
+
+    def push_funcaddr(self, value):
+        self.cpu.set_future_value_int(0, value)
+        self.esp += 1
 
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
-        self.bargs.append(BoxInt(value))
         self.esp += 1
 
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
-        self.bargs.append(BoxFloat(value))
         self.esp += 1
 
     def push_ref(self, value):
         self.cpu.set_future_value_ref(self.esp, value)
-        self.bargs.append(BoxPtr(value))
         self.esp += 1
+
+class _Func(object):
+    def __init__(self, args_type, res_type, looptoken, oplist):
+        self.args_type = args_type
+        self.res_type = res_type
+        self.looptoken = looptoken
+        self.oplist = oplist
