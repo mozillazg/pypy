@@ -2,11 +2,25 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
+from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root, ApplevelClass
 from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rstruct.runpack import runpack
+
+import os, types
+path, _ = os.path.split(__file__)
+app_array = os.path.join(path, 'app_array.py')
+app = ApplevelClass(file(app_array).read())
+
+def appmethod(n):
+    import app_array
+    f=getattr(app_array,n)
+    args = f.func_code.co_varnames[0:f.func_code.co_argcount]
+    args = ', '.join(['space'] + ['w_'+s for s in args])
+    exec """def descr(%s):
+                return app.interphook('%s')(%s)"""%(args, n, args)
+    return interp2app(descr)
 
 class W_ArrayBase(Wrappable):
     pass
@@ -14,7 +28,7 @@ class W_ArrayBase(Wrappable):
 class TypeCode(object):
     def __init__(self, itemtype, unwrap, canoverflow=False, signed=False):
         self.itemtype = itemtype
-        if itemtype is lltype.SingleFloat:
+        if itemtype is lltype.SingleFloat: # FUIXME
             self.bytes = 4
         else:
             self.bytes = rffi.sizeof(itemtype)
@@ -33,16 +47,16 @@ class TypeCode(object):
 types = {
     'c': TypeCode(lltype.Char,        'str_w'),
     'u': TypeCode(lltype.UniChar,     'unicode_w'),
-    #'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
-    #'B': TypeCode(rffi.UCHAR,         'int_w', True),
-    #'h': TypeCode(rffi.SHORT,         'int_w', True, True),
-    #'H': TypeCode(rffi.USHORT,        'int_w', True),
-    #'i': TypeCode(rffi.INT,           'int_w', True, True),
-    #'I': TypeCode(rffi.UINT,          'int_w', True),
-    #'l': TypeCode(rffi.LONG,          'int_w', True, True),
-    #'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
-    #'f': TypeCode(lltype.SingleFloat, 'float_w'),
-    #'d': TypeCode(lltype.Float,       'float_w'),
+    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
+    'B': TypeCode(rffi.UCHAR,         'int_w', True),
+    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
+    'H': TypeCode(rffi.USHORT,        'int_w', True),
+    'i': TypeCode(rffi.INT,           'int_w', True, True),
+    'I': TypeCode(rffi.UINT,          'int_w', True),
+    'l': TypeCode(rffi.LONG,          'int_w', True, True),
+    'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
+    'f': TypeCode(lltype.SingleFloat, 'float_w'),
+    'd': TypeCode(lltype.Float,       'float_w'),
     }
 for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
@@ -93,11 +107,11 @@ for thetypecode, thetype in types.items():
 
         def setlen(self, size):
             new_buffer = lltype.malloc(self.mytype.arraytype, size)
-            for i in range(self.len):
+            for i in range(min(size,self.len)):
                 new_buffer[i] = self.buffer[i]
             self.buffer = new_buffer
             self.len = size
-
+        setlen.unwrap_spec = ['self', int]
 
         def descr_len(self):
             return self.space.wrap(self.len)
@@ -135,9 +149,32 @@ for thetypecode, thetype in types.items():
         descr_append.unwrap_spec = ['self', W_Root]
 
 
-        def descr_extend(self, w_initializer):
+        def descr_fromsequence(self, w_seq):
             space = self.space
-            w_iterator = space.iter(w_initializer)
+            w_new = space.call_function(space.getattr(w_seq, space.wrap('__len__')))
+            new = space.int_w(w_new)
+            oldlen = self.len
+            self.setlen(self.len + new)
+            for i in range(new):
+                w_item = space.call_function(
+                    space.getattr(w_seq, space.wrap('__getitem__')),
+                    space.wrap(i))
+                try:
+                    item=self.item_w(w_item)
+                except OperationError:
+                    self.setlen(oldlen + i)
+                    raise
+                self.buffer[oldlen + i ] = item
+        descr_fromsequence.unwrap_spec = ['self', W_Root]
+
+
+        def descr_extend(self, w_iterable):
+            space=self.space
+            if isinstance(w_iterable, W_ArrayBase):
+                if self.mytype.typecode != w_iterable.mytype.typecode:
+                    msg = "can only extend with array of same kind"
+                    raise OperationError(space.w_TypeError, space.wrap(msg))
+            w_iterator = space.iter(w_iterable)
             while True:
                 try:
                     w_item = space.next(w_iterator)
@@ -148,14 +185,14 @@ for thetypecode, thetype in types.items():
                 self.descr_append(w_item)
         descr_extend.unwrap_spec = ['self', W_Root]
 
-        
+
         def descr_setitem(self, w_idx, w_item):
             start, stop, step = self.space.decode_index(w_idx, self.len)
             if step==0:
                 item = self.item_w(w_item)
                 self.buffer[start] = item
             else:
-                if isinstance(w_item, W_Array):
+                if isinstance(w_item, W_ArrayBase):
                     if self.mytype.typecode == w_item.mytype.typecode:
                         size = (stop - start) / step
                         if (stop - start) % step > 0: size += 1
@@ -171,18 +208,58 @@ for thetypecode, thetype in types.items():
                         return
                 msg='can only assign array to array slice'
                 raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
-
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
-        
+
+        def descr_fromstring(self, s):
+            if len(s)%self.mytype.bytes !=0:
+                msg = 'string length not a multiple of item size'
+                raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
+            oldlen = self.len
+            new = len(s) / self.mytype.bytes
+            self.setlen(oldlen + new)
+            for i in range(new):
+                p = i * self.mytype.bytes
+                item=runpack(self.mytype.typecode, s[p:p + self.mytype.bytes])
+                #self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
+                self.buffer[oldlen + i]=rffi.cast(self.mytype.itemtype, item)
+        descr_fromstring.unwrap_spec = ['self', str]
+
+        def descr_tolist(self):
+            return self.space.newlist([self.space.wrap(i) for i in self.buffer])
+        descr_tolist.unwrap_spec = ['self']
+
+
+
+    def descr_itemsize(space, self):
+        return space.wrap(self.mytype.bytes)
+    def descr_typecode(space, self):
+        return space.wrap(self.mytype.typecode)
 
     W_Array.__name__ = 'W_ArrayType_'+thetypecode
     W_Array.typedef = TypeDef(
         'ArrayType_'+thetypecode,
-        append      = interp2app(W_Array.descr_append),
-        extend      = interp2app(W_Array.descr_extend),
-        __len__     = interp2app(W_Array.descr_len),
-        __getitem__ = interp2app(W_Array.descr_getitem),
-        __setitem__ = interp2app(W_Array.descr_setitem),
+        append       = interp2app(W_Array.descr_append),
+        __len__      = interp2app(W_Array.descr_len),
+        __getitem__  = interp2app(W_Array.descr_getitem),
+        __setitem__  = interp2app(W_Array.descr_setitem),
+
+        itemsize     = GetSetProperty(descr_itemsize, cls=W_Array),
+        typecode     = GetSetProperty(descr_typecode, cls=W_Array),
+        extend       = interp2app(W_Array.descr_extend),
+
+        _fromsequence = interp2app(W_Array.descr_fromsequence),
+        fromstring   = interp2app(W_Array.descr_fromstring),
+        fromunicode  = appmethod('fromunicode'),
+        fromfile     = appmethod('fromfile'),
+        _fromfile    = appmethod('_fromfile'),
+        fromlist     = appmethod('fromlist'),
+        
+        tolist       = interp2app(W_Array.descr_tolist),
+        tounicode    = appmethod('tounicode'),
+        tofile       = appmethod('tofile'),
+        tostring     = appmethod('tostring'),
+
+        _setlen      = interp2app(W_Array.setlen),
     )
 
     thetype.w_class = W_Array
@@ -193,25 +270,19 @@ def array(space, typecode, w_initializer=None):
         msg = 'array() argument 1 must be char, not str'
         raise OperationError(space.w_TypeError, space.wrap(msg))
     typecode=typecode[0]
-
+    
     for tc in unroll_typecodes:
         if typecode == tc:
             a = types[tc].w_class(space)
-            if w_initializer is not None:
-                if not space.is_w(w_initializer, space.w_None):
-                    a.descr_extend(w_initializer)  
-                ## if space.is_w(space.type(w_initializer), space.w_str):
-                ##     a.descr_fromstring(space.str_w(w_initializer))
-                ## elif space.is_w(space.type(w_initializer), space.w_unicode):
-                ##     a.descr_fromunicode(space.unicode_w(w_initializer))
-                ## elif space.is_w(space.type(w_initializer), space.w_list):
-                ##     a.descr_fromlist(w_initializer)
-                ## elif not space.is_w(w_initializer, space.w_None):
-                ##     a.descr_extend(w_initializer)  
+            app.interphook('initiate')(space, a, w_initializer)
+            ## if w_initializer is not None:
+            ##     if not space.is_w(w_initializer, space.w_None):
+            ##         a.descr_fromsequence(w_initializer)  
             break
     else:
         msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
         raise OperationError(space.w_ValueError, space.wrap(msg))
+
 
     return a
 array.unwrap_spec = (ObjSpace, str, W_Root)
