@@ -195,3 +195,19 @@ class TestMatch:
         assert rsre.match(r, "xyxyxyB") is not None
         r = get_code(r"(?:xy(?:xy)+?)+?B")
         assert rsre.match(r, "xyxyxyB") is not None
+
+    def test_assert_group(self):
+        r = get_code(r"abc(?=(..)f)(.)")
+        res = rsre.match(r, "abcdefghi")
+        assert res is not None
+        assert res.span(2) == (3, 4)
+        assert res.span(1) == (3, 5)
+
+    def test_assert_not_group(self):
+        r = get_code(r"abc(?!(de)f)(.)")
+        res = rsre.match(r, "abcdeFghi")
+        assert res is not None
+        assert res.span(2) == (3, 4)
+        # this I definitely classify as Horrendously Implementation Dependent.
+        # CPython answers (3, 5).
+        assert res.span(1) == (-1, -1)
