@@ -1,4 +1,6 @@
 #include <iostream>
+#include <sstream>
+#include <string>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,31 +30,53 @@ public:
         count--;
     }
 
-    static int add1(int a) {
+// class methods
+    static int staticAddOneToInt(int a) {
         return a + 1;
     }
-    static int add1(int a, int b) {
+    static int staticAddOneToInt(int a, int b) {
         return a + b + 1;
     }
-    static double adddouble(double a) {
+    static double staticAddToDouble(double a) {
         return a + 0.01;
     }
-    static int atoi(const char* str) {
+    static int staticAtoi(const char* str) {
         return ::atoi(str);
     }
-    static char* strcpy(const char* strin) {
+    static char* staticStrcpy(const char* strin) {
         char* strout = (char*)malloc(::strlen(strin + 1));
         ::strcpy(strout, strin);
         return strout;
     }
 
-    static int getcount() {
+    static int getCount() {
         std::cout << "getcount called" << std::endl;
         return count;
     }
-    int add(int a) {
+
+// instance methods
+    int addDataToInt(int a) {
         return somedata + a;
     }
+
+    double addDataToDouble(double a) {
+        return somedata + a;
+    }
+
+    int addDataToAtoi(const char* str) {
+        return ::atoi(str) + somedata;
+    }   
+
+    char* addToStringValue(const char* str) {
+        int out = ::atoi(str) + somedata;
+        std::ostringstream ss;
+        ss << out << std::ends;
+        std::string result = ss.str();
+        char* cresult = (char*)malloc(result.size()+1);
+        ::strcpy(cresult, result.c_str());
+        return cresult;
+    }
+
 };
 
 int example01::count = 0;

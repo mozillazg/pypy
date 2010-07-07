@@ -113,7 +113,7 @@ class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
         assert not cppthis
         args = self.prepare_arguments(args_w)
-        result = capi.c_construct(self.cpptype.handle, len(args_w), args)
+        result = capi.c_cppyy_construct(self.cpptype.handle, len(args_w), args)
         self.free_arguments(args)
         return W_CPPObject(self.cpptype, result)
 
@@ -208,13 +208,19 @@ class W_CPPObject(Wrappable):
         self.cppclass = cppclass
         self.rawobject = rawobject
 
+    def _nullcheck(self):
+        if not self.rawobject:
+            raise OperationError(self.space.w_ReferenceError, self.space.wrap("trying to access a NULL pointer"))
+
     def invoke(self, method_name, args_w):
+        self._nullcheck()
         cppclass = jit.hint(self.cppclass, promote=True)
         overload = cppclass.get_overload(method_name)
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
-        capi.c_destruct(self.cppclass.handle, self.rawobject)
+        capi.c_cppyy_destruct(self.cppclass.handle, self.rawobject)
+        self.rawobject = NULL_VOIDP
 
 W_CPPObject.typedef = TypeDef(
     'CPPObject',

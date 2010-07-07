@@ -12,7 +12,7 @@ class TypeConverter(object):
 
 class IntConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
-        arg = space.int_w(w_obj)
+        arg = space.c_int_w(w_obj)
         x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)        

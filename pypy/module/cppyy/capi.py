@@ -31,20 +31,20 @@ c_callstatic_l = rffi.llexternal(
     "callstatic_l",
     [rffi.VOIDP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
-c_callstatic_d = rffi.llexternal(
-    "callstatic_d",
-    [rffi.VOIDP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
-    compilation_info=eci)
-c_construct = rffi.llexternal(
-    "construct",
+c_cppyy_construct = rffi.llexternal(
+    "cppyy_construct",
     [rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
     compilation_info=eci)
 c_cppyy_call_l = rffi.llexternal(
     "cppyy_call_l",
     [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
-c_destruct = rffi.llexternal(
-    "destruct",
+c_cppyy_call_d = rffi.llexternal(
+    "cppyy_call_d",
+    [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
+    compilation_info=eci)
+c_cppyy_destruct = rffi.llexternal(
+    "cppyy_destruct",
     [rffi.VOIDP, rffi.VOIDP], lltype.Void,
     compilation_info=eci)
 
