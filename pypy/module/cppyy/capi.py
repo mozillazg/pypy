@@ -16,6 +16,7 @@ except KeyError:
 eci = ExternalCompilationInfo(
     separate_module_files=[srcpath.join("reflexcwrapper.cxx")],
     include_dirs=[incpath, rootincpath],
+    includes=["reflexcwrapper.h"],
     library_dirs=[rootlibpath],
     libraries=["Reflex"],
     use_cpp_linker=True,
