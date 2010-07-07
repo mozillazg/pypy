@@ -87,11 +87,10 @@ class _Get(object):
 
             FPTR = lltype.Ptr(lltype.FuncType(args, res))
             FUNC = deref(FPTR)
-            self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
             self.looptoken = LoopToken()
-            self.oplist = [ResOperation(rop.CALL, bargs, bres,
-                                        descr=self.calldescr),
+            self.oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                            ResOperation(rop.FINISH, [bres], None,
                                         descr=BasicFailDescr(0))]
             self.cpu.compile_loop(bargs, self.oplist, self.looptoken)
