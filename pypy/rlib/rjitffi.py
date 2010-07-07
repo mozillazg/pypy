@@ -122,7 +122,7 @@ class _Get(object):
 
     def push_funcaddr(self, value):
         self.cpu.set_future_value_int(0, value)
-        self.esp += 1
+        #self.esp += 1
 
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
