@@ -131,25 +131,22 @@ def find_mark(mark, gid):
 
 
 class MatchResult(object):
-
-    def __init__(self, end, marks):
-        self.end = end
-        self.marks = marks
-
-    def move_to_next_result(self, ctx):
-        return False
-
-class AbstractMultipleMatchResult(MatchResult):
+    subresult = None
 
     def move_to_next_result(self, ctx):
         result = self.subresult
+        if result is None:
+            return False
         if result.move_to_next_result(ctx):
-            self.end = result.end
-            self.marks = result.marks
             return True
         return self.find_next_result(ctx)
-    
-class BranchMatchResult(AbstractMultipleMatchResult):
+
+    def find_next_result(self, ctx):
+        raise NotImplementedError
+
+MATCHED_OK = MatchResult()
+
+class BranchMatchResult(MatchResult):
 
     def __init__(self, ppos, ptr, marks):
         self.ppos = ppos
@@ -163,14 +160,12 @@ class BranchMatchResult(AbstractMultipleMatchResult):
             ppos += ctx.pat(ppos)
             if result is not None:
                 self.subresult = result
-                self.end = result.end
-                self.marks = result.marks
                 self.ppos = ppos
                 return True
         return False
     find_next_result = find_first_result
 
-class RepeatOneMatchResult(AbstractMultipleMatchResult):
+class RepeatOneMatchResult(MatchResult):
 
     def __init__(self, nextppos, minptr, ptr, marks):
         self.nextppos = nextppos
@@ -185,15 +180,13 @@ class RepeatOneMatchResult(AbstractMultipleMatchResult):
             ptr -= 1
             if result is not None:
                 self.subresult = result
-                self.end = result.end
-                self.marks = result.marks
                 self.start_ptr = ptr
                 return True
         return False
     find_next_result = find_first_result
 
 
-class MinRepeatOneMatchResult(AbstractMultipleMatchResult):
+class MinRepeatOneMatchResult(MatchResult):
 
     def __init__(self, nextppos, ppos3, maxptr, ptr, marks):
         self.nextppos = nextppos
@@ -208,8 +201,6 @@ class MinRepeatOneMatchResult(AbstractMultipleMatchResult):
             result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
             if result is not None:
                 self.subresult = result
-                self.end = result.end
-                self.marks = result.marks
                 self.start_ptr = ptr
                 return True
             ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
@@ -226,7 +217,7 @@ class MinRepeatOneMatchResult(AbstractMultipleMatchResult):
         self.start_ptr = ptr1
         return self.find_first_result(ctx)
 
-class AbstractUntilMatchResult(AbstractMultipleMatchResult):
+class AbstractUntilMatchResult(MatchResult):
 
     def __init__(self, ppos, tailppos, ptr, marks):
         self.ppos = ppos
@@ -255,8 +246,8 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
                 if enum is not None:
                     # matched one more 'item'.  record it and continue
                     self.pending.append((ptr, marks, enum))
-                    ptr = enum.end
-                    marks = enum.marks
+                    ptr = ctx.match_end
+                    marks = ctx.match_marks
                     break
                 else:
                     # 'item' no longer matches.
@@ -265,8 +256,6 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
                         result = sre_match(ctx, self.tailppos, ptr, marks)
                         if result is not None:
                             self.subresult = result
-                            self.end = result.end
-                            self.marks = result.marks
                             self.cur_ptr = ptr
                             self.cur_marks = marks
                             return True
@@ -303,8 +292,6 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
                 result = sre_match(ctx, self.tailppos, ptr, marks)
                 if result is not None:
                     self.subresult = result
-                    self.end = result.end
-                    self.marks = result.marks
                     self.cur_ptr = ptr
                     self.cur_marks = marks
                     return True
@@ -320,8 +307,8 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
                 if enum is not None:
                     # matched one more 'item'.  record it and continue
                     self.pending.append((ptr, marks, enum))
-                    ptr = enum.end
-                    marks = enum.marks
+                    ptr = ctx.match_end
+                    marks = ctx.match_marks
                     break
                 else:
                     # 'item' no longer matches.
@@ -350,7 +337,9 @@ def sre_match(ctx, ppos, ptr, marks):
         if (op == OPCODE_SUCCESS or
             op == OPCODE_MAX_UNTIL or
             op == OPCODE_MIN_UNTIL):
-            return MatchResult(ptr, marks)
+            ctx.match_end = ptr
+            ctx.match_marks = marks
+            return MATCHED_OK
 
         elif op == OPCODE_ANY:
             # match anything (except a newline)
@@ -659,8 +648,8 @@ AT_END_LINE = 6
 AT_END_STRING = 7
 AT_LOC_BOUNDARY = 8
 AT_LOC_NON_BOUNDARY = 9
-AT_UNI_BOUNDARY  =10
-AT_UNI_NON_BOUNDARY  =11
+AT_UNI_BOUNDARY = 10
+AT_UNI_NON_BOUNDARY = 11
 
 def sre_at(ctx, atcode, ptr):
     if (atcode == AT_BEGINNING or
@@ -706,10 +695,7 @@ def sre_at(ctx, atcode, ptr):
 
 def match(pattern, string, start=0, flags=0):
     ctx = MatchContext(pattern, string, start, flags)
-    result = sre_match(ctx, 0, start, None)
-    if result is not None:
-        ctx.match_end = result.end
-        ctx.match_marks = result.marks
+    if sre_match(ctx, 0, start, None) is not None:
         return ctx
     return None
 
@@ -723,11 +709,8 @@ def search(pattern, string, start=0, flags=0):
 def regular_search(ctx):
     start = ctx.match_start
     while start <= ctx.end:
-        result = sre_match(ctx, 0, start, None)
-        if result is not None:
+        if sre_match(ctx, 0, start, None) is not None:
             ctx.match_start = start
-            ctx.match_end = result.end
-            ctx.match_marks = result.marks
             return ctx
         start += 1
     return None
@@ -771,11 +754,8 @@ def fast_search(ctx):
                         ctx.match_marks = None
                         return ctx
                     ppos = pattern_offset + 2 * prefix_skip
-                    result = sre_match(ctx, ppos, ptr, None)
-                    if result is not None:
+                    if sre_match(ctx, ppos, ptr, None) is not None:
                         ctx.match_start = start
-                        ctx.match_end = result.end
-                        ctx.match_marks = result.marks
                         return ctx
                     i = ctx.pat(overlap_offset + i)
                 break
