@@ -33,16 +33,16 @@ class TypeCode(object):
 types = {
     'c': TypeCode(lltype.Char,        'str_w'),
     'u': TypeCode(lltype.UniChar,     'unicode_w'),
-    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
-    'B': TypeCode(rffi.UCHAR,         'int_w', True),
-    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
-    'H': TypeCode(rffi.USHORT,        'int_w', True),
-    'i': TypeCode(rffi.INT,           'int_w', True, True),
-    'I': TypeCode(rffi.UINT,          'int_w', True),
-    'l': TypeCode(rffi.LONG,          'int_w', True, True),
+    #'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
+    #'B': TypeCode(rffi.UCHAR,         'int_w', True),
+    #'h': TypeCode(rffi.SHORT,         'int_w', True, True),
+    #'H': TypeCode(rffi.USHORT,        'int_w', True),
+    #'i': TypeCode(rffi.INT,           'int_w', True, True),
+    #'I': TypeCode(rffi.UINT,          'int_w', True),
+    #'l': TypeCode(rffi.LONG,          'int_w', True, True),
     #'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
-    'f': TypeCode(lltype.SingleFloat, 'float_w'),
-    'd': TypeCode(lltype.Float,       'float_w'),
+    #'f': TypeCode(lltype.SingleFloat, 'float_w'),
+    #'d': TypeCode(lltype.Float,       'float_w'),
     }
 for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
@@ -59,7 +59,7 @@ for thetypecode, thetype in types.items():
             space = self.space
             unwrap = getattr(space, self.mytype.unwrap)
             item = unwrap(w_item)
-            if  self.mytype.unwrap == 'bigint_w':
+            if self.mytype.unwrap == 'bigint_w':
                 try:
                     if self.mytype.signed:
                         item = item.tolonglong()
@@ -68,6 +68,11 @@ for thetypecode, thetype in types.items():
                 except (ValueError, OverflowError):
                     msg = 'unsigned %d-byte integer out of range' % self.mytype.bytes
                     raise OperationError(space.w_OverflowError, space.wrap(msg))
+            elif self.mytype.unwrap == 'str_w' or self.mytype.unwrap == 'unicode_w':
+                if len(item) != 1:
+                    msg = 'array item must be char'
+                    raise OperationError(space.w_TypeError, space.wrap(msg))
+                item=item[0]
 
             if self.mytype.canoverflow:
                 msg = None
