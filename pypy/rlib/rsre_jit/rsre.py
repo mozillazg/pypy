@@ -361,6 +361,7 @@ def sre_match(ctx, ppos, ptr, marks):
             ptr1 = ptr - ctx.pat(ppos+1)
             if ptr1 < 0 or sre_match(ctx, ppos + 2, ptr1, marks) is None:
                 return
+            marks = ctx.match_marks
             ppos += ctx.pat(ppos)
 
         elif op == OPCODE_ASSERT_NOT:
@@ -369,7 +370,6 @@ def sre_match(ctx, ppos, ptr, marks):
             ptr1 = ptr - ctx.pat(ppos+1)
             if ptr1 >= 0 and sre_match(ctx, ppos + 2, ptr1, marks) is not None:
                 return
-            marks = ctx.match_marks
             ppos += ctx.pat(ppos)
 
         elif op == OPCODE_AT:
