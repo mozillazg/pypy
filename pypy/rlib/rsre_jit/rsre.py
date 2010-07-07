@@ -299,21 +299,18 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
             else:
                 enum = None    # 'max' reached, no more matches
 
-            while True:
-                if enum is not None:
-                    # matched one more 'item'.  record it and continue
-                    self.pending.append((ptr, marks, enum))
-                    ptr = ctx.match_end
-                    marks = ctx.match_marks
-                    break
-                else:
-                    # 'item' no longer matches.
-                    if len(self.pending) == 0:
-                        return
-                    ptr, marks, enum = self.pending.pop()
-                    enum = enum.move_to_next_result(ctx)
-                    continue
-                break
+            while enum is None:
+                # 'item' does not match; try to get further results from
+                # the 'pending' list.
+                if len(self.pending) == 0:
+                    return
+                ptr, marks, enum = self.pending.pop()
+                enum = enum.move_to_next_result(ctx)
+
+            # matched one more 'item'.  record it and continue
+            self.pending.append((ptr, marks, enum))
+            ptr = ctx.match_end
+            marks = ctx.match_marks
 
 # ____________________________________________________________
 
