@@ -37,52 +37,51 @@ class _Get(object):
         self.args_type = args_type
         self.res_type = res_type
         self.cpu = cpu
-        self.lib = lib.handler
-        self.setup_stack()
         self.looptoken = None
+        lib = lib.handler
+        bargs = []
+        self.setup_stack()
 
         try:
-            self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(self.lib,
-                                                                    func))
+            self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(lib, func))
         except KeyError:
             raise ValueError("Cannot find symbol %s", func)
-        self.bargs.append(BoxInt())
+        bargs.append(BoxInt())
 
         # check if it's not already compiled
         for func in cache:
             if self.args_type == func.args_type and \
                self.res_type == func.res_type:
                 self.looptoken = func.looptoken
-                self.oplist = func.oplist
                 break
 
         if self.looptoken is None:
             args = []
             for arg in self.args_type:
                 if arg == 'i':
-                    self.bargs.append(BoxInt())
+                    bargs.append(BoxInt())
                     args.append(lltype.Signed)
                 elif arg == 'f':
-                    self.bargs.append(BoxFloat())
+                    bargs.append(BoxFloat())
                     args.append(lltype.Float)
                 elif arg == 'p':
-                    self.bargs.append(BoxPtr())
+                    bargs.append(BoxPtr())
                     args.append(lltype.Signed)
                 else:
                     raise ValueError(arg)
 
             if self.res_type == 'i':
-                self.bres = BoxInt()
                 res = lltype.Signed
+                bres = BoxInt()
             elif self.res_type == 'f':
-                self.bres = BoxFloat()
                 res = lltype.Float
+                bres = BoxFloat()
             elif self.res_type == 'p':
-                self.bres = BoxPtr()
                 res = lltype.Signed
+                bres = BoxPtr()
             elif self.res_type == 'v':
-                self.bres = NULLBOX
                 res = lltype.Void
+                bres = NULLBOX
             else:
                 raise ValueError(self.res_type)
 
@@ -91,43 +90,34 @@ class _Get(object):
             self.calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
             self.looptoken = LoopToken()
-            inputargs = self.bargs # [ self.bfuncaddr ] + self.bargs
-
-            self.oplist = [ResOperation(rop.CALL, inputargs, self.bres,
+            self.oplist = [ResOperation(rop.CALL, bargs, bres,
                                         descr=self.calldescr),
-                           ResOperation(rop.FINISH, [self.bres], None,
+                           ResOperation(rop.FINISH, [bres], None,
                                         descr=BasicFailDescr(0))]
-            self.cpu.compile_loop(inputargs, self.oplist, self.looptoken)
+            self.cpu.compile_loop(bargs, self.oplist, self.looptoken)
 
             # add to the cache
-            cache.append(_Func(self.args_type, self.res_type, self.looptoken,
-                               self.oplist))
+            cache.append(_Func(self.args_type, self.res_type, self.looptoken))
 
     def call(self):
         self.push_funcaddr(self.funcaddr)
-
         res = self.cpu.execute_token(self.looptoken)
-        if res is self.oplist[-1].descr:
-            self.guard_failed = False
-        else:
-            self.guard_failed = True
 
         self.setup_stack() # clean up the stack
 
         if self.res_type == 'i':
-            r = BoxInt(self.cpu.get_latest_value_int(0)).getint()
+            r = self.cpu.get_latest_value_int(0)
         elif self.res_type == 'f':
-            r = BoxFloat(self.cpu.get_latest_value_float(0)).getfloat()
+            r = self.cpu.get_latest_value_float(0)
         elif self.res_type == 'p':
-            r = BoxPtr(self.cpu.get_latest_value_ref(0)).getref()
+            r = self.cpu.get_latest_value_ref(0)
         elif self.res_type == 'v':
             r = None
         else:
             raise ValueError(self.res_type)
-        return r
+        return r # XXX can't return various types
 
     def setup_stack(self):
-        self.bargs = []
         self.esp = 1 # 0 is funcaddr
 
     def push_funcaddr(self, value):
@@ -147,8 +137,7 @@ class _Get(object):
         self.esp += 1
 
 class _Func(object):
-    def __init__(self, args_type, res_type, looptoken, oplist):
+    def __init__(self, args_type, res_type, looptoken):
         self.args_type = args_type
         self.res_type = res_type
         self.looptoken = looptoken
-        self.oplist = oplist
