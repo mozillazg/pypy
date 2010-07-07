@@ -68,9 +68,7 @@ class W_Get(Wrappable):
         self.rget = rjitffi._Get(cpu, lib, func, args_type, res_type)
 
     def call_w(self, space, w_args=None):
-        if space.is_w(w_args, space.w_None):
-            return space.wrap(self.rget.call())
-        else:
+        if not space.is_w(w_args, space.w_None):
             i = 0
             w_iterator = space.iter(w_args)
             while True:
@@ -93,7 +91,8 @@ class W_Get(Wrappable):
                             space.wrap('Unsupported type of argument: %s'
                                         % self.args_type[0]))
                 i += 1
-        return space.wrap(self.rget.call())
+        res = self.rget.call()
+        return space.wrap(res.value)
 
 def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
     try:

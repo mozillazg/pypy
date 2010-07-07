@@ -71,44 +71,44 @@ class TestJitffi(object):
         func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(1)
         func.push_int(2)
-        assert func.call() == 3
+        assert func.call().value == 3
 
         func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(-1)
         func.push_int(2)
-        assert func.call() == 1
+        assert func.call().value == 1
 
         func = lib.get('add_integers', ['i', 'i'], 'i')
         func.push_int(0)
         func.push_int(0)
-        assert func.call() == 0
+        assert func.call().value == 0
 
         func = lib.get('max3', ['i', 'i', 'i'], 'i')
         func.push_int(2)
         func.push_int(8)
         func.push_int(3)
-        assert func.call() == 8
+        assert func.call().value == 8
 
         func = lib.get('add_floats', ['f', 'f'], 'f')
         func.push_float(1.2)
         func.push_float(1.5)
-        assert func.call() == 2.7
+        assert func.call().value == 2.7
 
     def test_get_void(self):
         lib = rjitffi.CDLL(self.lib_name)
 
         func = lib.get('fvoid', [], 'i')
-        assert func.call() == 1
+        assert func.call().value == 1
 
         func = lib.get('return_void', ['i', 'i'], 'v')
         func.push_int(1)
         func.push_int(2)
-        assert func.call() is None
+        assert func.call().value is None
 
         func = lib.get('return_void', ['i', 'i'])
         func.push_int(1)
         func.push_int(2)
-        assert func.call() is None
+        assert func.call().value is None
 
     def test_various_type_args(self):
         lib = rjitffi.CDLL(self.lib_name)
@@ -116,12 +116,12 @@ class TestJitffi(object):
         func = lib.get('add_intfloat', ['i', 'f'], 'i')
         func.push_int(1)
         func.push_float(2.9)
-        assert func.call() == 3
+        assert func.call().value == 3
         
         # stack is cleaned up after calling
         func.push_int(0)
         func.push_float(1.3)
-        assert func.call() == 1
+        assert func.call().value == 1
 
     def test_undefined_func(self):
         lib = rjitffi.CDLL(self.lib_name)

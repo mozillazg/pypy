@@ -102,18 +102,18 @@ class _Get(object):
         res = self.cpu.execute_token(self.looptoken)
 
         if self.res_type == 'i':
-            r = self.cpu.get_latest_value_int(0)
+            r = ReturnInt(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
-            r = self.cpu.get_latest_value_float(0)
+            r = ReturnFloat(self.cpu.get_latest_value_float(0))
         elif self.res_type == 'p':
-            r = self.cpu.get_latest_value_ref(0)
+            r = ReturnPtr(self.cpu.get_latest_value_ref(0))
         elif self.res_type == 'v':
-            r = None
+            r = ReturnNone(None)
         else:
             raise ValueError(self.res_type)
 
         self.setup_stack() # clean up the stack
-        return r # XXX can't return various types
+        return r
 
     def setup_stack(self):
         self.esp = 0
@@ -140,3 +140,19 @@ class _Func(object):
         self.args_type = args_type
         self.res_type = res_type
         self.looptoken = looptoken
+
+class Return(object):
+    def __init__(self, value):
+        self.value = value
+
+class ReturnInt(Return):
+    pass
+
+class ReturnFloat(Return):
+    pass
+
+class ReturnPtr(Return):
+    pass
+
+class ReturnNone(Return):
+    pass
