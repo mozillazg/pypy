@@ -1,7 +1,8 @@
 import py
 import os
 from pypy.conftest import gettestobjspace
-from pypy.module.cppyy import interp_cppyy
+from pypy.module.cppyy import interp_cppyy, executor
+
 
 currpath = py.path.local(__file__).dirpath()
 shared_lib = str(currpath.join("example01Dict.so"))
@@ -17,7 +18,7 @@ class TestCPPYYImplementation:
         w_cppyyclass = lib.type_byname("example01")
         adddouble = w_cppyyclass.function_members["adddouble"]
         func, = adddouble.functions
-        assert func.result_type == "double"
+        assert isinstance(func.executor, executor.DoubleExecutor)
         assert func.arg_types == ["double"]
 
 

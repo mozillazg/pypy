@@ -1,86 +1,16 @@
-import py, os
+import pypy.module.cppyy.capi as capi
 
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace, interp2app
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.baseobjspace import Wrappable
 
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import rffi, lltype
 
 from pypy.rlib.libffi import CDLL
 from pypy.rlib import jit, debug
 
-from pypy.module.cppyy import converter
-
-
-srcpath = py.path.local(__file__).dirpath().join("src")
-incpath = py.path.local(__file__).dirpath().join("include")
-rootincpath = os.path.join(os.environ["ROOTSYS"], "include")
-rootlibpath = os.path.join(os.environ["ROOTSYS"], "lib")
-
-eci = ExternalCompilationInfo(
-    separate_module_files=[srcpath.join("reflexcwrapper.cxx")],
-    include_dirs=[incpath, rootincpath],
-    library_dirs=[rootlibpath],
-    libraries=["Reflex"],
-    use_cpp_linker=True,
-)
-
-c_callstatic_l = rffi.llexternal(
-    "callstatic_l",
-    [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
-    compilation_info=eci)
-c_callstatic_d = rffi.llexternal(
-    "callstatic_d",
-    [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
-    compilation_info=eci)
-c_construct = rffi.llexternal(
-    "construct",
-    [rffi.CCHARP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
-    compilation_info=eci)
-c_callmethod_l = rffi.llexternal(
-    "callmethod_l",
-    [rffi.CCHARP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
-    compilation_info=eci)
-c_destruct = rffi.llexternal(
-    "destruct",
-    [rffi.CCHARP, rffi.VOIDP], lltype.Void,
-    compilation_info=eci)
-
-
-c_num_methods = rffi.llexternal(
-    "num_methods",
-    [rffi.CCHARP], rffi.INT,
-    compilation_info=eci)
-c_method_name = rffi.llexternal(
-    "method_name",
-    [rffi.CCHARP, rffi.INT], rffi.CCHARP,
-    compilation_info=eci)
-c_result_type_method = rffi.llexternal(
-    "result_type_method",
-    [rffi.CCHARP, rffi.INT], rffi.CCHARP,
-    compilation_info=eci)
-c_num_args_method = rffi.llexternal(
-    "num_args_method",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
-    compilation_info=eci)
-c_arg_type_method = rffi.llexternal(
-    "arg_type_method",
-    [rffi.CCHARP, rffi.INT, rffi.INT], rffi.CCHARP,
-    compilation_info=eci)
-c_is_constructor = rffi.llexternal(
-    "is_constructor",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
-    compilation_info=eci)
-c_is_static = rffi.llexternal(
-    "is_static",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
-    compilation_info=eci)
-c_myfree = rffi.llexternal(
-    "myfree",
-    [rffi.VOIDP], lltype.Void,
-    compilation_info=eci)
+from pypy.module.cppyy import converter, executor
 
 
 NULL_VOIDP = lltype.nullptr(rffi.VOIDP.TO)
@@ -113,13 +43,13 @@ class CPPMethod(object):
         self.cpptype = cpptype
         self.space = cpptype.space
         self.method_index = method_index
-        self.result_type = result_type
         self.arg_types = arg_types
+        self.executor = executor.get_executor( result_type )
         self.arg_converters = None
 
     def call(self, cppthis, args_w):
         args = self.prepare_arguments(args_w)
-        result = c_callmethod_l(self.cpptype.name, self.method_index,
+        result = capi.c_callmethod_l(self.cpptype.name, self.method_index,
                               cppthis, len(args_w), args)
         self.free_arguments(args)
         return self.space.wrap(result)
@@ -159,27 +89,18 @@ class CPPMethod(object):
         lltype.free(args, flavor='raw')
 
     def __repr__(self):
-        return "CPPFunction(%s, %s, %s, %s)" % (
-            self.cpptype, self.method_index, self.result_type, self.arg_types)
+        return "CPPFunction(%s, %s, %r, %s)" % (
+            self.cpptype, self.method_index, self.executor, self.arg_types)
 
 class CPPFunction(CPPMethod):
     def call(self, cppthis, args_w):
+        if self.executor is None:
+            raise OperationError(self.space.w_TypeError, self.space.wrap("return type not handled"))
+
         assert not cppthis
         args = self.prepare_arguments(args_w)
         try:
-            if self.result_type == "int":
-                result = c_callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
-                return self.space.wrap(result)
-            if self.result_type == "double":
-                result = c_callstatic_d(self.cpptype.name, self.method_index, len(args_w), args)
-                return self.space.wrap(result)
-            if self.result_type == "char*":
-                lresult = c_callstatic_l(self.cpptype.name, self.method_index, len(args_w), args)
-                ccpresult = rffi.cast(rffi.CCHARP, lresult)
-                result = charp2str_free(ccpresult)
-                return self.space.wrap(result)
-            else:
-                raise NotImplementedError
+            return self.executor.execute(self.space, self, len(args_w), args)
         finally:
             self.free_arguments(args)
  
@@ -188,7 +109,7 @@ class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
         assert not cppthis
         args = self.prepare_arguments(args_w)
-        result = c_construct(self.cpptype.name, len(args_w), args)
+        result = capi.c_construct(self.cpptype.name, len(args_w), args)
         self.free_arguments(args)
         return W_CPPObject(self.cpptype, result)
 
@@ -219,10 +140,6 @@ class CPPOverload(object):
     def __repr__(self):
         return "CPPOverload(%s, %s)" % (self.func_name, self.functions)
 
-def charp2str_free(charp):
-    string = rffi.charp2str(charp)
-    c_myfree(charp)
-    return string
 
 class W_CPPType(Wrappable):
     _immutable_fields_ = ["cpplib", "name"]
@@ -235,10 +152,10 @@ class W_CPPType(Wrappable):
         self._find_func_members()
     
     def _find_func_members(self):
-        num_func_members = c_num_methods(self.name)
+        num_func_members = capi.c_num_methods(self.name)
         args_temp = {}
         for i in range(num_func_members):
-            func_member_name = charp2str_free(c_method_name(self.name, i))
+            func_member_name = capi.charp2str_free(capi.c_method_name(self.name, i))
             cppfunction = self._make_cppfunction(i)
             overload = args_temp.setdefault(func_member_name, [])
             overload.append(cppfunction)
@@ -247,15 +164,15 @@ class W_CPPType(Wrappable):
             self.function_members[name] = overload
 
     def _make_cppfunction(self, method_index):
-        result_type = charp2str_free(c_result_type_method(self.name, method_index))
-        num_args = c_num_args_method(self.name, method_index)
+        result_type = capi.charp2str_free(capi.c_result_type_method(self.name, method_index))
+        num_args = capi.c_num_args_method(self.name, method_index)
         argtypes = []
         for i in range(num_args):
-            argtype = charp2str_free(c_arg_type_method(self.name, method_index, i))
+            argtype = capi.charp2str_free(capi.c_arg_type_method(self.name, method_index, i))
             argtypes.append(argtype)
-        if c_is_constructor(self.name, method_index):
+        if capi.c_is_constructor(self.name, method_index):
             cls = CPPConstructor
-        elif c_is_static(self.name, method_index):
+        elif capi.c_is_static(self.name, method_index):
             cls = CPPFunction
         else:
             cls = CPPMethod
@@ -292,7 +209,7 @@ class W_CPPObject(Wrappable):
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
-        c_destruct(self.cppclass.name, self.rawobject)
+        capi.c_destruct(self.cppclass.name, self.rawobject)
 
 W_CPPObject.typedef = TypeDef(
     'CPPObject',
