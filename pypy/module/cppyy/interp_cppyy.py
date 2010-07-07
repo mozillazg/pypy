@@ -27,7 +27,8 @@ class W_CPPLibrary(Wrappable):
         self.space = space
 
     def type_byname(self, name):
-        return W_CPPType(self, name)
+        handle = capi.c_cppyy_get_typehandle(name)
+        return W_CPPType(self, name, handle)
 
 W_CPPLibrary.typedef = TypeDef(
     'CPPLibrary',
@@ -112,7 +113,7 @@ class CPPConstructor(CPPFunction):
     def call(self, cppthis, args_w):
         assert not cppthis
         args = self.prepare_arguments(args_w)
-        result = capi.c_construct(self.cpptype.name, len(args_w), args)
+        result = capi.c_construct(self.cpptype.handle, len(args_w), args)
         self.free_arguments(args)
         return W_CPPObject(self.cpptype, result)
 
@@ -145,20 +146,21 @@ class CPPOverload(object):
 
 
 class W_CPPType(Wrappable):
-    _immutable_fields_ = ["cpplib", "name"]
+    _immutable_fields_ = ["cpplib", "name","handle"]
 
-    def __init__(self, cpplib, name):
+    def __init__(self, cpplib, name, handle):
         self.space = cpplib.space
         self.cpplib = cpplib
         self.name = name
+        self.handle = handle
         self.function_members = {}
         self._find_func_members()
     
     def _find_func_members(self):
-        num_func_members = capi.c_num_methods(self.name)
+        num_func_members = capi.c_num_methods(self.handle)
         args_temp = {}
         for i in range(num_func_members):
-            func_member_name = capi.charp2str_free(capi.c_method_name(self.name, i))
+            func_member_name = capi.charp2str_free(capi.c_method_name(self.handle, i))
             cppfunction = self._make_cppfunction(i)
             overload = args_temp.setdefault(func_member_name, [])
             overload.append(cppfunction)
@@ -167,15 +169,15 @@ class W_CPPType(Wrappable):
             self.function_members[name] = overload
 
     def _make_cppfunction(self, method_index):
-        result_type = capi.charp2str_free(capi.c_result_type_method(self.name, method_index))
-        num_args = capi.c_num_args_method(self.name, method_index)
+        result_type = capi.charp2str_free(capi.c_result_type_method(self.handle, method_index))
+        num_args = capi.c_num_args_method(self.handle, method_index)
         argtypes = []
         for i in range(num_args):
-            argtype = capi.charp2str_free(capi.c_arg_type_method(self.name, method_index, i))
+            argtype = capi.charp2str_free(capi.c_arg_type_method(self.handle, method_index, i))
             argtypes.append(argtype)
-        if capi.c_is_constructor(self.name, method_index):
+        if capi.c_is_constructor(self.handle, method_index):
             cls = CPPConstructor
-        elif capi.c_is_static(self.name, method_index):
+        elif capi.c_is_static(self.handle, method_index):
             cls = CPPFunction
         else:
             cls = CPPMethod
@@ -212,7 +214,7 @@ class W_CPPObject(Wrappable):
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
-        capi.c_destruct(self.cppclass.name, self.rawobject)
+        capi.c_destruct(self.cppclass.handle, self.rawobject)
 
 W_CPPObject.typedef = TypeDef(
     'CPPObject',

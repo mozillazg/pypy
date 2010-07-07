@@ -22,55 +22,60 @@ eci = ExternalCompilationInfo(
     use_cpp_linker=True,
 )
 
+c_cppyy_get_typehandle = rffi.llexternal(
+    "cppyy_get_typehandle",
+    [rffi.CCHARP], rffi.VOIDP,
+    compilation_info=eci)
+
 c_callstatic_l = rffi.llexternal(
     "callstatic_l",
-    [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
+    [rffi.VOIDP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
 c_callstatic_d = rffi.llexternal(
     "callstatic_d",
-    [rffi.CCHARP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
+    [rffi.VOIDP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
     compilation_info=eci)
 c_construct = rffi.llexternal(
     "construct",
-    [rffi.CCHARP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
+    [rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
     compilation_info=eci)
 c_callmethod_l = rffi.llexternal(
     "callmethod_l",
-    [rffi.CCHARP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
+    [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
 c_destruct = rffi.llexternal(
     "destruct",
-    [rffi.CCHARP, rffi.VOIDP], lltype.Void,
+    [rffi.VOIDP, rffi.VOIDP], lltype.Void,
     compilation_info=eci)
 
 
 c_num_methods = rffi.llexternal(
     "num_methods",
-    [rffi.CCHARP], rffi.INT,
+    [rffi.VOIDP], rffi.INT,
     compilation_info=eci)
 c_method_name = rffi.llexternal(
     "method_name",
-    [rffi.CCHARP, rffi.INT], rffi.CCHARP,
+    [rffi.VOIDP, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_result_type_method = rffi.llexternal(
     "result_type_method",
-    [rffi.CCHARP, rffi.INT], rffi.CCHARP,
+    [rffi.VOIDP, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_num_args_method = rffi.llexternal(
     "num_args_method",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
+    [rffi.VOIDP, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_arg_type_method = rffi.llexternal(
     "arg_type_method",
-    [rffi.CCHARP, rffi.INT, rffi.INT], rffi.CCHARP,
+    [rffi.VOIDP, rffi.INT, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_is_constructor = rffi.llexternal(
     "is_constructor",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
+    [rffi.VOIDP, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_is_static = rffi.llexternal(
     "is_static",
-    [rffi.CCHARP, rffi.INT], rffi.INT,
+    [rffi.VOIDP, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_myfree = rffi.llexternal(
     "myfree",
