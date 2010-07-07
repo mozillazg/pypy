@@ -48,11 +48,14 @@ class CPPMethod(object):
         self.arg_converters = None
 
     def call(self, cppthis, args_w):
+        if self.executor is None:
+            raise OperationError(self.space.w_TypeError, self.space.wrap("return type not handled"))
+
         args = self.prepare_arguments(args_w)
-        result = capi.c_callmethod_l(self.cpptype.name, self.method_index,
-                              cppthis, len(args_w), args)
-        self.free_arguments(args)
-        return self.space.wrap(result)
+        try:
+            return self.executor.execute(self.space, self, cppthis, len(args_w), args)
+        finally:
+            self.free_arguments(args)
 
     def _build_converters(self):
         self.arg_converters = [converter.get_converter(arg_type)
@@ -100,7 +103,7 @@ class CPPFunction(CPPMethod):
         assert not cppthis
         args = self.prepare_arguments(args_w)
         try:
-            return self.executor.execute(self.space, self, len(args_w), args)
+            return self.executor.execute(self.space, self, None, len(args_w), args)
         finally:
             self.free_arguments(args)
  
