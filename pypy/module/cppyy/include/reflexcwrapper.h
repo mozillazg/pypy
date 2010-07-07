@@ -5,19 +5,21 @@
 #ifdef __cplusplus
 extern "C" {
 #endif // ifdef __cplusplus
-    long callstatic_l(const char* class_name, int method_index, int numargs, void* args[]);
-    double callstatic_d(const char* class_name, int method_index, int numargs, void* args[]);
-    long callmethod_l(const char* class_name, int method_index, void* self, int numargs, void* args[]);
-    void* construct(const char* class_name, int numargs, void* args[]);
-    void destruct(const char* class_name, void* self);
+    void* cppyy_get_typehandle(const char* class_name);
 
-    int num_methods(const char* class_name);
-    char* method_name(const char* class_name, int method_index);
-    char* result_type_method(const char* class_name, int method_index);
-    int num_args_method(const char* class_name, int method_index);
-    char* arg_type_method(const char* class_name, int method_index, int index);
-    int is_constructor(const char* class_name, int method_index);
-    int is_static(const char* class_name, int method_index);
+    long callstatic_l(void* handle, int method_index, int numargs, void* args[]);
+    double callstatic_d(void* handle, int method_index, int numargs, void* args[]);
+    long callmethod_l(void* handle, int method_index, void* self, int numargs, void* args[]);
+    void* construct(void* handle, int numargs, void* args[]);
+    void destruct(void* handle, void* self);
+
+    int num_methods(void* handle);
+    char* method_name(void* handle, int method_index);
+    char* result_type_method(void* handle, int method_index);
+    int num_args_method(void* handle, int method_index);
+    char* arg_type_method(void* handle, int method_index, int index);
+    int is_constructor(void* handle, int method_index);
+    int is_static(void* handle, int method_index);
 
     void myfree(void* ptr);
 #ifdef __cplusplus
