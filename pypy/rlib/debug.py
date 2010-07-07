@@ -255,11 +255,20 @@ class Entry(ExtRegistryEntry):
 class IntegerCanBeNegative(Exception):
     pass
 
-def _check_nonneg(ann, bk):
-    from pypy.annotation.model import SomeInteger
-    s_nonneg = SomeInteger(nonneg=True)
-    if not s_nonneg.contains(ann):
-        raise IntegerCanBeNegative
-
 def check_nonneg(x):
-    check_annotation(x, _check_nonneg)
+    assert x >= 0
+    return x
+
+class Entry(ExtRegistryEntry):
+    _about_ = check_nonneg
+
+    def compute_result_annotation(self, s_arg):
+        from pypy.annotation.model import SomeInteger
+        s_nonneg = SomeInteger(nonneg=True)
+        if not s_nonneg.contains(s_arg):
+            raise IntegerCanBeNegative
+        return s_arg
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.inputarg(hop.args_r[0], arg=0)
