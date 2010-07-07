@@ -709,8 +709,9 @@ class Transformer(object):
         size2, unsigned2 = size_and_sign(op.result.concretetype)
         if size1 == size2 and unsigned1 == unsigned2:
             return
-        raise NotImplementedError("cast not supported yet: %s" % (op, ))
-
+        raise NotImplementedError("cast not supported yet: %s (%s->%s)" %
+                                  (op, op.args[0].concretetype,
+                                   op.result.concretetype))
 
     # ----------
     # Renames, from the _old opname to the _new one.

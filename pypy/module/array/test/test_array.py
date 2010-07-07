@@ -30,6 +30,7 @@ class AppTestArray:
 
         a = self.array('c')
         raises(TypeError, a.append, 7)
+        raises(TypeError, a.append, 'hi')
         a.append('h')
         assert a[0] == 'h'
         assert type(a[0]) is str
@@ -37,6 +38,7 @@ class AppTestArray:
 
         a = self.array('u')
         raises(TypeError, a.append, 7)
+        raises(TypeError, a.append, u'hi')
         a.append(unicode('h'))
         assert a[0] == unicode('h')
         assert type(a[0]) is unicode
