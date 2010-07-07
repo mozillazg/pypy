@@ -81,8 +81,11 @@ class MatchContext(object):
 
     def span(self, groupnum=0):
         # compatibility
-        lst = self.flatten_marks()[groupnum*2:groupnum*2+2]
-        return tuple(lst) or (-1, -1)
+        fmarks = self.flatten_marks()
+        groupnum *= 2
+        if groupnum >= len(fmarks):
+            return (-1, -1)
+        return (fmarks[groupnum], fmarks[groupnum+1])
 
     def group(self, group=0):
         # compatibility
@@ -757,10 +760,14 @@ def fast_search(ctx):
                 i += 1
                 if i == prefix_len:
                     # found a potential match
-                    if flags & rsre_char.SRE_INFO_LITERAL:
-                        return True # matched all of pure literal pattern
                     start = string_position + 1 - prefix_len
                     ptr = start + prefix_skip
+                    if flags & rsre_char.SRE_INFO_LITERAL:
+                        # matched all of pure literal pattern
+                        ctx.match_start = start
+                        ctx.match_end = ptr
+                        ctx.match_marks = None
+                        return ctx
                     ppos = pattern_offset + 2 * prefix_skip
                     result = sre_match(ctx, ppos, ptr, None)
                     if result is not None:

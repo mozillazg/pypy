@@ -3,12 +3,17 @@ from pypy.rlib.rsre.test.test_match import get_code
 from pypy.rlib.rsre import rsre
 
 
-def test_external():
+def test_external_match():
     from pypy.rlib.rsre.test.re_tests import tests
     for t in tests:
-        yield run_external, t
+        yield run_external, t, False
 
-def run_external(t):
+def test_external_search():
+    from pypy.rlib.rsre.test.re_tests import tests
+    for t in tests:
+        yield run_external, t, True
+
+def run_external(t, use_search):
     from pypy.rlib.rsre.test.re_tests import SUCCEED, FAIL, SYNTAX_ERROR
     pattern, s, outcome = t[:3]
     if len(t) == 5:
@@ -25,11 +30,14 @@ def run_external(t):
     if outcome == SYNTAX_ERROR:
         raise Exception("this should have been a syntax error")
     #
-    # Emulate a poor man's search() with repeated match()s
-    for i in range(len(s)+1):
-        result = rsre.match(obj, s, start=i)
-        if result:
-            break
+    if use_search:
+        result = rsre.search(obj, s)
+    else:
+        # Emulate a poor man's search() with repeated match()s
+        for i in range(len(s)+1):
+            result = rsre.match(obj, s, start=i)
+            if result:
+                break
     #
     if outcome == FAIL:
         if result is not None:
