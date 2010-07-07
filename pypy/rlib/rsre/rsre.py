@@ -43,6 +43,7 @@ class MatchContext(object):
     match_marks_flat = None
 
     def __init__(self, pattern, string, match_start, flags):
+        assert match_start >= 0
         self.pattern = pattern
         self.string = string
         self.end = len(string)
@@ -761,6 +762,7 @@ def fast_search(ctx):
                 if i == prefix_len:
                     # found a potential match
                     start = string_position + 1 - prefix_len
+                    assert start >= 0
                     ptr = start + prefix_skip
                     if flags & rsre_char.SRE_INFO_LITERAL:
                         # matched all of pure literal pattern
