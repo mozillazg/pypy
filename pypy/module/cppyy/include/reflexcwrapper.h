@@ -7,10 +7,10 @@ extern "C" {
 #endif // ifdef __cplusplus
     void* cppyy_get_typehandle(const char* class_name);
 
-    double callstatic_d(void* handle, int method_index, int numargs, void* args[]);
+    void* cppyy_construct(void* handle, int numargs, void* args[]);
     long cppyy_call_l(void* handle, int method_index, void* self, int numargs, void* args[]);
-    void* construct(void* handle, int numargs, void* args[]);
-    void destruct(void* handle, void* self);
+    double cppyy_call_d(void* handle, int method_index, void* self, int numargs, void* args[]);
+    void cppyy_destruct(void* handle, void* self);
 
     int num_methods(void* handle);
     char* method_name(void* handle, int method_index);

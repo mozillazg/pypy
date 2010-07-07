@@ -8,13 +8,18 @@ void* cppyy_get_typehandle(const char* class_name) {
    return Reflex::Type::ByName(class_name).Id();
 }
 
-double callstatic_d(void* handle, int method_index, int numargs, void* args[]) {
-    double result;
+
+void* cppyy_construct(void* handle, int numargs, void* args[]) {
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
-    Reflex::Member m = t.FunctionMemberAt(method_index);
-    m.Invoke(result, arguments);
-    return result;
+    std::vector<Reflex::Type> argtypes;
+    argtypes.reserve(numargs);
+    for (int i = 0; i < numargs; i++) {
+        argtypes.push_back(Reflex::Type::ByName("int"));
+    }
+    Reflex::Type constructor_type = Reflex::FunctionTypeBuilder(
+            Reflex::Type::ByName("void"), argtypes);
+    return t.Construct(constructor_type, arguments).Address();
 }
 
 long cppyy_call_l(void* handle, int method_index,
@@ -32,20 +37,22 @@ long cppyy_call_l(void* handle, int method_index,
     return result;
 }
 
-void* construct(void* handle, int numargs, void* args[]) {
+double cppyy_call_d(void* handle, int method_index,
+                    void* self, int numargs, void* args[]) {
+    double result;
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
-    std::vector<Reflex::Type> argtypes;
-    argtypes.reserve(numargs);
-    for (int i = 0; i < numargs; i++) {
-    	argtypes.push_back(Reflex::Type::ByName("int"));
+    Reflex::Member m = t.FunctionMemberAt(method_index);
+    if (self) {
+        Reflex::Object o(t, self);
+        m.Invoke(o, result, arguments);
+    } else {
+        m.Invoke(result, arguments);
     }
-    Reflex::Type constructor_type = Reflex::FunctionTypeBuilder(
-	    Reflex::Type::ByName("void"), argtypes);
-    return t.Construct(constructor_type, arguments).Address();
-}
+    return result;
+}   
 
-void destruct(void* handle, void* self) {
+void cppyy_destruct(void* handle, void* self) {
     Reflex::Type t((Reflex::TypeName*)handle);
     t.Destruct(self, true);
 }
