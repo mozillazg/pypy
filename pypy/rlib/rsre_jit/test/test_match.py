@@ -1,5 +1,5 @@
 import _sre, re, sre_compile
-from pypy.rlib.rsre import rsre
+from pypy.rlib.rsre_jit import rsre
 
 
 def get_code(regexp):

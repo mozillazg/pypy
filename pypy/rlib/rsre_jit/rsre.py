@@ -1,5 +1,5 @@
 from pypy.rlib.debug import check_nonneg
-from pypy.rlib.rsre import rsre_char
+from pypy.rlib.rsre_jit import rsre_char
 
 
 OPCODE_FAILURE            = 0
