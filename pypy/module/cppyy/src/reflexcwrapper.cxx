@@ -50,12 +50,26 @@ void destruct(void* handle, void* self) {
     t.Destruct(self, true);
 }
 
+typedef void* (*MethPtrGetter)(void*);
+static MethPtrGetter get_methptr_getter(Reflex::Member m)
+{
+  Reflex::PropertyList plist = m.Properties();
+  if (plist.HasProperty("MethPtrGetter")) {
+    Reflex::Any& value = plist.PropertyValue("MethPtrGetter");
+    return (MethPtrGetter)Reflex::any_cast<void*>(value);
+  }
+  else
+    return 0;
+}
+
 
 int num_methods(void* handle) {
     Reflex::Type t((Reflex::TypeName*)handle);
     for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
         Reflex::Member m = t.FunctionMemberAt(i);
         std::cout << i << " " << m.Name() << std::endl;
+        std::cout << "    " << "Stubfunction:  " << (void*)m.Stubfunction() << std::endl;
+        std::cout << "    " << "MethPtrGetter: " << (void*)get_methptr_getter(m) << std::endl;
         for (int j = 0; j < (int)m.FunctionParameterSize(); j++) {
             Reflex::Type at = m.TypeOf().FunctionParameterAt(j);
             std::cout << "    " << j << " " << at.Name() << std::endl;

@@ -5,5 +5,6 @@
 #include "Reflex/Member.h"
 #include "Reflex/Object.h"
 #include "Reflex/Builder/TypeBuilder.h"
+#include "Reflex/PropertyList.h"
 
 #endif // CPPYY_CPPYY
