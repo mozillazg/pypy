@@ -1,20 +1,20 @@
 import re
-from pypy.rlib.rsre.test.test_match import get_code
-from pypy.rlib.rsre import rsre
+from pypy.rlib.rsre_jit.test.test_match import get_code
+from pypy.rlib.rsre_jit import rsre
 
 
 def test_external_match():
-    from pypy.rlib.rsre.test.re_tests import tests
+    from pypy.rlib.rsre_jit.test.re_tests import tests
     for t in tests:
         yield run_external, t, False
 
 def test_external_search():
-    from pypy.rlib.rsre.test.re_tests import tests
+    from pypy.rlib.rsre_jit.test.re_tests import tests
     for t in tests:
         yield run_external, t, True
 
 def run_external(t, use_search):
-    from pypy.rlib.rsre.test.re_tests import SUCCEED, FAIL, SYNTAX_ERROR
+    from pypy.rlib.rsre_jit.test.re_tests import SUCCEED, FAIL, SYNTAX_ERROR
     pattern, s, outcome = t[:3]
     if len(t) == 5:
         repl, expected = t[3:5]

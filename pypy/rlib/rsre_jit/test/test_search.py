@@ -1,5 +1,5 @@
-from pypy.rlib.rsre import rsre
-from pypy.rlib.rsre.test.test_match import get_code
+from pypy.rlib.rsre_jit import rsre
+from pypy.rlib.rsre_jit.test.test_match import get_code
 
 
 class TestSearch:

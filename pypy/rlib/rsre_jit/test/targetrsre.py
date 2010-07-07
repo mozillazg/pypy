@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.rsre import rsre
+from pypy.rlib.rsre_jit import rsre
 import os, time
 
 
