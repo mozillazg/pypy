@@ -40,7 +40,6 @@ class _Get(object):
         self.looptoken = None
         lib = lib.handler
         bargs = []
-        self.setup_stack()
 
         try:
             self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(lib, func))
@@ -97,12 +96,10 @@ class _Get(object):
 
             # add to the cache
             cache.append(_Func(self.args_type, self.res_type, self.looptoken))
+        self.setup_stack()
 
     def call(self):
-        self.push_funcaddr(self.funcaddr)
         res = self.cpu.execute_token(self.looptoken)
-
-        self.setup_stack() # clean up the stack
 
         if self.res_type == 'i':
             r = self.cpu.get_latest_value_int(0)
@@ -114,14 +111,17 @@ class _Get(object):
             r = None
         else:
             raise ValueError(self.res_type)
+
+        self.setup_stack() # clean up the stack
         return r # XXX can't return various types
 
     def setup_stack(self):
-        self.esp = 1 # 0 is funcaddr
+        self.esp = 0
+        self.push_funcaddr(self.funcaddr)
 
     def push_funcaddr(self, value):
-        self.cpu.set_future_value_int(0, value)
-        #self.esp += 1
+        self.cpu.set_future_value_int(self.esp, value)
+        self.esp += 1
 
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
