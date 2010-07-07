@@ -89,10 +89,10 @@ class _Get(object):
             calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
 
             self.looptoken = LoopToken()
-            self.oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
-                           ResOperation(rop.FINISH, [bres], None,
-                                        descr=BasicFailDescr(0))]
-            self.cpu.compile_loop(bargs, self.oplist, self.looptoken)
+            oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
+                      ResOperation(rop.FINISH, [bres], None,
+                                   descr=BasicFailDescr(0))]
+            self.cpu.compile_loop(bargs, oplist, self.looptoken)
 
             # add to the cache
             cache.append(_Func(self.args_type, self.res_type, self.looptoken))
