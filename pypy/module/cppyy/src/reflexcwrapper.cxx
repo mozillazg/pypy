@@ -8,14 +8,6 @@ void* cppyy_get_typehandle(const char* class_name) {
    return Reflex::Type::ByName(class_name).Id();
 }
 
-long callstatic_l(void* handle, int method_index, int numargs, void* args[]) {
-    long result;
-    std::vector<void*> arguments(args, args+numargs);
-    Reflex::Type t((Reflex::TypeName*)handle);
-    Reflex::Member m = t.FunctionMemberAt(method_index);
-    m.Invoke(result, arguments);
-    return result;
-}
 double callstatic_d(void* handle, int method_index, int numargs, void* args[]) {
     double result;
     std::vector<void*> arguments(args, args+numargs);
@@ -25,14 +17,18 @@ double callstatic_d(void* handle, int method_index, int numargs, void* args[]) {
     return result;
 }
 
-long callmethod_l(void* handle, int method_index,
+long cppyy_call_l(void* handle, int method_index,
 	          void* self, int numargs, void* args[]) {
     long result;
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
-    Reflex::Object o(t, self);
     Reflex::Member m = t.FunctionMemberAt(method_index);
-    m.Invoke(o, result, arguments);
+    if (self) {
+        Reflex::Object o(t, self);
+        m.Invoke(o, result, arguments);
+    } else {
+        m.Invoke(result, arguments);
+    }
     return result;
 }
 

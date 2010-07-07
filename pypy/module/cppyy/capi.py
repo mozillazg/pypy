@@ -39,8 +39,8 @@ c_construct = rffi.llexternal(
     "construct",
     [rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
     compilation_info=eci)
-c_callmethod_l = rffi.llexternal(
-    "callmethod_l",
+c_cppyy_call_l = rffi.llexternal(
+    "cppyy_call_l",
     [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
 c_destruct = rffi.llexternal(

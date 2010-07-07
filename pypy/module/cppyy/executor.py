@@ -12,10 +12,7 @@ class FunctionExecutor(object):
 
 class LongExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
-        if cppthis is not None:
-            result = capi.c_callmethod_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
-        else:
-            result = capi.c_callstatic_l(func.cpptype.handle, func.method_index, num_args, args)
+        result = capi.c_cppyy_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class DoubleExecutor(FunctionExecutor):
@@ -31,7 +28,7 @@ class CStringExecutor(FunctionExecutor):
         if cppthis is not None:
             raise NotImplementedError
         else:
-            lresult = capi.c_callstatic_l(func.cpptype.handle, func.method_index, num_args, args)
+            lresult = capi.c_cppyy_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         ccpresult = rffi.cast(rffi.CCHARP, lresult)
         result = capi.charp2str_free(ccpresult)
         return space.wrap(result)

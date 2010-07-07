@@ -7,9 +7,8 @@ extern "C" {
 #endif // ifdef __cplusplus
     void* cppyy_get_typehandle(const char* class_name);
 
-    long callstatic_l(void* handle, int method_index, int numargs, void* args[]);
     double callstatic_d(void* handle, int method_index, int numargs, void* args[]);
-    long callmethod_l(void* handle, int method_index, void* self, int numargs, void* args[]);
+    long cppyy_call_l(void* handle, int method_index, void* self, int numargs, void* args[]);
     void* construct(void* handle, int numargs, void* args[]);
     void destruct(void* handle, void* self);
 
