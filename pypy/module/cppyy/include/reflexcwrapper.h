@@ -2,7 +2,9 @@
 #ifndef CPPYY_REFLEXCWRAPPER
 #define CPPYY_REFLEXCWRAPPER
 
+#ifdef __cplusplus
 extern "C" {
+#endif // ifdef __cplusplus
     long callstatic_l(const char* class_name, int method_index, int numargs, void* args[]);
     double callstatic_d(const char* class_name, int method_index, int numargs, void* args[]);
     long callmethod_l(const char* class_name, int method_index, void* self, int numargs, void* args[]);
@@ -18,6 +20,8 @@ extern "C" {
     int is_static(const char* class_name, int method_index);
 
     void myfree(void* ptr);
+#ifdef __cplusplus
 }
+#endif // ifdef __cplusplus
 
 #endif // ifndef CPPYY_REFLEXCWRAPPER
