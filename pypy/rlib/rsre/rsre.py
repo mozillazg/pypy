@@ -136,9 +136,9 @@ class MatchResult(object):
     def move_to_next_result(self, ctx):
         result = self.subresult
         if result is None:
-            return False
+            return
         if result.move_to_next_result(ctx):
-            return True
+            return result
         return self.find_next_result(ctx)
 
     def find_next_result(self, ctx):
@@ -161,8 +161,7 @@ class BranchMatchResult(MatchResult):
             if result is not None:
                 self.subresult = result
                 self.ppos = ppos
-                return True
-        return False
+                return self
     find_next_result = find_first_result
 
 class RepeatOneMatchResult(MatchResult):
@@ -181,8 +180,7 @@ class RepeatOneMatchResult(MatchResult):
             if result is not None:
                 self.subresult = result
                 self.start_ptr = ptr
-                return True
-        return False
+                return self
     find_next_result = find_first_result
 
 
@@ -202,18 +200,17 @@ class MinRepeatOneMatchResult(MatchResult):
             if result is not None:
                 self.subresult = result
                 self.start_ptr = ptr
-                return True
+                return self
             ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
             if ptr1 == ptr:
                 break
             ptr = ptr1
-        return False
 
     def find_next_result(self, ctx):
         ptr = self.start_ptr
         ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
         if ptr1 == ptr:
-            return False
+            return
         self.start_ptr = ptr1
         return self.find_first_result(ctx)
 
@@ -258,13 +255,12 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
                             self.subresult = result
                             self.cur_ptr = ptr
                             self.cur_marks = marks
-                            return True
+                            return self
                     resume = False
                     if len(self.pending) == 0:
-                        return False
+                        return
                     ptr, marks, enum = self.pending.pop()
-                    if not enum.move_to_next_result(ctx):
-                        enum = None
+                    enum = enum.move_to_next_result(ctx)
             #
             if max == 65535 or len(self.pending) < max:
                 # try to match one more 'item'
@@ -294,7 +290,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
                     self.subresult = result
                     self.cur_ptr = ptr
                     self.cur_marks = marks
-                    return True
+                    return self
             resume = False
 
             if max == 65535 or len(self.pending) < max:
@@ -313,10 +309,9 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
                 else:
                     # 'item' no longer matches.
                     if len(self.pending) == 0:
-                        return False
+                        return
                     ptr, marks, enum = self.pending.pop()
-                    if not enum.move_to_next_result(ctx):
-                        enum = None
+                    enum = enum.move_to_next_result(ctx)
                     continue
                 break
 
@@ -383,9 +378,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # alternation
             # <BRANCH> <0=skip> code <JUMP> ... <NULL>
             result = BranchMatchResult(ppos, ptr, marks)
-            if not result.find_first_result(ctx):
-                result = None
-            return result
+            return result.find_first_result(ctx)
 
         #elif op == OPCODE_CATEGORY:
         #   seems to be never produced
@@ -508,17 +501,13 @@ def sre_match(ctx, ppos, ptr, marks):
                 # remembering each state for each possible number of
                 # 'item' matching.
                 result = MaxUntilMatchResult(ppos, tailppos, ptr, marks)
-                if not result.find_first_result(ctx):
-                    result = None
-                return result
+                return result.find_first_result(ctx)
 
             elif op == OPCODE_MIN_UNTIL:
                 # first try to match the 'tail', and if it fails, try
                 # to match one more 'item' and try again
                 result = MinUntilMatchResult(ppos, tailppos, ptr, marks)
-                if not result.find_first_result(ctx):
-                    result = None
-                return result
+                return result.find_first_result(ctx)
 
             else:
                 raise AssertionError("missing UNTIL after REPEAT")
@@ -540,9 +529,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # and backtrack if not.
             nextppos = ppos + ctx.pat(ppos)
             result = RepeatOneMatchResult(nextppos, minptr, ptr, marks)
-            if not result.find_first_result(ctx):
-                result = None
-            return result
+            return result.find_first_result(ctx)
 
         elif op == OPCODE_MIN_REPEAT_ONE:
             # match repeated sequence (minimizing regexp).
@@ -571,9 +558,7 @@ def sre_match(ctx, ppos, ptr, marks):
             nextppos = ppos + ctx.pat(ppos)
             result = MinRepeatOneMatchResult(nextppos, ppos+3, maxptr,
                                              ptr, marks)
-            if not result.find_first_result(ctx):
-                result = None
-            return result
+            return result.find_first_result(ctx)
 
         else:
             assert 0, "bad pattern code %d" % op
