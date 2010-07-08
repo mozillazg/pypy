@@ -20,10 +20,23 @@ def load_lib(space, name):
     return W_CPPLibrary(space, cdll)
 load_lib.unwrap_spec = [ObjSpace, str]
 
+class State(object):
+    def __init__(self, space):
+        self.cpptype_cache = {}
+
 def type_byname(space, name):
+    state = space.fromcache(State)
+    try:
+        return state.cpptype_cache[name]
+    except KeyError:
+        pass
+
     handle = capi.c_cppyy_get_typehandle(name)
     if handle:
-        return W_CPPType(space, name, handle)
+        cpptype = W_CPPType(space, name, handle)
+        state.cpptype_cache[name] = cpptype
+        return cpptype
+
     raise OperationError(space.w_TypeError, space.wrap("no such C++ class %s" % name))
 type_byname.unwrap_spec = [ObjSpace, str]
 
@@ -48,7 +61,7 @@ class CPPMethod(object):
         self.space = cpptype.space
         self.method_index = method_index
         self.arg_types = arg_types
-        self.executor = executor.get_executor( result_type )
+        self.executor = executor.get_executor(self.space, result_type)
         self.arg_converters = None
         # <hack>
         self.hack_call = arg_types == ['int'] and result_type == 'int'
@@ -88,7 +101,7 @@ class CPPMethod(object):
         return space.wrap(rffi.cast(lltype.Signed, result))
 
     def _build_converters(self):
-        self.arg_converters = [converter.get_converter(arg_type)
+        self.arg_converters = [converter.get_converter(self.space, arg_type)
                                    for arg_type in self.arg_types]
 
     @jit.unroll_safe
@@ -260,6 +273,8 @@ W_CPPType.typedef = TypeDef(
     invoke = interp2app(W_CPPType.invoke, unwrap_spec=['self', str, 'args_w']),
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
 )
+
+
 
 class W_CCPInstance(Wrappable):
     _immutable_ = True

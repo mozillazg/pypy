@@ -32,7 +32,7 @@ class CStringExecutor(FunctionExecutor):
         result = capi.charp2str_free(ccpresult)
         return space.wrap(result)
 
-def get_executor(name):
+def get_executor(space, name):
     try:
         return _executors[name]
     except KeyError:
