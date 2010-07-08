@@ -66,11 +66,14 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
 
 def jittify_and_run(interp, graph, args, repeat=1,
                     backendopt=False, trace_limit=sys.maxint,
-                    debug_level=DEBUG_STEPS, inline=False, **kwds):
+                    debug_level=DEBUG_STEPS, inline=False,
+                    write_jitcodes_directory=False, **kwds):
     translator = interp.typer.annotator.translator
     translator.config.translation.gc = "boehm"
     translator.config.translation.list_comprehension_operations = True
-    warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt, **kwds)
+    warmrunnerdesc = WarmRunnerDesc(translator, backendopt=backendopt,
+                             write_jitcodes_directory=write_jitcodes_directory,
+                                    **kwds)
     for jd in warmrunnerdesc.jitdrivers_sd:
         jd.warmstate.set_param_threshold(3)          # for tests
         jd.warmstate.set_param_trace_eagerness(2)    # for tests
@@ -144,7 +147,8 @@ class CannotInlineCanEnterJit(JitException):
 class WarmRunnerDesc(object):
 
     def __init__(self, translator, policy=None, backendopt=True, CPUClass=None,
-                 optimizer=None, ProfilerClass=EmptyProfiler, **kwds):
+                 optimizer=None, ProfilerClass=EmptyProfiler,
+                 write_jitcodes_directory=False, **kwds):
         pyjitpl._warmrunnerdesc = self   # this is a global for debugging only!
         self.set_translator(translator)
         self.build_cpu(CPUClass, **kwds)
@@ -173,6 +177,8 @@ class WarmRunnerDesc(object):
         self.rewrite_jit_merge_points(policy)
 
         verbose = not self.cpu.translate_support_code
+        if write_jitcodes_directory:
+            verbose = False
         self.codewriter.make_jitcodes(verbose=verbose)
         self.rewrite_can_enter_jits()
         self.rewrite_set_param()
