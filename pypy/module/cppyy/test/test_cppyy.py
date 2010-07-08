@@ -31,10 +31,10 @@ class AppTestCPPYY:
     def setup_class(cls):
         cls.space = space
         env = os.environ
-        cls.w_example01 = cls.space.appexec([], """():
+        cls.w_example01, cls.w_payload = cls.space.unpackiterable(cls.space.appexec([], """():
             import cppyy
             cppyy.load_lib(%r)
-            return cppyy._type_byname('example01')""" % (shared_lib, ))
+            return cppyy._type_byname('example01'), cppyy._type_byname('payload')""" % (shared_lib, )))
 
     def test_example01static_int(self):
         """Test passing of an int, returning of an int, and overloading on a
@@ -133,3 +133,16 @@ class AppTestCPPYY:
         instance.destruct()
         assert t.invoke("getCount") == 0
 
+    def testPassingOfAnObjectByPointer(self):
+        """Test passing of an instance as an argument."""
+
+        t = self.example01
+
+        pl = self.payload.construct(3.14)
+        assert round(pl.invoke("getData")-3.14, 8) == 0
+        
+        t.invoke("setPayload", pl, 41.)    # now pl is a CPPInstance
+        assert pl.invoke("getData") == 41.
+        
+        pl.destruct() 
+        assert t.invoke("getCount") == 0
