@@ -6,18 +6,18 @@ from pypy.rpython.lltypesystem import rffi, lltype
 srcpath = py.path.local(__file__).dirpath().join("src")
 incpath = py.path.local(__file__).dirpath().join("include")
 
-try:
-   rootincpath = os.path.join(os.environ["ROOTSYS"], "include")
-   rootlibpath = os.path.join(os.environ["ROOTSYS"], "lib")
-except KeyError:
-   print 'please set ROOTSYS envar to the location of the ROOT installation'
-   raise
+if os.environ.get("ROOTSYS"):
+    rootincpath = [os.path.join(os.environ["ROOTSYS"], "include")]
+    rootlibpath = [os.path.join(os.environ["ROOTSYS"], "lib")]
+else:
+    rootincpath = []
+    rootlibpath = []
 
 eci = ExternalCompilationInfo(
     separate_module_files=[srcpath.join("reflexcwrapper.cxx")],
-    include_dirs=[incpath, rootincpath],
+    include_dirs=[incpath] + rootincpath,
     includes=["reflexcwrapper.h"],
-    library_dirs=[rootlibpath],
+    library_dirs=rootlibpath,
     libraries=["Reflex"],
     use_cpp_linker=True,
 )
