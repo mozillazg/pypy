@@ -4,3 +4,5 @@ tst: tstintimg.o intimg.o
 	gcc -o $@ $^
 loop: loop.o
 	gcc -o $@ $^
+sum: sumtst.o sum.o
+	gcc -o $@ $^	
