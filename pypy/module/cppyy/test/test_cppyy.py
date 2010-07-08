@@ -107,9 +107,12 @@ class AppTestCPPYY:
         instance = t.construct(13)
         res = instance.invoke("addDataToDouble", 16)
         assert round(res-29, 8) == 0.
+        instance.destruct()
         instance = t.construct(-13)
         res = instance.invoke("addDataToDouble", 16)
         assert round(res-3, 8) == 0.
+        instance.destruct()
+        assert t.invoke("getCount") == 0
 
     def test_example01method_constcharp(self):
         """Test passing of a C string and returning of a C string on a
@@ -125,4 +128,6 @@ class AppTestCPPYY:
         assert res == "54"
         res = instance.invoke("addToStringValue", "-12")
         assert res == "30"
+        instance.destruct()
+        assert t.invoke("getCount") == 0
 

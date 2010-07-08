@@ -7,9 +7,23 @@ class CppyyClass(type):
 
 def make_static_function(cpptype, name):
     def method(*args):
-        return cpptype.invoke(name,*args)
+        return cpptype.invoke(name, *args)
     method.__name__ = name
     return staticmethod(method)
+
+def make_method(name):
+    def method(self, *args):
+        return self._cppinstance.invoke(name, *args)
+    method.__name__ = name
+    return method
+
+class CppyyObject(object):
+    def __init__(self, *args):
+        self._cppinstance = self._cppyyclass.construct(*args)
+
+    def destruct(self):
+        self._cppinstance.destruct()
+    
 
 _existing_classes = {}
 def get_cppclass(name):
@@ -28,9 +42,9 @@ def get_cppclass(name):
         if cppol.is_static():
             d[f] = make_static_function(cpptype, f)
         else:
-            pass
+            d[f] = make_method(f)
 
-    pycpptype = CppyyClass(name, (object,), d)
+    pycpptype = CppyyClass(name, (CppyyObject,), d)
 
     return pycpptype
 
@@ -45,7 +59,7 @@ class _gbl(object):
             cppclass = get_cppclass(attr)
             self.__dict__[attr] = cppclass
             return cppclass
-        except TypeError:
+        except TypeError, e:
             raise AttributeError("'gbl' object has no attribute '%s'" % attr)
 
 

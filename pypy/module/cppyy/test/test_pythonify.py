@@ -56,4 +56,64 @@ class AppTestPYTHONIFY:
         raises(TypeError, 'example01_class.staticAddOneToInt(1, [])')
         raises(TypeError, 'example01_class.staticAddOneToInt(1.)')
         raises(OverflowError, 'example01_class.staticAddOneToInt(sys.maxint+1)')
+        res = example01_class.staticAddToDouble(0.09)
+        assert res == 0.09 + 0.01
+
+        res = example01_class.staticAtoi("1")
+        assert res == 1
+
+        res = example01_class.staticStrcpy("aap")
+        assert res == "aap"
+
+        res = example01_class.staticStrcpy(u"aap")
+        assert res == "aap"
+
+        raises(TypeError, 'example01_class.staticStrcpy(1.)')
+
+    def test_ConstrucingAndCalling(self):
+        """Test object and method calls."""
+        import cppyy, sys
+        example01_class = cppyy.gbl.example01
+        assert example01_class.getCount() == 0
+        instance = example01_class(7)
+        assert example01_class.getCount() == 1
+        res = instance.addDataToInt(4)
+        assert res == 11
+        res = instance.addDataToInt(-4)
+        assert res == 3
+        instance.destruct()
+        assert example01_class.getCount() == 0
+        raises(ReferenceError, 'instance.addDataToInt(4)')
+        return
+
+        instance = example01_class(7)
+        instance2 = example01_class(8)
+        assert example01_class.getCount() == 2
+        instance.destruct()
+        assert example01_class.getCount() == 1
+        instance2.destruct()
+        assert example01_class.getCount() == 0
+
+        t = self.example01
+        instance = example01_class(13)
+        res = instance.addDataToDouble(16)
+        assert round(res-29, 8) == 0.
+        instance.destruct()
+        instance = example01_class(-13)
+        res = instance.addDataToDouble(16)
+        assert round(res-3, 8) == 0.
+
+
+        t = self.example01
+        instance = example01_class(42)
+
+        res = instance.addDataToAtoi("13")
+        assert res == 55
+
+        res = instance.addToStringValue("12")
+        assert res == "54"
+        res = instance.addToStringValue("-12")
+        assert res == "30"
+        instance.destruct()
+        assert example01_class.getCount() == 0
 
