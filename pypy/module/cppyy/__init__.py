@@ -4,8 +4,10 @@ class Module(MixedModule):
     """    """
 
     interpleveldefs = {
-        'load_lib': 'interp_cppyy.load_lib',
+        '_load_lib': 'interp_cppyy.load_lib',
     }
 
     appleveldefs = {
+        'gbl'                    : 'pythonify.gbl',
+        'load_lib'               : 'pythonify.load_lib',
     }
