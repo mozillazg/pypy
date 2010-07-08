@@ -78,11 +78,11 @@ class CPPMethod(object):
         if len(args_w) != 1:
             raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
         arg = space.c_int_w(args_w[0])
-        methgetter = capi.c_cppyy_get_methptr_getter(self.cpptype.handle,
-                                                     self.method_index)
-        if not methgetter:
-            raise NotImplementedError
-        funcptr = methgetter(cppthis)
+
+        cpptype = jit.hint(self.cpptype, promote=True)
+        cpp_dynamic_type = capi.c_dynamic_type(cpptype.handle, cppthis)
+        cppthis_holder.cppthis = cppthis
+        funcptr = cpptype.get_methptr(cpp_dynamic_type, self.method_index)
         funcptr = rffi.cast(self.INT_2_INT_FNPTR, funcptr)
         result = funcptr(cppthis, arg)
         return space.wrap(rffi.cast(lltype.Signed, result))
@@ -184,6 +184,10 @@ W_CPPOverload.typedef = TypeDef(
     is_static = interp2app(W_CPPOverload.is_static, unwrap_spec=['self']),
 )
 
+# hack hack hack (see get_methptr)
+class _CppthisHolder(object):
+    pass
+cppthis_holder = _CppthisHolder()
 
 class W_CPPType(Wrappable):
     _immutable_fields_ = ["name","handle"]
@@ -228,6 +232,18 @@ class W_CPPType(Wrappable):
     @jit.purefunction
     def get_overload(self, name):
         return self.function_members[name]
+
+    @jit.purefunction
+    def get_methptr(self, cpp_dynamic_type, method_index):
+        # hack hack hack: we can't really pass cppthis as an argument as it's
+        # not constant, but as long as it corresponds to cpp_dynamic_type, the
+        # function is still pure
+        cppthis = cppthis_holder.cppthis
+        methgetter = capi.c_cppyy_get_methptr_getter(self.handle, method_index)
+        if not methgetter:
+            raise NotImplementedError
+        return methgetter(cppthis)
+
 
     def invoke(self, name, args_w):
         overload = self.get_overload(name)
