@@ -134,6 +134,8 @@ class AppTestPYTHONIFY:
         assert pl.getData() == 41.
         example01_class.setPayload(pl, 43.)
         assert pl.getData() == 43.
+        e.setPayload(pl, 45.)
+        assert pl.getData() == 45.
 
         pl.destruct()
         e.destruct()
