@@ -2,7 +2,7 @@ import cppyy
 
 import time
 import cppyy
-lib = cppyy.load_lib("example01Dict.so")
+lib = cppyy.load_lib("../../module/cppyy/test/example01Dict.so")
 cls = lib.type_byname("example01")
 inst = cls.construct(-17)
 
