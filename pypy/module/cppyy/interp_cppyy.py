@@ -132,7 +132,8 @@ class CPPFunction(CPPMethod):
         assert not cppthis
         args = self.prepare_arguments(args_w)
         try:
-            return self.executor.execute(self.space, self, None, len(args_w), args)
+            return self.executor.execute(self.space, self, NULL_VOIDP,
+                                         len(args_w), args)
         finally:
             self.free_arguments(args)
  
