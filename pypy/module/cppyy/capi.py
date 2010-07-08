@@ -91,6 +91,10 @@ c_is_static = rffi.llexternal(
     "is_static",
     [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
+c_is_subtype = rffi.llexternal(
+    "is_subtype",
+    [C_TYPEHANDLE, C_TYPEHANDLE], rffi.INT,
+    compilation_info=eci)
 c_dynamic_type = rffi.llexternal(
     "dynamic_type",
     [C_TYPEHANDLE, C_OBJECT], C_TYPEHANDLE,

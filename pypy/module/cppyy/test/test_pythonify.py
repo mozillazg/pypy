@@ -128,7 +128,12 @@ class AppTestPYTHONIFY:
 
         e = example01_class(14)
         pl = payload_class(3.14)
+        assert round(pl.getData()-3.14, 8) == 0
 
+        example01_class.setPayload(pl._cppinstance, 41.)
+        assert pl.getData() == 41.
+        example01_class.setPayload(pl, 43.)
+        assert pl.getData() == 43.
 
         pl.destruct()
         e.destruct()

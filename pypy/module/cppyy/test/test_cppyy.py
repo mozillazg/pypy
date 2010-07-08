@@ -19,6 +19,8 @@ class TestCPPYYImplementation:
     def test_class_query(self):
         lib = interp_cppyy.load_lib(space, shared_lib)
         w_cppyyclass = interp_cppyy.type_byname(space, "example01")
+        w_cppyyclass2 = interp_cppyy.type_byname(space, "example01")
+        assert space.is_w(w_cppyyclass, w_cppyyclass2)
         adddouble = w_cppyyclass.function_members["staticAddToDouble"]
         func, = adddouble.functions
         assert isinstance(func.executor, executor.DoubleExecutor)

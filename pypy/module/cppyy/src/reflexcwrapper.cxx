@@ -147,6 +147,14 @@ int is_static(cppyy_typehandle_t handle, int method_index) {
     return m.IsStatic();
 }
 
+int is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2) {
+    if (h1 == h2)
+        return 1;
+    Reflex::Type t1((Reflex::TypeName*)h1);
+    Reflex::Type t2((Reflex::TypeName*)h2);
+    return (int)t2.HasBase(t1);
+}
+
 cppyy_typehandle_t dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self) {
     Reflex::Type t((Reflex::TypeName*)handle);
     const Reflex::Object* obj = (const Reflex::Object*)self;
