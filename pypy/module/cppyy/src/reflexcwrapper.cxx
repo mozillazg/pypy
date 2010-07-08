@@ -57,16 +57,22 @@ void cppyy_destruct(void* handle, void* self) {
     t.Destruct(self, true);
 }
 
-typedef void* (*MethPtrGetter)(void*);
-static MethPtrGetter get_methptr_getter(Reflex::Member m)
+static cppyy_methptrgetter_t get_methptr_getter(Reflex::Member m)
 {
   Reflex::PropertyList plist = m.Properties();
   if (plist.HasProperty("MethPtrGetter")) {
     Reflex::Any& value = plist.PropertyValue("MethPtrGetter");
-    return (MethPtrGetter)Reflex::any_cast<void*>(value);
+    return (cppyy_methptrgetter_t)Reflex::any_cast<void*>(value);
   }
   else
     return 0;
+}
+
+cppyy_methptrgetter_t cppyy_get_methptr_getter(void* handle, int method_index)
+{
+    Reflex::Type t((Reflex::TypeName*)handle);
+    Reflex::Member m = t.FunctionMemberAt(method_index);
+    return get_methptr_getter(m);
 }
 
 
