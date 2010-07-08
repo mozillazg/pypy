@@ -265,7 +265,22 @@ def make_array(mytype):
             space = self.space
             return space.wrap(StringLikeBuffer(space, self.descr_tostring()))
         descr_buffer.unwrap_spec = ['self']
-        
+
+        def descr_isarray(self, w_other):
+            return self.space.wrap(isinstance(w_other, W_ArrayBase))
+
+        def descr_reduce(self):
+            space=self.space
+            if self.len>0:
+                args=[space.wrap(self.typecode), self.descr_tostring()]
+            else:
+                args=[space.wrap(self.typecode)]
+            from pypy.interpreter.mixedmodule import MixedModule
+            w_mod    = space.getbuiltinmodule('array')
+            mod      = space.interp_w(MixedModule, w_mod)
+            w_new_inst = mod.get('array')
+            return space.newtuple([w_new_inst, space.newtuple(args)])
+
 
 
     def descr_itemsize(space, self):
@@ -308,6 +323,16 @@ def make_array(mytype):
         index        = appmethod('index'),
         remove       = appmethod('remove'),
         reverse      = appmethod('reverse'),
+
+        __eq__       = appmethod('__eq__'),
+        __ne__       = appmethod('__ne__'),
+        __lt__       = appmethod('__lt__'),
+        __gt__       = appmethod('__gt__'),
+        __le__       = appmethod('__le__'),
+        __ge__       = appmethod('__ge__'),
+        
+        _isarray     = interp2app(W_Array.descr_isarray),
+        __reduce__   = interp2app(W_Array.descr_reduce),
         
         
         # TODO:

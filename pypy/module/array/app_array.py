@@ -116,3 +116,51 @@ if True:
         self._setlen(0)
         self.fromlist(lst)
 
+    def __eq__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) == buffer(other._data)
+        else:
+            return self.tolist() == other.tolist()
+
+    def __ne__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) != buffer(other._data)
+        else:
+            return self.tolist() != other.tolist()
+
+    def __lt__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) < buffer(other._data)
+        else:
+            return self.tolist() < other.tolist()
+
+    def __gt__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) > buffer(other._data)
+        else:
+            return self.tolist() > other.tolist()
+
+    def __le__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) <= buffer(other._data)
+        else:
+            return self.tolist() <= other.tolist()
+
+    def __ge__(self, other):
+        if not self._isarray(other):
+            return NotImplemented
+        if self.typecode == 'c':
+            return buffer(self._data) >= buffer(other._data)
+        else:
+            return self.tolist() >= other.tolist()
+

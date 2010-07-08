@@ -332,8 +332,59 @@ class AppTestArray:
             assert repr(a) == "array('i', [1, 2, 1, 2, 1])"
             a.remove(1)
             assert repr(a) == "array('i', [2, 1, 2, 1])"
-        
-        
+
+    def test_compare(self):
+        a = self.array('i', [1, 2, 3])
+        b = self.array('i', [1, 2, 3])
+        c = self.array('i', [1, 3, 2])
+
+        assert (a == a) is True
+        assert (a == b) is True
+        assert (b == a) is True
+        assert (a == c) is False
+        assert (c == a) is False
+
+        assert (a != a) is False
+        assert (a != b) is False
+        assert (b != a) is False
+        assert (a != c) is True
+        assert (c != a) is True
+
+        assert (a < a) is False
+        assert (a < b) is False
+        assert (b < a) is False
+        assert (a < c) is True
+        assert (c < a) is False
+
+        assert (a > a) is False
+        assert (a > b) is False
+        assert (b > a) is False
+        assert (a > c) is False
+        assert (c > a) is True
+
+        assert (a <= a) is True
+        assert (a <= b) is True
+        assert (b <= a) is True
+        assert (a <= c) is True
+        assert (c <= a) is False
+
+        assert (a >= a) is True
+        assert (a >= b) is True
+        assert (b >= a) is True
+        assert (a >= c) is False
+        assert (c >= a) is True
+
+    def test_reduce(self):
+        import pickle
+        a = self.array('i', [1, 2, 3])
+        s = pickle.dumps(a,1)
+        b = pickle.loads(s)
+        assert a == b
+
+        a = self.array('l')
+        s = pickle.dumps(a,1)
+        b = pickle.loads(s)
+        assert len(b) == 0 and b.typecode == 'l'
 
     #FIXME
     #def test_type(self):
