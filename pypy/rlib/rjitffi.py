@@ -6,7 +6,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
-cache = [] # XXX global!
+cache = {} # XXX global!
 
 class CDLL(object):
     def __init__(self, name, load=True):
@@ -37,7 +37,6 @@ class _Get(object):
         self.args_type = args_type
         self.res_type = res_type
         self.cpu = cpu
-        self.looptoken = None
         lib = lib.handler
         bargs = []
 
@@ -47,14 +46,10 @@ class _Get(object):
             raise ValueError("Cannot find symbol %s", func)
         bargs.append(BoxInt())
 
-        # check if it's not already compiled
-        for func in cache:
-            if self.args_type == func.args_type and \
-               self.res_type == func.res_type:
-                self.looptoken = func.looptoken
-                break
-
-        if self.looptoken is None:
+        # grab from the cache if possible
+        try:
+            self.looptoken = cache[self.res_type][tuple(self.args_type)]
+        except KeyError:
             args = []
             for arg in self.args_type:
                 if arg == 'i':
@@ -95,7 +90,7 @@ class _Get(object):
             self.cpu.compile_loop(bargs, oplist, self.looptoken)
 
             # add to the cache
-            cache.append(_Func(self.args_type, self.res_type, self.looptoken))
+            cache[self.res_type] = { tuple(self.args_type) : self.looptoken }
         self.setup_stack()
 
     def call(self, push_result):
@@ -134,9 +129,3 @@ class _Get(object):
     def push_ref(self, value):
         self.cpu.set_future_value_ref(self.esp, value)
         self.esp += 1
-
-class _Func(object):
-    def __init__(self, args_type, res_type, looptoken):
-        self.args_type = args_type
-        self.res_type = res_type
-        self.looptoken = looptoken
