@@ -44,5 +44,5 @@ def f(img):
         sa+=img[i]
     return sa
 
-img=array(4)
+img=array('i',(1,2,3,4))
 print f(img)
