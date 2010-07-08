@@ -12,22 +12,22 @@ class FunctionExecutor(object):
 
 class VoidExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
-        capi.c_cppyy_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        capi.c_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.w_None
 
 class LongExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
-        result = capi.c_cppyy_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class DoubleExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
-        result = capi.c_cppyy_call_d(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        result = capi.c_call_d(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class CStringExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
-        lresult = capi.c_cppyy_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        lresult = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         ccpresult = rffi.cast(rffi.CCHARP, lresult)
         result = capi.charp2str_free(ccpresult)
         return space.wrap(result)

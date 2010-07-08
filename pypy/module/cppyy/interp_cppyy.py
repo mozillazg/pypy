@@ -31,7 +31,7 @@ def type_byname(space, name):
     except KeyError:
         pass
 
-    handle = capi.c_cppyy_get_typehandle(name)
+    handle = capi.c_get_typehandle(name)
     if handle:
         cpptype = W_CPPType(space, name, handle)
         state.cpptype_cache[name] = cpptype
@@ -154,11 +154,11 @@ class CPPFunction(CPPMethod):
 class CPPConstructor(CPPMethod):
     def call(self, cppthis, args_w):
         assert not cppthis
-        newthis = capi.c_cppyy_allocate(self.cpptype.handle)
+        newthis = capi.c_allocate(self.cpptype.handle)
         try:
             CPPMethod.call(self, newthis, args_w)
         except Exception, e:
-            capi.c_cppyy_deallocate(self.cpptype.handle, newthis)
+            capi.c_deallocate(self.cpptype.handle, newthis)
             raise
         return W_CCPInstance(self.cpptype, newthis)
 
@@ -252,7 +252,7 @@ class W_CPPType(Wrappable):
         # not constant, but as long as it corresponds to cpp_dynamic_type, the
         # function is still pure
         cppthis = cppthis_holder.cppthis
-        methgetter = capi.c_cppyy_get_methptr_getter(self.handle, method_index)
+        methgetter = capi.c_get_methptr_getter(self.handle, method_index)
         if not methgetter:
             raise NotImplementedError
         return methgetter(cppthis)
@@ -294,7 +294,7 @@ class W_CCPInstance(Wrappable):
         return overload.call(self.rawobject, args_w)
 
     def destruct(self):
-        capi.c_cppyy_destruct(self.cppclass.handle, self.rawobject)
+        capi.c_destruct(self.cppclass.handle, self.rawobject)
         self.rawobject = NULL_VOIDP
 
 W_CCPInstance.typedef = TypeDef(
