@@ -27,6 +27,7 @@ extern "C" {
     char* arg_type_method(cppyy_typehandle_t handle, int method_index, int index);
     int is_constructor(cppyy_typehandle_t handle, int method_index);
     int is_static(cppyy_typehandle_t handle, int method_index);
+    cppyy_typehandle_t dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self);
 
     void myfree(void* ptr);
 

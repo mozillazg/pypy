@@ -147,6 +147,12 @@ int is_static(cppyy_typehandle_t handle, int method_index) {
     return m.IsStatic();
 }
 
+cppyy_typehandle_t dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self) {
+    Reflex::Type t((Reflex::TypeName*)handle);
+    const Reflex::Object* obj = (const Reflex::Object*)self;
+    return t.DynamicType((*obj)).Id();
+}
+
 void myfree(void* ptr) {
     free(ptr);
 }
