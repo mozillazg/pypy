@@ -10,7 +10,7 @@ class FunctionExecutor(object):
         raise NotImplementedError("abstract base class")
 
 
-class VoidExecutor(object):
+class VoidExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         capi.c_cppyy_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.w_None
