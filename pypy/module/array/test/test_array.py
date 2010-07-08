@@ -310,6 +310,31 @@ class AppTestArray:
         raises(ValueError, self.array('i').tounicode)
         assert self.array('u', unicode('hello')).tounicode() == unicode('hello')
 
+    def test_buffer(self):
+        assert buffer(self.array('h', 'Hi'))[1] == 'i'
+
+    def test_list_methods(self):
+        assert repr(self.array('i')) == "array('i')"
+        assert repr(self.array('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
+        assert repr(self.array('h')) == "array('h')"
+        
+        a=self.array('i', [1, 2, 3, 1, 2, 1])
+        assert a.count(1) == 3
+        assert a.count(2) == 2
+        assert a.index(3) == 2
+        assert a.index(2) == 1
+
+        a.reverse()
+        assert repr(a) == "array('i', [1, 2, 1, 3, 2, 1])"
+
+        if False:
+            a.remove(3)
+            assert repr(a) == "array('i', [1, 2, 1, 2, 1])"
+            a.remove(1)
+            assert repr(a) == "array('i', [2, 1, 2, 1])"
+        
+        
+
     #FIXME
     #def test_type(self):
     #    for t in 'bBhHiIlLfdcu':
