@@ -287,6 +287,20 @@ class AppTestArray:
         a = self.array('i',[0,0,0])
         assert a.tostring() == '\x00'*3*a.itemsize
 
+        s = self.array('i', [1, 2, 3]).tostring()
+        assert '\x00' in s
+        assert '\x01' in s
+        assert '\x02' in s
+        assert '\x03' in s
+        a=self.array('i', s)
+        assert a[0]==1 and a[1]==2 and a[2]==3
+
+        from struct import unpack
+        values = (-129, 128, -128, 127, 0, 255, -1, 256, -32760, 32760)
+        s = self.array('i', values).tostring()
+        a=unpack('i'*len(values), s)
+        assert a==values
+                 
         #FXIME: How to test?
         #from cStringIO import StringIO
         #f=StringIO()
