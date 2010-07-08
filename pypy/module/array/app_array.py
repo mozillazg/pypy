@@ -1,4 +1,5 @@
-    
+import operator
+
 if True:
     def initiate(self, initializer):
         if initializer is not None:
@@ -84,7 +85,34 @@ if True:
             s+=struct.pack(self.typecode, self[i])
         return s
 
-
         
+    def __repr__(self):
+        if len(self) == 0:
+            return "array('%s')" % self.typecode
+        elif self.typecode == "c":
+            return "array('%s', %s)" % (self.typecode, repr(self.tostring()))
+        elif self.typecode == "u":
+            return "array('%s', %s)" % (self.typecode, repr(self.tounicode()))
+        else:
+            return "array('%s', %s)" % (self.typecode, repr(self.tolist()))
 
+    ##### list methods
     
+    def count(self, x):
+        """Return number of occurences of x in the array."""
+        return operator.countOf(self, x)
+    def index(self, x):
+        """Return index of first occurence of x in the array."""
+        return operator.indexOf(self, x)
+    
+    def remove(self, x):
+        """Remove the first occurence of x in the array."""
+        self.pop(self.index(x))
+        
+    def reverse(self):
+        """Reverse the order of the items in the array."""
+        lst = self.tolist()
+        lst.reverse()
+        self._setlen(0)
+        self.fromlist(lst)
+

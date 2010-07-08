@@ -254,9 +254,18 @@ def make_array(mytype):
         def descr_tostring(self):
             pbuf = rffi.cast(rffi.CCHARP, self.buffer)
             s = ''
-            for i in range(self.len * self.itemsize):
+            i=0
+            while i < self.len * self.itemsize:
                 s += pbuf[i]
+                i+=1
             return self.space.wrap(s)
+
+        def descr_buffer(self):
+            from pypy.interpreter.buffer import StringLikeBuffer
+            space = self.space
+            return space.wrap(StringLikeBuffer(space, self.descr_tostring()))
+        descr_buffer.unwrap_spec = ['self']
+        
 
 
     def descr_itemsize(space, self):
@@ -280,16 +289,34 @@ def make_array(mytype):
         fromstring   = interp2app(W_Array.descr_fromstring),
         fromunicode  = appmethod('fromunicode'),
         fromfile     = appmethod('fromfile'),
+        read         = appmethod('fromfile'),
         _fromfile    = appmethod('_fromfile'),
         fromlist     = appmethod('fromlist'),
         
         tolist       = interp2app(W_Array.descr_tolist),
         tounicode    = appmethod('tounicode'),
         tofile       = appmethod('tofile'),
+        write        = appmethod('tofile'),
         #tostring     = appmethod('tostring'),
         tostring     = interp2app(W_Array.descr_tostring),
 
         _setlen      = interp2app(W_Array.setlen),
+        __buffer__   = interp2app(W_Array.descr_buffer),
+
+        __repr__     = appmethod('__repr__'),
+        count        = appmethod('count'),
+        index        = appmethod('index'),
+        remove       = appmethod('remove'),
+        reverse      = appmethod('reverse'),
+        
+        
+        # TODO:
+        # __cmp__
+        #byteswap     =
+        #buffer_info  =
+        #__copy__     =
+        #__reduce__   =
+        # insert, pop, 
     )
 
     mytype.w_class = W_Array
