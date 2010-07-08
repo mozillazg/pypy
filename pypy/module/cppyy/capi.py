@@ -33,13 +33,17 @@ c_cppyy_get_typehandle = rffi.llexternal(
     [rffi.CCHARP], C_TYPEHANDLE,
     compilation_info=eci)
 
-c_callstatic_l = rffi.llexternal(
-    "callstatic_l",
-    [C_TYPEHANDLE, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
+c_cppyy_allocate = rffi.llexternal(
+    "cppyy_allocate",
+    [C_TYPEHANDLE], rffi.VOIDP,
     compilation_info=eci)
-c_cppyy_construct = rffi.llexternal(
-    "cppyy_construct",
-    [C_TYPEHANDLE, rffi.INT, rffi.VOIDPP], C_OBJECT,
+c_cppyy_deallocate = rffi.llexternal(
+    "cppyy_deallocate",
+    [C_TYPEHANDLE, C_OBJECT], rffi.VOIDP,
+    compilation_info=eci)
+c_cppyy_call_v = rffi.llexternal(
+    "cppyy_call_v",
+    [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], lltype.Void,
     compilation_info=eci)
 c_cppyy_call_l = rffi.llexternal(
     "cppyy_call_l",

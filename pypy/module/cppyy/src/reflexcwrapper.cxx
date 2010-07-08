@@ -9,17 +9,25 @@ cppyy_typehandle_t cppyy_get_typehandle(const char* class_name) {
 }
 
 
-cppyy_object_t cppyy_construct(cppyy_typehandle_t handle, int numargs, void* args[]) {
+void* cppyy_allocate(cppyy_typehandle_t handle) {
+    return Reflex::Type((Reflex::TypeName*)handle).Allocate();
+}
+
+void cppyy_deallocate(cppyy_typehandle_t handle, cppyy_object_t instance) {
+    Reflex::Type((Reflex::TypeName*)handle).Deallocate(instance);
+}
+
+void cppyy_call_v(cppyy_typehandle_t handle, int method_index,
+                  cppyy_object_t self, int numargs, void* args[]) {
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
-    std::vector<Reflex::Type> argtypes;
-    argtypes.reserve(numargs);
-    for (int i = 0; i < numargs; i++) {
-        argtypes.push_back(Reflex::Type::ByName("int"));
+    Reflex::Member m = t.FunctionMemberAt(method_index);
+    if (self) {
+        Reflex::Object o(t, self);
+        m.Invoke(o, 0, arguments);
+    } else {
+        m.Invoke(0, arguments);
     }
-    Reflex::Type constructor_type = Reflex::FunctionTypeBuilder(
-            Reflex::Type::ByName("void"), argtypes);
-    return t.Construct(constructor_type, arguments).Address();
 }
 
 long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
