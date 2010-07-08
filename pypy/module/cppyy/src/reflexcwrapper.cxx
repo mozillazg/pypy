@@ -4,12 +4,12 @@
 #include <iostream>
 
 
-void* cppyy_get_typehandle(const char* class_name) {
+cppyy_typehandle_t cppyy_get_typehandle(const char* class_name) {
    return Reflex::Type::ByName(class_name).Id();
 }
 
 
-void* cppyy_construct(void* handle, int numargs, void* args[]) {
+cppyy_object_t cppyy_construct(cppyy_typehandle_t handle, int numargs, void* args[]) {
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
     std::vector<Reflex::Type> argtypes;
@@ -22,8 +22,8 @@ void* cppyy_construct(void* handle, int numargs, void* args[]) {
     return t.Construct(constructor_type, arguments).Address();
 }
 
-long cppyy_call_l(void* handle, int method_index,
-	          void* self, int numargs, void* args[]) {
+long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
+                  cppyy_object_t self, int numargs, void* args[]) {
     long result;
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
@@ -37,8 +37,8 @@ long cppyy_call_l(void* handle, int method_index,
     return result;
 }
 
-double cppyy_call_d(void* handle, int method_index,
-                    void* self, int numargs, void* args[]) {
+double cppyy_call_d(cppyy_typehandle_t handle, int method_index,
+                    cppyy_object_t self, int numargs, void* args[]) {
     double result;
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
@@ -52,7 +52,7 @@ double cppyy_call_d(void* handle, int method_index,
     return result;
 }   
 
-void cppyy_destruct(void* handle, void* self) {
+void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self) {
     Reflex::Type t((Reflex::TypeName*)handle);
     t.Destruct(self, true);
 }
@@ -68,7 +68,7 @@ static cppyy_methptrgetter_t get_methptr_getter(Reflex::Member m)
     return 0;
 }
 
-cppyy_methptrgetter_t cppyy_get_methptr_getter(void* handle, int method_index)
+cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int method_index)
 {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
@@ -76,7 +76,7 @@ cppyy_methptrgetter_t cppyy_get_methptr_getter(void* handle, int method_index)
 }
 
 
-int num_methods(void* handle) {
+int num_methods(cppyy_typehandle_t handle) {
     Reflex::Type t((Reflex::TypeName*)handle);
     for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
         Reflex::Member m = t.FunctionMemberAt(i);
@@ -91,7 +91,7 @@ int num_methods(void* handle) {
     return t.FunctionMemberSize();
 }
 
-char* method_name(void* handle, int method_index) {
+char* method_name(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     std::string name = m.Name();
@@ -100,7 +100,7 @@ char* method_name(void* handle, int method_index) {
     return name_char;
 }
 
-char* result_type_method(void* handle, int method_index) {
+char* result_type_method(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type rt = m.TypeOf().ReturnType();
@@ -110,13 +110,13 @@ char* result_type_method(void* handle, int method_index) {
     return name_char;
 }
 
-int num_args_method(void* handle, int method_index) {
+int num_args_method(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.FunctionParameterSize();
 }
 
-char* arg_type_method(void* handle, int method_index, int arg_index) {
+char* arg_type_method(cppyy_typehandle_t handle, int method_index, int arg_index) {
 
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
@@ -127,13 +127,13 @@ char* arg_type_method(void* handle, int method_index, int arg_index) {
     return name_char;
 }
 
-int is_constructor(void* handle, int method_index) {
+int is_constructor(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.IsConstructor();
 }
 
-int is_static(void* handle, int method_index) {
+int is_static(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.IsStatic();

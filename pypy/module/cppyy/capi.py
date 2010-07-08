@@ -22,67 +22,70 @@ eci = ExternalCompilationInfo(
     use_cpp_linker=True,
 )
 
-C_METHPTRGETTER = lltype.FuncType([rffi.VOIDP], rffi.VOIDP)
+C_TYPEHANDLE = rffi.VOIDP
+C_OBJECT = rffi.VOIDP
+
+C_METHPTRGETTER = lltype.FuncType([C_OBJECT], rffi.VOIDP)
 C_METHPTRGETTER_PTR = lltype.Ptr(C_METHPTRGETTER)
 
 c_cppyy_get_typehandle = rffi.llexternal(
     "cppyy_get_typehandle",
-    [rffi.CCHARP], rffi.VOIDP,
+    [rffi.CCHARP], C_TYPEHANDLE,
     compilation_info=eci)
 
 c_callstatic_l = rffi.llexternal(
     "callstatic_l",
-    [rffi.VOIDP, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
+    [C_TYPEHANDLE, rffi.INT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
 c_cppyy_construct = rffi.llexternal(
     "cppyy_construct",
-    [rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.VOIDP,
+    [C_TYPEHANDLE, rffi.INT, rffi.VOIDPP], C_OBJECT,
     compilation_info=eci)
 c_cppyy_call_l = rffi.llexternal(
     "cppyy_call_l",
-    [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.LONG,
+    [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
 c_cppyy_call_d = rffi.llexternal(
     "cppyy_call_d",
-    [rffi.VOIDP, rffi.INT, rffi.VOIDP, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
+    [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
     compilation_info=eci)
 c_cppyy_destruct = rffi.llexternal(
     "cppyy_destruct",
-    [rffi.VOIDP, rffi.VOIDP], lltype.Void,
+    [C_TYPEHANDLE, C_OBJECT], lltype.Void,
     compilation_info=eci)
 c_cppyy_get_methptr_getter = rffi.llexternal(
     "cppyy_get_methptr_getter",
-    [rffi.VOIDP, rffi.INT], C_METHPTRGETTER_PTR,
+    [C_TYPEHANDLE, rffi.INT], C_METHPTRGETTER_PTR,
     compilation_info=eci)
 
 
 c_num_methods = rffi.llexternal(
     "num_methods",
-    [rffi.VOIDP], rffi.INT,
+    [C_TYPEHANDLE], rffi.INT,
     compilation_info=eci)
 c_method_name = rffi.llexternal(
     "method_name",
-    [rffi.VOIDP, rffi.INT], rffi.CCHARP,
+    [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_result_type_method = rffi.llexternal(
     "result_type_method",
-    [rffi.VOIDP, rffi.INT], rffi.CCHARP,
+    [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_num_args_method = rffi.llexternal(
     "num_args_method",
-    [rffi.VOIDP, rffi.INT], rffi.INT,
+    [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_arg_type_method = rffi.llexternal(
     "arg_type_method",
-    [rffi.VOIDP, rffi.INT, rffi.INT], rffi.CCHARP,
+    [C_TYPEHANDLE, rffi.INT, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
 c_is_constructor = rffi.llexternal(
     "is_constructor",
-    [rffi.VOIDP, rffi.INT], rffi.INT,
+    [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_is_static = rffi.llexternal(
     "is_static",
-    [rffi.VOIDP, rffi.INT], rffi.INT,
+    [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
 c_myfree = rffi.llexternal(
     "myfree",
