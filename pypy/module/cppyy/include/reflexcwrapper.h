@@ -20,18 +20,19 @@ extern "C" {
     void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self);
     cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int method_index);
 
-    int num_methods(cppyy_typehandle_t handle);
-    char* method_name(cppyy_typehandle_t handle, int method_index);
-    char* result_type_method(cppyy_typehandle_t handle, int method_index);
-    int num_args_method(cppyy_typehandle_t handle, int method_index);
-    char* arg_type_method(cppyy_typehandle_t handle, int method_index, int index);
-    int is_constructor(cppyy_typehandle_t handle, int method_index);
-    int is_static(cppyy_typehandle_t handle, int method_index);
-    int is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2);
+    int cppyy_num_methods(cppyy_typehandle_t handle);
+    char* cppyy_method_name(cppyy_typehandle_t handle, int method_index);
+    char* cppyy_result_type_method(cppyy_typehandle_t handle, int method_index);
+    int cppyy_num_args_method(cppyy_typehandle_t handle, int method_index);
+    char* cppyy_arg_type_method(cppyy_typehandle_t handle, int method_index, int index);
 
-    cppyy_typehandle_t dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self);
+    int cppyy_is_constructor(cppyy_typehandle_t handle, int method_index);
+    int cppyy_is_static(cppyy_typehandle_t handle, int method_index);
+    int cppyy_is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2);
 
-    void myfree(void* ptr);
+    cppyy_typehandle_t cppyy_dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self);
+
+    void cppyy_free(void* ptr);
 
 #ifdef __cplusplus
 }

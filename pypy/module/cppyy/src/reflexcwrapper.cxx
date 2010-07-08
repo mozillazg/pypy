@@ -17,6 +17,7 @@ void cppyy_deallocate(cppyy_typehandle_t handle, cppyy_object_t instance) {
     Reflex::Type((Reflex::TypeName*)handle).Deallocate(instance);
 }
 
+
 void cppyy_call_v(cppyy_typehandle_t handle, int method_index,
                   cppyy_object_t self, int numargs, void* args[]) {
     std::vector<void*> arguments(args, args+numargs);
@@ -65,8 +66,8 @@ void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self) {
     t.Destruct(self, true);
 }
 
-static cppyy_methptrgetter_t get_methptr_getter(Reflex::Member m)
-{
+
+static cppyy_methptrgetter_t get_methptr_getter(Reflex::Member m) {
   Reflex::PropertyList plist = m.Properties();
   if (plist.HasProperty("MethPtrGetter")) {
     Reflex::Any& value = plist.PropertyValue("MethPtrGetter");
@@ -84,7 +85,7 @@ cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int me
 }
 
 
-int num_methods(cppyy_typehandle_t handle) {
+int cppyy_num_methods(cppyy_typehandle_t handle) {
     Reflex::Type t((Reflex::TypeName*)handle);
     for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
         Reflex::Member m = t.FunctionMemberAt(i);
@@ -99,7 +100,7 @@ int num_methods(cppyy_typehandle_t handle) {
     return t.FunctionMemberSize();
 }
 
-char* method_name(cppyy_typehandle_t handle, int method_index) {
+char* cppyy_method_name(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     std::string name = m.Name();
@@ -108,7 +109,7 @@ char* method_name(cppyy_typehandle_t handle, int method_index) {
     return name_char;
 }
 
-char* result_type_method(cppyy_typehandle_t handle, int method_index) {
+char* cppyy_result_type_method(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type rt = m.TypeOf().ReturnType();
@@ -118,14 +119,13 @@ char* result_type_method(cppyy_typehandle_t handle, int method_index) {
     return name_char;
 }
 
-int num_args_method(cppyy_typehandle_t handle, int method_index) {
+int cppyy_num_args_method(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.FunctionParameterSize();
 }
 
-char* arg_type_method(cppyy_typehandle_t handle, int method_index, int arg_index) {
-
+char* cppyy_arg_type_method(cppyy_typehandle_t handle, int method_index, int arg_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type at = m.TypeOf().FunctionParameterAt(arg_index);
@@ -135,19 +135,20 @@ char* arg_type_method(cppyy_typehandle_t handle, int method_index, int arg_index
     return name_char;
 }
 
-int is_constructor(cppyy_typehandle_t handle, int method_index) {
+
+int cppyy_is_constructor(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.IsConstructor();
 }
 
-int is_static(cppyy_typehandle_t handle, int method_index) {
+int cppyy_is_static(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.IsStatic();
 }
 
-int is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2) {
+int cppyy_is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2) {
     if (h1 == h2)
         return 1;
     Reflex::Type t1((Reflex::TypeName*)h1);
@@ -155,12 +156,13 @@ int is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2) {
     return (int)t2.HasBase(t1);
 }
 
-cppyy_typehandle_t dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self) {
+cppyy_typehandle_t cppyy_dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self) {
     Reflex::Type t((Reflex::TypeName*)handle);
     const Reflex::Object* obj = (const Reflex::Object*)self;
     return t.DynamicType((*obj)).Id();
 }
 
-void myfree(void* ptr) {
+
+void cppyy_free(void* ptr) {
     free(ptr);
 }
