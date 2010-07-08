@@ -118,7 +118,7 @@ class CPPConstructor(CPPFunction):
         args = self.prepare_arguments(args_w)
         result = capi.c_cppyy_construct(self.cpptype.handle, len(args_w), args)
         self.free_arguments(args)
-        return W_CPPObject(self.cpptype, result)
+        return W_CCPInstance(self.cpptype, result)
 
 
 class W_CPPOverload(Wrappable):
@@ -216,7 +216,7 @@ W_CPPType.typedef = TypeDef(
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
 )
 
-class W_CPPObject(Wrappable):
+class W_CCPInstance(Wrappable):
     _immutable_ = True
     def __init__(self, cppclass, rawobject):
         self.space = cppclass.space
@@ -237,8 +237,8 @@ class W_CPPObject(Wrappable):
         capi.c_cppyy_destruct(self.cppclass.handle, self.rawobject)
         self.rawobject = NULL_VOIDP
 
-W_CPPObject.typedef = TypeDef(
-    'CPPObject',
-    invoke = interp2app(W_CPPObject.invoke, unwrap_spec=['self', str, 'args_w']),
-    destruct = interp2app(W_CPPObject.destruct, unwrap_spec=['self']),
+W_CCPInstance.typedef = TypeDef(
+    'CPPInstance',
+    invoke = interp2app(W_CCPInstance.invoke, unwrap_spec=['self', str, 'args_w']),
+    destruct = interp2app(W_CCPInstance.destruct, unwrap_spec=['self']),
 )
