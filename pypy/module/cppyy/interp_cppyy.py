@@ -20,19 +20,22 @@ def load_lib(space, name):
     return W_CPPLibrary(space, cdll)
 load_lib.unwrap_spec = [ObjSpace, str]
 
+def type_byname(space, name):
+    handle = capi.c_cppyy_get_typehandle(name)
+    if handle:
+        return W_CPPType(space, name, handle)
+    raise OperationError(space.w_TypeError, space.wrap("no such C++ class %s" % name))
+type_byname.unwrap_spec = [ObjSpace, str]
+
+
 class W_CPPLibrary(Wrappable):
     _immutable_ = True
     def __init__(self, space, cdll):
         self.cdll = cdll
         self.space = space
 
-    def type_byname(self, name):
-        handle = capi.c_cppyy_get_typehandle(name)
-        return W_CPPType(self, name, handle)
-
 W_CPPLibrary.typedef = TypeDef(
     'CPPLibrary',
-    type_byname = interp2app(W_CPPLibrary.type_byname, unwrap_spec=['self', str]),
 )
 
 class CPPMethod(object):
@@ -118,13 +121,16 @@ class CPPConstructor(CPPFunction):
         return W_CPPObject(self.cpptype, result)
 
 
-class CPPOverload(object):
+class W_CPPOverload(Wrappable):
     _immutable_ = True
     _immutable_fields_ = ["functions[*]"]
     def __init__(self, space, func_name, functions):
         self.space = space
         self.func_name = func_name
         self.functions = debug.make_sure_not_resized(functions)
+
+    def is_static(self):
+        return self.space.wrap(isinstance(self.functions[0], CPPFunction))
 
     @jit.unroll_safe
     def call(self, cppthis, args_w):
@@ -142,15 +148,19 @@ class CPPOverload(object):
         raise OperationError(space.w_TypeError, space.wrap("none of the overloads matched"))
 
     def __repr__(self):
-        return "CPPOverload(%s, %s)" % (self.func_name, self.functions)
+        return "W_CPPOverload(%s, %s)" % (self.func_name, self.functions)
+
+W_CPPOverload.typedef = TypeDef(
+    'CPPOverload',
+    is_static = interp2app(W_CPPOverload.is_static, unwrap_spec=['self']),
+)
 
 
 class W_CPPType(Wrappable):
-    _immutable_fields_ = ["cpplib", "name","handle"]
+    _immutable_fields_ = ["name","handle"]
 
-    def __init__(self, cpplib, name, handle):
-        self.space = cpplib.space
-        self.cpplib = cpplib
+    def __init__(self, space, name, handle):
+        self.space = space
         self.name = name
         self.handle = handle
         self.function_members = {}
@@ -165,7 +175,7 @@ class W_CPPType(Wrappable):
             overload = args_temp.setdefault(func_member_name, [])
             overload.append(cppfunction)
         for name, functions in args_temp.iteritems():
-            overload = CPPOverload(self.space, name, functions[:])
+            overload = W_CPPOverload(self.space, name, functions[:])
             self.function_members[name] = overload
 
     def _make_cppfunction(self, method_index):
@@ -183,6 +193,9 @@ class W_CPPType(Wrappable):
             cls = CPPMethod
         return cls(self, method_index, result_type, argtypes)
 
+    def get_function_members(self):
+        return self.space.newlist([self.space.wrap(name) for name in self.function_members])
+
     @jit.purefunction
     def get_overload(self, name):
         return self.function_members[name]
@@ -197,6 +210,8 @@ class W_CPPType(Wrappable):
 
 W_CPPType.typedef = TypeDef(
     'CPPType',
+    get_function_members = interp2app(W_CPPType.get_function_members, unwrap_spec=['self']),
+    get_overload = interp2app(W_CPPType.get_overload, unwrap_spec=['self', str]),
     invoke = interp2app(W_CPPType.invoke, unwrap_spec=['self', str, 'args_w']),
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
 )
