@@ -74,9 +74,10 @@ class CPPMethod(object):
                                                  rffi.INT))
     def do_hack_call(self, cppthis, args_w):
         # hack: only for methods 'int m(int)'
+        space = self.space
         if len(args_w) != 1:
             raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
-        arg = self.space.c_int_w(args_w[0])
+        arg = space.c_int_w(args_w[0])
         methgetter = capi.c_cppyy_get_methptr_getter(self.cpptype.handle,
                                                      self.method_index)
         if not methgetter:
@@ -84,7 +85,7 @@ class CPPMethod(object):
         funcptr = methgetter(cppthis)
         funcptr = rffi.cast(self.INT_2_INT_FNPTR, funcptr)
         result = funcptr(cppthis, arg)
-        return self.space.wrap(rffi.cast(lltype.Signed, result))
+        return space.wrap(rffi.cast(lltype.Signed, result))
 
     def _build_converters(self):
         self.arg_converters = [converter.get_converter(arg_type)
