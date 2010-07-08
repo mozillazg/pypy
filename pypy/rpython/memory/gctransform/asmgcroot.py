@@ -415,11 +415,12 @@ def _compare_gcmap_entries(addr1, addr2):
     key1 = addr1.address[0]
     key2 = addr2.address[0]
     if key1 < key2:
-        return -1
+        result = -1
     elif key1 == key2:
-        return 0
+        result = 0
     else:
-        return 1
+        result = 1
+    return rffi.cast(rffi.INT, result)
 
 # ____________________________________________________________
 
