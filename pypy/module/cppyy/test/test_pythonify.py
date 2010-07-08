@@ -70,9 +70,9 @@ class AppTestPYTHONIFY:
 
         raises(TypeError, 'example01_class.staticStrcpy(1.)')
 
-    def test_ConstrucingAndCalling(self):
+    def test_ConstructingAndCalling(self):
         """Test object and method calls."""
-        import cppyy, sys
+        import cppyy
         example01_class = cppyy.gbl.example01
         assert example01_class.getCount() == 0
         instance = example01_class(7)
@@ -114,6 +114,22 @@ class AppTestPYTHONIFY:
         assert res == "54"
         res = instance.addToStringValue("-12")
         assert res == "30"
+
+        res = instance.staticAddOneToInt(1L)
+        assert res == 2
+
         instance.destruct()
         assert example01_class.getCount() == 0
 
+    def testPassingOfAnObjectByPointer(self):
+        import cppyy
+        example01_class = cppyy.gbl.example01
+        payload_class = cppyy.gbl.payload
+
+        e = example01_class(14)
+        pl = payload_class(3.14)
+
+
+        pl.destruct()
+        e.destruct()
+        assert example01_class.getCount() == 0

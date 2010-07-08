@@ -11,7 +11,10 @@ extern "C" {
 
     cppyy_typehandle_t cppyy_get_typehandle(const char* class_name);
 
-    cppyy_object_t cppyy_construct(cppyy_typehandle_t handle, int numargs, void* args[]);
+    void* cppyy_allocate(cppyy_typehandle_t handle);
+    void cppyy_deallocate(cppyy_typehandle_t handle, cppyy_object_t instance);
+
+    void cppyy_call_v(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
     long cppyy_call_l(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
     double cppyy_call_d(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
     void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self);

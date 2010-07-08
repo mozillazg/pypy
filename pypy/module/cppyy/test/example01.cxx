@@ -4,6 +4,22 @@
 #include <stdlib.h>
 #include <string.h>
 
+
+class payload {
+public:
+    payload(double d) : m_data(d) {}
+
+// cctor needed as long as we have no converter for const& objects
+    payload( const payload& p ) : m_data(p.m_data) {}
+
+    double getData() { return m_data; }
+    void setData(double d) { m_data = d; }
+
+private:
+    double m_data;
+};
+
+
 class example01 {
 public:
     static int count;
@@ -47,6 +63,9 @@ public:
         char* strout = (char*)malloc(::strlen(strin + 1));
         ::strcpy(strout, strin);
         return strout;
+    }
+    static void setPayload( payload* p, double d ) {
+        p->setData(d);
     }
 
     static int getCount() {

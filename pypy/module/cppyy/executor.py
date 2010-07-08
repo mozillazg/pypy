@@ -10,6 +10,11 @@ class FunctionExecutor(object):
         raise NotImplementedError("abstract base class")
 
 
+class VoidExecutor(object):
+    def execute(self, space, func, cppthis, num_args, args):
+        capi.c_cppyy_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return space.w_None
+
 class LongExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_cppyy_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
@@ -37,6 +42,7 @@ def get_executor(name):
  
  #  raise TypeError("no clue what %s is" % name)
 
+_executors["void"]                = VoidExecutor()
 _executors["int"]                 = LongExecutor()
 _executors["long"]                = LongExecutor()
 _executors["double"]              = DoubleExecutor()

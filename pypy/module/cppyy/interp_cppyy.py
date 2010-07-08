@@ -138,13 +138,16 @@ class CPPFunction(CPPMethod):
             self.free_arguments(args)
  
 
-class CPPConstructor(CPPFunction):
+class CPPConstructor(CPPMethod):
     def call(self, cppthis, args_w):
         assert not cppthis
-        args = self.prepare_arguments(args_w)
-        result = capi.c_cppyy_construct(self.cpptype.handle, len(args_w), args)
-        self.free_arguments(args)
-        return W_CCPInstance(self.cpptype, result)
+        newthis = capi.c_cppyy_allocate(self.cpptype.handle)
+        try:
+            CPPMethod.call(self, newthis, args_w)
+        except Exception, e:
+            capi.c_cppyy_deallocate(self.cpptype.handle, newthis)
+            raise
+        return W_CCPInstance(self.cpptype, newthis)
 
 
 class W_CPPOverload(Wrappable):
