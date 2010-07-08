@@ -35,10 +35,7 @@ class W_ArrayBase(Wrappable):
 class TypeCode(object):
     def __init__(self, itemtype, unwrap, canoverflow=False, signed=False):
         self.itemtype = itemtype
-        if itemtype is lltype.SingleFloat: # FUIXME
-            self.bytes = 4
-        else:
-            self.bytes = rffi.sizeof(itemtype)
+        self.bytes = rffi.sizeof(itemtype)
         self.arraytype = lltype.GcArray(itemtype)
         self.unwrap = unwrap
         self.signed = signed
@@ -53,67 +50,66 @@ class TypeCode(object):
 
 types = {
     'c': TypeCode(lltype.Char,        'str_w'),
-#    'u': TypeCode(lltype.UniChar,     'unicode_w'),
-#    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
-#    'B': TypeCode(rffi.UCHAR,         'int_w', True),
-#    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
-#    'H': TypeCode(rffi.USHORT,        'int_w', True),
-#    'i': TypeCode(rffi.INT,           'int_w', True, True),
-#    'I': TypeCode(rffi.UINT,          'int_w', True),
-#    'l': TypeCode(rffi.LONG,          'int_w', True, True),
-#    'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
-#    'f': TypeCode(lltype.SingleFloat, 'float_w'),
-#    'd': TypeCode(lltype.Float,       'float_w'),
+    'u': TypeCode(lltype.UniChar,     'unicode_w'),
+    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
+    'B': TypeCode(rffi.UCHAR,         'int_w', True),
+    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
+    'H': TypeCode(rffi.USHORT,        'int_w', True),
+    'i': TypeCode(rffi.INT,           'int_w', True, True),
+    'I': TypeCode(rffi.UINT,          'int_w', True), 
+    'l': TypeCode(rffi.LONG,          'int_w', True, True),
+    'L': TypeCode(rffi.ULONG,         'bigint_w'), # Overflow handled by rbigint.touint() which
+                                                   # corresponds to the C-type unsigned long
+    'f': TypeCode(lltype.SingleFloat, 'float_w'),
+    'd': TypeCode(lltype.Float,       'float_w'),
     }
 for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
 
-for thetypecode, thetype in types.items():
+def make_array(mytype):
     class W_Array(W_ArrayBase):
-        mytype = thetype
+        itemsize=mytype.bytes
+        typecode=mytype.typecode
         def __init__(self, space):
             self.space = space
             self.len = 0
-            self.buffer = lltype.nullptr(self.mytype.arraytype)
+            self.buffer = lltype.nullptr(mytype.arraytype)
 
         def item_w(self, w_item):
             space = self.space
-            unwrap = getattr(space, self.mytype.unwrap)
+            unwrap = getattr(space, mytype.unwrap)
             item = unwrap(w_item)
-            if self.mytype.unwrap == 'bigint_w':
+            if mytype.unwrap == 'bigint_w':
                 try:
-                    if self.mytype.signed:
-                        item = item.tolonglong()
-                    else:
-                        item = item.toulonglong()
+                    item = item.touint()
                 except (ValueError, OverflowError):
-                    msg = 'unsigned %d-byte integer out of range' % self.mytype.bytes
+                    msg = 'unsigned %d-byte integer out of range' % mytype.bytes
                     raise OperationError(space.w_OverflowError, space.wrap(msg))
-            elif self.mytype.unwrap == 'str_w' or self.mytype.unwrap == 'unicode_w':
+            elif mytype.unwrap == 'str_w' or mytype.unwrap == 'unicode_w':
                 if len(item) != 1:
                     msg = 'array item must be char'
                     raise OperationError(space.w_TypeError, space.wrap(msg))
                 item=item[0]
 
-            if self.mytype.canoverflow:
+            if mytype.canoverflow:
                 msg = None
-                if self.mytype.signed:
-                    if item < -1 << (self.mytype.bytes * 8 - 1):
-                        msg = 'signed %d-byte integer is less than minimum' % self.mytype.bytes
-                    elif item > (1 << (self.mytype.bytes * 8 - 1)) - 1:
-                        msg = 'signed %d-byte integer is greater than maximum' % self.mytype.bytes
+                if mytype.signed:
+                    if item < -1 << (mytype.bytes * 8 - 1):
+                        msg = 'signed %d-byte integer is less than minimum' % mytype.bytes
+                    elif item > (1 << (mytype.bytes * 8 - 1)) - 1:
+                        msg = 'signed %d-byte integer is greater than maximum' % mytype.bytes
                 else:
                     if item < 0:
-                        msg = 'unsigned %d-byte integer is less than minimum' % self.mytype.bytes
-                    elif item > (1 << (self.mytype.bytes * 8)) - 1:
-                        msg = 'unsigned %d-byte integer is greater than maximum' % self.mytype.bytes
+                        msg = 'unsigned %d-byte integer is less than minimum' % mytype.bytes
+                    elif item > (1 << (mytype.bytes * 8)) - 1:
+                        msg = 'unsigned %d-byte integer is greater than maximum' % mytype.bytes
                 if msg is not None:
                     raise OperationError(space.w_OverflowError, space.wrap(msg))
-            return rffi.cast(self.mytype.itemtype, item)
+            return rffi.cast(mytype.itemtype, item)
 
 
         def setlen(self, size):
-            new_buffer = lltype.malloc(self.mytype.arraytype, size)
+            new_buffer = lltype.malloc(mytype.arraytype, size)
             for i in range(min(size,self.len)):
                 new_buffer[i] = self.buffer[i]
             self.buffer = new_buffer
@@ -130,16 +126,16 @@ for thetypecode, thetype in types.items():
             start, stop, step = space.decode_index(w_idx, self.len)
             if step==0:
                 item = self.buffer[start]
-                tc=self.mytype.typecode
+                tc=mytype.typecode
                 if tc == 'b' or tc == 'B' or tc == 'h' or tc == 'H' or tc == 'i' or tc == 'l':
                     item = rffi.cast(lltype.Signed, item)
-                elif self.mytype.typecode == 'f':
+                elif mytype.typecode == 'f':
                     item = float(item)
                 return self.space.wrap(item)
             else:
                 size = (stop - start) / step
                 if (stop - start) % step > 0: size += 1
-                w_a=self.mytype.w_class(self.space)
+                w_a=mytype.w_class(self.space)
                 w_a.setlen(size)
                 j=0
                 for i in range(start, stop, step):
@@ -178,7 +174,7 @@ for thetypecode, thetype in types.items():
         def descr_extend(self, w_iterable):
             space=self.space
             if isinstance(w_iterable, W_ArrayBase):
-                if self.mytype.typecode != w_iterable.mytype.typecode:
+                if mytype.typecode != w_iterable.typecode:
                     msg = "can only extend with array of same kind"
                     raise OperationError(space.w_TypeError, space.wrap(msg))
             w_iterator = space.iter(w_iterable)
@@ -199,36 +195,35 @@ for thetypecode, thetype in types.items():
                 item = self.item_w(w_item)
                 self.buffer[start] = item
             else:
-                if isinstance(w_item, W_ArrayBase):
-                    if self.mytype.typecode == w_item.mytype.typecode:
-                        size = (stop - start) / step
-                        if (stop - start) % step > 0: size += 1
-                        if w_item.len != size: # FIXME: Support for step=1
-                            msg = ('attempt to assign array of size %d to ' + 
-                                   'slice of size %d') % (w_item.len, size)
-                            raise OperationError(self.space.w_ValueError,
-                                                 self.space.wrap(msg))
-                        j=0
-                        for i in range(start, stop, step):
-                            self.buffer[i]=w_item.buffer[j]
-                            j+=1
-                        return
+                if isinstance(w_item, W_Array): # Implies mytype.typecode == w_item.typecode
+                    size = (stop - start) / step
+                    if (stop - start) % step > 0: size += 1
+                    if w_item.len != size: # FIXME: Support for step=1
+                        msg = ('attempt to assign array of size %d to ' + 
+                               'slice of size %d') % (w_item.len, size)
+                        raise OperationError(self.space.w_ValueError,
+                                             self.space.wrap(msg))
+                    j=0
+                    for i in range(start, stop, step):
+                        self.buffer[i]=w_item.buffer[j]
+                        j+=1
+                    return
                 msg='can only assign array to array slice'
                 raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
         def descr_fromstring(self, s):
-            if len(s)%self.mytype.bytes !=0:
+            if len(s)%mytype.bytes !=0:
                 msg = 'string length not a multiple of item size'
                 raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
             oldlen = self.len
-            new = len(s) / self.mytype.bytes
+            new = len(s) / mytype.bytes
             self.setlen(oldlen + new)
             for i in range(new):
-                p = i * self.mytype.bytes
-                item=runpack(self.mytype.typecode, s[p:p + self.mytype.bytes])
+                p = i * mytype.bytes
+                item=runpack(mytype.typecode, s[p:p + mytype.bytes])
                 #self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
-                self.buffer[oldlen + i]=rffi.cast(self.mytype.itemtype, item)
+                self.buffer[oldlen + i]=rffi.cast(mytype.itemtype, item)
         descr_fromstring.unwrap_spec = ['self', str]
 
         def descr_tolist(self):
@@ -242,13 +237,13 @@ for thetypecode, thetype in types.items():
 
 
     def descr_itemsize(space, self):
-        return space.wrap(self.mytype.bytes)
+        return space.wrap(self.itemsize)
     def descr_typecode(space, self):
-        return space.wrap(self.mytype.typecode)
+        return space.wrap(self.typecode)
 
-    W_Array.__name__ = 'W_ArrayType_'+thetypecode
+    W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     W_Array.typedef = TypeDef(
-        'ArrayType_'+thetypecode,
+        'ArrayType_'+mytype.typecode,
         append       = interp2app(W_Array.descr_append),
         __len__      = interp2app(W_Array.descr_len),
         __getitem__  = interp2app(W_Array.descr_getitem),
@@ -258,7 +253,7 @@ for thetypecode, thetype in types.items():
         typecode     = GetSetProperty(descr_typecode, cls=W_Array),
         extend       = interp2app(W_Array.descr_extend),
 
-        _fromsequence = interp2app(W_Array.descr_fromsequence),
+        _fromsequence= interp2app(W_Array.descr_fromsequence),
         fromstring   = interp2app(W_Array.descr_fromstring),
         fromunicode  = appmethod('fromunicode'),
         fromfile     = appmethod('fromfile'),
@@ -273,8 +268,10 @@ for thetypecode, thetype in types.items():
         _setlen      = interp2app(W_Array.setlen),
     )
 
-    thetype.w_class = W_Array
+    mytype.w_class = W_Array
 
+for mytype in types.values():
+    make_array(mytype)
 
 initiate=app.interphook('initiate')
 def array(space, typecode, w_initializer=None):
