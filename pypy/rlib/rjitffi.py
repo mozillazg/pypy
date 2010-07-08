@@ -98,20 +98,20 @@ class _Get(object):
             cache.append(_Func(self.args_type, self.res_type, self.looptoken))
         self.setup_stack()
 
-    def call(self):
+    def call(self, push_result):
         res = self.cpu.execute_token(self.looptoken)
 
         if self.res_type == 'i':
-            r = ReturnInt(self.cpu.get_latest_value_int(0))
+            r = push_result(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
-            r = ReturnFloat(self.cpu.get_latest_value_float(0))
+            r = push_result(self.cpu.get_latest_value_float(0))
         elif self.res_type == 'p':
-            r = ReturnPtr(self.cpu.get_latest_value_ref(0))
+            r = push_result(self.cpu.get_latest_value_ref(0))
         elif self.res_type == 'v':
-            r = ReturnNone(None)
+            r = None
         else:
             raise ValueError(self.res_type)
-
+        
         self.setup_stack() # clean up the stack
         return r
 
@@ -140,19 +140,3 @@ class _Func(object):
         self.args_type = args_type
         self.res_type = res_type
         self.looptoken = looptoken
-
-class Return(object):
-    def __init__(self, value):
-        self.value = value
-
-class ReturnInt(Return):
-    pass
-
-class ReturnFloat(Return):
-    pass
-
-class ReturnPtr(Return):
-    pass
-
-class ReturnNone(Return):
-    pass

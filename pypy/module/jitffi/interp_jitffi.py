@@ -91,8 +91,7 @@ class W_Get(Wrappable):
                             space.wrap('Unsupported type of argument: %s'
                                         % self.args_type[0]))
                 i += 1
-        res = self.rget.call()
-        return space.wrap(res.value)
+        return self.rget.call(space.wrap)
 
 def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
     try:
