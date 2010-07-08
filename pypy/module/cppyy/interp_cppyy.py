@@ -50,16 +50,41 @@ class CPPMethod(object):
         self.arg_types = arg_types
         self.executor = executor.get_executor( result_type )
         self.arg_converters = None
+        # <hack>
+        self.hack_call = arg_types == ['int'] and result_type == 'int'
+        # </hack>
 
     def call(self, cppthis, args_w):
         if self.executor is None:
             raise OperationError(self.space.w_TypeError, self.space.wrap("return type not handled"))
+
+        if self.hack_call:
+            try:
+                return self.do_hack_call(cppthis, args_w)
+            except NotImplementedError:
+                pass
 
         args = self.prepare_arguments(args_w)
         try:
             return self.executor.execute(self.space, self, cppthis, len(args_w), args)
         finally:
             self.free_arguments(args)
+
+    INT_2_INT_FNPTR = lltype.Ptr(lltype.FuncType([rffi.VOIDP, rffi.INT],
+                                                 rffi.INT))
+    def do_hack_call(self, cppthis, args_w):
+        # hack: only for methods 'int m(int)'
+        if len(args_w) != 1:
+            raise OperationError(space.w_TypeError, space.wrap("wrong number of args"))
+        arg = self.space.c_int_w(args_w[0])
+        methgetter = capi.c_cppyy_get_methptr_getter(self.cpptype.handle,
+                                                     self.method_index)
+        if not methgetter:
+            raise NotImplementedError
+        funcptr = methgetter(cppthis)
+        funcptr = rffi.cast(self.INT_2_INT_FNPTR, funcptr)
+        result = funcptr(cppthis, arg)
+        return self.space.wrap(rffi.cast(lltype.Signed, result))
 
     def _build_converters(self):
         self.arg_converters = [converter.get_converter(arg_type)
@@ -74,7 +99,6 @@ class CPPMethod(object):
             self._build_converters()
         args = lltype.malloc(rffi.CArray(rffi.VOIDP), len(args_w), flavor='raw')
         for i in range(len(args_w)):
-            argtype = self.arg_types[i]
             conv = self.arg_converters[i]
             w_arg = args_w[i]
             try:

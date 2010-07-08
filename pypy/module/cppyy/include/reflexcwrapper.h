@@ -5,12 +5,15 @@
 #ifdef __cplusplus
 extern "C" {
 #endif // ifdef __cplusplus
+    typedef void* (*cppyy_methptrgetter_t)(void*);
+
     void* cppyy_get_typehandle(const char* class_name);
 
     void* cppyy_construct(void* handle, int numargs, void* args[]);
     long cppyy_call_l(void* handle, int method_index, void* self, int numargs, void* args[]);
     double cppyy_call_d(void* handle, int method_index, void* self, int numargs, void* args[]);
     void cppyy_destruct(void* handle, void* self);
+    cppyy_methptrgetter_t cppyy_get_methptr_getter(void* handle, int method_index);
 
     int num_methods(void* handle);
     char* method_name(void* handle, int method_index);

@@ -22,6 +22,9 @@ eci = ExternalCompilationInfo(
     use_cpp_linker=True,
 )
 
+C_METHPTRGETTER = lltype.FuncType([rffi.VOIDP], rffi.VOIDP)
+C_METHPTRGETTER_PTR = lltype.Ptr(C_METHPTRGETTER)
+
 c_cppyy_get_typehandle = rffi.llexternal(
     "cppyy_get_typehandle",
     [rffi.CCHARP], rffi.VOIDP,
@@ -46,6 +49,10 @@ c_cppyy_call_d = rffi.llexternal(
 c_cppyy_destruct = rffi.llexternal(
     "cppyy_destruct",
     [rffi.VOIDP, rffi.VOIDP], lltype.Void,
+    compilation_info=eci)
+c_cppyy_get_methptr_getter = rffi.llexternal(
+    "cppyy_get_methptr_getter",
+    [rffi.VOIDP, rffi.INT], C_METHPTRGETTER_PTR,
     compilation_info=eci)
 
 
