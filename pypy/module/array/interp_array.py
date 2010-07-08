@@ -36,7 +36,8 @@ class TypeCode(object):
     def __init__(self, itemtype, unwrap, canoverflow=False, signed=False):
         self.itemtype = itemtype
         self.bytes = rffi.sizeof(itemtype)
-        self.arraytype = lltype.GcArray(itemtype)
+        #self.arraytype = lltype.GcArray(itemtype)
+        self.arraytype = lltype.Array(itemtype, hints={'nolength': True})
         self.unwrap = unwrap
         self.signed = signed
         self.canoverflow = canoverflow
@@ -108,10 +109,20 @@ def make_array(mytype):
             return rffi.cast(mytype.itemtype, item)
 
 
+        def __del__(self):
+            self.setlen(0)
+
+                
         def setlen(self, size):
-            new_buffer = lltype.malloc(mytype.arraytype, size)
-            for i in range(min(size,self.len)):
-                new_buffer[i] = self.buffer[i]
+            if size > 0:
+                #new_buffer = lltype.malloc(mytype.arraytype, size)
+                new_buffer = lltype.malloc(mytype.arraytype, size, flavor='raw')
+                for i in range(min(size,self.len)):
+                    new_buffer[i] = self.buffer[i]
+            else:
+                new_buffer = lltype.nullptr(mytype.arraytype)
+            if self.buffer != lltype.nullptr(mytype.arraytype):
+                lltype.free(self.buffer, flavor='raw')                
             self.buffer = new_buffer
             self.len = size
         setlen.unwrap_spec = ['self', int]
@@ -219,11 +230,17 @@ def make_array(mytype):
             oldlen = self.len
             new = len(s) / mytype.bytes
             self.setlen(oldlen + new)
-            for i in range(new):
-                p = i * mytype.bytes
-                item=runpack(mytype.typecode, s[p:p + mytype.bytes])
-                #self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
-                self.buffer[oldlen + i]=rffi.cast(mytype.itemtype, item)
+            if False:
+                for i in range(new):
+                    p = i * mytype.bytes
+                    item=runpack(mytype.typecode, s[p:p + mytype.bytes])
+                    #self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
+                    self.buffer[oldlen + i]=rffi.cast(mytype.itemtype, item)
+            else:
+                pbuf = rffi.cast(rffi.CCHARP, self.buffer)
+                for i in range(len(s)):
+                    pbuf[oldlen * mytype.bytes + i] = s[i]
+                    
         descr_fromstring.unwrap_spec = ['self', str]
 
         def descr_tolist(self):
@@ -234,6 +251,12 @@ def make_array(mytype):
             #return self.space.newlist([self.space.wrap(i) for i in self.buffer])
         descr_tolist.unwrap_spec = ['self']
 
+        def descr_tostring(self):
+            pbuf = rffi.cast(rffi.CCHARP, self.buffer)
+            s = ''
+            for i in range(self.len * self.itemsize):
+                s += pbuf[i]
+            return self.space.wrap(s)
 
 
     def descr_itemsize(space, self):
@@ -263,7 +286,8 @@ def make_array(mytype):
         tolist       = interp2app(W_Array.descr_tolist),
         tounicode    = appmethod('tounicode'),
         tofile       = appmethod('tofile'),
-        tostring     = appmethod('tostring'),
+        #tostring     = appmethod('tostring'),
+        tostring     = interp2app(W_Array.descr_tostring),
 
         _setlen      = interp2app(W_Array.setlen),
     )
