@@ -6,7 +6,7 @@ _executors = {}
 
 
 class FunctionExecutor(object):
-    def execute(self, space, func, num_args, args):
+    def execute(self, space, func, cppthis, num_args, args):
         raise NotImplementedError("abstract base class")
 
 
