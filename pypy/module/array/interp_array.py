@@ -8,19 +8,26 @@ from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rstruct.runpack import runpack
 
-import os, types
+import os, types, re
 path, _ = os.path.split(__file__)
 app_array = os.path.join(path, 'app_array.py')
 app = ApplevelClass(file(app_array).read())
 
-def appmethod(n):
-    import app_array
-    f=getattr(app_array,n)
-    args = f.func_code.co_varnames[0:f.func_code.co_argcount]
-    args = ', '.join(['space'] + ['w_'+s for s in args])
-    exec """def descr(%s):
-                return app.interphook('%s')(%s)"""%(args, n, args)
-    return interp2app(descr)
+def appmethod(n,allappfn={}):
+    if not allappfn.has_key(n):
+        #exec 'import %s as mod'%f.__module__
+        #src=file(re.sub('.pyc$', '.py', mod.__file__)).read()
+        #app = ApplevelClass(src)
+        import app_array
+        f=getattr(app_array,n)
+        args = f.func_code.co_varnames[0:f.func_code.co_argcount]
+        args = ', '.join(['space'] + ['w_'+s for s in args])
+        appfn = app.interphook(n)
+        exec """def descr(%s):
+                    return appfn(%s)"""%(args, args) in locals()
+        descr.__name__='descr_appmethod_%s'%n
+        allappfn[n]=interp2app(descr)
+    return allappfn[n]
 
 class W_ArrayBase(Wrappable):
     pass
@@ -46,17 +53,17 @@ class TypeCode(object):
 
 types = {
     'c': TypeCode(lltype.Char,        'str_w'),
-    'u': TypeCode(lltype.UniChar,     'unicode_w'),
-    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
-    'B': TypeCode(rffi.UCHAR,         'int_w', True),
-    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
-    'H': TypeCode(rffi.USHORT,        'int_w', True),
-    'i': TypeCode(rffi.INT,           'int_w', True, True),
-    'I': TypeCode(rffi.UINT,          'int_w', True),
-    'l': TypeCode(rffi.LONG,          'int_w', True, True),
-    'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
-    'f': TypeCode(lltype.SingleFloat, 'float_w'),
-    'd': TypeCode(lltype.Float,       'float_w'),
+#    'u': TypeCode(lltype.UniChar,     'unicode_w'),
+#    'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
+#    'B': TypeCode(rffi.UCHAR,         'int_w', True),
+#    'h': TypeCode(rffi.SHORT,         'int_w', True, True),
+#    'H': TypeCode(rffi.USHORT,        'int_w', True),
+#    'i': TypeCode(rffi.INT,           'int_w', True, True),
+#    'I': TypeCode(rffi.UINT,          'int_w', True),
+#    'l': TypeCode(rffi.LONG,          'int_w', True, True),
+#    'L': TypeCode(rffi.ULONG,         'bigint_w', True), # FIXME: Won't compile
+#    'f': TypeCode(lltype.SingleFloat, 'float_w'),
+#    'd': TypeCode(lltype.Float,       'float_w'),
     }
 for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
@@ -225,7 +232,11 @@ for thetypecode, thetype in types.items():
         descr_fromstring.unwrap_spec = ['self', str]
 
         def descr_tolist(self):
-            return self.space.newlist([self.space.wrap(i) for i in self.buffer])
+            w_l=self.space.newlist([])
+            for i in range(self.len):
+                w_l.append(self.descr_getitem(self.space.wrap(i)))
+            return w_l
+            #return self.space.newlist([self.space.wrap(i) for i in self.buffer])
         descr_tolist.unwrap_spec = ['self']
 
 
@@ -265,6 +276,7 @@ for thetypecode, thetype in types.items():
     thetype.w_class = W_Array
 
 
+initiate=app.interphook('initiate')
 def array(space, typecode, w_initializer=None):
     if len(typecode) != 1:
         msg = 'array() argument 1 must be char, not str'
@@ -274,7 +286,7 @@ def array(space, typecode, w_initializer=None):
     for tc in unroll_typecodes:
         if typecode == tc:
             a = types[tc].w_class(space)
-            app.interphook('initiate')(space, a, w_initializer)
+            initiate(space, a, w_initializer)
             ## if w_initializer is not None:
             ##     if not space.is_w(w_initializer, space.w_None):
             ##         a.descr_fromsequence(w_initializer)  
