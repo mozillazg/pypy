@@ -804,7 +804,9 @@ class Transformer(object):
                 self.make_three_lists(op.args[2:2+num_green_args]) +
                 self.make_three_lists(op.args[2+num_green_args:]))
         op1 = SpaceOperation('jit_merge_point', args, None)
-        return ops + [op1]
+        op2 = SpaceOperation('-live-', [], None)
+        # ^^^ we need a -live- for the case of do_recursive_call()
+        return ops + [op1, op2]
 
     def handle_jit_marker__can_enter_jit(self, op, jitdriver):
         jd = self.callcontrol.jitdriver_sd_from_jitdriver(jitdriver)

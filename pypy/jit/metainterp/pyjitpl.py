@@ -149,8 +149,6 @@ class MIFrame(object):
             assert oldbox not in registers[count:]
 
     def make_result_of_lastop(self, resultbox):
-        if resultbox is None:
-            return
         target_index = ord(self.bytecode[self.pc-1])
         if resultbox.type == history.INT:
             self.registers_i[target_index] = resultbox
@@ -685,11 +683,11 @@ class MIFrame(object):
     def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes):
         targetjitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         allboxes = greenboxes + redboxes
-        portal_code = targetjitdriver_sd.mainjitcode
         warmrunnerstate = targetjitdriver_sd.warmstate
         token = None
         if warmrunnerstate.inlining:
             if warmrunnerstate.can_inline_callable(greenboxes):
+                portal_code = targetjitdriver_sd.mainjitcode
                 return self.metainterp.perform_call(portal_code, allboxes,
                                                     greenkey=greenboxes)
             token = warmrunnerstate.get_assembler_token(greenboxes)
@@ -697,6 +695,10 @@ class MIFrame(object):
             # that assembler that we call is still correct
             self.verify_green_args(targetjitdriver_sd, greenboxes)
         #
+        return self.do_recursive_call(targetjitdriver_sd, allboxes, token)
+
+    def do_recursive_call(self, targetjitdriver_sd, allboxes, token=None):
+        portal_code = targetjitdriver_sd.mainjitcode
         k = targetjitdriver_sd.portal_runner_adr
         funcbox = ConstInt(heaptracker.adr2int(k))
         return self.do_residual_call(funcbox, portal_code.calldescr,
@@ -787,12 +789,7 @@ class MIFrame(object):
 
     @arguments("int")
     def opimpl_can_enter_jit(self, jdindex):
-        if self.metainterp.in_recursion:
-            from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit
-            raise CannotInlineCanEnterJit()
-        assert jdindex == self.metainterp.jitdriver_sd.index, (
-            "found a can_enter_jit that does not match the current jitdriver")
-        self.metainterp.seen_can_enter_jit = True
+        self.metainterp.seen_can_enter_jit_for_jdindex = jdindex
 
     def verify_green_args(self, jitdriver_sd, varargs):
         num_green_args = jitdriver_sd.num_green_args
@@ -806,13 +803,15 @@ class MIFrame(object):
         self.verify_green_args(jitdriver_sd, greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(jitdriver_sd, greenboxes)
-        if self.metainterp.seen_can_enter_jit:
-            self.metainterp.seen_can_enter_jit = False
-            # Assert that it's impossible to arrive here with in_recursion
-            # set to a non-zero value: seen_can_enter_jit can only be set
-            # to True by opimpl_can_enter_jit, which should be executed
-            # just before opimpl_jit_merge_point (no recursion inbetween).
-            assert not self.metainterp.in_recursion
+        if self.metainterp.seen_can_enter_jit_for_jdindex < 0:
+            return
+        #
+        assert self.metainterp.seen_can_enter_jit_for_jdindex == jdindex, (
+            "found a can_enter_jit for a JitDriver that does not match "
+            "the following jit_merge_point's")
+        self.metainterp.seen_can_enter_jit_for_jdindex = -1
+        #
+        if not self.metainterp.in_recursion:
             assert jitdriver_sd is self.metainterp.jitdriver_sd
             # Set self.pc to point to jit_merge_point instead of just after:
             # if reached_can_enter_jit() raises SwitchToBlackhole, then the
@@ -822,6 +821,15 @@ class MIFrame(object):
             self.pc = orgpc
             self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
             self.pc = saved_pc
+        else:
+            warmrunnerstate = jitdriver_sd.warmstate
+            token = warmrunnerstate.get_assembler_token(greenboxes)
+            resbox = self.do_recursive_call(jitdriver_sd,
+                                            greenboxes + redboxes,
+                                            token)
+            # in case of exception, do_recursive_call() stops by raising
+            # the ChangeFrame exception already.
+            self.metainterp.finishframe(resbox)
 
     def debug_merge_point(self, jitdriver_sd, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
@@ -1018,9 +1026,10 @@ class MIFrame(object):
         self.metainterp.clear_exception()
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
-        self.make_result_of_lastop(resbox)
-        # ^^^ this is done before handle_possible_exception() because we need
-        # the box to show up in get_list_of_active_boxes()
+        if resbox is not None:
+            self.make_result_of_lastop(resbox)
+            # ^^^ this is done before handle_possible_exception() because we
+            # need the box to show up in get_list_of_active_boxes()
         if exc:
             self.metainterp.handle_possible_exception()
         else:
@@ -1323,7 +1332,8 @@ class MetaInterp(object):
         self.last_exc_value_box = None
         self.popframe()
         if self.framestack:
-            self.framestack[-1].make_result_of_lastop(resultbox)
+            if resultbox is not None:
+                self.framestack[-1].make_result_of_lastop(resultbox)
             raise ChangeFrame
         else:
             try:
@@ -1552,7 +1562,7 @@ class MetaInterp(object):
         redkey = original_boxes[num_green_args:]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
                                                        redkey)
-        self.seen_can_enter_jit = False
+        self.seen_can_enter_jit_for_jdindex = -1
         try:
             self.interpret()
         except GenerateMergePoint, gmp:
@@ -1579,7 +1589,7 @@ class MetaInterp(object):
         # because we cannot reconstruct the beginning of the proper loop
         self.current_merge_points = [(original_greenkey, -1)]
         self.resumekey = key
-        self.seen_can_enter_jit = False
+        self.seen_can_enter_jit_for_jdindex = -1
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             self.interpret()
@@ -2232,7 +2242,8 @@ def _get_opimpl_method(name, argcodes):
         else:
             resultbox = unboundmethod(self, *args)
         #
-        self.make_result_of_lastop(resultbox)
+        if resultbox is not None:
+            self.make_result_of_lastop(resultbox)
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)

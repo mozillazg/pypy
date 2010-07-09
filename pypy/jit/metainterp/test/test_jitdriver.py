@@ -14,7 +14,6 @@ class MultipleJitDriversTests:
 
     def test_simple(self):
         myjitdriver1 = JitDriver(greens=[], reds=['n', 'm'],
-                                 can_inline = lambda *args: False,
                                  get_printable_location = getloc1)
         myjitdriver2 = JitDriver(greens=['g'], reds=['r'],
                                  get_printable_location = getloc2)
