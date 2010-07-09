@@ -16,4 +16,4 @@ def _find_qualifier_index(name):
 def clean_type(name):
     assert name.find("const") == -1
     i = _find_qualifier_index(name)
-    return name[:i].strip()
+    return name[:i].strip(' ')
