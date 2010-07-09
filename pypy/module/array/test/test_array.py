@@ -18,10 +18,14 @@ class AppTestSimpleArray:
 
 class AppTestArray:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=('array',))
+        cls.space = gettestobjspace(usemodules=('array','struct'))
         cls.w_array = cls.space.appexec([], """():
             import array
             return array.array
+        """)
+        cls.w_unpack = cls.space.appexec([], """():
+            import struct
+            return struct.unpack
         """)
 
     def test_ctor(self):
@@ -306,13 +310,24 @@ class AppTestArray:
         a=self.array('i', s)
         assert a[0]==1 and a[1]==2 and a[2]==3
 
-        from struct import unpack
+        unpack=self.unpack
         values = (-129, 128, -128, 127, 0, 255, -1, 256, -32760, 32760)
         s = self.array('i', values).tostring()
         a=unpack('i'*len(values), s)
         assert a==values
+
+        for tcodes, values in (('bhilfd', (-128, 127, 0, 1, 7, -10)),
+                               ('BHILfd', (127, 0, 1, 7, 255, 169)),
+                               ('hilHILfd', (32760, 30123, 3422, 23244))):
+            for tc in tcodes:
+                values += ((2 ** self.array(tc).itemsize) / 2 - 1, )
+                s = self.array(tc, values).tostring()
+                a=unpack(tc*len(values), s)
+                assert a==values
+            
+
                  
-        #FXIME: How to test?
+        #FIXME: How to test?
         #from cStringIO import StringIO
         #f=StringIO()
         #self.array('c', ('h', 'i')).tofile(f)
