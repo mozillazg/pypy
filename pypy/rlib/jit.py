@@ -253,8 +253,7 @@ class JitDriver:
     
     def __init__(self, greens=None, reds=None, virtualizables=None,
                  get_jitcell_at=None, set_jitcell_at=None,
-                 can_inline=None, get_printable_location=None,
-                 confirm_enter_jit=None):
+                 get_printable_location=None, confirm_enter_jit=None):
         if greens is not None:
             self.greens = greens
         if reds is not None:
@@ -270,7 +269,6 @@ class JitDriver:
         self.get_jitcell_at = get_jitcell_at
         self.set_jitcell_at = set_jitcell_at
         self.get_printable_location = get_printable_location
-        self.can_inline = can_inline
         self.confirm_enter_jit = confirm_enter_jit
 
     def _freeze_(self):
@@ -384,7 +382,6 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
         self.annotate_hook(driver.get_jitcell_at, driver.greens, **kwds_s)
         self.annotate_hook(driver.set_jitcell_at, driver.greens, [s_jitcell],
                            **kwds_s)
-        self.annotate_hook(driver.can_inline, driver.greens, **kwds_s)
         self.annotate_hook(driver.get_printable_location, driver.greens, **kwds_s)
 
     def annotate_hook(self, func, variables, args_s=[], **kwds_s):

@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
-from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit, get_stats
+from pypy.jit.metainterp.warmspot import get_stats
 
 class RecursiveTests:
 
@@ -967,6 +967,94 @@ class RecursiveTests:
                                policy=StopAtXPolicy(residual))
         assert res == portal(2, 0)
         self.check_loops(call_assembler=2)
+
+    def test_inline_without_hitting_the_loop(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i'],
+                           get_printable_location = lambda codeno : str(codeno))
+
+        def portal(codeno):
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i)
+                if codeno < 10:
+                    i += portal(20)
+                    codeno += 1
+                elif codeno == 10:
+                    if i > 63:
+                        return i
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i)
+                else:
+                    return 1
+
+        assert portal(0) == 70
+        res = self.meta_interp(portal, [0], inline=True)
+        assert res == 70
+        self.check_loops(call_assembler=0)
+
+    def test_inline_with_hitting_the_loop_sometimes(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno))
+
+        def portal(codeno, k):
+            if k > 2:
+                return 1
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno < 10:
+                    i += portal(codeno + 5, k+1)
+                    codeno += 1
+                elif codeno == 10:
+                    if i > [-1, 2000, 63][k]:
+                        return i
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                else:
+                    return 1
+
+        assert portal(0, 1) == 2095
+        res = self.meta_interp(portal, [0, 1], inline=True)
+        assert res == 2095
+        self.check_loops(call_assembler=6, everywhere=True)
+
+    def test_inline_with_hitting_the_loop_sometimes_exc(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno))
+        class GotValue(Exception):
+            def __init__(self, result):
+                self.result = result
+
+        def portal(codeno, k):
+            if k > 2:
+                raise GotValue(1)
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno < 10:
+                    try:
+                        portal(codeno + 5, k+1)
+                    except GotValue, e:
+                        i += e.result
+                    codeno += 1
+                elif codeno == 10:
+                    if i > [-1, 2000, 63][k]:
+                        raise GotValue(i)
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                else:
+                    raise GotValue(1)
+
+        def main(codeno, k):
+            try:
+                portal(codeno, k)
+            except GotValue, e:
+                return e.result
+
+        assert main(0, 1) == 2095
+        res = self.meta_interp(main, [0, 1], inline=True)
+        assert res == 2095
+        self.check_loops(call_assembler=6, everywhere=True)
 
     # There is a test which I fail to write.
     #   * what happens if we call recursive_call while blackholing

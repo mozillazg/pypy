@@ -136,9 +136,6 @@ def debug_checks():
 class ContinueRunningNormallyBase(JitException):
     pass
 
-class CannotInlineCanEnterJit(JitException):
-    pass
-
 # ____________________________________________________________
 
 class WarmRunnerDesc(object):
