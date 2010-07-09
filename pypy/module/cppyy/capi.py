@@ -39,7 +39,7 @@ c_allocate = rffi.llexternal(
     compilation_info=eci)
 c_deallocate = rffi.llexternal(
     "cppyy_deallocate",
-    [C_TYPEHANDLE, C_OBJECT], rffi.VOIDP,
+    [C_TYPEHANDLE, C_OBJECT], rffi.VOID,
     compilation_info=eci)
 c_call_v = rffi.llexternal(
     "cppyy_call_v",
