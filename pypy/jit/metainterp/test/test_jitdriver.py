@@ -45,7 +45,6 @@ class MultipleJitDriversTests:
         # this is not an example of reasonable code: loop1() is unrolled
         # 'n/m' times, where n and m are given as red arguments.
         myjitdriver1 = JitDriver(greens=[], reds=['n', 'm'],
-                                 can_inline = lambda *args: True,
                                  get_printable_location = getloc1)
         myjitdriver2 = JitDriver(greens=['g'], reds=['r'],
                                  get_printable_location = getloc2)
