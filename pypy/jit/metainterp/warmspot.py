@@ -399,14 +399,6 @@ class WarmRunnerDesc(object):
             maybe_enter_jit._always_inline_ = True
         jd._maybe_enter_jit_fn = maybe_enter_jit
 
-        can_inline = state.can_inline_greenargs
-        num_green_args = jd.num_green_args
-        def maybe_enter_from_start(*args):
-            if can_inline is not None and not can_inline(*args[:num_green_args]):
-                maybe_compile_and_run(*args)
-        maybe_enter_from_start._always_inline_ = True
-        jd._maybe_enter_from_start_fn = maybe_enter_from_start
-
     def make_driverhook_graphs(self):
         from pypy.rlib.jit import BaseJitCell
         bk = self.rtyper.annotator.bookkeeper
@@ -423,8 +415,6 @@ class WarmRunnerDesc(object):
                 s_BaseJitCell_not_None)
             jd._get_jitcell_at_ptr = self._make_hook_graph(jd,
                 annhelper, jd.jitdriver.get_jitcell_at, s_BaseJitCell_or_None)
-            jd._can_inline_ptr = self._make_hook_graph(jd,
-                annhelper, jd.jitdriver.can_inline, annmodel.s_Bool)
             jd._get_printable_location_ptr = self._make_hook_graph(jd,
                 annhelper, jd.jitdriver.get_printable_location, s_Str)
             jd._confirm_enter_jit_ptr = self._make_hook_graph(jd,
@@ -582,7 +572,6 @@ class WarmRunnerDesc(object):
         def ll_portal_runner(*args):
             while 1:
                 try:
-                    jd._maybe_enter_from_start_fn(*args)
                     return support.maybe_on_top_of_llinterp(rtyper,
                                                       portal_ptr)(*args)
                 except self.ContinueRunningNormally, e:

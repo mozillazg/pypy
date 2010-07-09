@@ -316,9 +316,9 @@ class WarmEnterState(object):
             return self.jit_getter
         #
         if self.jitdriver_sd._get_jitcell_at_ptr is None:
-            jit_getter = self._make_jitcell_getter_default()
+            jit_getter_maybe, jit_getter = self._make_jitcell_getter_default()
         else:
-            jit_getter = self._make_jitcell_getter_custom()
+            jit_getter_maybe, jit_getter = self._make_jitcell_getter_custom()
         #
         unwrap_greenkey = self.make_unwrap_greenkey()
         #
@@ -326,6 +326,7 @@ class WarmEnterState(object):
             greenargs = unwrap_greenkey(greenkey)
             return jit_getter(*greenargs)
         self.jit_cell_at_key = jit_cell_at_key
+        self.jit_getter_maybe = jit_getter_maybe
         self.jit_getter = jit_getter
         #
         return jit_getter
@@ -356,13 +357,15 @@ class WarmEnterState(object):
         jitcell_dict = r_dict(comparekey, hashkey)
         #
         def get_jitcell(*greenargs):
+            return jitcell_dict.get(greenargs, None)
+        def get_or_build_jitcell(*greenargs):
             try:
                 cell = jitcell_dict[greenargs]
             except KeyError:
                 cell = JitCell()
                 jitcell_dict[greenargs] = cell
             return cell
-        return get_jitcell
+        return get_jitcell, get_or_build_jitcell
 
     def _make_jitcell_getter_custom(self):
         "NOT_RPYTHON"
@@ -388,6 +391,9 @@ class WarmEnterState(object):
                 else:
                     cell = None
             # </hacks>
+            return cell
+        def get_or_build_jitcell(*greenargs):
+            cell = get_jitcell_or_none(greenargs)
             if cell is None:
                 cell = JitCell()
                 # <hacks>
@@ -408,7 +414,7 @@ class WarmEnterState(object):
                                                       set_jitcell_at_ptr)
                 fn(cellref, *greenargs)
             return cell
-        return get_jitcell
+        return get_jitcell, get_or_build_jitcell
 
     # ----------
 
@@ -468,29 +474,17 @@ class WarmEnterState(object):
         if hasattr(self, 'get_location_str'):
             return
         #
-        can_inline_ptr = self.jitdriver_sd._can_inline_ptr
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
-        if can_inline_ptr is None:
-            def can_inline_callable(*greenargs):
-                # XXX shouldn't it be False by default?
-                return True
-        else:
-            rtyper = self.warmrunnerdesc.rtyper
-            #
-            def can_inline_callable(*greenargs):
-                fn = support.maybe_on_top_of_llinterp(rtyper, can_inline_ptr)
-                return fn(*greenargs)
-        def can_inline(*greenargs):
-            cell = jit_getter(*greenargs)
-            if cell.dont_trace_here:
-                return False
-            return can_inline_callable(*greenargs)
-        self.can_inline_greenargs = can_inline
-        def can_inline_greenkey(greenkey):
+        jit_getter_maybe = self.jit_getter_maybe
+
+        def can_inline_callable(greenkey):
             greenargs = unwrap_greenkey(greenkey)
-            return can_inline(*greenargs)
-        self.can_inline_callable = can_inline_greenkey
+            cell = jit_getter_maybe(*greenargs)
+            if cell is not None and cell.dont_trace_here:
+                return False
+            return True
+        self.can_inline_callable = can_inline_callable
 
         def get_assembler_token(greenkey):
             greenargs = unwrap_greenkey(greenkey)
