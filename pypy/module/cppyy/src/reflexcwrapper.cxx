@@ -156,13 +156,6 @@ int cppyy_is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2) {
     return (int)t2.HasBase(t1);
 }
 
-cppyy_typehandle_t cppyy_dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self) {
-    Reflex::Type t((Reflex::TypeName*)handle);
-    const Reflex::Object* obj = (const Reflex::Object*)self;
-    return t.DynamicType((*obj)).Id();
-}
-
-
 void cppyy_free(void* ptr) {
     free(ptr);
 }

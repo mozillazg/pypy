@@ -30,8 +30,6 @@ extern "C" {
     int cppyy_is_static(cppyy_typehandle_t handle, int method_index);
     int cppyy_is_subtype(cppyy_typehandle_t h1, cppyy_typehandle_t h2);
 
-    cppyy_typehandle_t cppyy_dynamic_type(cppyy_typehandle_t handle, cppyy_object_t self);
-
     void cppyy_free(void* ptr);
 
 #ifdef __cplusplus

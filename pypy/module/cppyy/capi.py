@@ -96,10 +96,6 @@ c_is_subtype = rffi.llexternal(
     "cppyy_is_subtype",
     [C_TYPEHANDLE, C_TYPEHANDLE], rffi.INT,
     compilation_info=eci)
-c_dynamic_type = rffi.llexternal(
-    "cppyy_dynamic_type",
-    [C_TYPEHANDLE, C_OBJECT], C_TYPEHANDLE,
-    compilation_info=eci)
 
 c_free = rffi.llexternal(
     "cppyy_free",
