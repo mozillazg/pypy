@@ -337,8 +337,12 @@ class AppTestArray:
         assert self.array('u', unicode('hello')).tounicode() == unicode('hello')
 
     def test_buffer(self):
-        assert buffer(self.array('h', 'Hi'))[1] == 'i'
-
+        a = self.array('h', 'Hi')
+        buf = buffer(a)
+        assert buf[1] == 'i'
+        raises(TypeError, buf.__setitem__, 1, 'o')
+        
+        
     def test_list_methods(self):
         assert repr(self.array('i')) == "array('i')"
         assert repr(self.array('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
@@ -353,11 +357,24 @@ class AppTestArray:
         a.reverse()
         assert repr(a) == "array('i', [1, 2, 1, 3, 2, 1])"
 
-        if False:
-            a.remove(3)
-            assert repr(a) == "array('i', [1, 2, 1, 2, 1])"
-            a.remove(1)
-            assert repr(a) == "array('i', [2, 1, 2, 1])"
+        a.remove(3)
+        assert repr(a) == "array('i', [1, 2, 1, 2, 1])"
+        a.remove(1)
+        assert repr(a) == "array('i', [2, 1, 2, 1])"
+
+        a.pop()
+        assert repr(a) == "array('i', [2, 1, 2])"
+
+        a.pop(1)
+        assert repr(a) == "array('i', [2, 2])"
+
+        a.pop(-2)
+        assert repr(a) == "array('i', [2])"
+
+        a.insert(1,7)
+        a.insert(0,8)
+        a.insert(-1,9)
+        assert repr(a) == "array('i', [8, 2, 9, 7])"
 
     def test_compare(self):
         a = self.array('i', [1, 2, 3])
@@ -400,6 +417,12 @@ class AppTestArray:
         assert (a >= c) is False
         assert (c >= a) is True
 
+        assert cmp(a, a) == 0
+        assert cmp(a, b) == 0
+        assert cmp(a, c) <  0
+        assert cmp(b, a) == 0
+        assert cmp(c, a) >  0
+        
     def test_reduce(self):
         import pickle
         a = self.array('i', [1, 2, 3])
@@ -411,6 +434,31 @@ class AppTestArray:
         s = pickle.dumps(a,1)
         b = pickle.loads(s)
         assert len(b) == 0 and b.typecode == 'l'
+
+    def test_misc(self):
+        a = self.array('i', [1, 2, 3])
+        from copy import copy
+        b = copy(a)
+        a[1] = 7
+        assert repr(b) == "array('i', [1, 2, 3])"
+
+        bi=b.buffer_info()
+        assert bi[0] != 0 # FIXME: How can the address be tested?
+        assert bi[1] == 3
+
+        for tc in 'bhilBHIL':
+            a=self.array(tc, [1, 2, 3])
+            a.byteswap()
+            assert len(a)==3
+            assert a[0] == 1 * (256 ** (a.itemsize-1))
+            assert a[1] == 2 * (256 ** (a.itemsize-1))
+            assert a[2] == 3 * (256 ** (a.itemsize-1))
+            a.byteswap()
+            assert len(a)==3
+            assert a[0] == 1
+            assert a[1] == 2
+            assert a[2] == 3
+            
 
     #FIXME
     #def test_type(self):

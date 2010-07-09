@@ -234,6 +234,9 @@ def make_array(mytype):
                 self.descr_setslice(start, stop, step, w_item)
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
+        def charbuf(self):
+            return  rffi.cast(rffi.CCHARP, self.buffer)
+
         def descr_fromstring(self, s):
             if len(s)%mytype.bytes !=0:
                 msg = 'string length not a multiple of item size'
@@ -248,7 +251,7 @@ def make_array(mytype):
                     #self.buffer[oldlen + i]=self.item_w(self.space.wrap(item))
                     self.buffer[oldlen + i]=rffi.cast(mytype.itemtype, item)
             else:
-                pbuf = rffi.cast(rffi.CCHARP, self.buffer)
+                pbuf =self.charbuf()
                 for i in range(len(s)):
                     pbuf[oldlen * mytype.bytes + i] = s[i]
                     
@@ -263,10 +266,10 @@ def make_array(mytype):
         descr_tolist.unwrap_spec = ['self']
 
         def descr_tostring(self):
-            pbuf = rffi.cast(rffi.CCHARP, self.buffer)
+            pbuf = self.charbuf()
             s = ''
             i=0
-            while i < self.len * self.itemsize:
+            while i < self.len * mytype.bytes:
                 s += pbuf[i]
                 i+=1
             return self.space.wrap(s)
@@ -292,12 +295,51 @@ def make_array(mytype):
             w_new_inst = mod.get('array')
             return space.newtuple([w_new_inst, space.newtuple(args)])
 
+        def descr_pop(self, i=-1):
+            if i < 0: i += self.len
+            if i < 0 or i >= self.len:
+                msg = 'pop index out of range'
+                raise OperationError(self.space.w_IndexError, self.space.wrap(msg))
+            val = self.buffer[i]
+            while i < self.len - 1:
+                self.buffer[i] = self.buffer[i + 1]
+                i += 1
+            self.setlen(self.len-1)
+            return self.space.wrap(val)
+        descr_pop.unwrap_spec = ['self', int]
+
+
+        def descr_copy(self):
+            w_a=mytype.w_class(self.space)
+            w_a.descr_fromsequence(self)
+            return w_a
+
+        def descr_buffer_info(self):
+            space = self.space
+            w_ptr = space.wrap(rffi.cast(lltype.Unsigned, self.buffer))
+            w_len = space.wrap(self.len)
+            return space.newtuple([w_ptr, w_len])
+
+        def descr_byteswap(self):
+            if mytype.bytes not in [1, 2, 4, 8]:
+                msg="byteswap not supported for this array"
+                raise OperationError(self.space.w_RuntimeError, self.space.wrap(msg))
+            bytes = self.charbuf()
+            tmp = [0] * mytype.bytes
+            for start in range(0, self.len * mytype.bytes, mytype.bytes):
+                stop = start + mytype.bytes - 1
+                for i in range(mytype.bytes):
+                    tmp[i] = bytes[start + i]
+                for i in range(mytype.bytes):
+                    bytes[stop - i] = tmp[i]
+
+
 
 
     def descr_itemsize(space, self):
-        return space.wrap(self.itemsize)
+        return space.wrap(mytype.bytes)
     def descr_typecode(space, self):
-        return space.wrap(self.typecode)
+        return space.wrap(mytype.typecode)
 
     W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     W_Array.typedef = TypeDef(
@@ -334,6 +376,8 @@ def make_array(mytype):
         index        = appmethod('index'),
         remove       = appmethod('remove'),
         reverse      = appmethod('reverse'),
+        insert       = appmethod('insert'),
+        pop          = interp2app(W_Array.descr_pop),
 
         __eq__       = appmethod('__eq__'),
         __ne__       = appmethod('__ne__'),
@@ -344,15 +388,11 @@ def make_array(mytype):
         
         _isarray     = interp2app(W_Array.descr_isarray),
         __reduce__   = interp2app(W_Array.descr_reduce),
+        __copy__     = interp2app(W_Array.descr_copy),
+
+        buffer_info  = interp2app(W_Array.descr_buffer_info),
         
-        
-        # TODO:
-        # __cmp__
-        #byteswap     =
-        #buffer_info  =
-        #__copy__     =
-        #__reduce__   =
-        # insert, pop, 
+        byteswap     = interp2app(W_Array.descr_byteswap),
     )
 
     mytype.w_class = W_Array
