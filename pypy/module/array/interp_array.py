@@ -43,6 +43,12 @@ class TypeCode(object):
         self.canoverflow = canoverflow
         self.w_class = None
 
+        assert self.bytes <= rffi.sizeof(rffi.ULONG)
+        if self.bytes == rffi.sizeof(rffi.ULONG) and not signed and self.unwrap == 'int_w':
+            # Treat this type as a ULONG
+            self.unwrap = 'bigint_w'
+            self.canoverflow = False
+
 
     def _freeze_(self):
         # hint for the annotator: track individual constant instances 
