@@ -1,7 +1,7 @@
 #!/usr/bin/python
 from time import time
 
-from array import array #, simple_array
+from array import array, simple_array
 
 def f(img, intimg):
     l=0
