@@ -92,6 +92,17 @@ class AppTestArray:
                 except OverflowError:
                     pass
 
+        for tc in 'BHIL':
+            a = self.array(tc)
+            vals=[0, 2 ** a.itemsize - 1]
+            a.fromlist(vals)
+            assert a.tolist() == vals
+
+            a = self.array(tc.lower())
+            vals=[ -1 * (2 ** a.itemsize) / 2,  (2 ** a.itemsize) / 2 - 1]
+            a.fromlist(vals)
+            assert a.tolist() == vals
+
     def test_float(self):
         values = [0, 1, 2.5, -4.25]
         for tc in 'fd':
