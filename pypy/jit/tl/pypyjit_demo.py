@@ -39,9 +39,11 @@
 
 from array import array
 def f(img):
+    i=0
     sa=0
-    for i in xrange(4):
+    while i<4:
         sa+=img[i]
+        i+=1
     return sa
 
 img=array('i',(1,2,3,4))

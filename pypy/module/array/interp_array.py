@@ -132,6 +132,17 @@ def make_array(mytype):
         descr_len.unwrap_spec = ['self']
 
 
+        def descr_getslice(self, start, stop, step):
+            size = (stop - start) / step
+            if (stop - start) % step > 0: size += 1
+            w_a=mytype.w_class(self.space)
+            w_a.setlen(size)
+            j=0
+            for i in range(start, stop, step):
+                w_a.buffer[j]=self.buffer[i]
+                j+=1
+            return w_a
+
         def descr_getitem(self, w_idx):
             space=self.space
             start, stop, step = space.decode_index(w_idx, self.len)
@@ -144,15 +155,7 @@ def make_array(mytype):
                     item = float(item)
                 return self.space.wrap(item)
             else:
-                size = (stop - start) / step
-                if (stop - start) % step > 0: size += 1
-                w_a=mytype.w_class(self.space)
-                w_a.setlen(size)
-                j=0
-                for i in range(start, stop, step):
-                    w_a.buffer[j]=self.buffer[i]
-                    j+=1
-                return w_a
+                return self.descr_getslice(start, stop, step)
         descr_getitem.unwrap_spec = ['self', W_Root]
 
 
@@ -199,28 +202,30 @@ def make_array(mytype):
                 self.descr_append(w_item)
         descr_extend.unwrap_spec = ['self', W_Root]
 
-
+        def descr_setslice(self, start, stop, step, w_item):
+            if isinstance(w_item, W_Array): # Implies mytype.typecode == w_item.typecode
+                size = (stop - start) / step
+                if (stop - start) % step > 0: size += 1
+                if w_item.len != size: # FIXME: Support for step=1
+                    msg = ('attempt to assign array of size %d to ' + 
+                           'slice of size %d') % (w_item.len, size)
+                    raise OperationError(self.space.w_ValueError,
+                                         self.space.wrap(msg))
+                j=0
+                for i in range(start, stop, step):
+                    self.buffer[i]=w_item.buffer[j]
+                    j+=1
+                return
+            msg='can only assign array to array slice'
+            raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
+            
         def descr_setitem(self, w_idx, w_item):
             start, stop, step = self.space.decode_index(w_idx, self.len)
             if step==0:
                 item = self.item_w(w_item)
                 self.buffer[start] = item
             else:
-                if isinstance(w_item, W_Array): # Implies mytype.typecode == w_item.typecode
-                    size = (stop - start) / step
-                    if (stop - start) % step > 0: size += 1
-                    if w_item.len != size: # FIXME: Support for step=1
-                        msg = ('attempt to assign array of size %d to ' + 
-                               'slice of size %d') % (w_item.len, size)
-                        raise OperationError(self.space.w_ValueError,
-                                             self.space.wrap(msg))
-                    j=0
-                    for i in range(start, stop, step):
-                        self.buffer[i]=w_item.buffer[j]
-                        j+=1
-                    return
-                msg='can only assign array to array slice'
-                raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
+                self.descr_setslice(start, stop, step, w_item)
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
         def descr_fromstring(self, s):
