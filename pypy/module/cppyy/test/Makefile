@@ -16,6 +16,6 @@ else
   cppflags2=-Wno-pmf-conversions
 endif
 
-example01Dict.so: example01.cxx
-	$(genreflex) example01.cxx $(genreflexflags)
-	g++ -o $@ example01_rflx.cpp -shared -lReflex $(cppflags) $(cppflags2)
+example01Dict.so: example01.cxx example01.h
+	$(genreflex) example01.h $(genreflexflags)
+	g++ -o $@ example01_rflx.cpp example01.cxx -shared -lReflex $(cppflags) $(cppflags2)
