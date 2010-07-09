@@ -116,6 +116,12 @@ if True:
         self._setlen(0)
         self.fromlist(lst)
 
+    def insert(self, i, x):
+        lst=self.tolist()
+        lst.insert(i, x)
+        self._setlen(0)
+        self.fromlist(lst)
+
     def __eq__(self, other):
         if not self._isarray(other):
             return NotImplemented
