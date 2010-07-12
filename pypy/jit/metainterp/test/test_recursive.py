@@ -916,13 +916,13 @@ class RecursiveTests:
                            get_printable_location = lambda codeno : str(codeno))
 
         def residual(k):
-            if k > 40:
+            if k > 150:
                 return 0
             return 1
 
         def portal(codeno, k):
             i = 0
-            while i < 10:
+            while i < 15:
                 driver.can_enter_jit(codeno=codeno, i=i, k=k)
                 driver.jit_merge_point(codeno=codeno, i=i, k=k)
                 if codeno == 2:
