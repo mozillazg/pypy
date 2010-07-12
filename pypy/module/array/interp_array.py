@@ -460,7 +460,6 @@ def make_array(mytype):
         fromunicode  = appmethod('fromunicode'),
         fromfile     = appmethod('fromfile'),
         read         = appmethod('fromfile'),
-        _fromfile    = appmethod('_fromfile'),
         fromlist     = appmethod('fromlist'),
         
         tolist       = interp2app(W_Array.descr_tolist),

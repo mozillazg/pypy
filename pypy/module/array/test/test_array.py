@@ -153,12 +153,17 @@ class BaseArrayTests:
 
     def test_fromfile(self):
         
-        class myfile(object):
-            def __init__(self, c, s):
-                self.c = c
-                self.s = s
-            def read(self,n):
-                return self.c*min(n,self.s)
+        ## class myfile(object):
+        ##     def __init__(self, c, s):
+        ##         self.c = c
+        ##         self.s = s
+        ##     def read(self,n):
+        ##         return self.c*min(n,self.s)
+        def myfile(c, s):
+            f=open('/tmp/deleteme', 'w')
+            f.write(c*s)
+            f.close()
+            return open('/tmp/deleteme', 'r')
 
         f=open('/dev/zero','r')
         for t in 'bBhHiIlLfd':
@@ -167,16 +172,16 @@ class BaseArrayTests:
             assert len(a)==2 and a[0]==0 and a[1]==0
 
         a = self.array('b')
-        a._fromfile(myfile('\x01', 20),2)
+        a.fromfile(myfile('\x01', 20),2)
         assert len(a)==2 and a[0]==1 and a[1]==1
 
         a = self.array('h')
-        a._fromfile(myfile('\x01', 20),2)
+        a.fromfile(myfile('\x01', 20),2)
         assert len(a)==2 and a[0]==257 and a[1]==257
 
         for i in (0,1):
             a = self.array('h')
-            raises(EOFError, a._fromfile, myfile('\x01', 2+i),2)
+            raises(EOFError, a.fromfile, myfile('\x01', 2+i),2)
             assert len(a)==1 and a[0]==257
 
 
@@ -357,10 +362,11 @@ class BaseArrayTests:
         a=self.array('i', s)
         assert a[0]==1 and a[1]==2 and a[2]==3
 
-        unpack=self.unpack
+        unpack=self.struct.unpack
         values = (-129, 128, -128, 127, 0, 255, -1, 256, -32760, 32760)
         s = self.array('i', values).tostring()
-        a=unpack('i'*len(values), s)
+        fmt = 'i'*len(values)
+        a=unpack(fmt, s)
         assert a==values
 
         for tcodes, values in (('bhilfd', (-128, 127, 0, 1, 7, -10)),
@@ -371,14 +377,16 @@ class BaseArrayTests:
                 s = self.array(tc, values).tostring()
                 a=unpack(tc*len(values), s)
                 assert a==values
-            
 
-                 
-        #FIXME: How to test?
-        #from cStringIO import StringIO
-        #f=StringIO()
-        #self.array('c', ('h', 'i')).tofile(f)
-        #assert f.getvalue() == 'hi'
+        f=open('/tmp/deleteme', 'w')
+        self.array('c', ('h', 'i')).tofile(f)
+        f.close()
+        assert open('/tmp/deleteme', 'r').readline() == 'hi'
+
+        a=self.array('c')
+        a.fromfile(open('/tmp/deleteme', 'r'),2)
+        assert repr(a) == "array('c', 'hi')"
+        
         
         raises(ValueError, self.array('i').tounicode)
         assert self.array('u', unicode('hello')).tounicode() == unicode('hello')
@@ -561,7 +569,7 @@ class TestCPythonsOwnArray(BaseArrayTests):
         import array
         cls.array = array.array
         import struct
-        cls.unpack = struct.unpack
+        cls.struct = struct
 
 
 class AppTestArray(BaseArrayTests):
@@ -571,15 +579,8 @@ class AppTestArray(BaseArrayTests):
             import array
             return array.array
         """)
-        cls.w_unpack = cls.space.appexec([], """():
+        cls.w_struct = cls.space.appexec([], """():
             import struct
-            return struct.unpack
+            return struct
         """)
 
-## class AppTestAppArray(AppTestArray):
-##     def setup_class(cls):
-##         cls.space = gettestobjspace(usemodules=('array',))
-##         cls.w_array = cls.space.appexec([], """():
-##             import apparray
-##             return apparray.array
-##         """)
