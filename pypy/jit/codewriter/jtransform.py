@@ -809,10 +809,13 @@ class Transformer(object):
         return ops + [op1, op2]
 
     def handle_jit_marker__can_enter_jit(self, op, jitdriver):
+        # a 'can_enter_jit' in the source graph becomes a 'loop_header'
+        # operation in the transformed graph, as its only purpose in
+        # the transformed graph is to detect loops.
         jd = self.callcontrol.jitdriver_sd_from_jitdriver(jitdriver)
         assert jd is not None
         c_index = Constant(jd.index, lltype.Signed)
-        return SpaceOperation('can_enter_jit', [c_index], None)
+        return SpaceOperation('loop_header', [c_index], None)
 
     def rewrite_op_debug_assert(self, op):
         log.WARNING("found debug_assert in %r; should have be removed" %

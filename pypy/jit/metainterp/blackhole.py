@@ -764,7 +764,7 @@ class BlackholeInterpreter(object):
     # the main hints and recursive calls
 
     @arguments("i")
-    def bhimpl_can_enter_jit(jdindex):
+    def bhimpl_loop_header(jdindex):
         pass
 
     @arguments("self", "i", "I", "R", "F", "I", "R", "F")

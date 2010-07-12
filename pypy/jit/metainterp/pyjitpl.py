@@ -795,8 +795,8 @@ class MIFrame(object):
         return clsbox
 
     @arguments("int")
-    def opimpl_can_enter_jit(self, jdindex):
-        self.metainterp.seen_can_enter_jit_for_jdindex = jdindex
+    def opimpl_loop_header(self, jdindex):
+        self.metainterp.seen_loop_header_for_jdindex = jdindex
 
     def verify_green_args(self, jitdriver_sd, varargs):
         num_green_args = jitdriver_sd.num_green_args
@@ -810,23 +810,23 @@ class MIFrame(object):
         self.verify_green_args(jitdriver_sd, greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(jitdriver_sd, greenboxes)
-        if self.metainterp.seen_can_enter_jit_for_jdindex < 0:
+        if self.metainterp.seen_loop_header_for_jdindex < 0:
             return
         #
-        assert self.metainterp.seen_can_enter_jit_for_jdindex == jdindex, (
-            "found a can_enter_jit for a JitDriver that does not match "
+        assert self.metainterp.seen_loop_header_for_jdindex == jdindex, (
+            "found a loop_header for a JitDriver that does not match "
             "the following jit_merge_point's")
-        self.metainterp.seen_can_enter_jit_for_jdindex = -1
+        self.metainterp.seen_loop_header_for_jdindex = -1
         #
         if not self.metainterp.in_recursion:
             assert jitdriver_sd is self.metainterp.jitdriver_sd
             # Set self.pc to point to jit_merge_point instead of just after:
-            # if reached_can_enter_jit() raises SwitchToBlackhole, then the
+            # if reached_loop_header() raises SwitchToBlackhole, then the
             # pc is still at the jit_merge_point, which is a point that is
             # much less expensive to blackhole out of.
             saved_pc = self.pc
             self.pc = orgpc
-            self.metainterp.reached_can_enter_jit(greenboxes, redboxes)
+            self.metainterp.reached_loop_header(greenboxes, redboxes)
             self.pc = saved_pc
         else:
             warmrunnerstate = jitdriver_sd.warmstate
@@ -1584,7 +1584,7 @@ class MetaInterp(object):
         redkey = original_boxes[num_green_args:]
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
                                                        redkey)
-        self.seen_can_enter_jit_for_jdindex = -1
+        self.seen_loop_header_for_jdindex = -1
         try:
             self.interpret()
         except GenerateMergePoint, gmp:
@@ -1611,7 +1611,7 @@ class MetaInterp(object):
         # because we cannot reconstruct the beginning of the proper loop
         self.current_merge_points = [(original_greenkey, -1)]
         self.resumekey = key
-        self.seen_can_enter_jit_for_jdindex = -1
+        self.seen_loop_header_for_jdindex = -1
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             self.interpret()
@@ -1641,7 +1641,7 @@ class MetaInterp(object):
             else:
                 duplicates[box] = None
 
-    def reached_can_enter_jit(self, greenboxes, redboxes):
+    def reached_loop_header(self, greenboxes, redboxes):
         duplicates = {}
         self.remove_consts_and_duplicates(redboxes, len(redboxes),
                                           duplicates)
@@ -1655,7 +1655,7 @@ class MetaInterp(object):
             live_arg_boxes += self.virtualizable_boxes
             live_arg_boxes.pop()
         assert len(self.virtualref_boxes) == 0, "missing virtual_ref_finish()?"
-        # Called whenever we reach the 'can_enter_jit' hint.
+        # Called whenever we reach the 'loop_header' hint.
         # First, attempt to make a bridge:
         # - if self.resumekey is a ResumeGuardDescr, it starts from a guard
         #   that failed;
