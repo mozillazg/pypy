@@ -74,6 +74,22 @@ for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
 
 def make_array(mytype):
+    class W_ArrayIter(Wrappable):
+        def __init__(self, a):
+            self.space = a.space
+            self.a = a
+            self.pos = 0
+
+        def iter_w(self):
+            return self.space.wrap(self)
+
+        def next_w(self):
+            if self.pos >= self.a.len:
+                raise OperationError(self.space.w_StopIteration, self.space.w_None)
+            val = self.a.descr_getitem(self.space.wrap(self.pos))
+            self.pos += 1
+            return val
+        
     class W_Array(W_ArrayBase):
         itemsize=mytype.bytes
         typecode=mytype.typecode
@@ -396,12 +412,32 @@ def make_array(mytype):
             return self
         descr_imul.unwrap_spec = ['self', int]
 
+        def descr_delitem(self, w_idx):
+            space=self.space
+            w_lst = space.call_function(
+                space.getattr(self, space.wrap('tolist')))
+            space.call_function(
+                space.getattr(w_lst, space.wrap('__delitem__')),
+                w_idx)
+            self.setlen(0)
+            self.descr_fromsequence(w_lst)
+        descr_delitem.unwrap_spec = ['self', W_Root]
+
+        def descr_iter(self):
+            return W_ArrayIter(self)
 
 
     def descr_itemsize(space, self):
         return space.wrap(mytype.bytes)
     def descr_typecode(space, self):
         return space.wrap(mytype.typecode)
+
+    W_ArrayIter.__name__ = 'W_ArrayIterType_'+mytype.typecode
+    W_ArrayIter.typedef = TypeDef(
+        'ArrayIterType_'+mytype.typecode,
+        __iter__  = interp2app(W_ArrayIter.iter_w),
+        next      = interp2app(W_ArrayIter.next_w),
+    )
 
     W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     W_Array.typedef = TypeDef(
@@ -410,8 +446,10 @@ def make_array(mytype):
         __len__      = interp2app(W_Array.descr_len),
         __getitem__  = interp2app(W_Array.descr_getitem),
         __setitem__  = interp2app(W_Array.descr_setitem),
+        __delitem__  = interp2app(W_Array.descr_delitem),
         __getslice__ = appmethod('__getslice__'),
         __setslice__ = appmethod('__setslice__'),
+        __delslice__ = appmethod('__delslice__'),
 
         itemsize     = GetSetProperty(descr_itemsize, cls=W_Array),
         typecode     = GetSetProperty(descr_typecode, cls=W_Array),
@@ -461,8 +499,10 @@ def make_array(mytype):
         __imul__     = interp2app(W_Array.descr_imul),
 
         buffer_info  = interp2app(W_Array.descr_buffer_info),
-        
         byteswap     = interp2app(W_Array.descr_byteswap),
+
+        __iter__     = interp2app(W_Array.descr_iter),
+        __contains__ = appmethod('__contains__'),
     )
 
     mytype.w_class = W_Array

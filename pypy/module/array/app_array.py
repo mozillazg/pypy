@@ -177,3 +177,13 @@ if True:
 
     def __setslice__(self, i, j, x):
         self.__setitem__(slice(i, j), x)
+
+    def __delslice__(self, i, j):
+        self.__delitem__(slice(i, j))
+
+    def __contains__(self, item):
+        for x in self:
+            if x == item:
+                return True
+        return False
+

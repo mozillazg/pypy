@@ -539,6 +539,26 @@ class AppTestArray:
 
         raises(TypeError, self.array('i').__add__, (2,))
         raises(TypeError, self.array('i').__add__, self.array('b'))
+
+    def test_delitem(self):
+        a = self.array('i', [1, 2, 3])
+        del a[1]
+        assert repr(a) == "array('i', [1, 3])"
+
+        a = self.array('i', [1, 2, 3, 4, 5])
+        del a[1:3]
+        assert repr(a) == "array('i', [1, 4, 5])"
+
+        a.__delslice__(0,2)
+        assert repr(a) == "array('i', [5])"
+
+    def test_iter(self):
+        a = self.array('i', [1, 2, 3])
+        assert 1 in a
+        b = self.array('i')
+        for i in a:
+            b.append(i)
+        assert repr(b) == "array('i', [1, 2, 3])"
         
 
     #FIXME
