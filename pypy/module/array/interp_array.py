@@ -3,6 +3,8 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root, ApplevelClass
+from pypy.objspace.std.listobject import W_ListObject
+from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
@@ -43,11 +45,12 @@ class TypeCode(object):
         self.canoverflow = canoverflow
         self.w_class = None
 
-        assert self.bytes <= rffi.sizeof(rffi.ULONG)
-        if self.bytes == rffi.sizeof(rffi.ULONG) and not signed and self.unwrap == 'int_w':
-            # Treat this type as a ULONG
-            self.unwrap = 'bigint_w'
-            self.canoverflow = False
+        if self.canoverflow:
+            assert self.bytes <= rffi.sizeof(rffi.ULONG)
+            if self.bytes == rffi.sizeof(rffi.ULONG) and not signed and self.unwrap == 'int_w':
+                # Treat this type as a ULONG
+                self.unwrap = 'bigint_w'
+                self.canoverflow = False
 
 
     def _freeze_(self):
@@ -209,16 +212,23 @@ def make_array(mytype):
             new = space.int_w(w_new)
             oldlen = self.len
             self.setlen(self.len + new)
-            for i in range(new):
-                w_item = space.call_function(
-                    space.getattr(w_seq, space.wrap('__getitem__')),
-                    space.wrap(i))
-                try:
-                    item=self.item_w(w_item)
-                except OperationError:
-                    self.setlen(oldlen + i)
-                    raise
-                self.buffer[oldlen + i ] = item
+            
+            try:
+                if (isinstance(w_seq, W_ListObject) or
+                    isinstance(w_seq, W_TupleObject)):
+                    for i in range(new):
+                        item = self.item_w(w_seq.wrappeditems[i])
+                        self.buffer[oldlen + i ] = item
+                else:
+                    getitem = space.getattr(w_seq, space.wrap('__getitem__'))
+                    for i in range(new):
+                        w_item = space.call_function(getitem, space.wrap(i))
+                        item=self.item_w(w_item)
+                        self.buffer[oldlen + i ] = item
+            except OperationError:
+                self.setlen(oldlen + i)
+                raise
+
         descr_fromsequence.unwrap_spec = ['self', W_Root]
 
 
@@ -340,12 +350,12 @@ def make_array(mytype):
             if i < 0 or i >= self.len:
                 msg = 'pop index out of range'
                 raise OperationError(self.space.w_IndexError, self.space.wrap(msg))
-            val = self.buffer[i]
+            val = self.descr_getitem(self.space.wrap(i))
             while i < self.len - 1:
                 self.buffer[i] = self.buffer[i + 1]
                 i += 1
             self.setlen(self.len-1)
-            return self.space.wrap(val)
+            return val
         descr_pop.unwrap_spec = ['self', int]
 
 
@@ -467,7 +477,6 @@ def make_array(mytype):
         tounicode    = appmethod('tounicode'),
         tofile       = appmethod('tofile'),
         write        = appmethod('tofile'),
-        #tostring     = appmethod('tostring'),
         tostring     = interp2app(W_Array.descr_tostring),
 
         _setlen      = interp2app(W_Array.setlen),
