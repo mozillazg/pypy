@@ -72,7 +72,7 @@ class GraphAnalyzer(object):
             return self.analyze_direct_call(graph, seen)
         elif op.opname == "indirect_call":
             if op.args[-1].value is None:
-                return self.top_result()
+                return self.analyze_unknown_indirect_call(op, seen)
             return self.analyze_indirect_call(op.args[-1].value, seen)
         elif op.opname == "oosend":
             name = op.args[0].value
@@ -123,6 +123,9 @@ class GraphAnalyzer(object):
         for graph in graphs:
             results.append(self.analyze_direct_call(graph, seen))
         return self.join_results(results)
+
+    def analyze_unknown_indirect_call(self, op, seen=None):
+        return self.top_result()
 
     def analyze_oosend(self, TYPE, name, seen=None):
         graphs = TYPE._lookup_graphs(name)
