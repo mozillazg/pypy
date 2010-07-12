@@ -59,7 +59,14 @@ pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               set_jitcell_at = set_jitcell_at,
                               confirm_enter_jit = confirm_enter_jit)
 
+PyFrame_execute_generator_frame = PyFrame.execute_generator_frame
+
 class __extend__(PyFrame):
+    just_resuming_generator = False
+
+    def execute_generator_frame(self, w_inputvalue, ex=False):
+        self.just_resuming_generator = True
+        return PyFrame_execute_generator_frame(self, w_inputvalue, ex)
 
     def dispatch(self, pycode, next_instr, ec):
         self = hint(self, access_directly=True)
@@ -75,6 +82,9 @@ class __extend__(PyFrame):
             return self.popvalue()
 
     def jump_absolute(self, jumpto, _, ec=None):
+        if self.just_resuming_generator:
+            self.just_resuming_generator = False
+            return jumpto
         if we_are_jitted():
             self.last_instr = intmask(jumpto)
             ec.bytecode_trace(self)
