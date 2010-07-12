@@ -28,7 +28,7 @@ public:
     static double staticAddToDouble(double a);
     static int staticAtoi(const char* str);
     static char* staticStrcpy(const char* strin);
-    static void setPayload( payload* p, double d );
+    static void staticSetPayload(payload* p, double d);
     static int getCount();
 
 // instance methods
@@ -36,4 +36,7 @@ public:
     double addDataToDouble(double a);
     int addDataToAtoi(const char* str);
     char* addToStringValue(const char* str);
+
+    void setPayload(payload* p);
+    payload* cyclePayload(payload* p);
 };

@@ -35,6 +35,7 @@ def type_byname(space, name):
     if handle:
         cpptype = W_CPPType(space, name, handle)
         state.cpptype_cache[name] = cpptype
+        cpptype._find_func_members()
         return cpptype
 
     raise OperationError(space.w_TypeError, space.wrap("no such C++ class %s" % name))
@@ -211,7 +212,10 @@ class W_CPPType(Wrappable):
         self.name = name
         self.handle = handle
         self.function_members = {}
-        self._find_func_members()
+        # Do not call "self._find_func_members()" here, so that a distinction can be
+        #  made between testing for existence (i.e. existence in the cache of classes)
+        #  and actual use. Point being that a class can use itself, e.g. as a return
+        #  type or an argument to one of its methods.
     
     def _find_func_members(self):
         num_func_members = capi.c_num_methods(self.handle)

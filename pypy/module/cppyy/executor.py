@@ -1,9 +1,9 @@
-import pypy.module.cppyy.capi as capi
-
 from pypy.rpython.lltypesystem import rffi, lltype
 
-_executors = {}
+from pypy.module.cppyy import helper, capi
 
+
+_executors = {}
 
 class FunctionExecutor(object):
     def execute(self, space, func, cppthis, num_args, args):
@@ -32,11 +32,29 @@ class CStringExecutor(FunctionExecutor):
         result = capi.charp2str_free(ccpresult)
         return space.wrap(result)
 
+class InstancePtrExecutor(FunctionExecutor):
+    _immutable_ = True
+    def __init__(self, space, cpptype):
+        self.cpptype = cpptype
+
+    def execute(self, space, func, cppthis, num_args, args):
+        from pypy.module.cppyy import interp_cppyy
+        result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return interp_cppyy.W_CCPInstance(self.cpptype, result)
+
+
 def get_executor(space, name):
+    from pypy.module.cppyy import interp_cppyy
+
     try:
         return _executors[name]
     except KeyError:
         pass
+
+    compound = helper.compound(name)
+    cpptype = interp_cppyy.type_byname(space, helper.clean_type(name))
+    if compound == "*":           
+        return InstancePtrExecutor(space, cpptype)
 
     return None # currently used until proper lazy instantiation available in interp_cppyy
  

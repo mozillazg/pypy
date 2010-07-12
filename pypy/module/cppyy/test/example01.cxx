@@ -54,7 +54,7 @@ char* example01::staticStrcpy(const char* strin) {
     ::strcpy(strout, strin);
     return strout;
 }
-void example01::setPayload( payload* p, double d ) {
+void example01::staticSetPayload(payload* p, double d) {
     p->setData(d);
 }
 
@@ -84,6 +84,15 @@ char* example01::addToStringValue(const char* str) {
     char* cresult = (char*)malloc(result.size()+1);
     ::strcpy(cresult, result.c_str());
     return cresult;
+}
+
+void example01::setPayload(payload* p) {
+    p->setData(somedata);
+}
+
+payload* example01::cyclePayload(payload* p) {
+    setPayload(p);
+    return p;
 }
 
 int example01::count = 0;

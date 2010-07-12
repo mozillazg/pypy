@@ -130,12 +130,17 @@ class AppTestPYTHONIFY:
         pl = payload_class(3.14)
         assert round(pl.getData()-3.14, 8) == 0
 
-        example01_class.setPayload(pl._cppinstance, 41.)
+        example01_class.staticSetPayload(pl._cppinstance, 41.)
         assert pl.getData() == 41.
-        example01_class.setPayload(pl, 43.)
+        example01_class.staticSetPayload(pl, 43.)
         assert pl.getData() == 43.
-        e.setPayload(pl, 45.)
+        e.staticSetPayload(pl, 45.)
         assert pl.getData() == 45.
+
+        e.setPayload(pl);
+        assert round(pl.getData()-14., 8) == 0
+        e.cyclePayload(pl);
+        assert round(pl.getData()-14., 8) == 0
 
         pl.destruct()
         e.destruct()
