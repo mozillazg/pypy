@@ -364,8 +364,9 @@ def make_array(mytype):
             if mytype.bytes not in [1, 2, 4, 8]:
                 msg="byteswap not supported for this array"
                 raise OperationError(self.space.w_RuntimeError, self.space.wrap(msg))
+            if self.len == 0: return
             bytes = self.charbuf()
-            tmp = [0] * mytype.bytes
+            tmp = [bytes[0]] * mytype.bytes
             for start in range(0, self.len * mytype.bytes, mytype.bytes):
                 stop = start + mytype.bytes - 1
                 for i in range(mytype.bytes):
