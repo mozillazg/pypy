@@ -68,12 +68,11 @@ def get_converter(space, name):
         return _converters[name]
     except KeyError:
         pass
+
     compound = helper.compound(name)
     cpptype = interp_cppyy.type_byname(space, helper.clean_type(name))
     if compound == "*":
         return InstancePtrConverter(space, cpptype)
-
-    print name
 
     raise OperationError(space.w_TypeError, space.wrap("no clue what %s is" % name))
 

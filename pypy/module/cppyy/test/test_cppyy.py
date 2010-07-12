@@ -141,8 +141,33 @@ class AppTestCPPYY:
         pl = self.payload.construct(3.14)
         assert round(pl.invoke("getData")-3.14, 8) == 0
         
-        t.invoke("setPayload", pl, 41.)    # now pl is a CPPInstance
+        t.invoke("staticSetPayload", pl, 41.)    # now pl is a CPPInstance
         assert pl.invoke("getData") == 41.
-        
+
+        e = t.construct(50)
+        e.invoke("setPayload", pl);
+        assert round(pl.invoke("getData")-50., 8) == 0
+
+        e.destruct()
         pl.destruct() 
         assert t.invoke("getCount") == 0
+
+    def testReturningOfAnObjectByPointer(self):
+        """Test passing of an instance as an argument."""
+
+        t = self.example01
+        
+        pl = self.payload.construct(3.14)
+        assert round(pl.invoke("getData")-3.14, 8) == 0
+
+        e = t.construct(50)
+
+        e.invoke("setPayload", pl);
+        assert round(pl.invoke("getData")-50., 8) == 0
+        e.invoke("cyclePayload", pl);
+        assert round(pl.invoke("getData")-50., 8) == 0
+
+        e.destruct()
+        pl.destruct() 
+        assert t.invoke("getCount") == 0
+
