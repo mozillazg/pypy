@@ -36,12 +36,11 @@ if True:
         the array. Also called as read."""
         if not isinstance(f, file):
             raise TypeError("arg1 must be open file")
-        self._fromfile(f, n)
 
-
-    def _fromfile(self, f, n):        
         size = self.itemsize * n
+        print "read"
         item = f.read(size)
+        print item
         if len(item) < size:
             n = len(item) % self.itemsize
             if n != 0: item = item[0:-(len(item) % self.itemsize)]
