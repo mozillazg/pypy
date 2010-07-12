@@ -289,6 +289,64 @@ class AppTestArray:
         except TypeError:
             pass
 
+        a=self.array('i', [1,2,3])
+        assert a.__getslice__(1,2) == a[1:2]
+        a.__setslice__(1,2, self.array('i',(7,)))
+        assert a[0] == 1 and a[1] == 7 and a[2] == 3
+
+    def test_resizingslice(self):
+        a=self.array('i', [1, 2, 3])
+        a[1:2] = self.array('i', [7, 8, 9])
+        assert repr(a) == "array('i', [1, 7, 8, 9, 3])"
+        a[1:2] = self.array('i', [10])
+        assert repr(a) == "array('i', [1, 10, 8, 9, 3])"
+        a[1:2] = self.array('i')
+        assert repr(a) == "array('i', [1, 8, 9, 3])"
+        
+        a[1:3] = self.array('i', [11, 12, 13])
+        assert repr(a) == "array('i', [1, 11, 12, 13, 3])"
+        a[1:3] = self.array('i', [14])
+        assert repr(a) == "array('i', [1, 14, 13, 3])"
+        a[1:3] = self.array('i')
+        assert repr(a) == "array('i', [1, 3])"
+        
+        a[1:1] = self.array('i', [15, 16, 17])
+        assert repr(a) == "array('i', [1, 15, 16, 17, 3])"
+        a[1:1] = self.array('i', [18])
+        assert repr(a) == "array('i', [1, 18, 15, 16, 17, 3])"
+        a[1:1] = self.array('i')
+        assert repr(a) == "array('i', [1, 18, 15, 16, 17, 3])"
+
+        a[:] = self.array('i', [20, 21, 22])
+        assert repr(a) == "array('i', [20, 21, 22])"
+
+    def test_reversingslice(self):
+        a = self.array('i', [22, 21, 20])
+        assert repr(a[::-1]) == "array('i', [20, 21, 22])"
+        assert repr(a[2:1:-1]) == "array('i', [20])"
+        assert repr(a[2:-1:-1]) == "array('i')"
+        assert repr(a[-1:0:-1]) == "array('i', [20, 21])"
+
+        for a in range(-4,5):
+            for b in range(-4,5):
+                for c in [-4, -3, -2, -1, 1, 2, 3, 4]:
+                    lst = [1, 2, 3]
+                    arr=self.array('i', lst)
+                    assert repr(arr[a:b:c]) == repr(self.array('i', lst[a:b:c]))
+                    for vals in ([4,5], [6], []):
+                        try:
+                            ok = False
+                            lst[a:b:c]=vals
+                            ok = True
+                            arr[a:b:c]=self.array('i', vals)
+                            assert repr(arr) == repr(self.array('i', lst))
+                        except ValueError:
+                            assert not ok
+                            raises(ValueError,
+                                   "arr[a:b:c]=self.array('i', vals)")
+
+
+
     def test_toxxx(self):
         a = self.array('i', [1,2,3])
         l  = a.tolist()
@@ -458,7 +516,30 @@ class AppTestArray:
             assert a[0] == 1
             assert a[1] == 2
             assert a[2] == 3
-            
+
+    def test_addmul(self):
+        a = self.array('i', [1, 2, 3])
+        assert repr(a + a) == "array('i', [1, 2, 3, 1, 2, 3])"
+        assert 2 * a == a + a
+        assert a * 2 == a + a
+        b = self.array('i', [4, 5, 6, 7])
+        assert repr(a + b) == "array('i', [1, 2, 3, 4, 5, 6, 7])"
+        assert repr(2 * self.array('i')) == "array('i')"
+        assert repr(self.array('i') + self.array('i')) == "array('i')"
+
+        a = self.array('i', [1, 2])
+        b = a
+        a += a
+        assert repr(b) == "array('i', [1, 2, 1, 2])"
+        b *= 3
+        assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2])"
+        assert a == b
+        a += self.array('i', (7,))
+        assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 7])"
+
+        raises(TypeError, self.array('i').__add__, (2,))
+        raises(TypeError, self.array('i').__add__, self.array('b'))
+        
 
     #FIXME
     #def test_type(self):

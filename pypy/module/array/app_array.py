@@ -170,3 +170,10 @@ if True:
         else:
             return self.tolist() >= other.tolist()
 
+    ##### list protocol
+
+    def __getslice__(self, i, j):
+        return self.__getitem__(slice(i, j))
+
+    def __setslice__(self, i, j, x):
+        self.__setitem__(slice(i, j), x)
