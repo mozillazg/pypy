@@ -149,6 +149,7 @@ class MIFrame(object):
             assert oldbox not in registers[count:]
 
     def make_result_of_lastop(self, resultbox):
+        assert resultbox is not None
         target_index = ord(self.bytecode[self.pc-1])
         if resultbox.type == history.INT:
             self.registers_i[target_index] = resultbox
