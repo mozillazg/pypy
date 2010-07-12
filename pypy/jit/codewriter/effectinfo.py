@@ -104,3 +104,10 @@ class VirtualizableAnalyzer(BoolGraphAnalyzer):
     def analyze_simple_operation(self, op):
         return op.opname in ('jit_force_virtualizable',
                              'jit_force_virtual')
+
+    def analyze_unknown_indirect_call(self, op, seen=None):
+        # hack hack hack.  The idea is that no indirect_call(..., None)
+        # should force the virtuals or virtualizables, which is kind of
+        # roughly reasonable: such an operation may call either a C function
+        # or an 'instantiate' method from a class vtable.
+        return False
