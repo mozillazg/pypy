@@ -149,15 +149,21 @@ class MIFrame(object):
             assert oldbox not in registers[count:]
 
     def make_result_of_lastop(self, resultbox):
-        assert resultbox is not None
+        got_type = resultbox.type
+        if not we_are_translated():
+            assert resultbox is not None
+            typeof = {'i': history.INT,
+                      'r': history.REF,
+                      'f': history.FLOAT}
+            assert typeof[self.jitcode._resulttypes[self.pc]] == got_type
         target_index = ord(self.bytecode[self.pc-1])
-        if resultbox.type == history.INT:
+        if got_type == history.INT:
             self.registers_i[target_index] = resultbox
-        elif resultbox.type == history.REF:
+        elif got_type == history.REF:
             #debug_print(' ->', 
             #            llmemory.cast_ptr_to_adr(resultbox.getref_base()))
             self.registers_r[target_index] = resultbox
-        elif resultbox.type == history.FLOAT:
+        elif got_type == history.FLOAT:
             self.registers_f[target_index] = resultbox
         else:
             raise AssertionError("bad result box type")
@@ -2260,6 +2266,8 @@ def _get_opimpl_method(name, argcodes):
         #
         if resultbox is not None:
             self.make_result_of_lastop(resultbox)
+        elif not we_are_translated():
+            assert self._result_argcode == 'v'
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)
