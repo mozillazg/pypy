@@ -16,18 +16,7 @@ class AppTestSimpleArray:
         assert a[5] == 7.42
 
 
-class AppTestArray:
-    def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=('array','struct'))
-        cls.w_array = cls.space.appexec([], """():
-            import array
-            return array.array
-        """)
-        cls.w_unpack = cls.space.appexec([], """():
-            import struct
-            return struct.unpack
-        """)
-
+class BaseArrayTests:
     def test_ctor(self):
         raises(TypeError, self.array, 'hi')
         raises(TypeError, self.array, 1)
@@ -566,6 +555,26 @@ class AppTestArray:
     #    for t in 'bBhHiIlLfdcu':
     #        assert type(self.array(t)) is self.array
 
+class TestCPythonsOwnArray(BaseArrayTests):
+
+    def setup_class(cls):
+        import array
+        cls.array = array.array
+        import struct
+        cls.unpack = struct.unpack
+
+
+class AppTestArray(BaseArrayTests):
+    def setup_class(cls):
+        cls.space = gettestobjspace(usemodules=('array', 'struct'))
+        cls.w_array = cls.space.appexec([], """():
+            import array
+            return array.array
+        """)
+        cls.w_unpack = cls.space.appexec([], """():
+            import struct
+            return struct.unpack
+        """)
 
 ## class AppTestAppArray(AppTestArray):
 ##     def setup_class(cls):
