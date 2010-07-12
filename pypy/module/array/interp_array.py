@@ -126,6 +126,7 @@ def make_array(mytype):
                 for i in range(min(size,self.len)):
                     new_buffer[i] = self.buffer[i]
             else:
+                assert size == 0
                 new_buffer = lltype.nullptr(mytype.arraytype)
             if self.buffer != lltype.nullptr(mytype.arraytype):
                 lltype.free(self.buffer, flavor='raw')                
@@ -138,22 +139,36 @@ def make_array(mytype):
         descr_len.unwrap_spec = ['self']
 
 
-        def descr_getslice(self, start, stop, step):
-            size = (stop - start) / step
-            if (stop - start) % step > 0: size += 1
-            w_a=mytype.w_class(self.space)
-            w_a.setlen(size)
-            j=0
-            for i in range(start, stop, step):
-                w_a.buffer[j]=self.buffer[i]
-                j+=1
+        def descr_getslice(self, w_idx):
+            space = self.space
+            start, stop, step = space.decode_index(w_idx, self.len)
+            if step < 0:
+                w_lst = space.call_function(
+                    space.getattr(self, space.wrap('tolist')))
+                w_lst = space.call_function(
+                    space.getattr(w_lst, space.wrap('__getitem__')),
+                    w_idx)
+                w_a=mytype.w_class(self.space)
+                w_a.descr_fromsequence(w_lst)
+            else:
+                size = (stop - start) / step
+                if (stop - start) % step > 0: size += 1
+                print size
+                if size < 0: size = 0
+                w_a=mytype.w_class(self.space)
+                w_a.setlen(size)
+                j=0
+                for i in range(start, stop, step):
+                    w_a.buffer[j]=self.buffer[i]
+                    j+=1
             return w_a
 
         def descr_getitem(self, w_idx):
             space=self.space
             start, stop, step = space.decode_index(w_idx, self.len)
-            if step==0:
-                item = self.buffer[start]
+            if step == 0:
+                idx = start
+                item = self.buffer[idx]
                 tc=mytype.typecode
                 if tc == 'b' or tc == 'B' or tc == 'h' or tc == 'H' or tc == 'i' or tc == 'l':
                     item = rffi.cast(lltype.Signed, item)
@@ -161,7 +176,7 @@ def make_array(mytype):
                     item = float(item)
                 return self.space.wrap(item)
             else:
-                return self.descr_getslice(start, stop, step)
+                return self.descr_getslice(w_idx)
         descr_getitem.unwrap_spec = ['self', W_Root]
 
 
@@ -208,30 +223,39 @@ def make_array(mytype):
                 self.descr_append(w_item)
         descr_extend.unwrap_spec = ['self', W_Root]
 
-        def descr_setslice(self, start, stop, step, w_item):
+        def descr_setslice(self, w_idx, w_item):
+            space=self.space
+            start, stop, step = self.space.decode_index(w_idx, self.len)
             if isinstance(w_item, W_Array): # Implies mytype.typecode == w_item.typecode
                 size = (stop - start) / step
                 if (stop - start) % step > 0: size += 1
-                if w_item.len != size: # FIXME: Support for step=1
-                    msg = ('attempt to assign array of size %d to ' + 
-                           'slice of size %d') % (w_item.len, size)
-                    raise OperationError(self.space.w_ValueError,
-                                         self.space.wrap(msg))
-                j=0
-                for i in range(start, stop, step):
-                    self.buffer[i]=w_item.buffer[j]
-                    j+=1
+                if w_item.len != size or step < 0:
+                    w_lst = space.call_function(
+                        space.getattr(self, space.wrap('tolist')))
+                    w_item = space.call_function(
+                        space.getattr(w_item, space.wrap('tolist')))
+                    space.call_function(
+                        space.getattr(w_lst, space.wrap('__setitem__')),
+                        w_idx, w_item)
+                    self.setlen(0)
+                    self.descr_fromsequence(w_lst)
+                else:
+                    j=0
+                    for i in range(start, stop, step):
+                        self.buffer[i]=w_item.buffer[j]
+                        j+=1
                 return
             msg='can only assign array to array slice'
             raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
             
         def descr_setitem(self, w_idx, w_item):
             start, stop, step = self.space.decode_index(w_idx, self.len)
-            if step==0:
+            if step == 0:
+                idx = start
                 item = self.item_w(w_item)
-                self.buffer[start] = item
+                self.buffer[idx] = item
             else:
-                self.descr_setslice(start, stop, step, w_item)
+                self.descr_setslice(w_idx, w_item)
         descr_setitem.unwrap_spec = ['self', W_Root, W_Root]
 
         def charbuf(self):
@@ -310,7 +334,7 @@ def make_array(mytype):
 
 
         def descr_copy(self):
-            w_a=mytype.w_class(self.space)
+            w_a = mytype.w_class(self.space)
             w_a.descr_fromsequence(self)
             return w_a
 
@@ -333,6 +357,44 @@ def make_array(mytype):
                 for i in range(mytype.bytes):
                     bytes[stop - i] = tmp[i]
 
+        def descr_add(self, w_other):
+            other = self.space.interp_w(W_Array, w_other)
+            w_a = mytype.w_class(self.space)
+            w_a.setlen(self.len + other.len)
+            for i in range(self.len):
+                w_a.buffer[i] = self.buffer[i]
+            for i in range(other.len):
+                w_a.buffer[i + self.len] = other.buffer[i]
+            return w_a
+        descr_add.unwrap_spec = ['self', W_Root]
+
+        def descr_iadd(self, w_other):
+            other = self.space.interp_w(W_Array, w_other)
+            oldlen = self.len
+            otherlen = other.len
+            self.setlen(oldlen + otherlen)
+            for i in range(otherlen):
+                self.buffer[oldlen + i] = other.buffer[i]
+            return self
+        descr_add.unwrap_spec = ['self', W_Root]
+
+        def descr_mul(self, repeat):
+            w_a = mytype.w_class(self.space)
+            w_a.setlen(self.len * repeat)
+            for r in range(repeat):
+                for i in range(self.len):
+                    w_a.buffer[r * self.len + i] = self.buffer[i]
+            return w_a
+        descr_mul.unwrap_spec = ['self', int]
+            
+        def descr_imul(self, repeat):
+            oldlen=self.len
+            self.setlen(self.len * repeat)
+            for r in range(1,repeat):
+                for i in range(oldlen):
+                    self.buffer[r * oldlen + i] = self.buffer[i]
+            return self
+        descr_imul.unwrap_spec = ['self', int]
 
 
 
@@ -348,6 +410,8 @@ def make_array(mytype):
         __len__      = interp2app(W_Array.descr_len),
         __getitem__  = interp2app(W_Array.descr_getitem),
         __setitem__  = interp2app(W_Array.descr_setitem),
+        __getslice__ = appmethod('__getslice__'),
+        __setslice__ = appmethod('__setslice__'),
 
         itemsize     = GetSetProperty(descr_itemsize, cls=W_Array),
         typecode     = GetSetProperty(descr_typecode, cls=W_Array),
@@ -389,6 +453,12 @@ def make_array(mytype):
         _isarray     = interp2app(W_Array.descr_isarray),
         __reduce__   = interp2app(W_Array.descr_reduce),
         __copy__     = interp2app(W_Array.descr_copy),
+
+        __add__     = interp2app(W_Array.descr_add),
+        __iadd__     = interp2app(W_Array.descr_iadd),
+        __mul__     = interp2app(W_Array.descr_mul),
+        __rmul__     = interp2app(W_Array.descr_mul),
+        __imul__     = interp2app(W_Array.descr_imul),
 
         buffer_info  = interp2app(W_Array.descr_buffer_info),
         
