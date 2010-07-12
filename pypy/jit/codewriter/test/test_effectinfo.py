@@ -1,7 +1,9 @@
 from pypy.rpython.lltypesystem.rclass import OBJECT
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.test.test_llinterp import gengraph
 from pypy.jit.codewriter.effectinfo import effectinfo_from_writeanalyze
+from pypy.jit.codewriter.effectinfo import VirtualizableAnalyzer
 
 class FakeCPU:
     def fielddescrof(self, T, fieldname):
@@ -77,3 +79,19 @@ def test_filter_out_instance_with_void():
     assert not effectinfo.readonly_descrs_fields
     assert not effectinfo.write_descrs_fields
     assert not effectinfo.write_descrs_arrays
+
+
+def test_external_calls():
+    C_METHPTRGETTER = lltype.FuncType([lltype.Signed], lltype.Signed)
+    c_get_methptr_getter = rffi.llexternal(
+        "cppyy_get_methptr_getter",
+        [lltype.Signed], lltype.Ptr(C_METHPTRGETTER))
+    #
+    def f(handle):
+        methgetter = c_get_methptr_getter(handle)
+        return methgetter(123)
+    t, _, graph = gengraph(f, [int])
+    #
+    va = VirtualizableAnalyzer(t)
+    result = va.analyze_direct_call(graph)
+    assert result is False
