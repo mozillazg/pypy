@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDriver, hint, we_are_jitted
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, Arguments
-from pypy.interpreter.pycode import PyCode, CO_CONTAINSLOOP
+from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
 from opcode import opmap
@@ -23,9 +23,6 @@ PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
-
-def can_inline(next_instr, bytecode):
-    return not bool(bytecode.co_flags & CO_CONTAINSLOOP)
 
 def get_printable_location(next_instr, bytecode):
     from pypy.tool.stdlib_opcode import opcode_method_names
@@ -57,8 +54,7 @@ class PyPyJitDriver(JitDriver):
 ##        blockstack = frame.blockstack
 ##        return (valuestackdepth, blockstack)
 
-pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
-                              get_printable_location = get_printable_location,
+pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
                               confirm_enter_jit = confirm_enter_jit)
