@@ -479,6 +479,7 @@ class WarmRunnerDesc(object):
             else:
                 pass   # a 'can_enter_jit' before the 'jit-merge_point', but
                        # originally in the same function: we ignore it here
+                       # see e.g. test_jitdriver.test_simple
         for jd in self.jitdrivers_sd:
             sublist = sublists[jd.jitdriver]
             assert len(sublist) > 0, \

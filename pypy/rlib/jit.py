@@ -282,6 +282,10 @@ class JitDriver:
         # special-cased by ExtRegistryEntry
         assert dict.fromkeys(livevars) == _self._alllivevars
 
+    def loop_header(self):
+        # special-cased by ExtRegistryEntry
+        pass
+
     def _set_param(self, name, value):
         # special-cased by ExtRegistryEntry
         # (internal, must receive a constant 'name')
@@ -321,10 +325,14 @@ class JitDriver:
         # specifically for them.
         self.jit_merge_point = self.jit_merge_point
         self.can_enter_jit = self.can_enter_jit
+        self.loop_header = self.loop_header
         self._set_param = self._set_param
 
         class Entry(ExtEnterLeaveMarker):
             _about_ = (self.jit_merge_point, self.can_enter_jit)
+
+        class Entry(ExtLoopHeader):
+            _about_ = self.loop_header
 
         class Entry(ExtSetParam):
             _about_ = self._set_param
@@ -419,6 +427,23 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                  hop.inputconst(lltype.Void, driver)]
         vlist.extend(greens_v)
         vlist.extend(reds_v)
+        return hop.genop('jit_marker', vlist,
+                         resulttype=lltype.Void)
+
+class ExtLoopHeader(ExtRegistryEntry):
+    # Replace a call to myjitdriver.loop_header()
+    # with an operation jit_marker('loop_header', myjitdriver).
+
+    def compute_result_annotation(self, **kwds_s):
+        from pypy.annotation import model as annmodel
+        return annmodel.s_None
+
+    def specialize_call(self, hop):
+        from pypy.rpython.lltypesystem import lltype
+        driver = self.instance.im_self
+        hop.exception_cannot_occur()
+        vlist = [hop.inputconst(lltype.Void, 'loop_header'),
+                 hop.inputconst(lltype.Void, driver)]
         return hop.genop('jit_marker', vlist,
                          resulttype=lltype.Void)
 

@@ -837,8 +837,8 @@ class MIFrame(object):
             # needed because do_recursive_call() will write its result
             # with make_result_of_lastop(), so the lastop must be right:
             # it must be the call to 'self', and not the jit_merge_point
-            # itself, which has no lastop at all.
-            assert self.metainterp.framestack
+            # itself, which has no result at all.
+            assert len(self.metainterp.framestack) >= 2
             try:
                 self.metainterp.finishframe(None)
             except ChangeFrame:
@@ -2267,7 +2267,7 @@ def _get_opimpl_method(name, argcodes):
         if resultbox is not None:
             self.make_result_of_lastop(resultbox)
         elif not we_are_translated():
-            assert self._result_argcode == 'v'
+            assert self._result_argcode in 'v?'
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)
