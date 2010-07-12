@@ -478,12 +478,15 @@ class WarmEnterState(object):
         jit_getter = self.make_jitcell_getter()
         jit_getter_maybe = self.jit_getter_maybe
 
-        def can_inline_callable(greenkey):
-            greenargs = unwrap_greenkey(greenkey)
+        def can_inline_greenargs(*greenargs):
             cell = jit_getter_maybe(*greenargs)
             if cell is not None and cell.dont_trace_here:
                 return False
             return True
+        def can_inline_callable(greenkey):
+            greenargs = unwrap_greenkey(greenkey)
+            return can_inline_greenargs(*greenargs)
+        self.can_inline_greenargs = can_inline_greenargs
         self.can_inline_callable = can_inline_callable
 
         def get_assembler_token(greenkey):

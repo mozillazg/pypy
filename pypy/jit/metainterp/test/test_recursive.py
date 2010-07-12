@@ -98,23 +98,18 @@ class RecursiveTests:
                                policy=StopAtXPolicy(opaque))
         assert res == 1
 
-    def get_interpreter(self, codes, always_inline=False):
+    def get_interpreter(self, codes):
         ADD = "0"
         JUMP_BACK = "1"
         CALL = "2"
         EXIT = "3"
 
-        if always_inline:
-            def can_inline(*args):
-                return True
-        else:
-            def can_inline(i, code):
-                code = hlstr(code)
-                return not JUMP_BACK in code
+        def getloc(i, code):
+            return 'code="%s", i=%d' % (code, i)
 
         jitdriver = JitDriver(greens = ['i', 'code'], reds = ['n'],
-                              can_inline = can_inline)
- 
+                              get_printable_location = getloc)
+
         def interpret(codenum, n, i):
             code = codes[codenum]
             while i < len(code):
@@ -162,31 +157,16 @@ class RecursiveTests:
 
         assert self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
                                 inline=True) == 42
-        self.check_loops(call_may_force = 1, call = 0)
-
-    def test_inline_faulty_can_inline(self):
-        code = "021"
-        subcode = "301"
-        codes = [code, subcode]
-
-        f = self.get_interpreter(codes, always_inline=True)
-
-        try:
-            self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
-                             inline=True)
-        except CannotInlineCanEnterJit:
-            pass
-        else:
-            py.test.fail("DID NOT RAISE")
+        # the call is fully inlined, because we jump to subcode[1], thus
+        # skipping completely the JUMP_BACK in subcode[0]
+        self.check_loops(call_may_force = 0, call_assembler = 0, call = 0)
 
     def test_guard_failure_in_inlined_function(self):
         def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
         def f(code, n):
             pc = 0
             while pc < len(code):
@@ -219,10 +199,8 @@ class RecursiveTests:
         def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n', 'flag'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
         def f(code, n):
             pc = 0
             flag = False
@@ -262,10 +240,8 @@ class RecursiveTests:
         def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
 
         class Exc(Exception):
             pass
@@ -307,10 +283,8 @@ class RecursiveTests:
         def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -523,11 +497,9 @@ class RecursiveTests:
     def test_trace_from_start(self):
         def p(pc, code):
             code = hlstr(code)
-            return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
+            return "'%s' at %d: %s" % (code, pc, code[pc])
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -537,9 +509,9 @@ class RecursiveTests:
                 op = code[pc]
                 if op == "+":
                     n += 7
-                if op == "-":
+                elif op == "-":
                     n -= 1
-                if op == "c":
+                elif op == "c":
                     n = f('---', n)
                 elif op == "l":
                     if n > 0:
@@ -556,7 +528,10 @@ class RecursiveTests:
             result = 0
             for i in range(m):
                 result += f('+-cl--', i)
+        g(50)
         self.meta_interp(g, [50], backendopt=True)
+        py.test.skip("tracing from start is by now only longer enabled "
+                     "if a trace gets too big")
         self.check_tree_loop_count(3)
         self.check_history(int_add=1)
 
@@ -564,10 +539,8 @@ class RecursiveTests:
         def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(pc, code):
-            return "l" not in hlstr(code)
         myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -606,8 +579,7 @@ class RecursiveTests:
 
     def test_directly_call_assembler(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -623,28 +595,29 @@ class RecursiveTests:
 
     def test_recursion_cant_call_assembler_directly(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'j'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno, j):
             i = 0
-            while i < 1:
-                driver.can_enter_jit(codeno=codeno, i=i, j=j)
+            while 1:
                 driver.jit_merge_point(codeno=codeno, i=i, j=j)
-                i += 1
-                if j == 0:
+                if i == 1:
+                    if j == 0:
+                        return
+                    portal(2, j - 1)
+                elif i == 3:
                     return
-                portal(2, j - 1)
+                i += 1
+                driver.can_enter_jit(codeno=codeno, i=i, j=j)
 
         portal(2, 50)
         self.meta_interp(portal, [2, 20], inline=True)
-        self.check_history(call_assembler=0, call_may_force=1)
-        self.check_enter_count_at_most(1)
+        self.check_loops(call_assembler=0, call_may_force=1,
+                         everywhere=True)
 
     def test_directly_call_assembler_return(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -667,8 +640,7 @@ class RecursiveTests:
                 self.x = x
         
         driver = JitDriver(greens = ['codeno'], reds = ['i'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -689,8 +661,7 @@ class RecursiveTests:
 
     def test_directly_call_assembler_fail_guard(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno, k):
             i = 0
@@ -721,8 +692,7 @@ class RecursiveTests:
         
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def main(codeno):
             frame = Frame()
@@ -760,8 +730,7 @@ class RecursiveTests:
         
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         @dont_look_inside
         def check_frame(subframe):
@@ -811,8 +780,7 @@ class RecursiveTests:
         
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
         class SomewhereElse(object):
             pass
 
@@ -851,8 +819,7 @@ class RecursiveTests:
 
     def test_directly_call_assembler_virtualizable_with_array(self):
         myjitdriver = JitDriver(greens = ['codeno'], reds = ['n', 'x', 'frame'],
-                                virtualizables = ['frame'],
-                                can_inline = lambda codeno : False)
+                                virtualizables = ['frame'])
 
         class Frame(object):
             _virtualizable2_ = ['l[*]', 's']
@@ -898,8 +865,7 @@ class RecursiveTests:
         
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
         class SomewhereElse(object):
             pass
 
@@ -941,8 +907,7 @@ class RecursiveTests:
 
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def residual(k):
             if k > 40:
