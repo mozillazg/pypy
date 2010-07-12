@@ -490,16 +490,12 @@ class BaseArrayTests:
         b = pickle.loads(s)
         assert len(b) == 0 and b.typecode == 'l'
 
-    def test_misc(self):
+    def test_copy_swap(self):
         a = self.array('i', [1, 2, 3])
         from copy import copy
         b = copy(a)
         a[1] = 7
         assert repr(b) == "array('i', [1, 2, 3])"
-
-        bi=b.buffer_info()
-        assert bi[0] != 0 # FIXME: How can the address be tested?
-        assert bi[1] == 3
 
         for tc in 'bhilBHIL':
             a=self.array(tc, [1, 2, 3])
@@ -574,7 +570,7 @@ class TestCPythonsOwnArray(BaseArrayTests):
 
 class AppTestArray(BaseArrayTests):
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=('array', 'struct'))
+        cls.space = gettestobjspace(usemodules=('array', 'struct', '_rawffi'))
         cls.w_array = cls.space.appexec([], """():
             import array
             return array.array
@@ -583,4 +579,17 @@ class AppTestArray(BaseArrayTests):
             import struct
             return struct
         """)
+        cls.w_rffi = cls.space.appexec([], """():
+            import _rawffi
+            return _rawffi
+        """)
 
+
+    def test_buffer_info(self):
+        a = self.array('c', 'Hi!')
+        bi=a.buffer_info()
+        assert bi[0] != 0 
+        assert bi[1] == 3
+        data = self.rffi.charp2string(bi[0])
+        assert data == 'Hi!'
+        
