@@ -2,6 +2,7 @@ import py
 from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE, hint
 from pypy.rlib.jit import unroll_safe, dont_look_inside
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import fatalerror
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
@@ -770,7 +771,7 @@ class RecursiveTests:
         res = self.meta_interp(main, [0], inline=True)
         assert res == main(0)
 
-    def test_directly_call_assembler_virtualizable_force(self):
+    def test_directly_call_assembler_virtualizable_force1(self):
         class Thing(object):
             def __init__(self, val):
                 self.val = val
@@ -797,6 +798,7 @@ class RecursiveTests:
             return frame.thing.val
 
         def portal(codeno, frame):
+            print 'ENTER:', codeno, frame.thing.val
             i = 0
             while i < 10:
                 driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
@@ -806,11 +808,15 @@ class RecursiveTests:
                     subframe = Frame()
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
-                elif frame.thing.val > 40:
-                    change(Thing(13))
-                    nextval = 13
+                elif codeno == 1:
+                    if frame.thing.val > 40:
+                        change(Thing(13))
+                        nextval = 13
+                else:
+                    fatalerror("bad codeno = " + str(codeno))
                 frame.thing = Thing(nextval + 1)
                 i += 1
+            print 'LEAVE:', codeno, frame.thing.val
             return frame.thing.val
 
         res = self.meta_interp(main, [0], inline=True,
