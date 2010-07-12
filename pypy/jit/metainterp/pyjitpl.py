@@ -825,12 +825,21 @@ class MIFrame(object):
         else:
             warmrunnerstate = jitdriver_sd.warmstate
             token = warmrunnerstate.get_assembler_token(greenboxes)
-            resbox = self.do_recursive_call(jitdriver_sd,
-                                            greenboxes + redboxes,
-                                            token)
-            # in case of exception, do_recursive_call() stops by raising
-            # the ChangeFrame exception already.
-            self.metainterp.finishframe(resbox)
+            # warning! careful here.  We have to return from the current
+            # frame containing the jit_merge_point, and then use
+            # do_recursive_call() to follow the recursive call.  This is
+            # needed because do_recursive_call() will write its result
+            # with make_result_of_lastop(), so the lastop must be right:
+            # it must be the call to 'self', and not the jit_merge_point
+            # itself, which has no lastop at all.
+            assert self.metainterp.framestack
+            try:
+                self.metainterp.finishframe(None)
+            except ChangeFrame:
+                pass
+            frame = self.metainterp.framestack[-1]
+            frame.do_recursive_call(jitdriver_sd, greenboxes + redboxes, token)
+            raise ChangeFrame
 
     def debug_merge_point(self, jitdriver_sd, greenkey):
         # debugging: produce a DEBUG_MERGE_POINT operation
@@ -879,6 +888,12 @@ class MIFrame(object):
         exc_value_box = self.metainterp.last_exc_value_box
         assert exc_value_box is not None
         return exc_value_box
+
+    @arguments("box")
+    def opimpl_debug_fatalerror(self, box):
+        from pypy.rpython.lltypesystem import rstr, lloperation
+        msg = box.getref(lltype.Ptr(rstr.STR))
+        lloperation.llop.debug_fatalerror(msg)
 
     @arguments("box")
     def opimpl_virtual_ref(self, box):

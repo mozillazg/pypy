@@ -2,7 +2,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import intmask, LONG_BIT, r_uint, ovfcheck
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop
-from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib.debug import make_sure_not_resized, fatalerror
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLException
@@ -755,6 +755,10 @@ class BlackholeInterpreter(object):
         e = self.exception_last_value
         assert e
         reraise(e)
+
+    @arguments("r")
+    def bhimpl_debug_fatalerror(msg):
+        llop.debug_fatalerror(lltype.Void, msg)
 
     # ----------
     # the main hints and recursive calls
