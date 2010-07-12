@@ -473,7 +473,12 @@ class WarmRunnerDesc(object):
             jitdriver = op.args[1].value
             assert jitdriver in sublists, \
                    "can_enter_jit with no matching jit_merge_point"
-            sublists[jitdriver].append((graph, block, index))
+            origportalgraph = jd._jit_merge_point_pos[0]
+            if graph is not origportalgraph:
+                sublists[jitdriver].append((graph, block, index))
+            else:
+                pass   # a 'can_enter_jit' before the 'jit-merge_point', but
+                       # originally in the same function: we ignore it here
         for jd in self.jitdrivers_sd:
             sublist = sublists[jd.jitdriver]
             assert len(sublist) > 0, \
@@ -681,17 +686,6 @@ class WarmRunnerDesc(object):
         origblock.operations.append(newop)
         origblock.exitswitch = None
         origblock.recloseblock(Link([v_result], origportalgraph.returnblock))
-        #
-        # Also kill any can_enter_jit left behind (example: see
-        # test_jitdriver.test_simple, which has a can_enter_jit in
-        # loop1's origportalgraph)
-        can_enter_jits = _find_jit_marker([origportalgraph], 'can_enter_jit')
-        for _, block, i in can_enter_jits:
-            op = block.operations[i]
-            assert op.opname == 'jit_marker'
-            block.operations[i] = SpaceOperation('same_as',
-                                                 [Constant(None, lltype.Void)],
-                                                 op.result)
         #
         checkgraph(origportalgraph)
 
