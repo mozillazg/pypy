@@ -475,7 +475,7 @@ class WarmEnterState(object):
             return
         #
         unwrap_greenkey = self.make_unwrap_greenkey()
-        jit_getter = self.make_jitcell_getter()
+        self.make_jitcell_getter()
         jit_getter_maybe = self.jit_getter_maybe
 
         def can_inline_greenargs(*greenargs):
@@ -491,8 +491,8 @@ class WarmEnterState(object):
 
         def get_assembler_token(greenkey):
             greenargs = unwrap_greenkey(greenkey)
-            cell = jit_getter(*greenargs)
-            if cell.counter >= 0:
+            cell = jit_getter_maybe(*greenargs)
+            if cell is None or cell.counter >= 0:
                 return None
             return cell.entry_loop_token
         self.get_assembler_token = get_assembler_token
