@@ -18,14 +18,14 @@ class EffectInfo(object):
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
                 extraeffect=EF_CAN_RAISE):
-        key = (frozenset(readonly_descrs_fields),
-               frozenset(write_descrs_fields),
-               frozenset(write_descrs_arrays),
+        key = (_frozenset_or_none(readonly_descrs_fields),
+               _frozenset_or_none(write_descrs_fields),
+               _frozenset_or_none(write_descrs_arrays),
                extraeffect)
         if key in cls._cache:
             return cls._cache[key]
         result = object.__new__(cls)
-        result.readonly_descrs_fields = readonly_descrs_fields
+        result.readonly_descrs_fields = readonly_descrs_fields   # or None
         result.write_descrs_fields = write_descrs_fields
         result.write_descrs_arrays = write_descrs_arrays
         result.extraeffect = extraeffect
@@ -35,11 +35,16 @@ class EffectInfo(object):
     def check_forces_virtual_or_virtualizable(self):
         return self.extraeffect >= self.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
 
+def _frozenset_or_none(x):
+    if x is None: return None
+    return frozenset(x)
+
+
 def effectinfo_from_writeanalyze(effects, cpu,
                                  extraeffect=EffectInfo.EF_CAN_RAISE):
     from pypy.translator.backendopt.writeanalyze import top_set
     if effects is top_set:
-        return None
+        return EffectInfo(None, None, None, extraeffect)
     readonly_descrs_fields = []
     # readonly_descrs_arrays = [] --- not enabled for now
     write_descrs_fields = []
