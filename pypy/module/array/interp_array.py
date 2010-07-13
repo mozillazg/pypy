@@ -3,17 +3,14 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root, ApplevelClass
-from pypy.objspace.std.listobject import W_ListObject
-from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rstruct.runpack import runpack
 
-import os, types, re
-path, _ = os.path.split(__file__)
-app_array = os.path.join(path, 'app_array.py')
-app = ApplevelClass(file(app_array).read())
+import py
+app_array = py.path.local(__file__).dirpath().join('app_array.py')
+app = ApplevelClass(file(str(app_array)).read())
 
 def appmethod(n,allappfn={}):
     if not allappfn.has_key(n):
@@ -101,6 +98,7 @@ def make_array(mytype):
         def __init__(self, space):
             self.space = space
             self.len = 0
+            self.allocated = 0
             self.buffer = lltype.nullptr(mytype.arraytype)
 
         def item_w(self, w_item):
@@ -143,17 +141,24 @@ def make_array(mytype):
             self.setlen(0)
                 
         def setlen(self, size):
-            if size > 0:
-                #new_buffer = lltype.malloc(mytype.arraytype, size)
-                new_buffer = lltype.malloc(mytype.arraytype, size, flavor='raw')
-                for i in range(min(size,self.len)):
-                    new_buffer[i] = self.buffer[i]
-            else:
-                assert size == 0
-                new_buffer = lltype.nullptr(mytype.arraytype)
-            if self.buffer != lltype.nullptr(mytype.arraytype):
-                lltype.free(self.buffer, flavor='raw')                
-            self.buffer = new_buffer
+            if size > self.allocated or size < self.allocated/2:
+                if size > 0:
+                    if size < 9:
+                        some = 3
+                    else:
+                        some = 6
+                    some += size >> 3
+                    self.allocated = size + some
+                    new_buffer = lltype.malloc(mytype.arraytype, self.allocated, flavor='raw')
+                    for i in range(min(size,self.len)):
+                        new_buffer[i] = self.buffer[i]
+                else:
+                    assert size == 0
+                    self.allocated = 0
+                    new_buffer = lltype.nullptr(mytype.arraytype)
+                if self.buffer != lltype.nullptr(mytype.arraytype):
+                    lltype.free(self.buffer, flavor='raw')                
+                self.buffer = new_buffer
             self.len = size
         setlen.unwrap_spec = ['self', int]
 
@@ -209,19 +214,29 @@ def make_array(mytype):
 
         def descr_fromsequence(self, w_seq):
             space = self.space
-            w_new = space.call_function(space.getattr(w_seq, space.wrap('__len__')))
-            new = space.int_w(w_new)
             oldlen = self.len
-            self.setlen(self.len + new)
+            try:
+                new = space.int_w(space.len(w_seq))
+                self.setlen(self.len + new)
+            except OperationError:
+                pass
 
             i = 0
             try:
-                for w_i in space.listview(w_seq):
-                    self.buffer[oldlen + i] = self.item_w(w_i)
+                if mytype.typecode == 'u':
+                    myiter = space.unpackiterable
+                else:
+                    myiter = space.listview
+                for w_i in myiter(w_seq):
+                    if oldlen + i < self.len:
+                        self.buffer[oldlen + i] = self.item_w(w_i)
+                    else:
+                        self.descr_append(w_i)
                     i += 1
             except OperationError:
                 self.setlen(oldlen + i)
                 raise
+            self.setlen(oldlen + i)
 
         descr_fromsequence.unwrap_spec = ['self', W_Root]
 
@@ -240,12 +255,8 @@ def make_array(mytype):
                         self.buffer[oldlen + i] = w_iterable.buffer[i]
                 else:
                     assert False
-            elif (isinstance(w_iterable, W_ListObject) or
-                  isinstance(w_iterable, W_TupleObject)):
-                self.descr_fromsequence(w_iterable)
             else:
-                for w_i in space.listview(w_iterable):
-                    self.descr_append(w_i)
+                self.descr_fromsequence(w_iterable)
         descr_extend.unwrap_spec = ['self', W_Root]
 
         def descr_setslice(self, w_idx, w_item):
