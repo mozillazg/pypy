@@ -563,7 +563,29 @@ class BaseArrayTests:
         for i in a:
             b.append(i)
         assert repr(b) == "array('i', [1, 2, 3])"
-        
+
+    def test_lying_iterable(self):
+        class lier(object):
+            def __init__(self, n):
+                self.n = n
+            def __len__(self):
+                return 3
+            def next(self):
+                self.n -= 1
+                if self.n < 0: raise StopIteration
+                return self.n
+            def __iter__(self):
+                return self
+
+        assert len(lier(2)) == 3
+        assert len(tuple(lier(2))) == 2
+        a = self.array('i', lier(2))
+        assert repr(a) == "array('i', [1, 0])"
+
+        assert len(lier(5)) == 3
+        assert len(tuple(lier(5))) == 5
+        a = self.array('i', lier(5))
+        assert repr(a) == "array('i', [4, 3, 2, 1, 0])"
 
     #FIXME
     #def test_type(self):
@@ -602,5 +624,5 @@ class AppTestArray(BaseArrayTests):
         assert bi[0] != 0 
         assert bi[1] == 3
         data = self.rffi.charp2string(bi[0])
-        assert data == 'Hi!'
+        assert data[0:3] == 'Hi!'
         
