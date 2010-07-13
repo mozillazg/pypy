@@ -5,25 +5,37 @@ import cppyy
 class CppyyClass(type):
      pass
 
+class CppyyObject(object):
+    def __init__(self, *args):
+        print '__init__ called', args
+        self._cppinstance = self._cppyyclass.construct(*args)
+        
+    def destruct(self):
+        self._cppinstance.destruct()
+
+
 def make_static_function(cpptype, name):
     def method(*args):
         return cpptype.invoke(name, *args)
     method.__name__ = name
     return staticmethod(method)
 
-def make_method(name):
-    def method(self, *args):
-        return self._cppinstance.invoke(name, *args)
-    method.__name__ = name
-    return method
+def make_method(name, rettype):
+    if rettype is None:                          # return builtin type
+        def method(self, *args):
+            return self._cppinstance.invoke(name, *args)
+        method.__name__ = name
+        return method
+    else:                                        # return instance
+        def method(self, *args):
+            result = self._cppinstance.invoke(name, *args)
+            if not result is None:
+                bound_result = object.__new__(get_cppclass(rettype))
+                bound_result._cppinstance = result
+            return bound_result
+        method.__name__ = name
+        return method
 
-class CppyyObject(object):
-    def __init__(self, *args):
-        self._cppinstance = self._cppyyclass.construct(*args)
-
-    def destruct(self):
-        self._cppinstance.destruct()
-    
 
 _existing_classes = {}
 def get_cppclass(name):
@@ -42,7 +54,7 @@ def get_cppclass(name):
         if cppol.is_static():
             d[f] = make_static_function(cpptype, f)
         else:
-            d[f] = make_method(f)
+            d[f] = make_method(f, cppol.get_returntype())
 
     pycpptype = CppyyClass(name, (CppyyObject,), d)
 

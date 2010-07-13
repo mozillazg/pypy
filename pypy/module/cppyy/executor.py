@@ -32,6 +32,7 @@ class CStringExecutor(FunctionExecutor):
         result = capi.charp2str_free(ccpresult)
         return space.wrap(result)
 
+
 class InstancePtrExecutor(FunctionExecutor):
     _immutable_ = True
     def __init__(self, space, cpptype):
@@ -41,7 +42,7 @@ class InstancePtrExecutor(FunctionExecutor):
         from pypy.module.cppyy import interp_cppyy
         long_result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         ptr_result = rffi.cast(rffi.VOIDP, long_result)
-        return interp_cppyy.W_CCPInstance(self.cpptype, ptr_result)
+        return interp_cppyy.W_CPPInstance(self.cpptype, ptr_result)
 
 
 def get_executor(space, name):

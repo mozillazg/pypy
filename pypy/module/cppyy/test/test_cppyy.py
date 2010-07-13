@@ -164,7 +164,7 @@ class AppTestCPPYY:
 
         e.invoke("setPayload", pl);
         assert round(pl.invoke("getData")-50., 8) == 0
-        e.invoke("cyclePayload", pl);
+        pl = e.invoke("cyclePayload", pl);
         assert round(pl.invoke("getData")-50., 8) == 0
 
         e.destruct()

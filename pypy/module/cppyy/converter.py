@@ -44,7 +44,7 @@ class InstancePtrConverter(TypeConverter):
         if w_cppinstance is not None:
             w_obj = w_cppinstance
         obj = space.interpclass_w(w_obj)
-        if isinstance(obj, interp_cppyy.W_CCPInstance):
+        if isinstance(obj, interp_cppyy.W_CPPInstance):
             if capi.c_is_subtype(obj.cppclass.handle, self.cpptype.handle):
                 return obj.rawobject
         raise OperationError(space.w_TypeError,
