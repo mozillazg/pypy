@@ -125,7 +125,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) == buffer(other._data)
+            return buffer(self) == buffer(other)
         else:
             return self.tolist() == other.tolist()
 
@@ -133,7 +133,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) != buffer(other._data)
+            return buffer(self) != buffer(other)
         else:
             return self.tolist() != other.tolist()
 
@@ -141,7 +141,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) < buffer(other._data)
+            return buffer(self) < buffer(other)
         else:
             return self.tolist() < other.tolist()
 
@@ -149,7 +149,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) > buffer(other._data)
+            return buffer(self) > buffer(other)
         else:
             return self.tolist() > other.tolist()
 
@@ -157,7 +157,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) <= buffer(other._data)
+            return buffer(self) <= buffer(other)
         else:
             return self.tolist() <= other.tolist()
 
@@ -165,7 +165,7 @@ if True:
         if not self._isarray(other):
             return NotImplemented
         if self.typecode == 'c':
-            return buffer(self._data) >= buffer(other._data)
+            return buffer(self) >= buffer(other)
         else:
             return self.tolist() >= other.tolist()
 
