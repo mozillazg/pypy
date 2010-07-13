@@ -44,6 +44,10 @@ class BaseArrayTests:
         assert a[2] == 'c'
         assert len(a) == 3
 
+        b = self.array('c', a)
+        assert a == b
+        raises(TypeError, self.array, 'i', a)
+
     def test_value_range(self):
         values = (-129, 128, -128, 127, 0, 255, -1, 256,
                   -32768, 32767, -32769, 32768, 65535, 65536,
@@ -217,6 +221,9 @@ class BaseArrayTests:
 
         a = self.array('b', (1, 2))
         assert len(a) == 2 and a[0] == 1 and a[1] == 2
+
+        a.extend(a)
+        assert repr(a) == "array('b', [1, 2, 1, 2])"
 
     def test_fromunicode(self):
         raises(ValueError, self.array('i').fromunicode, unicode('hi'))
@@ -432,51 +439,55 @@ class BaseArrayTests:
         assert repr(a) == "array('i', [8, 2, 9, 7])"
 
     def test_compare(self):
-        a = self.array('i', [1, 2, 3])
-        b = self.array('i', [1, 2, 3])
-        c = self.array('i', [1, 3, 2])
+        for v1,v2,tt in (([1, 2, 3], [1, 3, 2], 'bhilBHIL'),
+                         ('abc', 'acb', 'c'),
+                         (unicode('abc'), unicode('acb'), 'u')):
+            for t in tt:
+                a = self.array(t, v1)
+                b = self.array(t, v1)
+                c = self.array(t, v2)
 
-        assert (a == a) is True
-        assert (a == b) is True
-        assert (b == a) is True
-        assert (a == c) is False
-        assert (c == a) is False
+                assert (a == a) is True
+                assert (a == b) is True
+                assert (b == a) is True
+                assert (a == c) is False
+                assert (c == a) is False
 
-        assert (a != a) is False
-        assert (a != b) is False
-        assert (b != a) is False
-        assert (a != c) is True
-        assert (c != a) is True
+                assert (a != a) is False
+                assert (a != b) is False
+                assert (b != a) is False
+                assert (a != c) is True
+                assert (c != a) is True
 
-        assert (a < a) is False
-        assert (a < b) is False
-        assert (b < a) is False
-        assert (a < c) is True
-        assert (c < a) is False
+                assert (a < a) is False
+                assert (a < b) is False
+                assert (b < a) is False
+                assert (a < c) is True
+                assert (c < a) is False
 
-        assert (a > a) is False
-        assert (a > b) is False
-        assert (b > a) is False
-        assert (a > c) is False
-        assert (c > a) is True
+                assert (a > a) is False
+                assert (a > b) is False
+                assert (b > a) is False
+                assert (a > c) is False
+                assert (c > a) is True
 
-        assert (a <= a) is True
-        assert (a <= b) is True
-        assert (b <= a) is True
-        assert (a <= c) is True
-        assert (c <= a) is False
+                assert (a <= a) is True
+                assert (a <= b) is True
+                assert (b <= a) is True
+                assert (a <= c) is True
+                assert (c <= a) is False
 
-        assert (a >= a) is True
-        assert (a >= b) is True
-        assert (b >= a) is True
-        assert (a >= c) is False
-        assert (c >= a) is True
+                assert (a >= a) is True
+                assert (a >= b) is True
+                assert (b >= a) is True
+                assert (a >= c) is False
+                assert (c >= a) is True
 
-        assert cmp(a, a) == 0
-        assert cmp(a, b) == 0
-        assert cmp(a, c) <  0
-        assert cmp(b, a) == 0
-        assert cmp(c, a) >  0
+                assert cmp(a, a) == 0
+                assert cmp(a, b) == 0
+                assert cmp(a, c) <  0
+                assert cmp(b, a) == 0
+                assert cmp(c, a) >  0
         
     def test_reduce(self):
         import pickle

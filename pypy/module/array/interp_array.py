@@ -245,15 +245,27 @@ def make_array(mytype):
                 if mytype.typecode != w_iterable.typecode:
                     msg = "can only extend with array of same kind"
                     raise OperationError(space.w_TypeError, space.wrap(msg))
-            w_iterator = space.iter(w_iterable)
-            while True:
-                try:
-                    w_item = space.next(w_iterator)
-                except OperationError, e:
-                    if not e.match(space, space.w_StopIteration):
-                        raise
-                    break
-                self.descr_append(w_item)
+                if isinstance(w_iterable, W_Array):
+                    oldlen = self.len
+                    new = w_iterable.len
+                    self.setlen(self.len + new)
+                    for i in range(new):
+                        self.buffer[oldlen + i] = w_iterable.buffer[i]
+                else:
+                    assert False
+            elif (isinstance(w_iterable, W_ListObject) or
+                  isinstance(w_iterable, W_TupleObject)):
+                self.descr_fromsequence(w_iterable)
+            else:
+                w_iterator = space.iter(w_iterable)
+                while True:
+                    try:
+                        w_item = space.next(w_iterator)
+                    except OperationError, e:
+                        if not e.match(space, space.w_StopIteration):
+                            raise
+                        break
+                    self.descr_append(w_item)
         descr_extend.unwrap_spec = ['self', W_Root]
 
         def descr_setslice(self, w_idx, w_item):
