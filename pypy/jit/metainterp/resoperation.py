@@ -274,3 +274,41 @@ def setup(debug_print=False):
 
 setup(__name__ == '__main__')   # print out the table when run directly
 del _oplist
+
+opboolinvers = {
+    rop.INT_EQ: rop.INT_NE,
+    rop.INT_NE: rop.INT_EQ,
+    rop.INT_LT: rop.INT_GE,
+    rop.INT_GE: rop.INT_LT,
+    rop.INT_GT: rop.INT_LE,
+    rop.INT_LE: rop.INT_GT,
+
+    rop.FLOAT_EQ: rop.FLOAT_NE,
+    rop.FLOAT_NE: rop.FLOAT_EQ,
+    rop.FLOAT_LT: rop.FLOAT_GE,
+    rop.FLOAT_GE: rop.FLOAT_LT,
+    rop.FLOAT_GT: rop.FLOAT_LE,
+    rop.FLOAT_LE: rop.FLOAT_GT,
+
+    rop.PTR_EQ: rop.PTR_NE,
+    rop.PTR_NE: rop.PTR_EQ,
+    }
+
+opboolreflex = {
+    rop.INT_EQ: rop.INT_EQ,
+    rop.INT_NE: rop.INT_NE,
+    rop.INT_LT: rop.INT_GT,
+    rop.INT_GE: rop.INT_LE,
+    rop.INT_GT: rop.INT_LT,
+    rop.INT_LE: rop.INT_GE,
+
+    rop.FLOAT_EQ: rop.FLOAT_EQ,
+    rop.FLOAT_NE: rop.FLOAT_NE,
+    rop.FLOAT_LT: rop.FLOAT_GT,
+    rop.FLOAT_GE: rop.FLOAT_LE,
+    rop.FLOAT_GT: rop.FLOAT_LT,
+    rop.FLOAT_LE: rop.FLOAT_GE,
+
+    rop.PTR_EQ: rop.PTR_EQ,
+    rop.PTR_NE: rop.PTR_NE,
+    }
