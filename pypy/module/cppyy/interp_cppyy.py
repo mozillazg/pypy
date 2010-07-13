@@ -166,7 +166,7 @@ class CPPConstructor(CPPMethod):
         except Exception, e:
             capi.c_deallocate(self.cpptype.handle, newthis)
             raise
-        return W_CCPInstance(self.cpptype, newthis)
+        return W_CPPInstance(self.cpptype, newthis)
 
 
 class W_CPPOverload(Wrappable):
@@ -179,6 +179,12 @@ class W_CPPOverload(Wrappable):
 
     def is_static(self):
         return self.space.wrap(isinstance(self.functions[0], CPPFunction))
+
+    def get_returntype(self):
+        try:
+            return self.space.wrap(self.functions[0].executor.cpptype.name)
+        except AttributeError:
+            return None
 
     @jit.unroll_safe
     def call(self, cppthis, args_w):
@@ -201,6 +207,7 @@ class W_CPPOverload(Wrappable):
 W_CPPOverload.typedef = TypeDef(
     'CPPOverload',
     is_static = interp2app(W_CPPOverload.is_static, unwrap_spec=['self']),
+    get_returntype = interp2app(W_CPPOverload.get_returntype, unwrap_spec=['self']),
 )
 
 
@@ -268,8 +275,7 @@ W_CPPType.typedef = TypeDef(
 )
 
 
-
-class W_CCPInstance(Wrappable):
+class W_CPPInstance(Wrappable):
     _immutable_ = True
     def __init__(self, cppclass, rawobject):
         self.space = cppclass.space
@@ -290,8 +296,8 @@ class W_CCPInstance(Wrappable):
         capi.c_destruct(self.cppclass.handle, self.rawobject)
         self.rawobject = NULL_VOIDP
 
-W_CCPInstance.typedef = TypeDef(
+W_CPPInstance.typedef = TypeDef(
     'CPPInstance',
-    invoke = interp2app(W_CCPInstance.invoke, unwrap_spec=['self', str, 'args_w']),
-    destruct = interp2app(W_CCPInstance.destruct, unwrap_spec=['self']),
+    invoke = interp2app(W_CPPInstance.invoke, unwrap_spec=['self', str, 'args_w']),
+    destruct = interp2app(W_CPPInstance.destruct, unwrap_spec=['self']),
 )

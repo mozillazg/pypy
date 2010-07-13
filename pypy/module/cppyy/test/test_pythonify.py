@@ -137,9 +137,9 @@ class AppTestPYTHONIFY:
         e.staticSetPayload(pl, 45.)
         assert pl.getData() == 45.
 
-        e.setPayload(pl);
+        e.setPayload(pl)
         assert round(pl.getData()-14., 8) == 0
-        e.cyclePayload(pl);
+        pl = e.cyclePayload(pl)
         assert round(pl.getData()-14., 8) == 0
 
         pl.destruct()
