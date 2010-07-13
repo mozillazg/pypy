@@ -21,7 +21,7 @@ def appmethod(n,allappfn={}):
         #src=file(re.sub('.pyc$', '.py', mod.__file__)).read()
         #app = ApplevelClass(src)
         import app_array
-        f=getattr(app_array,n)
+        f = getattr(app_array,n)
         args = f.func_code.co_varnames[0:f.func_code.co_argcount]
         args = ', '.join(['space'] + ['w_'+s for s in args])
         appfn = app.interphook(n)
@@ -94,8 +94,10 @@ def make_array(mytype):
             return val
         
     class W_Array(W_ArrayBase):
-        itemsize=mytype.bytes
-        typecode=mytype.typecode
+        
+        itemsize = mytype.bytes
+        typecode = mytype.typecode
+        
         def __init__(self, space):
             self.space = space
             self.len = 0
@@ -121,22 +123,24 @@ def make_array(mytype):
                 msg = None
                 if mytype.signed:
                     if item < -1 << (mytype.bytes * 8 - 1):
-                        msg = 'signed %d-byte integer is less than minimum' % mytype.bytes
+                        msg = ('signed %d-byte integer is less than minimum' %
+                               mytype.bytes)
                     elif item > (1 << (mytype.bytes * 8 - 1)) - 1:
-                        msg = 'signed %d-byte integer is greater than maximum' % mytype.bytes
+                        msg = ('signed %d-byte integer is greater than maximum'
+                               % mytype.bytes)
                 else:
                     if item < 0:
-                        msg = 'unsigned %d-byte integer is less than minimum' % mytype.bytes
+                        msg = ('unsigned %d-byte integer is less than minimum'
+                               % mytype.bytes)
                     elif item > (1 << (mytype.bytes * 8)) - 1:
-                        msg = 'unsigned %d-byte integer is greater than maximum' % mytype.bytes
+                        msg = ('unsigned %d-byte integer is greater'
+                               ' than maximum' % mytype.bytes)
                 if msg is not None:
                     raise OperationError(space.w_OverflowError, space.wrap(msg))
             return rffi.cast(mytype.itemtype, item)
 
-
         def __del__(self):
             self.setlen(0)
-
                 
         def setlen(self, size):
             if size > 0:
@@ -156,7 +160,6 @@ def make_array(mytype):
         def descr_len(self):
             return self.space.wrap(self.len)
         descr_len.unwrap_spec = ['self']
-
 
         def descr_getslice(self, w_idx):
             space = self.space
@@ -198,13 +201,11 @@ def make_array(mytype):
                 return self.descr_getslice(w_idx)
         descr_getitem.unwrap_spec = ['self', W_Root]
 
-
         def descr_append(self, w_x):
             x = self.item_w(w_x)
             self.setlen(self.len + 1)
             self.buffer[self.len - 1] = x
         descr_append.unwrap_spec = ['self', W_Root]
-
 
         def descr_fromsequence(self, w_seq):
             space = self.space
