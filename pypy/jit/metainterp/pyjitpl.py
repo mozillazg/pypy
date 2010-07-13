@@ -1063,10 +1063,13 @@ class MIFrame(object):
         assert i == len(allboxes)
         #
         effectinfo = descr.get_extra_info()
-        if (effectinfo is None or
-                effectinfo.extraeffect ==
-                             effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
-                assembler_call_token is not None):
+        if effectinfo is None:
+            effect = -1
+        else:
+            effect = effectinfo.extraeffect
+        if (assembler_call_token is not None or
+            effectinfo is None or
+            effect == effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.clear_exception()
             self.metainterp.vable_and_vrefs_before_residual_call()
@@ -1083,7 +1086,6 @@ class MIFrame(object):
             self.metainterp.handle_possible_exception()
             return resbox
         else:
-            effect = effectinfo.extraeffect
             if effect == effectinfo.EF_CANNOT_RAISE:
                 return self.execute_varargs(rop.CALL, allboxes, descr, False)
             elif effect == effectinfo.EF_PURE:

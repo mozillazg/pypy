@@ -1098,14 +1098,10 @@ class HeapOpOptimizer(object):
             opnum == rop.DEBUG_MERGE_POINT):
             return
         assert opnum != rop.CALL_PURE
-        if (opnum == rop.CALL or
-            opnum == rop.CALL_MAY_FORCE or
-            opnum == rop.CALL_ASSEMBLER):
-            if opnum == rop.CALL_ASSEMBLER:
-                effectinfo = None
-            else:
-                effectinfo = op.descr.get_extra_info()
-            if effectinfo is not None:
+        if opnum == rop.CALL or opnum == rop.CALL_MAY_FORCE:
+            effectinfo = op.descr.get_extra_info()
+            if (effectinfo is not None and
+                effectinfo.readonly_descrs_fields is not None):
                 # XXX we can get the wrong complexity here, if the lists
                 # XXX stored on effectinfo are large
                 for fielddescr in effectinfo.readonly_descrs_fields:
@@ -1128,8 +1124,9 @@ class HeapOpOptimizer(object):
                     # of virtualref_info and virtualizable_info are not gcptrs.
                 return
             self.force_all_lazy_setfields()
-        elif op.is_final() or (not we_are_translated() and
-                               op.opnum < 0):   # escape() operations
+        elif (opnum == rop.CALL_ASSEMBLER or
+              op.is_final() or
+              (not we_are_translated() and op.opnum < 0)):   # escape() ops
             self.force_all_lazy_setfields()
         self.clean_caches()
 
