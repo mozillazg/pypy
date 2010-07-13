@@ -215,23 +215,9 @@ def make_array(mytype):
 
             i = 0
             try:
-                if isinstance(w_seq, W_ListObject):
-                    while i < new:
-                        item = self.item_w(w_seq.wrappeditems[i])
-                        self.buffer[oldlen + i ] = item
-                        i += 1
-                elif isinstance(w_seq, W_TupleObject):
-                    while i < new:
-                        item = self.item_w(w_seq.wrappeditems[i])
-                        self.buffer[oldlen + i ] = item
-                        i += 1
-                else:
-                    getitem = space.getattr(w_seq, space.wrap('__getitem__'))
-                    while i < new:
-                        w_item = space.call_function(getitem, space.wrap(i))
-                        item=self.item_w(w_item)
-                        self.buffer[oldlen + i ] = item
-                        i += 1
+                for w_i in space.listview(w_seq):
+                    self.buffer[oldlen + i] = self.item_w(w_i)
+                    i += 1
             except OperationError:
                 self.setlen(oldlen + i)
                 raise
@@ -257,15 +243,8 @@ def make_array(mytype):
                   isinstance(w_iterable, W_TupleObject)):
                 self.descr_fromsequence(w_iterable)
             else:
-                w_iterator = space.iter(w_iterable)
-                while True:
-                    try:
-                        w_item = space.next(w_iterator)
-                    except OperationError, e:
-                        if not e.match(space, space.w_StopIteration):
-                            raise
-                        break
-                    self.descr_append(w_item)
+                for w_i in space.listview(w_iterable):
+                    self.descr_append(w_i)
         descr_extend.unwrap_spec = ['self', W_Root]
 
         def descr_setslice(self, w_idx, w_item):
