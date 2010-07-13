@@ -11,7 +11,9 @@ def f(img):
     return l
 
 if True:
-    img=array('d', '\x00'*640*480*8)
+    img=array('d', '\x00'*640*480)
+    #img=array('d', [0]*640*480)
+    #img=array('d', (0,))*(640*480)
 else:
     img=simple_array(640*480)
     

@@ -212,19 +212,26 @@ def make_array(mytype):
             new = space.int_w(w_new)
             oldlen = self.len
             self.setlen(self.len + new)
-            
+
+            i = 0
             try:
-                if (isinstance(w_seq, W_ListObject) or
-                    isinstance(w_seq, W_TupleObject)):
-                    for i in range(new):
+                if isinstance(w_seq, W_ListObject):
+                    while i < new:
                         item = self.item_w(w_seq.wrappeditems[i])
                         self.buffer[oldlen + i ] = item
+                        i += 1
+                elif isinstance(w_seq, W_TupleObject):
+                    while i < new:
+                        item = self.item_w(w_seq.wrappeditems[i])
+                        self.buffer[oldlen + i ] = item
+                        i += 1
                 else:
                     getitem = space.getattr(w_seq, space.wrap('__getitem__'))
-                    for i in range(new):
+                    while i < new:
                         w_item = space.call_function(getitem, space.wrap(i))
                         item=self.item_w(w_item)
                         self.buffer[oldlen + i ] = item
+                        i += 1
             except OperationError:
                 self.setlen(oldlen + i)
                 raise
