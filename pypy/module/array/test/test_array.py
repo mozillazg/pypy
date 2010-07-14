@@ -532,12 +532,16 @@ class BaseArrayTests:
         assert repr(self.array('i') + self.array('i')) == "array('i')"
 
         a = self.array('i', [1, 2])
+        assert type(a + a) is self.array
+        assert type(a * 2) is self.array
+        assert type(2 * a) is self.array
         b = a
         a += a
         assert repr(b) == "array('i', [1, 2, 1, 2])"
         b *= 3
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2])"
         assert a == b
+        print "\nok: ", type(a)
         a += self.array('i', (7,))
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 7])"
 
@@ -587,10 +591,26 @@ class BaseArrayTests:
         a = self.array('i', lier(5))
         assert repr(a) == "array('i', [4, 3, 2, 1, 0])"
 
-    #FIXME
-    #def test_type(self):
-    #    for t in 'bBhHiIlLfdcu':
-    #        assert type(self.array(t)) is self.array
+    def test_type(self):
+        for t in 'bBhHiIlLfdcu':
+            assert type(self.array(t)) is self.array
+            assert isinstance(self.array(t), self.array)
+
+    def test_subclass(self):
+        assert len(self.array('b')) == 0
+
+        a=self.array('i')
+        a.append(7)
+        assert len(a) == 1
+
+        array=self.array
+        class adder(array):
+            def __getitem__(self, i):
+                return array.__getitem__(self, i) + 1
+
+        a=adder('i', (1,2,3))
+        assert len(a) == 3
+        assert a[0] == 2
 
 class TestCPythonsOwnArray(BaseArrayTests):
 
