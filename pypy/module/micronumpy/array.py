@@ -58,20 +58,5 @@ def construct_array(space, shape, w_dtype):
 class BaseNumArray(Wrappable):
     pass
 
-def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
-              w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
-              w_strides=NoneNotWrapped, order='C'):
-    shape_w = unpack_shape(space, w_shape)
-    dtype_w = get_dtype(space, w_dtype)
-    result = construct_array(space, shape_w, dtype_w)
-    #TODO: load from buffer?
-    return space.wrap(result)
-descr_new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root,
-                         W_Root, W_Root,
-                         W_Root, str]
-
-BaseNumArray.typedef = TypeDef("ndarray",
-                       __new__ = interp2app(descr_new),
-                      )
-base_typedef = BaseNumArray.typedef
+BaseNumArray.typedef = TypeDef("ndarray")
 ndarray = BaseNumArray
