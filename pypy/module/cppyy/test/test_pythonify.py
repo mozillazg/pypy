@@ -1,4 +1,4 @@
-import py, os
+import py, os, sys
 from pypy.conftest import gettestobjspace
 from pypy.module.cppyy import interp_cppyy, executor
 
@@ -9,7 +9,11 @@ shared_lib = str(currpath.join("example01Dict.so"))
 space = gettestobjspace(usemodules=['cppyy'])
 
 def setup_module(mod):
-    os.system("make")
+    if sys.platform == 'win32':
+        py.test.skip("win32 not supported so far")
+    err = os.system("cd '%s' && make example01Dict.so" % currpath)
+    if err:
+        raise OSError("'make' failed (see stderr)")
 
 class AppTestPYTHONIFY:
     def setup_class(cls):
