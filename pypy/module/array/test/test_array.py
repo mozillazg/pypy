@@ -497,9 +497,13 @@ class BaseArrayTests:
         assert a == b
 
         a = self.array('l')
-        s = pickle.dumps(a,1)
+        s = pickle.dumps(a, 1)
         b = pickle.loads(s)
         assert len(b) == 0 and b.typecode == 'l'
+
+        a = self.array('i', [1, 2, 4])
+        i = iter(a)
+        raises(TypeError, pickle.dumps, i, 1)
 
     def test_copy_swap(self):
         a = self.array('i', [1, 2, 3])
