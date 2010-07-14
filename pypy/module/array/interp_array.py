@@ -600,13 +600,7 @@ class W_WrappedArray(Wrappable):
         args=[space.wrap(self._array.typecode)]
         if self._array.len>0:
             args += [self._array.descr_tostring()]
-        from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('array')
-        mod      = space.interp_w(MixedModule, w_mod)
-        w_new_inst = mod.get('_new_array')
-        return space.newtuple([w_new_inst, space.newtuple(args)])
-        return space.newtuple([space.gettypeobject(W_WrappedArray.typedef),
-                               space.newtuple(args)])
+        return space.newtuple([space.type(self), space.newtuple(args)])
         
 
 def unwrap_array(w_a):
@@ -725,6 +719,7 @@ def descr_wrapped_typecode(space, self):
 
 W_WrappedArray.typedef = TypeDef(
     'array',
+    __module__   = 'array',
     __new__      = interp2app(new_array_sub),
     __init__     = interp2app(W_WrappedArray.__init__),
     pop          = interp2app(W_WrappedArray.descr_pop),
