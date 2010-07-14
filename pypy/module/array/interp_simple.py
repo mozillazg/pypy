@@ -11,6 +11,8 @@ FloatArray = lltype.GcArray(lltype.Float)
 
 
 class W_SizedFloatArray(Wrappable):
+    _immutable_fields_ = ['size', 'buffer']
+    
     @dont_look_inside
     def __init__(self, space, size):
         self.space = space
