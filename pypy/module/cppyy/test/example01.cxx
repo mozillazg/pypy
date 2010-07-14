@@ -15,20 +15,20 @@ void payload::setData(double d) { m_data = d; }
 
 
 //===========================================================================
-example01::example01() : somedata(-99) {
+example01::example01() : m_somedata(-99) {
     count++;
 }
-example01::example01(int a) : somedata(a) {
+example01::example01(int a) : m_somedata(a) {
     count++;
     std::cout << "constructor called" << std::endl;
 }
-example01::example01(const example01& e) : somedata(e.somedata) {
+example01::example01(const example01& e) : m_somedata(e.m_somedata) {
     count++;
     std::cout << "copy constructor called" << std::endl;
 }
 example01& example01::operator=(const example01& e) {
     if (this != &e) {
-        somedata = e.somedata;
+        m_somedata = e.m_somedata;
     }
     return *this;
 }
@@ -58,6 +58,11 @@ void example01::staticSetPayload(payload* p, double d) {
     p->setData(d);
 }
 
+payload* example01::staticCyclePayload(payload* p, double d) {
+    staticSetPayload(p, d);
+    return p;
+}
+
 int example01::getCount() {
     std::cout << "getcount called" << std::endl;
     return count;
@@ -65,19 +70,19 @@ int example01::getCount() {
 
 // instance methods
 int example01::addDataToInt(int a) {
-    return somedata + a;
+    return m_somedata + a;
 }
 
 double example01::addDataToDouble(double a) {
-    return somedata + a;
+    return m_somedata + a;
 }
 
 int example01::addDataToAtoi(const char* str) {
-    return ::atoi(str) + somedata;
+    return ::atoi(str) + m_somedata;
 }   
 
 char* example01::addToStringValue(const char* str) {
-    int out = ::atoi(str) + somedata;
+    int out = ::atoi(str) + m_somedata;
     std::ostringstream ss;
     ss << out << std::ends;
     std::string result = ss.str();
@@ -87,7 +92,7 @@ char* example01::addToStringValue(const char* str) {
 }
 
 void example01::setPayload(payload* p) {
-    p->setData(somedata);
+    p->setData(m_somedata);
 }
 
 payload* example01::cyclePayload(payload* p) {

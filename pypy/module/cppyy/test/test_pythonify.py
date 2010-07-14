@@ -139,9 +139,27 @@ class AppTestPYTHONIFY:
 
         e.setPayload(pl)
         assert round(pl.getData()-14., 8) == 0
-        pl = e.cyclePayload(pl)
-        assert round(pl.getData()-14., 8) == 0
 
+        pl.destruct()
+        e.destruct()
+        assert example01_class.getCount() == 0
+
+    def testReturningOfAnObjectByPointer(self):
+        import cppyy
+        example01_class = cppyy.gbl.example01
+        payload_class = cppyy.gbl.payload
+
+        pl = payload_class(3.14)
+        assert round(pl.getData()-3.14, 8) == 0
+        
+        pl2 = example01_class.staticCyclePayload(pl, 38.)
+        assert pl2.getData() == 38.
+
+        e = example01_class(14)
+
+        pl2 = e.cyclePayload(pl)
+        assert round(pl2.getData()-14., 8) == 0
+        
         pl.destruct()
         e.destruct()
         assert example01_class.getCount() == 0
