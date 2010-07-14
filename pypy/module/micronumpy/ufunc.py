@@ -1,4 +1,4 @@
-﻿from pypy.module.micronumpy.array import array, zeros, ndarray
+﻿from pypy.module.micronumpy.microarray import array, zeros
 from pypy.module.micronumpy.array import construct_array
 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
@@ -15,7 +15,8 @@ def minimum(space, w_a, w_b):
         raise OperationError(space.w_ValueError,
                              space.wrap("minimum of arrays of different length"))
 
-    result_type = w_a.dtype.result(w_b.dtype)
+    from pypy.module.micronumpy.dtype import result
+    result_type = result(w_a.dtype, w_b.dtype)
 
     result = MicroArray(w_a.shape, result_type)
 
@@ -32,29 +33,28 @@ def minimum(space, w_a, w_b):
 minimum.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 def dot(space, w_a, w_b):
-    if not isinstance(w_a, ndarray) or not isinstance(w_b, ndarray):
+    if not isinstance(w_a, MicroArray) or not isinstance(w_b, MicroArray):
         raise OperationError(space.w_TypeError,
                 space.wrap("expecting ndarray object"))
 
     if len(w_b.shape) == 1:
-        the_b = mdresult(space, w_b.dtype)(space, [w_b.shape[0], 1], w_b.dtype)
-        the_b.storage[:] = w_b.storage
+        the_b = MicroArray([w_b.shape[0], 1], w_b.dtype)
+        #the_b.storage[:] = w_b.storage #FIXME: copy storage
         w_b = the_b
 
     if len(w_a.shape)%2:
-        the_a = mdresult(space, w_a.dtype)(space, [1]+w_a.shape, w_a.dtype)
-        the_a.storage[:] = w_a.storage
+        the_a = MicroArray([1]+w_a.shape, w_a.dtype)
+        #the_a.storage[:] = w_a.storage #FIXME: ditto
         w_a = the_a
     ah, aw = w_a.shape[0], w_a.shape[1]
     als = len(w_a.shape)
 
     if len(w_b.shape)%2:
-        the_b = mdresult(space, w_b.dtype)(space, [1]+w_b.shape, w_b.dtype)
-        the_b.storage[:] = w_b.storage
+        the_b = MicroArray([1]+w_b.shape, w_b.dtype)
+        #the_b.storage[:] = w_b.storage #FIXME: and again
         w_b = the_b
     bh, bw = w_a.shape[0], w_a.shape[1]
     bls = len(w_b.shape)
-
 
     if aw == bh == 1:
         return dot(space, w_b, w_a)
@@ -68,8 +68,8 @@ def dot(space, w_a, w_b):
     if als != bls:
         raise shapemismatch
     
-
-    data = _dotit(space, w_a, w_b, als, [], [])
+    #data = _dotit(space, w_a, w_b, als, [], []) #FIXME: ok this definitely won't work here
+    data = [0] #FIXME: obviously wrong...
     if len(data) == 1:
         return space.wrap(data[0])
     shape = make_sure_not_resized([0]*als)
@@ -77,10 +77,11 @@ def dot(space, w_a, w_b):
         shape[i] = w_a.shape[i]
         shape[i+1] = w_b.shape[i+1]
 
-    dtype = result_mapping(space, (w_a.dtype, w_b.dtype))
+    from pypy.module.micronumpy.dtype import w_result
+    dtype = w_result(w_a.dtype, w_b.dtype)
 
-    res = construct_array(space, shape, retrieve_dtype(space, dtype))
-    res.storage[:] = data
+    res = construct_array(space, shape, dtype)
+    #res.storage[:] = data #FIXME: more copying
     return space.wrap(res)
 dot.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
