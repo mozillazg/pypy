@@ -13,9 +13,6 @@ def get_dtype(space, t):
 def retrieve_dtype(space, t):
     raise NotImplementedError("Stub")
 
-class BaseNumArray(Wrappable):
-    pass
-
 from pypy.rpython.lltypesystem import lltype
 
 def validate_index(array, space, w_i):
@@ -32,52 +29,6 @@ def validate_index(array, space, w_i):
     if index_dimensionality > array_dimensionality:
         raise OperationError(space.w_IndexError,
                 space.wrap("invalid index")) # all as in numpy
-
-def mul_operation():
-    def mul(x, y): return x * y
-    return mul
-
-def div_operation():
-    def div(x, y): return x / y
-    return div
-
-def add_operation():
-    def add(x, y): return x + y
-    return add
-
-def sub_operation():
-    def sub(x, y): return x - y
-    return sub
-
-def copy_operation():
-    def copy(x, y): return x #XXX: I sure hope GCC can optimize this
-    return copy
-
-def app_mul_operation():
-    def mul(space, x, y):
-        return space.mul(x, y)
-    return mul
-
-def app_div_operation():
-    def div(space, x, y):
-        return space.div(x, y)
-    return div
-
-def app_add_operation():
-    def add(space, x, y):
-        return space.add(x, y)
-    return add
-
-def app_sub_operation():
-    def sub(space, x, y):
-        return space.sub(x, y)
-    return sub
-
-def unpack_shape(space, w_shape):
-    if space.is_true(space.isinstance(w_shape, space.w_int)):
-        return [space.int_w(w_shape)]
-    shape_w = space.fixedview(w_shape)
-    return [space.int_w(w_i) for w_i in shape_w]
 
 def infer_shape(space, w_values):
     shape = []
@@ -104,6 +55,9 @@ def construct_array(space, shape, w_dtype):
         raise OperationError(space.w_NotImplementedError,
                 space.wrap("Haven't implemented generic array yet!"))
 
+class BaseNumArray(Wrappable):
+    pass
+
 def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
               w_strides=NoneNotWrapped, order='C'):
@@ -121,29 +75,3 @@ BaseNumArray.typedef = TypeDef("ndarray",
                       )
 base_typedef = BaseNumArray.typedef
 ndarray = BaseNumArray
-
-def array(space, w_values, w_dtype=NoneNotWrapped,
-          copy=True, order='C',
-          subok=False, ndim=1):
-    shape = infer_shape(space, w_values)
-
-    if w_dtype is None:
-        dtype_w = retrieve_dtype(space, iterable_type(space, w_values))
-    else:
-        dtype_w = get_dtype(space, w_dtype)
-    result = construct_array(space, shape, dtype_w)
-    result.load_iterable(w_values)
-    return space.wrap(result)
-array.unwrap_spec = [ObjSpace, W_Root, W_Root,
-                     bool, str,
-                     bool, int]
-
-def zeros(space, w_shape, w_dtype=NoneNotWrapped, order='C'):
-    shape_w = unpack_shape(space, w_shape)
-    if w_dtype is None:
-        dtype_w = retrieve_dtype(space, 'd')
-    else:
-        dtype_w = get_dtype(space, w_dtype)
-    result = construct_array(space, shape_w, dtype_w)
-    return space.wrap(result)
-zeros.unwrap_spec = [ObjSpace, W_Root, W_Root, str]
