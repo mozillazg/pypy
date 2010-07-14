@@ -8,17 +8,8 @@ from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module.micronumpy.array import BaseNumArray
-from pypy.module.micronumpy.array import base_typedef
 from pypy.module.micronumpy.array import construct_array, infer_shape
-from pypy.module.micronumpy.array import array as array_fromseq
 from pypy.module.micronumpy.array import validate_index
-from pypy.module.micronumpy.array import \
-        mul_operation, div_operation, add_operation, sub_operation
-
-from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
-from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
-from pypy.module.micronumpy.dtype import create_factory, result_mapping
-from pypy.module.micronumpy.dtype import retrieve_dtype
 
 def compute_pos(space, indexes, dim):
     current = 1
@@ -191,11 +182,6 @@ def descr_dtype(space, self):
 
 def descr_shape(space, self):
     return space.newtuple([space.wrap(dim) for dim in self.shape])
-
-mul = mul_operation()
-div = div_operation()
-add = add_operation()
-sub = sub_operation()
 
 def create_mdarray(data_type, unwrap, coerce):
 
@@ -464,7 +450,7 @@ def create_mdarray(data_type, unwrap, coerce):
         descr_str.unwrap_spec = ['self']
 
     MultiDimArray.typedef = \
-            TypeDef('ndarray', base_typedef,
+            TypeDef('mdarray', #XXX: condemned
                     __len__ = interp2app(MultiDimArray.descr_len),
                     __getitem__ = interp2app(MultiDimArray.descr_getitem),
                     __setitem__ = interp2app(MultiDimArray.descr_setitem),
@@ -485,8 +471,3 @@ def create_mdarray(data_type, unwrap, coerce):
                     shape = GetSetProperty(descr_shape, cls = MultiDimArray),
                    )
     return MultiDimArray
-
-MultiDimIntArray = create_mdarray(int, unwrap_int, coerce_int)
-MultiDimFloatArray = create_mdarray(float, unwrap_float, coerce_float)
-
-mdresult = create_factory({'i': MultiDimIntArray, 'd': MultiDimFloatArray})

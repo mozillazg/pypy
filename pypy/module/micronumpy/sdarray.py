@@ -7,11 +7,6 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.objspace.std.tupleobject import W_TupleObject
 
-from pypy.module.micronumpy.array import BaseNumArray
-from pypy.module.micronumpy.array import base_typedef
-from pypy.module.micronumpy.array import \
-        mul_operation, div_operation, add_operation, sub_operation
-
 #TODO: merge unwrap_spec decorator
 # from pypy.interpreter.gateway import unwrap_spec
 

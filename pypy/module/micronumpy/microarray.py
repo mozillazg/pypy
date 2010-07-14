@@ -1,21 +1,17 @@
 ﻿from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.error import OperationError
+
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.gateway import NoneNotWrapped
 
-from pypy.interpreter.baseobjspace import Wrappable
-from pypy.interpreter.baseobjspace import W_Root, UnpackValueError
-from pypy.objspace.std.sliceobject import W_SliceObject
-from pypy.objspace.std.listobject import W_ListObject
-from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.debug import make_sure_not_resized
 
 from pypy.module import micronumpy
 from pypy.module.micronumpy.array import BaseNumArray
-from pypy.module.micronumpy.array import base_typedef
 from pypy.module.micronumpy.array import construct_array, infer_shape
-from pypy.module.micronumpy.array import validate_index
 
 def size_from_shape(shape):
     size = 1
@@ -254,6 +250,19 @@ def descr_get_dtype(space, self):
 def descr_get_shape(space, self):
     return space.newtuple([space.wrap(x) for x in self.shape])
 
+#TODO: add to typedef when ready
+def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
+              w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
+              w_strides=NoneNotWrapped, order='C'):
+    shape_w = unpack_shape(space, w_shape)
+    dtype_w = get_dtype(space, w_dtype)
+    result = construct_array(space, shape_w, dtype_w)
+    #TODO: load from buffer
+    return space.wrap(result)
+descr_new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root,
+                         W_Root, W_Root,
+                         W_Root, str]
+
 MicroArray.typedef = TypeDef('uarray',
                              dtype = GetSetProperty(descr_get_dtype, cls=MicroArray),
                              shape = GetSetProperty(descr_get_shape, cls=MicroArray),
@@ -268,38 +277,10 @@ def reconcile_shapes(space, a, b):
     assert a == b, "Invalid assertion I think" # FIXME
     return a
 
-#def infer_shape(space, w_xs):
-def infer_shape_slow(space, w_xs): # gonna kill this after it's been svn for one revision
-    length = 0
-    shape = []
-    old = None
-    try:
-        w_i = space.iter(w_xs)
-        while True:
-            element = space.next(w_i)
-            try:
-                shape = infer_shape(space, element)
-            except OperationError, e:
-                if e.match(space, space.w_TypeError): pass
-                else: raise
-
-            if old is not None:
-                shape = reconcile_shapes(space, old, shape) # use to process jagged arrays, if Numpy even allows them
-                
-            length += 1
-            old = shape
-    except OperationError, e:
-        if e.match(space, space.w_StopIteration):
-            return [length] + shape
-        else:
-            raise
-
-#XXX: don't like having to pass around setitem
 app_fill_array = gateway.applevel("""
     def fill_array(start, a, b):
         i = 0
         for x in b:
-            print i
             try:
                 fill_array(start + [i], a, x)
             except TypeError, e:
