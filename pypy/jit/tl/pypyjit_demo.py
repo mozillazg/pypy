@@ -37,24 +37,24 @@
 ## t2 = time.time()
 ## print t2 - t1
 
-## from array import array
-## def f(img):
-##     i=0
-##     sa=0
-##     while i<4:
-##         sa+=img[i]
-##         i+=1
-##     return sa
-
-## img=array('i',(1,2,3,4))
-## print f(img)
-
-def f():
-    a=7
+from array import array
+def f(img):
     i=0
+    sa=0
     while i<4:
-        if  i<0: break
-        if  i<0: break
+        sa+=img[i]
         i+=1
+    return sa
 
-f()
+img=array('i',(1,2,3,4))
+print f(img)
+
+## def f():
+##     a=7
+##     i=0
+##     while i<4:
+##         if  i<0: break
+##         if  i<0: break
+##         i+=1
+
+## f()

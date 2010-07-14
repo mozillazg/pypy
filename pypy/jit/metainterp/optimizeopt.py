@@ -623,7 +623,7 @@ class Optimizer(object):
     def find_rewriteable_constant(self, op, args):
         try:
             oldopnum = opboolinvers[op.opnum]
-            targ = args[0:2] + [ConstInt(oldopnum)]
+            targ = [args[0], args[1], ConstInt(oldopnum)]
             oldop = self.pure_operations.get(targ, None)
             if oldop is not None and oldop.descr is op.descr:
                 value = self.getvalue(oldop.result)
@@ -639,7 +639,7 @@ class Optimizer(object):
 
         try:
             oldopnum = opboolreflex[op.opnum]
-            targ = args[1::-1] + [ConstInt(oldopnum)]
+            targ = [args[1], args[0], ConstInt(oldopnum)]
             oldop = self.pure_operations.get(targ, None)
             if oldop is not None and oldop.descr is op.descr:
                 value = self.getvalue(oldop.result)
