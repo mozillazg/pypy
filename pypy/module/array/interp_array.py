@@ -7,6 +7,7 @@ from pypy.rlib.jit import dont_look_inside
 from pypy.rlib import rgc
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rstruct.runpack import runpack
+from pypy.interpreter.argument import Arguments, Signature
 
 import py
 app_array = py.path.local(__file__).dirpath().join('app_array.py')
@@ -142,7 +143,7 @@ def make_array(mytype):
                 
         def setlen(self, size):
             if size > self.allocated or size < self.allocated/2:
-                if size > 0:
+                if size > 0: #FIXME: allways free 0
                     if size < 9:
                         some = 3
                     else:
@@ -180,7 +181,6 @@ def make_array(mytype):
             else:
                 size = (stop - start) / step
                 if (stop - start) % step > 0: size += 1
-                print size
                 if size < 0: size = 0
                 w_a=mytype.w_class(self.space)
                 w_a.setlen(size)
@@ -551,3 +551,170 @@ def array(space, typecode, w_initializer=None):
 
     return a
 array.unwrap_spec = (ObjSpace, str, W_Root)
+
+class W_WrappedArray(Wrappable):
+    def __init__(self, typecode, w_initializer=None):
+        pass
+    __init__.unwrap_spec = ['self', str, W_Root]
+
+    def descr_pop(self, i=-1):
+        return self._array.descr_pop(i)
+    descr_pop.unwrap_spec = ['self', int]
+
+    def descr_getitem(self, w_i):
+        w_item = self._array.descr_getitem(w_i)
+        if isinstance(w_item, W_ArrayBase):
+            return wrap_array(w_item)
+        return w_item
+    descr_getitem.unwrap_spec = ['self', W_Root]
+
+    def descr_iadd(self, w_i):
+        self._array.descr_iadd(w_i._array)
+        return self
+    descr_iadd.unwrap_spec = ['self', W_Root]
+
+    def descr_imul(self, i):
+        self._array.descr_imul(i)
+        return self
+    descr_imul.unwrap_spec = ['self', int]
+
+    def descr_reduce(self):
+        space=self._array.space
+        args=[space.wrap(self._array.typecode)]
+        if self._array.len>0:
+            args += [self._array.descr_tostring()]
+        from pypy.interpreter.mixedmodule import MixedModule
+        w_mod    = space.getbuiltinmodule('array')
+        mod      = space.interp_w(MixedModule, w_mod)
+        w_new_inst = mod.get('_new_array')
+        return space.newtuple([w_new_inst, space.newtuple(args)])
+        
+
+def unwrap_array(w_a):
+    if isinstance(w_a, W_WrappedArray):
+        return w_a._array
+    return w_a
+
+def wrap_array(a):
+    w_a = W_WrappedArray(None, None)
+    w_a._array = a
+    return w_a    
+
+def make_descr(fn, nargs, wrp):
+    if nargs == 0:
+        def descr(space, self):
+            ret = space.call_function(
+                space.getattr(self._array, space.wrap(fn)))
+            if (wrp): return wrap_array(ret)
+            return ret
+
+    elif nargs == 1:
+        def descr(space, self, w_a):
+            ret = space.call_function(
+                space.getattr(self._array, space.wrap(fn)),
+                unwrap_array(w_a))
+            if (wrp): return wrap_array(ret)
+            return ret
+    
+    elif nargs == 2:
+        def descr(space, self, w_a, w_b):
+            ret = space.call_function(
+                space.getattr(self._array, space.wrap(fn)),
+                unwrap_array(w_a), unwrap_array(w_b))
+            if (wrp): return wrap_array(ret)
+            return ret
+    
+    elif nargs == 3:
+        def descr(space, self, w_a, w_b, w_c):
+            ret = space.call_function(
+                space.getattr(self._array, space.wrap(fn)),
+                unwrap_array(w_a), unwrap_array(w_b), unwrap_array(w_c))
+            if (wrp): return wrap_array(ret)
+            return ret
+
+    else:
+        raise NotImplementedError
+
+    descr.unwrap_spec = (ObjSpace, W_WrappedArray) + (W_Root,) * nargs
+    descr.__name__ = 'W_WrappedArray_descr_' + fn
+    return interp2app(descr)
+
+typedefs={}
+for fn, nargs, wrp in (('append', 1, False),
+                       ('__len__', 0, False),
+                       ('__setitem__', 2, False),
+                       ('__delitem__', 1, False),
+                       ('__getslice__', 2, True),
+                       ('__setslice__', 3, False),
+                       ('__delslice__', 2, False),
+                       ('extend', 1, False),
+                       ('fromstring', 1, False),
+                       ('fromunicode', 1, False),
+                       ('fromfile', 2, False),
+                       ('read', 2, False),
+                       ('fromlist', 1, False),
+                       ('tolist', 0, False),
+                       ('tounicode', 0, False),
+                       ('tofile', 1, False),
+                       ('write', 1, False),
+                       ('tostring', 0, False),
+                       ('__buffer__', 0, False),
+                       ('__repr__', 0, False),
+                       ('count', 1, False),
+                       ('index', 1, False),
+                       ('remove', 1, False),
+                       ('reverse', 0, False),
+                       ('insert', 2, False),
+                       ('__eq__', 1, False),
+                       ('__ne__', 1, False),
+                       ('__lt__', 1, False),
+                       ('__gt__', 1, False),
+                       ('__le__', 1, False),
+                       ('__ge__', 1, False),
+                       ('__copy__', 0, True),
+                       ('__add__', 1, True),
+                       ('__mul__', 1, True),
+                       ('__rmul__', 1, True),
+                       ('buffer_info', 0, False),
+                       ('byteswap', 0, False),
+                       ('__iter__', 0, False),
+                       ('__contains__', 1, False),
+                   ):
+    typedefs[fn] = make_descr(fn, nargs, wrp)
+
+def new_array(space, typecode, w_initializer=None):
+    w_a = W_WrappedArray(None, None)
+    w_a._array = array(space, typecode, w_initializer)
+    return w_a
+new_array.unwrap_spec = (ObjSpace, str, W_Root)
+
+def new_array_sub(space, w_cls, typecode, w_initializer=None, w_args=None):
+    w_array = space.allocate_instance(W_WrappedArray, w_cls)
+    w_array._array = array(space, typecode, w_initializer)
+    if len(w_args.arguments_w) > 0:
+        msg = 'array() takes at most 2 arguments'
+        raise OperationError(space.w_TypeError, space.wrap(msg))
+    return w_array
+new_array_sub.unwrap_spec = (ObjSpace, W_Root, str, W_Root, Arguments)
+
+def descr_wrapped_itemsize(space, self):
+    return space.wrap(self._array.itemsize)
+
+def descr_wrapped_typecode(space, self):
+    return space.wrap(self._array.typecode)
+
+
+W_WrappedArray.typedef = TypeDef(
+    'array',
+    __new__      = interp2app(new_array_sub),
+    __init__     = interp2app(W_WrappedArray.__init__),
+    pop          = interp2app(W_WrappedArray.descr_pop),
+    __getitem__  = interp2app(W_WrappedArray.descr_getitem),
+    __iadd__     = interp2app(W_WrappedArray.descr_iadd),
+    __imul__     = interp2app(W_WrappedArray.descr_imul),
+    __reduce__   = interp2app(W_WrappedArray.descr_reduce),
+    itemsize     = GetSetProperty(descr_wrapped_itemsize, cls=W_WrappedArray),
+    typecode     = GetSetProperty(descr_wrapped_typecode, cls=W_WrappedArray),
+    
+    **typedefs
+)
