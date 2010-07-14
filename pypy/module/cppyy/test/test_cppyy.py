@@ -153,19 +153,20 @@ class AppTestCPPYY:
         assert t.invoke("getCount") == 0
 
     def testReturningOfAnObjectByPointer(self):
-        """Test passing of an instance as an argument."""
+        """Test returing of an instance as an argument."""
 
         t = self.example01
         
         pl = self.payload.construct(3.14)
         assert round(pl.invoke("getData")-3.14, 8) == 0
 
+        pl2 = t.invoke("staticCyclePayload", pl, 38.)
+        assert pl2.invoke("getData") == 38.
+
         e = t.construct(50)
 
-        e.invoke("setPayload", pl);
-        assert round(pl.invoke("getData")-50., 8) == 0
-        pl = e.invoke("cyclePayload", pl);
-        assert round(pl.invoke("getData")-50., 8) == 0
+        pl2 = e.invoke("cyclePayload", pl);
+        assert round(pl2.invoke("getData")-50., 8) == 0
 
         e.destruct()
         pl.destruct() 

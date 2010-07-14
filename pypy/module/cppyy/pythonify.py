@@ -7,16 +7,26 @@ class CppyyClass(type):
 
 class CppyyObject(object):
     def __init__(self, *args):
-        print '__init__ called', args
         self._cppinstance = self._cppyyclass.construct(*args)
         
     def destruct(self):
         self._cppinstance.destruct()
 
+def bind_object(cppobj, cppclass):
+    if cppobj is None:
+        return None
+    bound_obj = object.__new__(cppclass)
+    bound_obj._cppinstance = cppobj
+    return bound_obj
 
-def make_static_function(cpptype, name):
-    def method(*args):
-        return cpptype.invoke(name, *args)
+def make_static_function(cpptype, name, rettype):
+    if rettype is None:
+        def method(*args):
+            return cpptype.invoke(name, *args)
+    else:
+        cppclass = get_cppclass(rettype)
+        def method(*args):
+            return bind_object(cpptype.invoke(name, *args), cppclass)
     method.__name__ = name
     return staticmethod(method)
 
@@ -24,17 +34,12 @@ def make_method(name, rettype):
     if rettype is None:                          # return builtin type
         def method(self, *args):
             return self._cppinstance.invoke(name, *args)
-        method.__name__ = name
-        return method
     else:                                        # return instance
+        cppclass = get_cppclass(rettype)
         def method(self, *args):
-            result = self._cppinstance.invoke(name, *args)
-            if not result is None:
-                bound_result = object.__new__(get_cppclass(rettype))
-                bound_result._cppinstance = result
-            return bound_result
-        method.__name__ = name
-        return method
+            return bind_object(self._cppinstance.invoke(name, *args), cppclass)
+    method.__name__ = name
+    return method
 
 
 _existing_classes = {}
@@ -52,7 +57,7 @@ def get_cppclass(name):
     for f in cpptype.get_function_members():
         cppol = cpptype.get_overload(f)
         if cppol.is_static():
-            d[f] = make_static_function(cpptype, f)
+            d[f] = make_static_function(cpptype, f, cppol.get_returntype())
         else:
             d[f] = make_method(f, cppol.get_returntype())
 

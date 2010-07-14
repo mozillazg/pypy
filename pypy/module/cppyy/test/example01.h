@@ -14,7 +14,7 @@ private:
 class example01 {
 public:
     static int count;
-    int somedata;
+    int m_somedata;
 
     example01();
     example01(int a);
@@ -29,6 +29,7 @@ public:
     static int staticAtoi(const char* str);
     static char* staticStrcpy(const char* strin);
     static void staticSetPayload(payload* p, double d);
+    static payload* staticCyclePayload(payload* p, double d);
     static int getCount();
 
 // instance methods
