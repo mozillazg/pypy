@@ -615,6 +615,17 @@ class PyPyCJITTests(object):
             return total
         ''', 170, ([], 4999450000L))
 
+    def test_boolrewrite(self):
+        self.run_source('''
+        def main(a,b,c):
+            sa = 0
+            for i in range(100000):
+                if b < a: sa += 1
+                else: sa += 2
+                if b >= c: sa += 3
+                else: sa += 4
+        ''', 0, ([0, 1, 0], 7))
+
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
         if not option.runappdirect:

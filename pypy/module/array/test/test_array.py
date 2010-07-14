@@ -343,6 +343,21 @@ class BaseArrayTests:
                             assert repr(arr) == repr(self.array('i', lst))
                         except ValueError:
                             assert not ok
+
+    def test_reversingslice_pre26(self):
+        import sys
+        if sys.version_info >= (2, 6):
+            py.test.skip('arrays can handle more slice opps than lists in 2.6')
+
+        for a in range(-4,5):
+            for b in range(-4,5):
+                for c in [-4, -3, -2, -1, 1, 2, 3, 4]:
+                    lst = [1, 2, 3]
+                    arr=self.array('i', lst)
+                    for vals in ([4,5], [6], []):
+                        try:
+                            lst[a:b:c]=vals
+                        except ValueError:
                             raises(ValueError,
                                    "arr[a:b:c]=self.array('i', vals)")
 
