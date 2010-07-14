@@ -140,10 +140,10 @@ def make_array(mytype):
 
         def __del__(self):
             self.setlen(0)
-                
+
         def setlen(self, size):
-            if size > self.allocated or size < self.allocated/2:
-                if size > 0: #FIXME: allways free 0
+            if size > 0:
+                if size > self.allocated or size < self.allocated/2:
                     if size < 9:
                         some = 3
                     else:
@@ -154,14 +154,19 @@ def make_array(mytype):
                     for i in range(min(size,self.len)):
                         new_buffer[i] = self.buffer[i]
                 else:
-                    assert size == 0
-                    self.allocated = 0
-                    new_buffer = lltype.nullptr(mytype.arraytype)
-                if self.buffer != lltype.nullptr(mytype.arraytype):
-                    lltype.free(self.buffer, flavor='raw')                
-                self.buffer = new_buffer
+                    self.len = size
+                    return
+            else:
+                assert size == 0
+                self.allocated = 0
+                new_buffer = lltype.nullptr(mytype.arraytype)
+
+            if self.buffer != lltype.nullptr(mytype.arraytype):
+                lltype.free(self.buffer, flavor='raw')                
+            self.buffer = new_buffer
             self.len = size
-        setlen.unwrap_spec = ['self', int]
+            
+        setlen.unwrap_spec = ['self', int]        
 
         def descr_len(self):
             return self.space.wrap(self.len)
@@ -553,6 +558,8 @@ def array(space, typecode, w_initializer=None):
 array.unwrap_spec = (ObjSpace, str, W_Root)
 
 class W_WrappedArray(Wrappable):
+    _immutable_fields_ = ['_array']
+    
     def __init__(self, typecode, w_initializer=None):
         pass
     __init__.unwrap_spec = ['self', str, W_Root]
@@ -562,21 +569,31 @@ class W_WrappedArray(Wrappable):
     descr_pop.unwrap_spec = ['self', int]
 
     def descr_getitem(self, w_i):
-        w_item = self._array.descr_getitem(w_i)
+        space = self._array.space
+        #w_item = self._array.descr_getitem(w_i)
+        w_item = space.call_function(
+            space.getattr(self._array, space.wrap('__getitem__')), w_i)
         if isinstance(w_item, W_ArrayBase):
             return wrap_array(w_item)
         return w_item
     descr_getitem.unwrap_spec = ['self', W_Root]
 
     def descr_iadd(self, w_i):
-        self._array.descr_iadd(w_i._array)
+        space = self._array.space        
+        #self._array.descr_iadd(w_i._array)
+        w_i = space.interp_w(W_WrappedArray, w_i)
+        w_item = space.call_function(
+            space.getattr(self._array, space.wrap('__iadd__')), w_i._array)
         return self
     descr_iadd.unwrap_spec = ['self', W_Root]
 
-    def descr_imul(self, i):
-        self._array.descr_imul(i)
+    def descr_imul(self, w_i):
+        space = self._array.space        
+        #self._array.descr_imul(i)
+        w_item = space.call_function(
+            space.getattr(self._array, space.wrap('__imul__')), w_i)
         return self
-    descr_imul.unwrap_spec = ['self', int]
+    descr_imul.unwrap_spec = ['self', W_Root]
 
     def descr_reduce(self):
         space=self._array.space
@@ -588,6 +605,8 @@ class W_WrappedArray(Wrappable):
         mod      = space.interp_w(MixedModule, w_mod)
         w_new_inst = mod.get('_new_array')
         return space.newtuple([w_new_inst, space.newtuple(args)])
+        return space.newtuple([space.gettypeobject(W_WrappedArray.typedef),
+                               space.newtuple(args)])
         
 
 def unwrap_array(w_a):
