@@ -12,16 +12,6 @@ from pypy.module.micronumpy.array import base_typedef
 from pypy.module.micronumpy.array import \
         mul_operation, div_operation, add_operation, sub_operation
 
-from pypy.module.micronumpy.dtype import unwrap_int, coerce_int
-from pypy.module.micronumpy.dtype import unwrap_float, coerce_float
-from pypy.module.micronumpy.dtype import result_mapping, iterable_type
-
-from pypy.module.micronumpy.dtype import create_factory
-
-from pypy.module.micronumpy.dtype import get_dtype
-from pypy.module.micronumpy.dtype import retrieve_dtype #FIXME: ambiguously named?
-from pypy.module.micronumpy.dtype import DynamicType
-
 #TODO: merge unwrap_spec decorator
 # from pypy.interpreter.gateway import unwrap_spec
 
@@ -59,6 +49,15 @@ def create_sdarray(data_type, unwrap, coerce):
                         __iter__ = interp2app(SingleDimIterator.descr_iter),
                         next = interp2app(SingleDimIterator.descr_next)
                         )
+
+    def operation_name(type, operand_type, opname):
+        return '_'.join([type, operand_type, opname])
+
+    def fixedview_operation(opname, self, source, x):
+        return getattr(self, operation_name('client', 'fixedview', opname))(source, x)
+
+    def client_operation(opname, self, source, x):
+        return getattr(self, operation_name('client', 'scalar', opname))(source, x)
 
     def create_client_math_operation(f):
         def scalar_operation(self, source, x, inverse):
@@ -274,22 +273,22 @@ def create_sdarray(data_type, unwrap, coerce):
             maxlen = max([len(x) for x in strings])
             return strings, maxlen
 
-        def descr_str(self):
+        def descr_str(self, space):
             space = self.space
             #beautiful, as in numpy
             strings, maxlen = self.str()
             return space.wrap(
                     "[%s]" % ' '.join(["%-*s"%(maxlen, s) for s in strings]) 
                     )
-        descr_str.unwrap_spec = ['self']
+        descr_str.unwrap_spec = ['self', ObjSpace]
 
-        def descr_repr(self):
+        def descr_repr(self, space):
             space = self.space
             strings, maxlen = self.str()
             return space.wrap(
                     "array([%s])" % ', '.join(["%-*s"%(maxlen, s) for s in strings]) 
                     )
-        descr_repr.unwrap_spec = ['self']
+        descr_repr.unwrap_spec = ['self', ObjSpace]
 
     NumArray.typedef = TypeDef('ndarray', base_typedef,
                                __mul__ = interp2app(NumArray.descr_mul),
@@ -315,8 +314,3 @@ def create_sdarray(data_type, unwrap, coerce):
                               )
 
     return NumArray
-
-IntArray = create_sdarray(int, unwrap_int, coerce_int)
-FloatArray = create_sdarray(float, unwrap_float, coerce_float)
-
-sdresult = create_factory({'i': IntArray, 'd': FloatArray})

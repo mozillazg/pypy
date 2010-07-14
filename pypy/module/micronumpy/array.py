@@ -4,13 +4,19 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import interp2app
 
-from pypy.module.micronumpy.dtype import iterable_type
+def iterable_type(space, xs):
+    raise NotImplementedError("Stub")
 
-from pypy.module.micronumpy.dtype import get_dtype
-from pypy.module.micronumpy.dtype import retrieve_dtype #FIXME: ambiguous name?
+def get_dtype(space, t):
+    raise NotImplementedError("Stub")
+
+def retrieve_dtype(space, t):
+    raise NotImplementedError("Stub")
 
 class BaseNumArray(Wrappable):
     pass
+
+from pypy.rpython.lltypesystem import lltype
 
 def validate_index(array, space, w_i):
     index_dimensionality = space.int_w(space.len(w_i))
@@ -90,14 +96,10 @@ def infer_shape(space, w_values):
     return shape
 
 def construct_array(space, shape, w_dtype):
-    from pypy.module.micronumpy.sdarray import sdresult
-    from pypy.module.micronumpy.mdarray import mdresult
+    from pypy.module.micronumpy.microarray import MicroArray
     try:
-        if len(shape) == 1:
-            length = shape[0]
-            return sdresult(w_dtype.code)(space, length, w_dtype)
-        else:
-            return mdresult(w_dtype.code)(space, shape, w_dtype)
+        array = MicroArray(shape, w_dtype)
+        return space.wrap(array)
     except KeyError, e:
         raise OperationError(space.w_NotImplementedError,
                 space.wrap("Haven't implemented generic array yet!"))
