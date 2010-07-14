@@ -1,3 +1,5 @@
+all: example01Dict.so datatypesDict.so
+
 ROOTSYS := ${ROOTSYS}
 
 ifeq ($(ROOTSYS),)
@@ -19,3 +21,7 @@ endif
 example01Dict.so: example01.cxx example01.h
 	$(genreflex) example01.h $(genreflexflags)
 	g++ -o $@ example01_rflx.cpp example01.cxx -shared -lReflex $(cppflags) $(cppflags2)
+
+datatypesDict.so: datatypes.cxx datatypes.h
+	$(genreflex) datatypes.h $(genreflexflags)
+	g++ -o $@ datatypes_rflx.cpp datatypes.cxx -shared -lReflex $(cppflags) $(cppflags2)

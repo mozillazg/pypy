@@ -15,6 +15,11 @@ class VoidExecutor(FunctionExecutor):
         capi.c_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.w_None
 
+class BoolExecutor(FunctionExecutor):
+    def execute(self, space, func, cppthis, num_args, args):
+        result = capi.c_call_b(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return space.wrap(result)
+
 class LongExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
@@ -63,7 +68,8 @@ def get_executor(space, name):
  #  raise TypeError("no clue what %s is" % name)
 
 _executors["void"]                = VoidExecutor()
+_executors["bool"]                = BoolExecutor()
 _executors["int"]                 = LongExecutor()
-_executors["long"]                = LongExecutor()
+_executors["long int"]            = LongExecutor()
 _executors["double"]              = DoubleExecutor()
 _executors["char*"]               = CStringExecutor()

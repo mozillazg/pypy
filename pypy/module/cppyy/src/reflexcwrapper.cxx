@@ -31,9 +31,10 @@ void cppyy_call_v(cppyy_typehandle_t handle, int method_index,
     }
 }
 
-long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
-                  cppyy_object_t self, int numargs, void* args[]) {
-    long result;
+template<typename T>
+static inline T cppyy_call_T(cppyy_typehandle_t handle, int method_index,
+                             cppyy_object_t self, int numargs, void* args[]) {
+    T result;
     std::vector<void*> arguments(args, args+numargs);
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
@@ -46,19 +47,19 @@ long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
     return result;
 }
 
+int cppyy_call_b(cppyy_typehandle_t handle, int method_index,
+                  cppyy_object_t self, int numargs, void* args[]) {
+    return (int)cppyy_call_T<bool>(handle, method_index, self, numargs, args);
+}
+
+long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
+                  cppyy_object_t self, int numargs, void* args[]) {
+    return cppyy_call_T<long>(handle, method_index, self, numargs, args);
+}
+
 double cppyy_call_d(cppyy_typehandle_t handle, int method_index,
                     cppyy_object_t self, int numargs, void* args[]) {
-    double result;
-    std::vector<void*> arguments(args, args+numargs);
-    Reflex::Type t((Reflex::TypeName*)handle);
-    Reflex::Member m = t.FunctionMemberAt(method_index);
-    if (self) {
-        Reflex::Object o(t, self);
-        m.Invoke(o, result, arguments);
-    } else {
-        m.Invoke(result, arguments);
-    }
-    return result;
+    return cppyy_call_T<double>(handle, method_index, self, numargs, args);
 }   
 
 void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self) {

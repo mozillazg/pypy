@@ -11,7 +11,7 @@ space = gettestobjspace(usemodules=['cppyy'])
 def setup_module(mod):
     if sys.platform == 'win32':
         py.test.skip("win32 not supported so far")
-    err = os.system("cd '%s' && make" % currpath)
+    err = os.system("cd '%s' && make example01Dict.so" % currpath)
     if err:
         raise OSError("'make' failed (see stderr)")
 

@@ -13,12 +13,22 @@ class TypeConverter(object):
         lltype.free(arg, flavor='raw')
 
 
+class BoolConverter(TypeConverter):
+    def convert_argument(self, space, w_obj):
+        arg = space.c_int_w(w_obj)
+        if arg != False and arg != True:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("boolean value should be bool, or integer 1 or 0"))
+        x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
+        x[0] = arg
+        return rffi.cast(rffi.VOIDP, x)
+
 class IntConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         arg = space.c_int_w(w_obj)
         x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
         x[0] = arg
-        return rffi.cast(rffi.VOIDP, x)        
+        return rffi.cast(rffi.VOIDP, x)
 
 class DoubleConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -32,6 +42,7 @@ class CStringConverter(TypeConverter):
         arg = space.str_w(w_obj)
         x = rffi.str2charp(arg)
         return rffi.cast(rffi.VOIDP, x)
+
 
 class InstancePtrConverter(TypeConverter):
     _immutable_ = True
@@ -76,6 +87,7 @@ def get_converter(space, name):
 
     raise OperationError(space.w_TypeError, space.wrap("no clue what %s is" % name))
 
+_converters["bool"]                = BoolConverter()
 _converters["int"]                 = IntConverter()
 _converters["double"]              = DoubleConverter()
 _converters["const char*"]         = CStringConverter()

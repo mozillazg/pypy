@@ -14,8 +14,9 @@ extern "C" {
     void* cppyy_allocate(cppyy_typehandle_t handle);
     void cppyy_deallocate(cppyy_typehandle_t handle, cppyy_object_t instance);
 
-    void cppyy_call_v(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
-    long cppyy_call_l(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
+    void   cppyy_call_v(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
+    int    cppyy_call_b(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
+    long   cppyy_call_l(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
     double cppyy_call_d(cppyy_typehandle_t handle, int method_index, cppyy_object_t self, int numargs, void* args[]);
     void cppyy_destruct(cppyy_typehandle_t handle, cppyy_object_t self);
     cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int method_index);
