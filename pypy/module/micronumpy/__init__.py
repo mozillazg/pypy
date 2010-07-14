@@ -1,6 +1,5 @@
 ﻿
 from pypy.interpreter.mixedmodule import MixedModule 
-import dtype
 
 class Module(MixedModule):
     def __init__(self, space, w_name):
@@ -16,7 +15,7 @@ class Module(MixedModule):
         'array'    : 'microarray.array',
         'zeros'    : 'microarray.zeros',
         'ndarray'  : 'array.ndarray',
-        'minimum'  : 'ufunc.minimum',
-        'dot'      : 'ufunc.dot',
+        #'minimum'  : 'ufunc.minimum',
+        #'dot'      : 'ufunc.dot',
         }
 

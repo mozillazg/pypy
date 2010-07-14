@@ -12,6 +12,7 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.module import micronumpy
 from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import construct_array, infer_shape
+from pypy.module.micronumpy.dtype import null_storage
 
 def size_from_shape(shape):
     size = 1
@@ -79,7 +80,7 @@ class MicroArray(BaseNumArray):
         elif parent is not None:
             self.data = parent.data
         else:
-            self.data = None
+            self.data = null_storage
 
     def descr_len(self, space):
         return space.wrap(self.shape[0])

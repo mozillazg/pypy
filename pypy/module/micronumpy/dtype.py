@@ -40,7 +40,10 @@ TypeDescr.typedef = TypeDef('dtype',
                             __eq__ = interp2app(TypeDescr.descr_eq),
                             __repr__ = interp2app(TypeDescr.descr_repr),
                            )
-                            
+
+storage_type = lltype.Ptr(lltype.Array(lltype.Char))                           
+null_storage = lltype.nullptr(storage_type.TO)
+
 class DescrBase(object): pass
 
 _typeindex = {}
@@ -76,7 +79,9 @@ def descriptor(code, name, ll_type):
             array[index] = value # XXX: let's see if this works
 
         def alloc(self, count):
-            return lltype.malloc(arraytype, count, flavor='raw')
+            #return lltype.malloc(arraytype, count, flavor='raw')
+            mem = lltype.malloc(arraytype, count, flavor='raw')
+            return rffi.cast(storage_type, mem)
 
         def free(self, data):
             lltype.free(data, flavor='raw')
@@ -136,12 +141,16 @@ _result_types = {(_int_index, _int_index): _int_index,
                 }
 
 def result(a, b):
+    assert isinstance(a, DescrBase)
+    assert isinstance(b, DescrBase)
     a = a.typeid
     b = b.typeid
     c = _result_types[(a, b)]
     return _descriptors[c]
 
 def w_result(w_a, w_b):
+    assert isinstance(w_a, TypeDescr)
+    assert isinstance(w_b, TypeDescr)
     return result(w_a.dtype, w_b.dtype).wrappable_dtype()
 
 def from_typecode(s):
