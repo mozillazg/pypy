@@ -114,13 +114,10 @@ class _Get(object):
         self.esp = 0
         self.push_funcaddr(self.funcaddr)
 
-    def push_funcaddr(self, value):
-        self.cpu.set_future_value_int(self.esp, value)
-        self.esp += 1
-
     def push_int(self, value):
         self.cpu.set_future_value_int(self.esp, value)
         self.esp += 1
+    push_funcaddr = push_int
 
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
