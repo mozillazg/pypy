@@ -602,9 +602,11 @@ class W_WrappedArray(Wrappable):
 
     def descr_reduce(self):
         space=self.space
-        args=[space.wrap(self._array.typecode)]
-        if self._array.len>0:
-            args += [self._array.descr_tostring()]
+        if space.int_w(space.len(self._array)) > 0:
+            w_s = space.call_function(space.getattr(self._array, space.wrap('tostring')))
+            args = [space.wrap(self._array.typecode), w_s]
+        else:
+            args = [space.wrap(self._array.typecode)]
         return space.newtuple([space.type(self), space.newtuple(args)])
         
 
