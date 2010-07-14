@@ -254,9 +254,10 @@ def descr_get_shape(space, self):
 def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
               w_strides=NoneNotWrapped, order='C'):
+    from pypy.module.micronumpy import dtype
     shape_w = unpack_shape(space, w_shape)
-    dtype_w = get_dtype(space, w_dtype)
-    result = construct_array(space, shape_w, dtype_w)
+    dtype_w = dtype.get(space, w_dtype)
+    result = MicroArray(shape_w, dtype_w)
     #TODO: load from buffer
     return space.wrap(result)
 descr_new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root,
