@@ -1,32 +1,34 @@
 ﻿from pypy.module.micronumpy.array import array, zeros, ndarray
 from pypy.module.micronumpy.array import construct_array
-from pypy.module.micronumpy.dtype import result_mapping
-from pypy.module.micronumpy.sdarray import sdresult
-from pypy.module.micronumpy.mdarray import mdresult, compute_pos
-
-from pypy.module.micronumpy.dtype import retrieve_dtype
 
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
 from pypy.rlib.debug import make_sure_not_resized
 
+from pypy.module.micronumpy.microarray import MicroArray, size_from_shape
+
 def minimum(space, w_a, w_b):
-    if not isinstance(w_a, ndarray) or not isinstance(w_b, ndarray):
+    if not isinstance(w_a, MicroArray) or not isinstance(w_b, MicroArray):
         raise OperationError(space.w_TypeError,
                              space.wrap("expecting ndarray object"))
-    if w_a.len()!= w_b.len():
+    if w_a.shape != w_b.shape:
         raise OperationError(space.w_ValueError,
                              space.wrap("minimum of arrays of different length"))
-    dtype = result_mapping(space, (w_a.dtype, w_b.dtype))
-    res = construct_array(space, w_a.shape, retrieve_dtype(space, dtype))
-    for i in range(len(w_a.storage)):
-        one = w_a.storage[i]
-        two = w_b.storage[i]
+
+    result_type = w_a.dtype.result(w_b.dtype)
+
+    result = MicroArray(w_a.shape, result_type)
+
+    size = size_from_shape(w_a.shape)
+
+    for i in range(size): # FIXME: specialized paths for Signed and Float ? wraps right now...
+        one = w_a.getitem(space, i)
+        two = w_b.getitem(space, i)
         if one < two:
-            res.storage[i] = one
+            result.setitem(space, i, one)
         else:
-            res.storage[i] = two
-    return space.wrap(res)
+            result.setitem(space, i, two)
+    return space.wrap(result)
 minimum.unwrap_spec = [ObjSpace, W_Root, W_Root]
 
 def dot(space, w_a, w_b):

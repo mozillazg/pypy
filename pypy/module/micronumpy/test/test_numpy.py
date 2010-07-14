@@ -1,8 +1,11 @@
 ﻿
+import py
+
 from pypy.conftest import gettestobjspace
 
 class TestSDArray(object):
     def test_unwrap(self, space):
+        skip("Irrelevant interplevel test")
         w_int = space.wrap(1)
         w_float = space.wrap(1.0)
 
@@ -27,6 +30,7 @@ class TestSDArray(object):
         #interp_raises((space.w_TypeError,), unwrap_float, space, w_int) #er, shouldn't this raise?
 
     def test_coerce(self, space):
+        skip("Irrelevant interplevel test")
         w_int = space.wrap(1)
         w_float = space.wrap(1.0)
 
@@ -54,14 +58,15 @@ class AppTestSDArray(object):
 
     def test_type_array(self):
         compare = self.compare
-        from numpy import array
+        from micronumpy import array
         for data_type in (int, float):
             data = [data_type(x) for x in xrange(4)] 
             ar = array(data)
             assert compare(ar, data)
 
+    @py.test.mark.xfail
     def test_sdarray_operators(self):
-        from numpy import array
+        from micronumpy import array
         from operator import mul, div, add, sub
         compare = self.compare
         d = range(1, self.length)
@@ -76,9 +81,10 @@ class AppTestSDArray(object):
                     assert compare(operator(value, ar2), [operator(value, x) for x in data])
                 assert compare(operator(ar, ar2), [operator(x, y) for (x, y) in zip(ar, ar2)])
 
+    @py.test.mark.xfail
     def test_operator_result_types(self):
         from operator import mul, div, add, sub
-        from numpy import array
+        from micronumpy import array
         types = {
                  (int, int): int,
                  (int, float): float,
@@ -116,7 +122,7 @@ class AppTestSDArray(object):
                 test_type(f.dtype, result_type)
 
     def test_iter(self):
-        from numpy import array
+        from micronumpy import array
         for iterable_type in (list, tuple):
             for data_type in (int, float):
                 data = iterable_type([data_type(x) for x in xrange(self.length)])
@@ -126,19 +132,20 @@ class AppTestSDArray(object):
 
     def test_iterable_construction(self):
         compare = self.compare
-        from numpy import array
+        from micronumpy import array
         ar = array(xrange(4))
 
         assert compare(ar, xrange(4))
 
     def test_zeroes(self):
-        from numpy import zeros
+        from micronumpy import zeros
         for data_type in (int, float):
             ar = zeros(3, dtype=int)
             assert ar[0] == data_type(0.0)
     
+    @py.test.mark.xfail
     def test_setitem_getitem(self):
-        from numpy import zeros
+        from micronumpy import zeros
         compare = self.compare
 
         ar = zeros(8, dtype=int)
@@ -166,8 +173,9 @@ class AppTestSDArray(object):
         raises(ValueError, ar.__setitem__, 0, 'f')
         raises(ValueError, ar.__setitem__, slice(2, 3), [4, 5, 6])
 
+    @py.test.mark.xfail
     def test_minimum(self):
-        from numpy import zeros, minimum
+        from micronumpy import zeros, minimum
         ar = zeros(5, dtype=int)
         ar2 = zeros(5, dtype=int)
         ar[0] = 3
@@ -184,9 +192,9 @@ class AppTestSDArray(object):
         assert len(x) == 5
         raises(ValueError, minimum, ar, zeros(3, dtype=int))
 
+    @py.test.mark.xfail
     def test_str(self):
-        skip("Perfect string formatting is going to be tough.")
-        from numpy import zeros, array
+        from micronumpy import zeros, array
 
         z = zeros(shape=(3,))
         assert str(z) == '[ 0.  0.  0.]'
@@ -228,14 +236,15 @@ class AppTestMultiDim(object):
            return compare""")
 
     def test_multidim(self):
-        from numpy import zeros
+        from micronumpy import zeros
         ar = zeros((3, 3), dtype=int)
         assert ar[0, 2] == 0
         raises(IndexError, ar.__getitem__, (3, 0))
         assert ar[-2, 1] == 0
 
+    @py.test.mark.xfail
     def test_construction(self):
-        from numpy import array
+        from micronumpy import array
         gen_array = self.gen_array
 
         #3x3
@@ -248,7 +257,7 @@ class AppTestMultiDim(object):
         assert ar.shape == (2, 3)
 
         #3x2
-        ar = array(gen_array((3,2)))
+        ar = array(gen_array((3,2))) # XXX: here's the problem
         assert len(ar) == 3
         assert ar.shape == (3, 2)
 
@@ -256,7 +265,7 @@ class AppTestMultiDim(object):
         raises(ValueError, array, [2, [3, 4]])
 
     def test_getset(self):
-        from numpy import zeros
+        from micronumpy import zeros
         ar = zeros((3, 3, 3), dtype=int)
         ar[1, 2, 1] = 3
         assert ar[1, 2, 1] == 3
@@ -265,11 +274,11 @@ class AppTestMultiDim(object):
         assert ar[-2, 2, -2] == 3
 
     def test_len(self):
-        from numpy import zeros
+        from micronumpy import zeros
         assert len(zeros((3, 2, 1), dtype=int)) == 3
 
     def test_shape_detect(self):
-        from numpy import array
+        from micronumpy import array
         ar = array([range(i*3, i*3+3) for i in range(3)])
         assert len(ar) == 3
         assert ar.shape == (3, 3)
@@ -277,8 +286,9 @@ class AppTestMultiDim(object):
             for j in range(3):
                 assert ar[i, j] == i*3+j
     
+    @py.test.mark.xfail
     def test_get_set_slices(self):
-        from numpy import array
+        from micronumpy import array
         gen_array = self.gen_array
         compare = self.compare
 
@@ -327,18 +337,20 @@ class AppTestMultiDim(object):
         ar3[1:3] = [[0, 1, 2], [3, 4, 5]]
         assert compare(ar3[1, 2], [2, 2, 2])
 
+    @py.test.mark.xfail
     def test_newaxis(self):
-        from numpy import array
+        from micronumpy import array
         gen_array = self.gen_array
         compare = self.compare
 
         ar = array(gen_array((3, 3)))
 
         assert compare(ar[[1, 2], 0], ar[1:3, 0])
-        assert compare(ar[ [[1, 2], [0, 1]] ] [1, 0], ar[0])
+        assert compare(ar[ [[1, 2], [0, 1]] ] [1, 0], ar[0]) # zip iterables into coordinates
 
+    @py.test.mark.xfail
     def test_mdarray_operators(self):
-        from numpy import array
+        from micronumpy import array
         import operator
         compare = self.compare
 
@@ -377,9 +389,10 @@ class AppTestMultiDim(object):
 class AppTestDType(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
-    #FIXME: need DynamicType.__new__/__init__ to best test this
+
+    @py.test.mark.xfail
     def test_eq(self):
-        from numpy import zeros
+        from micronumpy import zeros
 
         a = zeros((4,), dtype=int)
         assert a.dtype == int
@@ -397,6 +410,7 @@ class AppTestDType(object):
 
 class TestDType(object):
     def test_lookups(self, space):
+        skip("Depends on interplevel stuff that doesn't exist really anymore.")
         from pypy.module.micronumpy.dtype import retrieve_dtype
         from pypy.module.micronumpy.dtype import get_dtype
         a = get_dtype(space, space.wrap('i'))
@@ -406,6 +420,7 @@ class TestDType(object):
         assert b == retrieve_dtype(space, 'd')
 
     def test_result_types(self, space):
+        skip("Depends on interplevel stuff that doesn't exist really anymore.")
         from pypy.module.micronumpy.dtype import get_dtype
         from pypy.module.micronumpy.dtype import result_mapping
         w_typecode_a = space.wrap('i')
@@ -419,9 +434,7 @@ class TestDType(object):
         assert 'd' == result_mapping(space, (w_typecode_b, w_typecode_b))
 
     def test_iterable_type(self, space):
-        from pypy.module.micronumpy.dtype import iterable_type
-        w_int = space.wrap(1)
-        w_float = space.wrap(2.0)
+        from pypy.module.micronumpy.dtype import infer_from_iterable
 
         data = [(space.wrap([1, 2, 3, 4, 5]), 'i'),
                 (space.wrap([1, 2, 3.0, 4, 5]), 'd'),
@@ -431,4 +444,44 @@ class TestDType(object):
                 (space.wrap([1.0, 2, 3, 4, 5.0]), 'd')]
 
         for w_xs, typecode in data:
-            assert typecode == iterable_type(space, w_xs)
+            assert typecode == infer_from_iterable(space, w_xs).typecode
+
+class TestMicroArray(object):
+    def test_strides(self, space):
+        from pypy.module.micronumpy.microarray import stride_row, stride_column
+
+        shape = (2, 3)
+        assert stride_row(shape, 0) == 3
+        assert stride_row(shape, 1) == 1
+
+        assert stride_column(shape, 0) == 1
+        assert stride_column(shape, 1) == 2
+
+        # TODO: more, N-dimensional too
+
+    def test_memory_layout(self, space):
+        from pypy.module.micronumpy.microarray import MicroArray
+        from pypy.module.micronumpy.microarray import array
+        from pypy.module.micronumpy.dtype import w_int_descr
+
+        data = [[1, 2, 3],
+                [4, 5, 6]]
+
+        w_data = space.wrap(data)
+        column_major = [1, 4, 2, 5, 3, 6]
+        row_major = [1, 2, 3, 4, 5, 6]
+
+        assert len(column_major) == len(row_major)
+        memlen = len(column_major)
+
+        ar = array(space, w_data, w_dtype=w_int_descr, order='C') #C for C not column
+        
+        for i in range(memlen):
+            array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
+            assert array_element == row_major[i]
+
+        ar = array(space, w_data, w_dtype=w_int_descr, order='F')
+        for i in range(memlen):
+            array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
+            assert array_element == column_major[i]
+
