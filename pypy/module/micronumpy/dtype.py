@@ -35,12 +35,6 @@ class TypeDescr(Wrappable):
         return space.wrap("dtype('%s')" % self.name)
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
-    def result(self, other):
-        a = self.dtype.typeid
-        b = other.dtype.typeid
-        c = _result_types[(a, b)]
-        return _descriptors[c].wrappable_dtype()
-
 TypeDescr.typedef = TypeDef('dtype',
                             itemsize = GetSetProperty(TypeDescr.descr_itemsize),
                             __eq__ = interp2app(TypeDescr.descr_eq),
@@ -140,6 +134,15 @@ _result_types = {(_int_index, _int_index): _int_index,
                  (_float_index, _int_index): _float_index,
                  (_float_index, _float_index): _float_index,
                 }
+
+def result(a, b):
+    a = a.typeid
+    b = b.typeid
+    c = _result_types[(a, b)]
+    return _descriptors[c]
+
+def w_result(w_a, w_b):
+    return result(w_a.dtype, w_b.dtype).wrappable_dtype()
 
 def from_typecode(s):
     index = _typeindex[s]

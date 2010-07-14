@@ -3,45 +3,6 @@ import py
 
 from pypy.conftest import gettestobjspace
 
-class TestSDArray(object):
-    def test_unwrap(self, space):
-        skip("Irrelevant interplevel test")
-        w_int = space.wrap(1)
-        w_float = space.wrap(1.0)
-
-        from pypy.interpreter.error import OperationError
-        def interp_raises(exceptions, f, *args, **kwargs):
-            try:
-                f(*args, **kwargs)
-            except OperationError, e:
-                for ex in exceptions:
-                    if e.match(space, ex):
-                        return
-                raise
-            else:
-                raise AssertionError("Expected one of %s to be raised" % str(exceptions))
-
-        from pypy.module.micronumpy.dtype import unwrap_int
-        assert 1 ==  unwrap_int(space, w_int)
-        interp_raises((space.w_TypeError,), unwrap_int, space, w_float)
-
-        from pypy.module.micronumpy.dtype import unwrap_float
-        assert 1.0 == unwrap_float(space, w_float)
-        #interp_raises((space.w_TypeError,), unwrap_float, space, w_int) #er, shouldn't this raise?
-
-    def test_coerce(self, space):
-        skip("Irrelevant interplevel test")
-        w_int = space.wrap(1)
-        w_float = space.wrap(1.0)
-
-        from pypy.module.micronumpy.dtype import coerce_int
-        assert 1 == coerce_int(space, w_int)
-        assert 1 == coerce_int(space, w_float)
-
-        from pypy.module.micronumpy.dtype import coerce_float
-        assert 1.0 == coerce_float(space, w_int)
-        assert 1.0 == coerce_float(space, w_float)
-
 class AppTestSDArray(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
@@ -410,28 +371,21 @@ class AppTestDType(object):
 
 class TestDType(object):
     def test_lookups(self, space):
-        skip("Depends on interplevel stuff that doesn't exist really anymore.")
-        from pypy.module.micronumpy.dtype import retrieve_dtype
-        from pypy.module.micronumpy.dtype import get_dtype
-        a = get_dtype(space, space.wrap('i'))
-        b = get_dtype(space, space.wrap('d'))
+        from pypy.module.micronumpy import dtype
+        a = dtype.get(space, space.wrap('i'))
+        b = dtype.get(space, space.wrap('d'))
 
-        assert a == retrieve_dtype(space, 'i')
-        assert b == retrieve_dtype(space, 'd')
+        assert a == dtype.int_descr
+        assert b == dtype.float_descr
 
     def test_result_types(self, space):
-        skip("Depends on interplevel stuff that doesn't exist really anymore.")
-        from pypy.module.micronumpy.dtype import get_dtype
-        from pypy.module.micronumpy.dtype import result_mapping
-        w_typecode_a = space.wrap('i')
-        w_typecode_b = space.wrap('d')
-        a = get_dtype(space, w_typecode_a)
-        b = get_dtype(space, w_typecode_b)
+        from pypy.module.micronumpy import dtype
+        from pypy.module.micronumpy.dtype import int_descr, float_descr
 
-        assert 'i' == result_mapping(space, (w_typecode_a, w_typecode_a))
-        assert 'd' == result_mapping(space, (w_typecode_b, w_typecode_a))
-        assert 'd' == result_mapping(space, (w_typecode_a, w_typecode_b))
-        assert 'd' == result_mapping(space, (w_typecode_b, w_typecode_b))
+        assert int_descr == dtype.result(int_descr, int_descr)
+        assert float_descr == dtype.result(int_descr, float_descr)
+        assert float_descr == dtype.result(float_descr, int_descr)
+        assert float_descr == dtype.result(float_descr, float_descr)
 
     def test_iterable_type(self, space):
         from pypy.module.micronumpy.dtype import infer_from_iterable
