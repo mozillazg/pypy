@@ -4,21 +4,29 @@ from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app
 from pypy.rpython.tool import rffi_platform
+from pypy.translator.platform import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 from pypy.rlib import rpoll
 
 import sys
 
-if sys.platform == 'win32':
+if sys.platform == 'win32' and platform.name != 'mingw32':
     libraries = ['libeay32', 'ssleay32', 'user32', 'advapi32', 'gdi32']
+    includes = [
+        # ssl.h includes winsock.h, which will conflict with our own
+        # need of winsock2.  Remove this when separate compilation is
+        # available...
+        'winsock2.h',
+        'openssl/ssl.h',
+        'openssl/err.h']
 else:
     libraries = ['ssl', 'crypto']
+    includes = ['openssl/ssl.h', 'openssl/err.h']
 
 eci = ExternalCompilationInfo(
     libraries = libraries,
-    includes = ['openssl/ssl.h',
-                ],
+    includes = includes,
     export_symbols = ['SSL_load_error_strings'],
     )
 
@@ -133,7 +141,7 @@ ssl_external('SSL_connect', [SSL_P], rffi.INT)
 ssl_external('SSL_get_error', [SSL_P, rffi.INT], rffi.INT)
 
 ssl_external('ERR_get_error', [], rffi.INT)
-ssl_external('ERR_error_string', [rffi.INT, rffi.CCHARP], rffi.CCHARP)
+ssl_external('ERR_error_string', [rffi.ULONG, rffi.CCHARP], rffi.CCHARP)
 ssl_external('SSL_get_peer_certificate', [SSL_P], X509_P)
 ssl_external('X509_get_subject_name', [X509_P], X509_NAME_P)
 ssl_external('X509_get_issuer_name', [X509_P], X509_NAME_P)

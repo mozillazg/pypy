@@ -1,47 +1,34 @@
-
-""" Just another bunch of tests for llmath, run on top of llinterp
+""" Try to test systematically all cases of ll_math.py.
 """
 
-from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
 from pypy.rpython.lltypesystem.module import ll_math
-import math
+from pypy.module.math.test.test_direct import MathTests, get_tester
 
-# XXX no OORtypeMixin here
 
-class TestMath(BaseRtypingTest, LLRtypeMixin):
-    def new_unary_test(name):
-        def next_test(self):
-            def f(x):
-                return getattr(math, name)(x)
-            assert self.interpret(f, [0.3]) == f(0.3)
-        return next_test
+class TestMath(MathTests):
+    pass
 
-    def new_binary_test(name):
-        def next_test(self):
-            def f(x, y):
-                return getattr(math, name)(x, y)
-            assert self.interpret(f, [0.3, 0.4]) == f(0.3, 0.4)
-        return next_test
-    
-    for name in ll_math.unary_math_functions:
-        func_name = 'test_%s' % (name,)
-        next_test = new_unary_test(name)
-        next_test.func_name = func_name
-        locals()[func_name] = next_test
-        del next_test
-        
-    for name in ll_math.binary_math_functions:
-        func_name = 'test_%s' % (name,)
-        next_test = new_binary_test(name)
-        next_test.func_name = func_name
-        locals()[func_name] = next_test
-        del next_test
-    
-    def test_ldexp(self):
-        def f(x, y):
-            return math.ldexp(x, y)
+def make_test_case((fnname, args, expected), dict):
+    #
+    def test_func(self):
+        fn = getattr(ll_math, 'll_math_' + fnname)
+        repr = "%s(%s)" % (fnname, ', '.join(map(str, args)))
+        try:
+            got = fn(*args)
+        except ValueError:
+            assert expected == ValueError, "%s: got a ValueError" % (repr,)
+        except OverflowError:
+            assert expected == OverflowError, "%s: got an OverflowError" % (
+                repr,)
+        else:
+            if not get_tester(expected)(got):
+                raise AssertionError("%r: got %s" % (repr, got))
+    #
+    dict[fnname] = dict.get(fnname, 0) + 1
+    testname = 'test_%s_%d' % (fnname, dict[fnname])
+    test_func.func_name = testname
+    setattr(TestMath, testname, test_func)
 
-        assert self.interpret(f, [3.4, 2]) == f(3.4, 2)
-        # underflows give 0.0 with no exception raised
-        assert f(1.0, -10000) == 0.0     # sanity-check the host Python
-        assert self.interpret(f, [1.0, -10000]) == 0.0
+_d = {}
+for testcase in TestMath.TESTCASES:
+    make_test_case(testcase, _d)

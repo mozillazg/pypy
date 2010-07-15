@@ -5,11 +5,11 @@ Unary operations on SomeValues.
 from types import MethodType
 from pypy.annotation.model import \
      SomeObject, SomeInteger, SomeBool, SomeString, SomeChar, SomeList, \
-     SomeDict, SomeTuple, SomeImpossibleValue, \
+     SomeDict, SomeTuple, SomeImpossibleValue, SomeUnicodeCodePoint, \
      SomeInstance, SomeBuiltin, SomeFloat, SomeIterator, SomePBC, \
      SomeExternalObject, SomeTypedAddressAccess, SomeAddress, \
      s_ImpossibleValue, s_Bool, s_None, \
-     unionof, set, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
+     unionof, missing_operation, add_knowntypedata, HarmlesslyBlocked, \
      SomeGenericCallable, SomeWeakRef, SomeUnicodeString
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.annotation import builtin
@@ -409,6 +409,8 @@ class __extend__(SomeDict):
         return SomeDict(dct.dictdef)
 
     def method_update(dct1, dct2):
+        if s_None.contains(dct2):
+            return SomeImpossibleValue()
         dct1.dictdef.union(dct2.dictdef)
 
     def method_keys(dct):
@@ -475,6 +477,8 @@ class __extend__(SomeString,
         return str.basestringclass()
 
     def method_join(str, s_list):
+        if s_None.contains(s_list):
+            return SomeImpossibleValue()
         getbookkeeper().count("str_join", str)
         s_item = s_list.listdef.read_item()
         if isinstance(s_item, SomeImpossibleValue):
@@ -489,9 +493,6 @@ class __extend__(SomeString,
 
     def getanyitem(str):
         return str.basecharclass()
-
-    def ord(str):
-        return SomeInteger(nonneg=True)
 
     def method_split(str, patt): # XXX
         getbookkeeper().count("str_split", str, patt)
@@ -537,10 +538,15 @@ class __extend__(SomeString):
         return SomeUnicodeString()
     method_decode.can_only_throw = [UnicodeDecodeError]
 
-class __extend__(SomeChar):
+class __extend__(SomeChar, SomeUnicodeCodePoint):
 
     def len(chr):
         return immutablevalue(1)
+
+    def ord(str):
+        return SomeInteger(nonneg=True)
+
+class __extend__(SomeChar):
 
     def method_isspace(chr):
         return s_Bool
@@ -573,6 +579,9 @@ class __extend__(SomeIterator):
         return can_throw
 
     def next(itr):
+        if itr.variant == ("enumerate",):
+            s_item = itr.s_container.getanyitem()
+            return SomeTuple((SomeInteger(nonneg=True), s_item))
         return itr.s_container.getanyitem(*itr.variant)
     next.can_only_throw = _can_only_throw
     method_next = next

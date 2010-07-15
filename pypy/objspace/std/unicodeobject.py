@@ -1,5 +1,8 @@
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std.stringobject import W_StringObject, make_rsplit_with_delim
 from pypy.objspace.std.ropeobject import W_RopeObject
 from pypy.objspace.std.noneobject import W_NoneObject
@@ -8,6 +11,8 @@ from pypy.objspace.std import slicetype
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
 from pypy.rlib.objectmodel import compute_hash
+from pypy.rlib.rstring import string_repeat
+from pypy.rlib.runicode import unicode_encode_unicode_escape
 from pypy.module.unicodedata import unicodedb_4_1_0 as unicodedb
 from pypy.tool.sourcetools import func_with_new_name
 
@@ -42,8 +47,9 @@ registerimplementation(W_UnicodeObject)
 # Helper for converting int/long
 def unicode_to_decimal_w(space, w_unistr):
     if not isinstance(w_unistr, W_UnicodeObject):
-        raise OperationError(space.w_TypeError,
-                             space.wrap("expected unicode"))
+        raise operationerrfmt(space.w_TypeError,
+                              "expected unicode, got '%s'",
+                              space.type(w_unistr).getname(space, '?'))
     unistr = w_unistr._value
     result = ['\0'] * len(unistr)
     digits = [ '0', '1', '2', '3', '4',
@@ -63,7 +69,7 @@ def unicode_to_decimal_w(space, w_unistr):
                 w_start = space.wrap(i)
                 w_end = space.wrap(i+1)
                 w_reason = space.wrap('invalid decimal Unicode string')
-                raise OperationError(space.w_UnicodeEncodeError,space.newtuple ([w_encoding, w_unistr, w_start, w_end, w_reason]))
+                raise OperationError(space.w_UnicodeEncodeError, space.newtuple([w_encoding, w_unistr, w_start, w_end, w_reason]))
     return ''.join(result)
 
 # string-to-unicode delegation
@@ -80,11 +86,11 @@ def _unicode_string_comparison(space, w_uni, w_str, inverse, uni_from_str):
     except OperationError, e:
         if e.match(space, space.w_UnicodeDecodeError):
             if inverse:
-                word = "unequal" 
+                msg = "Unicode unequal comparison failed to convert both "  \
+                      "arguments to Unicode - interpreting them as being unequal"
             else :
-                word = "equal"
-            msg = "Unicode %s comparison failed to convert both arguments\
-                    to Unicode - interpreting them as being unequal" % word
+                msg = "Unicode equal comparison failed to convert both "    \
+                      "arguments to Unicode - interpreting them as being unequal"
             space.warn(msg, space.w_UnicodeWarning)
             return space.newbool(inverse)
         raise
@@ -127,7 +133,9 @@ def lt__Unicode_Unicode(space, w_left, w_right):
 
 def ord__Unicode(space, w_uni):
     if len(w_uni._value) != 1:
-        raise OperationError(space.w_TypeError, space.wrap('ord() expected a character'))
+        raise operationerrfmt(space.w_TypeError,
+            "ord() expected a character, got a unicode of length %d",
+            len(w_uni._value))
     return space.wrap(ord(w_uni._value[0]))
 
 def getnewargs__Unicode(space, w_uni):
@@ -192,9 +200,8 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
         elif space.is_true(space.isinstance(item, space.w_str)):
             item = space.unicode_w(item)
         else:
-            w_msg = space.mod(space.wrap('sequence item %d: expected string or Unicode'),
-                              space.wrap(i))
-            raise OperationError(space.w_TypeError, w_msg)
+            raise operationerrfmt(space.w_TypeError,
+                "sequence item %d: expected string or Unicode", i)
         values_list[i] = item
     return W_UnicodeObject(w_self._value.join(values_list))
 
@@ -255,15 +262,13 @@ def mul__Unicode_ANY(space, w_uni, w_times):
         if e.match(space, space.w_TypeError):
             raise FailedToImplement
         raise
-    uni = w_uni._value
-    length = len(uni)
-    if times <= 0 or length == 0:
+    if times <= 0:
         return W_UnicodeObject.EMPTY
-    try:
-        result_size = ovfcheck(length * times)
-        result = u''.join([uni] * times)
-    except OverflowError:
-        raise OperationError(space.w_OverflowError, space.wrap('repeated string is too long'))
+    input = w_uni._value
+    if len(input) == 1:
+        result = input[0] * times
+    else:
+        result = string_repeat(input, times)
     return W_UnicodeObject(result)
 
 def mul__ANY_Unicode(space, w_times, w_uni):
@@ -888,101 +893,11 @@ def unicode_translate__Unicode_ANY(space, w_self, w_table):
                     space.wrap("character mapping must return integer, None or unicode"))
     return W_UnicodeObject(u''.join(result))
 
-# Move this into the _codecs module as 'unicodeescape_string (Remember to cater for quotes)'
 def repr__Unicode(space, w_unicode):
-    hexdigits = "0123456789abcdef"
     chars = w_unicode._value
     size = len(chars)
-    
-    singlequote = doublequote = False
-    for c in chars:
-        if c == u'\'':
-            singlequote = True
-        elif c == u'"':
-            doublequote = True
-    if singlequote and not doublequote:
-        quote = '"'
-    else:
-        quote = '\''
-    result = ['u', quote]
-    j = 0
-    while j<len(chars):
-        ch = chars[j]
-        code = ord(ch)
-        if code >= 0x10000:
-            # Resize if needed
-            result.extend(['\\', "U",
-                           hexdigits[(code >> 28) & 0xf],
-                           hexdigits[(code >> 24) & 0xf],
-                           hexdigits[(code >> 20) & 0xf],
-                           hexdigits[(code >> 16) & 0xf],
-                           hexdigits[(code >> 12) & 0xf],
-                           hexdigits[(code >>  8) & 0xf],
-                           hexdigits[(code >>  4) & 0xf],
-                           hexdigits[(code >>  0) & 0xf],
-                           ])
-            j += 1
-            continue
-        if code >= 0xD800 and code < 0xDC00:
-            if j < size - 1:
-                ch2 = chars[j+1]
-                code2 = ord(ch2)
-                if code2 >= 0xDC00 and code2 <= 0xDFFF:
-                    code = (((code & 0x03FF) << 10) | (code2 & 0x03FF)) + 0x00010000
-                    result.extend(['\\', "U",
-                                   hexdigits[(code >> 28) & 0xf],
-                                   hexdigits[(code >> 24) & 0xf],
-                                   hexdigits[(code >> 20) & 0xf],
-                                   hexdigits[(code >> 16) & 0xf],
-                                   hexdigits[(code >> 12) & 0xf],
-                                   hexdigits[(code >>  8) & 0xf],
-                                   hexdigits[(code >>  4) & 0xf],
-                                   hexdigits[(code >>  0) & 0xf],
-                                  ])
-                    j += 2
-                    continue
-                
-        if code >= 0x100:
-            result.extend(['\\', "u",
-                           hexdigits[(code >> 12) & 0xf],
-                           hexdigits[(code >>  8) & 0xf],
-                           hexdigits[(code >>  4) & 0xf],
-                           hexdigits[(code >>  0) & 0xf],
-                          ])
-            j += 1
-            continue
-        if code == ord('\\') or code == ord(quote):
-            result.append('\\')
-            result.append(chr(code))
-            j += 1
-            continue
-        if code == ord('\t'):
-            result.append('\\')
-            result.append('t')
-            j += 1
-            continue
-        if code == ord('\r'):
-            result.append('\\')
-            result.append('r')
-            j += 1
-            continue
-        if code == ord('\n'):
-            result.append('\\')
-            result.append('n')
-            j += 1
-            continue
-        if code < ord(' ') or code >= 0x7f:
-            result.extend(['\\', "x",
-                           hexdigits[(code >> 4) & 0xf], 
-                           hexdigits[(code >> 0) & 0xf],
-                          ])
-            j += 1
-            continue
-        result.append(chr(code))
-        j += 1
-    result.append(quote)
-    return space.wrap(''.join(result))
-        
+    s = unicode_encode_unicode_escape(chars, size, "strict", quotes=True)
+    return space.wrap(s)
 
 def mod__Unicode_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=True)

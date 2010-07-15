@@ -1,7 +1,5 @@
 import py
 from pypy.rlib.jit import JitDriver
-from pypy.jit.metainterp.policy import StopAtXPolicy
-from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
 
@@ -118,266 +116,77 @@ class ListTests:
         assert res == f(10)
         py.test.skip("'[non-null] * n' gives a residual call so far")
         self.check_loops(setarrayitem_gc=0, getarrayitem_gc=0, call=0)
-        
-    def test_append_pop(self):
-        py.test.skip("unsupported")
+    
+    def test_arraycopy_simpleoptimize(self):
+        def f():
+            l = [1, 2, 3, 4]
+            l2 = l[:]
+            return l2[0] + l2[1] + l2[2] + l2[3]
+
+        res = self.interp_operations(f, [], listops=True)
+        assert res == 10
+
+    def test_arraycopy_full(self):
         jitdriver = JitDriver(greens = [], reds = ['n'])
         def f(n):
+            l = []
+            l2 = []
             while n > 0:
                 jitdriver.can_enter_jit(n=n)
                 jitdriver.jit_merge_point(n=n)
-                lst = []
-                lst.append(5)
-                lst.append(n)
-                lst[0] -= len(lst)
-                three = lst[0]
-                n = lst.pop() - three
-            return n
-        res = self.meta_interp(f, [31])
-        assert res == -2
-        self.check_all_virtualized()
+                l = [1, 2, 3, n]
+                l2 = l[:]
+                n -= 1
+            return l2[0] + l2[1] + l2[2] + l2[3]
 
-    def test_insert(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = [1, 2, 3]
-                lst.insert(0, n)
-                n = lst[0] - 1
-                lst.pop()
-                # last pop is needed, otherwise it won't work
-            return n
-        res = self.meta_interp(f, [33])
-        assert res == f(33)
-        self.check_all_virtualized()
+        res = self.meta_interp(f, [5], listops=True)
+        assert res == 7
+        self.check_loops(call=0)
 
-    def test_nonzero(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
+    def test_fold_getitem_1(self):
+        jitdriver = JitDriver(greens = ['pc', 'n', 'l'], reds = ['total'])
         def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = [1, 2, 3]
-                lst.insert(0, n)
-                # nonzero should go away
-                if not lst:
-                    return -33
-                n = lst[0] - 1
-                lst.pop()
-                # last pop is needed, otherwise it won't work
-            return n
-        res = self.meta_interp(f, [33])
-        assert res == f(33)
-        self.check_all_virtualized()
-        self.check_loops(listnonzero=0, guard_true=1, guard_false=0)
-
-    def test_append_pop_rebuild(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = []
-                lst.append(5)
-                lst.append(n)
-                lst[0] -= len(lst)
-                three = lst[0]
-                n = lst.pop() - three
-                if n == 2:
-                    return n + lst.pop()
-            return n
-        res = self.meta_interp(f, [31])
-        assert res == -2
-        self.check_all_virtualized()
-
-    def test_list_escapes(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def f(n):
+            l = [100, n, 300, n, 500]
+            total = 0
+            pc = n
             while True:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = []
-                lst.append(n)
-                n = lst.pop() - 3
-                if n < 0:
-                    return len(lst)
-        res = self.meta_interp(f, [31])
-        assert res == 0
-        self.check_all_virtualized()
+                jitdriver.can_enter_jit(l=l, pc=pc, n=n, total=total)
+                jitdriver.jit_merge_point(l=l, pc=pc, n=n, total=total)
+                total += l[pc]
+                if total > 10000:
+                    return total
+                pc -= 1
+                if pc < 0:
+                    pc = n
 
-    def test_list_reenters(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = []
-                lst.append(n)
-                if n < 10:
-                    lst[-1] = n-1
-                n = lst.pop() - 3
-            return n
-        res = self.meta_interp(f, [31])
-        assert res == -1
-        self.check_all_virtualized()
+        res = self.meta_interp(f, [4], listops=True)
+        assert res == f(4)
+        self.check_loops(call=0)
 
-    def test_cannot_merge(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                lst = []
-                if n < 20:
-                    lst.append(n-3)
-                if n > 5:
-                    lst.append(n-4)
-                n = lst.pop()
-            return n
-        res = self.meta_interp(f, [30])
-        assert res == -1
-        self.check_all_virtualized()
-
-    def test_list_escapes(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def g(l):
+    def test_fold_getitem_2(self):
+        jitdriver = JitDriver(greens = ['pc', 'n', 'l'], reds = ['total', 'x'])
+        class X:
             pass
-        
         def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                l = []
-                l.append(3)
-                g(l)
-                n -= 1
-            return n
-        res = self.meta_interp(f, [30], policy=StopAtXPolicy(g))
-        assert res == 0
-        self.check_loops(append=1)
+            l = [100, n, 300, n, 500]
+            total = 0
+            x = X()
+            x.pc = n
+            while True:
+                pc = x.pc
+                jitdriver.can_enter_jit(l=l, pc=pc, n=n, total=total, x=x)
+                jitdriver.jit_merge_point(l=l, pc=pc, n=n, total=total, x=x)
+                x.pc = pc
+                total += l[x.pc]
+                if total > 10000:
+                    return total
+                x.pc -= 1
+                if x.pc < 0:
+                    x.pc = n
 
-    def test_list_escapes_various_ops(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def g(l):
-            pass
-        
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                l = []
-                l.append(3)
-                l.append(1)
-                n -= l.pop()
-                n -= l[0]
-                if l:
-                    g(l)
-                n -= 1
-            return n
-        res = self.meta_interp(f, [30], policy=StopAtXPolicy(g))
-        assert res == 0
-        self.check_loops(append=2)
-
-    def test_list_escapes_find_nodes(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n'])
-        def g(l):
-            pass
-        
-        def f(n):
-            while n > 0:
-                jitdriver.can_enter_jit(n=n)
-                jitdriver.jit_merge_point(n=n)
-                l = [0] * n
-                l.append(3)
-                l.append(1)
-                n -= l.pop()
-                n -= l[-1]
-                if l:
-                    g(l)
-                n -= 1
-            return n
-        res = self.meta_interp(f, [30], policy=StopAtXPolicy(g))
-        assert res == 0
-        self.check_loops(append=2)
-
-    def test_stuff_escapes_via_setitem(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
-        class Stuff(object):
-            def __init__(self, x):
-                self.x = x
-        
-        def f(n):
-            l = [None]
-            while n > 0:
-                jitdriver.can_enter_jit(n=n, l=l)
-                jitdriver.jit_merge_point(n=n, l=l)
-                s = Stuff(3)
-                l.append(s)
-                n -= l[0].x
-            return n
-        res = self.meta_interp(f, [30])
-        assert res == 0
-        self.check_loops(append=1)
-
-    def test_virtual_escaping_via_list(self):
-        py.test.skip("unsupported")
-        jitdriver = JitDriver(greens = [], reds = ['n', 'l'])
-        class Stuff(object):
-            def __init__(self, x):
-                self.x = x
-
-        def f(n):
-            l = [Stuff(n-i) for i in range(n)]
-
-            while n > 0:
-                jitdriver.can_enter_jit(n=n, l=l)
-                jitdriver.jit_merge_point(n=n, l=l)
-                s = l.pop()
-                n -= s.x
-
-        res = self.meta_interp(f, [20])
-        assert res == f(20)
-        self.check_loops(pop=1, getfield_gc=1)
-
-    def test_extend(self):
-        py.test.skip("XXX")
-        def f(n):
-            while n > 0:
-                lst = [5, 2]
-                lst.extend([6, 7, n - 10])
-                n = lst.pop()
-            return n
-        res = self.meta_interp(f, [33], exceptions=False)
-        assert res == -7
-        self.check_all_virtualized()
-
-    def test_single_list(self):
-        py.test.skip("in-progress")
-        def f(n):
-            lst = [n] * n
-            while n > 0:
-                n = lst.pop()
-                lst.append(n - 10)
-            a = lst.pop()
-            b = lst.pop()
-            return a * b
-        res = self.meta_interp(f, [37], exceptions=False)
-        assert res == -13 * 37
-        self.check_all_virtualized()
-
-
+        res = self.meta_interp(f, [4], listops=True)
+        assert res == f(4)
+        self.check_loops(call=0, getfield_gc=0)
 
 class TestOOtype(ListTests, OOJitMixin):
     pass

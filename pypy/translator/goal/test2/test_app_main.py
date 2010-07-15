@@ -8,19 +8,6 @@ from pypy.tool.udir import udir
 
 banner = sys.version.splitlines()[0]
 
-def relpath(path):
-    # force 'path' to be a relative path, for testing purposes
-    curdir = py.path.local()
-    p = py.path.local(path)
-    result = []
-    while not p.relto(curdir):
-        result.append(os.pardir)
-        if curdir == curdir.dirpath():
-            return str(path)     # no relative path found, give up
-        curdir = curdir.dirpath()
-    result.append(p.relto(curdir))
-    return os.path.join(*result)
-
 app_main = os.path.join(autopath.this_dir, os.pardir, 'app_main.py')
 app_main = os.path.abspath(app_main)
 
@@ -30,7 +17,8 @@ def getscript(source):
     p = udir.join('demo_test_app_main_%d.py' % (_counter,))
     _counter += 1
     p.write(str(py.code.Source(source)))
-    return relpath(p)
+    # return relative path for testing purposes 
+    return py.path.local().bestrelpath(p) 
 
 
 demo_script = getscript("""
@@ -277,9 +265,8 @@ class TestInteraction:
         child.expect('>>> ')
 
     def test_pythoninspect(self):
-        old = os.environ.get('PYTHONINSPECT', '')
+        os.environ['PYTHONINSPECT_'] = '1'
         try:
-            os.environ['PYTHONINSPECT'] = '1'
             path = getscript("""
                 print 6*7
                 """)
@@ -287,7 +274,7 @@ class TestInteraction:
             child.expect('42')
             child.expect('>>> ')
         finally:
-            os.environ['PYTHONINSPECT'] = old
+            del os.environ['PYTHONINSPECT_']
 
     def test_set_pythoninspect(self):
         path = getscript("""
@@ -422,13 +409,12 @@ class TestNonInteractive:
         assert ('Argv: ' + repr([p, 'extra'])) in data
 
     def test_pythoninspect_doesnt_override_isatty(self):
-        old = os.environ.get('PYTHONINSPECT', '')
+        os.environ['PYTHONINSPECT_'] = '1'
         try:
-            os.environ['PYTHONINSPECT'] = '1'
             data = self.run('', senddata='6*7\nprint 2+3\n')
             assert data == '5\n'
         finally:
-            os.environ['PYTHONINSPECT'] = old
+            del os.environ['PYTHONINSPECT_']
 
     def test_i_flag_overrides_isatty(self):
         data = self.run('-i', senddata='6*7\nraise SystemExit\n',
@@ -462,3 +448,57 @@ class TestNonInteractive:
         data = child_out_err.read(11)
         assert data == '\x00(STDOUT)\n\x00'    # from stdout
         child_out_err.close()
+
+
+class AppTestAppMain:
+
+    def setup_class(self):
+        # ------------------------------------
+        # setup code for test_get_library_path
+        # ------------------------------------
+        from pypy.module.sys.version import CPYTHON_VERSION, PYPY_VERSION
+        cpy_ver = '%d.%d.%d' % CPYTHON_VERSION[:3]
+        
+        goal_dir = os.path.dirname(app_main)
+        # build a directory hierarchy like which contains both bin/pypy-c and
+        # lib/pypy1.2/*
+        prefix = udir.join('pathtest').ensure(dir=1)
+        fake_exe = prefix.join('bin/pypy-c').ensure(file=1)
+        expected_path = [str(prefix.join(subdir).ensure(dir=1))
+                         for subdir in ('lib_pypy',
+                                        'lib-python/modified-%s' % cpy_ver,
+                                        'lib-python/%s' % cpy_ver)]
+        
+        self.w_goal_dir = self.space.wrap(goal_dir)
+        self.w_fake_exe = self.space.wrap(str(fake_exe))
+        self.w_expected_path = self.space.wrap(expected_path)
+        self.w_trunkdir = self.space.wrap(os.path.dirname(autopath.pypydir))
+
+    def test_get_library_path(self):
+        import sys
+        import os
+        sys.path.append(self.goal_dir)
+        try:
+            import app_main
+            app_main.os = os
+            newpath = app_main.get_library_path('/tmp/pypy-c') # stdlib not found
+            assert newpath == sys.path
+            newpath = app_main.get_library_path(self.fake_exe)
+            assert newpath == self.expected_path
+        finally:
+            sys.path.pop()
+
+    def test_trunk_can_be_prefix(self):
+        import sys
+        import os
+        sys.path.append(self.goal_dir)
+        try:
+            import app_main
+            app_main.os = os
+            pypy_c = os.path.join(self.trunkdir, 'pypy', 'translator', 'goal', 'pypy-c')
+            newpath = app_main.get_library_path(pypy_c)
+            assert len(newpath) == 3
+            for p in newpath:
+                assert p.startswith(self.trunkdir)
+        finally:
+            sys.path.pop()

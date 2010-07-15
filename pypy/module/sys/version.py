@@ -7,13 +7,25 @@ import os
 CPYTHON_VERSION            = (2, 5, 2, "beta", 42)
 CPYTHON_API_VERSION        = 1012
 
-PYPY_VERSION               = (1, 1, 0, "beta", '?')
+PYPY_VERSION               = (1, 3, 0, "beta", '?')
 # the last item is replaced by the svn revision ^^^
 
 TRIM_URL_UP_TO = 'svn/pypy/'
 SVN_URL = """$HeadURL$"""[10:-28]
 
 REV = """$LastChangedRevision$"""[22:-2]
+
+def rev2int(rev):
+    try:
+        return int(rev)
+    except ValueError:
+        import py
+        from pypy.tool.ansi_print import ansi_log
+        log = py.log.Producer("version")
+        py.log.setconsumer("version", ansi_log)
+        log.ERROR("No subversion revision number available!")
+        log.ERROR("Hard-coding '0'")
+        return 0
 
 
 import pypy
@@ -45,6 +57,11 @@ def get_version(space):
         PYPY_VERSION[0],
         PYPY_VERSION[1],
         PYPY_VERSION[2]))
+
+def get_winver(space):
+    return space.wrap("%d.%d" % (
+        CPYTHON_VERSION[0],
+        CPYTHON_VERSION[1]))
 
 def get_hexversion(space):
     return space.wrap(tuple2hex(CPYTHON_VERSION))
@@ -85,7 +102,7 @@ def svn_revision():
     "Return the last-changed svn revision number."
     # NB. we hack the number directly out of the .svn directory to avoid
     # to depend on an external 'svn' executable in the path.
-    rev = int(REV)
+    rev = rev2int(REV)
     try:
         formatfile = os.path.join(pypydir, '.svn', 'format')
         if os.path.exists(formatfile):

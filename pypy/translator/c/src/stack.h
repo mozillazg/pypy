@@ -3,11 +3,12 @@
  /***  C header subsection: stack operations               ***/
 
 #ifndef MAX_STACK_SIZE
-#    define MAX_STACK_SIZE (1 << 19)
+#    define MAX_STACK_SIZE (3 << 18)    /* 768 kb */
 #endif
 
 /* This include must be done in any case to initialise
- * the header dependencies early (thread -> winsock2, before windows.h) */
+ * the header dependencies early (winsock2, before windows.h).
+ * It is needed to have RPyThreadStaticTLS, too. */
 #include "thread.h"
 
 void LL_stack_unwind(void);

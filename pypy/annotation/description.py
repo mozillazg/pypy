@@ -209,8 +209,9 @@ class FunctionDesc(Desc):
         if len(self._cache) != 1:
             raise NoStandardGraph(self)
         [graph] = self._cache.values()
+        relax_sig_check = getattr(self.pyobj, "relax_sig_check", False)
         if (graph.signature != self.signature or
-            graph.defaults  != self.defaults):
+            graph.defaults  != self.defaults) and not relax_sig_check:
             raise NoStandardGraph(self)
         return graph
 
@@ -538,9 +539,18 @@ class ClassDesc(Desc):
                 try:
                     args.fixedunpack(0)
                 except ValueError:
-
                     raise Exception("default __init__ takes no argument"
                                     " (class %s)" % (self.name,))
+            elif self.pyobj is Exception:
+                # check explicitly against "raise Exception, x" where x
+                # is a low-level exception pointer
+                try:
+                    [s_arg] = args.fixedunpack(1)
+                except ValueError:
+                    pass
+                else:
+                    from pypy.annotation.model import SomePtr
+                    assert not isinstance(s_arg, SomePtr)
         else:
             # call the constructor
             args = args.prepend(s_instance)
@@ -595,6 +605,8 @@ class ClassDesc(Desc):
             if isinstance(value, staticmethod):   # special case
                 value = value.__get__(42)
                 classdef = None   # don't bind
+            elif isinstance(value, classmethod):
+                raise AssertionError("classmethods are not supported")
             s_value = self.bookkeeper.immutablevalue(value)
             if classdef is not None:
                 s_value = s_value.bind_callables_under(classdef, name)

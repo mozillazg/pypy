@@ -477,7 +477,7 @@ class AppTestOldstyle(object):
         assert a is a1
         assert a.l == [1, 2]
 
-    def test_cmp(self):
+    def test_cmp_and_coerce(self):
         class A:
             def __coerce__(self, other):
                 return (1, 2)
@@ -773,9 +773,9 @@ class AppTestOldStyleSharing(AppTestOldstyle):
         if option.runappdirect:
             py.test.skip("can only be run on py.py")
         def is_sharing(space, w_inst):
-            from pypy.objspace.std.sharingdict import SharedDictImplementation, W_DictMultiObject
+            from pypy.objspace.std.sharingdict import SharedDictImplementation
             w_d = w_inst.getdict()
-            return space.wrap(isinstance(w_d, SharedDictImplementation))
+            return space.wrap(isinstance(w_d, SharedDictImplementation) and w_d.r_dict_content is None)
         cls.w_is_sharing = cls.space.wrap(gateway.interp2app(is_sharing))
 
 
@@ -786,3 +786,21 @@ class AppTestOldStyleSharing(AppTestOldstyle):
         A1, A2, A3 = A(), A(), A()
         assert self.is_sharing(A3)
         assert self.is_sharing(A2)
+        assert self.is_sharing(A1)
+
+class AppTestOldStyleModDict(object):
+    def setup_class(cls):
+        if option.runappdirect:
+            py.test.skip("can only be run on py.py")
+        def is_strdict(space, w_class):
+            from pypy.objspace.std.dictmultiobject import StrDictImplementation
+            w_d = w_class.getdict()
+            return space.wrap(isinstance(w_d, StrDictImplementation) and w_d.r_dict_content is None)
+
+        cls.w_is_strdict = cls.space.wrap(gateway.interp2app(is_strdict))
+
+    def test_strdict(self):
+        class A:
+            a = 1
+            b = 2
+        assert self.is_strdict(A)

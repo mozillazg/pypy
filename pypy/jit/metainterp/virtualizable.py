@@ -11,12 +11,11 @@ from pypy.jit.metainterp.warmstate import wrap, unwrap
 
 
 class VirtualizableInfo:
-    token_none    = 0
-    token_tracing = -1
+    TOKEN_NONE            = 0      # must be 0 -- see also x86.call_assembler
+    TOKEN_TRACING_RESCALL = -1
 
-    def __init__(self, warmrunnerdesc):
+    def __init__(self, warmrunnerdesc, VTYPEPTR):
         self.warmrunnerdesc = warmrunnerdesc
-        jitdriver = warmrunnerdesc.jitdriver
         cpu = warmrunnerdesc.cpu
         if cpu.ts.name == 'ootype':
             import py
@@ -24,16 +23,10 @@ class VirtualizableInfo:
         self.cpu = cpu
         self.BoxArray = cpu.ts.BoxRef
         #
-        assert len(jitdriver.virtualizables) == 1    # for now
-        [vname] = jitdriver.virtualizables
-        index = len(jitdriver.greens) + jitdriver.reds.index(vname)
-        self.index_of_virtualizable = index
-        VTYPEPTR = warmrunnerdesc.JIT_ENTER_FUNCTYPE.ARGS[index]
         while 'virtualizable2_accessor' not in deref(VTYPEPTR)._hints:
             VTYPEPTR = cpu.ts.get_superclass(VTYPEPTR)
         self.VTYPEPTR = VTYPEPTR
         self.VTYPE = VTYPE = deref(VTYPEPTR)
-        self.null_vable = cpu.ts.nullptr(VTYPE)
         self.vable_token_descr = cpu.fielddescrof(VTYPE, 'vable_token')
         #
         accessor = VTYPE._hints['virtualizable2_accessor']
@@ -73,6 +66,10 @@ class VirtualizableInfo:
                                     for name in static_fields]
         self.array_field_descrs = [cpu.fielddescrof(VTYPE, name)
                                    for name in array_fields]
+        self.static_field_by_descrs = dict(
+            [(descr, i) for (i, descr) in enumerate(self.static_field_descrs)])
+        self.array_field_by_descrs = dict(
+            [(descr, i) for (i, descr) in enumerate(self.array_field_descrs)])
         #
         getlength = cpu.ts.getlength
         getarrayitem = cpu.ts.getarrayitem
@@ -102,6 +99,52 @@ class VirtualizableInfo:
                     setarrayitem(lst, j, x)
                     i = i + 1
             assert len(boxes) == i + 1
+        #
+        def write_from_resume_data_partial(virtualizable, reader, nums):
+            # Load values from the reader (see resume.py) described by
+            # the list of numbers 'nums', and write them in their proper
+            # place in the 'virtualizable'.  This works from the end of
+            # the list and returns the index in 'nums' of the start of
+            # the virtualizable data found, allowing the caller to do
+            # further processing with the start of the list.
+            i = len(nums) - 1
+            assert i >= 0
+            for ARRAYITEMTYPE, fieldname in unroll_array_fields_rev:
+                lst = getattr(virtualizable, fieldname)
+                for j in range(getlength(lst)-1, -1, -1):
+                    i -= 1
+                    assert i >= 0
+                    x = reader.load_value_of_type(ARRAYITEMTYPE, nums[i])
+                    setarrayitem(lst, j, x)
+            for FIELDTYPE, fieldname in unroll_static_fields_rev:
+                i -= 1
+                assert i >= 0
+                x = reader.load_value_of_type(FIELDTYPE, nums[i])
+                setattr(virtualizable, fieldname, x)
+            return i
+        #
+        def load_list_of_boxes(virtualizable, reader, nums):
+            # Uses 'virtualizable' only to know the length of the arrays;
+            # does not write anything into it.  The returned list is in
+            # the format expected of virtualizable_boxes, so it ends in
+            # the virtualizable itself.
+            i = len(nums) - 1
+            assert i >= 0
+            boxes = [reader.decode_box_of_type(self.VTYPEPTR, nums[i])]
+            for ARRAYITEMTYPE, fieldname in unroll_array_fields_rev:
+                lst = getattr(virtualizable, fieldname)
+                for j in range(getlength(lst)-1, -1, -1):
+                    i -= 1
+                    assert i >= 0
+                    box = reader.decode_box_of_type(ARRAYITEMTYPE, nums[i])
+                    boxes.append(box)
+            for FIELDTYPE, fieldname in unroll_static_fields_rev:
+                i -= 1
+                assert i >= 0
+                box = reader.decode_box_of_type(FIELDTYPE, nums[i])
+                boxes.append(box)
+            boxes.reverse()
+            return boxes
         #
         def check_boxes(virtualizable, boxes):
             # for debugging
@@ -142,8 +185,14 @@ class VirtualizableInfo:
                                                       static_fields))
         unroll_array_fields = unrolling_iterable(zip(ARRAYITEMTYPES,
                                                      array_fields))
+        unroll_static_fields_rev = unrolling_iterable(
+                                          reversed(list(unroll_static_fields)))
+        unroll_array_fields_rev  = unrolling_iterable(
+                                          reversed(list(unroll_array_fields)))
         self.read_boxes = read_boxes
         self.write_boxes = write_boxes
+        self.write_from_resume_data_partial = write_from_resume_data_partial
+        self.load_list_of_boxes = load_list_of_boxes
         self.check_boxes = check_boxes
         self.get_index_in_array = get_index_in_array
         self.get_array_length = get_array_length
@@ -153,16 +202,17 @@ class VirtualizableInfo:
 
     def finish(self):
         #
-        def force_if_necessary(virtualizable):
+        def force_virtualizable_if_necessary(virtualizable):
             if virtualizable.vable_token:
                 self.force_now(virtualizable)
-        force_if_necessary._always_inline_ = True
+        force_virtualizable_if_necessary._always_inline_ = True
         #
         all_graphs = self.warmrunnerdesc.translator.graphs
         ts = self.warmrunnerdesc.cpu.ts
         (_, FUNCPTR) = ts.get_FuncType([self.VTYPEPTR], lltype.Void)
-        funcptr = self.warmrunnerdesc.helper_func(FUNCPTR, force_if_necessary)
-        rvirtualizable2.replace_promote_virtualizable_with_call(
+        funcptr = self.warmrunnerdesc.helper_func(
+            FUNCPTR, force_virtualizable_if_necessary)
+        rvirtualizable2.replace_force_virtualizable_with_call(
             all_graphs, self.VTYPEPTR, funcptr)
 
     def unwrap_virtualizable_box(self, virtualizable_box):
@@ -172,11 +222,14 @@ class VirtualizableInfo:
         return self.cpu.ts.cast_to_instance_maybe(self.VTYPEPTR, virtualizable)
     cast_to_vtype._annspecialcase_ = 'specialize:ll'
 
+    def cast_gcref_to_vtype(self, virtualizable):
+        return lltype.cast_opaque_ptr(self.VTYPEPTR, virtualizable)
+
     def is_vtypeptr(self, TYPE):
         return rvirtualizable2.match_virtualizable_type(TYPE, self.VTYPEPTR)
 
     def reset_vable_token(self, virtualizable):
-        virtualizable.vable_token = self.token_none
+        virtualizable.vable_token = self.TOKEN_NONE
 
     def clear_vable_token(self, virtualizable):
         if virtualizable.vable_token:
@@ -185,14 +238,14 @@ class VirtualizableInfo:
 
     def tracing_before_residual_call(self, virtualizable):
         assert not virtualizable.vable_token
-        virtualizable.vable_token = self.token_tracing
+        virtualizable.vable_token = self.TOKEN_TRACING_RESCALL
 
     def tracing_after_residual_call(self, virtualizable):
         if virtualizable.vable_token:
             # not modified by the residual call; assert that it is still
-            # set to 'tracing_vable_rti' and clear it.
-            assert virtualizable.vable_token == self.token_tracing
-            virtualizable.vable_token = self.token_none
+            # set to TOKEN_TRACING_RESCALL and clear it.
+            assert virtualizable.vable_token == self.TOKEN_TRACING_RESCALL
+            virtualizable.vable_token = self.TOKEN_NONE
             return False
         else:
             # marker "modified during residual call" set.
@@ -200,18 +253,16 @@ class VirtualizableInfo:
 
     def force_now(self, virtualizable):
         token = virtualizable.vable_token
-        virtualizable.vable_token = self.token_none
-        if token == self.token_tracing:
+        if token == self.TOKEN_TRACING_RESCALL:
             # The values in the virtualizable are always correct during
-            # tracing.  We only need to reset vable_token to token_none
+            # tracing.  We only need to reset vable_token to TOKEN_NONE
             # as a marker for the tracing, to tell it that this
             # virtualizable escapes.
-            pass
+            virtualizable.vable_token = self.TOKEN_NONE
         else:
             from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
-            faildescr = self.cpu.force(token)
-            assert isinstance(faildescr, ResumeGuardForcedDescr)
-            faildescr.force_virtualizable(self, virtualizable, token)
+            ResumeGuardForcedDescr.force_now(self.cpu, token)
+            assert virtualizable.vable_token == self.TOKEN_NONE
     force_now._dont_inline_ = True
 
 # ____________________________________________________________
@@ -219,13 +270,13 @@ class VirtualizableInfo:
 # The 'vable_token' field of a virtualizable is either 0, -1, or points
 # into the CPU stack to a particular field in the current frame.  It is:
 #
-#   1. 0 (token_none) if not in the JIT at all, except as described below.
+#   1. 0 (TOKEN_NONE) if not in the JIT at all, except as described below.
 #
 #   2. equal to 0 when tracing is in progress; except:
 #
-#   3. equal to -1 (token_tracing) during tracing when we do a residual call,
-#      calling random unknown other parts of the interpreter; it is
-#      reset to 0 as soon as something occurs to the virtualizable.
+#   3. equal to -1 (TOKEN_TRACING_RESCALL) during tracing when we do a
+#      residual call, calling random unknown other parts of the interpreter;
+#      it is reset to 0 as soon as something occurs to the virtualizable.
 #
 #   4. when running the machine code with a virtualizable, it is set
 #      to the address in the CPU stack by the FORCE_TOKEN operation.

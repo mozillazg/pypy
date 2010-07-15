@@ -131,7 +131,7 @@ class AbstractTestRstr(BaseRtypingTest):
             s = c * mul
             res = 0
             for i in range(len(s)):
-                res = res*10 + ord(const(s[i])) - ord(const('0'))
+                res = res*10 + ord(const(s[i])[0]) - ord(const('0')[0])
             c2 = c
             c2 *= mul
             res = 10 * res + (c2 == s)
@@ -577,7 +577,7 @@ class AbstractTestRstr(BaseRtypingTest):
             sum = 0
             for num in l:
                  if len(num):
-                     sum += ord(num) - ord(const('0'))
+                     sum += ord(num[0]) - ord(const('0')[0])
             return sum + len(l) * 100
         for i in range(5):
             res = self.interpret(fn, [i])
@@ -862,6 +862,24 @@ class AbstractTestRstr(BaseRtypingTest):
         assert self.ll_to_string(res) is None
         res = self.interpret(f, [1])
         assert self.ll_to_string(res) == "hello"
+
+    def test_str_unichar(self):
+        def f(i):
+            c = u"abc"
+            return str(c[i])[0]
+        assert self.interpret(f, [1]) == "b"
+
+    def test_encode_char(self):
+        def f(i):
+            c = u"abc"
+            return c[i].encode("ascii")
+        assert self.ll_to_string(self.interpret(f, [0])) == "a"
+
+    def test_encode_char_latin1(self):
+        def f(i):
+            c = u"abc"
+            return c[i].encode("latin-1")
+        assert self.ll_to_string(self.interpret(f, [0])) == "a"
 
 def FIXME_test_str_to_pystringobj():
     def f(n):

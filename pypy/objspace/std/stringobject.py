@@ -1,6 +1,7 @@
-# -*- coding: latin-1 -*-
-
-from pypy.objspace.std.objspace import *
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplement
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter import gateway
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.objectmodel import we_are_translated, compute_hash
@@ -10,7 +11,7 @@ from pypy.objspace.std import slicetype
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.objspace.std.tupleobject import W_TupleObject
-from pypy.rlib.rstring import StringBuilder
+from pypy.rlib.rstring import StringBuilder, string_repeat
 from pypy.interpreter.buffer import StringBuffer
 
 from pypy.objspace.std.stringtype import sliced, joined, wrapstr, wrapchar, \
@@ -38,25 +39,10 @@ W_StringObject.EMPTY = W_StringObject('')
 W_StringObject.PREBUILT = [W_StringObject(chr(i)) for i in range(256)]
 del i
 
-def _decode_ascii(space, s):
-    try:
-        return s.decode("ascii")
-    except UnicodeDecodeError:
-        for i in range(len(s)):
-            if ord(s[i]) > 127:
-                raise OperationError(
-                    space.w_UnicodeDecodeError,
-                    space.newtuple([
-                    space.wrap('ascii'),
-                    space.wrap(s),
-                    space.wrap(i),
-                    space.wrap(i+1),
-                    space.wrap("ordinal not in range(128)")]))
-        assert False, "unreachable"
-
 def unicode_w__String(space, w_self):
     # XXX should this use the default encoding?
-    return _decode_ascii(space, w_self._value)
+    from pypy.objspace.std.unicodetype import plain_str2unicode
+    return plain_str2unicode(space, w_self._value)
 
 def _is_generic(space, w_self, fun): 
     v = w_self._value
@@ -160,21 +146,11 @@ otherwise."""
 
 def str_upper__String(space, w_self):
     self = w_self._value
-    res = [' '] * len(self)
-    for i in range(len(self)):
-        ch = self[i]
-        res[i] = _upper(ch)
-
-    return space.wrap("".join(res))
+    return space.wrap(self.upper())
 
 def str_lower__String(space, w_self):
     self = w_self._value
-    res = [' '] * len(self)
-    for i in range(len(self)):
-        ch = self[i]
-        res[i] = _lower(ch)
-
-    return space.wrap("".join(res))
+    return space.wrap(self.lower())
 
 def str_swapcase__String(space, w_self):
     self = w_self._value
@@ -350,12 +326,9 @@ str_rsplit__String_String_ANY = make_rsplit_with_delim('str_rsplit__String_Strin
 
 def str_join__String_ANY(space, w_self, w_list):
     list_w = space.listview(w_list)
-    str_w = space.str_w
     if list_w:
         self = w_self._value
-        listlen = 0
         reslen = 0
-        l = [None] * len(list_w)
         for i in range(len(list_w)):
             w_s = list_w[i]
             if not space.is_true(space.isinstance(w_s, space.w_str)):
@@ -365,13 +338,18 @@ def str_join__String_ANY(space, w_self, w_list):
                     w_list = space.newlist(list_w)
                     w_u = space.call_function(space.w_unicode, w_self)
                     return space.call_method(w_u, "join", w_list)
-                raise OperationError(
+                raise operationerrfmt(
                     space.w_TypeError,
-                    space.wrap("sequence item %d: expected string, %s "
-                               "found" % (i,
-                                          space.type(w_s).getname(space, '?'))))
-            l[i] = space.str_w(w_s)
-        return space.wrap(self.join(l))
+                    "sequence item %d: expected string, %s "
+                    "found", i, space.type(w_s).getname(space, '?'))
+            reslen += len(space.str_w(w_s))
+        reslen += len(self) * (len(list_w) - 1)
+        sb = StringBuilder(reslen)
+        for i in range(len(list_w)):
+            if self and i != 0:
+                sb.append(self)
+            sb.append(space.str_w(list_w[i]))
+        return space.wrap(sb.build())
     else:
         return W_StringObject.EMPTY
 
@@ -816,9 +794,8 @@ def getitem__String_ANY(space, w_str, w_index):
     if ival < 0:
         ival += slen
     if ival < 0 or ival >= slen:
-        exc = space.call_function(space.w_IndexError,
-                                  space.wrap("string index out of range"))
-        raise OperationError(space.w_IndexError, exc)
+        raise OperationError(space.w_IndexError,
+                             space.wrap("string index out of range"))
     return wrapchar(space, str[ival])
 
 def getitem__String_Slice(space, w_str, w_slice):
@@ -853,15 +830,12 @@ def mul_string_times(space, w_str, w_times):
     if mul <= 0:
         return W_StringObject.EMPTY
     input = w_str._value
-    input_len = len(input)
-    try:
-        buflen = ovfcheck(mul * input_len)
-    except OverflowError:
-        raise OperationError(
-            space.w_OverflowError, 
-            space.wrap("repeated string is too long: %d %d" % (input_len, mul)))
-    # XXX maybe only do this when input has a big length
-    return joined(space, [input] * mul)
+    if len(input) == 1:
+        s = input[0] * mul
+    else:
+        s = string_repeat(input, mul)
+    # xxx support again space.config.objspace.std.withstrjoin?
+    return W_StringObject(s)
 
 def mul__String_ANY(space, w_str, w_times):
     return mul_string_times(space, w_str, w_times)
@@ -882,18 +856,14 @@ def str__String(space, w_str):
         return w_str
     return wrapstr(space, w_str._value)
 
-def iter__String(space, w_list):
-    from pypy.objspace.std import iterobject
-    return iterobject.W_SeqIterObject(w_list)
-
 def ord__String(space, w_str):
     u_str = w_str._value
     if len(u_str) != 1:
-        raise OperationError(
+        raise operationerrfmt(
             space.w_TypeError,
-            space.wrap("ord() expected a character, but string "
-                       "of length %d found"%(len(w_str._value),)))
-    return space.wrap(ord(u_str))
+            "ord() expected a character, but string "
+            "of length %d found", len(u_str))
+    return space.wrap(ord(u_str[0]))
 
 def getnewargs__String(space, w_str):
     return space.newtuple([wrapstr(space, w_str._value)])
@@ -994,7 +964,6 @@ def mod__String_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=False)
 
 def buffer__String(space, w_string):
-    from pypy.interpreter.buffer import StringBuffer
     return space.wrap(StringBuffer(w_string._value))
 
 # register all methods

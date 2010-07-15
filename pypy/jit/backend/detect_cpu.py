@@ -18,7 +18,7 @@ def autodetect_main_model():
     if not mach:
         platform = sys.platform.lower()
         if platform.startswith('win'):   # assume an Intel Windows
-            return 'i386'
+            return 'x86'
         # assume we have 'uname'
         mach = os.popen('uname -m', 'r').read().strip()
         if not mach:
@@ -29,12 +29,12 @@ def autodetect_main_model():
         else:
             assert sys.maxint == 2 ** 63 - 1
     try:
-        return {'i386': 'i386',
-                'i486': 'i386',
-                'i586': 'i386',
-                'i686': 'i386',
-                'i86pc': 'i386',    # Solaris/Intel
-                'x86':   'i386',    # Apple
+        return {'i386': 'x86',
+                'i486': 'x86',
+                'i586': 'x86',
+                'i686': 'x86',
+                'i86pc': 'x86',    # Solaris/Intel
+                'x86':   'x86',    # Apple
                 'Power Macintosh': 'ppc',
                 'x86_64': 'x86_64', 
                 }[mach]
@@ -43,26 +43,32 @@ def autodetect_main_model():
 
 def autodetect():
     model = autodetect_main_model()
-    if model in ('i386', 'x86'):
+    if model == 'x86':
         from pypy.jit.backend.x86.detect_sse2 import detect_sse2
         if not detect_sse2():
             model = 'x86-without-sse2'
     return model
 
-def getcpuclass(backend_name="auto"):
+def getcpuclassname(backend_name="auto"):
     if backend_name == "auto":
         backend_name = autodetect()
-    if backend_name in ('i386', 'x86'):
-        from pypy.jit.backend.x86.runner import CPU
+    if backend_name == 'x86':
+        return "pypy.jit.backend.x86.runner", "CPU"
     elif backend_name == 'x86-without-sse2':
-        from pypy.jit.backend.x86.runner import CPU386_NO_SSE2 as CPU
+        return "pypy.jit.backend.x86.runner", "CPU386_NO_SSE2"
     elif backend_name == 'cli':
-        from pypy.jit.backend.cli.runner import CliCPU as CPU
+        return "pypy.jit.backend.cli.runner", "CliCPU"
     elif backend_name == 'llvm':
-        from pypy.jit.backend.llvm.runner import LLVMCPU as CPU
+        return "pypy.jit.backend.llvm.runner", "LLVMCPU"
     else:
-        raise ProcessorAutodetectError, "unsupported cpu '%s'" % backend_name
-    return CPU
+        raise ProcessorAutodetectError, (
+            "we have no JIT backend for this cpu: '%s'" % backend_name)
+
+def getcpuclass(backend_name="auto"):
+    modname, clsname = getcpuclassname(backend_name)
+    mod = __import__(modname, {}, {}, clsname)
+    return getattr(mod, clsname)
 
 if __name__ == '__main__':
     print autodetect()
+    print getcpuclassname()

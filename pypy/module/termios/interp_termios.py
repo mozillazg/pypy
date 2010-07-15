@@ -28,14 +28,8 @@ def convert_error(space, error):
     return OperationError(w_exception_class, w_exception)
 
 def tcsetattr(space, fd, when, w_attributes):
-    from pypy.interpreter.baseobjspace import UnpackValueError
-    try:
-        w_iflag, w_oflag, w_cflag, w_lflag, w_ispeed, w_ospeed, w_cc = \
-                 space.unpackiterable(w_attributes, expected_length=7)
-    except UnpackValueError, e:
-        raise OperationError(
-            space.w_TypeError,
-            space.wrap("tcsetattr, arg 3: must be 7 element list"))
+    w_iflag, w_oflag, w_cflag, w_lflag, w_ispeed, w_ospeed, w_cc = \
+             space.unpackiterable(w_attributes, expected_length=7)
     w_builtin = space.getbuiltinmodule('__builtin__')
     cc = []
     for w_c in space.unpackiterable(w_cc):
@@ -66,8 +60,8 @@ def tcgetattr(space, fd):
     # last one need to be chosen carefully
     cc_w = [space.wrap(i) for i in cc]
     if lflag & termios.ICANON:
-        cc_w[termios.VMIN] = space.wrap(ord(cc[termios.VMIN]))
-        cc_w[termios.VTIME] = space.wrap(ord(cc[termios.VTIME]))
+        cc_w[termios.VMIN] = space.wrap(ord(cc[termios.VMIN][0]))
+        cc_w[termios.VTIME] = space.wrap(ord(cc[termios.VTIME][0]))
     w_cc = space.newlist(cc_w)
     l_w.append(w_cc)
     return space.newlist(l_w)

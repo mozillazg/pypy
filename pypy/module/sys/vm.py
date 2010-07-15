@@ -31,7 +31,6 @@ purposes only."""
                              space.wrap("frame index must not be negative"))
     ec = space.getexecutioncontext()
     f = ec.gettopframe_nohidden()
-    f.force_f_back()
     while True:
         if f is None:
             raise OperationError(space.w_ValueError,
@@ -91,7 +90,7 @@ frame."""
     if operror is None:
         return space.newtuple([space.w_None,space.w_None,space.w_None])
     else:
-        return space.newtuple([operror.w_type, operror.w_value,
+        return space.newtuple([operror.w_type, operror.get_w_value(space),
                                space.wrap(operror.application_traceback)])
 
 def exc_clear(space):
@@ -118,3 +117,12 @@ def call_tracing(space, w_func, w_args):
 saved, and restored afterwards.  This is intended to be called from
 a debugger from a checkpoint, to recursively debug some other code."""
     return space.getexecutioncontext().call_tracing(w_func, w_args)
+
+def getwindowsversion(space):
+    from pypy.rlib import rwin32
+    info = rwin32.GetVersionEx()
+    return space.newtuple([space.wrap(info[0]),
+                           space.wrap(info[1]),
+                           space.wrap(info[2]),
+                           space.wrap(info[3]),
+                           space.wrap(info[4])])

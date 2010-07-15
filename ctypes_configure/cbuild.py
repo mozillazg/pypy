@@ -5,9 +5,7 @@ import distutils
 
 debug = 0
 
-log = py.log.Producer("cbuild")
-
-configdir = py.path.local.make_numbered_dir(prefix='ctypes_configure')
+configdir = py.path.local.make_numbered_dir(prefix='ctypes_configure-')
 
 class ExternalCompilationInfo(object):
 
@@ -327,7 +325,7 @@ def import_module_from_directory(dir, modname):
 def log_spawned_cmd(spawn):
     def spawn_and_log(cmd, *args, **kwds):
         if debug:
-            log.execute(' '.join(cmd))
+            print ' '.join(cmd)
         return spawn(cmd, *args, **kwds)
     return spawn_and_log
 
@@ -404,8 +402,8 @@ class CCompiler:
         data = ''
         try:
             saved_environ = os.environ.copy()
+            c = stdoutcapture.Capture(mixed_out_err = True)
             try:
-                c = stdoutcapture.Capture(mixed_out_err = True)
                 self._build()
             finally:
                 # workaround for a distutils bugs where some env vars can

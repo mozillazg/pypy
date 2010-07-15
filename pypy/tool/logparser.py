@@ -9,9 +9,9 @@ Actions:
 import autopath
 import sys, re
 from pypy.rlib.debug import DebugLog
+from pypy.tool import progressbar
 
-
-def parse_log_file(filename):
+def parse_log_file(filename, verbose=True):
     r_start = re.compile(r"\[([0-9a-fA-F]+)\] \{([\w-]+)$")
     r_stop  = re.compile(r"\[([0-9a-fA-F]+)\] ([\w-]+)\}$")
     lasttime = 0
@@ -19,8 +19,34 @@ def parse_log_file(filename):
     time_decrase = False
     performance_log = True
     nested = 0
+    #
     f = open(filename, 'r')
-    for line in f:
+    if f.read(2) == 'BZ':
+        f.close()
+        import bz2
+        f = bz2.BZ2File(filename, 'r')
+    else:
+        f.seek(0)
+    lines = f.readlines()
+    f.close()
+    #
+    if sys.stdout.isatty():
+        progress = progressbar.ProgressBar(color='green')
+    single_percent = len(lines) / 100
+    if verbose:
+        vnext = single_percent
+    else:
+        vnext = len(lines)
+    counter = 0
+    for i, line in enumerate(lines):
+        if i == vnext:
+            counter += 1
+            if sys.stdout.isatty():
+                progress.render(counter)
+                vnext += single_percent
+            else:
+                sys.stderr.write('%d%%..' % int(100.0*i/len(lines)))
+                vnext += 500000
         line = line.rstrip()
         match = r_start.match(line)
         if match:
@@ -39,7 +65,8 @@ def parse_log_file(filename):
         time_decrase = time_decrase or time < lasttime
         lasttime = time
         record(match.group(2), time=int(match.group(1), 16))
-    f.close()
+    if verbose:
+        sys.stderr.write('loaded\n')
     if performance_log and time_decrase:
         raise Exception("The time decreases!  The log file may have been"
                         " produced on a multi-CPU machine and the process"
@@ -341,13 +368,13 @@ ACTIONS = {
 
 if __name__ == '__main__':
     import getopt
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         print __doc__
         sys.exit(2)
     action = sys.argv[1]
     func, longopts = ACTIONS[action]
     options, args = getopt.gnu_getopt(sys.argv[2:], '', longopts)
-    if len(args) != 1:
+    if len(args) != 2:
         print __doc__
         sys.exit(2)
 
@@ -356,4 +383,4 @@ if __name__ == '__main__':
         assert name.startswith('--')
         kwds[name[2:]] = value
     log = parse_log_file(args[0])
-    func(log, **kwds)
+    func(log, args[1], **kwds)

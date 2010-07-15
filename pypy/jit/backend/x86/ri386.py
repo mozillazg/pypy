@@ -16,8 +16,11 @@ class REG(OPERAND):
     def lowest8bits(self):
         if self.op < 4:
             return registers8[self.op]
-        else:
-            raise ValueError
+        raise ValueError
+    def higher8bits(self):
+        if self.op < 4:
+            return registers8[self.op + 4]
+        raise ValueError
 
 class FLOATREG(OPERAND):
     width = 8
@@ -207,9 +210,19 @@ class MODRM8(MODRM):
 class REL32(OPERAND):
     width = 4
     def __init__(self, absolute_target):
-        self.absolute_target = absolute_target
+        self.absolute_target = get_real_int(absolute_target)
     def assembler(self):
-        return '%d' % (self.absolute_target,)
+        return '%d' % (self.absolute_target,)    
+
+class REL8(OPERAND):
+    width = 1
+    def __init__(self, relative_target):    # NB. a *relative* target
+        assert single_byte(relative_target)
+        self.relative_target = relative_target
+    def assembler(self):
+        # a bit of a hack: only works if a nextlabel is attached
+        nextlabel = getattr(self, 'nextlabel', '?')
+        return '%s+%d' % (nextlabel, self.relative_target,)
 
 class MISSING(OPERAND):
     def __repr__(self):
@@ -271,12 +284,16 @@ imm32 = IMM32
 imm8 = IMM8
 imm16 = IMM16
 rel32 = REL32
+rel8 = REL8
+
+def get_real_int(x):
+    from pypy.rpython.lltypesystem import rffi, lltype
+    return rffi.cast(lltype.Signed, x)    # force as a real int
 
 def imm(value):
     if isinstance(value, ComputedIntSymbolic):
         value = value.compute_fn()
-    if not we_are_translated():
-        assert type(value) is int
+    value = get_real_int(value)
     if single_byte(value):
         return imm8(value)
     else:
@@ -402,6 +419,7 @@ def constlistofchars(s):
 constlistofchars._annspecialcase_ = 'specialize:memo'
 
 missing = MISSING()
+rel8_patched_later = rel8(0)
 
 # __________________________________________________________
 # Abstract base class, with methods like NOP(), ADD(x, y), etc.

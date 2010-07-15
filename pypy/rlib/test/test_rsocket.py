@@ -78,6 +78,19 @@ def test_gethostbyaddr():
         py.test.fail("could not find the 127.0.0.1 IPv4 address in %r"
                      % (address_list,))
 
+        name, aliases, address_list = gethostbyaddr('localhost')
+        allnames = [name] + aliases
+        for n in allnames:
+            assert isinstance(n, str)
+        if sys.platform != 'win32':
+            assert 'localhost' in allnames
+        for a in address_list:
+            if isinstance(a, INET6Address) and a.get_host() == "::1":
+                break  # ok
+        else:
+            py.test.fail("could not find the ::1 IPv6 address in %r"
+                         % (address_list,))
+
 def test_getservbyname():
     assert getservbyname('http') == 80
     assert getservbyname('http', 'tcp') == 80
@@ -281,14 +294,15 @@ def test_getaddrinfo_http():
             addr.get_port() == 80):
             found = True
     assert found, lst
-    py.test.raises(GAIError, getaddrinfo, 'www.very-invalidaddress.com', None)
+    e = py.test.raises(GAIError, getaddrinfo, 'www.very-invalidaddress.com', None)
+    assert isinstance(e.value.get_msg(), str)
 
 def test_getaddrinfo_codespeak():
     lst = getaddrinfo('codespeak.net', None)
     assert isinstance(lst, list)
     found = False
     for family, socktype, protocol, canonname, addr in lst:
-        if addr.get_host() == '213.239.226.252':
+        if addr.get_host() == '88.198.193.90':
             found = True
     assert found, lst
 

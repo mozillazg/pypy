@@ -1,3 +1,4 @@
+import py
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECTPTR
@@ -342,8 +343,7 @@ class TestLowLevelAnnotateTestCase:
         assert s.items[1].const == 3
 
     def test_getRuntimeTypeInfo(self):
-        S = GcStruct('s', ('x', Signed))
-        attachRuntimeTypeInfo(S)
+        S = GcStruct('s', ('x', Signed), rtti=True)
         def llf():
             return getRuntimeTypeInfo(S)
         s = self.annotate(llf, [])
@@ -352,8 +352,7 @@ class TestLowLevelAnnotateTestCase:
         assert s.const == getRuntimeTypeInfo(S)
 
     def test_runtime_type_info(self):
-        S = GcStruct('s', ('x', Signed))
-        attachRuntimeTypeInfo(S)
+        S = GcStruct('s', ('x', Signed), rtti=True)
         def llf(p):
             return runtime_type_info(p)
         s = self.annotate(llf, [annmodel.SomePtr(Ptr(S))])

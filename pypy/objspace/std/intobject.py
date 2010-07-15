@@ -1,4 +1,7 @@
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift, LONG_BIT, r_uint
 from pypy.rlib.rbigint import rbigint
@@ -31,6 +34,10 @@ class W_IntObject(W_Object):
 
 registerimplementation(W_IntObject)
 
+# NB: This code is shared by smallintobject.py, and thus no other Int
+# multimethods should be invoked from these implementations. Instead, add an
+# alias and then teach copy_multimethods in smallintobject.py to override
+# it. See int__Int for example.
 
 def int_w__Int(space, w_int1):
     return int(w_int1.intval)
@@ -53,8 +60,7 @@ def repr__Int(space, w_int1):
 
 str__Int = repr__Int
 
-def declare_new_int_comparison(opname, clsname):
-    # also used by smallintobject.py
+def declare_new_int_comparison(opname):
     import operator
     from pypy.tool.sourcetools import func_with_new_name
     op = getattr(operator, opname)
@@ -62,18 +68,18 @@ def declare_new_int_comparison(opname, clsname):
         i = w_int1.intval
         j = w_int2.intval
         return space.newbool(op(i, j))
-    name = "%s__%s_%s" % (opname, clsname, clsname)
+    name = "%s__Int_Int" % (opname,)
     return func_with_new_name(f, name), name
 
 for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
-    func, name = declare_new_int_comparison(op, "Int")
+    func, name = declare_new_int_comparison(op)
     globals()[name] = func
 
 def hash__Int(space, w_int1):
     # unlike CPython, we don't special-case the value -1 in most of our
     # hash functions, so there is not much sense special-casing it here either.
     # Make sure this is consistent with the hash of floats and longs.
-    return int__Int(space, w_int1)
+    return get_integer(space, w_int1)
 
 # coerce
 def coerce__Int_Int(space, w_int1, w_int2):
@@ -86,7 +92,7 @@ def add__Int_Int(space, w_int1, w_int2):
     try:
         z = ovfcheck(x + y)
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer addition"))
     return wrapint(space, z)
 
@@ -96,7 +102,7 @@ def sub__Int_Int(space, w_int1, w_int2):
     try:
         z = ovfcheck(x - y)
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer substraction"))
     return wrapint(space, z)
 
@@ -106,7 +112,7 @@ def mul__Int_Int(space, w_int1, w_int2):
     try:
         z = ovfcheck(x * y)
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer multiplication"))
     return wrapint(space, z)
 
@@ -119,7 +125,7 @@ def floordiv__Int_Int(space, w_int1, w_int2):
         raise OperationError(space.w_ZeroDivisionError,
                              space.wrap("integer division by zero"))
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer division"))
     return wrapint(space, z)
 div__Int_Int = floordiv__Int_Int
@@ -128,7 +134,7 @@ def truediv__Int_Int(space, w_int1, w_int2):
     x = float(w_int1.intval)
     y = float(w_int2.intval)
     if y == 0.0:
-        raise FailedToImplement(space.w_ZeroDivisionError, space.wrap("float division"))    
+        raise FailedToImplementArgs(space.w_ZeroDivisionError, space.wrap("float division"))    
     return space.wrap(x / y)
 
 def mod__Int_Int(space, w_int1, w_int2):
@@ -140,7 +146,7 @@ def mod__Int_Int(space, w_int1, w_int2):
         raise OperationError(space.w_ZeroDivisionError,
                              space.wrap("integer modulo by zero"))
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer modulo"))
     return wrapint(space, z)
 
@@ -153,7 +159,7 @@ def divmod__Int_Int(space, w_int1, w_int2):
         raise OperationError(space.w_ZeroDivisionError,
                              space.wrap("integer divmod by zero"))
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer modulo"))
     # no overflow possible
     m = x % y
@@ -169,7 +175,7 @@ def _impl_int_int_pow(space, iv, iw, iz=0):
                              space.wrap("pow() 2nd argument "
                  "cannot be negative when 3rd argument specified"))
         ## bounce it, since it always returns float
-        raise FailedToImplement(space.w_ValueError,
+        raise FailedToImplementArgs(space.w_ValueError,
                                 space.wrap("integer exponentiation"))
     temp = iv
     ix = 1
@@ -188,7 +194,7 @@ def _impl_int_int_pow(space, iv, iw, iz=0):
         if iz:
             ix = ix % iz
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer exponentiation"))
     return wrapint(space, ix)
 
@@ -211,16 +217,17 @@ def neg__Int(space, w_int1):
     try:
         x = ovfcheck(-a)
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer negation"))
     return wrapint(space, x)
+get_negint = neg__Int
 
 
 def abs__Int(space, w_int1):
     if w_int1.intval >= 0:
-        return pos__Int(space, w_int1)
+        return get_integer(space, w_int1)
     else:
-        return neg__Int(space, w_int1)
+        return get_negint(space, w_int1)
 
 def nonzero__Int(space, w_int1):
     return space.newbool(w_int1.intval != 0)
@@ -237,14 +244,14 @@ def lshift__Int_Int(space, w_int1, w_int2):
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
     if a == 0 or b == 0:
-        return int__Int(space, w_int1)
+        return get_integer(space, w_int1)
     if b >= LONG_BIT:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer left shift"))
     try:
         c = ovfcheck_lshift(a, b)
     except OverflowError:
-        raise FailedToImplement(space.w_OverflowError,
+        raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer left shift"))
     return wrapint(space, c)
 
@@ -255,7 +262,7 @@ def rshift__Int_Int(space, w_int1, w_int2):
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
     if a == 0 or b == 0:
-        return int__Int(space, w_int1)
+        return get_integer(space, w_int1)
     if b >= LONG_BIT:
         if a < 0:
             a = -1
@@ -291,10 +298,11 @@ def int__Int(space, w_int1):
         return w_int1
     a = w_int1.intval
     return wrapint(space, a)
+get_integer = int__Int
 pos__Int = int__Int
 
 def index__Int(space, w_int1):
-    return int__Int(space, w_int1)
+    return get_integer(space, w_int1)
 
 def float__Int(space, w_int1):
     a = w_int1.intval

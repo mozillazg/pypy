@@ -73,9 +73,9 @@ PyPy can be used to run Python programs on Linux, OS/X,
 Windows, on top of .NET, and on top of Java.
 To dig into PyPy it is recommended to try out the current
 Subversion HEAD, which is always working or mostly working,
-instead of the `release 1.1.0`__.
+instead of the latest release, which is `1.2.0`__.
 
-.. __: release-1.1.0.html
+.. __: release-1.2.0.html
 
 PyPy is mainly developed on Linux and Mac OS X.  Windows is supported,
 but platform-specific bugs tend to take longer before we notice and fix
@@ -206,13 +206,6 @@ Directory                      explanation/links
 
 `interpreter/astcompiler/`_    interpreter-level bytecode compiler, via an AST
                                representation
-
-`lib/`_                        PyPy's wholesale reimplementations of CPython modules_
-                               and experimental new application-level modules
-
-`lib/app_test/`_               tests for the reimplementations, running on top of CPython
-
-`lib/distributed/`_            distributed execution prototype, based on `transparent proxies`_
 
 `module/`_                     contains `mixed modules`_ implementing core modules with 
                                both application and interpreter level code.

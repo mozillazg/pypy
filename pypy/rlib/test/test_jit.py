@@ -25,7 +25,7 @@ class BaseTestJIT(BaseRtypingTest):
         assert res == 5
 
     def test_purefunction_promote(self):
-        @purefunction_promote
+        @purefunction_promote()
         def g(func):
             return func + 1
         def f(x):
@@ -33,16 +33,38 @@ class BaseTestJIT(BaseRtypingTest):
         res = self.interpret(f, [2])
         assert res == 5
 
+    def test_purefunction_promote_args(self):
+        @purefunction_promote(promote_args='0')
+        def g(func, x):
+            return func + 1
+        def f(x):
+            return g(x * 2, x)
+        
+        import dis
+        from StringIO import StringIO
+        import sys
+        
+        s = StringIO()
+        sys.stdout = s
+        dis.dis(g)
+        sys.stdout = sys.__stdout__
+        x = s.getvalue().find('CALL_FUNCTION')
+        assert x != -1
+        x = s.getvalue().find('CALL_FUNCTION', x)
+        assert x != -1
+        x = s.getvalue().find('CALL_FUNCTION', x)
+        assert x != -1
+        res = self.interpret(f, [2])
+        assert res == 5
+
     def test_annotate_hooks(self):
         
         def can_inline(m): pass
         def get_printable_location(m): pass
-        def leave(m, n): pass
         
         myjitdriver = JitDriver(greens=['m'], reds=['n'],
                                 can_inline=can_inline,
-                                get_printable_location=get_printable_location,
-                                leave=leave)
+                                get_printable_location=get_printable_location)
         def fn(n):
             m = 42.5
             while n > 0:
@@ -58,9 +80,6 @@ class BaseTestJIT(BaseRtypingTest):
                 if getattr(graph, 'func', None) is func:
                     return [v.concretetype for v in graph.getargs()]
             raise Exception, 'function %r has not been annotated' % func
-
-        leave_args = getargs(leave)
-        assert leave_args == [lltype.Float, lltype.Signed]
 
         can_inline_args = getargs(can_inline)
         get_printable_location_args = getargs(get_printable_location)

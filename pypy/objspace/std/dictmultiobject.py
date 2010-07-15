@@ -1,6 +1,8 @@
-import py
-from pypy.objspace.std.objspace import *
+import py, sys
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.interpreter import gateway
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.argument import Signature
 from pypy.module.__builtin__.__init__ import BUILTIN_TO_INDEX, OPTIMIZED_BUILTINS
 
@@ -30,7 +32,7 @@ class W_DictMultiObject(W_Object):
     @staticmethod
     def allocate_and_init_instance(space, w_type=None, module=False,
                                    instance=False, classofinstance=None,
-                                   from_strdict_shared=None):
+                                   from_strdict_shared=None, strdict=False):
         if from_strdict_shared is not None:
             assert w_type is None
             assert not module and not instance and classofinstance is None
@@ -55,7 +57,7 @@ class W_DictMultiObject(W_Object):
                 classofinstance is not None):
             assert w_type is None
             return ShadowDetectingDictImplementation(space, classofinstance)
-        elif instance:
+        elif instance or strdict or module:
             assert w_type is None
             return StrDictImplementation(space)
         else:
@@ -99,9 +101,6 @@ class W_DictMultiObject(W_Object):
             return space.call_function(w_missing, w_dict, w_key)
         else:
             return None
-
-    def set_str_keyed_item(w_dict, key, w_value, shadows_type=True):
-        w_dict.setitem_str(key, w_value, shadows_type)
 
     # _________________________________________________________________ 
     # implementation methods
@@ -468,7 +467,7 @@ class RDictIteratorImplementation(IteratorImplementation):
 
 
 # XXX fix this thing
-import time, py
+import time
 
 class DictInfo(object):
     _dict_infos = []
@@ -513,7 +512,7 @@ class DictInfo(object):
         self._dict_infos.append(self)
     def __repr__(self):
         args = []
-        for k in py.builtin.sorted(self.__dict__):
+        for k in sorted(self.__dict__):
             v = self.__dict__[k]
             if v != 0:
                 args.append('%s=%r'%(k, v))
@@ -614,7 +613,7 @@ _example = DictInfo()
 del DictInfo._dict_infos[-1]
 tmpl = 'os.write(fd, "%(attr)s" + ": " + str(info.%(attr)s) + "\\n")'
 bodySrc = []
-for attr in py.builtin.sorted(_example.__dict__):
+for attr in sorted(_example.__dict__):
     if attr == 'sig':
         continue
     bodySrc.append(tmpl%locals())
@@ -796,7 +795,9 @@ def dict_pop__DictMulti_ANY(space, w_dict, w_key, w_defaults):
     defaults = space.listview(w_defaults)
     len_defaults = len(defaults)
     if len_defaults > 1:
-        raise OperationError(space.w_TypeError, space.wrap("pop expected at most 2 arguments, got %d" % (1 + len_defaults, )))
+        raise operationerrfmt(space.w_TypeError,
+                              "pop expected at most 2 arguments, got %d",
+                              1 + len_defaults)
     w_item = w_dict.getitem(w_key)
     if w_item is None:
         if len_defaults > 0:

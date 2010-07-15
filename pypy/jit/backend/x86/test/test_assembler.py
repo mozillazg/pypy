@@ -1,5 +1,5 @@
 from pypy.jit.backend.x86.ri386 import *
-from pypy.jit.backend.x86.assembler import Assembler386
+from pypy.jit.backend.x86.assembler import Assembler386, MachineCodeBlockWrapper
 from pypy.jit.backend.x86.regalloc import X86FrameManager, get_ebp_ofs
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from pypy.rlib.rarithmetic import intmask
@@ -11,10 +11,20 @@ class FakeCPU:
     supports_floats = True
 
 class FakeMC:
-    def __init__(self):
+    def __init__(self, base_address=0):
         self.content = []
+        self._size = 100
+        self.base_address = base_address
     def writechr(self, n):
         self.content.append(n)
+    def tell(self):
+        return self.base_address + len(self.content)
+    def get_relative_pos(self):
+        return len(self.content)
+    def JMP(self, *args):
+        self.content.append(("JMP", args))
+    def done(self):
+        pass
 
 
 def test_write_failure_recovery_description():
@@ -64,35 +74,6 @@ def test_write_failure_recovery_description():
     newlocs = assembler.rebuild_faillocs_from_descr(bytecode_addr)
     assert ([loc.assembler() for loc in newlocs] ==
             [loc.assembler() for loc in locs if loc is not None])
-
-    # finally, test make_boxes_from_latest_values(), which should
-    # reproduce the holes
-    expected_classes = [BoxInt, BoxPtr, BoxFloat,
-                        BoxInt, BoxPtr, BoxFloat,
-                        type(None), type(None),
-                        BoxInt, BoxPtr, BoxFloat]
-    ptrvalues = {}
-    S = lltype.GcStruct('S')
-    for i, cls in enumerate(expected_classes):
-        if cls == BoxInt:
-            assembler.fail_boxes_int.setitem(i, 1000 + i)
-        elif cls == BoxPtr:
-            s = lltype.malloc(S)
-            s_ref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-            ptrvalues[i] = s_ref
-            assembler.fail_boxes_ptr.setitem(i, s_ref)
-        elif cls == BoxFloat:
-            assembler.fail_boxes_float.setitem(i, 42.5 + i)
-    boxes = assembler.make_boxes_from_latest_values(bytecode_addr)
-    assert len(boxes) == len(locs) == len(expected_classes)
-    for i, (box, expected_class) in enumerate(zip(boxes, expected_classes)):
-        assert type(box) is expected_class
-        if expected_class == BoxInt:
-            assert box.value == 1000 + i
-        elif expected_class == BoxPtr:
-            assert box.value == ptrvalues[i]
-        elif expected_class == BoxFloat:
-            assert box.value == 42.5 + i
 
 # ____________________________________________________________
 
@@ -233,3 +214,47 @@ def do_failure_recovery_func(withfloats):
         # an approximate result, it might mean that only the first 32
         # bits of the float were correctly saved and restored.
         assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
+
+    # verify that until clear_latest_values() is called, reading the
+    # same values multiple times work
+    for i in range(len(content)):
+        assert assembler.fail_boxes_int.getitem(i) == expected_ints[i]
+        assert assembler.fail_boxes_ptr.getitem(i) == expected_ptrs[i]
+        assert assembler.fail_boxes_float.getitem(i) == expected_floats[i]
+
+class FakeProfileAgent(object):
+    def __init__(self):
+        self.functions = []
+
+    def native_code_written(self, name, address, size):
+        self.functions.append((name, address, size))
+
+class FakeMCWrapper(MachineCodeBlockWrapper):
+    count = 0
+    def _instantiate_mc(self):
+        self.count += 1
+        return FakeMC(200 * (self.count - 1))
+
+def test_mc_wrapper_profile_agent():
+    agent = FakeProfileAgent()
+    mc = FakeMCWrapper(100, agent)
+    mc.start_function("abc")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.end_function()
+    assert agent.functions == [("abc", 0, 4)]
+    mc.writechr("x")
+    mc.start_function("cde")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.writechr("x")
+    mc.end_function()
+    assert agent.functions == [("abc", 0, 4), ("cde", 5, 4)]
+    mc.start_function("xyz")
+    for i in range(50):
+        mc.writechr("x")
+    mc.end_function()
+    assert agent.functions == [("abc", 0, 4), ("cde", 5, 4), ("xyz", 9, 29), ("xyz", 200, 22)]

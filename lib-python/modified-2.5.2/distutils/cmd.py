@@ -17,8 +17,9 @@ from distutils import log
 def _easy_install_get_site_dirs():
     # return a list of 'site' dirs for easy_install
     from pkg_resources import normalize_path
+    from distutils.sysconfig import get_python_lib
     sitedirs = filter(None,os.environ.get('PYTHONPATH','').split(os.pathsep))
-    sitedirs.append(os.path.join(sys.pypy_prefix, 'site-packages'))
+    sitedirs.append(get_python_lib(standard_lib=False))
     sitedirs = map(normalize_path, sitedirs)
     return sitedirs
 

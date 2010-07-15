@@ -70,7 +70,11 @@ int pypysig_poll(void);   /* => signum or -1 */
    cleared again.  The variable is exposed and RPython code is free to
    use the other bits in any way. */
 #define PENDING_SIGNAL_BIT   (LONG_MIN)   /* high bit */
-extern long pypysig_occurred;
+/* This is a struct for the JIT. See interp_signal.py. */
+struct pypysig_long_struct {
+    long value;
+};
+extern struct pypysig_long_struct pypysig_occurred;
 
 /* some C tricks to get/set the variable as efficiently as possible:
    use macros when compiling as a stand-alone program, but still
@@ -87,9 +91,8 @@ void *pypysig_getaddr_occurred(void) { return (void *)(&pypysig_occurred); }
 
 #ifndef PYPY_NOT_MAIN_FILE
 
-
-long pypysig_occurred;
-static volatile long *pypysig_occurred_v = (volatile long *)&pypysig_occurred;
+struct pypysig_long_struct pypysig_occurred;
+static volatile long *pypysig_occurred_v = (volatile long *)&pypysig_occurred.value;
 static volatile int pypysig_flags[NSIG];
 
 void pypysig_ignore(int signum)
@@ -102,7 +105,7 @@ void pypysig_ignore(int signum)
     context.sa_flags = 0;
     sigaction(signum, &context, NULL);
 #else
-  signal(signum, SIG_IGN);
+    signal(signum, SIG_IGN);
 #endif
 }
 
@@ -116,17 +119,17 @@ void pypysig_default(int signum)
     context.sa_flags = 0;
     sigaction(signum, &context, NULL);
 #else
-  signal(signum, SIG_DFL);
+    signal(signum, SIG_DFL);
 #endif
 }
 
 static void signal_setflag_handler(int signum)
 {
-  if (0 <= signum && signum < NSIG)
-    pypysig_flags[signum] = 1;
-  /* the point of "*pypysig_occurred_v" instead of just "pypysig_occurred"
-     is the volatile declaration */
-  *pypysig_occurred_v |= PENDING_SIGNAL_BIT;
+    if (0 <= signum && signum < NSIG)
+        pypysig_flags[signum] = 1;
+    /* the point of "*pypysig_occurred_v" instead of just "pypysig_occurred"
+       is the volatile declaration */
+    *pypysig_occurred_v |= PENDING_SIGNAL_BIT;
 }
 
 void pypysig_setflag(int signum)
@@ -139,7 +142,7 @@ void pypysig_setflag(int signum)
     context.sa_flags = 0;
     sigaction(signum, &context, NULL);
 #else
-  signal(signum, signal_setflag_handler);
+    signal(signum, signal_setflag_handler);
 #endif
 }
 
@@ -152,18 +155,18 @@ int pypysig_poll(void)
 
 /* if (pypysig_occurred & PENDING_SIGNAL_BIT) */
     {
-      int i;
+        int i;
 /*     pypysig_occurred &= ~PENDING_SIGNAL_BIT; */
-      for (i=0; i<NSIG; i++)
-        if (pypysig_flags[i])
-          {
-            pypysig_flags[i] = 0;
-            /* maybe another signal is pending: */
-            pypysig_occurred |= PENDING_SIGNAL_BIT;
-            return i;
-          }
+        for (i=0; i<NSIG; i++)
+            if (pypysig_flags[i])
+            {
+                pypysig_flags[i] = 0;
+                /* maybe another signal is pending: */
+                pypysig_occurred.value |= PENDING_SIGNAL_BIT;
+                return i;
+            }
     }
-  return -1;  /* no pending signal */
+    return -1;  /* no pending signal */
 }
 
 #endif

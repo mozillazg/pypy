@@ -1,3 +1,6 @@
+
+# -*- coding: utf-8 -*-
+
 from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
 from pypy.interpreter import argument
@@ -196,6 +199,51 @@ class TestGateway:
                                space.wrap(0))
         space.raises_w(space.w_ValueError,
                        space.call_function, w_app_g, space.wrap(-1))
+
+    def test_interp2app_unwrap_spec_c_int(self):
+        from pypy.rlib.rarithmetic import r_longlong
+        space = self.space
+        w = space.wrap
+        def g(space, x):
+            return space.wrap(x + 6)
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace,
+                                                   'c_int'])
+        app_ug = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace,
+                                                   'c_uint'])
+        app_ng = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace,
+                                                   'c_nonnegint'])
+        assert app_ug is not app_g
+        w_app_g = space.wrap(app_g)
+        w_app_ug = space.wrap(app_ug)
+        w_app_ng = space.wrap(app_ng)
+        #
+        assert self.space.eq_w(space.call_function(w_app_g, space.wrap(7)),
+                               space.wrap(13))
+        space.raises_w(space.w_OverflowError,
+                       space.call_function, w_app_g,
+                       space.wrap(r_longlong(0x80000000)))
+        space.raises_w(space.w_OverflowError,
+                       space.call_function, w_app_g,
+                       space.wrap(r_longlong(-0x80000001)))
+        #
+        assert self.space.eq_w(space.call_function(w_app_ug, space.wrap(7)),
+                               space.wrap(13))
+        assert self.space.eq_w(space.call_function(w_app_ug,
+                                                   space.wrap(0x7FFFFFFF)),
+                               space.wrap(r_longlong(0x7FFFFFFF+6)))
+        space.raises_w(space.w_ValueError,
+                       space.call_function, w_app_ug, space.wrap(-1))
+        space.raises_w(space.w_OverflowError,
+                       space.call_function, w_app_ug,
+                       space.wrap(r_longlong(0x100000000)))
+        #
+        assert self.space.eq_w(space.call_function(w_app_ng, space.wrap(7)),
+                               space.wrap(13))
+        space.raises_w(space.w_OverflowError,
+                       space.call_function, w_app_ng,
+                       space.wrap(r_longlong(0x80000000)))
+        space.raises_w(space.w_ValueError,
+                       space.call_function, w_app_ng, space.wrap(-1))
 
     def test_interp2app_unwrap_spec_args_w(self):
         space = self.space
@@ -406,6 +454,16 @@ class TestGateway:
         assert len(l) == 1
         assert space.eq_w(l[0], w("foo"))
 
+    def test_interp2app_unwrap_spec_path(self, monkeypatch):
+        space = self.space
+        def g(space, p):
+            return p
+
+        app_g = gateway.interp2app(g, unwrap_spec=[gateway.ObjSpace, 'path'])
+        w_app_g = space.wrap(app_g)
+        monkeypatch.setattr(space.sys, "filesystemencoding", "utf-8")
+        w_res = space.call_function(w_app_g, space.wrap(u"ą"))
+
     def test_interp2app_classmethod(self):
         space = self.space
         w = space.wrap
@@ -519,6 +577,16 @@ class TestGateway:
         args3 = argument.Arguments(space, [space.wrap(3)])
         w_res = space.call_obj_args(w_g, w_self, args3)
         assert space.is_true(space.eq(w_res, space.wrap(('g', 'self', 3))))
+
+    def test_unwrap_spec_decorator(self):
+        space = self.space
+        @gateway.unwrap_spec(gateway.ObjSpace, gateway.W_Root, int)
+        def g(space, w_thing, i):
+            return space.newtuple([w_thing, space.wrap(i)])
+        w_g = space.wrap(gateway.interp2app_temp(g))
+        args = argument.Arguments(space, [space.wrap(-1), space.wrap(0)])
+        w_res = space.call_args(w_g, args)
+        assert space.eq_w(w_res, space.wrap((-1, 0)))
 
 
 class TestPassThroughArguments:

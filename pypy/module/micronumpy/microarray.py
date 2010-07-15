@@ -24,6 +24,7 @@ def index_w(space, w_index):
     return space.int_w(space.index(w_index))
 
 def stride_row(shape, i):
+    assert i >= 0
     stride = 1
     ndim = len(shape)
     for s in shape[i + 1:]:
@@ -31,13 +32,16 @@ def stride_row(shape, i):
     return stride
 
 def stride_column(shape, i):
-    if i < 1: return 1
-    elif i == 1:
+    i -= 1
+    if i < 0:
+        return 1
+    elif i == 0:
         return shape[0]
-    stride = 1
-    for s in shape[:i-1]:
-        stride *= s
-    return stride
+    else:
+        stride = 1
+        for s in shape[:i]:
+            stride *= s
+        return stride
 
 class MicroIter(Wrappable):
     def __init__(self, array):
@@ -153,6 +157,7 @@ class MicroArray(BaseNumArray):
             if index_dimension == len(self.shape):
                 return self.getitem(space, index)
             elif index_dimension < len(self.shape):
+                assert index_dimension > 0
                 array = MicroArray(self.shape[index_dimension:], self.dtype,
                                    parent=self, offset=self.offset + index)
                 return space.wrap(array)
@@ -196,7 +201,7 @@ class MicroArray(BaseNumArray):
     descr_setitem.unwrap_spec = ['self', ObjSpace, W_Root, W_Root]
 
     def descr_repr(self, space):
-        return space.wrap("<MicroArray Object>")
+        return app_descr_repr(space, space.wrap(self))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
     def descr_iter(self, space):
@@ -212,7 +217,7 @@ from pypy.interpreter import gateway
 
 app_formatting = gateway.applevel("""
     from StringIO import StringIO
-    def str(out, array):
+    def stringify(out, array):
         out.write("[")
         if len(array.shape) > 1:
             out.write(',\\n'.join([str(x) for x in array]))
@@ -222,7 +227,7 @@ app_formatting = gateway.applevel("""
 
     def descr_str(self):
         out = StringIO()
-        str(out, self)
+        stringify(out, self)
         result = out.getvalue()
         out.close()
         return result
@@ -230,7 +235,7 @@ app_formatting = gateway.applevel("""
     def descr_repr(self):
         out = StringIO()
         out.write("array(")
-        str(out, self)
+        stringify(out, self)
         out.write(")")
         result = out.getvalue()
         out.close()
@@ -238,10 +243,6 @@ app_formatting = gateway.applevel("""
                        """)
 
 app_descr_repr = app_formatting.interphook('descr_repr')
-
-def microarray_descr_repr(self, space):
-    return app_descr_repr(space, space.wrap(self))
-microarray_descr_repr.unwrap_spec = ['self', ObjSpace]
 
 # Getters, strange GetSetProperty behavior
 # forced them out of the class
@@ -271,7 +272,7 @@ MicroArray.typedef = TypeDef('uarray',
                              __getitem__ = interp2app(MicroArray.descr_getitem),
                              __setitem__ = interp2app(MicroArray.descr_setitem),
                              __len__ = interp2app(MicroArray.descr_len),
-                             __repr__ = microarray_descr_repr,
+                             __repr__ = interp2app(MicroArray.descr_repr),
                              __iter__ = interp2app(MicroArray.descr_iter),
                             )
 
@@ -308,7 +309,7 @@ def array(space, w_xs, w_dtype=NoneNotWrapped, copy=True, order='C', subok=False
     w_ar = space.wrap(ar)
 
     fill_array(space,
-               space.wrap([]), w_ar, w_xs)
+               space.newlist([]), w_ar, w_xs)
 
     return w_ar
 array.unwrap_spec = [ObjSpace, W_Root, W_Root, bool, str, bool, W_Root]
