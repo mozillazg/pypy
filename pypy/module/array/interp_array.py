@@ -161,7 +161,7 @@ def make_array(mytype):
                 self.allocated = 0
                 new_buffer = lltype.nullptr(mytype.arraytype)
 
-            if self.buffer != lltype.nullptr(mytype.arraytype):
+            if self.buffer:
                 lltype.free(self.buffer, flavor='raw')                
             self.buffer = new_buffer
             self.len = size
