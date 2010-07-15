@@ -611,8 +611,8 @@ class Optimizer(object):
                 assert oldop.opnum == op.opnum
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 return
-            elif self.find_rewriteable_constant(op, args):
-                return
+            #elif self.find_rewriteable_constant(op, args):
+            #    return
             else:
                 self.pure_operations[args] = op
 

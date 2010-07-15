@@ -176,11 +176,8 @@ def make_array(mytype):
             space = self.space
             start, stop, step = space.decode_index(w_idx, self.len)
             if step < 0:
-                w_lst = space.call_function(
-                    space.getattr(self, space.wrap('tolist')))
-                w_lst = space.call_function(
-                    space.getattr(w_lst, space.wrap('__getitem__')),
-                    w_idx)
+                w_lst = self.descr_tolist()
+                w_lst = space.getitem(w_lst, w_idx)
                 w_a=mytype.w_class(self.space)
                 w_a.descr_fromsequence(w_lst)
             else:
@@ -271,13 +268,9 @@ def make_array(mytype):
                 size = (stop - start) / step
                 if (stop - start) % step > 0: size += 1
                 if w_item.len != size or step < 0:
-                    w_lst = space.call_function(
-                        space.getattr(self, space.wrap('tolist')))
-                    w_item = space.call_function(
-                        space.getattr(w_item, space.wrap('tolist')))
-                    space.call_function(
-                        space.getattr(w_lst, space.wrap('__setitem__')),
-                        w_idx, w_item)
+                    w_lst = self.descr_tolist()
+                    w_item = space.call_method(w_item, 'tolist')
+                    space.setitem(w_lst, w_idx, w_item)
                     self.setlen(0)
                     self.descr_fromsequence(w_lst)
                 else:
@@ -440,11 +433,8 @@ def make_array(mytype):
 
         def descr_delitem(self, w_idx):
             space=self.space
-            w_lst = space.call_function(
-                space.getattr(self, space.wrap('tolist')))
-            space.call_function(
-                space.getattr(w_lst, space.wrap('__delitem__')),
-                w_idx)
+            w_lst = self.descr_tolist()
+            space.delitem(w_lst, w_idx)
             self.setlen(0)
             self.descr_fromsequence(w_lst)
         descr_delitem.unwrap_spec = ['self', W_Root]
@@ -570,14 +560,12 @@ class W_WrappedArray(Wrappable):
 
     def descr_pop(self, w_i=-1):
         space = self.space
-        return space.call_function(space.getattr(self._array, space.wrap('pop')), w_i)
+        return space.call_method(self._array, 'pop', w_i)
     descr_pop.unwrap_spec = ['self', W_Root]
 
     def descr_getitem(self, w_i):
         space = self.space
-        #w_item = self._array.descr_getitem(w_i)
-        w_item = space.call_function(
-            space.getattr(self._array, space.wrap('__getitem__')), w_i)
+        w_item = space.getitem(self._array, w_i)
         if isinstance(w_item, W_ArrayBase):
             return W_WrappedArray(space, w_item)
         return w_item
@@ -585,25 +573,21 @@ class W_WrappedArray(Wrappable):
 
     def descr_iadd(self, w_i):
         space = self.space        
-        #self._array.descr_iadd(w_i._array)
         w_i = space.interp_w(W_WrappedArray, w_i)
-        w_item = space.call_function(
-            space.getattr(self._array, space.wrap('__iadd__')), w_i._array)
+        w_item = space.call_method(self._array, '__iadd__', w_i._array)
         return self
     descr_iadd.unwrap_spec = ['self', W_Root]
     
     def descr_imul(self, w_i):
-        space = self.space        
-        #self._array.descr_imul(i)
-        w_item = space.call_function(
-            space.getattr(self._array, space.wrap('__imul__')), w_i)
+        space = self.space
+        w_item = space.call_method(self._array, '__imul__', w_i)        
         return self
     descr_imul.unwrap_spec = ['self', W_Root]
 
     def descr_reduce(self):
         space=self.space
         if space.int_w(space.len(self._array)) > 0:
-            w_s = space.call_function(space.getattr(self._array, space.wrap('tostring')))
+            w_s = space.call_method(self._array, 'tostring')
             args = [space.wrap(self._array.typecode), w_s]
         else:
             args = [space.wrap(self._array.typecode)]
@@ -618,31 +602,27 @@ def unwrap_array(w_a):
 def make_descr(fn, nargs, wrp):
     if nargs == 0:
         def descr(space, self):
-            ret = space.call_function(
-                space.getattr(self._array, space.wrap(fn)))
+            ret = space.call_method(self._array, fn)
             if (wrp): return W_WrappedArray(space, ret)
             return ret
 
     elif nargs == 1:
         def descr(space, self, w_a):
-            ret = space.call_function(
-                space.getattr(self._array, space.wrap(fn)),
+            ret = space.call_method(self._array, fn,
                 unwrap_array(w_a))
             if (wrp): return W_WrappedArray(space, ret)
             return ret
     
     elif nargs == 2:
         def descr(space, self, w_a, w_b):
-            ret = space.call_function(
-                space.getattr(self._array, space.wrap(fn)),
+            ret = space.call_method(self._array, fn,            
                 unwrap_array(w_a), unwrap_array(w_b))
             if (wrp): return W_WrappedArray(space, ret)
             return ret
     
     elif nargs == 3:
         def descr(space, self, w_a, w_b, w_c):
-            ret = space.call_function(
-                space.getattr(self._array, space.wrap(fn)),
+            ret = space.call_method(self._array, fn,                        
                 unwrap_array(w_a), unwrap_array(w_b), unwrap_array(w_c))
             if (wrp): return W_WrappedArray(space, ret)
             return ret
