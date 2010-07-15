@@ -13,6 +13,14 @@ class TypeConverter(object):
         lltype.free(arg, flavor='raw')
 
 
+class VoidConverter(TypeConverter):
+    def __init__(self, space, name):
+        self.name = name
+
+    def convert_argument(self, space, w_obj):
+        raise OperationError(space.w_TypeError,
+                             space.wrap('no converter available for type "%s"' % self.name))
+
 class BoolConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         arg = space.c_int_w(w_obj)
@@ -74,6 +82,7 @@ def get_converter(space, name):
     #   3) accept const ref as by value
     #   4) accept ref as pointer
     #   5) generalized cases (covers basically all user classes)
+    #   6) void converter, which fails on use
 
     try:
         return _converters[name]
@@ -85,7 +94,10 @@ def get_converter(space, name):
     if compound == "*":
         return InstancePtrConverter(space, cpptype)
 
-    raise OperationError(space.w_TypeError, space.wrap("no clue what %s is" % name))
+    # return a void converter here, so that the class can be build even
+    # when some types are unknown; this overload will simply fail on use
+    return VoidConverter(space, name)
+
 
 _converters["bool"]                = BoolConverter()
 _converters["int"]                 = IntConverter()
