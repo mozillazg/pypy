@@ -1,11 +1,11 @@
 
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
-from pypy.interpreter.error import OperationError, wrap_oserror
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.module import Module
-from pypy.module.__builtin__ import importing
+from pypy.module.imp import importing
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rzipfile import RZipFile, BadZipfile
 import os
@@ -131,7 +131,7 @@ class W_ZipImporter(Wrappable):
     def _find_relative_path(self, filename):
         if filename.startswith(self.filename):
             filename = filename[len(self.filename):]
-        if filename.startswith(os.sep):
+        if filename.startswith(os.path.sep) or filename.startswith(ZIPSEP):
             filename = filename[1:]
         if ZIPSEP != os.path.sep:
             filename = filename.replace(os.path.sep, ZIPSEP)
@@ -146,12 +146,12 @@ class W_ZipImporter(Wrappable):
     def import_py_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.filename + os.path.sep + self.corr_zname(filename)
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
-        result = importing.load_source_module(space, w(modname), w_mod,
-                                            filename, buf, write_pyc=False)
-        return result
+        code_w = importing.parse_source_module(space, filename, buf)
+        importing.exec_code_module(space, w_mod, code_w)
+        return w_mod
 
     def _parse_mtime(self, space, filename):
         w = space.wrap
@@ -193,7 +193,7 @@ class W_ZipImporter(Wrappable):
                                        pkgpath)
         buf = buf[8:] # XXX ugly copy, should use sequential read instead
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.filename + os.path.sep + self.corr_zname(filename)
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_compiled_module(space, w(modname), w_mod,
@@ -223,11 +223,6 @@ class W_ZipImporter(Wrappable):
 
     def load_module(self, space, fullname):
         w = space.wrap
-        w_modules = space.sys.get('modules')
-        try:
-            return space.getitem(w_modules, w(fullname))
-        except OperationError, e:
-            pass
         filename = self.mangle(fullname)
         last_exc = None
         for compiled, is_package, ext in ENUMERATE_EXTS:
@@ -242,7 +237,7 @@ class W_ZipImporter(Wrappable):
                 pass
             else:
                 if is_package:
-                    pkgpath = self.name
+                    pkgpath = self.name + os.path.sep + filename
                 else:
                     pkgpath = None
                 try:
@@ -257,7 +252,7 @@ class W_ZipImporter(Wrappable):
                     w_mods = space.sys.get('modules')
                 space.call_method(w_mods, 'pop', w(fullname), space.w_None)
         if last_exc:
-            raise OperationError(self.w_ZipImportError, last_exc.w_value)
+            raise OperationError(self.w_ZipImportError, last_exc.get_w_value(space))
         # should never happen I think
         return space.w_None
     load_module.unwrap_spec = ['self', ObjSpace, str]
@@ -288,8 +283,8 @@ class W_ZipImporter(Wrappable):
                     w_code = space.builtin.call('compile', w_source,
                                                 w(filename + ext), w('exec'))
                     return w_code
-        raise OperationError(self.w_ZipImportError, space.wrap(
-            "Cannot find source or code for %s in %s" % (filename, self.name)))
+        raise operationerrfmt(self.w_ZipImportError,
+            "Cannot find source or code for %s in %s", filename, self.name)
     get_code.unwrap_spec = ['self', ObjSpace, str]
 
     def get_source(self, space, fullname):
@@ -304,8 +299,8 @@ class W_ZipImporter(Wrappable):
                     found = True
         if found:
             return space.w_None
-        raise OperationError(self.w_ZipImportError, space.wrap(
-            "Cannot find source for %s in %s" % (filename, self.name)))
+        raise operationerrfmt(self.w_ZipImportError,
+            "Cannot find source for %s in %s", filename, self.name)
     get_source.unwrap_spec = ['self', ObjSpace, str]
 
     def is_package(self, space, fullname):
@@ -313,8 +308,8 @@ class W_ZipImporter(Wrappable):
         for _, is_package, ext in ENUMERATE_EXTS:
             if self.have_modulefile(space, filename + ext):
                 return space.wrap(is_package)
-        raise OperationError(self.w_ZipImportError, space.wrap(
-            "Cannot find module %s in %s" % (filename, self.name)))
+        raise operationerrfmt(self.w_ZipImportError,
+            "Cannot find module %s in %s", filename, self.name)
     is_package.unwrap_spec = ['self', ObjSpace, str]
 
     def getarchive(space, self):
@@ -326,41 +321,44 @@ def descr_new_zipimporter(space, w_type, name):
     w_ZipImportError = space.getattr(space.getbuiltinmodule('zipimport'),
                                      w('ZipImportError'))
     ok = False
-    parts = name.split(os.path.sep)
+    parts_ends = [i for i in range(0, len(name))
+                    if name[i] == os.path.sep or name[i] == ZIPSEP]
+    parts_ends.append(len(name))
     filename = "" # make annotator happy
-    for i in range(1, len(parts) + 1):
-        filename = os.path.sep.join(parts[:i])
+    for i in parts_ends:
+        filename = name[:i]
         if not filename:
             filename = os.path.sep
         try:
             s = os.stat(filename)
         except OSError:
-            raise OperationError(w_ZipImportError, space.wrap(
-                "Cannot find name %s" % (filename,)))
+            raise operationerrfmt(w_ZipImportError,
+                "Cannot find name %s", filename)
         if not stat.S_ISDIR(s.st_mode):
             ok = True
             break
     if not ok:
-        raise OperationError(w_ZipImportError, space.wrap(
-            "Did not find %s to be a valid zippath" % (name,)))
+        raise operationerrfmt(w_ZipImportError,
+            "Did not find %s to be a valid zippath", name)
     try:
         w_result = zip_cache.get(filename)
         if w_result is None:
-            raise OperationError(w_ZipImportError, space.wrap(
+            raise operationerrfmt(w_ZipImportError,
                 "Cannot import %s from zipfile, recursion detected or"
-                "already tried and failed" % (name,)))
-        return w_result
+                "already tried and failed", name)
     except KeyError:
         zip_cache.cache[filename] = None
     try:
         zip_file = RZipFile(filename, 'r')
     except (BadZipfile, OSError):
-        raise OperationError(w_ZipImportError, space.wrap(
-            "%s seems not to be a zipfile" % (filename,)))
+        raise operationerrfmt(w_ZipImportError,
+            "%s seems not to be a zipfile", filename)
     zip_file.close()
     prefix = name[len(filename):]
-    if prefix.startswith(os.sep):
+    if prefix.startswith(os.path.sep) or prefix.startswith(ZIPSEP):
         prefix = prefix[1:]
+    if prefix and not prefix.endswith(ZIPSEP):
+        prefix += ZIPSEP
     w_result = space.wrap(W_ZipImporter(space, name, filename,
                                         zip_file.NameToInfo, prefix))
     zip_cache.set(filename, w_result)

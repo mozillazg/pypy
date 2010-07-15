@@ -1,12 +1,11 @@
-import sys
-import ctypes
-import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, compile
 from pypy.jit.backend.x86.assembler import Assembler386
 from pypy.jit.backend.x86.regalloc import FORCE_INDEX_OFS
+from pypy.jit.backend.x86.profagent import ProfileAgent
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 
 class CPU386(AbstractLLCPU):
@@ -16,20 +15,36 @@ class CPU386(AbstractLLCPU):
     BOOTSTRAP_TP = lltype.FuncType([], lltype.Signed)
     dont_keepalive_stuff = False # for tests
 
-    def __init__(self, rtyper, stats, translate_support_code=False,
+    def __init__(self, rtyper, stats, opts=None, translate_support_code=False,
                  gcdescr=None):
-        AbstractLLCPU.__init__(self, rtyper, stats, translate_support_code,
-                               gcdescr)
-        self._bootstrap_cache = {}
+        AbstractLLCPU.__init__(self, rtyper, stats, opts,
+                               translate_support_code, gcdescr)
+
+        profile_agent = ProfileAgent()
+        if rtyper is not None:
+            config = rtyper.annotator.translator.config
+            if config.translation.jit_profiler == "oprofile":
+                from pypy.jit.backend.x86 import oprofile
+                profile_agent = oprofile.OProfileAgent()
+
+        self.profile_agent = profile_agent
 
     def setup(self):
-        self.assembler = Assembler386(self, self.translate_support_code)
+        if self.opts is not None:
+            failargs_limit = self.opts.failargs_limit
+        else:
+            failargs_limit = 1000
+        self.assembler = Assembler386(self, self.translate_support_code,
+                                            failargs_limit)
 
     def get_on_leave_jitted_hook(self):
         return self.assembler.leave_jitted_hook
 
     def setup_once(self):
-        pass
+        self.profile_agent.startup()
+
+    def finish_once(self):
+        self.profile_agent.shutdown()
 
     def compile_loop(self, inputargs, operations, looptoken):
         self.assembler.assemble_loop(inputargs, operations, looptoken)
@@ -53,18 +68,19 @@ class CPU386(AbstractLLCPU):
         return self.assembler.fail_boxes_float.getitem(index)
 
     def get_latest_value_ref(self, index):
-        ptrvalue = self.assembler.fail_boxes_ptr.getitem(index)
-        # clear after reading
-        self.assembler.fail_boxes_ptr.setitem(index, lltype.nullptr(
-            llmemory.GCREF.TO))
-        return ptrvalue
+        return self.assembler.fail_boxes_ptr.getitem(index)
+
+    def get_latest_value_count(self):
+        return self.assembler.fail_boxes_count
+
+    def clear_latest_values(self, count):
+        setitem = self.assembler.fail_boxes_ptr.setitem
+        null = lltype.nullptr(llmemory.GCREF.TO)
+        for index in range(count):
+            setitem(index, null)
 
     def get_latest_force_token(self):
         return self.assembler.fail_ebp + FORCE_INDEX_OFS
-
-    def make_boxes_from_latest_values(self, faildescr):
-        return self.assembler.make_boxes_from_latest_values(
-            faildescr._x86_failure_recovery_bytecode)
 
     def execute_token(self, executable_token):
         addr = executable_token._x86_bootstrap_code
@@ -122,5 +138,18 @@ class CPU386_NO_SSE2(CPU386):
 
 CPU = CPU386
 
-import pypy.jit.metainterp.executor
-pypy.jit.metainterp.executor.make_execute_list(CPU)
+# silence warnings
+
+history.LoopToken._x86_param_depth = 0
+history.LoopToken._x86_arglocs = (None, None)
+history.LoopToken._x86_frame_depth = 0
+history.LoopToken._x86_bootstrap_code = 0
+history.LoopToken._x86_direct_bootstrap_code = 0
+history.LoopToken._x86_failure_recovery_bytecode = 0
+history.LoopToken._x86_loop_code = 0
+history.LoopToken._x86_current_depths = (0, 0)
+
+compile._DoneWithThisFrameDescr._x86_current_depths = (0, 0)
+compile._DoneWithThisFrameDescr._x86_failure_recovery_bytecode = 0
+compile._DoneWithThisFrameDescr._x86_adr_jump_offset = 0
+

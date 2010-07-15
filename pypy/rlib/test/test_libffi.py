@@ -1,15 +1,14 @@
 
-""" Tests of libffi wrappers and dl* friends
+""" Tests of libffi wrapper
 """
 
-from pypy.rpython.test.test_llinterp import interpret
 from pypy.translator.c.test.test_genc import compile
 from pypy.rlib.libffi import *
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.lltypesystem import rffi, lltype
-import os, sys
 import py
+import sys
 import time
 
 def setup_module(mod):
@@ -19,14 +18,10 @@ def setup_module(mod):
         ffistruct = globals()[name]
         rffi.cast(rffi.VOIDP, ffistruct)
 
-class TestDLOperations:
+class TestLibffi:
     def setup_method(self, meth):
         ALLOCATED.clear()
 
-    def test_dlopen(self):
-        py.test.raises(OSError, "dlopen(rffi.str2charp('xxxxxxxxxxxx'))")
-        assert dlopen(rffi.str2charp(get_libc_name()))
-        
     def get_libc(self):
         return CDLL(get_libc_name())
     
@@ -233,19 +228,27 @@ class TestDLOperations:
         del libm
         assert not ALLOCATED
 
-    def test_make_struct_fftiype(self):
-        tp = make_struct_ffitype(6, 2)
-        assert tp.c_type == FFI_TYPE_STRUCT
-        assert tp.c_size == 6
-        assert tp.c_alignment == 2
-        lltype.free(tp, flavor='raw')
+    def test_make_struct_ffitype_e(self):
+        tpe = make_struct_ffitype_e(16, 4, [ffi_type_pointer, ffi_type_uchar])
+        assert tpe.ffistruct.c_type == FFI_TYPE_STRUCT
+        assert tpe.ffistruct.c_size == 16
+        assert tpe.ffistruct.c_alignment == 4
+        assert tpe.ffistruct.c_elements[0] == ffi_type_pointer
+        assert tpe.ffistruct.c_elements[1] == ffi_type_uchar
+        assert not tpe.ffistruct.c_elements[2]
+        lltype.free(tpe, flavor='raw')
+
+    def test_nested_struct_elements(self):
+        tpe2 = make_struct_ffitype_e(16, 4, [ffi_type_pointer, ffi_type_uchar])
+        tp2 = tpe2.ffistruct
+        tpe = make_struct_ffitype_e(32, 4, [tp2, ffi_type_schar])
+        assert tpe.ffistruct.c_elements[0] == tp2
+        assert tpe.ffistruct.c_elements[1] == ffi_type_schar
+        assert not tpe.ffistruct.c_elements[2]
+        lltype.free(tpe, flavor='raw')
+        lltype.free(tpe2, flavor='raw')
 
     def test_struct_by_val(self):
-        import platform
-        if platform.machine() == 'x86_64':
-            py.test.skip("Segfaults on x86_64 because small structures "
-                         "may be passed in registers and "
-                         "c_elements must not be null")
         from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.translator.platform import platform
         from pypy.tool.udir import udir
@@ -277,9 +280,9 @@ class TestDLOperations:
         slong = cast_type_to_ffitype(rffi.LONG)
         size = slong.c_size*2
         alignment = slong.c_alignment
-        tp = make_struct_ffitype(size, alignment)
+        tpe = make_struct_ffitype_e(size, alignment, [slong, slong])
 
-        sum_x_y = lib.getrawpointer('sum_x_y', [tp], slong)
+        sum_x_y = lib.getrawpointer('sum_x_y', [tpe.ffistruct], slong)
 
         buffer = lltype.malloc(rffi.LONGP.TO, 3, flavor='raw')
         buffer[0] = 200
@@ -291,17 +294,12 @@ class TestDLOperations:
 
         lltype.free(buffer, flavor='raw')
         del sum_x_y
-        lltype.free(tp, flavor='raw')
+        lltype.free(tpe, flavor='raw')
         del lib
 
         assert not ALLOCATED
 
     def test_ret_struct_val(self):
-        import platform
-        if platform.machine() == 'x86_64':
-            py.test.skip("Segfaults on x86_64 because small structures "
-                         "may be passed in registers and "
-                         "c_elements must not be null")
         from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.translator.platform import platform
         from pypy.tool.udir import udir
@@ -337,10 +335,10 @@ class TestDLOperations:
 
         size = ffi_type_sshort.c_size*2
         alignment = ffi_type_sshort.c_alignment
-        tp = make_struct_ffitype(size, alignment)
+        tpe = make_struct_ffitype_e(size, alignment, [ffi_type_sshort]*2)
 
         give  = lib.getrawpointer('give', [ffi_type_sshort, ffi_type_sshort],
-                                  tp)
+                                  tpe.ffistruct)
         inbuffer = lltype.malloc(rffi.SHORTP.TO, 2, flavor='raw')
         inbuffer[0] = rffi.cast(rffi.SHORT, 40)
         inbuffer[1] = rffi.cast(rffi.SHORT, 72)
@@ -354,7 +352,7 @@ class TestDLOperations:
         assert outbuffer[0] == 40
         assert outbuffer[1] == 72
 
-        perturb  = lib.getrawpointer('perturb', [tp], tp)
+        perturb  = lib.getrawpointer('perturb', [tpe.ffistruct], tpe.ffistruct)
 
         inbuffer[0] = rffi.cast(rffi.SHORT, 7)
         inbuffer[1] = rffi.cast(rffi.SHORT, 11)
@@ -372,7 +370,7 @@ class TestDLOperations:
         lltype.free(inbuffer, flavor='raw')
         del give
         del perturb
-        lltype.free(tp, flavor='raw')
+        lltype.free(tpe, flavor='raw')
         del lib
 
         assert not ALLOCATED

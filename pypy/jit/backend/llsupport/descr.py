@@ -1,8 +1,11 @@
-from pypy.rpython.lltypesystem import lltype
-from pypy.jit.backend.llsupport import symbolic
+import py
+from pypy.rpython.lltypesystem import lltype, rffi, llmemory, rclass
+from pypy.jit.backend.llsupport import symbolic, support
 from pypy.jit.metainterp.history import AbstractDescr, getkind, BoxInt, BoxPtr
 from pypy.jit.metainterp.history import BasicFailDescr, LoopToken, BoxFloat
+from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.codewriter import heaptracker
 
 # The point of the class organization in this file is to make instances
 # as compact as possible.  This is done by not storing the field size or
@@ -11,18 +14,19 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 
 
 class GcCache(object):
-    def __init__(self, translate_support_code):
+    def __init__(self, translate_support_code, rtyper=None):
         self.translate_support_code = translate_support_code
+        self.rtyper = rtyper
         self._cache_size = {}
         self._cache_field = {}
         self._cache_array = {}
         self._cache_call = {}
 
     def init_size_descr(self, STRUCT, sizedescr):
-        pass
+        assert isinstance(STRUCT, lltype.GcStruct)
 
     def init_array_descr(self, ARRAY, arraydescr):
-        pass
+        assert isinstance(ARRAY, lltype.GcArray)
 
 
 # ____________________________________________________________
@@ -37,6 +41,10 @@ class SizeDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<SizeDescr %s>' % self.size
 
+class SizeDescrWithVTable(SizeDescr):
+    def as_vtable_size_descr(self):
+        return self
+
 BaseSizeDescr = SizeDescr
 
 def get_size_descr(gccache, STRUCT):
@@ -45,7 +53,10 @@ def get_size_descr(gccache, STRUCT):
         return cache[STRUCT]
     except KeyError:
         size = symbolic.get_size(STRUCT, gccache.translate_support_code)
-        sizedescr = SizeDescr(size)
+        if heaptracker.has_gcstruct_a_vtable(STRUCT):
+            sizedescr = SizeDescrWithVTable(size)
+        else:
+            sizedescr = SizeDescr(size)
         gccache.init_size_descr(STRUCT, sizedescr)
         cache[STRUCT] = sizedescr
         return sizedescr
@@ -140,7 +151,6 @@ class BaseArrayDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<%s>' % self._clsname
 
-
 class NonGcPtrArrayDescr(BaseArrayDescr):
     _clsname = 'NonGcPtrArrayDescr'
     def get_item_size(self, translate_support_code):
@@ -150,9 +160,34 @@ class GcPtrArrayDescr(NonGcPtrArrayDescr):
     _clsname = 'GcPtrArrayDescr'
     _is_array_of_pointers = True
 
+_CA = rffi.CArray(lltype.Signed)
+
+class BaseArrayNoLengthDescr(BaseArrayDescr):
+    def get_base_size(self, translate_support_code):
+        basesize, _, _ = symbolic.get_array_token(_CA, translate_support_code)
+        return basesize
+
+    def get_ofs_length(self, translate_support_code):
+        _, _, ofslength = symbolic.get_array_token(_CA, translate_support_code)
+        return ofslength
+
+class NonGcPtrArrayNoLengthDescr(BaseArrayNoLengthDescr):
+    _clsname = 'NonGcPtrArrayNoLengthDescr'
+    def get_item_size(self, translate_support_code):
+        return symbolic.get_size_of_ptr(translate_support_code)
+
+class GcPtrArrayNoLengthDescr(NonGcPtrArrayNoLengthDescr):
+    _clsname = 'GcPtrArrayNoLengthDescr'
+    _is_array_of_pointers = True
+
 def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array', 'get_item_size',
+                         '_is_array_of_floats')
+
+def getArrayNoLengthDescrClass(ARRAY):
+    return getDescrClass(ARRAY.OF, BaseArrayNoLengthDescr, GcPtrArrayNoLengthDescr,
+                         NonGcPtrArrayNoLengthDescr, 'ArrayNoLength', 'get_item_size',
                          '_is_array_of_floats')
 
 def get_array_descr(gccache, ARRAY):
@@ -160,14 +195,18 @@ def get_array_descr(gccache, ARRAY):
     try:
         return cache[ARRAY]
     except KeyError:
-        arraydescr = getArrayDescrClass(ARRAY)()
+        if ARRAY._hints.get('nolength', False):
+            arraydescr = getArrayNoLengthDescrClass(ARRAY)()
+        else:
+            arraydescr = getArrayDescrClass(ARRAY)()
         # verify basic assumption that all arrays' basesize and ofslength
         # are equal
         basesize, itemsize, ofslength = symbolic.get_array_token(ARRAY, False)
         assert basesize == arraydescr.get_base_size(False)
         assert itemsize == arraydescr.get_item_size(False)
         assert ofslength == arraydescr.get_ofs_length(False)
-        gccache.init_array_descr(ARRAY, arraydescr)
+        if isinstance(ARRAY, lltype.GcArray):
+            gccache.init_array_descr(ARRAY, arraydescr)
         cache[ARRAY] = arraydescr
         return arraydescr
 
@@ -187,82 +226,115 @@ class BaseCallDescr(AbstractDescr):
     def get_extra_info(self):
         return self.extrainfo
 
-    def instantiate_arg_classes(self):
-        result = []
-        for c in self.arg_classes:
-            if   c == 'i': box = BoxInt()
-            elif c == 'f': box = BoxFloat()
-            else:          box = BoxPtr()
-            result.append(box)
-        return result
+    def get_arg_types(self):
+        return self.arg_classes
 
-    _returns_a_pointer = False        # unless overridden by GcPtrCallDescr
-    _returns_a_float   = False        # unless overridden by FloatCallDescr
-
-    def returns_a_pointer(self):
-        return self._returns_a_pointer
-
-    def returns_a_float(self):
-        return self._returns_a_float
+    def get_return_type(self):
+        return self._return_type
 
     def get_result_size(self, translate_support_code):
         raise NotImplementedError
 
-    def get_token_for_call(self, cpu):
-        if self.loop_token is not None:
-            return self.loop_token
-        args = [BoxInt()] + self.instantiate_arg_classes()
-        if self.get_result_size(cpu.translate_support_code) == 0:
-            result = None
-            result_list = []
+    def create_call_stub(self, rtyper, RESULT):
+        def process(c):
+            arg = 'args_%s[%d]' % (c, seen[c])
+            seen[c] += 1
+            return arg
+
+        def TYPE(arg):
+            if arg == 'i':
+                return lltype.Signed
+            elif arg == 'f':
+                return lltype.Float
+            elif arg == 'r':
+                return llmemory.GCREF
+            elif arg == 'v':
+                return lltype.Void
+
+        seen = {'i': 0, 'r': 0, 'f': 0}
+        args = ", ".join([process(c) for c in self.arg_classes])
+
+        if self.get_return_type() == history.INT:
+            result = 'rffi.cast(lltype.Signed, res)'
+        elif self.get_return_type() == history.REF:
+            result = 'lltype.cast_opaque_ptr(llmemory.GCREF, res)'
+        elif self.get_return_type() == history.FLOAT:
+            result = 'res'
+        elif self.get_return_type() == history.VOID:
+            result = 'None'
         else:
-            if self.returns_a_pointer():
-                result = BoxPtr()
-            elif self.returns_a_float():
-                result = BoxFloat()
-            else:
-                result = BoxInt()
-            result_list = [result]
-        operations = [
-            ResOperation(rop.CALL, args[:], result, self),
-            ResOperation(rop.GUARD_NO_EXCEPTION, [], None,
-                         descr=BasicFailDescr()),
-            ResOperation(rop.FINISH, result_list, None,
-                         descr=BasicFailDescr())]
-        operations[1].fail_args = []
-        loop_token = LoopToken()
-        # note: the 'args' that we pass below is not the same object as the
-        # 'args[:]' that was passed above to ResOperation, because we want
-        # the argument to ResOperation to be non-resizable, but the argument
-        # to compile_loop to be resizable.
-        cpu.compile_loop(args, operations, loop_token)
-        self.loop_token = loop_token
-        return loop_token
+            assert 0
+        source = py.code.Source("""
+        def call_stub(func, args_i, args_r, args_f):
+            fnptr = rffi.cast(lltype.Ptr(FUNC), func)
+            res = support.maybe_on_top_of_llinterp(rtyper, fnptr)(%(args)s)
+            return %(result)s
+        """ % locals())
+        ARGS = [TYPE(arg) for arg in self.arg_classes]
+        FUNC = lltype.FuncType(ARGS, RESULT)
+        d = locals().copy()
+        d.update(globals())
+        exec source.compile() in d
+        self.call_stub = d['call_stub']
+
+    def verify_types(self, args_i, args_r, args_f, return_type):
+        assert self._return_type == return_type
+        assert self.arg_classes.count('i') == len(args_i or ())
+        assert self.arg_classes.count('r') == len(args_r or ())
+        assert self.arg_classes.count('f') == len(args_f or ())
 
     def repr_of_descr(self):
         return '<%s>' % self._clsname
 
 
-class NonGcPtrCallDescr(BaseCallDescr):
+class BaseIntCallDescr(BaseCallDescr):
+    # Base class of the various subclasses of descrs corresponding to
+    # calls having a return kind of 'int' (including non-gc pointers).
+    # The inheritance hierarchy is a bit different than with other Descr
+    # classes because of the 'call_stub' attribute, which is of type
+    #
+    #     lambda func, args_i, args_r, args_f --> int/ref/float/void
+    #
+    # The purpose of BaseIntCallDescr is to be the parent of all classes
+    # in which 'call_stub' has a return kind of 'int'.
+    _return_type = history.INT
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: 0)
+
+class NonGcPtrCallDescr(BaseIntCallDescr):
     _clsname = 'NonGcPtrCallDescr'
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
-class GcPtrCallDescr(NonGcPtrCallDescr):
+class GcPtrCallDescr(BaseCallDescr):
     _clsname = 'GcPtrCallDescr'
-    _returns_a_pointer = True
+    _return_type = history.REF
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f:
+                             lltype.nullptr(llmemory.GCREF.TO))
+    def get_result_size(self, translate_support_code):
+        return symbolic.get_size_of_ptr(translate_support_code)
 
-class VoidCallDescr(NonGcPtrCallDescr):
+class FloatCallDescr(BaseCallDescr):
+    _clsname = 'FloatCallDescr'
+    _return_type = history.FLOAT
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: 0.0)
+    def get_result_size(self, translate_support_code):
+        return symbolic.get_size(lltype.Float, translate_support_code)
+
+class VoidCallDescr(BaseCallDescr):
     _clsname = 'VoidCallDescr'
+    _return_type = history.VOID
+    call_stub = staticmethod(lambda func, args_i, args_r, args_f: None)
     def get_result_size(self, translate_support_code):
         return 0
 
 def getCallDescrClass(RESULT):
     if RESULT is lltype.Void:
         return VoidCallDescr
-    return getDescrClass(RESULT, BaseCallDescr, GcPtrCallDescr,
+    if RESULT is lltype.Float:
+        return FloatCallDescr
+    return getDescrClass(RESULT, BaseIntCallDescr, GcPtrCallDescr,
                          NonGcPtrCallDescr, 'Call', 'get_result_size',
-                         '_returns_a_float')
+                         Ellipsis)  # <= floatattrname should not be used here
 
 def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
     arg_classes = []
@@ -281,6 +353,7 @@ def get_call_descr(gccache, ARGS, RESULT, extrainfo=None):
         return cache[key]
     except KeyError:
         calldescr = cls(arg_classes, extrainfo)
+        calldescr.create_call_stub(gccache.rtyper, RESULT)
         cache[key] = calldescr
         return calldescr
 

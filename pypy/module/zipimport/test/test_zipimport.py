@@ -4,7 +4,7 @@ import marshal
 import py
 import time
 import struct
-from pypy.module.__builtin__.importing import get_pyc_magic, _w_long
+from pypy.module.imp.importing import get_pyc_magic, _w_long
 from StringIO import StringIO
 
 from pypy.tool.udir import udir
@@ -114,9 +114,21 @@ class AppTestZipimport:
         from zipimport import _zip_directory_cache, zipimporter
         new_importer = zipimporter(self.zipfile)
         try:
-            assert zipimporter(self.zipfile) is new_importer
+            assert zipimporter(self.zipfile) is not new_importer
         finally:
             del _zip_directory_cache[self.zipfile]
+
+    def test_cache_subdir(self):
+        self.writefile(self, 'x.py', '')
+        self.writefile(self, 'sub/__init__.py', '')
+        self.writefile(self, 'sub/yy.py', '')
+        from zipimport import _zip_directory_cache, zipimporter
+        sub_importer = zipimporter(self.zipfile + '/sub')
+        main_importer = zipimporter(self.zipfile)
+
+        assert main_importer is not sub_importer
+        assert main_importer.prefix == ""
+        assert sub_importer.prefix == "sub/"
 
     def test_good_bad_arguments(self):
         from zipimport import zipimporter
@@ -193,16 +205,49 @@ class AppTestZipimport:
         import zipimport
         z = zipimport.zipimporter(self.zipfile)
         sys.modules['uuu'] = lambda x : x + 1
-        mod = z.load_module('uuu')
-        assert mod(3) == 4
+        raises(ImportError, z.load_module, 'uuu')
 
     def test_package(self):
         import os, sys
         self.writefile(self, "xxuuu/__init__.py", "")
         self.writefile(self, "xxuuu/yy.py", "def f(x): return x")
         mod = __import__("xxuuu", globals(), locals(), ['yy'])
-        assert mod.__path__
+        assert mod.__path__ == [self.zipfile + os.path.sep + "xxuuu"]
+        assert mod.__file__ == (self.zipfile + os.path.sep
+                                + "xxuuu" + os.path.sep
+                                + "__init__.py")
         assert mod.yy.f(3) == 3
+
+    def test_package_bug(self):
+        import os, sys
+        import new
+        mod = new.module('xxuuv')
+        mod.__path__ = [self.zipfile + '/xxuuv']
+        sys.modules['xxuuv'] = mod
+        #
+        self.writefile(self, "xxuuv/__init__.py", "")
+        self.writefile(self, "xxuuv/yy.py", "def f(x): return x")
+        mod = __import__("xxuuv.yy", globals(), locals(), ['__doc__'])
+        assert mod.__file__ == (self.zipfile + os.path.sep
+                                + "xxuuv" + os.path.sep
+                                + "yy.py")
+        assert mod.f(3) == 3
+
+    def test_pyc_in_package(self):
+        import os, sys
+        import new
+        mod = new.module('xxuuw')
+        mod.__path__ = [self.zipfile + '/xxuuw']
+        sys.modules['xxuuw'] = mod
+        #
+        self.writefile(self, "xxuuw/__init__.py", "")
+        self.writefile(self, "xxuuw/zz.pyc", self.test_pyc)
+        mod = __import__("xxuuw.zz", globals(), locals(), ['__doc__'])
+        assert mod.__file__ == (self.zipfile + os.path.sep
+                                + "xxuuw" + os.path.sep
+                                + "zz.pyc")
+        assert mod.get_file() == mod.__file__
+        assert mod.get_name() == mod.__name__
 
     def test_functions(self):
         import os
@@ -239,10 +284,11 @@ class AppTestZipimport:
         # value.  Not sure why it doesn't the assertion uses import.archive
         # directly. -exarkun
         archive = importer.archive
+        realprefix = importer.prefix
         allbutlast = self.zipfile.split(os.path.sep)[:-1]
-        prefix = 'directory'
+        prefix = 'directory/'
         assert archive == self.zipfile
-        assert importer.prefix == prefix
+        assert realprefix == prefix
 
     def test_zip_directory_cache(self):
         """ Check full dictionary interface
@@ -254,6 +300,11 @@ class AppTestZipimport:
         importer = zipimport.zipimporter(self.zipfile + "/directory")
         l = [i for i in zipimport._zip_directory_cache]
         assert len(l)
+
+    def test_path_hooks(self):
+        import sys
+        import zipimport
+        assert sys.path_hooks.count(zipimport.zipimporter) == 1
 
 class AppTestZipimportDeflated(AppTestZipimport):
     compression = ZIP_DEFLATED

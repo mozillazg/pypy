@@ -1,3 +1,4 @@
+import py
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.translator.c.test import test_typed
 
@@ -714,9 +715,12 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         yield self._test_size_limit, False
 
     def _test_size_limit(self, toobig):
+        import sys
         from pypy.rpython.lltypesystem import llgroup
         from pypy.rpython.lltypesystem.lloperation import llop
         from pypy.translator.platform import CompilationError
+        if toobig and sys.maxint > 2147483647:
+            py.test.skip("not easy to test groups too big on 64-bit platforms")
         grp = llgroup.group("big")
         S1 = Struct('S1', ('x', Signed), ('y', Signed),
                           ('z', Signed), ('u', Signed),
@@ -728,14 +732,17 @@ class TestLowLevelType(test_typed.CompilationTestCase):
                           ('z4', Signed), ('u4', Signed))
         goffsets = []
         for i in range(4096 + toobig):
-            goffsets.append(grp.add_member(malloc(S1, immortal=True)))
+            ofs = grp.add_member(malloc(S1, immortal=True))
+            goffsets.append(llgroup.CombinedSymbolic(ofs, 0))
         grpptr = grp._as_ptr()
         def f(n):
-            p = llop.get_group_member(Ptr(S1), grpptr, goffsets[n])
+            o = llop.extract_ushort(llgroup.HALFWORD, goffsets[n])
+            p = llop.get_group_member(Ptr(S1), grpptr, o)
             p.x = 5
             for i in range(len(goffsets)):
                 if i != n:
-                    q = llop.get_group_member(Ptr(S1), grpptr, goffsets[i])
+                    o = llop.extract_ushort(llgroup.HALFWORD, goffsets[i])
+                    q = llop.get_group_member(Ptr(S1), grpptr, o)
                     q.x = 666
             return p.x
         if toobig:
@@ -775,3 +782,48 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn = self.getcompiled(f, [])
         res = fn()
         assert res == 42
+
+    def test_padding_in_prebuilt_struct(self):
+        from pypy.rpython.lltypesystem import rffi
+        from pypy.rpython.tool import rffi_platform
+        eci = rffi_platform.eci_from_header("""
+            typedef struct {
+                char c1;        /* followed by one byte of padding */
+                short s1;
+                char c2;        /* followed by 3 bytes of padding */
+                int i2;
+                char c3;        /* followed by 3 or 7 bytes of padding */
+                long l3;
+                char c4;
+            } foobar_t;
+        """)
+        class CConfig:
+            _compilation_info_ = eci
+            STRUCT = rffi_platform.Struct("foobar_t",
+                                          [("c1", Signed),
+                                           ("s1", Signed),
+                                           ("l3", Signed)])
+        S = rffi_platform.configure(CConfig)['STRUCT']
+        assert 'get_padding_drop' in S._hints
+        s1 = malloc(S, immortal=True)
+        s1.c_c1 = rffi.cast(S.c_c1, -12)
+        s1.c_s1 = rffi.cast(S.c_s1, -7843)
+        s1.c_l3 = -98765432
+        s2 = malloc(S, immortal=True)
+        s2.c_c1 = rffi.cast(S.c_c1, -123)
+        s2.c_s1 = rffi.cast(S.c_s1, -789)
+        s2.c_l3 = -9999999
+        #
+        def f(n):
+            if n > 5:
+                s = s1
+            else:
+                s = s2
+            return s.c_l3
+        #
+        self.include_also_eci = eci
+        fn = self.getcompiled(f, [int])
+        res = fn(10)
+        assert res == -98765432
+        res = fn(1)
+        assert res == -9999999

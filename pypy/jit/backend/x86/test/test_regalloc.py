@@ -3,13 +3,13 @@
 """
 
 import py
-from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
+from pypy.jit.metainterp.history import BoxInt, ConstInt,\
      BoxPtr, ConstPtr, LoopToken, BasicFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager,\
-     BASE_CONSTANT_SIZE
+     FloatConstants
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
@@ -28,6 +28,7 @@ class MockGcDescr(GcCache):
 
 class MockAssembler(object):
     gcrefs = None
+    _float_constants = None
 
     def __init__(self, cpu=None, gc_ll_descr=None):
         self.movs = []
@@ -210,10 +211,9 @@ class TestRegallocSimple(BaseTestRegalloc):
         '''
         S = lltype.GcStruct('S')
         ptr = lltype.malloc(S)
+        self.cpu.clear_latest_values(2)
         self.interpret(ops, [0, ptr])
         assert self.getptr(0, lltype.Ptr(S)) == ptr
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(0)
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(1)
 
     def test_exception_bridge_no_exception(self):
         ops = '''
@@ -503,6 +503,7 @@ class TestRegallocFloats(BaseTestRegalloc):
 
     def test_float_overflow_const_list(self):
         ops = ['[f0]']
+        BASE_CONSTANT_SIZE = FloatConstants.BASE_CONSTANT_SIZE
         for i in range(BASE_CONSTANT_SIZE * 2):
             ops.append('f%d = float_add(f%d, 3.5)' % (i + 1, i))
         ops.append('finish(f%d)' % (BASE_CONSTANT_SIZE * 2))
@@ -520,18 +521,20 @@ class TestRegallocFloats(BaseTestRegalloc):
         assert self.getint(0) == 0
 
     def test_bug_float_is_true_stack(self):
+        # NB. float_is_true no longer exists.  Unsure if keeping this test
+        # makes sense any more.
         ops = '''
         [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9]
-        i0 = float_is_true(f0)
-        i1 = float_is_true(f1)
-        i2 = float_is_true(f2)
-        i3 = float_is_true(f3)
-        i4 = float_is_true(f4)
-        i5 = float_is_true(f5)
-        i6 = float_is_true(f6)
-        i7 = float_is_true(f7)
-        i8 = float_is_true(f8)
-        i9 = float_is_true(f9)
+        i0 = float_ne(f0, 0.0)
+        i1 = float_ne(f1, 0.0)
+        i2 = float_ne(f2, 0.0)
+        i3 = float_ne(f3, 0.0)
+        i4 = float_ne(f4, 0.0)
+        i5 = float_ne(f5, 0.0)
+        i6 = float_ne(f6, 0.0)
+        i7 = float_ne(f7, 0.0)
+        i8 = float_ne(f8, 0.0)
+        i9 = float_ne(f9, 0.0)
         finish(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9)
         '''
         loop = self.interpret(ops, [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9])

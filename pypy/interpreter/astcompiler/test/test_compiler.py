@@ -22,11 +22,15 @@ class TestCompiler:
     """
 
     def run(self, source):
+        import sys
         source = str(py.code.Source(source))
         space = self.space
         code = compile_with_astcompiler(source, 'exec', space)
-        print
-        code.dump()
+        # 2.7 bytecode is too different, the standard `dis` module crashes
+        # when trying to display pypy (2.5-like) bytecode.
+        if sys.version_info < (2, 7):
+            print
+            code.dump()
         w_dict = space.newdict()
         code.exec_code(space, w_dict, w_dict)
         return w_dict
@@ -39,7 +43,12 @@ class TestCompiler:
         pyco_expr = PyCode._from_code(space, co_expr)
         w_res = pyco_expr.exec_code(space, w_dict, w_dict)
         res = space.str_w(space.repr(w_res))
-        assert res == repr(expected)
+        if not isinstance(expected, float):
+            assert res == repr(expected)
+        else:
+            # Float representation can vary a bit between interpreter
+            # versions, compare the numbers instead.
+            assert eval(res) == expected
 
     def simple_test(self, source, evalexpr, expected):
         w_g = self.run(source)
@@ -53,7 +62,7 @@ class TestCompiler:
     if x:
 %s        return 1
     else:
-        return 0""" % ("        y += 1\n" * 9000,)
+        return 0""" % ("        y += 1\n" * 6700,)
         yield self.st, func, "f(1)", 1
         yield self.st, func, "f(0)", 0
 
@@ -317,6 +326,9 @@ class TestCompiler:
         for source, expected in [
             ('''def foo(): return 1''',      None),
             ('''class foo: pass''',          None),
+            ('''foo = lambda: 4''',          None),
+            ('''foo = lambda: "foo"''',      None),
+            ('''def foo(): 4''',             None),
             ('''class foo: "foo"''',         "foo"),
             ('''def foo():
                     """foo docstring"""

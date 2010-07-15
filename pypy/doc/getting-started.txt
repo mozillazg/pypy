@@ -14,10 +14,9 @@ PyPy is an implementation of the Python_ programming language written in
 Python itself, flexible and easy to experiment with.
 We target a large variety of platforms, small and large, by providing a
 compiler toolsuite that can produce custom Python versions.  Platform, memory
-and threading models are aspects of the translation process - as
-opposed to encoding low level details into the language implementation itself.
-Eventually, dynamic optimization techniques - implemented as another
-translation aspect - should become robust against language changes. `more...`_
+and threading models, as well as the JIT compiler itself, are aspects of the
+translation process - as opposed to encoding low level details into the
+language implementation itself. `more...`_
 
 .. _Python: http://docs.python.org/ref
 .. _`more...`: architecture.html
@@ -35,22 +34,31 @@ Svn-check out
 Before you can play with PyPy, you will need to obtain a copy
 of the sources.  This can be done either by `downloading them
 from the download page`_ or by checking them out from the
-repository using subversion.  We suggest using subversion as it
-offers access to the most recent versions.
+repository using subversion.  We suggest using subversion if one
+wants to access the current development.
 
 .. _`downloading them from the download page`: download.html
 
 If you choose to use subversion, you must issue the following command on your
 command line, DOS box, or terminal::
 
-    svn co http://codespeak.net/svn/pypy/dist pypy-dist
+    svn co http://codespeak.net/svn/pypy/trunk pypy-trunk
 
-This will check out the most recent stable release from subversion and
-place it into a directory named ``pypy-dist``, and will get you the PyPy
-source in ``pypy-dist/pypy`` and documentation files in
-``pypy-dist/pypy/doc``.  If you would prefer to check out the "cutting edge"
-version of PyPy - which may not always be stable! - then check out
-from ``http://codespeak.net/svn/pypy/trunk`` intead.
+This will check out the subversion head and place it into a directory
+named ``pypy-trunk``, and will get you the PyPy source in
+``pypy-trunk/pypy`` and documentation files in ``pypy-trunk/pypy/doc``.
+We try to ensure that the head is always stable, but it might
+occasionally be broken.  You may want to check out `our nightly tests:`_
+find a revision (5-digit number) that passed at least the
+``{own}`` and ``{applevel}`` tests (corresponding to a ``+`` sign on the
+line ``success``) and then check out using::
+
+    svn co -rXXXXX http://codespeak.net/svn/pypy/trunk pypy-trunk
+
+where XXXXX is the revision number.
+
+.. _`our nightly tests:`: http://codespeak.net:8099/summary?branch=<trunk>
+
 
 Where to go from here
 ----------------------

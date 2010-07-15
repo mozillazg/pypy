@@ -29,10 +29,12 @@ def main(options, args):
             if not b.check():
                 print "can't run %s benchmark for some reason"%(b.name,)
             else:
+                if int(options.sizefactor) > 1:
+                    b = b * int(options.sizefactor)
                 benchmarks.append(b)
 
     exes = get_executables(args)
-    pythons = 'python2.5 python2.4 python2.3'.split()
+    pythons = 'python2.6 python2.5 python2.4'.split()
     full_pythons = []
     for python in pythons:
         full_python = py.path.local.sysfind(python)
@@ -42,15 +44,26 @@ def main(options, args):
     sys.stdout.flush()
 
     refs = {}
+    final_error_count = 0
 
     if not options.nocpython:
         exes = full_pythons + exes
 
-    for i in range(int(options.runcount)) + [None]:
+    for i in range(int(options.runcount)) or [None]:
         if i is not None:
             for exe in exes:
                 for b in benchmarks:
-                    benchmark_result.result(exe, allowcreate=True).run_benchmark(b, verbose=True)
+                    br = benchmark_result.result(exe, allowcreate=True)
+                    result = br.run_benchmark(b, verbose=options.verbose)
+                    if not result:
+                        final_error_count += 1
+
+        if options.relto:
+            relto = options.relto
+        else:
+            relto = full_pythons[0]
+        if relto not in benchmark_result.benchmarks:
+            continue
 
         pickle.dump(benchmark_result, open(options.picklefile, 'wb'))
 
@@ -61,10 +74,6 @@ def main(options, args):
             stats = ['exe']
         for b in benchmarks:
             stats.append('bench:'+b.name)
-        if options.relto:
-            relto = options.relto
-        else:
-            relto = full_pythons[0]
         kwds = {'relto': relto,
                 'filteron' :lambda r: r.exe_name in exes,
                 }
@@ -77,6 +86,10 @@ def main(options, args):
                                                     **kwds):
                 print row
             print
+
+    if final_error_count:
+        raise SystemExit("%d benchmark run(s) failed (see -FAILED- above)"
+                         % final_error_count)
 
 if __name__ == '__main__':
     from optparse import OptionParser
@@ -105,6 +118,10 @@ if __name__ == '__main__':
     parser.add_option(
         '--no-cpython', action='store_true', dest='nocpython',
         default=None,
+        )
+    parser.add_option(
+        '--size-factor', dest='sizefactor',
+        default='1',
         )
     options, args = parser.parse_args(sys.argv[1:])
     main(options, args)

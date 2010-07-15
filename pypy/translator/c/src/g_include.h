@@ -11,16 +11,16 @@
 #  include "marshal.h"
 #  include "eval.h"
 #else
-#  include "src/standalone.h"
+#  include <stdlib.h>
+#  include <assert.h>
+#  include <math.h>
 #endif
 
 #include "src/mem.h"
 #include "src/exception.h"
 #include "src/support.h"
-#ifndef AVR
-#include "src/trace.h"
-#else
-    #define PY_LONG_LONG long long
+#ifndef PY_LONG_LONG
+#define PY_LONG_LONG long long
 #endif
 
 #ifndef PYPY_STANDALONE
@@ -51,13 +51,11 @@
 /*** modules ***/
 #ifdef HAVE_RTYPER      /* only if we have an RTyper */
 #  include "src/rtyper.h"
-#  include "src/debug.h"
+#  include "src/debug_print.h"
+#  include "src/debug_traceback.h"
 #ifndef AVR
 #  include "src/ll_os.h"
 #  include "src/ll_strtod.h"
-#  ifdef RPyExc_thread_error
-#    include "src/ll_thread.h"
-#  endif
 #endif
 #endif
 

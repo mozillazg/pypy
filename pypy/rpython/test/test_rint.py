@@ -1,3 +1,4 @@
+import py
 import sys, operator
 from pypy.translator.translator import TranslationContext
 from pypy.annotation import model as annmodel
@@ -105,6 +106,16 @@ class BaseTestRint(BaseRtypingTest):
         res = self.ll_to_string(res)
         assert res == '-' + oct(sys.maxint+1).replace('L', '').replace('l', '')
 
+    def test_str_of_longlong(self):
+        def f(i):
+            return str(i)
+
+        res = self.interpret(f, [int64(0)])
+        assert self.ll_to_string(res) == '0'
+
+        res = self.interpret(f, [int64(413974738222117)])
+        assert self.ll_to_string(res) == '413974738222117'
+
     def test_unsigned(self):
         bigvalue = sys.maxint + 17
         def dummy(i):
@@ -124,7 +135,7 @@ class BaseTestRint(BaseRtypingTest):
         f._annspecialcase_ = "specialize:argtype(0)"
         def g(n):
             if n > 0:
-                return f(r_longlong(0))
+                return f(int64(0))
             else:
                 return f(0)
         res = self.interpret(g, [0])
@@ -136,7 +147,7 @@ class BaseTestRint(BaseRtypingTest):
     def test_downcast_int(self):
         def f(i):
             return int(i)
-        res = self.interpret(f, [r_longlong(0)])
+        res = self.interpret(f, [int64(0)])
         assert res == 0
 
     def test_isinstance_vs_int_types(self):
@@ -158,7 +169,6 @@ class BaseTestRint(BaseRtypingTest):
         assert res == 0
 
     def test_truediv(self):
-        import operator
         def f(n, m):
             return operator.truediv(n, m)
         res = self.interpret(f, [20, 4])

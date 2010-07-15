@@ -19,6 +19,14 @@ class Entry(ExtRegistryEntry):
         hop.exception_cannot_occur()
         hop.genop('debug_assert', vlist)
 
+def fatalerror(msg, traceback=False):
+    from pypy.rpython.lltypesystem import lltype
+    from pypy.rpython.lltypesystem.lloperation import llop
+    if traceback:
+        llop.debug_print_traceback(lltype.Void)
+    llop.debug_fatalerror(lltype.Void, msg)
+fatalerror._dont_inline_ = True
+
 
 class DebugLog(list):
     def debug_print(self, *args):
@@ -242,3 +250,16 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         return hop.inputarg(hop.args_r[0], arg=0)
+
+
+class IntegerCanBeNegative(Exception):
+    pass
+
+def _check_nonneg(ann, bk):
+    from pypy.annotation.model import SomeInteger
+    s_nonneg = SomeInteger(nonneg=True)
+    if not s_nonneg.contains(ann):
+        raise IntegerCanBeNegative
+
+def check_nonneg(x):
+    check_annotation(x, _check_nonneg)

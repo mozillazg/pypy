@@ -14,7 +14,7 @@ from pypy.rlib.rarithmetic import intmask
 # * THREE_VERSIONS_OF_CORE=False: there is only one copy of the code,
 #   at the cost of an indirect method call to fetch each character.
 
-THREE_VERSIONS_OF_CORE = False
+THREE_VERSIONS_OF_CORE = True
 
 
 #### Constants and exposed functions
@@ -90,6 +90,11 @@ class W_State(Wrappable):
 
     def w_reset(self):
         self.reset()
+
+    def create_regs(self, group_count):
+        """ Purely abstract method
+        """
+        raise NotImplementedError
 
     def w_create_regs(self, group_count):
         """Creates a tuple of index pairs representing matched groups, a format
@@ -172,10 +177,20 @@ def w_search(space, w_state, w_pattern_codes):
     state = space.interp_w(W_State, w_state)
     pattern_codes = [intmask(space.uint_w(code)) for code
                                     in space.unpackiterable(w_pattern_codes)]
-    return space.newbool(state.search(pattern_codes))
+    try:
+        res = state.search(pattern_codes)
+    except RuntimeError:
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap("Internal re error"))
+    return space.newbool(res)
 
 def w_match(space, w_state, w_pattern_codes):
     state = space.interp_w(W_State, w_state)
     pattern_codes = [intmask(space.uint_w(code)) for code
                                     in space.unpackiterable(w_pattern_codes)]
-    return space.newbool(state.match(pattern_codes))
+    try:
+        res = state.match(pattern_codes)
+    except RuntimeError:
+        raise OperationError(space.w_RuntimeError,
+                             space.wrap("Internal re error"))
+    return space.newbool(res)

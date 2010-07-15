@@ -88,31 +88,17 @@ class RegisterOs(BaseLazyRegistering):
     def __init__(self):
         self.configure(CConfig)
 
-        # on some platforms, e.g. OS X Leopard, the following constants which
-        # may be defined in pyconfig.h triggers "legacy" behaviour for functions
-        # like setpgrp():
-        #
-        #   _POSIX_C_SOURCE 200112L
-        #   _XOPEN_SOURCE 600
-        #   _DARWIN_C_SOURCE 1
-        #
-        # since the translation currently includes pyconfig.h, the checkcompiles
-        # call below include the pyconfig.h file so that the same behaviour is
-        # present in both the check and the final translation...
-
         if hasattr(os, 'getpgrp'):
             self.GETPGRP_HAVE_ARG = platform.checkcompiles(
                 "getpgrp(0)",
-                '#include "pyconfig.h"\n#include <unistd.h>',
-                [platform.get_python_include_dir()]
-                )
+                '#include <unistd.h>',
+                [])
 
         if hasattr(os, 'setpgrp'):
             self.SETPGRP_HAVE_ARG = platform.checkcompiles(
                 "setpgrp(0,0)",
-                '#include "pyconfig.h"\n#include <unistd.h>',
-                [platform.get_python_include_dir()]
-                )
+                '#include <unistd.h>',
+                [])
 
         # we need an indirection via c functions to get macro calls working on llvm XXX still?
         if hasattr(os, 'WCOREDUMP'):
@@ -1343,7 +1329,7 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int], int, llimpl=umask_llimpl,
                       export_name="ll_os.ll_os_umask")
 
-    @registering_if(os, 'kill')
+    @registering_if(os, 'kill', sys.platform != 'win32')
     def register_os_kill(self):
         os_kill = self.llexternal('kill', [rffi.PID_T, rffi.INT],
                                   rffi.INT)
@@ -1399,6 +1385,30 @@ class RegisterOs(BaseLazyRegistering):
 
         return extdef([], int, llimpl=fork_llimpl,
                       export_name="ll_os.ll_os_fork")
+
+    @registering_if(os, 'openpty')
+    def register_os_openpty(self):
+        os_openpty = self.llexternal(
+            'openpty',
+            [rffi.INTP, rffi.INTP, rffi.VOIDP, rffi.VOIDP, rffi.VOIDP],
+            rffi.INT,
+            compilation_info=ExternalCompilationInfo(libraries=['util']))
+        def openpty_llimpl():
+            master_p = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
+            slave_p = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
+            result = os_openpty(master_p, slave_p, None, None, None)
+            master_fd = master_p[0]
+            slave_fd = slave_p[0]
+            lltype.free(master_p, flavor='raw')
+            lltype.free(slave_p, flavor='raw')
+            if result == -1:
+                raise OSError(rposix.get_errno(), "os_openpty failed")
+            return (rffi.cast(lltype.Signed, master_fd),
+                    rffi.cast(lltype.Signed, slave_fd))
+
+        return extdef([], (int, int), "ll_os.ll_os_openpty",
+                      llimpl=openpty_llimpl)
+
 
     @registering(os._exit)
     def register_os__exit(self):
@@ -1520,7 +1530,7 @@ if sys.platform == 'win32':
 
         @registering(rwin32.FormatError)
         def register_rwin32_FormatError(self):
-            return extdef([int], str,
+            return extdef([rwin32.DWORD], str,
                           "rwin32_FormatError",
                           llimpl=rwin32.llimpl_FormatError,
                           ooimpl=rwin32.fake_FormatError)

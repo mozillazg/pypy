@@ -2,6 +2,7 @@ import py
 from pypy import conftest
 from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
+from pypy.rlib.jit import non_virtual_ref, vref_None
 
 class AppTestSlow:    
     def setup_class(cls):
@@ -30,21 +31,18 @@ def _attach_helpers(space):
     from pypy.interpreter import pytraceback
     def hide_top_frame(space, w_frame):
         w_last = None
-        while w_frame.f_back():
-            # should have been forced by traceback capturing
-            assert w_frame.f_back_forced
+        while w_frame.f_backref():
             w_last = w_frame
-            w_frame = w_frame.f_back()
+            w_frame = w_frame.f_backref()
         assert w_last
-        w_saved = w_last.f_back()
-        w_last.f_back_some = None
+        w_saved = w_last.f_backref()
+        w_last.f_backref = vref_None
         return w_saved
 
     def restore_top_frame(space, w_frame, w_saved):
-        while w_frame.f_back():
-            assert w_frame.f_back_forced
-            w_frame = w_frame.f_back()
-        w_frame.f_back_some = w_saved
+        while w_frame.f_backref():
+            w_frame = w_frame.f_backref()
+        w_frame.f_backref = non_virtual_ref(w_saved)
 
     def read_exc_type(space, w_frame):
         if w_frame.last_exception is None:
@@ -75,10 +73,8 @@ def _detatch_helpers(space):
                   space.wrap('restore_top_frame'))
 
 class AppTestInterpObjectPickling:
-
+    pytestmark = py.test.mark.skipif("config.option.runappdirect")
     def setup_class(cls):
-        if conftest.option.runappdirect:
-            py.test.skip("not for py.test -A")
         _attach_helpers(cls.space)
 
     def teardown_class(cls):
@@ -472,3 +468,18 @@ class AppTestInterpObjectPickling:
         l = []
         unbound_meth2(l, 1)
         assert l == [1]
+
+    def test_pickle_submodule(self):
+        import pickle
+        import sys, new
+
+        mod = new.module('pack.mod')
+        sys.modules['pack.mod'] = mod
+        pack = new.module('pack')
+        pack.mod = mod
+        sys.modules['pack'] = pack
+
+        import pack.mod
+        pckl   = pickle.dumps(pack.mod)
+        result = pickle.loads(pckl)
+        assert pack.mod is result

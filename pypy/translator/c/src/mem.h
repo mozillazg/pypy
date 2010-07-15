@@ -2,11 +2,11 @@
 /************************************************************/
  /***  C header subsection: operations on LowLevelTypes    ***/
 
+#ifndef _MSC_VER
 extern char __gcmapstart;
 extern char __gcmapend;
 extern char __gccallshapes;
-extern void *__gcrootanchor;
-extern long pypy_asm_stackwalk(void*);
+extern long pypy_asm_stackwalk(void*, void*);
 #define __gcnoreorderhack __gcmapend
 
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
@@ -18,7 +18,6 @@ extern long pypy_asm_stackwalk(void*);
    and one in a register), pass one to GCROOT, and later use the other
    one.  In practice the pypy_asm_gcroot() is often a no-op in the final
    machine code and doesn't prevent most optimizations. */
-#ifndef _MSC_VER
 
 /* With gcc, getting the asm() right was tricky, though.  The asm() is
    not volatile so that gcc is free to delete it if the output variable
@@ -34,13 +33,26 @@ extern long pypy_asm_stackwalk(void*);
                     "0" (p), "m" (__gcnoreorderhack)); \
                _r; })
 
+#define pypy_asm_gc_nocollect(f) asm volatile ("/* GC_NOCOLLECT " #f " */" \
+                                               : : )
+
 #define pypy_asm_keepalive(v)  asm volatile ("/* keepalive %0 */" : : \
                                              "g" (v))
 
 /* marker for trackgcroot.py */
 #define pypy_asm_stack_bottom()  asm volatile ("/* GC_STACK_BOTTOM */" : : )
 
+#define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
+               i == 0 ? (void*)&__gcmapstart :         \
+               i == 1 ? (void*)&__gcmapend :           \
+               i == 2 ? (void*)&__gccallshapes :       \
+               NULL
+
 #else
+extern void* __gcmapstart;
+extern void* __gcmapend;
+extern char* __gccallshapes;
+extern long pypy_asm_stackwalk(void*, void*);
 
 /* With the msvc Microsoft Compiler, the optimizer seems free to move
    any code (even asm) that involves local memory (registers and stack).
@@ -58,19 +70,20 @@ pypy_asm_gcroot(void* _r1)
     return _r1;
 }
 
+#define pypy_asm_gc_nocollect(f) "/* GC_NOCOLLECT " #f " */"
+
 #define pypy_asm_keepalive(v)    __asm { }
 static __declspec(noinline) void pypy_asm_stack_bottom() { }
+
+#define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
+               i == 0 ? (void*)__gcmapstart :         \
+               i == 1 ? (void*)__gcmapend :           \
+               i == 2 ? (void*)&__gccallshapes :       \
+               NULL
 
 #endif
 
 
-
-#define OP_GC_ASMGCROOT_STATIC(i, r)   r =      \
-               i == 0 ? (void*)&__gcmapstart :         \
-               i == 1 ? (void*)&__gcmapend :           \
-               i == 2 ? (void*)&__gccallshapes :       \
-               i == 3 ? (void*)&__gcrootanchor :       \
-               NULL
 
 #define RAW_MALLOC_ZERO_FILLED 0
 
@@ -100,10 +113,6 @@ static __declspec(noinline) void pypy_asm_stack_bottom() { }
 #define OP_RAW_MEMCLEAR(p, size, r) memset((void*)p, 0, size)
 
 #define OP_RAW_MALLOC_USAGE(size, r) r = size
-
-#define OP_RAW_REALLOC_SHRINK(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
-
-#define OP_RAW_REALLOC_GROW(p, old_size, size, r) r = PyObject_Realloc((void*)p, size)
 
 #ifdef MS_WINDOWS
 #define alloca  _alloca

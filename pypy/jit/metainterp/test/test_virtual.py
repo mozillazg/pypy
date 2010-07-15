@@ -1,12 +1,12 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
 from pypy.rlib.objectmodel import compute_unique_id
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.ootypesystem import ootype
-from pypy.jit.metainterp import heaptracker
+from pypy.jit.codewriter import heaptracker
 
 class VirtualTests:
     def _freeze_(self):
@@ -143,8 +143,8 @@ class VirtualTests:
                 node = next
                 n -= 1
             return node.value
-        res = self.meta_interp(f, [10], policy=StopAtXPolicy(externfn))
-        assert res == f(10)
+        res = self.meta_interp(f, [11], policy=StopAtXPolicy(externfn))
+        assert res == f(11)
         self.check_loop_count(2)
         self.check_loops(**{self._new_op: 2})     # XXX was 1
         self.check_loops(int_mul=0, call=1)
@@ -299,10 +299,9 @@ class VirtualTests:
         self.check_tree_loop_count(2)      # the loop and the entry path
         # we get:
         #    ENTER             - compile the new loop
-        #    ENTER (BlackHole) - leave
         #    ENTER             - compile the entry bridge
         #    ENTER             - compile the leaving path
-        self.check_enter_count(4)
+        self.check_enter_count(3)
 
 class VirtualMiscTests:
 

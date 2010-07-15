@@ -7,11 +7,6 @@ class OracleNotConnectedTestBase(object):
 
     @classmethod
     def setup_class(cls):
-        try:
-            from pypy.module.oracle import roci
-        except ImportError:
-            py.test.skip("Oracle client not available")
-
         space = gettestobjspace(usemodules=('oracle',))
         cls.space = space
         space.setitem(space.builtin.w_dict, space.wrap('oracle'),
@@ -160,4 +155,6 @@ class AppTestPool(OracleNotConnectedTestBase):
         e = raises(oracle.DatabaseError, pool.acquire, user="proxyuser")
         # ORA-01017: invalid username/password; logon denied
         # ORA-28150: proxy not authorized to connect as client
-        assert e.value[0].code in (1017, 28150)
+        # ORA-01031: insufficient privileges
+        print "Error code", e.value[0].code
+        assert e.value[0].code in (1017, 28150, 1031)

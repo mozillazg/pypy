@@ -34,13 +34,13 @@ from pypy.tool import descriptor
 from pypy.tool.pairtype import pair, extendabletype
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_ulonglong, base_int
-from pypy.rlib.rarithmetic import r_singlefloat
+from pypy.rlib.rarithmetic import r_singlefloat, isnan
 import inspect, weakref
 
 DEBUG = False    # set to False to disable recording of debugging information
 TLS = tlsobject()
 
-class SomeObject:
+class SomeObject(object):
     """The set of all objects.  Each instance stands
     for an arbitrary object about which nothing is known."""
     __metaclass__ = extendabletype
@@ -127,26 +127,26 @@ class SomeObject:
             except AttributeError:
                 pass
             else:
-                bookkeeper._someobject_coming_from[id(self)] = position_key, None
+                bookkeeper._isomeobject_coming_from[self] = position_key, None
         return self
 
     def origin(self):
         bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
         if bookkeeper is None:
             return None
-        return bookkeeper._someobject_coming_from.get(id(self), (None, None))[0]
+        return bookkeeper._isomeobject_coming_from.get(self, (None, None))[0]
     origin = property(origin)
 
     def caused_by_merge(self):
         bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
         if bookkeeper is None:
             return None
-        return bookkeeper._someobject_coming_from.get(id(self), (None, None))[1]
+        return bookkeeper._isomeobject_coming_from.get(self, (None, None))[1]
     def set_caused_by_merge(self, nvalue):
         bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
         if bookkeeper is None:
             return
-        bookkeeper._someobject_coming_from[id(self)] = self.origin, nvalue
+        bookkeeper._isomeobject_coming_from[self] = self.origin, nvalue
     caused_by_merge = property(caused_by_merge, set_caused_by_merge)
     del set_caused_by_merge
 
@@ -161,6 +161,13 @@ class SomeFloat(SomeObject):
     knowntype = float   # if we don't know if it's a float or an int,
                         # pretend it's a float.
     immutable = True
+
+    def __eq__(self, other):
+        # NaN unpleasantness.
+        if (self.is_constant() and other.is_constant() and
+            isnan(self.const) and isnan(other.const)):
+            return True
+        return super(SomeFloat, self).__eq__(other)
 
     def can_be_none(self):
         return False
@@ -229,11 +236,15 @@ class SomeUnicodeString(SomeObject):
 
 class SomeChar(SomeString):
     "Stands for an object known to be a string of length 1."
+    can_be_None = False
+    def __init__(self):    # no 'can_be_None' argument here
+        pass
 
 class SomeUnicodeCodePoint(SomeUnicodeString):
     "Stands for an object known to be a unicode codepoint."
-    def can_be_none(self):
-        return False
+    can_be_None = False
+    def __init__(self):    # no 'can_be_None' argument here
+        pass
 
 SomeString.basestringclass = SomeString
 SomeString.basecharclass = SomeChar
@@ -694,19 +705,6 @@ def not_const(s_obj):
 
 # ____________________________________________________________
 # internal
-
-def setunion(d1, d2):
-    "Union of two sets represented as dictionaries."
-    d = d1.copy()
-    d.update(d2)
-    return d
-
-def set(it):
-    "Turn an iterable into a set."
-    d = {}
-    for x in it:
-        d[x] = True
-    return d
 
 def commonbase(cls1, cls2):   # XXX single inheritance only  XXX hum
     l1 = inspect.getmro(cls1)

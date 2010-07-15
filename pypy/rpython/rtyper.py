@@ -133,15 +133,34 @@ class RPythonTyper(object):
         return result
 
     def get_type_for_typeptr(self, typeptr):
+        search = typeptr._obj
         try:
-            return self.type_for_typeptr[typeptr._obj]
+            return self.type_for_typeptr[search]
         except KeyError:
-            # rehash the dictionary
+            # rehash the dictionary, and perform a linear scan
+            # for the case of ll2ctypes typeptr
+            found = None
             type_for_typeptr = {}
             for key, value in self.type_for_typeptr.items():
                 type_for_typeptr[key] = value
+                if key == search:
+                    found = value
             self.type_for_typeptr = type_for_typeptr
-            return self.type_for_typeptr[typeptr._obj]
+            if found is None:
+                raise KeyError(search)
+            return found
+
+    def set_type_for_typeptr(self, typeptr, TYPE):
+        self.type_for_typeptr[typeptr._obj] = TYPE
+        self.lltype2vtable[TYPE] = typeptr
+
+    def get_real_typeptr_for_typeptr(self, typeptr):
+        # perform a linear scan for the case of ll2ctypes typeptr
+        search = typeptr._obj
+        for key, value in self.type_for_typeptr.items():
+            if key == search:
+                return key._as_ptr()
+        raise KeyError(search)
 
     def makekey(self, s_obj):
         return pair(self.type_system, s_obj).rtyper_makekey(self)
@@ -152,7 +171,7 @@ class RPythonTyper(object):
     def getrepr(self, s_obj):
         # s_objs are not hashable... try hard to find a unique key anyway
         key = self.makekey(s_obj)
-        assert key[0] == s_obj.__class__
+        assert key[0] is s_obj.__class__
         try:
             result = self.reprs[key]
         except KeyError:
@@ -180,7 +199,7 @@ class RPythonTyper(object):
         assert dont_simplify_again in (False, True)  # safety check
         if not dont_simplify_again:
             self.annotator.simplify()
-            
+
         # first make sure that all functions called in a group have exactly
         # the same signature, by hacking their flow graphs if needed
         self.type_system.perform_normalizations(self)
@@ -195,11 +214,6 @@ class RPythonTyper(object):
             self.specialize_more_blocks()   # for the helpers just made
         if self.type_system.name == 'ootypesystem':
             self.attach_methods_to_subclasses()
-        
-        #
-        from pypy.annotation import listdef
-        ldef = listdef.ListDef(None, annmodel.SomeString())
-        self.list_of_str_repr = self.getrepr(annmodel.SomeList(ldef))
 
     def getannmixlevel(self):
         if self.annmixlevel is not None:

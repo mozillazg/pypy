@@ -27,16 +27,15 @@ class TypeDescr(Wrappable):
         return space.w_False
     descr_eq.unwrap_spec = ['self', ObjSpace, W_Root]
 
-    def descr_itemsize(self, space):
-        return space.wrap(self.dtype.itemsize())
-    descr_itemsize.unwrap_spec = ['self', ObjSpace]
-
     def descr_repr(self, space):
         return space.wrap("dtype('%s')" % self.name)
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
+def dtype_descr_itemsize(space, self):
+    return space.wrap(self.dtype.itemsize())
+
 TypeDescr.typedef = TypeDef('dtype',
-                            itemsize = GetSetProperty(TypeDescr.descr_itemsize),
+                            itemsize = GetSetProperty(dtype_descr_itemsize, cls=TypeDescr),
                             __eq__ = interp2app(TypeDescr.descr_eq),
                             __repr__ = interp2app(TypeDescr.descr_repr),
                            )

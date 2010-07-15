@@ -116,17 +116,6 @@ class MsvcPlatform(Platform):
             # The following symbol is used in c/src/stack.h
             self.cflags.append('/DMAX_STACK_SIZE=%d' % (stack_size - 1024))
 
-        if hasattr(sys, 'exec_prefix'):
-            self.add_cpython_dirs = True
-        else:
-            # We are certainly running pypy-c
-            self.add_cpython_dirs = False
-
-    def _preprocess_dirs(self, include_dirs):
-        if self.add_cpython_dirs:
-            return include_dirs + (py.path.local(sys.exec_prefix).join('PC'),)
-        return include_dirs
-
     def _includedirs(self, include_dirs):
         return ['/I%s' % (idir,) for idir in include_dirs]
 
@@ -150,8 +139,21 @@ class MsvcPlatform(Platform):
 
     def _link_args_from_eci(self, eci, standalone):
         # Windows needs to resolve all symbols even for DLLs
-        args = super(MsvcPlatform, self)._link_args_from_eci(eci, standalone=True)
-        return args + ['/EXPORT:%s' % symbol for symbol in eci.export_symbols]
+        return super(MsvcPlatform, self)._link_args_from_eci(eci, standalone=True)
+
+    def _exportsymbols_link_flags(self, eci, relto=None):
+        if not eci.export_symbols:
+            return []
+
+        response_file = self._make_response_file("exported_symbols_")
+        f = response_file.open("w")
+        for sym in eci.export_symbols:
+            f.write("/EXPORT:%s\n" % (sym,))
+        f.close()
+
+        if relto:
+            response_file = relto.bestrelpath(response_file)
+        return ["@%s" % (response_file,)]
 
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='obj')
@@ -169,7 +171,7 @@ class MsvcPlatform(Platform):
             # Tell the linker to generate a manifest file
             temp_manifest = ofile.dirpath().join(
                 ofile.purebasename + '.manifest')
-            args += ["/MANIFESTFILE:%s" % (temp_manifest,)]
+            args += ["/MANIFEST", "/MANIFESTFILE:%s" % (temp_manifest,)]
 
         self._execute_c_compiler(self.link, args, exe_name)
 
@@ -190,14 +192,15 @@ class MsvcPlatform(Platform):
             # Microsoft compilers write compilation errors to stdout
             stderr = stdout + stderr
             errorfile = outname.new(ext='errors')
-            errorfile.write(stderr)
+            errorfile.write(stderr, mode='wb')
             stderrlines = stderr.splitlines()
             for line in stderrlines:
                 log.ERROR(line)
             raise CompilationError(stdout, stderr)
 
 
-    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None,
+                     shared=False):
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
 
@@ -208,10 +211,25 @@ class MsvcPlatform(Platform):
 
         if exe_name is None:
             exe_name = cfiles[0].new(ext=self.exe_ext)
+        else:
+            exe_name = exe_name.new(ext=self.exe_ext)
 
         m = NMakefile(path)
         m.exe_name = exe_name
         m.eci = eci
+
+        linkflags = self.link_flags[:]
+        if shared:
+            linkflags = self._args_for_shared(linkflags) + [
+                '/EXPORT:$(PYPY_MAIN_FUNCTION)']
+        linkflags += self._exportsymbols_link_flags(eci, relto=path)
+
+        if shared:
+            so_name = exe_name.new(purebasename='lib' + exe_name.purebasename,
+                                   ext=self.so_ext)
+            target_name = so_name.basename
+        else:
+            target_name = exe_name.basename
 
         def pypyrel(fpath):
             rel = py.path.local(fpath).relto(pypypath)
@@ -229,25 +247,29 @@ class MsvcPlatform(Platform):
         m.comment('automatically generated makefile')
         definitions = [
             ('PYPYDIR', autopath.pypydir),
-            ('TARGET', exe_name.basename),
-            ('DEFAULT_TARGET', '$(TARGET)'),
+            ('TARGET', target_name),
+            ('DEFAULT_TARGET', exe_name.basename),
             ('SOURCES', rel_cfiles),
             ('OBJECTS', rel_ofiles),
             ('LIBS', self._libs(eci.libraries)),
             ('LIBDIRS', self._libdirs(eci.library_dirs)),
             ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
-            ('CFLAGS', self.cflags + list(eci.compile_extra)),
-            ('LDFLAGS', self.link_flags + list(eci.link_extra)),
+            ('CFLAGS', self.cflags),
+            ('CFLAGSEXTRA', list(eci.compile_extra)),
+            ('LDFLAGS', linkflags),
+            ('LDFLAGSEXTRA', list(eci.link_extra)),
             ('CC', self.cc),
             ('CC_LINK', self.link),
+            ('LINKFILES', eci.link_files),
             ('MASM', self.masm),
             ]
+
         for args in definitions:
             m.definition(*args)
 
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('.c.obj', '', '$(CC) /nologo $(CFLAGS) /Fo$@ /c $< $(INCLUDEDIRS)'),
+            ('.c.obj', '', '$(CC) /nologo $(CFLAGS) $(CFLAGSEXTRA) /Fo$@ /c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
@@ -255,26 +277,39 @@ class MsvcPlatform(Platform):
 
         if self.version < 80:
             m.rule('$(TARGET)', '$(OBJECTS)',
-                   '$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS)')
+                   '$(CC_LINK) /nologo $(LDFLAGS) $(LDFLAGSEXTRA) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS)')
         else:
             m.rule('$(TARGET)', '$(OBJECTS)',
-                   ['$(CC_LINK) /nologo $(LDFLAGS) $(OBJECTS) /out:$@ $(LIBDIRS) $(LIBS) /MANIFESTFILE:$*.manifest',
+                   ['$(CC_LINK) /nologo $(LDFLAGS) $(LDFLAGSEXTRA) $(OBJECTS) $(LINKFILES) /out:$@ $(LIBDIRS) $(LIBS) /MANIFEST /MANIFESTFILE:$*.manifest',
+                    'mt.exe -nologo -manifest $*.manifest -outputresource:$@;1',
+                    ])
+
+        if shared:
+            m.definition('SHARED_IMPORT_LIB', so_name.new(ext='lib').basename)
+            m.definition('PYPY_MAIN_FUNCTION', "pypy_main_startup")
+            m.rule('main.c', '',
+                   'echo '
+                   'int $(PYPY_MAIN_FUNCTION)(int, char*[]); '
+                   'int main(int argc, char* argv[]) '
+                   '{ return $(PYPY_MAIN_FUNCTION)(argc, argv); } > $@')
+            m.rule('$(DEFAULT_TARGET)', ['$(TARGET)', 'main.obj'],
+                   ['$(CC_LINK) /nologo main.obj $(SHARED_IMPORT_LIB) /out:$@ /MANIFEST /MANIFESTFILE:$*.manifest',
                     'mt.exe -nologo -manifest $*.manifest -outputresource:$@;1',
                     ])
 
         return m
 
-    def execute_makefile(self, path_to_makefile):
+    def execute_makefile(self, path_to_makefile, extra_opts=[]):
         if isinstance(path_to_makefile, NMakefile):
             path = path_to_makefile.makefile_dir
         else:
             path = path_to_makefile
-        log.execute('make in %s' % (path,))
+        log.execute('make %s in %s' % (" ".join(extra_opts), path))
         oldcwd = path.chdir()
         try:
             returncode, stdout, stderr = _run_subprocess(
                 'nmake',
-                ['/nologo', '/f', str(path.join('Makefile'))])
+                ['/nologo', '/f', str(path.join('Makefile'))] + extra_opts)
         finally:
             oldcwd.chdir()
 
@@ -303,8 +338,9 @@ class MingwPlatform(posix.BasePosix):
     name = 'mingw32'
     standalone_only = []
     shared_only = []
-    cflags = []
+    cflags = ['-O3']
     link_flags = []
+    exe_ext = 'exe'
     so_ext = 'dll'
 
     def __init__(self, cc=None):
