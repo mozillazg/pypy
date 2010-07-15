@@ -189,6 +189,7 @@ class W_CPPOverload(Wrappable):
     @jit.unroll_safe
     def call(self, cppthis, args_w):
         space = self.space
+        errmsg = 'None of the overloads matched:'
         for i in range(len(self.functions)):
             cppyyfunc = self.functions[i]
             try:
@@ -196,10 +197,11 @@ class W_CPPOverload(Wrappable):
             except OperationError, e:
                 if not e.match(space, space.w_TypeError):
                     raise
+                errmsg += '\n\t'+str(e)
             except KeyError:
                 pass
-        # XXX better error reporting
-        raise OperationError(space.w_TypeError, space.wrap("none of the overloads matched"))
+
+        raise OperationError(space.w_TypeError, space.wrap(errmsg))
 
     def __repr__(self):
         return "W_CPPOverload(%s, %s)" % (self.func_name, self.functions)
