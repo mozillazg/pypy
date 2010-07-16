@@ -611,8 +611,8 @@ class Optimizer(object):
                 assert oldop.opnum == op.opnum
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 return
-            #elif self.find_rewriteable_constant(op, args):
-            #    return
+            elif self.find_rewriteable_bool(op, args):
+                return
             else:
                 self.pure_operations[args] = op
 
@@ -620,7 +620,7 @@ class Optimizer(object):
         self.emit_operation(op)
 
 
-    def find_rewriteable_constant(self, op, args):
+    def find_rewriteable_bool(self, op, args):
         try:
             oldopnum = opboolinvers[op.opnum]
             targ = [args[0], args[1], ConstInt(oldopnum)]
@@ -642,12 +642,12 @@ class Optimizer(object):
             targ = [args[1], args[0], ConstInt(oldopnum)]
             oldop = self.pure_operations.get(targ, None)
             if oldop is not None and oldop.descr is op.descr:
-                value = self.getvalue(oldop.result)
-                if value.is_constant():
-                    self.make_constant(op.result, value.box)
-                    return True
+                self.make_equal_to(op.result, self.getvalue(oldop.result))
+                return True
         except KeyError:
             pass
+
+        # FIXME: oldopnum = opboolinvers[opboolreflex[op.opnum]]?
             
         return False
         
