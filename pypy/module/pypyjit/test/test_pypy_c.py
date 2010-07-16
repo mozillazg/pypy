@@ -617,11 +617,11 @@ class PyPyCJITTests(object):
         ''', 170, ([], 4999450000L))
 
     def test_boolrewrite_invers(self):
-        for a, b, res, ops in (('2000', '2000', 20001000, 53),
-                               ( '500',  '500', 15001500, 83),
-                               ( '300',  '600', 16001700, 89),
+        for a, b, res, ops in (('2000', '2000', 20001000, 51),
+                               ( '500',  '500', 15001500, 81),
+                               ( '300',  '600', 16001700, 83),
                                (   'a',    'b', 16001700, 89),
-                               (   'a',    'a', 13001700, 87)):
+                               (   'a',    'a', 13001700, 85)):
 
             self.run_source('''
             def main():
@@ -637,11 +637,11 @@ class PyPyCJITTests(object):
             '''%(a, b), ops, ([], res))
 
     def test_boolrewrite_reflex(self):
-        for a, b, res, ops in (('2000', '2000', 10001000, 53),
-                               ( '500',  '500', 15001500, 83),
-                               ( '300',  '600', 14001700, 89),
+        for a, b, res, ops in (('2000', '2000', 10001000, 51),
+                               ( '500',  '500', 15001500, 81),
+                               ( '300',  '600', 14001700, 83),
                                (   'a',    'b', 14001700, 89),
-                               (   'a',    'a', 17001700, 87)):
+                               (   'a',    'a', 17001700, 85)):
 
             self.run_source('''
             def main():
@@ -657,7 +657,7 @@ class PyPyCJITTests(object):
             '''%(a, b), ops, ([], res))
 
 
-    def test_boolrewrite_int_correct_invers(self):
+    def test_boolrewrite_correct_invers(self):
         def opval(i, op, a):
             if eval('%d %s %d' % (i, op, a)): return 1
             return 2
@@ -683,9 +683,23 @@ class PyPyCJITTests(object):
                             if i %s %d: sa += 10000
                             else: sa += 20000
                         return sa
-                    '''%(op1, a, op2, b), 100, ([], res))
+                    '''%(op1, a, op2, b), 83, ([], res))
 
-    def test_boolrewrite_int_correct_reflex(self):
+                    self.run_source('''
+                    def main():
+                        sa = 0
+                        i = 0.0
+                        while i < 250.0:
+                            if i %s %f: sa += 1
+                            else: sa += 2
+                            if i %s %f: sa += 10000
+                            else: sa += 20000
+                            i += 0.25
+                        return sa
+                    '''%(op1, float(a)/4.0, op2, float(b)/4.0), 109, ([], res))
+                    
+
+    def test_boolrewrite_correct_reflex(self):
         def opval(i, op, a):
             if eval('%d %s %d' % (i, op, a)): return 1
             return 2
@@ -711,8 +725,58 @@ class PyPyCJITTests(object):
                             if %d %s i: sa += 10000
                             else: sa += 20000
                         return sa
-                    '''%(op1, a, b, op2), 100, ([], res))
+                    '''%(op1, a, b, op2), 83, ([], res))
 
+                    self.run_source('''
+                    def main():
+                        sa = 0
+                        i = 0.0
+                        while i < 250.0:
+                            if i %s %f: sa += 1
+                            else: sa += 2
+                            if %f %s i: sa += 10000
+                            else: sa += 20000
+                            i += 0.25
+                        return sa
+                    '''%(op1, float(a)/4.0, float(b)/4.0, op2), 109, ([], res))
+
+    def test_boolrewrite_ptr(self):
+        compares = ('a == b', 'b == a', 'a != b', 'a == c')
+        for e1 in compares:
+            for e2 in compares:
+                a, b, c = 1, 2, 3
+                if eval(e1): res = 752 * 1 
+                else: res = 752 * 2 
+                if eval(e2): res += 752 * 10000 
+                else: res += 752 * 20000 
+                a = b
+                if eval(e1): res += 248 * 1
+                else: res += 248 * 2
+                if eval(e2): res += 248 * 10000
+                else: res += 248 * 20000
+
+
+                if 'c' in e1 or 'c' in e2:
+                    n = 245
+                else:
+                    n = 215
+
+                self.run_source('''
+                class tst:
+                    pass
+                def main():
+                    a = tst()
+                    b = tst()
+                    c = tst()
+                    sa = 0
+                    for i in range(1000):
+                        if %s: sa += 1
+                        else: sa += 2
+                        if %s: sa += 10000
+                        else: sa += 20000
+                        if i > 750: a = b
+                    return sa
+                '''%(e1, e2), n, ([], res))
 
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
