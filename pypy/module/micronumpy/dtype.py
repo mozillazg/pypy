@@ -41,7 +41,7 @@ TypeDescr.typedef = TypeDef('dtype',
                            )
 
 storage_type = lltype.Ptr(lltype.Array(lltype.Char))                           
-null_storage = lltype.nullptr(storage_type.TO)
+null_data = lltype.nullptr(storage_type.TO)
 
 class DescrBase(object): pass
 
@@ -62,7 +62,7 @@ def descriptor(code, name, ll_type):
             return space.wrap(self.getitem(data, index))
 
         def w_setitem(self, space, data, index, w_value):
-            value = self.unwrap(space, w_value)
+            value = self.coerce_w(space, w_value)
             self.setitem(data, index, value)
 
         def itemsize(self):
@@ -123,12 +123,14 @@ _typestring = {}
 
 int_descr = descriptor('i', 'int32', lltype.Signed)
 type(int_descr).unwrap = lambda self, space, value: space.int_w(value)
+type(int_descr).coerce_w = lambda self, space, value: space.int_w(space.int(value))
 _int_index = _typeindex['i']
 _typestring['int32'] = _int_index
 w_int_descr = _w_descriptors[_int_index]
 
 float_descr = descriptor('d', 'float64', lltype.Float)
 type(float_descr).unwrap = lambda self, space, value: space.float_w(value)
+type(float_descr).coerce_w = lambda self, space, value: space.float_w(space.float(value))
 _float_index = _typeindex['d']
 _typestring['float64'] = _float_index
 w_float_descr = _w_descriptors[_float_index]
