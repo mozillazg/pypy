@@ -1,5 +1,6 @@
 import sys
 from pypy.rlib import rlocale
+from pypy.rlib.objectmodel import we_are_translated
 
 def getdefaultencoding(space):
     """Return the current default string encoding used by the Unicode 
@@ -18,6 +19,8 @@ implementation."""
     space.sys.defaultencoding = encoding
 
 def get_w_default_encoder(space):
+    assert not (space.config.translating and not we_are_translated()), \
+        "get_w_default_encoder() should not be called during translation"
     w_encoding = space.wrap(space.sys.defaultencoding)
     mod = space.getbuiltinmodule("_codecs")
     w_lookup = space.getattr(mod, space.wrap("lookup"))
@@ -52,4 +55,6 @@ def getfilesystemencoding(space):
     """Return the encoding used to convert Unicode filenames in
     operating system filenames.
     """
+    if space.sys.filesystemencoding is None:
+        space.sys.filesystemencoding = _getfilesystemencoding(space)
     return space.wrap(space.sys.filesystemencoding)

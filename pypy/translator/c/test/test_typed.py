@@ -79,11 +79,6 @@ class TestTypedTestCase(CompilationTestCase):
         nested_whiles = self.getcompiled(snippet.nested_whiles, [int, int])
         assert nested_whiles(5,3) == '!!!!!'
 
-    def test_call_five(self):
-        call_five = self.getcompiled(snippet.call_five, [int])
-        result = call_five()
-        assert result == [5]
-
     def test_call_unpack_56(self):
         call_unpack_56 = self.getcompiled(snippet.call_unpack_56, [])
         result = call_unpack_56()
@@ -115,13 +110,6 @@ class TestTypedTestCase(CompilationTestCase):
         assert fn(3) == 789
         assert fn(4) == 789
         assert fn(5) == 101112
-
-    def test_get_set_del_slice(self):
-        fn = self.getcompiled(snippet.get_set_del_slice, [list])
-        l = list('abcdefghij')
-        result = fn(l)
-        assert l == [3, 'c', 8, 11, 'h', 9]
-        assert result == ([3, 'c'], [9], [11, 'h'])
 
     def test_type_conversion(self):
         # obfuscated test case specially for typer.insert_link_conversions()
@@ -795,3 +783,43 @@ class TestTypedTestCase(CompilationTestCase):
                 del a[:]
     
         f = self.getcompiled(func_swap, [])
+
+    def test_returns_unicode(self):
+        def func(i):
+            return u'hello' + unichr(i)
+        f = self.getcompiled(func, [int])
+        assert f(0x1234) == u'hello\u1234'
+
+    def test_ovfcheck_float_to_int(self):
+        from pypy.rlib.rarithmetic import ovfcheck_float_to_int
+
+        def func(fl):
+            try:
+                return ovfcheck_float_to_int(fl)
+            except OverflowError:
+                return -666
+        f = self.getcompiled(func, [float])
+        assert f(-123.0) == -123
+
+        for frac in [0.0, 0.01, 0.99]:
+            # strange things happening for float to int on 64 bit:
+            # int(float(i)) != i  because of rounding issues
+            x = sys.maxint
+            while int(x + frac) > sys.maxint:
+                x -= 1
+            assert f(x + frac) == int(x + frac)
+
+            x = sys.maxint
+            while int(x - frac) <= sys.maxint:
+                x += 1
+            assert f(x - frac) == -666
+
+            x = -sys.maxint-1
+            while int(x - frac) < -sys.maxint-1:
+                x += 1
+            assert f(x - frac) == int(x - frac)
+
+            x = -sys.maxint-1
+            while int(x + frac) >= -sys.maxint-1:
+                x -= 1
+            assert f(x + frac) == -666

@@ -1,14 +1,13 @@
-from pypy.interpreter.baseobjspace import Wrappable, W_Root
+from pypy.interpreter.baseobjspace import Wrappable, W_Root, ObjSpace
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.interpreter.gateway import ObjSpace, W_Root
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import BuiltinFunction, Method, StaticMethod
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.pyobject import (PyObject, from_ref, make_ref, make_typedescr,
-                                         Py_DecRef)
+from pypy.module.cpyext.pyobject import (PyObject, from_ref, make_ref,
+                                         make_typedescr, Py_DecRef)
 from pypy.module.cpyext.api import (
     generic_cpy_call, cpython_api, PyObject, cpython_struct, METH_KEYWORDS,
     METH_O, CONST_STRING, METH_CLASS, METH_STATIC, METH_COEXIST, METH_NOARGS,
@@ -235,10 +234,11 @@ def PyStaticMethod_New(space, w_func):
 def PyDescr_NewMethod(space, w_type, method):
     return space.wrap(W_PyCMethodObject(space, method, w_type))
 
-def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, doc, flags, func):
+def PyDescr_NewWrapper(space, pto, method_name, wrapper_func, wrapper_func_kwds,
+                       doc, func):
     # not exactly the API sig
     return space.wrap(W_PyCWrapperObject(space, pto, method_name,
-        wrapper_func, doc, flags, func))
+        wrapper_func, wrapper_func_kwds, doc, func))
 
 @cpython_api([lltype.Ptr(PyMethodDef), PyObject, CONST_STRING], PyObject)
 def Py_FindMethod(space, table, w_obj, name_ptr):

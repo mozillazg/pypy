@@ -14,6 +14,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib import jit, rstackovf, rstack
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.rlib.debug import check_nonneg
 from pypy.tool.stdlib_opcode import (bytecode_spec, host_bytecode_spec,
                                      unrolling_all_opcode_descs, opmap,
                                      host_opmap)
@@ -186,7 +187,7 @@ class __extend__(pyframe.PyFrame):
                 lo = ord(co_code[next_instr])
                 hi = ord(co_code[next_instr+1])
                 next_instr += 2
-                oparg = (hi << 8) | lo
+                oparg = (hi * 256) | lo
             else:
                 oparg = 0
 
@@ -197,7 +198,7 @@ class __extend__(pyframe.PyFrame):
                 lo = ord(co_code[next_instr+1])
                 hi = ord(co_code[next_instr+2])
                 next_instr += 3
-                oparg = (oparg << 16) | (hi << 8) | lo
+                oparg = (oparg * 65536) | (hi * 256) | lo
 
             if opcode == self.opcodedesc.RETURN_VALUE.index:
                 w_returnvalue = self.popvalue()
@@ -209,10 +210,6 @@ class __extend__(pyframe.PyFrame):
                     unroller = SReturnValue(w_returnvalue)
                     next_instr = block.handle(self, unroller)
                     return next_instr    # now inside a 'finally' block
-
-            if opcode == self.opcodedesc.YIELD_VALUE.index:
-                #self.last_instr = intmask(next_instr - 1) XXX clean up!
-                raise Yield
 
             if opcode == self.opcodedesc.END_FINALLY.index:
                 unroller = self.end_finally()
@@ -238,7 +235,7 @@ class __extend__(pyframe.PyFrame):
                     if not opdesc.is_enabled(space):
                         continue
                     if opdesc.methodname in (
-                        'EXTENDED_ARG', 'RETURN_VALUE', 'YIELD_VALUE',
+                        'EXTENDED_ARG', 'RETURN_VALUE',
                         'END_FINALLY', 'JUMP_ABSOLUTE'):
                         continue   # opcodes implemented above
 
@@ -323,7 +320,9 @@ class __extend__(pyframe.PyFrame):
     ##
 
     def NOP(self, oparg, next_instr):
-        pass
+        # annotation-time check: if it fails, it means that the decoding
+        # of oparg failed to produce an integer which is annotated as non-neg
+        check_nonneg(oparg)
 
     def LOAD_FAST(self, varindex, next_instr):
         # access a local variable directly
@@ -810,6 +809,9 @@ class __extend__(pyframe.PyFrame):
                                   "cannot import name '%s'",
                                   self.space.str_w(w_name))
         self.pushvalue(w_obj)
+
+    def YIELD_VALUE(self, oparg, next_instr):
+        raise Yield
 
     def jump_absolute(self, jumpto, next_instr, ec):
         return jumpto

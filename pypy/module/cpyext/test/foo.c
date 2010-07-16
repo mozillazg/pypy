@@ -55,7 +55,7 @@ foo_copy(fooobject *self)
 static PyObject *
 foo_create(fooobject *self)
 {
-    return newfooobject();
+    return (PyObject*)newfooobject();
 }
 
 static PyObject *
@@ -114,6 +114,25 @@ foo_call(PyObject *self, PyObject *args, PyObject *kwds)
     return kwds;
 }
 
+static int
+foo_setattro(fooobject *self, PyObject *name, PyObject *value)
+{
+    char *name_str;
+    if (!PyString_Check(name)) {
+        PyErr_SetObject(PyExc_AttributeError, name);
+        return -1;
+    }
+    name_str = PyString_AsString(name);
+    if (strcmp(name_str, "set_foo") == 0)
+    {
+        long v = PyInt_AsLong(value);
+        if (v == -1 && PyErr_Occurred())
+            return -1;
+        self->foo = v;
+    }
+    return PyObject_GenericSetAttr((PyObject *)self, name, value);
+}
+
 static PyMemberDef foo_members[] = {
     {"int_member", T_INT, offsetof(fooobject, foo), 0,
      "A helpful docstring."},
@@ -151,7 +170,7 @@ static PyTypeObject footype = {
     foo_call,                /*tp_call*/
     0,                       /*tp_str*/
     0,                       /*tp_getattro*/
-    0,                       /*tp_setattro*/
+    (setattrofunc)foo_setattro, /*tp_setattro*/
     0,                       /*tp_as_buffer*/
     Py_TPFLAGS_DEFAULT,      /*tp_flags*/
     0,                       /*tp_doc*/
@@ -174,8 +193,9 @@ typedef struct {
 } FuuObject;
 
 
-void Fuu_init(FuuObject *self, PyObject *args, PyObject *kwargs) {
+static int Fuu_init(FuuObject *self, PyObject *args, PyObject *kwargs) {
     self->val = 42;
+    return 0;
 }
 
 static PyObject *
@@ -242,7 +262,7 @@ PyTypeObject FuuType = {
     0,          /*tp_descr_set*/
     0,          /*tp_dictoffset*/
 
-    Fuu_init,          /*tp_init*/
+    (initproc) Fuu_init, /*tp_init*/
     0,          /*tp_alloc  will be set to PyType_GenericAlloc in module init*/
     0,          /*tp_new*/
     0,          /*tp_free  Low-level free-memory routine */
@@ -398,6 +418,156 @@ static PyMethodDef foo_functions[] = {
 };
 
 
+static int initerrtype_init(PyObject *self, PyObject *args, PyObject *kwargs) {
+    PyErr_SetString(PyExc_ValueError, "init raised an error!");
+    return -1;
+}
+
+
+PyTypeObject InitErrType = {
+    PyObject_HEAD_INIT(NULL)
+    0,
+    "foo.InitErr",
+    sizeof(PyObject),
+    0,
+    0,          /*tp_dealloc*/
+    0,          /*tp_print*/
+    0,          /*tp_getattr*/
+    0,          /*tp_setattr*/
+    0,          /*tp_compare*/
+    0,          /*tp_repr*/
+    0,          /*tp_as_number*/
+    0,          /*tp_as_sequence*/
+    0,          /*tp_as_mapping*/
+    0,          /*tp_hash */
+
+    0,          /*tp_call*/
+    0,          /*tp_str*/
+    0,          /*tp_getattro*/
+    0,          /*tp_setattro*/
+    0,          /*tp_as_buffer*/
+
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_CHECKTYPES, /*tp_flags*/
+    0,          /*tp_doc*/
+
+    0,          /*tp_traverse*/
+    0,          /*tp_clear*/
+
+    0,          /*tp_richcompare*/
+    0,          /*tp_weaklistoffset*/
+
+    0,          /*tp_iter*/
+    0,          /*tp_iternext*/
+
+    /* Attribute descriptor and subclassing stuff */
+
+    0,          /*tp_methods*/
+    0,          /*tp_members*/
+    0,          /*tp_getset*/
+    0,          /*tp_base*/
+    0,          /*tp_dict*/
+
+    0,          /*tp_descr_get*/
+    0,          /*tp_descr_set*/
+    0,          /*tp_dictoffset*/
+
+    initerrtype_init,          /*tp_init*/
+    0,          /*tp_alloc  will be set to PyType_GenericAlloc in module init*/
+    0,          /*tp_new*/
+    0,          /*tp_free  Low-level free-memory routine */
+    0,          /*tp_is_gc For PyObject_IS_GC */
+    0,          /*tp_bases*/
+    0,          /*tp_mro method resolution order */
+    0,          /*tp_cache*/
+    0,          /*tp_subclasses*/
+    0           /*tp_weaklist*/
+};
+
+PyObject * prop_descr_get(PyObject *self, PyObject *obj, PyObject *type)
+{
+    if (obj == NULL)
+	obj = Py_None;
+    if (type == NULL)
+	type = Py_None;
+
+    return PyTuple_Pack(3, self, obj, type);
+}
+
+int prop_descr_set(PyObject *self, PyObject *obj, PyObject *value)
+{
+    int res;
+    if (value != NULL) {
+	PyObject *result = PyTuple_Pack(2, self, value);
+	res = PyObject_SetAttrString(obj, "y", result);
+	Py_DECREF(result);
+    }
+    else {
+	res = PyObject_SetAttrString(obj, "z", self);
+    }
+    return res;
+}
+
+
+PyTypeObject SimplePropertyType = {
+    PyObject_HEAD_INIT(NULL)
+    0,
+    "foo.Property",
+    sizeof(PyObject),
+    0,
+    0,          /*tp_dealloc*/
+    0,          /*tp_print*/
+    0,          /*tp_getattr*/
+    0,          /*tp_setattr*/
+    0,          /*tp_compare*/
+    0,          /*tp_repr*/
+    0,          /*tp_as_number*/
+    0,          /*tp_as_sequence*/
+    0,          /*tp_as_mapping*/
+    0,          /*tp_hash */
+
+    0,          /*tp_call*/
+    0,          /*tp_str*/
+    0,          /*tp_getattro*/
+    0,          /*tp_setattro*/
+    0,          /*tp_as_buffer*/
+
+    Py_TPFLAGS_DEFAULT | Py_TPFLAGS_BASETYPE | Py_TPFLAGS_CHECKTYPES, /*tp_flags*/
+    0,          /*tp_doc*/
+
+    0,          /*tp_traverse*/
+    0,          /*tp_clear*/
+
+    0,          /*tp_richcompare*/
+    0,          /*tp_weaklistoffset*/
+
+    0,          /*tp_iter*/
+    0,          /*tp_iternext*/
+
+    /* Attribute descriptor and subclassing stuff */
+
+    0,          /*tp_methods*/
+    0,          /*tp_members*/
+    0,          /*tp_getset*/
+    0,          /*tp_base*/
+    0,          /*tp_dict*/
+
+    prop_descr_get, /*tp_descr_get*/
+    prop_descr_set, /*tp_descr_set*/
+    0,          /*tp_dictoffset*/
+
+    0,          /*tp_init*/
+    0,          /*tp_alloc  will be set to PyType_GenericAlloc in module init*/
+    0,          /*tp_new*/
+    0,          /*tp_free  Low-level free-memory routine */
+    0,          /*tp_is_gc For PyObject_IS_GC */
+    0,          /*tp_bases*/
+    0,          /*tp_mro method resolution order */
+    0,          /*tp_cache*/
+    0,          /*tp_subclasses*/
+    0           /*tp_weaklist*/
+};
+
+
 /* Initialize this module. */
 
 void initfoo(void)
@@ -418,6 +588,10 @@ void initfoo(void)
         return;
     if (PyType_Ready(&MetaType) < 0)
         return;
+    if (PyType_Ready(&InitErrType) < 0)
+        return;
+    if (PyType_Ready(&SimplePropertyType) < 0)
+	return;
     m = Py_InitModule("foo", foo_functions);
     if (m == NULL)
         return;
@@ -431,5 +605,9 @@ void initfoo(void)
     if(PyDict_SetItemString(d, "Fuu2Type", (PyObject *) &Fuu2Type) < 0)
         return;
     if (PyDict_SetItemString(d, "MetaType", (PyObject *) &MetaType) < 0)
+        return;
+    if (PyDict_SetItemString(d, "InitErrType", (PyObject *) &InitErrType) < 0)
+        return;
+    if (PyDict_SetItemString(d, "Property", (PyObject *) &SimplePropertyType) < 0)
         return;
 }
