@@ -863,7 +863,7 @@ def ord__String(space, w_str):
             space.w_TypeError,
             "ord() expected a character, but string "
             "of length %d found", len(u_str))
-    return space.wrap(ord(u_str))
+    return space.wrap(ord(u_str[0]))
 
 def getnewargs__String(space, w_str):
     return space.newtuple([wrapstr(space, w_str._value)])
@@ -964,7 +964,6 @@ def mod__String_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=False)
 
 def buffer__String(space, w_string):
-    from pypy.interpreter.buffer import StringBuffer
     return space.wrap(StringBuffer(w_string._value))
 
 # register all methods

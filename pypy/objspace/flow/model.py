@@ -7,7 +7,7 @@ import py
 from pypy.tool.uid import uid, Hashable
 from pypy.tool.descriptor import roproperty
 from pypy.tool.sourcetools import PY_IDENTIFIER, nice_repr_for_func
-from pypy.lib.identity_dict import identity_dict
+from pypy.tool.identity_dict import identity_dict
 
 """
     memory size before and after introduction of __slots__
@@ -416,13 +416,14 @@ def mkentrymap(funcgraph):
         lst.append(link)
     return result
 
-def copygraph(graph, shallow=False, varmap={}):
+def copygraph(graph, shallow=False, varmap={}, shallowvars=False):
     "Make a copy of a flow graph."
     blockmap = {}
     varmap = varmap.copy()
+    shallowvars = shallowvars or shallow
 
     def copyvar(v):
-        if shallow:
+        if shallowvars:
             return v
         try:
             return varmap[v]

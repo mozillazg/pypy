@@ -3,6 +3,8 @@ from pypy.interpreter import gateway
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.basestringtype import basestring_typedef
+from pypy.rlib.runicode import str_decode_utf_8, str_decode_ascii,\
+     unicode_encode_utf_8, unicode_encode_ascii
 
 from sys import maxint
 
@@ -168,6 +170,32 @@ from pypy.objspace.std.stringtype import str_decode as unicode_decode
 
 # ____________________________________________________________
 
+def decode_error_handler(space):
+    def raise_unicode_exception_decode(errors, encoding, msg, s,
+                                       startingpos, endingpos):
+        raise OperationError(space.w_UnicodeDecodeError,
+                             space.newtuple([space.wrap(encoding),
+                                             space.wrap(s),
+                                             space.wrap(startingpos),
+                                             space.wrap(endingpos),
+                                             space.wrap(msg)]))
+    return raise_unicode_exception_decode
+decode_error_handler._annspecialcase_ = 'specialize:memo'
+
+def encode_error_handler(space):
+    def raise_unicode_exception_encode(errors, encoding, msg, u,
+                                       startingpos, endingpos):
+        raise OperationError(space.w_UnicodeEncodeError,
+                             space.newtuple([space.wrap(encoding),
+                                             space.wrap(u),
+                                             space.wrap(startingpos),
+                                             space.wrap(endingpos),
+                                             space.wrap(msg)]))
+    return raise_unicode_exception_encode
+encode_error_handler._annspecialcase_ = 'specialize:memo'
+
+# ____________________________________________________________
+
 def getdefaultencoding(space):
     return space.sys.defaultencoding
 
@@ -188,6 +216,17 @@ def encode_object(space, w_object, encoding, errors):
         # This lookup is cached.
         w_encoder = space.sys.get_w_default_encoder()
     else:
+        if errors is None or errors == 'strict':
+            if encoding == 'ascii':
+                u = space.unicode_w(w_object)
+                eh = encode_error_handler(space)
+                return space.wrap(unicode_encode_ascii(u, len(u), None,
+                                                       errorhandler=eh))
+            if encoding == 'utf-8':
+                u = space.unicode_w(w_object)
+                eh = encode_error_handler(space)
+                return space.wrap(unicode_encode_utf_8(u, len(u), None,
+                                                       errorhandler=eh))
         from pypy.module._codecs.interp_codecs import lookup_codec
         w_encoder = space.getitem(lookup_codec(space, encoding), space.wrap(0))
     if errors is None:
@@ -203,9 +242,21 @@ def encode_object(space, w_object, encoding, errors):
     return w_retval
 
 def decode_object(space, w_obj, encoding, errors):
-    w_codecs = space.getbuiltinmodule("_codecs")
     if encoding is None:
         encoding = getdefaultencoding(space)
+    if errors is None or errors == 'strict':
+        if encoding == 'ascii':
+            # XXX error handling
+            s = space.bufferstr_w(w_obj)
+            eh = decode_error_handler(space)
+            return space.wrap(str_decode_ascii(s, len(s), None,
+                                               errorhandler=eh)[0])
+        if encoding == 'utf-8':
+            s = space.bufferstr_w(w_obj)
+            eh = decode_error_handler(space)
+            return space.wrap(str_decode_utf_8(s, len(s), None,
+                                               errorhandler=eh)[0])
+    w_codecs = space.getbuiltinmodule("_codecs")
     w_decode = space.getattr(w_codecs, space.wrap("decode"))
     if errors is None:
         w_retval = space.call_function(w_decode, w_obj, space.wrap(encoding))

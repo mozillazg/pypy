@@ -94,7 +94,7 @@ def compile(f, gc, **kwds):
 def run(cbuilder, args=''):
     #
     pypylog = udir.join('test_zrpy_gc.log')
-    data = cbuilder.cmdexec(args, env={'PYPYLOG': str(pypylog)})
+    data = cbuilder.cmdexec(args, env={'PYPYLOG': ':%s' % pypylog})
     return data.strip()
 
 def compile_and_run(f, gc, **kwds):
@@ -105,6 +105,12 @@ def compile_and_run(f, gc, **kwds):
 
 def test_compile_boehm():
     myjitdriver = JitDriver(greens = [], reds = ['n', 'x'])
+    @dont_look_inside
+    def see(lst, n):
+        assert len(lst) == 3
+        assert lst[0] == n+10
+        assert lst[1] == n+20
+        assert lst[2] == n+30
     def main(n, x):
         while n > 0:
             myjitdriver.can_enter_jit(n=n, x=x)
@@ -112,6 +118,7 @@ def test_compile_boehm():
             y = X()
             y.foo = x.foo
             n -= y.foo
+            see([n+10, n+20, n+30], n)
     res = compile_and_run(get_entry(get_g(main)), "boehm", jit=True)
     assert int(res) >= 16
 
@@ -174,7 +181,7 @@ class TestCompileHybrid(object):
     def run(self, name, n=2000):
         pypylog = udir.join('TestCompileHybrid.log')
         res = self.cbuilder.cmdexec("%s %d" %(name, n),
-                                    env={'PYPYLOG': str(pypylog)})
+                                    env={'PYPYLOG': ':%s' % pypylog})
         assert int(res) == 20
 
     def run_orig(self, name, n, x):

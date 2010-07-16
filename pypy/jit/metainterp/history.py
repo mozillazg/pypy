@@ -9,6 +9,7 @@ from pypy.tool.uid import uid
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.codewriter import heaptracker
 
 # ____________________________________________________________
 
@@ -16,6 +17,7 @@ INT   = 'i'
 REF   = 'r'
 FLOAT = 'f'
 HOLE  = '_'
+VOID  = 'v'
 
 FAILARGS_LIMIT = 1000
 
@@ -40,6 +42,7 @@ def getkind(TYPE, supports_floats=True):
         return "ref"
     else:
         raise NotImplementedError("type %s not supported" % TYPE)
+getkind._annspecialcase_ = 'specialize:memo'
 
 def repr_pointer(box):
     from pypy.rpython.lltypesystem import rstr
@@ -98,7 +101,7 @@ class AbstractValue(object):
     def nonconstbox(self):
         raise NotImplementedError
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         raise NotImplementedError
 
     def sort_key(self):
@@ -122,8 +125,17 @@ class AbstractDescr(AbstractValue):
     def repr_of_descr(self):
         return '%r' % (self,)
 
-    def _clone_if_mutable(self):
-        return self
+    def get_arg_types(self):
+        """ Implement in call descr.
+        Must return a string of INT, REF and FLOAT ('i', 'r', 'f').
+        """
+        raise NotImplementedError
+
+    def get_return_type(self):
+        """ Implement in call descr.
+        Must return INT, REF, FLOAT, or 'v' for void.
+        """
+        raise NotImplementedError
 
     def get_extra_info(self):
         """ Implement in call descr
@@ -150,10 +162,24 @@ class AbstractDescr(AbstractValue):
         """
         raise NotImplementedError
 
+    def as_vtable_size_descr(self):
+        """ Implement for size descr representing objects with vtables.
+        Returns self.  (it's an annotation hack)
+        """
+        raise NotImplementedError
+
+    def _clone_if_mutable(self):
+        return self
+    def clone_if_mutable(self):
+        clone = self._clone_if_mutable()
+        if not we_are_translated():
+            assert clone.__class__ is self.__class__
+        return clone
+
 class AbstractFailDescr(AbstractDescr):
     index = -1
 
-    def handle_fail(self, metainterp_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError
@@ -176,18 +202,13 @@ class Const(AbstractValue):
     __slots__ = ()
 
     @staticmethod
-    def _new(x, cpu):
+    def _new(x):
         "NOT_RPYTHON"
         T = lltype.typeOf(x)
         kind = getkind(T)
         if kind == "int":
             if isinstance(T, lltype.Ptr):
-                if not we_are_translated():
-                    # cannot store integers representing casted addresses
-                    # inside ConstInt() instances that are going through
-                    # translation; must use the special ConstAddr instead.
-                    return ConstAddr(x, cpu)
-                intval = cpu.cast_adr_to_int(llmemory.cast_ptr_to_adr(x))
+                intval = heaptracker.adr2int(llmemory.cast_ptr_to_adr(x))
             else:
                 intval = lltype.cast_primitive(lltype.Signed, x)
             return ConstInt(intval)
@@ -216,15 +237,13 @@ class Const(AbstractValue):
         # to get the other behavior (i.e. using this __eq__).
         if self.__class__ is not other.__class__:
             return False
-        if isinstance(self.value, Symbolic):
-            v1 = "symbolic", id(self.value)
-        else:
-            v1 = self.value
-        if isinstance(other.value, Symbolic):
-            v2 = "symbolic", id(other.value)
-        else:
-            v2 = other.value
-        return v1 == v2
+        try:
+            return self.value == other.value
+        except TypeError:
+            if (isinstance(self.value, Symbolic) and
+                isinstance(other.value, Symbolic)):
+                return self.value is other.value
+            raise
 
     def __ne__(self, other):
         return not (self == other)
@@ -232,6 +251,7 @@ class Const(AbstractValue):
 
 class ConstInt(Const):
     type = INT
+    value = 0
     _attrs_ = ('value',)
 
     def __init__(self, value):
@@ -250,11 +270,11 @@ class ConstInt(Const):
     def getint(self):
         return self.value
 
-    def getaddr(self, cpu):
-        return cpu.cast_int_to_adr(self.value)
+    def getaddr(self):
+        return heaptracker.int2adr(self.value)
 
     def _get_hash_(self):
-        return self.value
+        return make_hashable_int(self.value)
 
     def set_future_value(self, cpu, j):
         cpu.set_future_value_int(j, self.value)
@@ -274,50 +294,6 @@ class ConstInt(Const):
 
 CONST_FALSE = ConstInt(0)
 CONST_TRUE  = ConstInt(1)
-
-class ConstAddr(Const):       # only for constants built before translation
-    type = INT
-    _attrs_ = ('value', 'cpu')
-
-    def __init__(self, adrvalue, cpu):
-        "NOT_RPYTHON"
-        assert not we_are_translated()
-        if isinstance(lltype.typeOf(adrvalue), lltype.Ptr):
-            adrvalue = llmemory.cast_ptr_to_adr(adrvalue)    # convenience
-        else:
-            assert lltype.typeOf(adrvalue) == llmemory.Address
-        self.value = adrvalue
-        self.cpu = cpu
-
-    def clonebox(self):
-        return BoxInt(self.cpu.cast_adr_to_int(self.value))
-
-    nonconstbox = clonebox
-
-    def getint(self):
-        return self.cpu.cast_adr_to_int(self.value)
-
-    def getaddr(self, cpu):
-        return self.value
-
-    def _get_hash_(self):
-        return llmemory.cast_adr_to_int(self.value)
-
-    def set_future_value(self, cpu, j):
-        cpu.set_future_value_int(j, self.getint())
-
-    def same_constant(self, other):
-        assert isinstance(other, Const)
-        return self.value == other.getaddr(self.cpu)
-
-    def nonnull(self):
-        return bool(self.value)
-
-    def _getrepr_(self):
-        return self.value
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'ca')
 
 class ConstFloat(Const):
     type = FLOAT
@@ -355,6 +331,8 @@ class ConstFloat(Const):
     def repr_rpython(self):
         return repr_rpython(self, 'cf')
 
+CONST_FZERO = ConstFloat(0.0)
+
 class ConstPtr(Const):
     type = REF
     value = lltype.nullptr(llmemory.GCREF.TO)
@@ -382,7 +360,7 @@ class ConstPtr(Const):
         else:
             return 0
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         return llmemory.cast_ptr_to_adr(self.value)
 
     def set_future_value(self, cpu, j):
@@ -403,7 +381,13 @@ class ConstPtr(Const):
     def _get_str(self):    # for debugging only
         from pypy.rpython.annlowlevel import hlstr
         from pypy.rpython.lltypesystem import rstr
-        return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), self.value))
+        try:
+            return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR),
+                                                self.value))
+        except lltype.UninitializedMemoryAccess:
+            return '<uninitialized string>'
+
+CONST_NULL = ConstPtr(ConstPtr.value)
 
 class ConstObj(Const):
     type = REF
@@ -435,7 +419,7 @@ class ConstObj(Const):
     def set_future_value(self, cpu, j):
         cpu.set_future_value_ref(j, self.value)
 
-##    def getaddr(self, cpu):
+##    def getaddr(self):
 ##        # so far this is used only when calling
 ##        # CodeWriter.IndirectCallset.bytecode_for_address.  We don't need a
 ##        # real addr, but just a key for the dictionary
@@ -464,7 +448,7 @@ class Box(AbstractValue):
     is_box = True  # hint that we want to make links in graphviz from this
 
     @staticmethod
-    def _new(x, cpu):
+    def _new(x):
         "NOT_RPYTHON"
         kind = getkind(lltype.typeOf(x))
         if kind == "int":
@@ -527,11 +511,11 @@ class BoxInt(Box):
     def getint(self):
         return self.value
 
-    def getaddr(self, cpu):
-        return cpu.cast_int_to_adr(self.value)
+    def getaddr(self):
+        return heaptracker.int2adr(self.value)
 
     def _get_hash_(self):
-        return self.value
+        return make_hashable_int(self.value)
 
     def set_future_value(self, cpu, j):
         cpu.set_future_value_int(j, self.value)
@@ -598,7 +582,7 @@ class BoxPtr(Box):
         return lltype.cast_opaque_ptr(PTR, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
 
-    def getaddr(self, cpu):
+    def getaddr(self):
         return llmemory.cast_ptr_to_adr(self.value)
 
     def _get_hash_(self):
@@ -694,6 +678,13 @@ def dc_hash(c):
     except lltype.DelayedPointer:
         return -2      # xxx risk of changing hash...
 
+def make_hashable_int(i):
+    if not we_are_translated() and isinstance(i, llmemory.AddressAsInt):
+        # Warning: such a hash changes at the time of translation
+        adr = heaptracker.int2adr(i)
+        return llmemory.cast_adr_to_int(adr, "emulated")
+    return i
+
 # ____________________________________________________________
 
 # The TreeLoop class contains a loop or a generalized loop, i.e. a tree
@@ -708,6 +699,7 @@ class LoopToken(AbstractDescr):
     generated assembler.
     """
     terminating = False # see TerminatingLoopToken in compile.py
+    outermost_jitdriver_sd = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
     number = 0
@@ -844,16 +836,6 @@ class History(object):
         resbox = self.operations[position].result
         op = ResOperation(opnum, argboxes, resbox, descr)
         self.operations[position] = op
-
-    def slice_history_at(self, position):
-        """ a strange function that does this:
-        history : operation_at_position : rest
-        it'll kill operation_at_position, store everything before that
-        in history.operations and return rest
-        """
-        rest = self.operations[position + 1:]
-        del self.operations[position:]
-        return rest
 
 # ____________________________________________________________
 

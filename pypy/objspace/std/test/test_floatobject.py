@@ -92,9 +92,17 @@ class AppTestAppFloatTest:
     def test_float_string(self):
         assert 42 == float("42")
         assert 42.25 == float("42.25")
-        assert str(float("inf")).startswith("inf")
-        assert str(float("-INf")).startswith("-inf")
-        assert str(float("-nAn")).startswith("nan")
+        inf = 1e200*1e200
+        assert float("inf")  == inf
+        assert float("-INf") == -inf
+        assert str(inf) == "inf"
+        assert str(-inf) == "-inf"
+        assert str(float("nan")) == "nan"
+        assert str(float("-nAn")) == "nan"
+        assert repr(inf) == "inf"
+        assert repr(-inf) == "-inf"
+        assert repr(float("nan")) == "nan"
+        assert repr(float("-nAn")) == "nan"
 
     def test_float_unicode(self):
         # u00A0 and u2000 are some kind of spaces

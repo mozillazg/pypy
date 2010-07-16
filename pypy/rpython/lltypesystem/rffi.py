@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
-from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof, raw_memcopy
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
@@ -11,7 +11,6 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.annlowlevel import llhelper
@@ -643,16 +642,8 @@ def make_string_mappings(strtype):
         allows for the process to be performed without an extra copy.
         Make sure to call keep_buffer_alive_until_here on the returned values.
         """
-        str_chars_offset = (offsetof(STRTYPE, 'chars') + \
-                            itemoffsetof(STRTYPE.chars, 0))
-        gc_buf = lltype.nullptr(STRTYPE) # rgc.malloc_nonmovable(STRTYPE, count)
-        if gc_buf:
-            realbuf = cast_ptr_to_adr(gc_buf) + str_chars_offset
-            raw_buf = cast(TYPEP, realbuf)
-            return raw_buf, gc_buf
-        else:
-            raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
-            return raw_buf, lltype.nullptr(STRTYPE)
+        raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
+        return raw_buf, lltype.nullptr(STRTYPE)
     alloc_buffer._always_inline_ = True # to get rid of the returned tuple
 
     # (char*, str, int, int) -> None
@@ -785,7 +776,6 @@ def sizeof(tp):
         # the hint is present in structures probed by rffi_platform.
         size = tp._hints.get('size')
         if size is None:
-            from pypy.rpython.lltypesystem import llmemory
             size = llmemory.sizeof(tp)    # a symbolic result in this case
         return size
     if isinstance(tp, lltype.Ptr):
@@ -796,6 +786,8 @@ def sizeof(tp):
         return r_wchar_t.BITS/8
     if tp is lltype.Float:
         return 8
+    if tp is lltype.SingleFloat:
+        return 4
     assert isinstance(tp, lltype.Number)
     if tp is lltype.Signed:
         return ULONG._type.BITS/8
@@ -814,7 +806,6 @@ def offsetof(STRUCT, fieldname):
             if name == fieldname:
                 return fieldoffsets[index]
     # a symbolic result as a fallback
-    from pypy.rpython.lltypesystem import llmemory
     return llmemory.offsetof(STRUCT, fieldname)
 offsetof._annspecialcase_ = 'specialize:memo'
 

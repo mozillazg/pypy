@@ -72,6 +72,9 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         del obj.object_member_ex
         raises(AttributeError, "del obj.object_member_ex")
 
+        obj.set_foo = 32
+        assert obj.foo == 32
+
     def test_typeobject_string_member(self):
         module = self.import_module(name='foo')
         obj = module.new()
@@ -170,6 +173,61 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         re._cache.clear()
         re._cache_repl.clear()
 
+    def test_init_error(self):
+        module = self.import_module("foo")
+        raises(ValueError, module.InitErrType)
+    
+    def test_cmps(self):
+        module = self.import_module("comparisons")
+        cmpr = module.CmpType()
+        assert cmpr == 3
+        assert cmpr != 42
+    
+    def test_hash(self):
+        module = self.import_module("comparisons")
+        cmpr = module.CmpType()
+        assert hash(cmpr) == 3
+        d = {}
+        d[cmpr] = 72
+        assert d[cmpr] == 72
+        assert d[3] == 72
+
+    def test_descriptor(self):
+        module = self.import_module("foo")
+        prop = module.Property()
+        class C(object):
+            x = prop
+        obj = C()
+        assert obj.x == (prop, obj, C)
+        assert C.x == (prop, None, C)
+
+        obj.x = 2
+        assert obj.y == (prop, 2)
+        del obj.x
+        assert obj.z == prop
+
+    def test_tp_dict(self):
+        foo = self.import_module("foo")
+        module = self.import_extension('test', [
+           ("read_tp_dict", "METH_O",
+            '''
+                 PyObject *method;
+                 if (!args->ob_type->tp_dict)
+                 {
+                     PyErr_SetNone(PyExc_ValueError);
+                     return NULL;
+                 }
+                 method = PyDict_GetItemString(
+                     args->ob_type->tp_dict, "copy");
+                 Py_INCREF(method);
+                 return method;
+             '''
+             )
+            ])
+        obj = foo.new()
+        assert module.read_tp_dict(obj) == foo.fooType.copy
+
+
 class TestTypes(BaseApiTest):
     def test_type_attributes(self, space, api):
         w_class = space.appexec([], """():
@@ -206,8 +264,29 @@ class TestTypes(BaseApiTest):
         w_obj = api._PyType_Lookup(w_type, space.wrap("__invalid"))
         assert w_obj is None
         assert api.PyErr_Occurred() is None
-
+    
 class AppTestSlots(AppTestCpythonExtensionBase):
+    def test_some_slots(self):
+        module = self.import_extension('foo', [
+            ("test_type", "METH_O",
+             '''
+                 if (!args->ob_type->tp_setattro)
+                 {
+                     PyErr_SetString(PyExc_ValueError, "missing tp_setattro");
+                     return NULL;
+                 }
+                 if (args->ob_type->tp_setattro ==
+                     args->ob_type->tp_base->tp_setattro)
+                 {
+                     PyErr_SetString(PyExc_ValueError, "recursive tp_setattro");
+                     return NULL;
+                 }
+                 Py_RETURN_TRUE;
+             '''
+             )
+            ])
+        assert module.test_type(type(None))
+
     def test_nb_int(self):
         module = self.import_extension('foo', [
             ("nb_int", "METH_O",
@@ -245,3 +324,21 @@ class AppTestSlots(AppTestCpythonExtensionBase):
             def __call__(self, *args):
                 return args
         assert module.tp_call(C(), ('x', 2)) == ('x', 2)
+
+    def test_tp_str(self):
+        module = self.import_extension('foo', [
+           ("tp_str", "METH_O",
+            '''
+                 if (!args->ob_type->tp_str)
+                 {
+                     PyErr_SetNone(PyExc_ValueError);
+                     return NULL;
+                 }
+                 return args->ob_type->tp_str(args);
+             '''
+             )
+            ])
+        class C:
+            def __str__(self):
+                return "text"
+        assert module.tp_str(C()) == "text"

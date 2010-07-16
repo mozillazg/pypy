@@ -1,5 +1,6 @@
 from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.error import OperationError
+from pypy.rlib.objectmodel import we_are_translated
 import sys
 
 class Module(MixedModule):
@@ -29,9 +30,8 @@ class Module(MixedModule):
         'stderr'                : 'state.getio(space).w_stderr',
         '__stderr__'            : 'state.getio(space).w_stderr',
         'pypy_objspaceclass'    : 'space.wrap(repr(space))',
-        #'pypy_prefix': added by pypy_initial_path() when it succeeds, pointing
-        # to the trunk of a checkout or to the dir /usr/share/pypy-1.1 .
-
+        #'prefix'               : # added by pypy_initial_path() when it 
+        #'exec_prefix'          : # succeeds, pointing to trunk or /usr
         'path'                  : 'state.get(space).w_path', 
         'modules'               : 'state.get(space).w_modules', 
         'argv'                  : 'state.get(space).w_argv', 
@@ -92,10 +92,11 @@ class Module(MixedModule):
         self.space.setitem(w_modules, w_name, w_module)
 
     def startup(self, space):
-        from pypy.module.sys.interp_encoding import _getfilesystemencoding
-        self.filesystemencoding = _getfilesystemencoding(space)
+        if space.config.translating and not we_are_translated():
+            # don't get the filesystemencoding at translation time
+            assert self.filesystemencoding is None
 
-    def getmodule(self, name): 
+    def getmodule(self, name):
         space = self.space
         w_modules = self.get('modules') 
         try: 
