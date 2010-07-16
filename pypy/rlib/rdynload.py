@@ -18,8 +18,6 @@ _FREEBSD_7 = platform.name == "freebsd7"
 
 if _WIN32:
     from pypy.rlib import rwin32
-
-if _WIN32:
     includes = ['windows.h']
 else:
     includes = ['dlfcn.h']
@@ -138,7 +136,7 @@ if _WIN32:
         intresource = rffi.cast(rffi.CCHARP, r_uint(index) & 0xFFFF)
         res = rwin32.GetProcAddress(handle, intresource)
         if not res:
-            raise KeyError(name)
+            raise KeyError(index)
         # XXX rffi.cast here...
         return res
     
