@@ -17,7 +17,7 @@ class W_CDLL(Wrappable):
         args_type_w = [ space.str_w(w_x)
                         for w_x in space.listview(w_args_type) ]
         try:
-            ret = W_Get(space, self.rcdll.cpu, space.wrap(self.lib_w),
+            ret = W_Get(space, self.rcdll.cpu, self.lib_w,
                         func, args_type_w, res_type)
         except ValueError, e:
             raise OperationError(space.w_ValueError, space.wrap(str(e)))
