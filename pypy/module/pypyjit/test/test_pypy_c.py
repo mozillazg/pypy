@@ -83,6 +83,7 @@ class PyPyCJITTests(object):
         assert isinstance(expected_max_ops, int)
         source = py.code.Source(source)
         filepath = self.tmpdir.join('case%d.py' % self.counter)
+        print filepath
         logfilepath = filepath.new(ext='.log')
         self.__class__.counter += 1
         f = filepath.open('w')
@@ -615,16 +616,103 @@ class PyPyCJITTests(object):
             return total
         ''', 170, ([], 4999450000L))
 
-    def test_boolrewrite(self):
-        self.run_source('''
-        def main(a,b,c):
-            sa = 0
-            for i in range(100000):
-                if b < a: sa += 1
-                else: sa += 2
-                if b >= c: sa += 3
-                else: sa += 4
-        ''', 0, ([0, 1, 0], 7))
+    def test_boolrewrite_invers(self):
+        for a, b, res, ops in (('2000', '2000', 20001000, 53),
+                               ( '500',  '500', 15001500, 83),
+                               ( '300',  '600', 16001700, 89),
+                               (   'a',    'b', 16001700, 89),
+                               (   'a',    'a', 13001700, 87)):
+
+            self.run_source('''
+            def main():
+                sa = 0
+                a = 300
+                b = 600
+                for i in range(1000):
+                    if i < %s: sa += 1
+                    else: sa += 2
+                    if i >= %s: sa += 10000
+                    else: sa += 20000
+                return sa
+            '''%(a, b), ops, ([], res))
+
+    def test_boolrewrite_reflex(self):
+        for a, b, res, ops in (('2000', '2000', 10001000, 53),
+                               ( '500',  '500', 15001500, 83),
+                               ( '300',  '600', 14001700, 89),
+                               (   'a',    'b', 14001700, 89),
+                               (   'a',    'a', 17001700, 87)):
+
+            self.run_source('''
+            def main():
+                sa = 0
+                a = 300
+                b = 600
+                for i in range(1000):
+                    if i < %s: sa += 1
+                    else: sa += 2
+                    if %s > i: sa += 10000
+                    else: sa += 20000
+                return sa
+            '''%(a, b), ops, ([], res))
+
+
+    def test_boolrewrite_int_correct_invers(self):
+        def opval(i, op, a):
+            if eval('%d %s %d' % (i, op, a)): return 1
+            return 2
+
+        ops = ('<', '>', '<=', '>=', '==', '!=')        
+        for op1 in ops:
+            for op2 in ops:
+                for a,b in ((500, 500), (300, 600)):
+                    res = 0
+                    res += opval(a-1, op1, a) * (a)
+                    res += opval(  a, op1, a) 
+                    res += opval(a+1, op1, a) * (1000 - a - 1)
+                    res += opval(b-1, op2, b) * 10000 * (b)
+                    res += opval(  b, op2, b) * 10000 
+                    res += opval(b+1, op2, b) * 10000 * (1000 - b - 1)
+
+                    self.run_source('''
+                    def main():
+                        sa = 0
+                        for i in range(1000):
+                            if i %s %d: sa += 1
+                            else: sa += 2
+                            if i %s %d: sa += 10000
+                            else: sa += 20000
+                        return sa
+                    '''%(op1, a, op2, b), 100, ([], res))
+
+    def test_boolrewrite_int_correct_reflex(self):
+        def opval(i, op, a):
+            if eval('%d %s %d' % (i, op, a)): return 1
+            return 2
+
+        ops = ('<', '>', '<=', '>=', '==', '!=')        
+        for op1 in ops:
+            for op2 in ops:
+                for a,b in ((500, 500), (300, 600)):
+                    res = 0
+                    res += opval(a-1, op1, a) * (a)
+                    res += opval(  a, op1, a) 
+                    res += opval(a+1, op1, a) * (1000 - a - 1)
+                    res += opval(b, op2, b-1) * 10000 * (b)
+                    res += opval(b, op2,   b) * 10000
+                    res += opval(b, op2, b+1) * 10000 * (1000 - b - 1)
+
+                    self.run_source('''
+                    def main():
+                        sa = 0
+                        for i in range(1000):
+                            if i %s %d: sa += 1
+                            else: sa += 2
+                            if %d %s i: sa += 10000
+                            else: sa += 20000
+                        return sa
+                    '''%(op1, a, b, op2), 100, ([], res))
+
 
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
