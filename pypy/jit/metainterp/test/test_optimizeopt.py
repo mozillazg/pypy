@@ -874,16 +874,10 @@ class BaseTestOptimizeOpt(BaseTest):
         guard_nonnull(p0) []
         i7 = ptr_ne(p0, p1)
         guard_true(i7) []
-        i8 = ptr_eq(p0, p1)
-        guard_false(i8) []
         i9 = ptr_ne(p0, p2)
         guard_true(i9) []
-        i10 = ptr_eq(p0, p2)
-        guard_false(i10) []
         i11 = ptr_ne(p2, p1)
         guard_true(i11) []
-        i12 = ptr_eq(p2, p1)
-        guard_false(i12) []
         jump(p0, p1, p2)
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected2)
