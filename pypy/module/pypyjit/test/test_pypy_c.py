@@ -741,7 +741,7 @@ class PyPyCJITTests(object):
                     '''%(op1, float(a)/4.0, float(b)/4.0, op2), 109, ([], res))
 
     def test_boolrewrite_ptr(self):
-        compares = ('a == b', 'b == a', 'a != b', 'a == c')
+        compares = ('a == b', 'b == a', 'a != b', 'b != a', 'a == c', 'c != b')
         for e1 in compares:
             for e2 in compares:
                 a, b, c = 1, 2, 3

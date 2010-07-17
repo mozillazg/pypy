@@ -283,6 +283,11 @@ opboolinvers = {
     rop.INT_GT: rop.INT_LE,
     rop.INT_LE: rop.INT_GT,
 
+    rop.UINT_LT: rop.UINT_GE,
+    rop.UINT_GE: rop.UINT_LT,
+    rop.UINT_GT: rop.UINT_LE,
+    rop.UINT_LE: rop.UINT_GT,
+
     rop.FLOAT_EQ: rop.FLOAT_NE,
     rop.FLOAT_NE: rop.FLOAT_EQ,
     rop.FLOAT_LT: rop.FLOAT_GE,
@@ -301,6 +306,11 @@ opboolreflex = {
     rop.INT_GE: rop.INT_LE,
     rop.INT_GT: rop.INT_LT,
     rop.INT_LE: rop.INT_GE,
+
+    rop.UINT_LT: rop.UINT_GT,
+    rop.UINT_GE: rop.UINT_LE,
+    rop.UINT_GT: rop.UINT_LT,
+    rop.UINT_LE: rop.UINT_GE,
 
     rop.FLOAT_EQ: rop.FLOAT_EQ,
     rop.FLOAT_NE: rop.FLOAT_NE,
