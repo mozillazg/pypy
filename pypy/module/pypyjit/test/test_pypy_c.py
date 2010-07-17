@@ -757,7 +757,7 @@ class PyPyCJITTests(object):
 
 
                 if 'c' in e1 or 'c' in e2:
-                    n = 245
+                    n = 337
                 else:
                     n = 215
 
