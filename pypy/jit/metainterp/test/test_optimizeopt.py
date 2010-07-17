@@ -364,7 +364,7 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
-    def test_constant_boolrewrite1(self):
+    def test_constant_boolrewrite_lt(self):
         ops = """
         [i0]
         i1 = int_lt(i0, 0)
@@ -381,7 +381,7 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
-    def test_constant_boolrewrite2(self):
+    def test_constant_boolrewrite_gt(self):
         ops = """
         [i0]
         i1 = int_gt(i0, 0)
@@ -398,13 +398,30 @@ class BaseTestOptimizeOpt(BaseTest):
         """
         self.optimize_loop(ops, 'Not', expected)
 
-    def test_constant_boolrewrite3(self):
+    def test_constant_boolrewrite_reflex(self):
         ops = """
         [i0]
         i1 = int_gt(i0, 0)
         guard_true(i1) []
         i2 = int_lt(0, i0)
         guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_gt(i0, 0)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_constant_boolrewrite_reflex_invers(self):
+        ops = """
+        [i0]
+        i1 = int_gt(i0, 0)
+        guard_true(i1) []
+        i2 = int_ge(0, i0)
+        guard_false(i2) []
         jump(i0)
         """
         expected = """

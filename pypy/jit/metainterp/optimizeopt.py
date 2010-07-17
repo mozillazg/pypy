@@ -620,36 +620,49 @@ class Optimizer(object):
         self.emit_operation(op)
 
 
+    def try_boolinvers(self, op, targs):
+        oldop = self.pure_operations.get(targs, None)
+        if oldop is not None and oldop.descr is op.descr:
+            value = self.getvalue(oldop.result)
+            if value.is_constant():
+                if value.box is CONST_1:
+                    self.make_constant(op.result, CONST_0)
+                    return True
+                elif value.box is CONST_0:
+                    self.make_constant(op.result, CONST_1)
+                    return True
+        return False
+
+    
     def find_rewriteable_bool(self, op, args):
         try:
             oldopnum = opboolinvers[op.opnum]
-            targ = [args[0], args[1], ConstInt(oldopnum)]
-            oldop = self.pure_operations.get(targ, None)
-            if oldop is not None and oldop.descr is op.descr:
-                value = self.getvalue(oldop.result)
-                if value.is_constant():
-                    if value.box is CONST_1:
-                        self.make_constant(op.result, CONST_0)
-                        return True
-                    elif value.box is CONST_0:
-                        self.make_constant(op.result, CONST_1)
-                        return True
+            targs = [args[0], args[1], ConstInt(oldopnum)]
+            if self.try_boolinvers(op, targs):
+                return True
         except KeyError:
             pass
 
         try:
             oldopnum = opboolreflex[op.opnum]
-            targ = [args[1], args[0], ConstInt(oldopnum)]
-            oldop = self.pure_operations.get(targ, None)
+            targs = [args[1], args[0], ConstInt(oldopnum)]
+            oldop = self.pure_operations.get(targs, None)
             if oldop is not None and oldop.descr is op.descr:
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 return True
         except KeyError:
             pass
 
-        # FIXME: oldopnum = opboolinvers[opboolreflex[op.opnum]]?
-            
+        try:
+            oldopnum = opboolinvers[opboolreflex[op.opnum]]
+            targs = [args[1], args[0], ConstInt(oldopnum)]
+            if self.try_boolinvers(op, targs):
+                return True
+        except KeyError:
+            pass
+
         return False
+
         
     def optimize_JUMP(self, op):
         orgop = self.loop.operations[-1]
