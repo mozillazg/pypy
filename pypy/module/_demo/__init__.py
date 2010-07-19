@@ -4,13 +4,10 @@ class Module(MixedModule):
     """A demo built-in module based on ctypes."""
 
     interpleveldefs = {
-        'measuretime'      : 'demo.measuretime',
-        'sieve'            : 'demo.sieve',
-        'MyType'           : 'demo.W_MyType',
+        'tp' : 'interp_demo.w_type',
     }
 
     appleveldefs = {
-        'DemoError'        : 'app_demo.DemoError',
     }
 
     # Used in tests
