@@ -31,6 +31,15 @@ class BoolConverter(TypeConverter):
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)
 
+class CharConverter(TypeConverter):
+    def convert_argument(self, space, w_obj):
+        arg = space.str_w(w_obj)
+        if len(arg) != 1:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("char expecter, got string of size %d" % len(arg)))
+        x = rffi.str2charp(arg)
+        return rffi.cast(rffi.VOIDP, x)
+
 class IntConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         arg = space.c_int_w(w_obj)
@@ -100,6 +109,8 @@ def get_converter(space, name):
 
 
 _converters["bool"]                = BoolConverter()
+_converters["char"]                = CharConverter()
+_converters["unsigned char"]       = CharConverter()
 _converters["int"]                 = IntConverter()
 _converters["double"]              = DoubleConverter()
 _converters["const char*"]         = CStringConverter()

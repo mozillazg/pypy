@@ -20,6 +20,11 @@ class BoolExecutor(FunctionExecutor):
         result = capi.c_call_b(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
+class CharExecutor(FunctionExecutor):
+     def execute(self, space, func, cppthis, num_args, args):
+        result = capi.c_call_c(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return space.wrap(result)
+
 class LongExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
@@ -69,6 +74,8 @@ def get_executor(space, name):
 
 _executors["void"]                = VoidExecutor()
 _executors["bool"]                = BoolExecutor()
+_executors["char"]                = CharExecutor()
+_executors["unsigned char"]       = CharExecutor()
 _executors["int"]                 = LongExecutor()
 _executors["long int"]            = LongExecutor()
 _executors["double"]              = DoubleExecutor()
