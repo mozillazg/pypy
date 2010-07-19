@@ -52,6 +52,11 @@ int cppyy_call_b(cppyy_typehandle_t handle, int method_index,
     return (int)cppyy_call_T<bool>(handle, method_index, self, numargs, args);
 }
 
+char cppyy_call_c(cppyy_typehandle_t handle, int method_index,
+                 cppyy_object_t self, int numargs, void* args[]) {
+   return cppyy_call_T<char>(handle, method_index, self, numargs, args);
+}
+
 long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
                   cppyy_object_t self, int numargs, void* args[]) {
     return cppyy_call_T<long>(handle, method_index, self, numargs, args);
@@ -88,16 +93,16 @@ cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int me
 
 int cppyy_num_methods(cppyy_typehandle_t handle) {
     Reflex::Type t((Reflex::TypeName*)handle);
-    for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
-        Reflex::Member m = t.FunctionMemberAt(i);
-        std::cout << i << " " << m.Name() << std::endl;
-        std::cout << "    " << "Stubfunction:  " << (void*)m.Stubfunction() << std::endl;
-        std::cout << "    " << "MethPtrGetter: " << (void*)get_methptr_getter(m) << std::endl;
-        for (int j = 0; j < (int)m.FunctionParameterSize(); j++) {
-            Reflex::Type at = m.TypeOf().FunctionParameterAt(j);
-            std::cout << "    " << j << " " << at.Name() << std::endl;
-        }
-    }
+    // for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
+    //     Reflex::Member m = t.FunctionMemberAt(i);
+    //     std::cout << i << " " << m.Name() << std::endl;
+    //     std::cout << "    " << "Stubfunction:  " << (void*)m.Stubfunction() << std::endl;
+    //     std::cout << "    " << "MethPtrGetter: " << (void*)get_methptr_getter(m) << std::endl;
+    //     for (int j = 0; j < (int)m.FunctionParameterSize(); j++) {
+    //         Reflex::Type at = m.TypeOf().FunctionParameterAt(j);
+    //         std::cout << "    " << j << " " << at.Name() << std::endl;
+    //     }
+    // }
     return t.FunctionMemberSize();
 }
 
