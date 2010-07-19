@@ -1,4 +1,9 @@
-from pypy.interpreter.mixedmodule import MixedModule 
+from pypy.interpreter.mixedmodule import MixedModule
+from pypy.module._demo.interp_demo import W_Zero, W_One
+from pypy.objspace.std.model import registerimplementation
+
+registerimplementation(W_Zero)
+registerimplementation(W_One)
 
 class Module(MixedModule):
     """A demo built-in module based on ctypes."""
