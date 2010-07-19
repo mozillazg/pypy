@@ -11,8 +11,10 @@ def w_type(space, arg):
         return W_One()
 w_type.unwrap_spec = [ObjSpace, int]
 
-type_typedef = StdTypeDef("tp",
-                          __new__ = w_type)
+#type_repr = SMM('__repr__', 1, 'a docstring')
+tp_pop    = SMM('pop',    2, defaults=(-1,))
+
+type_typedef = StdTypeDef("tp", __new__ = w_type)
 type_typedef.registermethods(globals())
 
 class W_Zero(W_Object):
@@ -34,5 +36,20 @@ def repr__Zero(space, w_zero):
 
 def repr__One(space, w_one):
     return space.wrap("one")
+
+
+def len__Zero(space, w_zero):
+    return space.wrap(7)
+
+def len__One(space, w_zero):
+    return space.wrap(42)
+
+
+def tp_pop__One_ANY(space, w_one, w_count):
+    return w_count
+
+def tp_pop__Zero_ANY(space, w_zero, w_count):
+    return space.wrap(9)
+
 
 register_all(locals(), globals())
