@@ -3,18 +3,19 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.objspace.std.stdtypedef import SMM, StdTypeDef
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.model import W_Object
+from pypy.interpreter.gateway import interp2app
 
-def w_type(space, arg):
+def w_type(space, w_subtype, arg):
+    # XXX handle subclasses
     if arg == 0:
         return W_Zero()
     else:
         return W_One()
-w_type.unwrap_spec = [ObjSpace, int]
+w_type.unwrap_spec = [ObjSpace, W_Root, int]
 
-#type_repr = SMM('__repr__', 1, 'a docstring')
 tp_pop    = SMM('pop',    2, defaults=(-1,))
 
-type_typedef = StdTypeDef("tp", __new__ = w_type)
+type_typedef = StdTypeDef("tp", __new__ = interp2app(w_type))
 type_typedef.registermethods(globals())
 
 class W_Zero(W_Object):

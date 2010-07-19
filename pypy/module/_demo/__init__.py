@@ -9,7 +9,8 @@ class Module(MixedModule):
     """A demo built-in module based on ctypes."""
 
     interpleveldefs = {
-        'tp' : 'interp_demo.w_type',
+        'tp' : 'interp_demo.W_Zero', # W_One would do as well, gateway
+        # is getting type of an object anyway (which they share)
     }
 
     appleveldefs = {
