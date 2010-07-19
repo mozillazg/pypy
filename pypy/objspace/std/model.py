@@ -140,6 +140,8 @@ class StdTypeModel:
 
         # check if we missed implementations
         for implcls in _registered_implementations:
+            if hasattr(implcls, 'register'):
+                implcls.register(self.typeorder)
             assert (implcls in self.typeorder or
                     implcls in self.imported_but_not_registered), (
                 "please add %r in StdTypeModel.typeorder" % (implcls,))

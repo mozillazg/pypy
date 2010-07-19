@@ -2,12 +2,13 @@
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.objspace.std.stdtypedef import SMM, StdTypeDef
 from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.model import W_Object
 
 def w_type(space, arg):
     if arg == 0:
-        return space.wrap(W_Zero())
+        return W_Zero()
     else:
-        return space.wrap(W_One())
+        return W_One()
 w_type.unwrap_spec = [ObjSpace, int]
 
 type_repr = SMM('__repr__', 1, 'a docstring')
@@ -16,10 +17,18 @@ type_typedef = StdTypeDef("tp",
                           __new__ = w_type)
 type_typedef.registermethods(globals())
 
-class W_Zero(Wrappable):
+class W_Zero(W_Object):
+    @staticmethod
+    def register(typeorder):
+        typeorder[W_Zero] = []
+        
     typedef = type_typedef
 
-class W_One(Wrappable):
+class W_One(W_Object):
+    @staticmethod
+    def register(typeorder):
+        typeorder[W_One] = []
+        
     typedef = type_typedef
 
 def repr__Zero(space, w_zero):
