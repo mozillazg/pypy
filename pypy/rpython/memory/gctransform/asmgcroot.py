@@ -326,7 +326,7 @@ class AsmStackRootWalker(BaseRootWalker):
             ll_assert(reg < CALLEE_SAVED_REGS, "bad register location")
             return callee.regs_stored_at[reg]
         elif kind == LOC_ESP_PLUS:    # in the caller stack frame at N(%esp)
-            esp_in_caller = callee.frame_address + 4
+            esp_in_caller = callee.frame_address + sizeofaddr
             return esp_in_caller + offset
         elif kind == LOC_EBP_PLUS:    # in the caller stack frame at N(%ebp)
             ebp_in_caller = callee.regs_stored_at[INDEX_OF_EBP].address[0]
@@ -465,9 +465,16 @@ class ShapeDecompressor:
 #   - frame address (actually the addr of the retaddr of the current function;
 #                    that's the last word of the frame in memory)
 #
+"""
 CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
 INDEX_OF_EBP      = 3
 FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
+"""
+
+# FIXME: hard-coded for 64-bit
+CALLEE_SAVED_REGS = 6
+INDEX_OF_EBP      = 5
+FRAME_PTR         = CALLEE_SAVED_REGS
 
 ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([], lltype.Void))
 

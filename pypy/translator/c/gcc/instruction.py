@@ -5,6 +5,16 @@ LOC_EBP_MINUS = 3
 LOC_MASK      = 0x03
 LOC_NOWHERE   = LOC_REG | 0
 
+# XXX: Although it simplifies things, it's ugly to mix x86-64 and x86-32
+# registers in the same tuple
+ARGUMENT_REGISTERS = (
+    # x86-64 registers used to pass arguments
+    ('%rdi', '%rsi', '%rdx', '%rcx', '%r8', '%r9') +
+    # x86-32 registers sometimes used to pass arguments when gcc optimizes
+    # a function's calling convention
+    ('%eax', '%edx', '%ecx')
+)
+
 def frameloc_esp(offset):
     assert offset >= 0
     assert offset % 4 == 0
@@ -19,7 +29,8 @@ def frameloc_ebp(offset):
 
 
 class SomeNewValue(object):
-    pass
+    def __repr__(self):
+        return 'somenewvalue'
 somenewvalue = SomeNewValue()
 
 class LocalVar(object):
@@ -42,7 +53,7 @@ class LocalVar(object):
         else:
             return 1
 
-    def getlocation(self, framesize, uses_frame_pointer):
+    def getlocation(self, framesize, uses_frame_pointer, wordsize):
         if (self.hint == 'esp' or not uses_frame_pointer
             or self.ofs_from_frame_end % 2 != 0):
             # try to use esp-relative addressing
@@ -52,7 +63,7 @@ class LocalVar(object):
             # we can get an odd value if the framesize is marked as bogus
             # by visit_andl()
         assert uses_frame_pointer
-        ofs_from_ebp = self.ofs_from_frame_end + 4
+        ofs_from_ebp = self.ofs_from_frame_end + wordsize
         return frameloc_ebp(ofs_from_ebp)
 
 
@@ -81,6 +92,7 @@ class Label(Insn):
         self.previous_insns = []   # all insns that jump (or fallthrough) here
 
 class InsnFunctionStart(Insn):
+    _args_ = ['arguments']
     framesize = 0
     previous_insns = ()
     def __init__(self, registers):
@@ -90,7 +102,7 @@ class InsnFunctionStart(Insn):
 
     def source_of(self, localvar, tag):
         if localvar not in self.arguments:
-            if localvar in ('%eax', '%edx', '%ecx'):
+            if localvar in ARGUMENT_REGISTERS:
                 # xxx this might show a bug in trackgcroot.py failing to
                 # figure out which instruction stored a value in these
                 # registers.  However, this case also occurs when the
@@ -219,9 +231,12 @@ class InsnGCROOT(Insn):
 
 class InsnPrologue(Insn):
     def __setattr__(self, attr, value):
+        # FIXME: Correct this assert to work for both 32-bit and 64-bit
+        """
         if attr == 'framesize':
             assert value == 4, ("unrecognized function prologue - "
                                 "only supports push %ebp; movl %esp, %ebp")
+        """
         Insn.__setattr__(self, attr, value)
 
 class InsnEpilogue(Insn):
