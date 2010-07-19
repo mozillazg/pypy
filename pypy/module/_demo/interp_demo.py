@@ -11,8 +11,6 @@ def w_type(space, arg):
         return W_One()
 w_type.unwrap_spec = [ObjSpace, int]
 
-type_repr = SMM('__repr__', 1, 'a docstring')
-
 type_typedef = StdTypeDef("tp",
                           __new__ = w_type)
 type_typedef.registermethods(globals())
