@@ -53,6 +53,10 @@ def test_get_field_descr():
         assert descr_y.__class__ is GcPtrFieldDescr
         assert descr_z.__class__ is NonGcPtrFieldDescr
         assert descr_f.__class__ is clsf
+        assert descr_x.name == 'S.x'
+        assert descr_y.name == 'S.y'
+        assert descr_z.name == 'S.z'
+        assert descr_f.name == 'S.f'
         if not tsc:
             assert descr_x.offset < descr_y.offset < descr_z.offset
             assert descr_x.sort_key() < descr_y.sort_key() < descr_z.sort_key()
@@ -140,7 +144,25 @@ def test_get_array_descr():
     assert isinstance(descr2.get_item_size(True), Symbolic)
     assert isinstance(descr3.get_item_size(True), Symbolic)
     assert isinstance(descr4.get_item_size(True), Symbolic)
-
+    CA = rffi.CArray(lltype.Signed)
+    descr = get_array_descr(c0, CA)
+    assert not descr.is_array_of_floats()
+    assert descr.get_base_size(False) == 0
+    assert descr.get_ofs_length(False) == -1
+    CA = rffi.CArray(lltype.Ptr(lltype.GcStruct('S')))
+    descr = get_array_descr(c0, CA)
+    assert descr.is_array_of_pointers()
+    assert descr.get_base_size(False) == 0
+    assert descr.get_ofs_length(False) == -1
+    CA = rffi.CArray(lltype.Ptr(lltype.Struct('S')))
+    descr = get_array_descr(c0, CA)
+    assert descr.get_base_size(False) == 0
+    assert descr.get_ofs_length(False) == -1
+    CA = rffi.CArray(lltype.Float)
+    descr = get_array_descr(c0, CA)
+    assert descr.is_array_of_floats()
+    assert descr.get_base_size(False) == 0
+    assert descr.get_ofs_length(False) == -1
 
 def test_get_call_descr_not_translated():
     c0 = GcCache(False)
@@ -210,11 +232,11 @@ def test_repr_of_descr():
     #
     descr2 = get_field_descr(c0, S, 'y')
     o, _ = symbolic.get_field_token(S, 'y', False)
-    assert descr2.repr_of_descr() == '<GcPtrFieldDescr %d>' % o
+    assert descr2.repr_of_descr() == '<GcPtrFieldDescr S.y %d>' % o
     #
     descr2i = get_field_descr(c0, S, 'x')
     o, _ = symbolic.get_field_token(S, 'x', False)
-    assert descr2i.repr_of_descr() == '<CharFieldDescr %d>' % o
+    assert descr2i.repr_of_descr() == '<CharFieldDescr S.x %d>' % o
     #
     descr3 = get_array_descr(c0, lltype.GcArray(lltype.Ptr(S)))
     assert descr3.repr_of_descr() == '<GcPtrArrayDescr>'

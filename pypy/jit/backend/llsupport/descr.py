@@ -23,10 +23,10 @@ class GcCache(object):
         self._cache_call = {}
 
     def init_size_descr(self, STRUCT, sizedescr):
-        pass
+        assert isinstance(STRUCT, lltype.GcStruct)
 
     def init_array_descr(self, ARRAY, arraydescr):
-        pass
+        assert isinstance(ARRAY, lltype.GcArray)
 
 
 # ____________________________________________________________
@@ -67,9 +67,11 @@ def get_size_descr(gccache, STRUCT):
 
 class BaseFieldDescr(AbstractDescr):
     offset = 0      # help translation
+    name = ''
     _clsname = ''
 
-    def __init__(self, offset):
+    def __init__(self, name, offset):
+        self.name = name
         self.offset = offset
 
     def sort_key(self):
@@ -88,7 +90,7 @@ class BaseFieldDescr(AbstractDescr):
         return self._is_float_field
 
     def repr_of_descr(self):
-        return '<%s %s>' % (self._clsname, self.offset)
+        return '<%s %s %s>' % (self._clsname, self.name, self.offset)
 
 
 class NonGcPtrFieldDescr(BaseFieldDescr):
@@ -113,7 +115,8 @@ def get_field_descr(gccache, STRUCT, fieldname):
         offset, _ = symbolic.get_field_token(STRUCT, fieldname,
                                              gccache.translate_support_code)
         FIELDTYPE = getattr(STRUCT, fieldname)
-        fielddescr = getFieldDescrClass(FIELDTYPE)(offset)
+        name = '%s.%s' % (STRUCT._name, fieldname)
+        fielddescr = getFieldDescrClass(FIELDTYPE)(name, offset)
         cachedict = cache.setdefault(STRUCT, {})
         cachedict[fieldname] = fielddescr
         return fielddescr
@@ -151,7 +154,6 @@ class BaseArrayDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<%s>' % self._clsname
 
-
 class NonGcPtrArrayDescr(BaseArrayDescr):
     _clsname = 'NonGcPtrArrayDescr'
     def get_item_size(self, translate_support_code):
@@ -161,9 +163,34 @@ class GcPtrArrayDescr(NonGcPtrArrayDescr):
     _clsname = 'GcPtrArrayDescr'
     _is_array_of_pointers = True
 
+_CA = rffi.CArray(lltype.Signed)
+
+class BaseArrayNoLengthDescr(BaseArrayDescr):
+    def get_base_size(self, translate_support_code):
+        basesize, _, _ = symbolic.get_array_token(_CA, translate_support_code)
+        return basesize
+
+    def get_ofs_length(self, translate_support_code):
+        _, _, ofslength = symbolic.get_array_token(_CA, translate_support_code)
+        return ofslength
+
+class NonGcPtrArrayNoLengthDescr(BaseArrayNoLengthDescr):
+    _clsname = 'NonGcPtrArrayNoLengthDescr'
+    def get_item_size(self, translate_support_code):
+        return symbolic.get_size_of_ptr(translate_support_code)
+
+class GcPtrArrayNoLengthDescr(NonGcPtrArrayNoLengthDescr):
+    _clsname = 'GcPtrArrayNoLengthDescr'
+    _is_array_of_pointers = True
+
 def getArrayDescrClass(ARRAY):
     return getDescrClass(ARRAY.OF, BaseArrayDescr, GcPtrArrayDescr,
                          NonGcPtrArrayDescr, 'Array', 'get_item_size',
+                         '_is_array_of_floats')
+
+def getArrayNoLengthDescrClass(ARRAY):
+    return getDescrClass(ARRAY.OF, BaseArrayNoLengthDescr, GcPtrArrayNoLengthDescr,
+                         NonGcPtrArrayNoLengthDescr, 'ArrayNoLength', 'get_item_size',
                          '_is_array_of_floats')
 
 def get_array_descr(gccache, ARRAY):
@@ -171,14 +198,18 @@ def get_array_descr(gccache, ARRAY):
     try:
         return cache[ARRAY]
     except KeyError:
-        arraydescr = getArrayDescrClass(ARRAY)()
+        if ARRAY._hints.get('nolength', False):
+            arraydescr = getArrayNoLengthDescrClass(ARRAY)()
+        else:
+            arraydescr = getArrayDescrClass(ARRAY)()
         # verify basic assumption that all arrays' basesize and ofslength
         # are equal
         basesize, itemsize, ofslength = symbolic.get_array_token(ARRAY, False)
         assert basesize == arraydescr.get_base_size(False)
         assert itemsize == arraydescr.get_item_size(False)
         assert ofslength == arraydescr.get_ofs_length(False)
-        gccache.init_array_descr(ARRAY, arraydescr)
+        if isinstance(ARRAY, lltype.GcArray):
+            gccache.init_array_descr(ARRAY, arraydescr)
         cache[ARRAY] = arraydescr
         return arraydescr
 
