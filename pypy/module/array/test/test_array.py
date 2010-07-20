@@ -2,22 +2,25 @@ from pypy.conftest import gettestobjspace
 import py
 
 
-class AppTestSimpleArray:
-    def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=('array',))
-        cls.w_simple_array = cls.space.appexec([], """():
-            import array
-            return array.simple_array
-        """)
+## class AppTestSimpleArray:
+##     def setup_class(cls):
+##         cls.space = gettestobjspace(usemodules=('array',))
+##         cls.w_simple_array = cls.space.appexec([], """():
+##             import array
+##             return array.simple_array
+##         """)
 
-    def test_simple(self):
-        a = self.simple_array(10)
-        a[5] = 7.42
-        assert a[5] == 7.42
+##     def test_simple(self):
+##         a = self.simple_array(10)
+##         a[5] = 7.42
+##         assert a[5] == 7.42
 
 
 class BaseArrayTests:
     def test_ctor(self):
+        assert len(self.array('c')) == 0
+        assert len(self.array('i')) == 0
+
         raises(TypeError, self.array, 'hi')
         raises(TypeError, self.array, 1)
         raises(ValueError, self.array, 'q')
@@ -45,9 +48,17 @@ class BaseArrayTests:
         assert len(a) == 3
 
         b = self.array('c', a)
+        assert len(b) == 3
         assert a == b
         raises(TypeError, self.array, 'i', a)
 
+        a = self.array('i', (1,2,3))
+        b = self.array('h', (1,2,3))
+        assert a == b
+
+        for tc in 'bhilBHILfd':
+            assert self.array(tc).typecode == tc
+            
     def test_value_range(self):
         values = (-129, 128, -128, 127, 0, 255, -1, 256,
                   -32768, 32767, -32769, 32768, 65535, 65536,
