@@ -48,6 +48,10 @@ array_extend = SMM('extend', 2)
 
 array_tolist = SMM('tolist', 1)
 array_fromlist = SMM('fromlist', 2)
+array_tostring = SMM('tostring', 1)
+array_fromstring = SMM('fromstring', 2)
+array_tofile = SMM('tofile', 1)
+array_fromfile = SMM('fromfile', 3)
 
 
 def descr_itemsize(space, self):
@@ -236,8 +240,12 @@ def make_array(mytype):
                 self.setlen(oldlen + i)
                 raise
             self.setlen(oldlen + i)
-            
 
+        def charbuf(self):
+            return  rffi.cast(rffi.CCHARP, self.buffer)
+
+
+    # List interface
 
     def len__Array(space, self):
         return space.wrap(self.len)
@@ -282,6 +290,9 @@ def make_array(mytype):
         else:
             self.fromsequence(w_iterable)
 
+
+    # Convertions
+    
     def array_tolist__Array(space, self):
         w_l=space.newlist([])
         for i in range(self.len):
@@ -298,7 +309,37 @@ def make_array(mytype):
         except OperationError:
             self.setlen(s)
             raise
-    
+
+    def array_fromstring__Array_ANY(space, self, w_s):
+        s = space.str_w(w_s)
+        if len(s)%mytype.bytes !=0:
+            msg = 'string length not a multiple of item size'
+            raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
+        oldlen = self.len
+        new = len(s) / mytype.bytes
+        self.setlen(oldlen + new)
+        cbuf =self.charbuf()
+        for i in range(len(s)):
+            cbuf[oldlen * mytype.bytes + i] = s[i]
+
+    def array_fromfile__Array_ANY_ANY(space, self, w_f, w_n):
+        if space.type(w_f).name != 'file': # FIXME: this cant be the right way?
+            msg = "arg1 must be open file"
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        n = space.int_w(w_n)
+        
+        size = self.itemsize * n
+        w_item = space.call_method(w_f, 'read', space.wrap(size))
+        item = space.str_w(w_item)
+        if len(item) < size:
+            n = len(item) % self.itemsize
+            if n != 0: item = item[0:-(len(item) % self.itemsize)]
+            w_item = space.wrap(item)
+            array_fromstring__Array_ANY(space, self, w_item)
+            msg = "not enough items in file"
+            raise OperationError(space.w_EOFError, space.wrap(msg))
+        array_fromstring__Array_ANY(space, self, w_item)
+        
 
     def cmp__Array_ANY(space, self, other):
         if isinstance(other, W_ArrayBase):
