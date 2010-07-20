@@ -80,17 +80,6 @@ class __extend__(AbstractStringRepr):
             # defaults to checking the length
             return super(AbstractStringRepr, self).rtype_is_true(hop)
 
-    def rtype_ord(self, hop):
-        string_repr = hop.args_r[0].repr
-        v_str, = hop.inputargs(string_repr)
-        c_zero = inputconst(Signed, 0)
-        v_chr = hop.gendirectcall(self.ll.ll_stritem_nonneg, v_str, c_zero)
-        if string_repr is hop.rtyper.type_system.rstr.string_repr:
-            return hop.genop('cast_char_to_int', [v_chr], resulttype=Signed)
-        else:
-            assert string_repr is hop.rtyper.type_system.rstr.unicode_repr
-            return hop.genop('cast_unichar_to_int', [v_chr], resulttype=Signed)
-
     def rtype_method_startswith(self, hop):
         str1_repr, str2_repr = self._str_reprs(hop)
         v_str, v_value = hop.inputargs(str1_repr, str2_repr)
@@ -299,7 +288,11 @@ class __extend__(AbstractUnicodeRepr):
         if not hop.args_s[1].is_constant():
             raise TyperError("encoding must be constant")
         encoding = hop.args_s[1].const
-        v_self = hop.inputarg(self.repr, 0)
+        if encoding == "ascii":
+            expect = self.lowleveltype   # can be a UniChar
+        else:
+            expect = self.repr           # must be a regular unicode string
+        v_self = hop.inputarg(expect, 0)
         hop.exception_is_here()
         if encoding == "ascii":
             return hop.gendirectcall(self.ll_str, v_self)
@@ -426,7 +419,17 @@ class __extend__(pairtype(AbstractStringRepr, AbstractTupleRepr)):
             sourcevars.append((v_item, r_arg))
 
         return r_str.ll.do_stringformat(hop, sourcevars)
-                
+
+
+class __extend__(AbstractCharRepr):
+    def ll_str(self, ch):
+        return self.ll.ll_chr2str(ch)
+
+class __extend__(AbstractUniCharRepr):
+    def ll_str(self, ch):
+        # xxx suboptimal, maybe
+        return str(unicode(ch))
+
 
 class __extend__(AbstractCharRepr,
                  AbstractUniCharRepr):
@@ -443,9 +446,6 @@ class __extend__(AbstractCharRepr,
         return self.ll.ll_char_hash
 
     get_ll_fasthash_function = get_ll_hash_function
-
-    def ll_str(self, ch):
-        return self.ll.ll_chr2str(ch)
 
     def rtype_len(_, hop):
         return hop.inputconst(Signed, 1)
