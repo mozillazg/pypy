@@ -1,13 +1,16 @@
-# Package initialisation
 from pypy.interpreter.mixedmodule import MixedModule
+from pypy.module.array.interp_array import types, W_ArrayBase
+from pypy.objspace.std.model import registerimplementation
 
+for mytype in types.values():
+    print mytype.w_class
+    registerimplementation(mytype.w_class)
 
 class Module(MixedModule):
 
-    appleveldefs = {
+    interpleveldefs = {
+        'array' : 'interp_array.W_ArrayBase',
     }
 
-    interpleveldefs = {
-        'array':        'interp_array.W_WrappedArray',
-        'simple_array': 'interp_simple.simple_array',
+    appleveldefs = {
     }
