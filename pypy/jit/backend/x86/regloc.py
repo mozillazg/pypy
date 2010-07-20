@@ -19,6 +19,9 @@ class AssemblerLocation(object):
     def _getregkey(self):
         return self.value
 
+    def is_memory_reference(self):
+        return self.location_code() in ('b', 's', 'j', 'a', 'm')
+
     def value_r(self): return self.value
     def value_b(self): return self.value
     def value_s(self): return self.value
@@ -191,8 +194,8 @@ class LocationCodeBuilder(object):
             # must be careful not to combine it with location types that
             # might need to use the scratch register themselves.
             if loc2 is X86_64_SCRATCH_REG:
-                assert code1 not in ('j', 'i')
-            if loc1 is X86_64_SCRATCH_REG:
+                assert code1 != 'j'
+            if loc1 is X86_64_SCRATCH_REG and not name.startswith("MOV"):
                 assert code2 not in ('j', 'i')
 
             for possible_code1 in unrolling_location_codes:
