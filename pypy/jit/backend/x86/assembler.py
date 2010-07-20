@@ -208,7 +208,9 @@ class Assembler386(object):
         float_constants = (float_constants + 15) & ~15    # align to 16 bytes
         addr = rffi.cast(rffi.CArrayPtr(lltype.Char), float_constants)
         qword_padding = '\x00\x00\x00\x00\x00\x00\x00\x00'
+        # 0x8000000000000000
         neg_const = '\x00\x00\x00\x00\x00\x00\x00\x80'
+        # 0x7FFFFFFFFFFFFFFF
         abs_const = '\xFF\xFF\xFF\xFF\xFF\xFF\xFF\x7F'
         data = neg_const + qword_padding + abs_const + qword_padding
         for i in range(len(data)):
@@ -1460,8 +1462,9 @@ class Assembler386(object):
         # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
-        # _assemble_bootstrap_code().  The LEA below throws away most
-        # of the frame, including all the PUSHes that we did just above.
+        # _assemble_bootstrap_code().  The LEA in _call_footer below throws
+        # away most of the frame, including all the PUSHes that we did just
+        # above.
 
         self._call_footer()
         self.mc.done()
@@ -1510,9 +1513,6 @@ class Assembler386(object):
         # exit function
         self._call_footer()
 
-    # FIXME: I changed the third argument to this method, but I don't know
-    # what to do with @specialize
-    @specialize.arg(2)
     def implement_guard(self, guard_token, condition=None):
         self.mc.reserve_bytes(guard_token.recovery_stub_size())
         self.pending_guard_tokens.append(guard_token)

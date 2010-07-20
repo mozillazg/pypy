@@ -149,6 +149,19 @@ XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(16)]
 eax, ecx, edx, ebx, esp, ebp, esi, edi, r8, r9, r10, r11, r12, r13, r14, r15 = REGLOCS
 xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15 = XMMREGLOCS
 
+# We use a scratch register to simulate having 64-bit immediates. When we
+# want to do something like:
+#     mov rax, [0xDEADBEEFDEADBEEF]
+# we actually do:
+#     mov r11, 0xDEADBEEFDEADBEEF
+#     mov rax, [r11]
+# 
+# NB: You can use the scratch register as a temporary register in
+# assembly.py, but great care must be taken when doing so. A call to a
+# method in LocationCodeBuilder could clobber the scratch register when
+# certain location types are passed in. In additional, if a new MC is
+# allocated, and it happens to be more than 32-bits away, the JMP to it
+# will also clobber the scratch register.
 X86_64_SCRATCH_REG = r11
 # XXX: a GPR scratch register is definitely needed, but we could probably do
 # without an xmm scratch reg.
