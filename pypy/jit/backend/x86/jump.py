@@ -63,7 +63,7 @@ def remap_frame_layout(assembler, src_locations, dst_locations, tmpreg):
             assert pending_dests == 0
 
 def _move(assembler, src, dst, tmpreg):
-    if isinstance(dst, StackLoc) and isinstance(src, StackLoc):
+    if dst.is_memory_reference() and src.is_memory_reference():
         assembler.regalloc_mov(src, tmpreg)
         src = tmpreg
     assembler.regalloc_mov(src, dst)
