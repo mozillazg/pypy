@@ -92,7 +92,18 @@ class MachineCodeBlockWrapper(object):
     def make_new_mc(self):
         new_mc = self._instantiate_mc()
         debug_print('[new machine code block at', new_mc.tell(), ']')
+
+        if IS_X86_64:
+            # The scratch register is sometimes used as a temporary
+            # register, but the JMP below might clobber it. Rather than risk
+            # subtle bugs, we preserve the scratch register across the jump.
+            self._mc.PUSH_r(X86_64_SCRATCH_REG.value)
+            
         self._mc.JMP(imm(new_mc.tell()))
+
+        if IS_X86_64:
+            # Restore scratch reg
+            new_mc.POP_r(X86_64_SCRATCH_REG.value)
 
         if self.function_name is not None:
             self.end_function(done=False)
@@ -492,7 +503,6 @@ class Assembler386(object):
 
         for i in range(len(get_from_stack)):
             loc, is_xmm = get_from_stack[i]
-            self.mc.ensure_bytes_available(32)
             if is_xmm:
                 self.mc.MOVSD_xb(X86_64_XMM_SCRATCH_REG.value, (2 + i) * WORD)
                 self.mc.MOVSD(loc, X86_64_XMM_SCRATCH_REG)
@@ -650,9 +660,6 @@ class Assembler386(object):
                 tmp2 = result_loc.higher8bits()
             elif IS_X86_64:
                 tmp2 = X86_64_SCRATCH_REG.lowest8bits()
-                # We can't do a jump in the middle below, because that could
-                # clobber the scratch register
-                self.mc.ensure_bytes_available(32)
 
             self.mc.SET_ir(rx86.Conditions[cond], tmp1.value)
             if is_ne:
@@ -771,7 +778,6 @@ class Assembler386(object):
                     self.mc.MOVSD(X86_64_XMM_SCRATCH_REG, loc)
                     self.mc.MOVSD_sx(i*WORD, X86_64_XMM_SCRATCH_REG.value)
                 else:
-                    self.mc.ensure_bytes_available(32)
                     self.mc.MOV(X86_64_SCRATCH_REG, loc)
                     self.mc.MOV_sr(i*WORD, X86_64_SCRATCH_REG.value)
             else:

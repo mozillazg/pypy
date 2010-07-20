@@ -30,6 +30,10 @@ class FakeMC:
         self.content.append(("JMP", args))
     def done(self):
         pass
+    def PUSH_r(self, reg):
+        pass
+    def POP_r(self, reg):
+        pass
 
 class FakeAssembler:
     def write_pending_failure_recoveries(self):
