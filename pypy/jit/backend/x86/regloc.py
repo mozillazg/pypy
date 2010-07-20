@@ -157,12 +157,11 @@ xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7, xmm8, xmm9, xmm10, xmm11, xmm12,
 #     mov rax, [r11]
 # 
 # NB: You can use the scratch register as a temporary register in
-# assembly.py, but great care must be taken when doing so. A call to a
-# method in LocationCodeBuilder could clobber the scratch register when
-# certain location types are passed in. In additional, if a new MC is
-# allocated, and it happens to be more than 32-bits away, the JMP to it
-# will also clobber the scratch register.
+# assembler.py, but care must be taken when doing so. A call to a method in
+# LocationCodeBuilder could clobber the scratch register when certain
+# location types are passed in.
 X86_64_SCRATCH_REG = r11
+
 # XXX: a GPR scratch register is definitely needed, but we could probably do
 # without an xmm scratch reg.
 X86_64_XMM_SCRATCH_REG = xmm15
@@ -187,6 +186,15 @@ class LocationCodeBuilder(object):
         def INSN(self, loc1, loc2):
             code1 = loc1.location_code()
             code2 = loc2.location_code()
+
+            # You can pass in the scratch register as a location, but you
+            # must be careful not to combine it with location types that
+            # might need to use the scratch register themselves.
+            if loc2 is X86_64_SCRATCH_REG:
+                assert code1 not in ('j', 'i')
+            if loc1 is X86_64_SCRATCH_REG:
+                assert code2 not in ('j', 'i')
+
             for possible_code1 in unrolling_location_codes:
                 if code1 == possible_code1:
                     for possible_code2 in unrolling_location_codes:
