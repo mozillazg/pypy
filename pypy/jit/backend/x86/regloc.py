@@ -50,7 +50,6 @@ class StackLoc(AssemblerLocation):
     def location_code(self):
         return 'b'
 
-    # FIXME: This definition of assembler sufficient?
     def assembler(self):
         return repr(self)
 
@@ -84,13 +83,11 @@ class RegLoc(AssemblerLocation):
         else:
             return 'r'
 
-    # FIXME: This definition of assembler sufficient?
     def assembler(self):
         return '%' + repr(self)
 
 class ImmedLoc(AssemblerLocation):
     _immutable_ = True
-    # XXX: Does this even make sense for an immediate?
     width = WORD
     def __init__(self, value):
         from pypy.rpython.lltypesystem import rffi, lltype
