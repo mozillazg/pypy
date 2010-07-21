@@ -635,13 +635,8 @@ define_modrm_modes('ANDPD_x*', ['\x66', rex_nw, '\x0F\x54', register(1, 8)], reg
 
 # ____________________________________________________________
 
-# FIXME: What about 32-bit only or 64-bit only instructions?
-# This is used to build the MachineCodeBlockWrapper. Missing
-# some instructions could possibly lead to subtle bugs.
+_classes = (AbstractX86CodeBuilder, X86_64_CodeBuilder, X86_32_CodeBuilder)
 
-# FIXME: hack hack hack
-all_instructions = ([name for name in AbstractX86CodeBuilder.__dict__
-                     if name.split('_')[0].isupper()] +
-                    [name for name in X86_64_CodeBuilder.__dict__
-                     if name.split('_')[0].isupper()])
-all_instructions.sort()
+# Used to build the MachineCodeBlockWrapper
+all_instructions = sorted(name for cls in _classes for name in cls.__dict__
+                          if name.split('_')[0].isupper())
