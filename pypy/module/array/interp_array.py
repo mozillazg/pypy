@@ -50,6 +50,8 @@ array_tolist = SMM('tolist', 1)
 array_fromlist = SMM('fromlist', 2)
 array_tostring = SMM('tostring', 1)
 array_fromstring = SMM('fromstring', 2)
+array_tounicode = SMM('tounicode', 1)
+array_fromunicode = SMM('fromunicode', 2)
 array_tofile = SMM('tofile', 1)
 array_fromfile = SMM('fromfile', 3)
 
@@ -231,10 +233,9 @@ def make_array(mytype):
                 else:
                     myiter = space.listview
                 for w_i in myiter(w_seq):
-                    if oldlen + i < self.len:
-                        self.buffer[oldlen + i] = self.item_w(w_i)
-                    else:
-                        self.descr_append(w_i)
+                    if oldlen + i >= self.len:
+                        self.setlen(oldlen + i + 1)
+                    self.buffer[oldlen + i] = self.item_w(w_i)
                     i += 1
             except OperationError:
                 self.setlen(oldlen + i)
@@ -251,7 +252,8 @@ def make_array(mytype):
         return space.wrap(self.len)
 
     def getitem__Array_ANY(space, self, w_idx):
-        idx = space.int_w(w_idx)
+        idx, stop, step = space.decode_index(w_idx, self.len)
+        assert step == 0
         item = self.buffer[idx]
         tc=mytype.typecode
         if (tc == 'b' or tc == 'B' or tc == 'h' or tc == 'H' or
@@ -261,10 +263,50 @@ def make_array(mytype):
             item = float(item)
         return self.space.wrap(item)
 
+    def getitem__Array_Slice(space, self, w_slice):
+        start, stop, step = space.decode_index(w_slice, self.len)
+        if step < 0:
+            w_lst = array_tolist__Array(space, self)
+            w_lst = space.getitem(w_lst, w_idx)
+            w_a=mytype.w_class(self.space)
+            w_a.fromsequence(w_lst)
+        else:
+            size = (stop - start) / step
+            if (stop - start) % step > 0: size += 1
+            w_a=mytype.w_class(self.space)
+            w_a.setlen(size)
+            for j,i in enumerate(range(start, stop, step)):
+                w_a.buffer[j]=self.buffer[i]
+        return w_a
+
+    def getslice__Array_ANY_ANY(space, self, w_i, w_j):
+        return space.getitem(self, space.newslice(w_i, w_j, space.w_None))
+
     def setitem__Array_ANY_ANY(space, self, w_idx, w_item):
-        idx = space.int_w(w_idx)
+        idx, stop, step = space.decode_index(w_idx, self.len)
+        if step != 0:
+            msg='can only assign array to array slice'
+            raise OperationError(self.space.w_TypeError, self.space.wrap(msg))
         item = self.item_w(w_item)
         self.buffer[idx] = item
+
+    def setitem__Array_Slice_Array(space, self, w_idx, w_item):
+        start, stop, step = self.space.decode_index(w_idx, self.len)
+        size = (stop - start) / step
+        if (stop - start) % step > 0: size += 1
+        if w_item.len != size or step < 0:
+            w_lst = array_tolist__Array(space, self)
+            w_item = space.call_method(w_item, 'tolist')
+            space.setitem(w_lst, w_idx, w_item)
+            self.setlen(0)
+            self.fromsequence(w_lst)
+        else:
+            for j,i in enumerate(range(start, stop, step)):
+                self.buffer[i]=w_item.buffer[j]
+
+    def setslice__Array_ANY_ANY_ANY(space, self, w_i, w_j, w_x):
+        space.setitem(self, space.newslice(w_i, w_j, space.w_None), w_x)
+    
     
     def array_append__Array_ANY(space, self, w_x):
         x = self.item_w(w_x)
@@ -278,11 +320,9 @@ def make_array(mytype):
             new = w_iterable.len
             self.setlen(self.len + new)
             for i in range(new):
-                if oldlen + i < self.len:
-                    self.buffer[oldlen + i] = w_iterable.buffer[i]
-                else:
+                if oldlen + i >= self.len:
                     self.setlen(oldlen + i + 1)
-                    self.buffer[oldlen + i] = w_iterable.buffer[i]
+                self.buffer[oldlen + i] = w_iterable.buffer[i]
             self.setlen(oldlen + i + 1)
         elif isinstance(w_iterable, W_ArrayBase):
             msg = "can only extend with array of same kind"
@@ -299,10 +339,7 @@ def make_array(mytype):
             w_l.append(getitem__Array_ANY(space, self, space.wrap(i)))
         return w_l
 
-    def array_fromlist__Array_ANY(space, self, w_lst):
-        if space.type(w_lst) is not space.w_list:
-            msg = "arg must be list"
-            raise OperationError(space.w_TypeError, space.wrap(msg))
+    def array_fromlist__Array_List(space, self, w_lst):
         s = self.len
         try:
             self.fromsequence(w_lst)
@@ -339,6 +376,20 @@ def make_array(mytype):
             msg = "not enough items in file"
             raise OperationError(space.w_EOFError, space.wrap(msg))
         array_fromstring__Array_ANY(space, self, w_item)
+
+    def array_fromunicode__Array_Unicode(space, self, w_ustr):
+        if mytype.typecode != 'u':
+            msg = "fromunicode() may only be called on type 'u' arrays"
+            raise OperationError(space.w_ValueError, space.wrap(msg))
+        
+        # XXX the following probable bug is not emulated:
+        # CPython accepts a non-unicode string or a buffer, and then
+        # behaves just like fromstring(), except that it strangely truncate
+        # string arguments at multiples of the unicode byte size.
+        # Let's only accept unicode arguments for now.
+        self.fromsequence(w_ustr)
+
+            
         
 
     def cmp__Array_ANY(space, self, other):
@@ -349,10 +400,32 @@ def make_array(mytype):
         else:
             raise OperationError(space.w_NotImplementedError, space.wrap(''))
         
+
+    def repr__Array(space, self):
+        if self.len == 0:
+            return "array('%s')" % self.typecode
+        elif self.typecode == "c":
+            r = space.repr(space.call_method(self, 'tostring'))
+            s = "array('%s', %s)" % (self.typecode, space.str_w(r))
+            return space.wrap(s)
+        elif self.typecode == "u":
+            r = space.repr(space.call_method(self, 'tounicode'))
+            s = "array('%s', %s)" % (self.typecode, space.str_w(r))
+            return space.wrap(s)
+        else:
+            r = space.repr(space.call_method(self, 'tolist'))
+            s = "array('%s', %s)" % (self.typecode, space.str_w(r))
+            return space.wrap(s)
+
+
     W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     mytype.w_class = W_Array
+
+    from pypy.objspace.std.sliceobject import W_SliceObject    
+    from pypy.objspace.std.listobject import W_ListObject
+    from pypy.objspace.std.unicodeobject import W_UnicodeObject
     register_all(locals(), globals())
+
 
 for mytype in types.values():
     make_array(mytype)
-    print mytype, mytype.w_class
