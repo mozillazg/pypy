@@ -4,16 +4,21 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import interp2app
 
-def iterable_type(space, xs):
-    raise NotImplementedError("Stub")
+def stride_row(shape, i):
+    assert i >= 0
+    stride = 1
+    ndim = len(shape)
+    for s in shape[i + 1:]:
+        stride *= s
+    return stride
 
-def get_dtype(space, t):
-    raise NotImplementedError("Stub")
-
-def retrieve_dtype(space, t):
-    raise NotImplementedError("Stub")
-
-from pypy.rpython.lltypesystem import lltype
+def stride_column(shape, i):
+    i -= 1
+    stride = 1
+    while i >= 0:
+        stride *= shape[i]
+        i -= 1
+    return stride
 
 def validate_index(array, space, w_i):
     index_dimensionality = space.int_w(space.len(w_i))
