@@ -394,6 +394,22 @@ def shifts(mod_field):
 # ____________________________________________________________
 
 
+# Method names take the form of
+# 
+#     <instruction name>_<operand type codes>
+#
+# For example, the method name for "mov reg, immed" is MOV_ri. Operand order
+# is Intel-style, with the destination first.
+# 
+# The operand type codes are:
+#     r - register
+#     b - ebp/rbp offset
+#     s - esp/rsp offset
+#     j - address
+#     i - immediate
+#     x - XMM register
+#     a - 4-tuple: (base_register, scale_register, scale, offset)
+#     m - 2-tuple: (base_register, offset)
 class AbstractX86CodeBuilder(object):
     """Abstract base class."""
 
