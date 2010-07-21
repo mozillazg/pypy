@@ -344,7 +344,7 @@ OPT_TABLE = {
 
 # For now, 64-bit JIT requires boehm
 if IS_64_BITS:
-    OPT_TABLE['jit'] = 'boehm extraopts jit'
+    OPT_TABLE['jit'] = OPT_TABLE['jit'].replace('hybrid', 'boehm')
 
 def set_opt_level(config, level):
     """Apply optimization suggestions on the 'config'.
