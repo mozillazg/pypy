@@ -1,5 +1,6 @@
 from pypy.rlib import rdynload
 from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.jit.backend.llsupport import descr, symbolic
 from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.history import LoopToken, BasicFailDescr
 from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
@@ -36,6 +37,7 @@ class _Get(object):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
+        self.res = None
         self.cpu = cpu
         lib = lib.handler
         bargs = []
@@ -65,24 +67,21 @@ class _Get(object):
                     raise ValueError(arg)
 
             if self.res_type == 'i':
-                res = lltype.Signed
+                self.res = lltype.Signed
                 bres = BoxInt()
             elif self.res_type == 'f':
-                res = lltype.Float
+                self.res = lltype.Float
                 bres = BoxFloat()
             elif self.res_type == 'p':
-                res = lltype.Signed
+                self.res = lltype.Signed
                 bres = BoxPtr()
             elif self.res_type == 'v':
-                res = lltype.Void
+                self.res = lltype.Void
                 bres = NULLBOX
             else:
                 raise ValueError(self.res_type)
 
-            FPTR = lltype.Ptr(lltype.FuncType(args, res))
-            FUNC = deref(FPTR)
-            calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
-
+            calldescr = self.gen_calldescr() # XXX add cache
             self.looptoken = LoopToken()
             oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                       ResOperation(rop.FINISH, [bres], None,
@@ -92,6 +91,26 @@ class _Get(object):
             # add to the cache
             cache[self.res_type] = { tuple(self.args_type) : self.looptoken }
         self.setup_stack()
+
+    def gen_calldescr(self):
+        arg_classes = ''.join(self.args_type)
+        gccache = self.cpu.gc_ll_descr
+
+        if self.res_type == 'i':
+            cls = SignedCallDescr
+        elif self.res_type == 'f':
+            cls = descr.FloatCallDescr
+        elif self.res_type == 'p':
+            cls = descr.NonGcPtrCallDescr
+        elif self.res_type == 'v':
+            cls = descr.VoidCallDescr
+        else:
+            raise NotImplementedError('Unknown type of descr: %s'
+                                      % self.res_type)
+
+        calldescr = cls(arg_classes)
+        calldescr.create_call_stub(gccache.rtyper, self.res)
+        return calldescr
 
     def call(self, push_result):
         res = self.cpu.execute_token(self.looptoken)
@@ -126,3 +145,12 @@ class _Get(object):
     def push_ref(self, value):
         self.cpu.set_future_value_ref(self.esp, value)
         self.esp += 1
+
+# ____________________________________________________________
+# CallDescrs
+
+class SignedCallDescr(descr.BaseIntCallDescr):
+    _clsname = 'SignedCallDescr'
+    def get_result_size(self, translate_support_code):
+        return symbolic.get_size(lltype.Signed, translate_support_code)
+
