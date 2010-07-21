@@ -411,6 +411,14 @@ class TestMicroArray(object):
         assert stride_column(shape, 0) == 1
         assert stride_column(shape, 1) == 2
 
+        shape = (5, 4, 3)
+        assert stride_row(shape, 0) == 12
+        assert stride_row(shape, 1) == 3
+        assert stride_row(shape, 2) == 1
+
+        assert stride_column(shape, 0) == 1
+        assert stride_column(shape, 1) == 5
+        assert stride_column(shape, 2) == 20
         # TODO: more, N-dimensional too
 
     def test_memory_layout(self, space):

@@ -14,6 +14,8 @@ from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import construct_array, infer_shape
 from pypy.module.micronumpy.dtype import null_data
 
+from pypy.module.micronumpy.array import stride_row, stride_column
+
 def size_from_shape(shape):
     size = 1
     for dimension in shape:
@@ -23,29 +25,11 @@ def size_from_shape(shape):
 def index_w(space, w_index):
     return space.int_w(space.index(w_index))
 
-def stride_row(shape, i):
-    assert i >= 0
-    stride = 1
-    ndim = len(shape)
-    for s in shape[i + 1:]:
-        stride *= s
-    return stride
-
-def stride_column(shape, i):
-    i -= 1
-    if i < 0:
-        return 1
-    elif i == 0:
-        return shape[0]
-    else:
-        stride = 1
-        for s in shape[:i]:
-            stride *= s
-        return stride
-
 class MicroIter(Wrappable):
+    _immutable_fields_ = ['array', 'stride']
     def __init__(self, array):
         self.array = array
+        self.stride = array.stride(0)
         self.i = 0
 
     def descr_iter(self, space):
@@ -53,13 +37,36 @@ class MicroIter(Wrappable):
     descr_iter.unwrap_spec = ['self', ObjSpace]
     
     def descr_next(self, space):
-        if self.i < space.int_w(space.len(self.array)):
-            next = self.array.getitem(space, self.i) # FIXME: wrong for multi dimensional! (would be easy applevel)
-            self.i += 1
-            return next
+        if self.i < self.array.opposite_stride(1): #will change for row/column
+            if len(self.array.shape) > 1:
+                ar = MicroArray(self.array.shape[1:], # ok for column major?
+                                self.array.dtype,
+                                self.array,
+                                offset = self.array.offset + self.i * self.stride)
+                self.i += 1
+                return space.wrap(ar)
+            elif len(self.array.shape) == 1:
+                next = self.array.getitem(space, self.i * self.stride)
+                self.i += 1
+                return next
+            else:
+                raise OperationError(space.w_ValueError,
+                       space.wrap("Something is horribly wrong with this array's shape. Has %d dimensions." % len(self.array.shape)))
         else:
             raise OperationError(space.w_StopIteration, space.wrap(""))
     descr_next.unwrap_spec = ['self', ObjSpace]
+
+    def __str__(self):
+        from pypy.rlib.rStringIO import RStringIO as StringIO
+        out = StringIO()
+        out.write('iterator(i=')
+        out.write(str(self.i))
+        out.write(', array=')
+        out.write(repr(self.array))
+        out.write(')')
+        result = out.getvalue()
+        out.close()
+        return result
 
 MicroIter.typedef = TypeDef('iterator',
                             __iter__ = interp2app(MicroIter.descr_iter),
@@ -116,27 +123,29 @@ class MicroArray(BaseNumArray):
         for i in range(len(index)):
             if index[i] < 0:
                 index[i] = self.shape[i] + index[i]
-        return self.flatten_index(space, index) 
+        return self.flatten_index(index) 
 
-    def create_flatten_index(stride_function):
-        def flatten_index(self, index):
-            offset = 0
-            for i in range(len(index)):
-                stride = stride_function(self.shape, i)
-                offset += index[i] * stride
-            return offset
-        return flatten_index
+    def flatten_index(self, index):
+        offset = 0
+        for i in range(len(index)):
+            stride = self.stride(i)
+            offset += index[i] * stride
+        return offset
 
-    flatten_index_r = create_flatten_index(stride_row)
-    flatten_index_c = create_flatten_index(stride_column)
-
-    # FIXME: when different types are supported
-    # this function will change
-    def flatten_index(self, space, index):
+    def stride(self, i):
         if self.order == 'C':
-            return self.flatten_index_r(index) # row order for C
+            return stride_row(self.shape, i) # row order for C
         elif self.order == 'F':
-            return self.flatten_index_c(index) #
+            return stride_column(self.shape, i) #
+        else:
+            raise OperationError(space.w_NotImplementedError,
+                                 space.wrap("Unknown order: '%s'" % self.order))
+
+    def opposite_stride(self, i):
+        if self.order == 'C': # C for C not Column, but this is opposite
+            return stride_column(self.shape, i)
+        elif self.order == 'F':
+            return stride_row(self.shape, i)
         else:
             raise OperationError(space.w_NotImplementedError,
                                  space.wrap("Unknown order: '%s'" % self.order))
@@ -204,6 +213,11 @@ class MicroArray(BaseNumArray):
         return app_descr_repr(space, space.wrap(self))
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
+    # FIXME: Can I use app_descr_str directly somehow?
+    def descr_str(self, space):
+        return app_descr_str(space, space.wrap(self))
+    descr_str.unwrap_spec = ['self', ObjSpace]
+
     def descr_iter(self, space):
         return space.wrap(MicroIter(self))
     descr_iter.unwrap_spec = ['self', ObjSpace]
@@ -217,13 +231,40 @@ from pypy.interpreter import gateway
 
 app_formatting = gateway.applevel("""
     from StringIO import StringIO
-    def stringify(out, array):
+    def stringify(out, array, prefix='', commas=False, first=False, last=False, depth=0):
+        if depth > 0 and not first:
+            out.write('\\n')
+            out.write(prefix) # indenting for array(
+            out.write(' ' * depth) 
+
         out.write("[")
         if len(array.shape) > 1:
-            out.write(',\\n'.join([str(x) for x in array]))
+            i = 1
+            for x in array:
+                if i == 1:
+                    stringify(out, x,
+                              first=True, commas=commas, prefix=prefix, depth=depth + 1)
+                elif i >= len(array):
+                    stringify(out, x,
+                              last=True, commas=commas, prefix=prefix, depth=depth + 1)
+                else:
+                    stringify(out, x,
+                              commas=commas, prefix=prefix, depth=depth + 1)
+
+                i += 1
+            out.write("]")
         else:
-            out.write(', '.join([str(x) for x in array]))
-        out.write("]")
+            if commas:
+                separator = ', '
+            else:
+                separator = ' '
+
+            out.write(separator.join([str(x) for x in array]))
+
+            if commas and not last:
+                out.write("],")
+            else:
+                out.write("]")
 
     def descr_str(self):
         out = StringIO()
@@ -235,7 +276,7 @@ app_formatting = gateway.applevel("""
     def descr_repr(self):
         out = StringIO()
         out.write("array(")
-        stringify(out, self)
+        stringify(out, self, commas=True, prefix='      ') 
         out.write(")")
         result = out.getvalue()
         out.close()
@@ -243,6 +284,7 @@ app_formatting = gateway.applevel("""
                        """)
 
 app_descr_repr = app_formatting.interphook('descr_repr')
+app_descr_str = app_formatting.interphook('descr_str')
 
 # Getters, strange GetSetProperty behavior
 # forced them out of the class
@@ -273,6 +315,7 @@ MicroArray.typedef = TypeDef('uarray',
                              __setitem__ = interp2app(MicroArray.descr_setitem),
                              __len__ = interp2app(MicroArray.descr_len),
                              __repr__ = interp2app(MicroArray.descr_repr),
+                             __str__ = interp2app(MicroArray.descr_str),
                              __iter__ = interp2app(MicroArray.descr_iter),
                             )
 
