@@ -1,10 +1,11 @@
+
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.node import Node
+from pypy.translator.avm2.node import ClassNodeBase
 
-from mech.fusion.avm2 import constants as c, traits
-from pypy.translator.avm2 import types_ as types
+from mech.fusion.avm2.constants import QName
+from mech.fusion.avm2.interfaces import IMultiname
 
-class Record(Node):
+class Record(ClassNodeBase):
     def __init__(self, db, record, name):
         self.db = db
         self.cts = db.genoo.TypeSystem(db)
@@ -15,55 +16,55 @@ class Record(Node):
         return hash(self.record)
 
     def __eq__(self, other):
-        return self.record == other.record
+        return type(self) == type(other) and self.record == other.record
 
     def __ne__(self, other):
         return not self == other
+
+    def __repr__(self):
+        return '<Record %s>' % self.name
+
+    def get_type(self):
+        return QName(self.name)
 
     def get_name(self):
         return self.name
 
     def get_base_class(self):
-        return c.QName("Object")
+        return QName("Object")
 
-    def render(self, ilasm):
-        self.ilasm = ilasm
-        ilasm.begin_class(c.QName(self.name))
-        for f_name, (FIELD_TYPE, f_default) in self.record._fields.iteritems():
-            f_name = self.cts.escape_name(f_name)
-            cts_type = self.cts.lltype_to_cts(FIELD_TYPE)
-            if cts_type != types.types.void:
-                ilasm.context.add_instance_trait(traits.AbcSlotTrait(c.QName(f_name), cts_type.multiname()))
-        self._toString()
-        #self._getHashCode()
-        ilasm.exit_context()
-        
-    def _toString(self):
-        # only for testing purposes, and only if the Record represents a tuple
-        from pypy.translator.cli.test.runtest import format_object
+    def get_fields(self):
+        return self.record._fields.iteritems()
 
+    def _fieldToString(self, ilasm, fieldnum):
+        f_name = 'item%d' % (fieldnum,)
+        FIELD_TYPE, f_default = self.record._fields[f_name]
+        if FIELD_TYPE is ootype.Void:
+            return True
+        ilasm.push_this()
+        ilasm.emit('getproperty', IMultiname(f_name))
+        ilasm.emit('convert_s')
+
+    def render_toString(self, ilasm):
         for f_name in self.record._fields:
             if not f_name.startswith('item'):
                 return # it's not a tuple
 
-        self.ilasm.begin_method('toString', [], c.QName("String"))
-        self.ilasm.push_const("(")
-        for i in xrange(len(self.record._fields)):
-            f_name = 'item%d' % i
-            FIELD_TYPE, f_default = self.record._fields[f_name]
-            if FIELD_TYPE is ootype.Void:
+        ilasm.begin_method('toString', [], QName("String"))
+        ilasm.load("(")
+        fieldlen = len(self.record._fields)-1
+        for i in xrange(fieldlen):
+            if self._fieldToString(ilasm, i):
                 continue
-            self.ilasm.push_this()
-            #self.ilasm.get_field((f_type, self.name, f_name))
-            self.ilasm.emit('getproperty', c.QName(f_name))
-            self.ilasm.emit('callproperty', c.Multiname("toString", c.PROP_NAMESPACE_SET), 0)
-            self.ilasm.emit('add')
-            self.ilasm.push_const(", ")
-            self.ilasm.emit('add')
-        self.ilasm.push_const(")")
-        self.ilasm.emit('add')
-        self.ilasm.emit('returnvalue')
-        self.ilasm.exit_context()
+            ilasm.emit('add')
+            ilasm.load(", ")
+            ilasm.emit('add')
+        self._fieldToString(ilasm, fieldlen)
+        ilasm.emit('add')
+        ilasm.load(")")
+        ilasm.emit('add')
+        ilasm.emit('returnvalue')
+        ilasm.exit_context()
 
     # def _equals(self):
     #     # field by field comparison

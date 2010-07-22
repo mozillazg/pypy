@@ -1,80 +1,59 @@
 
+import functools
+
 from pypy.rpython.ootypesystem import ootype
 
-from mech.fusion.avm2.constants import QName, packagedQName, TYPE_MULTINAME_TypeName
-from mech.fusion.avm2.query import ClassDesc
-from mech.fusion.avm2.library import Library
-from mech.fusion.avm2.playerglobal.flash.utils import Vector
+from mech.fusion.avm2            import playerglobal
+from mech.fusion.avm2.interfaces import IMultiname
+from mech.fusion.avm2.constants  import QName, TypeName, undefined
+from mech.fusion.avm2.library    import make_package
 
-from pypy.translator.avm2.types_ import vec_qname
+from pypy.translator.avm2.runtime import AVM2Class, AVM2Instance, _static_meth
 
-## Monkey Patching!
+def ClassDescConverter(classdesc, _cache={}):
+    T = classdesc.Library.get_type
+    C = lambda t: ClassDescConverter(t)._INSTANCE
+    def resolve(TYPE):
+        if TYPE in classdesc.Library:
+            return C(T(TYPE))
 
-ClassDesc._nativeclass = None
+        if type(TYPE) == object or TYPE in (undefined, None): # interfaces and root objects
+            return ootype.ROOT
+        name = IMultiname(TYPE)
 
-class PyPyLibrary(Library):
-    def resolve_class(self, TYPE):
-        if self.has_type(TYPE):
-            return self.get_type(TYPE)
-        if playerglobal_lib.has_type(TYPE):
-            return self.get_type(TYPE)
-        if TYPE.KIND == TYPE_MULTINAME_TypeName and TYPE.name == vec_qname:
-            assert len(TYPE.types) == 1
-            return Vector[TYPE.types[0]]
-        if getattr(TYPE, "multiname", None):
-            return TYPE.multiname()
+        if isinstance(name, TypeName):
+            return C(T(name.name).specialize(name.types))
 
-    def convert_classdesc(self, classdesc):
-        resolve = self.resolve_class
-        from pypy.translator.avm2.runtime import NativeClass, NativeInstance
-        from pypy.translator.avm2.runtime import _overloaded_static_meth, _static_meth
+        return name
 
-        if classdesc._nativeclass is not None:
-            return classdesc._nativeclass
+    def create_methods(methods, meth, Meth):
+        return dict((name, meth(Meth([resolve(arg) for arg in args], resolve(result))))
+                    for name, args, result in methods)
 
-        TYPE = NativeInstance(classdesc.Package, classdesc.ShortName, None, {}, {})
-        Class = NativeClass(TYPE, {}, {})
-        classdesc._nativeclass = Class
-        if classdesc.FullName == QName('Object'):
-            TYPE._set_superclass(ootype.ROOT)
-        else:
-            BASETYPE = resolve(classdesc.BaseType)
-            TYPE._set_superclass(BASETYPE)
+    if classdesc in _cache:
+        return _cache[classdesc]
 
-        TYPE._isArray = classdesc.IsArray
-        if classdesc.IsArray:
-            TYPE._ELEMENT = resolve(classdesc.ElementType)
+    TYPE = AVM2Instance(classdesc.Package, classdesc.ShortName, None)
+    Class = AVM2Class(TYPE, {}, {})
+    _cache[classdesc] = Class
 
-        # add both static and instance methods, and static fields
-        static_meths = self.group_methods(classdesc.StaticMethods,
-            _overloaded_static_meth, _static_meth, ootype.StaticMethod)
-        meths = self.group_methods(classdesc.Methods, ootype.overload,
-                              ootype.meth, ootype.Meth)
-        Class._add_methods(static_meths)
-        Class._add_static_fields(dict((name,
-            resolve(t)) for name, t in classdesc.StaticFields]))
-        Class._add_static_fields(dict((name,
-            resolve(t)) for name, t, g, s in classdesc.StaticProperties))
-        TYPE._add_methods(meths)
-        TYPE._add_fields(dict((name, resolve(t)) for name, t in classdesc.Fields))
-        TYPE._add_fields(dict((name, resolve(t)) for name, t, g, s in classdesc.Properties))
-        return Class
+    if classdesc.FullName == QName('Object'):
+        TYPE._set_superclass(ootype.ROOT)
+    else:
+        TYPE._set_superclass(resolve(classdesc.BaseType))
 
-    def group_methods(self, methods, overload, meth, Meth):
-        from pypy.translator.avm2.runtime import OverloadingResolver
-        groups = {}
-        for name, args, result, AS3 in methods:
-            groups[name] = args, result, AS3
+    # add both static and instance methods, and static fields
+    static_meths = create_methods(classdesc.StaticMethods, _static_meth, ootype.StaticMethod)
+    meths = create_methods(classdesc.Methods, ootype.meth, ootype.Meth)
+    Class._add_methods(static_meths)
+    Class._add_static_fields(dict((t[0], resolve(t[1])) for t in
+        classdesc.StaticFields + classdesc.StaticProperties))
 
-        res = {}
-        attrs = dict(resolver=OverloadingResolver)
-        for name, methlist in groups.iteritems():
-            meths = [meth(Meth([self.resolve_class(arg) for arg in args],
-                          self.resolve_class(result))) for (args, result) in methlist]
-            res[name] = overload(*meths, **attrs)
-        return res
+    TYPE._add_methods(meths)
+    TYPE._add_fields(dict((t[0], resolve(t[1])) for t in
+        classdesc.Fields + classdesc.Properties if not TYPE._has_field(t[0])))
 
-from mech.fusion.avm2.library import get_playerglobal
+    return Class
 
-playerglobal_lib = get_playerglobal(Library=PyPyLibrary)
-playerglobal_lib.install_global(__name__.rpartition(".")[0]+".playerglobal")
+convert_package = functools.partial(make_package, Interface=ClassDescConverter)
+get_playerglobal = functools.partial(make_package, playerglobal, ClassDescConverter)

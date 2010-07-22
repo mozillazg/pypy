@@ -3,10 +3,9 @@ import types
 from pypy.tool.pairtype import pair, pairtype
 from pypy.annotation.model import SomeObject, SomeInstance, SomeOOInstance, SomeInteger, s_None,\
      s_ImpossibleValue, lltype_to_annotation, annotation_to_lltype, SomeChar, SomeString
-# from pypy.annotation.unaryop import immutablevalue
-# from pypy.annotation.binaryop import _make_none_union
+
 from pypy.annotation import model as annmodel
-# from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+
 from pypy.rpython.error import TyperError
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rmodel import Repr
@@ -17,17 +16,16 @@ from pypy.rpython.ootypesystem.ootype import Meth, StaticMethod
 
 ## Annotation model
 
-class SomeNativeClass(SomeObject):
+class SomeAVM2Class(SomeObject):
     def getattr(self, s_attr):
         assert self.is_constant()
         assert s_attr.is_constant()
         nativeclass = self.const
         attrname = s_attr.const
         if attrname in nativeclass._static_fields:
-            TYPE = nativeclass._static_fields[attrname]
-            return OverloadingResolver.lltype_to_annotation(TYPE)
+            return nativeclass._static_fields[attrname]
         elif attrname in nativeclass._static_methods:
-            return SomeNativeStaticMethod(nativeclass, attrname)
+            return SomeAVM2StaticMethod(nativeclass, attrname)
         else:
             return s_ImpossibleValue
 
@@ -45,13 +43,13 @@ class SomeNativeClass(SomeObject):
         return SomeOOInstance(self.const._INSTANCE)
 
     def rtyper_makerepr(self, rtyper):
-        return NativeClassRepr(self.const)
+        return AVM2ClassRepr(self.const)
 
     def rtyper_makekey(self):
         return self.__class__, self.const
 
 
-class SomeNativeStaticMethod(SomeObject):
+class SomeAVM2StaticMethod(SomeObject):
     def __init__(self, native_class, meth_name):
         self.native_class = native_class
         self.meth_name = meth_name
@@ -60,7 +58,7 @@ class SomeNativeStaticMethod(SomeObject):
         return self.native_class._ann_static_method(self.meth_name, args_s)
 
     def rtyper_makerepr(self, rtyper):
-        return NativeStaticMethodRepr(self.native_class, self.meth_name)
+        return AVM2StaticMethodRepr(self.native_class, self.meth_name)
 
     def rtyper_makekey(self):
         return self.__class__, self.native_class, self.meth_name
@@ -96,7 +94,7 @@ class __extend__(pairtype(SomeOOInstance, SomeInteger)):
 
 ## Rtyper model
 
-class NativeClassRepr(Repr):
+class AVM2ClassRepr(Repr):
     lowleveltype = ootype.Void
 
     def __init__(self, native_class):
@@ -122,14 +120,13 @@ class NativeClassRepr(Repr):
         return hop.genop("setstaticfield", [c_class, c_name, v_value], resulttype=hop.r_result.lowleveltype)
 
     def rtype_simple_call(self, hop):
-        # TODO: resolve constructor overloading
         INSTANCE = hop.args_r[0].native_class._INSTANCE
         cINST = hop.inputconst(ootype.Void, INSTANCE)
         vlist = hop.inputargs(*hop.args_r)[1:] # discard the first argument
         hop.exception_is_here()
         return hop.genop("new", [cINST]+vlist, resulttype=hop.r_result.lowleveltype)
 
-class NativeStaticMethodRepr(Repr):
+class AVM2StaticMethodRepr(Repr):
     lowleveltype = ootype.Void
 
     def __init__(self, native_class, meth_name):
@@ -153,15 +150,11 @@ class NativeStaticMethodRepr(Repr):
 class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 
     def rtype_getitem((r_inst, r_int), hop):
-        if not r_inst.lowleveltype._isArray:
-            raise TyperError("getitem() on a non-array instance")
         v_array, v_index = hop.inputargs(r_inst, ootype.Signed)
         hop.exception_is_here()
         return hop.genop('getelem', [v_array, v_index], hop.r_result.lowleveltype)
 
     def rtype_setitem((r_inst, r_int), hop):
-        if not r_inst.lowleveltype._isArray:
-            raise TyperError("setitem() on a non-array instance")
         vlist = hop.inputargs(*hop.args_r)
         hop.exception_is_here()
         return hop.genop('setelem', vlist, hop.r_result.lowleveltype)
@@ -176,49 +169,16 @@ class __extend__(OOInstanceRepr):
         hop.exception_cannot_occur()
         return hop.genop('arraylength', vlist, hop.r_result.lowleveltype)
 
-    def rtype_simple_call(self, hop):
-        TYPE = self.lowleveltype
-        _, meth = TYPE._lookup('Invoke')
-        assert isinstance(meth, ootype._overloaded_meth)
-        ARGS = tuple([repr.lowleveltype for repr in hop.args_r[1:]])
-        desc = meth._get_desc('Invoke', ARGS)
-        cname = hop.inputconst(ootype.Void, desc)
-        vlist = hop.inputargs(self, *hop.args_r[1:])
-        hop.exception_is_here()
-        return hop.genop("oosend", [cname]+vlist,
-                         resulttype = hop.r_result.lowleveltype)
+    ## def rtype_simple_call(self, hop):
+    ##     TYPE = self.lowleveltype
+    ##     ARGS = tuple([repr.lowleveltype for repr in hop.args_r[1:]])
+    ##     vlist = hop.inputargs(self, *hop.args_r[1:])
+    ##     hop.exception_is_here()
+    ##     return hop.genop("oosend", [cname]+vlist,
+    ##                      resulttype = hop.r_result.lowleveltype)
 
 
 ## OOType model
-
-class OverloadingResolver(ootype.OverloadingResolver):
-
-    def _can_convert_from_to(self, ARG1, ARG2):
-        if ARG1 is ootype.Void and isinstance(ARG2, NativeInstance):
-            return True # ARG1 could be None, that is always convertible to a NativeInstance
-        else:
-            return ootype.OverloadingResolver._can_convert_from_to(self, ARG1, ARG2)
-
-    def annotation_to_lltype(cls, ann):
-        if isinstance(ann, SomeChar):
-            return ootype.Char
-        elif isinstance(ann, SomeString):
-            return ootype.String
-        else:
-            return annotation_to_lltype(ann)
-    annotation_to_lltype = classmethod(annotation_to_lltype)
-
-    def lltype_to_annotation(cls, TYPE):
-        if isinstance(TYPE, NativeInstance):
-            return SomeOOInstance(TYPE)
-        elif TYPE is ootype.Char:
-            return SomeChar()
-        elif TYPE is ootype.String:
-            return SomeString(can_be_None=True)
-        else:
-            return lltype_to_annotation(TYPE)
-    lltype_to_annotation = classmethod(lltype_to_annotation)
-
 
 class _static_meth(object):
 
@@ -233,22 +193,7 @@ class _static_meth(object):
         #assert ARGS == self._TYPE.ARGS
         return self
 
-class _overloaded_static_meth(object):
-    def __init__(self, *overloadings, **attrs):
-        resolver = attrs.pop('resolver', OverloadingResolver)
-        assert not attrs
-        self._resolver = resolver(overloadings)
-
-    def _set_attrs(self, cls, name):
-        for meth in self._resolver.overloadings:
-            meth._set_attrs(cls, name)
-
-    def _get_desc(self, ARGS):
-        meth = self._resolver.resolve(ARGS)
-        assert isinstance(meth, _static_meth)
-        return meth._get_desc(ARGS)
-    
-class NativeInstance(ootype.Instance):
+class AVM2Instance(ootype.Instance):
     def __init__(self, namespace, name, superclass,
                  fields={}, methods={}, _is_root=False, _hints = {}):
         fullname = '%s.%s' % (namespace, name)
@@ -258,11 +203,9 @@ class NativeInstance(ootype.Instance):
         ootype.Instance.__init__(self, fullname, superclass, fields, methods, _is_root, _hints)
 
 
-
-
 ## RPython interface definition
 
-class NativeClass(object):
+class AVM2Class(object):
     def __init__(self, INSTANCE, static_methods, static_fields):
         self._name = INSTANCE._name
         self._INSTANCE = INSTANCE
@@ -294,10 +237,10 @@ class NativeClass(object):
 
 
 class Entry(ExtRegistryEntry):
-    _type_ = NativeClass
+    _type_ = AVM2Class
 
     def compute_annotation(self):
-        return SomeNativeClass()
+        return SomeAVM2Class()
 
     def compute_result_annotation(self):
         return SomeOOInstance(self.instance._INSTANCE)
@@ -325,7 +268,7 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         c_type, v_length = hop.inputargs(*hop.args_r)
         hop.exception_cannot_occur()
-        return hop.genop('avm2_newvector', [c_type, v_length], hop.r_result.lowleveltype)
+        return hop.genop('newvector', [c_type, v_length], hop.r_result.lowleveltype)
 
 
 class Entry(ExtRegistryEntry):
@@ -499,10 +442,6 @@ class Entry(ExtRegistryEntry):
 
 #     def compute_annotation(self):
 #         return SomeOOInstance(CLR.System.Reflection.FieldInfo._INSTANCE)
-
-from pypy.translator.avm2.query import NativeNamespace
-playerglobal = NativeNamespace(None)
-playerglobal._buildtree()
 
 # known_delegates = {
 #     ootype.StaticMethod([ootype.Signed], ootype.Signed):       CLR.pypy.test.DelegateType_int__int_1,

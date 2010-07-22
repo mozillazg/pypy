@@ -1,17 +1,25 @@
 
-from functools import partial
+from itertools import chain
+
+from py.builtin import set
 
 from pypy.objspace.flow import model as flowmodel
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lltype import Void
 from pypy.translator.oosupport.function import Function as OOFunction
-from pypy.translator.cli.node import Node
+
+from pypy.translator.avm2.node import Node
 from mech.fusion.avm2 import constants
 
+class CompiledABCNode(Node):
+    def __init__(self, abc):
+        self.abc = abc
+
+    def render(self, ilasm):
+        ilasm.abc.merge(self.abc)
+
 class Function(OOFunction, Node):
-
     auto_propagate_exceptions = True
-
     def __init__(self, db, graph, name=None, is_method=False, is_entrypoint=False):
         OOFunction.__init__(self, db, graph, name, is_method, is_entrypoint)
 
@@ -58,12 +66,12 @@ class Function(OOFunction, Node):
 
         self.generator.begin_method(self.name, self.args, returntype, static=not self.is_method, override=self.override)
 
-        self.declare_locals()
+        # self.declare_locals()
 
     def end_render(self):
+        self.generator.end_method()
         if self.classname:
-            self.generator.exit_context()
-        self.generator.exit_context()
+            self.generator.end_class()
 
     def render_return_block(self, block):
         return_var = block.inputargs[0]
@@ -76,13 +84,39 @@ class Function(OOFunction, Node):
     def set_label(self, label):
         return self.generator.set_label(label)
 
-    def declare_locals(self):
-        for TYPE, name in set(self.locals):
-            TYPE.load_default(self.generator)
-            self.generator.store_var(name)
+    def get_block_locals(self, block, exits=False):
+        if not block.operations:
+            return set()
+        all_locals  = set(arg.name for op in block.operations for arg in op.args if isinstance(arg, flowmodel.Variable))
+        all_locals |= set(op.result.name for op in block.operations)
+        all_locals -= set(arg.name for arg in self.graph.getargs() if isinstance(arg, flowmodel.Variable))
+        if exits:
+            all_locals -= set(arg.name for exit in block.exits
+                              for arg in exit.args + exit.target.inputargs
+                              if isinstance(arg, flowmodel.Variable))
+        if isinstance(block.exitswitch, flowmodel.Variable) and block.exitswitch.name in all_locals:
+            all_locals.remove(block.exitswitch.name)
+        return all_locals
+
+    def get_block_links_args(self, link):
+        return set(arg.name for exit in link.prevblock.exits for arg in exit.args if arg not in link.args if isinstance(arg, flowmodel.Variable))
+
+    def end_block(self, block):
+        L = self.get_block_locals(block, True)
+        for var in self.get_block_locals(block, True):
+            if self.generator.HL(var):
+                self.generator.KL(var)
+
+    def __eq__(self, other):
+        return type(self) == type(other) and self.graph == other.graph
+
+    ## def declare_locals(self):
+    ##     for TYPE, name in set(self.locals):
+    ##         TYPE.load_default(self.generator)
+    ##         self.generator.store_var(name)
 
     def _trace_enabled(self):
-        return True
+        return False
 
     def _trace(self, s, writeline=False):
         print "TRACE:", s
@@ -94,33 +128,36 @@ class Function(OOFunction, Node):
         print "Rendering op:", op
         super(Function, self)._render_op(op)
 
-    ## def _setup_link(self, link):
-    ##     target = link.target
-    ##     linkvars = []
-    ##     for to_load, to_store in zip(link.args, target.inputargs):
-    ##         if isinstance(to_load, flowmodel.Variable) and to_load.name == to_store.name:
-    ##             continue
-    ##         if to_load.concretetype is ootype.Void:
-    ##             continue
-    ##         linkvars.append((to_load, to_store))
+    def _setup_link(self, link):
+        target = link.target
+        linkvars = []
+        locals = self.get_block_locals(link.prevblock) | self.get_block_links_args(link)
+        for to_load, to_store in zip(link.args, target.inputargs):
+            if isinstance(to_load, flowmodel.Variable) and to_load.name == to_store.name:
+                continue
+            if to_load.concretetype is ootype.Void:
+                continue
+            linkvars.append((to_load, to_store))
 
-    ##     # after SSI_to_SSA it can happen to have to_load = [a, b] and
-    ##     # to_store = [b, c].  If we store each variable sequentially,
-    ##     # 'b' would be overwritten before being read.  To solve, we
-    ##     # first load all the values on the stack, then store in the
-    ##     # appropriate places.
+        # after SSI_to_SSA it can happen to have to_load = [a, b] and
+        # to_store = [b, c].  If we store each variable sequentially,
+        # 'b' would be overwritten before being read.  To solve, we
+        # first load all the values on the stack, then store in the
+        # appropriate places.
 
-    ##     if self._trace_enabled():
-    ##         self._trace('link', writeline=True)
-    ##         for to_load, to_store in linkvars:
-    ##             self._trace_value('%s <-- %s' % (to_store, to_load), to_load)
-    ##         self._trace('', writeline=True)
+        if self._trace_enabled():
+            self._trace('link', writeline=True)
+            for to_load, to_store in linkvars:
+                self._trace_value('%s <-- %s' % (to_store, to_load), to_load)
+            self._trace('', writeline=True)
 
-    ##     for to_load, to_store in linkvars:
-    ##         self.generator.load(to_load)
+        for to_load, to_store in linkvars:
+            self.generator.load(to_load)
+            if isinstance(to_load, flowmodel.Variable) and to_load.name in locals:
+                self.generator.KL(to_load.name)
 
-    ##     for to_load, to_store in reversed(linkvars):
-    ##         self.generator.store(to_store)
+        for to_load, to_store in reversed(linkvars):
+            self.generator.store(to_store)
 
     def begin_try(self, cond):
         if cond:
@@ -134,7 +171,7 @@ class Function(OOFunction, Node):
     def begin_catch(self, llexitcase):
         ll_meta_exc = llexitcase
         ll_exc = ll_meta_exc._INSTANCE
-        self.ilasm.begin_catch(ll_exc)
+        self.ilasm.begin_catch(self.cts.instance_to_qname(ll_exc))
 
     def end_catch(self, target_label):
         self.ilasm.end_catch()
@@ -150,19 +187,66 @@ class Function(OOFunction, Node):
             # the exception value is on the stack, use it as the 2nd target arg
             assert len(link.args) == 2
             assert len(link.target.inputargs) == 2
-            self.store(link.target.inputargs[1])
+            self.generator.store(link.target.inputargs[1])
         else:
             # the exception value is on the stack, store it in the proper place
             if isinstance(link.last_exception, flowmodel.Variable):
-                self.ilasm.opcode('dup')
-                self.store(link.last_exc_value)
-                self.ilasm.emit('convert_o')
-                self.ilasm.get_field('prototype')
-                self.ilasm.get_field('constructor')
-                self.store(link.last_exception)
+                self.generator.emit('dup')
+                self.generator.store(link.last_exc_value)
+                self.generator.emit('convert_o')
+                self.generator.get_field('prototype')
+                self.generator.get_field('constructor')
+                self.generator.store(link.last_exception)
             else:
-                self.store(link.last_exc_value)
+                self.generator.store(link.last_exc_value)
             self._setup_link(link)
+
+    def render_normal_block(self, block):
+        for op in block.operations:
+            self._render_op(op)
+
+        self.end_block(block)
+
+        if block.exitswitch is None:
+            assert len(block.exits) == 1
+            link = block.exits[0]
+            target_label = self._get_block_name(link.target)
+            self._setup_link(link)
+            self.generator.branch_unconditionally(target_label)
+        elif block.exitswitch.concretetype is ootype.Bool:
+            self.render_bool_switch(block)
+        elif block.exitswitch.concretetype in (ootype.Signed, ootype.SignedLongLong,
+                                               ootype.Unsigned, ootype.UnsignedLongLong,
+                                               ootype.Char, ootype.UniChar):
+            self.render_numeric_switch(block)
+        else:
+            assert False, 'Unknonw exitswitch type: %s' % block.exitswitch.concretetype
+
+    def render_bool_switch(self, block):
+        assert len(block.exits) == 2
+        for link in block.exits:
+            if link.exitcase:
+                link_true = link
+            else:
+                link_false = link
+
+        true_label = self.next_label('link_true')
+        self.generator.load(block.exitswitch)
+        self.generator.KL(block.exitswitch.name, True)
+        self.generator.branch_conditionally(True, true_label)
+        self._follow_link(link_false) # if here, the exitswitch is false
+        self.set_label(true_label)
+        self._follow_link(link_true)  # if here, the exitswitch is true
+
+    def _follow_link(self, link):
+        target_label = self._get_block_name(link.target)
+        allowed = self.get_block_locals(link.prevblock) | self.get_block_links_args(link)
+        for arg in chain(*(exit.args for exit in link.prevblock.exits)):
+            if isinstance(arg, flowmodel.Variable) and arg.name in allowed and arg not in link.args and self.generator.HL(arg.name):
+                self.generator.KL(arg.name)
+        self._setup_link(link)
+        self.generator.branch_unconditionally(target_label)
+
 
     # def render_numeric_switch(self, block):
     #     if block.exitswitch.concretetype in (ootype.SignedLongLong, ootype.UnsignedLongLong):
@@ -188,17 +272,6 @@ class Function(OOFunction, Node):
     #     self.render_switch_case(*default)
     #     for link, lbl in cases.itervalues():
     #         self.render_switch_case(link, lbl)
-
-    # def call_oostring(self, ARGTYPE):
-    #     if isinstance(ARGTYPE, ootype.Instance):
-    #         argtype = self.cts.types.object
-    #     else:
-    #         argtype = self.cts.lltype_to_cts(ARGTYPE)
-    #     self.call_signature('string [pypylib]pypy.runtime.Utils::OOString(%s, int32)' % argtype)
-
-    # def call_oounicode(self, ARGTYPE):
-    #     argtype = self.cts.lltype_to_cts(ARGTYPE)
-    #     self.call_signature('string [pypylib]pypy.runtime.Utils::OOUnicode(%s)' % argtype)
 
     # Those parts of the generator interface that are function
     # specific

@@ -1,16 +1,18 @@
 from pypy.translator.avm2.metavm import  Call, CallMethod, \
-     IndirectCall, GetField, SetField, DownCast, \
-     NewArray, GetArrayElem, SetArrayElem, OOParseInt, OOParseFloat, \
-     TypeOf, EventHandler, GetStaticField, SetStaticField, \
-     FieldInfoForConst, OOString, ConstCall, ConstCallArgs, PushClass
-from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, StoreResult, InstructionList,\
-    New, RuntimeNew, CastTo, PushPrimitive, OONewArray
+     IndirectCall, GetField, SetField, AddSub, \
+     NewArray, OOParseInt, OOParseFloat, \
+     TypeOf, GetStaticField, SetStaticField, \
+     OOString, ConstCall, ConstCallArgs, PushClass
+from pypy.translator.oosupport.metavm import PushArg, PushAllArgs, \
+     StoreResult, InstructionList, New, RuntimeNew, CastTo, PushPrimitive, \
+     OONewArray, DownCast
 from pypy.translator.cli.cts import WEAKREF
 from pypy.rpython.ootypesystem import ootype
 
 # some useful instruction patterns
 Not = ['not']
 DoNothing = [PushAllArgs]
+DontStoreResult = object()
 Ignore = []
 
 def _not(op):
@@ -45,8 +47,10 @@ misc_ops = {
     # 'cli_setstaticfield':       [SetStaticField],
     # 'cli_fieldinfo_for_const':  [FieldInfoForConst],
     'oois':                     'strictequals',
-    'oononnull':                [PushAllArgs, 'pushnull', 'equals', 'not'],
-    'classof':                  [PushAllArgs, 'callvirt instance class [mscorlib]System.Type object::GetType()'],
+#    'oononnull':                [PushAllArgs, 'pushnull', 'equals', 'not'],
+    'oononnull':                [PushAllArgs, 'convert_b'],
+    'ooisnull':                 [PushAllArgs, 'pushnull', 'equals'],
+    'classof':                  [PushAllArgs, TypeOf],
     'instanceof':               [CastTo],
     'subclassof':               [CastTo],
     'ooidentityhash':           [PushAllArgs, 'callvirt instance int32 object::GetHashCode()'],
@@ -134,12 +138,16 @@ binary_ops = {
     'char_gt':                  'greaterthan',
     'char_ge':                  'greaterequals',
 
-    'unichar_eq':               'ceq',
-    'unichar_ne':               _not('ceq'),
+    'unichar_eq':               'equals',
+    'unichar_ne':               _not('equals'),
 
     'int_add':                  'add_i',
+    'int_add_ovf':              'add_i',
+    'int_add_nonneg_ovf':       'add_i',
     'int_sub':                  'subtract_i',
+    'int_sub_ovf':              'subtract_i',
     'int_mul':                  'multiply_i',
+    'int_mul_ovf':              'multiply_i',
     'int_floordiv':             [PushAllArgs, 'divide', 'convert_i'],
 #    'int_floordiv_zer':         _check_zer('div'),
     'int_mod':                  'modulo',
@@ -155,7 +163,7 @@ binary_ops = {
     'int_rshift':               'rshift',
     'int_xor':                  'bitxor',
 #    'int_add_ovf':              _check_ovf('add.ovf'),
-#    'int_add_nonneg_ovf':       _check_ovf('add.ovf'),
+
 #    'int_sub_ovf':              _check_ovf('sub.ovf'),
 #    'int_mul_ovf':              _check_ovf('mul.ovf'),
     'int_floordiv_ovf':         'divide', # these can't overflow!
@@ -253,7 +261,9 @@ for key, value in opcodes.iteritems():
     if type(value) is str:
         value = InstructionList([PushAllArgs, value, StoreResult])
     elif value is not None:
-        if value is not Ignore and StoreResult not in value:
+        if DontStoreResult in value:
+            value.remove(DontStoreResult)
+        elif value is not Ignore and StoreResult not in value:
             value.append(StoreResult)
         value = InstructionList(value)
 

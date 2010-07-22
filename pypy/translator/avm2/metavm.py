@@ -1,19 +1,37 @@
+
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.oosupport.metavm import MicroInstruction, PushAllArgs, \
-     StoreResult, GetField, SetField, DownCast, _Call as _OOCall, \
-     get_primitive_name
-from pypy.translator.avm2.runtime import _static_meth, NativeInstance
-from pypy.translator.avm2 import types_ as types
-from mech.fusion.avm2 import constants
+from pypy.objspace.flow.model import Constant
+from pypy.translator.oosupport.metavm import MicroInstruction, _Call as _OOCall
+from pypy.translator.avm2.runtime import _static_meth
+from pypy.translator.avm2.rlib import RLib
+from pypy.translator.avm2.types_ import types
 
-STRING_HELPER_CLASS = '[pypylib]pypy.runtime.String'
+from mech.fusion.avm2.interfaces import IMultiname
 
-def functype_to_cts(cts, FUNC):
-    ret_type = cts.lltype_to_cts(FUNC.RESULT)
-    arg_types = [cts.lltype_to_cts(arg).typename()
-                 for arg in FUNC.ARGS
-                 if arg is not ootype.Void]
-    return ret_type, arg_types
+class AddSub(MicroInstruction):
+    def __init__(self, int, add):
+        if int:
+            if add:
+                self.p1, self.n1 = 'increment_i', 'decrement_i'
+            else:
+                self.p1, self.n1 = 'decrement_i', 'increment_i'
+        else:
+            if add:
+                self.p1, self.n1 = 'increment', 'decrement'
+            else:
+                self.p1, self.n1 = 'decrement', 'increment'
+
+    def render(self, generator, op):
+        if isinstance(op.args[1], Constant):
+            if op.args[1].value == 1:
+                generator.load(op.args[0])
+                generator.emit(self.p1)
+            elif op.args[1].value == -1:
+                generator.load(op.args[0])
+                generator.emit(self.n1)
+        for arg in op.args:
+            generator.load(arg)
+        generator.emit('add')
 
 class _Call(_OOCall):
     def render(self, generator, op):
@@ -24,58 +42,47 @@ class _Call(_OOCall):
             generator.call_graph(op.args[0].value.graph, op.args[1:])
 
     def _render_static_function(self, generator, funcdesc, args):
-        import pdb; pdb.set_trace()
-        for func_arg in args[1:]: # push parameters
-            self._load_arg_or_null(generator, func_arg)
         cts = generator.cts
+        generator.load(*args[1:])
         generator.emit()
 
-    def _load_arg_or_null(self, generator, *args):
-        for arg in args:
-            if arg.concretetype is ootype.Void:
-                if arg.value is None:
-                    generator.ilasm.push_null() # special-case: use None as a null value
-                else:
-                    assert False, "Don't know how to load this arg"
-            else:
-                generator.load(arg)
-
-
 class _CallMethod(_Call):
-    DISPATCH = {
-        ootype.Array : {
-            "ll_setitem_fast": lambda gen: gen.array_setitem(),
-            "ll_getitem_fast": lambda gen: gen.array_getitem(),
-            "ll_length": lambda gen: gen.get_field("length", types.types.int),
-        },
-        ootype.AbstractString : {
-            "ll_append": lambda gen: gen.emit('add'),
-            "ll_stritem_nonneg": lambda gen: gen.call_method("charAt", 1, types.types.string),
-            "ll_strlen": lambda gen: gen.get_field("length", types.types.int),
-        },
+    donothing = object()
+    ONELINER = {
+        "list_ll_length": lambda gen,a: gen.get_field("length", types.int),
+
+        "str_ll_append": lambda gen,a: gen.emit('add'),
+        "str_ll_strlen": lambda gen,a: gen.get_field("length", types.int),
+        "str_ll_stritem_nonneg": lambda gen,a: gen.call_method("charAt", 1, types.string),
+        "str_ll_strconcat": lambda gen,a: gen.emit('add'),
+        "str_ll_streq": lambda gen,a: gen.emit('equals'),
+        "str_ll_strcmp": lambda gen,a: gen.call_method("localeCompare", 1, types.int),
+
+        "stringbuilder_ll_allocate": donothing,
+        "stringbuilder_ll_build": donothing,
     }
     def render(self, generator, op):
         method = op.args[0]
         self._render_method(generator, method.value, op.args[1:])
 
     def _render_method(self, generator, method_name, args):
-        this = args[0]
-        native = isinstance(this.concretetype, NativeInstance)
-        if native:
-            self._load_arg_or_null(generator, *args)
-        else:
+        DISPATCH, meth = self.ONELINER, args[0].concretetype.oopspec_name+'_'+method_name
+        if meth in DISPATCH:
             generator.load(*args)
-
-        for TYPE, D in self.DISPATCH.iteritems():
-            if isinstance(this.concretetype, TYPE):
-                D[method_name](generator)
-                break
+            if DISPATCH[meth] is not self.donothing:
+                DISPATCH[meth](generator, args)
+        elif getattr(generator, meth, None):
+            getattr(generator, meth)(args)
+        elif meth in RLib:
+            RLib[meth](generator, *args)
         else:
-            generator.call_method(method_name, len(args)-1)
+            # storeresult expects something on the stack
+            generator.push_null()
 
 class _IndirectCall(_CallMethod):
     def render(self, generator, op):
         # discard the last argument because it's used only for analysis
+        assert False
         self._render_method(generator, 'Invoke', op.args[:-1])
 
 class ConstCall(MicroInstruction):
@@ -84,8 +91,7 @@ class ConstCall(MicroInstruction):
         self.__args = args
 
     def render(self, generator, op):
-        generator.load(*self.__args)
-        generator.call_method(self.__method, len(self.__args))
+        generator.call_method_constargs(self.__method, None, *self.__args)
 
 class ConstCallArgs(MicroInstruction):
     def __init__(self, method, numargs):
@@ -103,32 +109,52 @@ class _RuntimeNew(MicroInstruction):
 
 class _OOString(MicroInstruction):
     def render(self, generator, op):
-        if op.args[1] == -1:
-            generator.emit('findpropstrict', types.str_qname)
-            generator.load(op.args[0])
-            generator.emit('callproperty', types.str_qname, 1)
+        obj, base = op.args
+        if base == -1 or (isinstance(base, Constant) and base.value == -1):
+            if isinstance(obj.concretetype, ootype.Instance):
+                generator.load("<")
+                generator.call_method_constargs('getName', obj)
+                generator.emit('add')
+                generator.load(" object>")
+                generator.emit('add')
+            else:
+                generator.call_method_constargs('toString', obj)
         else:
-            generator.load(*op.args)
-            generator.emit('callproperty', constants.QName("toString"), 1)
+            generator.call_method_constargs('toString', obj, base)
 
 class _OOParseInt(MicroInstruction):
     def render(self, generator, op):
-        generator.load(*op.args)
-        generator.emit('getglobalscope')
-        generator.emit('callproperty', constants.QName("parseInt"), 2)
+        generator.call_function_constargs('parseInt', *op.args)
 
 class _OOParseFloat(MicroInstruction):
     def render(self, generator, op):
-        generator.load(*op.args)
-        generator.emit('getglobalscope')
-        generator.emit('callproperty', constants.QName("parseFloat"), 1)
+        generator.call_function_constargs('parseFloat', *op.args)
+
+class _SetField(MicroInstruction):
+    def render(self, generator, op):
+        this, field, value = op.args
+        if value.concretetype is ootype.Void:
+            return
+        generator.load(this)
+        generator.load(value)
+        generator.set_field(field.value)
+
+class _GetField(MicroInstruction):
+    def render(self, generator, op):
+        # OOType produces void values on occassion that can safely be ignored
+        if op.result.concretetype is ootype.Void:
+            return
+        this, field = op.args
+        generator.load(this)
+        generator.get_field(field.value)
+
 
 class PushClass(MicroInstruction):
     def __init__(self, classname):
-        self.__class = constants.QName(classname)
+        self.__class = IMultiname(classname)
 
     def render(self, generator, op):
-        generator.emit('getlex', constants.QName(self.__class))
+        generator.load(self.__class)
 
 # class _NewCustomDict(MicroInstruction):
 #     def render(self, generator, op):
@@ -220,32 +246,7 @@ class _SetArrayElem(MicroInstruction):
 
 class _TypeOf(MicroInstruction):
     def render(self, generator, op):
-        c_type, = op.args
-        assert c_type.concretetype is ootype.Void
-        if isinstance(c_type.value, ootype.StaticMethod):
-            FUNC = c_type.value
-            fullname = generator.cts.lltype_to_cts(FUNC)
-        else:
-            cliClass = c_type.value
-            fullname = cliClass._INSTANCE._name
         generator.gettype()
-
-class _EventHandler(MicroInstruction):
-    def render(self, generator, op):
-        cts = generator.cts
-        v_obj, c_methname = op.args
-        assert c_methname.concretetype is ootype.Void
-        TYPE = v_obj.concretetype
-        classname = TYPE._name
-        methname = 'o' + c_methname.value # XXX: do proper mangling
-        _, meth = TYPE._lookup(methname)
-        METH = ootype.typeOf(meth)
-        ret_type, arg_types = functype_to_cts(cts, METH)
-        arg_list = ', '.join(arg_types)
-        generator.load(v_obj)
-        desc = '%s class %s::%s(%s)' % (ret_type, classname, methname, arg_list)
-        generator.ilasm.opcode('ldftn instance', desc)
-        generator.ilasm.opcode('newobj', 'instance void class [mscorlib]System.EventHandler::.ctor(object, native int)')
 
 class _GetStaticField(MicroInstruction):
     def render(self, generator, op):
@@ -261,17 +262,6 @@ class _SetStaticField(MicroInstruction):
         generator.ilasm.load(cts_class)
         generator.ilasm.swap()
         generator.ilasm.set_field(fldname)
-
-class _FieldInfoForConst(MicroInstruction):
-    def render(self, generator, op):
-        from pypy.translator.cli.constant import CONST_CLASS
-        llvalue = op.args[0].value
-        constgen = generator.db.constant_generator
-        const = constgen.record_const(llvalue)
-        generator.ilasm.opcode('ldtoken', CONST_CLASS)
-        generator.ilasm.call('class [mscorlib]System.Type class [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)')
-        generator.ilasm.opcode('ldstr', '"%s"' % const.name)
-        generator.ilasm.call_method('class [mscorlib]System.Reflection.FieldInfo class [mscorlib]System.Type::GetField(string)', virtual=True)
 
 
 # OOTYPE_TO_MNEMONIC = {
@@ -300,11 +290,11 @@ NewArray = _NewArray()
 GetArrayElem = _GetArrayElem()
 SetArrayElem = _SetArrayElem()
 TypeOf = _TypeOf()
-EventHandler = _EventHandler()
 GetStaticField = _GetStaticField()
 SetStaticField = _SetStaticField()
-FieldInfoForConst = _FieldInfoForConst()
 OOString = _OOString()
 OOParseInt = _OOParseInt()
 OOParseFloat = _OOParseFloat()
 # CastPrimitive = _CastPrimitive()
+GetField = _GetField()
+SetField = _SetField()

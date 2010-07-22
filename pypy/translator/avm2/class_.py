@@ -1,56 +1,63 @@
+
+from py.builtin import set
+
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli.node import Node
+from pypy.translator.avm2.node import ClassNodeBase
+from pypy.translator.avm2.types_ import types
 from pypy.translator.oosupport.constant import push_constant
 
-from mech.fusion.avm2 import constants, traits
-from pypy.translator.avm2 import types_ as types
+from mech.fusion.avm2.constants import QName, packagedQName
+from mech.fusion.avm2.interfaces import IMultiname
 
-try:
-    set
-except NameError:
-    from sets import Set as set
-
-class Class(Node):
+class Class(ClassNodeBase):
     def __init__(self, db, INSTANCE, namespace, name):
         self.db = db
         self.cts = db.genoo.TypeSystem(db)
         self.INSTANCE = INSTANCE
+        print INSTANCE, INSTANCE._superclass
         self.exception = ootype.isSubclass(self.INSTANCE, self.db.genoo.EXCEPTION)
         self.namespace = namespace
         self.name = name
-
-    def dependencies(self):
-        if not self.is_root(self.INSTANCE):
-            self.db.pending_class(self.INSTANCE._superclass)
 
     def __hash__(self):
         return hash(self.INSTANCE)
 
     def __eq__(self, other):
-        return self.INSTANCE == other.INSTANCE
+        return isinstance(other, type(self)) and self.INSTANCE == other.INSTANCE
 
     def __ne__(self, other):
         return not self == other
 
-    def is_root(INSTANCE):
-        return INSTANCE._superclass is None
-    is_root = staticmethod(is_root)
+    def __repr__(self):
+        return '<Class %s>' % self.name
+
+    def dependencies(self):
+        if self.INSTANCE._superclass._superclass:
+            self.db.pending_class(self.INSTANCE._superclass)
+
+    def get_fields(self):
+        return self.INSTANCE._fields.iteritems()
 
     def get_name(self):
         return self.name
 
-    def __repr__(self):
-        return '<Class %s>' % self.name
+    def get_full_name(self):
+        if self.namespace is None:
+            return self.name
+        else:
+            return '%s::%s' % (self.namespace, self.name)
+
+    def get_type(self):
+        return packagedQName(self.namespace, self.name)
 
     def get_base_class(self):
         base_class = self.INSTANCE._superclass
         if self.INSTANCE is self.db.genoo.EXCEPTION:
-            return constants.QName("Error")
-        if self.is_root(base_class):
-            return constants.QName("Object")
-        else:
+            return QName("Error")
+        elif self.INSTANCE._superclass._superclass:
             ns, name = self.db.class_name(base_class).rsplit('::', 1)
-            return constants.packagedQName(ns, name)
+            return packagedQName(ns, name)
+        return QName("Object")
 
     def is_abstract(self):
         return False # XXX
@@ -75,22 +82,25 @@ class Class(Node):
         
         return False
 
-    def render(self, ilasm):        
-        if self.is_root(self.INSTANCE):
-            return
-
-        self.ilasm = ilasm
-
-        ilasm.begin_class(constants.packagedQName(self.namespace, self.name), self.get_base_class())
-        for f_name, (f_type, f_default) in self.INSTANCE._fields.iteritems():
-            cts_type = self.cts.lltype_to_cts(f_type)
+    def render_ctor(self, ilasm):
+        ilasm.begin_constructor()
+        # set default values for fields
+        default_values = self.INSTANCE._fields.copy()
+        default_values.update(self.INSTANCE._overridden_defaults)
+        for f_name, (F_TYPE, f_default) in default_values.iteritems():
+            if getattr(F_TYPE, '_is_value_type', False):
+                continue # we can't set it to null
+            # INSTANCE_DEF, _ = self.INSTANCE._lookup_field(f_name)
+            cts_type = self.cts.lltype_to_cts(F_TYPE)
             f_name = self.cts.escape_name(f_name)
-            if cts_type != types.types.void:
-                ilasm.context.add_instance_trait(traits.AbcSlotTrait(constants.QName(f_name), cts_type.multiname()))
+            if cts_type != types.void:
+                ilasm.push_this()
+                push_constant(self.db, F_TYPE, f_default, ilasm)
+                # class_name = self.db.class_name(INSTANCE_DEF)
+                ilasm.set_field(f_name)
+        ilasm.end_constructor()
 
-        self._ctor()
-        self._toString()
-
+    def render_methods(self, ilasm):
         for m_name, m_meth in self.INSTANCE._methods.iteritems():
             if hasattr(m_meth, 'graph'):
                 # if the first argument's type is not a supertype of
@@ -119,40 +129,25 @@ class Class(Node):
                            if ARG is not ootype.Void]
                 returntype = self.cts.lltype_to_cts(METH.RESULT)
                 ilasm.begin_method(m_name, arglist, returntype)
-                ilasm.emit('findpropstrict', constants.QName("Error"))
-                ilasm.push_const("Abstract method %s::%s called" % (self.name, m_name))
-                ilasm.emit('constructprop', constants.QName("Error"), 1)
+                ilasm.emit('findpropstrict', QName("Error"))
+                ilasm.load("Abstract method %s::%s called" % (self.name, m_name))
+                ilasm.emit('constructprop', QName("Error"), 1)
                 ilasm.throw()
                 ilasm.exit_context()
 
-        ilasm.exit_context()
-    
-    def _ctor(self):
-        self.ilasm.begin_constructor()
-        # set default values for fields
-        default_values = self.INSTANCE._fields.copy()
-        default_values.update(self.INSTANCE._overridden_defaults)
-        for f_name, (F_TYPE, f_default) in default_values.iteritems():
-            if getattr(F_TYPE, '_is_value_type', False):
-                continue # we can't set it to null
-            # INSTANCE_DEF, _ = self.INSTANCE._lookup_field(f_name)
-            cts_type = self.cts.lltype_to_cts(F_TYPE)
-            f_name = self.cts.escape_name(f_name)
-            if cts_type != types.types.void:
-                self.ilasm.push_this()
-                push_constant(self.db, F_TYPE, f_default, self.gen)
-                # class_name = self.db.class_name(INSTANCE_DEF)
-                self.ilasm.set_field(f_name)
-        self.ilasm.end_constructor()
+        self.render_getName(ilasm)
 
-    def _toString(self):
-        if self.is_root(self.INSTANCE._superclass):
-            override = False
-        else:
-            override = True
-        print self.exception
+    def render_toString(self, ilasm):
+        override = self.INSTANCE._superclass._superclass is not None
         wrapper = "Exception" if self.exception else "Instance"
-        self.ilasm.begin_method('toString', [], types.types.string, override=override)
-        self.ilasm.load("%sWrapper('%s')" % (wrapper, self.name))
-        self.ilasm.return_value()
-        self.ilasm.end_method()
+        ilasm.begin_method('toString', [], types.string, override=override)
+        ilasm.load("%sWrapper('%s')" % (wrapper, self.name))
+        ilasm.return_value()
+        ilasm.end_method()
+
+    def render_getName(self, ilasm):
+        override = self.INSTANCE._superclass._superclass is not None
+        ilasm.begin_method('getName', [], types.string, override=override)
+        ilasm.load(self.name)
+        ilasm.return_value()
+        ilasm.end_method()

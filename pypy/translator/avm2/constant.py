@@ -7,9 +7,14 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.translator.avm2 import types_ as types
 from pypy.rpython.lltypesystem import lltype
 
-from mech.fusion.avm2 import constants, traits
+from mech.fusion.avm2.traits import AbcConstTrait
+from mech.fusion.avm2.constants import QName, packagedQName
+from mech.fusion.avm2.interfaces import IMultiname
 
-CONST_CLASS = constants.packagedQName("pypy.runtime", "Constants")
+from zope.interface import implementer
+from zope.component import adapter, provideAdapter
+
+CONST_CLASS = packagedQName("pypy.runtime", "Constants")
 
 # ______________________________________________________________________
 # Constant Generators
@@ -41,11 +46,11 @@ class Avm2ConstGenerator(BaseConstantGenerator):
         self.ilasm.exit_context()
     
     def _declare_const(self, gen, const):
-        self.ctx.add_static_trait(traits.AbcConstTrait(constants.QName(const.name), const.get_type().multiname()))
+        self.ctx.add_static_trait(AbcConstTrait(IMultiname(const.name), IMultiname(const)))
 
     def downcast_constant(self, gen, const, EXPECTED_TYPE):
         type = self.cts.lltype_to_cts(EXPECTED_TYPE)
-        gen.emit('coerce', type.multiname())
+        gen.emit('coerce', IMultiname(type))
  
     def _get_key_for_const(self, value):
         if isinstance(value, ootype._view) and isinstance(value._inst, ootype._record):
@@ -54,22 +59,23 @@ class Avm2ConstGenerator(BaseConstantGenerator):
     
     def push_constant(self, gen, const):
         gen.emit('getlex', CONST_CLASS)
-        gen.emit('getproperty', constants.QName(const.name))
+        gen.emit('getproperty', IMultiname(const.name))
 
     def _push_constant_during_init(self, gen, const):
         gen.push_this()
-        gen.emit('getproperty', constants.QName(const.name))
+        gen.emit('getproperty', IMultiname(const.name))
 
     def _pre_store_constant(self, gen, const):
         gen.push_this()
     
     def _store_constant(self, gen, const):
-        gen.emit('initproperty', constants.QName(const.name))
+        gen.emit('initproperty', IMultiname(const.name))
 
     def _initialize_data(self, gen, all_constants):
         """ Iterates through each constant, initializing its data. """
         for const in all_constants:
-            self._consider_step(gen)
+            if const._do_not_initialize():
+                continue
             self._push_constant_during_init(gen, const)
             self.current_const = const
             if not const.initialize_data(self, gen):
@@ -113,6 +119,13 @@ class Avm2BaseConstMixin(object):
         assert self.is_null()
         gen.ilasm.push_null()
 
+@adapter(Avm2BaseConstMixin)
+@implementer(IMultiname)
+def _adapter(self):
+    return IMultiname(self.get_type())
+
+provideAdapter(_adapter)
+
 # class Avm2DictMixin(Avm2BaseConstMixin):
 #     def _check_for_void_dict(self, gen):
 #         KEYTYPE = self.value._TYPE._KEYTYPE
@@ -153,9 +166,8 @@ class Avm2BaseConstMixin(object):
 # the generator interface in Tamarin.
 
 class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
-    def create_pointer(self, gen):
-        self.db.const_count.inc('Record')
-        super(Avm2RecordConst, self).create_pointer(gen)
+    def _do_not_initialize(self):
+        return False
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
@@ -168,10 +180,8 @@ class Avm2RecordConst(Avm2BaseConstMixin, RecordConst):
                 gen.set_field(f_name)
 
 class Avm2InstanceConst(Avm2BaseConstMixin, InstanceConst):
-    def create_pointer(self, gen):
-        self.db.const_count.inc('Instance')
-        self.db.const_count.inc('Instance', self.OOTYPE())
-        super(Avm2InstanceConst, self).create_pointer(gen)
+    def _do_not_initialize(self):
+        return not self.value._TYPE._fields
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
@@ -198,49 +208,52 @@ class Avm2ClassConst(Avm2BaseConstMixin, ClassConst):
     def is_inline(self):
         return True
 
+    def _do_not_initialize(self):
+        return True
+
     def push_inline(self, gen, EXPECTED_TYPE):
         if not self.is_null():
-            if hasattr(self.value, '_FUNC'):
-                FUNC = self.value._FUNC
-                classname = self.db.record_delegate(FUNC)
-            else:
-                INSTANCE = self.value._INSTANCE
-                classname = self.db.class_name(INSTANCE)
-            ns, name = classname.rsplit('::', 1)
-            gen.emit('getlex', constants.packagedQName(ns, name))
-            return
-        super(Avm2ClassConst, self).push_inline(gen, EXPECTED_TYPE)
+            INSTANCE = self.value._INSTANCE
+            classname = self.cts.instance_to_qname(INSTANCE)
+            return gen.load(classname)
 
+class Avm2ArrayListConst(Avm2BaseConstMixin):
+    def get_value(self):
+        pass
 
-class Avm2ArrayListConst(Avm2BaseConstMixin, ListConst):
+    def get_length(self):
+        return len(self.get_value())
 
     def _do_not_initialize(self):
         # Check if it is a list of all zeroes:
         try:
-            if self.value._list == [0] * len(self.value._list):
-                return True
+            return self.get_value() == [0] * self.get_length()
         except:
-            pass
-        return super(Avm2ListConst, self)._do_not_initialize()
-    
+            return False
+
     def create_pointer(self, gen):
-        llen = len(self.value._list)
-        self.db.const_count.inc('List')
-        self.db.const_count.inc('List', self.value._TYPE.ITEM)
-        self.db.const_count.inc('List', llen)
-        gen.oonewarray(self.value._TYPE, llen)
+        gen.oonewarray(self.value._TYPE, self.get_length())
 
     def initialize_data(self, constgen, gen):
         assert not self.is_null()
-        
+        ITEM = self.value._TYPE.ITEM
+
         # check for special cases and avoid initialization
         if self._do_not_initialize():
             return
-        
-        for idx, item in enumerate(self.value._array):
+
+        for idx, item in enumerate(self.get_value()):
             gen.dup()
-            gen.emit('setproperty', constants.Multiname(
-                    str(idx), constants.PROP_NAMESPACE_SET))
+            push_constant(self.db, ITEM, item, gen)
+            gen.set_field(idx)
+
+class Avm2ListConst (Avm2ArrayListConst, ListConst):
+    def get_value(self):
+        return self.value._list
+
+class Avm2ArrayConst(Avm2ArrayListConst, ArrayConst):
+    def get_value(self):
+        return self.value._array
 
 # class CLIDictConst(CLIDictMixin, DictConst):
 #     def create_pointer(self, gen):
