@@ -54,17 +54,13 @@ class _Get(object):
         try:
             self.looptoken = self._cache[key]
         except KeyError:
-            args = []
             for arg in self.args_type:
                 if arg == 'i':
                     bargs.append(BoxInt())
-                    args.append(lltype.Signed)
                 elif arg == 'f':
                     bargs.append(BoxFloat())
-                    args.append(lltype.Float)
                 elif arg == 'p':
                     bargs.append(BoxPtr())
-                    args.append(lltype.Signed)
                 else:
                     raise ValueError(arg)
 
