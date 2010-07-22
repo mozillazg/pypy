@@ -37,7 +37,6 @@ class _Get(object):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
-        self.res = None
         self.cpu = cpu
         lib = lib.handler
         bargs = []
@@ -70,21 +69,17 @@ class _Get(object):
                     raise ValueError(arg)
 
             if self.res_type == 'i':
-                self.res = lltype.Signed
                 bres = BoxInt()
             elif self.res_type == 'f':
-                self.res = lltype.Float
                 bres = BoxFloat()
             elif self.res_type == 'p':
-                self.res = lltype.Signed
                 bres = BoxPtr()
             elif self.res_type == 'v':
-                self.res = lltype.Void
                 bres = NULLBOX
             else:
                 raise ValueError(self.res_type)
 
-            calldescr = self.gen_calldescr() # XXX add cache
+            calldescr = self.gen_calldescr()
             self.looptoken = LoopToken()
             oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                       ResOperation(rop.FINISH, [bres], None,
@@ -112,11 +107,10 @@ class _Get(object):
                                       % self.res_type)
 
         calldescr = cls(arg_classes)
-        calldescr.create_call_stub(gccache.rtyper, self.res)
         return calldescr
 
     def call(self, push_result):
-        res = self.cpu.execute_token(self.looptoken)
+        self.cpu.execute_token(self.looptoken)
 
         if self.res_type == 'i':
             r = push_result(self.cpu.get_latest_value_int(0))
