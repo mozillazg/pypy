@@ -358,6 +358,55 @@ class FunctionGcRootTracker(object):
                 self.lines.insert(call.lineno+1, '\t.globl\t%s\n' % (label,))
         call.global_label = label
 
+    @classmethod
+    def compress_callshape(cls, shape):
+        # For a single shape, this turns the list of integers into a list of
+        # bytes and reverses the order of the entries.  The length is
+        # encoded by inserting a 0 marker after the gc roots coming from
+        # shape[5:] and before the 5 values coming from shape[4] to
+        # shape[0].  In practice it seems that shapes contain many integers
+        # whose value is up to a few thousands, which the algorithm below
+        # compresses down to 2 bytes.  Very small values compress down to a
+        # single byte.
+
+        # Callee-save regs plus ret addr
+        min_size = len(cls.CALLEE_SAVE_REGISTERS) + 1
+
+        assert len(shape) >= min_size
+        shape = list(shape)
+        assert 0 not in shape[min_size:]
+        shape.insert(min_size, 0)
+        result = []
+        for loc in shape:
+            assert loc >= 0
+            flag = 0
+            while loc >= 0x80:
+                result.append(int(loc & 0x7F) | flag)
+                flag = 0x80
+                loc >>= 7
+            result.append(int(loc) | flag)
+        result.reverse()
+        return result
+
+    @classmethod
+    def decompress_callshape(cls, bytes):
+        # For tests.  This logic is copied in asmgcroot.py.
+        result = []
+        n = 0
+        while n < len(bytes):
+            value = 0
+            while True:
+                b = bytes[n]
+                n += 1
+                value += b
+                if b < 0x80:
+                    break
+                value = (value - 0x80) << 7
+            result.append(value)
+        result.reverse()
+        assert result[5] == 0
+        del result[5]
+        return result
     # ____________________________________________________________
 
     CANNOT_COLLECT = {    # some of the most used functions that cannot collect
@@ -733,6 +782,64 @@ class FunctionGcRootTracker(object):
             if target in ['__alldiv', '__allrem', '__allmul', '__alldvrm']:
                 insns.append(InsnStackAdjust(16))
         return insns
+    # __________ debugging output __________
+
+    @classmethod
+    def format_location(cls, loc):
+        # A 'location' is a single number describing where a value is stored
+        # across a call.  It can be in one of the CALLEE_SAVE_REGISTERS, or
+        # in the stack frame at an address relative to either %esp or %ebp.
+        # The last two bits of the location number are used to tell the cases
+        # apart; see format_location().
+        assert loc >= 0
+        kind = loc & LOC_MASK
+        if kind == LOC_REG:
+            if loc == LOC_NOWHERE:
+                return '?'
+            reg = (loc >> 2) - 1
+            return '%' + cls.CALLEE_SAVE_REGISTERS[reg].replace("%", "")
+        else:
+            offset = loc & ~ LOC_MASK
+            if kind == LOC_EBP_PLUS:
+                result = '(%' + cls.EBP.replace("%", "") + ')'
+            elif kind == LOC_EBP_MINUS:
+                result = '(%' + cls.EBP.replace("%", "") + ')'
+                offset = -offset
+            elif kind == LOC_ESP_PLUS:
+                result = '(%' + cls.ESP.replace("%", "") + ')'
+            else:
+                assert 0, kind
+            if offset != 0:
+                result = str(offset) + result
+            return result
+
+    @classmethod
+    def format_callshape(cls, shape):
+        # A 'call shape' is a tuple of locations in the sense of
+        # format_location().  They describe where in a function frame
+        # interesting values are stored, when this function executes a 'call'
+        # instruction.
+        #
+        #   shape[0]    is the location that stores the fn's own return
+        #               address (not the return address for the currently
+        #               executing 'call')
+        #
+        #   shape[1..N] is where the fn saved its own caller's value of a
+        #               certain callee save register. (where N is the number
+        #               of callee save registers.)
+        #
+        #   shape[>N]   are GC roots: where the fn has put its local GCPTR
+        #               vars
+        #
+        num_callee_save_regs = len(cls.CALLEE_SAVE_REGISTERS)
+        assert isinstance(shape, tuple)
+        # + 1 for the return address
+        assert len(shape) >= (num_callee_save_regs + 1)
+        result = [cls.format_location(loc) for loc in shape]
+        return '{%s | %s | %s}' % (result[0],
+                                   ', '.join(result[1:(num_callee_save_regs+1)]),
+                                   ', '.join(result[(num_callee_save_regs+1):]))
+
 
 class FunctionGcRootTracker32(FunctionGcRootTracker):
     WORD = 4
@@ -1179,7 +1286,7 @@ class AssemblerParser(object):
         table = tracker.computegcmaptable(self.verbose)
         if self.verbose > 1:
             for label, state in table:
-                print >> sys.stderr, label, '\t', format_callshape(self, state)
+                print >> sys.stderr, label, '\t', tracker.format_callshape(state)
         table = compress_gcmaptable(table)
         if self.shuffle and random.random() < 0.5:
             self.gcmaptable[:0] = table
@@ -1432,6 +1539,8 @@ class GcRootTracker(object):
         else:
             word_decl = '.long'
 
+        tracker_cls = PARSERS[self.format].FunctionGcRootTracker
+
         # The pypy_asm_stackwalk() function
 
         if self.format == 'msvc':
@@ -1601,7 +1710,7 @@ class GcRootTracker(object):
                     n = shapes[state]
                 except KeyError:
                     n = shapes[state] = shapeofs
-                    bytes = [str(b) for b in compress_callshape(state)]
+                    bytes = [str(b) for b in tracker_cls.compress_callshape(state)]
                     shapelines.append('\t%s,\t/* %s */\n' % (
                             ', '.join(bytes),
                             shapeofs))
@@ -1633,7 +1742,7 @@ class GcRootTracker(object):
                     n = shapes[state]
                 except KeyError:
                     n = shapes[state] = shapeofs
-                    bytes = [str(b) for b in compress_callshape(state)]
+                    bytes = [str(b) for b in tracker_cls.compress_callshape(state)]
                     shapelines.append('\t/*%d*/\t.byte\t%s\n' % (
                         shapeofs,
                         ', '.join(bytes)))
@@ -1643,7 +1752,7 @@ class GcRootTracker(object):
                 print >> output, '\t%s\t%s-%d' % (
                     word_decl,
                     label,
-                    PARSERS[self.format].FunctionGcRootTracker.OFFSET_LABELS)
+                    tracker_cls.OFFSET_LABELS)
                 print >> output, '\t%s\t%d' % (word_decl, n)
 
             print >> output, """\
@@ -1685,59 +1794,6 @@ class NoPatternMatch(Exception):
     pass
 
 
-# __________ debugging output __________
-
-def format_location(parser, loc):
-    # A 'location' is a single number describing where a value is stored
-    # across a call.  It can be in one of the CALLEE_SAVE_REGISTERS, or
-    # in the stack frame at an address relative to either %esp or %ebp.
-    # The last two bits of the location number are used to tell the cases
-    # apart; see format_location().
-    tracker_cls = parser.FunctionGcRootTracker
-    assert loc >= 0
-    kind = loc & LOC_MASK
-    if kind == LOC_REG:
-        if loc == LOC_NOWHERE:
-            return '?'
-        reg = (loc >> 2) - 1
-        return '%' + tracker_cls.CALLEE_SAVE_REGISTERS[reg].replace("%", "")
-    else:
-        offset = loc & ~ LOC_MASK
-        if kind == LOC_EBP_PLUS:
-            result = '(%' + tracker_cls.EBP.replace("%", "") + ')'
-        elif kind == LOC_EBP_MINUS:
-            result = '(%' + tracker_cls.EBP.replace("%", "") + ')'
-            offset = -offset
-        elif kind == LOC_ESP_PLUS:
-            result = '(%' + tracker_cls.ESP.replace("%", "") + ')'
-        else:
-            assert 0, kind
-        if offset != 0:
-            result = str(offset) + result
-        return result
-
-def format_callshape(parser, shape):
-    # A 'call shape' is a tuple of locations in the sense of format_location().
-    # They describe where in a function frame interesting values are stored,
-    # when this function executes a 'call' instruction.
-    #
-    #   shape[0] is the location that stores the fn's own return address
-    #            (not the return address for the currently executing 'call')
-    #   shape[1] is where the fn saved its own caller's %ebx value
-    #   shape[2] is where the fn saved its own caller's %esi value
-    #   shape[3] is where the fn saved its own caller's %edi value
-    #   shape[4] is where the fn saved its own caller's %ebp value
-    #   shape[>=5] are GC roots: where the fn has put its local GCPTR vars
-    #
-    num_callee_save_regs = len(parser.FunctionGcRootTracker.CALLEE_SAVE_REGISTERS)
-    assert isinstance(shape, tuple)
-    # + 1 for the return address
-    assert len(shape) >= (num_callee_save_regs + 1)
-    result = [format_location(parser, loc) for loc in shape]
-    return '{%s | %s | %s}' % (result[0],
-                               ', '.join(result[1:(num_callee_save_regs+1)]),
-                               ', '.join(result[(num_callee_save_regs+1):]))
-
 # __________ table compression __________
 
 def compress_gcmaptable(table):
@@ -1764,54 +1820,6 @@ def compress_gcmaptable(table):
         yield (label1, state, is_range)
         i = j
 
-def compress_callshape(shape):
-    # For a single shape, this turns the list of integers into a list of
-    # bytes and reverses the order of the entries.  The length is
-    # encoded by inserting a 0 marker after the gc roots coming from
-    # shape[5:] and before the 5 values coming from shape[4] to
-    # shape[0].  In practice it seems that shapes contain many integers
-    # whose value is up to a few thousands, which the algorithm below
-    # compresses down to 2 bytes.  Very small values compress down to a
-    # single byte.
-
-    # FIXME
-    # MIN_SIZE = 5
-    MIN_SIZE = 7
-
-    assert len(shape) >= MIN_SIZE
-    shape = list(shape)
-    assert 0 not in shape[MIN_SIZE:]
-    shape.insert(MIN_SIZE, 0)
-    result = []
-    for loc in shape:
-        assert loc >= 0
-        flag = 0
-        while loc >= 0x80:
-            result.append(int(loc & 0x7F) | flag)
-            flag = 0x80
-            loc >>= 7
-        result.append(int(loc) | flag)
-    result.reverse()
-    return result
-
-def decompress_callshape(bytes):
-    # For tests.  This logic is copied in asmgcroot.py.
-    result = []
-    n = 0
-    while n < len(bytes):
-        value = 0
-        while True:
-            b = bytes[n]
-            n += 1
-            value += b
-            if b < 0x80:
-                break
-            value = (value - 0x80) << 7
-        result.append(value)
-    result.reverse()
-    assert result[5] == 0
-    del result[5]
-    return result
 
 def getidentifier(s):
     def mapchar(c):
