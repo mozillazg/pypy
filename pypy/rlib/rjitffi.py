@@ -7,6 +7,8 @@ from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
+GLOBAL_CPU = CPU(None, None)
+
 class CDLL(object):
     def __init__(self, name, load=True):
         if load:
@@ -15,7 +17,7 @@ class CDLL(object):
             self.lib = None
 
         self.name = name
-        self.cpu = CPU(None, None)
+        self.cpu = GLOBAL_CPU
 
     def get(self, func, args_type, res_type='v'):
         return _Get(self.cpu, self.lib, func, args_type, res_type)
