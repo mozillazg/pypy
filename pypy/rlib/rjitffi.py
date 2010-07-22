@@ -75,7 +75,7 @@ class _Get(object):
             else:
                 raise ValueError(self.res_type)
 
-            calldescr = self.gen_calldescr()
+            calldescr = self.get_calldescr()
             self.looptoken = LoopToken()
             oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                       ResOperation(rop.FINISH, [bres], None,
@@ -86,7 +86,7 @@ class _Get(object):
             self._cache[key] = self.looptoken
         self.setup_stack()
 
-    def gen_calldescr(self):
+    def get_calldescr(self):
         arg_classes = ''.join(self.args_type)
         gccache = self.cpu.gc_ll_descr
 
