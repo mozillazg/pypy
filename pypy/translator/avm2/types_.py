@@ -1,71 +1,42 @@
 """
-bTranslate between PyPy ootypesystem and .NET Common Type System
+Translate between PyPy ootypesystem and the Tamarin Type System.
 """
 
-import exceptions
-
-from py.builtin import set
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.cli import oopspec
-from pypy.translator.cli.option import getoption
 
-from mech.fusion.avm2 import constants
+from py.builtin import set
 
-from pypy.tool.ansi_print import ansi_log
+from mech.fusion.avm2.constants import packagedQName, QName, TypeName, null
+from mech.fusion.avm2.interfaces import IMultiname
 
-vec_qname = constants.packagedQName("__AS3__.vec", "Vector")
-str_qname = constants.QName("String")
-arr_qname = constants.QName("Array")
+from zope.component import adapter, provideAdapter
+from zope.interface import implementer
 
 class Avm2Type(object):
-    def typename(self):
-        raise NotImplementedError
+    def __init__(self, multiname, default):
+        self.multiname = IMultiname(multiname)
+        self.default = default
+
+    @classmethod
+    def from_string(cls, name, default=None):
+        ns, _, name = name.rpartition('::')
+        return cls(packagedQName(ns, name), default)
 
     def load_default(self, asm):
-        raise NotImplementedError
+        asm.load(self.default)
 
     def __str__(self):
-        return str(self.multiname())
+        return str(self.multiname)
 
-    def __hash__(self):
-        return hash(self.multiname())
+@adapter(Avm2Type)
+@implementer(IMultiname)
+def _adapter(self):
+    return self.multiname
 
-    def __eq__(self, other):
-        return isinstance(other, type(self)) and self.multiname() == other.multiname()
+provideAdapter(_adapter)
 
-    def __ne__(self, other):
-        return not self == other
-
-class Avm2PrimitiveType(Avm2Type):
-    def __init__(self, name, default):
-        self.name, self.default = name, default
-
-    def load_default(self, gen):
-        gen.load(self.default)
-
-    def typename(self):
-        return self.name
-
-    def multiname(self):
-        return constants.QName(self.typename())
-
-class Avm2NamespacedType(Avm2Type):
-    nstype = constants.TYPE_NAMESPACE_PackageNamespace
-    def __init__(self, name, namespace=''):
-        if '::' in name and namespace == '':
-            self.ns, self.name = name.rsplit('::', 1)
-        else:
-            self.name = name
-            self.ns = namespace
-
-    def typename(self):
-        return "%s::%s" % (self.ns, self.name)
-
-    def multiname(self):
-        return constants.QName(self.name, constants.Namespace(self.nstype, self.ns))
-
-class Avm2ArrayType(Avm2Type):
+class Avm2VectorType(object):
     def __init__(self, itemtype):
         self.ITEM = itemtype
 
@@ -73,25 +44,27 @@ class Avm2ArrayType(Avm2Type):
         gen.oonewarray(self, 0)
 
     def __str__(self):
-        return "%s.<%s>" % (vec_qname, constants.QName(self.ITEM))
+        return "Vector.<%s>" % (IMultiname(self.ITEM))
 
-    def multiname(self):
-        return constants.TypeName(vec_qname, constants.QName(self.ITEM))
+@adapter(Avm2VectorType)
+@implementer(IMultiname)
+def _adapter(self):
+    return TypeName(packagedQName("__AS3__.vec", "Vector"), IMultiname(self.ITEM))
 
-T = Avm2PrimitiveType
-# N = Avm2NamespacedType
+provideAdapter(_adapter)
+
+T = Avm2Type
 class types:
-    void   =  T('void', constants.null)
+    void   =  T('*', null)
     int    =  T('int', -1)
     uint   =  T('uint', 0)
     bool   =  T('Boolean', False)
     float  =  T('Number', float('nan'))
     string =  T('String', "")
-    type   =  T('Class', constants.QName('Class'))
+    type   =  T('Class', QName('Class'))
     object =  T('Object', {})
-    list   =  Avm2ArrayType
+    list   =  Avm2VectorType
     dict   =  T('Object', {})
-#    sb     =  N('StringBuilder', 'pypy.lib')
 del T
 
 _lltype_to_cts = {
@@ -106,9 +79,9 @@ _lltype_to_cts = {
     ootype.UniChar: types.string,
     ootype.Class: types.type,
     ootype.String: types.string,
-#   ootype.StringBuilder: types.sb,
+    ootype.StringBuilder: types.string,
     ootype.Unicode: types.string,
-#   ootype.UnicodeBuilder: types.sb,
+    ootype.UnicodeBuilder: types.string,
 
     # maps generic types to their ordinal
     ootype.List.SELFTYPE_T: types.list,
@@ -129,22 +102,22 @@ class Avm2TypeSystem(object):
         elif isinstance(t, ootype.Instance):
             NATIVE_INSTANCE = t._hints.get('NATIVE_INSTANCE', None)
             if NATIVE_INSTANCE:
-                return Avm2NamespacedType(NATIVE_INSTANCE._name)
+                return Avm2Type.from_string(NATIVE_INSTANCE._name)
             else:
                 name = self.db.pending_class(t)
-                return Avm2NamespacedType(name)
+                return Avm2Type.from_string(name)
         elif isinstance(t, ootype.Record):
             name = self.db.pending_record(t)
-            return Avm2NamespacedType(name)
+            return Avm2Type.from_string(name)
         elif isinstance(t, ootype.StaticMethod):
             delegate = self.db.record_delegate(t)
-            return Avm2NamespacedType(delegate)
+            return Avm2Type.from_string(delegate)
         elif isinstance(t, (ootype.Array, ootype.List)):
             item_type = self.lltype_to_cts(t.ITEM)
             return types.list(item_type)
         elif isinstance(t, ootype.Dict):
-            key_type = self.lltype_to_cts(t._KEYTYPE)
-            value_type = self.lltype_to_cts(t._VALUETYPE)
+            #key_type = self.lltype_to_cts(t._KEYTYPE)
+            #value_type = self.lltype_to_cts(t._VALUETYPE)
             return types.dict
         ## elif isinstance(t, ootype.DictItemsIterator):
         ##     key_type = self.lltype_to_cts(t._KEYTYPE)
@@ -170,9 +143,14 @@ class Avm2TypeSystem(object):
         func_name = graph.name
         namespace = getattr(graph, '_namespace_', None)
         if namespace:
-            return constants.packagedQName(namespace, func_name)
+            return packagedQName(namespace, func_name)
         else:
-            return constants.QName(func_name)
+            return QName(func_name)
+
+    def instance_to_qname(self, instance):
+        classname = self.db.class_name(instance)
+        ns, name = classname.rsplit('::', 1)
+        return packagedQName(ns, name)
 
     # def ctor_name(self, t):
     #     return 'instance void %s::.ctor()' % self.lltype_to_cts(t)
@@ -258,10 +236,10 @@ class Avm2TypeSystem(object):
     #     else:
     #         assert False
 
-def dict_of_void_ll_copy_hack(TYPE, ret_type):
-    # XXX: ugly hack to make the ll_copy signature correct when
-    # CustomDict is special-cased to DictOfVoid.
-    if isinstance(TYPE, ootype.CustomDict) and TYPE._VALUETYPE is ootype.Void:
-        return ret_type.typename().replace('Dict`2', 'DictOfVoid`2')
-    else:
-        return ret_type
+## def dict_of_void_ll_copy_hack(TYPE, ret_type):
+##     # XXX: ugly hack to make the ll_copy signature correct when
+##     # CustomDict is special-cased to DictOfVoid.
+##     if isinstance(TYPE, ootype.CustomDict) and TYPE._VALUETYPE is ootype.Void:
+##         return ret_type.typename().replace('Dict`2', 'DictOfVoid`2')
+##     else:
+##         return ret_type

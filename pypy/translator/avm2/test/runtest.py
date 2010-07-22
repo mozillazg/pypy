@@ -15,47 +15,53 @@ from pypy.translator.avm2.test.entrypoint import SWFTestEntryPoint, TamarinTestE
 from pypy.translator.avm2.test.browsertest import ExceptionWrapper, InstanceWrapper
 from pypy.translator.avm2.genavm import GenAVM2
 
-ENTRY_POINTS = dict(swf=SWFTestEntryPoint, tamarin=TamarinTestEntryPoint)
+class UnparsableResult(Exception):
+    pass
 
 def parse_result(string):
     string = string.strip()
+    if string.startswith("Got:"):
+        return parse_result_raw(string[4:].strip())
+    elif string.startswith("ExceptionWrapper"):
+        return eval(string.splitlines()[0])
+    raise UnparsableResult(string)
+
+def parse_result_raw(string):
+    if string == "":
+        return ""
     if string == "true":
         return True
-    elif string == "false":
+    if string == "false":
         return False
-    elif string == "undefined" or string == "null":
+    if string == "undefined" or string == "null":
         return None
-    elif all(c in "123456789-" for c in string):
+    if string[0] + string[-1] in ('()', '[]'):
+        res = [parse_result_raw(s) for s in string[1:-1].split(",")]
+        return tuple(res) if string[0] == '(' else res
+    try:
         return int(string)
-    elif "," in string:
-        if string.startswith("(") and string.endswith(")"):
-            return tuple(parse_result(s) for s in string[1:-1].split(","))
-        return [parse_result(s) for s in string.split(",")]
-    elif string.startswith("ExceptionWrapper"):
-        return eval(string)
-    else:
-        try:
-            return float(string)
-        except ValueError:
-            pass
+    except ValueError:
+        pass
+    try:
+        return float(string)
+    except ValueError:
+        pass
     return string
 
-def compile_function(func, name, annotation=[], backendopt=True,
+def compile_function(func, name, annotation, backendopt=True,
                      exctrans=False, annotatorpolicy=None, wrapexc=False):
     olddefs = patch_os()
-    gen = _build_gen(func, annotation, backendopt, exctrans, annotatorpolicy)
-    entry_point = ENTRY_POINTS[option.tamtarget](name, gen, wrapexc)
-    gen.ilasm = entry_point.actions
+    gen = _build_gen(func, name, annotation, backendopt,
+                     exctrans, annotatorpolicy, wrapexc)
     gen.generate_source()
+    gen.entrypoint.finish_compiling()
     unpatch_os(olddefs) # restore original values
-    return entry_point, gen
+    return gen
 
-def _build_gen(func, annotation, backendopt=True, exctrans=False,
-               annotatorpolicy=None):
-    try:
-        func = func.im_func
-    except AttributeError:
-        pass
+def _build_gen(func, name, annotation, backendopt=True,
+               exctrans=False,  annotatorpolicy=None, wrapexc=False):
+    func = getattr(func, "im_func", func)
+
     t = TranslationContext()
     ann = t.buildannotator(policy=annotatorpolicy)
     ann.build_types(func, annotation)
@@ -70,15 +76,21 @@ def _build_gen(func, annotation, backendopt=True, exctrans=False,
 
     tmpdir = py.path.local('.')
 
-    return GenAVM2(tmpdir, t, None, exctrans)
+    if option.browsertest:
+        entry = SWFTestEntryPoint
+    else:
+        entry = TamarinTestEntryPoint
+    ep = entry(name, t.graphs[0], wrapexc)
+
+    return GenAVM2(tmpdir, t, ep, exctrans)
 
 class AVM2Test(BaseRtypingTest, OORtypeMixin):
     def __init__(self):
         self._func = None
         self._ann = None
-        self._harness = None
+        self._entry_point = None
 
-    def _compile(self, fn, args, ann=None, backendopt=True, exctrans=False, wrapexc=False):
+    def _compile(self, fn, ann=None, backendopt=True, exctrans=False, wrapexc=False):
         frame = sys._getframe()
         while frame:
             name = frame.f_code.co_name
@@ -88,14 +100,13 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
         else:
             name = "test_unknown"
 
-        if ann is None:
-            ann = [lltype_to_annotation(typeOf(x)) for x in args]
-
-        self._entry_point = compile_function(fn, "%s.%s" % (type(self).__name__, name),
+        if fn == self._func and self._ann == ann:
+            return self._gen
+        self._gen = compile_function(fn, "%s.%s" % (type(self).__name__, name),
             ann, backendopt=backendopt, exctrans=exctrans, wrapexc=wrapexc)
         self._func = fn
         self._ann = ann
-        return self._entry_point
+        return self._gen
 
     def _skip_win(self, reason):
         if platform.system() == 'Windows':
@@ -116,11 +127,11 @@ class AVM2Test(BaseRtypingTest, OORtypeMixin):
     def interpret(self, fn, args, annotation=None, backendopt=None,
                   exctrans=False, wrapexc=False):
         backendopt = self._get_backendopt(backendopt)
-        entry_point, gen = self._compile(fn, args, annotation,
-            backendopt, exctrans, wrapexc)
-        entry_point.start_test()
-        entry_point.actions.call_graph(gen.translator.graphs[0], args)
-        result = parse_result(entry_point.do_test())
+        if annotation is None:
+            annotation = [lltype_to_annotation(typeOf(x)) for x in args]
+        gen = self._compile(fn, annotation,
+               backendopt, exctrans, wrapexc)
+        result = parse_result(gen.entrypoint.run_test(args))
         if isinstance(result, ExceptionWrapper):
             raise result
         return result

@@ -7,7 +7,7 @@ class TestAVM2String(AVM2Test, oostring.BaseTestString):
     EMPTY_STRING_HASH = 0
 
     def test_unichar_const(self):
-        py.test.skip("CLI interpret doesn't support unicode for input arguments")
+        py.test.skip("Tamarin interpret doesn't support unicode for input arguments")
     test_unichar_eq = test_unichar_const
     test_unichar_ord = test_unichar_const
     test_unichar_hash = test_unichar_const
@@ -15,11 +15,11 @@ class TestAVM2String(AVM2Test, oostring.BaseTestString):
     test_char_unichar_eq_2 = test_unichar_const
 
     def test_upper(self):
-        py.test.skip("CLI doens't support backquotes inside string literals")
+        py.test.skip("Tamarin doesn't support backquotes inside string literals")
     test_lower = test_upper
 
     def test_hlstr(self):
-        py.test.skip("CLI tests can't have string as input arguments")
+        py.test.skip("Tamarin tests can't have string as input arguments")
 
     test_inplace_add = test_hlstr
 
