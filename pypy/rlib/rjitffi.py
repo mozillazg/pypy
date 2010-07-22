@@ -81,7 +81,7 @@ class _Get(object):
             else:
                 raise ValueError(self.res_type)
 
-            calldescr = self.gen_calldescr() # XXX add cache
+            calldescr = self.gen_calldescr()
             self.looptoken = LoopToken()
             oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                       ResOperation(rop.FINISH, [bres], None,
@@ -92,7 +92,7 @@ class _Get(object):
             cache[self.res_type] = { tuple(self.args_type) : self.looptoken }
         self.setup_stack()
 
-    def gen_calldescr(self):
+    def gen_calldescr(self, extrainfo=None):
         arg_classes = ''.join(self.args_type)
         gccache = self.cpu.gc_ll_descr
 
@@ -108,9 +108,15 @@ class _Get(object):
             raise NotImplementedError('Unknown type of descr: %s'
                                       % self.res_type)
 
-        calldescr = cls(arg_classes)
-        calldescr.create_call_stub(gccache.rtyper, self.res)
-        return calldescr
+        key = (cls, arg_classes, extrainfo)
+        cache = gccache._cache_call
+        try:
+            return cache[key]
+        except KeyError:
+            calldescr = cls(arg_classes, extrainfo)
+            calldescr.create_call_stub(gccache.rtyper, self.res)
+            cache[key] = calldescr
+            return calldescr
 
     def call(self, push_result):
         res = self.cpu.execute_token(self.looptoken)
@@ -153,4 +159,3 @@ class SignedCallDescr(descr.BaseIntCallDescr):
     _clsname = 'SignedCallDescr'
     def get_result_size(self, translate_support_code):
         return symbolic.get_size(lltype.Signed, translate_support_code)
-
