@@ -7,8 +7,6 @@ from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
-cache = {} # XXX global!
-
 class CDLL(object):
     def __init__(self, name, load=True):
         if load:
@@ -41,6 +39,7 @@ class _Get(object):
         self.cpu = cpu
         lib = lib.handler
         bargs = []
+        self._cache = {}
 
         try:
             self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(lib, func))
@@ -49,8 +48,10 @@ class _Get(object):
         bargs.append(BoxInt())
 
         # grab from the cache if possible
+        arg_classes = ''.join(self.args_type)
+        key = (self.res_type, arg_classes)
         try:
-            self.looptoken = cache[self.res_type][tuple(self.args_type)]
+            self.looptoken = self._cache[key]
         except KeyError:
             args = []
             for arg in self.args_type:
@@ -89,7 +90,7 @@ class _Get(object):
             self.cpu.compile_loop(bargs, oplist, self.looptoken)
 
             # add to the cache
-            cache[self.res_type] = { tuple(self.args_type) : self.looptoken }
+            self._cache[key] = self.looptoken
         self.setup_stack()
 
     def gen_calldescr(self):
@@ -153,4 +154,3 @@ class SignedCallDescr(descr.BaseIntCallDescr):
     _clsname = 'SignedCallDescr'
     def get_result_size(self, translate_support_code):
         return symbolic.get_size(lltype.Signed, translate_support_code)
-
