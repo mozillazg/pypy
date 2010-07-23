@@ -267,7 +267,7 @@ def make_array(mytype):
         start, stop, step = space.decode_index(w_slice, self.len)
         if step < 0:
             w_lst = array_tolist__Array(space, self)
-            w_lst = space.getitem(w_lst, w_idx)
+            w_lst = space.getitem(w_lst, w_slice)
             w_a=mytype.w_class(self.space)
             w_a.fromsequence(w_lst)
         else:
@@ -359,6 +359,17 @@ def make_array(mytype):
         for i in range(len(s)):
             cbuf[oldlen * mytype.bytes + i] = s[i]
 
+    def array_tostring__Array(space, self):
+        cbuf = self.charbuf()
+        s = ''
+        i=0
+        while i < self.len * mytype.bytes:
+            s += cbuf[i]
+            i+=1
+        return self.space.wrap(s)
+
+            
+
     def array_fromfile__Array_ANY_ANY(space, self, w_f, w_n):
         if space.type(w_f).name != 'file': # FIXME: this cant be the right way?
             msg = "arg1 must be open file"
@@ -377,17 +388,19 @@ def make_array(mytype):
             raise OperationError(space.w_EOFError, space.wrap(msg))
         array_fromstring__Array_ANY(space, self, w_item)
 
-    def array_fromunicode__Array_Unicode(space, self, w_ustr):
-        if mytype.typecode != 'u':
+    if mytype.typecode == 'u':
+        def array_fromunicode__Array_Unicode(space, self, w_ustr):
+            # XXX the following probable bug is not emulated:
+            # CPython accepts a non-unicode string or a buffer, and then
+            # behaves just like fromstring(), except that it strangely truncate
+            # string arguments at multiples of the unicode byte size.
+            # Let's only accept unicode arguments for now.
+            self.fromsequence(w_ustr)
+    else:
+        def array_fromunicode__Array_Unicode(space, self, w_ustr):
             msg = "fromunicode() may only be called on type 'u' arrays"
             raise OperationError(space.w_ValueError, space.wrap(msg))
         
-        # XXX the following probable bug is not emulated:
-        # CPython accepts a non-unicode string or a buffer, and then
-        # behaves just like fromstring(), except that it strangely truncate
-        # string arguments at multiples of the unicode byte size.
-        # Let's only accept unicode arguments for now.
-        self.fromsequence(w_ustr)
 
             
         
@@ -403,7 +416,7 @@ def make_array(mytype):
 
     def repr__Array(space, self):
         if self.len == 0:
-            return "array('%s')" % self.typecode
+            return space.wrap("array('%s')" % self.typecode)
         elif self.typecode == "c":
             r = space.repr(space.call_method(self, 'tostring'))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
@@ -415,7 +428,7 @@ def make_array(mytype):
         else:
             r = space.repr(space.call_method(self, 'tolist'))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
-            return space.wrap(s)
+            return space.wrap(s)    
 
 
     W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
