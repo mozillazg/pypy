@@ -1,5 +1,6 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.rlib.rarithmetic import r_singlefloat
 
 from pypy.module.cppyy import helper, capi
 
@@ -46,6 +47,13 @@ class IntConverter(TypeConverter):
         x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)
+
+class FloatConverter(TypeConverter):
+    def convert_argument(self, space, w_obj):
+        arg = space.float_w(w_obj)
+        x = lltype.malloc(rffi.FLOATP.TO, 1, flavor='raw')
+        x[0] = r_singlefloat(arg)
+        return rffi.cast(rffi.VOIDP, x)        
 
 class DoubleConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -112,5 +120,6 @@ _converters["bool"]                = BoolConverter()
 _converters["char"]                = CharConverter()
 _converters["unsigned char"]       = CharConverter()
 _converters["int"]                 = IntConverter()
+_converters["float"]               = FloatConverter()
 _converters["double"]              = DoubleConverter()
 _converters["const char*"]         = CStringConverter()

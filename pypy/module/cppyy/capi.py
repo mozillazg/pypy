@@ -41,6 +41,7 @@ c_deallocate = rffi.llexternal(
     "cppyy_deallocate",
     [C_TYPEHANDLE, C_OBJECT], lltype.Void,
     compilation_info=eci)
+
 c_call_v = rffi.llexternal(
     "cppyy_call_v",
     [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], lltype.Void,
@@ -57,10 +58,15 @@ c_call_l = rffi.llexternal(
     "cppyy_call_l",
     [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], rffi.LONG,
     compilation_info=eci)
+c_call_f = rffi.llexternal(
+    "cppyy_call_f",
+    [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
+    compilation_info=eci)
 c_call_d = rffi.llexternal(
     "cppyy_call_d",
     [C_TYPEHANDLE, rffi.INT, C_OBJECT, rffi.INT, rffi.VOIDPP], rffi.DOUBLE,
     compilation_info=eci)
+
 c_destruct = rffi.llexternal(
     "cppyy_destruct",
     [C_TYPEHANDLE, C_OBJECT], lltype.Void,

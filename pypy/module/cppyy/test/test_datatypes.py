@@ -81,8 +81,12 @@ class AppTestDATATYPES:
         for i in range(len(names)):
             exec 'c.set_%s = %d' % (names[i],2*i)
             assert eval('c.m_%s' % names[i]) == i
+        """
 
         # float types
+        c.set_float( 0.123 );  assert round(c.get_float()  - 0.123, 5) == 0
+        c.set_double( 0.456 ); assert round(c.get_double() - 0.456, 8) == 0
+        """
         c.m_float = 0.123;     assert round(c.get_float()  - 0.123, 5) == 0
         c.set_float( 0.234 );  assert round(c.m_float      - 0.234, 5) == 0
         c.m_double = 0.456;    assert round(c.get_double() - 0.456, 8) == 0

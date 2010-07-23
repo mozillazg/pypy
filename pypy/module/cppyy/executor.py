@@ -30,6 +30,11 @@ class LongExecutor(FunctionExecutor):
         result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
+class FloatExecutor(FunctionExecutor):
+    def execute(self, space, func, cppthis, num_args, args):
+        result = capi.c_call_f(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return space.wrap(result)
+
 class DoubleExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_d(func.cpptype.handle, func.method_index, cppthis, num_args, args)
@@ -78,5 +83,6 @@ _executors["char"]                = CharExecutor()
 _executors["unsigned char"]       = CharExecutor()
 _executors["int"]                 = LongExecutor()
 _executors["long int"]            = LongExecutor()
+_executors["float"]               = FloatExecutor()
 _executors["double"]              = DoubleExecutor()
 _executors["char*"]               = CStringExecutor()
