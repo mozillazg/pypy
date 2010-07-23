@@ -29,7 +29,6 @@ class MicroIter(Wrappable):
     _immutable_fields_ = ['array', 'stride']
     def __init__(self, array):
         self.array = array
-        self.stride = array.stride(0)
         self.i = 0
 
     def descr_iter(self, space):
@@ -37,16 +36,17 @@ class MicroIter(Wrappable):
     descr_iter.unwrap_spec = ['self', ObjSpace]
     
     def descr_next(self, space):
-        if self.i < self.array.opposite_stride(1): #will change for row/column
+        if self.i < self.array.shape[0]: #will change for row/column
             if len(self.array.shape) > 1:
                 ar = MicroArray(self.array.shape[1:], # ok for column major?
                                 self.array.dtype,
-                                self.array,
-                                offset = self.array.offset + self.i * self.stride)
+                                parent=self.array,
+                                strides=self.array.strides[1:],
+                                offset=self.array.get_offset(self.array.flatten_index([self.i])))
                 self.i += 1
                 return space.wrap(ar)
             elif len(self.array.shape) == 1:
-                next = self.array.getitem(space, self.i * self.stride)
+                next = self.array.getitem(space, self.array.flatten_index([self.i]))
                 self.i += 1
                 return next
             else:
@@ -74,17 +74,26 @@ MicroIter.typedef = TypeDef('iterator',
                            )
 
 class MicroArray(BaseNumArray):
-    def __init__(self, shape, dtype, parent=None, offset = 0):
+    _immutable_fields_ = ['parent', 'offset']
+    def __init__(self, shape, dtype, order='C', strides=None, parent=None, offset=0):
         self.shape = shape
         self.dtype = dtype
         self.parent = parent
         self.offset = offset
-        self.order = 'C' #XXX: more forgiving to give it valid default
+
+        self.order = order
 
         assert self.dtype is not None
         dtype = dtype.dtype #XXX: ugly
 
         size = size_from_shape(shape)
+
+        if strides is not None:
+            self.strides = strides
+        else:
+            self.strides = [0] * len(self.shape)
+            for i in range(len(self.shape)):
+                self.strides[i] = self.stride(i) # XXX calling self.stride repeatedly is a bit wasteful
 
         if size > 0 and parent is None:
             self.data = dtype.alloc(size)
@@ -93,6 +102,9 @@ class MicroArray(BaseNumArray):
         else:
             self.data = null_data
 
+    def get_offset(self, index):
+        return self.offset + index
+
     def descr_len(self, space):
         return space.wrap(self.shape[0])
     descr_len.unwrap_spec = ['self', ObjSpace]
@@ -100,14 +112,15 @@ class MicroArray(BaseNumArray):
     def getitem(self, space, index):
         try:
             dtype = self.dtype.dtype #XXX: kinda ugly
-            return dtype.w_getitem(space, self.data, self.offset + index)
+            return dtype.w_getitem(space, self.data,
+                                   self.get_offset(index))
         except IndexError, e:
             raise OperationError(space.w_IndexError,
                                  space.wrap("index out of bounds"))
 
     def setitem(self, space, index, w_value):
         dtype = self.dtype.dtype #XXX: kinda ugly
-        dtype.w_setitem(space, self.data, self.offset + index, w_value) #maybe hang onto w_dtype separately?
+        dtype.w_setitem(space, self.data, self.get_offset(index), w_value) #maybe hang onto w_dtype separately?
 
     def flatten_applevel_index(self, space, w_index):
         try:
@@ -119,7 +132,8 @@ class MicroArray(BaseNumArray):
 
         index = space.fixedview(w_index)
         index = [index_w(space, w_x) for w_x in index]
-        # XXX: normalize
+
+        # Normalize indices
         for i in range(len(index)):
             if index[i] < 0:
                 index[i] = self.shape[i] + index[i]
@@ -128,8 +142,7 @@ class MicroArray(BaseNumArray):
     def flatten_index(self, index):
         offset = 0
         for i in range(len(index)):
-            stride = self.stride(i)
-            offset += index[i] * stride
+            offset += index[i] * self.strides[i]
         return offset
 
     def stride(self, i):
@@ -155,8 +168,6 @@ class MicroArray(BaseNumArray):
             index = self.flatten_applevel_index(space, w_index)
             
             try:
-                #w_iter = space.iter(w_index) # XXX: I guess len() should throw TypeError
-                                              # FIXME: what about slices?
                 index_dimension = space.int_w(space.len(w_index))
             except OperationError, e:
                 if e.match(space, space.w_TypeError):
@@ -168,7 +179,7 @@ class MicroArray(BaseNumArray):
             elif index_dimension < len(self.shape):
                 assert index_dimension > 0
                 array = MicroArray(self.shape[index_dimension:], self.dtype,
-                                   parent=self, offset=self.offset + index)
+                                   parent=self, offset=self.get_offset(index))
                 return space.wrap(array)
             else:
                 raise OperationError(space.w_IndexError,
@@ -337,6 +348,10 @@ app_fill_array = gateway.applevel("""
 fill_array = app_fill_array.interphook('fill_array')
 
 def array(space, w_xs, w_dtype=NoneNotWrapped, copy=True, order='C', subok=False, w_ndim=NoneNotWrapped):
+    if not order in 'CF':
+        raise OperationError(space.w_TypeError,
+                             space.wrap("order not understood"))
+
     if w_dtype is None:
         dtype = micronumpy.dtype.infer_from_iterable(space, w_xs)
     else:
@@ -347,8 +362,7 @@ def array(space, w_xs, w_dtype=NoneNotWrapped, copy=True, order='C', subok=False
 
     shape = infer_shape(space, w_xs)
 
-    ar = MicroArray(shape, wrappable_dtype)
-    ar.order = order
+    ar = MicroArray(shape, wrappable_dtype, order=order)
     w_ar = space.wrap(ar)
 
     fill_array(space,

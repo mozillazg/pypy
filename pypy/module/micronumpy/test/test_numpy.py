@@ -437,7 +437,6 @@ class TestMicroArray(object):
         memlen = len(column_major)
 
         ar = array(space, w_data, w_dtype=w_int_descr, order='C') #C for C not column
-        
         for i in range(memlen):
             array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
             assert array_element == row_major[i]
@@ -446,4 +445,3 @@ class TestMicroArray(object):
         for i in range(memlen):
             array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
             assert array_element == column_major[i]
-
