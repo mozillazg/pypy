@@ -1072,9 +1072,10 @@ class BaseBackendTest(Runner):
                         operations[1].fail_args = []
                         looptoken = LoopToken()
                         # Use "set" to unique-ify inputargs
-                        self.cpu.compile_loop(list(set(testcase)), operations,
+                        unique_testcase_list = list(set(testcase))
+                        self.cpu.compile_loop(unique_testcase_list, operations,
                                               looptoken)
-                        for i, box in enumerate(testcase):
+                        for i, box in enumerate(unique_testcase_list):
                             self.cpu.set_future_value_float(i, box.value)
                         fail = self.cpu.execute_token(looptoken)
                         if fail.identifier != 5 - (expected_id^expected):
