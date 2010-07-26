@@ -118,6 +118,7 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath1 = 0
         self.malloc_fixedsize_slowpath2 = 0
         self.setup_failure_recovery()
+        self._loop_counter = 0
 
     def leave_jitted_hook(self):
         ptrs = self.fail_boxes_ptr.ar
@@ -281,7 +282,9 @@ class Assembler386(object):
         for op in operations:
             if op.opnum == rop.DEBUG_MERGE_POINT:
                 return op.args[0]._get_str()
-        return ""
+        # invent the counter, so we don't get too confused
+        self._loop_counter += 1
+        return "<loop %d>" % self._loop_counter
         
     def patch_jump_for_descr(self, faildescr, adr_new_target):
         adr_jump_offset = faildescr._x86_adr_jump_offset
