@@ -10,8 +10,10 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.executor import execute
 from pypy.jit.backend.test.runner_test import LLtypeBackendTest
 from pypy.jit.metainterp.test.oparser import parse
+from pypy.tool.udir import udir
 import ctypes
 import sys
+import os
 
 class FakeStats(object):
     pass
@@ -394,7 +396,14 @@ class TestX86OverflowMC(TestX86):
 
 class TestDebuggingAssembler(object):
     def setup_method(self, meth):
+        self.pypylog = os.environ.get('PYPYLOG', None)
+        self.logfile = str(udir.join('x86_runner.log'))
+        os.environ['PYPYLOG'] = self.logfile
         self.cpu = CPU(rtyper=None, stats=FakeStats())
+
+    def teardown_method(self, meth):
+        if self.pypylog is not None:
+            os.environ['PYPYLOG'] = self.pypylog
 
     def test_debugger_on(self):
         loop = """
@@ -413,3 +422,6 @@ class TestDebuggingAssembler(object):
         # check debugging info
         assert self.cpu.assembler.loop_names == ["xyz"]
         assert self.cpu.assembler.loop_run_counter.getitem(0) == 10
+        self.cpu.finish_once()
+        lines = py.path.local(self.logfile + ".count").readlines()
+        assert lines[0] == 'xyz:10\n'
