@@ -169,6 +169,8 @@ class Assembler386(object):
                 self._build_malloc_fixedsize_slowpath()
             s = os.environ.get('PYPYLOG')
             if s:
+                if s.find(':') != -1:
+                    s = s.split(':')[-1]
                 self.set_debug(True)
                 self._output_loop_log = s + ".count"
 
