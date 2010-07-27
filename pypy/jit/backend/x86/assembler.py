@@ -174,8 +174,9 @@ class Assembler386(object):
 
     def finish_once(self):
         if self._debug:
-            assert self._output_loop_log is not None
-            f = open_file_as_stream(self._output_loop_log, "w")
+            output_log = self._output_loop_log
+            assert output_log is not None
+            f = open_file_as_stream(output_log, "w")
             for i in range(self._loop_counter):
                 f.write(self.loop_names[i] + ":" +
                         str(self.loop_run_counter.getitem(i)) + "\n")
