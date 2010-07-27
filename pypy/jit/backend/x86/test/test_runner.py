@@ -398,7 +398,7 @@ class TestDebuggingAssembler(object):
     def setup_method(self, meth):
         self.pypylog = os.environ.get('PYPYLOG', None)
         self.logfile = str(udir.join('x86_runner.log'))
-        os.environ['PYPYLOG'] = self.logfile
+        os.environ['PYPYLOG'] = "mumble:" + self.logfile
         self.cpu = CPU(rtyper=None, stats=FakeStats())
 
     def teardown_method(self, meth):
