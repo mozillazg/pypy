@@ -17,6 +17,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.x86.support import values_array
 from pypy.rlib.debug import debug_print
 from pypy.rlib import rgc
+from pypy.rlib.streamio import open_file_as_stream
 
 # our calling convention - we pass first 6 args in registers
 # and the rest stays on the stack
@@ -99,6 +100,7 @@ class Assembler386(object):
     mc_size = MachineCodeBlockWrapper.MC_DEFAULT_SIZE
     _float_constants = None
     _regalloc = None
+    _output_loop_log = None
 
     def __init__(self, cpu, translate_support_code=False,
                             failargs_limit=1000):
@@ -165,9 +167,19 @@ class Assembler386(object):
                 self._build_float_constants()
             if hasattr(gc_ll_descr, 'get_malloc_fixedsize_slowpath_addr'):
                 self._build_malloc_fixedsize_slowpath()
-            s = os.environ.get('PYPYJITLOG')
+            s = os.environ.get('PYPYLOG')
             if s:
                 self.set_debug(True)
+                self._output_loop_log = s + ".count"
+
+    def finish_once(self):
+        if self._debug:
+            assert self._output_loop_log is not None
+            f = open_file_as_stream(self._output_loop_log, "w")
+            for i in range(self._loop_counter):
+                f.write(self.loop_names[i] + ":" +
+                        str(self.loop_run_counter.getitem(i)) + "\n")
+            f.close()
 
     def _build_float_constants(self):
         # 11 words: 8 words for the data, and up to 3 words for alignment
