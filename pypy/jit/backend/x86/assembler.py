@@ -312,7 +312,7 @@ class Assembler386(object):
         # invent the counter, so we don't get too confused
         if self._debug:
             self.loop_names.append(funcname)
-        self._loop_counter += 1
+            self._loop_counter += 1
         return funcname
         
     def patch_jump_for_descr(self, faildescr, adr_new_target):
