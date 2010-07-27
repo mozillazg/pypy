@@ -231,9 +231,9 @@ class Assembler386(object):
                _x86_param_depth
                _x86_arglocs
         """
+        self.make_sure_mc_exists()
         funcname = self._find_debug_merge_point(operations)
 
-        self.make_sure_mc_exists()
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         arglocs = regalloc.prepare_loop(inputargs, operations, looptoken)
         looptoken._x86_arglocs = arglocs
@@ -268,9 +268,9 @@ class Assembler386(object):
         
 
     def assemble_bridge(self, faildescr, inputargs, operations):
+        self.make_sure_mc_exists()
         funcname = self._find_debug_merge_point(operations)
 
-        self.make_sure_mc_exists()
         arglocs = self.rebuild_faillocs_from_descr(
             faildescr._x86_failure_recovery_bytecode)
         if not we_are_translated():
