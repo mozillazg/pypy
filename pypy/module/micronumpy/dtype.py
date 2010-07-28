@@ -12,19 +12,15 @@ class TypeDescr(Wrappable):
         self.w_native_type = None
 
     def descr_eq(self, space, w_type):
-        if space.eq_w(self.w_native_type, w_type):
-            return space.w_True
+        if isinstance(w_type, TypeDescr):
+            other_type = w_type.dtype
+        else:
+            other_type = get(space, w_type)
 
-        try:
-            typestr = space.str_w(w_type)
-            if self.dtype.typecode == typestr: return space.w_True
-            elif self.name == typestr: return space.w_True
-            else: return space.w_False
-        except OperationError, e:
-            if e.match(space, space.w_TypeError): pass
-            else: raise
+        typecode = self.dtype.typecode
+        other_typecode = other_type.typecode
 
-        return space.w_False
+        return space.w_True if typecode == other_typecode else space.w_False
     descr_eq.unwrap_spec = ['self', ObjSpace, W_Root]
 
     def descr_repr(self, space):
@@ -165,10 +161,16 @@ def from_typestring(s):
 def from_wrapped_type(space, w_type):
     if w_type is space.w_int:
         return int_descr
-    else:
+    elif w_type is space.w_float:
         return float_descr #XXX: only handles two types!
+    else:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("unknown type %s" % w_type))
 
 def get(space, w_dtype):
+    if isinstance(w_dtype, TypeDescr):
+        return w_dtype.dtype #FIXME: a little wasteful since we end up just getting the TypeDescr
+
     try:
         s = space.str_w(w_dtype)
 
@@ -184,13 +186,6 @@ def get(space, w_dtype):
 
     except OperationError, e:
         if e.match(space, space.w_TypeError): pass # XXX: ValueError?
-
-    try:
-        i = space.int_w(w_dtype)
-        return _descriptors[i]
-    except OperationError, e:
-        if e.match(space, space.w_TypeError): pass 
-        else: raise
 
     return from_wrapped_type(space, w_dtype)
 
