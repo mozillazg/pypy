@@ -351,7 +351,6 @@ class AppTestDType(object):
     def setup_class(cls):
         cls.space = gettestobjspace(usemodules=('micronumpy',))
 
-    @py.test.mark.xfail
     def test_eq(self):
         from micronumpy import zeros
 
