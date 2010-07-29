@@ -21,15 +21,16 @@ def w_array(space, typecode, w_initializer=None):
     for tc in unroll_typecodes:
         if typecode == tc:
             a = types[tc].w_class(space)
-            if not space.is_w(w_initializer, space.w_None):
-                if space.type(w_initializer) is space.w_str:
-                    space.call_method(a, 'fromstring', w_initializer)
-                elif space.type(w_initializer) is space.w_unicode:
-                    space.call_method(a, 'fromunicode', w_initializer)
-                elif space.type(w_initializer) is space.w_list:
-                    space.call_method(a, 'fromlist', w_initializer)
-                else:
-                    space.call_method(a, 'extend', w_initializer)
+            if w_initializer is not None:
+                if not space.is_w(w_initializer, space.w_None):
+                    if space.type(w_initializer) is space.w_str:
+                        space.call_method(a, 'fromstring', w_initializer)
+                    elif space.type(w_initializer) is space.w_unicode:
+                        space.call_method(a, 'fromunicode', w_initializer)
+                    elif space.type(w_initializer) is space.w_list:
+                        space.call_method(a, 'fromlist', w_initializer)
+                    else:
+                        space.call_method(a, 'extend', w_initializer)
             break
     else:
         msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
@@ -63,7 +64,8 @@ array_tofile = SMM('tofile', 2)
 array_fromfile = SMM('fromfile', 3)
 
 array_buffer_info = SMM('buffer_info', 1)
-
+array_reduce = SMM('__reduce__', 1)
+array_byteswap = SMM('byteswap', 1)
 
 
 def descr_itemsize(space, self):
@@ -75,6 +77,7 @@ def descr_typecode(space, self):
 type_typedef = StdTypeDef(
     'array',
     __new__ = interp2app(w_array_sub),
+    __module__   = 'array',    
     itemsize = GetSetProperty(descr_itemsize),
     typecode = GetSetProperty(descr_typecode),
     )
@@ -400,6 +403,47 @@ def make_array(mytype):
             i -= 1
         self.buffer[i] = val
 
+
+    # Add and mul methods
+
+    def add__Array_Array(space, self, other):
+        a = mytype.w_class(space)
+        a.setlen(self.len + other.len)
+        for i in range(self.len):
+            a.buffer[i] = self.buffer[i]
+        for i in range(other.len):
+            a.buffer[i + self.len] = other.buffer[i]
+        return a
+
+    def inplace_add__Array_Array(space, self, other):
+        oldlen = self.len
+        otherlen = other.len
+        self.setlen(oldlen + otherlen)
+        for i in range(otherlen):
+            self.buffer[oldlen + i] = other.buffer[i]
+        return self
+
+    def mul__Array_ANY(space, self, w_repeat):
+        repeat = space.int_w(w_repeat)
+        a = mytype.w_class(space)
+        a.setlen(self.len * repeat)
+        for r in range(repeat):
+            for i in range(self.len):
+                a.buffer[r * self.len + i] = self.buffer[i]
+        return a
+
+    def mul__ANY_Array(space, w_repeat, self):
+        return mul__Array_ANY(space, self, w_repeat)
+
+    def inplace_mul__Array_ANY(space, self, w_repeat):
+        repeat = space.int_w(w_repeat)
+        oldlen=self.len
+        self.setlen(self.len * repeat)
+        for r in range(1,repeat):
+            for i in range(oldlen):
+                self.buffer[r * oldlen + i] = self.buffer[i]
+        return self
+
     # Convertions
     
     def array_tolist__Array(space, self):
@@ -488,6 +532,7 @@ def make_array(mytype):
             raise OperationError(space.w_ValueError, space.wrap(msg))
         
 
+    # Compare methods
     def cmp__Array_ANY(space, self, other):
         if isinstance(other, W_ArrayBase):
             w_lst1 = array_tolist__Array(space, self)
@@ -497,6 +542,8 @@ def make_array(mytype):
             raise OperationError(space.w_NotImplementedError, space.wrap(''))
         
 
+    # Misc methods
+    
     def buffer__Array(space, self):
         from pypy.interpreter.buffer import StringLikeBuffer
         w_s = array_tostring__Array(space, self)
@@ -506,8 +553,30 @@ def make_array(mytype):
         w_ptr = space.wrap(rffi.cast(lltype.Unsigned, self.buffer))
         w_len = space.wrap(self.len)
         return space.newtuple([w_ptr, w_len])
+
+    def array_reduce__Array(space, self):
+        if self.len > 0:
+            w_s = array_tostring__Array(space, self)
+            args = [space.wrap(mytype.typecode), w_s]
+        else:
+            args = [space.wrap(mytype.typecode)]
+        return space.newtuple([space.type(self), space.newtuple(args)])
+
+
+    def array_byteswap__Array(space, self):
+        if mytype.bytes not in [1, 2, 4, 8]:
+            msg="byteswap not supported for this array"
+            raise OperationError(space.w_RuntimeError, space.wrap(msg))
+        if self.len == 0: return
+        bytes = self.charbuf()
+        tmp = [bytes[0]] * mytype.bytes
+        for start in range(0, self.len * mytype.bytes, mytype.bytes):
+            stop = start + mytype.bytes - 1
+            for i in range(mytype.bytes):
+                tmp[i] = bytes[start + i]
+            for i in range(mytype.bytes):
+                bytes[stop - i] = tmp[i]
         
-    
 
     def repr__Array(space, self):
         if self.len == 0:
