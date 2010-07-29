@@ -4,6 +4,7 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.objectmodel import CDefinedIntSymbolic
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib.unroll import unrolling_iterable
+from pypy.jit.backend.detect_cpu import getcpuclass
 
 def purefunction(func):
     """ Decorate a function as pure. Pure means precisely that:
@@ -76,6 +77,10 @@ def purefunction_promote(promote_args='all'):
         result.func_name = func.func_name + "_promote"
         return result
     return decorator
+
+def get_cpu():
+    CPUClass = getcpuclass()
+    return CPUClass(None, None)
 
 class Entry(ExtRegistryEntry):
     _about_ = hint
