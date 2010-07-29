@@ -582,7 +582,6 @@ class BaseArrayTests:
         b *= 3
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2])"
         assert a == b
-        print "\nok: ", type(a)
         a += self.array('i', (7,))
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 7])"
 
