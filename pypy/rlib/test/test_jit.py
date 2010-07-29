@@ -1,9 +1,10 @@
 import py
 from pypy.rlib.jit import hint, we_are_jitted, JitDriver, purefunction_promote
-from pypy.rlib.jit import JitHintError
+from pypy.rlib.jit import JitHintError, get_cpu
 from pypy.translator.translator import TranslationContext, graphof
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.lltypesystem import lltype
+from pypy.jit.backend.detect_cpu import ProcessorAutodetectError
 
 class BaseTestJIT(BaseRtypingTest):
     def test_hint(self):
@@ -107,6 +108,14 @@ class BaseTestJIT(BaseRtypingTest):
             return n
         py.test.raises(JitHintError, self.gengraph, fn, [int])
 
+    def test_get_cpu(self):
+        try:
+            cpu = get_cpu()
+        except ProcessorAutodetectError:
+            pass
+        else:
+            from pypy.jit.backend.model import AbstractCPU
+            assert isinstance(cpu, AbstractCPU)
 
 class TestJITLLtype(BaseTestJIT, LLRtypeMixin):
     pass
