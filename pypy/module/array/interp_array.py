@@ -46,14 +46,24 @@ w_array_sub.unwrap_spec = (ObjSpace, W_Root, str, W_Root)
 array_append = SMM('append', 2)
 array_extend = SMM('extend', 2)
 
+array_count = SMM('count', 2)
+array_index = SMM('index', 2)
+array_reverse = SMM('reverse', 1)
+array_remove = SMM('remove', 2)
+array_pop = SMM('pop', 2, defaults=(-1,))
+array_insert = SMM('insert', 3)
+
 array_tolist = SMM('tolist', 1)
 array_fromlist = SMM('fromlist', 2)
 array_tostring = SMM('tostring', 1)
 array_fromstring = SMM('fromstring', 2)
 array_tounicode = SMM('tounicode', 1)
 array_fromunicode = SMM('fromunicode', 2)
-array_tofile = SMM('tofile', 1)
+array_tofile = SMM('tofile', 2)
 array_fromfile = SMM('fromfile', 3)
+
+array_buffer_info = SMM('buffer_info', 1)
+
 
 
 def descr_itemsize(space, self):
@@ -246,7 +256,7 @@ def make_array(mytype):
             return  rffi.cast(rffi.CCHARP, self.buffer)
 
 
-    # List interface
+    # Basic get/set/append/extend methods
 
     def len__Array(space, self):
         return space.wrap(self.len)
@@ -331,6 +341,65 @@ def make_array(mytype):
             self.fromsequence(w_iterable)
 
 
+    # List interface
+    def array_count__Array_ANY(space, self, w_val):
+        val = self.item_w(w_val)
+        cnt = 0
+        for i in range(self.len):
+            if self.buffer[i] == val:
+                cnt += 1
+        return space.wrap(cnt)
+    
+
+    def array_index__Array_ANY(space, self, w_val):
+        val = self.item_w(w_val)
+        cnt = 0
+        for i in range(self.len):
+            if self.buffer[i] == val:
+                return space.wrap(i)
+        msg = 'array.index(x): x not in list'
+        raise OperationError(space.w_ValueError, space.wrap(msg))
+
+
+    def array_reverse__Array(space, self):
+        b = self.buffer
+        for i in range(self.len/2):
+            b[i], b[self.len - i -1] = b[self.len - i -1], b[i]
+
+
+    def array_pop__Array_ANY(space, self, w_idx):
+        i = space.int_w(w_idx)
+        if i < 0: i += self.len
+        if i < 0 or i >= self.len:
+            msg = 'pop index out of range'
+            raise OperationError(space.w_IndexError, space.wrap(msg))
+        w_val = getitem__Array_ANY(space, self, space.wrap(i))
+        while i < self.len - 1:
+            self.buffer[i] = self.buffer[i + 1]
+            i += 1
+        self.setlen(self.len-1)
+        return w_val
+        
+
+    def array_remove__Array_ANY(space, self, w_val):
+        w_idx = array_index__Array_ANY(space, self, w_val)
+        array_pop__Array_ANY(space, self, w_idx)
+
+
+    def array_insert__Array_ANY_ANY(space, self, w_idx, w_val):
+        idx = space.int_w(w_idx)
+        if idx < 0: idx += self.len
+        if idx < 0: idx = 0
+        if idx > self.len: idx = self.len
+
+        val = self.item_w(w_val)
+        self.setlen(self.len + 1)
+        i = self.len-1
+        while i > idx:
+            self.buffer[i] = self.buffer[i-1]
+            i -= 1
+        self.buffer[i] = val
+
     # Convertions
     
     def array_tolist__Array(space, self):
@@ -388,6 +457,13 @@ def make_array(mytype):
             raise OperationError(space.w_EOFError, space.wrap(msg))
         array_fromstring__Array_ANY(space, self, w_item)
 
+    def array_tofile__Array_ANY(space, self, w_f):
+        if space.type(w_f).name != 'file': # FIXME: this cant be the right way?
+            msg = "arg1 must be open file"
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        w_s = array_tostring__Array(space, self)
+        space.call_method(w_f, 'write', w_s)
+
     if mytype.typecode == 'u':
         def array_fromunicode__Array_Unicode(space, self, w_ustr):
             # XXX the following probable bug is not emulated:
@@ -396,13 +472,20 @@ def make_array(mytype):
             # string arguments at multiples of the unicode byte size.
             # Let's only accept unicode arguments for now.
             self.fromsequence(w_ustr)
+            
+        def array_tounicode__Array(space, self):
+            u = u""
+            for i in range(self.len):
+                u += self.buffer[i]
+            return space.wrap(u)
     else:
         def array_fromunicode__Array_Unicode(space, self, w_ustr):
             msg = "fromunicode() may only be called on type 'u' arrays"
             raise OperationError(space.w_ValueError, space.wrap(msg))
-        
 
-            
+        def array_tounicode__Array(space, self):
+            msg = "tounicode() may only be called on type 'u' arrays"
+            raise OperationError(space.w_ValueError, space.wrap(msg))
         
 
     def cmp__Array_ANY(space, self, other):
@@ -413,6 +496,18 @@ def make_array(mytype):
         else:
             raise OperationError(space.w_NotImplementedError, space.wrap(''))
         
+
+    def buffer__Array(space, self):
+        from pypy.interpreter.buffer import StringLikeBuffer
+        w_s = array_tostring__Array(space, self)
+        return space.wrap(StringLikeBuffer(space, w_s))
+
+    def array_buffer_info__Array(space, self):
+        w_ptr = space.wrap(rffi.cast(lltype.Unsigned, self.buffer))
+        w_len = space.wrap(self.len)
+        return space.newtuple([w_ptr, w_len])
+        
+    
 
     def repr__Array(space, self):
         if self.len == 0:
