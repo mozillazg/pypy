@@ -441,10 +441,15 @@ class BaseArrayTests:
         assert a.count(2) == 2
         assert a.index(3) == 2
         assert a.index(2) == 1
+        raises(ValueError, a.index, 10)
 
         a.reverse()
         assert repr(a) == "array('i', [1, 2, 1, 3, 2, 1])"
 
+        b=self.array('i', [1, 2, 3, 1, 2])
+        b.reverse()
+        assert repr(b) == "array('i', [2, 1, 3, 2, 1])"
+        
         a.remove(3)
         assert repr(a) == "array('i', [1, 2, 1, 2, 1])"
         a.remove(1)
@@ -460,9 +465,15 @@ class BaseArrayTests:
         assert repr(a) == "array('i', [2])"
 
         a.insert(1,7)
+        assert repr(a) == "array('i', [2, 7])"
         a.insert(0,8)
         a.insert(-1,9)
         assert repr(a) == "array('i', [8, 2, 9, 7])"
+
+        a.insert(100,10)
+        assert repr(a) == "array('i', [8, 2, 9, 7, 10])"
+        a.insert(-100,20)
+        assert repr(a) == "array('i', [20, 8, 2, 9, 7, 10])"
 
     def test_compare(self):
         for v1,v2,tt in (([1, 2, 3], [1, 3, 2], 'bhilBHIL'),
