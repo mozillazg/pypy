@@ -62,8 +62,15 @@ def CALL_METHOD(f, oparg, *ignored):
     n_kwargs = (oparg >> 8) & 0xff
     w_self = f.peekvalue(n_args + (2 * n_kwargs))
     w_callable = f.peekvalue(n_args + (2 * n_kwargs) + 1)
+    n = n_args + (w_self is not None)
     
-    if n_kwargs:
+    if not n_kwargs:
+        try:
+            w_result = f.space.call_valuestack(w_callable, n, f)
+            rstack.resume_point("CALL_METHOD", f, n_args, returns=w_result)
+        finally:
+            f.dropvalues(n_args + 2)
+    else:
         keywords = [None] * n_kwargs
         keywords_w = [None] * n_kwargs
         while True:
@@ -75,18 +82,15 @@ def CALL_METHOD(f, oparg, *ignored):
             key = f.space.str_w(w_key)
             keywords[n_kwargs] = key
             keywords_w[n_kwargs] = w_value
-    else:
-        keywords = None
-        keywords_w = None
     
-    arguments = f.popvalues(n_args + (w_self is not None))
-    args = f.argument_factory(arguments, keywords, keywords_w, None, None)
-    
-    try:
-        w_result = f.space.call_args(w_callable, args)
-        rstack.resume_point("CALL_METHOD", f, returns=w_result)
-    finally:
-        f.dropvalues(1 + (w_self is None))
+        arguments = f.popvalues(n)
+        args = f.argument_factory(arguments, keywords, keywords_w, None, None)
+        
+        try:
+            w_result = f.space.call_args(w_callable, args)
+            rstack.resume_point("CALL_METHOD", f, returns=w_result)
+        finally:
+            f.dropvalues(1 + (w_self is None))
     f.pushvalue(w_result)
 
 
