@@ -539,7 +539,9 @@ class BaseArrayTests:
         assert len(b) == 0 and b.typecode == 'l'
 
         a = self.array('i', [1, 2, 4])
+        print "itter"
         i = iter(a)
+        print "ok"
         raises(TypeError, pickle.dumps, i, 1)
 
     def test_copy_swap(self):
@@ -584,6 +586,28 @@ class BaseArrayTests:
         assert a == b
         a += self.array('i', (7,))
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 7])"
+
+        try:
+            raised = False
+            a = self.array('i') + 2
+        except TypeError:
+            raised = True
+        assert raised
+
+        try:
+            raised = False
+            a = self.array('i') + self.array('b')
+        except TypeError:
+            raised = True
+        assert raised
+        
+        try:
+            raised = False
+            a = self.array('i').__add__(2)
+            print a
+        except TypeError:
+            raised = True
+        assert raised
 
         raises(TypeError, self.array('i').__add__, (2,))
         raises(TypeError, self.array('i').__add__, self.array('b'))
@@ -637,6 +661,7 @@ class BaseArrayTests:
             assert isinstance(self.array(t), self.array)
 
     def test_subclass(self):
+        print type(self.array('b'))
         assert len(self.array('b')) == 0
 
         a=self.array('i')
@@ -646,9 +671,11 @@ class BaseArrayTests:
         array=self.array
         class adder(array):
             def __getitem__(self, i):
+                print 25
                 return array.__getitem__(self, i) + 1
 
         a=adder('i', (1,2,3))
+        print type(a)
         assert len(a) == 3
         assert a[0] == 2
 
