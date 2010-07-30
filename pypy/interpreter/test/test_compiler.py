@@ -848,13 +848,38 @@ class AppTestOptimizer:
         
         import StringIO, sys, dis
         s = StringIO.StringIO()
+        out = sys.stdout
         sys.stdout = s
         try:
             dis.dis(code)
         finally:
-            sys.stdout = sys.__stdout__
+            sys.stdout = out
         output = s.getvalue()
         assert "LOAD_GLOBAL" not in output
+    
+    def test_call_method_kwargs(self):
+        source = """def _f(a):
+            return a.f(a=a)
+        """
+        CALL_METHOD = self.space.config.objspace.opcodes.CALL_METHOD
+        self.space.config.objspace.opcodes.CALL_METHOD = True
+        try:
+            exec source
+        finally:
+            self.space.config.objspace.opcodes.CALL_METHOD = CALL_METHOD
+        code = _f.func_code
+        
+        import StringIO, sys, dis
+        s = StringIO.StringIO()
+        out = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = out
+        output = s.getvalue()
+        assert "CALL_METHOD" in output
+            
 
 class AppTestExceptions:
     def test_indentation_error(self):
