@@ -56,16 +56,37 @@ def LOOKUP_METHOD(f, nameindex, *ignored):
     f.pushvalue(w_value)
     f.pushvalue(None)
 
-def CALL_METHOD(f, nargs, *ignored):
-    # 'nargs' is the argument count excluding the implicit 'self'
-    w_self = f.peekvalue(nargs)
-    w_callable = f.peekvalue(nargs + 1)
-    n = nargs + (w_self is not None)
+def CALL_METHOD(f, oparg, *ignored):
+    # opargs contains the arg, and kwarg count, excluding the implicit 'self'
+    n_args = oparg & 0xff
+    n_kwargs = (oparg >> 8) & 0xff
+    w_self = f.peekvalue(n_args + (2 * n_kwargs))
+    w_callable = f.peekvalue(n_args + (2 * n_kwargs) + 1)
+    
+    if n_kwargs:
+        keywords = [None] * n_kwargs
+        keywords_w = [None] * n_kwargs
+        while True:
+            n_kwargs -= 1
+            if n_kwargs < 0:
+                break
+            w_value = f.popvalue()
+            w_key = f.popvalue()
+            key = f.space.str_w(w_key)
+            keywords[n_keywords] = key
+            keywords_w[n_keywords] = w_value
+    else:
+        keywords = None
+        keywords_w = None
+    
+    arguments = f.popvalues(n_args + (w_self is not None))
+    args = f.argument_factory(arguments, keywords, keywords_w, None, None)
+    
     try:
-        w_result = f.space.call_valuestack(w_callable, n, f)
-        rstack.resume_point("CALL_METHOD", f, nargs, returns=w_result)
+        w_result = f.space.call_args(w_callable, args)
+        rstack.resume_point("CALL_METHOD", f, returns=w_result)
     finally:
-        f.dropvalues(nargs + 2)
+        f.dropvalues(1 + (w_self is None))
     f.pushvalue(w_result)
 
 
