@@ -11,8 +11,12 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.objspace.std.stdtypedef import SMM, StdTypeDef
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.model import W_Object
+from pypy.interpreter.argument import Arguments, Signature
 
-def w_array(space, typecode, w_initializer=None):
+def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
+    if len(w_args.arguments_w) > 0:
+        msg = 'array() takes at most 2 arguments'
+        raise OperationError(space.w_TypeError, space.wrap(msg))
     if len(typecode) != 1:
         msg = 'array() argument 1 must be char, not str'
         raise OperationError(space.w_TypeError, space.wrap(msg))
@@ -20,7 +24,9 @@ def w_array(space, typecode, w_initializer=None):
     
     for tc in unroll_typecodes:
         if typecode == tc:
-            a = types[tc].w_class(space)
+            a = space.allocate_instance(types[tc].w_class, w_cls)
+            a.__init__(space)
+
             if w_initializer is not None:
                 if not space.is_w(w_initializer, space.w_None):
                     if space.type(w_initializer) is space.w_str:
@@ -37,11 +43,7 @@ def w_array(space, typecode, w_initializer=None):
         raise OperationError(space.w_ValueError, space.wrap(msg))
 
     return a
-w_array.unwrap_spec = (ObjSpace, str, W_Root)
-
-def w_array_sub(space, w_cls, typecode, w_initializer=None):
-    return w_array(space, typecode, w_initializer)
-w_array_sub.unwrap_spec = (ObjSpace, W_Root, str, W_Root)
+w_array.unwrap_spec = (ObjSpace, W_Root, str, W_Root, Arguments)
 
 
 array_append = SMM('append', 2)
@@ -76,7 +78,7 @@ def descr_typecode(space, self):
 
 type_typedef = StdTypeDef(
     'array',
-    __new__ = interp2app(w_array_sub),
+    __new__ = interp2app(w_array),
     __module__   = 'array',    
     itemsize = GetSetProperty(descr_itemsize),
     typecode = GetSetProperty(descr_typecode),
@@ -133,22 +135,6 @@ for k, v in types.items(): v.typecode=k
 unroll_typecodes = unrolling_iterable(types.keys())
 
 def make_array(mytype):
-    class W_ArrayIter(Wrappable):
-        def __init__(self, a):
-            self.space = a.space
-            self.a = a
-            self.pos = 0
-
-        def iter_w(self):
-            return self.space.wrap(self)
-
-        def next_w(self):
-            if self.pos >= self.a.len:
-                raise OperationError(self.space.w_StopIteration, self.space.w_None)
-            val = self.a.descr_getitem(self.space.wrap(self.pos))
-            self.pos += 1
-            return val
-        
     class W_Array(W_ArrayBase):
         itemsize = mytype.bytes
         typecode = mytype.typecode
@@ -404,6 +390,15 @@ def make_array(mytype):
         self.buffer[i] = val
 
 
+    def delitem__Array_ANY(space, self, w_idx):
+        w_lst = array_tolist__Array(space, self)
+        space.delitem(w_lst, w_idx)
+        self.setlen(0)
+        self.fromsequence(w_lst)
+
+    def delslice__Array_ANY_ANY(space, self, w_i, w_j):
+        return space.delitem(self, space.newslice(w_i, w_j, space.w_None))
+    
     # Add and mul methods
 
     def add__Array_Array(space, self, other):
@@ -594,6 +589,11 @@ def make_array(mytype):
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
             return space.wrap(s)    
 
+    init_signature = Signature(['typecode', 'initializer'])
+    init_defaults = [None, None]
+    
+    def init__Array(space, self, args):        
+        args.parse_obj(None, 'array', init_signature, init_defaults)
 
     W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     mytype.w_class = W_Array
