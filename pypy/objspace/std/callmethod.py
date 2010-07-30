@@ -73,8 +73,8 @@ def CALL_METHOD(f, oparg, *ignored):
             w_value = f.popvalue()
             w_key = f.popvalue()
             key = f.space.str_w(w_key)
-            keywords[n_keywords] = key
-            keywords_w[n_keywords] = w_value
+            keywords[n_kwargs] = key
+            keywords_w[n_kwargs] = w_value
     else:
         keywords = None
         keywords_w = None
