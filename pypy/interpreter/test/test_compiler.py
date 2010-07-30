@@ -4,6 +4,7 @@ from pypy.interpreter.pycompiler import PythonAstCompiler
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments
+from pypy.conftest import gettestobjspace
 
 class BaseTestCompiler:
     def setup_method(self, method):
@@ -856,17 +857,16 @@ class AppTestOptimizer:
             sys.stdout = out
         output = s.getvalue()
         assert "LOAD_GLOBAL" not in output
-    
+
+class AppTestCallMethod(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{'objspace.opcodes.CALL_METHOD': True})
+        
     def test_call_method_kwargs(self):
         source = """def _f(a):
             return a.f(a=a)
         """
-        CALL_METHOD = self.space.config.objspace.opcodes.CALL_METHOD
-        self.space.config.objspace.opcodes.CALL_METHOD = True
-        try:
-            exec source
-        finally:
-            self.space.config.objspace.opcodes.CALL_METHOD = CALL_METHOD
+        exec source
         code = _f.func_code
         
         import StringIO, sys, dis
