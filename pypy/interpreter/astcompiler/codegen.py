@@ -1003,12 +1003,12 @@ class PythonCodeGenerator(assemble.PythonCodeMaker):
             arg_count = len(call.args)
         else:
             arg_count = 0
-        if call.kwargs:
-            call.kwargs.walkabout(self)
-            kwarg_count = len(call.kwargs)
+        if call.keywords:
+            self.visit_sequence(call.keywords)
+            kwarg_count = len(call.keywords)
         else:
             kwarg_count = 0
-        self.emit_op_arg(ops.CALL_METHOD, (kwarg_count << 8) + arg_count)
+        self.emit_op_arg(ops.CALL_METHOD, (kwarg_count << 8) | arg_count)
         return True
 
     def _listcomp_generator(self, list_name, gens, gen_index, elt):
