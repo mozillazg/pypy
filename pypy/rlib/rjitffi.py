@@ -88,9 +88,6 @@ class _Get(object):
         self.setup_stack()
 
     def get_calldescr(self):
-        arg_classes = ''.join(self.args_type)
-        gccache = self.cpu.gc_ll_descr
-
         if self.res_type == 'i':
             cls = SignedCallDescr
         elif self.res_type == 'f':
@@ -103,6 +100,7 @@ class _Get(object):
             raise NotImplementedError('Unknown type of descr: %s'
                                       % self.res_type)
 
+        arg_classes = ''.join(self.args_type)
         calldescr = cls(arg_classes)
         return calldescr
 
