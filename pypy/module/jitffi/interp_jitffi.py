@@ -92,11 +92,11 @@ class W_Get(Wrappable):
                 i += 1
         return self.rget.call(space.wrap)
 
-def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
-    try:
-        return space.wrap(W_Get(space, w_type, cpu, lib, func, args_type, res_type))
-    except OSError, e:
-        raise wrap_oserror(space, e)
+#def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
+#    try:
+#        return space.wrap(W_Get(space, w_type, cpu, lib, func, args_type, res_type))
+#    except OSError, e:
+#        raise wrap_oserror(space, e)
 
 W_Get.typedef = TypeDef(
         'Get',
