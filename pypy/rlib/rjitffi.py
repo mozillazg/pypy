@@ -1,13 +1,13 @@
 from pypy.rlib import rdynload
+from pypy.rlib.jit import get_cpu
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.llsupport import descr, symbolic
-from pypy.jit.backend.x86.runner import CPU
 from pypy.jit.metainterp.history import LoopToken, BasicFailDescr
 from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
-GLOBAL_CPU = CPU(None, None)
+GLOBAL_CPU = get_cpu()
 
 class CDLL(object):
     def __init__(self, name, load=True):
