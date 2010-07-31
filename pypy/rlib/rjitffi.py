@@ -3,7 +3,7 @@ from pypy.rlib.jit import get_cpu
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.jit.backend.llsupport import descr, symbolic
 from pypy.jit.metainterp.history import LoopToken, BasicFailDescr
-from pypy.jit.metainterp.history import BoxInt, BoxFloat, BoxPtr, NULLBOX
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, NULLBOX
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
@@ -59,8 +59,6 @@ class _Get(object):
                     bargs.append(BoxInt())
                 elif arg == 'f':
                     bargs.append(BoxFloat())
-                elif arg == 'p':
-                    bargs.append(BoxPtr())
                 else:
                     raise ValueError(arg)
 
@@ -68,8 +66,6 @@ class _Get(object):
                 bres = BoxInt()
             elif self.res_type == 'f':
                 bres = BoxFloat()
-            elif self.res_type == 'p':
-                bres = BoxPtr()
             elif self.res_type == 'v':
                 bres = NULLBOX
             else:
@@ -92,8 +88,6 @@ class _Get(object):
             cls = SignedCallDescr
         elif self.res_type == 'f':
             cls = descr.FloatCallDescr
-        elif self.res_type == 'p':
-            cls = descr.NonGcPtrCallDescr
         elif self.res_type == 'v':
             cls = descr.VoidCallDescr
         else:
@@ -111,8 +105,6 @@ class _Get(object):
             r = push_result(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
             r = push_result(self.cpu.get_latest_value_float(0))
-        elif self.res_type == 'p':
-            r = push_result(self.cpu.get_latest_value_ref(0))
         elif self.res_type == 'v':
             r = None
         else:
@@ -132,10 +124,6 @@ class _Get(object):
 
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
-        self.esp += 1
-
-    def push_ref(self, value):
-        self.cpu.set_future_value_ref(self.esp, value)
         self.esp += 1
 
 # ____________________________________________________________
