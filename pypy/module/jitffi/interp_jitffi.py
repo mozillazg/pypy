@@ -84,8 +84,9 @@ class W_Get(Wrappable):
                 elif self.rget.args_type[i] == 'f':
                     self.rget.push_float(space.float_w(w_arg))
                 else:
+                    # should never happen (raised earlier)
                     raise OperationError(
-                            space.w_TypeError,
+                            space.w_ValueError,
                             space.wrap('Unsupported type of argument: %s'
                                         % self.rget.args_type[0]))
                 i += 1
