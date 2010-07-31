@@ -77,6 +77,7 @@ class _Get(object):
 
             calldescr = self.get_calldescr()
             self.looptoken = LoopToken()
+            bargs = list(bargs) # make sure it's not resized before ResOperation
             oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                       ResOperation(rop.FINISH, [bres], None,
                                    descr=BasicFailDescr(0))]
