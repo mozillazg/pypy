@@ -89,7 +89,7 @@ class W_Get(Wrappable):
                     raise OperationError(
                             space.w_TypeError,
                             space.wrap('Unsupported type of argument: %s'
-                                        % self.args_type[0]))
+                                        % self.rget.args_type[0]))
                 i += 1
         return self.rget.call(space.wrap)
 
