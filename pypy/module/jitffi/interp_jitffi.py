@@ -83,8 +83,6 @@ class W_Get(Wrappable):
                     self.rget.push_int(space.int_w(w_arg))
                 elif self.rget.args_type[i] == 'f':
                     self.rget.push_float(space.float_w(w_arg))
-                elif self.rget.args_type[i] == 'p':
-                    self.rget.push_ref(space.int_w(w_arg))
                 else:
                     raise OperationError(
                             space.w_TypeError,
