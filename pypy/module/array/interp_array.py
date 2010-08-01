@@ -30,13 +30,13 @@ def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
             if w_initializer is not None:
                 if not space.is_w(w_initializer, space.w_None):
                     if space.type(w_initializer) is space.w_str:
-                        space.call_method(a, 'fromstring', w_initializer)
+                        a.fromstring(w_initializer)
                     elif space.type(w_initializer) is space.w_unicode:
-                        space.call_method(a, 'fromunicode', w_initializer)
+                        a.fromsequence(w_initializer)
                     elif space.type(w_initializer) is space.w_list:
-                        space.call_method(a, 'fromlist', w_initializer)
+                        a.fromlist(w_initializer)
                     else:
-                        space.call_method(a, 'extend', w_initializer)
+                        a.extend(w_initializer)
             break
     else:
         msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
@@ -241,6 +241,46 @@ def make_array(mytype):
                 raise
             self.setlen(oldlen + i)
 
+        def fromstring(self, w_s):
+            space = self.space
+            s = space.str_w(w_s)
+            if len(s)%self.itemsize !=0:
+                msg = 'string length not a multiple of item size'
+                raise OperationError(space.w_ValueError, space.wrap(msg))
+            oldlen = self.len
+            new = len(s) / mytype.bytes
+            self.setlen(oldlen + new)
+            cbuf =self.charbuf()
+            for i in range(len(s)):
+                cbuf[oldlen * mytype.bytes + i] = s[i]
+
+        def fromlist(self, w_lst):
+            s = self.len
+            try:
+                self.fromsequence(w_lst)
+            except OperationError:
+                self.setlen(s)
+                raise
+
+        def extend(self, w_iterable):
+            space = self.space
+            if isinstance(w_iterable, W_Array):
+                oldlen = self.len
+                new = w_iterable.len
+                self.setlen(self.len + new)
+                for i in range(new):
+                    if oldlen + i >= self.len:
+                        self.setlen(oldlen + i + 1)
+                    self.buffer[oldlen + i] = w_iterable.buffer[i]
+                self.setlen(oldlen + i + 1)
+            elif isinstance(w_iterable, W_ArrayBase):
+                msg = "can only extend with array of same kind"
+                raise OperationError(space.w_TypeError, space.wrap(msg))
+            else:
+                self.fromsequence(w_iterable)
+            
+        
+
         def charbuf(self):
             return  rffi.cast(rffi.CCHARP, self.buffer)
 
@@ -314,20 +354,7 @@ def make_array(mytype):
 
 
     def array_extend__Array_ANY(space, self, w_iterable):
-        if isinstance(w_iterable, W_Array):
-            oldlen = self.len
-            new = w_iterable.len
-            self.setlen(self.len + new)
-            for i in range(new):
-                if oldlen + i >= self.len:
-                    self.setlen(oldlen + i + 1)
-                self.buffer[oldlen + i] = w_iterable.buffer[i]
-            self.setlen(oldlen + i + 1)
-        elif isinstance(w_iterable, W_ArrayBase):
-            msg = "can only extend with array of same kind"
-            raise OperationError(space.w_TypeError, space.wrap(msg))
-        else:
-            self.fromsequence(w_iterable)
+        self.extend(w_iterable)
 
 
     # List interface
@@ -448,24 +475,10 @@ def make_array(mytype):
         return w_l
 
     def array_fromlist__Array_List(space, self, w_lst):
-        s = self.len
-        try:
-            self.fromsequence(w_lst)
-        except OperationError:
-            self.setlen(s)
-            raise
+        self.fromlist(w_lst)
 
     def array_fromstring__Array_ANY(space, self, w_s):
-        s = space.str_w(w_s)
-        if len(s)%mytype.bytes !=0:
-            msg = 'string length not a multiple of item size'
-            raise OperationError(self.space.w_ValueError, self.space.wrap(msg))
-        oldlen = self.len
-        new = len(s) / mytype.bytes
-        self.setlen(oldlen + new)
-        cbuf =self.charbuf()
-        for i in range(len(s)):
-            cbuf[oldlen * mytype.bytes + i] = s[i]
+        self.fromstring(w_s)
 
     def array_tostring__Array(space, self):
         cbuf = self.charbuf()
@@ -577,15 +590,15 @@ def make_array(mytype):
         if self.len == 0:
             return space.wrap("array('%s')" % self.typecode)
         elif self.typecode == "c":
-            r = space.repr(space.call_method(self, 'tostring'))
+            r = space.repr(array_tostring__Array(space, self))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
             return space.wrap(s)
         elif self.typecode == "u":
-            r = space.repr(space.call_method(self, 'tounicode'))
+            r = space.repr(array_tounicode__Array(space, self))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
             return space.wrap(s)
         else:
-            r = space.repr(space.call_method(self, 'tolist'))
+            r = space.repr(array_tolist__Array(space, self))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
             return space.wrap(s)    
 
