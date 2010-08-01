@@ -268,11 +268,13 @@ def make_array(mytype):
                 oldlen = self.len
                 new = w_iterable.len
                 self.setlen(self.len + new)
-                for i in range(new):
+                i = 0
+                while i < new:
                     if oldlen + i >= self.len:
                         self.setlen(oldlen + i + 1)
                     self.buffer[oldlen + i] = w_iterable.buffer[i]
-                self.setlen(oldlen + i + 1)
+                    i += 1
+                self.setlen(oldlen + i)
             elif isinstance(w_iterable, W_ArrayBase):
                 msg = "can only extend with array of same kind"
                 raise OperationError(space.w_TypeError, space.wrap(msg))
