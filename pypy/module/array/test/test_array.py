@@ -600,17 +600,22 @@ class BaseArrayTests:
         except TypeError:
             raised = True
         assert raised
-        
-        try:
-            raised = False
-            a = self.array('i').__add__(2)
-            print a
-        except TypeError:
-            raised = True
-        assert raised
 
-        raises(TypeError, self.array('i').__add__, (2,))
-        raises(TypeError, self.array('i').__add__, self.array('b'))
+        # Calling __add__ directly raises TypeError in cpython but
+        # returns NotImplemented in pypy if placed within a
+        # try: except TypeError: construction.
+        #
+        # raises(TypeError, self.array('i').__add__, (2,))
+        # raises(TypeError, self.array('i').__add__, self.array('b'))
+
+        class addable(object):
+            def __add__(self, other):
+                return "add"
+            def __radd__(self, other):
+                return "radd"
+
+        assert addable() + self.array('i') == 'add'
+        assert self.array('i') + addable() == 'radd'
 
     def test_delitem(self):
         a = self.array('i', [1, 2, 3])
@@ -678,6 +683,57 @@ class BaseArrayTests:
         print type(a)
         assert len(a) == 3
         assert a[0] == 2
+
+    def test_override_from(self):
+        class mya(self.array):
+            def fromlist(self, lst):
+                self.append(7)
+            def fromstring(self, lst):
+                self.append('8')
+            def fromunicode(self, lst):
+                self.append(u'9')
+            def extend(self, lst):
+                self.append(10)
+
+        assert repr(mya('c', 'hi')) == "array('c', 'hi')"
+        assert repr(mya('u', u'hi')) == "array('u', u'hi')"
+        assert repr(mya('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
+        assert repr(mya('i', (1, 2, 3))) == "array('i', [1, 2, 3])"
+
+        a = mya('i')
+        a.fromlist([1, 2, 3])
+        assert repr(a) == "array('i', [7])"
+
+        a = mya('c')
+        a.fromstring('hi')
+        assert repr(a) == "array('c', '8')"
+
+        a = mya('u')
+        a.fromunicode(u'hi')
+        assert repr(a) == "array('u', u'9')"
+
+        a = mya('i')
+        a.extend([1, 2, 3])
+        assert repr(a) == "array('i', [10])"
+
+    def test_override_to(self):
+        class mya(self.array):
+            def tolist(self):
+                return 'list'
+            def tostring(self):
+                return 'str'
+            def tounicode(self):
+                return 'unicode'
+
+        assert mya('i', [1, 2, 3]).tolist() == 'list'
+        assert mya('c', 'hi').tostring() == 'str'
+        assert mya('u', u'hi').tounicode() == 'unicode'
+        
+        assert repr(mya('c', 'hi')) == "array('c', 'hi')"
+        assert repr(mya('u', u'hi')) == "array('u', u'hi')"
+        assert repr(mya('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
+        assert repr(mya('i', (1, 2, 3))) == "array('i', [1, 2, 3])"
+
 
 class TestCPythonsOwnArray(BaseArrayTests):
 
