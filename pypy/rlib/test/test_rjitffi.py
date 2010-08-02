@@ -71,60 +71,60 @@ class TestJitffi(object):
     def test_get(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_integers', ['i', 'i'], 'i')
+        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
         func.push_int(1)
         func.push_int(2)
-        assert func.call(self.push_result) == 3
+        assert func.call() == 3
 
-        func = lib.get('add_integers', ['i', 'i'], 'i')
+        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
         func.push_int(-1)
         func.push_int(2)
-        assert func.call(self.push_result) == 1
+        assert func.call() == 1
 
-        func = lib.get('add_integers', ['i', 'i'], 'i')
+        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
         func.push_int(0)
         func.push_int(0)
-        assert func.call(self.push_result) == 0
+        assert func.call() == 0
 
-        func = lib.get('max3', ['i', 'i', 'i'], 'i')
+        func = lib.get('max3', ['i', 'i', 'i'], 'i', self.push_result)
         func.push_int(2)
         func.push_int(8)
         func.push_int(3)
-        assert func.call(self.push_result) == 8
+        assert func.call() == 8
 
-        func = lib.get('add_floats', ['f', 'f'], 'f')
+        func = lib.get('add_floats', ['f', 'f'], 'f', self.push_result)
         func.push_float(1.2)
         func.push_float(1.5)
-        assert func.call(self.push_result) == 2.7
+        assert func.call() == 2.7
 
     def test_get_void(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('fvoid', [], 'i')
-        assert func.call(self.push_result) == 1
+        func = lib.get('fvoid', [], 'i', self.push_result)
+        assert func.call() == 1
 
-        func = lib.get('return_void', ['i', 'i'], 'v')
+        func = lib.get('return_void', ['i', 'i'], 'v', self.push_result)
         func.push_int(1)
         func.push_int(2)
-        assert func.call(self.push_result) is None
+        assert func.call() is None
 
-        func = lib.get('return_void', ['i', 'i'])
+        func = lib.get('return_void', ['i', 'i'], push_result=self.push_result)
         func.push_int(1)
         func.push_int(2)
-        assert func.call(self.push_result) is None
+        assert func.call() is None
 
     def test_various_type_args(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_intfloat', ['i', 'f'], 'i')
+        func = lib.get('add_intfloat', ['i', 'f'], 'i', self.push_result)
         func.push_int(1)
         func.push_float(2.9)
-        assert func.call(self.push_result) == 3
+        assert func.call() == 3
         
         # stack is cleaned up after calling
         func.push_int(0)
         func.push_float(1.3)
-        assert func.call(self.push_result) == 1
+        assert func.call() == 1
 
     def test_undefined_func(self):
         lib = rjitffi.CDLL(self.lib_name)

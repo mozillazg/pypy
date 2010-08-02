@@ -19,8 +19,8 @@ class CDLL(object):
         self.name = name
         self.cpu = GLOBAL_CPU
 
-    def get(self, func, args_type, res_type='v'):
-        return _Get(self.cpu, self.lib, func, args_type, res_type)
+    def get(self, func, args_type, res_type='v', push_result=None):
+        return _Get(self.cpu, self.lib, func, args_type, res_type, push_result)
 
 class _LibHandler(object):
     def __init__(self, name):
@@ -33,10 +33,11 @@ class _LibHandler(object):
             rffi.free_charp(name_ptr)
 
 class _Get(object):
-    def __init__(self, cpu, lib, func, args_type, res_type='v'):
+    def __init__(self, cpu, lib, func, args_type, res_type='v', push_result=None):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
+        self.push_result = push_result
         self.cpu = cpu
         lib = lib.handler
         bargs = []
@@ -98,13 +99,13 @@ class _Get(object):
         calldescr = cls(arg_classes)
         return calldescr
 
-    def call(self, push_result):
+    def call(self):
         self.cpu.execute_token(self.looptoken)
 
         if self.res_type == 'i':
-            r = push_result(self.cpu.get_latest_value_int(0))
+            r = self.push_result(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
-            r = push_result(self.cpu.get_latest_value_float(0))
+            r = self.push_result(self.cpu.get_latest_value_float(0))
         elif self.res_type == 'v':
             r = None
         else:
