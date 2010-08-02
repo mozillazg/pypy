@@ -46,6 +46,7 @@ class AbstractX86CPU(AbstractLLCPU):
         self.profile_agent.startup()
 
     def finish_once(self):
+        self.assembler.finish_once()
         self.profile_agent.shutdown()
 
     def compile_loop(self, inputargs, operations, looptoken):
