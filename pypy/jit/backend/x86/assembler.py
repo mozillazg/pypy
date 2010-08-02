@@ -363,22 +363,14 @@ class Assembler386(object):
         self.write_pending_failure_recoveries()
 
     def write_pending_failure_recoveries(self):
-        # NB: We must be careful to only modify pending_guard_tokens, not
-        # re-assign it to a different list. Since it is a prebuilt gc object,
-        # if we were to re-assign it, the original list would never be freed.
-        # This is particularly bad in the case where the failargs of a token
-        # contains a BoxPtr to an object, which would also never be freed.
-        #
-        # This is why we pop() off the end instead of iterating and then
-        # saying "self.pending_guard_tokens = []"
-        while len(self.pending_guard_tokens) > 0:
-            tok = self.pending_guard_tokens.pop()
+        for tok in self.pending_guard_tokens:
             # Okay to write to _mc because we've already made sure that
             # there's enough space by "reserving" bytes.
             addr = self.generate_quick_failure(self.mc._mc, tok.faildescr, tok.failargs, tok.fail_locs, tok.exc, tok.desc_bytes)
             tok.faildescr._x86_adr_recovery_stub = addr
             self.patch_jump_for_descr(tok.faildescr, addr)
 
+        self.pending_guard_tokens = []
         self.mc.reset_reserved_bytes()
         self.mc.done()
 
