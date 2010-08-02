@@ -88,6 +88,7 @@ class StdTypeModel:
         import pypy.objspace.std.default # register a few catch-all multimethods
 
         import pypy.objspace.std.marshal_impl # install marshal multimethods
+        import pypy.module.array
 
         # the set of implementation types
         self.typeorder = {

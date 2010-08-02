@@ -127,7 +127,7 @@ types = {
     'I': TypeCode(rffi.UINT,          'int_w', True), 
     'l': TypeCode(rffi.LONG,          'int_w', True, True),
     'L': TypeCode(rffi.ULONG,         'bigint_w'), # Overflow handled by rbigint.touint() which
-                                                   # corresponds to the C-type unsigned long
+                                                    # corresponds to the C-type unsigned long
     'f': TypeCode(lltype.SingleFloat, 'float_w'),
     'd': TypeCode(lltype.Float,       'float_w'),
     }
@@ -311,13 +311,17 @@ def make_array(mytype):
             w_lst = space.getitem(w_lst, w_slice)
             w_a=mytype.w_class(self.space)
             w_a.fromsequence(w_lst)
+        elif step == 0:
+            raise ValueError, 'getitem__Array_Slice with step zero'
         else:
             size = (stop - start) / step
             if (stop - start) % step > 0: size += 1
             w_a=mytype.w_class(self.space)
             w_a.setlen(size)
-            for j,i in enumerate(range(start, stop, step)):
-                w_a.buffer[j]=self.buffer[i]
+            j = 0
+            for i in range(start, stop, step):
+                w_a.buffer[j] = self.buffer[i]
+                j += 1
         return w_a
 
     def getslice__Array_ANY_ANY(space, self, w_i, w_j):
@@ -341,9 +345,13 @@ def make_array(mytype):
             space.setitem(w_lst, w_idx, w_item)
             self.setlen(0)
             self.fromsequence(w_lst)
+        elif step == 0:
+            raise ValueError, 'setitem__Array_Slice with step zero'            
         else:
-            for j,i in enumerate(range(start, stop, step)):
-                self.buffer[i]=w_item.buffer[j]
+            j = 0
+            for i in range(start, stop, step):
+                self.buffer[i] = w_item.buffer[j]
+                j += 1
 
     def setslice__Array_ANY_ANY_ANY(space, self, w_i, w_j, w_x):
         space.setitem(self, space.newslice(w_i, w_j, space.w_None), w_x)
@@ -361,19 +369,19 @@ def make_array(mytype):
 
     # List interface
     def array_count__Array_ANY(space, self, w_val):
-        val = self.item_w(w_val)
         cnt = 0
         for i in range(self.len):
-            if self.buffer[i] == val:
+            w_item = getitem__Array_ANY(space, self, space.wrap(i))
+            if space.is_true(space.eq(w_item, w_val)):
                 cnt += 1
         return space.wrap(cnt)
     
 
     def array_index__Array_ANY(space, self, w_val):
-        val = self.item_w(w_val)
         cnt = 0
         for i in range(self.len):
-            if self.buffer[i] == val:
+            w_item = getitem__Array_ANY(space, self, space.wrap(i))
+            if space.is_true(space.eq(w_item, w_val)):
                 return space.wrap(i)
         msg = 'array.index(x): x not in list'
         raise OperationError(space.w_ValueError, space.wrap(msg))
@@ -504,7 +512,8 @@ def make_array(mytype):
         item = space.str_w(w_item)
         if len(item) < size:
             n = len(item) % self.itemsize
-            if n != 0: item = item[0:-(len(item) % self.itemsize)]
+            elems = max(0,len(item)-(len(item) % self.itemsize))
+            if n != 0: item = item[0:elems]
             w_item = space.wrap(item)
             array_fromstring__Array_ANY(space, self, w_item)
             msg = "not enough items in file"
@@ -610,8 +619,16 @@ def make_array(mytype):
     def init__Array(space, self, args):        
         args.parse_obj(None, 'array', init_signature, init_defaults)
 
-    W_Array.__name__ = 'W_ArrayType_'+mytype.typecode
     mytype.w_class = W_Array
+
+    # Annotator seems to mess up if the names are not unique
+    name = 'ArrayType'+mytype.typecode
+    W_Array.__name__ = 'W_' + name
+    import re
+    for n,f in locals().items():
+        new,n = re.subn('_Array_', '_%s_' % name, n)
+        if n>0:
+            f.__name__ = new
 
     from pypy.objspace.std.sliceobject import W_SliceObject    
     from pypy.objspace.std.listobject import W_ListObject
