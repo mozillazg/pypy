@@ -9,8 +9,11 @@ from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.executor import execute
 from pypy.jit.backend.test.runner_test import LLtypeBackendTest
+from pypy.jit.metainterp.test.oparser import parse
+from pypy.tool.udir import udir
 import ctypes
 import sys
+import os
 
 CPU = getcpuclass()
 
@@ -453,3 +456,36 @@ class TestX86OverflowMC(TestX86):
             # Really just a sanity check. We're actually interested in
             # whether the test segfaults.
             assert self.cpu.get_latest_value_int(0) == finished.value
+
+
+class TestDebuggingAssembler(object):
+    def setup_method(self, meth):
+        self.pypylog = os.environ.get('PYPYLOG', None)
+        self.logfile = str(udir.join('x86_runner.log'))
+        os.environ['PYPYLOG'] = "mumble:" + self.logfile
+        self.cpu = CPU(rtyper=None, stats=FakeStats())
+
+    def teardown_method(self, meth):
+        if self.pypylog is not None:
+            os.environ['PYPYLOG'] = self.pypylog
+
+    def test_debugger_on(self):
+        loop = """
+        [i0]
+        debug_merge_point('xyz')
+        i1 = int_add(i0, 1)
+        i2 = int_ge(i1, 10)
+        guard_false(i2) []
+        jump(i1)
+        """
+        ops = parse(loop)
+        self.cpu.assembler.set_debug(True)
+        self.cpu.compile_loop(ops.inputargs, ops.operations, ops.token)
+        self.cpu.set_future_value_int(0, 0)
+        self.cpu.execute_token(ops.token)
+        # check debugging info
+        assert self.cpu.assembler.loop_names == ["xyz"]
+        assert self.cpu.assembler.loop_run_counter.getitem(0) == 10
+        self.cpu.finish_once()
+        lines = py.path.local(self.logfile + ".count").readlines()
+        assert lines[0] == 'xyz:10\n'

@@ -26,7 +26,7 @@ class _Specialize(object):
         by a call result then.
         """
         def decorated_func(func):
-            func._annspecialcase_ = 'specialize:memo()'
+            func._annspecialcase_ = 'specialize:memo'
             return func
         return decorated_func
 
@@ -63,7 +63,7 @@ class _Specialize(object):
         for example). Same warnings about exponential behavior apply.
         """
         def decorated_func(func):
-            func._annspecialcase_ = 'specialize:ll()'
+            func._annspecialcase_ = 'specialize:ll'
             return func
 
         return decorated_func
@@ -81,6 +81,17 @@ class _Specialize(object):
         return "("+','.join([repr(arg) for arg in args]) +")"
         
 specialize = _Specialize()
+
+def enforceargs(*args):
+    """ Decorate a function with forcing of RPython-level types on arguments.
+    None means no enforcing.
+
+    XXX shouldn't we also add asserts in function body?
+    """
+    def decorator(f):
+        f._annenforceargs_ = args
+        return f
+    return decorator
 
 # ____________________________________________________________
 
