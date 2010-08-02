@@ -190,7 +190,7 @@ class Assembler386(object):
     def set_debug(self, v):
         self._debug = v
 
-    def make_sure_mc_exists(self):
+    def setup(self):
         if self.mc is None:
             # the address of the function called by 'new'
             gc_ll_descr = self.cpu.gc_ll_descr
@@ -293,7 +293,7 @@ class Assembler386(object):
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)
 
-        self.make_sure_mc_exists()
+        self.setup()
         funcname = self._find_debug_merge_point(operations)
 
         
@@ -328,7 +328,7 @@ class Assembler386(object):
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)
 
-        self.make_sure_mc_exists()
+        self.setup()
         funcname = self._find_debug_merge_point(operations)
 
         arglocs = self.rebuild_faillocs_from_descr(

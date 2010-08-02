@@ -80,7 +80,7 @@ class TestX86(LLtypeBackendTest):
         # relative addressing to work properly.
         addr = rffi.cast(lltype.Signed, addr)
         
-        self.cpu.assembler.make_sure_mc_exists()
+        self.cpu.assembler.setup()
         self.cpu.assembler.malloc_func_addr = addr
         ofs = symbolic.get_field_token(rstr.STR, 'chars', False)[0]
 
@@ -393,7 +393,7 @@ class TestX86OverflowMC(TestX86):
         ops.append(ResOperation(rop.FINISH, [v], None,
                                 descr=BasicFailDescr()))
         looptoken = LoopToken()
-        self.cpu.assembler.make_sure_mc_exists()
+        self.cpu.assembler.setup()
         old_mc_mc = self.cpu.assembler.mc._mc
         self.cpu.compile_loop([base_v], ops, looptoken)
         assert self.cpu.assembler.mc._mc != old_mc_mc   # overflowed
