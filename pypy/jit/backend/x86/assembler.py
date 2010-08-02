@@ -177,7 +177,7 @@ class Assembler386(object):
         self.float_const_abs_addr = 0
         self.malloc_fixedsize_slowpath1 = 0
         self.malloc_fixedsize_slowpath2 = 0
-        self.pending_guard_tokens = []
+        self.pending_guard_tokens = None
         self.setup_failure_recovery()
         self._loop_counter = 0
         self._debug = False
@@ -225,6 +225,12 @@ class Assembler386(object):
                     s = s.split(':')[-1]
                 self.set_debug(True)
                 self._output_loop_log = s + ".count"
+            # Intialize here instead of __init__ to prevent
+            # pending_guard_tokens from being considered a prebuilt object,
+            # which sometimes causes memory leaks since the prebuilt list is
+            # still considered a GC root after we re-assign
+            # pending_guard_tokens in write_pending_failure_recoveries
+            self.pending_guard_tokens = []
 
     def finish_once(self):
         if self._debug:
