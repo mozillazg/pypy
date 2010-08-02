@@ -65,7 +65,21 @@ W_LibHandler.typedef = TypeDef(
 class W_Get(Wrappable):
     def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
         self.space = space
-        self.rget = rjitffi._Get(cpu, lib, func, args_type, res_type)
+
+        if res_type == 'i':
+            self.rget = rjitffi._Get(cpu, lib, func, args_type,
+                                     res_type, self.wrap_int)
+        elif res_type == 'f':
+            self.rget = rjitffi._Get(cpu, lib, func, args_type,
+                                     res_type, self.wrap_float)
+        elif res_type == 'v':
+            self.rget = rjitffi._Get(cpu, lib, func, args_type,
+                                     res_type, self.wrap_void)
+        else:
+            raise OperationError(
+                    space.w_ValueError,
+                    space.wrap('Unsupported type of result: %s'
+                                % res_type))
 
     def call_w(self, space, w_args=None):
         if not space.is_w(w_args, space.w_None):
@@ -90,7 +104,11 @@ class W_Get(Wrappable):
                             space.wrap('Unsupported type of argument: %s'
                                         % self.rget.args_type[0]))
                 i += 1
-        return self.rget.call(space.wrap)
+        return self.rget.call()
+
+    wrap_int = lambda self, value: self.space.wrap(value)
+    wrap_float = lambda self, value: self.space.wrap(value)
+    wrap_void = lambda self, value: self.space.wrap(value)
 
 #def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
 #    try:
