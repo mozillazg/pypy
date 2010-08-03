@@ -33,56 +33,51 @@ class _LibHandler(object):
             rffi.free_charp(name_ptr)
 
 class _Get(object):
-    def __init__(self, cpu, lib, func, args_type, res_type='v', push_result=None):
+    def __init__(self, cpu, lib, func, args_type, res_type='v',
+                 push_result=None, cache=False):
         assert isinstance(args_type, list)
         self.args_type = args_type
         self.res_type = res_type
         self.push_result = push_result
         self.cpu = cpu
+        self.bargs = []
         lib = lib.handler
-        bargs = []
-        self._cache = {}
 
         try:
             self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(lib, func))
         except KeyError:
             raise ValueError("Cannot find symbol %s", func)
-        bargs.append(BoxInt())
-
-        # grab from the cache if possible
-        arg_classes = ''.join(self.args_type)
-        key = (self.res_type, arg_classes)
-        try:
-            self.looptoken = self._cache[key]
-        except KeyError:
-            for arg in self.args_type:
-                if arg == 'i':
-                    bargs.append(BoxInt())
-                elif arg == 'f':
-                    bargs.append(BoxFloat())
-                else:
-                    raise ValueError(arg)
-
-            if self.res_type == 'i':
-                bres = BoxInt()
-            elif self.res_type == 'f':
-                bres = BoxFloat()
-            elif self.res_type == 'v':
-                bres = NULLBOX
-            else:
-                raise ValueError(self.res_type)
-
-            calldescr = self.get_calldescr()
-            self.looptoken = LoopToken()
-            bargs = list(bargs) # make sure it's not resized before ResOperation
-            oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
-                      ResOperation(rop.FINISH, [bres], None,
-                                   descr=BasicFailDescr(0))]
-            self.cpu.compile_loop(bargs, oplist, self.looptoken)
-
-            # add to the cache
-            self._cache[key] = self.looptoken
+        self.bargs.append(BoxInt())
+        if not cache:
+            self.gen_looptaken()
         self.setup_stack()
+
+    def gen_looptaken(self):
+        for arg in self.args_type:
+            if arg == 'i':
+                self.bargs.append(BoxInt())
+            elif arg == 'f':
+                self.bargs.append(BoxFloat())
+            else:
+                raise ValueError(arg)
+
+        if self.res_type == 'i':
+            bres = BoxInt()
+        elif self.res_type == 'f':
+            bres = BoxFloat()
+        elif self.res_type == 'v':
+            bres = NULLBOX
+        else:
+            raise ValueError(self.res_type)
+
+        calldescr = self.get_calldescr()
+        self.looptoken = LoopToken()
+        # make sure it's not resized before ResOperation
+        self.bargs = list(self.bargs) 
+        oplist = [ResOperation(rop.CALL, self.bargs, bres, descr=calldescr),
+                  ResOperation(rop.FINISH, [bres], None,
+                               descr=BasicFailDescr(0))]
+        self.cpu.compile_loop(self.bargs, oplist, self.looptoken)
 
     def get_calldescr(self):
         if self.res_type == 'i':
