@@ -70,7 +70,7 @@ class AppTestDATATYPES:
         raises(TypeError, 'c.set_char("string")')
         raises(TypeError, 'c.set_char(500)')
         raises(TypeError, 'c.set_uchar("string")')
-#        raises(TypeError, 'c.set_uchar(-1)')
+# TODO: raises(TypeError, 'c.set_uchar(-1)')
 
         """
         # integer types
@@ -84,15 +84,17 @@ class AppTestDATATYPES:
             assert eval('c.m_%s' % names[i]) == i
         """
 
-        # float types
+        # float types through functions
         c.set_float( 0.123 );  assert round(c.get_float()  - 0.123, 5) == 0
         c.set_double( 0.456 ); assert round(c.get_double() - 0.456, 8) == 0
-        """
+
+        # float types through data members
         c.m_float = 0.123;     assert round(c.get_float()  - 0.123, 5) == 0
         c.set_float( 0.234 );  assert round(c.m_float      - 0.234, 5) == 0
         c.m_double = 0.456;    assert round(c.get_double() - 0.456, 8) == 0
         c.set_double( 0.567 ); assert round(c.m_double     - 0.567, 8) == 0
 
+        """
         # arrays; there will be pointer copies, so destroy the current ones
         c.destroy_arrays()
 
