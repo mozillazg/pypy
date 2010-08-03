@@ -61,6 +61,9 @@ W_LibHandler.typedef = TypeDef(
                                                                 W_Root, str])
 )
 
+class Cache(object):
+    def __init__(self, space):
+        self.cache = {}
 
 class W_Get(Wrappable):
     def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
@@ -68,18 +71,28 @@ class W_Get(Wrappable):
 
         if res_type == 'i':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_int)
+                                     res_type, self.wrap_int, cache=True)
         elif res_type == 'f':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_float)
+                                     res_type, self.wrap_float, cache=True)
         elif res_type == 'v':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_void)
+                                     res_type, self.wrap_void, cache=True)
         else:
             raise OperationError(
                     space.w_ValueError,
                     space.wrap('Unsupported type of result: %s'
                                 % res_type))
+
+        # grab from the cache if possible
+        arg_classes = ''.join(args_type)
+        key = (res_type, arg_classes)
+        cache = space.fromcache(Cache).cache
+        try:
+            self.rget.looptoken = cache[key]
+        except KeyError:
+            self.rget.gen_looptaken()
+            cache[key] = self.rget.looptoken
 
     def call_w(self, space, w_args=None):
         if not space.is_w(w_args, space.w_None):
