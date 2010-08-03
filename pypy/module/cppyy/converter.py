@@ -8,10 +8,17 @@ from pypy.module.cppyy import helper, capi
 _converters = {}
 
 class TypeConverter(object):
+    def _get_fieldptr(self, space, w_obj, offset):
+        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
+        return lltype.direct_ptradd(obj.rawobject, offset)
+
     def convert_argument(self, space, w_obj):
         raise NotImplementedError("abstract base class")
 
     def from_memory(self, space, w_obj, offset):
+        raise NotImplementedError("abstract base class")
+
+    def to_memory(self, space, w_obj, w_value, offset):
         raise NotImplementedError("abstract base class")
 
     def free_argument(self, arg):
@@ -25,6 +32,7 @@ class VoidConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap('no converter available for type "%s"' % self.name))
+
 
 class BoolConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -58,13 +66,11 @@ class CharConverter(TypeConverter):
         return rffi.cast(rffi.VOIDP, x)
 
     def from_memory(self, space, w_obj, offset):
-        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
-        fieldptr = lltype.direct_ptradd(obj.rawobject, offset)
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
         return space.wrap(fieldptr[0])
 
     def to_memory(self, space, w_obj, w_value, offset):
-        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
-        fieldptr = lltype.direct_ptradd(obj.rawobject, offset)
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
         fieldptr[0] = self._from_space(space, w_value)
 
 class IntConverter(TypeConverter):
@@ -81,12 +87,33 @@ class FloatConverter(TypeConverter):
         x[0] = r_singlefloat(arg)
         return rffi.cast(rffi.VOIDP, x)        
 
+    def from_memory(self, space, w_obj, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        floatptr = rffi.cast(rffi.FLOATP, fieldptr)
+        return space.wrap(float(floatptr[0]))
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        floatptr = rffi.cast(rffi.FLOATP, fieldptr)
+        floatptr[0] = r_singlefloat(space.float_w(w_value))
+
 class DoubleConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         arg = space.float_w(w_obj)
         x = lltype.malloc(rffi.DOUBLEP.TO, 1, flavor='raw')
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)        
+
+    def from_memory(self, space, w_obj, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        doubleptr = rffi.cast(rffi.DOUBLEP, fieldptr)
+        return space.wrap(doubleptr[0])
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        doubleptr = rffi.cast(rffi.DOUBLEP, fieldptr)
+        doubleptr[0] = space.float_w(w_value)
+
 
 class CStringConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
