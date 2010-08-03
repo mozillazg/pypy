@@ -296,9 +296,7 @@ def make_array(mytype):
         idx, stop, step = space.decode_index(w_idx, self.len)
         assert step == 0
         item = self.buffer[idx]
-        tc=mytype.typecode
-        if (tc == 'b' or tc == 'B' or tc == 'h' or tc == 'H' or
-            tc == 'i' or tc == 'l'):
+        if mytype.typecode in 'bBhHil':
             item = rffi.cast(lltype.Signed, item)
         elif mytype.typecode == 'f':
             item = float(item)
@@ -555,7 +553,7 @@ def make_array(mytype):
     def cmp__Array_ANY(space, self, other):
         if isinstance(other, W_ArrayBase):
             w_lst1 = array_tolist__Array(space, self)
-            w_lst2 = array_tolist__Array(space, other)
+            w_lst2 = space.call_method(other, 'tolist')
             return space.cmp(w_lst1, w_lst2)
         else:
             raise OperationError(space.w_NotImplementedError, space.wrap(''))
