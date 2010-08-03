@@ -15,6 +15,8 @@ from pypy.translator.c.gcc.instruction import LOC_REG, LOC_NOWHERE, LOC_MASK
 from pypy.translator.c.gcc.instruction import LOC_EBP_PLUS, LOC_EBP_MINUS
 from pypy.translator.c.gcc.instruction import LOC_ESP_PLUS
 
+IS_64_BITS = sys.maxint > 2147483647
+
 class FunctionGcRootTracker(object):
     skip = 0
     COMMENT = "([#;].*)?"
@@ -1844,9 +1846,10 @@ if __name__ == '__main__':
     elif sys.platform == 'win32':
         format = 'mingw32'
     else:
-        # FIXME
-        # format = 'elf'
-        format = 'elf64'
+        if IS_64_BITS:
+            format = 'elf64'
+        else:
+            format = 'elf'
     entrypoint = 'main'
     while len(sys.argv) > 1:
         if sys.argv[1] == '-v':
