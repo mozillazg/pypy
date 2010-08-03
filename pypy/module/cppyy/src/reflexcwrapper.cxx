@@ -18,6 +18,7 @@ void cppyy_deallocate(cppyy_typehandle_t handle, cppyy_object_t instance) {
 }
 
 
+/* method/function dispatching -------------------------------------------- */
 void cppyy_call_v(cppyy_typehandle_t handle, int method_index,
                   cppyy_object_t self, int numargs, void* args[]) {
     std::vector<void*> arguments(args, args+numargs);
@@ -96,6 +97,7 @@ cppyy_methptrgetter_t cppyy_get_methptr_getter(cppyy_typehandle_t handle, int me
 }
 
 
+/* method/function reflection information --------------------------------- */
 int cppyy_num_methods(cppyy_typehandle_t handle) {
     Reflex::Type t((Reflex::TypeName*)handle);
     // for (int i = 0; i < (int)t.FunctionMemberSize(); i++) {
@@ -120,7 +122,7 @@ char* cppyy_method_name(cppyy_typehandle_t handle, int method_index) {
     return name_char;
 }
 
-char* cppyy_result_type_method(cppyy_typehandle_t handle, int method_index) {
+char* cppyy_method_result_type(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type rt = m.TypeOf().ReturnType();
@@ -130,13 +132,13 @@ char* cppyy_result_type_method(cppyy_typehandle_t handle, int method_index) {
     return name_char;
 }
 
-int cppyy_num_args_method(cppyy_typehandle_t handle, int method_index) {
+int cppyy_method_num_args(cppyy_typehandle_t handle, int method_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     return m.FunctionParameterSize();
 }
 
-char* cppyy_arg_type_method(cppyy_typehandle_t handle, int method_index, int arg_index) {
+char* cppyy_method_arg_type(cppyy_typehandle_t handle, int method_index, int arg_index) {
     Reflex::Type t((Reflex::TypeName*)handle);
     Reflex::Member m = t.FunctionMemberAt(method_index);
     Reflex::Type at = m.TypeOf().FunctionParameterAt(arg_index);
@@ -144,6 +146,37 @@ char* cppyy_arg_type_method(cppyy_typehandle_t handle, int method_index, int arg
     char* name_char = (char*)malloc(name.size() + 1);
     strcpy(name_char, name.c_str());
     return name_char;
+}
+
+
+/* data member reflection information ------------------------------------- */
+int cppyy_num_data_members(cppyy_typehandle_t handle) {
+    Reflex::Type t((Reflex::TypeName*)handle);
+    return t.DataMemberSize();
+}
+
+char* cppyy_data_member_name(cppyy_typehandle_t handle, int data_member_index) {
+    Reflex::Type t((Reflex::TypeName*)handle);
+    Reflex::Member m = t.DataMemberAt(data_member_index);
+    std::string name = m.Name();
+    char* name_char = (char*)malloc(name.size() + 1);
+    strcpy(name_char, name.c_str());
+    return name_char;
+}
+
+char* cppyy_data_member_type(cppyy_typehandle_t handle, int data_member_index) {
+    Reflex::Type t((Reflex::TypeName*)handle);
+    Reflex::Member m = t.DataMemberAt(data_member_index);
+    std::string name = m.TypeOf().Name(Reflex::FINAL|Reflex::SCOPED|Reflex::QUALIFIED);
+    char* name_char = (char*)malloc(name.size() + 1);
+    strcpy(name_char, name.c_str());
+    return name_char;
+}
+
+size_t cppyy_data_member_offset(cppyy_typehandle_t handle, int data_member_index) {
+    Reflex::Type t((Reflex::TypeName*)handle);
+    Reflex::Member m = t.DataMemberAt(data_member_index);
+    return m.Offset();
 }
 
 

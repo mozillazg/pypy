@@ -85,17 +85,34 @@ c_method_name = rffi.llexternal(
     "cppyy_method_name",
     [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
-c_result_type_method = rffi.llexternal(
-    "cppyy_result_type_method",
+c_method_result_type = rffi.llexternal(
+    "cppyy_method_result_type",
     [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
     compilation_info=eci)
-c_num_args_method = rffi.llexternal(
-    "cppyy_num_args_method",
+c_method_num_args = rffi.llexternal(
+    "cppyy_method_num_args",
     [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
-c_arg_type_method = rffi.llexternal(
-    "cppyy_arg_type_method",
+c_method_arg_type = rffi.llexternal(
+    "cppyy_method_arg_type",
     [C_TYPEHANDLE, rffi.INT, rffi.INT], rffi.CCHARP,
+    compilation_info=eci)
+
+c_num_data_members = rffi.llexternal(
+    "cppyy_num_data_members",
+    [C_TYPEHANDLE], rffi.INT,
+    compilation_info=eci)
+c_data_member_name = rffi.llexternal(
+    "cppyy_data_member_name",
+    [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
+    compilation_info=eci)
+c_data_member_type = rffi.llexternal(
+    "cppyy_data_member_type",
+    [C_TYPEHANDLE, rffi.INT], rffi.CCHARP,
+    compilation_info=eci)
+c_data_member_offset = rffi.llexternal(
+    "cppyy_data_member_offset",
+    [C_TYPEHANDLE, rffi.INT], rffi.INT,
     compilation_info=eci)
 
 c_is_constructor = rffi.llexternal(

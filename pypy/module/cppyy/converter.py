@@ -10,6 +10,9 @@ class TypeConverter(object):
     def convert_argument(self, space, w_obj):
         raise NotImplementedError("abstract base class")
 
+    def from_memory(self, space, w_obj, offset):
+        raise NotImplementedError("abstract base class")
+
     def free_argument(self, arg):
         lltype.free(arg, flavor='raw')
 
@@ -40,6 +43,17 @@ class CharConverter(TypeConverter):
                                  space.wrap("char expecter, got string of size %d" % len(arg)))
         x = rffi.str2charp(arg)
         return rffi.cast(rffi.VOIDP, x)
+
+    def from_memory(self, space, w_obj, offset):
+        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
+        fieldptr = lltype.direct_ptradd(obj.rawobject, offset)
+        return space.wrap(fieldptr[0])
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
+        fieldptr = lltype.direct_ptradd(obj.rawobject, offset)
+        print w_value
+        fieldptr[0] = space.str_w(w_value)
 
 class IntConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -87,6 +101,7 @@ class InstancePtrConverter(TypeConverter):
                              space.wrap("cannot pass %s as %s" % (
                                  space.type(w_obj).getname(space, "?"),
                                  self.cpptype.name)))
+
     def free_argument(self, arg):
         pass
         

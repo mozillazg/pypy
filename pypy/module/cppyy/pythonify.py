@@ -54,12 +54,15 @@ def get_cppclass(name):
     # TODO: handle base classes
     cpptype = cppyy._type_byname(name)
     d = {"_cppyyclass" : cpptype}
-    for f in cpptype.get_function_members():
+    for f in cpptype.get_method_names():
         cppol = cpptype.get_overload(f)
         if cppol.is_static():
             d[f] = make_static_function(cpptype, f, cppol.get_returntype())
         else:
             d[f] = make_method(f, cppol.get_returntype())
+
+    for dm in cpptype.get_data_member_names():
+         d[dm] = cpptype.get_data_member(dm)
 
     pycpptype = CppyyClass(name, (CppyyObject,), d)
 
@@ -77,6 +80,7 @@ class _gbl(object):
             self.__dict__[attr] = cppclass
             return cppclass
         except TypeError, e:
+            import traceback
             raise AttributeError("'gbl' object has no attribute '%s'" % attr)
 
 
