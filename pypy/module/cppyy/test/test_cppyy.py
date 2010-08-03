@@ -21,7 +21,7 @@ class TestCPPYYImplementation:
         w_cppyyclass = interp_cppyy.type_byname(space, "example01")
         w_cppyyclass2 = interp_cppyy.type_byname(space, "example01")
         assert space.is_w(w_cppyyclass, w_cppyyclass2)
-        adddouble = w_cppyyclass.function_members["staticAddToDouble"]
+        adddouble = w_cppyyclass.methods["staticAddToDouble"]
         func, = adddouble.functions
         assert isinstance(func.executor, executor.DoubleExecutor)
         assert func.arg_types == ["double"]

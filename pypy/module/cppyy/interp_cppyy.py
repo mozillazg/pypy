@@ -35,7 +35,8 @@ def type_byname(space, name):
     if handle:
         cpptype = W_CPPType(space, name, handle)
         state.cpptype_cache[name] = cpptype
-        cpptype._find_func_members()
+        cpptype._find_methods()
+        cpptype._find_data_members()
         return cpptype
 
     raise OperationError(space.w_TypeError, space.wrap("no such C++ class %s" % name))
@@ -213,6 +214,28 @@ W_CPPOverload.typedef = TypeDef(
 )
 
 
+class W_CPPDataMember(Wrappable):
+    _immutable_fields_ = ["converter", "offset"]
+
+    def __init__(self, space, cpptype, offset):
+        self.space = space
+        self.converter = converter.get_converter(self.space, cpptype)
+        self.offset = offset
+
+    def __get__(self, args_w):
+        return self.converter.from_memory(self.space, args_w[0], self.offset)
+
+    def __set__(self, args_w):
+        self.converter.to_memory(self.space, args_w[0], args_w[1], self.offset)
+        return None
+
+W_CPPDataMember.typedef = TypeDef(
+    'CPPDataMember',
+    __get__ = interp2app(W_CPPDataMember.__get__, unwrap_spec=['self', 'args_w']),
+    __set__ = interp2app(W_CPPDataMember.__set__, unwrap_spec=['self', 'args_w']),
+)
+
+
 class W_CPPType(Wrappable):
     _immutable_fields_ = ["name","handle"]
 
@@ -220,30 +243,33 @@ class W_CPPType(Wrappable):
         self.space = space
         self.name = name
         self.handle = handle
-        self.function_members = {}
-        # Do not call "self._find_func_members()" here, so that a distinction can be
-        #  made between testing for existence (i.e. existence in the cache of classes)
-        #  and actual use. Point being that a class can use itself, e.g. as a return
-        #  type or an argument to one of its methods.
+        self.methods = {}
+        # Do not call "self._find_methods()" here, so that a distinction can
+        #  be made between testing for existence (i.e. existence in the cache
+        #  of classes) and actual use. Point being that a class can use itself,
+        #  e.g. as a return type or an argument to one of its methods.
+
+        self.data_members = {}
+        # Idem self.methods: a type could hold itself by pointer.
     
-    def _find_func_members(self):
-        num_func_members = capi.c_num_methods(self.handle)
+    def _find_methods(self):
+        num_methods = capi.c_num_methods(self.handle)
         args_temp = {}
-        for i in range(num_func_members):
-            func_member_name = capi.charp2str_free(capi.c_method_name(self.handle, i))
+        for i in range(num_methods):
+            method_name = capi.charp2str_free(capi.c_method_name(self.handle, i))
             cppfunction = self._make_cppfunction(i)
-            overload = args_temp.setdefault(func_member_name, [])
+            overload = args_temp.setdefault(method_name, [])
             overload.append(cppfunction)
         for name, functions in args_temp.iteritems():
             overload = W_CPPOverload(self.space, name, functions[:])
-            self.function_members[name] = overload
+            self.methods[name] = overload
 
     def _make_cppfunction(self, method_index):
-        result_type = capi.charp2str_free(capi.c_result_type_method(self.handle, method_index))
-        num_args = capi.c_num_args_method(self.handle, method_index)
+        result_type = capi.charp2str_free(capi.c_method_result_type(self.handle, method_index))
+        num_args = capi.c_method_num_args(self.handle, method_index)
         argtypes = []
         for i in range(num_args):
-            argtype = capi.charp2str_free(capi.c_arg_type_method(self.handle, method_index, i))
+            argtype = capi.charp2str_free(capi.c_method_arg_type(self.handle, method_index, i))
             argtypes.append(argtype)
         if capi.c_is_constructor(self.handle, method_index):
             cls = CPPConstructor
@@ -253,12 +279,28 @@ class W_CPPType(Wrappable):
             cls = CPPMethod
         return cls(self, method_index, result_type, argtypes)
 
-    def get_function_members(self):
-        return self.space.newlist([self.space.wrap(name) for name in self.function_members])
+    def _find_data_members(self):
+        num_data_members = capi.c_num_data_members(self.handle)
+        for i in range(num_data_members):
+            data_member_name = capi.charp2str_free(capi.c_data_member_name(self.handle, i))
+            cpptype = capi.charp2str_free(capi.c_data_member_type(self.handle, i))
+            offset = capi.c_data_member_offset(self.handle, i)
+            data_member = W_CPPDataMember(self.space, cpptype, offset)
+            self.data_members[data_member_name] = data_member
+
+    def get_method_names(self):
+        return self.space.newlist([self.space.wrap(name) for name in self.methods])
 
     @jit.purefunction
     def get_overload(self, name):
-        return self.function_members[name]
+        return self.methods[name]
+
+    def get_data_member_names(self):
+        return self.space.newlist([self.space.wrap(name) for name in self.data_members])
+
+    @jit.purefunction
+    def get_data_member(self, name):
+        return self.data_members[name]
 
     def invoke(self, name, args_w):
         overload = self.get_overload(name)
@@ -270,8 +312,10 @@ class W_CPPType(Wrappable):
 
 W_CPPType.typedef = TypeDef(
     'CPPType',
-    get_function_members = interp2app(W_CPPType.get_function_members, unwrap_spec=['self']),
+    get_method_names = interp2app(W_CPPType.get_method_names, unwrap_spec=['self']),
     get_overload = interp2app(W_CPPType.get_overload, unwrap_spec=['self', str]),
+    get_data_member_names = interp2app(W_CPPType.get_data_member_names, unwrap_spec=['self']),
+    get_data_member = interp2app(W_CPPType.get_data_member, unwrap_spec=['self', str]),
     invoke = interp2app(W_CPPType.invoke, unwrap_spec=['self', str, 'args_w']),
     construct = interp2app(W_CPPType.construct, unwrap_spec=['self', 'args_w']),
 )
