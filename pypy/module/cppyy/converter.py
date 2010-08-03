@@ -1,6 +1,7 @@
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.rarithmetic import r_singlefloat
+from pypy.objspace.std.intobject import W_IntObject
 
 from pypy.module.cppyy import helper, capi
 
@@ -36,11 +37,23 @@ class BoolConverter(TypeConverter):
         return rffi.cast(rffi.VOIDP, x)
 
 class CharConverter(TypeConverter):
-    def convert_argument(self, space, w_obj):
-        arg = space.str_w(w_obj)
-        if len(arg) != 1:
+    def _from_space(self, space, w_value):
+        # allow int to pass to char and make sure that str is of length 1
+        if type(w_value) == W_IntObject:
+            try:
+                value = chr(space.c_int_w(w_value))     
+            except ValueError, e:
+                raise OperationError(space.w_TypeError, space.wrap(str(e)))
+        else:
+            value = space.str_w(w_value)
+
+        if len(value) != 1:  
             raise OperationError(space.w_TypeError,
-                                 space.wrap("char expecter, got string of size %d" % len(arg)))
+                                 space.wrap("char expecter, got string of size %d" % len(value)))
+        return value
+
+    def convert_argument(self, space, w_obj):
+        arg = self._from_space(space, w_obj)
         x = rffi.str2charp(arg)
         return rffi.cast(rffi.VOIDP, x)
 
@@ -52,8 +65,7 @@ class CharConverter(TypeConverter):
     def to_memory(self, space, w_obj, w_value, offset):
         obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
         fieldptr = lltype.direct_ptradd(obj.rawobject, offset)
-        print w_value
-        fieldptr[0] = space.str_w(w_value)
+        fieldptr[0] = self._from_space(space, w_value)
 
 class IntConverter(TypeConverter):
     def convert_argument(self, space, w_obj):

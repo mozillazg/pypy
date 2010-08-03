@@ -59,17 +59,18 @@ class AppTestDATATYPES:
 
         # char types through data members
         c.m_char = 'b';    assert c.get_char()  ==     'b'
-        #c.m_char = 40;     assert c.get_char()  == chr(40)
+        c.m_char = 40;     assert c.get_char()  == chr(40)
         c.set_char('c');   assert c.m_char      ==     'c'
-        #c.set_char(41);    assert c.m_char      == chr(41)
+        c.set_char(41);    assert c.m_char      == chr(41)
         c.m_uchar = 'd';   assert c.get_uchar() ==     'd'
-        #c.m_uchar = 42;    assert c.get_uchar() == chr(42)
+        c.m_uchar = 42;    assert c.get_uchar() == chr(42)
         c.set_uchar('e');  assert c.m_uchar     ==     'e'
-        #c.set_uchar(43);   assert c.m_uchar     == chr(43)
+        c.set_uchar(43);   assert c.m_uchar     == chr(43)
 
         raises(TypeError, 'c.set_char("string")')
-#        raises(TypeError, 'c.set_uchar(-1)')
+        raises(TypeError, 'c.set_char(500)')
         raises(TypeError, 'c.set_uchar("string")')
+#        raises(TypeError, 'c.set_uchar(-1)')
 
         """
         # integer types
