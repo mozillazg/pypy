@@ -778,6 +778,34 @@ class PyPyCJITTests(object):
                     return sa
                 '''%(e1, e2), n, ([], res))
 
+    def test_array_sum(self):
+        #for tc in 'bhilBHILfd':
+        for tc in 'd':
+            self.run_source('''
+            from array import array
+
+            def main():
+                img = array("%s", range(127) * 5) * 484
+                l, i = 0, 0
+                while i < 640 * 480:
+                    l += img[i]
+                    i += 1
+                return l
+            ''' % tc, 38, ([], 19352859))
+
+    def test_array_sum_char(self):
+        self.run_source('''
+            from array import array
+
+            def main():
+                img = array("c", ' ') * 640 * 480
+                l, i = 0, 0
+                while i < 640 * 480:
+                    l += ord(img[i])
+                    i += 1
+                return l
+            ''', 60, ([], 9830400))
+
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
         if not option.runappdirect:

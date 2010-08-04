@@ -47,7 +47,7 @@ try:
             i+=1
         return sa
 
-    img=array('i',(1,2,3,4))
+    img=array('h',(1,2,3,4))
     print f(img)
 except Exception, e:
     print "Exception: ", type(e)
