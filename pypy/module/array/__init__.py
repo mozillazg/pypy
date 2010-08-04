@@ -6,10 +6,11 @@ for mytype in types.values():
     print mytype.w_class
     registerimplementation(mytype.w_class)
 
+
 class Module(MixedModule):
 
     interpleveldefs = {
-        'array' : 'interp_array.W_ArrayBase',
+        'array': 'interp_array.W_ArrayBase',
     }
 
     appleveldefs = {
