@@ -7,13 +7,15 @@ _executors = {}
 
 class FunctionExecutor(object):
     def execute(self, space, func, cppthis, num_args, args):
-        raise NotImplementedError("abstract base class")
+        raise NotImplementedError(
+            "abstract base class (actual: %s)" % type(self).__name__)
 
 
 class VoidExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
         capi.c_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.w_None
+
 
 class BoolExecutor(FunctionExecutor):
     def execute(self, space, func, cppthis, num_args, args):
@@ -23,6 +25,11 @@ class BoolExecutor(FunctionExecutor):
 class CharExecutor(FunctionExecutor):
      def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_c(func.cpptype.handle, func.method_index, cppthis, num_args, args)
+        return space.wrap(result)
+
+class ShortExecutor(FunctionExecutor):
+    def execute(self, space, func, cppthis, num_args, args):
+        result = capi.c_call_h(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class LongExecutor(FunctionExecutor):
@@ -81,8 +88,12 @@ _executors["void"]                = VoidExecutor()
 _executors["bool"]                = BoolExecutor()
 _executors["char"]                = CharExecutor()
 _executors["unsigned char"]       = CharExecutor()
+_executors["short int"]           = ShortExecutor()
+_executors["unsigned short int"]  = ShortExecutor()
 _executors["int"]                 = LongExecutor()
+_executors["unsigned int"]        = LongExecutor()
 _executors["long int"]            = LongExecutor()
+_executors["unsigned long int"]   = LongExecutor()
 _executors["float"]               = FloatExecutor()
 _executors["double"]              = DoubleExecutor()
 _executors["char*"]               = CStringExecutor()

@@ -12,14 +12,18 @@ class TypeConverter(object):
         obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
         return lltype.direct_ptradd(obj.rawobject, offset)
 
+    def _is_abstract(self):
+        raise NotImplementedError(
+            "abstract base class (actual: %s)" % type(self).__name__)
+
     def convert_argument(self, space, w_obj):
-        raise NotImplementedError("abstract base class")
+        self._is_abstract()
 
     def from_memory(self, space, w_obj, offset):
-        raise NotImplementedError("abstract base class")
+        self._is_abstract()
 
     def to_memory(self, space, w_obj, w_value, offset):
-        raise NotImplementedError("abstract base class")
+        self._is_abstract()
 
     def free_argument(self, arg):
         lltype.free(arg, flavor='raw')
@@ -73,12 +77,35 @@ class CharConverter(TypeConverter):
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         fieldptr[0] = self._from_space(space, w_value)
 
-class IntConverter(TypeConverter):
+class LongConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
         arg = space.c_int_w(w_obj)
         x = lltype.malloc(rffi.LONGP.TO, 1, flavor='raw')
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)
+
+    def from_memory(self, space, w_obj, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        longptr = rffi.cast(rffi.LONGP, fieldptr)
+        return space.wrap(longptr[0])
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        longptr = rffi.cast(rffi.LONGP, fieldptr)
+        longptr[0] = space.c_int_w(w_value)
+
+class ShortConverter(LongConverter):
+    def from_memory(self, space, w_obj, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        intptr = rffi.cast(rffi.SHORTP, fieldptr)
+        return space.wrap(intptr[0])
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        import struct
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        pack = struct.pack('h', space.unwrap(w_value))         # unchecked
+        fieldptr[0] = pack[0]
+        fieldptr[1] = pack[1]
 
 class FloatConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -173,7 +200,12 @@ def get_converter(space, name):
 _converters["bool"]                = BoolConverter()
 _converters["char"]                = CharConverter()
 _converters["unsigned char"]       = CharConverter()
-_converters["int"]                 = IntConverter()
+_converters["short int"]           = ShortConverter()
+_converters["unsigned short int"]  = ShortConverter()
+_converters["int"]                 = LongConverter()
+_converters["unsigned int"]        = LongConverter()
+_converters["long int"]            = LongConverter()
+_converters["unsigned long int"]   = LongConverter()
 _converters["float"]               = FloatConverter()
 _converters["double"]              = DoubleConverter()
 _converters["const char*"]         = CStringConverter()
