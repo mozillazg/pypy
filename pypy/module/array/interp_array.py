@@ -23,7 +23,7 @@ def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
         msg = 'array() argument 1 must be char, not str'
         raise OperationError(space.w_TypeError, space.wrap(msg))
     typecode = typecode[0]
-    
+
     for tc in unroll_typecodes:
         if typecode == tc:
             a = space.allocate_instance(types[tc].w_class, w_cls)
@@ -83,7 +83,7 @@ def descr_typecode(space, self):
 type_typedef = StdTypeDef(
     'array',
     __new__ = interp2app(w_array),
-    __module__   = 'array',    
+    __module__   = 'array',
     itemsize = GetSetProperty(descr_itemsize),
     typecode = GetSetProperty(descr_typecode),
     )
@@ -118,7 +118,7 @@ class TypeCode(object):
                 self.canoverflow = False
 
     def _freeze_(self):
-        # hint for the annotator: track individual constant instances 
+        # hint for the annotator: track individual constant instances
         return True
 
 types = {
@@ -129,7 +129,7 @@ types = {
     'h': TypeCode(rffi.SHORT,         'int_w', True, True),
     'H': TypeCode(rffi.USHORT,        'int_w', True),
     'i': TypeCode(rffi.INT,           'int_w', True, True),
-    'I': TypeCode(rffi.UINT,          'int_w', True), 
+    'I': TypeCode(rffi.UINT,          'int_w', True),
     'l': TypeCode(rffi.LONG,          'int_w', True, True),
     'L': TypeCode(rffi.ULONG,         'bigint_w'),  # Overflow handled by
                                                     # rbigint.touint() which
@@ -222,7 +222,7 @@ def make_array(mytype):
                 new_buffer = lltype.nullptr(mytype.arraytype)
 
             if self.buffer:
-                lltype.free(self.buffer, flavor='raw')                
+                lltype.free(self.buffer, flavor='raw')
             self.buffer = new_buffer
             self.len = size
 
@@ -290,7 +290,7 @@ def make_array(mytype):
                 raise OperationError(space.w_TypeError, space.wrap(msg))
             else:
                 self.fromsequence(w_iterable)
-            
+
         def charbuf(self):
             return  rffi.cast(rffi.CCHARP, self.buffer)
 
@@ -362,7 +362,7 @@ def make_array(mytype):
 
     def setslice__Array_ANY_ANY_ANY(space, self, w_i, w_j, w_x):
         space.setitem(self, space.newslice(w_i, w_j, space.w_None), w_x)
-    
+
     def array_append__Array_ANY(space, self, w_x):
         x = self.item_w(w_x)
         self.setlen(self.len + 1)
@@ -437,7 +437,7 @@ def make_array(mytype):
 
     def delslice__Array_ANY_ANY(space, self, w_i, w_j):
         return space.delitem(self, space.newslice(w_i, w_j, space.w_None))
-    
+
     # Add and mul methods
 
     def add__Array_Array(space, self, other):
@@ -479,7 +479,7 @@ def make_array(mytype):
         return self
 
     # Convertions
-    
+
     def array_tolist__Array(space, self):
         w_l = space.newlist([])
         for i in range(self.len):
@@ -506,7 +506,7 @@ def make_array(mytype):
             msg = "arg1 must be open file"
             raise OperationError(space.w_TypeError, space.wrap(msg))
         n = space.int_w(w_n)
-        
+
         size = self.itemsize * n
         w_item = space.call_method(w_f, 'read', space.wrap(size))
         item = space.str_w(w_item)
@@ -537,7 +537,7 @@ def make_array(mytype):
             # string arguments at multiples of the unicode byte size.
             # Let's only accept unicode arguments for now.
             self.fromsequence(w_ustr)
-            
+
         def array_tounicode__Array(space, self):
             u = u""
             for i in range(self.len):
@@ -552,7 +552,7 @@ def make_array(mytype):
         def array_tounicode__Array(space, self):
             msg = "tounicode() may only be called on type 'u' arrays"
             raise OperationError(space.w_ValueError, space.wrap(msg))
-        
+
     # Compare methods
     def cmp__Array_ANY(space, self, other):
         if isinstance(other, W_ArrayBase):
@@ -563,7 +563,7 @@ def make_array(mytype):
             raise OperationError(space.w_NotImplementedError, space.wrap(''))
 
     # Misc methods
-    
+
     def buffer__Array(space, self):
         from pypy.interpreter.buffer import StringLikeBuffer
         w_s = array_tostring__Array(space, self)
@@ -611,12 +611,12 @@ def make_array(mytype):
         else:
             r = space.repr(array_tolist__Array(space, self))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))
-            return space.wrap(s)    
+            return space.wrap(s)
 
     init_signature = Signature(['typecode', 'initializer'])
     init_defaults = [None, None]
-    
-    def init__Array(space, self, args):        
+
+    def init__Array(space, self, args):
         args.parse_obj(None, 'array', init_signature, init_defaults)
 
     mytype.w_class = W_Array
@@ -630,7 +630,7 @@ def make_array(mytype):
         if n > 0:
             f.__name__ = new
 
-    from pypy.objspace.std.sliceobject import W_SliceObject    
+    from pypy.objspace.std.sliceobject import W_SliceObject
     from pypy.objspace.std.listobject import W_ListObject
     from pypy.objspace.std.unicodeobject import W_UnicodeObject
     register_all(locals(), globals())
