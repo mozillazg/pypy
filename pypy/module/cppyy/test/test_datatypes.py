@@ -72,7 +72,6 @@ class AppTestDATATYPES:
         raises(TypeError, 'c.set_uchar("string")')
 # TODO: raises(TypeError, 'c.set_uchar(-1)')
 
-        """
         # integer types
         names = ['short', 'ushort', 'int', 'uint', 'long', 'ulong']
         for i in range(len(names)):
@@ -82,7 +81,6 @@ class AppTestDATATYPES:
         for i in range(len(names)):
             exec 'c.set_%s = %d' % (names[i],2*i)
             assert eval('c.m_%s' % names[i]) == i
-        """
 
         # float types through functions
         c.set_float( 0.123 );  assert round(c.get_float()  - 0.123, 5) == 0

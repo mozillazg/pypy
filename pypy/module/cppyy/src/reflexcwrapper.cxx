@@ -58,6 +58,11 @@ char cppyy_call_c(cppyy_typehandle_t handle, int method_index,
    return cppyy_call_T<char>(handle, method_index, self, numargs, args);
 }
 
+short cppyy_call_h(cppyy_typehandle_t handle, int method_index,
+                   cppyy_object_t self, int numargs, void* args[]) {
+   return cppyy_call_T<short>(handle, method_index, self, numargs, args);
+}
+
 long cppyy_call_l(cppyy_typehandle_t handle, int method_index,
                   cppyy_object_t self, int numargs, void* args[]) {
     return cppyy_call_T<long>(handle, method_index, self, numargs, args);
