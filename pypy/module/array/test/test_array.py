@@ -1,5 +1,6 @@
 from pypy.conftest import gettestobjspace
 import py
+import py.test
 
 
 ## class AppTestSimpleArray:
@@ -17,6 +18,8 @@ import py
 
 
 class BaseArrayTests:
+
+    
     def test_ctor(self):
         assert len(self.array('c')) == 0
         assert len(self.array('i')) == 0
@@ -179,12 +182,12 @@ class BaseArrayTests:
         ##     def read(self,n):
         ##         return self.c*min(n,self.s)
         def myfile(c, s):
-            f = open('/tmp/deleteme', 'w')
+            f = open(self.tempfile, 'w')
             f.write(c * s)
             f.close()
-            return open('/tmp/deleteme', 'r')
+            return open(self.tempfile, 'r')
 
-        f = open('/dev/zero', 'r')
+        f = myfile('\x00', 100)
         for t in 'bBhHiIlLfd':
             a = self.array(t)
             a.fromfile(f, 2)
@@ -415,13 +418,13 @@ class BaseArrayTests:
                 a = unpack(tc * len(values), s)
                 assert a == values
 
-        f = open('/tmp/deleteme', 'w')
+        f = open(self.tempfile, 'w')
         self.array('c', ('h', 'i')).tofile(f)
         f.close()
-        assert open('/tmp/deleteme', 'r').readline() == 'hi'
+        assert open(self.tempfile, 'r').readline() == 'hi'
 
         a = self.array('c')
-        a.fromfile(open('/tmp/deleteme', 'r'), 2)
+        a.fromfile(open(self.tempfile, 'r'), 2)
         assert repr(a) == "array('c', 'hi')"
 
         raises(ValueError, self.array('i').tounicode)
@@ -756,7 +759,7 @@ class TestCPythonsOwnArray(BaseArrayTests):
         cls.array = array.array
         import struct
         cls.struct = struct
-
+        cls.tempfile = str(py.test.ensuretemp('array').join('tmpfile'))        
 
 class AppTestArray(BaseArrayTests):
     def setup_class(cls):
@@ -773,6 +776,12 @@ class AppTestArray(BaseArrayTests):
             import _rawffi
             return _rawffi
         """)
+        cls.w_tempfile = cls.space.wrap(
+            str(py.test.ensuretemp('array').join('tmpfile')))
+
+
+
+
 
     def test_buffer_info(self):
         a = self.array('c', 'Hi!')
