@@ -19,8 +19,9 @@ class CDLL(object):
         self.name = name
         self.cpu = GLOBAL_CPU
 
-    def get(self, func, args_type, res_type='v', push_result=None):
-        return _Get(self.cpu, self.lib, func, args_type, res_type, push_result)
+    def get(self, func, args_type, res_type='v', push_result=None, cache=False):
+        return _Get(self.cpu, self.lib, func, args_type, res_type,
+                    push_result, cache)
 
 class _LibHandler(object):
     def __init__(self, name):
