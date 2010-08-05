@@ -65,34 +65,61 @@ class TestJitffi(object):
     def push_result(self, value): # mock function
         return value
 
+    def fromcache(self, f, args_type, res_type):
+        if not hasattr(self, 'cache'):
+            self.cache = {}
+
+        arg_classes = ''.join(args_type)
+        key = (res_type, arg_classes)
+        try:
+            f.looptoken = self.cache[key]
+        except KeyError:
+            f.gen_looptaken()
+            self.cache[key] = f.looptoken
+
     def test_missing_lib(self):
         py.test.raises(OSError, rjitffi.CDLL, 'xxxfoo888baryyy')
 
     def test_get(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
+        args_type = ['i', 'i']
+        res_type = 'i'
+
+        func = lib.get('add_integers', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(1)
         func.push_int(2)
         assert func.call() == 3
 
-        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
+        func = lib.get('add_integers', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(-1)
         func.push_int(2)
         assert func.call() == 1
 
-        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
+        func = lib.get('add_integers', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(0)
         func.push_int(0)
         assert func.call() == 0
 
+        args_type = ['i', 'i', 'i']
+        res_type = 'i'
+
+        func = lib.get('add_integers', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func = lib.get('max3', ['i', 'i', 'i'], 'i', self.push_result)
         func.push_int(2)
         func.push_int(8)
         func.push_int(3)
         assert func.call() == 8
 
-        func = lib.get('add_floats', ['f', 'f'], 'f', self.push_result)
+        args_type = ['f', 'f']
+        res_type = 'f'
+
+        func = lib.get('add_floats', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_float(1.2)
         func.push_float(1.5)
         assert func.call() == 2.7
@@ -100,15 +127,24 @@ class TestJitffi(object):
     def test_get_void(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('fvoid', [], 'i', self.push_result)
+        args_type = []
+        res_type = 'i'
+
+        func = lib.get('fvoid', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         assert func.call() == 1
 
-        func = lib.get('return_void', ['i', 'i'], 'v', self.push_result)
+        args_type = ['i', 'i']
+        res_type = 'v'
+
+        func = lib.get('return_void', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(1)
         func.push_int(2)
         assert func.call() is None
 
-        func = lib.get('return_void', ['i', 'i'], push_result=self.push_result)
+        func = lib.get('return_void', args_type, push_result=self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(1)
         func.push_int(2)
         assert func.call() is None
@@ -116,7 +152,10 @@ class TestJitffi(object):
     def test_various_type_args(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('add_intfloat', ['i', 'f'], 'i', self.push_result)
+        args_type = ['i', 'f']
+        res_type = 'i'
+        func = lib.get('add_intfloat', args_type, res_type, self.push_result, cache=True)
+        self.fromcache(func, args_type, res_type)
         func.push_int(1)
         func.push_float(2.9)
         assert func.call() == 3
@@ -124,6 +163,14 @@ class TestJitffi(object):
         # stack is cleaned up after calling
         func.push_int(0)
         func.push_float(1.3)
+        assert func.call() == 1
+
+    def test_nocache(self):
+        lib = rjitffi.CDLL(self.lib_name)
+
+        func = lib.get('add_integers', ['i', 'i'], 'i', self.push_result)
+        func.push_int(1)
+        func.push_int(0)
         assert func.call() == 1
 
     def test_undefined_func(self):
