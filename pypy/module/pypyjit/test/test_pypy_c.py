@@ -779,8 +779,13 @@ class PyPyCJITTests(object):
                 '''%(e1, e2), n, ([], res))
 
     def test_array_sum(self):
-        #for tc in 'bhilBHILfd':
-        for tc in 'd':
+        for tc, maxops in zip('bhilBHILfd', (38,) * 6 + (40, 40, 41, 38)):
+            res = 19352859
+            if tc in 'IL':
+                res = long(res)
+            elif tc in 'fd':
+                res = float(res)
+            
             self.run_source('''
             from array import array
 
@@ -791,20 +796,56 @@ class PyPyCJITTests(object):
                     l += img[i]
                     i += 1
                 return l
-            ''' % tc, 38, ([], 19352859))
+            ''' % tc, maxops, ([], res))
 
     def test_array_sum_char(self):
         self.run_source('''
             from array import array
 
             def main():
-                img = array("c", ' ') * 640 * 480
+                img = array("c", "Hello") * 130 * 480
                 l, i = 0, 0
                 while i < 640 * 480:
                     l += ord(img[i])
                     i += 1
                 return l
-            ''', 60, ([], 9830400))
+            ''', 60, ([], 30720000))
+
+    def test_array_sum_unicode(self):
+        self.run_source('''
+            from array import array
+
+            def main():
+                img = array("u", u"Hello") * 130 * 480
+                l, i = 0, 0
+                while i < 640 * 480:
+                    if img[i] == u"l":
+                        l += 1
+                    i += 1
+                return l
+            ''', 65, ([], 122880))
+
+    def test_array_intimg(self):
+        for tc, maxops in zip('ilILd', (67, 67, 69, 69, 61)):
+            res = 73574560
+            if tc in 'IL':
+                res = long(res)
+            elif tc in 'fd':
+                res = float(res)
+            
+            self.run_source('''
+            from array import array
+
+            def main(tc):
+                img = array(tc, range(3)) * (350 * 480)
+                intimg = array(tc, (0,)) * (640 * 480)
+                l, i = 0, 640
+                while i < 640 * 480:
+                    l = l + img[i]
+                    intimg[i] = (intimg[i-640] + l) 
+                    i += 1
+                return intimg[i - 1]
+            ''', maxops, ([tc], res))
 
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
@@ -827,6 +868,7 @@ class TestJIT(PyPyCJITTests):
         cls.tmpdir.ensure(dir=1)
         cls.counter = 0
         cls.pypy_c = option.pypy_c
+
 
 def has_info(pypy_c, option):
     g = os.popen('"%s" --info' % pypy_c, 'r')
