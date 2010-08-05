@@ -41,24 +41,23 @@ class _Get(object):
         self.res_type = res_type
         self.push_result = push_result
         self.cpu = cpu
-        self.bargs = []
         lib = lib.handler
 
         try:
             self.funcaddr = rffi.cast(lltype.Signed, rdynload.dlsym(lib, func))
         except KeyError:
             raise ValueError("Cannot find symbol %s", func)
-        self.bargs.append(BoxInt())
+        self.setup_stack()
         if not cache:
             self.gen_looptaken()
-        self.setup_stack()
 
     def gen_looptaken(self):
+        bargs = [BoxInt()] # func addr
         for arg in self.args_type:
             if arg == 'i':
-                self.bargs.append(BoxInt())
+                bargs.append(BoxInt())
             elif arg == 'f':
-                self.bargs.append(BoxFloat())
+                bargs.append(BoxFloat())
             else:
                 raise ValueError(arg)
 
@@ -74,11 +73,11 @@ class _Get(object):
         calldescr = self.get_calldescr()
         self.looptoken = LoopToken()
         # make sure it's not resized before ResOperation
-        self.bargs = list(self.bargs) 
-        oplist = [ResOperation(rop.CALL, self.bargs, bres, descr=calldescr),
+        bargs = list(bargs) 
+        oplist = [ResOperation(rop.CALL, bargs, bres, descr=calldescr),
                   ResOperation(rop.FINISH, [bres], None,
                                descr=BasicFailDescr(0))]
-        self.cpu.compile_loop(self.bargs, oplist, self.looptoken)
+        self.cpu.compile_loop(bargs, oplist, self.looptoken)
 
     def get_calldescr(self):
         if self.res_type == 'i':
