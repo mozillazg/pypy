@@ -291,23 +291,9 @@ class BaseArrayTests:
         a[0:-1:2] = self.array('i', [7, 8])
         assert a[0] == 7 and a[1] == 5 and a[2] == 8 and a[3] == 4
 
-        try:
-            a[1:2:4] = self.array('i', [5, 6, 7])
-            assert False
-        except ValueError:
-            pass
-
-        try:
-            a[1:3] = self.array('I', [5, 6])
-            assert False
-        except TypeError:
-            pass
-
-        try:
-            a[1:3] = [5, 6]
-            assert False
-        except TypeError:
-            pass
+        raises(ValueError, "a[1:2:4] = self.array('i', [5, 6, 7])")
+        raises(TypeError, "a[1:3] = self.array('I', [5, 6])")
+        raises(TypeError, "a[1:3] = [5, 6]")
 
         a = self.array('i', [1, 2, 3])
         assert a.__getslice__(1, 2) == a[1:2]
@@ -593,19 +579,8 @@ class BaseArrayTests:
         a += self.array('i', (7,))
         assert repr(a) == "array('i', [1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 1, 2, 7])"
 
-        try:
-            raised = False
-            a = self.array('i') + 2
-        except TypeError:
-            raised = True
-        assert raised
-
-        try:
-            raised = False
-            a = self.array('i') + self.array('b')
-        except TypeError:
-            raised = True
-        assert raised
+        raises(TypeError, "a = self.array('i') + 2")
+        raises(TypeError, "self.array('i') + self.array('b')")
 
         # Calling __add__ directly raises TypeError in cpython but
         # returns NotImplemented in pypy if placed within a
