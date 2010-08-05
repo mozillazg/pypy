@@ -1071,7 +1071,7 @@ class Assembler386(object):
                 self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                              scale.value))
             else:
-                print "[asmgen]setarrayitem unsupported size: %d" % scale.value
+                print "[asmgen]getarrayitem unsupported size: %d" % scale.value
                 raise NotImplementedError()
 
     genop_getarrayitem_gc_pure = genop_getarrayitem_gc

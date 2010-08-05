@@ -11,7 +11,8 @@ def descr_seqiter__reduce__(w_self, space):
     """
 
     # cpython does not support pickling iterators
-    raise OperationError(space.w_TypeError, space.w_None)
+    msg = 'Pickling for iterators dissabled as cpython does not support it'
+    raise OperationError(space.w_TypeError, space.wrap(msg))
 
     from pypy.objspace.std.iterobject import W_AbstractSeqIterObject
     assert isinstance(w_self, W_AbstractSeqIterObject)
