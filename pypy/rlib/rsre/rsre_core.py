@@ -124,7 +124,7 @@ class AbstractMatchContext(object):
         return self.match_marks_flat
 
     def span(self, groupnum=0):
-        "NOT_RPYTHON"   # compatibility
+        # compatibility
         fmarks = self.flatten_marks()
         groupnum *= 2
         if groupnum >= len(fmarks):
