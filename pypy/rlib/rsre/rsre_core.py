@@ -1,5 +1,7 @@
+import sys
 from pypy.rlib.debug import check_nonneg
 from pypy.rlib.rsre import rsre_char
+from pypy.rlib import jit
 
 
 OPCODE_FAILURE            = 0
@@ -42,11 +44,12 @@ class MatchContext(object):
     match_marks = None
     match_marks_flat = None
 
-    def __init__(self, pattern, string, match_start, flags):
-        assert match_start >= 0
+    def __init__(self, pattern, string, match_start, end, flags):
         self.pattern = pattern
         self.string = string
-        self.end = len(string)
+        if end > len(string):
+            end = len(string)
+        self.end = end
         self.match_start = match_start
         self.flags = flags
 
@@ -70,6 +73,10 @@ class MatchContext(object):
         if self.match_marks_flat is None:
             self.match_marks_flat = [self.match_start, self.match_end]
             mark = self.match_marks
+            if mark is not None:
+                self.match_lastindex = mark.gid
+            else:
+                self.match_lastindex = -1
             while mark is not None:
                 index = mark.gid + 2
                 while index >= len(self.match_marks_flat):
@@ -88,12 +95,13 @@ class MatchContext(object):
             return (-1, -1)
         return (fmarks[groupnum], fmarks[groupnum+1])
 
-    def group(self, group=0):
+    def group(self, groupnum=0):
         # compatibility
-        frm, to = self.span(group)
-        if frm < 0 or to < frm:
+        frm, to = self.span(groupnum)
+        if 0 <= frm <= to:
+            return self.string[frm:to]
+        else:
             return None
-        return self.string[frm:to]
 
     def at_boundary(self, ptr, word_checker):
         if self.end == 0:
@@ -153,6 +161,7 @@ class BranchMatchResult(MatchResult):
         self.start_ptr = ptr
         self.start_marks = marks
 
+    @jit.unroll_safe     # there are only a few branch alternatives
     def find_first_result(self, ctx):
         ppos = self.ppos
         while ctx.pat(ppos):
@@ -221,7 +230,15 @@ class AbstractUntilMatchResult(MatchResult):
         self.tailppos = tailppos
         self.cur_ptr = ptr
         self.cur_marks = marks
-        self.pending = []
+        self.pending = None
+        self.num_pending = 0
+
+class Pending(object):
+    def __init__(self, ptr, marks, enum, next):
+        self.ptr = ptr
+        self.marks = marks
+        self.enum = enum
+        self.next = next     # chained list
 
 class MaxUntilMatchResult(AbstractUntilMatchResult):
 
@@ -242,13 +259,14 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
             while True:
                 if enum is not None:
                     # matched one more 'item'.  record it and continue
-                    self.pending.append((ptr, marks, enum))
+                    self.pending = Pending(ptr, marks, enum, self.pending)
+                    self.num_pending += 1
                     ptr = ctx.match_end
                     marks = ctx.match_marks
                     break
                 else:
                     # 'item' no longer matches.
-                    if not resume and len(self.pending) >= min:
+                    if not resume and self.num_pending >= min:
                         # try to match 'tail' if we have enough 'item'
                         result = sre_match(ctx, self.tailppos, ptr, marks)
                         if result is not None:
@@ -257,12 +275,16 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
                             self.cur_marks = marks
                             return self
                     resume = False
-                    if len(self.pending) == 0:
+                    p = self.pending
+                    if p is None:
                         return
-                    ptr, marks, enum = self.pending.pop()
-                    enum = enum.move_to_next_result(ctx)
+                    self.pending = p.next
+                    self.num_pending -= 1
+                    ptr = p.ptr
+                    marks = p.marks
+                    enum = p.enum.move_to_next_result(ctx)
             #
-            if max == 65535 or len(self.pending) < max:
+            if max == 65535 or self.num_pending < max:
                 # try to match one more 'item'
                 enum = sre_match(ctx, ppos + 3, ptr, marks)
             else:
@@ -284,7 +306,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
         marks = self.cur_marks
         while True:
             # try to match 'tail' if we have enough 'item'
-            if not resume and len(self.pending) >= min:
+            if not resume and self.num_pending >= min:
                 result = sre_match(ctx, self.tailppos, ptr, marks)
                 if result is not None:
                     self.subresult = result
@@ -293,7 +315,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
                     return self
             resume = False
 
-            if max == 65535 or len(self.pending) < max:
+            if max == 65535 or self.num_pending < max:
                 # try to match one more 'item'
                 enum = sre_match(ctx, ppos + 3, ptr, marks)
             else:
@@ -302,18 +324,25 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
             while enum is None:
                 # 'item' does not match; try to get further results from
                 # the 'pending' list.
-                if len(self.pending) == 0:
+                p = self.pending
+                if p is None:
                     return
-                ptr, marks, enum = self.pending.pop()
-                enum = enum.move_to_next_result(ctx)
+                self.pending = p.next
+                self.num_pending -= 1
+                ptr = p.ptr
+                marks = p.marks
+                enum = p.enum.move_to_next_result(ctx)
 
             # matched one more 'item'.  record it and continue
-            self.pending.append((ptr, marks, enum))
+            self.pending = Pending(ptr, marks, enum, self.pending)
+            self.num_pending += 1
             ptr = ctx.match_end
             marks = ctx.match_marks
 
 # ____________________________________________________________
 
+@jit.unroll_safe      # it's safe to unroll the main 'while' loop:
+                      # 'ppos' is only ever incremented in this function
 def sre_match(ctx, ppos, ptr, marks):
     """Returns either None or a MatchResult object.  Usually we only need
     the first result, but there is the case of REPEAT...UNTIL where we
@@ -383,34 +412,33 @@ def sre_match(ctx, ppos, ptr, marks):
         elif op == OPCODE_GROUPREF:
             # match backreference
             # <GROUPREF> <groupnum>
-            gid = ctx.pat(ppos) * 2
-            startptr = find_mark(marks, gid)
-            if startptr < 0:
-                return
-            endptr = find_mark(marks, gid + 1)
-            if endptr < startptr:   # also includes the case "endptr == -1"
-                return
-            for i in range(startptr, endptr):
-                if ptr >= ctx.end or ctx.str(ptr) != ctx.str(i):
-                    return
-                ptr += 1
+            startptr, length = get_group_ref(marks, ctx.pat(ppos))
+            if length < 0:
+                return     # group was not previously defined
+            if not match_repeated(ctx, ptr, startptr, length):
+                return     # no match
+            ptr += length
             ppos += 1
 
         elif op == OPCODE_GROUPREF_IGNORE:
             # match backreference
             # <GROUPREF> <groupnum>
-            gid = ctx.pat(ppos) * 2
-            startptr = find_mark(marks, gid)
-            if startptr < 0:
-                return
-            endptr = find_mark(marks, gid + 1)
-            if endptr < startptr:   # also includes the case "endptr == -1"
-                return
-            for i in range(startptr, endptr):
-                if ptr >= ctx.end or ctx.lowstr(ptr) != ctx.lowstr(i):
-                    return
-                ptr += 1
+            startptr, length = get_group_ref(marks, ctx.pat(ppos))
+            if length < 0:
+                return     # group was not previously defined
+            if not match_repeated_ignore(ctx, ptr, startptr, length):
+                return     # no match
+            ptr += length
             ppos += 1
+
+        elif op == OPCODE_GROUPREF_EXISTS:
+            # conditional match depending on the existence of a group
+            # <GROUPREF_EXISTS> <group> <skip> codeyes <JUMP> codeno ...
+            _, length = get_group_ref(marks, ctx.pat(ppos))
+            if length >= 0:
+                ppos += 2                  # jump to 'codeyes'
+            else:
+                ppos += ctx.pat(ppos+1)    # jump to 'codeno'
 
         elif op == OPCODE_IN:
             # match set member (or non_member)
@@ -561,6 +589,31 @@ def sre_match(ctx, ppos, ptr, marks):
             assert 0, "bad pattern code %d" % op
 
 
+def get_group_ref(marks, groupnum):
+    gid = groupnum * 2
+    startptr = find_mark(marks, gid)
+    if startptr < 0:
+        return 0, -1
+    endptr = find_mark(marks, gid + 1)
+    length = endptr - startptr     # < 0 if endptr < startptr (or if endptr=-1)
+    return startptr, length
+
+def match_repeated(ctx, ptr, oldptr, length):
+    if ptr + length > ctx.end:
+        return False
+    for i in range(length):
+        if ctx.str(ptr + i) != ctx.str(oldptr + i):
+            return False
+    return True
+
+def match_repeated_ignore(ctx, ptr, oldptr, length):
+    if ptr + length > ctx.end:
+        return False
+    for i in range(length):
+        if ctx.lowstr(ptr + i) != ctx.lowstr(oldptr + i):
+            return False
+    return True
+
 def find_repetition_end(ctx, ppos, ptr, maxcount):
     end = ctx.end
     # adjust end
@@ -570,54 +623,60 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
             end = end1
 
     op = ctx.pat(ppos)
+    if op == OPCODE_ANY:            return fre_ANY(ctx, ptr, end)
+    if op == OPCODE_ANY_ALL:        return end
+    if op == OPCODE_IN:             return fre_IN(ctx, ptr, end, ppos)
+    if op == OPCODE_IN_IGNORE:      return fre_IN_IGNORE(ctx, ptr, end, ppos)
+    if op == OPCODE_LITERAL:        return fre_LITERAL(ctx, ptr, end, ppos)
+    if op == OPCODE_LITERAL_IGNORE: return fre_LITERAL_IGNORE(ctx,ptr,end,ppos)
+    if op == OPCODE_NOT_LITERAL:    return fre_NOT_LITERAL(ctx, ptr, end, ppos)
+    if op == OPCODE_NOT_LITERAL_IGNORE: return fre_NOT_LITERAL_IGNORE(ctx,ptr,
+                                                                      end,ppos)
+    raise NotImplementedError("rsre.find_repetition_end[%d]" % op)
 
-    if op == OPCODE_ANY:
-        # repeated dot wildcard.
-        while ptr < end and not rsre_char.is_linebreak(ctx.str(ptr)):
-            ptr += 1
-
-    elif op == OPCODE_ANY_ALL:
-        # repeated dot wildcare.  skip to the end of the target
-        # string, and backtrack from there
-        ptr = end
-
-    elif op == OPCODE_IN:
-        # repeated set
-        while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
-                                                    ctx.str(ptr)):
-            ptr += 1
-
-    elif op == OPCODE_IN_IGNORE:
-        # repeated set
-        while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
-                                                    ctx.lowstr(ptr)):
-            ptr += 1
-
-    elif op == OPCODE_LITERAL:
-        chr = ctx.pat(ppos+1)
-        while ptr < end and ctx.str(ptr) == chr:
-            ptr += 1
-
-    elif op == OPCODE_LITERAL_IGNORE:
-        chr = ctx.pat(ppos+1)
-        while ptr < end and ctx.lowstr(ptr) == chr:
-            ptr += 1
-
-    elif op == OPCODE_NOT_LITERAL:
-        chr = ctx.pat(ppos+1)
-        while ptr < end and ctx.str(ptr) != chr:
-            ptr += 1
-
-    elif op == OPCODE_NOT_LITERAL_IGNORE:
-        chr = ctx.pat(ppos+1)
-        while ptr < end and ctx.lowstr(ptr) != chr:
-            ptr += 1
-
-    else:
-        raise NotImplementedError("rsre.find_repetition_end[%d]" % op)
-
+def fre_ANY(ctx, ptr, end):
+    # repeated dot wildcard.
+    while ptr < end and not rsre_char.is_linebreak(ctx.str(ptr)):
+        ptr += 1
     return ptr
 
+def fre_IN(ctx, ptr, end, ppos):
+    # repeated set
+    while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
+                                                ctx.str(ptr)):
+        ptr += 1
+    return ptr
+
+def fre_IN_IGNORE(ctx, ptr, end, ppos):
+    # repeated set
+    while ptr < end and rsre_char.check_charset(ctx.pattern, ppos+2,
+                                                ctx.lowstr(ptr)):
+        ptr += 1
+    return ptr
+
+def fre_LITERAL(ctx, ptr, end, ppos):
+    chr = ctx.pat(ppos+1)
+    while ptr < end and ctx.str(ptr) == chr:
+        ptr += 1
+    return ptr
+
+def fre_LITERAL_IGNORE(ctx, ptr, end, ppos):
+    chr = ctx.pat(ppos+1)
+    while ptr < end and ctx.lowstr(ptr) == chr:
+        ptr += 1
+    return ptr
+
+def fre_NOT_LITERAL(ctx, ptr, end, ppos):
+    chr = ctx.pat(ppos+1)
+    while ptr < end and ctx.str(ptr) != chr:
+        ptr += 1
+    return ptr
+
+def fre_NOT_LITERAL_IGNORE(ctx, ptr, end, ppos):
+    chr = ctx.pat(ppos+1)
+    while ptr < end and ctx.lowstr(ptr) != chr:
+        ptr += 1
+    return ptr
 
 ##### At dispatch
 
@@ -676,14 +735,18 @@ def sre_at(ctx, atcode, ptr):
 
 # ____________________________________________________________
 
-def match(pattern, string, start=0, flags=0):
-    ctx = MatchContext(pattern, string, start, flags)
+def match(pattern, string, start=0, end=sys.maxint, flags=0):
+    if start < 0: start = 0
+    if end < start: return None
+    ctx = MatchContext(pattern, string, start, end, flags)
     if sre_match(ctx, 0, start, None) is not None:
         return ctx
     return None
 
-def search(pattern, string, start=0, flags=0):
-    ctx = MatchContext(pattern, string, start, flags)
+def search(pattern, string, start=0, end=sys.maxint, flags=0):
+    if start < 0: start = 0
+    if end < start: return None
+    ctx = MatchContext(pattern, string, start, end, flags)
     if ctx.pat(0) == OPCODE_INFO:
         if ctx.pat(2) & rsre_char.SRE_INFO_PREFIX and ctx.pat(5) > 1:
             return fast_search(ctx)
