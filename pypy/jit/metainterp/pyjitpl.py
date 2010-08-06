@@ -151,7 +151,6 @@ class MIFrame(object):
     def make_result_of_lastop(self, resultbox):
         got_type = resultbox.type
         if not we_are_translated():
-            assert resultbox is not None
             typeof = {'i': history.INT,
                       'r': history.REF,
                       'f': history.FLOAT}
