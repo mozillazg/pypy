@@ -43,27 +43,11 @@ OPCODE_MIN_REPEAT_ONE     = 31
 def specializectx(func):
     """A decorator that specializes 'func' for each concrete subclass
     XyzMatchContext.  It must then be called as func(ctx,...) where
-    ctx is known to be of a specific subclass.  Use this for the case
-    of very common and small methods; for large methods where an
-    indirect call is ok, use @specializectxmethod.
+    ctx is known to be of a specific subclass.
     """
-    func._annspecialcase_ = 'specialize:argtype(0)'
+    i = list(func.func_code.co_varnames).index('ctx')
+    func._annspecialcase_ = 'specialize:argtype(%d)' % i
     return func
-
-def specializectxmethod(func):
-    """A decorator that puts 'func' as a method on each concrete
-    subclass XyzMatchContext.  This is an annotation trick to allow a
-    different version of the function to be called (as a method call)
-    depending on whether it operates on strings or unicodes.  It is ok
-    to do ctx.func(...) even if ctx is a general AbstractMatchContext;
-    it becomes an indirect call in the C version.
-    """
-    name = func.__name__
-    setattr(StrMatchContext, name,
-            func_with_new_name(func, name + '_str'))
-    setattr(UnicodeMatchContext, name,
-            func_with_new_name(func, name + '_unicode'))
-    return NotImplemented    # the original decorated function is not available
 
 # ____________________________________________________________
 
@@ -93,13 +77,13 @@ class AbstractMatchContext(object):
         The line below is used to generate a translation-time crash
         if there is a call to str() that is indirect.  All calls must
         be direct for performance reasons; you need to specialize the
-        caller with @specializectx or @specializectxmethod."""
+        caller with @specializectx."""
         raise NotImplementedError
 
     @specializectx
-    def lowstr(self, index):
-        c = self.str(index)
-        return rsre_char.getlower(c, self.flags)
+    def lowstr(ctx, index):
+        c = ctx.str(index)
+        return rsre_char.getlower(c, ctx.flags)
 
     def get_mark(self, gid):
         return find_mark(self.match_marks, gid)
@@ -187,6 +171,7 @@ def find_mark(mark, gid):
 class MatchResult(object):
     subresult = None
 
+    @specializectx
     def move_to_next_result(self, ctx):
         result = self.subresult
         if result is None:
@@ -207,11 +192,12 @@ class BranchMatchResult(MatchResult):
         self.start_ptr = ptr
         self.start_marks = marks
 
+    @specializectx
     @jit.unroll_safe     # there are only a few branch alternatives
     def find_first_result(self, ctx):
         ppos = self.ppos
         while ctx.pat(ppos):
-            result = ctx.sre_match(ppos + 1, self.start_ptr, self.start_marks)
+            result = sre_match(ctx, ppos + 1, self.start_ptr, self.start_marks)
             ppos += ctx.pat(ppos)
             if result is not None:
                 self.subresult = result
@@ -227,10 +213,11 @@ class RepeatOneMatchResult(MatchResult):
         self.start_ptr = ptr
         self.start_marks = marks
 
+    @specializectx
     def find_first_result(self, ctx):
         ptr = self.start_ptr
         while ptr >= self.minptr:
-            result = ctx.sre_match(self.nextppos, ptr, self.start_marks)
+            result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
             ptr -= 1
             if result is not None:
                 self.subresult = result
@@ -248,22 +235,24 @@ class MinRepeatOneMatchResult(MatchResult):
         self.start_ptr = ptr
         self.start_marks = marks
 
+    @specializectx
     def find_first_result(self, ctx):
         ptr = self.start_ptr
         while ptr <= self.maxptr:
-            result = ctx.sre_match(self.nextppos, ptr, self.start_marks)
+            result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
             if result is not None:
                 self.subresult = result
                 self.start_ptr = ptr
                 return self
-            ptr1 = ctx.find_repetition_end(self.ppos3, ptr, 1)
+            ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
             if ptr1 == ptr:
                 break
             ptr = ptr1
 
+    @specializectx
     def find_next_result(self, ctx):
         ptr = self.start_ptr
-        ptr1 = ctx.find_repetition_end(self.ppos3, ptr, 1)
+        ptr1 = find_repetition_end(ctx, self.ppos3, ptr, 1)
         if ptr1 == ptr:
             return
         self.start_ptr = ptr1
@@ -288,13 +277,16 @@ class Pending(object):
 
 class MaxUntilMatchResult(AbstractUntilMatchResult):
 
+    @specializectx
     def find_first_result(self, ctx):
-        enum = ctx.sre_match(self.ppos + 3, self.cur_ptr, self.cur_marks)
+        enum = sre_match(ctx, self.ppos + 3, self.cur_ptr, self.cur_marks)
         return self.search_next(ctx, enum, resume=False)
 
+    @specializectx
     def find_next_result(self, ctx):
         return self.search_next(ctx, None, resume=True)
 
+    @specializectx
     def search_next(self, ctx, enum, resume):
         ppos = self.ppos
         min = ctx.pat(ppos+1)
@@ -314,7 +306,7 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
                     # 'item' no longer matches.
                     if not resume and self.num_pending >= min:
                         # try to match 'tail' if we have enough 'item'
-                        result = ctx.sre_match(self.tailppos, ptr, marks)
+                        result = sre_match(ctx, self.tailppos, ptr, marks)
                         if result is not None:
                             self.subresult = result
                             self.cur_ptr = ptr
@@ -332,18 +324,21 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
             #
             if max == 65535 or self.num_pending < max:
                 # try to match one more 'item'
-                enum = ctx.sre_match(ppos + 3, ptr, marks)
+                enum = sre_match(ctx, ppos + 3, ptr, marks)
             else:
                 enum = None    # 'max' reached, no more matches
 
 class MinUntilMatchResult(AbstractUntilMatchResult):
 
+    @specializectx
     def find_first_result(self, ctx):
         return self.search_next(ctx, resume=False)
 
+    @specializectx
     def find_next_result(self, ctx):
         return self.search_next(ctx, resume=True)
 
+    @specializectx
     def search_next(self, ctx, resume):
         ppos = self.ppos
         min = ctx.pat(ppos+1)
@@ -353,7 +348,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
         while True:
             # try to match 'tail' if we have enough 'item'
             if not resume and self.num_pending >= min:
-                result = ctx.sre_match(self.tailppos, ptr, marks)
+                result = sre_match(ctx, self.tailppos, ptr, marks)
                 if result is not None:
                     self.subresult = result
                     self.cur_ptr = ptr
@@ -363,7 +358,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
 
             if max == 65535 or self.num_pending < max:
                 # try to match one more 'item'
-                enum = ctx.sre_match(ppos + 3, ptr, marks)
+                enum = sre_match(ctx, ppos + 3, ptr, marks)
             else:
                 enum = None    # 'max' reached, no more matches
 
@@ -387,7 +382,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
 
 # ____________________________________________________________
 
-@specializectxmethod
+@specializectx
 @jit.unroll_safe      # it's safe to unroll the main 'while' loop:
                       # 'ppos' is only ever incremented in this function
 def sre_match(ctx, ppos, ptr, marks):
@@ -427,7 +422,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # assert subpattern
             # <ASSERT> <0=skip> <1=back> <pattern>
             ptr1 = ptr - ctx.pat(ppos+1)
-            if ptr1 < 0 or ctx.sre_match(ppos + 2, ptr1, marks) is None:
+            if ptr1 < 0 or sre_match(ctx, ppos + 2, ptr1, marks) is None:
                 return
             marks = ctx.match_marks
             ppos += ctx.pat(ppos)
@@ -436,7 +431,7 @@ def sre_match(ctx, ppos, ptr, marks):
             # assert not subpattern
             # <ASSERT_NOT> <0=skip> <1=back> <pattern>
             ptr1 = ptr - ctx.pat(ppos+1)
-            if ptr1 >= 0 and ctx.sre_match(ppos + 2, ptr1, marks) is not None:
+            if ptr1 >= 0 and sre_match(ctx, ppos + 2, ptr1, marks) is not None:
                 return
             ppos += ctx.pat(ppos)
 
@@ -595,7 +590,7 @@ def sre_match(ctx, ppos, ptr, marks):
             minptr = start + ctx.pat(ppos+1)
             if minptr > ctx.end:
                 return    # cannot match
-            ptr = ctx.find_repetition_end(ppos+3, start, ctx.pat(ppos+2))
+            ptr = find_repetition_end(ctx, ppos+3, start, ctx.pat(ppos+2))
             # when we arrive here, ptr points to the tail of the target
             # string.  check if the rest of the pattern matches,
             # and backtrack if not.
@@ -617,7 +612,7 @@ def sre_match(ctx, ppos, ptr, marks):
                 if minptr > ctx.end:
                     return   # cannot match
                 # count using pattern min as the maximum
-                ptr = ctx.find_repetition_end(ppos+3, ptr, min)
+                ptr = find_repetition_end(ctx, ppos+3, ptr, min)
                 if ptr < minptr:
                     return   # did not match minimum number of times
 
@@ -663,7 +658,7 @@ def match_repeated_ignore(ctx, ptr, oldptr, length):
             return False
     return True
 
-@specializectxmethod
+@specializectx
 def find_repetition_end(ctx, ppos, ptr, maxcount):
     end = ctx.end
     # adjust end
@@ -827,7 +822,7 @@ def search(pattern, string, start=0, end=sys.maxint, flags=0):
 def match_context(ctx):
     if ctx.end < ctx.match_start:
         return None
-    if ctx.sre_match(0, ctx.match_start, None) is not None:
+    if sre_match(ctx, 0, ctx.match_start, None) is not None:
         return ctx
     return None
 
@@ -844,7 +839,7 @@ def search_context(ctx):
 def regular_search(ctx):
     start = ctx.match_start
     while start <= ctx.end:
-        if ctx.sre_match(0, start, None) is not None:
+        if sre_match(ctx, 0, start, None) is not None:
             ctx.match_start = start
             return ctx
         start += 1
@@ -890,7 +885,7 @@ def fast_search(ctx):
                         ctx.match_marks = None
                         return ctx
                     ppos = pattern_offset + 2 * prefix_skip
-                    if ctx.sre_match(ppos, ptr, None) is not None:
+                    if sre_match(ctx, ppos, ptr, None) is not None:
                         ctx.match_start = start
                         return ctx
                     i = ctx.pat(overlap_offset + i)
