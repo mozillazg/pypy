@@ -81,11 +81,11 @@ class _Get(object):
 
     def get_calldescr(self):
         if self.res_type == 'i':
-            cls = SignedCallDescr
+            cls = descr.SignedCallDescr
         elif self.res_type == 'f':
-            cls = FloatCallDescr
+            cls = descr.FloatCallDescr
         elif self.res_type == 'v':
-            cls = VoidCallDescr
+            cls = descr.VoidCallDescr
         else:
             raise NotImplementedError('Unknown type of descr: %s'
                                       % self.res_type)
@@ -121,14 +121,3 @@ class _Get(object):
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
         self.esp += 1
-
-# ____________________________________________________________
-# CallDescrs
-
-class SignedCallDescr(descr.BaseIntCallDescr):
-    _clsname = 'SignedCallDescr'
-    def get_result_size(self, translate_support_code):
-        return symbolic.get_size(lltype.Signed, translate_support_code)
-
-FloatCallDescr = descr.FloatCallDescr
-VoidCallDescr = descr.VoidCallDescr
