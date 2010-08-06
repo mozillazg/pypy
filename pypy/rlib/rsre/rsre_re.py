@@ -110,7 +110,7 @@ class RSREMatch(object):
         for group in groups:
             frm, to = self.span(group)
             if 0 <= frm <= to:
-                result.append(self._ctx.string[frm:to])
+                result.append(self._ctx._string[frm:to])
             else:
                 result.append(None)
         if len(result) > 1:
@@ -160,7 +160,7 @@ class RSREMatch(object):
 
     @property
     def string(self):
-        return self._ctx.string
+        return self._ctx._string
 
     @property
     def pos(self):
