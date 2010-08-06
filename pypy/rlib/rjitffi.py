@@ -83,9 +83,9 @@ class _Get(object):
         if self.res_type == 'i':
             cls = SignedCallDescr
         elif self.res_type == 'f':
-            cls = descr.FloatCallDescr
+            cls = FloatCallDescr
         elif self.res_type == 'v':
-            cls = descr.VoidCallDescr
+            cls = VoidCallDescr
         else:
             raise NotImplementedError('Unknown type of descr: %s'
                                       % self.res_type)
@@ -129,3 +129,6 @@ class SignedCallDescr(descr.BaseIntCallDescr):
     _clsname = 'SignedCallDescr'
     def get_result_size(self, translate_support_code):
         return symbolic.get_size(lltype.Signed, translate_support_code)
+
+FloatCallDescr = descr.FloatCallDescr
+VoidCallDescr = descr.VoidCallDescr
