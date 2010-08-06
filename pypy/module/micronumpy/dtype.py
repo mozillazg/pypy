@@ -70,11 +70,9 @@ def descriptor(code, name, ll_type):
 
         def setitem(self, data, index, value):
             array = rffi.cast(lltype.Ptr(arraytype), data)
-            #array[index] = rffi.cast(ll_type, value)
-            array[index] = value # XXX: let's see if this works
+            array[index] = value
 
         def alloc(self, count):
-            #return lltype.malloc(arraytype, count, flavor='raw')
             mem = lltype.malloc(arraytype, count, flavor='raw')
             return rffi.cast(storage_type, mem)
 
@@ -84,6 +82,12 @@ def descriptor(code, name, ll_type):
         def wrappable_dtype(self):
             assert _w_descriptors[self.typeid].dtype is self, "This better be true."
             return _w_descriptors[self.typeid]
+
+        def cast(self, data):
+            return rffi.cast(lltype.Ptr(arraytype), data)
+
+        def dump(self, data):
+            return ', '.join([str(x) for x in self.cast(data)])
 
     for type in [lltype.Signed, lltype.Float]:
         def get_type(self, data, index):
