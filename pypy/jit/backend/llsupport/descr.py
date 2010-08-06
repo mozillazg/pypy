@@ -308,6 +308,11 @@ class NonGcPtrCallDescr(BaseIntCallDescr):
     def get_result_size(self, translate_support_code):
         return symbolic.get_size_of_ptr(translate_support_code)
 
+class SignedCallDescr(BaseIntCallDescr):
+    _clsname = 'SignedCallDescr'
+    def get_result_size(self, translate_support_code):
+        return symbolic.get_size(lltype.Signed, translate_support_code)
+
 class GcPtrCallDescr(BaseCallDescr):
     _clsname = 'GcPtrCallDescr'
     _return_type = history.REF
