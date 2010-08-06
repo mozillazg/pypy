@@ -756,10 +756,10 @@ def sre_at(ctx, atcode, ptr):
         return prevptr < 0 or rsre_char.is_linebreak(ctx.str(prevptr))
 
     elif atcode == AT_BOUNDARY:
-        return at_boundary(ctx, ptr, rsre_char.is_word)
+        return at_boundary(ctx, ptr)
 
     elif atcode == AT_NON_BOUNDARY:
-        return at_non_boundary(ctx, ptr, rsre_char.is_word)
+        return at_non_boundary(ctx, ptr)
 
     elif atcode == AT_END:
         remaining_chars = ctx.end - ptr
@@ -773,36 +773,41 @@ def sre_at(ctx, atcode, ptr):
         return ptr == ctx.end
 
     elif atcode == AT_LOC_BOUNDARY:
-        return at_boundary(ctx, ptr, rsre_char.is_loc_word)
+        return at_loc_boundary(ctx, ptr)
 
     elif atcode == AT_LOC_NON_BOUNDARY:
-        return at_non_boundary(ctx, ptr, rsre_char.is_loc_word)
+        return at_loc_non_boundary(ctx, ptr)
 
     elif atcode == AT_UNI_BOUNDARY:
-        return at_boundary(ctx, ptr, rsre_char.is_uni_word)
+        return at_uni_boundary(ctx, ptr)
 
     elif atcode == AT_UNI_NON_BOUNDARY:
-        return at_non_boundary(ctx, ptr, rsre_char.is_uni_word)
+        return at_uni_non_boundary(ctx, ptr)
 
     return False
 
-@specializectx
-def at_boundary(ctx, ptr, word_checker):
-    if ctx.end == 0:
-        return False
-    prevptr = ptr - 1
-    that = prevptr >= 0 and word_checker(ctx.str(prevptr))
-    this = ptr < ctx.end and word_checker(ctx.str(ptr))
-    return this != that
+def _make_boundary(word_checker):
+    @specializectx
+    def at_boundary(ctx, ptr):
+        if ctx.end == 0:
+            return False
+        prevptr = ptr - 1
+        that = prevptr >= 0 and word_checker(ctx.str(prevptr))
+        this = ptr < ctx.end and word_checker(ctx.str(ptr))
+        return this != that
+    @specializectx
+    def at_non_boundary(ctx, ptr):
+        if ctx.end == 0:
+            return False
+        prevptr = ptr - 1
+        that = prevptr >= 0 and word_checker(ctx.str(prevptr))
+        this = ptr < ctx.end and word_checker(ctx.str(ptr))
+        return this == that
+    return at_boundary, at_non_boundary
 
-@specializectx
-def at_non_boundary(ctx, ptr, word_checker):
-    if ctx.end == 0:
-        return False
-    prevptr = ptr - 1
-    that = prevptr >= 0 and word_checker(ctx.str(prevptr))
-    this = ptr < ctx.end and word_checker(ctx.str(ptr))
-    return this == that
+at_boundary, at_non_boundary = _make_boundary(rsre_char.is_word)
+at_loc_boundary, at_loc_non_boundary = _make_boundary(rsre_char.is_loc_word)
+at_uni_boundary, at_uni_non_boundary = _make_boundary(rsre_char.is_uni_word)
 
 # ____________________________________________________________
 
