@@ -438,9 +438,9 @@ class TestMicroArray(object):
         ar = array(space, w_data, w_dtype=w_int_descr, order='C') #C for C not column
         for i in range(memlen):
             array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
-            assert array_element == row_major[i]
+            assert array_element == row_major[i], "Array Data: %r, Array Index: %d (%s != %s)" % (ar.dtype.dtype.dump(ar.data), i, array_element, row_major[i])
 
         ar = array(space, w_data, w_dtype=w_int_descr, order='F')
         for i in range(memlen):
             array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
-            assert array_element == column_major[i]
+            assert array_element == column_major[i], "Array Data: %r, Array Index: %d (%s != %s)" % (ar.dtype.dtype.dump(ar.data), i, array_element, row_major[i])
