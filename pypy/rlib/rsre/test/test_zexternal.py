@@ -1,6 +1,6 @@
 import re
 from pypy.rlib.rsre.test.test_match import get_code
-from pypy.rlib.rsre import rsre
+from pypy.rlib.rsre import rsre_core
 
 
 def test_external_match():
@@ -31,11 +31,11 @@ def run_external(t, use_search):
         raise Exception("this should have been a syntax error")
     #
     if use_search:
-        result = rsre.search(obj, s)
+        result = rsre_core.search(obj, s)
     else:
         # Emulate a poor man's search() with repeated match()s
         for i in range(len(s)+1):
-            result = rsre.match(obj, s, start=i)
+            result = rsre_core.match(obj, s, start=i)
             if result:
                 break
     #
