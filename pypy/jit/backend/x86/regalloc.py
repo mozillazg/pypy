@@ -637,7 +637,7 @@ class RegAlloc(object):
 
     def consider_call_assembler(self, op, guard_op):
         portal_calldescr = self.assembler.cpu.portal_calldescr
-        assert portal_calldescr is not None
+        assert portal_calldescr is not None # XXX is it correct?
         size = portal_calldescr.get_result_size(self.translate_support_code)
         #
         descr = op.descr
