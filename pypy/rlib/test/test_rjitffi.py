@@ -2,6 +2,8 @@ from pypy.rlib import rjitffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 from pypy.rpython.lltypesystem import rffi, lltype
+from pypy.rpython.test.test_llinterp import interpret
+from pypy.jit.backend.llsupport import descr
 
 import py
 
@@ -186,3 +188,48 @@ class TestJitffi(object):
         py.test.raises(ValueError, lib.get, 'fvoid', ['i','xxxfoo888baryyy'])
         py.test.raises(ValueError, lib.get, 'fvoid', ['xxxfoo888baryyy'],'i')
         py.test.raises(ValueError, lib.get, 'fvoid', [], 'xxxfoo888baryyy')
+
+class TestTranslation(object):
+    @staticmethod
+    def preprare_c_example():
+        from pypy.tool.udir import udir
+        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib.c")
+        c_file.write(py.code.Source('''
+        int add_int(int a, int b)
+        {
+           return a+b;
+        }
+        float add_float(float a, float b)
+        {
+           return a+b;
+        }
+        void ret_void(int a)
+        {
+        }     
+        '''
+        ))
+
+        symbols = ['add_int', 'add_float', 'ret_void']
+        eci = ExternalCompilationInfo(export_symbols=symbols)
+
+        return str(platform.compile([c_file], eci, 'x', standalone=False))
+
+    def setup_class(cls):
+        cls.lib_name = cls.preprare_c_example()
+
+    def test_get_calldescr(self):
+        lib = rjitffi.CDLL(self.lib_name)
+        def ret_int():
+            func = lib.get('add_int', ['i', 'i'], 'i')
+            assert isinstance(func.get_calldescr(), descr.SignedCallDescr)
+        interpret(ret_int, [])
+
+        def ret_float():
+            func = lib.get('add_float', ['f', 'f'], 'f')
+            assert isinstance(func.get_calldescr(), descr.FloatCallDescr)
+        interpret(ret_float, [])
+
+        def ret_void():
+            func = lib.get('ret_void', ['i'], 'v')
+            assert isinstance(func.get_calldescr(), descr.VoidCallDescr)
+        interpret(ret_void, [])
