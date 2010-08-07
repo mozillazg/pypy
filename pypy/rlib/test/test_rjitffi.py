@@ -11,7 +11,7 @@ class TestJitffi(object):
     @staticmethod
     def preprare_c_example():
         from pypy.tool.udir import udir
-        c_file = udir.ensure("test_jitffi", dir=True).join("xlib.c")
+        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib.c")
         c_file.write(py.code.Source('''
         int add_integers(int a, int b)
         {
