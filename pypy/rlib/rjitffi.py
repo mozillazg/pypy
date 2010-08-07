@@ -8,6 +8,9 @@ from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
 
 GLOBAL_CPU = get_cpu()
+GLOBAL_CPU.portal_calldescr = None
+GLOBAL_CPU._vtable_to_descr_dict = None
+GLOBAL_CPU.setup()
 
 class CDLL(object):
     def __init__(self, name, load=True):
