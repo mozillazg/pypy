@@ -71,13 +71,13 @@ class W_Get(Wrappable):
 
         if res_type == 'i':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_int, cache=True)
+                                     res_type, self.wrap_int_w, cache=True)
         elif res_type == 'f':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_float, cache=True)
+                                     res_type, self.wrap_float_w, cache=True)
         elif res_type == 'v':
             self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_void, cache=True)
+                                     res_type, self.wrap_void_w, cache=True)
         else:
             raise OperationError(
                     space.w_ValueError,
@@ -119,9 +119,9 @@ class W_Get(Wrappable):
                 i += 1
         return self.rget.call()
 
-    wrap_int = lambda self, value: self.space.wrap(value)
-    wrap_float = lambda self, value: self.space.wrap(value)
-    wrap_void = lambda self, value: self.space.wrap(value)
+    wrap_int_w = lambda self, value: self.space.wrap(value)
+    wrap_float_w = lambda self, value: self.space.wrap(value)
+    wrap_void_w = lambda self, w_value: value
 
 #def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
 #    try:
@@ -132,5 +132,8 @@ class W_Get(Wrappable):
 W_Get.typedef = TypeDef(
         'Get',
         #__new__ = interp2app(W_Get___new__, unwrap_spec=[ObjSpace, W_Root, W_Root, W_Root, str, W_Root, str]),
-        call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root])
+        call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root]),
+        wrap_int = interp2app(W_Get.wrap_int_w, unwrap_spec=['self', int]),
+        wrap_float = interp2app(W_Get.wrap_float_w, unwrap_spec=['self', float]),
+        wrap_void = interp2app(W_Get.wrap_void_w, unwrap_spec=['self', W_Root])
 )
