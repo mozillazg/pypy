@@ -5,7 +5,7 @@ class ResOperation(object):
     """The central ResOperation class, representing one operation."""
 
     # for 'guard_*'
-    fail_args = []
+    fail_args = [] # XXX is it correct?
 
     # debug
     name = ""
