@@ -52,11 +52,16 @@ class TestJitffi(object):
             int c;
             c = a + b;
         }
+        int return_ptrvalue(int *a)
+        {
+            return *a;
+        }
         '''
         ))
 
         symbols = ['add_integers', 'add_floats', 'add_intfloat',
-                   'return_float', 'max3', 'fvoid', 'return_void']
+                   'return_float', 'max3', 'fvoid', 'return_void',
+                   'return_ptrvalue']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x1', standalone=False))
@@ -166,6 +171,16 @@ class TestJitffi(object):
         func.push_int(0)
         func.push_float(1.3)
         assert func.call() == 1
+
+    def test_ptrargs(self):
+        lib = rjitffi.CDLL(self.lib_name)
+
+        func = lib.get('return_ptrvalue', ['p'], 'i', self.push_result)
+        intp = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
+        intp[0] = 5
+        func.push_ref(rffi.cast(lltype.Signed, intp))
+        lltype.free(intp, flavor='raw')
+        assert func.call() == 5
 
     def test_nocache(self):
         lib = rjitffi.CDLL(self.lib_name)
