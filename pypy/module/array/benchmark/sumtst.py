@@ -1,5 +1,5 @@
 #!/usr/bin/python
-from array import array, simple_array
+from array import array
 
 #img=array('d',(0,)*640*480);
 def f(img):
@@ -10,12 +10,9 @@ def f(img):
         i+=1
     return l
 
-if True:
-    img=array('d', '\x00'*640*480)
-    #img=array('d', [0]*640*480)
-    #img=array('d', (0,))*(640*480)
-else:
-    img=simple_array(640*480)
+img=array('d', (0,)) * (640*480)
+#img=array('d', [0]*640*480)
+#img=array('d', (0,))*(640*480)
     
 for l in range(500): f(img)
 #print f(img)
