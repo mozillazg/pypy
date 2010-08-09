@@ -52,16 +52,34 @@ class TestJitffi(object):
             int c;
             c = a + b;
         }
-        int return_ptrvalue(int *a)
+        int return_ptrvalue(int a, int *b)
         {
-            return *a;
+            return a+(*b);
+        }
+        int sum_intarray(int *a)
+        {
+            int i;
+            int sum = 0;
+            for(i=0; i<5; i++)
+            {
+                sum += *a+i;
+            }
+            return sum;
+        }
+        void a2b(char *txt)
+        {
+            int i;
+            for(i=0; txt[i] != '\0'; i++)
+            {
+                if (txt[i] == 'a') txt[i] = 'b';
+            }
         }
         '''
         ))
 
         symbols = ['add_integers', 'add_floats', 'add_intfloat',
                    'return_float', 'max3', 'fvoid', 'return_void',
-                   'return_ptrvalue']
+                   'return_ptrvalue', 'sum_intarray', 'a2b']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x1', standalone=False))
@@ -175,12 +193,34 @@ class TestJitffi(object):
     def test_ptrargs(self):
         lib = rjitffi.CDLL(self.lib_name)
 
-        func = lib.get('return_ptrvalue', ['p'], 'i', self.push_result)
-        intp = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
-        intp[0] = 5
-        func.push_ref(rffi.cast(lltype.Signed, intp))
-        lltype.free(intp, flavor='raw')
-        assert func.call() == 5
+        func = lib.get('return_ptrvalue', ['i', 'p'], 'i', self.push_result)
+        func.push_int(20)
+        try:
+            intp = lltype.malloc(rffi.INTP.TO, 1, flavor='raw')
+            intp[0] = 10
+            func.push_ref(rffi.cast(lltype.Signed, intp))
+            assert func.call() == 30
+        finally:
+            lltype.free(intp, flavor='raw')
+
+        func = lib.get('sum_intarray', ['p'], 'i', self.push_result)
+        intp = lltype.malloc(rffi.INTP.TO, 5, flavor='raw')
+        try:
+            for i in xrange(5):
+                intp[i] = i
+            func.push_ref(rffi.cast(lltype.Signed, intp))
+            assert func.call() == 10
+        finally:
+            lltype.free(intp, flavor='raw')
+
+        func = lib.get('a2b', ['p'], push_result=self.push_result)
+        charp = rffi.str2charp('xaxaxa')
+        try:
+            func.push_ref(rffi.cast(lltype.Signed, charp))
+            func.call()
+            assert rffi.charp2str(charp) == 'xbxbxb'
+        finally:
+            rffi.free_charp(charp)
 
     def test_nocache(self):
         lib = rjitffi.CDLL(self.lib_name)
