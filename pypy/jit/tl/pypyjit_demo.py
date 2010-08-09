@@ -42,7 +42,7 @@ try:
     def f(img):
         i=0
         sa=0
-        while i<4:
+        while i < img.__len__():
             sa+=img[i]
             i+=1
         return sa

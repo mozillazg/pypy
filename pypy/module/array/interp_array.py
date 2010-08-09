@@ -13,7 +13,7 @@ from pypy.objspace.std.stdtypedef import SMM, StdTypeDef
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.model import W_Object
 from pypy.interpreter.argument import Arguments, Signature
-
+from pypy.module._file.interp_file import W_File
 
 def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
     if len(w_args.arguments_w) > 0:
@@ -502,7 +502,7 @@ def make_array(mytype):
         return self.space.wrap(s)
 
     def array_fromfile__Array_ANY_ANY(space, self, w_f, w_n):
-        if space.type(w_f).name != 'file':
+        if not isinstance(w_f, W_File):
             msg = "arg1 must be open file"
             raise OperationError(space.w_TypeError, space.wrap(msg))
         n = space.int_w(w_n)
@@ -522,7 +522,7 @@ def make_array(mytype):
         array_fromstring__Array_ANY(space, self, w_item)
 
     def array_tofile__Array_ANY(space, self, w_f):
-        if space.type(w_f).name != 'file':
+        if not isinstance(w_f, W_File):
             msg = "arg1 must be open file"
             raise OperationError(space.w_TypeError, space.wrap(msg))
         w_s = array_tostring__Array(space, self)
