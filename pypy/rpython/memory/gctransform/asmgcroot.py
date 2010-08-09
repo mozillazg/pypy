@@ -18,6 +18,7 @@ import sys
 #  The .s file produced by GCC is then parsed by trackgcroot.py.
 #
 
+IS_64_BITS = sys.maxint > 2147483647
 
 class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
     _asmgcc_save_restore_arguments = None
@@ -465,16 +466,15 @@ class ShapeDecompressor:
 #   - frame address (actually the addr of the retaddr of the current function;
 #                    that's the last word of the frame in memory)
 #
-"""
-CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
-INDEX_OF_EBP      = 3
-FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
-"""
 
-# FIXME: hard-coded for 64-bit
-CALLEE_SAVED_REGS = 6
-INDEX_OF_EBP      = 5
-FRAME_PTR         = CALLEE_SAVED_REGS
+if IS_64_BITS:
+    CALLEE_SAVED_REGS = 6
+    INDEX_OF_EBP      = 5
+    FRAME_PTR         = CALLEE_SAVED_REGS
+else:
+    CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
+    INDEX_OF_EBP      = 3
+    FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
 
 ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
