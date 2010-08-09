@@ -11,7 +11,7 @@ class TestJitffi(object):
     @staticmethod
     def preprare_c_example():
         from pypy.tool.udir import udir
-        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib.c")
+        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib1.c")
         c_file.write(py.code.Source('''
         int add_integers(int a, int b)
         {
@@ -59,7 +59,7 @@ class TestJitffi(object):
                    'return_float', 'max3', 'fvoid', 'return_void']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
-        return str(platform.compile([c_file], eci, 'x', standalone=False))
+        return str(platform.compile([c_file], eci, 'x1', standalone=False))
 
     def setup_class(cls):
         cls.lib_name = cls.preprare_c_example()
@@ -193,7 +193,7 @@ class TestTranslation(object):
     @staticmethod
     def preprare_c_example():
         from pypy.tool.udir import udir
-        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib.c")
+        c_file = udir.ensure("test_rjitffi", dir=True).join("xlib2.c")
         c_file.write(py.code.Source('''
         int add_int(int a, int b)
         {
@@ -212,7 +212,7 @@ class TestTranslation(object):
         symbols = ['add_int', 'add_float', 'ret_void']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
-        return str(platform.compile([c_file], eci, 'x', standalone=False))
+        return str(platform.compile([c_file], eci, 'x2', standalone=False))
 
     def setup_class(cls):
         cls.lib_name = cls.preprare_c_example()
