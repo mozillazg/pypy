@@ -61,6 +61,8 @@ class _Get(object):
                 bargs.append(BoxInt())
             elif arg == 'f':
                 bargs.append(BoxFloat())
+            elif arg == 'p':
+                bargs.append(BoxInt())
             else:
                 raise ValueError(arg)
 
@@ -120,6 +122,7 @@ class _Get(object):
         self.cpu.set_future_value_int(self.esp, value)
         self.esp += 1
     push_funcaddr = push_int
+    push_ref = push_int
 
     def push_float(self, value):
         self.cpu.set_future_value_float(self.esp, value)
