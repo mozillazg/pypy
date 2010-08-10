@@ -41,6 +41,8 @@ int PYPY_MAIN_FUNCTION(int argc, char *argv[])
     pypy_Windows_startup();
 #endif
 
+    debug_memrecord_startup();
+
     errmsg = RPython_StartupCode();
     if (errmsg) goto error;
 

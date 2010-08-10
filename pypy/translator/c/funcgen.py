@@ -20,6 +20,7 @@ PyObjPtr = Ptr(PyObject)
 LOCALVAR = 'l_%s'
 
 KEEP_INLINED_GRAPHS = False
+DMR_COUNT = 0
 
 class FunctionCodeGenerator(object):
     """
@@ -480,6 +481,12 @@ class FunctionCodeGenerator(object):
         T = self.lltypemap(op.args[-1])
         if T is Void:
             result = '/* %s */' % result
+        elif (isinstance(T, Ptr) and T.TO._gckind == 'gc' and
+              self.lltypemap(op.args[0]).TO._gckind == 'gc'):
+            global DMR_COUNT
+            DMR_COUNT += 1
+            result = 'RPyWrite(%d, %s, %s);' % (
+                DMR_COUNT, targetexpr, newvalue)
         return result
 
     def OP_GETFIELD(self, op, ampersand=''):
