@@ -7,27 +7,29 @@ void debug_memrecord_startup(void);
 
 struct debug_memrecord_s {
   long a;
-  void *b, *c, *d;
+  void *b, *c, *d, *e;
 };
 
-#define DEBUG_MEMREC(a1, b1, c1, d1)  do {                      \
+#define DEBUG_MEMREC(a1, b1, c1, d1, e1)  do {                  \
   struct debug_memrecord_s _dmr_s;                              \
   _dmr_s.a = a1;                                                \
   _dmr_s.b = b1;                                                \
   _dmr_s.c = c1;                                                \
   _dmr_s.d = d1;                                                \
+  _dmr_s.e = e1;                                                \
   fwrite_unlocked(&_dmr_s, sizeof(struct debug_memrecord_s), 1, \
                   debug_memrecord_f);                           \
 } while(0)
 
-#define RPyWrite(posid, targetexpr, newvalue)                   \
-  DEBUG_MEMREC(posid, &(targetexpr), targetexpr, newvalue);     \
+#define RPyWrite(posid, container, targetexpr, newvalue)        \
+  DEBUG_MEMREC(posid, *(void**)(container), &(targetexpr),      \
+               targetexpr, newvalue);                           \
   targetexpr = newvalue
 
 #undef OP_RAW_MEMCLEAR
-#define OP_RAW_MEMCLEAR(p, size, r)                     \
-  memset((void*)p, 0, size);                            \
-  DEBUG_MEMREC(0, (void*)p, (void*)size, (void*)0)
+#define OP_RAW_MEMCLEAR(p, size, r)                             \
+  memset((void*)p, 0, size);                                    \
+  DEBUG_MEMREC(-1, (void*)p, (void*)size, (void*)0, (void*)0)
 
 /************************************************************/
 

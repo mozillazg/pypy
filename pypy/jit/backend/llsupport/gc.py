@@ -623,3 +623,7 @@ def get_ll_description(gcdescr, translator=None, rtyper=None):
         raise NotImplementedError("GC transformer %r not supported by "
                                   "the JIT backend" % (name,))
     return cls(gcdescr, translator, rtyper)
+
+
+debug_memrec = rffi.llexternal('DEBUG_MEMREC', [lltype.Signed]*5,
+                               lltype.Void, _nowrapper=True)

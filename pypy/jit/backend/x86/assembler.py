@@ -221,6 +221,7 @@ class Assembler386(object):
                 self._build_float_constants()
             if hasattr(gc_ll_descr, 'get_malloc_fixedsize_slowpath_addr'):
                 self._build_malloc_fixedsize_slowpath()
+            self._build_debug_memrecord()
             s = os.environ.get('PYPYLOG')
             if s:
                 if s.find(':') != -1:
@@ -262,6 +263,11 @@ class Assembler386(object):
             addr[i] = data[i]
         self.float_const_neg_addr = float_constants
         self.float_const_abs_addr = float_constants + 16
+
+    def _build_debug_memrecord(self):
+        fptr = llhelper(lltype.Ptr(FOUR_INT_ARGS),
+                        debug_memrecord_setfield_gc)
+        self.debug_memrecord_setfield_gc_code = rffi.cast(lltype.Signed, fptr)
 
     def _build_malloc_fixedsize_slowpath(self):
         # ---------- first helper for the slow path of malloc ----------
@@ -1079,6 +1085,24 @@ class Assembler386(object):
         if isinstance(value_loc, RegLoc) and value_loc.is_xmm:
             self.mc.MOVSD(dest_addr, value_loc)
         elif size == WORD:
+            #
+            if op.args[0].type == REF and op.args[1].type == REF:
+                self.mc.PUSH(eax)
+                self.mc.PUSH(ecx)
+                self.mc.PUSH(edx)
+                self.mc.PUSH(value_loc)
+                self.mc.PUSH(ofs_loc)
+                self.mc.PUSH(base_loc)
+                self.mc.PUSH(imm(self.mc.tell()))
+                self.mc.CALL(imm(self.debug_memrecord_setfield_gc_code))
+                self.mc.POP(eax)
+                self.mc.POP(eax)
+                self.mc.POP(eax)
+                self.mc.POP(eax)
+                self.mc.POP(edx)
+                self.mc.POP(ecx)
+                self.mc.POP(eax)
+            #
             self.mc.MOV(dest_addr, value_loc)
         elif size == 2:
             self.mc.MOV16(dest_addr, value_loc)
@@ -1856,3 +1880,13 @@ def mem(loc, offset):
 
 def heap(addr):
     return AddressLoc(ImmedLoc(addr), ImmedLoc(0), 0, 0)
+
+
+from pypy.jit.backend.llsupport.gc import debug_memrec
+FOUR_INT_ARGS = lltype.FuncType([lltype.Signed]*4, lltype.Void)
+def debug_memrecord_setfield_gc(asmaddr, base, ofs, value):
+    debug_memrec(asmaddr,
+                 rffi.cast(rffi.CArrayPtr(lltype.Signed), base)[0],
+                 base + ofs,
+                 rffi.cast(rffi.CArrayPtr(lltype.Signed), base + ofs)[0],
+                 value)

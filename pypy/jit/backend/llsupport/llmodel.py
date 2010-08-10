@@ -18,6 +18,7 @@ from pypy.jit.backend.llsupport.descr import get_call_descr
 from pypy.jit.backend.llsupport.descr import BaseIntCallDescr, GcPtrCallDescr
 from pypy.jit.backend.llsupport.descr import FloatCallDescr, VoidCallDescr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+from pypy.jit.backend.llsupport.gc import debug_memrec
 
 
 class AbstractLLCPU(AbstractCPU):
@@ -302,8 +303,15 @@ class AbstractLLCPU(AbstractCPU):
         self.gc_ll_descr.do_write_barrier(gcref, newvalue)
         # --- start of GC unsafe code (no GC operation!) ---
         items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), ofs)
+        items = rffi.ptradd(items, itemindex * 4)     # XXX
         items = rffi.cast(rffi.CArrayPtr(lltype.Signed), items)
-        items[itemindex] = self.cast_gcref_to_int(newvalue)
+        oldvalue = items[0]
+        items[0] = self.cast_gcref_to_int(newvalue)
+        debug_memrec(6,
+                     rffi.cast(rffi.CArrayPtr(lltype.Signed), gcref)[0],
+                     rffi.cast(lltype.Signed, items),
+                     oldvalue,
+                     items[0])
         # --- end of GC unsafe code ---
 
     @specialize.argtype(2)
@@ -399,7 +407,13 @@ class AbstractLLCPU(AbstractCPU):
         # --- start of GC unsafe code (no GC operation!) ---
         fieldptr = rffi.ptradd(rffi.cast(rffi.CCHARP, struct), ofs)
         fieldptr = rffi.cast(rffi.CArrayPtr(lltype.Signed), fieldptr)
+        oldvalue = fieldptr[0]
         fieldptr[0] = self.cast_gcref_to_int(newvalue)
+        debug_memrec(5,
+                     rffi.cast(rffi.CArrayPtr(lltype.Signed), struct)[0],
+                     rffi.cast(lltype.Signed, fieldptr),
+                     oldvalue,
+                     fieldptr[0])
         # --- end of GC unsafe code ---
 
     @specialize.argtype(1)
