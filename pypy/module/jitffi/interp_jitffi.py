@@ -119,9 +119,14 @@ class W_Get(Wrappable):
                 i += 1
         return self.rget.call()
 
-    wrap_int_w = lambda self, value: self.space.wrap(value)
-    wrap_float_w = lambda self, value: self.space.wrap(value)
-    wrap_void_w = lambda self, w_value: value
+    def wrap_int_w(self, value):
+        return self.space.wrap(value)
+
+    def wrap_float_w(self, value):
+        return self.space.wrap(value)
+
+    def wrap_void_w(self, w_value):
+        return w_value
 
 #def W_Get___new__(space, w_type, cpu, lib, func, args_type, res_type):
 #    try:
