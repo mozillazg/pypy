@@ -4,6 +4,8 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.backend.x86.arch import WORD, IS_X86_32, IS_X86_64
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib.rarithmetic import intmask
+from pypy.jit.metainterp.history import FLOAT
 
 #
 # This module adds support for "locations", which can be either in a Const,
@@ -144,6 +146,27 @@ class AddressLoc(AssemblerLocation):
     def value_m(self):
         return self.loc_m
 
+class ConstFloatLoc(AssemblerLocation):
+    # XXX: We have to use this class instead of just AddressLoc because
+    # AddressLoc is "untyped" and also we to have need some sort of unique
+    # identifier that we can use in _getregkey (for jump.py)
+
+    _immutable_ = True
+
+    width = 8
+
+    def __init__(self, address, const_id):
+        self.value = address
+        self.const_id = const_id
+
+    def _getregkey(self):
+        # XXX: 1000 is kind of magic: We just don't want to be confused
+        # with any registers
+        return 1000 + self.const_id
+
+    def location_code(self):
+        return 'j'
+
 REGLOCS = [RegLoc(i, is_xmm=False) for i in range(16)]
 XMMREGLOCS = [RegLoc(i, is_xmm=True) for i in range(16)]
 eax, ecx, edx, ebx, esp, ebp, esi, edi, r8, r9, r10, r11, r12, r13, r14, r15 = REGLOCS
@@ -252,7 +275,7 @@ class LocationCodeBuilder(object):
                 if code == possible_code:
                     val = getattr(loc, "value_" + possible_code)()
                     if possible_code == 'i':
-                        offset = val - (self.tell() + 5)
+                        offset = intmask(val - (self.tell() + 5))
                         if rx86.fits_in_32bits(offset):
                             _rx86_getattr(self, name + "_l")(val)
                         else:

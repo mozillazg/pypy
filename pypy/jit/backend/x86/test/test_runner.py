@@ -1,8 +1,9 @@
 import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr, rclass
+from pypy.rpython.annlowlevel import llhelper
 from pypy.jit.metainterp.history import ResOperation, LoopToken
-from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         Box, BoxFloat, BasicFailDescr)
+from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstFloat,
+                                         ConstPtr, Box, BoxFloat, BasicFailDescr)
 from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.backend.x86.arch import WORD
 from pypy.jit.backend.llsupport import symbolic
@@ -376,6 +377,19 @@ class TestX86(LLtypeBackendTest):
         res = self.cpu.get_latest_value_int(0)
         assert res == 20
 
+    def test_call_with_const_floats(self):
+        def func(f1, f2):
+            return f1 + f2
+
+        FUNC = self.FuncType([lltype.Float, lltype.Float], lltype.Float)
+        FPTR = self.Ptr(FUNC)
+        calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+        func_ptr = llhelper(FPTR, func)
+        funcbox = self.get_funcbox(self.cpu, func_ptr)
+        res = self.execute_operation(rop.CALL, [funcbox, ConstFloat(1.5), ConstFloat(2.5)], 'float', descr=calldescr)
+        assert res.value == 4.0
+
+
 class TestX86OverflowMC(TestX86):
 
     def setup_method(self, meth):
@@ -484,8 +498,9 @@ class TestDebuggingAssembler(object):
         self.cpu.set_future_value_int(0, 0)
         self.cpu.execute_token(ops.token)
         # check debugging info
-        assert self.cpu.assembler.loop_names == ["xyz"]
-        assert self.cpu.assembler.loop_run_counter.getitem(0) == 10
+        name, struct = self.cpu.assembler.loop_run_counters[0]
+        assert name == 'xyz'
+        assert struct.i == 10
         self.cpu.finish_once()
         lines = py.path.local(self.logfile + ".count").readlines()
         assert lines[0] == 'xyz:10\n'
