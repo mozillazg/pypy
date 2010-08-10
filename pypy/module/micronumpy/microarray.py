@@ -9,17 +9,12 @@ from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.gateway import NoneNotWrapped
 
 from pypy.module import micronumpy
-from pypy.module.micronumpy.array import BaseNumArray
-from pypy.module.micronumpy.array import infer_shape
 from pypy.module.micronumpy.dtype import null_data
 
-from pypy.module.micronumpy.array import stride_row, stride_column
-
-def size_from_shape(shape):
-    size = 1
-    for dimension in shape:
-        size *= dimension
-    return size
+from pypy.module.micronumpy.array import BaseNumArray
+from pypy.module.micronumpy.array import infer_shape
+from pypy.module.micronumpy.array import stride_row, stride_column, size_from_shape
+from pypy.module.micronumpy.array import normalize_slice_starts
 
 def index_w(space, w_index):
     return space.int_w(space.index(w_index))
@@ -28,24 +23,27 @@ class MicroIter(Wrappable):
     _immutable_fields_ = ['array']
     def __init__(self, array):
         self.array = array
-        self.i = array.offsets[0]
-
+        self.i = array.slice_starts[0]
+        self.step = array.slice_steps[0]
+        self.stop = self.i + array.shape[0]
+        self.ndim = len(self.array.shape)
     def descr_iter(self, space):
         return space.wrap(self)
     descr_iter.unwrap_spec = ['self', ObjSpace]
     
     def descr_next(self, space):
-        if self.i < self.array.shape[0]:
-            if len(self.array.shape) > 1:
+        if self.i < self.stop:
+            if self.ndim > 1:
                 ar = MicroArray(self.array.shape[1:],
                                 self.array.dtype,
                                 parent=self.array,
                                 strides=self.array.strides[1:],
-                                offsets=self.array.offsets + [self.i])
+                                slice_starts=self.array.offsets + [self.i],
+                                slice_steps=self.array.slice_steps[1:])
                 self.i += 1
                 return space.wrap(ar)
-            elif len(self.array.shape) == 1:
-                next = self.array.getitem(space, self.array.flatten_index([self.i]))
+            elif self.ndim == 1:
+                next = self.array.getitem(space, self.array.offset + self.array.flatten_index([self.i]))
                 self.i += 1
                 return next
             else:
@@ -111,14 +109,12 @@ class MicroArray(BaseNumArray):
         return space.wrap(self.shape[0])
     descr_len.unwrap_spec = ['self', ObjSpace]
 
-    def absolute_offset(self, index):
-        return self.offset + index # XXX: need more descriptive name
-
-    def getitem(self, space, index):
+    def getitem(self, space, offset):
+        """Helper function.
+           Grabs a value at an offset into the data."""
         try:
             dtype = self.dtype.dtype #XXX: kinda ugly
-            return dtype.w_getitem(space, self.data,
-                                   self.absolute_offset(index))
+            return dtype.w_getitem(space, self.data, offset)
         except IndexError, e:
             raise OperationError(space.w_IndexError,
                                  space.wrap("index out of bounds"))
@@ -127,24 +123,9 @@ class MicroArray(BaseNumArray):
         dtype = self.dtype.dtype #XXX: kinda ugly
         dtype.w_setitem(space, self.data, index, w_value) #maybe hang onto w_dtype separately?
 
-    def flatten_applevel_index(self, space, w_index):
-        try:
-            index = space.int_w(w_index)
-            return index
-        except OperationError, e:
-            if not e.match(space, space.w_TypeError):
-                raise
-
-        index = space.fixedview(w_index)
-        index = [index_w(space, w_x) for w_x in index]
-
-        # Normalize indices
-        for i in range(len(index)):
-            if index[i] < 0:
-                index[i] = self.shape[i] + index[i]
-        return self.flatten_index(index) 
-
     def flatten_index(self, index):
+        """Computes offset into subarray from all information.
+           Gives offset into subarray, not into data."""
         offset = 0
         for i in range(len(index)):
             offset += (self.slice_starts[i] + self.slice_steps[i] * index[i]) * self.strides[i]
@@ -172,8 +153,9 @@ class MicroArray(BaseNumArray):
         dtype = self.dtype.dtype
         try:
             index = space.int_w(space.index(w_index))
-            return (self.flatten_index([index]),
-                   self.slice_starts[1:], self.shape[1:], self.slice_steps[1:])
+            slice_starts = self.slice_starts[:]
+            slice_starts[0] += index
+            return slice_starts, self.shape[1:], self.slice_steps[1:]
         except OperationError, e:
             if e.match(space, space.w_TypeError): pass
             else:raise
@@ -217,28 +199,25 @@ class MicroArray(BaseNumArray):
                     raise OperationError(space.w_NotImplementedError,
                                          space.wrap("Don't support records yet.")) # XXX: and we may never
 
-            prefix = 0
-            while shape[prefix] == 1: prefix += 1
+            try:
+                slice_starts = normalize_slice_starts(slice_starts, self.shape) # XXX: could make in-place
+            except IndexError, e:
+                #print "starts=%s, shape=%s" % (slice_starts, shape)
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("invalid index"))
 
-            index = 0
-            for offset in slice_starts[:prefix]:
-                index += self.strides[offset]
+            return slice_starts, shape, slice_steps
 
-            return (self.flatten_index(slice_starts[:prefix]),
-                   slice_starts[prefix:], shape[prefix:], slice_steps[prefix:])
-
-        except IndexError, e:
-            raise OperationError(space.w_IndexError,
-                                 space.wrap("invalid index"))
+        finally: pass
 
     def descr_getitem(self, space, w_index):
-        offset, slice_starts, shape, slice_steps = self.index2slices(space, w_index)
+        slice_starts, shape, slice_steps = self.index2slices(space, w_index)
 
         size = size_from_shape(shape)
 
         if size == 1:
             return self.getitem(space,
-                                self.flatten_index(slice_starts))
+                                self.offset + self.flatten_index(slice_starts))
         else:
             ar = MicroArray(shape,
                             dtype=dtype,
@@ -247,19 +226,20 @@ class MicroArray(BaseNumArray):
                             slice_starts=slice_starts, # XXX: begin renaming slice_starts
                             slice_steps=slice_steps)
             return space.wrap(ar)
+    descr_getitem.unwrap_spec = ['self', ObjSpace, W_Root]
 
-    def set_slice_single_value(self, space, shape, offsets, steps, w_value):
+    def set_slice_single_value(self, space, offset, shape, offsets, steps, w_value):
         index = offsets
         if len(shape) > 1:
             for i in shape[0]:
-                self.set_slice(space, shape[1:], index, steps, w_value)
-                index[len(shape)-1] += 1 # XXX: reason
+                self.set_slice_single_value(space, offset, shape[1:], index, steps[1:], w_value)
+                index[len(index) - len(shape)] += steps[0] # XXX: reason
         else:
             dtype = self.dtype.dtype
             for i in range(0, shape[0]):
-                dtype.w_setitem(space, data,
-                                self.flatten_index(index),
-                                value)
+                self.set_slice_single_value(self, space,
+                                            offset, shape, index, steps,
+                                            w_value)
                 index[len(index)-1] += steps[0] # XXX: don't do steps in range
 
     def set_slice(self, space, shape, offsets, steps, w_value):
@@ -271,27 +251,41 @@ class MicroArray(BaseNumArray):
             if length == 1:
                 self.set_slice_single_value(space, shape, offsets, steps, w_value)
             else:
-                value_shape = infer_shape(space, w_value)
-                if value_shape != shape:
-                    raise OperationError(space.w_ValueError,
-                                         space.wrap("shape mismatch: objects cannot"
-                                                    " be broadcast to a single shape"))
                 raise OperationError(space.w_NotImplementedError,
                                      space.wrap("TODO"))
 
     def descr_setitem(self, space, w_index, w_value):
         dtype = self.dtype.dtype
 
-        offset, slice_starts, shape, slice_steps = self.index2slices(space, w_index)
+        slice_starts, shape, slice_steps = self.index2slices(space, w_index)
 
         size = size_from_shape(shape)
 
         if size == 1:
             self.setitem(space,
-                         offset + selfflatten_index(slice_starts), # XXX: yeah?
+                         self.offset + self.flatten_index(slice_starts),
                          w_value)
         else:
-            self.set_slice(space, shape, slice_starts, slice_steps, w_value)
+            try:
+                if space.int_w(space.len(w_value)) == 1:
+                    w_value = space.getitem(w_value, space.wrap(0))
+                value_shape = infer_shape(space, w_value)
+                value_size = size_from_shape(value_shape)
+
+            except OperationError, e:
+                if e.match(space, space.w_TypeError):
+                    value_size = 1
+                else: raise
+
+                if value_size == 1:
+                    pass # TODO: set one value many times
+
+                if value_shape != shape:
+                    raise OperationError(space.w_ValueError,
+                                         space.wrap("shape mismatch: objects cannot"
+                                                    " be broadcast to a single shape"))
+                else:
+                    self.set_slice(space, offset, shape, slice_starts, slice_steps, w_value)
 
     descr_setitem.unwrap_spec = ['self', ObjSpace, W_Root, W_Root]
 
