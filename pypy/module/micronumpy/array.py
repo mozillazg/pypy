@@ -20,6 +20,59 @@ def stride_column(shape, i):
         i -= 1
     return stride
 
+def size_from_shape(shape):
+    size = 1
+    for dimension in shape:
+        size *= dimension
+    return size
+
+def normalize_slice_starts(starts, shape):
+    result = starts[:]
+    for i in range(len(result)):
+        if result[i] < 0:
+            result[i] += shape[i]
+        elif result[i] >= shape[i]:
+            raise IndexError("invalid index")
+    return result
+
+def squeeze_slice(current_shape, starts, shape, step):
+    current_shape = current_shape[:]
+    i = 0
+    stop = len(shape)
+    while i < stop:
+        if shape[i] == 1:
+            if i == 0:
+                offset += starts[i] # FIXME: eh?
+                offset *= current_shape[i]
+            else:
+                step[i-1] += starts[i] # FIXME: eh?
+                step[i-1] *= current_shape[i]
+
+            del current_shape[i]
+            del starts[i] # XXX: I think this needs to be incorporated...
+            del shape[i]
+            del step[i]
+        else:
+            i += 1
+    return offset
+
+def shape_prefix(shape):
+    prefix = 0
+    try:
+        while shape[prefix] == 1: prefix += 1
+    except IndexError, e:
+        prefix = len(shape) # XXX - 1?
+
+    return prefix
+
+def shape_suffix(shape):
+    suffix = len(shape)
+    try:
+        while shape[suffix - 1] == 1: suffix -= 1
+    except IndexError, e:
+        suffix = 0
+    return suffix
+
 def validate_index(array, space, w_i):
     index_dimensionality = space.int_w(space.len(w_i))
     array_dimensionality = len(array.shape)

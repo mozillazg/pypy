@@ -400,8 +400,41 @@ class TestDType(object):
             assert typecode == infer_from_iterable(space, w_xs).typecode
 
 class TestMicroArray(object):
+    def test_index2strides(self, space):
+        from pypy.module.micronumpy.microarray import MicroArray
+        from pypy.module.micronumpy.dtype import int_descr
+
+        w_int_descr = int_descr.wrappable_dtype()
+
+        ar = MicroArray(shape=[2, 3, 4],
+                        dtype=w_int_descr)
+
+        w_index = space.wrap([0, 0, 1])
+        start, shape, step = ar.index2slices(space, w_index)
+
+        assert start == [0, 0, 1]
+        assert shape == [1, 1, 1]
+        assert step == [1, 1, 1]
+
+        ar = MicroArray(shape=[5, 4, 3, 2],
+                        dtype=w_int_descr)
+    
+        w_index = space.wrap([1, Ellipsis, Ellipsis, Ellipsis])
+        start, shape, step = ar.index2slices(space, w_index)
+
+        assert start == [1, 0, 0, 0]
+        assert shape == [1, 4, 3, 2]
+        assert step == [1, 1, 1, 1]
+
+        w_index = space.wrap([Ellipsis, 2, Ellipsis, Ellipsis])
+        start, shape, step = ar.index2slices(space, w_index)
+
+        assert start == [0, 2, 0, 0]
+        assert shape == [5, 1, 3, 2]
+        assert step == [1, 1, 1, 1]
+                        
     def test_strides(self, space):
-        from pypy.module.micronumpy.microarray import stride_row, stride_column
+        from pypy.module.micronumpy.array import stride_row, stride_column
 
         shape = (2, 3)
         assert stride_row(shape, 0) == 3
