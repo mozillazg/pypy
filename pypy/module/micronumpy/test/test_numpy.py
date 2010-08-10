@@ -402,9 +402,7 @@ class TestDType(object):
 class TestMicroArray(object):
     def test_index2strides(self, space):
         from pypy.module.micronumpy.microarray import MicroArray
-        from pypy.module.micronumpy.dtype import int_descr
-
-        w_int_descr = int_descr.wrappable_dtype()
+        from pypy.module.micronumpy.dtype import w_int_descr
 
         ar = MicroArray(shape=[2, 3, 4],
                         dtype=w_int_descr)
@@ -436,22 +434,45 @@ class TestMicroArray(object):
     def test_strides(self, space):
         from pypy.module.micronumpy.array import stride_row, stride_column
 
-        shape = (2, 3)
-        assert stride_row(shape, 0) == 3
-        assert stride_row(shape, 1) == 1
+        def strides(shape, f):
+            result = [0] * len(shape)
+            for i in range(len(shape)):
+                result[i] = f(shape, i)
+            return result
 
-        assert stride_column(shape, 0) == 1
-        assert stride_column(shape, 1) == 2
+        row_strides = lambda shape: strides(shape, stride_row)
+        column_strides = lambda shape: strides(shape, stride_column)
+
+        shape = (2, 3)
+        assert row_strides(shape) == [3, 1]
+        assert column_strides(shape) == [1, 2]
 
         shape = (5, 4, 3)
-        assert stride_row(shape, 0) == 12
-        assert stride_row(shape, 1) == 3
-        assert stride_row(shape, 2) == 1
+        assert row_strides(shape) == [12, 3, 1]
+        assert column_strides(shape) == [1, 5, 20]
 
-        assert stride_column(shape, 0) == 1
-        assert stride_column(shape, 1) == 5
-        assert stride_column(shape, 2) == 20
-        # TODO: more, N-dimensional too
+        shape = (7, 5, 3, 2)
+        assert row_strides(shape) == [30, 6, 2, 1]
+        assert column_strides(shape) == [1, 7, 35, 105]
+
+    def test_flatten_index(self, space):
+        from pypy.module.micronumpy.microarray import MicroArray
+        from pypy.module.micronumpy.dtype import w_int_descr
+
+        ar = MicroArray(shape=[7, 5, 3, 2],
+                        dtype=w_int_descr)
+        
+        offset = ar.flatten_index([0, 0, 0, 0])
+        assert offset == 0
+
+        offset = ar.flatten_index([0, 0, 0, 1])
+        assert offset == 1
+
+        offset = ar.flatten_index([0, 0, 1, 1])
+        assert offset == 3
+
+        offset = ar.flatten_index([0, 2, 0, 1])
+        assert offset == 13
 
     def test_memory_layout(self, space):
         from pypy.module.micronumpy.microarray import MicroArray

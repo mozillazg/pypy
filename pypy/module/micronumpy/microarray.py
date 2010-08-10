@@ -20,13 +20,14 @@ def index_w(space, w_index):
     return space.int_w(space.index(w_index))
 
 class MicroIter(Wrappable):
-    _immutable_fields_ = ['array']
+    _immutable_fields_ = ['array', 'step', 'stop', 'ndim']
     def __init__(self, array):
         self.array = array
         self.i = array.slice_starts[0]
         self.step = array.slice_steps[0]
         self.stop = self.i + array.shape[0]
         self.ndim = len(self.array.shape)
+
     def descr_iter(self, space):
         return space.wrap(self)
     descr_iter.unwrap_spec = ['self', ObjSpace]
@@ -52,18 +53,6 @@ class MicroIter(Wrappable):
         else:
             raise OperationError(space.w_StopIteration, space.wrap(""))
     descr_next.unwrap_spec = ['self', ObjSpace]
-
-    def __str__(self):
-        from pypy.rlib.rStringIO import RStringIO as StringIO
-        out = StringIO()
-        out.write('iterator(i=')
-        out.write(str(self.i))
-        out.write(', array=')
-        out.write(repr(self.array))
-        out.write(')')
-        result = out.getvalue()
-        out.close()
-        return result
 
 MicroIter.typedef = TypeDef('iterator',
                             __iter__ = interp2app(MicroIter.descr_iter),
@@ -93,7 +82,7 @@ class MicroArray(BaseNumArray):
 
         size = size_from_shape(shape)
 
-        self.strides = strides
+        self.strides = strides[:]
         stridelen = len(self.strides)
         for i in range(len(self.shape) - stridelen):
             self.strides.append(self.stride(stridelen + i)) # XXX calling self.stride repeatedly is a bit wasteful
@@ -202,7 +191,6 @@ class MicroArray(BaseNumArray):
             try:
                 slice_starts = normalize_slice_starts(slice_starts, self.shape) # XXX: could make in-place
             except IndexError, e:
-                #print "starts=%s, shape=%s" % (slice_starts, shape)
                 raise OperationError(space.w_IndexError,
                                      space.wrap("invalid index"))
 
