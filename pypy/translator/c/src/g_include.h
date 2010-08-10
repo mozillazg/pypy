@@ -61,6 +61,7 @@
 
 #ifdef PYPY_STANDALONE
 #  include "src/allocator.h"
+#  include "src/debug_memrecord.h"
 #  include "src/main.h"
 #endif
 
