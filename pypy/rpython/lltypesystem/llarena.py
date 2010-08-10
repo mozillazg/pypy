@@ -447,6 +447,9 @@ else:
     clear_large_memory_chunk = llmemory.raw_memclear
 
 
+clear_large_memory_chunk = llmemory.raw_memclear      # XXXXXX
+
+
 def llimpl_arena_malloc(nbytes, zero):
     addr = llmemory.raw_malloc(nbytes)
     if zero and bool(addr):
