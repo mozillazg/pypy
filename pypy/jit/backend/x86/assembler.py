@@ -20,7 +20,7 @@ from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          r12, r13, r14, r15,
                                          X86_64_SCRATCH_REG,
                                          X86_64_XMM_SCRATCH_REG,
-                                         RegLoc, StackLoc, ConstFloatLoc,
+                                         RegLoc, StackLoc,
                                          ImmedLoc, AddressLoc, imm)
 
 from pypy.rlib.objectmodel import we_are_translated, specialize
@@ -818,13 +818,8 @@ class Assembler386(object):
 
         for i in range(start, len(arglocs)):
             loc = arglocs[i]
-            # XXX: Should be much simplier to tell whether a location is a
-            # float! It's so ugly because we have to "guard" the access to
-            # .type with isinstance, since not all AssemblerLocation classes
-            # are "typed"
-            if ((isinstance(loc, RegLoc) and loc.is_xmm) or
-                (isinstance(loc, StackLoc) and loc.type == FLOAT) or
-                (isinstance(loc, ConstFloatLoc))):
+            # XXX: Should be much simplier to tell whether a location is a float!
+            if (isinstance(loc, RegLoc) and loc.is_xmm) or (loc.is_memory_reference() and loc.type == FLOAT):
                 if len(unused_xmm) > 0:
                     xmm_src_locs.append(loc)
                     xmm_dst_locs.append(unused_xmm.pop())
@@ -1066,14 +1061,11 @@ class Assembler386(object):
             if scale.value == 0:
                 self.mc.MOVZX8(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                                 scale.value))
-            elif scale.value == 1:
-                self.mc.MOVZX16(resloc, addr_add(base_loc, ofs_loc, ofs.value,
-                                                scale.value))
             elif (1 << scale.value) == WORD:
                 self.mc.MOV(resloc, addr_add(base_loc, ofs_loc, ofs.value,
                                              scale.value))
             else:
-                print "[asmgen]getarrayitem unsupported size: %d" % scale.value
+                print "[asmgen]setarrayitem unsupported size: %d" % scale.value
                 raise NotImplementedError()
 
     genop_getarrayitem_gc_pure = genop_getarrayitem_gc
@@ -1106,8 +1098,6 @@ class Assembler386(object):
         else:
             if (1 << scale_loc.value) == WORD:
                 self.mc.MOV(dest_addr, value_loc)
-            elif scale_loc.value == 1:
-                self.mc.MOV16(dest_addr, value_loc)
             elif scale_loc.value == 0:
                 self.mc.MOV8(dest_addr, value_loc.lowest8bits())
             else:
