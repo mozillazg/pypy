@@ -69,20 +69,9 @@ class W_Get(Wrappable):
     def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
         self.space = space
 
-        if res_type == 'i':
-            self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_int_w, cache=True)
-        elif res_type == 'f':
-            self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_float_w, cache=True)
-        elif res_type == 'v':
-            self.rget = rjitffi._Get(cpu, lib, func, args_type,
-                                     res_type, self.wrap_void_w, cache=True)
-        else:
-            raise OperationError(
-                    space.w_ValueError,
-                    space.wrap('Unsupported type of result: %s'
-                                % res_type))
+        wrap_func = (self.wrap_int_w, self.wrap_float_w, self.wrap_void_w)
+        self.rget = rjitffi._Get(cpu, lib, func, args_type, res_type,
+                                 wrap_func, cache=True)
 
         # grab from the cache if possible
         arg_classes = ''.join(args_type)
