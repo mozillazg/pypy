@@ -40,7 +40,7 @@ FILE* debug_memrecord_f;
 
 void debug_memrecord_startup(void)
 {
-  debug_memrecord_f = fopen("debug_memrecord", "wb");
+  debug_memrecord_f = popen("gzip -c -3 > debug_memrecord.gz", "w");
   assert(debug_memrecord_f);
 }
 
