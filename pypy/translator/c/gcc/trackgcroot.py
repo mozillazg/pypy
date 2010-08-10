@@ -919,14 +919,27 @@ class FunctionGcRootTracker64(FunctionGcRootTracker):
         return self._visit_pop(target)
 
     def visit_jmp(self, line):
-        # Check for a very special case that occurs in varags functions.
-        # See test/elf64/track_varargs_function.s for an example of the
-        # pattern we are looking for
+        # On 64-bit, %al is used when calling varargs functions to specify an
+        # upper-bound on the number of xmm registers used in the call. gcc
+        # uses %al to compute an indirect jump that looks like:
+        #
+        #     jmp *[some register]
+        #     movaps %xmm7, [stack location]
+        #     movaps %xmm6, [stack location]
+        #     movaps %xmm5, [stack location]
+        #     movaps %xmm4, [stack location]
+        #     movaps %xmm3, [stack location]
+        #     movaps %xmm2, [stack location]
+        #     movaps %xmm1, [stack location]
+        #     movaps %xmm0, [stack location]
+        #
+        # The jmp is always to somewhere in the block of "movaps"
+        # instructions, according to how many xmm registers need to be saved
+        # to the stack. The point of all this is that we can safely ignore
+        # jmp instructions of that form.
         if (self.currentlineno + 8) < len(self.lines) and self.r_unaryinsn_star.match(line):
             matches = [self.r_save_xmm_register.match(self.lines[self.currentlineno + 1 + i]) for i in range(8)]
             if all(m and int(m.group(1)) == (7 - i) for i, m in enumerate(matches)):
-                # We assume that the JMP is to somewhere in the block of
-                # movaps instructions, and ignore it.
                 return []
 
         return FunctionGcRootTracker.visit_jmp(self, line)
@@ -998,7 +1011,6 @@ class ElfFunctionGcRootTracker64(FunctionGcRootTracker64):
     EBP = '%rbp'
     EAX = '%rax'
     CALLEE_SAVE_REGISTERS = ['%rbx', '%r12', '%r13', '%r14', '%r15', '%rbp']
-    # XXX: Is this okay?
     REG2LOC = dict((_reg, LOC_REG | ((_i+1)<<2))
                    for _i, _reg in enumerate(CALLEE_SAVE_REGISTERS))
     OPERAND = r'(?:[-\w$%+.:@"]+(?:[(][\w%,]+[)])?|[(][\w%,]+[)])'
