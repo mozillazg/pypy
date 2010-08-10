@@ -74,12 +74,18 @@ class TestJitffi(object):
                 if (txt[i] == 'a') txt[i] = 'b';
             }
         }
+        int *return_intptr(int a)
+        {
+            int *x = malloc(sizeof(int));
+            *x = a;
+            return x;
+        }
         '''
         ))
 
         symbols = ['add_integers', 'add_floats', 'add_intfloat',
                    'return_float', 'max3', 'fvoid', 'return_void',
-                   'return_ptrvalue', 'sum_intarray', 'a2b']
+                   'return_ptrvalue', 'sum_intarray', 'a2b', 'return_intptr']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x1', standalone=False))
@@ -221,6 +227,15 @@ class TestJitffi(object):
             assert rffi.charp2str(charp) == 'xbxbxb'
         finally:
             rffi.free_charp(charp)
+
+    def test_get_ptr(self):
+        lib = rjitffi.CDLL(self.lib_name)
+
+        func = lib.get('return_intptr', ['i'], 'p', self.push_result)
+        func.push_int(22)
+        addr = func.call()
+        ret = rffi.cast(rffi.INTP, addr)
+        assert ret[0] == 22
 
     def test_nocache(self):
         lib = rjitffi.CDLL(self.lib_name)

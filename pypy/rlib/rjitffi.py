@@ -70,6 +70,8 @@ class _Get(object):
             bres = BoxInt()
         elif self.res_type == 'f':
             bres = BoxFloat()
+        elif self.res_type == 'p':
+            bres = BoxInt()
         elif self.res_type == 'v':
             bres = NULLBOX
         else:
@@ -89,6 +91,8 @@ class _Get(object):
             cls = descr.SignedCallDescr
         elif self.res_type == 'f':
             cls = descr.FloatCallDescr
+        elif self.res_type == 'p':
+            cls = descr.SignedCallDescr
         elif self.res_type == 'v':
             cls = descr.VoidCallDescr
         else:
@@ -106,6 +110,8 @@ class _Get(object):
             r = self.push_result(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
             r = self.push_result(self.cpu.get_latest_value_float(0))
+        elif self.res_type == 'p':
+            r = self.push_result(self.cpu.get_latest_value_int(0))
         elif self.res_type == 'v':
             r = None
         else:
