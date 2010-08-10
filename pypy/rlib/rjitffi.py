@@ -107,13 +107,13 @@ class _Get(object):
         self.cpu.execute_token(self.looptoken)
 
         if self.res_type == 'i':
-            r = self.push_result(self.cpu.get_latest_value_int(0))
+            r = self.push_result[0](self.cpu.get_latest_value_int(0))
         elif self.res_type == 'f':
-            r = self.push_result(self.cpu.get_latest_value_float(0))
+            r = self.push_result[1](self.cpu.get_latest_value_float(0))
         elif self.res_type == 'p':
-            r = self.push_result(self.cpu.get_latest_value_int(0))
+            r = self.push_result[0](self.cpu.get_latest_value_int(0))
         elif self.res_type == 'v':
-            r = None
+            r = self.push_result[2](None)
         else:
             raise ValueError(self.res_type)
         
