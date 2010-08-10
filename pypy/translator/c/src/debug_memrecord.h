@@ -24,6 +24,11 @@ struct debug_memrecord_s {
   DEBUG_MEMREC(posid, &(targetexpr), targetexpr, newvalue);     \
   targetexpr = newvalue
 
+#undef OP_RAW_MEMCLEAR
+#define OP_RAW_MEMCLEAR(p, size, r)                     \
+  memset((void*)p, 0, size);                            \
+  DEBUG_MEMREC(0, (void*)p, (void*)size, (void*)0)
+
 /************************************************************/
 
 #ifndef PYPY_NOT_MAIN_FILE
