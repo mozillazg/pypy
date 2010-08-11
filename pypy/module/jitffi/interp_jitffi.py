@@ -136,6 +136,7 @@ W_Get.typedef = TypeDef(
         call = interp2app(W_Get.call_w, unwrap_spec=['self', ObjSpace, W_Root]),
         wrap_int = interp2app(W_Get.wrap_int_w, unwrap_spec=['self', int]),
         wrap_float = interp2app(W_Get.wrap_float_w, unwrap_spec=['self', float]),
+        wrap_ref = interp2app(W_Get.wrap_ref_w, unwrap_spec=['self', int]),
         wrap_void = interp2app(W_Get.wrap_void_w, unwrap_spec=['self', W_Root])
 )
 
