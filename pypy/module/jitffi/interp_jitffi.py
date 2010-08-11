@@ -3,6 +3,7 @@ from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import OperationError, wrap_oserror
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
+from pypy.rpython.lltypesystem import rffi, lltype
 
 class W_CDLL(Wrappable):
     def __init__(self, space, name):
@@ -69,7 +70,8 @@ class W_Get(Wrappable):
     def __init__(self, space, cpu, lib, func, args_type, res_type='v'):
         self.space = space
 
-        wrap_func = (self.wrap_int_w, self.wrap_float_w, self.wrap_void_w)
+        wrap_func = (self.wrap_int_w, self.wrap_float_w,
+                     self.wrap_ref_w, self.wrap_void_w)
         self.rget = rjitffi._Get(cpu, lib, func, args_type, res_type,
                                  wrap_func, cache=True)
 
@@ -99,6 +101,8 @@ class W_Get(Wrappable):
                     self.rget.push_int(space.int_w(w_arg))
                 elif self.rget.args_type[i] == 'f':
                     self.rget.push_float(space.float_w(w_arg))
+                elif self.rget.args_type[i] == 'p':
+                    self.rget.push_ref(space.int_w(w_arg))
                 else:
                     # should never happen (raised earlier)
                     raise OperationError(
@@ -112,6 +116,9 @@ class W_Get(Wrappable):
         return self.space.wrap(value)
 
     def wrap_float_w(self, value):
+        return self.space.wrap(value)
+
+    def wrap_ref_w(self, value):
         return self.space.wrap(value)
 
     def wrap_void_w(self, w_value):
@@ -130,4 +137,43 @@ W_Get.typedef = TypeDef(
         wrap_int = interp2app(W_Get.wrap_int_w, unwrap_spec=['self', int]),
         wrap_float = interp2app(W_Get.wrap_float_w, unwrap_spec=['self', float]),
         wrap_void = interp2app(W_Get.wrap_void_w, unwrap_spec=['self', W_Root])
+)
+
+# for tests only
+class W_Test(Wrappable):
+    def __init__(self, space):
+        self.space = space
+
+    def get_intp_w(self, space, n, w_values):
+        values_w = [ space.int_w(w_x) for w_x in space.listview(w_values) ]
+        intp = lltype.malloc(rffi.INTP.TO, n, flavor='raw') # XXX free it!
+        for i in xrange(n):
+            intp[i] = values_w[i]
+        return space.wrap(rffi.cast(lltype.Signed, intp))
+
+    def get_charp_w(self, space, txt):
+        charp = rffi.str2charp(txt)
+        return space.wrap(rffi.cast(lltype.Signed, charp)) # XXX free it!
+
+    def get_str_w(self, space, addr):
+        charp = rffi.cast(rffi.CCHARP, addr)
+        return space.wrap(rffi.charp2str(charp)) # XXX free it?
+
+    def adr_to_intp_w(self, space, addr):
+        return space.wrap(rffi.cast(rffi.INTP, addr))
+
+def W_Test___new__(space, w_x):
+    return space.wrap(W_Test(space))
+
+W_Test.typedef = TypeDef(
+        'Test',
+        __new__ = interp2app(W_Test___new__, unwrap_spec=[ObjSpace, W_Root]),
+        get_intp = interp2app(W_Test.get_intp_w,
+                              unwrap_spec=['self', ObjSpace, int, W_Root]),
+        get_charp = interp2app(W_Test.get_charp_w,
+                              unwrap_spec=['self', ObjSpace, str]),
+        get_str = interp2app(W_Test.get_str_w,
+                              unwrap_spec=['self', ObjSpace, int]),
+        adr_to_intp = interp2app(W_Test.adr_to_intp_w,
+                                 unwrap_spec=['self', ObjSpace, int])
 )

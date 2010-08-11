@@ -92,7 +92,7 @@ class TestJitffi(object):
 
     def setup_class(cls):
         cls.lib_name = cls.preprare_c_example()
-        cls.push_result = [ lambda x: x for i in xrange(3) ] # mock function
+        cls.push_result = [ lambda x: x for i in xrange(4) ] # mock function
 
     def fromcache(self, f, args_type, res_type):
         if not hasattr(self, 'cache'):
