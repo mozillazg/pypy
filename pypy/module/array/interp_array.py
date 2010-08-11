@@ -14,9 +14,10 @@ from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.model import W_Object
 from pypy.interpreter.argument import Arguments, Signature
 from pypy.module._file.interp_file import W_File
+from pypy.interpreter.buffer import RWBuffer
 
-def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
-    if len(w_args.arguments_w) > 0:
+def w_array(space, w_cls, typecode, w_args=None):
+    if len(w_args.arguments_w) > 1:
         msg = 'array() takes at most 2 arguments'
         raise OperationError(space.w_TypeError, space.wrap(msg))
     if len(typecode) != 1:
@@ -29,23 +30,23 @@ def w_array(space, w_cls, typecode, w_initializer=None, w_args=None):
             a = space.allocate_instance(types[tc].w_class, w_cls)
             a.__init__(space)
 
-            if w_initializer is not None:
-                if not space.is_w(w_initializer, space.w_None):
-                    if space.type(w_initializer) is space.w_str:
-                        a.fromstring(w_initializer)
-                    elif space.type(w_initializer) is space.w_unicode:
-                        a.fromsequence(w_initializer)
-                    elif space.type(w_initializer) is space.w_list:
-                        a.fromlist(w_initializer)
-                    else:
-                        a.extend(w_initializer)
+            if len(w_args.arguments_w) > 0:
+                w_initializer = w_args.arguments_w[0]
+                if space.type(w_initializer) is space.w_str:
+                    a.fromstring(w_initializer)
+                elif space.type(w_initializer) is space.w_unicode:
+                    a.fromsequence(w_initializer)
+                elif space.type(w_initializer) is space.w_list:
+                    a.fromlist(w_initializer)
+                else:
+                    a.extend(w_initializer)
             break
     else:
         msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
         raise OperationError(space.w_ValueError, space.wrap(msg))
 
     return a
-w_array.unwrap_spec = (ObjSpace, W_Root, str, W_Root, Arguments)
+w_array.unwrap_spec = (ObjSpace, W_Root, str, Arguments)
 
 
 array_append = SMM('append', 2)
@@ -141,6 +142,22 @@ types = {
 for k, v in types.items():
     v.typecode = k
 unroll_typecodes = unrolling_iterable(types.keys())
+
+class ArrayBuffer(RWBuffer):
+    def __init__(self, data, bytes):
+        self.data = data
+        self.len = bytes
+
+    def getlength(self):
+        return self.len
+
+    def getitem(self, index):
+        return self.data[index]
+
+    def setitem(self, index, char):
+        self.data[index] = char
+
+
 
 
 def make_array(mytype):
@@ -460,6 +477,7 @@ def make_array(mytype):
     def mul__Array_ANY(space, self, w_repeat):
         repeat = space.int_w(w_repeat)
         a = mytype.w_class(space)
+        repeat = max(repeat, 0)
         a.setlen(self.len * repeat)
         for r in range(repeat):
             for i in range(self.len):
@@ -472,6 +490,7 @@ def make_array(mytype):
     def inplace_mul__Array_ANY(space, self, w_repeat):
         repeat = space.int_w(w_repeat)
         oldlen = self.len
+        repeat = max(repeat, 0)
         self.setlen(self.len * repeat)
         for r in range(1, repeat):
             for i in range(oldlen):
@@ -560,14 +579,13 @@ def make_array(mytype):
             w_lst2 = space.call_method(other, 'tolist')
             return space.cmp(w_lst1, w_lst2)
         else:
-            raise OperationError(space.w_NotImplementedError, space.wrap(''))
+            return space.w_NotImplemented
 
     # Misc methods
 
     def buffer__Array(space, self):
-        from pypy.interpreter.buffer import StringLikeBuffer
-        w_s = array_tostring__Array(space, self)
-        return space.wrap(StringLikeBuffer(space, w_s))
+        b = ArrayBuffer(self.charbuf(), self.len * mytype.bytes)
+        return space.wrap(b)
 
     def array_buffer_info__Array(space, self):
         w_ptr = space.wrap(rffi.cast(lltype.Unsigned, self.buffer))
@@ -580,7 +598,11 @@ def make_array(mytype):
             args = [space.wrap(mytype.typecode), w_s]
         else:
             args = [space.wrap(mytype.typecode)]
-        return space.newtuple([space.type(self), space.newtuple(args)])
+        try:
+            dct = space.getattr(self, space.wrap('__dict__'))
+        except OperationError:
+            dct = space.w_None
+        return space.newtuple([space.type(self), space.newtuple(args), dct])
 
     def array_byteswap__Array(space, self):
         if mytype.bytes not in [1, 2, 4, 8]:
@@ -638,3 +660,5 @@ def make_array(mytype):
 
 for mytype in types.values():
     make_array(mytype)
+
+register_all(locals(), globals())
