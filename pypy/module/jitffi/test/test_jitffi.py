@@ -49,11 +49,40 @@ class AppTestJitffi(object):
             int c;
             c = a + b;
         }
+        int return_ptrvalue(int a, int *b)
+        {
+            return a+(*b);
+        }
+        int sum_intarray(int *a)
+        {
+            int i;
+            int sum = 0;
+            for(i=0; i<5; i++)
+            {
+                sum += *a+i;
+            }
+            return sum;
+        }
+        void a2b(char *txt)
+        {
+            int i;
+            for(i=0; txt[i] != '\0'; i++)
+            {
+                if (txt[i] == 'a') txt[i] = 'b';
+            }
+        }
+        int *return_intptr(int a)
+        {
+            int *x = malloc(sizeof(int));
+            *x = a;
+            return x;
+        }
         '''
         ))
 
         symbols = ['add_integers', 'add_floats', 'add_intfloat',
-                   'return_float', 'max3', 'fvoid', 'return_void']
+                   'return_float', 'max3', 'fvoid', 'return_void',
+                   'return_ptrvalue', 'sum_intarray', 'a2b', 'return_intptr']
         eci = ExternalCompilationInfo(export_symbols=symbols)
 
         return str(platform.compile([c_file], eci, 'x', standalone=False))
@@ -103,6 +132,34 @@ class AppTestJitffi(object):
         func = lib.get('add_intfloat', ['i', 'f'], 'i')
         assert func.call([1, 2.9]) == 3
         assert func.call([0, 1.3]) == 1
+
+    def test_ptrargs(self):
+        import jitffi
+        t = jitffi.Test()
+        lib = jitffi.CDLL(self.lib_name)
+
+        func = lib.get('return_ptrvalue', ['i', 'p'], 'i')
+        intp = t.get_intp(1, [10])
+        assert func.call([20, intp]) == 30
+
+        func = lib.get('sum_intarray', ['p'], 'i')
+        intp = t.get_intp(5, [ i for i in xrange(5) ])
+        assert func.call([intp]) == 10
+
+        func = lib.get('a2b', ['p'])
+        charp = t.get_charp('xaxaxa')
+        func.call([charp])
+        assert t.get_str(charp) == 'xbxbxb'
+
+    #def test_get_ptr(self):
+    #    import jitffi
+    #    t = jitffi.Test()
+    #    lib = jitffi.CDLL(self.lib_name)
+
+    #    func = lib.get('return_intptr', ['i'], 'p')
+    #    addr = func.call([22])
+    #    ret = t.adr_to_intp(addr)
+    #    assert ret[0] == 22
 
     def test_undefined_func(self):
         import jitffi
