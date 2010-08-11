@@ -32,7 +32,7 @@ class _LibHandler(object):
         try:
             self.handler = rdynload.dlopen(name_ptr)
         except rdynload.DLOpenError, e:
-            raise OSError('%s: %s', name, e.msg or 'unspecified error')
+            raise OSError(-1, '%s: %s' % (name, e.msg or 'unspecified error'))
         finally:
             rffi.free_charp(name_ptr)
 
