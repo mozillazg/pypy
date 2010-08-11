@@ -290,6 +290,9 @@ REX_B = 1
 def encode_rex(mc, rexbyte, basevalue, orbyte):
     if mc.WORD == 8:
         assert 0 <= rexbyte < 8
+        # XXX: Hack. Ignore REX.W if we are using 16-bit operands
+        if mc._use_16_bit_immediate:
+            basevalue &= ~REX_W
         if basevalue != 0x40 or rexbyte != 0:
             mc.writechar(chr(basevalue | rexbyte))
     else:
@@ -492,6 +495,7 @@ class AbstractX86CodeBuilder(object):
 
     PUSH_r = insn(rex_nw, register(1), '\x50')
     PUSH_b = insn(rex_nw, '\xFF', orbyte(6<<3), stack_bp(1))
+    PUSH_i32 = insn('\x68', immediate(1, 'i'))
 
     POP_r = insn(rex_nw, register(1), '\x58')
     POP_b = insn(rex_nw, '\x8F', orbyte(0<<3), stack_bp(1))
