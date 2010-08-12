@@ -76,7 +76,7 @@ class OptValue(object):
         if val is None: return
         self.maxint = val - 1
 
-    def bountint_le(self, val):
+    def boundint_le(self, val):
         if val is None: return
         self.maxint = val
         
@@ -84,7 +84,7 @@ class OptValue(object):
         if val is None: return
         self.minint = val + 1
 
-    def bountint_ge(self, val):
+    def boundint_ge(self, val):
         if val is None: return
         self.minint = val
 
@@ -1142,18 +1142,13 @@ class Optimizer(object):
     def optimize_INT_GT(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
-        min1 = v1.get_minint()
-        max1 = v1.get_maxint()
-        min2 = v2.get_minint()
-        max2 = v1.get_maxint()
-        if min1 is not None and min2 is not None and max2 < min1
+        if v1.known_gt(v2):
             self.make_constant_int(op.result, 1)
-        elif min1 is not None and max2 is not None and max2 <= min1:
+        elif v1.known_le(v2):
             self.make_constant_int(op.result, 0)
         else:
             self.optimize_default(op)
-        
-        
+
     def propagate_bounds_INT_LT(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
@@ -1165,6 +1160,22 @@ class Optimizer(object):
             elif r.box.same_constant(CONST_0):
                 v1.boundint_ge(v2.get_minint())
                 v2.boundint_le(v1.get_maxint())
+            else:
+                assert False, "Boolean neither True nor False"
+            self.propagate_bounds_backward(op.args[0])
+            self.propagate_bounds_backward(op.args[1])
+
+    def propagate_bounds_INT_GT(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        r = self.getvalue(op.result)
+        if r.is_constant():
+            if r.box.same_constant(CONST_1):
+                v2.boundint_lt(v1.get_maxint())
+                v1.boundint_gt(v2.get_minint())
+            elif r.box.same_constant(CONST_0):
+                v2.boundint_ge(v1.get_minint())
+                v1.boundint_le(v2.get_maxint())
             else:
                 assert False, "Boolean neither True nor False"
             self.propagate_bounds_backward(op.args[0])
