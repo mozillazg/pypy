@@ -707,12 +707,14 @@ class RegAlloc(object):
     def _fastpath_malloc(self, op, descr):
         assert isinstance(descr, BaseSizeDescr)
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
-        tmp0 = TempBox()
         self.rm.force_allocate_reg(op.result, selected_reg=eax)
+        # We need to force-allocate each of save_around_call_regs now.
+        # The alternative would be to save and restore them around the
+        # actual call to malloc(), in the rare case where we need to do
+        # it; however, mark_gc_roots() would need to be adapted to know
+        # where the variables end up being saved.  Messy.
         for reg in self.rm.save_around_call_regs:
             if reg is not eax:
-                # FIXME: Is this the right way to spill a register? And do we
-                # need to do this for all non-callee-save regs?
                 tmp_box = TempBox()
                 self.rm.force_allocate_reg(tmp_box, selected_reg=reg)
                 self.rm.possibly_free_var(tmp_box)

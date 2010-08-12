@@ -273,7 +273,8 @@ class Assembler386(object):
         if IS_X86_32:
             self.mc.MOV_sr(WORD, edx.value)        # save it as the new argument
         elif IS_X86_64:
-            # FIXME: We can't just clobber rdi like this, can we?
+            # rdi can be clobbered: its content was forced to the stack
+            # by _fastpath_malloc(), like all other save_around_call_regs.
             self.mc.MOV_rr(edi.value, edx.value)
 
         addr = self.cpu.gc_ll_descr.get_malloc_fixedsize_slowpath_addr()
