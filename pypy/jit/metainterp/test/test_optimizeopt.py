@@ -3129,6 +3129,25 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
         
+    def test_bound_lt_tripple(self):
+        ops = """
+        [i0]
+        i1 = int_lt(i0, 0)
+        guard_true(i1) []
+        i2 = int_lt(i0, 7)
+        guard_true(i2) []
+        i3 = int_lt(i0, 5)
+        guard_true(i3) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_lt(i0, 0)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
         
     
 

@@ -18,6 +18,9 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 
+import sys
+SYSMAXINT = sys.maxint
+SYSMININT = -sys.maxint - 1
 
 def optimize_loop_1(metainterp_sd, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -74,19 +77,27 @@ class OptValue(object):
 
     def boundint_lt(self, val):
         if val is None: return
-        self.maxint = val - 1
+        if self.maxint is None or val <= self.maxint:
+            if val <= SYSMININT:
+                self.maxint = None
+            self.maxint = val - 1
 
     def boundint_le(self, val):
         if val is None: return
-        self.maxint = val
+        if self.maxint is None or val < self.maxint:
+            self.maxint = val
         
     def boundint_gt(self, val):
         if val is None: return
-        self.minint = val + 1
+        if self.minint is None or val >= self.minint:
+            if val >= SYSMAXINT:
+                self.minint = None
+            self.minint = val + 1
 
     def boundint_ge(self, val):
         if val is None: return
-        self.minint = val
+        if self.minint is None or val > self.minint:
+            self.minint = val
 
     def known_lt(self, other):
         max1 = self.get_maxint()
