@@ -88,6 +88,27 @@ class OptValue(object):
         if val is None: return
         self.minint = val
 
+    def known_lt(self, other):
+        max1 = self.get_maxint()
+        min2 = other.get_minint()
+        if max1 is not None and min2 is not None and max1 < min2:
+            return True
+        return False
+
+    def known_le(self, other):
+        max1 = self.get_maxint()
+        min2 = other.get_minint()
+        if max1 is not None and min2 is not None and max1 <= min2:
+            return True
+        return False
+
+    def known_gt(self, other):
+        return other.known_lt(self)
+
+    def known_ge(self, other):
+        return other.known_le(self)
+
+
     def force_box(self):
         return self.box
 
@@ -1111,11 +1132,21 @@ class Optimizer(object):
     def optimize_INT_LT(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
+        if v1.known_lt(v2):
+            self.make_constant_int(op.result, 1)
+        elif v1.known_ge(v2):
+            self.make_constant_int(op.result, 0)
+        else:
+            self.optimize_default(op)
+
+    def optimize_INT_GT(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
         min1 = v1.get_minint()
         max1 = v1.get_maxint()
         min2 = v2.get_minint()
         max2 = v1.get_maxint()
-        if max1 is not None and min2 is not None and max1 < min2:
+        if min1 is not None and min2 is not None and max2 < min1
             self.make_constant_int(op.result, 1)
         elif min1 is not None and max2 is not None and max2 <= min1:
             self.make_constant_int(op.result, 0)
