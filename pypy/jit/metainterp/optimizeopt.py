@@ -50,12 +50,43 @@ class OptValue(object):
 
     level = LEVEL_UNKNOWN
     known_class = None
+    maxint = None
+    minint = None
 
-    def __init__(self, box):
+    def __init__(self, box, producer=None):
         self.box = box
+        self.producer = producer
         if isinstance(box, Const):
             self.level = LEVEL_CONSTANT
         # invariant: box is a Const if and only if level == LEVEL_CONSTANT
+
+    def get_maxint(self):
+        if self.level == LEVEL_CONSTANT:
+            return self.box.getint()
+        else:
+            return self.maxint
+
+    def get_minint(self):
+        if self.level == LEVEL_CONSTANT:
+            return self.box.getint()
+        else:
+            return self.minint
+
+    def boundint_lt(self, val):
+        if val is None: return
+        self.maxint = val - 1
+
+    def bountint_le(self, val):
+        if val is None: return
+        self.maxint = val
+        
+    def boundint_gt(self, val):
+        if val is None: return
+        self.minint = val + 1
+
+    def bountint_ge(self, val):
+        if val is None: return
+        self.minint = val
 
     def force_box(self):
         return self.box
@@ -412,6 +443,7 @@ class Optimizer(object):
         self.bool_boxes = {}
         self.loop_invariant_results = {}
         self.pure_operations = args_dict()
+        self.producer = {}
 
     def forget_numberings(self, virtualbox):
         self.metainterp_sd.profiler.count(jitprof.OPT_FORCINGS)
@@ -527,6 +559,7 @@ class Optimizer(object):
         self.exception_might_have_happened = False
         self.newoperations = []
         for op in self.loop.operations:
+            self.producer[op.result] = op
             opnum = op.opnum
             for value, func in optimize_ops:
                 if opnum == value:
@@ -537,6 +570,20 @@ class Optimizer(object):
         self.loop.operations = self.newoperations
         # accumulate counters
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
+
+    def propagate_bounds_backward(self, box):
+        print box
+        try:
+            op = self.producer[box]
+        except KeyError:
+            return
+        print op
+
+        opnum = op.opnum
+        for value, func in propagate_bounds_ops:
+            if opnum == value:
+                func(self, op)
+                break
 
     def emit_operation(self, op):
         self.heap_op_optimizer.emitting_operation(op)
@@ -689,6 +736,7 @@ class Optimizer(object):
         if emit_operation:
             self.emit_operation(op)
         value.make_constant(constbox)
+        self.propagate_bounds_backward(op.args[0])
 
     def optimize_GUARD_ISNULL(self, op):
         value = self.getvalue(op.args[0])
@@ -1060,8 +1108,40 @@ class Optimizer(object):
         else:
             self.optimize_default(op)
 
+    def optimize_INT_LT(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        min1 = v1.get_minint()
+        max1 = v1.get_maxint()
+        min2 = v2.get_minint()
+        max2 = v1.get_maxint()
+        if max1 is not None and min2 is not None and max1 < min2:
+            self.make_constant_int(op.result, 1)
+        elif min1 is not None and max2 is not None and max2 <= min1:
+            self.make_constant_int(op.result, 0)
+        else:
+            self.optimize_default(op)
+        
+        
+    def propagate_bounds_INT_LT(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        r = self.getvalue(op.result)
+        if r.is_constant():
+            if r.box.same_constant(CONST_1):
+                v1.boundint_lt(v2.get_maxint())
+                v2.boundint_gt(v1.get_minint())
+            elif r.box.same_constant(CONST_0):
+                v1.boundint_ge(v2.get_minint())
+                v2.boundint_le(v1.get_maxint())
+            else:
+                assert False, "Boolean neither True nor False"
+            self.propagate_bounds_backward(op.args[0])
+            self.propagate_bounds_backward(op.args[1])
+
 
 optimize_ops = _findall(Optimizer, 'optimize_')
+propagate_bounds_ops = _findall(Optimizer, 'propagate_bounds_')
 
 
 class CachedArrayItems(object):
