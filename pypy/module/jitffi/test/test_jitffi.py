@@ -151,15 +151,15 @@ class AppTestJitffi(object):
         func.call([charp])
         assert t.get_str(charp) == 'xbxbxb'
 
-    #def test_get_ptr(self):
-    #    import jitffi
-    #    t = jitffi.Test()
-    #    lib = jitffi.CDLL(self.lib_name)
+    def test_get_ptr(self):
+        import jitffi
+        t = jitffi.Test()
+        lib = jitffi.CDLL(self.lib_name)
 
-    #    func = lib.get('return_intptr', ['i'], 'p')
-    #    addr = func.call([22])
-    #    ret = t.adr_to_intp(addr)
-    #    assert ret[0] == 22
+        func = lib.get('return_intptr', ['i'], 'p')
+        addr = func.call([22])
+        ret = t.get_int_from_addr(addr)
+        assert ret == 22
 
     def test_undefined_func(self):
         import jitffi
