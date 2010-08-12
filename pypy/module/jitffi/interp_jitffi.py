@@ -160,8 +160,9 @@ class W_Test(Wrappable):
         charp = rffi.cast(rffi.CCHARP, addr)
         return space.wrap(rffi.charp2str(charp)) # XXX free it?
 
-    def adr_to_intp_w(self, space, addr):
-        return space.wrap(rffi.cast(rffi.INTP, addr))
+    def get_int_from_addr_w(self, space, addr):
+        intp = rffi.cast(rffi.INTP, addr)
+        return space.wrap(intp[0]) # return the first element
 
 def W_Test___new__(space, w_x):
     return space.wrap(W_Test(space))
@@ -175,6 +176,6 @@ W_Test.typedef = TypeDef(
                               unwrap_spec=['self', ObjSpace, str]),
         get_str = interp2app(W_Test.get_str_w,
                               unwrap_spec=['self', ObjSpace, int]),
-        adr_to_intp = interp2app(W_Test.adr_to_intp_w,
+        get_int_from_addr = interp2app(W_Test.get_int_from_addr_w,
                                  unwrap_spec=['self', ObjSpace, int])
 )
