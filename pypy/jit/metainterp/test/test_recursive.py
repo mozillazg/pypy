@@ -1032,6 +1032,7 @@ class RecursiveTests:
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'str'],
                            get_printable_location = lambda codeno: str(codeno))
         def do_can_enter_jit(codeno, i, str):
+            i = (i+1)-1    # some operations
             driver.can_enter_jit(codeno=codeno, i=i, str=str)
         def intermediate(codeno, i, str):
             if i == 9:
@@ -1057,7 +1058,7 @@ class RecursiveTests:
                     portal(64, '') +
                     portal(64, ''))
         assert main() == 'ABCDEFGHIabcdefghijJ' * 5
-        for tlimit in [90, 110, 150]:
+        for tlimit in [95, 90, 102]:
             print 'tlimit =', tlimit
             res = self.meta_interp(main, [], inline=True, trace_limit=tlimit)
             assert ''.join(res.chars) == 'ABCDEFGHIabcdefghijJ' * 5
