@@ -1169,8 +1169,7 @@ class BlackholeInterpreter(object):
             self.run()
         #
         except JitException, e:
-            if self.nextblackholeinterp and self.jitcode.is_portal:
-                self._handle_jitexception_in_portal(e)
+            self._handle_jitexception(e)
             raise     # go through
         except Exception, e:
             # if we get an exception, return it to the caller frame
@@ -1272,7 +1271,7 @@ class BlackholeInterpreter(object):
         e = lltype.cast_opaque_ptr(llmemory.GCREF, e)
         raise sd.ExitFrameWithExceptionRef(self.cpu, e)
 
-    def _handle_jitexception_in_portal(self, e):
+    def _handle_jitexception(self, e):
         # This case is really rare, but can occur if
         # convert_and_run_from_pyjitpl() gets called in this situation:
         #
@@ -1286,8 +1285,21 @@ class BlackholeInterpreter(object):
         # JitException.  In that case, the JitException is not supposed
         # to fall through the whole chain of BlackholeInterpreters, but
         # be caught and handled just below the level "recursive main jit
-        # code".  The present function is called in this case, with self
-        # being the blackhole interpreter of "recursive main jit code".
+        # code".
+        blackholeinterp = self
+        while True:
+            # If we reach "bottom main jit code", just re-raise.
+            # This case is handled by the fact that the call chain
+            # leading to convert_and_run_from_pyjitpl() contains it
+            # own ll_portal_runner().
+            if not blackholeinterp.nextblackholeinterp:
+                raise e
+            # If we reach an intermediate portal, special code needed.
+            if blackholeinterp.jitcode.is_portal:
+                break
+            # Else, continue searching in the parent.
+            blackholeinterp = blackholeinterp.nextblackholeinterp
+        #
         print e
         print "XXX must handle this JitException here!"
         assert False, "XXX must handle this JitException here!"
