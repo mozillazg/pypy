@@ -1168,7 +1168,9 @@ class BlackholeInterpreter(object):
             # we now proceed to interpret the bytecode in this frame
             self.run()
         #
-        except JitException:
+        except JitException, e:
+            if self.nextblackholeinterp and self.jitcode.is_portal:
+                self._handle_jitexception_in_portal(e)
             raise     # go through
         except Exception, e:
             # if we get an exception, return it to the caller frame
@@ -1269,6 +1271,26 @@ class BlackholeInterpreter(object):
         sd = self.builder.metainterp_sd
         e = lltype.cast_opaque_ptr(llmemory.GCREF, e)
         raise sd.ExitFrameWithExceptionRef(self.cpu, e)
+
+    def _handle_jitexception_in_portal(self, e):
+        # This case is really rare, but can occur if
+        # convert_and_run_from_pyjitpl() gets called in this situation:
+        #
+        #     [function 1]             <---- top BlackholeInterpreter()
+        #     [recursive main jit code]
+        #     ...
+        #     [bottom main jit code]   <---- bottom BlackholeInterpreter()
+        #
+        # and then "function 1" contains a call to "function 2", which
+        # calls "can_enter_jit".  The latter can terminate by raising a
+        # JitException.  In that case, the JitException is not supposed
+        # to fall through the whole chain of BlackholeInterpreters, but
+        # be caught and handled just below the level "recursive main jit
+        # code".  The present function is called in this case, with self
+        # being the blackhole interpreter of "recursive main jit code".
+        print e
+        print "XXX must handle this JitException here!"
+        assert False, "XXX must handle this JitException here!"
 
     def _copy_data_from_miframe(self, miframe):
         self.setposition(miframe.jitcode, miframe.pc)
