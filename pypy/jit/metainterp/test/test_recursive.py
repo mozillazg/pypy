@@ -1027,6 +1027,41 @@ class RecursiveTests:
         assert res == 2095
         self.check_loops(call_assembler=6, everywhere=True)
 
+    def test_handle_jitexception_in_portal(self):
+        # a test for _handle_jitexception_in_portal in blackhole.py
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'str'],
+                           get_printable_location = lambda codeno: str(codeno))
+        def do_can_enter_jit(codeno, i, str):
+            driver.can_enter_jit(codeno=codeno, i=i, str=str)
+        def intermediate(codeno, i, str):
+            if i == 9:
+                do_can_enter_jit(codeno, i, str)
+        def portal(codeno, str):
+            i = value.initial
+            while i < 10:
+                intermediate(codeno, i, str)
+                driver.jit_merge_point(codeno=codeno, i=i, str=str)
+                i += 1
+                if codeno == 64 and i == 10:
+                    str = portal(96, str)
+                str += chr(codeno+i)
+            return str
+        class Value:
+            initial = -1
+        value = Value()
+        def main():
+            value.initial = 0
+            return (portal(64, '') +
+                    portal(64, '') +
+                    portal(64, '') +
+                    portal(64, '') +
+                    portal(64, ''))
+        assert main() == 'ABCDEFGHIabcdefghijJ' * 5
+        for tlimit in [90, 110, 150]:
+            print 'tlimit =', tlimit
+            res = self.meta_interp(main, [], inline=True, trace_limit=tlimit)
+            assert ''.join(res.chars) == 'ABCDEFGHIabcdefghijJ' * 5
+
     # There is a test which I fail to write.
     #   * what happens if we call recursive_call while blackholing
     #     this seems to be completely corner case and not really happening
