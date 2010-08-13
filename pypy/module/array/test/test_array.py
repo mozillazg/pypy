@@ -61,6 +61,7 @@ class BaseArrayTests:
 
         for tc in 'bhilBHILfd':
             assert self.array(tc).typecode == tc
+            raises(TypeError, self.array, tc, None)
 
     def test_value_range(self):
         values = (-129, 128, -128, 127, 0, 255, -1, 256,
@@ -468,6 +469,12 @@ class BaseArrayTests:
         assert repr(a) == "array('i', [20, 8, 2, 9, 7, 10])"
 
     def test_compare(self):
+        class comparable(object):
+            def __cmp__(self, other):
+                return 0
+        class incomparable(object):
+            pass
+        
         for v1, v2, tt in (([1, 2, 3], [1, 3, 2], 'bhilBHIL'),
                          ('abc', 'acb', 'c'),
                          (unicode('abc'), unicode('acb'), 'u')):
@@ -475,6 +482,13 @@ class BaseArrayTests:
                 a = self.array(t, v1)
                 b = self.array(t, v1)
                 c = self.array(t, v2)
+
+                print (a==7)
+                assert (a == 7) is False
+                assert (comparable() == a) is True
+                assert (a == comparable()) is True
+                assert (a == incomparable()) is False
+                assert (incomparable() == a) is False
 
                 assert (a == a) is True
                 assert (a == b) is True
@@ -579,13 +593,16 @@ class BaseArrayTests:
 
         raises(TypeError, "a = self.array('i') + 2")
         raises(TypeError, "self.array('i') + self.array('b')")
+        a = self.array('i')
+        raises(TypeError, "a += 7")
 
         # Calling __add__ directly raises TypeError in cpython but
         # returns NotImplemented in pypy if placed within a
         # try: except TypeError: construction.
         #
-        # raises(TypeError, self.array('i').__add__, (2,))
-        # raises(TypeError, self.array('i').__add__, self.array('b'))
+        #raises(TypeError, self.array('i').__add__, (2,))
+        #raises(TypeError, self.array('i').__iadd__, (2,))
+        #raises(TypeError, self.array('i').__add__, self.array('b'))
 
         class addable(object):
             def __add__(self, other):
@@ -597,12 +614,34 @@ class BaseArrayTests:
         assert addable() + self.array('i') == 'add'
         assert self.array('i') + addable() == 'radd'
 
+        a = self.array('i')
+        a += addable()
+        assert a == 'radd'
+
         a = self.array('i', [1, 2])
         assert a * -1 == self.array('i')
         b = a
         a *= -1
         assert a == self.array('i')
         assert b == self.array('i')
+
+        a = self.array('i')
+        raises(TypeError, "a * 'hi'")
+        raises(TypeError, "'hi' * a")
+
+        class mulable(object):
+            def __mul__(self, other):
+                return "mul"
+
+            def __rmul__(self, other):
+                return "rmul"
+        
+        assert mulable() * self.array('i') == 'mul'
+        assert self.array('i') * mulable() == 'rmul'
+
+        a = self.array('i')
+        a *= mulable()
+        assert a == 'rmul'
 
     def test_delitem(self):
         a = self.array('i', [1, 2, 3])
@@ -730,6 +769,12 @@ class BaseArrayTests:
         assert repr(mya('u', u'hi')) == "array('u', u'hi')"
         assert repr(mya('i', [1, 2, 3])) == "array('i', [1, 2, 3])"
         assert repr(mya('i', (1, 2, 3))) == "array('i', [1, 2, 3])"
+
+    def test_unicode_outofrange(self):
+        a = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
+        b = self.array('u', unicode(r'\x01\u263a\x00\ufeff', 'unicode-escape'))
+        b.byteswap()
+        assert a != b
 
 
 class TestCPythonsOwnArray(BaseArrayTests):
