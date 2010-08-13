@@ -1062,10 +1062,6 @@ class RecursiveTests:
             res = self.meta_interp(main, [], inline=True, trace_limit=tlimit)
             assert ''.join(res.chars) == 'ABCDEFGHIabcdefghijJ' * 5
 
-    # There is a test which I fail to write.
-    #   * what happens if we call recursive_call while blackholing
-    #     this seems to be completely corner case and not really happening
-    #     in the wild
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass
