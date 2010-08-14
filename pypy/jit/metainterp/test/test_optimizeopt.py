@@ -3112,23 +3112,6 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
         
-    def test_bound_gt(self):
-        ops = """
-        [i0]
-        i1 = int_gt(i0, 5)
-        guard_true(i1) []
-        i2 = int_gt(i0, 4)
-        guard_true(i2) []
-        jump(i0)
-        """
-        expected = """
-        [i0]
-        i1 = int_gt(i0, 5)
-        guard_true(i1) []
-        jump(i0)
-        """
-        self.optimize_loop(ops, 'Not', expected)
-        
     def test_bound_lt_tripple(self):
         ops = """
         [i0]
@@ -3148,8 +3131,167 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
         
+    def test_bound_lt_add(self):
+        ops = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_add(i0, 10)
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_add(i0, 10)        
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
         
-    
+    def test_bound_lt_add_before(self):
+        ops = """
+        [i0]
+        i2 = int_add(i0, 10)
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        i1 = int_lt(i0, 6)
+        guard_true(i1) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i2 = int_add(i0, 10)
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_lt_sub(self):
+        ops = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_sub(i0, 10)
+        i3 = int_lt(i2, -5)
+        guard_true(i3) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_sub(i0, 10)        
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_lt_sub_before(self):
+        ops = """
+        [i0]
+        i2 = int_sub(i0, 10)
+        i3 = int_lt(i2, -5)
+        guard_true(i3) []
+        i1 = int_lt(i0, 5)
+        guard_true(i1) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i2 = int_sub(i0, 10)
+        i3 = int_lt(i2, -5)
+        guard_true(i3) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_ltle(self):
+        ops = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_le(i0, 3)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_bound_lelt(self):
+        ops = """
+        [i0]
+        i1 = int_le(i0, 4)
+        guard_true(i1) []
+        i2 = int_lt(i0, 5)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_le(i0, 4)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_bound_gt(self):
+        ops = """
+        [i0]
+        i1 = int_gt(i0, 5)
+        guard_true(i1) []
+        i2 = int_gt(i0, 4)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_gt(i0, 5)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_gtge(self):
+        ops = """
+        [i0]
+        i1 = int_gt(i0, 5)
+        guard_true(i1) []
+        i2 = int_ge(i0, 6)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_gt(i0, 5)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_gegt(self):
+        ops = """
+        [i0]
+        i1 = int_ge(i0, 5)
+        guard_true(i1) []
+        i2 = int_gt(i0, 4)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_ge(i0, 5)
+        guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
