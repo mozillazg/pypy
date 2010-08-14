@@ -3292,6 +3292,37 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_framestackdepth_overhead(self):
+        ops = """
+        [p0, i22]
+        i1 = getfield_gc(p0, descr=valuedescr)
+        i2 = int_gt(i1, i22)
+        guard_false(i2) []
+        i3 = int_add(i1, 1)
+        setfield_gc(p0, i3, descr=valuedescr)
+        i4 = int_sub(i3, 1)
+        setfield_gc(p0, i4, descr=valuedescr)
+        i5 = int_gt(i4, i22)
+        guard_false(i5) []
+        i6 = int_add(i4, 1)
+        i331 = force_token()
+        i7 = int_sub(i6, 1)
+        setfield_gc(p0, i7, descr=valuedescr)
+        jump(p0, i22)
+        """
+        expected = """
+        [p0, i22]
+        i1 = getfield_gc(p0, descr=valuedescr)
+        i2 = int_gt(i1, i22)
+        guard_false(i2) []
+        i3 = int_add(i1, 1)
+        i331 = force_token()
+        setfield_gc(p0, i1, descr=valuedescr)
+        jump(p0, i22)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+        
+
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 

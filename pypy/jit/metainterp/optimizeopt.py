@@ -745,6 +745,15 @@ class Optimizer(object):
                 # a real GUARD_VALUE.  Make it use one counter per value.
                 descr.make_a_counter_per_value(op)
 
+    def make_args_key(self, op):
+        args = op.args[:]
+        for i in range(len(args)):
+            arg = args[i]
+            if arg in self.values:
+                args[i] = self.values[arg].get_key_box()
+            args.append(ConstInt(op.opnum))
+        return args
+            
     def optimize_default(self, op):
         if op.is_always_pure():
             for arg in op.args:
@@ -759,12 +768,7 @@ class Optimizer(object):
                 return
 
             # did we do the exact same operation already?
-            args = op.args[:]
-            for i in range(len(args)):
-                arg = args[i]
-                if arg in self.values:
-                    args[i] = self.values[arg].get_key_box()
-            args.append(ConstInt(op.opnum))
+            args = self.make_args_key(op)
             oldop = self.pure_operations.get(args, None)
             if oldop is not None and oldop.descr is op.descr:
                 assert oldop.opnum == op.opnum
@@ -1223,6 +1227,15 @@ class Optimizer(object):
             self.optimize_default(op)
         r = self.getvalue(op.result)
         r.intbound.intersect(v1.intbound.add_bound(v2.intbound))
+
+        # Synthesize the reverse op for optimize_default to reuse
+        revop = ResOperation(rop.INT_SUB, (op.result, op.args[1]), \
+                             op.args[0], op.descr)
+        self.pure_operations[self.make_args_key(revop)] = revop            
+        revop = ResOperation(rop.INT_SUB, (op.result, op.args[0]), \
+                             op.args[1], op.descr)
+        self.pure_operations[self.make_args_key(revop)] = revop            
+
 
     def optimize_INT_LT(self, op):
         v1 = self.getvalue(op.args[0])
