@@ -104,7 +104,6 @@ class AppTestSDArray(object):
             ar = zeros(3, dtype=int)
             assert ar[0] == data_type(0.0)
     
-    @py.test.mark.xfail
     def test_setitem_getitem(self):
         from micronumpy import zeros
         compare = self.compare
@@ -113,7 +112,7 @@ class AppTestSDArray(object):
         assert ar[0] == 0
         ar[1] = 3
         assert ar[1] == 3
-        raises((IndexError, ValueError), ar.__getitem__, 'xyz') #FIXME: why TypeError?
+        raises((IndexError, ValueError), ar.__getitem__, 'xyz')
         raises(IndexError, ar.__getitem__, 38)
         assert ar[-2] == 0
         assert ar[-7] == 3
@@ -133,6 +132,7 @@ class AppTestSDArray(object):
         raises(ValueError, ar.__setitem__, 0, [99])
         raises(ValueError, ar.__setitem__, 0, 'f')
         raises(ValueError, ar.__setitem__, slice(2, 3), [4, 5, 6])
+
 
     @py.test.mark.xfail
     def test_minimum(self):
@@ -246,8 +246,26 @@ class AppTestMultiDim(object):
         for i in range(3):
             for j in range(3):
                 assert ar[i, j] == i*3+j
+
+    def test_iteration(self):
+        from micronumpy import array
+        ar = array([1, 2, 3, 4])
+        
+        for x, y in zip(ar, [1, 2, 3, 4]):
+            assert x == y
+
+        ar2 = ar[0:]
+        for x, y in zip(ar2, [1, 2, 3, 4]):
+            assert x == y
+
+        ar2 = ar[1:]
+        for x, y in zip(ar2, [2, 3, 4]):
+            assert x == y
+
+        ar2 = ar[2:4]
+        for x, y, in zip(ar2, [3, 4]):
+            assert x == y
     
-    @py.test.mark.xfail
     def test_get_set_slices(self):
         from micronumpy import array
         gen_array = self.gen_array
@@ -298,6 +316,14 @@ class AppTestMultiDim(object):
         ar3[1:3] = [[0, 1, 2], [3, 4, 5]]
         assert compare(ar3[1, 2], [2, 2, 2])
 
+    def test_subarray(self):
+        from micronumpy import array
+        gen_array = self.gen_array
+
+        ar = array(gen_array((7, 5, 3, 2)))
+        
+        assert ar[0][0][0][0] == ar[0, 0, 0, 0]
+        
     @py.test.mark.xfail
     def test_newaxis(self):
         from micronumpy import array
@@ -430,6 +456,36 @@ class TestMicroArray(object):
         assert start == [0, 2, 0, 0]
         assert shape == [5, 1, 3, 2]
         assert step == [1, 1, 1, 1]
+
+        w_index = space.wrap(slice(1, 3))
+        start, shape, step = ar.index2slices(space, w_index)
+        assert start[0] == 1
+        assert shape[0] == 2
+        assert step[0] == 1
+
+    def test_slice_setting(self, space):
+        from pypy.module.micronumpy.array import size_from_shape
+        from pypy.module.micronumpy.microarray import MicroArray
+        from pypy.module.micronumpy.dtype import w_int_descr
+
+        ar = MicroArray(shape=[7, 5, 3, 2],
+                        dtype=w_int_descr)
+
+        ar.set_slice_single_value(space,
+                                  slice_starts=[5, 4, 2, 1], shape=[1, 1, 1, 1], slice_steps=[1, 1, 1, 1],
+                                  w_value=space.wrap(3))
+
+        assert space.is_true(space.eq(ar.getitem(space, ar.offset + ar.flatten_index([5, 4, 2, 1])), space.wrap(3)))
+
+        ar.set_slice_single_value(space,
+                                  slice_starts=[0, 0, 0, 0], shape=[7, 5, 3, 2], slice_steps=[1, 1, 1, 1],
+                                  w_value=space.wrap(97))
+
+        for i in range(size_from_shape(ar.shape)):
+            array_element = space.unwrap(ar.getitem(space, i)) # ugly, but encapsulates everything
+            assert array_element == 97
+
+        # TODO: test more
                         
     def test_strides(self, space):
         from pypy.module.micronumpy.array import stride_row, stride_column

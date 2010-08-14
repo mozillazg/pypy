@@ -44,6 +44,7 @@ if __name__ == '__main__':
     image = generate_image(width, height)
     kernel = generate_kernel(kwidth, kheight)
 
+    print "Timing"
     from timeit import Timer
     convolve_timer = Timer('naive_convolve(image, kernel)', 'from convolve import naive_convolve; from __main__ import image, kernel; gc.enable()')
     print "%.5f sec/pass" % (convolve_timer.timeit(number=count)/count)
