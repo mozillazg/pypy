@@ -30,6 +30,22 @@ def specialize_value(TYPE, x):
     else:
         return lltype.cast_opaque_ptr(TYPE, x)
 
+@specialize.ll()
+def unspecialize_value(value):
+    """Casts 'value' to a Signed, a GCREF or a Float."""
+    if isinstance(lltype.typeOf(value), lltype.Ptr):
+        if lltype.typeOf(value).TO._gckind == 'gc':
+            return lltype.cast_opaque_ptr(llmemory.GCREF, value)
+        else:
+            adr = llmemory.cast_ptr_to_adr(value)
+            return heaptracker.adr2int(adr)
+    elif isinstance(lltype.typeOf(value), ootype.OOType):
+        return ootype.cast_to_object(value)
+    elif isinstance(value, float):
+        return value
+    else:
+        return intmask(value)
+
 @specialize.arg(0)
 def unwrap(TYPE, box):
     if TYPE is lltype.Void:

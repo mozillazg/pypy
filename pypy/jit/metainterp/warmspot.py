@@ -558,6 +558,7 @@ class WarmRunnerDesc(object):
         # Prepare the portal_runner() helper
         #
         from pypy.jit.metainterp.warmstate import specialize_value
+        from pypy.jit.metainterp.warmstate import unspecialize_value
         portal_ptr = self.cpu.ts.functionptr(PORTALFUNC, 'portal',
                                          graph = portalgraph)
         jd._portal_ptr = portal_ptr
@@ -612,6 +613,37 @@ class WarmRunnerDesc(object):
                         value = cast_base_ptr_to_instance(Exception, value)
                         raise Exception, value
 
+        def handle_jitexception(e):
+            # XXX the bulk of this function is a copy-paste from above :-(
+            try:
+                raise e
+            except self.ContinueRunningNormally, e:
+                args = ()
+                for ARGTYPE, attrname, count in portalfunc_ARGS:
+                    x = getattr(e, attrname)[count]
+                    x = specialize_value(ARGTYPE, x)
+                    args = args + (x,)
+                return ll_portal_runner(*args)
+            except self.DoneWithThisFrameVoid:
+                assert result_kind == 'void'
+                return
+            except self.DoneWithThisFrameInt, e:
+                assert result_kind == 'int'
+                return specialize_value(RESULT, e.result)
+            except self.DoneWithThisFrameRef, e:
+                assert result_kind == 'ref'
+                return specialize_value(RESULT, e.result)
+            except self.DoneWithThisFrameFloat, e:
+                assert result_kind == 'float'
+                return specialize_value(RESULT, e.result)
+            except self.ExitFrameWithExceptionRef, e:
+                value = ts.cast_to_baseclass(e.value)
+                if not we_are_translated():
+                    raise LLException(ts.get_typeptr(value), value)
+                else:
+                    value = cast_base_ptr_to_instance(Exception, value)
+                    raise Exception, value
+
         jd._ll_portal_runner = ll_portal_runner # for debugging
         jd.portal_runner_ptr = self.helper_func(jd._PTR_PORTAL_FUNCTYPE,
                                                 ll_portal_runner)
@@ -632,32 +664,8 @@ class WarmRunnerDesc(object):
                     vinfo.reset_vable_token(virtualizable)
                 try:
                     loop_token = fail_descr.handle_fail(self.metainterp_sd, jd)
-                except self.ContinueRunningNormally, e:
-                    args = ()
-                    for ARGTYPE, attrname, count in portalfunc_ARGS:
-                        x = getattr(e, attrname)[count]
-                        x = specialize_value(ARGTYPE, x)
-                        args = args + (x,)
-                    return ll_portal_runner(*args)
-                except self.DoneWithThisFrameVoid:
-                    assert result_kind == 'void'
-                    return
-                except self.DoneWithThisFrameInt, e:
-                    assert result_kind == 'int'
-                    return specialize_value(RESULT, e.result)
-                except self.DoneWithThisFrameRef, e:
-                    assert result_kind == 'ref'
-                    return specialize_value(RESULT, e.result)
-                except self.DoneWithThisFrameFloat, e:
-                    assert result_kind == 'float'
-                    return specialize_value(RESULT, e.result)
-                except self.ExitFrameWithExceptionRef, e:
-                    value = ts.cast_to_baseclass(e.value)
-                    if not we_are_translated():
-                        raise LLException(ts.get_typeptr(value), value)
-                    else:
-                        value = cast_base_ptr_to_instance(Exception, value)
-                        raise Exception, value
+                except JitException, e:
+                    return handle_jitexception(e)
                 fail_descr = self.cpu.execute_token(loop_token)
 
         jd._assembler_call_helper = assembler_call_helper # for debugging
@@ -668,6 +676,21 @@ class WarmRunnerDesc(object):
             jd._assembler_helper_ptr)
         if vinfo is not None:
             jd.vable_token_descr = vinfo.vable_token_descr
+
+        def handle_jitexception_from_blackhole(bhcaller, e):
+            result = handle_jitexception(e)
+            #
+            if result_kind != 'void':
+                result = unspecialize_value(result)
+                if result_kind == 'int':
+                    bhcaller._setup_return_value_i(result)
+                elif result_kind == 'ref':
+                    bhcaller._setup_return_value_r(result)
+                elif result_kind == 'float':
+                    bhcaller._setup_return_value_f(result)
+                else:
+                    assert False
+        jd.handle_jitexc_from_bh = handle_jitexception_from_blackhole
 
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
