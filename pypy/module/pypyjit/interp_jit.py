@@ -20,6 +20,7 @@ PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             'fastlocals_w[*]',
                             'last_exception',
                             'lastblock',
+                            'last_yield',
                             ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
@@ -62,10 +63,10 @@ pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
 PyFrame_execute_generator_frame = PyFrame.execute_generator_frame
 
 class __extend__(PyFrame):
-    just_resuming_generator = False
+    last_yield = -1
 
     def execute_generator_frame(self, w_inputvalue, ex=False):
-        self.just_resuming_generator = True
+        self.last_yield = self.last_instr
         return PyFrame_execute_generator_frame(self, w_inputvalue, ex)
 
     def dispatch(self, pycode, next_instr, ec):
@@ -81,14 +82,22 @@ class __extend__(PyFrame):
         except ExitFrame:
             return self.popvalue()
 
-    def jump_absolute(self, jumpto, _, ec=None):
-        if self.just_resuming_generator:
-            self.just_resuming_generator = False
+    def jump_absolute(self, jumpto, _, ec):
+        # Custom logic.  A JUMP_ABSOLUTE closes a loop, except when it is
+        # a jump over the most recent YIELD_VALUE.
+        if jumpto <= self.last_yield:
+            self.last_yield = -1
             return jumpto
+        # In jitted mode, we call bytecode_trace() only once per loop,
+        # instead of every N instructions.
         if we_are_jitted():
             self.last_instr = intmask(jumpto)
             ec.bytecode_trace(self)
             jumpto = r_uint(self.last_instr)
+        # Call the main hook on pypyjitdriver.  In the non-JITted version
+        # of this code, this becomes a call to a profiling helper that may
+        # jump to the JITted version.  In the JITted version, it marks the
+        # start and the end of all loops.
         pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
                                     pycode=self.getcode())
         return jumpto
