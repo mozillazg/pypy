@@ -26,14 +26,17 @@ def size_from_shape(shape):
         size *= dimension
     return size
 
-def normalize_slice_starts(starts, shape):
-    result = starts[:]
-    for i in range(len(result)):
-        if result[i] < 0:
-            result[i] += shape[i]
-        elif result[i] >= shape[i]:
+def normalize_slice_starts(slice_starts, shape):
+    for i in range(len(slice_starts)):
+        if slice_starts[i] < 0:
+            slice_starts[i] += shape[i]
+        elif slice_starts[i] >= shape[i]:
             raise IndexError("invalid index")
-    return result
+    return slice_starts
+
+def squeeze_shape(shape):
+    "Simple squeeze."
+    return [x for x in shape if x != 1]
 
 def squeeze_slice(current_shape, starts, shape, step):
     current_shape = current_shape[:]
