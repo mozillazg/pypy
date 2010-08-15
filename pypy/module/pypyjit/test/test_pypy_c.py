@@ -118,6 +118,7 @@ class PyPyCJITTests(object):
         assert result.splitlines()[-1].strip() == 'OK :-)'
         self.parse_loops(logfilepath)
         self.print_loops()
+        print logfilepath
         if self.total_ops > expected_max_ops:
             assert 0, "too many operations: got %d, expected maximum %d" % (
                 self.total_ops, expected_max_ops)
@@ -845,6 +846,112 @@ class PyPyCJITTests(object):
                     i += 1
                 return intimg[i - 1]
             ''', maxops, ([tc], res))
+
+    def test_intbound(self):
+        ops = ('<', '>', '<=', '>=')
+        nbr = (3, 7)
+        for o1 in ops:
+            for o2 in ops:
+                for n1 in nbr:
+                    for n2 in nbr:
+                        src = '''
+                        def f(i):
+                            a, b = 3, 3
+                            if i %s %d:
+                                a = 0
+                            else:
+                                a = 1
+                            if i %s %d:
+                                b = 0
+                            else:
+                                b = 1
+                            return a + b * 2
+
+                        def main():
+                            res = [0] * 4
+                            for i in range(15) * 1500:
+                                res[f(i)] += 1
+                            return res
+
+                        ''' % (o1, n1, o2, n2)
+
+                        exec(str(py.code.Source(src)))
+                        res = [0] * 4
+                        for i in range(15):
+                            res[f(i)] += 1500
+                        self.run_source(src, 220, ([], res))
+
+    def test_intbound_addsub(self):
+        tests = ('i > 4', 'i > 2', 'i + 1 > 2', '1 + i > 4',
+                 'i - 1 > 1', '1 - i > 1', '1 - i < -3')
+        for t1 in tests:
+            for t2 in tests:
+                src = '''
+                def f(i):
+                    a, b = 3, 3
+                    if %s:
+                        a = 0
+                    else:
+                        a = 1
+                    if %s:
+                        b = 0
+                    else:
+                        b = 1
+                    return a + b * 2
+
+                def main():
+                    res = [0] * 4
+                    for i in range(15) * 1500:
+                        res[f(i)] += 1
+                    return res
+
+                ''' % (t1, t2)
+
+                exec(str(py.code.Source(src)))
+                res = [0] * 4
+                for i in range(15):
+                    res[f(i)] += 1500
+                self.run_source(src, 232, ([], res))
+
+    def test_intbound_gt(self):
+        self.run_source('''
+        def main():
+            i, a, b = 0, 0, 0
+            while i < 2000:
+                if i > -1:
+                    a += 1
+                if i > -2:
+                    b += 1
+                i += 1
+            return (a, b)
+        ''', 48, ([], (2000, 2000)))
+
+
+    def test_intbound_addsub_ge(self):
+        self.run_source('''
+        def main():
+            i, a, b = 0, 0, 0
+            while i < 2000:
+                if i + 5 >= 5:
+                    a += 1
+                #if i - 1 >= -1:
+                if i - 1 >= -1:
+                    b += 1
+                i += 1
+            return (a, b)
+        ''', 0, ([], (2000, 2000)))
+
+    def test_intbound_sub_lt(self):
+        self.run_source('''
+        def main():
+            i, a, b = 0, 0, 0
+            while i < 2000:
+                if i - 10 < 1995:
+                    a += 1
+                i += 1
+            return (a, b)
+        ''', 0, ([], (2000, 0)))
+
 
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):
