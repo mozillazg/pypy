@@ -18,7 +18,6 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 from pypy.rlib.rarithmetic import ovfcheck
-from copy import copy
 
 def optimize_loop_1(metainterp_sd, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -40,6 +39,8 @@ def optimize_bridge_1(metainterp_sd, bridge):
 # ____________________________________________________________
 
 class IntBound(object):
+    _attrs_ = ('has_upper', 'has_lower', 'upper', 'lower')
+    
     def __init__(self, lower, upper):
         self.has_upper = True
         self.has_lower = True
@@ -103,7 +104,7 @@ class IntBound(object):
         return r
     
     def add(self, offset):
-        res = copy(self)
+        res = self.copy()
         try:
             res.lower = ovfcheck(res.lower + offset)
         except OverflowError:
@@ -115,7 +116,7 @@ class IntBound(object):
         return res
     
     def add_bound(self, other):
-        res = copy(self)
+        res = self.copy()
         if other.has_upper:
             res.upper += other.upper
         else:
@@ -127,7 +128,7 @@ class IntBound(object):
         return res
 
     def sub_bound(self, other):
-        res = copy(self)
+        res = self.copy()
         if other.has_upper:
             res.lower -= other.upper
         else:
@@ -156,6 +157,11 @@ class IntBound(object):
             u = 'Inf'
         return '%s <= x <= %s' % (l, u)
 
+    def copy(self):
+        res = IntBound(self.lower, self.upper)
+        res.has_lower = self.has_lower
+        res.has_upper = self.has_upper
+        return res
         
         
 
@@ -186,15 +192,15 @@ LEVEL_KNOWNCLASS = '\x02'     # might also mean KNOWNARRAYDESCR, for arrays
 LEVEL_CONSTANT   = '\x03'        
 
 class OptValue(object):
-    _attrs_ = ('box', 'known_class', 'last_guard_index', 'level')
+    _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound')
     last_guard_index = -1
 
     level = LEVEL_UNKNOWN
     known_class = None
+    intbound = None
 
-    def __init__(self, box, producer=None):
+    def __init__(self, box):
         self.box = box
-        self.producer = producer
         self.intbound = IntUnbounded()
         if isinstance(box, Const):
             self.make_constant(box)
@@ -1229,10 +1235,10 @@ class Optimizer(object):
         r.intbound.intersect(v1.intbound.add_bound(v2.intbound))
 
         # Synthesize the reverse op for optimize_default to reuse
-        revop = ResOperation(rop.INT_SUB, (op.result, op.args[1]), \
+        revop = ResOperation(rop.INT_SUB, [op.result, op.args[1]], \
                              op.args[0], op.descr)
         self.pure_operations[self.make_args_key(revop)] = revop            
-        revop = ResOperation(rop.INT_SUB, (op.result, op.args[0]), \
+        revop = ResOperation(rop.INT_SUB, [op.result, op.args[0]], \
                              op.args[1], op.descr)
         self.pure_operations[self.make_args_key(revop)] = revop            
 
