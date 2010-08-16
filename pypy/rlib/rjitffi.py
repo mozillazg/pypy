@@ -12,6 +12,10 @@ GLOBAL_CPU.portal_calldescr = None
 GLOBAL_CPU._vtable_to_descr_dict = None
 GLOBAL_CPU.setup()
 
+FUNCFLAG_STDCALL   = 0
+FUNCFLAG_CDECL     = 1  # for WINAPI calls
+FUNCFLAG_PYTHONAPI = 4
+
 class CDLL(object):
     def __init__(self, name, load=True):
         if load:
