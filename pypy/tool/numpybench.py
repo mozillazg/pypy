@@ -3,22 +3,22 @@ try:
 except ImportError, e:
     import micronumpy as numpy
 
-def generate_image(width, height):
-    return numpy.array([[x + y for x in range(width)] for y in range(height)])
+def generate_image(width, height, dtype=float):
+    return numpy.array([[x + y for x in range(width)] for y in range(height)], dtype=dtype)
 
-def generate_kernel(width, height):
+def generate_kernel(width, height, dtype=float):
     from math import sin, pi
-    #kernel = numpy.zeros((width, height), dtype=int) # FIXME: micronumpy.zeros can't handle missing dtype
-    kernel = [[0] * width] * height
+    kernel = numpy.zeros((width, height), dtype=dtype) # FIXME: micronumpy.zeros can't handle missing dtype
 
     for i in range(width):
         for j in range(height):
-            u = i / float(width)
-            v = j / float(height)
-            kernel[j][i] = int((0.5 + sin(u * pi)) * (0.5 + sin(v * pi))) # DOUBLE FIXME: setitem doesn't coerce to array type
+            u = (i + 0.5) / float(width)
+            v = (j + 0.5) / float(height)
+            kernel[j,i] = int((0.5 + sin(u * pi)) * (0.5 + sin(v * pi))) # DOUBLE FIXME: setitem doesn't coerce to array type
+            print "kernel[%d,%d] = %s" % (j, i, kernel[j][i])
         
-    #return kernel
-    return numpy.array(kernel)
+    print kernel
+    return kernel
 
 if __name__ == '__main__':
     from optparse import OptionParser
@@ -41,8 +41,9 @@ if __name__ == '__main__':
     kwidth, kheight = parse_dimension(options.kernel)
     count = int(options.count)
 
-    image = generate_image(width, height)
-    kernel = generate_kernel(kwidth, kheight)
+    dtype = float
+    image = generate_image(width, height, dtype)
+    kernel = generate_kernel(kwidth, kheight, dtype)
 
     print "Timing"
     from timeit import Timer
