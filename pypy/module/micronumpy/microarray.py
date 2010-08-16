@@ -372,6 +372,17 @@ def descr_get_dtype(space, self):
 def descr_get_shape(space, self):
     return space.newtuple([space.wrap(x) for x in self.shape[self.offset:]])
 
+def descr_array_interface(space, self):
+    w_dict = space.newdict()
+    data_ptr = space.wrap(lltype.cast_ptr_to_int(self.data))
+    data = [data_ptr, space.w_False]
+    content = [(space.wrap('shape'), descr_get_shape(space, self)),
+               (space.wrap('data'), space.newtuple(data)),
+               (space.wrap('typestr'), space.wrap(self.dtype.dtype.str())),
+               (space.wrap('version'), space.wrap(3))]
+    w_dict.initialize_content(content)
+    return w_dict
+
 #TODO: add to typedef when ready
 def descr_new(space, w_cls, w_shape, w_dtype=NoneNotWrapped,
               w_buffer=NoneNotWrapped, w_offset=NoneNotWrapped,
@@ -401,6 +412,7 @@ descr_new.unwrap_spec = [ObjSpace, W_Root, W_Root, W_Root,
 MicroArray.typedef = TypeDef('uarray',
                              dtype = GetSetProperty(descr_get_dtype, cls=MicroArray),
                              shape = GetSetProperty(descr_get_shape, cls=MicroArray),
+                             __array_interface__ = GetSetProperty(descr_get_array_interface, cls=MicroArray),
                              __getitem__ = interp2app(MicroArray.descr_getitem),
                              __setitem__ = interp2app(MicroArray.descr_setitem),
                              __len__ = interp2app(MicroArray.descr_len),

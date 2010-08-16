@@ -38,7 +38,8 @@ def naive_convolve(f, g):
                 for t in range(t_from, t_to):
                     v = x - smid + s
                     w = y - tmid + t
+                    #print "f[%d, %d] = %s" % (v, w, f[v, w])
                     value += g[smid - s, tmid - t] * f[v, w]
-            print "h[%d, %d] = %s" % (x, y, value)
+            #print "h[%d, %d] = %s" % (x, y, value)
             h[x, y] = value
     return h

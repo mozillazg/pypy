@@ -5,6 +5,10 @@ from pypy.interpreter.gateway import interp2app
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 
+from sys import byteorder
+
+byteorder = '>' if byteorder == 'big' else '<'
+
 class TypeDescr(Wrappable):
     def __init__(self, dtype, name):
         self.dtype = dtype
@@ -36,7 +40,7 @@ TypeDescr.typedef = TypeDef('dtype',
                             __repr__ = interp2app(TypeDescr.descr_repr),
                            )
 
-storage_type = lltype.Ptr(lltype.Array(lltype.Char))                           
+storage_type = lltype.Ptr(rffi.CArray(lltype.Char))                           
 null_data = lltype.nullptr(storage_type.TO)
 
 class DescrBase(object): pass
@@ -45,7 +49,7 @@ _typeindex = {}
 _descriptors = []
 _w_descriptors = []
 def descriptor(code, name, ll_type):
-    arraytype = lltype.Array(ll_type)
+    arraytype = rffi.CArray(ll_type)
     class DescrImpl(DescrBase):
         def __init__(self):
             self.typeid = 0
@@ -88,6 +92,14 @@ def descriptor(code, name, ll_type):
 
         def dump(self, data):
             return ', '.join([str(x) for x in self.cast(data)])
+
+        def str(self):
+            if self is float_descr:
+                code = 'f'
+            else:
+                code = self.typecode
+
+            return ''.join([byteorder, code, self.itemsize()])
 
     for type in [lltype.Signed, lltype.Float]:
         def get_type(self, data, index):
