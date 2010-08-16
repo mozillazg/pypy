@@ -38,17 +38,17 @@
 ## print t2 - t1
 
 try:
-    from array import array
-    def f(img):
-        i=0
-        sa=0
-        while i < img.__len__():
-            sa+=img[i]
-            i+=1
-        return sa
+    from micronumpy import zeros
 
-    img=array('h',(1,2,3,4))
-    print f(img)
+    size = 128
+    dtype = float
+
+    for run in range(200):
+        ar = zeros((size,), dtype=dtype)
+
+        for i in range(size):
+            ar[i] = dtype(i) * 5
+            print i
 except Exception, e:
     print "Exception: ", type(e)
     print e
