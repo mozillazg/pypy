@@ -315,11 +315,64 @@ class AbstractLLCPU(AbstractCPU):
         items[itemindex] = newvalue
         # --- end of GC unsafe code ---
 
-    bh_setarrayitem_raw_i = bh_setarrayitem_gc_i
-    bh_setarrayitem_raw_f = bh_setarrayitem_gc_f
+    @specialize.argtype(2)
+    def bh_getarrayitem_raw_i(self, arraydescr, gcref, itemindex):
+        size = arraydescr.get_item_size(self.translate_support_code)
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), 0)
+        for TYPE, itemsize in unroll_basic_sizes:
+            if size == itemsize:
+                items = rffi.cast(rffi.CArrayPtr(TYPE), items) 
+                val = items[itemindex]
+                # --- end of GC unsafe code ---
+                return rffi.cast(lltype.Signed, val)
+        else:
+            raise NotImplementedError("size = %d" % size)
 
-    bh_getarrayitem_raw_i = bh_getarrayitem_gc_i
-    bh_getarrayitem_raw_f = bh_getarrayitem_gc_f
+    def bh_getarrayitem_raw_r(self, arraydescr, gcref, itemindex):
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.cast(rffi.CArrayPtr(lltype.Signed), items)
+        pval = self._cast_int_to_gcref(items[itemindex])
+        # --- end of GC unsafe code ---
+        return pval
+
+    @specialize.argtype(2)
+    def bh_getarrayitem_raw_f(self, arraydescr, gcref, itemindex):
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), 0)
+        items = rffi.cast(rffi.CArrayPtr(lltype.Float), items)
+        fval = items[itemindex]
+        # --- end of GC unsafe code ---
+        return fval
+
+    @specialize.argtype(2)
+    def bh_setarrayitem_raw_i(self, arraydescr, gcref, itemindex, newvalue):
+        size = arraydescr.get_item_size(self.translate_support_code)
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), 0)
+        for TYPE, itemsize in unroll_basic_sizes:
+            if size == itemsize:
+                items = rffi.cast(rffi.CArrayPtr(TYPE), items)
+                items[itemindex] = rffi.cast(TYPE, newvalue)
+                # --- end of GC unsafe code ---
+                return
+        else:
+            raise NotImplementedError("size = %d" % size)
+
+    def bh_setarrayitem_raw_r(self, arraydescr, gcref, itemindex, newvalue):
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), 0)
+        items = rffi.cast(rffi.CArrayPtr(lltype.Signed), items)
+        items[itemindex] = self.cast_gcref_to_int(newvalue)
+        # --- end of GC unsafe code ---
+
+    @specialize.argtype(2)
+    def bh_setarrayitem_raw_f(self, arraydescr, gcref, itemindex, newvalue):
+        # --- start of GC unsafe code (no GC operation!) ---
+        items = rffi.ptradd(rffi.cast(rffi.CCHARP, gcref), 0)
+        items = rffi.cast(rffi.CArrayPtr(lltype.Float), items)
+        items[itemindex] = newvalue
+        # --- end of GC unsafe code ---
 
     def bh_strlen(self, string):
         s = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), string)

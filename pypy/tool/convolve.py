@@ -25,10 +25,8 @@ def naive_convolve(f, g):
     # Allocate result image.
     h = np.zeros([xmax, ymax], dtype=f.dtype)
     # Do convolution
-    print "Herp"
     for x in range(xmax):
         for y in range(ymax):
-            print "<%d,%d>" % (x, y)
             # Calculate pixel value for h at (x,y). Sum one component
             # for each pixel (s, t) of the filter g.
             s_from = max(smid - x, -smid)
@@ -41,5 +39,6 @@ def naive_convolve(f, g):
                     v = x - smid + s
                     w = y - tmid + t
                     value += g[smid - s, tmid - t] * f[v, w]
+            print "h[%d, %d] = %s" % (x, y, value)
             h[x, y] = value
     return h
