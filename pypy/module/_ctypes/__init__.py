@@ -5,7 +5,24 @@ class Module(MixedModule):
         'dlopen' : 'interp_dll.W_CDLL',
         'Test' : 'interp_test.W_Test',
     }
-    appleveldefs = {}
+    appleveldefs = {
+        '_SimpleCData' : 'app_dummy._SimpleCData',
+        '_Pointer' : 'app_dummy._Pointer',
+        'CFuncPtr' : 'app_dummy.CFuncPtr',
+        'Union' : 'app_dummy.Union',
+        'Structure' : 'app_dummy.Structure',
+        'Array' : 'app_dummy.Array',
+        'ArgumentError' : 'app_dummy.ArgumentError',
+        'sizeof' : 'app_dummy.sizeof',
+        'byref' : 'app_dummy.byref',
+        'addressof' : 'app_dummy.addressof',
+        'alignment' : 'app_dummy.alignment',
+        'resize' : 'app_dummy.resize',
+        '_memmove_addr' : 'app_dummy._memmove_addr',
+        '_memset_addr' : 'app_dummy._memset_addr',
+        '_cast_addr' : 'app_dummy._cast_addr',
+        '_string_at' : 'app_dummy._string_at',
+    }
 
     def buildloaders(cls):
         from pypy.module._ctypes.constants import constants
