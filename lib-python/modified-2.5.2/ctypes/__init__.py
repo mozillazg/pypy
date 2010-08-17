@@ -143,9 +143,10 @@ def _check_size(typ, typecode=None):
         # Most _type_ codes are the same as used in struct
         typecode = typ._type_
     actual, required = sizeof(typ), calcsize(typecode)
-    if actual != required:
-        raise SystemError("sizeof(%s) wrong: %d instead of %d" % \
-                          (typ, actual, required))
+    # XXX temporary commented (see r76653)
+    #if actual != required:
+    #    raise SystemError("sizeof(%s) wrong: %d instead of %d" % \
+    #                      (typ, actual, required))
 
 class py_object(_SimpleCData):
     _type_ = "O"
