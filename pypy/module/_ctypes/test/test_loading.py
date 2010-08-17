@@ -8,7 +8,7 @@ import py
 
 class AppTestLoader(object):
     def setup_class(cls):
-        space = gettestobjspace(usemodules=('_ctypes',))
+        space = gettestobjspace(usemodules=('_ctypes', 'struct'))
         cls.space = space
         cls.w_unknowndll = space.wrap("xxrandomnamexx")
 
