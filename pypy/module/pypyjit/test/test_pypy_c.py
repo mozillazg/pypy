@@ -110,6 +110,7 @@ class PyPyCJITTests(object):
 
         if sys.platform.startswith('win'):
             py.test.skip("XXX this is not Windows-friendly")
+        print logfilepath
         child_stdout = os.popen('PYPYLOG=":%s" "%s" "%s"' % (
             logfilepath, self.pypy_c, filepath), 'r')
         result = child_stdout.read()
@@ -847,7 +848,7 @@ class PyPyCJITTests(object):
                 return intimg[i - 1]
             ''', maxops, ([tc], res))
 
-    def test_intbound(self):
+    def test_intbound_simple(self):
         ops = ('<', '>', '<=', '>=')
         nbr = (3, 7)
         for o1 in ops:
@@ -881,11 +882,12 @@ class PyPyCJITTests(object):
                             res[f(i)] += 1500
                         self.run_source(src, 220, ([], res))
 
-    def test_intbound_addsub(self):
+    def test_intbound_addsub_mix(self):
         tests = ('i > 4', 'i > 2', 'i + 1 > 2', '1 + i > 4',
                  'i - 1 > 1', '1 - i > 1', '1 - i < -3')
         for t1 in tests:
             for t2 in tests:
+                print t1, t2
                 src = '''
                 def f(i):
                     a, b = 3, 3
@@ -926,21 +928,6 @@ class PyPyCJITTests(object):
             return (a, b)
         ''', 48, ([], (2000, 2000)))
 
-
-    def test_intbound_addsub_ge(self):
-        self.run_source('''
-        def main():
-            i, a, b = 0, 0, 0
-            while i < 2000:
-                if i + 5 >= 5:
-                    a += 1
-                #if i - 1 >= -1:
-                if i - 1 >= -1:
-                    b += 1
-                i += 1
-            return (a, b)
-        ''', 0, ([], (2000, 2000)))
-
     def test_intbound_sub_lt(self):
         self.run_source('''
         def main():
@@ -950,8 +937,47 @@ class PyPyCJITTests(object):
                     a += 1
                 i += 1
             return (a, b)
-        ''', 0, ([], (2000, 0)))
+        ''', 38, ([], (2000, 0)))
 
+    def test_intbound_addsub_ge(self):
+        self.run_source('''
+        def main():
+            i, a, b = 0, 0, 0
+            while i < 2000:
+                if i + 5 >= 5:
+                    a += 1
+                if i - 1 >= -1:
+                    b += 1
+                i += 1
+            return (a, b)
+        ''', 56, ([], (2000, 2000)))
+
+    def test_zeropadded(self):
+        self.run_source('''
+        from array import array
+        class ZeroPadded(array):
+            def __new__(cls, l):
+                self = array.__new__(cls, 'd', range(l))
+                return self
+
+            def __getitem__(self, i):
+                if i < 0 or i >= self.__len__():
+                    return 0
+                return array.__getitem__(self, i)
+
+
+        def main():
+            buf = ZeroPadded(2000)
+            i = 10
+            sa = 0
+            while i < 2000 - 10:
+                sa += buf[i-2] + buf[i-1] + buf[i] + buf[i+1] + buf[i+2]
+                i += 1
+            return sa
+
+        ''', 232, ([], 9895050.0))
+
+    # test_circular
 
 class AppTestJIT(PyPyCJITTests):
     def setup_class(cls):

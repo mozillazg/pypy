@@ -3169,6 +3169,47 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
         
+    def test_bound_lt_add_ovf(self):
+        ops = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_add_ovf(i0, 10)
+        guard_no_overflow() []
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_lt(i0, 4)
+        guard_true(i1) []
+        i2 = int_add(i0, 10)        
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
+    def test_bound_lt_add_ovf_before(self):
+        ops = """
+        [i0]
+        i2 = int_add_ovf(i0, 10)
+        guard_no_overflow() []
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        i1 = int_lt(i0, 6)
+        guard_true(i1) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i2 = int_add_ovf(i0, 10)
+        guard_no_overflow() []
+        i3 = int_lt(i2, 15)
+        guard_true(i3) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+        
     def test_bound_lt_sub(self):
         ops = """
         [i0]
@@ -3292,6 +3333,79 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not', expected)
 
+    def test_bound_ovf(self):
+        ops = """
+        [i0]
+        i1 = int_ge(i0, 0)
+        guard_true(i1) []
+        i2 = int_lt(i0, 10)
+        guard_true(i2) []
+        i3 = int_add_ovf(i0, 1)
+        guard_no_overflow() []
+        jump(i3)
+        """
+        expected = """
+        [i0]
+        i1 = int_ge(i0, 0)
+        guard_true(i1) []
+        i2 = int_lt(i0, 10)
+        guard_true(i2) []
+        i3 = int_add(i0, 1)
+        jump(i3)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_addsub_const(self):
+        ops = """
+        [i0]
+        i1 = int_add(i0, 1)
+        i2 = int_sub(i1, 1)
+        i3 = int_add(i2, 1)
+        i4 = int_mul(i2, i3)
+        jump(i4)
+        """
+        expected = """
+        [i0]
+        i1 = int_add(i0, 1)
+        i4 = int_mul(i0, i1)
+        jump(i4)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_addsub_int(self):
+        ops = """
+        [i0, i10]
+        i1 = int_add(i0, i10)
+        i2 = int_sub(i1, i10)
+        i3 = int_add(i2, i10)
+        i4 = int_add(i2, i3)
+        jump(i4, i10)
+        """
+        expected = """
+        [i0, i10]
+        i1 = int_add(i0, i10)
+        i4 = int_add(i0, i1)
+        jump(i4, i10)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_addsub_int2(self):
+        ops = """
+        [i0, i10]
+        i1 = int_add(i10, i0)
+        i2 = int_sub(i1, i10)
+        i3 = int_add(i10, i2)
+        i4 = int_add(i2, i3)
+        jump(i4, i10)
+        """
+        expected = """
+        [i0, i10]
+        i1 = int_add(i10, i0)
+        i4 = int_add(i0, i1)
+        jump(i4, i10)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
     def test_framestackdepth_overhead(self):
         ops = """
         [p0, i22]
@@ -3321,6 +3435,115 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         jump(p0, i22)
         """
         self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_addsub_ovf(self):
+        ops = """
+        [i0]
+        i1 = int_add_ovf(i0, 10)
+        guard_no_overflow() []
+        i2 = int_sub_ovf(i1, 5)
+        guard_no_overflow() []
+        jump(i2)
+        """
+        expected = """
+        [i0]
+        i1 = int_add_ovf(i0, 10)
+        guard_no_overflow() []
+        i2 = int_sub(i1, 5)
+        jump(i2)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_subadd_ovf(self):
+        ops = """
+        [i0]
+        i1 = int_sub_ovf(i0, 10)
+        guard_no_overflow() []
+        i2 = int_add_ovf(i1, 5)
+        guard_no_overflow() []
+        jump(i2)
+        """
+        expected = """
+        [i0]
+        i1 = int_sub_ovf(i0, 10)
+        guard_no_overflow() []
+        i2 = int_add(i1, 5)
+        jump(i2)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_bound_and(self):
+        ops = """
+        [i0]
+        i1 = int_and(i0, 255)
+        i2 = int_lt(i1, 500)
+        guard_true(i2) []
+        i3 = int_le(i1, 255)
+        guard_true(i3) []
+        i4 = int_gt(i1, -1)
+        guard_true(i4) []
+        i5 = int_ge(i1, 0)
+        guard_true(i5) []
+        i6 = int_lt(i1, 0)
+        guard_false(i6) []
+        i7 = int_le(i1, -1)
+        guard_false(i7) []
+        i8 = int_gt(i1, 255)
+        guard_false(i8) []
+        i9 = int_ge(i1, 500)
+        guard_false(i9) []
+        i12 = int_lt(i1, 100)
+        guard_true(i12) []
+        i13 = int_le(i1, 90)
+        guard_true(i13) []
+        i14 = int_gt(i1, 10)
+        guard_true(i14) []
+        i15 = int_ge(i1, 20)
+        guard_true(i15) []        
+        jump(i1)
+        """
+        expected = """
+        [i0]
+        i1 = int_and(i0, 255)
+        i12 = int_lt(i1, 100)
+        guard_true(i12) []
+        i13 = int_le(i1, 90)
+        guard_true(i13) []
+        i14 = int_gt(i1, 10)
+        guard_true(i14) []
+        i15 = int_ge(i1, 20)
+        guard_true(i15) []        
+        jump(i1)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_subsub_ovf(self):
+        ops = """
+        [i0]
+        i1 = int_sub_ovf(1, i0)
+        guard_no_overflow() []
+        i2 = int_gt(i1, 1)
+        guard_true(i2) []
+        i3 = int_sub_ovf(1, i0)
+        guard_no_overflow() []
+        i4 = int_gt(i3, 1)
+        guard_true(i4) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_sub_ovf(1, i0)
+        guard_no_overflow() []
+        i2 = int_gt(i1, 1)
+        guard_true(i2) []
+        i3 = int_sub_ovf(1, i0)
+        guard_no_overflow() []
+        i4 = int_gt(i3, 1)
+        guard_true(i4) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
         
 
 

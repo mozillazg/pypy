@@ -19,6 +19,10 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 from pypy.rlib.rarithmetic import ovfcheck
 
+import sys
+MAXINT = sys.maxint
+MININT = -sys.maxint - 1
+
 def optimize_loop_1(metainterp_sd, loop):
     """Optimize loop.operations to make it match the input of loop.specnodes
     and to remove internal overheadish operations.  Note that loop.specnodes
@@ -118,25 +122,37 @@ class IntBound(object):
     def add_bound(self, other):
         res = self.copy()
         if other.has_upper:
-            res.upper += other.upper
+            try:
+                res.upper = ovfcheck(res.upper + other.upper)
+            except OverflowError:
+                res.has_upper = False
         else:
             res.has_upper = False
         if other.has_lower:
-            res.lower += other.lower
+            try:
+                res.lower = ovfcheck(res.lower + other.lower)
+            except OverflowError:
+                res.has_lower = False            
         else:
             res.has_lower = False
         return res
 
     def sub_bound(self, other):
         res = self.copy()
-        if other.has_upper:
-            res.lower -= other.upper
-        else:
-            res.has_lower = False
         if other.has_lower:
-            res.upper -= other.lower
+            try:
+                res.upper = ovfcheck(res.upper - other.lower)
+            except OverflowError:
+                res.has_upper = False
         else:
             res.has_upper = False
+        if other.has_upper:
+            try:
+                res.lower = ovfcheck(res.lower - other.upper)
+            except OverflowError:
+                res.has_lower = False            
+        else:
+            res.has_lower = False
         return res
 
     def contains(self, val):
@@ -201,7 +217,7 @@ class OptValue(object):
 
     def __init__(self, box):
         self.box = box
-        self.intbound = IntUnbounded()
+        self.intbound = IntBound(MININT, MAXINT) #IntUnbounded()
         if isinstance(box, Const):
             self.make_constant(box)
         # invariant: box is a Const if and only if level == LEVEL_CONSTANT
@@ -678,7 +694,9 @@ class Optimizer(object):
     def propagate_forward(self):
         self.exception_might_have_happened = False
         self.newoperations = []
-        for op in self.loop.operations:
+        self.i = 0
+        while self.i < len(self.loop.operations):
+            op = self.loop.operations[self.i]
             self.producer[op.result] = op
             opnum = op.opnum
             for value, func in optimize_ops:
@@ -687,6 +705,7 @@ class Optimizer(object):
                     break
             else:
                 self.optimize_default(op)
+            self.i += 1
         self.loop.operations = self.newoperations
         # accumulate counters
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
@@ -757,7 +776,7 @@ class Optimizer(object):
             arg = args[i]
             if arg in self.values:
                 args[i] = self.values[arg].get_key_box()
-            args.append(ConstInt(op.opnum))
+        args.append(ConstInt(op.opnum))
         return args
             
     def optimize_default(self, op):
@@ -1199,6 +1218,15 @@ class Optimizer(object):
             self.make_constant_int(op.result, 0)
         else:
             self.optimize_default(op)
+            r = self.getvalue(op.result)
+            if v2.is_constant():
+                val = v2.box.getint()
+                if val >= 0:
+                    r.intbound.intersect(IntBound(0,val))
+            elif v1.is_constant():
+                val = v1.box.getint()
+                if val >= 0:
+                    r.intbound.intersect(IntBound(0,val))
 
     def optimize_INT_OR(self, op):
         v1 = self.getvalue(op.args[0])
@@ -1209,6 +1237,10 @@ class Optimizer(object):
             self.make_equal_to(op.result, v1)
         else:
             self.optimize_default(op)
+
+    def pure(self, opnum, args, result):
+        op = ResOperation(opnum, args, result)
+        self.pure_operations[self.make_args_key(op)] = op 
     
     def optimize_INT_SUB(self, op):
         v1 = self.getvalue(op.args[0])
@@ -1218,8 +1250,11 @@ class Optimizer(object):
         else:
             self.optimize_default(op)
         r = self.getvalue(op.result)
-        print v1.intbound.sub_bound(v2.intbound)
         r.intbound.intersect(v1.intbound.sub_bound(v2.intbound))
+
+        # Synthesize the reverse ops for optimize_default to reuse
+        self.pure(rop.INT_ADD, [op.result, op.args[1]], op.args[0])
+        self.pure(rop.INT_SUB, [op.args[0], op.result], op.args[1])
     
     def optimize_INT_ADD(self, op):
         v1 = self.getvalue(op.args[0])
@@ -1235,13 +1270,38 @@ class Optimizer(object):
         r.intbound.intersect(v1.intbound.add_bound(v2.intbound))
 
         # Synthesize the reverse op for optimize_default to reuse
-        revop = ResOperation(rop.INT_SUB, [op.result, op.args[1]], \
-                             op.args[0], op.descr)
-        self.pure_operations[self.make_args_key(revop)] = revop            
-        revop = ResOperation(rop.INT_SUB, [op.result, op.args[0]], \
-                             op.args[1], op.descr)
-        self.pure_operations[self.make_args_key(revop)] = revop            
+        self.pure(rop.INT_SUB, [op.result, op.args[1]], op.args[0])
+        self.pure(rop.INT_SUB, [op.result, op.args[0]], op.args[1])
 
+    def optimize_INT_ADD_OVF(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        resbound = v1.intbound.add_bound(v2.intbound)
+        if resbound.has_lower and resbound.has_upper and \
+               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
+            # Transform into INT_SUB and remove guard
+            op.opnum = rop.INT_ADD
+            self.i += 1
+            self.optimize_INT_ADD(op)
+        else:
+            self.optimize_default(op)
+            r = self.getvalue(op.result)
+            r.intbound.intersect(resbound)
+        
+    def optimize_INT_SUB_OVF(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        resbound = v1.intbound.sub_bound(v2.intbound)
+        if resbound.has_lower and resbound.has_upper and \
+               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
+            # Transform into INT_SUB and remove guard
+            op.opnum = rop.INT_SUB
+            self.i += 1
+            self.optimize_INT_SUB(op)
+        else:
+            self.optimize_default(op)
+            r = self.getvalue(op.result)
+            r.intbound.intersect(resbound)
 
     def optimize_INT_LT(self, op):
         v1 = self.getvalue(op.args[0])
@@ -1359,6 +1419,9 @@ class Optimizer(object):
         # FIXME:
         # b = r.intbound.sub_bound(v1.intbound).mul(-1)
         # if v2.intbound.intersect(b):
+
+    propagate_bounds_INT_ADD_OVF  = propagate_bounds_INT_ADD
+    propagate_bounds_INT_SUB_OVF  = propagate_bounds_INT_SUB
 
 optimize_ops = _findall(Optimizer, 'optimize_')
 propagate_bounds_ops = _findall(Optimizer, 'propagate_bounds_')
