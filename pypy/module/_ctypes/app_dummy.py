@@ -1,7 +1,7 @@
 class DummyClass(object):
     def __init__(self, *args, **kwargs):
         raise NotImplementedError("not-implemented ctypes function")
-_Pointer = Union = Structure = Array = ArgumentError = DummyClass
+_Pointer = Union = Structure = Array = DummyClass
 
 class CFuncPtr(object):
     def __init__(self, *args, **kwargs):

@@ -6,13 +6,13 @@ class Module(MixedModule):
         'Test' : 'interp_test.W_Test',
     }
     appleveldefs = {
+        'ArgumentError' : 'app_basics.ArgumentError',
         '_SimpleCData' : 'app_dummy._SimpleCData',
         '_Pointer' : 'app_dummy._Pointer',
         'CFuncPtr' : 'app_dummy.CFuncPtr',
         'Union' : 'app_dummy.Union',
         'Structure' : 'app_dummy.Structure',
         'Array' : 'app_dummy.Array',
-        'ArgumentError' : 'app_dummy.ArgumentError',
         'sizeof' : 'app_dummy.sizeof',
         'byref' : 'app_dummy.byref',
         'addressof' : 'app_dummy.addressof',
