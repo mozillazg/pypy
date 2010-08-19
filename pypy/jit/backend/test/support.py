@@ -2,7 +2,7 @@ import py
 import sys
 from pypy.rlib.debug import debug_print
 from pypy.rlib.jit import OPTIMIZER_FULL
-from pypy.translator.translator import TranslationContext
+from pypy.translator.translator import TranslationContext, graphof
 
 class BaseCompiledMixin(object):
 
@@ -56,16 +56,18 @@ class BaseCompiledMixin(object):
             """ % (arglist,))
         exec src.compile() in locals()
 
-        t.buildannotator().build_types(function, [int] * len(args))
+        t.buildannotator().build_types(function, [int] * len(args),
+                                       main_entry_point=True)
         t.buildrtyper(type_system=self.type_system).specialize()
         warmrunnerdesc = WarmRunnerDesc(t, translate_support_code=True,
                                         CPUClass=self.CPUClass,
                                         **kwds)
-        warmrunnerdesc.state.set_param_threshold(3)          # for tests
-        warmrunnerdesc.state.set_param_trace_eagerness(2)    # for tests
-        warmrunnerdesc.state.set_param_trace_limit(trace_limit)
-        warmrunnerdesc.state.set_param_inlining(inline)
-        warmrunnerdesc.state.set_param_optimizer(OPTIMIZER_FULL)
+        for jd in warmrunnerdesc.jitdrivers_sd:
+            jd.warmstate.set_param_threshold(3)          # for tests
+            jd.warmstate.set_param_trace_eagerness(2)    # for tests
+            jd.warmstate.set_param_trace_limit(trace_limit)
+            jd.warmstate.set_param_inlining(inline)
+            jd.warmstate.set_param_optimizer(OPTIMIZER_FULL)
         mixlevelann = warmrunnerdesc.annhelper
         entry_point_graph = mixlevelann.getgraph(entry_point, [s_list_of_strings],
                                                  annmodel.SomeInteger())

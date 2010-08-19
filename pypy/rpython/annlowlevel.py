@@ -17,7 +17,7 @@ class KeyComp(object):
     def __init__(self, val):
         self.val = val
     def __eq__(self, other):
-        return self.__class__ == other.__class__ and self.val == other.val
+        return self.__class__ is other.__class__ and self.val == other.val
     def __ne__(self, other):
         return not (self == other)
     def __hash__(self):
@@ -34,6 +34,7 @@ class KeyComp(object):
             else:
                 s = compact()        
         return s + 'Const'
+    __repr__ = __str__
 
 class LowLevelAnnotatorPolicy(AnnotatorPolicy):
     allow_someobjects = False

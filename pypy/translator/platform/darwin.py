@@ -18,8 +18,20 @@ class Darwin(posix.BasePosix):
         self.cc = cc
 
     def _args_for_shared(self, args):
-        return (self.shared_only + ['-bundle', '-undefined', 'dynamic_lookup']
+        return (self.shared_only + ['-dynamiclib', '-undefined', 'dynamic_lookup']
                                  + args)
+    
+    def _preprocess_include_dirs(self, include_dirs):
+        res_incl_dirs = list(include_dirs)
+        res_incl_dirs.append('/usr/local/include') # Homebrew
+        res_incl_dirs.append('/opt/local/include') # MacPorts
+        return res_incl_dirs
+
+    def _preprocess_library_dirs(self, library_dirs):
+        res_lib_dirs = list(library_dirs) 
+        res_lib_dirs.append('/usr/local/lib') # Homebrew
+        res_lib_dirs.append('/opt/local/lib') # MacPorts
+        return res_lib_dirs
 
     def include_dirs_for_libffi(self):
         return ['/usr/include/ffi']
@@ -43,6 +55,20 @@ class Darwin(posix.BasePosix):
         frameworks = self._frameworks(eci.frameworks)
         include_dirs = self._includedirs(eci.include_dirs)
         return (args + frameworks + include_dirs)
+
+    def _exportsymbols_link_flags(self, eci, relto=None):
+        if not eci.export_symbols:
+            return []
+
+        response_file = self._make_response_file("dynamic-symbols-")
+        f = response_file.open("w")
+        for sym in eci.export_symbols:
+            f.write("_%s\n" % (sym,))
+        f.close()
+
+        if relto:
+            response_file = relto.bestrelpath(response_file)
+        return ["-Wl,-exported_symbols_list,%s" % (response_file,)]
 
 class Darwin_i386(Darwin):
     name = "darwin_i386"

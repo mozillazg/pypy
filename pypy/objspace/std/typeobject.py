@@ -1,4 +1,5 @@
-from pypy.objspace.std.objspace import register_all, W_Object
+from pypy.objspace.std.model import W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.interpreter.function import Function, StaticMethod
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -13,6 +14,7 @@ from pypy.rlib.jit import dont_look_inside, purefunction
 from pypy.rlib.rarithmetic import intmask, r_uint
 
 from copy_reg import _HEAPTYPE
+_CPYTYPE = 1 # used for non-heap types defined in C
 
 # from compiler/misc.py
 
@@ -45,6 +47,19 @@ def _mangle(name, klass):
 
 class VersionTag(object):
     pass
+
+class MethodCache(object):
+
+    def __init__(self, space):
+        assert space.config.objspace.std.withmethodcache
+        SIZE = 1 << space.config.objspace.std.methodcachesizeexp
+        self.versions = [None] * SIZE
+        self.names = [None] * SIZE
+        self.lookup_where = [(None, None)] * SIZE
+        if space.config.objspace.std.withmethodcachecounter:
+            self.hits = {}
+            self.misses = {}
+
 
 class W_TypeObject(W_Object):
     from pypy.objspace.std.typetype import type_typedef as typedef
@@ -82,7 +97,7 @@ class W_TypeObject(W_Object):
         w_self.needsdel = False
         w_self.weakrefable = False
         w_self.weak_subclasses = []
-        w_self.__flags__ = 0           # or _HEAPTYPE
+        w_self.__flags__ = 0           # or _HEAPTYPE or _CPYTYPE
         w_self.instancetypedef = overridetypedef
 
         if overridetypedef is not None:
@@ -264,6 +279,7 @@ class W_TypeObject(W_Object):
     @purefunction
     def _pure_lookup_where_with_method_cache(w_self, name, version_tag):
         space = w_self.space
+        cache = space.fromcache(MethodCache)
         SHIFT2 = r_uint.BITS - space.config.objspace.std.methodcachesizeexp
         SHIFT1 = SHIFT2 - 5
         version_tag_as_int = current_object_addr_as_int(version_tag)
@@ -280,23 +296,21 @@ class W_TypeObject(W_Object):
         # platforms SHIFT2 is really large, and we loose too much information
         # that way (as shown by failures of the tests that typically have
         # method names like 'f' who hash to a number that has only ~33 bits).
-        cached_version_tag = space.method_cache_versions[method_hash]
+        cached_version_tag = cache.versions[method_hash]
         if cached_version_tag is version_tag:
-            cached_name = space.method_cache_names[method_hash]
+            cached_name = cache.names[method_hash]
             if cached_name is name:
-                tup = space.method_cache_lookup_where[method_hash]
+                tup = cache.lookup_where[method_hash]
                 if space.config.objspace.std.withmethodcachecounter:
-                    space.method_cache_hits[name] = \
-                            space.method_cache_hits.get(name, 0) + 1
+                    cache.hits[name] = cache.hits.get(name, 0) + 1
 #                print "hit", w_self, name
                 return tup
         tup = w_self._lookup_where_all_typeobjects(name)
-        space.method_cache_versions[method_hash] = version_tag
-        space.method_cache_names[method_hash] = name
-        space.method_cache_lookup_where[method_hash] = tup
+        cache.versions[method_hash] = version_tag
+        cache.names[method_hash] = name
+        cache.lookup_where[method_hash] = tup
         if space.config.objspace.std.withmethodcachecounter:
-            space.method_cache_misses[name] = \
-                    space.method_cache_misses.get(name, 0) + 1
+            cache.misses[name] = cache.misses.get(name, 0) + 1
 #        print "miss", w_self, name
         return tup
 
@@ -338,7 +352,10 @@ class W_TypeObject(W_Object):
         raise UnwrapError(w_self)
 
     def is_heaptype(w_self):
-        return w_self.__flags__&_HEAPTYPE
+        return w_self.__flags__ & _HEAPTYPE
+
+    def is_cpytype(w_self):
+        return w_self.__flags__ & _CPYTYPE
 
     def get_module(w_self):
         space = w_self.space
@@ -564,6 +581,10 @@ def setup_user_defined_type(w_self):
     w_bestbase = check_and_find_best_base(w_self.space, w_self.bases_w)
     w_self.instancetypedef = w_bestbase.instancetypedef
     w_self.__flags__ = _HEAPTYPE
+    for w_base in w_self.bases_w:
+        if not isinstance(w_base, W_TypeObject):
+            continue
+        w_self.__flags__ |= w_base.__flags__
 
     hasoldstylebase = copy_flags_from_bases(w_self, w_bestbase)
     create_all_slots(w_self, hasoldstylebase)

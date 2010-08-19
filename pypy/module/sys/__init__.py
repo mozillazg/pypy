@@ -1,5 +1,7 @@
-from pypy.interpreter.mixedmodule import MixedModule 
+from pypy.interpreter.mixedmodule import MixedModule
 from pypy.interpreter.error import OperationError
+from pypy.rlib.objectmodel import we_are_translated
+import sys
 
 class Module(MixedModule):
     """Sys Builtin Module. """
@@ -10,6 +12,7 @@ class Module(MixedModule):
         self.recursionlimit = 100
         self.w_default_encoder = None
         self.defaultencoding = "ascii"
+        self.filesystemencoding = None
         
     interpleveldefs = {
         '__name__'              : '(space.wrap("sys"))', 
@@ -27,9 +30,8 @@ class Module(MixedModule):
         'stderr'                : 'state.getio(space).w_stderr',
         '__stderr__'            : 'state.getio(space).w_stderr',
         'pypy_objspaceclass'    : 'space.wrap(repr(space))',
-        #'pypy_prefix': added by pypy_initial_path() when it succeeds, pointing
-        # to the trunk of a checkout or to the dir /usr/share/pypy-1.1 .
-
+        #'prefix'               : # added by pypy_initial_path() when it 
+        #'exec_prefix'          : # succeeds, pointing to trunk or /usr
         'path'                  : 'state.get(space).w_path', 
         'modules'               : 'state.get(space).w_modules', 
         'argv'                  : 'state.get(space).w_argv', 
@@ -68,13 +70,18 @@ class Module(MixedModule):
         
         'getdefaultencoding'    : 'interp_encoding.getdefaultencoding', 
         'setdefaultencoding'    : 'interp_encoding.setdefaultencoding',
-}
+        'getfilesystemencoding' : 'interp_encoding.getfilesystemencoding',
+        }
+
+    if sys.platform == 'win32':
+        interpleveldefs['winver'] = 'version.get_winver(space)'
+        interpleveldefs['getwindowsversion'] = 'vm.getwindowsversion'
+    
     appleveldefs = {
         'excepthook'            : 'app.excepthook', 
         '__excepthook__'        : 'app.excepthook', 
         'exit'                  : 'app.exit', 
         'exitfunc'              : 'app.exitfunc',
-        'getfilesystemencoding' : 'app.getfilesystemencoding', 
         'callstats'             : 'app.callstats',
         'copyright'             : 'app.copyright_str', 
     }
@@ -84,7 +91,12 @@ class Module(MixedModule):
         w_modules = self.get('modules')
         self.space.setitem(w_modules, w_name, w_module)
 
-    def getmodule(self, name): 
+    def startup(self, space):
+        if space.config.translating and not we_are_translated():
+            # don't get the filesystemencoding at translation time
+            assert self.filesystemencoding is None
+
+    def getmodule(self, name):
         space = self.space
         w_modules = self.get('modules') 
         try: 

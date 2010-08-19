@@ -7,7 +7,7 @@ import os
 CPYTHON_VERSION            = (2, 5, 2, "beta", 42)
 CPYTHON_API_VERSION        = 1012
 
-PYPY_VERSION               = (1, 2, 0, "beta", '?')
+PYPY_VERSION               = (1, 3, 0, "beta", '?')
 # the last item is replaced by the svn revision ^^^
 
 TRIM_URL_UP_TO = 'svn/pypy/'
@@ -57,6 +57,11 @@ def get_version(space):
         PYPY_VERSION[0],
         PYPY_VERSION[1],
         PYPY_VERSION[2]))
+
+def get_winver(space):
+    return space.wrap("%d.%d" % (
+        CPYTHON_VERSION[0],
+        CPYTHON_VERSION[1]))
 
 def get_hexversion(space):
     return space.wrap(tuple2hex(CPYTHON_VERSION))

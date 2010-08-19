@@ -15,7 +15,7 @@ allow them to be parents of each other. Needs a bit more
 experience to decide where to set the limits.
 """
 
-from pypy.interpreter.baseobjspace import Wrappable, UnpackValueError
+from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import GetSetProperty, TypeDef
 from pypy.interpreter.typedef import interp_attrproperty, interp_attrproperty_w
@@ -24,7 +24,9 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.function import StaticMethod
 
 from pypy.module._stackless.stackless_flags import StacklessFlags
-from pypy.module._stackless.rcoroutine import Coroutine, BaseCoState, AbstractThunk
+from pypy.module._stackless.rcoroutine import Coroutine, BaseCoState, AbstractThunk, CoroutineExit
+
+from pypy.module.exceptions.interp_exceptions import W_SystemExit, _new_exception
 
 from pypy.rlib import rstack # for resume points
 from pypy.tool import stdlib_opcode as pythonopcode
@@ -48,6 +50,13 @@ class _AppThunk(AbstractThunk):
         rstack.resume_point("appthunk", costate, returns=w_result)
         costate.w_tempval = w_result
 
+W_CoroutineExit = _new_exception('CoroutineExit', W_SystemExit,
+                        """Coroutine killed manually.""")
+
+# Should be moved to interp_stackless.py if it's ever implemented... Currently
+# used by pypy/lib/stackless.py.
+W_TaskletExit = _new_exception('TaskletExit', W_SystemExit, 
+            """Tasklet killed manually.""")
 
 class AppCoroutine(Coroutine): # XXX, StacklessFlags):
 
@@ -92,6 +101,13 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
         w_ret, state.w_tempval = state.w_tempval, space.w_None
         return w_ret
 
+    def switch(self):
+        space = self.space
+        try:
+            Coroutine.switch(self)
+        except CoroutineExit:
+            raise OperationError(self.costate.w_CoroutineExit, space.w_None)
+
     def w_finished(self, w_excinfo):
         pass
 
@@ -102,6 +118,9 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
             w_excvalue = operror.get_w_value(space)
             w_exctraceback = operror.application_traceback
             w_excinfo = space.newtuple([w_exctype, w_excvalue, w_exctraceback])
+            
+            if w_exctype is self.costate.w_CoroutineExit:
+                self.coroutine_exit = True
         else:
             w_N = space.w_None
             w_excinfo = space.newtuple([w_N, w_N, w_N])
@@ -118,6 +137,23 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
 
     def w_kill(self):
         self.kill()
+            
+    def w_throw(self, w_type, w_value=None, w_traceback=None):
+        space = self.space
+
+        operror = OperationError(w_type, w_value)
+        operror.normalize_exception(space)
+        
+        if not space.is_w(w_traceback, space.w_None):
+            from pypy.interpreter import pytraceback
+            tb = space.interpclass_w(w_traceback)
+            if tb is None or not space.is_true(space.isinstance(tb, 
+                space.gettypeobject(pytraceback.PyTraceback.typedef))):
+                raise OperationError(space.w_TypeError,
+                      space.wrap("throw: arg 3 must be a traceback or None"))
+            operror.application_traceback = tb
+        
+        self._kill(operror)
 
     def _userdel(self):
         if self.get_is_zombie():
@@ -173,11 +209,8 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
         return nt([w_new_inst, nt(tup_base), nt(tup_state)])
 
     def descr__setstate__(self, space, w_args):
-        try:
-            w_flags, w_state, w_thunk, w_parent = space.unpackiterable(w_args,
-                                                             expected_length=4)
-        except UnpackValueError, e:
-            raise OperationError(space.w_ValueError, space.wrap(e.msg))
+        w_flags, w_state, w_thunk, w_parent = space.unpackiterable(w_args,
+                                                        expected_length=4)
         self.flags = space.int_w(w_flags)
         if space.is_w(w_parent, space.w_None):
             w_parent = self.w_getmain(space)
@@ -188,11 +221,8 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
         if space.is_w(w_thunk, space.w_None):
             self.thunk = None
         else:
-            try:
-                w_func, w_args, w_kwds = space.unpackiterable(w_thunk,
-                                                             expected_length=3)
-            except UnpackValueError, e:
-                raise OperationError(space.w_ValueError, space.wrap(e.msg))
+            w_func, w_args, w_kwds = space.unpackiterable(w_thunk,
+                                                          expected_length=3)
             args = Arguments.frompacked(space, w_args, w_kwds)
             self.bind(_AppThunk(space, self.costate, w_func, args))
 
@@ -235,10 +265,14 @@ class AppCoroutine(Coroutine): # XXX, StacklessFlags):
             instr += 1
             oparg = ord(code[instr]) | ord(code[instr + 1]) << 8
             nargs = oparg & 0xff
+            nkwds = (oparg >> 8) & 0xff
             if space.config.objspace.opcodes.CALL_METHOD and opcode == map['CALL_METHOD']:
-                chain = resume_state_create(chain, 'CALL_METHOD', frame,
-                                            nargs)
-            elif opcode == map['CALL_FUNCTION'] and (oparg >> 8) & 0xff == 0:
+                if nkwds == 0:     # only positional arguments
+                    chain = resume_state_create(chain, 'CALL_METHOD', frame,
+                                                nargs)
+                else:              # includes keyword arguments
+                    chain = resume_state_create(chain, 'CALL_METHOD_KW', frame)
+            elif opcode == map['CALL_FUNCTION'] and nkwds == 0:
                 # Only positional arguments
                 # case1: ("CALL_FUNCTION", f, nargs, returns=w_result)
                 chain = resume_state_create(chain, 'CALL_FUNCTION', frame,
@@ -315,6 +349,7 @@ AppCoroutine.typedef = TypeDef("coroutine",
                       unwrap_spec=['self', W_Root, Arguments]),
     switch = interp2app(AppCoroutine.w_switch),
     kill = interp2app(AppCoroutine.w_kill),
+    throw = interp2app(AppCoroutine.w_throw),
     finished = interp2app(AppCoroutine.w_finished),
     is_alive = GetSetProperty(AppCoroutine.w_get_is_alive),
     is_zombie = GetSetProperty(AppCoroutine.w_get_is_zombie,
@@ -336,6 +371,26 @@ class AppCoState(BaseCoState):
         BaseCoState.__init__(self)
         self.w_tempval = space.w_None
         self.space = space
+
+        # Exporting new exception to space
+        self.w_CoroutineExit = space.gettypefor(W_CoroutineExit)
+        space.setitem(
+                      space.exceptions_module.w_dict, 
+                      space.new_interned_str('CoroutineExit'), 
+                      self.w_CoroutineExit) 
+        space.setitem(space.builtin.w_dict, 
+                      space.new_interned_str('CoroutineExit'), 
+                      self.w_CoroutineExit)
+        
+        # Should be moved to interp_stackless.py if it's ever implemented...
+        self.w_TaskletExit = space.gettypefor(W_TaskletExit)
+        space.setitem(
+                      space.exceptions_module.w_dict, 
+                      space.new_interned_str('TaskletExit'), 
+                      self.w_TaskletExit) 
+        space.setitem(space.builtin.w_dict, 
+                      space.new_interned_str('TaskletExit'), 
+                      self.w_TaskletExit)  
         
     def post_install(self):
         self.current = self.main = AppCoroutine(self.space, state=self)

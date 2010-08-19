@@ -34,7 +34,7 @@ from pypy.tool import descriptor
 from pypy.tool.pairtype import pair, extendabletype
 from pypy.tool.tls import tlsobject
 from pypy.rlib.rarithmetic import r_uint, r_ulonglong, base_int
-from pypy.rlib.rarithmetic import r_singlefloat
+from pypy.rlib.rarithmetic import r_singlefloat, isnan
 import inspect, weakref
 
 DEBUG = False    # set to False to disable recording of debugging information
@@ -162,6 +162,13 @@ class SomeFloat(SomeObject):
                         # pretend it's a float.
     immutable = True
 
+    def __eq__(self, other):
+        # NaN unpleasantness.
+        if (self.is_constant() and other.is_constant() and
+            isnan(self.const) and isnan(other.const)):
+            return True
+        return super(SomeFloat, self).__eq__(other)
+
     def can_be_none(self):
         return False
 
@@ -229,11 +236,15 @@ class SomeUnicodeString(SomeObject):
 
 class SomeChar(SomeString):
     "Stands for an object known to be a string of length 1."
+    can_be_None = False
+    def __init__(self):    # no 'can_be_None' argument here
+        pass
 
 class SomeUnicodeCodePoint(SomeUnicodeString):
     "Stands for an object known to be a unicode codepoint."
-    def can_be_none(self):
-        return False
+    can_be_None = False
+    def __init__(self):    # no 'can_be_None' argument here
+        pass
 
 SomeString.basestringclass = SomeString
 SomeString.basecharclass = SomeChar
@@ -694,19 +705,6 @@ def not_const(s_obj):
 
 # ____________________________________________________________
 # internal
-
-def setunion(d1, d2):
-    "Union of two sets represented as dictionaries."
-    d = d1.copy()
-    d.update(d2)
-    return d
-
-def set(it):
-    "Turn an iterable into a set."
-    d = {}
-    for x in it:
-        d[x] = True
-    return d
 
 def commonbase(cls1, cls2):   # XXX single inheritance only  XXX hum
     l1 = inspect.getmro(cls1)

@@ -4,7 +4,7 @@ import py
 from pypy.tool.udir import udir
 
 def setup_module(mod):
-    mod.space = gettestobjspace(usemodules=['_socket'])
+    mod.space = gettestobjspace(usemodules=['_socket', 'array'])
     global socket
     import socket
     mod.w_socket = space.appexec([], "(): import _socket as m; return m")
@@ -115,6 +115,9 @@ def test_ntohl():
     w_n = space.appexec([w_socket, space.wrap(0x89abcdef)],
                         "(_socket, x): return _socket.ntohl(x)")
     assert space.unwrap(w_n) in (0x89abcdef, 0xefcdab89)
+    space.raises_w(space.w_OverflowError, space.appexec,
+                   [w_socket, space.wrap(1<<32)],
+                   "(_socket, x): return _socket.ntohl(x)")
 
 def test_htons():
     w_n = space.appexec([w_socket, space.wrap(125)],
@@ -128,6 +131,9 @@ def test_htonl():
     w_n = space.appexec([w_socket, space.wrap(0x89abcdef)],
                         "(_socket, x): return _socket.htonl(x)")
     assert space.unwrap(w_n) in (0x89abcdef, 0xefcdab89)
+    space.raises_w(space.w_OverflowError, space.appexec,
+                   [w_socket, space.wrap(1<<32)],
+                   "(_socket, x): return _socket.htonl(x)")
 
 def test_aton_ntoa():
     ip = '123.45.67.89'
@@ -344,7 +350,7 @@ class AppTestSocket:
         import _socket
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
         for args in tests:
-            raises(TypeError, s.connect, args)
+            raises((TypeError, ValueError), s.connect, args)
         s.close()
 
     def test_NtoH(self):
@@ -495,9 +501,9 @@ class AppTestSocketTCP:
             return serv
             ''')
     def teardown_method(self, method):
-        space.appexec([self.w_serv], '(serv): serv.close()')
-        self.w_serv = None
-            
+        if hasattr(self, 'w_serv'):
+            space.appexec([self.w_serv], '(serv): serv.close()')
+            self.w_serv = None
 
     def test_timeout(self):
         from _socket import timeout

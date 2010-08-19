@@ -223,6 +223,27 @@ class TestAnnotateTestCase:
         # result should be a list of integers
         assert listitem(s).knowntype == int
 
+    def test_staticmethod(self):
+        class X(object):
+            @staticmethod
+            def stat(value):
+                return value + 4
+        def f(v):
+            return X().stat(v)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s, annmodel.SomeInteger)
+
+    def test_classmethod(self):
+        class X(object):
+            @classmethod
+            def meth(cls):
+                return None
+        def f():
+            return X().meth()
+        a = self.RPythonAnnotator()
+        py.test.raises(AssertionError, a.build_types, f,  [])
+
     def test_methodcall1(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet._methodcall1, [int])
@@ -3164,6 +3185,13 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeList)
         assert s.listdef.listitem.resized
 
+    def test_varargs(self):
+        def f(*args):
+            return args[0] + 42
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int, int])
+        assert isinstance(s, annmodel.SomeInteger)
+
     def test_listitem_no_mutating(self):
         from pypy.rlib.debug import check_annotation
         called = []
@@ -3282,6 +3310,37 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
         assert s.knowntype is int
+
+    def test_relax(self):
+        def f(*args):
+            return args[0] + args[1]
+        f.relax_sig_check = True
+        def g(x):
+            return f(x, x - x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [int])
+        assert a.bookkeeper.getdesc(f).getuniquegraph()
+
+    def test_cannot_raise_ll_exception(self):
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        #
+        def f():
+            e = OverflowError()
+            lle = cast_instance_to_base_ptr(e)
+            raise Exception, lle
+            # ^^^ instead, must cast back from a base ptr to an instance
+        a = self.RPythonAnnotator()
+        py.test.raises(AssertionError, a.build_types, f, [])
+
+    def test_enumerate(self):
+        def f():
+            for i, x in enumerate(['a', 'b', 'c', 'd']):
+                if i == 2:
+                    return x
+            return '?'
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeChar)
 
 
 def g(n):

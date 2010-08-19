@@ -1,4 +1,7 @@
-from pypy.objspace.std.objspace import *
+from pypy.interpreter.error import OperationError
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
+from pypy.objspace.std.multimethod import FailedToImplementArgs
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.rlib.rarithmetic import ovfcheck, ovfcheck_lshift, LONG_BIT, r_uint
 from pypy.rlib.rbigint import rbigint
@@ -31,6 +34,10 @@ class W_IntObject(W_Object):
 
 registerimplementation(W_IntObject)
 
+# NB: This code is shared by smallintobject.py, and thus no other Int
+# multimethods should be invoked from these implementations. Instead, add an
+# alias and then teach copy_multimethods in smallintobject.py to override
+# it. See int__Int for example.
 
 def int_w__Int(space, w_int1):
     return int(w_int1.intval)
@@ -53,8 +60,7 @@ def repr__Int(space, w_int1):
 
 str__Int = repr__Int
 
-def declare_new_int_comparison(opname, clsname):
-    # also used by smallintobject.py
+def declare_new_int_comparison(opname):
     import operator
     from pypy.tool.sourcetools import func_with_new_name
     op = getattr(operator, opname)
@@ -62,18 +68,18 @@ def declare_new_int_comparison(opname, clsname):
         i = w_int1.intval
         j = w_int2.intval
         return space.newbool(op(i, j))
-    name = "%s__%s_%s" % (opname, clsname, clsname)
+    name = "%s__Int_Int" % (opname,)
     return func_with_new_name(f, name), name
 
 for op in ['lt', 'le', 'eq', 'ne', 'gt', 'ge']:
-    func, name = declare_new_int_comparison(op, "Int")
+    func, name = declare_new_int_comparison(op)
     globals()[name] = func
 
 def hash__Int(space, w_int1):
     # unlike CPython, we don't special-case the value -1 in most of our
     # hash functions, so there is not much sense special-casing it here either.
     # Make sure this is consistent with the hash of floats and longs.
-    return int__Int(space, w_int1)
+    return get_integer(space, w_int1)
 
 # coerce
 def coerce__Int_Int(space, w_int1, w_int2):
@@ -214,13 +220,14 @@ def neg__Int(space, w_int1):
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer negation"))
     return wrapint(space, x)
+get_negint = neg__Int
 
 
 def abs__Int(space, w_int1):
     if w_int1.intval >= 0:
-        return pos__Int(space, w_int1)
+        return get_integer(space, w_int1)
     else:
-        return neg__Int(space, w_int1)
+        return get_negint(space, w_int1)
 
 def nonzero__Int(space, w_int1):
     return space.newbool(w_int1.intval != 0)
@@ -233,34 +240,36 @@ def invert__Int(space, w_int1):
 def lshift__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
     b = w_int2.intval
+    if r_uint(b) < LONG_BIT: # 0 <= b < LONG_BIT
+        try:
+            c = ovfcheck_lshift(a, b)
+        except OverflowError:
+            raise FailedToImplementArgs(space.w_OverflowError,
+                                    space.wrap("integer left shift"))
+        return wrapint(space, c)
     if b < 0:
         raise OperationError(space.w_ValueError,
                              space.wrap("negative shift count"))
-    if a == 0 or b == 0:
-        return int__Int(space, w_int1)
-    if b >= LONG_BIT:
+    else: #b >= LONG_BIT
+        if a == 0:
+            return get_integer(space, w_int1)
         raise FailedToImplementArgs(space.w_OverflowError,
                                 space.wrap("integer left shift"))
-    try:
-        c = ovfcheck_lshift(a, b)
-    except OverflowError:
-        raise FailedToImplementArgs(space.w_OverflowError,
-                                space.wrap("integer left shift"))
-    return wrapint(space, c)
 
 def rshift__Int_Int(space, w_int1, w_int2):
     a = w_int1.intval
     b = w_int2.intval
-    if b < 0:
-        raise OperationError(space.w_ValueError,
-                             space.wrap("negative shift count"))
-    if a == 0 or b == 0:
-        return int__Int(space, w_int1)
-    if b >= LONG_BIT:
-        if a < 0:
-            a = -1
-        else:
-            a = 0
+    if r_uint(b) >= LONG_BIT: # not (0 <= b < LONG_BIT)
+        if b < 0:
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("negative shift count"))
+        else: # b >= LONG_BIT
+            if a == 0:
+                return get_integer(space, w_int1)
+            if a < 0:
+                a = -1
+            else:
+                a = 0
     else:
         a = a >> b
     return wrapint(space, a)
@@ -291,10 +300,11 @@ def int__Int(space, w_int1):
         return w_int1
     a = w_int1.intval
     return wrapint(space, a)
+get_integer = int__Int
 pos__Int = int__Int
 
 def index__Int(space, w_int1):
-    return int__Int(space, w_int1)
+    return get_integer(space, w_int1)
 
 def float__Int(space, w_int1):
     a = w_int1.intval

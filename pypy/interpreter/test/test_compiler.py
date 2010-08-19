@@ -4,6 +4,7 @@ from pypy.interpreter.pycompiler import PythonAstCompiler
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments
+from pypy.conftest import gettestobjspace
 
 class BaseTestCompiler:
     def setup_method(self, method):
@@ -53,6 +54,14 @@ class BaseTestCompiler:
                            'if 1:\n  x x', '?', mode, 0)
             space.raises_w(space.w_SyntaxError, self.compiler.compile_command,
                            ')', '?', mode, 0)
+
+    def test_hidden_applevel(self):
+        code = self.compiler.compile("def f(x): pass", "<test>", "exec", 0,
+                                     True)
+        assert code.hidden_applevel
+        for w_const in code.co_consts_w:
+            if isinstance(w_const, PyCode):
+                assert code.hidden_applevel
 
     def test_indentation_error(self):
         space = self.space
@@ -830,6 +839,47 @@ class AppTestOptimizer:
             sys.stdout = save_stdout
         output = s.getvalue()
         assert "STOP_CODE" not in output
+    
+    def test_optimize_list_comp(self):
+        source = """def _f(a):
+            return [x for x in a if None]
+        """
+        exec source
+        code = _f.func_code
+        
+        import StringIO, sys, dis
+        s = StringIO.StringIO()
+        out = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = out
+        output = s.getvalue()
+        assert "LOAD_GLOBAL" not in output
+
+class AppTestCallMethod(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{'objspace.opcodes.CALL_METHOD': True})
+        
+    def test_call_method_kwargs(self):
+        source = """def _f(a):
+            return a.f(a=a)
+        """
+        exec source
+        code = _f.func_code
+        
+        import StringIO, sys, dis
+        s = StringIO.StringIO()
+        out = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = out
+        output = s.getvalue()
+        assert "CALL_METHOD" in output
+            
 
 class AppTestExceptions:
     def test_indentation_error(self):

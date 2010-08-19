@@ -17,6 +17,8 @@ from pypy.jit.backend.x86.runner import CPU386
 from pypy.jit.backend.llsupport.gc import GcRefList, GcRootMap_asmgcc
 from pypy.jit.backend.llsupport.gc import GcLLDescr_framework
 from pypy.tool.udir import udir
+from pypy.jit.backend.x86.arch import IS_X86_64
+import py.test
 
 class X(object):
     def __init__(self, x=0):
@@ -82,7 +84,7 @@ def compile(f, gc, **kwds):
     for name, value in kwds.items():
         setattr(t.config.translation, name, value)
     ann = t.buildannotator(policy=annpolicy.StrictAnnotatorPolicy())
-    ann.build_types(f, [s_list_of_strings])
+    ann.build_types(f, [s_list_of_strings], main_entry_point=True)
     t.buildrtyper().specialize()
     if kwds['jit']:
         apply_jit(t, optimizer=OPTIMIZER_SIMPLE)
@@ -94,7 +96,7 @@ def compile(f, gc, **kwds):
 def run(cbuilder, args=''):
     #
     pypylog = udir.join('test_zrpy_gc.log')
-    data = cbuilder.cmdexec(args, env={'PYPYLOG': str(pypylog)})
+    data = cbuilder.cmdexec(args, env={'PYPYLOG': ':%s' % pypylog})
     return data.strip()
 
 def compile_and_run(f, gc, **kwds):
@@ -105,6 +107,12 @@ def compile_and_run(f, gc, **kwds):
 
 def test_compile_boehm():
     myjitdriver = JitDriver(greens = [], reds = ['n', 'x'])
+    @dont_look_inside
+    def see(lst, n):
+        assert len(lst) == 3
+        assert lst[0] == n+10
+        assert lst[1] == n+20
+        assert lst[2] == n+30
     def main(n, x):
         while n > 0:
             myjitdriver.can_enter_jit(n=n, x=x)
@@ -112,6 +120,7 @@ def test_compile_boehm():
             y = X()
             y.foo = x.foo
             n -= y.foo
+            see([n+10, n+20, n+30], n)
     res = compile_and_run(get_entry(get_g(main)), "boehm", jit=True)
     assert int(res) >= 16
 
@@ -119,6 +128,10 @@ def test_compile_boehm():
 
 class TestCompileHybrid(object):
     def setup_class(cls):
+        if IS_X86_64:
+            # No hybrid GC on 64-bit for the time being
+            py.test.skip()
+
         funcs = []
         name_to_func = {}
         for fullname in dir(cls):
@@ -174,7 +187,7 @@ class TestCompileHybrid(object):
     def run(self, name, n=2000):
         pypylog = udir.join('TestCompileHybrid.log')
         res = self.cbuilder.cmdexec("%s %d" %(name, n),
-                                    env={'PYPYLOG': str(pypylog)})
+                                    env={'PYPYLOG': ':%s' % pypylog})
         assert int(res) == 20
 
     def run_orig(self, name, n, x):

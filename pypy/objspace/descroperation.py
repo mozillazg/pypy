@@ -5,6 +5,7 @@ from pypy.interpreter.function import Function, Method, FunctionWithFixedCode
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.typedef import default_identity_hash
 from pypy.tool.sourcetools import compile2, func_with_new_name
+from pypy.module.__builtin__.interp_classobj import W_InstanceObject
 
 def object_getattribute(space):
     "Utility that returns the app-level descriptor object.__getattribute__."
@@ -20,6 +21,13 @@ def object_setattr(space):
     return w_setattr
 object_setattr._annspecialcase_ = 'specialize:memo'
 
+def object_delattr(space):
+    "Utility that returns the app-level descriptor object.__delattr__."
+    w_src, w_delattr = space.lookup_in_type_where(space.w_object,
+                                                  '__delattr__')
+    return w_delattr
+object_delattr._annspecialcase_ = 'specialize:memo'
+
 def raiseattrerror(space, w_obj, name, w_descr=None):
     w_type = space.type(w_obj)
     typename = w_type.getname(space, '?')
@@ -31,6 +39,17 @@ def raiseattrerror(space, w_obj, name, w_descr=None):
         raise operationerrfmt(space.w_AttributeError,
                               "'%s' object attribute '%s' is read-only",
                               typename, name)
+
+# Helpers for old-style and mix-style mixup
+
+def _same_class_w(space, w_obj1, w_obj2, w_typ1, w_typ2):
+    if (space.is_oldstyle_instance(w_obj1) and
+        space.is_oldstyle_instance(w_obj2)):
+        assert isinstance(w_obj1, W_InstanceObject)
+        assert isinstance(w_obj2, W_InstanceObject)
+        return space.is_w(w_obj1.w_class, w_obj2.w_class)
+    return space.is_w(w_typ1, w_typ2)
+
 
 class Object:
     def descr__getattribute__(space, w_obj, w_name):
@@ -297,7 +316,7 @@ class DescrOperation:
         w_typ1 = space.type(w_obj1)
         w_typ2 = space.type(w_obj2)
         w_left_src, w_left_impl = space.lookup_in_type_where(w_typ1, '__pow__')
-        if space.is_w(w_typ1, w_typ2):
+        if _same_class_w(space, w_obj1, w_obj2, w_typ1, w_typ2):
             w_right_impl = None
         else:
             w_right_src, w_right_impl = space.lookup_in_type_where(w_typ2, '__rpow__')
@@ -581,7 +600,7 @@ def _make_binop_impl(symbol, specialnames):
         w_typ1 = space.type(w_obj1)
         w_typ2 = space.type(w_obj2)
         w_left_src, w_left_impl = space.lookup_in_type_where(w_typ1, left)
-        if space.is_w(w_typ1, w_typ2):
+        if _same_class_w(space, w_obj1, w_obj2, w_typ1, w_typ2):
             w_right_impl = None
         else:
             w_right_src, w_right_impl = space.lookup_in_type_where(w_typ2, right)
@@ -604,8 +623,8 @@ def _make_binop_impl(symbol, specialnames):
                 # -- end of bug compatibility
                 if space.is_true(space.issubtype(w_typ2, w_typ1)):
                     if (w_left_src and w_right_src and
-                   not space.abstract_issubclass_w(w_left_src, w_right_src) and
-                   not space.abstract_issubclass_w(w_typ1, w_right_src)):
+                        not space.abstract_issubclass_w(w_left_src, w_right_src) and
+                        not space.abstract_issubclass_w(w_typ1, w_right_src)):
                         w_obj1, w_obj2 = w_obj2, w_obj1
                         w_left_impl, w_right_impl = w_right_impl, w_left_impl
 
@@ -632,8 +651,8 @@ def _make_comparison_impl(symbol, specialnames):
         w_left_src, w_left_impl = space.lookup_in_type_where(w_typ1, left)
         w_first = w_obj1
         w_second = w_obj2
-        
-        if space.is_w(w_typ1, w_typ2):
+
+        if _same_class_w(space, w_obj1, w_obj2, w_typ1, w_typ2):
             w_right_impl = None
         else:
             w_right_src, w_right_impl = space.lookup_in_type_where(w_typ2, right)

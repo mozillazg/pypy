@@ -52,19 +52,23 @@ def lazy_register(func_or_list, register_func):
                         return super(ExtRegistryEntry, self).__getattr__(attr)
                     raise exc, exc_inst, tb
 
-def registering(func):
+def registering(func, condition=True):
+    if not condition:
+        return lambda method: None
+
     def decorator(method):
         method._registering_func = func
         return method
     return decorator
 
-def registering_if(ns, name):
+def registering_if(ns, name, condition=True):
     try:
         func = getattr(ns, name)
     except AttributeError:
-        return lambda method: None
-    else:
-        return registering(func)
+        condition = False
+        func = None
+
+    return registering(func, condition=condition)
 
 class LazyRegisteringMeta(type):
     def __new__(self, _name, _type, _vars):
@@ -91,6 +95,7 @@ class LazyRegisteringMeta(type):
 
 class BaseLazyRegistering(object):
     __metaclass__ = LazyRegisteringMeta
+    compilation_info = None
 
     def configure(self, CConfig):
         classes_seen = self.__dict__.setdefault('__classes_seen', {})
@@ -98,7 +103,11 @@ class BaseLazyRegistering(object):
             return
         from pypy.rpython.tool import rffi_platform as platform
         # copy some stuff
-        self.compilation_info = CConfig._compilation_info_
+        if self.compilation_info is None:
+            self.compilation_info = CConfig._compilation_info_
+        else:
+            self.compilation_info = self.compilation_info.merge(
+                CConfig._compilation_info_)
         self.__dict__.update(platform.configure(CConfig))
         classes_seen[CConfig] = True
 
@@ -159,8 +168,6 @@ class ExtFuncEntry(ExtRegistryEntry):
         return signature_args
 
     def compute_result_annotation(self, *args_s):
-        if hasattr(self, 'ann_hook'):
-            self.ann_hook()
         self.normalize_args(*args_s)   # check arguments
         return self.signature_result
 
@@ -227,7 +234,6 @@ class ExtFuncEntry(ExtRegistryEntry):
 def register_external(function, args, result=None, export_name=None,
                        llimpl=None, ooimpl=None,
                        llfakeimpl=None, oofakeimpl=None,
-                       annotation_hook=None,
                        sandboxsafe=False):
     """
     function: the RPython function that will be rendered as an external function (e.g.: math.floor)
@@ -236,7 +242,6 @@ def register_external(function, args, result=None, export_name=None,
     export_name: the name of the function as it will be seen by the backends
     llimpl, ooimpl: optional; if provided, these RPython functions are called instead of the target function
     llfakeimpl, oofakeimpl: optional; if provided, they are called by the llinterpreter
-    annotationhook: optional; a callable that is called during annotation, useful for genc hacks
     sandboxsafe: use True if the function performs no I/O (safe for --sandbox)
     """
 
@@ -263,8 +268,6 @@ def register_external(function, args, result=None, export_name=None,
             lltypefakeimpl = staticmethod(llfakeimpl)
         if oofakeimpl:
             ootypefakeimpl = staticmethod(oofakeimpl)
-        if annotation_hook:
-            ann_hook = staticmethod(annotation_hook)
 
     if export_name:
         FunEntry.__name__ = export_name

@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rlib import rstackovf
 
 import sys, os
 import math
@@ -110,16 +111,14 @@ class LLInterpreter(object):
         self.traceback_frames = []
         lines = []
         for frame in frames:
-            logline = frame.graph.name
+            logline = frame.graph.name + "()"
             if frame.curr_block is None:
                 logline += " <not running yet>"
                 lines.append(logline)
                 continue
             try:
-                logline += " " + self.typer.annotator.annotated[frame.curr_block].__module__
-            except (KeyError, AttributeError):
-                # if the graph is from the GC it was not produced by the same
-                # translator :-(
+                logline += " " + self.typer.annotator.annotated[frame.curr_block].func.__module__
+            except (KeyError, AttributeError, TypeError):
                 logline += " <unknown module>"
             lines.append(logline)
             for i, operation in enumerate(frame.curr_block.operations):
@@ -321,6 +320,18 @@ class LLFrame(object):
         except LLException, e:
             if not (catch_exception and op is block.operations[-1]):
                 raise
+        except RuntimeError, e:
+            rstackovf.check_stack_overflow()
+            # xxx fish fish fish for proper etype and evalue to use
+            rtyper = self.llinterpreter.typer
+            bk = rtyper.annotator.bookkeeper
+            classdef = bk.getuniqueclassdef(rstackovf._StackOverflow)
+            exdata = rtyper.getexceptiondata()
+            evalue = exdata.get_standard_ll_exc_instance(rtyper, classdef)
+            etype = exdata.fn_type_of_exc_inst(evalue)
+            e = LLException(etype, evalue)
+            if not (catch_exception and op is block.operations[-1]):
+                raise e
 
         # determine nextblock and/or return value
         if len(block.exits) == 0:
@@ -795,9 +806,9 @@ class LLFrame(object):
         checkptr(ptr)
         return llmemory.cast_ptr_to_adr(ptr)
 
-    def op_cast_adr_to_int(self, adr):
+    def op_cast_adr_to_int(self, adr, mode):
         checkadr(adr)
-        return llmemory.cast_adr_to_int(adr)
+        return llmemory.cast_adr_to_int(adr, mode)
 
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py

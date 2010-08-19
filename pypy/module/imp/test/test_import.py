@@ -457,6 +457,16 @@ class AppTestImport:
     def test_reload_infinite(self):
         import infinite_reload
 
+    def test_explicitly_missing(self):
+        import sys
+        sys.modules['foobarbazmod'] = None
+        try:
+            import foobarbazmod
+            assert False, "should have failed, got instead %r" % (
+                foobarbazmod,)
+        except ImportError:
+            pass
+
 def _getlong(data):
     x = marshal.dumps(data)
     return x[-4:]
@@ -920,16 +930,15 @@ class AppTestImportHooks(object):
             sys.path_hooks.pop()
 
 class AppTestNoPycFile(object):
-    usepycfiles = False
-    lonepycfiles = False
-
+    spaceconfig = {
+        "objspace.usepycfiles": False,
+        "objspace.lonepycfiles": False
+    }
     def setup_class(cls):
-        cls.space = gettestobjspace(**{
-            "objspace.usepycfiles": cls.usepycfiles,
-            "objspace.lonepycfiles": cls.lonepycfiles,
-            })
-        cls.w_usepycfiles = cls.space.wrap(cls.usepycfiles)
-        cls.w_lonepycfiles = cls.space.wrap(cls.lonepycfiles)
+        usepycfiles = cls.spaceconfig['objspace.usepycfiles']
+        lonepycfiles = cls.spaceconfig['objspace.lonepycfiles']
+        cls.w_usepycfiles = cls.space.wrap(usepycfiles)
+        cls.w_lonepycfiles = cls.space.wrap(lonepycfiles)
         cls.saved_modules = _setup(cls.space)
 
     def teardown_class(cls):
@@ -950,9 +959,13 @@ class AppTestNoPycFile(object):
             assert lone.__file__.endswith('lone.pyc')
 
 class AppTestNoLonePycFile(AppTestNoPycFile):
-    usepycfiles = True
-    lonepycfiles = False
+    spaceconfig = {
+        "objspace.usepycfiles": True,
+        "objspace.lonepycfiles": False
+    }
 
 class AppTestLonePycFile(AppTestNoPycFile):
-    usepycfiles = True
-    lonepycfiles = True
+    spaceconfig = {
+        "objspace.usepycfiles": True,
+        "objspace.lonepycfiles": True
+    }

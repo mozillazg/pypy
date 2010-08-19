@@ -63,13 +63,14 @@ class InstanceNode(object):
         # invariant: if escaped=True, then dependencies is None
         if not self.escaped:
             self.escaped = True
+            self.unique = UNIQUE_NO
+            # ^^^ always set unique to UNIQUE_NO when we set escaped to True.
+            # See for example test_find_nodes_store_into_loop_constant_2.
             if self.dependencies is not None:
                 deps = self.dependencies
                 self.dependencies = None
                 for box in deps:
                     box.mark_escaped()
-                    # see test_find_nodes_store_into_loop_constant_1 for this:
-                    box.unique = UNIQUE_NO
 
     def set_unique_nodes(self):
         if self.fromstart:
@@ -159,7 +160,8 @@ class NodeFinder(object):
             else:
                 # all constant arguments: we can constant-fold
                 argboxes = [self.get_constant_box(arg) for arg in op.args]
-                resbox = execute_nonspec(self.cpu, op.opnum, argboxes, op.descr)
+                resbox = execute_nonspec(self.cpu, None,
+                                         op.opnum, argboxes, op.descr)
                 self.set_constant_node(op.result, resbox.constbox())
         # default case: mark the arguments as escaping
         for box in op.args:
@@ -168,8 +170,8 @@ class NodeFinder(object):
     def find_nodes_no_escape(self, op):
         pass    # for operations that don't escape their arguments
 
-    find_nodes_OOIS          = find_nodes_no_escape
-    find_nodes_OOISNOT       = find_nodes_no_escape
+    find_nodes_PTR_EQ        = find_nodes_no_escape
+    find_nodes_PTR_NE        = find_nodes_no_escape
     find_nodes_INSTANCEOF    = find_nodes_no_escape
     find_nodes_GUARD_NONNULL = find_nodes_no_escape
     find_nodes_GUARD_ISNULL  = find_nodes_no_escape
@@ -342,12 +344,16 @@ class PerfectSpecializationFinder(NodeFinder):
         # computed by NodeFinder.find_nodes().
         op = loop.operations[-1]
         assert op.opnum == rop.JUMP
-        specnodes = []
         assert len(self.inputnodes) == len(op.args)
-        for i in range(len(op.args)):
-            inputnode = self.inputnodes[i]
-            exitnode = self.getnode(op.args[i])
-            specnodes.append(self.intersect(inputnode, exitnode))
+        while True:
+            self.restart_needed = False
+            specnodes = []
+            for i in range(len(op.args)):
+                inputnode = self.inputnodes[i]
+                exitnode = self.getnode(op.args[i])
+                specnodes.append(self.intersect(inputnode, exitnode))
+            if not self.restart_needed:
+                break
         loop.token.specnodes = specnodes
 
     def intersect(self, inputnode, exitnode):
@@ -362,6 +368,15 @@ class PerfectSpecializationFinder(NodeFinder):
             return prebuiltNotSpecNode
         unique = exitnode.unique
         if unique == UNIQUE_NO:
+            if inputnode is not self.node_fromstart:
+                # Mark the input node as escaped, and schedule a complete
+                # restart of intersect().  This is needed because there is
+                # an order dependency: calling inputnode.mark_escaped()
+                # might set the field exitnode.unique to UNIQUE_NO in some
+                # other node.  If inputnode is node_fromstart, there is no
+                # problem (and it must not be mutated by mark_escaped() then).
+                inputnode.mark_escaped()
+                self.restart_needed = True
             return prebuiltNotSpecNode
         if unique == UNIQUE_INST:
             return self.intersect_instance(inputnode, exitnode)

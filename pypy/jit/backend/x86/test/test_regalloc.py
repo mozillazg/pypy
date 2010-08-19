@@ -3,19 +3,21 @@
 """
 
 import py
-from pypy.jit.metainterp.history import ResOperation, BoxInt, ConstInt,\
+from pypy.jit.metainterp.history import BoxInt, ConstInt,\
      BoxPtr, ConstPtr, LoopToken, BasicFailDescr
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
-from pypy.jit.backend.x86.runner import CPU
-from pypy.jit.backend.x86.regalloc import RegAlloc, WORD, X86RegisterManager,\
+from pypy.jit.backend.detect_cpu import getcpuclass
+from pypy.jit.backend.x86.regalloc import RegAlloc, X86RegisterManager,\
      FloatConstants
+from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
-from pypy.jit.backend.x86.ri386 import *
+from pypy.jit.backend.x86.rx86 import *
 
+CPU = getcpuclass()
 class MockGcDescr(GcCache):
     def get_funcptr_for_new(self):
         return 123
@@ -92,13 +94,20 @@ class BaseTestRegalloc(object):
     def f2(x, y):
         return x*y
 
+    def f10(*args):
+        assert len(args) == 10
+        return sum(args)
+
     F1PTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed))
     F2PTR = lltype.Ptr(lltype.FuncType([lltype.Signed]*2, lltype.Signed))
+    F10PTR = lltype.Ptr(lltype.FuncType([lltype.Signed]*10, lltype.Signed))
     f1ptr = llhelper(F1PTR, f1)
     f2ptr = llhelper(F2PTR, f2)
+    f10ptr = llhelper(F10PTR, f10)
 
     f1_calldescr = cpu.calldescrof(F1PTR.TO, F1PTR.TO.ARGS, F1PTR.TO.RESULT)
     f2_calldescr = cpu.calldescrof(F2PTR.TO, F2PTR.TO.ARGS, F2PTR.TO.RESULT)
+    f10_calldescr = cpu.calldescrof(F10PTR.TO, F10PTR.TO.ARGS, F10PTR.TO.RESULT)
 
     namespace = locals().copy()
     type_system = 'lltype'
@@ -211,10 +220,9 @@ class TestRegallocSimple(BaseTestRegalloc):
         '''
         S = lltype.GcStruct('S')
         ptr = lltype.malloc(S)
+        self.cpu.clear_latest_values(2)
         self.interpret(ops, [0, ptr])
         assert self.getptr(0, lltype.Ptr(S)) == ptr
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(0)
-        assert not self.cpu.assembler.fail_boxes_ptr.getitem(1)
 
     def test_exception_bridge_no_exception(self):
         ops = '''
@@ -522,24 +530,32 @@ class TestRegallocFloats(BaseTestRegalloc):
         assert self.getint(0) == 0
 
     def test_bug_float_is_true_stack(self):
+        # NB. float_is_true no longer exists.  Unsure if keeping this test
+        # makes sense any more.
         ops = '''
         [f0, f1, f2, f3, f4, f5, f6, f7, f8, f9]
-        i0 = float_is_true(f0)
-        i1 = float_is_true(f1)
-        i2 = float_is_true(f2)
-        i3 = float_is_true(f3)
-        i4 = float_is_true(f4)
-        i5 = float_is_true(f5)
-        i6 = float_is_true(f6)
-        i7 = float_is_true(f7)
-        i8 = float_is_true(f8)
-        i9 = float_is_true(f9)
+        i0 = float_ne(f0, 0.0)
+        i1 = float_ne(f1, 0.0)
+        i2 = float_ne(f2, 0.0)
+        i3 = float_ne(f3, 0.0)
+        i4 = float_ne(f4, 0.0)
+        i5 = float_ne(f5, 0.0)
+        i6 = float_ne(f6, 0.0)
+        i7 = float_ne(f7, 0.0)
+        i8 = float_ne(f8, 0.0)
+        i9 = float_ne(f9, 0.0)
         finish(i0, i1, i2, i3, i4, i5, i6, i7, i8, i9)
         '''
         loop = self.interpret(ops, [0.0, .1, .2, .3, .4, .5, .6, .7, .8, .9])
         assert self.getints(9) == [0, 1, 1, 1, 1, 1, 1, 1, 1]
 
 class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
+    def expected_param_depth(self, num_args):
+        # Assumes the arguments are all non-float
+        if IS_X86_32:
+            return num_args
+        elif IS_X86_64:
+            return max(num_args - 6, 0)
 
     def test_one_call(self):
         ops = '''
@@ -549,7 +565,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
         assert self.getints(11) == [5, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
-        assert loop.token._x86_param_depth == 1
+        assert loop.token._x86_param_depth == self.expected_param_depth(1)
 
     def test_two_calls(self):
         ops = '''
@@ -560,8 +576,21 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         loop = self.interpret(ops, [4, 7, 9, 9 ,9, 9, 9, 9, 9, 9, 9])
         assert self.getints(11) == [5*7, 7, 9, 9, 9, 9, 9, 9, 9, 9, 9]
-        assert loop.token._x86_param_depth == 2
-        
+        assert loop.token._x86_param_depth == self.expected_param_depth(2)
+
+    def test_call_many_arguments(self):
+        # NB: The first and last arguments in the call are constants. This
+        # is primarily for x86-64, to ensure that loading a constant to an
+        # argument register or to the stack works correctly
+        ops = '''
+        [i0, i1, i2, i3, i4, i5, i6, i7]
+        i8 = call(ConstClass(f10ptr), 1, i0, i1, i2, i3, i4, i5, i6, i7, 10, descr=f10_calldescr)
+        finish(i8)
+        '''
+        loop = self.interpret(ops, [2, 3, 4, 5, 6, 7, 8, 9])
+        assert self.getint(0) == 55
+        assert loop.token._x86_param_depth == self.expected_param_depth(10)
+
     def test_bridge_calls_1(self):
         ops = '''
         [i0, i1]
@@ -578,7 +607,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
 
-        assert loop.operations[-2].descr._x86_bridge_param_depth == 2
+        assert loop.operations[-2].descr._x86_bridge_param_depth == self.expected_param_depth(2)
 
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        
@@ -601,7 +630,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
 
-        assert loop.operations[-2].descr._x86_bridge_param_depth == 2        
+        assert loop.operations[-2].descr._x86_bridge_param_depth == self.expected_param_depth(2)
 
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        

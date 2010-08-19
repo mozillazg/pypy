@@ -1,5 +1,5 @@
-from pypy.objspace.std.objspace import register_all, W_Object
-from pypy.objspace.std.objspace import registerimplementation
+from pypy.objspace.std.model import registerimplementation, W_Object
+from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter import gateway
@@ -39,25 +39,10 @@ W_StringObject.EMPTY = W_StringObject('')
 W_StringObject.PREBUILT = [W_StringObject(chr(i)) for i in range(256)]
 del i
 
-def _decode_ascii(space, s):
-    try:
-        return s.decode("ascii")
-    except UnicodeDecodeError:
-        for i in range(len(s)):
-            if ord(s[i]) > 127:
-                raise OperationError(
-                    space.w_UnicodeDecodeError,
-                    space.newtuple([
-                    space.wrap('ascii'),
-                    space.wrap(s),
-                    space.wrap(i),
-                    space.wrap(i+1),
-                    space.wrap("ordinal not in range(128)")]))
-        assert False, "unreachable"
-
 def unicode_w__String(space, w_self):
     # XXX should this use the default encoding?
-    return _decode_ascii(space, w_self._value)
+    from pypy.objspace.std.unicodetype import plain_str2unicode
+    return plain_str2unicode(space, w_self._value)
 
 def _is_generic(space, w_self, fun): 
     v = w_self._value
@@ -878,7 +863,7 @@ def ord__String(space, w_str):
             space.w_TypeError,
             "ord() expected a character, but string "
             "of length %d found", len(u_str))
-    return space.wrap(ord(u_str))
+    return space.wrap(ord(u_str[0]))
 
 def getnewargs__String(space, w_str):
     return space.newtuple([wrapstr(space, w_str._value)])
@@ -979,7 +964,6 @@ def mod__String_ANY(space, w_format, w_values):
     return mod_format(space, w_format, w_values, do_unicode=False)
 
 def buffer__String(space, w_string):
-    from pypy.interpreter.buffer import StringBuffer
     return space.wrap(StringBuffer(w_string._value))
 
 # register all methods

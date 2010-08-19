@@ -1,3 +1,6 @@
+
+# -*- coding: utf-8 -*-
+
 from pypy.conftest import gettestobjspace
 from pypy.interpreter import gateway
 from pypy.interpreter import argument

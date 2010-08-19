@@ -1,7 +1,6 @@
 import autopath
 import py
 import sys, os
-from pypy.translator.c.node import PyObjectNode, FuncNode
 from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.llsupport.wrapper import new_wrapper
@@ -13,6 +12,7 @@ from pypy.tool import isolate
 from pypy.translator.c.support import log, c_string_constant
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
+from pypy.rlib import exports
 
 def import_module_from_directory(dir, modname):
     file, pathname, description = imp.find_module(modname, [str(dir)])
@@ -32,7 +32,7 @@ class ProfOpt(object):
 
     def first(self):
         platform = self.compiler.platform
-        if platform.name == 'darwin':
+        if platform.name.startswith('darwin'):
             # XXX incredible hack for darwin
             cfiles = self.compiler.cfiles
             STR = '/*--no-profiling-for-this-file!--*/'
@@ -77,14 +77,22 @@ class CCompilerDriver(object):
         self.outputfilename = outputfilename
         self.profbased = profbased
 
-    def _build(self, eci=ExternalCompilationInfo()):
+    def _build(self, eci=ExternalCompilationInfo(), shared=False):
+        outputfilename = self.outputfilename
+        if shared:
+            if outputfilename:
+                basename = outputfilename
+            else:
+                basename = self.cfiles[0].purebasename
+            outputfilename = 'lib' + basename
         return self.platform.compile(self.cfiles, self.eci.merge(eci),
-                                     outputfilename=self.outputfilename)
+                                     outputfilename=outputfilename,
+                                     standalone=not shared)
 
-    def build(self):
+    def build(self, shared=False):
         if self.profbased:
             return self._do_profbased()
-        return self._build()
+        return self._build(shared=shared)
 
     def _do_profbased(self):
         ProfDriver, args = self.profbased
@@ -103,7 +111,8 @@ class CBuilder(object):
     modulename = None
     split = False
     
-    def __init__(self, translator, entrypoint, config, gcpolicy=None):
+    def __init__(self, translator, entrypoint, config, gcpolicy=None,
+            secondary_entrypoints=()):
         self.translator = translator
         self.entrypoint = entrypoint
         self.entrypoint_name = getattr(self.entrypoint, 'func_name', None)
@@ -113,6 +122,7 @@ class CBuilder(object):
         if gcpolicy is not None and gcpolicy.requires_stackless:
             config.translation.stackless = True
         self.eci = self.get_eci()
+        self.secondary_entrypoints = secondary_entrypoints
 
     def get_eci(self):
         pypy_include_dir = py.path.local(autopath.pypydir).join('translator', 'c')
@@ -159,7 +169,16 @@ class CBuilder(object):
             self.c_entrypoint_name = None
         else:
             pfname = db.get(pf)
+
+            for func, _ in self.secondary_entrypoints:
+                bk = translator.annotator.bookkeeper
+                db.get(getfunctionptr(bk.getdesc(func).getuniquegraph()))
+
             self.c_entrypoint_name = pfname
+
+        for obj in exports.EXPORTS_obj2name.keys():
+            db.getcontainernode(obj)
+        exports.clear()
         db.complete()
 
         self.collect_compilation_info(db)
@@ -176,7 +195,7 @@ class CBuilder(object):
 
         all = []
         for node in self.db.globalcontainers():
-            eci = getattr(node, 'compilation_info', None)
+            eci = node.compilation_info()
             if eci:
                 all.append(eci)
         self.merge_eci(*all)
@@ -202,12 +221,12 @@ class CBuilder(object):
         graphs = db.all_graphs()
         db.gctransformer.prepare_inline_helpers(graphs)
         for node in db.containerlist:
-            if isinstance(node, FuncNode):
+            if hasattr(node, 'funcgens'):
                 for funcgen in node.funcgens:
                     funcgen.patch_graph(copy_graph=False)
         return db
 
-    def generate_source(self, db=None, defines={}):
+    def generate_source(self, db=None, defines={}, exe_name=None):
         assert self.c_source_filename is None
         translator = self.translator
 
@@ -240,6 +259,10 @@ class CBuilder(object):
             if CBuilder.have___thread:
                 if not self.config.translation.no__thread:
                     defines['USE___THREAD'] = 1
+            if self.config.translation.shared:
+                defines['PYPY_MAIN_FUNCTION'] = "pypy_main_startup"
+                self.eci = self.eci.merge(ExternalCompilationInfo(
+                    export_symbols=["pypy_main_startup"]))
             self.eci, cfile, extra = gen_source_standalone(db, modulename,
                                                  targetdir,
                                                  self.eci,
@@ -247,7 +270,7 @@ class CBuilder(object):
                                                  defines = defines)
         self.c_source_filename = py.path.local(cfile)
         self.extrafiles = self.eventually_copy(extra)
-        self.gen_makefile(targetdir)
+        self.gen_makefile(targetdir, exe_name=exe_name)
         return cfile
 
     def eventually_copy(self, cfiles):
@@ -404,12 +427,13 @@ _rpython_startup()
         if isinstance(self._module, isolate.Isolate):
             isolate.close_isolate(self._module)
 
-    def gen_makefile(self, targetdir):
+    def gen_makefile(self, targetdir, exe_name=None):
         pass
 
 class CStandaloneBuilder(CBuilder):
     standalone = True
     executable_name = None
+    shared_library_name = None
 
     def getprofbased(self):
         profbased = None
@@ -450,9 +474,40 @@ class CStandaloneBuilder(CBuilder):
             return res.out, res.err
         return res.out
 
-    def compile(self):
+    def build_main_for_shared(self, shared_library_name, entrypoint, exe_name):
+        import time
+        time.sleep(1)
+        self.shared_library_name = shared_library_name
+        # build main program
+        eci = self.get_eci()
+        kw = {}
+        if self.translator.platform.cc == 'gcc':
+            kw['libraries'] = [self.shared_library_name.purebasename[3:]]
+            kw['library_dirs'] = [self.targetdir]
+        else:
+            kw['libraries'] = [self.shared_library_name.new(ext='')]
+        eci = eci.merge(ExternalCompilationInfo(
+            separate_module_sources=['''
+                int %s(int argc, char* argv[]);
+
+                int main(int argc, char* argv[])
+                { return %s(argc, argv); }
+                ''' % (entrypoint, entrypoint)
+                ],
+            **kw
+            ))
+        eci = eci.convert_sources_to_files(
+            cache_dir=self.targetdir)
+        return self.translator.platform.compile(
+            [], eci,
+            outputfilename=exe_name)
+
+    def compile(self, exe_name=None):
         assert self.c_source_filename
         assert not self._compiled
+
+        shared = self.config.translation.shared
+
         if (self.config.translation.gcrootfinder == "asmgcc" or
             self.config.translation.force_make):
             extra_opts = []
@@ -460,19 +515,32 @@ class CStandaloneBuilder(CBuilder):
                 extra_opts += ['-j', str(self.config.translation.make_jobs)]
             self.translator.platform.execute_makefile(self.targetdir,
                                                       extra_opts)
+            if shared:
+                self.shared_library_name = self.executable_name.new(
+                    purebasename='lib' + self.executable_name.purebasename,
+                    ext=self.translator.platform.so_ext)
         else:
             compiler = CCompilerDriver(self.translator.platform,
                                        [self.c_source_filename] + self.extrafiles,
-                                       self.eci, profbased=self.getprofbased())
-            self.executable_name = compiler.build()
+                                       self.eci, profbased=self.getprofbased(),
+                                       outputfilename=exe_name)
+            self.executable_name = compiler.build(shared=shared)
+            if shared:
+                self.executable_name = self.build_main_for_shared(
+                    self.executable_name, "pypy_main_startup", exe_name)
             assert self.executable_name
         self._compiled = True
         return self.executable_name
 
-    def gen_makefile(self, targetdir):
+    def gen_makefile(self, targetdir, exe_name=None):
         cfiles = [self.c_source_filename] + self.extrafiles
-        mk = self.translator.platform.gen_makefile(cfiles, self.eci,
-                                                   path=targetdir)
+        if exe_name is not None:
+            exe_name = targetdir.join(exe_name)
+        mk = self.translator.platform.gen_makefile(
+            cfiles, self.eci,
+            path=targetdir, exe_name=exe_name,
+            shared=self.config.translation.shared)
+
         if self.has_profopt():
             profopt = self.config.translation.profopt
             mk.definition('ABS_TARGET', '$(shell python -c "import sys,os; print os.path.abspath(sys.argv[1])" $(TARGET))')
@@ -516,6 +584,11 @@ class CStandaloneBuilder(CBuilder):
             mk.definition('GCMAPFILES', gcmapfiles)
             mk.definition('DEBUGFLAGS', '-O2 -fomit-frame-pointer -g')
 
+            if self.config.translation.shared:
+                mk.definition('PYPY_MAIN_FUNCTION', "pypy_main_startup")
+            else:
+                mk.definition('PYPY_MAIN_FUNCTION', "main")
+
             if sys.platform == 'win32':
                 python = sys.executable.replace('\\', '/') + ' '
             else:
@@ -541,7 +614,7 @@ class CStandaloneBuilder(CBuilder):
                         'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) /nologo $(ASM_CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
-                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -t $*.s > $@']
+                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -m$(PYPY_MAIN_FUNCTION) -t $*.s > $@']
                         )
                 mk.rule('gcmaptable.c', '$(GCMAPFILES)',
                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc $(GCMAPFILES) > $@')
@@ -550,7 +623,7 @@ class CStandaloneBuilder(CBuilder):
                 mk.definition('OBJECTS', '$(ASMLBLFILES) gcmaptable.s')
                 mk.rule('%.s', '%.c', '$(CC) $(CFLAGS) $(CFLAGSEXTRA) -frandom-seed=$< -o $@ -S $< $(INCLUDEDIRS)')
                 mk.rule('%.lbl.s %.gcmap', '%.s',
-                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -t $< > $*.gcmap')
+                        python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -m$(PYPY_MAIN_FUNCTION) -t $< > $*.gcmap')
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
                         python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py $(GCMAPFILES) > $@')
 
