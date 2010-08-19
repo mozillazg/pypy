@@ -5,7 +5,6 @@ from pypy.rlib.jit import JitDriver, OPTIMIZER_FULL, unroll_parameters
 from pypy.rlib.jit import PARAMETERS, dont_look_inside
 from pypy.jit.metainterp.jitprof import Profiler
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.ootypesystem import ootype
 
 class TranslationTest:
 
@@ -21,6 +20,7 @@ class TranslationTest:
         # - profiler
         # - full optimizer
         # - jitdriver hooks
+        # - two JITs
 
         class Frame(object):
             _virtualizable2_ = ['i']
@@ -40,7 +40,7 @@ class TranslationTest:
         def can_inline():
             return False
 
-        jitdriver = JitDriver(greens = [], reds = ['frame', 'total'],
+        jitdriver = JitDriver(greens = [], reds = ['total', 'frame'],
                               virtualizables = ['frame'],
                               get_jitcell_at=get_jitcell_at,
                               set_jitcell_at=set_jitcell_at,
@@ -62,14 +62,28 @@ class TranslationTest:
                     frame.i -= 2
                 frame.i -= 1
             return total * 10
-        res = ll_meta_interp(f, [40], CPUClass=self.CPUClass,
+        #
+        myjitdriver2 = JitDriver(greens = ['g'], reds = ['m', 'x'],
+                                 can_inline = lambda *args: False)
+        def f2(g, m, x):
+            while m > 0:
+                myjitdriver2.can_enter_jit(g=g, m=m, x=x)
+                myjitdriver2.jit_merge_point(g=g, m=m, x=x)
+                m -= 1
+                x += 3
+            return x
+        #
+        def main(i, j):
+            return f(i) - f2(i+j, i, j)
+        res = ll_meta_interp(main, [40, 5], CPUClass=self.CPUClass,
                              type_system=self.type_system)
-        assert res == f(40)
-        res = rpython_ll_meta_interp(f, [40], loops=2, CPUClass=self.CPUClass,
+        assert res == main(40, 5)
+        res = rpython_ll_meta_interp(main, [40, 5], loops=2,
+                                     CPUClass=self.CPUClass,
                                      type_system=self.type_system,
                                      optimizer=OPTIMIZER_FULL,
                                      ProfilerClass=Profiler)
-        assert res == f(40)
+        assert res == main(40, 5)
 
     def test_external_exception_handling_translates(self):
         jitdriver = JitDriver(greens = [], reds = ['n', 'total'])

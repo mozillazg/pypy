@@ -55,8 +55,6 @@ class TestRLong(object):
                 assert r1.tolong() == r2
 
     def test_touint(self):
-        import sys
-        from pypy.rlib.rarithmetic import r_uint
         result = r_uint(sys.maxint + 42)
         rl = rbigint.fromint(sys.maxint).add(rbigint.fromint(42))
         assert rl.touint() == result
@@ -474,10 +472,11 @@ class TestTranslatable(object):
     def test_args_from_rarith_int(self):
         from pypy.rpython.tool.rfficache import platform
         from pypy.rlib.rarithmetic import r_int
+        from pypy.rpython.lltypesystem.rffi import r_int_real
         classlist = platform.numbertype_to_rclass.values()
         fnlist = []
         for r in classlist:
-            if r is r_int:     # and also r_longlong on 64-bit
+            if r in (r_int, r_int_real):     # and also r_longlong on 64-bit
                 continue
             if r is int:
                 mask = sys.maxint*2+1

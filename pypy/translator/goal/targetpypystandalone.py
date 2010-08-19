@@ -2,7 +2,6 @@ import py
 
 import os, sys
 
-from pypy.objspace.std.objspace import StdObjSpace
 from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
 from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
@@ -226,22 +225,25 @@ class PyPyTarget(object):
         return PyPyJitPolicy()
     
     def get_entry_point(self, config):
-        from pypy.lib.ctypes_config_cache import rebuild
+        from pypy.tool.lib_pypy import import_from_lib_pypy
+        rebuild = import_from_lib_pypy('ctypes_config_cache/rebuild')
         rebuild.try_rebuild()
 
         space = make_objspace(config)
 
         # manually imports app_main.py
         filename = os.path.join(this_dir, 'app_main.py')
-        w_dict = space.newdict()
-        space.exec_(open(filename).read(), w_dict, w_dict)
+        app = gateway.applevel(open(filename).read(), 'app_main.py', 'app_main')
+        app.hidden_applevel = False
+        app.can_use_geninterp = False
+        w_dict = app.getwdict(space)
         entry_point = create_entry_point(space, w_dict)
 
         return entry_point, None, PyPyAnnotatorPolicy(single_space = space)
 
     def interface(self, ns):
         for name in ['take_options', 'handle_config', 'print_help', 'target',
-                     'jitpolicy',
+                     'jitpolicy', 'get_entry_point',
                      'get_additional_config_options']:
             ns[name] = getattr(self, name)
 

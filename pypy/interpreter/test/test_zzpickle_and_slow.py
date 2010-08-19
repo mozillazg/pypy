@@ -73,10 +73,8 @@ def _detatch_helpers(space):
                   space.wrap('restore_top_frame'))
 
 class AppTestInterpObjectPickling:
-
+    pytestmark = py.test.mark.skipif("config.option.runappdirect")
     def setup_class(cls):
-        if conftest.option.runappdirect:
-            py.test.skip("not for py.test -A")
         _attach_helpers(cls.space)
 
     def teardown_class(cls):
@@ -470,3 +468,18 @@ class AppTestInterpObjectPickling:
         l = []
         unbound_meth2(l, 1)
         assert l == [1]
+
+    def test_pickle_submodule(self):
+        import pickle
+        import sys, new
+
+        mod = new.module('pack.mod')
+        sys.modules['pack.mod'] = mod
+        pack = new.module('pack')
+        pack.mod = mod
+        sys.modules['pack'] = pack
+
+        import pack.mod
+        pckl   = pickle.dumps(pack.mod)
+        result = pickle.loads(pckl)
+        assert pack.mod is result

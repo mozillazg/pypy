@@ -12,7 +12,8 @@ except (ImportError, CompilationError):
     rzlib = None
 
 # XXX hack to get crc32 to work
-from pypy.lib.binascii import crc_32_tab
+from pypy.tool.lib_pypy import import_from_lib_pypy
+crc_32_tab = import_from_lib_pypy('binascii').crc_32_tab
 
 rcrc_32_tab = [r_uint(i) for i in crc_32_tab]
 
@@ -217,7 +218,7 @@ class RZipFile(object):
                                 + fheader[_FH_EXTRA_FIELD_LENGTH])
             fname = fp.read(fheader[_FH_FILENAME_LENGTH])
             if fname != data.orig_filename:
-                raise RuntimeError, \
+                raise BadZipfile, \
                       'File name in directory "%s" and header "%s" differ.' % (
                           data.orig_filename, fname)
         fp.seek(self.start_dir, 0)

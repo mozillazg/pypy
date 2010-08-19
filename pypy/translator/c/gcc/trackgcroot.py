@@ -17,6 +17,7 @@ from pypy.translator.c.gcc.instruction import LOC_ESP_PLUS
 
 class FunctionGcRootTracker(object):
     skip = 0
+    COMMENT = "([#;].*)?"
 
     @classmethod
     def init_regexp(cls):
@@ -25,10 +26,10 @@ class FunctionGcRootTracker(object):
         cls.r_globllabel    = re.compile(cls.LABEL+r"=[.][+]%d\s*$"%cls.OFFSET_LABELS)
 
         cls.r_insn          = re.compile(r"\t([a-z]\w*)\s")
-        cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*$")
+        cls.r_unaryinsn     = re.compile(r"\t[a-z]\w*\s+("+cls.OPERAND+")\s*" + cls.COMMENT + "$")
         cls.r_binaryinsn    = re.compile(r"\t[a-z]\w*\s+(?P<source>"+cls.OPERAND+"),\s*(?P<target>"+cls.OPERAND+")\s*$")
 
-        cls.r_jump          = re.compile(r"\tj\w+\s+"+cls.LABEL+"\s*$")
+        cls.r_jump          = re.compile(r"\tj\w+\s+"+cls.LABEL+"\s*" + cls.COMMENT + "$")
         cls.r_jmp_switch    = re.compile(r"\tjmp\t[*]"+cls.LABEL+"[(]")
         cls.r_jmp_source    = re.compile(r"\d*[(](%[\w]+)[,)]")
 
@@ -337,7 +338,7 @@ class FunctionGcRootTracker(object):
             else:
                 funcname = self.funcname
             while 1:
-                label = '__gcmap_%s__%s_%d' % (self.filetag, self.funcname, k)
+                label = '__gcmap_%s__%s_%d' % (self.filetag, funcname, k)
                 if label not in self.labels:
                     break
                 k += 1
@@ -616,7 +617,7 @@ class FunctionGcRootTracker(object):
             # tail-calls are equivalent to RET for us
             return InsnRet(self.CALLEE_SAVE_REGISTERS)
         return InsnStop()
-
+    
     def register_jump_to(self, label):
         if not isinstance(self.insns[-1], InsnStop):
             self.labels[label].previous_insns.append(self.insns[-1])
@@ -641,6 +642,7 @@ class FunctionGcRootTracker(object):
         self.register_jump_to(label)
         return []
 
+    visit_jmpl = visit_jmp
     visit_je = conditional_jump
     visit_jne = conditional_jump
     visit_jg = conditional_jump
@@ -833,6 +835,8 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker):
     LABEL   = r'([a-zA-Z_$@.][a-zA-Z0-9_$@.]*)'
     OFFSET_LABELS = 0
 
+    r_segmentstart  = re.compile(r"[_A-Z]+\tSEGMENT$")
+    r_segmentend    = re.compile(r"[_A-Z]+\tENDS$")
     r_functionstart = re.compile(r"; Function compile flags: ")
     r_codestart     = re.compile(LABEL+r"\s+PROC\s*(:?;.+)?\n$")
     r_functionend   = re.compile(LABEL+r"\s+ENDP\s*$")
@@ -1012,7 +1016,8 @@ class AssemblerParser(object):
     def process(self, iterlines, newfile, entrypoint='main', filename='?'):
         for in_function, lines in self.find_functions(iterlines):
             if in_function:
-                lines = self.process_function(lines, entrypoint, filename)
+                tracker = self.process_function(lines, entrypoint, filename)
+                lines = tracker.lines
             self.write_newfile(newfile, lines, filename.split('.')[0])
         if self.verbose == 1:
             sys.stderr.write('\n')
@@ -1040,25 +1045,24 @@ class AssemblerParser(object):
         else:
             self.gcmaptable.extend(table)
         self.seen_main |= is_main
-        return tracker.lines
+        return tracker
 
 class ElfAssemblerParser(AssemblerParser):
     format = "elf"
     FunctionGcRootTracker = ElfFunctionGcRootTracker
 
-    @classmethod
-    def find_functions(cls, iterlines):
+    def find_functions(self, iterlines):
         functionlines = []
         in_function = False
         for line in iterlines:
-            if cls.FunctionGcRootTracker.r_functionstart.match(line):
+            if self.FunctionGcRootTracker.r_functionstart.match(line):
                 assert not in_function, (
                     "missed the end of the previous function")
                 yield False, functionlines
                 in_function = True
                 functionlines = []
             functionlines.append(line)
-            if cls.FunctionGcRootTracker.r_functionend.match(line):
+            if self.FunctionGcRootTracker.r_functionend.match(line):
                 assert in_function, (
                     "missed the start of the current function")
                 yield True, functionlines
@@ -1088,22 +1092,21 @@ class DarwinAssemblerParser(AssemblerParser):
                      ]
     r_sectionstart = re.compile(r"\t\.("+'|'.join(OTHERSECTIONS)+").*$")
 
-    @classmethod
-    def find_functions(cls, iterlines):
+    def find_functions(self, iterlines):
         functionlines = []
         in_text = False
         in_function = False
         for n, line in enumerate(iterlines):
-            if cls.r_textstart.match(line):
+            if self.r_textstart.match(line):
                 assert not in_text, "unexpected repeated .text start: %d" % n
                 in_text = True
-            elif cls.r_sectionstart.match(line):
+            elif self.r_sectionstart.match(line):
                 if in_function:
                     yield in_function, functionlines
                     functionlines = []
                 in_text = False
                 in_function = False
-            elif in_text and cls.FunctionGcRootTracker.r_functionstart.match(line):
+            elif in_text and self.FunctionGcRootTracker.r_functionstart.match(line):
                 yield in_function, functionlines
                 functionlines = []
                 in_function = True
@@ -1121,17 +1124,16 @@ class Mingw32AssemblerParser(DarwinAssemblerParser):
     format = "mingw32"
     FunctionGcRootTracker = Mingw32FunctionGcRootTracker
 
-    @classmethod
-    def find_functions(cls, iterlines):
+    def find_functions(self, iterlines):
         functionlines = []
         in_text = False
         in_function = False
         for n, line in enumerate(iterlines):
-            if cls.r_textstart.match(line):
+            if self.r_textstart.match(line):
                 in_text = True
-            elif cls.r_sectionstart.match(line):
+            elif self.r_sectionstart.match(line):
                 in_text = False
-            elif in_text and cls.FunctionGcRootTracker.r_functionstart.match(line):
+            elif in_text and self.FunctionGcRootTracker.r_functionstart.match(line):
                 yield in_function, functionlines
                 functionlines = []
                 in_function = True
@@ -1143,19 +1145,41 @@ class MsvcAssemblerParser(AssemblerParser):
     format = "msvc"
     FunctionGcRootTracker = MsvcFunctionGcRootTracker
 
-    @classmethod
-    def find_functions(cls, iterlines):
+    def find_functions(self, iterlines):
         functionlines = []
         in_function = False
+        in_segment = False
+        ignore_public = False
+        self.inline_functions = {}
         for line in iterlines:
-            if cls.FunctionGcRootTracker.r_functionstart.match(line):
+            if line.startswith('; File '):
+                filename = line[:-1].split(' ', 2)[2]
+                ignore_public = ('wspiapi.h' in filename.lower())
+            if ignore_public:
+                # this header define __inline functions, that are
+                # still marked as PUBLIC in the generated assembler
+                if line.startswith(';\tCOMDAT '):
+                    funcname = line[:-1].split(' ', 1)[1]
+                    self.inline_functions[funcname] = True
+                elif line.startswith('PUBLIC\t'):
+                    funcname = line[:-1].split('\t')[1]
+                    self.inline_functions[funcname] = True
+
+            if self.FunctionGcRootTracker.r_segmentstart.match(line):
+                in_segment = True
+            elif self.FunctionGcRootTracker.r_functionstart.match(line):
                 assert not in_function, (
                     "missed the end of the previous function")
-                yield False, functionlines
                 in_function = True
-                functionlines = []
+                if in_segment:
+                    yield False, functionlines
+                    functionlines = []
             functionlines.append(line)
-            if cls.FunctionGcRootTracker.r_functionend.match(line):
+            if self.FunctionGcRootTracker.r_segmentend.match(line):
+                yield False, functionlines
+                in_segment = False
+                functionlines = []
+            elif self.FunctionGcRootTracker.r_functionend.match(line):
                 assert in_function, (
                     "missed the start of the current function")
                 yield True, functionlines
@@ -1181,14 +1205,18 @@ class MsvcAssemblerParser(AssemblerParser):
             # compiler: every string or float constant is exported
             # with a name built after its value, and will conflict
             # with other modules.
-            if line.startswith("PUBLIC\t__real@"):
-                line = '; ' + line
-            if line.startswith("PUBLIC\t__mask@@"):
-                line = '; ' + line
-            elif line.startswith("PUBLIC\t??_C@"):
-                line = '; ' + line
-            elif line == "PUBLIC\t__$ArrayPad$\n":
-                line = '; ' + line
+            if line.startswith("PUBLIC\t"):
+                symbol = line[:-1].split()[1]
+                if symbol.startswith('__real@'):
+                    line = '; ' + line
+                elif symbol.startswith("__mask@@"):
+                    line = '; ' + line
+                elif symbol.startswith("??_C@"):
+                    line = '; ' + line
+                elif symbol == "__$ArrayPad$":
+                    line = '; ' + line
+                elif symbol in self.inline_functions:
+                    line = '; ' + line
 
             # The msvc compiler writes "fucomip ST(1)" when the correct
             # syntax is "fucomip ST, ST(1)"
@@ -1257,20 +1285,13 @@ class GcRootTracker(object):
 
         if self.format == 'msvc':
             print >> output, """\
-            /* A circular doubly-linked list of all
-             * the ASM_FRAMEDATAs currently alive
-             */
-            struct asm_framedata {
-                struct asm_framedata* prev;
-                struct asm_framedata* next;
-            } __gcrootanchor = { &__gcrootanchor, &__gcrootanchor };
-
             /* See description in asmgcroot.py */
             __declspec(naked)
             long pypy_asm_stackwalk(void *callback)
             {
                __asm {
-                mov\tedx, DWORD PTR [esp+4]\t; my argument, which is the callback
+                mov\tedx, DWORD PTR [esp+4]\t; 1st argument, which is the callback
+                mov\tecx, DWORD PTR [esp+8]\t; 2nd argument, which is gcrootanchor
                 mov\teax, esp\t\t; my frame top address
                 push\teax\t\t\t; ASM_FRAMEDATA[6]
                 push\tebp\t\t\t; ASM_FRAMEDATA[5]
@@ -1281,10 +1302,10 @@ class GcRootTracker(object):
             ; Add this ASM_FRAMEDATA to the front of the circular linked
             ; list.  Let's call it 'self'.
 
-                mov\teax, DWORD PTR [__gcrootanchor+4]\t\t; next = gcrootanchor->next
+                mov\teax, DWORD PTR [ecx+4]\t\t; next = gcrootanchor->next
                 push\teax\t\t\t\t\t\t\t\t\t; self->next = next
-                push\tOFFSET __gcrootanchor              ; self->prev = gcrootanchor
-                mov\tDWORD PTR [__gcrootanchor+4], esp\t\t; gcrootanchor->next = self
+                push\tecx              ; self->prev = gcrootanchor
+                mov\tDWORD PTR [ecx+4], esp\t\t; gcrootanchor->next = self
                 mov\tDWORD PTR [eax+0], esp\t\t\t\t\t; next->prev = self
 
                 call\tedx\t\t\t\t\t\t; invoke the callback
@@ -1317,7 +1338,8 @@ class GcRootTracker(object):
 
             print >> output, """\
             /* See description in asmgcroot.py */
-            movl\t4(%esp), %edx\t/* my argument, which is the callback */
+            movl\t4(%esp), %edx\t/* 1st argument, which is the callback */
+            movl\t8(%esp), %ecx\t/* 2nd argument, which is gcrootanchor */
             movl\t%esp, %eax\t/* my frame top address */
             pushl\t%eax\t\t/* ASM_FRAMEDATA[6] */
             pushl\t%ebp\t\t/* ASM_FRAMEDATA[5] */
@@ -1328,10 +1350,10 @@ class GcRootTracker(object):
             /* Add this ASM_FRAMEDATA to the front of the circular linked */
             /* list.  Let's call it 'self'.                               */
 
-            movl\t__gcrootanchor + 4, %eax\t/* next = gcrootanchor->next */
+            movl\t4(%ecx), %eax\t/* next = gcrootanchor->next */
             pushl\t%eax\t\t\t\t/* self->next = next */
-            pushl\t$__gcrootanchor\t\t\t/* self->prev = gcrootanchor */
-            movl\t%esp, __gcrootanchor + 4\t/* gcrootanchor->next = self */
+            pushl\t%ecx\t\t\t/* self->prev = gcrootanchor */
+            movl\t%esp, 4(%ecx)\t/* gcrootanchor->next = self */
             movl\t%esp, 0(%eax)\t\t\t/* next->prev = self */
 
             /* note: the Mac OS X 16 bytes aligment must be respected. */
@@ -1352,7 +1374,7 @@ class GcRootTracker(object):
             /* the return value is the one of the 'call' above, */
             /* because %eax (and possibly %edx) are unmodified  */
             ret
-            """.replace("__gcrootanchor", _globalname("__gcrootanchor"))
+            """
 
             _variant(elf='.size pypy_asm_stackwalk, .-pypy_asm_stackwalk',
                      darwin='',
@@ -1362,17 +1384,6 @@ class GcRootTracker(object):
             for label, state, is_range in self.gcmaptable:
                 label = label[1:]
                 print >> output, "extern void* %s;" % label
-        else:
-            print >> output, """\
-            /* A circular doubly-linked list of all */
-            /* the ASM_FRAMEDATAs currently alive */
-            .data
-            .align 4
-            .globl __gcrootanchor
-            __gcrootanchor:
-            .long\t__gcrootanchor       /* prev */
-            .long\t__gcrootanchor       /* next */
-            """.replace("__gcrootanchor", _globalname("__gcrootanchor"))
 
         shapes = {}
         shapelines = []
@@ -1411,6 +1422,8 @@ class GcRootTracker(object):
             """
         else:
             print >> output, """\
+            .data
+            .align 4
             .globl __gcmapstart
             __gcmapstart:
             """.replace("__gcmapstart", _globalname("__gcmapstart"))
@@ -1451,7 +1464,8 @@ class GcRootTracker(object):
         parser = PARSERS[format](verbose=self.verbose, shuffle=self.shuffle)
         for in_function, lines in parser.find_functions(iterlines):
             if in_function:
-                lines = parser.process_function(lines, entrypoint, filename)
+                tracker = parser.process_function(lines, entrypoint, filename)
+                lines = tracker.lines
             parser.write_newfile(newfile, lines, filename.split('.')[0])
         if self.verbose == 1:
             sys.stderr.write('\n')
@@ -1613,6 +1627,7 @@ if __name__ == '__main__':
         format = 'mingw32'
     else:
         format = 'elf'
+    entrypoint = 'main'
     while len(sys.argv) > 1:
         if sys.argv[1] == '-v':
             del sys.argv[1]
@@ -1625,6 +1640,9 @@ if __name__ == '__main__':
             output_raw_table = True
         elif sys.argv[1].startswith('-f'):
             format = sys.argv[1][2:]
+            del sys.argv[1]
+        elif sys.argv[1].startswith('-m'):
+            entrypoint = sys.argv[1][2:]
             del sys.argv[1]
         else:
             break
@@ -1642,7 +1660,7 @@ if __name__ == '__main__':
             lblfn = fn[:-2] + '.lbl.s'
             g = open(lblfn, 'w')
             try:
-                tracker.process(f, g, filename=fn)
+                tracker.process(f, g, entrypoint=entrypoint, filename=fn)
             except:
                 g.close()
                 os.unlink(lblfn)

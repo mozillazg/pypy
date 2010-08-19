@@ -2,14 +2,17 @@ import py
 from pypy.rlib.jit import JitDriver, OPTIMIZER_SIMPLE, OPTIMIZER_FULL
 from pypy.rlib.objectmodel import compute_hash
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
-from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import history
 
 class LoopTest(object):
     optimizer = OPTIMIZER_SIMPLE
+    automatic_promotion_result = {
+        'int_add' : 6, 'int_gt' : 1, 'guard_false' : 1, 'jump' : 1, 
+        'guard_value' : 3
+    }
 
     def meta_interp(self, f, args, policy=None):
         return ll_meta_interp(f, args, optimizer=self.optimizer,
@@ -342,7 +345,7 @@ class LoopTest(object):
         assert res == expected
 
     def test_loop_unicode(self):
-        myjitdriver = JitDriver(greens = [], reds = ['x', 'n'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'x'])
         def f(n):
             x = u''
             while n > 13:
@@ -356,7 +359,7 @@ class LoopTest(object):
         assert res == expected
 
     def test_loop_string(self):
-        myjitdriver = JitDriver(greens = [], reds = ['x', 'n'])
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'x'])
         def f(n):
             x = ''
             while n > 13:
@@ -478,9 +481,9 @@ class LoopTest(object):
         res = self.meta_interp(main_interpreter_loop, [1])
         assert res == main_interpreter_loop(1)
         self.check_loop_count(1)
-        # XXX maybe later optimize guard_value away
-        self.check_loops({'int_add' : 6, 'int_gt' : 1,
-                          'guard_false' : 1, 'jump' : 1, 'guard_value' : 3})
+        # These loops do different numbers of ops based on which optimizer we
+        # are testing with.
+        self.check_loops(self.automatic_promotion_result)
 
     def test_can_enter_jit_outside_main_loop(self):
         myjitdriver = JitDriver(greens=[], reds=['i', 'j', 'a'])

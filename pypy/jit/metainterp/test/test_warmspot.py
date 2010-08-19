@@ -128,10 +128,11 @@ class WarmspotTests(object):
 
         from pypy.jit.metainterp import optimize
 
-        assert warmrunnerdescr.state.optimize_loop is optimize.optimize_loop
-        assert warmrunnerdescr.state.optimize_bridge is optimize.optimize_bridge
+        state = warmrunnerdescr.jitdrivers_sd[0].warmstate
+        assert state.optimize_loop is optimize.optimize_loop
+        assert state.optimize_bridge is optimize.optimize_bridge
 
-    def test_static_debug_level(self):
+    def test_static_debug_level(self, capfd):
         py.test.skip("debug_level is being deprecated")
         from pypy.rlib.jit import DEBUG_PROFILE, DEBUG_OFF, DEBUG_STEPS
         from pypy.jit.metainterp.jitprof import EmptyProfiler, Profiler
@@ -144,36 +145,31 @@ class WarmspotTests(object):
                 n -= 1
             return n
 
-        outerr = py.io.StdCaptureFD()
+        capfd.readouterr()
         self.meta_interp(f, [10], debug_level=DEBUG_OFF,
                                   ProfilerClass=Profiler)
-        out, errf = outerr.done()
-        err = errf.read()
+        out, err = capfd.readouterr()
         assert not 'ENTER' in err
         assert not 'LEAVE' in err
         assert not "Running asm" in err
-        outerr = py.io.StdCaptureFD()
         self.meta_interp(f, [10], debug_level=DEBUG_PROFILE,
                                   ProfilerClass=Profiler)
-        out, errf = outerr.done()
-        err = errf.read()
+        out, err = capfd.readouterr()
         assert not 'ENTER' in err
         assert not 'LEAVE' in err
         assert not 'compiled new' in err
         assert "Running asm" in err
-        outerr = py.io.StdCaptureFD()
+
         self.meta_interp(f, [10], debug_level=DEBUG_STEPS,
                                   ProfilerClass=Profiler)
-        out, errf = outerr.done()
-        err = errf.read()
+        out, err = capfd.readouterr()
         assert 'ENTER' in err
         assert 'LEAVE' in err
         assert "Running asm" in err
-        outerr = py.io.StdCaptureFD()
+
         self.meta_interp(f, [10], debug_level=DEBUG_STEPS,
                                   ProfilerClass=EmptyProfiler)
-        out, errf = outerr.done()
-        err = errf.read()
+        out, err = capfd.readouterr()
         assert 'ENTER' in err
         assert 'LEAVE' in err
         assert not "Running asm" in err
@@ -282,13 +278,13 @@ class TestLLWarmspot(WarmspotTests, LLJitMixin):
     type_system = 'lltype'
 
 class TestOOWarmspot(WarmspotTests, OOJitMixin):
-    CPUClass = runner.OOtypeCPU
+    ##CPUClass = runner.OOtypeCPU
     type_system = 'ootype'
 
 class TestWarmspotDirect(object):
     def setup_class(cls):
         from pypy.jit.metainterp.typesystem import llhelper
-        from pypy.jit.metainterp.support import annotate
+        from pypy.jit.codewriter.support import annotate
         from pypy.jit.metainterp.warmspot import WarmRunnerDesc
         from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
         from pypy.rpython.lltypesystem import lltype, llmemory
@@ -299,12 +295,12 @@ class TestWarmspotDirect(object):
             def __init__(self, no):
                 self.no = no
             
-            def handle_fail(self, metainterp_sd):
+            def handle_fail(self, metainterp_sd, jitdrivers_sd):
                 if self.no == 0:
                     raise metainterp_sd.warmrunnerdesc.DoneWithThisFrameInt(3)
                 if self.no == 1:
                     raise metainterp_sd.warmrunnerdesc.ContinueRunningNormally(
-                        [BoxInt(0), BoxInt(1)])
+                        [0], [], [], [1], [], [])
                 if self.no == 3:
                     exc = lltype.malloc(OBJECT)
                     exc.typeptr = exc_vtable
@@ -313,10 +309,15 @@ class TestWarmspotDirect(object):
                         lltype.cast_opaque_ptr(llmemory.GCREF, exc))
                 return self.no
 
+        class FakeDescr:
+            def as_vtable_size_descr(self):
+                return self
+
         class FakeCPU(object):
             supports_floats = False
             ts = llhelper
             translate_support_code = False
+            stats = "stats"
             
             def get_fail_descr_number(self, d):
                 return -1
@@ -325,7 +326,7 @@ class TestWarmspotDirect(object):
                 pass
 
             def nodescr(self, *args, **kwds):
-                pass
+                return FakeDescr()
             fielddescrof = nodescr
             calldescrof  = nodescr
             sizeof       = nodescr
@@ -348,18 +349,20 @@ class TestWarmspotDirect(object):
             return red
 
         rtyper = annotate(f, [0])
+        FakeCPU.rtyper = rtyper
         translator = rtyper.annotator.translator
         translator.config.translation.gc = 'hybrid'
         cls.desc = WarmRunnerDesc(translator, CPUClass=FakeCPU)
 
     def test_call_helper(self):
         from pypy.rpython.llinterp import LLException
-        
-        assert self.desc.assembler_call_helper(0, 0) == 3
-        assert self.desc.assembler_call_helper(1, 0) == 10
-        assert self.desc.assembler_call_helper(2, 0) == 10
+
+        [jd] = self.desc.jitdrivers_sd
+        assert jd._assembler_call_helper(0, 0) == 3
+        assert jd._assembler_call_helper(1, 0) == 10
+        assert jd._assembler_call_helper(2, 0) == 10
         try:
-            self.desc.assembler_call_helper(3, 0)
+            jd._assembler_call_helper(3, 0)
         except LLException, lle:
             assert lle[0] == self.exc_vtable
         else:

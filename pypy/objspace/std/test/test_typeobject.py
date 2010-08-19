@@ -1,5 +1,5 @@
-from pypy.objspace.std.objspace import *
-from pypy.objspace.std.stdtypedef import *
+from pypy.objspace.std.model import W_Object
+from pypy.objspace.std.stdtypedef import StdTypeDef
 from pypy.conftest import gettestobjspace
 
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -15,7 +15,7 @@ class TestTypeObject:
         def descr__new__(space, w_subtype):
             return space.allocate_instance(W_Stuff, w_subtype)
         W_Stuff.typedef = StdTypeDef("stuff",
-                                     __new__ = newmethod(descr__new__))
+                                     __new__ = interp2app(descr__new__))
         W_Stuff.typedef.acceptable_as_base_class = False
         w_stufftype = space.gettypeobject(W_Stuff.typedef)
         space.appexec([w_stufftype], """(stufftype):
@@ -1001,12 +1001,12 @@ class AppTestGetattributeShortcut:
         y.x = 3
         assert y.x == 3
 
-        def ga(self, name):
-            return 'GA'
+        def ga2(self, name):
+            return 'GA2'
 
-        X.__getattribute__ = ga
+        X.__getattribute__ = ga2
 
-        assert y.x == 'GA'
+        assert y.x == 'GA2'
 
 class TestNewShortcut:
 

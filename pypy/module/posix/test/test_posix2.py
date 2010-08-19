@@ -1,3 +1,6 @@
+
+# -*- coding: utf-8 -*-
+
 from pypy.objspace.std import StdObjSpace 
 from pypy.tool.udir import udir
 from pypy.conftest import gettestobjspace
@@ -29,16 +32,21 @@ def setup_module(mod):
     # even when running on top of CPython 2.4.
     os.stat_float_times(True)
 
+    # Initialize sys.filesystemencoding
+    space.call_method(space.getbuiltinmodule('sys'), 'getfilesystemencoding')
+
 def need_sparse_files():
     if sys.platform == 'darwin':
         py.test.skip("no sparse files on default Mac OS X file system")
     if os.name == 'nt':
         py.test.skip("no sparse files on Windows")
 
+GET_POSIX = "(): import %s as m ; return m" % os.name
+
 class AppTestPosix: 
     def setup_class(cls): 
         cls.space = space 
-        cls.w_posix = space.appexec([], "(): import %s as m ; return m" % os.name)
+        cls.w_posix = space.appexec([], GET_POSIX)
         cls.w_path = space.wrap(str(path))
         cls.w_path2 = space.wrap(str(path2))
         cls.w_pdir = space.wrap(str(pdir))
@@ -175,16 +183,18 @@ class AppTestPosix:
             assert 0
 
     def test_filename_exception(self):
-        for fn in [self.posix.unlink, self.posix.remove,
-                   self.posix.chdir, self.posix.mkdir, self.posix.rmdir,
-                   self.posix.listdir, self.posix.readlink,
-                   self.posix.chroot]:
-            try:
-                fn('qowieuqw/oeiu')
-            except OSError, e:
-                assert e.filename == 'qowieuqw/oeiu'
-            else:
-                assert 0
+        for fname in ['unlink', 'remove',
+                      'chdir', 'mkdir', 'rmdir',
+                      'listdir', 'readlink',
+                      'chroot']:
+            if hasattr(self.posix, fname):
+                func = getattr(self.posix, fname)
+                try:
+                    func('qowieuqw/oeiu')
+                except OSError, e:
+                    assert e.filename == 'qowieuqw/oeiu'
+                else:
+                    assert 0
 
     def test_chmod_exception(self):
         try:
@@ -195,12 +205,13 @@ class AppTestPosix:
             assert 0
 
     def test_chown_exception(self):
-        try:
-            self.posix.chown('qowieuqw/oeiu', 0, 0)
-        except OSError, e:
-            assert e.filename == 'qowieuqw/oeiu'
-        else:
-            assert 0
+        if hasattr(self.posix, 'chown'):
+            try:
+                self.posix.chown('qowieuqw/oeiu', 0, 0)
+            except OSError, e:
+                assert e.filename == 'qowieuqw/oeiu'
+            else:
+                assert 0
 
     def test_utime_exception(self):
         for arg in [None, (0, 0)]:
@@ -240,6 +251,19 @@ class AppTestPosix:
         fd = posix.open(path, posix.O_RDONLY, 0777)
         f = posix.fdopen(fd, "r")
         f.close()
+
+    def test_fdopen_hackedbuiltins(self):
+        "Same test, with __builtins__.file removed"
+        _file = __builtins__.file
+        __builtins__.file = None
+        try:
+            path = self.path
+            posix = self.posix
+            fd = posix.open(path, posix.O_RDONLY, 0777)
+            f = posix.fdopen(fd, "r")
+            f.close()
+        finally:
+            __builtins__.file = _file
 
     def test_getcwd(self):
         assert isinstance(self.posix.getcwd(), str)
@@ -469,6 +493,12 @@ class AppTestPosix:
 
             if not hasattr(os, "fork"):
                 skip("Need fork() to test wait()")
+            if hasattr(os, "waitpid") and hasattr(os, "WNOHANG"):
+                try:
+                    while os.waitpid(-1, os.WNOHANG)[0]:
+                        pass
+                except OSError:  # until we get "No child processes", hopefully
+                    pass
             child = os.fork()
             if child == 0: # in child
                 os._exit(exit_status)
@@ -636,6 +666,71 @@ class AppTestEnvironment(object):
         f.seek(0, 0)
         assert isinstance(f, file)
         assert f.read() == 'xxx'
+
+class AppTestPosixUnicode:
+
+    def setup_class(cls):
+        cls.space = space
+        cls.w_posix = space.appexec([], GET_POSIX)
+        if py.test.config.option.runappdirect:
+            # Can't change encoding
+            try:
+                u"ą".encode(sys.getfilesystemencoding())
+            except UnicodeEncodeError:
+                py.test.skip("encoding not good enough")
+        else:
+            cls.save_fs_encoding = space.sys.filesystemencoding
+            space.sys.filesystemencoding = "utf-8"
+
+    def teardown_class(cls):
+        try:
+            cls.space.sys.filesystemencoding = cls.save_fs_encoding
+        except AttributeError:
+            pass
+
+    def test_stat_unicode(self):
+        # test that passing unicode would not raise UnicodeDecodeError
+        try:
+            self.posix.stat(u"ą")
+        except OSError:
+            pass
+
+    def test_open_unicode(self):
+        # Ensure passing unicode doesn't raise UnicodeEncodeError
+        try:
+            self.posix.open(u"ą", self.posix.O_WRONLY)
+        except OSError:
+            pass
+
+    def test_remove_unicode(self):
+        # See 2 above ;)
+        try:
+            self.posix.remove(u"ą")
+        except OSError:
+            pass
+
+class AppTestUnicodeFilename:
+    def setup_class(cls):
+        ufilename = (unicode(udir.join('test_unicode_filename_')) +
+                     u'\u65e5\u672c.txt') # "Japan"
+        try:
+            f = file(ufilename, 'w')
+        except UnicodeEncodeError:
+            py.test.skip("encoding not good enough")
+        f.write("test")
+        f.close()
+        cls.space = space
+        cls.w_filename = space.wrap(ufilename)
+        cls.w_posix = space.appexec([], GET_POSIX)
+
+    def test_open(self):
+        fd = self.posix.open(self.filename, self.posix.O_RDONLY)
+        try:
+            content = self.posix.read(fd, 50)
+        finally:
+            self.posix.close(fd)
+        assert content == "test"
+
 
 class TestPexpect(object):
     # XXX replace with AppExpectTest class as soon as possible

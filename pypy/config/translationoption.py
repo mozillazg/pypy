@@ -23,7 +23,8 @@ translation_optiondescription = OptionDescription(
         "translation", "Translation Options", [
     BoolOption("stackless", "enable stackless features during compilation",
                default=False, cmdline="--stackless",
-               requires=[("translation.type_system", "lltype")]),
+               requires=[("translation.type_system", "lltype"),
+                         ("translation.gcremovetypeptr", False)]),  # XXX?
     ChoiceOption("type_system", "Type system to use when RTyping",
                  ["lltype", "ootype"], cmdline=None, default="lltype",
                  requires={
@@ -41,6 +42,9 @@ translation_optiondescription = OptionDescription(
                      "jvm":    [("translation.type_system", "ootype")],
                      },
                  cmdline="-b --backend"),
+
+    BoolOption("shared", "Build as a shared library",
+               default=False, cmdline="--shared"),
 
     BoolOption("log", "Include debug prints in the translation (PYPYLOG=...)",
                default=True, cmdline="--log"),
@@ -100,7 +104,7 @@ translation_optiondescription = OptionDescription(
     # JIT generation: use -Ojit to enable it
     BoolOption("jit", "generate a JIT",
                default=False,
-               suggests=[("translation.gc", "hybrid"),     # or "boehm"
+               suggests=[("translation.gc", "hybrid"),
                          ("translation.gcrootfinder", "asmgcc"),
                          ("translation.list_comprehension_operations", True)]),
     ChoiceOption("jit_backend", "choose the backend for the JIT",
@@ -138,6 +142,9 @@ translation_optiondescription = OptionDescription(
     ArbitraryOption("instrumentctl", "internal",
                default=None),
     StrOption("output", "Output file name", cmdline="--output"),
+    StrOption("secondaryentrypoints",
+            "Comma separated list of keys choosing secondary entrypoints",
+            cmdline="--entrypoints", default=""),
 
     BoolOption("dump_static_data_info", "Dump static data info",
                cmdline="--dump_static_data_info",
@@ -335,6 +342,10 @@ OPT_TABLE = {
     'jit':  'hybrid      extraopts     jit',
     }
 
+# For now, 64-bit JIT requires boehm
+if IS_64_BITS:
+    OPT_TABLE['jit'] = OPT_TABLE['jit'].replace('hybrid', 'boehm')
+
 def set_opt_level(config, level):
     """Apply optimization suggestions on the 'config'.
     The optimizations depend on the selected level and possibly on the backend.
@@ -369,6 +380,8 @@ def set_opt_level(config, level):
             config.translation.suggest(withsmallfuncsets=5)
         elif word == 'jit':
             config.translation.suggest(jit=True)
+            if config.translation.stackless:
+                raise NotImplementedError("JIT conflicts with stackless for now")
         elif word == 'removetypeptr':
             config.translation.suggest(gcremovetypeptr=True)
         else:

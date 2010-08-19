@@ -7,18 +7,18 @@ from pypy.interpreter.argument import Arguments
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.executioncontext import ExecutionContext
 from pypy.interpreter import pytraceback
-import opcode
 from pypy.rlib.objectmodel import we_are_translated, instantiate
 from pypy.rlib.jit import hint
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib import jit
+from pypy.rlib import jit, rstack
+from pypy.tool import stdlib_opcode
 
 # Define some opcodes used
 g = globals()
 for op in '''DUP_TOP POP_TOP SETUP_LOOP SETUP_EXCEPT SETUP_FINALLY
 POP_BLOCK END_FINALLY'''.split():
-    g[op] = opcode.opmap[op]
-HAVE_ARGUMENT = opcode.HAVE_ARGUMENT
+    g[op] = stdlib_opcode.opmap[op]
+HAVE_ARGUMENT = stdlib_opcode.HAVE_ARGUMENT
 
 class PyFrame(eval.Frame):
     """Represents a frame for a regular Python function
@@ -64,6 +64,8 @@ class PyFrame(eval.Frame):
         self.fastlocals_w = [None]*self.numlocals
         make_sure_not_resized(self.fastlocals_w)
         self.f_lineno = code.co_firstlineno
+        # Keep from having to call space.wrap in a RuntimeError
+        self._recursion_error = space.wrap("maximum recursion depth exceeded")
 
     def append_block(self, block):
         block.previous = self.lastblock
@@ -130,10 +132,9 @@ class PyFrame(eval.Frame):
 
     def execute_frame(self):
         """Execute this frame.  Main entry point to the interpreter."""
-        from pypy.rlib import rstack
         # the following 'assert' is an annotation hint: it hides from
         # the annotator all methods that are defined in PyFrame but
-        # overridden in the FrameClass subclass of PyFrame.
+        # overridden in the {,Host}FrameClass subclasses of PyFrame.
         assert isinstance(self, self.space.FrameClass)
         executioncontext = self.space.getexecutioncontext()
         executioncontext.enter(self)
@@ -236,6 +237,8 @@ class PyFrame(eval.Frame):
             self.pushvalue(w_value)
         
     def peekvalue(self, index_from_top=0):
+        # NOTE: top of the stack is peekvalue(0).
+        # Contrast this with CPython where it's PEEK(-1).
         index_from_top = hint(index_from_top, promote=True)
         index = self.valuestackdepth + ~index_from_top
         assert index >= 0, "peek past the bottom of the stack"
@@ -539,7 +542,7 @@ class PyFrame(eval.Frame):
                 if delta_iblock < min_delta_iblock:
                     min_delta_iblock = delta_iblock
 
-            if op >= opcode.HAVE_ARGUMENT:
+            if op >= stdlib_opcode.HAVE_ARGUMENT:
                 addr += 3
             else:
                 addr += 1
