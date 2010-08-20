@@ -1,10 +1,6 @@
+from pypy.objspace.std.test.test_dictmultiobject import FakeSpace
 from pypy.objspace.std.mapdict import *
 
-class FakeSpace(object):
-    def str_w(self, s):
-        return s
-    def wrap(self, x):
-        return x
 space = FakeSpace()
 
 class FakeMember(object):
