@@ -41,16 +41,17 @@ class AppTestDATATYPES:
         c = cppyy_test_data()
         assert isinstance(c, cppyy_test_data)
 
-        # boolean types
+        # boolean types through functions
         c.set_bool(True);
         assert c.get_bool() == True
         c.set_bool(0);     assert c.get_bool() == False
-        """
+
+        # boolean types through data members
         c.m_bool = True;   assert c.get_bool() == True
         c.set_bool(True);  assert c.m_bool     == True
         c.m_bool = 0;      assert c.get_bool() == False
         c.set_bool(0);     assert c.m_bool     == False
-        """
+
         raises(TypeError, 'c.set_bool(10)')
 
         # char types through functions
