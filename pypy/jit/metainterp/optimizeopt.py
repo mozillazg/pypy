@@ -711,6 +711,11 @@ class Optimizer(object):
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
     def propagate_bounds_backward(self, box):
+        v = self.getvalue(box)
+        b = v.intbound
+        if b.has_lower and b.has_upper and b.lower == b.upper:
+            v.make_constant(ConstInt(b.lower))
+            
         try:
             op = self.producer[box]
         except KeyError:
@@ -812,13 +817,15 @@ class Optimizer(object):
         oldop = self.pure_operations.get(targs, None)
         if oldop is not None and oldop.descr is op.descr:
             value = self.getvalue(oldop.result)
+            print value
             if value.is_constant():
-                if value.box is CONST_1:
+                if value.box.same_constant(CONST_1):
                     self.make_constant(op.result, CONST_0)
                     return True
-                elif value.box is CONST_0:
+                elif value.box.same_constant(CONST_0):
                     self.make_constant(op.result, CONST_1)
                     return True
+                    
         return False
 
     
@@ -1343,6 +1350,16 @@ class Optimizer(object):
         else:
             self.optimize_default(op)
 
+    def optimize_INT_EQ(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        if v1.intbound.known_gt(v2.intbound):
+            self.make_constant_int(op.result, 0)
+        elif v1.intbound.known_lt(v2.intbound):
+            self.make_constant_int(op.result, 0)
+        else: 
+            self.optimize_default(op)
+            
     def make_int_lt(self, args):
         v1 = self.getvalue(args[0])
         v2 = self.getvalue(args[1])
@@ -1397,6 +1414,17 @@ class Optimizer(object):
                 self.make_int_ge(op.args)
             else:
                 self.make_int_lt(op.args)
+
+    def propagate_bounds_INT_EQ(self, op):
+        r = self.getvalue(op.result)
+        if r.is_constant():
+            if r.box.same_constant(CONST_1):
+                v1 = self.getvalue(op.args[0])
+                v2 = self.getvalue(op.args[1])
+                if v1.intbound.intersect(v2.intbound):
+                    self.propagate_bounds_backward(op.args[0])
+                if v2.intbound.intersect(v1.intbound):
+                    self.propagate_bounds_backward(op.args[1])
 
     def propagate_bounds_INT_ADD(self, op):
         v1 = self.getvalue(op.args[0])
