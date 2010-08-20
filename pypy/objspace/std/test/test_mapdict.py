@@ -211,6 +211,32 @@ def test_getdict():
     assert obj.getdict().length() == 3
 
 
+def test_materialize_r_dict():
+    cls = Class()
+    obj = cls.instantiate()
+    a =  FakeMember("a")
+    b =  FakeMember("b")
+    c =  FakeMember("c")
+    obj.setslotvalue(a, 50)
+    obj.setslotvalue(b, 60)
+    obj.setslotvalue(c, 70)
+    obj.setdictvalue(space, "a", 5)
+    obj.setdictvalue(space, "b", 6)
+    obj.setdictvalue(space, "c", 7)
+    assert obj.storage == [50, 60, 70, 5, 6, 7]
+
+    class FakeDict(object):
+        def __init__(self, d):
+            self.r_dict_content = d
+
+    d = {}
+    w_d = FakeDict(d)
+    flag = obj.map.write(obj, ("dict", SPECIAL), w_d)
+    assert flag
+    materialize_r_dict(space, obj, w_d)
+    assert d == {"a": 5, "b": 6, "c": 7}
+    assert obj.storage == [50, 60, 70, w_d]
+
 
 def test_size_prediction():
     for i in range(10):
