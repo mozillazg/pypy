@@ -48,6 +48,23 @@ class BoolConverter(TypeConverter):
         x[0] = arg
         return rffi.cast(rffi.VOIDP, x)
 
+    def from_memory(self, space, w_obj, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        if fieldptr[0] == '\x01':
+            return space.wrap(True)
+        return space.wrap(False)
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        arg = space.c_int_w(w_value)
+        if arg != False and arg != True:
+            raise OperationError(space.w_TypeError,
+                                 space.wrap("boolean value should be bool, or integer 1 or 0"))
+        if arg:
+           fieldptr[0] = '\x01'
+        else:
+           fieldptr[0] = '\x00'
+
 class CharConverter(TypeConverter):
     def _from_space(self, space, w_value):
         # allow int to pass to char and make sure that str is of length 1
