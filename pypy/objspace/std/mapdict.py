@@ -52,6 +52,9 @@ class AbstractAttribute(object):
         obj.storage[attr.position] = w_value
         obj.map = attr
 
+    def materialize_r_dict(self, space, obj, w_d):
+        raise NotImplementedError("abstract base class")
+
 
 class Terminator(AbstractAttribute):
     def __init__(self, w_cls=None):
@@ -78,6 +81,11 @@ class Terminator(AbstractAttribute):
     def set_terminator(self, obj, terminator):
         result = Object()
         result._init_empty(terminator)
+        return result
+
+    def materialize_r_dict(self, space, obj, w_d):
+        result = Object()
+        result._init_empty(self) # XXX
         return result
 
 class NoDictTerminator(Terminator):
@@ -130,6 +138,15 @@ class PlainAttribute(AbstractAttribute):
             return self
         return self.back.search(attrtype)
 
+    def materialize_r_dict(self, space, obj, w_d):
+        new_obj = self.back.materialize_r_dict(space, obj, w_d)
+        if self.selector[1] == DICT:
+            w_attr = space.wrap(self.selector[0])
+            w_d.r_dict_content[w_attr] = obj.storage[self.position]
+        else:
+            self._copy_attr(obj, new_obj)
+        return new_obj
+
 
 # ____________________________________________________________
 # object implementation
@@ -169,7 +186,8 @@ class Object(object):
         if w_dict is not None:
             return w_dict
         w_dict = MapDictImplementation(self.space, self)
-        self.map.write(self, ("dict", SPECIAL), w_dict)
+        flag = self.map.write(self, ("dict", SPECIAL), w_dict)
+        assert flag
         return w_dict
 
     def setdict(self, space, w_dict):
@@ -274,19 +292,16 @@ class MapDictImplementation(W_DictMultiObject):
         r_dict_content = self.initialize_as_rdict()
         space = self.space
         w_obj = self.w_obj
-        curr = w_obj.map.search(DICT)
-        while curr is not None:
-            attr = curr.selector[0]
-            r_dict_content[space.wrap(attr)] = w_obj.getdictvalue(space, attr)
-            curr = curr.back
-            curr = curr.search(DICT)
+        materialize_r_dict(space, w_obj, self)
         self._clear_fields()
         return self
 
 
-def _materialize_r_dict(space, obj, w_d):
-    assert isinstance(w_d, MapDictImplementation)
-    #XXX
+def materialize_r_dict(space, obj, w_d):
+    map = obj.map # XXX
+    assert obj.getdict() is w_d
+    new_obj = map.materialize_r_dict(space, obj, w_d)
+    obj._become(new_obj)
 
 class MapDictIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
