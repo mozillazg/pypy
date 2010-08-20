@@ -266,6 +266,18 @@ class AppTestSreScanner:
                                     p.match().group(0), p.match().group(0))
         assert None == p.match()
 
+    def test_scanner_match_detail(self):
+        import re
+        p = re.compile("a").scanner("aaXaa")
+        assert "a" == p.match().group(0)
+        assert "a" == p.match().group(0)
+        assert None == p.match()
+        assert "a" == p.match().group(0)
+        assert "a" == p.match().group(0)
+        assert None == p.match()
+        assert None == p.match()
+        assert None == p.match()
+
     def test_scanner_search(self):
         import re
         p = re.compile("\d").scanner("bla23c5a")
