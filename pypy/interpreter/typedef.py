@@ -239,10 +239,10 @@ def _builduserclswithfeature(config, supercls, *features):
             def user_setup_slots(self, nslots):
                 if nslots > 0:
                     self.slots_w = [None] * nslots
-            def setslotvalue(self, index, w_value):
-                self.slots_w[index] = w_value
-            def getslotvalue(self, index):
-                return self.slots_w[index]
+            def setslotvalue(self, member, w_value):
+                self.slots_w[member.index] = w_value
+            def getslotvalue(self, member):
+                return self.slots_w[member.index]
         add(Proto)
 
     wantdict = "dict" in features
@@ -521,7 +521,7 @@ class Member(Wrappable):
         else:
             self = member
             self.typecheck(space, w_obj)
-            w_result = w_obj.getslotvalue(self.index)
+            w_result = w_obj.getslotvalue(self)
             if w_result is None:
                 raise OperationError(space.w_AttributeError,
                                      space.wrap(self.name)) # XXX better message
@@ -532,14 +532,14 @@ class Member(Wrappable):
         Write into the slot 'member' of the given 'obj'."""
         self = member
         self.typecheck(space, w_obj)
-        w_obj.setslotvalue(self.index, w_value)
+        w_obj.setslotvalue(self, w_value)
     
     def descr_member_del(space, member, w_obj):
         """member.__delete__(obj)
         Delete the value of the slot 'member' from the given 'obj'."""
         self = member
         self.typecheck(space, w_obj)
-        w_obj.setslotvalue(self.index, None)
+        w_obj.setslotvalue(self, None)
 
 Member.typedef = TypeDef(
     "member_descriptor",

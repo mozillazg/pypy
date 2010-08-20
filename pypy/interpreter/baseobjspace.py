@@ -105,10 +105,10 @@ class W_Root(object):
         return space.wrap("<%s at 0x%s%s>" % (info, addrstring,
                                               moreinfo))
 
-    def getslotvalue(self, index):
+    def getslotvalue(self, member):
         raise NotImplementedError
 
-    def setslotvalue(self, index, w_val):
+    def setslotvalue(self, member, w_val):
         raise NotImplementedError
 
     def descr_call_mismatch(self, space, opname, RequiredClass, args):
