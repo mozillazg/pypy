@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDriver, hint, we_are_jitted
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, Arguments
-from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.pycode import PyCode, CO_GENERATOR
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
 from opcode import opmap
@@ -36,7 +36,8 @@ def set_jitcell_at(newcell, next_instr, bytecode):
     bytecode.jit_cells[next_instr] = newcell
 
 def confirm_enter_jit(next_instr, bytecode, frame, ec):
-    return (frame.w_f_trace is None and
+    return (not (bytecode.co_flags & CO_GENERATOR) and
+            frame.w_f_trace is None and
             ec.profilefunc is None and
             ec.w_tracefunc is None)
 
