@@ -884,7 +884,8 @@ class PyPyCJITTests(object):
 
     def test_intbound_addsub_mix(self):
         tests = ('i > 4', 'i > 2', 'i + 1 > 2', '1 + i > 4',
-                 'i - 1 > 1', '1 - i > 1', '1 - i < -3')
+                 'i - 1 > 1', '1 - i > 1', '1 - i < -3',
+                 'i == 1', 'i == 5')
         for t1 in tests:
             for t2 in tests:
                 print t1, t2
@@ -952,6 +953,32 @@ class PyPyCJITTests(object):
             return (a, b)
         ''', 56, ([], (2000, 2000)))
 
+    def test_intbound_eq(self):
+        self.run_source('''
+        def main(a):
+            i, s = 0, 0
+            while i < 1500:
+                if a == 7:
+                    s += a + 1
+                elif i == 10:
+                    s += i
+                else:
+                    s += 1
+                i += 1
+            return s
+        ''', 69, ([7], 12000), ([42], 1509), ([10], 1509))
+        
+    def test_assert(self):
+        self.run_source('''
+        def main(a):
+            i, s = 0, 0
+            while i < 1500:
+                assert a == 7
+                s += a + 1
+                i += 1
+            return s
+        ''', 38, ([7], 8*1500))
+        
     def test_zeropadded(self):
         self.run_source('''
         from array import array
@@ -976,6 +1003,29 @@ class PyPyCJITTests(object):
             return sa
 
         ''', 232, ([], 9895050.0))
+
+    def test_circular(self):
+        self.run_source('''
+        from array import array
+        class Circular(array):
+            def __new__(cls):
+                self = array.__new__(cls, 'd', range(256))
+                return self
+            def __getitem__(self, i):
+                return array.__getitem__(self, i & 255)
+
+        def main():
+            buf = Circular()
+            i = 10
+            sa = 0
+            while i < 2000 - 10:
+                sa += buf[i-2] + buf[i-1] + buf[i] + buf[i+1] + buf[i+2]
+                i += 1
+            return sa
+
+        ''', 170, ([], 1239690.0))
+
+        
 
     # test_circular
 
