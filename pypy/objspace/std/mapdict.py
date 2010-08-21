@@ -232,14 +232,17 @@ class Object(object):
         w_dict = MapDictImplementation(self.space, self)
         flag = self.map.write(self, ("dict", SPECIAL), w_dict)
         assert flag
+        assert isinstance(w_dict, W_DictMultiObject)
         return w_dict
 
     def setdict(self, space, w_dict):
-        XXX_here_be_monster
-        typename = space.type(self).getname(space, '?')
-        raise operationerrfmt(space.w_TypeError,
-                              "attribute '__dict__' of %s objects "
-                              "is not writable", typename)
+        from pypy.interpreter.typedef import check_new_dictionary
+        w_dict = check_new_dictionary(space, w_dict)
+        w_olddict = self.getdict()
+        assert isinstance(w_dict, W_DictMultiObject)
+        w_olddict._as_rdict()
+        flag = self.map.write(self, ("dict", SPECIAL), w_dict)
+        assert flag
 
     def getclass(self, space):
         return self.map.get_terminator().w_cls

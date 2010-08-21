@@ -620,7 +620,7 @@ class FakeSpace:
     w_StopIteration = StopIteration
     w_None = None
     StringObjectCls = FakeString
-    w_dict = None
+    w_dict = W_DictMultiObject
     iter = iter
     fixedview = list
     listview  = list
