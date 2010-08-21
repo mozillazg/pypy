@@ -602,6 +602,12 @@ class FakeSpace:
                 classofinstance=classofinstance,
                 from_strdict_shared=from_strdict_shared)
 
+    def finditem_str(self, w_dict, s):
+        return w_dict.getitem_str(s) # assume it's a multidict
+
+    def setitem_str(self, w_dict, s, w_value):
+        return w_dict.setitem_str(s, w_value) # assume it's a multidict
+
     def allocate_instance(self, cls, type):
         return object.__new__(cls)
 

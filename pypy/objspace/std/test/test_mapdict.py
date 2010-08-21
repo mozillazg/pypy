@@ -11,7 +11,7 @@ class Class(object):
     def __init__(self, hasdict=True):
         self.hasdict = True
         if hasdict:
-            self.terminator = Terminator(self)
+            self.terminator = DictTerminator(self)
         else:
             self.terminator = NoDictTerminator(self)
 
@@ -269,3 +269,44 @@ class TestMapDictImplementation(BaseTestRDictImplementation):
 class TestDevolvedMapDictImplementation(BaseTestDevolvedDictImplementation):
     get_impl = get_impl
     ImplementionClass = MapDictImplementation
+
+# ___________________________________________________________
+# tests that check the obj interface after the dict has devolved
+
+def devolve_dict(obj):
+    w_d = obj.getdict()
+    w_d._as_rdict()
+
+def test_get_setdictvalue_after_devolve():
+    cls = Class()
+    obj = cls.instantiate()
+    a =  FakeMember("a")
+    b =  FakeMember("b")
+    c =  FakeMember("c")
+    obj.setslotvalue(a, 50)
+    obj.setslotvalue(b, 60)
+    obj.setslotvalue(c, 70)
+    obj.setdictvalue(space, "a", 5)
+    obj.setdictvalue(space, "b", 6)
+    obj.setdictvalue(space, "c", 7)
+    devolve_dict(obj)
+    assert obj.getdictvalue(space, "a") == 5
+    assert obj.getdictvalue(space, "b") == 6
+    assert obj.getdictvalue(space, "c") == 7
+    assert obj.getslotvalue(a) == 50
+    assert obj.getslotvalue(b) == 60
+    assert obj.getslotvalue(c) == 70
+
+    obj.setslotvalue(a, 501)
+    obj.setslotvalue(b, 601)
+    obj.setslotvalue(c, 701)
+    obj.setdictvalue(space, "a", 51)
+    obj.setdictvalue(space, "b", 61)
+    obj.setdictvalue(space, "c", 71)
+    assert obj.getdictvalue(space, "a") == 51
+    assert obj.getdictvalue(space, "b") == 61
+    assert obj.getdictvalue(space, "c") == 71
+    assert obj.getslotvalue(a) == 501
+    assert obj.getslotvalue(b) == 601
+    assert obj.getslotvalue(c) == 701
+

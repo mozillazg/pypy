@@ -83,16 +83,50 @@ class Terminator(AbstractAttribute):
         result._init_empty(terminator)
         return result
 
+
+class DictTerminator(Terminator):
+    def __init__(self, w_cls=None):
+        Terminator.__init__(self, w_cls)
+        self.devolved_dict_terminator = DevolvedDictTerminator(w_cls)
+
     def materialize_r_dict(self, space, obj, w_d):
         result = Object()
-        result._init_empty(self) # XXX
+        result._init_empty(self.devolved_dict_terminator)
         return result
+
 
 class NoDictTerminator(Terminator):
     def write(self, obj, selector, w_value):
         if selector[1] == DICT:
             return False
         return Terminator.write(self, obj, selector, w_value)
+
+
+class DevolvedDictTerminator(Terminator):
+    def read(self, obj, selector):
+        w_dict = obj.getdict()
+        space = obj.space # XXX
+        return space.finditem_str(w_dict, selector[0])
+
+    def write(self, obj, selector, w_value):
+        if selector[1] == DICT:
+            w_dict = obj.getdict()
+            space = obj.space # XXX
+            space.setitem_str(w_dict, selector[0], w_value)
+            return True
+        Terminator.write(self, obj, selector, w_value)
+
+    def delete(self, obj, selector):
+        if selector[1] == DICT:
+            w_dict = obj.getdict()
+            space = obj.space # XXX
+            try:
+                space.delitem(w_dict, w_name)
+            except OperationError, ex:
+                if not ex.match(space, space.w_KeyError):
+                    raise
+        return Terminator.delete(self, obj, selector)
+
 
 class PlainAttribute(AbstractAttribute):
     def __init__(self, selector, back):
@@ -175,7 +209,7 @@ class Object(object):
     def deldictvalue(self, space, w_name):
         attrname = space.str_w(w_name)
         new_obj = self.map.delete(self, (attrname, DICT))
-        # XXX too slow?
+        # XXX too slow? XXX wrong for devolved dicts
         if new_obj.map is self.map and new_obj.storage == self.storage:
             return False
         self._become(new_obj)
