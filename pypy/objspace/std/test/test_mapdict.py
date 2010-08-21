@@ -312,3 +312,26 @@ def test_get_setdictvalue_after_devolve():
     res = obj.deldictvalue(space, "a")
     assert res
     assert obj.getdictvalue(space, "a") is None
+    assert obj.getdictvalue(space, "b") == 61
+    assert obj.getdictvalue(space, "c") == 71
+    assert obj.getslotvalue(a) == 501
+    assert obj.getslotvalue(b) == 601
+    assert obj.getslotvalue(c) == 701
+
+def test_setdict():
+    cls = Class()
+    obj = cls.instantiate()
+    obj.setdictvalue(space, "a", 5)
+    obj.setdictvalue(space, "b", 6)
+    obj.setdictvalue(space, "c", 7)
+    w_d = obj.getdict()
+    obj2 = cls.instantiate()
+    obj2.setdictvalue(space, "d", 8)
+    obj.setdict(space, obj2.getdict())
+    assert obj.getdictvalue(space, "a") is None
+    assert obj.getdictvalue(space, "b") is None
+    assert obj.getdictvalue(space, "c") is None
+    assert obj.getdictvalue(space, "d") == 8
+    assert w_d.getitem_str("a") == 5
+    assert w_d.getitem_str("b") == 6
+    assert w_d.getitem_str("c") == 7
