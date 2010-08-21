@@ -608,6 +608,9 @@ class FakeSpace:
     def setitem_str(self, w_dict, s, w_value):
         return w_dict.setitem_str(s, w_value) # assume it's a multidict
 
+    def delitem(self, w_dict, w_s):
+        return w_dict.delitem(w_s) # assume it's a multidict
+
     def allocate_instance(self, cls, type):
         return object.__new__(cls)
 
