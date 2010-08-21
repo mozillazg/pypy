@@ -309,4 +309,6 @@ def test_get_setdictvalue_after_devolve():
     assert obj.getslotvalue(a) == 501
     assert obj.getslotvalue(b) == 601
     assert obj.getslotvalue(c) == 701
-
+    res = obj.deldictvalue(space, "a")
+    assert res
+    assert obj.getdictvalue(space, "a") is None

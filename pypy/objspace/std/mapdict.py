@@ -1,5 +1,3 @@
-
-
 # ____________________________________________________________
 # attribute shapes
 
@@ -16,6 +14,9 @@ class AbstractAttribute(object):
         raise NotImplementedError("abstract base class")
 
     def delete(self, obj, selector):
+        return None
+
+    def copy(self, obj):
         raise NotImplementedError("abstract base class")
 
     def length(self):
@@ -67,7 +68,7 @@ class Terminator(AbstractAttribute):
         obj.map.add_attr(obj, selector, w_value)
         return True
 
-    def delete(self, obj, selector):
+    def copy(self, obj):
         result = Object()
         result._init_empty(self)
         return result
@@ -117,14 +118,16 @@ class DevolvedDictTerminator(Terminator):
         Terminator.write(self, obj, selector, w_value)
 
     def delete(self, obj, selector):
+        from pypy.interpreter.error import OperationError
         if selector[1] == DICT:
             w_dict = obj.getdict()
             space = obj.space # XXX
             try:
-                space.delitem(w_dict, w_name)
+                space.delitem(w_dict, space.wrap(selector[0]))
             except OperationError, ex:
                 if not ex.match(space, space.w_KeyError):
                     raise
+            return Terminator.copy(self, obj)
         return Terminator.delete(self, obj, selector)
 
 
@@ -151,9 +154,17 @@ class PlainAttribute(AbstractAttribute):
         return self.back.write(obj, selector, w_value)
 
     def delete(self, obj, selector):
+        if self.selector == selector:
+            # ok, attribute is deleted
+            return self.back.copy(obj)
         new_obj = self.back.delete(obj, selector)
-        if self.selector != selector:
+        if new_obj is not None:
             self._copy_attr(obj, new_obj)
+        return new_obj
+
+    def copy(self, obj):
+        new_obj = self.back.copy(obj)
+        self._copy_attr(obj, new_obj)
         return new_obj
 
     def length(self):
@@ -209,8 +220,7 @@ class Object(object):
     def deldictvalue(self, space, w_name):
         attrname = space.str_w(w_name)
         new_obj = self.map.delete(self, (attrname, DICT))
-        # XXX too slow? XXX wrong for devolved dicts
-        if new_obj.map is self.map and new_obj.storage == self.storage:
+        if new_obj is None:
             return False
         self._become(new_obj)
         return True
