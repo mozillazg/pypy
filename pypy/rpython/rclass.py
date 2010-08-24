@@ -156,14 +156,13 @@ class AbstractInstanceRepr(Repr):
         if '_immutable_' in self.classdef.classdesc.classdict:
             hints = hints.copy()
             hints['immutable'] = True
+        self.immutable_field_list = []  # unless overwritten below
         if self.classdef.classdesc.lookup('_immutable_fields_') is not None:
             hints = hints.copy()
             immutable_fields = self.classdef.classdesc.classdict.get(
                 '_immutable_fields_')
             if immutable_fields is not None:
                 self.immutable_field_list = immutable_fields.value
-            else:
-                self.immutable_field_list = []
             accessor = FieldListAccessor()
             hints['immutable_fields'] = accessor
         return hints
