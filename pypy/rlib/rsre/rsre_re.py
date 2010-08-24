@@ -1,3 +1,7 @@
+"""
+Testing code.  This is not used in a PyPy translation.
+It exports the same interface as the Python 're' module.
+"""
 import re, sys
 from pypy.rlib.rsre import rsre_core, rsre_char
 from pypy.rlib.rsre.test.test_match import get_code as _get_code
@@ -5,12 +9,12 @@ from pypy.module.unicodedata import unicodedb_3_2_0
 rsre_char.unicodedb = unicodedb_3_2_0
 
 
-I = IGNORECASE = 2   # ignore case
-L = LOCALE     = 4   # assume current 8-bit locale
-U = UNICODE    = 32  # assume unicode locale
-M = MULTILINE  = 8   # make anchors look for newline
-S = DOTALL     = 16  # make dot match newline
-X = VERBOSE    = 64  # ignore whitespace and comments
+I = IGNORECASE = re.I   # ignore case
+L = LOCALE     = re.L   # assume current 8-bit locale
+U = UNICODE    = re.U   # assume unicode locale
+M = MULTILINE  = re.M   # make anchors look for newline
+S = DOTALL     = re.S   # make dot match newline
+X = VERBOSE    = re.X   # ignore whitespace and comments
 
 
 def match(pattern, string, flags=0):
@@ -24,6 +28,15 @@ def findall(pattern, string, flags=0):
 
 def finditer(pattern, string, flags=0):
     return compile(pattern, flags).finditer(string)
+
+def sub(pattern, repl, string, count=0):
+    return compile(pattern).sub(repl, string, count)
+
+def subn(pattern, repl, string, count=0):
+    return compile(pattern).subn(repl, string, count)
+
+def split(pattern, string, maxsplit=0):
+    return compile(pattern).split(string, maxsplit)
 
 def compile(pattern, flags=0):
     code, flags, args = _get_code(pattern, flags, allargs=True)
@@ -54,9 +67,9 @@ class RSREPattern(object):
                                                  pos, endpos,
                                                  flags=self.flags))
 
-    def findall(self, string):
+    def findall(self, string, pos=0, endpos=sys.maxint):
         matchlist = []
-        for match in self.finditer(string):
+        for match in self.finditer(string, pos, endpos):
             if self.groups == 0 or self.groups == 1:
                 item = match.group(self.groups)
             else:
@@ -64,22 +77,87 @@ class RSREPattern(object):
             matchlist.append(item)
         return matchlist        
 
-    def finditer(self, string):
-        matchlist = []
+    def finditer(self, string, pos=0, endpos=sys.maxint):
+        return iter(self.scanner(string, pos, endpos).search, None)
+
+    def subn(self, repl, string, count=0):
+        filter = repl
+        if not callable(repl) and "\\" in repl:
+            # handle non-literal strings; hand it over to the template compiler
+            filter = re._subx(self, repl)
         start = 0
-        while True:
+        sublist = []
+        force_unicode = (isinstance(string, unicode) or
+                         isinstance(repl, unicode))
+        n = last_pos = 0
+        while not count or n < count:
             match = rsre_core.search(self._code, string, start,
                                      flags=self.flags)
             if match is None:
                 break
-            end = match.match_end
-            yield RSREMatch(self, match)
-            if start == end:
+            if last_pos < match.match_start:
+                sublist.append(string[last_pos:match.match_start])
+            if not (last_pos == match.match_start
+                             == match.match_end and n > 0):
+                # the above ignores empty matches on latest position
+                if callable(filter):
+                    piece = filter(self._make_match(match))
+                else:
+                    piece = filter
+                sublist.append(piece)
+                last_pos = match.match_end
+                n += 1
+            elif last_pos >= len(string):
+                break     # empty match at the end: finished
+            #
+            start = match.match_end
+            if start == match.match_start:
                 start += 1
-                if start > len(string):
+
+        if last_pos < len(string):
+            sublist.append(string[last_pos:])
+
+        if n == 0:
+            # not just an optimization -- see test_sub_unicode
+            return string, n
+
+        if force_unicode:
+            item = u"".join(sublist)
+        else:
+            item = "".join(sublist)
+        return item, n
+
+    def sub(self, repl, string, count=0):
+        item, n = self.subn(repl, string, count)
+        return item
+
+    def split(self, string, maxsplit=0):
+        splitlist = []
+        start = 0
+        n = 0
+        last = 0
+        while not maxsplit or n < maxsplit:
+            match = rsre_core.search(self._code, string, start,
+                                     flags=self.flags)
+            if match is None:
+                break
+            if match.match_start == match.match_end: # zero-width match
+                if match.match_start == len(string): # at end of string
                     break
-            else:
-                start = end
+                start = match.match_end + 1
+                continue
+            splitlist.append(string[last:match.match_start])
+            # add groups (if any)
+            if self.groups:
+                match1 = self._make_match(match)
+                splitlist.extend(match1.groups(None))
+            n += 1
+            last = start = match.match_end
+        splitlist.append(string[last:])
+        return splitlist
+
+    def scanner(self, string, start=0, end=sys.maxint):
+        return SREScanner(self, string, start, end)
 
     def _make_match(self, res):
         if res is None:
@@ -169,3 +247,67 @@ class RSREMatch(object):
     @property
     def endpos(self):
         return self._ctx.end
+
+
+class SREScanner(object):
+    def __init__(self, pattern, string, start, end):
+        self.pattern = pattern
+        self._string = string
+        self._start = start
+        self._end = end
+
+    def _match_search(self, matcher):
+        if self._start > len(self._string):
+            return None
+        match = matcher(self._string, self._start, self._end)
+        if match is None:
+            self._start += 1     # obscure corner case
+        else:
+            self._start = match.end()
+            if match.start() == self._start:
+                self._start += 1
+        return match
+
+    def match(self):
+        return self._match_search(self.pattern.match)
+
+    def search(self):
+        return self._match_search(self.pattern.search)
+
+class Scanner:
+    # This class is copied directly from re.py.
+    def __init__(self, lexicon, flags=0):
+        from sre_constants import BRANCH, SUBPATTERN
+        import sre_parse
+        self.lexicon = lexicon
+        # combine phrases into a compound pattern
+        p = []
+        s = sre_parse.Pattern()
+        s.flags = flags
+        for phrase, action in lexicon:
+            p.append(sre_parse.SubPattern(s, [
+                (SUBPATTERN, (len(p)+1, sre_parse.parse(phrase, flags))),
+                ]))
+        s.groups = len(p)+1
+        p = sre_parse.SubPattern(s, [(BRANCH, (None, p))])
+        self.scanner = compile(p)
+    def scan(self, string):
+        result = []
+        append = result.append
+        match = self.scanner.scanner(string).match
+        i = 0
+        while 1:
+            m = match()
+            if not m:
+                break
+            j = m.end()
+            if i == j:
+                break
+            action = self.lexicon[m.lastindex-1][1]
+            if callable(action):
+                self.match = m
+                action = action(self, m.group())
+            if action is not None:
+                append(action)
+            i = j
+        return result, string[i:]

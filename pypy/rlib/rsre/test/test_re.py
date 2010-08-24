@@ -21,7 +21,7 @@ class TestRe:
         int_value = int(matchobj.group(0))
         return str(int_value + 1)
 
-    def XXXtest_basic_re_sub(self):
+    def test_basic_re_sub(self):
         assert re.sub("(?i)b+", "x", "bbbb BBBB") == 'x x'
         assert re.sub(r'\d+', self.bump_num, '08.2 -2 23x99y') == (
                          '9.3 -3 24x100y')
@@ -49,12 +49,12 @@ class TestRe:
 
         assert re.sub('^\s*', 'X', 'test') == 'Xtest'
 
-    def XXXtest_bug_449964(self):
+    def test_bug_449964(self):
         # fails for group followed by other escape
         assert re.sub(r'(?P<unk>x)', '\g<1>\g<1>\\b', 'xx') == (
                          'xx\bxx\b')
 
-    def XXXtest_bug_449000(self):
+    def test_bug_449000(self):
         # Test for sub() on escaped characters
         assert re.sub(r'\r\n', r'\n', 'abc\r\ndef\r\n') == (
                          'abc\ndef\n')
@@ -65,7 +65,7 @@ class TestRe:
         assert re.sub('\r\n', '\n', 'abc\r\ndef\r\n') == (
                          'abc\ndef\n')
 
-    def XXXtest_bug_1140(self):
+    def test_bug_1140(self):
         # re.sub(x, y, u'') should return u'', not '', and
         # re.sub(x, y, '') should return '', not u''.
         # Also:
@@ -90,7 +90,7 @@ class TestRe:
                 assert z == y
                 assert type(z) == type(y)
 
-    def XXXtest_sub_template_numeric_escape(self):
+    def test_sub_template_numeric_escape(self):
         # bug 776311 and friends
         assert re.sub('x', r'\0', 'x') == '\0'
         assert re.sub('x', r'\000', 'x') == '\000'
@@ -132,20 +132,20 @@ class TestRe:
         assert re.sub('((((((((((y))))))))))(.)', r'\11a', 'xyz') == (
                          'xza')
 
-    def XXXtest_qualified_re_sub(self):
+    def test_qualified_re_sub(self):
         assert re.sub('a', 'b', 'aaaaa') == 'bbbbb'
         assert re.sub('a', 'b', 'aaaaa', 1) == 'baaaa'
 
-    def XXXtest_bug_114660(self):
+    def test_bug_114660(self):
         assert re.sub(r'(\S)\s+(\S)', r'\1 \2', 'hello  there') == (
                          'hello there')
 
-    def XXXtest_bug_462270(self):
+    def test_bug_462270(self):
         # Test for empty sub() behaviour, see SF bug #462270
         assert re.sub('x*', '-', 'abxd') == '-a-b-d-'
         assert re.sub('x+', '-', 'abxd') == 'ab-d'
 
-    def XXXtest_symbolic_refs(self):
+    def test_symbolic_refs(self):
         raises(re.error, re.sub, '(?P<a>x)', '\g<a', 'xx')
         raises(re.error, re.sub, '(?P<a>x)', '\g<', 'xx')
         raises(re.error, re.sub, '(?P<a>x)', '\g', 'xx')
@@ -156,14 +156,14 @@ class TestRe:
         raises(re.error, re.sub, '(?P<a>x)|(?P<b>y)', '\\2', 'xx')
         raises(re.error, re.sub, '(?P<a>x)', '\g<-1>', 'xx')
 
-    def XXXtest_re_subn(self):
+    def test_re_subn(self):
         assert re.subn("(?i)b+", "x", "bbbb BBBB") == ('x x', 2)
         assert re.subn("b+", "x", "bbbb BBBB") == ('x BBBB', 1)
         assert re.subn("b+", "x", "xyz") == ('xyz', 0)
         assert re.subn("b*", "x", "xyz") == ('xxxyxzx', 4)
         assert re.subn("b*", "x", "xyz", 2) == ('xxxyz', 2)
 
-    def XXXtest_re_split(self):
+    def test_re_split(self):
         assert re.split(":", ":a:b::c") == ['', 'a', 'b', '', 'c']
         assert re.split(":*", ":a:b::c") == ['', 'a', 'b', 'c']
         assert re.split("(:*)", ":a:b::c") == (
@@ -179,7 +179,7 @@ class TestRe:
         assert re.split("(?:b)|(?::+)", ":a:b::c") == (
                          ['', 'a', '', '', 'c'])
 
-    def XXXtest_qualified_re_split(self):
+    def test_qualified_re_split(self):
         assert re.split(":", ":a:b::c", 2) == ['', 'a', 'b::c']
         assert re.split(':', 'a:b:c:d', 2) == ['a', 'b', 'c:d']
         assert re.split("(:)", ":a:b::c", 2) == (
@@ -512,13 +512,13 @@ class TestRe:
         assert re.match('(x)*y', 50000*'x'+'y').group(1) == 'x'
         assert re.match('(x)*?y', 50000*'x'+'y').group(1) == 'x'
 
-    def XXXtest_scanner(self):
+    def test_scanner(self):
         def s_ident(scanner, token): return token
         def s_operator(scanner, token): return "op%s" % token
         def s_float(scanner, token): return float(token)
         def s_int(scanner, token): return int(token)
 
-        scanner = Scanner([
+        scanner = re.Scanner([
             (r"[a-zA-Z_]\w*", s_ident),
             (r"\d+\.\d*", s_float),
             (r"\d+", s_int),
@@ -590,7 +590,7 @@ class TestRe:
         assert (re.compile('bug_926075') is not
                      re.compile(eval("u'bug_926075'")))
 
-    def XXXtest_bug_931848(self):
+    def test_bug_931848(self):
         try:
             unicode
         except NameError:
