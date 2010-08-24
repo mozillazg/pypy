@@ -1,4 +1,4 @@
-from pypy.objspace.std.test.test_dictmultiobject import FakeSpace
+from pypy.objspace.std.test.test_dictmultiobject import FakeSpace, W_DictMultiObject
 from pypy.objspace.std.mapdict import *
 
 space = FakeSpace()
@@ -11,9 +11,9 @@ class Class(object):
     def __init__(self, hasdict=True):
         self.hasdict = True
         if hasdict:
-            self.terminator = DictTerminator(self)
+            self.terminator = DictTerminator(self, space)
         else:
-            self.terminator = NoDictTerminator(self)
+            self.terminator = NoDictTerminator(self, space)
 
     def instantiate(self, sp=None):
         if sp is None:
@@ -22,8 +22,12 @@ class Class(object):
         result.user_setup(sp, self)
         return result
 
+class Object(Object):
+    class typedef:
+        hasdict = False
+
 def test_plain_attribute():
-    aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator()))
+    aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator(None, None)))
     obj = Object()
     obj.map, obj.storage = aa, [10, 20]
     assert obj.getdictvalue(space, "a") == 10
@@ -44,7 +48,7 @@ def test_plain_attribute():
     assert aa.get_terminator() is aa.back.back
 
 def test_search():
-    aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator()))
+    aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator(None, None)))
     assert aa.search(DICT) is aa
     assert aa.search(SLOT) is None
     assert aa.search(SPECIAL) is None
@@ -121,31 +125,35 @@ def test_class():
     assert obj.storage == [50, 60, 70]
 
 def test_special():
+    from pypy.module._weakref.interp__weakref import WeakrefLifeline
+    lifeline1 = WeakrefLifeline(space)
+    lifeline2 = WeakrefLifeline(space)
     c = Class()
     obj = c.instantiate()
+    assert obj.getweakref() is None
     obj.setdictvalue(space, "a", 50)
     obj.setdictvalue(space, "b", 60)
     obj.setdictvalue(space, "c", 70)
-    obj.setweakref(space, 100)
+    obj.setweakref(space, lifeline1)
     assert obj.getdictvalue(space, "a") == 50
     assert obj.getdictvalue(space, "b") == 60
     assert obj.getdictvalue(space, "c") == 70
-    assert obj.storage == [50, 60, 70, 100]
-    assert obj.getweakref() == 100
+    assert obj.storage == [50, 60, 70, lifeline1]
+    assert obj.getweakref() is lifeline1
 
     obj2 = c.instantiate()
     obj2.setdictvalue(space, "a", 150)
     obj2.setdictvalue(space, "b", 160)
     obj2.setdictvalue(space, "c", 170)
-    obj2.setweakref(space, 1100)
-    assert obj2.storage == [150, 160, 170, 1100]
-    assert obj2.getweakref() == 1100
+    obj2.setweakref(space, lifeline2)
+    assert obj2.storage == [150, 160, 170, lifeline2]
+    assert obj2.getweakref() is lifeline2
 
     assert obj2.map is obj.map
 
     assert obj.getdictvalue(space, "weakref") is None
     obj.setdictvalue(space, "weakref", 41)
-    assert obj.getweakref() == 100
+    assert obj.getweakref() is lifeline1
     assert obj.getdictvalue(space, "weakref") == 41
 
 
@@ -221,7 +229,7 @@ def test_materialize_r_dict():
     obj.setdictvalue(space, "c", 7)
     assert obj.storage == [50, 60, 70, 5, 6, 7]
 
-    class FakeDict(object):
+    class FakeDict(W_DictMultiObject):
         def __init__(self, d):
             self.r_dict_content = d
 
@@ -300,7 +308,8 @@ def test_get_setdictvalue_after_devolve():
     obj.setslotvalue(a, 501)
     obj.setslotvalue(b, 601)
     obj.setslotvalue(c, 701)
-    obj.setdictvalue(space, "a", 51)
+    res = obj.setdictvalue(space, "a", 51)
+    assert res
     obj.setdictvalue(space, "b", 61)
     obj.setdictvalue(space, "c", 71)
     assert obj.getdictvalue(space, "a") == 51

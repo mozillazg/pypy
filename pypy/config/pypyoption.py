@@ -238,6 +238,14 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    default=False,
                    requires=[("objspace.std.withshadowtracking", False)]),
 
+        BoolOption("withmapdict",
+                   "make instances really small but slow without the JIT",
+                   default=True,
+                   requires=[("objspace.std.withshadowtracking", False),
+                             ("objspace.std.withinlineddict", False),
+                             ("objspace.std.withsharingdict", False),
+                       ]),
+
         BoolOption("withrangelist",
                    "enable special range list implementation that does not "
                    "actually create the full list until the resulting "
