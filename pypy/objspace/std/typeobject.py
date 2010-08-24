@@ -116,6 +116,12 @@ class W_TypeObject(W_Object):
                 # dict_w of any of the types in the mro changes, or if the mro
                 # itself changes
                 w_self._version_tag = VersionTag()
+        if space.config.objspace.std.withmapdict:
+            from pypy.objspace.std.mapdict import DictTerminator, NoDictTerminator
+            if w_self.hasdict:
+                w_self.terminator = DictTerminator(w_self, space)
+            else:
+                w_self.terminator = NoDictTerminator(w_self, space)
 
     def mutated(w_self):
         space = w_self.space

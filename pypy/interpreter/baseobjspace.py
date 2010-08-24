@@ -166,6 +166,16 @@ class W_Root(object):
     def _call_builtin_destructor(self):
         pass     # method overridden in typedef.py
 
+    # hooks that the mapdict implementations needs:
+    def _get_mapdict_map(self):
+        return None
+    def _get_mapdict_storage(self):
+        return None
+    def _set_mapdict_map(self, map):
+        raise NotImplementedError
+    def _set_mapdict_storage(self, storage):
+        raise NotImplementedError
+
 
 class Wrappable(W_Root):
     """A subclass of Wrappable is an internal, interpreter-level class

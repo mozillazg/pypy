@@ -42,34 +42,36 @@ class AbstractAttribute(object):
         if attr is None:
             attr = PlainAttribute(selector, self)
             cache[selector] = attr
-        oldattr = obj.map
+        oldattr = obj._get_mapdict_map()
         oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
-        if attr.length() > len(obj.storage):
+        if attr.length() > len(obj._get_mapdict_storage()):
             new_storage = [None] * attr.size_estimate()
-            for i in range(len(obj.storage)):
-                new_storage[i] = obj.storage[i]
-            obj.storage = new_storage
+            for i in range(len(obj._get_mapdict_storage())):
+                new_storage[i] = obj._get_mapdict_storage()[i]
+            obj._set_mapdict_storage(new_storage)
 
-        obj.storage[attr.position] = w_value
-        obj.map = attr
+        obj._get_mapdict_storage()[attr.position] = w_value
+        obj._set_mapdict_map(attr)
 
     def materialize_r_dict(self, space, obj, w_d):
         raise NotImplementedError("abstract base class")
 
 
 class Terminator(AbstractAttribute):
-    def __init__(self, w_cls=None):
+    def __init__(self, w_cls, space):
         self.w_cls = w_cls
+        self.space = space
 
     def read(self, obj, selector):
         return None
 
     def write(self, obj, selector, w_value):
-        obj.map.add_attr(obj, selector, w_value)
+        obj._get_mapdict_map().add_attr(obj, selector, w_value)
         return True
 
     def copy(self, obj):
         result = Object()
+        result.space = self.space
         result._init_empty(self)
         return result
 
@@ -81,17 +83,19 @@ class Terminator(AbstractAttribute):
 
     def set_terminator(self, obj, terminator):
         result = Object()
+        result.space = self.space
         result._init_empty(terminator)
         return result
 
 
 class DictTerminator(Terminator):
-    def __init__(self, w_cls=None):
-        Terminator.__init__(self, w_cls)
-        self.devolved_dict_terminator = DevolvedDictTerminator(w_cls)
+    def __init__(self, w_cls, space):
+        Terminator.__init__(self, w_cls, space)
+        self.devolved_dict_terminator = DevolvedDictTerminator(w_cls, space)
 
     def materialize_r_dict(self, space, obj, w_d):
         result = Object()
+        result.space = space
         result._init_empty(self.devolved_dict_terminator)
         return result
 
@@ -106,22 +110,22 @@ class NoDictTerminator(Terminator):
 class DevolvedDictTerminator(Terminator):
     def read(self, obj, selector):
         w_dict = obj.getdict()
-        space = obj.space # XXX
+        space = self.space
         return space.finditem_str(w_dict, selector[0])
 
     def write(self, obj, selector, w_value):
         if selector[1] == DICT:
             w_dict = obj.getdict()
-            space = obj.space # XXX
+            space = self.space
             space.setitem_str(w_dict, selector[0], w_value)
             return True
-        Terminator.write(self, obj, selector, w_value)
+        return Terminator.write(self, obj, selector, w_value)
 
     def delete(self, obj, selector):
         from pypy.interpreter.error import OperationError
         if selector[1] == DICT:
             w_dict = obj.getdict()
-            space = obj.space # XXX
+            space = self.space
             try:
                 space.delitem(w_dict, space.wrap(selector[0]))
             except OperationError, ex:
@@ -140,16 +144,16 @@ class PlainAttribute(AbstractAttribute):
 
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.selector)
-        new_obj.map.add_attr(new_obj, self.selector, w_value)
+        new_obj._get_mapdict_map().add_attr(new_obj, self.selector, w_value)
 
     def read(self, obj, selector):
         if selector == self.selector:
-            return obj.storage[self.position]
+            return obj._get_mapdict_storage()[self.position]
         return self.back.read(obj, selector)
 
     def write(self, obj, selector, w_value):
         if selector == self.selector:
-            obj.storage[self.position] = w_value
+            obj._get_mapdict_storage()[self.position] = w_value
             return True
         return self.back.write(obj, selector, w_value)
 
@@ -187,7 +191,7 @@ class PlainAttribute(AbstractAttribute):
         new_obj = self.back.materialize_r_dict(space, obj, w_d)
         if self.selector[1] == DICT:
             w_attr = space.wrap(self.selector[0])
-            w_d.r_dict_content[w_attr] = obj.storage[self.position]
+            w_d.r_dict_content[w_attr] = obj._get_mapdict_storage()[self.position]
         else:
             self._copy_attr(obj, new_obj)
         return new_obj
@@ -200,13 +204,24 @@ DICT = 6
 SLOT = 1
 SPECIAL = 2
 
-class Object(object):
+from pypy.interpreter.baseobjspace import W_Root
+
+class Object(W_Root): # slightly evil to make it inherit from W_Root
     def _init_empty(self, map):
         self.map = map
         self.storage = [None] * map.size_estimate()
     def _become(self, new_obj):
         self.map = new_obj.map
         self.storage = new_obj.storage
+
+    def _get_mapdict_map(self):
+        return self.map
+    def _get_mapdict_storage(self):
+        return self.storage
+    def _set_mapdict_map(self, map):
+        self.map = map
+    def _set_mapdict_storage(self, storage):
+        self.storage = storage
 
     # _____________________________________________
     # objspace interface
@@ -228,11 +243,11 @@ class Object(object):
     def getdict(self):
         w_dict = self.map.read(self, ("dict", SPECIAL))
         if w_dict is not None:
+            assert isinstance(w_dict, W_DictMultiObject)
             return w_dict
         w_dict = MapDictImplementation(self.space, self)
         flag = self.map.write(self, ("dict", SPECIAL), w_dict)
         assert flag
-        assert isinstance(w_dict, W_DictMultiObject)
         return w_dict
 
     def setdict(self, space, w_dict):
@@ -253,6 +268,7 @@ class Object(object):
 
     def user_setup(self, space, w_subtype):
         self.space = space
+        assert not self.typedef.hasdict
         self._init_empty(w_subtype.terminator)
 
     def getslotvalue(self, member):
@@ -264,16 +280,25 @@ class Object(object):
     # used by _weakref implemenation
 
     def getweakref(self):
-        return self.map.read(self, ("weakref", SPECIAL))
+        from pypy.module._weakref.interp__weakref import WeakrefLifeline
+        lifeline = self.map.read(self, ("weakref", SPECIAL))
+        if lifeline is None:
+            return None
+        assert isinstance(lifeline, WeakrefLifeline)
+        return lifeline
 
     def setweakref(self, space, weakreflifeline):
+        from pypy.module._weakref.interp__weakref import WeakrefLifeline
+        assert isinstance(weakreflifeline, WeakrefLifeline)
         self.map.write(self, ("weakref", SPECIAL), weakreflifeline)
+
 
 # ____________________________________________________________
 # dict implementation
 
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
+from pypy.objspace.std.dictmultiobject import _is_sane_hash
 
 class MapDictImplementation(W_DictMultiObject):
     def __init__(self, space, w_obj):
@@ -318,8 +343,7 @@ class MapDictImplementation(W_DictMultiObject):
 
     def impl_length(self):
         res = 0
-        # XXX not RPython yet
-        curr = self.w_obj.map.search(DICT)
+        curr = self.w_obj._get_mapdict_map().search(DICT)
         while curr is not None:
             curr = curr.back
             curr = curr.search(DICT)
@@ -345,28 +369,31 @@ class MapDictImplementation(W_DictMultiObject):
 
 
 def materialize_r_dict(space, obj, w_d):
-    map = obj.map # XXX
+    map = obj._get_mapdict_map()
     assert obj.getdict() is w_d
     new_obj = map.materialize_r_dict(space, obj, w_d)
-    obj._become(new_obj)
+    # XXX this is like _become, really, but we cannot use that due to RPython
+    # reasons
+    obj._set_mapdict_map(new_obj.map)
+    obj._set_mapdict_storage(new_obj.storage)
 
 class MapDictIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
         IteratorImplementation.__init__(self, space, dictimplementation)
         w_obj = dictimplementation.w_obj
         self.w_obj = w_obj
-        # XXX
-        self.orig_map = self.curr_map = w_obj.map
+        self.orig_map = self.curr_map = w_obj._get_mapdict_map()
 
     def next_entry(self):
         implementation = self.dictimplementation
         assert isinstance(implementation, MapDictImplementation)
-        if self.orig_map is not self.w_obj.map:
+        if self.orig_map is not self.w_obj._get_mapdict_map():
             return None, None
         if self.curr_map:
             curr_map = self.curr_map.search(DICT)
             if curr_map:
                 self.curr_map = curr_map.back
                 attr = curr_map.selector[0]
-                return attr, self.w_obj.getdictvalue(self.space, attr)
+                w_attr = self.space.wrap(attr)
+                return w_attr, self.w_obj.getdictvalue(self.space, attr)
         return None, None
