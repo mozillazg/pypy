@@ -849,7 +849,7 @@ class PyPyCJITTests(object):
             ''', maxops, ([tc], res))
 
     def test_intbound_simple(self):
-        ops = ('<', '>', '<=', '>=')
+        ops = ('<', '>', '<=', '>=', '==', '!=')
         nbr = (3, 7)
         for o1 in ops:
             for o2 in ops:
@@ -870,7 +870,10 @@ class PyPyCJITTests(object):
 
                         def main():
                             res = [0] * 4
-                            for i in range(15) * 1500:
+                            idx = []
+                            for i in range(15):
+                                idx.extend([i] * 1500)
+                            for i in idx:
                                 res[f(i)] += 1
                             return res
 
@@ -880,12 +883,12 @@ class PyPyCJITTests(object):
                         res = [0] * 4
                         for i in range(15):
                             res[f(i)] += 1500
-                        self.run_source(src, 220, ([], res))
+                        self.run_source(src, 268, ([], res))
 
     def test_intbound_addsub_mix(self):
         tests = ('i > 4', 'i > 2', 'i + 1 > 2', '1 + i > 4',
                  'i - 1 > 1', '1 - i > 1', '1 - i < -3',
-                 'i == 1', 'i == 5')
+                 'i == 1', 'i == 5', 'i != 1', '-2 * i < -4')
         for t1 in tests:
             for t2 in tests:
                 print t1, t2
@@ -904,7 +907,10 @@ class PyPyCJITTests(object):
 
                 def main():
                     res = [0] * 4
-                    for i in range(15) * 1500:
+                    idx = []
+                    for i in range(15):
+                        idx.extend([i] * 1500)
+                    for i in idx:
                         res[f(i)] += 1
                     return res
 
@@ -914,7 +920,7 @@ class PyPyCJITTests(object):
                 res = [0] * 4
                 for i in range(15):
                     res[f(i)] += 1500
-                self.run_source(src, 232, ([], res))
+                self.run_source(src, 280, ([], res))
 
     def test_intbound_gt(self):
         self.run_source('''
@@ -953,6 +959,19 @@ class PyPyCJITTests(object):
             return (a, b)
         ''', 56, ([], (2000, 2000)))
 
+    def test_intbound_addmul_ge(self):
+        self.run_source('''
+        def main():
+            i, a, b = 0, 0, 0
+            while i < 2000:
+                if i + 5 >= 5:
+                    a += 1
+                if 2 * i >= 0:
+                    b += 1
+                i += 1
+            return (a, b)
+        ''', 53, ([], (2000, 2000)))
+
     def test_intbound_eq(self):
         self.run_source('''
         def main(a):
@@ -967,6 +986,20 @@ class PyPyCJITTests(object):
                 i += 1
             return s
         ''', 69, ([7], 12000), ([42], 1509), ([10], 1509))
+        
+    def test_intbound_mul(self):
+        self.run_source('''
+        def main(a):
+            i, s = 0, 0
+            while i < 1500:
+                assert i >= 0
+                if 2 * i < 30000:
+                    s += 1
+                else:
+                    s += a
+                i += 1
+            return s
+        ''', 43, ([7], 1500))
         
     def test_assert(self):
         self.run_source('''
@@ -1012,6 +1045,7 @@ class PyPyCJITTests(object):
                 self = array.__new__(cls, 'd', range(256))
                 return self
             def __getitem__(self, i):
+                # assert self.__len__() == 256 (FIXME: does not improve)
                 return array.__getitem__(self, i & 255)
 
         def main():

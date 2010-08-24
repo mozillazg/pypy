@@ -118,6 +118,9 @@ class IntBound(object):
         except OverflowError:
             res.has_upper = False
         return res
+
+    def mul(self, value):
+        return self.mul_bound(IntBound(value, value))
     
     def add_bound(self, other):
         res = self.copy()
@@ -154,6 +157,35 @@ class IntBound(object):
         else:
             res.has_lower = False
         return res
+
+    def mul_bound(self, other):
+        if self.has_upper and self.has_lower and \
+           other.has_upper and other.has_lower:
+            try:
+                vals = (ovfcheck(self.upper * other.upper),
+                        ovfcheck(self.upper * other.lower),
+                        ovfcheck(self.lower * other.upper),
+                        ovfcheck(self.lower * other.lower))
+                return IntBound(min4(vals), max4(vals))
+            except OverflowError:
+                return IntUnbounded()
+        else:
+            return IntUnbounded()
+
+    def div_bound(self, other):
+        if self.has_upper and self.has_lower and \
+           other.has_upper and other.has_lower and \
+           not other.contains(0):
+            try:
+                vals = (ovfcheck(self.upper / other.upper),
+                        ovfcheck(self.upper / other.lower),
+                        ovfcheck(self.lower / other.upper),
+                        ovfcheck(self.lower / other.lower))
+                return IntBound(min4(vals), max4(vals))
+            except OverflowError:
+                return IntUnbounded()
+        else:
+            return IntUnbounded()
 
     def contains(self, val):
         if self.has_lower and val < self.lower:
@@ -711,6 +743,9 @@ class Optimizer(object):
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
     def propagate_bounds_backward(self, box):
+        # FIXME: This takes care of the instruction where box is the reuslt
+        #        but the bounds produced by all instructions where box is
+        #        an argument might also be tighten
         v = self.getvalue(box)
         b = v.intbound
         if b.has_lower and b.has_upper and b.lower == b.upper:
@@ -817,7 +852,6 @@ class Optimizer(object):
         oldop = self.pure_operations.get(targs, None)
         if oldop is not None and oldop.descr is op.descr:
             value = self.getvalue(oldop.result)
-            print value
             if value.is_constant():
                 if value.box.same_constant(CONST_1):
                     self.make_constant(op.result, CONST_0)
@@ -1280,13 +1314,29 @@ class Optimizer(object):
         self.pure(rop.INT_SUB, [op.result, op.args[1]], op.args[0])
         self.pure(rop.INT_SUB, [op.result, op.args[0]], op.args[1])
 
+    def optimize_INT_MUL(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        # If one side of the op is 0 the result is the other side.
+        if v1.is_constant() and v1.box.getint() == 1:
+            self.make_equal_to(op.result, v2)
+        elif v2.is_constant() and v2.box.getint() == 1:
+            self.make_equal_to(op.result, v1)
+        elif (v1.is_constant() and v1.box.getint() == 0) or \
+             (v2.is_constant() and v2.box.getint() == 0):
+            self.make_constant_int(op.result, 0)
+        else:
+            self.optimize_default(op)
+        r = self.getvalue(op.result)
+        r.intbound.intersect(v1.intbound.mul_bound(v2.intbound))
+
     def optimize_INT_ADD_OVF(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
         resbound = v1.intbound.add_bound(v2.intbound)
         if resbound.has_lower and resbound.has_upper and \
                self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
-            # Transform into INT_SUB and remove guard
+            # Transform into INT_ADD and remove guard
             op.opnum = rop.INT_ADD
             self.i += 1
             self.optimize_INT_ADD(op)
@@ -1310,6 +1360,21 @@ class Optimizer(object):
             r = self.getvalue(op.result)
             r.intbound.intersect(resbound)
 
+    def optimize_INT_MUL_OVF(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        resbound = v1.intbound.mul_bound(v2.intbound)
+        if resbound.has_lower and resbound.has_upper and \
+               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
+            # Transform into INT_MUL and remove guard
+            op.opnum = rop.INT_MUL
+            self.i += 1
+            self.optimize_INT_MUL(op)
+        else:
+            self.optimize_default(op)
+            r = self.getvalue(op.result)
+            r.intbound.intersect(resbound)
+        
     def optimize_INT_LT(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
@@ -1357,6 +1422,16 @@ class Optimizer(object):
             self.make_constant_int(op.result, 0)
         elif v1.intbound.known_lt(v2.intbound):
             self.make_constant_int(op.result, 0)
+        else: 
+            self.optimize_default(op)
+            
+    def optimize_INT_NE(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        if v1.intbound.known_gt(v2.intbound):
+            self.make_constant_int(op.result, 1)
+        elif v1.intbound.known_lt(v2.intbound):
+            self.make_constant_int(op.result, 1)
         else: 
             self.optimize_default(op)
             
@@ -1426,6 +1501,17 @@ class Optimizer(object):
                 if v2.intbound.intersect(v1.intbound):
                     self.propagate_bounds_backward(op.args[1])
 
+    def propagate_bounds_INT_NE(self, op):
+        r = self.getvalue(op.result)
+        if r.is_constant():
+            if r.box.same_constant(CONST_0):
+                v1 = self.getvalue(op.args[0])
+                v2 = self.getvalue(op.args[1])
+                if v1.intbound.intersect(v2.intbound):
+                    self.propagate_bounds_backward(op.args[0])
+                if v2.intbound.intersect(v1.intbound):
+                    self.propagate_bounds_backward(op.args[1])
+
     def propagate_bounds_INT_ADD(self, op):
         v1 = self.getvalue(op.args[0])
         v2 = self.getvalue(op.args[1])
@@ -1444,12 +1530,24 @@ class Optimizer(object):
         b = r.intbound.add_bound(v2.intbound)
         if v1.intbound.intersect(b):
             self.propagate_bounds_backward(op.args[0])        
-        # FIXME:
-        # b = r.intbound.sub_bound(v1.intbound).mul(-1)
-        # if v2.intbound.intersect(b):
+        b = r.intbound.sub_bound(v1.intbound).mul(-1)
+        if v2.intbound.intersect(b):
+            self.propagate_bounds_backward(op.args[1])            
+
+    def propagate_bounds_INT_MUL(self, op):
+        v1 = self.getvalue(op.args[0])
+        v2 = self.getvalue(op.args[1])
+        r = self.getvalue(op.result)
+        b = r.intbound.div_bound(v2.intbound)
+        if v1.intbound.intersect(b):
+            self.propagate_bounds_backward(op.args[0])    
+        b = r.intbound.div_bound(v1.intbound)
+        if v2.intbound.intersect(b):
+            self.propagate_bounds_backward(op.args[1])
 
     propagate_bounds_INT_ADD_OVF  = propagate_bounds_INT_ADD
     propagate_bounds_INT_SUB_OVF  = propagate_bounds_INT_SUB
+    propagate_bounds_INT_MUL_OVF  = propagate_bounds_INT_MUL
 
 optimize_ops = _findall(Optimizer, 'optimize_')
 propagate_bounds_ops = _findall(Optimizer, 'propagate_bounds_')
@@ -1691,3 +1789,8 @@ class HeapOpOptimizer(object):
                                    write=True)
 
 
+def min4(t):
+    return min(min(t[0], t[1]), min(t[2], t[3]))
+
+def max4(t):
+    return max(max(t[0], t[1]), max(t[2], t[3]))
