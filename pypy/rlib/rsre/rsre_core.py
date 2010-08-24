@@ -3,6 +3,7 @@ from pypy.rlib.debug import check_nonneg
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rsre import rsre_char
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib.objectmodel import we_are_translated
 
 
 OPCODE_FAILURE            = 0
@@ -14,7 +15,7 @@ OPCODE_ASSERT_NOT         = 5
 OPCODE_AT                 = 6
 OPCODE_BRANCH             = 7
 #OPCODE_CALL              = 8
-#OPCODE_CATEGORY          = 9
+OPCODE_CATEGORY           = 9
 #OPCODE_CHARSET           = 10
 #OPCODE_BIGCHARSET        = 11
 OPCODE_GROUPREF           = 12
@@ -40,6 +41,8 @@ OPCODE_MIN_REPEAT_ONE     = 31
 
 # ____________________________________________________________
 
+_seen_specname = {}
+
 def specializectx(func):
     """A decorator that specializes 'func(ctx,...)' for each concrete subclass
     of AbstractMatchContext.  During annotation, if 'ctx' is known to be a
@@ -48,11 +51,15 @@ def specializectx(func):
     """
     assert func.func_code.co_varnames[0] == 'ctx'
     specname = '_spec_' + func.func_name
+    while specname in _seen_specname:
+        specname += '_'
+    _seen_specname[specname] = True
     # Install a copy of the function under the name '_spec_funcname' in each
     # concrete subclass
     for prefix, concreteclass in [('str', StrMatchContext),
                                   ('uni', UnicodeMatchContext)]:
         newfunc = func_with_new_name(func, prefix + specname)
+        assert not hasattr(concreteclass, specname)
         setattr(concreteclass, specname, newfunc)
     # Return a dispatcher function, specialized on the exact type of 'ctx'
     def dispatch(ctx, *args):
@@ -62,6 +69,10 @@ def specializectx(func):
 
 # ____________________________________________________________
 
+class Error(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
 class AbstractMatchContext(object):
     """Abstract base class"""
     match_start = 0
@@ -70,17 +81,29 @@ class AbstractMatchContext(object):
     match_marks_flat = None
 
     def __init__(self, pattern, match_start, end, flags):
-        # here, 'end' must be at most len(string)
+        # 'match_start' and 'end' must be known to be non-negative
+        # and they must not be more than len(string).
+        check_nonneg(match_start)
+        check_nonneg(end)
         self.pattern = pattern
-        if match_start < 0:
-            match_start = 0
         self.match_start = match_start
         self.end = end
         self.flags = flags
 
+    def reset(self, start):
+        self.match_start = start
+        self.match_marks = None
+        self.match_marks_flat = None
+
     def pat(self, index):
         check_nonneg(index)
-        return self.pattern[index]
+        result = self.pattern[index]
+        # Check that we only return non-negative integers from this helper.
+        # It is possible that self.pattern contains negative integers
+        # (see set_charset() and set_bigcharset() in rsre_char.py)
+        # but they should not be fetched via this helper here.
+        assert result >= 0
+        return result
 
     def str(self, index):
         """NOT_RPYTHON: Must be overridden in a concrete subclass.
@@ -132,12 +155,13 @@ class AbstractMatchContext(object):
         else:
             return None
 
+    def fresh_copy(self, start):
+        raise NotImplementedError
+
 class StrMatchContext(AbstractMatchContext):
     """Concrete subclass for matching in a plain string."""
 
     def __init__(self, pattern, string, match_start, end, flags):
-        if end > len(string):
-            end = len(string)
         AbstractMatchContext.__init__(self, pattern, match_start, end, flags)
         self._string = string
 
@@ -149,12 +173,14 @@ class StrMatchContext(AbstractMatchContext):
         c = self.str(index)
         return rsre_char.getlower(c, self.flags)
 
+    def fresh_copy(self, start):
+        return StrMatchContext(self.pattern, self._string, start,
+                               self.end, self.flags)
+
 class UnicodeMatchContext(AbstractMatchContext):
     """Concrete subclass for matching in a unicode string."""
 
     def __init__(self, pattern, unicodestr, match_start, end, flags):
-        if end > len(unicodestr):
-            end = len(unicodestr)
         AbstractMatchContext.__init__(self, pattern, match_start, end, flags)
         self._unicodestr = unicodestr
 
@@ -165,6 +191,10 @@ class UnicodeMatchContext(AbstractMatchContext):
     def lowstr(self, index):
         c = self.str(index)
         return rsre_char.getlower(c, self.flags)
+
+    def fresh_copy(self, start):
+        return UnicodeMatchContext(self.pattern, self._unicodestr, start,
+                                   self.end, self.flags)
 
 # ____________________________________________________________
 
@@ -275,7 +305,7 @@ class MinRepeatOneMatchResult(MatchResult):
         for op1, (checkerfn, _) in unroll_char_checker:
             if op1 == op:
                 return checkerfn(ctx, ptr, ppos)
-        raise NotImplementedError("next_char_ok[%d]" % op)
+        raise Error("next_char_ok[%d]" % op)
 
 class AbstractUntilMatchResult(MatchResult):
 
@@ -311,32 +341,33 @@ class MaxUntilMatchResult(AbstractUntilMatchResult):
         marks = self.cur_marks
         while True:
             while True:
-                if enum is not None:
-                    # matched one more 'item'.  record it and continue
+                if (enum is not None and
+                    (ptr != ctx.match_end or self.num_pending < min)):
+                    #               ^^^^^^^^^^ zero-width match protection
+                    # matched one more 'item'.  record it and continue.
                     self.pending = Pending(ptr, marks, enum, self.pending)
                     self.num_pending += 1
                     ptr = ctx.match_end
                     marks = ctx.match_marks
                     break
-                else:
-                    # 'item' no longer matches.
-                    if not resume and self.num_pending >= min:
-                        # try to match 'tail' if we have enough 'item'
-                        result = sre_match(ctx, self.tailppos, ptr, marks)
-                        if result is not None:
-                            self.subresult = result
-                            self.cur_ptr = ptr
-                            self.cur_marks = marks
-                            return self
-                    resume = False
-                    p = self.pending
-                    if p is None:
-                        return
-                    self.pending = p.next
-                    self.num_pending -= 1
-                    ptr = p.ptr
-                    marks = p.marks
-                    enum = p.enum.move_to_next_result(ctx)
+                # 'item' no longer matches.
+                if not resume and self.num_pending >= min:
+                    # try to match 'tail' if we have enough 'item'
+                    result = sre_match(ctx, self.tailppos, ptr, marks)
+                    if result is not None:
+                        self.subresult = result
+                        self.cur_ptr = ptr
+                        self.cur_marks = marks
+                        return self
+                resume = False
+                p = self.pending
+                if p is None:
+                    return
+                self.pending = p.next
+                self.num_pending -= 1
+                ptr = p.ptr
+                marks = p.marks
+                enum = p.enum.move_to_next_result(ctx)
             #
             if max == 65535 or self.num_pending < max:
                 # try to match one more 'item'
@@ -375,7 +406,9 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
             else:
                 enum = None    # 'max' reached, no more matches
 
-            while enum is None:
+            while (enum is None or
+                   (ptr == ctx.match_end and self.num_pending >= min)):
+                #                   ^^^^^^^^^^ zero-width match protection
                 # 'item' does not match; try to get further results from
                 # the 'pending' list.
                 p = self.pending
@@ -459,8 +492,15 @@ def sre_match(ctx, ppos, ptr, marks):
             result = BranchMatchResult(ppos, ptr, marks)
             return result.find_first_result(ctx)
 
-        #elif op == OPCODE_CATEGORY:
-        #   seems to be never produced
+        elif op == OPCODE_CATEGORY:
+            # seems to be never produced, but used by some tests from
+            # pypy/module/_sre/test
+            # <CATEGORY> <category>
+            if (ptr == ctx.end or
+                not rsre_char.category_dispatch(ctx.pat(ppos), ctx.str(ptr))):
+                return
+            ptr += 1
+            ppos += 1
 
         elif op == OPCODE_GROUPREF:
             # match backreference
@@ -588,7 +628,7 @@ def sre_match(ctx, ppos, ptr, marks):
                 return result.find_first_result(ctx)
 
             else:
-                raise AssertionError("missing UNTIL after REPEAT")
+                raise Error("missing UNTIL after REPEAT")
 
         elif op == OPCODE_REPEAT_ONE:
             # match repeated sequence (maximizing regexp).
@@ -639,7 +679,7 @@ def sre_match(ctx, ppos, ptr, marks):
             return result.find_first_result(ctx)
 
         else:
-            assert 0, "bad pattern code %d" % op
+            raise Error("bad pattern code %d" % op)
 
 
 def get_group_ref(marks, groupnum):
@@ -681,7 +721,7 @@ def find_repetition_end(ctx, ppos, ptr, maxcount):
     for op1, (_, fre) in unroll_char_checker:
         if op1 == op:
             return fre(ctx, ptr, end, ppos)
-    raise NotImplementedError("rsre.find_repetition_end[%d]" % op)
+    raise Error("rsre.find_repetition_end[%d]" % op)
 
 @specializectx
 def match_ANY(ctx, ptr, ppos):   # dot wildcard.
@@ -810,24 +850,39 @@ at_uni_boundary, at_uni_non_boundary = _make_boundary(rsre_char.is_uni_word)
 
 # ____________________________________________________________
 
+def _adjust(start, end, length):
+    if start < 0: start = 0
+    elif start > length: start = length
+    if end < 0: end = 0
+    elif end > length: end = length
+    return start, end
+
 def match(pattern, string, start=0, end=sys.maxint, flags=0):
+    start, end = _adjust(start, end, len(string))
     ctx = StrMatchContext(pattern, string, start, end, flags)
-    return match_context(ctx)
+    if match_context(ctx):
+        return ctx
+    else:
+        return None
 
 def search(pattern, string, start=0, end=sys.maxint, flags=0):
+    start, end = _adjust(start, end, len(string))
     ctx = StrMatchContext(pattern, string, start, end, flags)
-    return search_context(ctx)
+    if search_context(ctx):
+        return ctx
+    else:
+        return None
 
 def match_context(ctx):
+    ctx.original_pos = ctx.match_start
     if ctx.end < ctx.match_start:
-        return None
-    if sre_match(ctx, 0, ctx.match_start, None) is not None:
-        return ctx
-    return None
+        return False
+    return sre_match(ctx, 0, ctx.match_start, None) is not None
 
 def search_context(ctx):
+    ctx.original_pos = ctx.match_start
     if ctx.end < ctx.match_start:
-        return None
+        return False
     if ctx.pat(0) == OPCODE_INFO:
         if ctx.pat(2) & rsre_char.SRE_INFO_PREFIX and ctx.pat(5) > 1:
             return fast_search(ctx)
@@ -838,9 +893,9 @@ def regular_search(ctx):
     while start <= ctx.end:
         if sre_match(ctx, 0, start, None) is not None:
             ctx.match_start = start
-            return ctx
+            return True
         start += 1
-    return None
+    return False
 
 @specializectx
 def fast_search(ctx):
@@ -881,11 +936,11 @@ def fast_search(ctx):
                         ctx.match_start = start
                         ctx.match_end = ptr
                         ctx.match_marks = None
-                        return ctx
+                        return True
                     if sre_match(ctx, ppos_start, ptr, None) is not None:
                         ctx.match_start = start
-                        return ctx
+                        return True
                     i = ctx.pat(overlap_offset + i)
                 break
         string_position += 1
-    return None
+    return False
