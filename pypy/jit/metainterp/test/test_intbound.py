@@ -185,6 +185,53 @@ def test_add_bound():
     assert not a.contains(2)
     assert not a.contains(7)
 
+def test_mul_bound():
+    for _, _, b1 in some_bounds():
+        for _, _, b2 in some_bounds():
+            b3 = b1.mul_bound(b2)
+            for n1 in nbr:
+                for n2 in nbr:
+                    if b1.contains(n1) and b2.contains(n2):
+                        assert b3.contains(n1 * n2)
+
+    a=bound(2, 4).mul_bound(bound(1, 2))
+    assert not a.contains(1)
+    assert not a.contains(9)
+
+    a=bound(-3, 2).mul_bound(bound(1, 2))
+    assert not a.contains(-7)
+    assert not a.contains(5)
+    assert a.contains(-6)
+    assert a.contains(4)
+
+    a=bound(-3, 2).mul(-1)
+    for i in range(-2,4):
+        assert a.contains(i)
+    assert not a.contains(4)
+    assert not a.contains(-3)
+
+def test_div_bound():
+    for _, _, b1 in some_bounds():
+        for _, _, b2 in some_bounds():
+            b3 = b1.div_bound(b2)
+            for n1 in nbr:
+                for n2 in nbr:
+                    if b1.contains(n1) and b2.contains(n2):
+                        if n2 != 0:
+                            assert b3.contains(n1 / n2)
+
+    a=bound(2, 4).div_bound(bound(1, 2))
+    assert not a.contains(0)
+    assert not a.contains(5)
+
+    a=bound(-3, 2).div_bound(bound(1, 2))
+    assert not a.contains(-4)
+    assert not a.contains(3)
+    assert a.contains(-3)
+    assert a.contains(0)
+
+
+
 def test_sub_bound():
     for _, _, b1 in some_bounds():
         for _, _, b2 in some_bounds():
