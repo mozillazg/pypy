@@ -820,7 +820,12 @@ class Optimizer(object):
         return args
             
     def optimize_default(self, op):
-        if op.is_always_pure():
+        canfold = op.is_always_pure()
+        is_ovf = op.is_ovf()
+        if is_ovf:
+            nextop = self.loop.operations[self.i + 1]
+            canfold = nextop.opnum == rop.GUARD_NO_OVERFLOW
+        if canfold:
             for arg in op.args:
                 if self.get_constant_box(arg) is None:
                     break
@@ -830,6 +835,8 @@ class Optimizer(object):
                 resbox = execute_nonspec(self.cpu, None,
                                          op.opnum, argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
+                if is_ovf:
+                    self.i += 1 # skip next operation, it is the unneeded guard
                 return
 
             # did we do the exact same operation already?
@@ -838,6 +845,8 @@ class Optimizer(object):
             if oldop is not None and oldop.descr is op.descr:
                 assert oldop.opnum == op.opnum
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
+                if is_ovf:
+                    self.i += 1 # skip next operation, it is the unneeded guard
                 return
             elif self.find_rewritable_bool(op, args):
                 return
