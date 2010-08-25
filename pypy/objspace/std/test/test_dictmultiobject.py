@@ -696,6 +696,14 @@ class BaseTestRDictImplementation:
         assert self.impl.length() == 0
         self.check_not_devolved()
 
+    def test_clear(self):
+        self.fill_impl()
+        assert self.impl.length() == 2
+        self.impl.clear()
+        assert self.impl.length() == 0
+        self.check_not_devolved()
+
+
     def test_keys(self):
         self.fill_impl()
         keys = self.impl.keys()

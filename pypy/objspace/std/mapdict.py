@@ -57,6 +57,9 @@ class AbstractAttribute(object):
     def materialize_r_dict(self, space, obj, w_d):
         raise NotImplementedError("abstract base class")
 
+    def remove_dict_entries(self, obj):
+        raise NotImplementedError("abstract base class")
+
 
 class Terminator(AbstractAttribute):
     def __init__(self, w_cls, space):
@@ -88,6 +91,8 @@ class Terminator(AbstractAttribute):
         result._init_empty(terminator)
         return result
 
+    def remove_dict_entries(self, obj):
+        return self.copy(obj)
 
 class DictTerminator(Terminator):
     def __init__(self, w_cls, space):
@@ -135,6 +140,8 @@ class DevolvedDictTerminator(Terminator):
             return Terminator.copy(self, obj)
         return Terminator.delete(self, obj, selector)
 
+    def remove_dict_entries(self, obj):
+        assert 0, "should be unreachable"
 
 class PlainAttribute(AbstractAttribute):
     def __init__(self, selector, back):
@@ -197,13 +204,23 @@ class PlainAttribute(AbstractAttribute):
             self._copy_attr(obj, new_obj)
         return new_obj
 
+    def remove_dict_entries(self, obj):
+        new_obj = self.back.remove_dict_entries(obj)
+        if self.selector[1] != DICT:
+            self._copy_attr(obj, new_obj)
+        return new_obj
 
+def _become(w_obj, new_obj):
+    # this is like the _become method, really, but we cannot use that due to
+    # RPython reasons
+    w_obj._set_mapdict_map(new_obj.map)
+    w_obj._set_mapdict_storage(new_obj.storage)
 # ____________________________________________________________
 # object implementation
 
-DICT = 6     # XXX meant '0'?
-SLOT = 1
-SPECIAL = 2
+DICT = 0
+SPECIAL = 1
+SLOTS_STARTING_FROM = 2
 
 from pypy.interpreter.baseobjspace import W_Root
 
@@ -273,10 +290,12 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         self._init_empty(w_subtype.terminator)
 
     def getslotvalue(self, member):
-        return self.map.read(self, (member.name, SLOT))
+        key = (member.name, SLOTS_STARTING_FROM + member.index)
+        return self.map.read(self, key)
 
     def setslotvalue(self, member, w_value):
-        self.map.write(self, (member.name, SLOT), w_value)
+        key = (member.name, SLOTS_STARTING_FROM + member.index)
+        self.map.write(self, key, w_value)
 
     # used by _weakref implemenation
 
@@ -314,7 +333,7 @@ class MapDictImplementation(W_DictMultiObject):
         elif _is_sane_hash(space, w_lookup_type):
             return None
         else:
-            return self._as_rdict().getitem(w_lookup)
+            return self._as_rdict().impl_fallback_getitem(w_lookup)
 
     def impl_getitem_str(self, key):
         return self.w_obj.getdictvalue(self.space, key)
@@ -328,7 +347,7 @@ class MapDictImplementation(W_DictMultiObject):
         if space.is_w(space.type(w_key), space.w_str):
             self.impl_setitem_str(self.space.str_w(w_key), w_value)
         else:
-            self._as_rdict().setitem(w_key, w_value)
+            self._as_rdict().impl_fallback_setitem(w_key, w_value)
 
     def impl_delitem(self, w_key):
         space = self.space
@@ -340,7 +359,7 @@ class MapDictImplementation(W_DictMultiObject):
         elif _is_sane_hash(space, w_key_type):
             raise KeyError
         else:
-            self._as_rdict().delitem(w_key)
+            self._as_rdict().impl_fallback_delitem(w_key)
 
     def impl_length(self):
         res = 0
@@ -355,9 +374,9 @@ class MapDictImplementation(W_DictMultiObject):
         return MapDictIteratorImplementation(self.space, self)
 
     def impl_clear(self):
-        # XXX implement me better, or provide a reasonable default
-        # XXX implementation in W_DictMultiObject
-        self._as_rdict().clear()
+        w_obj = self.w_obj
+        new_obj = w_obj._get_mapdict_map().remove_dict_entries(w_obj)
+        _become(w_obj, new_obj)
 
     def _clear_fields(self):
         self.w_obj = None
@@ -369,19 +388,13 @@ class MapDictImplementation(W_DictMultiObject):
         materialize_r_dict(space, w_obj, self)
         self._clear_fields()
         return self
-        # XXX then the calls self._as_rdict().method() from above look like
-        # recursive calls, and a stack check is inserted, which is pointless.
-        # It would be better to return self.r_dict_content, I think
 
 
 def materialize_r_dict(space, obj, w_d):
     map = obj._get_mapdict_map()
     assert obj.getdict() is w_d
     new_obj = map.materialize_r_dict(space, obj, w_d)
-    # XXX this is like _become, really, but we cannot use that due to RPython
-    # reasons
-    obj._set_mapdict_map(new_obj.map)
-    obj._set_mapdict_storage(new_obj.storage)
+    _become(obj, new_obj)
 
 class MapDictIteratorImplementation(IteratorImplementation):
     def __init__(self, space, dictimplementation):
