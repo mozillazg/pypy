@@ -1,3 +1,4 @@
+from pypy.conftest import gettestobjspace
 from pypy.objspace.std.test.test_dictmultiobject import FakeSpace, W_DictMultiObject
 from pypy.objspace.std.mapdict import *
 
@@ -344,3 +345,34 @@ def test_setdict():
     assert w_d.getitem_str("a") == 5
     assert w_d.getitem_str("b") == 6
     assert w_d.getitem_str("c") == 7
+
+# ___________________________________________________________
+# integration tests
+
+# XXX write more
+
+class AppTestWithMapDict(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withmapdict": True})
+
+    def test_simple(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 5
+        a.y = 6
+        a.zz = 7
+        assert a.x == 5
+        assert a.y == 6
+        assert a.zz == 7
+
+    def test_slot_name_conflict(self):
+        class A(object):
+            __slots__ = 'slot1'
+        class B(A):
+            __slots__ = 'slot1'
+        x = B()
+        x.slot1 = 'child'             # using B.slot1
+        A.slot1.__set__(x, 'parent')  # using A.slot1
+        assert x.slot1 == 'child'     # B.slot1 should still have its old value
+        assert A.slot1.__get__(x) == 'parent'
