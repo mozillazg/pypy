@@ -76,6 +76,12 @@ def shape_suffix(shape):
         suffix = 0
     return suffix
 
+def unpack_shape(space, w_shape):
+    if space.is_true(space.isinstance(w_shape, space.w_int)):
+        return [space.int_w(w_shape)]
+    shape_w = space.fixedview(w_shape)
+    return [space.int_w(w_i) for w_i in shape_w]
+
 def validate_index(array, space, w_i):
     index_dimensionality = space.int_w(space.len(w_i))
     array_dimensionality = len(array.shape)
