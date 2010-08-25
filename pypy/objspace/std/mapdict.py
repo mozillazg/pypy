@@ -320,7 +320,7 @@ class MapDictImplementation(W_DictMultiObject):
         return self.w_obj.getdictvalue(self.space, key)
 
     def impl_setitem_str(self,  key, w_value, shadows_type=True):
-        flag = self.w_obj.setdictvalue(self.space, key, w_value)
+        flag = self.w_obj.setdictvalue(self.space, key, w_value, shadows_type)
         assert flag
 
     def impl_setitem(self,  w_key, w_value):
