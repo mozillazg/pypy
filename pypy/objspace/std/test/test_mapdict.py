@@ -5,8 +5,9 @@ from pypy.objspace.std.mapdict import *
 space = FakeSpace()
 
 class FakeMember(object):
-    def __init__(self, name):
+    def __init__(self, name, index=0):
         self.name = name
+        self.index = index
 
 class Class(object):
     def __init__(self, hasdict=True):
@@ -51,11 +52,11 @@ def test_plain_attribute():
 def test_search():
     aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator(None, None)))
     assert aa.search(DICT) is aa
-    assert aa.search(SLOT) is None
+    assert aa.search(SLOTS_STARTING_FROM) is None
     assert aa.search(SPECIAL) is None
-    bb = PlainAttribute(("C", SPECIAL), PlainAttribute(("A", SLOT), aa))
+    bb = PlainAttribute(("C", SPECIAL), PlainAttribute(("A", SLOTS_STARTING_FROM), aa))
     assert bb.search(DICT) is aa
-    assert bb.search(SLOT) is bb.back
+    assert bb.search(SLOTS_STARTING_FROM) is bb.back
     assert bb.search(SPECIAL) is bb
 
 def test_add_attribute():
@@ -192,6 +193,21 @@ def test_slots():
     obj2.setdictvalue(space, "c", 71)
     assert obj2.storage == [501, 601, 701, 51, 61, 71]
     assert obj.map is obj2.map
+
+def test_slots_same_name():
+    cls = Class()
+    obj = cls.instantiate()
+    a =  FakeMember("a")
+    b =  FakeMember("a", 1)
+    c =  FakeMember("a", 2)
+    obj.setslotvalue(a, 50)
+    obj.setslotvalue(b, 60)
+    obj.setslotvalue(c, 70)
+    assert obj.getslotvalue(a) == 50
+    assert obj.getslotvalue(b) == 60
+    assert obj.getslotvalue(c) == 70
+    assert obj.storage == [50, 60, 70]
+
 
 def test_slots_no_dict():
     cls = Class(hasdict=False)
@@ -365,6 +381,29 @@ class AppTestWithMapDict(object):
         assert a.x == 5
         assert a.y == 6
         assert a.zz == 7
+
+    def test_read_write_dict(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 5
+        a.y = 6
+        a.zz = 7
+        d = a.__dict__
+        assert d == {"x": 5, "y": 6, "zz": 7}
+        d['dd'] = 41
+        assert a.dd == 41
+        del a.x
+        assert d == {"y": 6, "zz": 7, 'dd': 41}
+        d2 = d.copy()
+        d2[1] = 2
+        a.__dict__ = d2
+        assert a.y == 6
+        assert a.zz == 7
+        assert a.dd == 41
+        d['dd'] = 43
+        assert a.dd == 41
+
 
     def test_slot_name_conflict(self):
         class A(object):
