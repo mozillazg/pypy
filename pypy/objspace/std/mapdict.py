@@ -45,6 +45,7 @@ class AbstractAttribute(object):
         oldattr = obj._get_mapdict_map()
         oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
         if attr.length() > len(obj._get_mapdict_storage()):
+            # note that attr.size_estimate() is always at least attr.length()
             new_storage = [None] * attr.size_estimate()
             for i in range(len(obj._get_mapdict_storage())):
                 new_storage[i] = obj._get_mapdict_storage()[i]
@@ -200,7 +201,7 @@ class PlainAttribute(AbstractAttribute):
 # ____________________________________________________________
 # object implementation
 
-DICT = 6
+DICT = 6     # XXX meant '0'?
 SLOT = 1
 SPECIAL = 2
 
@@ -354,13 +355,13 @@ class MapDictImplementation(W_DictMultiObject):
         return MapDictIteratorImplementation(self.space, self)
 
     def impl_clear(self):
-        raise NotImplementedError("abstract base class")
+        XXX     # implement me!
 
     def _clear_fields(self):
         self.w_obj = None
 
     def _as_rdict(self):
-        r_dict_content = self.initialize_as_rdict()
+        self.initialize_as_rdict()
         space = self.space
         w_obj = self.w_obj
         materialize_r_dict(space, w_obj, self)
