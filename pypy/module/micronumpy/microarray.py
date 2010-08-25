@@ -18,6 +18,8 @@ from pypy.module.micronumpy.array import normalize_slice_starts
 from pypy.module.micronumpy.array import squeeze_slice, squeeze_shape
 from pypy.module.micronumpy.array import shape_prefix
 
+from pypy.rpython.lltypesystem.lltype import cast_ptr_to_int
+
 class MicroIter(Wrappable):
     _immutable_fields_ = ['step', 'stop', 'ndim'] # XXX: removed array
     def __init__(self, array):
@@ -372,13 +374,13 @@ def descr_get_dtype(space, self):
 def descr_get_shape(space, self):
     return space.newtuple([space.wrap(x) for x in self.shape[self.offset:]])
 
-def descr_array_interface(space, self):
+def descr_get_array_interface(space, self):
     w_dict = space.newdict()
-    data_ptr = space.wrap(lltype.cast_ptr_to_int(self.data))
+    data_ptr = space.wrap(cast_ptr_to_int(self.data))
     data = [data_ptr, space.w_False]
     content = [(space.wrap('shape'), descr_get_shape(space, self)),
                (space.wrap('data'), space.newtuple(data)),
-               (space.wrap('typestr'), space.wrap(self.dtype.dtype.str())),
+               (space.wrap('typestr'), space.wrap(self.dtype.dtype.typestr())),
                (space.wrap('version'), space.wrap(3))]
     w_dict.initialize_content(content)
     return w_dict

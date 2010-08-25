@@ -93,13 +93,13 @@ def descriptor(code, name, ll_type):
         def dump(self, data):
             return ', '.join([str(x) for x in self.cast(data)])
 
-        def str(self):
+        def typestr(self):
             if self is float_descr:
                 code = 'f'
             else:
                 code = self.typecode
 
-            return ''.join([byteorder, code, self.itemsize()])
+            return ''.join([byteorder, code, str(self.itemsize())])
 
     for type in [lltype.Signed, lltype.Float]:
         def get_type(self, data, index):
