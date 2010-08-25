@@ -355,7 +355,9 @@ class MapDictImplementation(W_DictMultiObject):
         return MapDictIteratorImplementation(self.space, self)
 
     def impl_clear(self):
-        XXX     # implement me!
+        # XXX implement me better, or provide a reasonable default
+        # XXX implementation in W_DictMultiObject
+        self._as_rdict().clear()
 
     def _clear_fields(self):
         self.w_obj = None
@@ -367,6 +369,9 @@ class MapDictImplementation(W_DictMultiObject):
         materialize_r_dict(space, w_obj, self)
         self._clear_fields()
         return self
+        # XXX then the calls self._as_rdict().method() from above look like
+        # recursive calls, and a stack check is inserted, which is pointless.
+        # It would be better to return self.r_dict_content, I think
 
 
 def materialize_r_dict(space, obj, w_d):
