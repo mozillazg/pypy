@@ -292,6 +292,8 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         self._init_empty(w_subtype.terminator)
 
     def getslotvalue(self, member):
+        # XXX we don't need member here, it's enough to have member.index
+        # XXX and revert the change to the signature of getslotvalue(), maybe.
         key = (member.name, SLOTS_STARTING_FROM + member.index)
         return self.map.read(self, key)
 
