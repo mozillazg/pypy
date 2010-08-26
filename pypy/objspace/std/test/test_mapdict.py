@@ -314,6 +314,7 @@ def test_get_setdictvalue_after_devolve():
     obj.setdictvalue(space, "a", 5)
     obj.setdictvalue(space, "b", 6)
     obj.setdictvalue(space, "c", 7)
+    obj.setdictvalue(space, "weakref", 42)
     devolve_dict(obj)
     assert obj.getdictvalue(space, "a") == 5
     assert obj.getdictvalue(space, "b") == 6
@@ -321,6 +322,8 @@ def test_get_setdictvalue_after_devolve():
     assert obj.getslotvalue(a) == 50
     assert obj.getslotvalue(b) == 60
     assert obj.getslotvalue(c) == 70
+    assert obj.getdictvalue(space, "weakref") == 42
+    assert obj.getweakref() is None
 
     obj.setslotvalue(a, 501)
     obj.setslotvalue(b, 601)
