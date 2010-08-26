@@ -289,19 +289,8 @@ class GcRootMap_asmgcc:
         self._encode_num(shape, num)
 
     def add_callee_save_reg(self, shape, reg_index):
+        assert reg_index > 0
         shape.append(chr(self.LOC_REG | (reg_index << 2)))
-
-    def add_ebx(self, shape):
-        shape.append(chr(self.LOC_REG | 4))
-
-    def add_esi(self, shape):
-        shape.append(chr(self.LOC_REG | 8))
-
-    def add_edi(self, shape):
-        shape.append(chr(self.LOC_REG | 12))
-
-    def add_ebp(self, shape):
-        shape.append(chr(self.LOC_REG | 16))
 
     def compress_callshape(self, shape):
         # Similar to compress_callshape() in trackgcroot.py.
