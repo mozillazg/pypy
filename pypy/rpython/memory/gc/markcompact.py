@@ -2,25 +2,18 @@
 import time
 
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
-from pypy.rpython.memory.gc.base import MovingGCBase
+from pypy.rpython.memory.gc.base import MovingGCBase, read_from_env
 from pypy.rlib.debug import ll_assert, have_debug_prints
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
-from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
-
-first_gcflag = 1 << 16
-GCFLAG_MARKBIT = first_gcflag << 0
-GCFLAG_HASHTAKEN = first_gcflag << 1      # someone already asked for the hash
-GCFLAG_HASHFIELD = first_gcflag << 2      # we have an extra hash field
-
-memoryError = MemoryError()
 
 # Mark'n'compact garbage collector
 #
@@ -34,41 +27,37 @@ memoryError = MemoryError()
 # this gc works more or less like semispace, but has some essential
 # differencies. The main difference is that we have separate phases of
 # marking and assigning pointers, hence order of objects is preserved.
-# This means we can reuse the same space if it did not grow enough.
-# More importantly, in case we need to resize space we can copy it bit by
-# bit, hence avoiding double memory consumption at peak times
+# This means we can reuse the same space, overwriting it as we collect.
 
-# so the algorithm itself is performed in 3 stages (module weakrefs and
-# finalizers)
+# so the algorithm itself is performed in 3 stages (modulo weakrefs and
+# finalizers):
 
 # 1. We mark alive objects
 # 2. We walk all objects and assign forward pointers in the same order,
 #    also updating all references
-# 3. We compact the space by moving. In case we move to the same space,
-#    we use arena_new_view trick, which looks like new space to tests,
-#    but compiles to the same pointer. Also we use raw_memmove in case
-#    objects overlap.
+# 3. We compact the space by moving.  We use 'arena_new_view' trick, which
+#    looks like new space to tests, but compiles to the same pointer.
+#    Also we use raw_memmove in case the object overlaps with its destination.
 
-# Exact algorithm for space resizing: we keep allocated more space than needed
-# (2x, can be even more), but it's full of zeroes. After each collection,
-# we bump next_collect_after which is a marker where to start each collection.
-# It should be exponential (but less than 2) from the size occupied by objects
+# After each collection, we bump 'next_collect_after' which is a marker
+# where to start each collection.  It should be exponential (but less
+# than 2) from the size occupied by objects so far.
 
 # field optimization - we don't need forward pointer and flags at the same
-# time. Instead we copy list of tids when we know how many objects are alive
-# and store forward pointer there.
+# time. Instead we copy the TIDs in a list when we know how many objects are
+# alive, and store the forward pointer in the old object header.
 
+first_gcflag_bit = LONG_BIT//2
+first_gcflag = 1 << first_gcflag_bit
+GCFLAG_HASHTAKEN = first_gcflag << 0      # someone already asked for the hash
+GCFLAG_HASHFIELD = first_gcflag << 1      # we have an extra hash field
+GCFLAG_MARKBIT   = first_gcflag << 2
+# note that only the first 2 bits are preserved during a collection!
 
-# in case we need to grow space, we use
-# current_space_size * FREE_SPACE_MULTIPLIER / FREE_SPACE_DIVIDER + needed
-FREE_SPACE_MULTIPLIER = 3
-FREE_SPACE_DIVIDER = 2
-FREE_SPACE_ADD = 256
-# XXX adjust
-GC_CLEARANCE = 32*1024
 
 TID_TYPE = llgroup.HALFWORD
 BYTES_PER_TID = rffi.sizeof(TID_TYPE)
+TID_BACKUP = lltype.FixedSizeArray(TID_TYPE, 1)
 
 
 class MarkCompactGC(MovingGCBase):
@@ -77,37 +66,40 @@ class MarkCompactGC(MovingGCBase):
     withhash_flag_is_in_field = 'tid', GCFLAG_HASHFIELD
     # ^^^ all prebuilt objects have GCFLAG_HASHTAKEN, but only some have
     #     GCFLAG_HASHFIELD (and then they are one word longer).
-    TID_BACKUP = lltype.Array(TID_TYPE, hints={'nolength':True})
-    WEAKREF_OFFSETS = lltype.Array(lltype.Signed)
+    WEAKREF_OFFSETS = rffi.CArray(lltype.Signed)
 
+    # The default space size is 1.9375 GB, i.e. almost 2 GB, allocated as
+    # a big mmap.  The process does not actually consume that space until
+    # needed, of course.
+    TRANSLATION_PARAMS = {'space_size': int((1 + 15.0/16)*1024*1024*1024)}
 
-    TRANSLATION_PARAMS = {'space_size': 8*1024*1024} # XXX adjust
-
-    malloc_zero_filled = True
+    malloc_zero_filled = False
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
-    first_unused_gcflag = first_gcflag << 3
     total_collection_time = 0.0
     total_collection_count = 0
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
-        import py; py.test.skip("Disabled for now, sorry")
-        self.param_space_size = space_size
         MovingGCBase.__init__(self, config, chunk_size)
+        self.space_size = space_size
 
     def setup(self):
-        self.space_size = self.param_space_size
-        self.next_collect_after = self.param_space_size/2 # whatever...
+        envsize = max_size_from_env()
+        if envsize >= 4096:
+            self.space_size = envsize & ~4095
+
+        self.next_collect_after = min(self.space_size,
+                                      4*1024*1024)    # 4MB initially
 
         self.program_start_time = time.time()
-        self.space = llarena.arena_malloc(self.space_size, True)
-        ll_assert(bool(self.space), "couldn't allocate arena")
+        self.space = llarena.arena_malloc(self.space_size, False)
+        if not self.space:
+            raise CannotAllocateGCArena
         self.free = self.space
-        self.top_of_space = self.space + self.next_collect_after
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
         self.objects_with_weakrefs = self.AddressStack()
-        self.tid_backup = lltype.nullptr(self.TID_BACKUP)
+        self.tid_backup = lltype.nullptr(TID_BACKUP)
 
     def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
@@ -117,135 +109,106 @@ class MarkCompactGC(MovingGCBase):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
         flags |= GCFLAG_HASHTAKEN
         hdr.tid = self.combine(typeid16, flags)
-        # XXX we can store forward_ptr to itself, if we fix C backend
-        # so that get_forwarding_address(obj) returns
-        # obj itself if obj is a prebuilt object
 
-    def malloc_fixedsize_clear(self, typeid16, size, can_collect,
-                               has_finalizer=False, contains_weakptr=False):
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        totalsize = size_gc_header + size
+    def _get_memory(self, totalsize):
+        # also counts the space that will be needed during the following
+        # collection to store the TID
+        requested_size = raw_malloc_usage(totalsize) + BYTES_PER_TID
+        self.next_collect_after -= requested_size
+        if self.next_collect_after < 0:
+            self.obtain_free_space(requested_size)
         result = self.free
-        if raw_malloc_usage(totalsize) > self.top_of_space - result:
-            result = self.obtain_free_space(totalsize)
-        llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid16)
         self.free += totalsize
+        llarena.arena_reserve(result, totalsize)
+        return result
+    _get_memory._always_inline_ = True
+
+    def _get_totalsize_var(self, nonvarsize, itemsize, length):
+        try:
+            varsize = ovfcheck(itemsize * length)
+        except OverflowError:
+            raise MemoryError
+        totalsize = llarena.round_up_for_allocation(nonvarsize + varsize)
+        if totalsize < 0:    # if wrapped around
+            raise MemoryError
+        return totalsize
+    _get_totalsize_var._always_inline_ = True
+
+    def _setup_object(self, result, typeid16, has_finalizer, contains_weakptr):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        self.init_gc_object(result, typeid16)
         if has_finalizer:
             self.objects_with_finalizers.append(result + size_gc_header)
         if contains_weakptr:
             self.objects_with_weakrefs.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
-    
+    _setup_object._always_inline_ = True
+
+    def malloc_fixedsize(self, typeid16, size, can_collect,
+                         has_finalizer=False, contains_weakptr=False):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        result = self._get_memory(totalsize)
+        return self._setup_object(result, typeid16, has_finalizer,
+                                  contains_weakptr)
+
+    def malloc_fixedsize_clear(self, typeid16, size, can_collect,
+                               has_finalizer=False, contains_weakptr=False):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        result = self._get_memory(totalsize)
+        llmemory.raw_memclear(result, totalsize)
+        return self._setup_object(result, typeid16, has_finalizer,
+                                  contains_weakptr)
+
     def malloc_varsize_clear(self, typeid16, length, size, itemsize,
                              offset_to_length, can_collect):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
-        try:
-            varsize = ovfcheck(itemsize * length)
-            totalsize = ovfcheck(nonvarsize + varsize)
-        except OverflowError:
-            raise memoryError
-        result = self.free
-        if raw_malloc_usage(totalsize) > self.top_of_space - result:
-            result = self.obtain_free_space(totalsize)
-        llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid16)
+        totalsize = self._get_totalsize_var(nonvarsize, itemize, length)
+        result = self._get_memory(totalsize)
+        llmemory.raw_memclear(result, totalsize)
         (result + size_gc_header + offset_to_length).signed[0] = length
-        self.free = result + llarena.round_up_for_allocation(totalsize)
-        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+        return self._setup_object(result, typeid16, False, False)
 
-    def obtain_free_space(self, totalsize):
-        # a bit of tweaking to maximize the performance and minimize the
-        # amount of code in an inlined version of malloc_fixedsize_clear()
-        if not self.try_obtain_free_space(totalsize):
-            raise memoryError
-        return self.free
+    def obtain_free_space(self, requested_size):
+        self.markcompactcollect()
+        self.next_collect_after -= requested_size
+        if self.next_collect_after < 0:
+            raise MemoryError
     obtain_free_space._dont_inline_ = True
-
-    def try_obtain_free_space(self, needed):
-        needed = raw_malloc_usage(needed)
-        while 1:
-            self.markcompactcollect(needed)
-            missing = needed - (self.top_of_space - self.free)
-            if missing < 0:
-                return True
-
-    def new_space_size(self, occupied, needed):
-        res = (occupied * FREE_SPACE_MULTIPLIER /
-               FREE_SPACE_DIVIDER + FREE_SPACE_ADD + needed)
-        # align it to 4096, which is somewhat around page size
-        return ((res/4096) + 1) * 4096
-
-    def double_space_size(self, minimal_size):
-        while self.space_size <= minimal_size:
-            self.space_size *= 2
-        toaddr = llarena.arena_malloc(self.space_size, True)
-        return toaddr
-
-    def compute_alive_objects(self):
-        fromaddr = self.space
-        addraftercollect = self.space
-        num = 1
-        while fromaddr < self.free:
-            size_gc_header = self.gcheaderbuilder.size_gc_header
-            tid = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR)).tid
-            obj = fromaddr + size_gc_header
-            objsize = self.get_size(obj)
-            objtotalsize = size_gc_header + objsize
-            if self.marked(obj):
-                copy_has_hash_field = ((tid & GCFLAG_HASHFIELD) != 0 or
-                                       ((tid & GCFLAG_HASHTAKEN) != 0 and
-                                        addraftercollect < fromaddr))
-                addraftercollect += raw_malloc_usage(objtotalsize)
-                if copy_has_hash_field:
-                    addraftercollect += llmemory.sizeof(lltype.Signed)
-            num += 1
-            fromaddr += objtotalsize
-            if tid & GCFLAG_HASHFIELD:
-                fromaddr += llmemory.sizeof(lltype.Signed)
-        ll_assert(addraftercollect <= fromaddr,
-                  "markcompactcollect() is trying to increase memory usage")
-        self.totalsize_of_objs = addraftercollect - self.space
-        return num
 
     def collect(self, gen=0):
         self.markcompactcollect()
-    
-    def markcompactcollect(self, needed=0):
+
+    def markcompactcollect(self):
         start_time = self.debug_collect_start()
         self.debug_check_consistency()
-        self.to_see = self.AddressStack()
-        self.mark_roots_recursively()
-        if (self.objects_with_finalizers.non_empty() or
-            self.run_finalizers.non_empty()):
-            self.mark_objects_with_finalizers()
-            self._trace_and_mark()
+        #
+        # Mark alive objects
+        #
+        self.to_see = self.AddressDeque()
+        self.trace_from_roots()
+        #if (self.objects_with_finalizers.non_empty() or
+        #    self.run_finalizers.non_empty()):
+        #    self.mark_objects_with_finalizers()
+        #    self._trace_and_mark()
         self.to_see.delete()
-        num_of_alive_objs = self.compute_alive_objects()
-        size_of_alive_objs = self.totalsize_of_objs
-        totalsize = self.new_space_size(size_of_alive_objs, needed +
-                                        num_of_alive_objs * BYTES_PER_TID)
-        tid_backup_size = (llmemory.sizeof(self.TID_BACKUP, 0) +
-                           llmemory.sizeof(TID_TYPE) * num_of_alive_objs)
-        used_space_now = self.next_collect_after + raw_malloc_usage(tid_backup_size)
-        if totalsize >= self.space_size or used_space_now >= self.space_size:
-            toaddr = self.double_space_size(totalsize)
-            llarena.arena_reserve(toaddr + size_of_alive_objs, tid_backup_size)
-            self.tid_backup = llmemory.cast_adr_to_ptr(
-                toaddr + size_of_alive_objs,
-                lltype.Ptr(self.TID_BACKUP))
-            resizing = True
-        else:
-            toaddr = llarena.arena_new_view(self.space)
-            llarena.arena_reserve(self.top_of_space, tid_backup_size)
-            self.tid_backup = llmemory.cast_adr_to_ptr(
-                self.top_of_space,
-                lltype.Ptr(self.TID_BACKUP))
-            resizing = False
-        self.next_collect_after = totalsize
-        weakref_offsets = self.collect_weakref_offsets()
-        finaladdr = self.update_forward_pointers(toaddr, num_of_alive_objs)
+        #
+        # Prepare new views on the same memory
+        #
+        toaddr = llarena.arena_new_view(self.space)
+        llarena.arena_reserve(self.free, self.space_size - self.free)
+        self.tid_backup = llmemory.cast_adr_to_ptr(
+            self.free,
+            lltype.Ptr(self.TID_BACKUP))
+        #
+        # Walk all objects and assign forward pointers in the same order,
+        # also updating all references
+        #
+        self.next_collect_after = self.space_size
+        #weakref_offsets = self.collect_weakref_offsets()
+        finaladdr = self.update_forward_pointers(toaddr)
         if (self.run_finalizers.non_empty() or
             self.objects_with_finalizers.non_empty()):
             self.update_run_finalizers()
@@ -257,7 +220,7 @@ class MarkCompactGC(MovingGCBase):
             size = toaddr + self.space_size - finaladdr
             llarena.arena_reset(finaladdr, size, True)
         else:
-            if we_are_translated():
+            if 1:  # XXX? we_are_translated():
                 # because we free stuff already in raw_memmove, we
                 # would get double free here. Let's free it anyway
                 llarena.arena_free(self.space)
@@ -353,18 +316,16 @@ class MarkCompactGC(MovingGCBase):
         tid = self.header(addr).tid
         return llop.extract_ushort(llgroup.HALFWORD, tid)
 
-    def mark_roots_recursively(self):
+    def trace_from_roots(self):
         self.root_walker.walk_roots(
-            MarkCompactGC._mark_root_recursively,  # stack roots
-            MarkCompactGC._mark_root_recursively,  # static in prebuilt non-gc structures
-            MarkCompactGC._mark_root_recursively)  # static in prebuilt gc objects
+            MarkCompactGC._mark_root,  # stack roots
+            MarkCompactGC._mark_root,  # static in prebuilt non-gc structures
+            MarkCompactGC._mark_root)  # static in prebuilt gc objects
         self._trace_and_mark()
 
     def _trace_and_mark(self):
-        # XXX depth-first tracing... it can consume a lot of rawmalloced
-        # memory for very long stacks in some cases
         while self.to_see.non_empty():
-            obj = self.to_see.pop()
+            obj = self.to_see.popleft()
             self.trace(obj, self._mark_obj, None)
 
     def _mark_obj(self, pointer, ignored):
@@ -374,7 +335,7 @@ class MarkCompactGC(MovingGCBase):
         self.mark(obj)
         self.to_see.append(obj)
 
-    def _mark_root_recursively(self, root):
+    def _mark_root(self, root):
         self.mark(root.address[0])
         self.to_see.append(root.address[0])
 
@@ -384,24 +345,46 @@ class MarkCompactGC(MovingGCBase):
     def marked(self, obj):
         return self.header(obj).tid & GCFLAG_MARKBIT
 
-    def update_forward_pointers(self, toaddr, num_of_alive_objs):
-        self.base_forwarding_addr = toaddr
+    def update_forward_pointers(self, toaddr):
+        base_forwarding_addr = toaddr
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        i = 0
+        p_tid_backup = self.tid_backup
         while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
-            objsize = self.get_size(obj)
-            totalsize = size_gc_header + objsize
+            # compute the original and the new object size, including the
+            # optional hash field
+            baseobjsize = self.get_size(obj)
+            totalsrcsize = size_gc_header + baseobjsize
+            if hdr.tid & GCFLAG_HASHFIELD:  # already a hash field, copy it too
+                totalsrcsize += llmemory.sizeof(lltype.Signed)
+                totaldstsize = totalsrcsize
+            elif hdr.tid & GCFLAG_HASHTAKEN:
+                # grow a new hash field -- with the exception: if the object
+                # actually doesn't move, don't (otherwise, toaddr > fromaddr)
+                if toaddr < fromaddr:
+                    totaldstsize += llmemory.sizeof(lltype.Signed)
+            #
             if not self.marked(obj):
-                self.set_null_forwarding_address(obj, i)
+                hdr.tid = -1     # mark the object as dying
             else:
                 llarena.arena_reserve(toaddr, totalsize)
-                self.set_forwarding_address(obj, toaddr, i)
-                toaddr += totalsize
-            i += 1
-            fromaddr += totalsize
+                # save the field hdr.tid in the array tid_backup
+                p_tid_backup[0] = self.get_type_id(obj)
+                p_tid_backup = lltype.direct_ptradd(p_tid_backup, 1)
+                # compute forward_offset, the offset to the future copy
+                # of this object
+                forward_offset = toaddr - base_forwarding_addr
+                # copy the first two gc flags in forward_offset
+                ll_assert(forward_offset & 3 == 0, "misalignment!")
+                forward_offset |= (hdr.tid >> first_gcflag_bit) & 3
+                hdr.tid = forward_offset
+                # done
+                toaddr += totaldstsize
+            fromaddr += totalsrcsize
+            if not we_are_translated():
+                assert toaddr <= fromaddr
 
         # now update references
         self.root_walker.walk_roots(
@@ -480,15 +463,8 @@ class MarkCompactGC(MovingGCBase):
         return self.get_header_forwarded_addr(obj)
 
     def set_null_forwarding_address(self, obj, num):
-        self.backup_typeid(num, obj)
         hdr = self.header(obj)
         hdr.tid = -1          # make the object forwarded to NULL
-
-    def set_forwarding_address(self, obj, newobjhdr, num):
-        self.backup_typeid(num, obj)
-        forward_offset = newobjhdr - self.base_forwarding_addr
-        hdr = self.header(obj)
-        hdr.tid = forward_offset     # make the object forwarded to newobj
 
     def restore_normal_header(self, obj, num):
         # Reverse of set_forwarding_address().
@@ -504,13 +480,11 @@ class MarkCompactGC(MovingGCBase):
     def surviving(self, obj):
         return self._is_external(obj) or self.header_forwarded(obj).tid != -1
 
-    def backup_typeid(self, num, obj):
-        self.tid_backup[num] = self.get_type_id(obj)
-
     def get_typeid_from_backup(self, num):
         return self.tid_backup[num]
 
     def get_size_from_backup(self, obj, num):
+        # does not count the hash field, if any
         typeid = self.get_typeid_from_backup(num)
         size = self.fixed_size(typeid)
         if self.is_varsize(typeid):
@@ -518,9 +492,6 @@ class MarkCompactGC(MovingGCBase):
             length = lenaddr.signed[0]
             size += length * self.varsize_item_sizes(typeid)
             size = llarena.round_up_for_allocation(size)
-            # XXX maybe we should parametrize round_up_for_allocation()
-            # per GC; if we do, we also need to fix the call in
-            # gctypelayout.encode_type_shape()
         return size
 
     def compact(self, resizing):
@@ -640,3 +611,11 @@ class MarkCompactGC(MovingGCBase):
         #
         hdr.tid |= GCFLAG_HASHTAKEN
         return llmemory.cast_adr_to_int(obj)  # direct case
+
+# ____________________________________________________________
+
+class CannotAllocateGCArena(Exception):
+    pass
+
+def max_size_from_env():
+    return read_from_env('PYPY_MARKCOMPACTGC_MAX')

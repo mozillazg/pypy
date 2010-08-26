@@ -348,3 +348,23 @@ def choose_gc_from_config(config):
                         globals(), locals(), [classname])
     GCClass = getattr(module, classname)
     return GCClass, GCClass.TRANSLATION_PARAMS
+
+def read_from_env(varname):
+    import os
+    value = os.environ.get(varname)
+    if value:
+        realvalue = value[:-1]
+        if value[-1] in 'kK':
+            factor = 1024
+        elif value[-1] in 'mM':
+            factor = 1024*1024
+        elif value[-1] in 'gG':
+            factor = 1024*1024*1024
+        else:
+            factor = 1
+            realvalue = value
+        try:
+            return int(float(realvalue) * factor)
+        except ValueError:
+            pass
+    return -1

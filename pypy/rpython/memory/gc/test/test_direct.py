@@ -96,7 +96,7 @@ class DirectGCTest(object):
         p[index] = newvalue
 
     def malloc(self, TYPE, n=None):
-        addr = self.gc.malloc(self.get_type_id(TYPE), n)
+        addr = self.gc.malloc(self.get_type_id(TYPE), n, zero=True)
         return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(TYPE))
 
     def test_simple(self):
