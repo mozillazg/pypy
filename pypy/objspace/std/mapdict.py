@@ -115,9 +115,11 @@ class NoDictTerminator(Terminator):
 
 class DevolvedDictTerminator(Terminator):
     def read(self, obj, selector):
-        w_dict = obj.getdict()
-        space = self.space
-        return space.finditem_str(w_dict, selector[0])
+        if selector[1] == DICT:
+            w_dict = obj.getdict()
+            space = self.space
+            return space.finditem_str(w_dict, selector[0])
+        return Terminator.read(self, obj, selector)
 
     def write(self, obj, selector, w_value):
         if selector[1] == DICT:
