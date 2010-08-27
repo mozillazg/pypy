@@ -639,12 +639,10 @@ class TestGenerationalGC(TestSemiSpaceGC):
 
 class TestMarkCompactGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+    GC_PARAMS = {'space_size': 16384}
 
     def test_finalizer_order(self):
         py.test.skip("Not implemented yet")
-
-class TestMarkCompactGCGrowing(TestMarkCompactGC):
-    GC_PARAMS = {'space_size': 16*WORD}
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
