@@ -217,10 +217,6 @@ class MarkCompactGC(MovingGCBase):
         #
         self.to_see = self.AddressDeque()
         self.trace_from_roots()
-        #if (self.objects_with_finalizers.non_empty() or
-        #    self.run_finalizers.non_empty()):
-        #    self.mark_objects_with_finalizers()
-        #    self._trace_and_mark()
         self.to_see.delete()
         #
         # Prepare new views on the same memory
@@ -237,9 +233,9 @@ class MarkCompactGC(MovingGCBase):
         #
         #weakref_offsets = self.collect_weakref_offsets()
         finaladdr = self.update_forward_pointers(toaddr, maxnum)
-        #if (self.run_finalizers.non_empty() or
-        #    self.objects_with_finalizers.non_empty()):
-        #    self.update_run_finalizers()
+        if (self.run_finalizers.non_empty() or
+            self.objects_with_finalizers.non_empty()):
+            self.update_run_finalizers()
         #if self.objects_with_weakrefs.non_empty():
         #    self.invalidate_weakrefs(weakref_offsets)
 
@@ -327,13 +323,14 @@ class MarkCompactGC(MovingGCBase):
 
 
     def update_run_finalizers(self):
-        xxx
-        run_finalizers = self.AddressDeque()
-        while self.run_finalizers.non_empty():
-            obj = self.run_finalizers.popleft()
-            run_finalizers.append(self.get_forwarding_address(obj))
-        self.run_finalizers.delete()
-        self.run_finalizers = run_finalizers
+        if self.run_finalizers.non_empty():     # uncommon case
+            run_finalizers = self.AddressDeque()
+            while self.run_finalizers.non_empty():
+                obj = self.run_finalizers.popleft()
+                run_finalizers.append(self.get_forwarding_address(obj))
+            self.run_finalizers.delete()
+            self.run_finalizers = run_finalizers
+        #
         objects_with_finalizers = self.AddressDeque()
         while self.objects_with_finalizers.non_empty():
             obj = self.objects_with_finalizers.popleft()
@@ -367,6 +364,9 @@ class MarkCompactGC(MovingGCBase):
             MarkCompactGC._mark_root,  # stack roots
             MarkCompactGC._mark_root,  # static in prebuilt non-gc structures
             MarkCompactGC._mark_root)  # static in prebuilt gc objects
+        if (self.objects_with_finalizers.non_empty() or
+            self.run_finalizers.non_empty()):
+            self.trace_from_objects_with_finalizers()
         self._trace_and_mark()
 
     def _trace_and_mark(self):
@@ -375,18 +375,15 @@ class MarkCompactGC(MovingGCBase):
             self.trace(obj, self._mark_obj, None)
 
     def _mark_obj(self, pointer, ignored):
-        obj = pointer.address[0]
-        if self.marked(obj):
-            return
-        self.mark(obj)
-        self.to_see.append(obj)
+        self.mark(pointer.address[0])
 
     def _mark_root(self, root):
         self.mark(root.address[0])
-        self.to_see.append(root.address[0])
 
     def mark(self, obj):
-        self.header(obj).tid |= GCFLAG_MARKBIT
+        if not self.marked(obj):
+            self.header(obj).tid |= GCFLAG_MARKBIT
+            self.to_see.append(obj)
 
     def marked(self, obj):
         # should work both if tid contains a CombinedSymbolic (for dying
@@ -568,26 +565,27 @@ class MarkCompactGC(MovingGCBase):
         # not sure what to check here
         pass
 
-    def mark_objects_with_finalizers(self):
-        xxx
+    def trace_from_objects_with_finalizers(self):
+        if self.run_finalizers.non_empty():   # uncommon case
+            new_run_finalizers = self.AddressDeque()
+            while self.run_finalizers.non_empty():
+                x = self.run_finalizers.popleft()
+                self.mark(x)
+                new_run_finalizers.append(x)
+            self.run_finalizers.delete()
+            self.run_finalizers = new_run_finalizers
+        #
+        # xxx we get to run the finalizers in a random order
+        self._trace_and_mark()
         new_with_finalizers = self.AddressDeque()
-        run_finalizers = self.run_finalizers
-        new_run_finalizers = self.AddressDeque()
-        while run_finalizers.non_empty():
-            x = run_finalizers.popleft()
-            self.mark(x)
-            self.to_see.append(x)
-            new_run_finalizers.append(x)
-        run_finalizers.delete()
-        self.run_finalizers = new_run_finalizers
         while self.objects_with_finalizers.non_empty():
             x = self.objects_with_finalizers.popleft()
             if self.marked(x):
                 new_with_finalizers.append(x)
             else:
-                new_run_finalizers.append(x)
+                self.run_finalizers.append(x)
                 self.mark(x)
-                self.to_see.append(x)
+                self._trace_and_mark()
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizers
 
