@@ -386,7 +386,8 @@ class MarkCompactGC(MovingGCBase):
             obj = fromaddr + size_gc_header
             # compute the original object size, including the
             # optional hash field
-            totalsrcsize = size_gc_header + self.get_size(obj)
+            basesize = size_gc_header + self.get_size(obj)
+            totalsrcsize = basesize
             if hdr.tid & GCFLAG_HASHFIELD:  # already a hash field, copy it too
                 totalsrcsize += llmemory.sizeof(lltype.Signed)
             #
@@ -401,7 +402,13 @@ class MarkCompactGC(MovingGCBase):
                     # (otherwise, we get a bogus toaddr > fromaddr)
                     if self.toaddr_smaller_than_fromaddr(toaddr, fromaddr):
                         totaldstsize += llmemory.sizeof(lltype.Signed)
-                llarena.arena_reserve(toaddr, totaldstsize)
+                #
+                if not we_are_translated():
+                    llarena.arena_reserve(toaddr, basesize)
+                    if (raw_malloc_usage(totaldstsize) >
+                        raw_malloc_usage(basesize)):
+                        llarena.arena_reserve(toaddr + basesize,
+                                              llmemory.sizeof(lltype.Signed))
                 #
                 # save the field hdr.tid in the array tid_backup
                 ll_assert(num < maxnum, "overflow of the tid_backup table")
@@ -446,7 +453,8 @@ class MarkCompactGC(MovingGCBase):
             else:
                 typeid = self.get_type_id(obj)
             baseobjsize = self._get_size_for_typeid(obj, typeid)
-            totalsrcsize = size_gc_header + baseobjsize
+            basesize = size_gc_header + baseobjsize
+            totalsrcsize = basesize
             #
             if survives:
                 grow_hash_field = False
@@ -458,8 +466,7 @@ class MarkCompactGC(MovingGCBase):
                     if self.toaddr_smaller_than_fromaddr(toaddr, fromaddr):
                         grow_hash_field = True
                         totaldstsize += llmemory.sizeof(lltype.Signed)
-                callback(self, obj, typeid, totalsrcsize,
-                         toaddr, grow_hash_field)
+                callback(self, obj, typeid, basesize, toaddr, grow_hash_field)
                 toaddr += totaldstsize
             else:
                 if hdr.tid & GCFLAG_HASHFIELD:
@@ -545,21 +552,26 @@ class MarkCompactGC(MovingGCBase):
     def compact(self):
         self.walk_marked_objects(MarkCompactGC.copy_and_compact)
 
-    def copy_and_compact(self, obj, typeid, totalsrcsize,
-                         toaddr, grow_hash_field):
+    def copy_and_compact(self, obj, typeid, basesize, toaddr, grow_hash_field):
+        # 'basesize' is the size without any hash field
         # restore the normal header
         hdr = self.header_forwarded(obj)
         gcflags = hdr.tid & 3
         if grow_hash_field:
             gcflags |= GCFLAG_SAVED_HASHFIELD
-            save_hash_field_now
+            hashvalue = self.get_identityhash_from_addr(obj)
+            (toaddr + basesize).signed[0] = hashvalue
+        elif gcflags & GCFLAG_SAVED_HASHFIELD:
+            hashvalue = (fromaddr + basesize).signed[0]
+            (toaddr + basesize).signed[0] = hashvalue
+        #
         hdr.tid = self.combine(typeid, gcflags << first_gcflag_bit)
         #
         fromaddr = obj - self.gcheaderbuilder.size_gc_header
         if we_are_translated():
-            llmemory.raw_memmove(fromaddr, toaddr, totalsrcsize)
+            llmemory.raw_memmove(fromaddr, toaddr, basesize)
         else:
-            llmemory.raw_memcopy(fromaddr, toaddr, totalsrcsize)
+            llmemory.raw_memcopy(fromaddr, toaddr, basesize)
 
     def debug_check_object(self, obj):
         # not sure what to check here
@@ -603,10 +615,13 @@ class MarkCompactGC(MovingGCBase):
         hdr = self.header(obj)
         #
         if hdr.tid & GCFLAG_HASHFIELD:  # the hash is in a field at the end
-            obj += self.get_size(obj)
+            obj = llarena.getfakearenaaddress(obj) + self.get_size(obj)
             return obj.signed[0]
         #
         hdr.tid |= GCFLAG_HASHTAKEN
+        return self.get_identityhash_from_addr(obj)
+
+    def get_identityhash_from_addr(self, obj):
         if we_are_translated():
             return llmemory.cast_adr_to_int(obj)  # direct case
         else:
