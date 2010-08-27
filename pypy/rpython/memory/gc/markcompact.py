@@ -85,18 +85,25 @@ class MarkCompactGC(MovingGCBase):
     total_collection_count = 0
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
-                 min_next_collect_after=64):
+                 min_next_collect_after=128):
         MovingGCBase.__init__(self, config, chunk_size)
         self.space_size = space_size
         self.min_next_collect_after = min_next_collect_after
 
-    def next_collection(self, used_space, num_objects_so_far):
+    def next_collection(self, used_space, num_objects_so_far, requested_size):
         used_space += BYTES_PER_TID * num_objects_so_far
-        next = (used_space // 3) * 2
+        ll_assert(used_space <= self.space_size,
+                  "used_space + num_objects_so_far overflow")
+        try:
+            next = ((used_space + requested_size) // 3) * 2
+        except OverflowError:
+            next = self.space_size
         if next < self.min_next_collect_after:
             next = self.min_next_collect_after
-        if used_space + next > self.space_size:
+        if next > self.space_size - used_space:
             next = self.space_size - used_space
+        # the value we return guarantees that used_space + next <= space_size,
+        # with 'BYTES_PER_TID*num_objects_so_far' included in used_space
         return next
 
     def setup(self):
@@ -104,7 +111,7 @@ class MarkCompactGC(MovingGCBase):
         if envsize >= 4096:
             self.space_size = envsize & ~4095
 
-        self.next_collect_after = self.next_collection(0, 0)
+        self.next_collect_after = self.next_collection(0, 0, 0)
 
         self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, False)
@@ -180,14 +187,23 @@ class MarkCompactGC(MovingGCBase):
                              offset_to_length, can_collect):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
-        totalsize = self._get_totalsize_var(nonvarsize, itemize, length)
+        totalsize = self._get_totalsize_var(nonvarsize, itemsize, length)
         result = self._get_memory(totalsize)
         llmemory.raw_memclear(result, totalsize)
         (result + size_gc_header + offset_to_length).signed[0] = length
         return self._setup_object(result, typeid16, False, False)
 
     def obtain_free_space(self, requested_size):
-        self.markcompactcollect(requested_size)
+        while True:
+            executed_some_finalizers = self.markcompactcollect(requested_size)
+            self.next_collect_after -= requested_size
+            if self.next_collect_after >= 0:
+                break    # ok
+            else:
+                if executed_some_finalizers:
+                    pass   # try again to do a collection
+                else:
+                    raise MemoryError
     obtain_free_space._dont_inline_ = True
 
     def collect(self, gen=0):
@@ -234,12 +250,9 @@ class MarkCompactGC(MovingGCBase):
         self.free = finaladdr
         remaining_size = (toaddr + self.space_size) - finaladdr
         llarena.arena_reset(finaladdr, remaining_size, False)
-
-        if requested_size > remaining_size:
-            raise MemoryError
-        self.next_collect_after = self.next_collection(
-            (finaladdr - toaddr) + requested_size,
-            self.num_alive_objs + 1)
+        self.next_collect_after = self.next_collection(finaladdr - toaddr,
+                                                       self.num_alive_objs,
+                                                       requested_size)
         #
         if not we_are_translated():
             llarena.arena_free(self.space)
@@ -249,16 +262,12 @@ class MarkCompactGC(MovingGCBase):
         self.debug_collect_finish(start_time)
         if self.next_collect_after < 0:
             raise MemoryError
-        ll_assert((self.free - self.space) +   # used space
-                  requested_size +             # requested extra size
-                  BYTES_PER_TID * self.num_alive_objs +    # space for TIDs
-                  BYTES_PER_TID +              # space for extra TID
-                  self.next_collect_after      # size we can allocate later
-                  <= self.space_size,
-                  "miscomputation of next_collect_after")
         #
         if self.run_finalizers.non_empty():
             self.execute_finalizers()
+            return True      # executed some finalizers
+        else:
+            return False     # no finalizer executed
 
     def collect_weakref_offsets(self):
         weakrefs = self.objects_with_weakrefs
