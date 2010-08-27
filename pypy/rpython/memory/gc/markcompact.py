@@ -562,6 +562,8 @@ class MarkCompactGC(MovingGCBase):
             hashvalue = self.get_identityhash_from_addr(obj)
             (toaddr + basesize).signed[0] = hashvalue
         elif gcflags & GCFLAG_SAVED_HASHFIELD:
+            fromaddr = llarena.getfakearenaaddress(obj)
+            fromaddr -= self.gcheaderbuilder.size_gc_header
             hashvalue = (fromaddr + basesize).signed[0]
             (toaddr + basesize).signed[0] = hashvalue
         #
