@@ -9,7 +9,7 @@ from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rpython.memory.support import get_address_stack, get_address_deque
 from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
-from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import rffi
@@ -51,13 +51,17 @@ first_gcflag_bit = LONG_BIT//2
 first_gcflag = 1 << first_gcflag_bit
 GCFLAG_HASHTAKEN = first_gcflag << 0      # someone already asked for the hash
 GCFLAG_HASHFIELD = first_gcflag << 1      # we have an extra hash field
-GCFLAG_MARKBIT   = first_gcflag << 2
 # note that only the first 2 bits are preserved during a collection!
+GCFLAG_MARKBIT   = intmask(first_gcflag << (LONG_BIT//2-1))
+assert GCFLAG_MARKBIT < 0     # should be 0x80000000
+
+GCFLAG_SAVED_HASHTAKEN = GCFLAG_HASHTAKEN >> first_gcflag_bit
+GCFLAG_SAVED_HASHFIELD = GCFLAG_HASHFIELD >> first_gcflag_bit
 
 
 TID_TYPE = llgroup.HALFWORD
 BYTES_PER_TID = rffi.sizeof(TID_TYPE)
-TID_BACKUP = lltype.FixedSizeArray(TID_TYPE, 1)
+TID_BACKUP = rffi.CArray(TID_TYPE)
 
 
 class MarkCompactGC(MovingGCBase):
@@ -71,7 +75,8 @@ class MarkCompactGC(MovingGCBase):
     # The default space size is 1.9375 GB, i.e. almost 2 GB, allocated as
     # a big mmap.  The process does not actually consume that space until
     # needed, of course.
-    TRANSLATION_PARAMS = {'space_size': int((1 + 15.0/16)*1024*1024*1024)}
+    TRANSLATION_PARAMS = {'space_size': int((1 + 15.0/16)*1024*1024*1024),
+                          'min_next_collect_after': 4*1024*1024}   # 4MB
 
     malloc_zero_filled = False
     inline_simple_malloc = True
@@ -79,17 +84,27 @@ class MarkCompactGC(MovingGCBase):
     total_collection_time = 0.0
     total_collection_count = 0
 
-    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096):
+    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
+                 min_next_collect_after=64):
         MovingGCBase.__init__(self, config, chunk_size)
         self.space_size = space_size
+        self.min_next_collect_after = min_next_collect_after
+
+    def next_collection(self, used_space, num_objects_so_far):
+        used_space += BYTES_PER_TID * num_objects_so_far
+        next = (used_space // 3) * 2
+        if next < self.min_next_collect_after:
+            next = self.min_next_collect_after
+        if used_space + next > self.space_size:
+            next = self.space_size - used_space
+        return next
 
     def setup(self):
         envsize = max_size_from_env()
         if envsize >= 4096:
             self.space_size = envsize & ~4095
 
-        self.next_collect_after = min(self.space_size,
-                                      4*1024*1024)    # 4MB initially
+        self.next_collect_after = self.next_collection(0, 0)
 
         self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, False)
@@ -172,17 +187,14 @@ class MarkCompactGC(MovingGCBase):
         return self._setup_object(result, typeid16, False, False)
 
     def obtain_free_space(self, requested_size):
-        self.markcompactcollect()
-        self.next_collect_after -= requested_size
-        if self.next_collect_after < 0:
-            raise MemoryError
+        self.markcompactcollect(requested_size)
     obtain_free_space._dont_inline_ = True
 
     def collect(self, gen=0):
         self.markcompactcollect()
 
-    def markcompactcollect(self):
-        start_time = self.debug_collect_start()
+    def markcompactcollect(self, requested_size=0):
+        start_time = self.debug_collect_start(requested_size)
         self.debug_check_consistency()
         #
         # Mark alive objects
@@ -198,43 +210,56 @@ class MarkCompactGC(MovingGCBase):
         # Prepare new views on the same memory
         #
         toaddr = llarena.arena_new_view(self.space)
-        llarena.arena_reserve(self.free, self.space_size - self.free)
-        self.tid_backup = llmemory.cast_adr_to_ptr(
-            self.free,
-            lltype.Ptr(self.TID_BACKUP))
+        maxnum = self.space_size - (self.free - self.space)
+        maxnum /= BYTES_PER_TID
+        llarena.arena_reserve(self.free, llmemory.sizeof(TID_BACKUP, maxnum))
+        self.tid_backup = llmemory.cast_adr_to_ptr(self.free,
+                                                   lltype.Ptr(TID_BACKUP))
         #
         # Walk all objects and assign forward pointers in the same order,
         # also updating all references
         #
-        self.next_collect_after = self.space_size
         #weakref_offsets = self.collect_weakref_offsets()
-        finaladdr = self.update_forward_pointers(toaddr)
-        if (self.run_finalizers.non_empty() or
-            self.objects_with_finalizers.non_empty()):
-            self.update_run_finalizers()
-        if self.objects_with_weakrefs.non_empty():
-            self.invalidate_weakrefs(weakref_offsets)
+        finaladdr = self.update_forward_pointers(toaddr, maxnum)
+        #if (self.run_finalizers.non_empty() or
+        #    self.objects_with_finalizers.non_empty()):
+        #    self.update_run_finalizers()
+        #if self.objects_with_weakrefs.non_empty():
+        #    self.invalidate_weakrefs(weakref_offsets)
+
         self.update_objects_with_id()
-        self.compact(resizing)
-        if not resizing:
-            size = toaddr + self.space_size - finaladdr
-            llarena.arena_reset(finaladdr, size, True)
-        else:
-            if 1:  # XXX? we_are_translated():
-                # because we free stuff already in raw_memmove, we
-                # would get double free here. Let's free it anyway
-                llarena.arena_free(self.space)
-            llarena.arena_reset(toaddr + size_of_alive_objs, tid_backup_size,
-                                True)
-        self.space        = toaddr
-        self.free         = finaladdr
-        self.top_of_space = toaddr + self.next_collect_after
+        self.compact()
+        #
+        self.tid_backup = lltype.nullptr(TID_BACKUP)
+        self.free = finaladdr
+        remaining_size = (toaddr + self.space_size) - finaladdr
+        llarena.arena_reset(finaladdr, remaining_size, False)
+
+        if requested_size > remaining_size:
+            raise MemoryError
+        self.next_collect_after = self.next_collection(
+            (finaladdr - toaddr) + requested_size,
+            self.num_alive_objs + 1)
+        #
+        if not we_are_translated():
+            llarena.arena_free(self.space)
+            self.space = toaddr
+        #
         self.debug_check_consistency()
-        self.tid_backup = lltype.nullptr(self.TID_BACKUP)
+        self.debug_collect_finish(start_time)
+        if self.next_collect_after < 0:
+            raise MemoryError
+        ll_assert((self.free - self.space) +   # used space
+                  requested_size +             # requested extra size
+                  BYTES_PER_TID * self.num_alive_objs +    # space for TIDs
+                  BYTES_PER_TID +              # space for extra TID
+                  self.next_collect_after      # size we can allocate later
+                  <= self.space_size,
+                  "miscomputation of next_collect_after")
+        #
         if self.run_finalizers.non_empty():
             self.execute_finalizers()
-        self.debug_collect_finish(start_time)
-        
+
     def collect_weakref_offsets(self):
         weakrefs = self.objects_with_weakrefs
         new_weakrefs = self.AddressStack()
@@ -251,11 +276,13 @@ class MarkCompactGC(MovingGCBase):
         weakrefs.delete()
         return weakref_offsets
 
-    def debug_collect_start(self):
+    def debug_collect_start(self, requested_size):
         if have_debug_prints():
             debug_start("gc-collect")
             debug_print()
-            debug_print(".----------- Full collection ------------------")
+            debug_print(".----------- Full collection -------------------")
+            debug_print("| requested size                     ",
+                        requested_size)
             start_time = time.time()
             return start_time
         return -1
@@ -271,6 +298,14 @@ class MarkCompactGC(MovingGCBase):
             cc = self.total_collection_count
             debug_print("| number of collections so far       ", 
                         cc)
+            debug_print("| total space size                   ", 
+                        self.space_size)
+            debug_print("| number of objects alive            ", 
+                        self.num_alive_objs)
+            debug_print("| used space size                    ", 
+                        self.free - self.space)
+            debug_print("| next collection after              ", 
+                        self.next_collect_after)
             debug_print("| total collections per second:      ",
                         cc / total_program_time)
             debug_print("| total time in markcompact-collect: ",
@@ -343,83 +378,114 @@ class MarkCompactGC(MovingGCBase):
         self.header(obj).tid |= GCFLAG_MARKBIT
 
     def marked(self, obj):
-        return self.header(obj).tid & GCFLAG_MARKBIT
+        # should work both if tid contains a CombinedSymbolic (for dying
+        # objects, at this point), or a plain integer.
+        return MovingGCBase.header(self, obj).tid & GCFLAG_MARKBIT
 
-    def update_forward_pointers(self, toaddr):
-        base_forwarding_addr = toaddr
+    def update_forward_pointers(self, toaddr, maxnum):
+        self.base_forwarding_addr = base_forwarding_addr = toaddr
         fromaddr = self.space
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        p_tid_backup = self.tid_backup
+        num = 0
         while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
-            # compute the original and the new object size, including the
+            # compute the original object size, including the
             # optional hash field
-            baseobjsize = self.get_size(obj)
-            totalsrcsize = size_gc_header + baseobjsize
+            totalsrcsize = size_gc_header + self.get_size(obj)
             if hdr.tid & GCFLAG_HASHFIELD:  # already a hash field, copy it too
                 totalsrcsize += llmemory.sizeof(lltype.Signed)
-                totaldstsize = totalsrcsize
-            elif hdr.tid & GCFLAG_HASHTAKEN:
-                # grow a new hash field -- with the exception: if the object
-                # actually doesn't move, don't (otherwise, toaddr > fromaddr)
-                if toaddr < fromaddr:
-                    totaldstsize += llmemory.sizeof(lltype.Signed)
             #
-            if not self.marked(obj):
-                hdr.tid = -1     # mark the object as dying
-            else:
-                llarena.arena_reserve(toaddr, totalsize)
+            if self.marked(obj):
+                # the object is marked as suriving.  Compute the new object
+                # size
+                totaldstsize = totalsrcsize
+                if (hdr.tid & (GCFLAG_HASHTAKEN|GCFLAG_HASHFIELD) ==
+                               GCFLAG_HASHTAKEN):
+                    # grow a new hash field -- with the exception: if
+                    # the object actually doesn't move, don't
+                    # (otherwise, we get a bogus toaddr > fromaddr)
+                    if toaddr - base_forwarding_addr < fromaddr - self.space:
+                        totaldstsize += llmemory.sizeof(lltype.Signed)
+                llarena.arena_reserve(toaddr, totaldstsize)
+                #
                 # save the field hdr.tid in the array tid_backup
-                p_tid_backup[0] = self.get_type_id(obj)
-                p_tid_backup = lltype.direct_ptradd(p_tid_backup, 1)
+                ll_assert(num < maxnum, "overflow of the tid_backup table")
+                self.tid_backup[num] = self.get_type_id(obj)
+                num += 1
                 # compute forward_offset, the offset to the future copy
                 # of this object
                 forward_offset = toaddr - base_forwarding_addr
                 # copy the first two gc flags in forward_offset
                 ll_assert(forward_offset & 3 == 0, "misalignment!")
                 forward_offset |= (hdr.tid >> first_gcflag_bit) & 3
-                hdr.tid = forward_offset
+                hdr.tid = forward_offset | GCFLAG_MARKBIT
+                ll_assert(self.marked(obj), "re-marking object failed!")
                 # done
                 toaddr += totaldstsize
+            #
             fromaddr += totalsrcsize
             if not we_are_translated():
-                assert toaddr <= fromaddr
+                assert toaddr - base_forwarding_addr <= fromaddr - self.space
+        self.num_alive_objs = num
 
         # now update references
         self.root_walker.walk_roots(
-            MarkCompactGC._update_root,  # stack roots
-            MarkCompactGC._update_root,  # static in prebuilt non-gc structures
-            MarkCompactGC._update_root)  # static in prebuilt gc objects
+            MarkCompactGC._update_ref,  # stack roots
+            MarkCompactGC._update_ref,  # static in prebuilt non-gc structures
+            MarkCompactGC._update_ref)  # static in prebuilt gc objects
+        self.walk_marked_objects(MarkCompactGC.trace_and_update_ref)
+        return toaddr
+
+    def walk_marked_objects(self, callback):
+        num = 0
+        size_gc_header = self.gcheaderbuilder.size_gc_header
         fromaddr = self.space
-        i = 0
+        toaddr = self.base_forwarding_addr
         while fromaddr < self.free:
             hdr = llmemory.cast_adr_to_ptr(fromaddr, lltype.Ptr(self.HDR))
             obj = fromaddr + size_gc_header
-            objsize = self.get_size_from_backup(obj, i)
-            totalsize = size_gc_header + objsize
-            if not self.surviving(obj):
-                pass
+            survives = self.marked(obj)
+            if survives:
+                typeid = self.get_typeid_from_backup(num)
+                num += 1
             else:
-                self.trace_with_backup(obj, self._update_ref, i)
-            fromaddr += totalsize
-            i += 1
-        return toaddr
+                typeid = self.get_type_id(obj)
+            baseobjsize = self._get_size_for_typeid(obj, typeid)
+            totalsrcsize = size_gc_header + baseobjsize
+            #
+            if survives:
+                grow_hash_field = False
+                if hdr.tid & GCFLAG_SAVED_HASHFIELD:
+                    totalsrcsize += llmemory.sizeof(lltype.Signed)
+                totaldstsize = totalsrcsize
+                if (hdr.tid & (GCFLAG_SAVED_HASHTAKEN|GCFLAG_SAVED_HASHFIELD)
+                            == GCFLAG_SAVED_HASHTAKEN):
+                    if toaddr - base_forwarding_addr < fromaddr - self.space:
+                        grow_hash_field = True
+                        totaldstsize += llmemory.sizeof(lltype.Signed)
+                callback(self, obj, typeid, totalsrcsize,
+                         toaddr, grow_hash_field)
+                toaddr += totaldstsize
+            else:
+                if hdr.tid & GCFLAG_HASHFIELD:
+                    totalsrcsize += llmemory.sizeof(lltype.Signed)
+            #
+            fromaddr += totalsrcsize
+    walk_marked_objects._annspecialcase_ = 'specialize:arg(2)'
 
-    def trace_with_backup(self, obj, callback, arg):
+    def trace_and_update_ref(self, obj, typeid, _1, _2, _3):
         """Enumerate the locations inside the given obj that can contain
         GC pointers.  For each such location, callback(pointer, arg) is
         called, where 'pointer' is an address inside the object.
         Typically, 'callback' is a bound method and 'arg' can be None.
         """
-        typeid = self.get_typeid_from_backup(arg)
         if self.is_gcarrayofgcptr(typeid):
             # a performance shortcut for GcArray(gcptr)
             length = (obj + llmemory.gcarrayofptr_lengthoffset).signed[0]
             item = obj + llmemory.gcarrayofptr_itemsoffset
             while length > 0:
-                if self.points_to_valid_gc_object(item):
-                    callback(item, arg)
+                self._update_ref(item)
                 item += llmemory.gcarrayofptr_singleitemoffset
                 length -= 1
             return
@@ -427,8 +493,7 @@ class MarkCompactGC(MovingGCBase):
         i = 0
         while i < len(offsets):
             item = obj + offsets[i]
-            if self.points_to_valid_gc_object(item):
-                callback(item, arg)
+            self._update_ref(item)
             i += 1
         if self.has_gcptr_in_varsize(typeid):
             item = obj + self.varsize_offset_to_variable_part(typeid)
@@ -439,42 +504,28 @@ class MarkCompactGC(MovingGCBase):
                 j = 0
                 while j < len(offsets):
                     itemobj = item + offsets[j]
-                    if self.points_to_valid_gc_object(itemobj):
-                        callback(itemobj, arg)
+                    self._update_ref(itemobj)
                     j += 1
                 item += itemlength
                 length -= 1
-    trace_with_backup._annspecialcase_ = 'specialize:arg(2)'
 
-    def _update_root(self, pointer):
-        if pointer.address[0] != NULL:
-            pointer.address[0] = self.get_forwarding_address(pointer.address[0])
-
-    def _update_ref(self, pointer, ignore):
-        if pointer.address[0] != NULL:
-            pointer.address[0] = self.get_forwarding_address(pointer.address[0])
+    def _update_ref(self, pointer):
+        if self.points_to_valid_gc_object(pointer):
+            pointer.address[0] = self.get_forwarding_address(
+                pointer.address[0])
 
     def _is_external(self, obj):
-        return not (self.space <= obj < self.top_of_space)
+        return not (self.space <= obj < self.free)
 
     def get_forwarding_address(self, obj):
         if self._is_external(obj):
             return obj
         return self.get_header_forwarded_addr(obj)
 
-    def set_null_forwarding_address(self, obj, num):
-        hdr = self.header(obj)
-        hdr.tid = -1          # make the object forwarded to NULL
-
-    def restore_normal_header(self, obj, num):
-        # Reverse of set_forwarding_address().
-        typeid16 = self.get_typeid_from_backup(num)
-        hdr = self.header_forwarded(obj)
-        hdr.tid = self.combine(typeid16, 0)      # restore the normal header
-
     def get_header_forwarded_addr(self, obj):
+        GCFLAG_MASK = ~(GCFLAG_MARKBIT | 3)
         return (self.base_forwarding_addr +
-                self.header_forwarded(obj).tid +
+                (self.header_forwarded(obj).tid & GCFLAG_MASK) +
                 self.gcheaderbuilder.size_gc_header)
 
     def surviving(self, obj):
@@ -483,55 +534,24 @@ class MarkCompactGC(MovingGCBase):
     def get_typeid_from_backup(self, num):
         return self.tid_backup[num]
 
-    def get_size_from_backup(self, obj, num):
-        # does not count the hash field, if any
-        typeid = self.get_typeid_from_backup(num)
-        size = self.fixed_size(typeid)
-        if self.is_varsize(typeid):
-            lenaddr = obj + self.varsize_offset_to_length(typeid)
-            length = lenaddr.signed[0]
-            size += length * self.varsize_item_sizes(typeid)
-            size = llarena.round_up_for_allocation(size)
-        return size
+    def compact(self):
+        self.walk_marked_objects(MarkCompactGC.copy_and_compact)
 
-    def compact(self, resizing):
-        fromaddr = self.space
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        start = fromaddr
-        end = fromaddr
-        num = 0
-        while fromaddr < self.free:
-            obj = fromaddr + size_gc_header
-            objsize = self.get_size_from_backup(obj, num)
-            totalsize = size_gc_header + objsize
-            if not self.surviving(obj): 
-                # this object dies. Following line is a noop in C,
-                # we clear it to make debugging easier
-                llarena.arena_reset(fromaddr, totalsize, False)
-            else:
-                if resizing:
-                    end = fromaddr
-                forward_obj = self.get_header_forwarded_addr(obj)
-                self.restore_normal_header(obj, num)
-                if obj != forward_obj:
-                    #llop.debug_print(lltype.Void, "Copying from to",
-                    #                 fromaddr, forward_ptr, totalsize)
-                    llmemory.raw_memmove(fromaddr,
-                                         forward_obj - size_gc_header,
-                                         totalsize)
-                if resizing and end - start > GC_CLEARANCE:
-                    diff = end - start
-                    #llop.debug_print(lltype.Void, "Cleaning", start, diff)
-                    diff = (diff / GC_CLEARANCE) * GC_CLEARANCE
-                    #llop.debug_print(lltype.Void, "Cleaning", start, diff)
-                    end = start + diff
-                    if we_are_translated():
-                        # XXX wuaaaaa.... those objects are freed incorrectly
-                        #                 here in case of test_gc
-                        llarena.arena_reset(start, diff, True)
-                    start += diff
-            num += 1
-            fromaddr += totalsize
+    def copy_and_compact(self, obj, typeid, totalsrcsize,
+                         toaddr, grow_hash_field):
+        # restore the normal header
+        hdr = self.header_forwarded(obj)
+        gcflags = hdr.tid & 3
+        if grow_hash_field:
+            gcflags |= GCFLAG_SAVED_HASHFIELD
+            save_hash_field_now
+        hdr.tid = self.combine(typeid, gcflags << first_gcflag_bit)
+        #
+        fromaddr = obj - self.gcheaderbuilder.size_gc_header
+        if we_are_translated():
+            llmemory.raw_memmove(fromaddr, toaddr, totalsrcsize)
+        else:
+            llmemory.raw_memcopy(fromaddr, toaddr, totalsrcsize)
 
     def debug_check_object(self, obj):
         # not sure what to check here
