@@ -70,7 +70,6 @@ class MarkCompactGC(MovingGCBase):
     withhash_flag_is_in_field = 'tid', GCFLAG_HASHFIELD
     # ^^^ all prebuilt objects have GCFLAG_HASHTAKEN, but only some have
     #     GCFLAG_HASHFIELD (and then they are one word longer).
-    WEAKREF_OFFSETS = rffi.CArray(lltype.Signed)
 
     # The default space size is 1.9375 GB, i.e. almost 2 GB, allocated as
     # a big mmap.  The process does not actually consume that space until
@@ -122,7 +121,6 @@ class MarkCompactGC(MovingGCBase):
         self.free = self.space
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
-        self.objects_with_weakrefs = self.AddressStack()
         self.tid_backup = lltype.nullptr(TID_BACKUP)
 
     def init_gc_object(self, addr, typeid16, flags=0):
@@ -163,8 +161,6 @@ class MarkCompactGC(MovingGCBase):
         self.init_gc_object(result, typeid16)
         if has_finalizer:
             self.objects_with_finalizers.append(result + size_gc_header)
-        if contains_weakptr:
-            self.objects_with_weakrefs.append(result + size_gc_header)
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
     _setup_object._always_inline_ = True
 
@@ -233,13 +229,10 @@ class MarkCompactGC(MovingGCBase):
         # Walk all objects and assign forward pointers in the same order,
         # also updating all references
         #
-        #weakref_offsets = self.collect_weakref_offsets()
         finaladdr = self.update_forward_pointers(toaddr, maxnum)
         if (self.run_finalizers.non_empty() or
             self.objects_with_finalizers.non_empty()):
             self.update_run_finalizers()
-        #if self.objects_with_weakrefs.non_empty():
-        #    self.invalidate_weakrefs(weakref_offsets)
 
         self.update_objects_with_id()
         self.compact()
@@ -266,23 +259,6 @@ class MarkCompactGC(MovingGCBase):
             return True      # executed some finalizers
         else:
             return False     # no finalizer executed
-
-    def collect_weakref_offsets(self):
-        xxx
-        weakrefs = self.objects_with_weakrefs
-        new_weakrefs = self.AddressStack()
-        weakref_offsets = lltype.malloc(self.WEAKREF_OFFSETS,
-                                        weakrefs.length(), flavor='raw')
-        i = 0
-        while weakrefs.non_empty():
-            obj = weakrefs.pop()
-            offset = self.weakpointer_offset(self.get_type_id(obj))
-            weakref_offsets[i] = offset
-            new_weakrefs.append(obj)
-            i += 1
-        self.objects_with_weakrefs = new_weakrefs
-        weakrefs.delete()
-        return weakref_offsets
 
     def debug_collect_start(self, requested_size):
         if have_debug_prints():
@@ -518,11 +494,25 @@ class MarkCompactGC(MovingGCBase):
                     j += 1
                 item += itemlength
                 length -= 1
+        else:
+            weakofs = self.weakpointer_offset(typeid)
+            if weakofs >= 0:
+                self._update_weakref(obj + weakofs)
 
     def _update_ref(self, pointer):
         if self.points_to_valid_gc_object(pointer):
             pointer.address[0] = self.get_forwarding_address(
                 pointer.address[0])
+
+    def _update_weakref(self, pointer):
+        # either update the weak pointer's destination, or
+        # if it dies, write a NULL
+        if self.points_to_valid_gc_object(pointer):
+            if self.marked(pointer.address[0]):
+                pointer.address[0] = self.get_forwarding_address(
+                    pointer.address[0])
+            else:
+                pointer.address[0] = NULL
 
     def _is_external(self, obj):
         return not (self.space <= obj < self.free)
@@ -590,33 +580,6 @@ class MarkCompactGC(MovingGCBase):
                 self._trace_and_mark()
         self.objects_with_finalizers.delete()
         self.objects_with_finalizers = new_with_finalizers
-
-    def invalidate_weakrefs(self, weakref_offsets):
-        # walk over list of objects that contain weakrefs
-        # if the object it references survives then update the weakref
-        # otherwise invalidate the weakref
-        xxx
-        new_with_weakref = self.AddressStack()
-        i = 0
-        while self.objects_with_weakrefs.non_empty():
-            obj = self.objects_with_weakrefs.pop()
-            if not self.surviving(obj):
-                continue # weakref itself dies
-            newobj = self.get_forwarding_address(obj)
-            offset = weakref_offsets[i]
-            pointing_to = (obj + offset).address[0]
-            # XXX I think that pointing_to cannot be NULL here
-            if pointing_to:
-                if self.surviving(pointing_to):
-                    (obj + offset).address[0] = self.get_forwarding_address(
-                        pointing_to)
-                    new_with_weakref.append(newobj)
-                else:
-                    (obj + offset).address[0] = NULL
-            i += 1
-        self.objects_with_weakrefs.delete()
-        self.objects_with_weakrefs = new_with_weakref
-        lltype.free(weakref_offsets, flavor='raw')
 
     def identityhash(self, gcobj):
         # Unlike SemiSpaceGC.identityhash(), this function does not have
