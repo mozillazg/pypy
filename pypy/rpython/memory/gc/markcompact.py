@@ -270,6 +270,7 @@ class MarkCompactGC(MovingGCBase):
             return False     # no finalizer executed
 
     def collect_weakref_offsets(self):
+        xxx
         weakrefs = self.objects_with_weakrefs
         new_weakrefs = self.AddressStack()
         weakref_offsets = lltype.malloc(self.WEAKREF_OFFSETS,
@@ -290,7 +291,7 @@ class MarkCompactGC(MovingGCBase):
             debug_start("gc-collect")
             debug_print()
             debug_print(".----------- Full collection -------------------")
-            debug_print("| requested size                     ",
+            debug_print("| requested size:",
                         requested_size)
             start_time = time.time()
             return start_time
@@ -326,6 +327,7 @@ class MarkCompactGC(MovingGCBase):
 
 
     def update_run_finalizers(self):
+        xxx
         run_finalizers = self.AddressDeque()
         while self.run_finalizers.non_empty():
             obj = self.run_finalizers.popleft()
@@ -567,6 +569,7 @@ class MarkCompactGC(MovingGCBase):
         pass
 
     def mark_objects_with_finalizers(self):
+        xxx
         new_with_finalizers = self.AddressDeque()
         run_finalizers = self.run_finalizers
         new_run_finalizers = self.AddressDeque()
@@ -592,6 +595,7 @@ class MarkCompactGC(MovingGCBase):
         # walk over list of objects that contain weakrefs
         # if the object it references survives then update the weakref
         # otherwise invalidate the weakref
+        xxx
         new_with_weakref = self.AddressStack()
         i = 0
         while self.objects_with_weakrefs.non_empty():
@@ -614,13 +618,6 @@ class MarkCompactGC(MovingGCBase):
         self.objects_with_weakrefs = new_with_weakref
         lltype.free(weakref_offsets, flavor='raw')
 
-    def get_size_incl_hash(self, obj):
-        size = self.get_size(obj)
-        hdr = self.header(obj)
-        if hdr.tid & GCFLAG_HASHFIELD:
-            size += llmemory.sizeof(lltype.Signed)
-        return size
-
     def identityhash(self, gcobj):
         # Unlike SemiSpaceGC.identityhash(), this function does not have
         # to care about reducing top_of_space.  The reason is as
@@ -639,7 +636,14 @@ class MarkCompactGC(MovingGCBase):
             return obj.signed[0]
         #
         hdr.tid |= GCFLAG_HASHTAKEN
-        return llmemory.cast_adr_to_int(obj)  # direct case
+        if we_are_translated():
+            return llmemory.cast_adr_to_int(obj)  # direct case
+        else:
+            try:
+                adr = llarena.getfakearenaaddress(obj)   # -> arena address
+            except RuntimeError:
+                return llmemory.cast_adr_to_int(obj)  # not in an arena...
+            return adr - self.space
 
 # ____________________________________________________________
 
