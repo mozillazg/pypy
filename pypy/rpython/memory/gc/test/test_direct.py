@@ -323,6 +323,8 @@ class DirectGCTest(object):
         self.stackroots.pop(-2)
         self.gc.collect()     # p0 goes away, p shifts left
         assert hash == self.gc.identityhash(self.stackroots[-1])
+        self.gc.collect()
+        assert hash == self.gc.identityhash(self.stackroots[-1])
         self.stackroots.pop()
 
 class TestSemiSpaceGC(DirectGCTest):
