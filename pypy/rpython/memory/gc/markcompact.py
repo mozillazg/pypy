@@ -1,6 +1,3 @@
-
-import time
-
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.memory.gc.base import MovingGCBase, read_from_env
 from pypy.rlib.debug import ll_assert, have_debug_prints
@@ -80,8 +77,11 @@ class MarkCompactGC(MovingGCBase):
     malloc_zero_filled = False
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
-    total_collection_time = 0.0
-    total_collection_count = 0
+    #total_collection_time = 0.0
+    #total_collection_count = 0
+
+    free = NULL
+    next_collect_after = -1
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE, space_size=4096,
                  min_next_collect_after=128):
@@ -112,9 +112,7 @@ class MarkCompactGC(MovingGCBase):
         if envsize >= 4096:
             self.space_size = envsize & ~4095
 
-        self.next_collect_after = self.next_collection(0, 0, 0)
-
-        self.program_start_time = time.time()
+        #self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, False)
         if not self.space:
             raise CannotAllocateGCArena
@@ -122,6 +120,7 @@ class MarkCompactGC(MovingGCBase):
         MovingGCBase.setup(self)
         self.objects_with_finalizers = self.AddressDeque()
         self.tid_backup = lltype.nullptr(TID_BACKUP)
+        self.next_collect_after = self.next_collection(0, 0, 0)
 
     def init_gc_object(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
@@ -138,8 +137,9 @@ class MarkCompactGC(MovingGCBase):
         requested_size = raw_malloc_usage(totalsize) + BYTES_PER_TID
         self.next_collect_after -= requested_size
         if self.next_collect_after < 0:
-            self.obtain_free_space(requested_size)
-        result = self.free
+            result = self.obtain_free_space(requested_size)
+        else:
+            result = self.free
         self.free += totalsize
         llarena.arena_reserve(result, totalsize)
         return result
@@ -190,6 +190,8 @@ class MarkCompactGC(MovingGCBase):
         return self._setup_object(result, typeid16, False)
 
     def obtain_free_space(self, requested_size):
+        if self.free == NULL:
+            return self._emergency_initial_block(requested_size)
         while True:
             executed_some_finalizers = self.markcompactcollect(requested_size)
             self.next_collect_after -= requested_size
@@ -200,13 +202,23 @@ class MarkCompactGC(MovingGCBase):
                     pass   # try again to do a collection
                 else:
                     raise MemoryError
+        return self.free
     obtain_free_space._dont_inline_ = True
+
+    def _emergency_initial_block(self, requested_size):
+        # xxx before the GC is fully setup, we might get there.  Hopefully
+        # we will only allocate a couple of strings, e.g. in read_from_env().
+        # Just allocate them raw and leak them.
+        debug_start("gc-initial-block")
+        debug_print("leaking", requested_size, "bytes")
+        debug_stop("gc-initial-block")
+        return llmemory.raw_malloc(requested_size)
 
     def collect(self, gen=0):
         self.markcompactcollect()
 
     def markcompactcollect(self, requested_size=0):
-        start_time = self.debug_collect_start(requested_size)
+        self.debug_collect_start(requested_size)
         self.debug_check_consistency()
         #
         # Mark alive objects
@@ -220,9 +232,9 @@ class MarkCompactGC(MovingGCBase):
         toaddr = llarena.arena_new_view(self.space)
         maxnum = self.space_size - (self.free - self.space)
         maxnum /= BYTES_PER_TID
-        if not we_are_translated():
-            llarena.arena_reserve(self.free,
-                                  llmemory.sizeof(TID_BACKUP, maxnum))
+        llarena.arena_reserve(self.free,
+                              llmemory.itemoffsetof(TID_BACKUP) +
+                              llmemory.sizeof(TID_BACKUP.OF) * maxnum)
         self.tid_backup = llmemory.cast_adr_to_ptr(self.free,
                                                    lltype.Ptr(TID_BACKUP))
         #
@@ -250,7 +262,7 @@ class MarkCompactGC(MovingGCBase):
             self.space = toaddr
         #
         self.debug_check_consistency()
-        self.debug_collect_finish(start_time)
+        self.debug_collect_finish()
         if self.next_collect_after < 0:
             raise MemoryError
         #
@@ -261,27 +273,27 @@ class MarkCompactGC(MovingGCBase):
             return False     # no finalizer executed
 
     def debug_collect_start(self, requested_size):
-        if have_debug_prints():
+        if 1:# have_debug_prints():
             debug_start("gc-collect")
             debug_print()
             debug_print(".----------- Full collection -------------------")
             debug_print("| requested size:",
                         requested_size)
-            start_time = time.time()
-            return start_time
-        return -1
+            #start_time = time.time()
+            #return start_time
+        #return -1
 
-    def debug_collect_finish(self, start_time):
-        if start_time != -1:
-            end_time = time.time()
-            elapsed_time = end_time - start_time
-            self.total_collection_time += elapsed_time
-            self.total_collection_count += 1
-            total_program_time = end_time - self.program_start_time
-            ct = self.total_collection_time
-            cc = self.total_collection_count
-            debug_print("| number of collections so far       ", 
-                        cc)
+    def debug_collect_finish(self):
+        if 1:# start_time != -1:
+            #end_time = time.time()
+            #elapsed_time = end_time - start_time
+            #self.total_collection_time += elapsed_time
+            #self.total_collection_count += 1
+            #total_program_time = end_time - self.program_start_time
+            #ct = self.total_collection_time
+            #cc = self.total_collection_count
+            #debug_print("| number of collections so far       ", 
+            #            cc)
             debug_print("| total space size                   ", 
                         self.space_size)
             debug_print("| number of objects alive            ", 
@@ -290,12 +302,12 @@ class MarkCompactGC(MovingGCBase):
                         self.free - self.space)
             debug_print("| next collection after              ", 
                         self.next_collect_after)
-            debug_print("| total collections per second:      ",
-                        cc / total_program_time)
-            debug_print("| total time in markcompact-collect: ",
-                        ct, "seconds")
-            debug_print("| percentage collection<->total time:",
-                        ct * 100.0 / total_program_time, "%")
+            #debug_print("| total collections per second:      ",
+            #            cc / total_program_time)
+            #debug_print("| total time in markcompact-collect: ",
+            #            ct, "seconds")
+            #debug_print("| percentage collection<->total time:",
+            #            ct * 100.0 / total_program_time, "%")
             debug_print("`----------------------------------------------")
             debug_stop("gc-collect")
 
@@ -570,6 +582,7 @@ class MarkCompactGC(MovingGCBase):
         hdr.tid = self.combine(typeid, gcflags << first_gcflag_bit)
         #
         fromaddr = obj - self.gcheaderbuilder.size_gc_header
+        llarena.arena_reserve(toaddr, basesize)
         if we_are_translated():
             llmemory.raw_memmove(fromaddr, toaddr, basesize)
         else:
