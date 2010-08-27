@@ -95,15 +95,17 @@ class MarkCompactGC(MovingGCBase):
         ll_assert(used_space <= self.space_size,
                   "used_space + num_objects_so_far overflow")
         try:
-            next = ((used_space + requested_size) // 3) * 2
+            next = (used_space // 3) * 2 + requested_size
         except OverflowError:
             next = self.space_size
         if next < self.min_next_collect_after:
             next = self.min_next_collect_after
         if next > self.space_size - used_space:
             next = self.space_size - used_space
-        # the value we return guarantees that used_space + next <= space_size,
-        # with 'BYTES_PER_TID*num_objects_so_far' included in used_space
+        # The value we return guarantees that used_space + next <= space_size,
+        # with 'BYTES_PER_TID*num_objects_so_far' included in used_space.
+        # Normally, the value we return should also be at least requested_size
+        # unless we are out of memory.
         return next
 
     def setup(self):
