@@ -1138,13 +1138,10 @@ class TestSemiSpaceGC(GenericMovingGCTests):
 class TestMarkCompactGC(GenericMovingGCTests):
     gcname = 'markcompact'
 
-    def setup_class(cls):
-        py.test.skip("Disabled for now, sorry")
-
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
-            GC_PARAMS = {'space_size': 512*WORD}
+            GC_PARAMS = {'space_size': 4096*WORD}
             root_stack_depth = 200
 
 class TestGenerationGC(GenericMovingGCTests):

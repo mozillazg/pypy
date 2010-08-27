@@ -220,7 +220,9 @@ class MarkCompactGC(MovingGCBase):
         toaddr = llarena.arena_new_view(self.space)
         maxnum = self.space_size - (self.free - self.space)
         maxnum /= BYTES_PER_TID
-        llarena.arena_reserve(self.free, llmemory.sizeof(TID_BACKUP, maxnum))
+        if not we_are_translated():
+            llarena.arena_reserve(self.free,
+                                  llmemory.sizeof(TID_BACKUP, maxnum))
         self.tid_backup = llmemory.cast_adr_to_ptr(self.free,
                                                    lltype.Ptr(TID_BACKUP))
         #
@@ -366,6 +368,14 @@ class MarkCompactGC(MovingGCBase):
         # objects, at this point), or a plain integer.
         return MovingGCBase.header(self, obj).tid & GCFLAG_MARKBIT
 
+    def toaddr_smaller_than_fromaddr(self, toaddr, fromaddr):
+        if we_are_translated():
+            return toaddr < fromaddr
+        else:
+            # convert the addresses to integers, because they are
+            # theoretically not from the same arena
+            return toaddr - self.base_forwarding_addr < fromaddr - self.space
+
     def update_forward_pointers(self, toaddr, maxnum):
         self.base_forwarding_addr = base_forwarding_addr = toaddr
         fromaddr = self.space
@@ -389,7 +399,7 @@ class MarkCompactGC(MovingGCBase):
                     # grow a new hash field -- with the exception: if
                     # the object actually doesn't move, don't
                     # (otherwise, we get a bogus toaddr > fromaddr)
-                    if toaddr - base_forwarding_addr < fromaddr - self.space:
+                    if self.toaddr_smaller_than_fromaddr(toaddr, fromaddr):
                         totaldstsize += llmemory.sizeof(lltype.Signed)
                 llarena.arena_reserve(toaddr, totaldstsize)
                 #
@@ -445,7 +455,7 @@ class MarkCompactGC(MovingGCBase):
                 totaldstsize = totalsrcsize
                 if (hdr.tid & (GCFLAG_SAVED_HASHTAKEN|GCFLAG_SAVED_HASHFIELD)
                             == GCFLAG_SAVED_HASHTAKEN):
-                    if toaddr - base_forwarding_addr < fromaddr - self.space:
+                    if self.toaddr_smaller_than_fromaddr(toaddr, fromaddr):
                         grow_hash_field = True
                         totaldstsize += llmemory.sizeof(lltype.Signed)
                 callback(self, obj, typeid, totalsrcsize,
@@ -456,7 +466,7 @@ class MarkCompactGC(MovingGCBase):
                     totalsrcsize += llmemory.sizeof(lltype.Signed)
             #
             fromaddr += totalsrcsize
-    walk_marked_objects._annspecialcase_ = 'specialize:arg(2)'
+    walk_marked_objects._annspecialcase_ = 'specialize:arg(1)'
 
     def trace_and_update_ref(self, obj, typeid, _1, _2, _3):
         """Enumerate the locations inside the given obj that can contain
