@@ -156,7 +156,7 @@ class MarkCompactGC(MovingGCBase):
         return totalsize
     _get_totalsize_var._always_inline_ = True
 
-    def _setup_object(self, result, typeid16, has_finalizer, contains_weakptr):
+    def _setup_object(self, result, typeid16, has_finalizer):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         self.init_gc_object(result, typeid16)
         if has_finalizer:
@@ -169,8 +169,7 @@ class MarkCompactGC(MovingGCBase):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         result = self._get_memory(totalsize)
-        return self._setup_object(result, typeid16, has_finalizer,
-                                  contains_weakptr)
+        return self._setup_object(result, typeid16, has_finalizer)
 
     def malloc_fixedsize_clear(self, typeid16, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
@@ -178,8 +177,7 @@ class MarkCompactGC(MovingGCBase):
         totalsize = size_gc_header + size
         result = self._get_memory(totalsize)
         llmemory.raw_memclear(result, totalsize)
-        return self._setup_object(result, typeid16, has_finalizer,
-                                  contains_weakptr)
+        return self._setup_object(result, typeid16, has_finalizer)
 
     def malloc_varsize_clear(self, typeid16, length, size, itemsize,
                              offset_to_length, can_collect):
@@ -189,7 +187,7 @@ class MarkCompactGC(MovingGCBase):
         result = self._get_memory(totalsize)
         llmemory.raw_memclear(result, totalsize)
         (result + size_gc_header + offset_to_length).signed[0] = length
-        return self._setup_object(result, typeid16, False, False)
+        return self._setup_object(result, typeid16, False)
 
     def obtain_free_space(self, requested_size):
         while True:
