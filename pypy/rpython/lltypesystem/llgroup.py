@@ -135,6 +135,10 @@ class CombinedSymbolic(llmemory.Symbolic):
         assert (other & CombinedSymbolic.MASK) == 0
         return CombinedSymbolic(self.lowpart, self.rest - other)
 
+    def __rshift__(self, other):
+        assert other >= HALFSHIFT
+        return self.rest >> (other - HALFSHIFT)
+
     def __eq__(self, other):
         if (isinstance(other, CombinedSymbolic) and
             self.lowpart is other.lowpart):
