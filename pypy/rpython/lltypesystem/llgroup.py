@@ -137,7 +137,7 @@ class CombinedSymbolic(llmemory.Symbolic):
 
     def __rshift__(self, other):
         assert other >= HALFSHIFT
-        return self.rest >> (other - HALFSHIFT)
+        return self.rest >> other
 
     def __eq__(self, other):
         if (isinstance(other, CombinedSymbolic) and

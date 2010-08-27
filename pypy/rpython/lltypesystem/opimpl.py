@@ -222,6 +222,13 @@ def op_int_mul(x, y):
     assert isinstance(y, (int, llmemory.AddressOffset))
     return intmask(x * y)
 
+def op_int_rshift(x, y):
+    if not isinstance(x, int):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
+    assert isinstance(y, int)
+    return x >> y
+
 def op_int_floordiv(x, y):
     assert isinstance(x, (int, llmemory.AddressOffset))
     assert isinstance(y, (int, llmemory.AddressOffset))
