@@ -314,7 +314,16 @@ class DirectGCTest(object):
         print hash
         assert isinstance(hash, (int, long))
         assert hash == self.gc.identityhash(p_const)
-
+        # (5) p is actually moving (for the markcompact gc)
+        p0 = self.malloc(S)
+        self.stackroots.append(p0)
+        p = self.malloc(S)
+        self.stackroots.append(p)
+        hash = self.gc.identityhash(p)
+        self.stackroots.pop(-2)
+        self.gc.collect()     # p0 goes away, p shifts left
+        assert hash == self.gc.identityhash(self.stackroots[-1])
+        self.stackroots.pop()
 
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
