@@ -447,12 +447,12 @@ class TestMarkCompactGC(DirectGCTest):
 
     def test_many_objects(self):
         DirectGCTest.test_many_objects(self)
-    test_many_objects.GC_PARAMS = {'space_size': 3 * 4096}
+    test_many_objects.GC_PARAMS = {'space_size': 3 * 1024 * WORD}
 
     def test_varsized_from_stack(self):
         DirectGCTest.test_varsized_from_stack(self)
-    test_varsized_from_stack.GC_PARAMS = {'space_size': 2 * 4096}
+    test_varsized_from_stack.GC_PARAMS = {'space_size': 2 * 1024 * WORD}
 
     def test_varsized_from_prebuilt_gc(self):
         DirectGCTest.test_varsized_from_prebuilt_gc(self)
-    test_varsized_from_prebuilt_gc.GC_PARAMS = {'space_size': 3 * 4096}
+    test_varsized_from_prebuilt_gc.GC_PARAMS = {'space_size': 3 * 1024 * WORD}
