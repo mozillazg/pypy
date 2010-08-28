@@ -153,10 +153,13 @@ class MarkCompactGC(MovingGCBase):
             varsize = ovfcheck(itemsize * length)
         except OverflowError:
             raise MemoryError
-        totalsize = llarena.round_up_for_allocation(nonvarsize + varsize)
-        if totalsize < 0:    # if wrapped around
+        # Careful to detect overflows.  The following works even if varsize
+        # is almost equal to sys.maxint; morever, self.space_size is known
+        # to be at least 4095 bytes smaller than sys.maxint, so this function
+        # always raises instead of returning an integer >= sys.maxint-4095.
+        if varsize > self.space_size - nonvarsize:
             raise MemoryError
-        return totalsize
+        return llarena.round_up_for_allocation(nonvarsize + varsize)
     _get_totalsize_var._always_inline_ = True
 
     def _setup_object(self, result, typeid16, has_finalizer):
