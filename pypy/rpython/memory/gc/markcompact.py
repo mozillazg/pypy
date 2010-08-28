@@ -8,7 +8,7 @@ from pypy.rpython.memory.support import AddressDict
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 
@@ -59,6 +59,9 @@ GCFLAG_SAVED_HASHFIELD = GCFLAG_HASHFIELD >> first_gcflag_bit
 TID_TYPE = llgroup.HALFWORD
 BYTES_PER_TID = rffi.sizeof(TID_TYPE)
 TID_BACKUP = rffi.CArray(TID_TYPE)
+
+def translated_to_c():
+    return we_are_translated() and not running_on_llinterp
 
 
 class MarkCompactGC(MovingGCBase):
@@ -232,9 +235,7 @@ class MarkCompactGC(MovingGCBase):
         toaddr = llarena.arena_new_view(self.space)
         maxnum = self.space_size - (self.free - self.space)
         maxnum /= BYTES_PER_TID
-        llarena.arena_reserve(self.free,
-                              llmemory.itemoffsetof(TID_BACKUP) +
-                              llmemory.sizeof(TID_BACKUP.OF) * maxnum)
+        llarena.arena_reserve(self.free, llmemory.sizeof(TID_BACKUP, maxnum))
         self.tid_backup = llmemory.cast_adr_to_ptr(self.free,
                                                    lltype.Ptr(TID_BACKUP))
         #
@@ -251,13 +252,13 @@ class MarkCompactGC(MovingGCBase):
         #
         self.tid_backup = lltype.nullptr(TID_BACKUP)
         self.free = finaladdr
-        remaining_size = (toaddr + self.space_size) - finaladdr
-        llarena.arena_reset(finaladdr, remaining_size, False)
         self.next_collect_after = self.next_collection(finaladdr - toaddr,
                                                        self.num_alive_objs,
                                                        requested_size)
         #
-        if not we_are_translated():
+        if not translated_to_c():
+            remaining_size = (toaddr + self.space_size) - finaladdr
+            llarena.arena_reset(finaladdr, remaining_size, False)
             llarena.arena_free(self.space)
             self.space = toaddr
         #
@@ -381,7 +382,7 @@ class MarkCompactGC(MovingGCBase):
         return MovingGCBase.header(self, obj).tid & GCFLAG_MARKBIT
 
     def toaddr_smaller_than_fromaddr(self, toaddr, fromaddr):
-        if we_are_translated():
+        if translated_to_c():
             return toaddr < fromaddr
         else:
             # convert the addresses to integers, because they are
@@ -415,7 +416,7 @@ class MarkCompactGC(MovingGCBase):
                     if self.toaddr_smaller_than_fromaddr(toaddr, fromaddr):
                         totaldstsize += llmemory.sizeof(lltype.Signed)
                 #
-                if not we_are_translated():
+                if not translated_to_c():
                     llarena.arena_reserve(toaddr, basesize)
                     if (raw_malloc_usage(totaldstsize) >
                         raw_malloc_usage(basesize)):
@@ -438,7 +439,7 @@ class MarkCompactGC(MovingGCBase):
                 toaddr += totaldstsize
             #
             fromaddr += totalsrcsize
-            if not we_are_translated():
+            if not translated_to_c():
                 assert toaddr - base_forwarding_addr <= fromaddr - self.space
         self.num_alive_objs = num
 
@@ -582,8 +583,7 @@ class MarkCompactGC(MovingGCBase):
         hdr.tid = self.combine(typeid, gcflags << first_gcflag_bit)
         #
         fromaddr = obj - self.gcheaderbuilder.size_gc_header
-        llarena.arena_reserve(toaddr, basesize)
-        if we_are_translated():
+        if translated_to_c():
             llmemory.raw_memmove(fromaddr, toaddr, basesize)
         else:
             llmemory.raw_memcopy(fromaddr, toaddr, basesize)
@@ -637,7 +637,7 @@ class MarkCompactGC(MovingGCBase):
         return self.get_identityhash_from_addr(obj)
 
     def get_identityhash_from_addr(self, obj):
-        if we_are_translated():
+        if translated_to_c():
             return llmemory.cast_adr_to_int(obj)  # direct case
         else:
             try:
