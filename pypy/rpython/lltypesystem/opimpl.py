@@ -197,6 +197,18 @@ def op_int_sub(x, y):
     assert isinstance(y, int)
     return intmask(x - y)
 
+def op_int_ge(x, y):
+    # special case for 'AddressOffset >= 0'
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, int)
+    return x >= y
+
+def op_int_lt(x, y):
+    # special case for 'AddressOffset < 0'
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, int)
+    return x < y
+
 def op_int_between(a, b, c):
     assert lltype.typeOf(a) is lltype.Signed
     assert lltype.typeOf(b) is lltype.Signed
