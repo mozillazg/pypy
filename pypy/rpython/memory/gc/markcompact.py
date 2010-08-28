@@ -157,7 +157,8 @@ class MarkCompactGC(MovingGCBase):
         # is almost equal to sys.maxint; morever, self.space_size is known
         # to be at least 4095 bytes smaller than sys.maxint, so this function
         # always raises instead of returning an integer >= sys.maxint-4095.
-        if varsize > self.space_size - nonvarsize:
+        if (raw_malloc_usage(varsize) > self.space_size -
+                                        raw_malloc_usage(nonvarsize)):
             raise MemoryError
         return llarena.round_up_for_allocation(nonvarsize + varsize)
     _get_totalsize_var._always_inline_ = True
