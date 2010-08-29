@@ -291,14 +291,12 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         assert not self.typedef.hasdict
         self._init_empty(w_subtype.terminator)
 
-    def getslotvalue(self, member):
-        # XXX we don't need member here, it's enough to have member.index
-        # XXX and revert the change to the signature of getslotvalue(), maybe.
-        key = (member.name, SLOTS_STARTING_FROM + member.index)
+    def getslotvalue(self, index):
+        key = ("slot", SLOTS_STARTING_FROM + index)
         return self.map.read(self, key)
 
-    def setslotvalue(self, member, w_value):
-        key = (member.name, SLOTS_STARTING_FROM + member.index)
+    def setslotvalue(self, index, w_value):
+        key = ("slot", SLOTS_STARTING_FROM + index)
         self.map.write(self, key, w_value)
 
     # used by _weakref implemenation

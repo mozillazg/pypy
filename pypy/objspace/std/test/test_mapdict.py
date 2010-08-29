@@ -4,11 +4,6 @@ from pypy.objspace.std.mapdict import *
 
 space = FakeSpace()
 
-class FakeMember(object):
-    def __init__(self, name, index=0):
-        self.name = name
-        self.index = index
-
 class Class(object):
     def __init__(self, hasdict=True):
         self.hasdict = True
@@ -162,9 +157,9 @@ def test_special():
 def test_slots():
     cls = Class()
     obj = cls.instantiate()
-    a =  FakeMember("a")
-    b =  FakeMember("b")
-    c =  FakeMember("c")
+    a =  0
+    b =  1
+    c =  2
     obj.setslotvalue(a, 50)
     obj.setslotvalue(b, 60)
     obj.setslotvalue(c, 70)
@@ -194,27 +189,13 @@ def test_slots():
     assert obj2.storage == [501, 601, 701, 51, 61, 71]
     assert obj.map is obj2.map
 
-def test_slots_same_name():
-    cls = Class()
-    obj = cls.instantiate()
-    a =  FakeMember("a")
-    b =  FakeMember("a", 1)
-    c =  FakeMember("a", 2)
-    obj.setslotvalue(a, 50)
-    obj.setslotvalue(b, 60)
-    obj.setslotvalue(c, 70)
-    assert obj.getslotvalue(a) == 50
-    assert obj.getslotvalue(b) == 60
-    assert obj.getslotvalue(c) == 70
-    assert obj.storage == [50, 60, 70]
-
 
 def test_slots_no_dict():
     cls = Class(hasdict=False)
     obj = cls.instantiate()
-    a =  FakeMember("a")
-    b =  FakeMember("b")
-    c =  FakeMember("c")
+    a = 0
+    b = 1
+    c = 2
     obj.setslotvalue(a, 50)
     obj.setslotvalue(b, 60)
     assert obj.getslotvalue(a) == 50
@@ -235,9 +216,9 @@ def test_getdict():
 def test_materialize_r_dict():
     cls = Class()
     obj = cls.instantiate()
-    a =  FakeMember("a")
-    b =  FakeMember("b")
-    c =  FakeMember("c")
+    a = 0
+    b = 1
+    c = 2
     obj.setslotvalue(a, 50)
     obj.setslotvalue(b, 60)
     obj.setslotvalue(c, 70)
@@ -305,9 +286,9 @@ def devolve_dict(obj):
 def test_get_setdictvalue_after_devolve():
     cls = Class()
     obj = cls.instantiate()
-    a =  FakeMember("a")
-    b =  FakeMember("b")
-    c =  FakeMember("c")
+    a = 0
+    b = 1
+    c = 2
     obj.setslotvalue(a, 50)
     obj.setslotvalue(b, 60)
     obj.setslotvalue(c, 70)
