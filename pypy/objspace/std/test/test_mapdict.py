@@ -399,3 +399,48 @@ class AppTestWithMapDict(object):
         A.slot1.__set__(x, 'parent')  # using A.slot1
         assert x.slot1 == 'child'     # B.slot1 should still have its old value
         assert A.slot1.__get__(x) == 'parent'
+
+    def test_change_class(self):
+        class A(object):
+            pass
+        class B(object):
+            pass
+        a = A()
+        a.x = 1
+        a.y = 2
+        assert a.x == 1
+        assert a.y == 2
+        a.__class__ = B
+        assert a.x == 1
+        assert a.y == 2
+        assert isinstance(a, B)
+
+        # dict accessed:
+        a = A()
+        a.x = 1
+        a.y = 2
+        assert a.x == 1
+        assert a.y == 2
+        d = a.__dict__
+        assert d == {"x": 1, "y": 2}
+        a.__class__ = B
+        assert a.x == 1
+        assert a.y == 2
+        assert a.__dict__ is d
+        assert d == {"x": 1, "y": 2}
+        assert isinstance(a, B)
+
+        # dict devolved:
+        a = A()
+        a.x = 1
+        a.y = 2
+        assert a.x == 1
+        assert a.y == 2
+        d = a.__dict__
+        d[1] = 3
+        assert d == {"x": 1, "y": 2, 1:3}
+        a.__class__ = B
+        assert a.x == 1
+        assert a.y == 2
+        assert a.__dict__ is d
+        assert isinstance(a, B)

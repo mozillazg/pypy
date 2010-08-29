@@ -158,6 +158,12 @@ class DevolvedDictTerminator(Terminator):
     def remove_dict_entries(self, obj):
         assert 0, "should be unreachable"
 
+    def set_terminator(self, obj, terminator):
+        if not isinstance(terminator, DevolvedDictTerminator):
+            assert isinstance(terminator, DictTerminator)
+            terminator = terminator.devolved_dict_terminator
+        return Terminator.set_terminator(self, obj, terminator)
+
 class PlainAttribute(AbstractAttribute):
     _immutable_ = True
     def __init__(self, selector, back):
