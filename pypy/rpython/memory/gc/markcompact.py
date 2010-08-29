@@ -558,9 +558,10 @@ class MarkCompactGC(MovingGCBase):
         return self.get_header_forwarded_addr(obj)
 
     def get_header_forwarded_addr(self, obj):
+        tid = self.header_forwarded(obj).tid
+        ll_assert(tid & GCFLAG_MARKBIT != 0, "dying object is not forwarded")
         GCFLAG_MASK = ~(GCFLAG_MARKBIT | 3)
-        return (self.base_forwarding_addr +
-                (self.header_forwarded(obj).tid & GCFLAG_MASK) +
+        return (self.base_forwarding_addr + (tid & GCFLAG_MASK) +
                 self.gcheaderbuilder.size_gc_header)
 
     def surviving(self, obj):
