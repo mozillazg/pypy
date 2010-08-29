@@ -240,7 +240,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withmapdict",
                    "make instances really small but slow without the JIT",
-                   default=True,
+                   default=False,
                    requires=[("objspace.std.withshadowtracking", False),
                              ("objspace.std.withinlineddict", False),
                              ("objspace.std.withsharingdict", False),
@@ -327,6 +327,9 @@ def set_pypy_opt_level(config, level):
     # all the good optimizations for PyPy should be listed here
     if level in ['2', '3']:
         config.objspace.opcodes.suggest(CALL_LIKELY_BUILTIN=True)
+        config.objspace.std.suggest(withinlineddict=True)
+        if type_system != 'ootype':
+            config.objspace.std.suggest(withsharingdict=True)
     if level in ['2', '3', 'jit']:
         config.objspace.opcodes.suggest(CALL_METHOD=True)
         config.objspace.std.suggest(withrangelist=True)
@@ -336,9 +339,6 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(optimized_list_getitem=True)
         config.objspace.std.suggest(getattributeshortcut=True)
         config.objspace.std.suggest(newshortcut=True)        
-        if type_system != 'ootype':
-            config.objspace.std.suggest(withsharingdict=True)
-        config.objspace.std.suggest(withinlineddict=True)
 
     # extra costly optimizations only go in level 3
     if level == '3':
@@ -367,6 +367,7 @@ def set_pypy_opt_level(config, level):
     # extra optimizations with the JIT
     if level == 'jit':
         config.objspace.std.suggest(withcelldict=True)
+        config.objspace.std.suggest(withmapdict=True)
 
 
 def enable_allworkingmodules(config):
