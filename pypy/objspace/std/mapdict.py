@@ -1,3 +1,4 @@
+from pypy.rlib import jit
 # ____________________________________________________________
 # attribute shapes
 
@@ -28,13 +29,16 @@ class AbstractAttribute(object):
     def set_terminator(self, obj, terminator):
         raise NotImplementedError("abstract base class")
 
+    @jit.purefunction
     def size_estimate(self):
         return self._size_estimate >> NUM_DIGITS
 
     def search(self, attrtype):
         return None
 
-    def add_attr(self, obj, selector, w_value):
+    @jit.purefunction
+    def _get_new_attr(self, name, index):
+        selector = name, index
         cache = self.cache_attrs
         if cache is None:
             cache = self.cache_attrs = {}
@@ -42,8 +46,15 @@ class AbstractAttribute(object):
         if attr is None:
             attr = PlainAttribute(selector, self)
             cache[selector] = attr
+        return attr
+
+    @jit.unroll_safe
+    def add_attr(self, obj, selector, w_value):
+        # grumble, jit needs this
+        attr = self._get_new_attr(selector[0], selector[1])
         oldattr = obj._get_mapdict_map()
-        oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
+        if not jit.we_are_jitted():
+            oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
         if attr.length() > len(obj._get_mapdict_storage()):
             # note that attr.size_estimate() is always at least attr.length()
             new_storage = [None] * attr.size_estimate()
@@ -62,6 +73,7 @@ class AbstractAttribute(object):
 
 
 class Terminator(AbstractAttribute):
+    _immutable_ = True
     def __init__(self, w_cls, space):
         self.w_cls = w_cls
         self.space = space
@@ -95,6 +107,7 @@ class Terminator(AbstractAttribute):
         return self.copy(obj)
 
 class DictTerminator(Terminator):
+    _immutable_ = True
     def __init__(self, w_cls, space):
         Terminator.__init__(self, w_cls, space)
         self.devolved_dict_terminator = DevolvedDictTerminator(w_cls, space)
@@ -146,6 +159,7 @@ class DevolvedDictTerminator(Terminator):
         assert 0, "should be unreachable"
 
 class PlainAttribute(AbstractAttribute):
+    _immutable_ = True
     def __init__(self, selector, back):
         self.selector = selector
         self.position = back.length()
@@ -228,14 +242,15 @@ from pypy.interpreter.baseobjspace import W_Root
 
 class Object(W_Root): # slightly evil to make it inherit from W_Root
     def _init_empty(self, map):
+        from pypy.rlib.debug import make_sure_not_resized
         self.map = map
-        self.storage = [None] * map.size_estimate()
+        self.storage = make_sure_not_resized([None] * map.size_estimate())
     def _become(self, new_obj):
         self.map = new_obj.map
         self.storage = new_obj.storage
 
     def _get_mapdict_map(self):
-        return self.map
+        return jit.hint(self.map, promote=True)
     def _get_mapdict_storage(self):
         return self.storage
     def _set_mapdict_map(self, map):
@@ -247,26 +262,26 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
     # objspace interface
 
     def getdictvalue(self, space, attrname):
-        return self.map.read(self, (attrname, DICT))
+        return self._get_mapdict_map().read(self, (attrname, DICT))
 
     def setdictvalue(self, space, attrname, w_value, shadows_type=True):
-        return self.map.write(self, (attrname, DICT), w_value)
+        return self._get_mapdict_map().write(self, (attrname, DICT), w_value)
 
     def deldictvalue(self, space, w_name):
         attrname = space.str_w(w_name)
-        new_obj = self.map.delete(self, (attrname, DICT))
+        new_obj = self._get_mapdict_map().delete(self, (attrname, DICT))
         if new_obj is None:
             return False
         self._become(new_obj)
         return True
 
     def getdict(self):
-        w_dict = self.map.read(self, ("dict", SPECIAL))
+        w_dict = self._get_mapdict_map().read(self, ("dict", SPECIAL))
         if w_dict is not None:
             assert isinstance(w_dict, W_DictMultiObject)
             return w_dict
         w_dict = MapDictImplementation(self.space, self)
-        flag = self.map.write(self, ("dict", SPECIAL), w_dict)
+        flag = self._get_mapdict_map().write(self, ("dict", SPECIAL), w_dict)
         assert flag
         return w_dict
 
@@ -276,14 +291,14 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         w_olddict = self.getdict()
         assert isinstance(w_dict, W_DictMultiObject)
         w_olddict._as_rdict()
-        flag = self.map.write(self, ("dict", SPECIAL), w_dict)
+        flag = self._get_mapdict_map().write(self, ("dict", SPECIAL), w_dict)
         assert flag
 
     def getclass(self, space):
-        return self.map.get_terminator().w_cls
+        return self._get_mapdict_map().get_terminator().w_cls
 
     def setclass(self, space, w_cls):
-        new_obj = self.map.set_terminator(self, w_cls.terminator)
+        new_obj = self._get_mapdict_map().set_terminator(self, w_cls.terminator)
         self._become(new_obj)
 
     def user_setup(self, space, w_subtype):
@@ -293,17 +308,17 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
 
     def getslotvalue(self, index):
         key = ("slot", SLOTS_STARTING_FROM + index)
-        return self.map.read(self, key)
+        return self._get_mapdict_map().read(self, key)
 
     def setslotvalue(self, index, w_value):
         key = ("slot", SLOTS_STARTING_FROM + index)
-        self.map.write(self, key, w_value)
+        self._get_mapdict_map().write(self, key, w_value)
 
     # used by _weakref implemenation
 
     def getweakref(self):
         from pypy.module._weakref.interp__weakref import WeakrefLifeline
-        lifeline = self.map.read(self, ("weakref", SPECIAL))
+        lifeline = self._get_mapdict_map().read(self, ("weakref", SPECIAL))
         if lifeline is None:
             return None
         assert isinstance(lifeline, WeakrefLifeline)
@@ -312,7 +327,7 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
     def setweakref(self, space, weakreflifeline):
         from pypy.module._weakref.interp__weakref import WeakrefLifeline
         assert isinstance(weakreflifeline, WeakrefLifeline)
-        self.map.write(self, ("weakref", SPECIAL), weakreflifeline)
+        self._get_mapdict_map().write(self, ("weakref", SPECIAL), weakreflifeline)
 
 
 # ____________________________________________________________
