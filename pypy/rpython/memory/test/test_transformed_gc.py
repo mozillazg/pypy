@@ -1144,6 +1144,10 @@ class TestMarkCompactGC(GenericMovingGCTests):
             GC_PARAMS = {'space_size': 4096*WORD}
             root_stack_depth = 200
 
+    def test_writebarrier_before_copy(self):
+        py.test.skip("Not relevant, and crashes because llarena does not "
+                     "support empty GcStructs")
+
 class TestGenerationGC(GenericMovingGCTests):
     gcname = "generation"
     GC_CAN_SHRINK_ARRAY = True
@@ -1532,4 +1536,13 @@ class TestHybridTaggedPointerGC(TaggedPointerGCTests):
                                                           GCClass
             GC_PARAMS = {'space_size': 512*WORD,
                          'nursery_size': 32*WORD}
+            root_stack_depth = 200
+
+class TestMarkCompactTaggedpointerGC(TaggedPointerGCTests):
+    gcname = 'markcompact'
+
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
+            GC_PARAMS = {'space_size': 4096*WORD}
             root_stack_depth = 200

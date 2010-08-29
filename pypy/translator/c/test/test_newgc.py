@@ -67,9 +67,8 @@ class TestUsingFramework(object):
             if not fullname.startswith('define'):
                 continue
             keyword = conftest.option.keyword
-            if keyword:
-                if keyword.startswith('test_'):
-                    keyword = keyword[len('test_'):]
+            if keyword.startswith('test_'):
+                keyword = keyword[len('test_'):]
                 if keyword not in fullname:
                     continue
             prefix, name = fullname.split('_', 1)
@@ -1072,10 +1071,10 @@ class TestMarkCompactGC(TestSemiSpaceGC):
     should_be_moving = True
     GC_CAN_SHRINK_ARRAY = False
 
-    def setup_class(cls):
-        py.test.skip("Disabled for now")
-
     def test_gc_set_max_heap_size(self):
+        py.test.skip("not implemented")
+
+    def test_gc_heap_stats(self):
         py.test.skip("not implemented")
 
     def test_finalizer_order(self):
