@@ -593,8 +593,13 @@ class MarkCompactGC(MovingGCBase):
             llmemory.raw_memcopy(fromaddr, toaddr, basesize)
 
     def debug_check_object(self, obj):
-        # not sure what to check here
-        pass
+        # Test that GCFLAG_MARKBIT is not set.  It should not be set at the
+        # very start or at the very end of a collection -- only temporarily
+        # during the collection.
+        tid = self.header(obj).tid
+        assert tid & GCFLAG_MARKBIT == 0
+        type_id = self.get_type_id(obj)
+        self.has_gcptr_in_varsize(type_id)   # checks that the type_id is valid
 
     def trace_from_objects_with_finalizers(self):
         if self.run_finalizers.non_empty():   # uncommon case
