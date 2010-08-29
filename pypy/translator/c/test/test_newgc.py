@@ -1082,9 +1082,8 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 
 # ____________________________________________________________________
 
-class TestHybridTaggedPointers(TestHybridGC):
+class TaggedPointersTest(object):
     taggedpointers = True
-
 
     def define_tagged(cls):
         class Unrelated(object):
@@ -1128,3 +1127,10 @@ class UnboxedObject(TaggedBase, UnboxedValue):
     __slots__ = 'smallint'
     def meth(self, x):
         return self.smallint + x + 3
+
+
+class TestHybridTaggedPointers(TaggedPointersTest, TestHybridGC):
+    pass
+
+class TestMarkCompactGCMostCompact(TaggedPointersTest, TestMarkCompactGC):
+    removetypeptr = True
