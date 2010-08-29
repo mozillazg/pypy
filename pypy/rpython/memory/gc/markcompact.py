@@ -131,7 +131,10 @@ class MarkCompactGC(MovingGCBase):
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        flags |= GCFLAG_HASHTAKEN
+        flags |= GCFLAG_HASHTAKEN | GCFLAG_MARKBIT
+        # All prebuilt GC objects have the GCFLAG_MARKBIT always set.
+        # That's convenient to make the GC always think that they
+        # survive the current collection.
         hdr.tid = self.combine(typeid16, flags)
 
     def _get_memory(self, totalsize):
@@ -561,7 +564,7 @@ class MarkCompactGC(MovingGCBase):
                 self.gcheaderbuilder.size_gc_header)
 
     def surviving(self, obj):
-        return self._is_external(obj) or self.header_forwarded(obj).tid != -1
+        return self.marked(obj)
 
     def get_typeid_from_backup(self, num):
         return self.tid_backup[num]
@@ -593,11 +596,18 @@ class MarkCompactGC(MovingGCBase):
             llmemory.raw_memcopy(fromaddr, toaddr, basesize)
 
     def debug_check_object(self, obj):
-        # Test that GCFLAG_MARKBIT is not set.  It should not be set at the
-        # very start or at the very end of a collection -- only temporarily
-        # during the collection.
         tid = self.header(obj).tid
-        assert tid & GCFLAG_MARKBIT == 0
+        if self._is_external(obj):
+            # All external objects have GCFLAG_MARKBIT and GCFLAG_HASHTAKEN
+            # set.
+            assert tid & GCFLAG_MARKBIT
+            assert tid & GCFLAG_HASHTAKEN
+        else:
+            # Non-external objects have GCFLAG_MARKBIT that should not be set
+            # at the very start or at the very end of a collection -- only
+            # temporarily during the collection.
+            assert tid & GCFLAG_MARKBIT == 0
+        #
         type_id = self.get_type_id(obj)
         self.has_gcptr_in_varsize(type_id)   # checks that the type_id is valid
 
