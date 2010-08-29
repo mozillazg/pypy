@@ -249,7 +249,7 @@ class MarkCompactGC(MovingGCBase):
         # Walk all objects and assign forward pointers in the same order,
         # also updating all references
         #
-        finaladdr = self.update_forward_pointers(toaddr, maxnum)
+        self.update_forward_pointers(toaddr, maxnum)
         if (self.run_finalizers.non_empty() or
             self.objects_with_finalizers.non_empty()):
             self.update_run_finalizers()
@@ -258,14 +258,14 @@ class MarkCompactGC(MovingGCBase):
         self.compact()
         #
         self.tid_backup = lltype.nullptr(TID_BACKUP)
-        self.free = finaladdr
-        self.next_collect_after = self.next_collection(finaladdr - toaddr,
+        self.free = self.finaladdr
+        self.next_collect_after = self.next_collection(self.finaladdr - toaddr,
                                                        self.num_alive_objs,
                                                        requested_size)
         #
         if not translated_to_c():
-            remaining_size = (toaddr + self.space_size) - finaladdr
-            llarena.arena_reset(finaladdr, remaining_size, False)
+            remaining_size = (toaddr + self.space_size) - self.finaladdr
+            llarena.arena_reset(self.finaladdr, remaining_size, False)
             llarena.arena_free(self.space)
             self.space = toaddr
         #
@@ -449,6 +449,7 @@ class MarkCompactGC(MovingGCBase):
             if not translated_to_c():
                 assert toaddr - base_forwarding_addr <= fromaddr - self.space
         self.num_alive_objs = num
+        self.finaladdr = toaddr
 
         # now update references
         self.root_walker.walk_roots(
@@ -456,7 +457,6 @@ class MarkCompactGC(MovingGCBase):
             MarkCompactGC._update_ref,  # static in prebuilt non-gc structures
             MarkCompactGC._update_ref)  # static in prebuilt gc objects
         self.walk_marked_objects(MarkCompactGC.trace_and_update_ref)
-        return toaddr
 
     def walk_marked_objects(self, callback):
         num = 0
@@ -561,8 +561,10 @@ class MarkCompactGC(MovingGCBase):
         tid = self.header_forwarded(obj).tid
         ll_assert(tid & GCFLAG_MARKBIT != 0, "dying object is not forwarded")
         GCFLAG_MASK = ~(GCFLAG_MARKBIT | 3)
-        return (self.base_forwarding_addr + (tid & GCFLAG_MASK) +
-                self.gcheaderbuilder.size_gc_header)
+        res = (self.base_forwarding_addr + (tid & GCFLAG_MASK) +
+               self.gcheaderbuilder.size_gc_header)
+        ll_assert(res < self.finaladdr, "forwarded address >= self.finaladdr")
+        return res
 
     def surviving(self, obj):
         return self.marked(obj)
