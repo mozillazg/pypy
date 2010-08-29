@@ -220,7 +220,6 @@ class GCBase(object):
             pending = self._debug_pending
             while pending.non_empty():
                 obj = pending.pop()
-                self.debug_check_object(obj)
                 self.trace(obj, self._debug_callback2, None)
             self._debug_seen.delete()
             self._debug_pending.delete()
@@ -229,6 +228,7 @@ class GCBase(object):
         seen = self._debug_seen
         if not seen.contains(obj):
             seen.add(obj)
+            self.debug_check_object(obj)
             self._debug_pending.append(obj)
     def _debug_callback(self, root):
         obj = root.address[0]
