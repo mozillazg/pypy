@@ -73,7 +73,7 @@ class AbstractAttribute(object):
 
 
 class Terminator(AbstractAttribute):
-    _immutable_ = True
+    _immutable_fields_ = ['w_cls']
     def __init__(self, w_cls, space):
         self.w_cls = w_cls
         self.space = space
@@ -107,7 +107,7 @@ class Terminator(AbstractAttribute):
         return self.copy(obj)
 
 class DictTerminator(Terminator):
-    _immutable_ = True
+    _immutable_fields_ = ['devolved_dict_terminator']
     def __init__(self, w_cls, space):
         Terminator.__init__(self, w_cls, space)
         self.devolved_dict_terminator = DevolvedDictTerminator(w_cls, space)
@@ -165,7 +165,7 @@ class DevolvedDictTerminator(Terminator):
         return Terminator.set_terminator(self, obj, terminator)
 
 class PlainAttribute(AbstractAttribute):
-    _immutable_ = True
+    _immutable_fields_ = ['selector', 'position', 'back']
     def __init__(self, selector, back):
         self.selector = selector
         self.position = back.length()
