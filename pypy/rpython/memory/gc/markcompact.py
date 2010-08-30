@@ -602,6 +602,9 @@ class MarkCompactGC(MovingGCBase):
             (toaddr + basesize).signed[0] = hashvalue
 
     def debug_check_object(self, obj):
+        type_id = self.get_type_id(obj)
+        self.has_gcptr_in_varsize(type_id)   # checks that the type_id is valid
+        #
         tid = self.header(obj).tid
         if self._is_external(obj):
             # All external objects have GCFLAG_MARKBIT and GCFLAG_HASHTAKEN
@@ -613,9 +616,6 @@ class MarkCompactGC(MovingGCBase):
             # at the very start or at the very end of a collection -- only
             # temporarily during the collection.
             assert tid & GCFLAG_MARKBIT == 0
-        #
-        type_id = self.get_type_id(obj)
-        self.has_gcptr_in_varsize(type_id)   # checks that the type_id is valid
 
     def trace_from_objects_with_finalizers(self):
         if self.run_finalizers.non_empty():   # uncommon case
