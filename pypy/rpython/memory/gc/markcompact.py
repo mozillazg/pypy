@@ -583,12 +583,12 @@ class MarkCompactGC(MovingGCBase):
         if grow_hash_field:
             gcflags |= GCFLAG_SAVED_HASHFIELD
             hashvalue = self.get_identityhash_from_addr(obj)
-            (toaddr + basesize).signed[0] = hashvalue
         elif gcflags & GCFLAG_SAVED_HASHFIELD:
             fromaddr = llarena.getfakearenaaddress(obj)
             fromaddr -= self.gcheaderbuilder.size_gc_header
             hashvalue = (fromaddr + basesize).signed[0]
-            (toaddr + basesize).signed[0] = hashvalue
+        else:
+            hashvalue = 0     # not used
         #
         hdr.tid = self.combine(typeid, gcflags << first_gcflag_bit)
         #
@@ -597,6 +597,9 @@ class MarkCompactGC(MovingGCBase):
             llmemory.raw_memmove(fromaddr, toaddr, basesize)
         else:
             llmemory.raw_memcopy(fromaddr, toaddr, basesize)
+        #
+        if gcflags & GCFLAG_SAVED_HASHFIELD:
+            (toaddr + basesize).signed[0] = hashvalue
 
     def debug_check_object(self, obj):
         tid = self.header(obj).tid
