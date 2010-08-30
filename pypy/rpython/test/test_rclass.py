@@ -709,7 +709,7 @@ class BaseTestRclass(BaseRtypingTest):
 
     def test_immutable(self):
         class I(object):
-            _immutable_ = True
+            _immutable_fields_ = ["v"]
             
             def __init__(self, v):
                 self.v = v
@@ -796,27 +796,17 @@ class BaseTestRclass(BaseRtypingTest):
         assert accessor.fields == {"inst_y" : ""} or \
                accessor.fields == {"oy" : ""} # for ootype
 
-    def test_immutable_inheritance(self):
-        class I(object):
-            def __init__(self, v):
-                self.v = v
-        
-        class J(I):
-            _immutable_ = True
-            def __init__(self, v, w):
-                self.w = w
-                I.__init__(self, v)
-
-        j = J(3, 4)
+    def test_immutable_forbidden_inheritance(self):
+        from pypy.rpython.rclass import ImmutableConflictError
+        class A(object):
+            pass
+        class B(A):
+            _immutable_fields_ = ['v']
         def f():
-            j.v = j.v * 1 # make the annotator think it is mutated
-            j.w = j.w * 1 # make the annotator think it is mutated
-            return j.v + j.w
-
-        t, typer, graph = self.gengraph(f, [], backendopt=True)
-        f_summary = summary(graph)
-        assert f_summary == {"setfield": 2} or \
-               f_summary == {"oosetfield": 2} # for ootype
+            A().v = 123
+            B()             # crash: class B says 'v' is immutable,
+                            # but it is defined on parent class I
+        py.test.raises(ImmutableConflictError, self.gengraph, f, [])
 
 
 class TestLLtype(BaseTestRclass, LLRtypeMixin):
