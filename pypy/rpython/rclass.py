@@ -18,6 +18,10 @@ class FieldListAccessor(object):
     def _freeze_(self):
         return True
 
+class ImmutableConflictError(Exception):
+    """Raised when an attribute 'x' is found on some parent class,
+    but defined in a subclass to be in _immutable_fields_."""
+
 
 def getclassrepr(rtyper, classdef):
     try:
@@ -154,8 +158,9 @@ class AbstractInstanceRepr(Repr):
 
     def _check_for_immutable_hints(self, hints):
         if '_immutable_' in self.classdef.classdesc.classdict:
-            hints = hints.copy()
-            hints['immutable'] = True
+            raise TyperError(
+                "%r: the _immutable_ hint is not supported any more.\n"
+                "Use _immutable_fields_ instead." % (self,))
         self.immutable_field_list = []  # unless overwritten below
         if self.classdef.classdesc.lookup('_immutable_fields_') is not None:
             hints = hints.copy()
@@ -189,18 +194,32 @@ class AbstractInstanceRepr(Repr):
             rbase = self
             while rbase.classdef is not None:
                 immutable_fields.update(
-                    dict.fromkeys(rbase.immutable_field_list))
+                    dict.fromkeys(rbase.immutable_field_list, rbase))
                 rbase = rbase.rbase
             self._parse_field_list(immutable_fields, accessor)
 
     def _parse_field_list(self, fields, accessor):
         with_suffix = {}
-        for name in fields:
+        for name, rbase in fields.items():
             if name.endswith('[*]'):
                 name = name[:-3]
                 suffix = '[*]'
             else:
                 suffix = ''
+            #
+            # check that the field is not higher up the class hierarchy
+            # than where it was originally defined in _immutable_fields_
+            if rbase.rbase.classdef is not None:
+                try:
+                    rbase.rbase._get_field(name)
+                except KeyError:
+                    pass
+                else:
+                    raise ImmutableConflictError(
+                        "the field %r is declared in _immutable_fields_ in "
+                        "class %r, but actually ends up in parent class"
+                        % (name, rbase))
+            #
             try:
                 mangled_name, r = self._get_field(name)
             except KeyError:
