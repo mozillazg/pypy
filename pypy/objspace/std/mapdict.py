@@ -1,4 +1,10 @@
 from pypy.rlib import jit
+
+from pypy.interpreter.baseobjspace import W_Root
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+from pypy.objspace.std.dictmultiobject import IteratorImplementation
+from pypy.objspace.std.dictmultiobject import _is_sane_hash
+
 # ____________________________________________________________
 # attribute shapes
 
@@ -244,7 +250,6 @@ DICT = 0
 SPECIAL = 1
 SLOTS_STARTING_FROM = 2
 
-from pypy.interpreter.baseobjspace import W_Root
 
 class Object(W_Root): # slightly evil to make it inherit from W_Root
     def _init_empty(self, map):
@@ -339,9 +344,6 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
 # ____________________________________________________________
 # dict implementation
 
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject
-from pypy.objspace.std.dictmultiobject import IteratorImplementation
-from pypy.objspace.std.dictmultiobject import _is_sane_hash
 
 class MapDictImplementation(W_DictMultiObject):
     def __init__(self, space, w_obj):
