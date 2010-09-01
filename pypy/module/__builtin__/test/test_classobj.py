@@ -767,6 +767,17 @@ class AppTestOldstyle(object):
         finally:
             warnings.simplefilter('default', RuntimeWarning)
 
+    def test_cant_subclass_instance(self):
+        class A:
+            pass
+        try:
+            class B(type(A())):
+                pass
+        except TypeError:
+            pass
+        else:
+            assert 0, "should have raised"
+
 class AppTestOldStyleSharing(AppTestOldstyle):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsharingdict": True})
