@@ -1,4 +1,4 @@
-from pypy.jit.metainterp.optimizeopt import IntBound, IntUpperBound, \
+from pypy.jit.metainterp.optimizeopt.optimizer import IntBound, IntUpperBound, \
      IntLowerBound, IntUnbounded
 from copy import copy
 
