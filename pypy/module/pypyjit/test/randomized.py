@@ -101,6 +101,7 @@ def run(python, code):
     r.close()
     return res, err
 
+fcnt = 0
 while True:
     code = '''
 try: # make the file runnable by CPython
@@ -116,9 +117,14 @@ print f()
     r1,e1 = run('/usr/bin/python', code)
     r2,e2 = run('../../../translator/goal/pypy-c', code)
     if r1 != r2:
-        print
-        print '******************** FAILED ******************'
-        print code
-        print 'cpython: ', r1, e1
-        print 'pypy: ', r2, e2
+        rapport = '******************** FAILED ******************\n' + \
+                  code + "\n" + \
+                  'cpython: %s %s\n' % (r1, e1) + \
+                  'pypy: %s %s\n' % (r2, e2)
+        fcnt += 1
+        f = open('failures/%d' % fcnt, "w")
+        f.write(rapport)
+        f.close()
+        print rapport
+        
 
