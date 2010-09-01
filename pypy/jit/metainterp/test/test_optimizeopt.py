@@ -4,7 +4,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             #OOtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
-from pypy.jit.metainterp import optimizeopt
+import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 from pypy.jit.metainterp.optimizeopt import optimize_loop_1
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxInt
