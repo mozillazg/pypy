@@ -757,6 +757,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                          unwrap_spec=['self', ObjSpace]),
     **rawdict
 )
+W_InstanceObject.typedef.acceptable_as_base_class = False
 
 class W_InstanceObjectWithDel(W_InstanceObject):
     def __del__(self):
