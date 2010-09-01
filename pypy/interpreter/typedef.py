@@ -271,6 +271,9 @@ def _builduserclswithfeature(config, supercls, *features):
             wantdict = False
 
     if wantdict:
+        base_user_setup = supercls.user_setup.im_func
+        if "user_setup" in body:
+            base_user_setup = body["user_setup"]
         class Proto(object):
             def getdict(self):
                 return self.w__dict__
@@ -279,11 +282,9 @@ def _builduserclswithfeature(config, supercls, *features):
                 self.w__dict__ = check_new_dictionary(space, w_dict)
             
             def user_setup(self, space, w_subtype):
-                self.space = space
-                self.w__class__ = w_subtype
                 self.w__dict__ = space.newdict(
                     instance=True, classofinstance=w_subtype)
-                self.user_setup_slots(w_subtype.nslots)
+                base_user_setup(self, space, w_subtype)
 
             def setclass(self, space, w_subtype):
                 # only used by descr_set___class__
