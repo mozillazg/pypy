@@ -463,6 +463,16 @@ class TestMicroArray(object):
         assert shape[0] == 2
         assert step[0] == 1
 
+    def test_squeeze(self, space):
+        from pypy.module.micronumpy.array import squeeze
+        from pypy.module.micronumpy.microarray import SQUEEZE_ME
+        slice_starts = [1, 2, 3]
+        shape = [1, SQUEEZE_ME, 3]
+        slice_steps = [1, 1, 1]
+        strides = [1, 2, 3]
+
+        offset = squeeze(slice_starts, shape, slice_steps, strides)
+
     def test_slice_setting(self, space):
         from pypy.module.micronumpy.array import size_from_shape
         from pypy.module.micronumpy.microarray import MicroArray

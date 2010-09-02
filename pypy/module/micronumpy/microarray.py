@@ -15,20 +15,36 @@ from pypy.module.micronumpy.array import BaseNumArray
 from pypy.module.micronumpy.array import infer_shape
 from pypy.module.micronumpy.array import stride_row, stride_column, size_from_shape
 from pypy.module.micronumpy.array import normalize_slice_starts
-from pypy.module.micronumpy.array import squeeze_slice, squeeze_shape
+from pypy.module.micronumpy.array import squeeze_shape
+from pypy.module.micronumpy.array import squeeze, SQUEEZE_ME
 from pypy.module.micronumpy.array import shape_prefix
 
 from pypy.rpython.lltypesystem.lltype import cast_ptr_to_int
 
+class FlatIter(Wrappable):
+    _immutable_fields_ = ['array', 'stop']
+    def __init__(self, array):
+        self.array = array
+        self.i = 0
+        self.stop = size_from_shape(array.shape)
+
+    def descr_iter(self, space):
+        return space.wrap(self)
+    descr_iter.unwrap_spec = ['self', ObjSpace]
+
+    def descr_next(self, space):
+        return self.array.getitem(space, self.i) # FIXME
+    descr_iter.unwrap_spec = ['self', ObjSpace]
+
 class MicroIter(Wrappable):
-    _immutable_fields_ = ['step', 'stop', 'ndim'] # XXX: removed array
+    _immutable_fields_ = ['array', 'step', 'stop', 'ndim']
     def __init__(self, array):
         self.array = array
         self.i = 0
         self.index = array.slice_starts[:]
-        self.step = array.slice_steps[array.offset]
-        self.stop = array.shape[array.offset]
-        self.ndim = len(array.shape[array.offset:])
+        self.step = array.slice_steps[array.prefix]
+        self.stop = array.shape[array.prefix]
+        self.ndim = len(array.shape) - array.prefix
 
     def descr_iter(self, space):
         return space.wrap(self)
@@ -36,25 +52,24 @@ class MicroIter(Wrappable):
     
     def descr_next(self, space):
         if self.i < self.stop:
+            print self.index
             if self.ndim > 1:
                 ar = MicroArray(self.array.shape,
                                 self.array.dtype,
                                 parent=self.array,
-                                offset=self.array.offset + 1,
+                                offset=self.array.prefix + 1,
                                 strides=self.array.strides,
                                 slice_starts=self.index,
                                 slice_steps=self.array.slice_steps)
-                self.i += 1
-                self.index[self.array.offset] += self.step
-                return space.wrap(ar)
+                next = space.wrap(ar)
             elif self.ndim == 1:
-                next = self.array.getitem(space, self.array.flatten_index(self.index))
-                self.i += 1
-                self.index[self.array.offset] += self.step
-                return next
+                next = self.array.getitem(space, self.array.flatten_slice_starts(self.index))
             else:
                 raise OperationError(space.w_ValueError,
                        space.wrap("Something is horribly wrong with this array's shape. Has %d dimensions." % len(self.array.shape)))
+            self.i += 1
+            self.index[self.array.prefix] += self.step
+            return next
         else:
             raise OperationError(space.w_StopIteration, space.wrap(""))
     descr_next.unwrap_spec = ['self', ObjSpace]
@@ -64,9 +79,13 @@ MicroIter.typedef = TypeDef('iterator',
                             next = interp2app(MicroIter.descr_next),
                            )
 
+
 class MicroArray(BaseNumArray):
     _immutable_fields_ = ['shape', 'strides', 'offset', 'slice_starts'] # XXX: removed parent
-    def __init__(self, shape, dtype, order='C', strides=[], parent=None, offset=0, slice_starts=[], slice_steps=[]):
+    def __init__(self, shape, dtype,
+                 order='C', strides=[], parent=None,
+                 prefix=0, offset=0,
+                 slice_starts=[], slice_steps=[]):
         assert dtype is not None
 
         self.shape = shape
@@ -74,21 +93,21 @@ class MicroArray(BaseNumArray):
         self.parent = parent
         self.order = order
         self.offset = offset
+        self.prefix = prefix
 
         self.slice_starts = slice_starts[:]
-        for i in range(len(shape) - len(slice_starts)):
+        for i in range(len(slice_starts), len(shape)):
             self.slice_starts.append(0)
 
         self.slice_steps = slice_steps[:]
-        for i in range(len(shape) - len(slice_steps)):
+        for i in range(len(slice_steps), len(shape)):
             self.slice_steps.append(1)
 
         size = size_from_shape(shape)
 
         self.strides = strides[:]
-        stridelen = len(self.strides)
-        for i in range(len(self.shape) - stridelen):
-            self.strides.append(self.stride(stridelen + i))
+        for i in range(len(self.strides), len(shape)):
+            self.strides.append(self.stride(i))
 
         if size > 0 and parent is None:
             self.data = dtype.dtype.alloc(size)
@@ -98,7 +117,7 @@ class MicroArray(BaseNumArray):
             self.data = null_data
 
     def descr_len(self, space):
-        return space.wrap(self.shape[self.offset])
+        return space.wrap(self.shape[self.prefix])
     descr_len.unwrap_spec = ['self', ObjSpace]
 
     def getitem(self, space, offset):
@@ -110,9 +129,11 @@ class MicroArray(BaseNumArray):
             raise OperationError(space.w_IndexError,
                                  space.wrap("index out of bounds"))
 
-    def setitem(self, space, index, w_value):
+    def setitem(self, space, offset, w_value):
+        """Helper function.
+           Sets a value at an offset in the data."""
         try:
-            self.dtype.dtype.w_setitem(space, self.data, index, w_value)
+            self.dtype.dtype.w_setitem(space, self.data, offset, w_value)
         except IndexError, e:
             raise OperationError(space.w_IndexError,
                                  space.wrap("index out of bounds"))
@@ -122,10 +143,20 @@ class MicroArray(BaseNumArray):
            Gives offset into subarray, not into data."""
         offset = 0
         for i in range(len(slice_starts)):
-            offset += (self.slice_steps[i] * slice_starts[i]) * self.strides[i]
+            offset += slice_starts[i] * self.strides[i]
+        #print offset
         return offset
 
-    flatten_index = flatten_slice_starts # TODO: migrate to slice_starts for name?
+    def flatten_slice_starts2(self, slice_starts):
+        """Computes offset into subarray from all information.
+           Gives offset into subarray, not into data."""
+        offset = 0
+        for i in range(len(slice_starts)):
+            offset += (self.slice_steps[i] * slice_starts[i]) * self.strides[i]
+        print offset
+        return offset
+
+    flatten_index = flatten_slice_starts2 # TODO: migrate to slice_starts for name?
 
     def stride(self, i):
         if self.order == 'C':
@@ -146,10 +177,13 @@ class MicroArray(BaseNumArray):
             index = space.int_w(space.index(w_index))
             # Normalize 
             if index < 0:
-                index += self.shape[self.offset]
+                index += self.shape[self.prefix]
+            elif index > self.shape[self.prefix]:
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("invalid index")) # FIXME: message
 
-            slice_starts[self.offset] += index * self.slice_steps[self.offset]
-            shape[self.offset] = 1
+            slice_starts[self.prefix] += index * self.slice_steps[self.prefix]
+            shape[self.prefix] = 1 #SQUEEZE_ME
             return slice_starts, shape, slice_steps
         except OperationError, e:
             if e.match(space, space.w_TypeError): pass
@@ -157,9 +191,9 @@ class MicroArray(BaseNumArray):
 
         if isinstance(w_index, W_SliceObject):
             start, stop, step, length = w_index.indices4(space, self.shape[0])
-            slice_starts[self.offset] += start * slice_steps[self.offset]
-            shape[self.offset] = length
-            slice_steps[self.offset] *= step
+            slice_starts[self.prefix] += start * slice_steps[self.prefix]
+            shape[self.prefix] = length
+            slice_steps[self.prefix] *= step
             return slice_starts, shape, slice_steps
         elif space.is_w(w_index, space.w_Ellipsis):
             return slice_starts, shape, slice_steps
@@ -168,13 +202,16 @@ class MicroArray(BaseNumArray):
             indices = space.fixedview(w_index)
 
             indexlen = len(indices)
+            if indexlen != len(self.shape): # FIXME: shape will often be larger...
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("invalid index")) # FIXME: message
 
             for i in range(indexlen):
                 w_index = indices[i]
                 try:
                     index = space.int_w(space.index(w_index))
-                    slice_starts[self.offset + i] += index
-                    shape[self.offset + i] = 1
+                    slice_starts[self.prefix + i] += index
+                    shape[self.prefix + i] = 1 #SQUEEZE_ME
                     continue
 
                 except OperationError, e:
@@ -183,9 +220,9 @@ class MicroArray(BaseNumArray):
 
                 if isinstance(w_index, W_SliceObject):
                     start, stop, step, length = w_index.indices4(space, self.shape[i])
-                    slice_starts[self.offset + i] += start * slice_steps[self.offset + i]
-                    shape[self.offset + i] = length
-                    slice_steps[self.offset + i] *= step
+                    slice_starts[self.prefix + i] += start * slice_steps[self.prefix + i]
+                    shape[self.prefix + i] = length
+                    slice_steps[self.prefix + i] *= step
                 elif space.is_w(w_index, space.w_Ellipsis):
                     pass # I can't think of anything we need to do
                 else:
@@ -212,13 +249,14 @@ class MicroArray(BaseNumArray):
 
         if size == 1:
             return self.getitem(space,
-                                self.flatten_index(slice_starts))
+                                self.flatten_slice_starts(slice_starts))
         else:
             prefix = shape_prefix(shape)
             ar = MicroArray(shape,
                             dtype=self.dtype,
                             parent=self,
                             offset=prefix, # XXX: what do we do about shapes that needs to be squeezed out?
+                            strides=self.strides[:], 
                             slice_starts=slice_starts,
                             slice_steps=slice_steps)
             return space.wrap(ar)
@@ -372,7 +410,7 @@ def descr_get_dtype(space, self):
     return space.wrap(self.dtype)
 
 def descr_get_shape(space, self):
-    return space.newtuple([space.wrap(x) for x in self.shape[self.offset:]])
+    return space.newtuple([space.wrap(x) for x in self.shape[self.prefix:]])
 
 def descr_get_array_interface(space, self):
     w_dict = space.newdict()
