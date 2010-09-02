@@ -400,6 +400,9 @@ class Array(ContainerType):
     def _container_example(self):
         return _array(self, 1, initialization='example')
 
+    def _immutable_field(self, index):
+        return self._hints.get('immutable', False)
+
 class GcArray(Array):
     _gckind = 'gc'
     def _inline_is_varsize(self, last):
