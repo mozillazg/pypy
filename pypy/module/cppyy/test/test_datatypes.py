@@ -16,11 +16,10 @@ def setup_module(mod):
         raise OSError("'make' failed (see stderr)")
 
 class AppTestDATATYPES:
-    N = 5               # should be imported from the dictionary
-
     def setup_class(cls):
         cls.space = space
         env = os.environ
+        cls.w_N = space.wrap(5)    # should be imported from the dictionary
         cls.w_shared_lib = space.wrap(shared_lib)
         cls.w_datatypes = cls.space.appexec([], """():
             import cppyy
@@ -93,23 +92,22 @@ class AppTestDATATYPES:
         c.m_double = 0.456;    assert round(c.get_double() - 0.456, 8) == 0
         c.set_double( 0.567 ); assert round(c.m_double     - 0.567, 8) == 0
 
-        """
         # arrays; there will be pointer copies, so destroy the current ones
         c.destroy_arrays()
 
         # integer arrays
-        a = range(N)
-        atypes = [ 'h', 'H', 'i', 'I', 'l', 'L' ]
-        for j in range(len(names)):
-            b = array(atypes[j], a)
+        import array
+        a = range(self.N)
+        atypes = [ 'h' ] #, 'H', 'i', 'I', 'l', 'L' ]
+        for j in range(len(atypes)):#names)):
+            b = array.array(atypes[j], a)
             exec 'c.m_%s_array = b' % names[j]   # buffer copies
-            for i in range(N):
+            for i in range(self.N):
                 assert eval('c.m_%s_array[i]' % names[j]) == b[i]
 
-            exec 'c.m_%s_array2 = b' % names[j]  # pointer copies
-            b[i] = 28
-            for i in range(N):
-                assert eval('c.m_%s_array2[i]' % names[j]) == b[i]
-        """
+#            exec 'c.m_%s_array2 = b' % names[j]  # pointer copies
+#            b[i] = 28
+#            for i in range(self.N):
+#                assert eval('c.m_%s_array2[i]' % names[j]) == b[i]
 
         c.destruct()
