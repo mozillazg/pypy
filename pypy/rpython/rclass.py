@@ -19,8 +19,8 @@ class FieldListAccessor(object):
         return True
 
 class ImmutableConflictError(Exception):
-    """Raised when an attribute 'x' is found on some parent class,
-    but defined in a subclass to be in _immutable_fields_."""
+    """Raised when the _immutable_ or _immutable_fields_ hints are
+    not consistent across a class hierarchy."""
 
 
 def getclassrepr(rtyper, classdef):
@@ -157,10 +157,9 @@ class AbstractInstanceRepr(Repr):
         pass
 
     def _check_for_immutable_hints(self, hints):
-        if '_immutable_' in self.classdef.classdesc.classdict:
-            raise TyperError(
-                "%r: the _immutable_ hint is not supported any more.\n"
-                "Use _immutable_fields_ instead." % (self,))
+        if self.classdef.classdesc.lookup('_immutable_') is not None:
+            hints = hints.copy()
+            hints['immutable'] = True
         self.immutable_field_list = []  # unless overwritten below
         if self.classdef.classdesc.lookup('_immutable_fields_') is not None:
             hints = hints.copy()
@@ -187,39 +186,29 @@ class AbstractInstanceRepr(Repr):
         return 'InstanceR %s' % (clsname,)
 
     def _setup_repr_final(self):
+        self._setup_immutable_field_list()
+        self._check_for_immutable_conflicts()
+
+    def _setup_immutable_field_list(self):
         hints = self.object_type._hints
         if "immutable_fields" in hints:
             accessor = hints["immutable_fields"]
-            immutable_fields = {}
-            rbase = self
-            while rbase.classdef is not None:
-                immutable_fields.update(
-                    dict.fromkeys(rbase.immutable_field_list, rbase))
-                rbase = rbase.rbase
-            self._parse_field_list(immutable_fields, accessor)
+            if not hasattr(accessor, 'fields'):
+                immutable_fields = []
+                rbase = self
+                while rbase.classdef is not None:
+                    immutable_fields += rbase.immutable_field_list
+                    rbase = rbase.rbase
+                self._parse_field_list(immutable_fields, accessor)
 
     def _parse_field_list(self, fields, accessor):
         with_suffix = {}
-        for name, rbase in fields.items():
+        for name in fields:
             if name.endswith('[*]'):
                 name = name[:-3]
                 suffix = '[*]'
             else:
                 suffix = ''
-            #
-            # check that the field is not higher up the class hierarchy
-            # than where it was originally defined in _immutable_fields_
-            if rbase.rbase.classdef is not None:
-                try:
-                    rbase.rbase._get_field(name)
-                except KeyError:
-                    pass
-                else:
-                    raise ImmutableConflictError(
-                        "the field %r is declared in _immutable_fields_ in "
-                        "class %r, but actually ends up in parent class"
-                        % (name, rbase))
-            #
             try:
                 mangled_name, r = self._get_field(name)
             except KeyError:
@@ -227,6 +216,36 @@ class AbstractInstanceRepr(Repr):
             with_suffix[mangled_name] = suffix
         accessor.initialize(self.object_type, with_suffix)
         return with_suffix
+
+    def _check_for_immutable_conflicts(self):
+        # check for conflicts, i.e. a field that is defined normally as
+        # mutable in some parent class but that is now declared immutable
+        from pypy.rpython.lltypesystem.lltype import Void
+        is_self_immutable = "immutable" in self.object_type._hints
+        base = self
+        while base.classdef is not None:
+            base = base.rbase
+            for fieldname in base.fields:
+                try:
+                    mangled, r = base._get_field(fieldname)
+                except KeyError:
+                    continue
+                if r.lowleveltype == Void:
+                    continue
+                base._setup_immutable_field_list()
+                if base.object_type._immutable_field(mangled):
+                    continue
+                # 'fieldname' is a mutable, non-Void field in the parent
+                if is_self_immutable:
+                    raise ImmutableConflictError(
+                        "class %r has _immutable_=True, but parent class %r "
+                        "defines (at least) the mutable field %r" % (
+                        self, base, fieldname))
+                if fieldname in self.immutable_field_list:
+                    raise ImmutableConflictError(
+                        "field %r is defined mutable in class %r, but "
+                        "listed in _immutable_fields_ in subclass %r" % (
+                        fieldname, base, self))
 
     def new_instance(self, llops, classcallhop=None):
         raise NotImplementedError
