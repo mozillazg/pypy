@@ -244,6 +244,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    requires=[("objspace.std.withshadowtracking", False),
                              ("objspace.std.withinlineddict", False),
                              ("objspace.std.withsharingdict", False),
+                             ("objspace.std.getattributeshortcut", True),
+                             ("objspace.std.withtypeversion", True),
                        ]),
 
         BoolOption("withrangelist",

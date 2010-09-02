@@ -23,6 +23,9 @@ class AbstractAttribute(object):
     def delete(self, obj, selector):
         return None
 
+    def index(self, selector):
+        return -1
+
     def copy(self, obj):
         raise NotImplementedError("abstract base class")
 
@@ -194,13 +197,18 @@ class PlainAttribute(AbstractAttribute):
         return self.back.write(obj, selector, w_value)
 
     def delete(self, obj, selector):
-        if self.selector == selector:
+        if selector == self.selector:
             # ok, attribute is deleted
             return self.back.copy(obj)
         new_obj = self.back.delete(obj, selector)
         if new_obj is not None:
             self._copy_attr(obj, new_obj)
         return new_obj
+
+    def index(self, selector):
+        if selector == self.selector:
+            return self.position
+        return self.back.index(selector)
 
     def copy(self, obj):
         new_obj = self.back.copy(obj)
@@ -248,7 +256,8 @@ def _become(w_obj, new_obj):
 
 DICT = 0
 SPECIAL = 1
-SLOTS_STARTING_FROM = 2
+INVALID = 2
+SLOTS_STARTING_FROM = 3
 
 
 class Object(W_Root): # slightly evil to make it inherit from W_Root
@@ -441,3 +450,77 @@ class MapDictIteratorImplementation(IteratorImplementation):
                 w_attr = self.space.wrap(attr)
                 return w_attr, self.w_obj.getdictvalue(self.space, attr)
         return None, None
+
+# ____________________________________________________________
+# Magic caching
+
+# XXX we also would like getdictvalue_attr_is_in_class() above
+
+class CacheEntry(object):
+    map = None
+    version_tag = None
+    index = 0
+    success_counter = 0
+    failure_counter = 0
+
+INVALID_CACHE_ENTRY = CacheEntry()
+INVALID_CACHE_ENTRY.map = AbstractAttribute()    # different from any real map
+
+def init_mapdict_cache(pycode):
+    num_entries = len(pycode.co_names_w)
+    pycode._mapdict_caches = [INVALID_CACHE_ENTRY] * num_entries
+
+def LOAD_ATTR_caching(pycode, w_obj, nameindex):
+    # this whole mess is to make the interpreter quite a bit faster; it's not
+    # used if we_are_jitted().
+    entry = pycode._mapdict_caches[nameindex]
+    map = w_obj._get_mapdict_map()
+    if map is entry.map:
+        w_type = map.get_terminator().w_cls    # XXX fix me, too slow
+        version_tag = w_type.version_tag()
+        if version_tag is entry.version_tag:
+            # everything matches, it's incredibly fast
+            if pycode.space.config.objspace.std.withmethodcachecounter:
+                entry.success_counter += 1
+            return w_obj._get_mapdict_storage()[entry.index]
+    return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)
+LOAD_ATTR_caching._always_inline_ = True
+
+def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
+    space = pycode.space
+    w_name = pycode.co_names_w[nameindex]
+    if map is not None:
+        w_type = map.get_terminator().w_cls
+        w_descr = w_type.getattribute_if_not_from_object()
+        if w_descr is not None:
+            return space._handle_getattribute(w_descr, w_obj, w_name)
+
+        version_tag = w_type.version_tag()
+        if version_tag is not None:
+            name = space.str_w(w_name)
+            w_descr = w_type.lookup(name)
+            selector = ("", INVALID)
+            if w_descr is not None and space.is_data_descr(w_descr):
+                from pypy.interpreter.typedef import Member
+                descr = space.interpclass_w(w_descr)
+                if isinstance(descr, Member):
+                    selector = ("slot", SLOTS_STARTING_FROM + descr.index)
+            else:
+                selector = (name, DICT)
+            if selector[1] != INVALID:
+                index = map.index(selector)
+                if index >= 0:
+                    entry = pycode._mapdict_caches[nameindex]
+                    if entry is INVALID_CACHE_ENTRY:
+                        entry = CacheEntry()
+                        pycode._mapdict_caches[nameindex] = entry
+                    entry.map = map
+                    entry.version_tag = version_tag
+                    entry.index = index
+                    if space.config.objspace.std.withmethodcachecounter:
+                        entry.failure_counter += 1
+                    return w_obj._get_mapdict_storage()[index]
+    if space.config.objspace.std.withmethodcachecounter:
+        INVALID_CACHE_ENTRY.failure_counter += 1
+    return space.getattr(w_obj, w_name)
+LOAD_ATTR_slowpath._dont_inline_ = True
