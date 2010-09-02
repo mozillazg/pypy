@@ -8,9 +8,9 @@ class Class(object):
     def __init__(self, hasdict=True):
         self.hasdict = True
         if hasdict:
-            self.terminator = DictTerminator(self, space)
+            self.terminator = DictTerminator(space, self)
         else:
-            self.terminator = NoDictTerminator(self, space)
+            self.terminator = NoDictTerminator(space, self)
 
     def instantiate(self, sp=None):
         if sp is None:
@@ -24,7 +24,14 @@ class Object(Object):
         hasdict = False
 
 def test_plain_attribute():
-    aa = PlainAttribute(("b", DICT), PlainAttribute(("a", DICT), Terminator(None, None)))
+    space = " "
+    w_cls = "class"
+    aa = PlainAttribute(("b", DICT),
+                        PlainAttribute(("a", DICT),
+                                       Terminator(space, w_cls)))
+    assert aa.space is space
+    assert aa.w_cls is w_cls
+
     obj = Object()
     obj.map, obj.storage = aa, [10, 20]
     assert obj.getdictvalue(space, "a") == 10

@@ -1,4 +1,4 @@
-from pypy.rlib import jit
+from pypy.rlib import jit, objectmodel
 
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
@@ -13,6 +13,10 @@ NUM_DIGITS = 4
 class AbstractAttribute(object):
     cache_attrs = None
     _size_estimate = 0
+
+    def __init__(self, space, w_cls):
+        self.space = space
+        self.w_cls = w_cls
 
     def read(self, obj, selector):
         raise NotImplementedError("abstract base class")
@@ -83,9 +87,6 @@ class AbstractAttribute(object):
 
 class Terminator(AbstractAttribute):
     _immutable_fields_ = ['w_cls']
-    def __init__(self, w_cls, space):
-        self.w_cls = w_cls
-        self.space = space
 
     def read(self, obj, selector):
         return None
@@ -117,9 +118,9 @@ class Terminator(AbstractAttribute):
 
 class DictTerminator(Terminator):
     _immutable_fields_ = ['devolved_dict_terminator']
-    def __init__(self, w_cls, space):
-        Terminator.__init__(self, w_cls, space)
-        self.devolved_dict_terminator = DevolvedDictTerminator(w_cls, space)
+    def __init__(self, space, w_cls):
+        Terminator.__init__(self, space, w_cls)
+        self.devolved_dict_terminator = DevolvedDictTerminator(space, w_cls)
 
     def materialize_r_dict(self, space, obj, w_d):
         result = Object()
@@ -176,6 +177,7 @@ class DevolvedDictTerminator(Terminator):
 class PlainAttribute(AbstractAttribute):
     _immutable_fields_ = ['selector', 'position', 'back']
     def __init__(self, selector, back):
+        AbstractAttribute.__init__(self, back.space, back.w_cls)
         self.selector = selector
         self.position = back.length()
         self.back = back
@@ -315,7 +317,7 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         assert flag
 
     def getclass(self, space):
-        return self._get_mapdict_map().get_terminator().w_cls
+        return self._get_mapdict_map().w_cls
 
     def setclass(self, space, w_cls):
         new_obj = self._get_mapdict_map().set_terminator(self, w_cls.terminator)
@@ -464,7 +466,8 @@ class CacheEntry(object):
     failure_counter = 0
 
 INVALID_CACHE_ENTRY = CacheEntry()
-INVALID_CACHE_ENTRY.map = AbstractAttribute()    # different from any real map
+INVALID_CACHE_ENTRY.map = objectmodel.instantiate(AbstractAttribute)
+                             # different from any real map ^^^
 
 def init_mapdict_cache(pycode):
     num_entries = len(pycode.co_names_w)
@@ -476,8 +479,7 @@ def LOAD_ATTR_caching(pycode, w_obj, nameindex):
     entry = pycode._mapdict_caches[nameindex]
     map = w_obj._get_mapdict_map()
     if map is entry.map:
-        w_type = map.get_terminator().w_cls    # XXX fix me, too slow
-        version_tag = w_type.version_tag()
+        version_tag = map.w_cls.version_tag()
         if version_tag is entry.version_tag:
             # everything matches, it's incredibly fast
             if pycode.space.config.objspace.std.withmethodcachecounter:
@@ -490,7 +492,7 @@ def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
     space = pycode.space
     w_name = pycode.co_names_w[nameindex]
     if map is not None:
-        w_type = map.get_terminator().w_cls
+        w_type = map.w_cls
         w_descr = w_type.getattribute_if_not_from_object()
         if w_descr is not None:
             return space._handle_getattribute(w_descr, w_obj, w_name)
