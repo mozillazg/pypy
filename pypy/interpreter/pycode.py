@@ -117,6 +117,10 @@ class PyCode(eval.Code):
 
         self._compute_flatcall()
 
+        if self.space.config.objspace.std.withmapdict:
+            from pypy.objspace.std.mapdict import init_mapdict_cache
+            init_mapdict_cache(self)
+
     def _freeze_(self):
         if self.magic == cpython_magic:
             raise Exception("CPython host codes should not be rendered")

@@ -1,4 +1,4 @@
-from pypy.conftest import gettestobjspace
+from pypy.conftest import gettestobjspace, option
 from pypy.objspace.std.test.test_dictmultiobject import FakeSpace, W_DictMultiObject
 from pypy.objspace.std.mapdict import *
 
@@ -498,3 +498,171 @@ class AppTestWithMapDict(object):
         assert a.y == 2
         assert a.__dict__ is d
         assert isinstance(a, B)
+
+
+class AppTestWithMapDictAndCounters(object):
+    def setup_class(cls):
+        from pypy.interpreter import gateway
+        cls.space = gettestobjspace(
+            **{"objspace.std.withmapdict": True,
+               "objspace.std.withmethodcachecounter": True})
+        #
+        def check(space, w_func, name):
+            w_code = space.getattr(w_func, space.wrap('func_code'))
+            nameindex = map(space.str_w, w_code.co_names_w).index(name)
+            entry = w_code._mapdict_caches[nameindex]
+            entry.failure_counter = 0
+            entry.success_counter = 0
+            INVALID_CACHE_ENTRY.failure_counter = 0
+            #
+            w_res = space.call_function(w_func)
+            assert space.eq_w(w_res, space.wrap(42))
+            #
+            entry = w_code._mapdict_caches[nameindex]
+            if entry is INVALID_CACHE_ENTRY:
+                failures = successes = 0
+            else:
+                failures = entry.failure_counter
+                successes = entry.success_counter
+            globalfailures = INVALID_CACHE_ENTRY.failure_counter
+            return space.wrap((failures, successes, globalfailures))
+        check.unwrap_spec = [gateway.ObjSpace, gateway.W_Root, str]
+        cls.w_check = cls.space.wrap(gateway.interp2app(check))
+
+    def test_simple(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 42
+        def f():
+            return a.x
+        #
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        #
+        A.y = 5     # unrelated, but changes the version_tag
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        #
+        A.x = 8     # but shadowed by 'a.x'
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+
+    def test_property(self):
+        class A(object):
+            x = property(lambda self: 42)
+        a = A()
+        def f():
+            return a.x
+        #
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
+
+    def test_slots(self):
+        class A(object):
+            __slots__ = ['x']
+        a = A()
+        a.x = 42
+        def f():
+            return a.x
+        #
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+
+    def test_two_attributes(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 40
+        a.y = -2
+        def f():
+            return a.x - a.y
+        #
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        #
+        res = self.check(f, 'y')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'y')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'y')
+        assert res == (0, 1, 0)
+
+    def test_two_maps(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 42
+        def f():
+            return a.x
+        #
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        #
+        a.y = "foo"      # changes the map
+        res = self.check(f, 'x')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        #
+        a.y = "bar"      # does not change the map any more
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'x')
+        assert res == (0, 1, 0)
+
+    def test_custom_metaclass(self):
+        class A(object):
+            class __metaclass__(type):
+                pass
+        a = A()
+        a.x = 42
+        def f():
+            return a.x
+        #
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
+        res = self.check(f, 'x')
+        assert res == (0, 0, 1)
