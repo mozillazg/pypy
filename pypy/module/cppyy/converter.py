@@ -261,17 +261,19 @@ def get_converter(space, name):
     return VoidConverter(space, name)
 
 
-_converters["bool"]                = BoolConverter
-_converters["char"]                = CharConverter
-_converters["unsigned char"]       = CharConverter
-_converters["short int"]           = ShortConverter
-_converters["short int*"]          = ShortPtrConverter
-_converters["short int[]"]         = ShortArrayConverter
-_converters["unsigned short int"]  = ShortConverter
-_converters["int"]                 = LongConverter
-_converters["unsigned int"]        = LongConverter
-_converters["long int"]            = LongConverter
-_converters["unsigned long int"]   = LongConverter
-_converters["float"]               = FloatConverter
-_converters["double"]              = DoubleConverter
-_converters["const char*"]         = CStringConverter
+_converters["bool"]                     = BoolConverter
+_converters["char"]                     = CharConverter
+_converters["unsigned char"]            = CharConverter
+_converters["short int"]                = ShortConverter
+_converters["short int*"]               = ShortPtrConverter
+_converters["short int[]"]              = ShortArrayConverter
+_converters["unsigned short int"]       = ShortConverter
+_converters["unsigned short int*"]      = ShortPtrConverter
+_converters["unsigned short int[]"]     = ShortArrayConverter
+_converters["int"]                      = LongConverter
+_converters["unsigned int"]             = LongConverter
+_converters["long int"]                 = LongConverter
+_converters["unsigned long int"]        = LongConverter
+_converters["float"]                    = FloatConverter
+_converters["double"]                   = DoubleConverter
+_converters["const char*"]              = CStringConverter
