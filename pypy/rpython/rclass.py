@@ -9,6 +9,7 @@ from pypy.rpython.rmodel import Repr, getgcflavor
 class FieldListAccessor(object):
 
     def initialize(self, TYPE, fields):
+        assert type(fields) is dict
         self.TYPE = TYPE
         self.fields = fields
 
