@@ -4,6 +4,8 @@ from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import interp2app
 
+SQUEEZE_ME = -1
+
 def stride_row(shape, i):
     assert i >= 0
     stride = 1
@@ -28,33 +30,33 @@ def size_from_shape(shape):
 
 def normalize_slice_starts(slice_starts, shape):
     for i in range(len(slice_starts)):
+        #print "slice_start[%d]=%d" % (i, slice_starts[i])
         if slice_starts[i] < 0:
             slice_starts[i] += shape[i]
         elif slice_starts[i] >= shape[i]:
+            print "raising"
             raise IndexError("invalid index")
     return slice_starts
 
 def squeeze_shape(shape):
     "Simple squeeze."
+    #return [x for x in shape if x != SQUEEZE_ME]
     return [x for x in shape if x != 1]
 
-def squeeze_slice(current_shape, starts, shape, step):
-    current_shape = current_shape[:]
+def squeeze(starts, shape, step, strides):
+    offset = 0
     i = 0
     stop = len(shape)
     while i < stop:
-        if shape[i] == 1:
+        if shape[i] == SQUEEZE_ME:
             if i == 0:
-                offset += starts[i] # FIXME: eh?
-                offset *= current_shape[i]
-            else:
-                step[i-1] += starts[i] # FIXME: eh?
-                step[i-1] *= current_shape[i]
+                offset += starts[i]
 
-            del current_shape[i]
-            del starts[i] # XXX: I think this needs to be incorporated...
+            del starts[i]
             del shape[i]
             del step[i]
+            del strides[i]
+            stop -= 1
         else:
             i += 1
     return offset
@@ -64,7 +66,7 @@ def shape_prefix(shape):
     try:
         while shape[prefix] == 1: prefix += 1
     except IndexError, e:
-        prefix = len(shape) # XXX - 1?
+        prefix = len(shape)
 
     return prefix
 
