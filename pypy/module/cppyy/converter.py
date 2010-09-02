@@ -3,6 +3,8 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.objspace.std.intobject import W_IntObject
 
+from pypy.module._rawffi.interp_rawffi import unpack_simple_shape
+
 from pypy.module.cppyy import helper, capi
 
 _converters = {}
@@ -166,6 +168,41 @@ class CStringConverter(TypeConverter):
         return rffi.cast(rffi.VOIDP, x)
 
 
+class ShortPtrConverter(TypeConverter):
+    _immutable_ = True
+    def __init__(self, detail=None):
+        if detail is None:
+            import sys
+            detail = sys.maxint
+        self.size = detail
+    
+    def convert_argument(self, space, w_obj):
+        assert "not yet implemented"
+
+    def from_memory(self, space, w_obj, offset):
+        # read access, so no copy needed
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        shortptr = rffi.cast(rffi.SHORTP, fieldptr)
+        w_array = unpack_simple_shape(space, space.wrap('h'))
+        return w_array.fromaddress(space, shortptr, self.size)
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        # copy only the pointer value
+        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
+        byteptr = rffi.cast(rffi.LONGP, obj.rawobject[offset])
+        # TODO: now what ... ?? AFAICS, w_value is a pure python list, not an array?
+#        byteptr[0] = space.unwrap(space.id(w_value.getslotvalue(2)))
+
+
+class ShortArrayConverter(ShortPtrConverter):
+    def to_memory(self, space, w_obj, w_value, offset):
+        # copy the full array (uses byte copy for now)
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        value = w_value.getslotvalue(2)
+        for i in range(min(self.size*2, value.getlength())):
+            fieldptr[i] = value.getitem(i)
+
+
 class InstancePtrConverter(TypeConverter):
     _immutable_ = True
     def __init__(self, space, cpptype):
@@ -199,13 +236,23 @@ def get_converter(space, name):
     #   5) generalized cases (covers basically all user classes)
     #   6) void converter, which fails on use
 
+    #   1) full, exact match
     try:
-        return _converters[name]
+        return _converters[name]()
     except KeyError:
         pass
 
-    compound = helper.compound(name)
-    cpptype = interp_cppyy.type_byname(space, helper.clean_type(name))
+    #   2) match of decorated, unqualified type
+    compound, detail = helper.compound(name)
+    clean_name = helper.clean_type(name)
+    try:
+        if detail:
+            return _converters[clean_name+compound](detail)
+        return _converters[clean_name+compound]()
+    except KeyError:
+        pass
+        
+    cpptype = interp_cppyy.type_byname(space, clean_name)
     if compound == "*":
         return InstancePtrConverter(space, cpptype)
 
@@ -214,15 +261,17 @@ def get_converter(space, name):
     return VoidConverter(space, name)
 
 
-_converters["bool"]                = BoolConverter()
-_converters["char"]                = CharConverter()
-_converters["unsigned char"]       = CharConverter()
-_converters["short int"]           = ShortConverter()
-_converters["unsigned short int"]  = ShortConverter()
-_converters["int"]                 = LongConverter()
-_converters["unsigned int"]        = LongConverter()
-_converters["long int"]            = LongConverter()
-_converters["unsigned long int"]   = LongConverter()
-_converters["float"]               = FloatConverter()
-_converters["double"]              = DoubleConverter()
-_converters["const char*"]         = CStringConverter()
+_converters["bool"]                = BoolConverter
+_converters["char"]                = CharConverter
+_converters["unsigned char"]       = CharConverter
+_converters["short int"]           = ShortConverter
+_converters["short int*"]          = ShortPtrConverter
+_converters["short int[]"]         = ShortArrayConverter
+_converters["unsigned short int"]  = ShortConverter
+_converters["int"]                 = LongConverter
+_converters["unsigned int"]        = LongConverter
+_converters["long int"]            = LongConverter
+_converters["unsigned long int"]   = LongConverter
+_converters["float"]               = FloatConverter
+_converters["double"]              = DoubleConverter
+_converters["const char*"]         = CStringConverter

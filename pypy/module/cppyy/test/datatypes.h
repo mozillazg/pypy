@@ -14,6 +14,9 @@ public:
     cppyy_test_data();
     ~cppyy_test_data();
 
+// helper
+    void destroy_arrays();
+
 // getters
     bool           get_bool();
     char           get_char();
@@ -105,9 +108,6 @@ public:
     static unsigned long  s_ulong;
     static float          s_float;
     static double         s_double;
-
-private:
-    void destroy_arrays();
 
 private:
     bool m_owns_arrays;
