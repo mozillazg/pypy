@@ -1,5 +1,6 @@
 from optimizer import Optimizer
-from rewrite import Rewrite
+from rewrite import OptRewrite
+from intbounds import OptIntBounds
 
 def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -7,7 +8,9 @@ def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     must be applicable to the loop; you will probably get an AssertionError
     if not.
     """
-    optimizations = (Rewrite(),)
+    optimizations = [OptIntBounds(),
+                     OptRewrite(),
+                    ]
     optimizer = Optimizer(metainterp_sd, loop, optimizations)
     if virtuals:
         optimizer.setup_virtuals_and_constants()

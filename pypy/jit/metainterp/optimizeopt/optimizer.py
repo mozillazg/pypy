@@ -17,209 +17,17 @@ from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
-from pypy.rlib.rarithmetic import ovfcheck
-
-import sys
-MAXINT = sys.maxint
-MININT = -sys.maxint - 1
-
-class IntBound(object):
-    _attrs_ = ('has_upper', 'has_lower', 'upper', 'lower')
-    
-    def __init__(self, lower, upper):
-        self.has_upper = True
-        self.has_lower = True
-        self.upper = upper
-        self.lower = lower
-
-    # Returns True if the bound was updated
-    def make_le(self, other):
-        if other.has_upper:
-            if not self.has_upper or other.upper < self.upper:
-                self.has_upper = True
-                self.upper = other.upper
-                return True
-        return False
-
-    def make_lt(self, other):
-        return self.make_le(other.add(-1))
-
-    def make_ge(self, other):
-        if other.has_lower:
-            if not self.has_lower or other.lower > self.lower:
-                self.has_lower = True
-                self.lower = other.lower
-                return True
-        return False
-
-    def make_gt(self, other):
-        return self.make_ge(other.add(1))
-
-    def known_lt(self, other):
-        if self.has_upper and other.has_lower and self.upper < other.lower:
-            return True
-        return False
-
-    def known_le(self, other):
-        if self.has_upper and other.has_lower and self.upper <= other.lower:
-            return True
-        return False
-
-    def known_gt(self, other):
-        return other.known_lt(self)
-
-    def known_ge(self, other):
-        return other.known_le(self)
-
-    def intersect(self, other):
-        r = False
-
-        if other.has_lower:
-            if other.lower > self.lower or not self.has_lower:
-                self.lower = other.lower
-                self.has_lower = True
-                r = True
-
-        if other.has_upper:
-            if other.upper < self.upper or not self.has_upper:
-                self.upper = other.upper
-                self.has_upper = True
-                r = True
-
-        return r
-    
-    def add(self, offset):
-        res = self.copy()
-        try:
-            res.lower = ovfcheck(res.lower + offset)
-        except OverflowError:
-            res.has_lower = False
-        try:
-            res.upper = ovfcheck(res.upper + offset)
-        except OverflowError:
-            res.has_upper = False
-        return res
-
-    def mul(self, value):
-        return self.mul_bound(IntBound(value, value))
-    
-    def add_bound(self, other):
-        res = self.copy()
-        if other.has_upper:
-            try:
-                res.upper = ovfcheck(res.upper + other.upper)
-            except OverflowError:
-                res.has_upper = False
-        else:
-            res.has_upper = False
-        if other.has_lower:
-            try:
-                res.lower = ovfcheck(res.lower + other.lower)
-            except OverflowError:
-                res.has_lower = False            
-        else:
-            res.has_lower = False
-        return res
-
-    def sub_bound(self, other):
-        res = self.copy()
-        if other.has_lower:
-            try:
-                res.upper = ovfcheck(res.upper - other.lower)
-            except OverflowError:
-                res.has_upper = False
-        else:
-            res.has_upper = False
-        if other.has_upper:
-            try:
-                res.lower = ovfcheck(res.lower - other.upper)
-            except OverflowError:
-                res.has_lower = False            
-        else:
-            res.has_lower = False
-        return res
-
-    def mul_bound(self, other):
-        if self.has_upper and self.has_lower and \
-           other.has_upper and other.has_lower:
-            try:
-                vals = (ovfcheck(self.upper * other.upper),
-                        ovfcheck(self.upper * other.lower),
-                        ovfcheck(self.lower * other.upper),
-                        ovfcheck(self.lower * other.lower))
-                return IntBound(min4(vals), max4(vals))
-            except OverflowError:
-                return IntUnbounded()
-        else:
-            return IntUnbounded()
-
-    def div_bound(self, other):
-        if self.has_upper and self.has_lower and \
-           other.has_upper and other.has_lower and \
-           not other.contains(0):
-            try:
-                vals = (ovfcheck(self.upper / other.upper),
-                        ovfcheck(self.upper / other.lower),
-                        ovfcheck(self.lower / other.upper),
-                        ovfcheck(self.lower / other.lower))
-                return IntBound(min4(vals), max4(vals))
-            except OverflowError:
-                return IntUnbounded()
-        else:
-            return IntUnbounded()
-
-    def contains(self, val):
-        if self.has_lower and val < self.lower:
-            return False
-        if self.has_upper and val > self.upper:
-            return False
-        return True
-        
-    def __repr__(self):
-        if self.has_lower:
-            l = '%4d' % self.lower
-        else:
-            l = '-Inf'
-        if self.has_upper:
-            u = '%3d' % self.upper
-        else:
-            u = 'Inf'
-        return '%s <= x <= %s' % (l, u)
-
-    def copy(self):
-        res = IntBound(self.lower, self.upper)
-        res.has_lower = self.has_lower
-        res.has_upper = self.has_upper
-        return res
-        
-        
-
-class IntUpperBound(IntBound):
-    def __init__(self, upper):
-        self.has_upper = True
-        self.has_lower = False
-        self.upper = upper
-        self.lower = 0
-
-class IntLowerBound(IntBound):
-    def __init__(self, lower):
-        self.has_upper = False
-        self.has_lower = True
-        self.upper = 0
-        self.lower = lower
-
-class IntUnbounded(IntBound):
-    def __init__(self):
-        self.has_upper = False
-        self.has_lower = False
-        self.upper = 0
-        self.lower = 0
+from intutils import IntBound, IntUnbounded
 
 LEVEL_UNKNOWN    = '\x00'
 LEVEL_NONNULL    = '\x01'
 LEVEL_KNOWNCLASS = '\x02'     # might also mean KNOWNARRAYDESCR, for arrays
 LEVEL_CONSTANT   = '\x03'        
 
+import sys
+MAXINT = sys.maxint
+MININT = -sys.maxint - 1
+        
 class OptValue(object):
     _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound')
     last_guard_index = -1
@@ -263,7 +71,8 @@ class OptValue(object):
         self.box = constbox
         self.level = LEVEL_CONSTANT
         try:
-            self.intbound = IntBound(self.box.getint(),self. box.getint())
+            val = self.box.getint()
+            self.intbound = IntBound(val, val)
         except NotImplementedError:
             self.intbound = IntUnbounded()
 
@@ -580,7 +389,7 @@ class __extend__(VirtualArraySpecNode):
 
 class Optimization(object):
     def propagate_forward(self, op):
-        raise NotImplemented
+        raise NotImplementedError
 
     def emit_operation(self, op):
         self.next_optimization.propagate_forward(op)
@@ -591,13 +400,25 @@ class Optimization(object):
     def make_constant(self, box, constbox):
         return self.optimizer.make_constant(box, constbox)
 
+    def make_constant_int(self, box, intconst):
+        return self.optimizer.make_constant_int(box, intconst)
+
     def make_equal_to(self, box, value):
         return self.optimizer.make_equal_to(box, value)
-    
+
+    def pure(self, opnum, args, result):
+        op = ResOperation(opnum, args, result)
+        self.optimizer.pure_operations[self.optimizer.make_args_key(op)] = op
+
+    def nextop(self):
+        return self.optimizer.loop.operations[self.optimizer.i + 1]
+
+    def skip_nextop(self):
+        self.optimizer.i += 1
 
 class Optimizer(Optimization):
 
-    def __init__(self, metainterp_sd, loop, optimizations=()):
+    def __init__(self, metainterp_sd, loop, optimizations=[]):
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
@@ -753,25 +574,6 @@ class Optimizer(Optimization):
             self.optimize_default(op)
 
 
-    def propagate_bounds_backward(self, box):
-        # FIXME: This takes care of the instruction where box is the reuslt
-        #        but the bounds produced by all instructions where box is
-        #        an argument might also be tighten
-        v = self.getvalue(box)
-        b = v.intbound
-        if b.has_lower and b.has_upper and b.lower == b.upper:
-            v.make_constant(ConstInt(b.lower))
-            
-        try:
-            op = self.producer[box]
-        except KeyError:
-            return
-        opnum = op.opnum
-        for value, func in propagate_bounds_ops:
-            if opnum == value:
-                func(self, op)
-                break
-
     def emit_operation(self, op):
         self.heap_op_optimizer.emitting_operation(op)
         self._emit_operation(op)
@@ -864,7 +666,7 @@ class Optimizer(Optimization):
 
         # otherwise, the operation remains
         self.emit_operation(op)
-        
+
     def optimize_JUMP(self, op):
         orgop = self.loop.operations[-1]
         exitargs = []
@@ -889,7 +691,6 @@ class Optimizer(Optimization):
         if emit_operation:
             self.emit_operation(op)
         value.make_constant(constbox)
-        self.propagate_bounds_backward(op.args[0])
 
     def optimize_GUARD_ISNULL(self, op):
         value = self.getvalue(op.args[0])
@@ -1224,305 +1025,7 @@ class Optimizer(Optimization):
         self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
                                          op.descr))
 
-    def optimize_INT_AND(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.is_null() or v2.is_null():
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-            r = self.getvalue(op.result)
-            if v2.is_constant():
-                val = v2.box.getint()
-                if val >= 0:
-                    r.intbound.intersect(IntBound(0,val))
-            elif v1.is_constant():
-                val = v1.box.getint()
-                if val >= 0:
-                    r.intbound.intersect(IntBound(0,val))
-
-    def optimize_INT_OR(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.is_null():
-            self.make_equal_to(op.result, v2)
-        elif v2.is_null():
-            self.make_equal_to(op.result, v1)
-        else:
-            self.optimize_default(op)
-
-    def pure(self, opnum, args, result):
-        op = ResOperation(opnum, args, result)
-        self.pure_operations[self.make_args_key(op)] = op 
-    
-    def optimize_INT_SUB(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
-        else:
-            self.optimize_default(op)
-        r = self.getvalue(op.result)
-        r.intbound.intersect(v1.intbound.sub_bound(v2.intbound))
-
-        # Synthesize the reverse ops for optimize_default to reuse
-        self.pure(rop.INT_ADD, [op.result, op.args[1]], op.args[0])
-        self.pure(rop.INT_SUB, [op.args[0], op.result], op.args[1])
-    
-    def optimize_INT_ADD(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        # If one side of the op is 0 the result is the other side.
-        if v1.is_constant() and v1.box.getint() == 0:
-            self.make_equal_to(op.result, v2)
-        elif v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
-        else:
-            self.optimize_default(op)
-        r = self.getvalue(op.result)
-        r.intbound.intersect(v1.intbound.add_bound(v2.intbound))
-
-        # Synthesize the reverse op for optimize_default to reuse
-        self.pure(rop.INT_SUB, [op.result, op.args[1]], op.args[0])
-        self.pure(rop.INT_SUB, [op.result, op.args[0]], op.args[1])
-
-    def optimize_INT_MUL(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        # If one side of the op is 0 the result is the other side.
-        if v1.is_constant() and v1.box.getint() == 1:
-            self.make_equal_to(op.result, v2)
-        elif v2.is_constant() and v2.box.getint() == 1:
-            self.make_equal_to(op.result, v1)
-        elif (v1.is_constant() and v1.box.getint() == 0) or \
-             (v2.is_constant() and v2.box.getint() == 0):
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-        r = self.getvalue(op.result)
-        r.intbound.intersect(v1.intbound.mul_bound(v2.intbound))
-
-    def optimize_INT_ADD_OVF(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        resbound = v1.intbound.add_bound(v2.intbound)
-        if resbound.has_lower and resbound.has_upper and \
-               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
-            # Transform into INT_ADD and remove guard
-            op.opnum = rop.INT_ADD
-            self.i += 1
-            self.optimize_INT_ADD(op)
-        else:
-            self.optimize_default(op)
-            r = self.getvalue(op.result)
-            r.intbound.intersect(resbound)
-        
-    def optimize_INT_SUB_OVF(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        resbound = v1.intbound.sub_bound(v2.intbound)
-        if resbound.has_lower and resbound.has_upper and \
-               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
-            # Transform into INT_SUB and remove guard
-            op.opnum = rop.INT_SUB
-            self.i += 1
-            self.optimize_INT_SUB(op)
-        else:
-            self.optimize_default(op)
-            r = self.getvalue(op.result)
-            r.intbound.intersect(resbound)
-
-    def optimize_INT_MUL_OVF(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        resbound = v1.intbound.mul_bound(v2.intbound)
-        if resbound.has_lower and resbound.has_upper and \
-               self.loop.operations[self.i+1].opnum == rop.GUARD_NO_OVERFLOW:
-            # Transform into INT_MUL and remove guard
-            op.opnum = rop.INT_MUL
-            self.i += 1
-            self.optimize_INT_MUL(op)
-        else:
-            self.optimize_default(op)
-            r = self.getvalue(op.result)
-            r.intbound.intersect(resbound)
-        
-    def optimize_INT_LT(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_lt(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        elif v1.intbound.known_ge(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-
-    def optimize_INT_GT(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_gt(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        elif v1.intbound.known_le(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-
-    def optimize_INT_LE(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_le(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        elif v1.intbound.known_gt(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-
-    def optimize_INT_GE(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_ge(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        elif v1.intbound.known_lt(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        else:
-            self.optimize_default(op)
-
-    def optimize_INT_EQ(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_gt(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        elif v1.intbound.known_lt(v2.intbound):
-            self.make_constant_int(op.result, 0)
-        else: 
-            self.optimize_default(op)
-            
-    def optimize_INT_NE(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        if v1.intbound.known_gt(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        elif v1.intbound.known_lt(v2.intbound):
-            self.make_constant_int(op.result, 1)
-        else: 
-            self.optimize_default(op)
-            
-    def make_int_lt(self, args):
-        v1 = self.getvalue(args[0])
-        v2 = self.getvalue(args[1])
-        if v1.intbound.make_lt(v2.intbound):
-            self.propagate_bounds_backward(args[0])            
-        if v2.intbound.make_gt(v1.intbound):
-            self.propagate_bounds_backward(args[1])
-        
-
-    def make_int_le(self, args):
-        v1 = self.getvalue(args[0])
-        v2 = self.getvalue(args[1])
-        if v1.intbound.make_le(v2.intbound):
-            self.propagate_bounds_backward(args[0])
-        if v2.intbound.make_ge(v1.intbound):
-            self.propagate_bounds_backward(args[1])
-
-    def make_int_gt(self, args):
-        self.make_int_lt([args[1], args[0]])
-
-    def make_int_ge(self, args):
-        self.make_int_le([args[1], args[0]])
-
-    def propagate_bounds_INT_LT(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_1):
-                self.make_int_lt(op.args)
-            else:
-                self.make_int_ge(op.args)
-
-    def propagate_bounds_INT_GT(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_1):
-                self.make_int_gt(op.args)
-            else:
-                self.make_int_le(op.args)
-
-    def propagate_bounds_INT_LE(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_1):
-                self.make_int_le(op.args)
-            else:
-                self.make_int_gt(op.args)
-
-    def propagate_bounds_INT_GE(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_1):
-                self.make_int_ge(op.args)
-            else:
-                self.make_int_lt(op.args)
-
-    def propagate_bounds_INT_EQ(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_1):
-                v1 = self.getvalue(op.args[0])
-                v2 = self.getvalue(op.args[1])
-                if v1.intbound.intersect(v2.intbound):
-                    self.propagate_bounds_backward(op.args[0])
-                if v2.intbound.intersect(v1.intbound):
-                    self.propagate_bounds_backward(op.args[1])
-
-    def propagate_bounds_INT_NE(self, op):
-        r = self.getvalue(op.result)
-        if r.is_constant():
-            if r.box.same_constant(CONST_0):
-                v1 = self.getvalue(op.args[0])
-                v2 = self.getvalue(op.args[1])
-                if v1.intbound.intersect(v2.intbound):
-                    self.propagate_bounds_backward(op.args[0])
-                if v2.intbound.intersect(v1.intbound):
-                    self.propagate_bounds_backward(op.args[1])
-
-    def propagate_bounds_INT_ADD(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        r = self.getvalue(op.result)
-        b = r.intbound.sub_bound(v2.intbound)
-        if v1.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[0])    
-        b = r.intbound.sub_bound(v1.intbound)
-        if v2.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[1])
-
-    def propagate_bounds_INT_SUB(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        r = self.getvalue(op.result)
-        b = r.intbound.add_bound(v2.intbound)
-        if v1.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[0])        
-        b = r.intbound.sub_bound(v1.intbound).mul(-1)
-        if v2.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[1])            
-
-    def propagate_bounds_INT_MUL(self, op):
-        v1 = self.getvalue(op.args[0])
-        v2 = self.getvalue(op.args[1])
-        r = self.getvalue(op.result)
-        b = r.intbound.div_bound(v2.intbound)
-        if v1.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[0])    
-        b = r.intbound.div_bound(v1.intbound)
-        if v2.intbound.intersect(b):
-            self.propagate_bounds_backward(op.args[1])
-
-    propagate_bounds_INT_ADD_OVF  = propagate_bounds_INT_ADD
-    propagate_bounds_INT_SUB_OVF  = propagate_bounds_INT_SUB
-    propagate_bounds_INT_MUL_OVF  = propagate_bounds_INT_MUL
-
 optimize_ops = _findall(Optimizer, 'optimize_')
-propagate_bounds_ops = _findall(Optimizer, 'propagate_bounds_')
 
 
 class CachedArrayItems(object):
@@ -1761,8 +1264,3 @@ class HeapOpOptimizer(object):
                                    write=True)
 
 
-def min4(t):
-    return min(min(t[0], t[1]), min(t[2], t[3]))
-
-def max4(t):
-    return max(max(t[0], t[1]), max(t[2], t[3]))
