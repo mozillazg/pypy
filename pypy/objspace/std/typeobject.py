@@ -121,9 +121,9 @@ class W_TypeObject(W_Object):
         if space.config.objspace.std.withmapdict:
             from pypy.objspace.std.mapdict import DictTerminator, NoDictTerminator
             if w_self.hasdict:
-                w_self.terminator = DictTerminator(w_self, space)
+                w_self.terminator = DictTerminator(space, w_self)
             else:
-                w_self.terminator = NoDictTerminator(w_self, space)
+                w_self.terminator = NoDictTerminator(space, w_self)
 
     def mutated(w_self):
         space = w_self.space
