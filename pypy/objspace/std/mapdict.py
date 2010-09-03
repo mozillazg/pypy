@@ -324,8 +324,10 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         self._become(new_obj)
 
     def user_setup(self, space, w_subtype):
+        from pypy.module.__builtin__.interp_classobj import W_InstanceObject
         self.space = space
-        assert not self.typedef.hasdict
+        assert (not self.typedef.hasdict or
+                self.typedef is W_InstanceObject.typedef)
         self._init_empty(w_subtype.terminator)
 
     def getslotvalue(self, index):

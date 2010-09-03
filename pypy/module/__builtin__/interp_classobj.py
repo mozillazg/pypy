@@ -5,6 +5,8 @@ from pypy.interpreter.gateway import interp2app, ObjSpace
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.argument import Arguments
 from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.typedef import GetSetProperty, descr_get_dict
+from pypy.interpreter.typedef import descr_set_dict
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.objectmodel import compute_identity_hash
 from pypy.rlib.debug import make_sure_not_resized
@@ -402,7 +404,7 @@ class W_InstanceObject(Wrappable):
         if name and name[0] == "_":
             if name == '__dict__':
                 # use setdict to raise the error
-                self.setdict(space, None)
+                self.setdict(space, space.w_None)
                 return
             elif name == '__class__':
                 # use set_oldstyle_class to raise the error
@@ -706,6 +708,14 @@ for op in "or and xor lshift rshift add sub mul div mod divmod floordiv truediv"
         rmeth,
         unwrap_spec=["self", ObjSpace, W_Root])
 
+
+def descr_del_dict(space, w_inst):
+    # use setdict to raise the error
+    self.setdict(space, space.w_None)
+
+dict_descr = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict)
+dict_descr.name = '__dict__'
+
 W_InstanceObject.typedef = TypeDef("instance",
     __new__ = interp2app(descr_instance_new),
     __getattribute__ = interp2app(W_InstanceObject.descr_getattribute,
@@ -757,6 +767,7 @@ W_InstanceObject.typedef = TypeDef("instance",
                       unwrap_spec=['self', ObjSpace]),
     __del__ = interp2app(W_InstanceObject.descr_del,
                          unwrap_spec=['self', ObjSpace]),
+    __dict__ = dict_descr,
     **rawdict
 )
 W_InstanceObject.typedef.acceptable_as_base_class = False
