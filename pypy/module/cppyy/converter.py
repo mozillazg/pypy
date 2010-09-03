@@ -193,13 +193,45 @@ class ShortPtrConverter(TypeConverter):
         # TODO: now what ... ?? AFAICS, w_value is a pure python list, not an array?
 #        byteptr[0] = space.unwrap(space.id(w_value.getslotvalue(2)))
 
-
 class ShortArrayConverter(ShortPtrConverter):
     def to_memory(self, space, w_obj, w_value, offset):
         # copy the full array (uses byte copy for now)
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         value = w_value.getslotvalue(2)
         for i in range(min(self.size*2, value.getlength())):
+            fieldptr[i] = value.getitem(i)
+
+class LongPtrConverter(TypeConverter):
+    _immutable_ = True
+    def __init__(self, detail=None):
+        if detail is None:
+            import sys
+            detail = sys.maxint
+        self.size = detail
+    
+    def convert_argument(self, space, w_obj):
+        assert "not yet implemented"
+
+    def from_memory(self, space, w_obj, offset):
+        # read access, so no copy needed
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        longptr = rffi.cast(rffi.LONGP, fieldptr)
+        w_array = unpack_simple_shape(space, space.wrap('l'))
+        return w_array.fromaddress(space, longptr, self.size)
+
+    def to_memory(self, space, w_obj, w_value, offset):
+        # copy only the pointer value
+        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
+        byteptr = rffi.cast(rffi.LONGP, obj.rawobject[offset])
+        # TODO: now what ... ?? AFAICS, w_value is a pure python list, not an array?
+#        byteptr[0] = space.unwrap(space.id(w_value.getslotvalue(2)))
+
+class LongArrayConverter(LongPtrConverter):
+    def to_memory(self, space, w_obj, w_value, offset):
+        # copy the full array (uses byte copy for now)
+        fieldptr = self._get_fieldptr(space, w_obj, offset)
+        value = w_value.getslotvalue(2)
+        for i in range(min(self.size*4, value.getlength())):
             fieldptr[i] = value.getitem(i)
 
 
@@ -271,6 +303,8 @@ _converters["unsigned short int"]       = ShortConverter
 _converters["unsigned short int*"]      = ShortPtrConverter
 _converters["unsigned short int[]"]     = ShortArrayConverter
 _converters["int"]                      = LongConverter
+_converters["int*"]                     = LongPtrConverter
+_converters["int[]"]                    = LongArrayConverter
 _converters["unsigned int"]             = LongConverter
 _converters["long int"]                 = LongConverter
 _converters["unsigned long int"]        = LongConverter
