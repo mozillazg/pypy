@@ -98,7 +98,7 @@ class AppTestDATATYPES:
         # integer arrays
         import array
         a = range(self.N)
-        atypes = ['h', 'H', 'i', 'I']#, 'l', 'L' ]
+        atypes = ['h', 'H', 'i', 'I', 'l']#, 'L' ]
         for j in range(len(atypes)):#names)):
             b = array.array(atypes[j], a)
             exec 'c.m_%s_array = b' % names[j]   # buffer copies
