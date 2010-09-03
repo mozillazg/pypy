@@ -711,7 +711,7 @@ for op in "or and xor lshift rshift add sub mul div mod divmod floordiv truediv"
 
 def descr_del_dict(space, w_inst):
     # use setdict to raise the error
-    self.setdict(space, space.w_None)
+    w_inst.setdict(space, space.w_None)
 
 dict_descr = GetSetProperty(descr_get_dict, descr_set_dict, descr_del_dict)
 dict_descr.name = '__dict__'

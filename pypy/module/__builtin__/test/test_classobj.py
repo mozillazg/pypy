@@ -778,6 +778,21 @@ class AppTestOldstyle(object):
         else:
             assert 0, "should have raised"
 
+    def test_dict_descriptor(self):
+        import sys
+        if not hasattr(sys, 'pypy_objspaceclass'):
+            skip("on CPython old-style instances don't have a __dict__ descriptor")
+        class A:
+            pass
+        a = A()
+        a.x = 1
+        descr = type(a).__dict__['__dict__']
+        assert descr.__get__(a) == {'x': 1}
+        descr.__set__(a, {'x': 2})
+        assert a.x == 2
+        raises(TypeError, descr.__delete__, a)
+
+
 class AppTestOldStyleSharing(AppTestOldstyle):
     def setup_class(cls):
         cls.space = gettestobjspace(**{"objspace.std.withsharingdict": True})
