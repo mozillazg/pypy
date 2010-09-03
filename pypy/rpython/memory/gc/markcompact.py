@@ -75,7 +75,7 @@ class MarkCompactGC(MovingGCBase):
     # a big mmap.  The process does not actually consume that space until
     # needed, of course.
     TRANSLATION_PARAMS = {'space_size': int((1 + 15.0/16)*1024*1024*1024),
-                          'min_next_collect_after': 4*1024*1024}   # 4MB
+                          'min_next_collect_after': 16*1024*1024}   # 16MB
 
     malloc_zero_filled = False
     inline_simple_malloc = True
@@ -111,9 +111,12 @@ class MarkCompactGC(MovingGCBase):
         return next
 
     def setup(self):
-        envsize = max_size_from_env()
+        envsize = read_from_env('PYPY_MARKCOMPACTGC_MAX')
         if envsize >= 4096:
             self.space_size = envsize & ~4095
+        mincollect = read_from_env('PYPY_MARKCOMPACTGC_MIN')
+        if mincollect >= 4096:
+            self.min_next_collect_after = mincollect
 
         #self.program_start_time = time.time()
         self.space = llarena.arena_malloc(self.space_size, False)
@@ -675,6 +678,3 @@ class MarkCompactGC(MovingGCBase):
 
 class CannotAllocateGCArena(Exception):
     pass
-
-def max_size_from_env():
-    return read_from_env('PYPY_MARKCOMPACTGC_MAX')
