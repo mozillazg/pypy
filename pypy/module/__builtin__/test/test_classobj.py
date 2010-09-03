@@ -815,3 +815,22 @@ class AppTestOldStyleModDict(object):
             a = 1
             b = 2
         assert self.is_strdict(A)
+
+class AppTestOldStyleMapDict(AppTestOldstyle):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withmapdict": True})
+        if option.runappdirect:
+            py.test.skip("can only be run on py.py")
+        def has_mapdict(space, w_inst):
+            return space.wrap(w_inst._get_mapdict_map() is not None)
+        cls.w_has_mapdict = cls.space.wrap(gateway.interp2app(has_mapdict))
+
+
+    def test_has_mapdict(self):
+        class A:
+            def __init__(self):
+                self.x = 42
+        a = A()
+        assert a.x == 42
+        assert self.has_mapdict(a)
+
