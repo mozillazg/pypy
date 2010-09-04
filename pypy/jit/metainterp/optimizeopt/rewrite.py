@@ -1,12 +1,12 @@
-from optimizer import Optimization, CONST_1, CONST_0
+from optimizer import *
 from pypy.jit.metainterp.resoperation import opboolinvers, opboolreflex
 from pypy.jit.metainterp.history import ConstInt
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 
 class OptRewrite(Optimization):
-    """Rewrite operations into equvivialent, already executed operations
-       or constants.
+    """Rewrite operations into equvivialent, cheeper operations.
+       This includes already executed operations and constants.
     """
     
     def propagate_forward(self, op):
@@ -127,6 +127,116 @@ class OptRewrite(Optimization):
         else:
             self.emit_operation(op)
 
+    def optimize_CALL_PURE(self, op):
+        for arg in op.args:
+            if self.get_constant_box(arg) is None:
+                break
+        else:
+            # all constant arguments: constant-fold away
+            self.make_constant(op.result, op.args[0])
+            return
+        # replace CALL_PURE with just CALL
+        self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
+                                         op.descr))
+    def optimize_guard(self, op, constbox, emit_operation=True):
+        value = self.getvalue(op.args[0])
+        if value.is_constant():
+            box = value.box
+            assert isinstance(box, Const)
+            if not box.same_constant(constbox):
+                raise InvalidLoop
+            return
+        if emit_operation:
+            self.emit_operation(op)
+        value.make_constant(constbox)
+
+    def optimize_GUARD_ISNULL(self, op):
+        value = self.getvalue(op.args[0])
+        if value.is_null():
+            return
+        elif value.is_nonnull():
+            raise InvalidLoop
+        self.emit_operation(op)
+        value.make_constant(self.optimizer.cpu.ts.CONST_NULL)
+
+    def optimize_GUARD_NONNULL(self, op):
+        value = self.getvalue(op.args[0])
+        if value.is_nonnull():
+            return
+        elif value.is_null():
+            raise InvalidLoop
+        self.emit_operation(op)
+        value.make_nonnull(len(self.optimizer.newoperations) - 1)
+
+    def optimize_GUARD_VALUE(self, op):
+        value = self.getvalue(op.args[0])
+        emit_operation = True
+        if value.last_guard_index != -1:
+            # there already has been a guard_nonnull or guard_class or
+            # guard_nonnull_class on this value, which is rather silly.
+            # replace the original guard with a guard_value
+            old_guard_op = self.optimizer.newoperations[value.last_guard_index]
+            old_opnum = old_guard_op.opnum
+            old_guard_op.opnum = rop.GUARD_VALUE
+            old_guard_op.args = [old_guard_op.args[0], op.args[1]]
+            # hack hack hack.  Change the guard_opnum on
+            # old_guard_op.descr so that when resuming,
+            # the operation is not skipped by pyjitpl.py.
+            descr = old_guard_op.descr
+            assert isinstance(descr, compile.ResumeGuardDescr)
+            descr.guard_opnum = rop.GUARD_VALUE
+            descr.make_a_counter_per_value(old_guard_op)
+            emit_operation = False
+        constbox = op.args[1]
+        assert isinstance(constbox, Const)
+        self.optimize_guard(op, constbox, emit_operation)
+
+    def optimize_GUARD_TRUE(self, op):
+        self.optimize_guard(op, CONST_1)
+
+    def optimize_GUARD_FALSE(self, op):
+        self.optimize_guard(op, CONST_0)
+
+    def optimize_GUARD_CLASS(self, op):
+        value = self.getvalue(op.args[0])
+        expectedclassbox = op.args[1]
+        assert isinstance(expectedclassbox, Const)
+        realclassbox = value.get_constant_class(self.optimizer.cpu)
+        if realclassbox is not None:
+            # the following assert should always be true for now,
+            # because invalid loops that would fail it are detected
+            # earlier, in optimizefindnode.py.
+            assert realclassbox.same_constant(expectedclassbox)
+            return
+        emit_operation = True
+        if value.last_guard_index != -1:
+            # there already has been a guard_nonnull or guard_class or
+            # guard_nonnull_class on this value.
+            old_guard_op = self.optimizer.newoperations[value.last_guard_index]
+            if old_guard_op.opnum == rop.GUARD_NONNULL:
+                # it was a guard_nonnull, which we replace with a
+                # guard_nonnull_class.
+                old_guard_op.opnum = rop.GUARD_NONNULL_CLASS
+                old_guard_op.args = [old_guard_op.args[0], op.args[1]]
+                # hack hack hack.  Change the guard_opnum on
+                # old_guard_op.descr so that when resuming,
+                # the operation is not skipped by pyjitpl.py.
+                descr = old_guard_op.descr
+                assert isinstance(descr, compile.ResumeGuardDescr)
+                descr.guard_opnum = rop.GUARD_NONNULL_CLASS
+                emit_operation = False
+        if emit_operation:
+            self.emit_operation(op)
+            last_guard_index = len(self.optimizer.newoperations) - 1
+        else:
+            last_guard_index = value.last_guard_index
+        value.make_constant_class(expectedclassbox, last_guard_index)
+
+    def optimize_GUARD_NO_EXCEPTION(self, op):
+        if not self.optimizer.exception_might_have_happened:
+            return
+        self.emit_operation(op)
+        self.optimizer.exception_might_have_happened = False
 
 optimize_ops = _findall(OptRewrite, 'optimize_')
         

@@ -5,6 +5,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import (LLtypeMixin,
                                                             BaseTest)
 from pypy.jit.metainterp.optimizefindnode import PerfectSpecializationFinder
 import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
+import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimizeopt import optimize_loop_1
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxInt
@@ -64,7 +65,7 @@ def test_sharing_field_lists_of_virtual():
         class cpu(object):
             pass
     opt = FakeOptimizer()
-    virt1 = optimizeopt.AbstractVirtualStructValue(opt, None)
+    virt1 = virtualize.AbstractVirtualStructValue(opt, None)
     lst1 = virt1._get_field_descr_list()
     assert lst1 == []
     lst2 = virt1._get_field_descr_list()
@@ -75,7 +76,7 @@ def test_sharing_field_lists_of_virtual():
     lst4 = virt1._get_field_descr_list()
     assert lst3 is lst4
     
-    virt2 = optimizeopt.AbstractVirtualStructValue(opt, None)
+    virt2 = virtualize.AbstractVirtualStructValue(opt, None)
     lst5 = virt2._get_field_descr_list()
     assert lst5 is lst1
     virt2.setfield(LLtypeMixin.valuedescr, optimizeopt.OptValue(None))
@@ -88,7 +89,7 @@ def test_reuse_vinfo():
             self.fieldnums = fieldnums
         def equals(self, fieldnums):
             return self.fieldnums == fieldnums
-    class FakeVirtualValue(optimizeopt.AbstractVirtualValue):
+    class FakeVirtualValue(virtualize.AbstractVirtualValue):
         def _make_virtual(self, *args):
             return FakeVInfo()
     v1 = FakeVirtualValue(None, None, None)
@@ -257,6 +258,7 @@ class BaseTestOptimizeOpt(BaseTest):
         optimize_loop_1(metainterp_sd, loop)
         #
         expected = self.parse(optops)
+        print '\n'.join([str(o) for o in loop.operations])
         self.assert_equal(loop, expected)
 
     def test_simple(self):
