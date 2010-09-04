@@ -1,6 +1,8 @@
 from optimizer import Optimizer
 from rewrite import OptRewrite
 from intbounds import OptIntBounds
+from virtualize import OptVirtualize
+from heap import OptHeap
 
 def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -10,10 +12,10 @@ def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     """
     optimizations = [OptIntBounds(),
                      OptRewrite(),
+                     OptVirtualize(),
+                     OptHeap(),
                     ]
-    optimizer = Optimizer(metainterp_sd, loop, optimizations)
-    if virtuals:
-        optimizer.setup_virtuals_and_constants()
+    optimizer = Optimizer(metainterp_sd, loop, optimizations, virtuals)
     optimizer.propagate_all_forward()
 
 def optimize_bridge_1(metainterp_sd, bridge):
