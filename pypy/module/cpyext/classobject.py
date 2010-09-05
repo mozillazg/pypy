@@ -15,7 +15,7 @@ def PyInstance_NewRaw(space, w_class, w_dict):
     class is the class of new object.  The dict parameter will be used as the
     object's __dict__; if NULL, a new dictionary will be created for the
     instance."""
-    if not PyClass_Check(space, w_class):
+    if not isinstance(w_class, W_ClassObject):
         return PyErr_BadInternalCall(space)
     w_result = w_class.instantiate(space)
     if w_dict is not None:
