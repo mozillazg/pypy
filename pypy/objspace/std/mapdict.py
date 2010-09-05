@@ -11,6 +11,7 @@ from pypy.objspace.std.dictmultiobject import _is_sane_hash
 NUM_DIGITS = 4
 
 class AbstractAttribute(object):
+    _immutable_fields_ = ['w_cls']
     cache_attrs = None
     _size_estimate = 0
 
@@ -86,7 +87,6 @@ class AbstractAttribute(object):
 
 
 class Terminator(AbstractAttribute):
-    _immutable_fields_ = ['w_cls']
 
     def read(self, obj, selector):
         return None
