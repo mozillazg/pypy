@@ -942,6 +942,66 @@ class TestUsingFramework(object):
     def test_get_rpy_referents(self):
         self.run("get_rpy_referents")
 
+    def define_is_rpy_instance(self):
+        class Foo:
+            pass
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+
+        def check(gcref, expected):
+            result = rgc._is_rpy_instance(gcref)
+            assert result == expected
+
+        def fn():
+            s = lltype.malloc(S)
+            gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+            check(gcref1, False)
+
+            f = Foo()
+            gcref3 = rgc.cast_instance_to_gcref(f)
+            check(gcref3, True)
+
+            return 0
+
+        return fn
+
+    def test_is_rpy_instance(self):
+        self.run("is_rpy_instance")
+
+    def define_try_cast_gcref_to_instance(self):
+        class Foo:
+            pass
+        class FooBar(Foo):
+            pass
+        class Biz(object):
+            pass
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
+
+        def fn():
+            foo = Foo()
+            gcref1 = rgc.cast_instance_to_gcref(foo)
+            assert rgc.try_cast_gcref_to_instance(Foo,    gcref1) is foo
+            assert rgc.try_cast_gcref_to_instance(FooBar, gcref1) is None
+            assert rgc.try_cast_gcref_to_instance(Biz,    gcref1) is None
+
+            foobar = FooBar()
+            gcref2 = rgc.cast_instance_to_gcref(foobar)
+            assert rgc.try_cast_gcref_to_instance(Foo,    gcref2) is foobar
+            assert rgc.try_cast_gcref_to_instance(FooBar, gcref2) is foobar
+            assert rgc.try_cast_gcref_to_instance(Biz,    gcref2) is None
+
+            s = lltype.malloc(S)
+            gcref3 = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+            assert rgc.try_cast_gcref_to_instance(Foo,    gcref3) is None
+            assert rgc.try_cast_gcref_to_instance(FooBar, gcref3) is None
+            assert rgc.try_cast_gcref_to_instance(Biz,    gcref3) is None
+
+            return 0
+
+        return fn
+
+    def test_try_cast_gcref_to_instance(self):
+        self.run("try_cast_gcref_to_instance")
+
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
