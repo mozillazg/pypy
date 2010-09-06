@@ -1,4 +1,4 @@
-import gc
+import gc, types
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.objectmodel import we_are_translated
 
@@ -318,7 +318,8 @@ def no_collect(func):
 
 def _get_objects():
     lst = gc.get_objects()
-    return map(_GcRef, lst)
+    # discard objects that are too random or that are _freeze_=True
+    return [_GcRef(x) for x in lst if _keep_object(x)]
 
 def _get_referents(gcref):
     x = gcref._x
@@ -327,17 +328,29 @@ def _get_referents(gcref):
     elif isinstance(x, dict):
         return map(_GcRef, x.keys() + x.values())
     else:
+        d = []
         if hasattr(x, '__dict__'):
-            d = map(_GcRef, x.__dict__.values())
-        else:
-            d = []
+            d = x.__dict__.values()
         if hasattr(type(x), '__slots__'):
             for slot in type(x).__slots__:
                 try:
-                    d.append(_GcRef(getattr(x, slot)))
+                    d.append(getattr(x, slot))
                 except AttributeError:
                     pass
-        return d
+        # discard objects that are too random or that are _freeze_=True
+        return [_GcRef(x) for x in d if _keep_object(x)]
+
+def _keep_object(x):
+    if isinstance(x, type) or type(x) is types.ClassType:
+        return False      # don't keep any type
+    if isinstance(x, (list, dict)):
+        return True       # keep lists and dicts
+    try:
+        return not x._freeze_()   # don't keep any frozen object
+    except AttributeError:
+        return type(x).__module__ != '__builtin__'   # keep non-builtins
+    except Exception:
+        return False      # don't keep objects whose _freeze_() method explodes
 
 def _get_memory_usage(gcref):
     # approximate implementation using CPython's type info
