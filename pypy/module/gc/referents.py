@@ -32,6 +32,10 @@ def unwrap(space, w_obj):
         gcref = rgc.cast_instance_to_gcref(w_obj)
     return gcref
 
+def get_rpy_roots(space):
+    lst = rgc.get_rpy_roots()
+    return space.newlist([wrap(space, gcref) for gcref in lst if gcref])
+
 def get_rpy_referents(space, w_obj):
     """Return a list of all the referents, as reported by the GC.
     This is likely to contain a lot of GcRefs."""
@@ -74,11 +78,12 @@ def get_objects(space):
     # be W_Roots
     pending_w = []   # <- list of W_Roots
     for gcref in roots:
-        w_obj = try_cast_gcref_to_w_root(gcref)
-        if w_obj is not None:
-            pending_w.append(w_obj)
-        else:
-            _list_w_obj_referents(gcref, pending_w)
+        if gcref:
+            w_obj = try_cast_gcref_to_w_root(gcref)
+            if w_obj is not None:
+                pending_w.append(w_obj)
+            else:
+                _list_w_obj_referents(gcref, pending_w)
     # continue by following every W_Root.  Note that this will force a hash
     # on every W_Root, which is kind of bad, but not on every RPython object,
     # which is really good.

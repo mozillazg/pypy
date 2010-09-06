@@ -594,7 +594,9 @@ class __extend__(pairtype(SomeList, SomeInteger)):
     getitem_idx_key = getitem_idx
 
     def setitem((lst1, int2), s_value):
-        getbookkeeper().count("list_setitem", int2)        
+        if lst1.listdef.listitem.s_value.contains(s_value):
+            return     # already up-to-date
+        getbookkeeper().count("list_setitem", int2)
         lst1.listdef.mutate()
         lst1.listdef.generalize(s_value)
     setitem.can_only_throw = [IndexError]

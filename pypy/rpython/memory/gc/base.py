@@ -255,6 +255,84 @@ class GCBase(object):
         finally:
             self.finalizer_lock_count -= 1
 
+    # ---------- implementation of pypy.rlib.rgc.get_rpy_roots() ----------
+
+    def _counting_rpy_root(self, root):
+        self._count_rpy += 1
+
+    def _do_count_rpy_roots(self):
+        self._count_rpy = 0
+        self.root_walker.walk_roots(
+            GCBase._counting_rpy_root,
+            GCBase._counting_rpy_root,
+            GCBase._counting_rpy_root)
+        return self._count_rpy
+
+    def _append_rpy_root(self, root):
+        # Can use the gc list, but should not allocate!
+        # It is essential that the list is not resizable!
+        lst = self._list_rpy
+        index = self._count_rpy
+        if index >= len(lst):
+            raise ValueError
+        self._count_rpy = index + 1
+        lst[index] = llmemory.cast_adr_to_ptr(root.address[0], llmemory.GCREF)
+
+    def _do_append_rpy_roots(self, lst):
+        self._count_rpy = 0
+        self._list_rpy = lst
+        self.root_walker.walk_roots(
+            GCBase._append_rpy_root,
+            GCBase._append_rpy_root,
+            GCBase._append_rpy_root)
+        self._list_rpy = None
+
+    def get_rpy_roots(self):
+        count = self._do_count_rpy_roots()
+        extra = 16
+        while True:
+            result = [lltype.nullptr(llmemory.GCREF.TO)] * (count + extra)
+            try:
+                self._do_append_rpy_roots(result)
+            except ValueError:
+                extra *= 3
+            else:
+                return result
+
+    # ---------- implementation of pypy.rlib.rgc.get_rpy_referents() ----------
+
+    def _count_rpy_referent(self, pointer, _):
+        self._count_rpy += 1
+
+    def _do_count_rpy_referents(self, gcref):
+        self._count_rpy = 0
+        self.trace(llmemory.cast_ptr_to_adr(gcref),
+                   self._count_rpy_referent, None)
+        return self._count_rpy
+
+    def _append_rpy_referent(self, pointer, _):
+        # Can use the gc list, but should not allocate!
+        # It is essential that the list is not resizable!
+        lst = self._list_rpy
+        index = self._count_rpy
+        if index >= len(lst):
+            raise ValueError
+        self._count_rpy = index + 1
+        lst[index] = llmemory.cast_adr_to_ptr(pointer.address[0],
+                                              llmemory.GCREF)
+
+    def _do_append_rpy_referents(self, gcref, lst):
+        self._count_rpy = 0
+        self._list_rpy = lst
+        self.trace(llmemory.cast_ptr_to_adr(gcref),
+                   self._append_rpy_referent, None)
+
+    def get_rpy_referents(self, gcref):
+        count = self._do_count_rpy_referents(gcref)
+        result = [lltype.nullptr(llmemory.GCREF.TO)] * count
+        self._do_append_rpy_referents(gcref, result)
+        return result
+
 
 class MovingGCBase(GCBase):
     moving_gc = True

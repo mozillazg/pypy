@@ -2,7 +2,7 @@ import py
 import sys, os, inspect
 
 from pypy.objspace.flow.model import summary
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.test import snippet
 from pypy.rlib import rgc
@@ -23,6 +23,7 @@ class TestUsingFramework(object):
     GC_CAN_SHRINK_ARRAY = False
 
     _isolated_func = None
+    c_allfuncs = None
 
     @classmethod
     def _makefunc_str_int(cls, f):
@@ -890,6 +891,56 @@ class TestUsingFramework(object):
 
     def test_arraycopy_writebarrier_ptr(self):
         self.run("arraycopy_writebarrier_ptr")
+
+    def define_get_rpy_roots(self):
+        U = lltype.GcStruct('U', ('x', lltype.Signed))
+        S = lltype.GcStruct('S', ('u', lltype.Ptr(U)))
+
+        def g(s):
+            lst = rgc.get_rpy_roots()
+            found = False
+            for x in lst:
+                if x == lltype.cast_opaque_ptr(llmemory.GCREF, s):
+                    found = True
+                if x == lltype.cast_opaque_ptr(llmemory.GCREF, s.u):
+                    os.write(2, "s.u should not be found!\n")
+                    assert False
+            return found == 1
+
+        def fn():
+            s = lltype.malloc(S)
+            s.u = lltype.malloc(U)
+            found = g(s)
+            if not found:
+                os.write(2, "not found!\n")
+                assert False
+            s.u.x = 42
+            return 0
+
+        return fn
+
+    def test_get_rpy_roots(self):
+        self.run("get_rpy_roots")
+
+    def define_get_rpy_referents(self):
+        U = lltype.GcStruct('U', ('x', lltype.Signed))
+        S = lltype.GcStruct('S', ('u', lltype.Ptr(U)))
+
+        def fn():
+            s = lltype.malloc(S)
+            s.u = lltype.malloc(U)
+            gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+            gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, s.u)
+            lst = rgc.get_rpy_referents(gcref1)
+            assert gcref2 in lst
+            assert gcref1 not in lst
+            s.u.x = 42
+            return 0
+
+        return fn
+
+    def test_get_rpy_referents(self):
+        self.run("get_rpy_referents")
 
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
