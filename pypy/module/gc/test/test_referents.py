@@ -2,34 +2,28 @@
 
 class AppTestReferents(object):
 
-    def test_get_objects(self):
-        # XXX this test should be run first, before GcRefs are created.
-        import gc
-        x = [2, 3, 4]
-        lst = gc.get_objects()
-        for found in lst:
-            if found is x:
-                break
-        else:
-            assert 0, "'x' not found in get_rpy_objects"
-        for found in lst:
-            if type(found) is gc.GcRef:
-                assert 0, "get_objects() returned a GcRef"
+    def setup_class(cls):
+        from pypy.rlib import rgc
+        cls._backup = [rgc.get_rpy_roots]
+        w = cls.space.wrap
+        cls.ALL_ROOTS = [w(4), w([2, 7])]
+        cls.w_ALL_ROOTS = cls.space.newlist(cls.ALL_ROOTS)
+        rgc.get_rpy_roots = lambda: map(rgc._GcRef, cls.ALL_ROOTS)
 
-    def test_get_rpy_objects(self):
+    def teardown_class(cls):
+        from pypy.rlib import rgc
+        rgc.get_rpy_roots = cls._backup[0]
+
+    def test_get_objects(self):
         import gc
-        x = [2, 3, 4]
-        lst = gc.get_rpy_objects()
-        for found in lst:
-            if found is x:
-                break
-        else:
-            assert 0, "'x' not found in get_rpy_objects"
-        for found in lst:
-            if type(found) is gc.GcRef:
-                break
-        else:
-            assert 0, "get_rpy_objects() did not return any GcRef"
+        lst = gc.get_objects()
+        assert 2 in lst
+        assert 4 in lst
+        assert 7 in lst
+        assert [2, 7] in lst
+        for x in lst:
+            if type(x) is gc.GcRef:
+                assert 0, "get_objects() returned a GcRef"
 
     def test_get_rpy_referents(self):
         import gc
@@ -64,11 +58,3 @@ class AppTestReferents(object):
         x = [y, z]
         lst = gc.get_referents(x)
         assert y in lst and z in lst
-
-    def test_get_memory_usage(self):
-        import gc
-        x = [2, 5, 10]
-        n = gc.get_rpy_memory_usage(x)
-        m = gc.get_memory_usage(x)
-        print n, m
-        assert 4 <= n < m <= 128
