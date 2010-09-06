@@ -309,12 +309,14 @@ def no_collect(func):
 # ____________________________________________________________
 
 def get_rpy_roots():
+    "NOT_RPYTHON"
     # Return the 'roots' from the GC.
     # This stub is not usable on top of CPython.
     # The gc typically returns a list that ends with a few NULL_GCREFs.
     raise NotImplementedError
 
 def get_rpy_referents(gcref):
+    "NOT_RPYTHON"
     x = gcref._x
     if isinstance(x, list):
         d = x
@@ -346,6 +348,7 @@ def _keep_object(x):
         return False      # don't keep objects whose _freeze_() method explodes
 
 def get_rpy_memory_usage(gcref):
+    "NOT_RPYTHON"
     # approximate implementation using CPython's type info
     Class = type(gcref._x)
     size = Class.__basicsize__
@@ -385,14 +388,32 @@ class _GcRef(object):
 def cast_instance_to_gcref(x):
     # Before translation, casts an RPython instance into a _GcRef.
     # After translation, it is a variant of cast_object_to_ptr(GCREF).
-    return _GcRef(x)
+    if we_are_translated():
+        from pypy.rpython import annlowlevel
+        x = annlowlevel.cast_instance_to_base_ptr(x)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, x)
+    else:
+        return _GcRef(x)
+cast_instance_to_gcref._annspecialcase_ = 'specialize:argtype(0)'
 
 def try_cast_gcref_to_instance(Class, gcref):
     # Before translation, unwraps the RPython instance contained in a _GcRef.
     # After translation, it is a type-check performed by the GC.
-    if isinstance(gcref._x, Class):
-        return gcref._x
-    return None
+    if we_are_translated():
+        from pypy.rpython.annlowlevel import base_ptr_lltype
+        from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
+        from pypy.rpython.lltypesystem import rclass
+        if _is_rpy_instance(gcref):
+            objptr = lltype.cast_opaque_ptr(base_ptr_lltype(), gcref)
+            clsptr = _get_llcls_from_cls(Class)
+            if rclass.ll_isinstance(objptr, clsptr):
+                return cast_base_ptr_to_instance(Class, objptr)
+        return None
+    else:
+        if isinstance(gcref._x, Class):
+            return gcref._x
+        return None
+try_cast_gcref_to_instance._annspecialcase_ = 'specialize:arg(0)'
 
 # ------------------- implementation -------------------
 
@@ -425,3 +446,39 @@ class Entry(ExtRegistryEntry):
         vlist = hop.inputargs(hop.args_r[0])
         return hop.genop('gc_get_rpy_referents', vlist,
                          resulttype = hop.r_result)
+
+def _is_rpy_instance(gcref):
+    "NOT_RPYTHON"
+    raise NotImplementedError
+
+def _get_llcls_from_cls(Class):
+    "NOT_RPYTHON"
+    raise NotImplementedError
+
+class Entry(ExtRegistryEntry):
+    _about_ = _is_rpy_instance
+    def compute_result_annotation(self, s_gcref):
+        from pypy.annotation import model as annmodel
+        return annmodel.SomeBool()
+    def specialize_call(self, hop):
+        vlist = hop.inputargs(hop.args_r[0])
+        return hop.genop('gc_is_rpy_instance', vlist,
+                         resulttype = hop.r_result)
+
+class Entry(ExtRegistryEntry):
+    _about_ = _get_llcls_from_cls
+    def compute_result_annotation(self, s_Class):
+        from pypy.annotation import model as annmodel
+        from pypy.rpython.lltypesystem import rclass
+        assert s_Class.is_constant()
+        return annmodel.SomePtr(rclass.CLASSTYPE)
+    def specialize_call(self, hop):
+        from pypy.rpython.rclass import getclassrepr
+        from pypy.objspace.flow.model import Constant
+        from pypy.rpython.lltypesystem import rclass
+        Class = hop.args_s[0].const
+        classdef = hop.rtyper.annotator.bookkeeper.getuniqueclassdef(Class)
+        classrepr = getclassrepr(hop.rtyper, classdef)
+        vtable = classrepr.getvtable()
+        assert lltype.typeOf(vtable) == rclass.CLASSTYPE
+        return Constant(vtable, concretetype=rclass.CLASSTYPE)

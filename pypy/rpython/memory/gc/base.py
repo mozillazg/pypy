@@ -53,7 +53,8 @@ class GCBase(object):
                             varsize_offset_to_length,
                             varsize_offsets_to_gcpointers_in_var_part,
                             weakpointer_offset,
-                            member_index):
+                            member_index,
+                            is_rpython_class):
         self.getfinalizer = getfinalizer
         self.is_varsize = is_varsize
         self.has_gcptr_in_varsize = has_gcptr_in_varsize
@@ -66,6 +67,7 @@ class GCBase(object):
         self.varsize_offsets_to_gcpointers_in_var_part = varsize_offsets_to_gcpointers_in_var_part
         self.weakpointer_offset = weakpointer_offset
         self.member_index = member_index
+        self.is_rpython_class = is_rpython_class
 
     def get_member_index(self, type_id):
         return self.member_index(type_id)
@@ -332,6 +334,12 @@ class GCBase(object):
         result = [lltype.nullptr(llmemory.GCREF.TO)] * count
         self._do_append_rpy_referents(gcref, result)
         return result
+
+    # ----------
+
+    def is_rpy_instance(self, gcref):
+        typeid = self.get_type_id(llmemory.cast_ptr_to_adr(gcref))
+        return self.is_rpython_class(typeid)
 
 
 class MovingGCBase(GCBase):
