@@ -6,9 +6,12 @@ class AppTestReferents(object):
         from pypy.rlib import rgc
         cls._backup = [rgc.get_rpy_roots]
         w = cls.space.wrap
-        cls.ALL_ROOTS = [w(4), w([2, 7])]
+        class RandomRPythonObject(object):
+            pass
+        cls.ALL_ROOTS = [w(4), w([2, 7]), RandomRPythonObject()]
         cls.w_ALL_ROOTS = cls.space.newlist(cls.ALL_ROOTS)
-        rgc.get_rpy_roots = lambda: map(rgc._GcRef, cls.ALL_ROOTS)
+        rgc.get_rpy_roots = lambda: (
+            map(rgc._GcRef, cls.ALL_ROOTS) + [rgc.NULL_GCREF]*17)
 
     def teardown_class(cls):
         from pypy.rlib import rgc
@@ -24,6 +27,14 @@ class AppTestReferents(object):
         for x in lst:
             if type(x) is gc.GcRef:
                 assert 0, "get_objects() returned a GcRef"
+
+    def test_get_rpy_roots(self):
+        import gc
+        lst = gc.get_rpy_roots()
+        assert lst[0] == 4
+        assert lst[1] == [2, 7]
+        assert type(lst[2]) is gc.GcRef
+        assert len(lst) == 3
 
     def test_get_rpy_referents(self):
         import gc

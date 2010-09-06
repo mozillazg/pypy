@@ -311,6 +311,7 @@ def no_collect(func):
 def get_rpy_roots():
     # Return the 'roots' from the GC.
     # This stub is not usable on top of CPython.
+    # The gc typically returns a list that ends with a few NULL_GCREFs.
     raise NotImplementedError
 
 def get_rpy_referents(gcref):
@@ -395,11 +396,17 @@ def try_cast_gcref_to_instance(Class, gcref):
 
 # ------------------- implementation -------------------
 
+_cache_s_list_of_gcrefs = None
+
 def s_list_of_gcrefs():
-    from pypy.annotation import model as annmodel
-    from pypy.annotation.listdef import ListDef
-    s_gcref = annmodel.SomePtr(llmemory.GCREF)
-    return annmodel.SomeList(ListDef(None, s_gcref, resized=False))
+    global _cache_s_list_of_gcrefs
+    if _cache_s_list_of_gcrefs is None:
+        from pypy.annotation import model as annmodel
+        from pypy.annotation.listdef import ListDef
+        s_gcref = annmodel.SomePtr(llmemory.GCREF)
+        _cache_s_list_of_gcrefs = annmodel.SomeList(
+            ListDef(None, s_gcref, resized=False))
+    return _cache_s_list_of_gcrefs
 
 class Entry(ExtRegistryEntry):
     _about_ = get_rpy_roots
@@ -407,3 +414,14 @@ class Entry(ExtRegistryEntry):
         return s_list_of_gcrefs()
     def specialize_call(self, hop):
         return hop.genop('gc_get_rpy_roots', [], resulttype = hop.r_result)
+
+class Entry(ExtRegistryEntry):
+    _about_ = get_rpy_referents
+    def compute_result_annotation(self, s_gcref):
+        from pypy.annotation import model as annmodel
+        assert annmodel.SomePtr(llmemory.GCREF).contains(s_gcref)
+        return s_list_of_gcrefs()
+    def specialize_call(self, hop):
+        vlist = hop.inputargs(hop.args_r[0])
+        return hop.genop('gc_get_rpy_referents', vlist,
+                         resulttype = hop.r_result)

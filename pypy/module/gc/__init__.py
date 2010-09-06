@@ -18,6 +18,7 @@ class Module(MixedModule):
         if (not space.config.translating or
             space.config.translation.gctransformer == "framework"):
             self.interpleveldefs.update({
+                'get_rpy_roots': 'referents.get_rpy_roots',
                 'get_rpy_referents': 'referents.get_rpy_referents',
                 'get_rpy_memory_usage': 'referents.get_rpy_memory_usage',
                 'get_objects': 'referents.get_objects',
