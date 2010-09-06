@@ -405,7 +405,7 @@ def s_list_of_gcrefs():
         from pypy.annotation.listdef import ListDef
         s_gcref = annmodel.SomePtr(llmemory.GCREF)
         _cache_s_list_of_gcrefs = annmodel.SomeList(
-            ListDef(None, s_gcref, resized=False))
+            ListDef(None, s_gcref, mutated=True, resized=False))
     return _cache_s_list_of_gcrefs
 
 class Entry(ExtRegistryEntry):
