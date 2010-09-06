@@ -321,8 +321,23 @@ def _get_objects():
     return map(_GcRef, lst)
 
 def _get_referents(gcref):
-    lst = gc.get_referents(gcref._x)
-    return map(_GcRef, lst)
+    x = gcref._x
+    if isinstance(x, list):
+        return map(_GcRef, x)
+    elif isinstance(x, dict):
+        return map(_GcRef, x.keys() + x.values())
+    else:
+        if hasattr(x, '__dict__'):
+            d = map(_GcRef, x.__dict__.values())
+        else:
+            d = []
+        if hasattr(type(x), '__slots__'):
+            for slot in type(x).__slots__:
+                try:
+                    d.append(_GcRef(getattr(x, slot)))
+                except AttributeError:
+                    pass
+        return d
 
 def _get_memory_usage(gcref):
     # approximate implementation using CPython's type info
