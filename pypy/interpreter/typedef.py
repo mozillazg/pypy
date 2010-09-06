@@ -198,8 +198,7 @@ def _builduserclswithfeature(config, supercls, *features):
                     value = func_with_new_name(value, value.func_name)
                 body[key] = value
 
-    if (features == ("user", "dict", "weakref", "slots") and
-            config.objspace.std.withmapdict):
+    if (config.objspace.std.withmapdict and "dict" in features):
         from pypy.objspace.std.mapdict import Object
         add(Object)
         features = ()
