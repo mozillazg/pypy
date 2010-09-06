@@ -1,6 +1,7 @@
 import gc, types
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 # ____________________________________________________________
 # General GC features
@@ -93,7 +94,7 @@ class CloneFnEntry(ExtRegistryEntry):
 
     def specialize_call(self, hop):
         from pypy.rpython.error import TyperError
-        from pypy.rpython.lltypesystem import lltype, llmemory, rtuple
+        from pypy.rpython.lltypesystem import rtuple
         from pypy.annotation import model as annmodel
         from pypy.rpython.memory.gc.marksweep import X_CLONE, X_CLONE_PTR
 
@@ -150,7 +151,6 @@ class CollectEntry(ExtRegistryEntry):
         return annmodel.s_None
 
     def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype        
         hop.exception_cannot_occur()
         args_v = []
         if len(hop.args_s) == 1:
@@ -165,7 +165,6 @@ class SetMaxHeapSizeEntry(ExtRegistryEntry):
         return annmodel.s_None
 
     def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
         [v_nbytes] = hop.inputargs(lltype.Signed)
         hop.exception_cannot_occur()
         return hop.genop('gc_set_max_heap_size', [v_nbytes],
@@ -182,7 +181,6 @@ class CanMoveEntry(ExtRegistryEntry):
         return annmodel.SomeBool()
 
     def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
         hop.exception_cannot_occur()
         return hop.genop('gc_can_move', hop.args_v, resulttype=hop.r_result)
 
@@ -195,11 +193,9 @@ class DumpHeapEntry(ExtRegistryEntry):
     def compute_result_annotation(self):
         from pypy.annotation import model as annmodel
         from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
-        from pypy.rpython.lltypesystem import lltype
         return annmodel.SomePtr(lltype.Ptr(ARRAY_TYPEID_MAP))
 
     def specialize_call(self, hop):
-        from pypy.rpython.lltypesystem import lltype
         from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
         hop.exception_is_here()
         return hop.genop('gc_heap_stats', [], resulttype=hop.r_result)
@@ -209,7 +205,6 @@ def malloc_nonmovable(TP, n=None, zero=False):
     When running directly, will pretend that gc is always
     moving (might be configurable in a future)
     """
-    from pypy.rpython.lltypesystem import lltype
     return lltype.nullptr(TP)
 
 class MallocNonMovingEntry(ExtRegistryEntry):
@@ -221,7 +216,6 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         return malloc(s_TP, s_n, s_zero=s_zero)
 
     def specialize_call(self, hop, i_zero=None):
-        from pypy.rpython.lltypesystem import lltype
         # XXX assume flavor and zero to be None by now
         assert hop.args_s[0].is_constant()
         vlist = [hop.inputarg(lltype.Void, arg=0)]
@@ -243,7 +237,6 @@ class MallocNonMovingEntry(ExtRegistryEntry):
 
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
-    from pypy.rpython.lltypesystem import lltype, llmemory
     from pypy.rlib.objectmodel import keepalive_until_here
 
     # supports non-overlapping copies only
@@ -279,7 +272,6 @@ ll_arraycopy.oopspec = 'list.ll_arraycopy(source, dest, source_start, dest_start
 
 def ll_shrink_array(p, smallerlength):
     from pypy.rpython.lltypesystem.lloperation import llop
-    from pypy.rpython.lltypesystem import lltype, llmemory
     from pypy.rlib.objectmodel import keepalive_until_here
 
     if llop.shrink_array(lltype.Bool, p, smallerlength):
@@ -316,17 +308,17 @@ def no_collect(func):
 
 # ____________________________________________________________
 
-def _get_objects():
-    lst = gc.get_objects()
-    # discard objects that are too random or that are _freeze_=True
-    return [_GcRef(x) for x in lst if _keep_object(x)]
+def get_rpy_roots():
+    # Return the 'roots' from the GC.
+    # This stub is not usable on top of CPython.
+    raise NotImplementedError
 
-def _get_referents(gcref):
+def get_rpy_referents(gcref):
     x = gcref._x
     if isinstance(x, list):
-        return map(_GcRef, x)
+        d = x
     elif isinstance(x, dict):
-        return map(_GcRef, x.keys() + x.values())
+        d = x.keys() + x.values()
     else:
         d = []
         if hasattr(x, '__dict__'):
@@ -337,14 +329,14 @@ def _get_referents(gcref):
                     d.append(getattr(x, slot))
                 except AttributeError:
                     pass
-        # discard objects that are too random or that are _freeze_=True
-        return [_GcRef(x) for x in d if _keep_object(x)]
+    # discard objects that are too random or that are _freeze_=True
+    return [_GcRef(x) for x in d if _keep_object(x)]
 
 def _keep_object(x):
     if isinstance(x, type) or type(x) is types.ClassType:
         return False      # don't keep any type
-    if isinstance(x, (list, dict)):
-        return True       # keep lists and dicts
+    if isinstance(x, (list, dict, str)):
+        return True       # keep lists and dicts and strings
     try:
         return not x._freeze_()   # don't keep any frozen object
     except AttributeError:
@@ -352,13 +344,21 @@ def _keep_object(x):
     except Exception:
         return False      # don't keep objects whose _freeze_() method explodes
 
-def _get_memory_usage(gcref):
+def get_rpy_memory_usage(gcref):
     # approximate implementation using CPython's type info
     Class = type(gcref._x)
     size = Class.__basicsize__
     if Class.__itemsize__ > 0:
         size += Class.__itemsize__ * len(gcref._x)
     return size
+
+def cast_gcref_to_int(gcref):
+    if we_are_translated():
+        return cast_ptr_to_int(gcref)
+    else:
+        return id(gcref._x)
+
+NULL_GCREF = lltype.nullptr(llmemory.GCREF.TO)
 
 class _GcRef(object):
     # implementation-specific: there should not be any after translation
@@ -368,6 +368,10 @@ class _GcRef(object):
     def __hash__(self):
         return object.__hash__(self._x)
     def __eq__(self, other):
+        if isinstance(other, lltype._ptr):
+            assert other == NULL_GCREF, (
+                "comparing a _GcRef with a non-NULL lltype ptr")
+            return False
         assert isinstance(other, _GcRef)
         return self._x is other._x
     def __ne__(self, other):
@@ -385,9 +389,21 @@ def cast_instance_to_gcref(x):
 def try_cast_gcref_to_instance(Class, gcref):
     # Before translation, unwraps the RPython instance contained in a _GcRef.
     # After translation, it is a type-check performed by the GC.
-    # Important: the GC only supports calling this function with one Class
-    # in the whole RPython program (so it can store a single Yes/No bit in
-    # gctypelayout.py).
     if isinstance(gcref._x, Class):
         return gcref._x
     return None
+
+# ------------------- implementation -------------------
+
+def s_list_of_gcrefs():
+    from pypy.annotation import model as annmodel
+    from pypy.annotation.listdef import ListDef
+    s_gcref = annmodel.SomePtr(llmemory.GCREF)
+    return annmodel.SomeList(ListDef(None, s_gcref, resized=False))
+
+class Entry(ExtRegistryEntry):
+    _about_ = get_rpy_roots
+    def compute_result_annotation(self):
+        return s_list_of_gcrefs()
+    def specialize_call(self, hop):
+        return hop.genop('gc_get_rpy_roots', [], resulttype = hop.r_result)
