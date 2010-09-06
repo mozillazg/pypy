@@ -397,7 +397,8 @@ class W_InstanceObject(Wrappable):
         if w_meth is not None:
             space.call_function(w_meth, w_name, w_value)
         else:
-            self.setdictvalue(space, name, w_value)
+            # bit obscure: appease normalization
+            self.setdictvalue(space, name, w_value, True)
 
     def descr_delattr(self, space, w_name):
         name = unwrap_attr(space, w_name)
