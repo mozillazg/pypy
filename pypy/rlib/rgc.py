@@ -313,3 +313,53 @@ def no_collect(func):
     func._dont_inline_ = True
     func._gc_no_collect_ = True
     return func
+
+# ____________________________________________________________
+
+def _get_objects():
+    lst = gc.get_objects()
+    return map(_GcRef, lst)
+
+def _get_referents(gcref):
+    lst = gc.get_referents(gcref._x)
+    return map(_GcRef, lst)
+
+def _get_memory_usage(gcref):
+    # approximate implementation using CPython's type info
+    Class = type(gcref._x)
+    size = Class.__basicsize__
+    if Class.__itemsize__ > 0:
+        size += Class.__itemsize__ * len(gcref._x)
+    return size
+
+class _GcRef(object):
+    # implementation-specific: there should not be any after translation
+    __slots__ = ['_x']
+    def __init__(self, x):
+        self._x = x
+    def __hash__(self):
+        return object.__hash__(self._x)
+    def __eq__(self, other):
+        assert isinstance(other, _GcRef)
+        return self._x is other._x
+    def __ne__(self, other):
+        return not self.__eq__(other)
+    def __repr__(self):
+        return "_GcRef(%r)" % (self._x, )
+    def _freeze_(self):
+        raise Exception("instances of rlib.rgc._GcRef cannot be translated")
+
+def cast_instance_to_gcref(x):
+    # Before translation, casts an RPython instance into a _GcRef.
+    # After translation, it is a variant of cast_object_to_ptr(GCREF).
+    return _GcRef(x)
+
+def try_cast_gcref_to_instance(Class, gcref):
+    # Before translation, unwraps the RPython instance contained in a _GcRef.
+    # After translation, it is a type-check performed by the GC.
+    # Important: the GC only supports calling this function with one Class
+    # in the whole RPython program (so it can store a single Yes/No bit in
+    # gctypelayout.py).
+    if isinstance(gcref._x, Class):
+        return gcref._x
+    return None
