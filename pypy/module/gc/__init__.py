@@ -16,6 +16,14 @@ class Module(MixedModule):
 
     def __init__(self, space, w_name):
         ts = space.config.translation.type_system
-        if ts == 'ootype':
-            del self.interpleveldefs['dump_heap_stats']
+        if ts == 'lltype':
+            self.interpleveldefs.update({
+                'get_rpy_objects': 'referents.get_rpy_objects',
+                'get_rpy_referents': 'referents.get_rpy_referents',
+                'get_rpy_memory_usage': 'referents.get_rpy_memory_usage',
+                'get_objects': 'referents.get_objects',
+                'get_referents': 'referents.get_referents',
+                'get_memory_usage': 'referents.get_memory_usage',
+                'GcRef': 'referents.W_GcRef',
+                })
         MixedModule.__init__(self, space, w_name)
