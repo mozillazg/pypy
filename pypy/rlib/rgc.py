@@ -364,7 +364,7 @@ def get_rpy_type_index(gcref):
 
 def cast_gcref_to_int(gcref):
     if we_are_translated():
-        return cast_ptr_to_int(gcref)
+        return lltype.cast_ptr_to_int(gcref)
     else:
         return id(gcref._x)
 
