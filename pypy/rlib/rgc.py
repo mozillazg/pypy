@@ -356,7 +356,7 @@ def get_rpy_memory_usage(gcref):
         size += Class.__itemsize__ * len(gcref._x)
     return size
 
-def get_rpy_typeid(gcref):
+def get_rpy_type_index(gcref):
     "NOT_RPYTHON"
     from pypy.rlib.rarithmetic import intmask
     Class = gcref._x.__class__
@@ -464,13 +464,13 @@ class Entry(ExtRegistryEntry):
                          resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
-    _about_ = get_rpy_typeid
+    _about_ = get_rpy_type_index
     def compute_result_annotation(self, s_gcref):
         from pypy.annotation import model as annmodel
         return annmodel.SomeInteger()
     def specialize_call(self, hop):
         vlist = hop.inputargs(hop.args_r[0])
-        return hop.genop('gc_get_rpy_typeid', vlist,
+        return hop.genop('gc_get_rpy_type_index', vlist,
                          resulttype = hop.r_result)
 
 def _is_rpy_instance(gcref):

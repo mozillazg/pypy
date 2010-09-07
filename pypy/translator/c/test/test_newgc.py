@@ -1034,7 +1034,7 @@ class TestUsingFramework(object):
     def test_get_rpy_memory_usage(self):
         self.run("get_rpy_memory_usage")
 
-    def define_get_rpy_typeid(self):
+    def define_get_rpy_type_index(self):
         U = lltype.GcStruct('U', ('x', lltype.Signed))
         S = lltype.GcStruct('S', ('u', lltype.Ptr(U)))
         A = lltype.GcArray(lltype.Ptr(S))
@@ -1045,13 +1045,13 @@ class TestUsingFramework(object):
             a = lltype.malloc(A, 1000)
             s2 = lltype.malloc(S)
             gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, s)
-            int1 = rgc.get_rpy_typeid(gcref1)
+            int1 = rgc.get_rpy_type_index(gcref1)
             gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, s.u)
-            int2 = rgc.get_rpy_typeid(gcref2)
+            int2 = rgc.get_rpy_type_index(gcref2)
             gcref3 = lltype.cast_opaque_ptr(llmemory.GCREF, a)
-            int3 = rgc.get_rpy_typeid(gcref3)
+            int3 = rgc.get_rpy_type_index(gcref3)
             gcref4 = lltype.cast_opaque_ptr(llmemory.GCREF, s2)
-            int4 = rgc.get_rpy_typeid(gcref4)
+            int4 = rgc.get_rpy_type_index(gcref4)
             assert int1 != int2
             assert int1 != int3
             assert int2 != int3
@@ -1060,8 +1060,8 @@ class TestUsingFramework(object):
 
         return fn
 
-    def test_get_rpy_typeid(self):
-        self.run("get_rpy_typeid")
+    def test_get_rpy_type_index(self):
+        self.run("get_rpy_type_index")
 
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
