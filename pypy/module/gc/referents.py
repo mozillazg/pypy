@@ -50,6 +50,14 @@ def get_rpy_memory_usage(space, w_obj):
     size = rgc.get_rpy_memory_usage(gcref)
     return space.wrap(size)
 
+def get_rpy_type_index(space, w_obj):
+    """Return an integer identifying the RPython type of the given
+    object or GcRef.  The number starts at 1; it is an index in the
+    file typeids.txt produced at translation."""
+    gcref = unwrap(space, w_obj)
+    index = rgc.get_rpy_type_index(gcref)
+    return space.wrap(index)
+
 def _list_w_obj_referents(gcref, result_w):
     # Get all W_Root reachable directly from gcref, and add them to
     # the list 'result_w'.  The logic here is not robust against gc

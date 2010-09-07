@@ -62,6 +62,20 @@ class AppTestReferents(object):
         print n
         assert 4 <= n <= 64
 
+    def test_get_rpy_type_index(self):
+        import gc
+        class Foo(object):
+            pass
+        n1 = gc.get_rpy_type_index(12345)
+        n2 = gc.get_rpy_type_index(23456)
+        n3 = gc.get_rpy_type_index(1.2)
+        n4 = gc.get_rpy_type_index(Foo())
+        print n1, n2, n3, n4
+        assert n1 == n2
+        assert n1 != n3
+        assert n1 != n4
+        assert n3 != n4
+
     def test_get_referents(self):
         import gc
         y = 12345

@@ -21,6 +21,7 @@ class Module(MixedModule):
                 'get_rpy_roots': 'referents.get_rpy_roots',
                 'get_rpy_referents': 'referents.get_rpy_referents',
                 'get_rpy_memory_usage': 'referents.get_rpy_memory_usage',
+                'get_rpy_type_index': 'referents.get_rpy_type_index',
                 'get_objects': 'referents.get_objects',
                 'get_referents': 'referents.get_referents',
                 'GcRef': 'referents.W_GcRef',
