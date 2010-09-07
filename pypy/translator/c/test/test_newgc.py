@@ -1002,6 +1002,38 @@ class TestUsingFramework(object):
     def test_try_cast_gcref_to_instance(self):
         self.run("try_cast_gcref_to_instance")
 
+    def define_get_rpy_memory_usage(self):
+        U = lltype.GcStruct('U', ('x1', lltype.Signed),
+                                 ('x2', lltype.Signed),
+                                 ('x3', lltype.Signed),
+                                 ('x4', lltype.Signed),
+                                 ('x5', lltype.Signed),
+                                 ('x6', lltype.Signed),
+                                 ('x7', lltype.Signed),
+                                 ('x8', lltype.Signed))
+        S = lltype.GcStruct('S', ('u', lltype.Ptr(U)))
+        A = lltype.GcArray(lltype.Ptr(S))
+
+        def fn():
+            s = lltype.malloc(S)
+            s.u = lltype.malloc(U)
+            a = lltype.malloc(A, 1000)
+            gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+            int1 = rgc.get_rpy_memory_usage(gcref1)
+            assert 8 <= int1 <= 32
+            gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, s.u)
+            int2 = rgc.get_rpy_memory_usage(gcref2)
+            assert 4*9 <= int2 <= 8*12
+            gcref3 = lltype.cast_opaque_ptr(llmemory.GCREF, a)
+            int3 = rgc.get_rpy_memory_usage(gcref3)
+            assert 4*1001 <= int3 <= 8*1010
+            return 0
+
+        return fn
+
+    def test_get_rpy_memory_usage(self):
+        self.run("get_rpy_memory_usage")
+
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"

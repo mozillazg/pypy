@@ -396,6 +396,11 @@ class FrameworkGCTransformer(GCTransformer):
                                            [s_gc, s_gcref],
                                            rgc.s_list_of_gcrefs(),
                                            minimal_transform=False)
+        self.get_rpy_memory_usage_ptr = getfn(
+                                          GCClass.get_rpy_memory_usage.im_func,
+                                          [s_gc, s_gcref],
+                                          annmodel.SomeInteger(),
+                                          minimal_transform=False)
         self.is_rpy_instance_ptr = getfn(GCClass.is_rpy_instance.im_func,
                                          [s_gc, s_gcref],
                                          annmodel.SomeBool(),
@@ -908,6 +913,14 @@ class FrameworkGCTransformer(GCTransformer):
         [v_ptr] = hop.spaceop.args
         hop.genop("direct_call",
                   [self.get_rpy_referents_ptr, self.c_const_gc, v_ptr],
+                  resultvar=hop.spaceop.result)
+        self.pop_roots(hop, livevars)
+
+    def gct_gc_get_rpy_memory_usage(self, hop):
+        livevars = self.push_roots(hop)
+        [v_ptr] = hop.spaceop.args
+        hop.genop("direct_call",
+                  [self.get_rpy_memory_usage_ptr, self.c_const_gc, v_ptr],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
