@@ -324,15 +324,12 @@ class AppTestPosix:
     if hasattr(__import__(os.name), "openpty"):
         def test_openpty(self):
             os = self.posix
-            master_fd, slave_fd = self.posix.openpty()
-            try:
-                assert isinstance(master_fd, int)
-                assert isinstance(slave_fd, int)
-                os.write(slave_fd, 'x')
-                assert os.read(master_fd, 1) == 'x'
-            finally:
-                os.close(master_fd)
-                os.close(slave_fd)
+            master_fd, slave_fd = os.openpty()
+            assert isinstance(master_fd, int)
+            assert isinstance(slave_fd, int)
+            os.write(slave_fd, 'x\n')
+            data = os.read(master_fd, 100)
+            assert data.startswith('x')
 
 
     if hasattr(__import__(os.name), "execv"):
