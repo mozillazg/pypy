@@ -238,6 +238,87 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
         self.optimizer.exception_might_have_happened = False
 
+    def optimize_CALL_LOOPINVARIANT(self, op):
+        funcvalue = self.getvalue(op.args[0])
+        if not funcvalue.is_constant():
+            self.emit_operation(op)
+            return
+        key = make_hashable_int(op.args[0].getint())
+        resvalue = self.optimizer.loop_invariant_results.get(key, None)
+        if resvalue is not None:
+            self.make_equal_to(op.result, resvalue)
+            return
+        # change the op to be a normal call, from the backend's point of view
+        # there is no reason to have a separate operation for this
+        op.opnum = rop.CALL
+        self.emit_operation(op)
+        resvalue = self.getvalue(op.result)
+        self.optimizer.loop_invariant_results[key] = resvalue
+    
+    def _optimize_nullness(self, op, box, expect_nonnull):
+        value = self.getvalue(box)
+        if value.is_nonnull():
+            self.make_constant_int(op.result, expect_nonnull)
+        elif value.is_null():
+            self.make_constant_int(op.result, not expect_nonnull)
+        else:
+            self.emit_operation(op)
+
+    def optimize_INT_IS_TRUE(self, op):
+        if self.getvalue(op.args[0]) in self.optimizer.bool_boxes:
+            self.make_equal_to(op.result, self.getvalue(op.args[0]))
+            return
+        self._optimize_nullness(op, op.args[0], True)
+
+    def optimize_INT_IS_ZERO(self, op):
+        self._optimize_nullness(op, op.args[0], False)
+
+    def _optimize_oois_ooisnot(self, op, expect_isnot):
+        value0 = self.getvalue(op.args[0])
+        value1 = self.getvalue(op.args[1])
+        if value0.is_virtual():
+            if value1.is_virtual():
+                intres = (value0 is value1) ^ expect_isnot
+                self.make_constant_int(op.result, intres)
+            else:
+                self.make_constant_int(op.result, expect_isnot)
+        elif value1.is_virtual():
+            self.make_constant_int(op.result, expect_isnot)
+        elif value1.is_null():
+            self._optimize_nullness(op, op.args[0], expect_isnot)
+        elif value0.is_null():
+            self._optimize_nullness(op, op.args[1], expect_isnot)
+        elif value0 is value1:
+            self.make_constant_int(op.result, not expect_isnot)
+        else:
+            cls0 = value0.get_constant_class(self.optimizer.cpu)
+            if cls0 is not None:
+                cls1 = value1.get_constant_class(self.optimizer.cpu)
+                if cls1 is not None and not cls0.same_constant(cls1):
+                    # cannot be the same object, as we know that their
+                    # class is different
+                    self.make_constant_int(op.result, expect_isnot)
+                    return
+            self.emit_operation(op)
+
+    def optimize_PTR_NE(self, op):
+        self._optimize_oois_ooisnot(op, True)
+
+    def optimize_PTR_EQ(self, op):
+        self._optimize_oois_ooisnot(op, False)
+
+    def optimize_INSTANCEOF(self, op):
+        value = self.getvalue(op.args[0])
+        realclassbox = value.get_constant_class(self.optimizer.cpu)
+        if realclassbox is not None:
+            checkclassbox = self.optimizer.cpu.typedescr2classbox(op.descr)
+            result = self.optimizer.cpu.ts.subclassOf(self.optimizer.cpu,
+                                                      realclassbox, 
+                                                      checkclassbox)
+            self.make_constant_int(op.result, result)
+            return
+        self.emit_operation(op)
+
 optimize_ops = _findall(OptRewrite, 'optimize_')
         
 
