@@ -674,6 +674,14 @@ class MarkCompactGC(MovingGCBase):
                 return llmemory.cast_adr_to_int(obj)  # not in an arena...
             return adr - self.space
 
+    def get_rpy_memory_usage(self, gcref):
+        obj = llmemory.cast_ptr_to_adr(gcref)
+        size = self.get_size(obj)
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_HASHFIELD:
+            size += llmemory.sizeof(lltype.Signed)
+        return size
+
 # ____________________________________________________________
 
 class CannotAllocateGCArena(Exception):

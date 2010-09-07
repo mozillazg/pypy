@@ -337,6 +337,10 @@ class GCBase(object):
 
     # ----------
 
+    def get_rpy_memory_usage(self, gcref):
+        # overridden in semispace.py and markcompact.py to also count the hash
+        return self.get_size(llmemory.cast_ptr_to_adr(gcref))
+
     def is_rpy_instance(self, gcref):
         typeid = self.get_type_id(llmemory.cast_ptr_to_adr(gcref))
         return self.is_rpython_class(typeid)
