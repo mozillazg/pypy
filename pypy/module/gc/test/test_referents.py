@@ -1,3 +1,4 @@
+from pypy.conftest import option
 
 
 class AppTestReferents(object):
@@ -12,6 +13,7 @@ class AppTestReferents(object):
         cls.w_ALL_ROOTS = cls.space.newlist(cls.ALL_ROOTS)
         rgc.get_rpy_roots = lambda: (
             map(rgc._GcRef, cls.ALL_ROOTS) + [rgc.NULL_GCREF]*17)
+        cls.w_runappdirect = cls.space.wrap(option.runappdirect)
 
     def teardown_class(cls):
         from pypy.rlib import rgc
@@ -20,10 +22,15 @@ class AppTestReferents(object):
     def test_get_objects(self):
         import gc
         lst = gc.get_objects()
-        assert 2 in lst
-        assert 4 in lst
-        assert 7 in lst
-        assert [2, 7] in lst
+        i4, l27, ro = self.ALL_ROOTS
+        i2, i7 = l27
+        found = 0
+        for x in lst:
+            if x is i4: found |= 1
+            if x is i2: found |= 2
+            if x is i7: found |= 4
+            if x is l27: found |= 8
+        assert found == 15
         for x in lst:
             if type(x) is gc.GcRef:
                 assert 0, "get_objects() returned a GcRef"
@@ -31,10 +38,13 @@ class AppTestReferents(object):
     def test_get_rpy_roots(self):
         import gc
         lst = gc.get_rpy_roots()
-        assert lst[0] == 4
-        assert lst[1] == [2, 7]
-        assert type(lst[2]) is gc.GcRef
-        assert len(lst) == 3
+        if self.runappdirect:
+            pass    # unsure what to test
+        else:
+            assert lst[0] == 4
+            assert lst[1] == [2, 7]
+            assert type(lst[2]) is gc.GcRef
+            assert len(lst) == 3
 
     def test_get_rpy_referents(self):
         import gc
