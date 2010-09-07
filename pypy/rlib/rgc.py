@@ -411,9 +411,10 @@ def try_cast_gcref_to_instance(Class, gcref):
         from pypy.rpython.lltypesystem import rclass
         if _is_rpy_instance(gcref):
             objptr = lltype.cast_opaque_ptr(base_ptr_lltype(), gcref)
-            clsptr = _get_llcls_from_cls(Class)
-            if rclass.ll_isinstance(objptr, clsptr):
-                return cast_base_ptr_to_instance(Class, objptr)
+            if objptr.typeptr:   # may be NULL, e.g. in rdict's dummykeyobj
+                clsptr = _get_llcls_from_cls(Class)
+                if rclass.ll_isinstance(objptr, clsptr):
+                    return cast_base_ptr_to_instance(Class, objptr)
         return None
     else:
         if isinstance(gcref._x, Class):
