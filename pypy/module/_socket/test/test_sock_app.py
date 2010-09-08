@@ -256,7 +256,7 @@ def test_addr_raw_packet():
     w_obj = rsocket.make_address(c_addr, addrlen).as_object(fd, space)
     assert space.is_true(space.eq(w_obj, space.newtuple([
         space.wrap('lo'),
-        space.wrap(2048),
+        space.wrap(socket.ntohs(8)),
         space.wrap(13),
         space.wrap(False),
         space.wrap("abc"),
