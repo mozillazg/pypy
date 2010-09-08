@@ -425,6 +425,8 @@ class WarmRunnerDesc(object):
             jd._confirm_enter_jit_ptr = self._make_hook_graph(jd,
                 annhelper, jd.jitdriver.confirm_enter_jit, annmodel.s_Bool,
                 onlygreens=False)
+            jd._can_never_inline_ptr = self._make_hook_graph(jd,
+                annhelper, jd.jitdriver.can_never_inline, annmodel.s_Bool)
         annhelper.finish()
 
     def _make_hook_graph(self, jitdriver_sd, annhelper, func,

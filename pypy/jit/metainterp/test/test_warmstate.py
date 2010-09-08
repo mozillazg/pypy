@@ -166,6 +166,7 @@ def test_make_jitdriver_callbacks_1():
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = None
         _confirm_enter_jit_ptr = None
+        _can_never_inline_ptr = None
     class FakeCell:
         dont_trace_here = False
     state = WarmEnterState(None, FakeJitDriverSD())
@@ -189,6 +190,7 @@ def test_make_jitdriver_callbacks_3():
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = llhelper(GET_LOCATION, get_location)
         _confirm_enter_jit_ptr = None
+        _can_never_inline_ptr = None
         _get_jitcell_at_ptr = None
     state = WarmEnterState(FakeWarmRunnerDesc(), FakeJitDriverSD())
     state.make_jitdriver_callbacks()
@@ -209,9 +211,31 @@ def test_make_jitdriver_callbacks_4():
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = None
         _confirm_enter_jit_ptr = llhelper(ENTER_JIT, confirm_enter_jit)
+        _can_never_inline_ptr = None
         _get_jitcell_at_ptr = None
 
     state = WarmEnterState(FakeWarmRunnerDesc(), FakeJitDriverSD())
     state.make_jitdriver_callbacks()
     res = state.confirm_enter_jit(5, 42.5, 3)
+    assert res is True
+
+def test_make_jitdriver_callbacks_5():
+    def can_never_inline(x, y):
+        assert x == 5
+        assert y == 42.5
+        return True
+    CAN_NEVER_INLINE = lltype.Ptr(lltype.FuncType(
+        [lltype.Signed, lltype.Float], lltype.Bool))
+    class FakeWarmRunnerDesc:
+        rtyper = None
+    class FakeJitDriverSD:
+        _green_args_spec = [lltype.Signed, lltype.Float]
+        _get_printable_location_ptr = None
+        _confirm_enter_jit_ptr = None
+        _can_never_inline_ptr = llhelper(CAN_NEVER_INLINE, can_never_inline)
+        _get_jitcell_at_ptr = None
+
+    state = WarmEnterState(FakeWarmRunnerDesc(), FakeJitDriverSD())
+    state.make_jitdriver_callbacks()
+    res = state.can_never_inline(5, 42.5)
     assert res is True
