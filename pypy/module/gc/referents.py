@@ -79,19 +79,23 @@ def _list_w_obj_referents(gcref, result_w):
             else:
                 pending.append(gcref)
 
-def get_objects(space):
-    """Return a list of all app-level objects."""
-    roots = rgc.get_rpy_roots()
-    # start from the roots, which is a list of gcrefs that may or may not
-    # be W_Roots
-    pending_w = []   # <- list of W_Roots
-    for gcref in roots:
+def _get_objects_from_rpy(list_of_gcrefs):
+    # given a list of gcrefs that may or may not be W_Roots, build a list
+    # of W_Roots obtained by following references from there.
+    result_w = []   # <- list of W_Roots
+    for gcref in list_of_gcrefs:
         if gcref:
             w_obj = try_cast_gcref_to_w_root(gcref)
             if w_obj is not None:
-                pending_w.append(w_obj)
+                result_w.append(w_obj)
             else:
-                _list_w_obj_referents(gcref, pending_w)
+                _list_w_obj_referents(gcref, result_w)
+    return result_w
+
+def get_objects(space):
+    """Return a list of all app-level objects."""
+    roots = rgc.get_rpy_roots()
+    pending_w = _get_objects_from_rpy(roots)
     # continue by following every W_Root.  Note that this will force a hash
     # on every W_Root, which is kind of bad, but not on every RPython object,
     # which is really good.
@@ -116,3 +120,30 @@ def get_referents(space, args_w):
         _list_w_obj_referents(gcref, result)
     return space.newlist(result)
 get_referents.unwrap_spec = [ObjSpace, 'args_w']
+
+def get_referrers(space, args_w):
+    """Return the list of objects that directly refer to any of objs."""
+    roots = rgc.get_rpy_roots()
+    pending_w = _get_objects_from_rpy(roots)
+    arguments_w = {}
+    for w_obj in args_w:
+        arguments_w[w_obj] = None
+    # continue by following every W_Root.  Same remark about hashes as
+    # in get_objects().
+    result_w = {}
+    seen_w = {}
+    while len(pending_w) > 0:
+        previous_w = pending_w
+        pending_w = []
+        for w_obj in previous_w:
+            if w_obj not in seen_w:
+                seen_w[w_obj] = None
+                gcref = rgc.cast_instance_to_gcref(w_obj)
+                referents_w = []
+                _list_w_obj_referents(gcref, referents_w)
+                for w_subobj in referents_w:
+                    if w_subobj in arguments_w:
+                        result_w[w_obj] = None
+                pending_w += referents_w
+    return space.newlist(result_w.keys())
+get_referrers.unwrap_spec = [ObjSpace, 'args_w']

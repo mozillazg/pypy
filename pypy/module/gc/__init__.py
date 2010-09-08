@@ -24,6 +24,7 @@ class Module(MixedModule):
                 'get_rpy_type_index': 'referents.get_rpy_type_index',
                 'get_objects': 'referents.get_objects',
                 'get_referents': 'referents.get_referents',
+                'get_referrers': 'referents.get_referrers',
                 'GcRef': 'referents.W_GcRef',
                 })
         MixedModule.__init__(self, space, w_name)
