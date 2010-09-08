@@ -243,6 +243,12 @@ def test_addr_raw_packet():
     c_addr = rffi.cast(lltype.Ptr(rsocket._c.sockaddr), c_addr_ll)
     rffi.setintfield(c_addr_ll, 'c_sll_ifindex', 1)
     rffi.setintfield(c_addr_ll, 'c_sll_protocol', 8)
+    rffi.setintfield(c_addr_ll, 'c_sll_pkttype', 13)
+    rffi.setintfield(c_addr_ll, 'c_sll_hatype', 0)
+    rffi.setintfield(c_addr_ll, 'c_sll_halen', 3)
+    c_addr_ll.c_sll_addr[0] = 'a'
+    c_addr_ll.c_sll_addr[1] = 'b'
+    c_addr_ll.c_sll_addr[2] = 'c'
     rffi.setintfield(c_addr, 'c_sa_family', socket.AF_PACKET)
     # fd needs to be somehow valid
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -250,7 +256,11 @@ def test_addr_raw_packet():
     w_obj = rsocket.make_address(c_addr, addrlen).as_object(fd, space)
     assert space.is_true(space.eq(w_obj, space.newtuple([
         space.wrap('lo'),
-        space.w_None])))
+        space.wrap(2048),
+        space.wrap(13),
+        space.wrap(False),
+        space.wrap("abc"),
+        ])))
 
 def test_getnameinfo():
     host = "127.0.0.1"
