@@ -210,7 +210,13 @@ class PacketAddress(Address):
         rffi.setintfield(p, 'c_ifr_ifindex',
                          rffi.getintfield(a, 'c_sll_ifindex'))
         if (_c.ioctl(fd, _c.SIOCGIFNAME, p) == 0):
-            ifname = rffi.charp2str(p.c_ifr_name)
+            # eh, the iface name is a constant length array
+            i = 0
+            d = []
+            while p.c_ifr_name[i] != '\x00' and i < len(p.c_ifr_name):
+                d.append(p.c_ifr_name[i])
+                i += 1
+            ifname = ''.join(d)
         else:
             ifname = ""
         lltype.free(p, flavor='raw')
@@ -238,7 +244,10 @@ class PacketAddress(Address):
     def get_addr(self):
         a = self.lock(_c.sockaddr_ll)
         lgt = rffi.getintfield(a, 'c_sll_halen')
-        res = rffi.charpsize2str(a.c_sll_addr, lgt)
+        d = []
+        for i in range(lgt):
+            d.append(a.c_sll_addr[i])
+        res = "".join(d)
         self.unlock()
         return res
 
