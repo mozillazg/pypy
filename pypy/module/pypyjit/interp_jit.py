@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDriver, hint, we_are_jitted
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, Arguments
-from pypy.interpreter.pycode import PyCode
+from pypy.interpreter.pycode import PyCode, CO_GENERATOR
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
 from opcode import opmap
@@ -40,6 +40,9 @@ def confirm_enter_jit(next_instr, bytecode, frame, ec):
             ec.profilefunc is None and
             ec.w_tracefunc is None)
 
+def can_never_inline(next_instr, bytecode):
+    return (bytecode.co_flags & CO_GENERATOR) != 0
+
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
@@ -57,12 +60,10 @@ class PyPyJitDriver(JitDriver):
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
-                              confirm_enter_jit = confirm_enter_jit)
-
-PyFrame__execute_generator_frame = PyFrame.execute_generator_frame
+                              confirm_enter_jit = confirm_enter_jit,
+                              can_never_inline = can_never_inline)
 
 class __extend__(PyFrame):
-    last_yield = -1
 
     def dispatch(self, pycode, next_instr, ec):
         self = hint(self, access_directly=True)
@@ -77,16 +78,7 @@ class __extend__(PyFrame):
         except ExitFrame:
             return self.popvalue()
 
-    def execute_generator_frame(self, w_inputvalue, operr=None):
-        self.last_yield = self.last_instr
-        return PyFrame__execute_generator_frame(self, w_inputvalue, operr)
-
     def jump_absolute(self, jumpto, _, ec=None):
-        if jumpto <= self.last_yield:
-            # Here we are in a generator, closing the loop that did a YIELD.
-            # In that case, we should not consider this a loop at all.
-            self.last_yield = -1
-            return jumpto
         if we_are_jitted():
             self.last_instr = intmask(jumpto)
             ec.bytecode_trace(self)
