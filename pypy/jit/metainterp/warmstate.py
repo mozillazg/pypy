@@ -493,6 +493,8 @@ class WarmEnterState(object):
         jit_getter = self.make_jitcell_getter()
 
         def can_inline_greenargs(*greenargs):
+            if can_never_inline(*greenargs):
+                return False
             cell = jit_getter(False, *greenargs)
             if cell is not None and cell.dont_trace_here:
                 return False
@@ -546,3 +548,16 @@ class WarmEnterState(object):
                                                       confirm_enter_jit_ptr)
                 return fn(*args)
         self.confirm_enter_jit = confirm_enter_jit
+        #
+        can_never_inline_ptr = self.jitdriver_sd._can_never_inline_ptr
+        if can_never_inline_ptr is None:
+            def can_never_inline(*greenargs):
+                return False
+        else:
+            rtyper = self.warmrunnerdesc.rtyper
+            #
+            def can_never_inline(*greenargs):
+                fn = support.maybe_on_top_of_llinterp(rtyper,
+                                                      can_never_inline_ptr)
+                return fn(*greenargs)
+        self.can_never_inline = can_never_inline
