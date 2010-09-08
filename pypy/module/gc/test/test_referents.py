@@ -93,3 +93,14 @@ class AppTestReferents(object):
         x = [y, z]
         lst = gc.get_referents(x)
         assert y in lst and z in lst
+
+    def test_get_referrers(self):
+        import gc
+        l27 = self.ALL_ROOTS[1]
+        i2, i7 = l27
+        lst = gc.get_referrers(i7)
+        for x in lst:
+            if x is l27:
+                break   # found
+        else:
+            assert 0, "the list [2, 7] is not found as gc.get_referrers(7)"
