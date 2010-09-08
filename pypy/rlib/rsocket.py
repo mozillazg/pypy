@@ -218,11 +218,36 @@ class PacketAddress(Address):
         return ifname
 
     def get_protocol(self):
-        a = self.lock
+        a = self.lock(_c.sockaddr_ll)
+        res = ntohs(rffi.getintfield(a, 'c_sll_protocol'))
+        self.unlock()
+        return res
+
+    def get_pkttype(self):
+        a = self.lock(_c.sockaddr_ll)
+        res = rffi.getintfield(a, 'c_sll_pkttype')
+        self.unlock()
+        return res
+
+    def get_hatype(self):
+        a = self.lock(_c.sockaddr_ll)
+        res = bool(rffi.getintfield(a, 'c_sll_hatype'))
+        self.unlock()
+        return res
+        
+    def get_addr(self):
+        a = self.lock(_c.sockaddr_ll)
+        lgt = rffi.getintfield(a, 'c_sll_halen')
+        res = rffi.charpsize2str(a.c_sll_addr, lgt)
+        self.unlock()
+        return res
 
     def as_object(self, fd, space):
         return space.newtuple([space.wrap(self.get_ifname(fd)),
-                               space.wrap(self.get_protocol())])
+                               space.wrap(self.get_protocol()),
+                               space.wrap(self.get_pkttype()),
+                               space.wrap(self.get_hatype()),
+                               space.wrap(self.get_addr())])
 
 class INETAddress(IPAddress):
     family = AF_INET
