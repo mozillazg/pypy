@@ -57,12 +57,9 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop.inputargs = history.inputargs
     for box in loop.inputargs:
         assert isinstance(box, Box)
-    if start > 0:
-        ops = history.operations[start:]
-    else:
-        ops = history.operations
     # make a copy, because optimize_loop can mutate the ops and descrs
-    loop.operations = [op.clone() for op in ops]
+    h_ops = history.operations
+    loop.operations = [h_ops[i].clone() for i in range(start, len(h_ops))]
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
     loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd)
