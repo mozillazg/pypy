@@ -290,9 +290,6 @@ class LLtypeCPU(BaseCPU):
         return self.getdescr(0, token[0], extrainfo=extrainfo,
                              arg_types=''.join(arg_types))
 
-    def grab_exc_value(self):
-        return llimpl.grab_exc_value()
-
     def arraydescrof(self, A):
         assert A.OF != lltype.Void
         size = symbolic.get_size(A)
