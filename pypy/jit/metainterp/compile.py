@@ -14,6 +14,7 @@ from pypy.jit.metainterp import history
 from pypy.jit.metainterp.specnode import NotSpecNode, more_general_specnodes
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
+from pypy.jit.codewriter import heaptracker
 
 def giveup():
     from pypy.jit.metainterp.pyjitpl import SwitchToBlackhole
@@ -547,3 +548,51 @@ def prepare_last_operation(new_loop, target_loop_token):
         descr = target_loop_token.finishdescr
         new_op = ResOperation(rop.FINISH, op.args, None, descr=descr)
         new_loop.operations[-1] = new_op
+
+# ____________________________________________________________
+
+class PropagateExceptionDescr(AbstractFailDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        cpu = metainterp_sd.cpu
+        exception = self.cpu.grab_exc_value()
+        raise metainterp_sd.ExitFrameWithExceptionRef(cpu, exception)
+
+def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
+    """Make a LoopToken that corresponds to assembler code that just
+    calls back the interpreter.  Used temporarily: a fully compiled
+    version of the code may end up replacing it.
+    """
+    # 'redboxes' is only used to know the types of red arguments
+    inputargs = [box.clonebox() for box in redboxes]
+    loop_token = make_loop_token(len(inputargs), jitdriver_sd)
+    #
+    k = jitdriver_sd.portal_runner_adr
+    funcbox = history.ConstInt(heaptracker.adr2int(k))
+    args = [funcbox] + greenkey + inputargs
+    #
+    result_type = jitdriver_sd.result_type
+    if result_type == history.INT:
+        result = BoxInt()
+    elif result_type == history.REF:
+        result = BoxPtr()
+    elif result_type == history.FLOAT:
+        result = BoxFloat()
+    elif result_type == history.VOID:
+        result = None
+    else:
+        assert 0, "bad result_type"
+    if result is not None:
+        finishargs = []
+    else:
+        finishargs = [result]
+    #
+    jd = jitdriver_sd
+    faildescr = PropagateExceptionDescr()
+    operations = [
+        ResOperation(rop.CALL, args, result, descr=jd.portal_calldescr),
+        ResOperation(rop.GUARD_NO_EXCEPTION, [], None, descr=faildescr),
+        ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
+        ]
+    operations[1].fail_args = []
+    cpu.compile_loop(inputargs, operations, loop_token)
+    return loop_token

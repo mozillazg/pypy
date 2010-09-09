@@ -696,7 +696,7 @@ class MIFrame(object):
                 portal_code = targetjitdriver_sd.mainjitcode
                 return self.metainterp.perform_call(portal_code, allboxes,
                                                     greenkey=greenboxes)
-            token = warmrunnerstate.get_assembler_token(greenboxes)
+            token = warmrunnerstate.get_assembler_token(greenboxes, redboxes)
             # verify that we have all green args, needed to make sure
             # that assembler that we call is still correct
             self.verify_green_args(targetjitdriver_sd, greenboxes)
@@ -829,7 +829,7 @@ class MIFrame(object):
             self.pc = saved_pc
         else:
             warmrunnerstate = jitdriver_sd.warmstate
-            token = warmrunnerstate.get_assembler_token(greenboxes)
+            token = warmrunnerstate.get_assembler_token(greenboxes, redboxes)
             # warning! careful here.  We have to return from the current
             # frame containing the jit_merge_point, and then use
             # do_recursive_call() to follow the recursive call.  This is
@@ -1217,6 +1217,7 @@ class MetaInterpStaticData(object):
                     history.FLOAT: 'float',
                     history.VOID: 'void'}[jd.result_type]
             tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
+            jd.portal_finishtoken = tokens[0].finishdescr
             num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
             setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
         #
