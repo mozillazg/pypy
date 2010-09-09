@@ -199,64 +199,65 @@ class IPAddress(Address):
 
 # ____________________________________________________________
 
-class PacketAddress(Address):
-    family = AF_PACKET
-    struct = _c.sockaddr_ll
-    maxlen = minlen = sizeof(struct)
+if 'AF_PACKET' in constants:
+    class PacketAddress(Address):
+        family = AF_PACKET
+        struct = _c.sockaddr_ll
+        maxlen = minlen = sizeof(struct)
 
-    def get_ifname(self, fd):
-        a = self.lock(_c.sockaddr_ll)
-        p = lltype.malloc(_c.ifreq, flavor='raw')
-        rffi.setintfield(p, 'c_ifr_ifindex',
-                         rffi.getintfield(a, 'c_sll_ifindex'))
-        if (_c.ioctl(fd, _c.SIOCGIFNAME, p) == 0):
-            # eh, the iface name is a constant length array
-            i = 0
+        def get_ifname(self, fd):
+            a = self.lock(_c.sockaddr_ll)
+            p = lltype.malloc(_c.ifreq, flavor='raw')
+            rffi.setintfield(p, 'c_ifr_ifindex',
+                             rffi.getintfield(a, 'c_sll_ifindex'))
+            if (_c.ioctl(fd, _c.SIOCGIFNAME, p) == 0):
+                # eh, the iface name is a constant length array
+                i = 0
+                d = []
+                while p.c_ifr_name[i] != '\x00' and i < len(p.c_ifr_name):
+                    d.append(p.c_ifr_name[i])
+                    i += 1
+                ifname = ''.join(d)
+            else:
+                ifname = ""
+            lltype.free(p, flavor='raw')
+            self.unlock()
+            return ifname
+
+        def get_protocol(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = ntohs(rffi.getintfield(a, 'c_sll_protocol'))
+            self.unlock()
+            return res
+
+        def get_pkttype(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = rffi.getintfield(a, 'c_sll_pkttype')
+            self.unlock()
+            return res
+
+        def get_hatype(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = bool(rffi.getintfield(a, 'c_sll_hatype'))
+            self.unlock()
+            return res
+
+        def get_addr(self):
+            a = self.lock(_c.sockaddr_ll)
+            lgt = rffi.getintfield(a, 'c_sll_halen')
             d = []
-            while p.c_ifr_name[i] != '\x00' and i < len(p.c_ifr_name):
-                d.append(p.c_ifr_name[i])
-                i += 1
-            ifname = ''.join(d)
-        else:
-            ifname = ""
-        lltype.free(p, flavor='raw')
-        self.unlock()
-        return ifname
+            for i in range(lgt):
+                d.append(a.c_sll_addr[i])
+            res = "".join(d)
+            self.unlock()
+            return res
 
-    def get_protocol(self):
-        a = self.lock(_c.sockaddr_ll)
-        res = ntohs(rffi.getintfield(a, 'c_sll_protocol'))
-        self.unlock()
-        return res
-
-    def get_pkttype(self):
-        a = self.lock(_c.sockaddr_ll)
-        res = rffi.getintfield(a, 'c_sll_pkttype')
-        self.unlock()
-        return res
-
-    def get_hatype(self):
-        a = self.lock(_c.sockaddr_ll)
-        res = bool(rffi.getintfield(a, 'c_sll_hatype'))
-        self.unlock()
-        return res
-        
-    def get_addr(self):
-        a = self.lock(_c.sockaddr_ll)
-        lgt = rffi.getintfield(a, 'c_sll_halen')
-        d = []
-        for i in range(lgt):
-            d.append(a.c_sll_addr[i])
-        res = "".join(d)
-        self.unlock()
-        return res
-
-    def as_object(self, fd, space):
-        return space.newtuple([space.wrap(self.get_ifname(fd)),
-                               space.wrap(self.get_protocol()),
-                               space.wrap(self.get_pkttype()),
-                               space.wrap(self.get_hatype()),
-                               space.wrap(self.get_addr())])
+        def as_object(self, fd, space):
+            return space.newtuple([space.wrap(self.get_ifname(fd)),
+                                   space.wrap(self.get_protocol()),
+                                   space.wrap(self.get_pkttype()),
+                                   space.wrap(self.get_hatype()),
+                                   space.wrap(self.get_addr())])
 
 class INETAddress(IPAddress):
     family = AF_INET
