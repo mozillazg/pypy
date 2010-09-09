@@ -4,7 +4,7 @@
 
 from pypy.translator.platform import Platform, log, _run_subprocess
 from pypy.tool import autopath
-import py, os
+import py, os, sys
 
 class BasePosix(Platform):
     exe_ext = ''
@@ -104,6 +104,13 @@ class BasePosix(Platform):
         else:
             target_name = exe_name.basename
 
+        cflags = self.cflags
+        if sys.maxint > 2147483647:   # XXX XXX XXX sort this out
+            if shared:
+                cflags = self.cflags + self.shared_only
+            else:
+                cflags = self.cflags + self.standalone_only
+
         m = GnuMakefile(path)
         m.exe_name = exe_name
         m.eci = eci
@@ -132,7 +139,7 @@ class BasePosix(Platform):
             ('LIBS', self._libs(eci.libraries)),
             ('LIBDIRS', self._libdirs(eci.library_dirs)),
             ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
-            ('CFLAGS', self.cflags),
+            ('CFLAGS', cflags),
             ('CFLAGSEXTRA', list(eci.compile_extra)),
             ('LDFLAGS', linkflags),
             ('LDFLAGSEXTRA', list(eci.link_extra)),
