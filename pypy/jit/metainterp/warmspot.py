@@ -584,9 +584,11 @@ class WarmRunnerDesc(object):
         ts = self.cpu.ts
 
         def ll_portal_runner(*args):
+            start = True
             while 1:
                 try:
-                    jd._maybe_enter_from_start_fn(*args)
+                    if start:
+                        jd._maybe_enter_from_start_fn(*args)
                     return support.maybe_on_top_of_llinterp(rtyper,
                                                       portal_ptr)(*args)
                 except self.ContinueRunningNormally, e:
@@ -595,6 +597,8 @@ class WarmRunnerDesc(object):
                         x = getattr(e, attrname)[count]
                         x = specialize_value(ARGTYPE, x)
                         args = args + (x,)
+                    start = False
+                    continue
                 except self.DoneWithThisFrameVoid:
                     assert result_kind == 'void'
                     return
