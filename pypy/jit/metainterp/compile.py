@@ -554,8 +554,10 @@ def prepare_last_operation(new_loop, target_loop_token):
 class PropagateExceptionDescr(AbstractFailDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd):
         cpu = metainterp_sd.cpu
-        exception = self.cpu.grab_exc_value()
+        exception = cpu.grab_exc_value()
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, exception)
+
+propagate_exception_descr = PropagateExceptionDescr()
 
 def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
     """Make a LoopToken that corresponds to assembler code that just
@@ -568,7 +570,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
     #
     k = jitdriver_sd.portal_runner_adr
     funcbox = history.ConstInt(heaptracker.adr2int(k))
-    args = [funcbox] + greenkey + inputargs
+    callargs = [funcbox] + greenkey + inputargs
     #
     result_type = jitdriver_sd.result_type
     if result_type == history.INT:
@@ -587,9 +589,9 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
         finishargs = [result]
     #
     jd = jitdriver_sd
-    faildescr = PropagateExceptionDescr()
+    faildescr = propagate_exception_descr
     operations = [
-        ResOperation(rop.CALL, args, result, descr=jd.portal_calldescr),
+        ResOperation(rop.CALL, callargs, result, descr=jd.portal_calldescr),
         ResOperation(rop.GUARD_NO_EXCEPTION, [], None, descr=faildescr),
         ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
         ]
