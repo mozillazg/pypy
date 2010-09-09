@@ -90,8 +90,9 @@ def descriptor(code, name, ll_type):
         def cast(self, data):
             return rffi.cast(lltype.Ptr(arraytype), data)
 
-        def dump(self, data):
-            return ', '.join([str(x) for x in self.cast(data)])
+        def dump(self, data, count):
+            data = self.cast(data)
+            return ', '.join([str(data[i]) for i in range(count)])
 
         def typestr(self):
             if self is float_descr:
@@ -134,15 +135,19 @@ _typestring = {}
 # i is ??
 
 int_descr = descriptor('i', 'int32', lltype.Signed)
-type(int_descr).unwrap = lambda self, space, value: space.int_w(value)
-type(int_descr).coerce_w = lambda self, space, value: space.int_w(space.int(value))
+IntDescrImpl = type(int_descr)
+IntDescrImpl.unwrap = lambda self, space, value: space.int_w(value)
+IntDescrImpl.coerce = lambda self, space, value: space.int(value)
+IntDescrImpl.coerce_w = lambda self, space, value: space.int_w(space.int(value))
 _int_index = _typeindex['i']
 _typestring['int32'] = _int_index
 w_int_descr = _w_descriptors[_int_index]
 
 float_descr = descriptor('d', 'float64', lltype.Float)
-type(float_descr).unwrap = lambda self, space, value: space.float_w(value)
-type(float_descr).coerce_w = lambda self, space, value: space.float_w(space.float(value))
+FloatDescrImpl = type(float_descr)
+FloatDescrImpl.unwrap = lambda self, space, value: space.float_w(value)
+FloatDescrImpl.coerce = lambda self, space, value: space.float(value)
+FloatDescrImpl.coerce_w = lambda self, space, value: space.float_w(space.float(value))
 _float_index = _typeindex['d']
 _typestring['float64'] = _float_index
 w_float_descr = _w_descriptors[_float_index]

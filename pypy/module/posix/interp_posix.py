@@ -6,8 +6,6 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError, wrap_oserror, wrap_oserror2
 from pypy.rpython.module.ll_os import RegisterOs
 from pypy.rpython.module import ll_os_stat
-from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 import os, sys
@@ -449,6 +447,7 @@ def getstatfields(space):
 
 
 class State:
+    from pypy.rpython.lltypesystem import rffi, lltype
     def __init__(self, space): 
         self.space = space
         self.w_environ = space.newdict()
@@ -956,6 +955,8 @@ chown.unwrap_spec = [ObjSpace, str, "c_nonnegint", "c_nonnegint"]
 
 if _WIN:
     from pypy.rlib import rwin32
+    from pypy.rpython.lltypesystem import rffi, lltype
+    from pypy.rpython.tool import rffi_platform
 
     eci = ExternalCompilationInfo(
         includes = ['windows.h', 'wincrypt.h'],
