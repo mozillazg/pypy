@@ -15,6 +15,7 @@ def stride_row(shape, i):
     return stride
 
 def stride_column(shape, i):
+    assert i >= 0
     i -= 1
     stride = 1
     while i >= 0:
@@ -24,17 +25,18 @@ def stride_column(shape, i):
 
 def size_from_shape(shape):
     size = 1
-    for dimension in shape:
-        size *= dimension
-    return size
+    if len(shape) > 0:
+        for dimension in shape:
+            size *= dimension
+        return size
+    else:
+        return 0
 
 def normalize_slice_starts(slice_starts, shape):
     for i in range(len(slice_starts)):
-        #print "slice_start[%d]=%d" % (i, slice_starts[i])
         if slice_starts[i] < 0:
             slice_starts[i] += shape[i]
         elif slice_starts[i] >= shape[i]:
-            print "raising"
             raise IndexError("invalid index")
     return slice_starts
 
@@ -100,6 +102,13 @@ def validate_index(array, space, w_i):
                 space.wrap("invalid index")) # all as in numpy
 
 def infer_shape(space, w_values):
+    try:
+        values = space.str_w(w_values)
+        return [len(values)]
+    except OperationError, e:
+        if e.match(space, space.w_TypeError): pass
+        else: raise
+
     shape = []
     while True:
         try:
