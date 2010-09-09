@@ -136,8 +136,6 @@ TYPES = {
     'guard_false'     : (('bool',), None),
     'guard_value'     : (('int', 'int'), None),
     'guard_class'     : (('ref', 'ref'), None),
-    'guard_no_exception'   : ((), None),
-    'guard_exception'      : (('ref',), 'ref'),
     'guard_no_overflow'    : ((), None),
     'guard_overflow'       : ((), None),
     'guard_nonnull'        : (('ref',), None),
@@ -598,39 +596,12 @@ class Frame(object):
         if value != expected_value:
             raise GuardFailed
 
-    def op_guard_no_exception(self, _):
-        if _last_exception:
-            raise GuardFailed
+    def op_last_exc(self, _):
+        return grab_exc_value()
 
-    def _check_exception(self, expected_exception):
+    def op_clear_exc(self, _):
         global _last_exception
-        expected_exception = self._cast_exception(expected_exception)
-        assert expected_exception
-        exc = _last_exception
-        if exc:
-            got = exc.args[0]
-            # exact match!
-            if got != expected_exception:
-                return False
-            return True
-        else:
-            return False
-
-    def _cast_exception(self, exception):
-        return llmemory.cast_adr_to_ptr(
-            llmemory.cast_int_to_adr(exception),
-            rclass.CLASSTYPE)
-
-    def _issubclass(self, cls1, cls2):
-        return rclass.ll_issubclass(cls1, cls2)
-
-    def op_guard_exception(self, _, expected_exception):
-        global _last_exception
-        if not self._check_exception(expected_exception):
-            raise GuardFailed
-        res = _last_exception[1]
         _last_exception = None
-        return res
 
     def op_guard_no_overflow(self, _):
         flag = self.overflow_flag
@@ -976,12 +947,6 @@ class OOFrame(Frame):
     def op_subclassof(self, _, obj1, obj2):
         cls1 = ootype.cast_from_object(ootype.Class, obj1)
         cls2 = ootype.cast_from_object(ootype.Class, obj2)
-        return ootype.subclassof(cls1, cls2)
-
-    def _cast_exception(self, exception):
-        return ootype.cast_from_object(ootype.Class, exception)
-
-    def _issubclass(self, cls1, cls2):
         return ootype.subclassof(cls1, cls2)
 
 # ____________________________________________________________
@@ -1558,7 +1523,6 @@ setannotation(frame_float_getvalue, annmodel.SomeFloat())
 setannotation(frame_get_value_count, annmodel.SomeInteger())
 setannotation(frame_clear_latest_values, annmodel.s_None)
 
-setannotation(grab_exc_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 setannotation(get_forced_token_frame, s_Frame)
 setannotation(get_frame_forced_token, annmodel.SomeAddress())

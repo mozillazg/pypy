@@ -293,6 +293,8 @@ def _make_execute_list():
                          rop.COND_CALL_GC_WB,
                          rop.DEBUG_MERGE_POINT,
                          rop.SETARRAYITEM_RAW,
+                         rop.LAST_EXC,
+                         rop.CLEAR_EXC,
                          ):      # list of opcodes never executed by pyjitpl
                 continue
             raise AssertionError("missing %r" % (key,))

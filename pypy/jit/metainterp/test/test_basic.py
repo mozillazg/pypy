@@ -375,7 +375,8 @@ class BasicTests:
             return externfn(n, n+1)
         res = self.interp_operations(f, [6])
         assert res == 42
-        self.check_operations_history(int_add=1, int_mul=0, call=1, guard_no_exception=0)
+        self.check_operations_history(int_add=1, int_mul=0, call=1,
+                                      last_exc=0, clear_exc=0)
 
     def test_residual_call_pure(self):
         def externfn(x, y):

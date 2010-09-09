@@ -377,8 +377,6 @@ class BaseBackendTest(Runner):
             looptoken = LoopToken()
             self.cpu.compile_loop([v1, v2], ops, looptoken)
             for x, y, z in testcases:
-                excvalue = self.cpu.grab_exc_value()
-                assert not excvalue
                 self.cpu.set_future_value_int(0, x)
                 self.cpu.set_future_value_int(1, y)
                 fail = self.cpu.execute_token(looptoken)
@@ -388,8 +386,6 @@ class BaseBackendTest(Runner):
                     assert fail.identifier == 2
                 if z != boom:
                     assert self.cpu.get_latest_value_int(0) == z
-                excvalue = self.cpu.grab_exc_value()
-                assert not excvalue
 
     def test_ovf_operations_reversed(self):
         self.test_ovf_operations(reversed=True)
@@ -1330,8 +1326,9 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0]
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
-        p0 = guard_exception(ConstClass(xtp)) [i1]
-        finish(0, p0)
+        p0 = last_exc()
+        clear_exc()
+        finish(p0)
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
         fptr = llhelper(FPTR, func)
@@ -1344,64 +1341,19 @@ class LLtypeBackendTest(BaseBackendTest):
                             hints={'vtable':  xtp._obj})
         xptr = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(X))
 
-
         exc_tp = xtp
         exc_ptr = xptr
         loop = parse(ops, self.cpu, namespace=locals())
         self.cpu.compile_loop(loop.inputargs, loop.operations, loop.token)
         self.cpu.set_future_value_int(0, 1)
         self.cpu.execute_token(loop.token)
-        assert self.cpu.get_latest_value_int(0) == 0
-        assert self.cpu.get_latest_value_ref(1) == xptr
-        excvalue = self.cpu.grab_exc_value()
-        assert not excvalue
+        assert self.cpu.get_latest_value_ref(0) == xptr
         self.cpu.set_future_value_int(0, 0)
         self.cpu.execute_token(loop.token)
-        assert self.cpu.get_latest_value_int(0) == 1
-        excvalue = self.cpu.grab_exc_value()
-        assert not excvalue
+        assert self.cpu.get_latest_value_ref(0) == lltype.nullptr(
+            llmemory.GCREF.TO)
 
-        ytp = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
-        ytp.subclassrange_min = 2
-        ytp.subclassrange_max = 2
-        assert rclass.ll_issubclass(ytp, xtp)
-        Y = lltype.GcStruct('Y', ('parent', rclass.OBJECT),
-                            hints={'vtable':  ytp._obj})
-        yptr = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(Y))
-
-        # guard_exception uses an exact match
-        exc_tp = ytp
-        exc_ptr = yptr
-        loop = parse(ops, self.cpu, namespace=locals())
-        self.cpu.compile_loop(loop.inputargs, loop.operations, loop.token)
-        self.cpu.set_future_value_int(0, 1)
-        self.cpu.execute_token(loop.token)
-        assert self.cpu.get_latest_value_int(0) == 1
-        excvalue = self.cpu.grab_exc_value()
-        assert excvalue == yptr
-        assert not self.cpu.grab_exc_value()   # cleared
-
-        exc_tp = xtp
-        exc_ptr = xptr
-        ops = '''
-        [i0]
-        i1 = same_as(1)
-        call(ConstClass(fptr), i0, descr=calldescr)
-        guard_no_exception() [i1]
-        finish(0)
-        '''
-        loop = parse(ops, self.cpu, namespace=locals())
-        self.cpu.compile_loop(loop.inputargs, loop.operations, loop.token)
-        self.cpu.set_future_value_int(0, 1)
-        self.cpu.execute_token(loop.token)
-        assert self.cpu.get_latest_value_int(0) == 1
-        excvalue = self.cpu.grab_exc_value()
-        assert excvalue == xptr
-        self.cpu.set_future_value_int(0, 0)
-        self.cpu.execute_token(loop.token)
-        assert self.cpu.get_latest_value_int(0) == 0
-        excvalue = self.cpu.grab_exc_value()
-        assert not excvalue
+        assert not hasattr(self.cpu, 'grab_exc_value')   # old interface
 
     def test_cond_call_gc_wb(self):
         def func_void(a, b):

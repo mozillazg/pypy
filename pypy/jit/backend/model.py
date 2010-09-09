@@ -101,12 +101,6 @@ class AbstractCPU(object):
         values -- normally get_latest_value_count()."""
         raise NotImplementedError
 
-    def grab_exc_value(self):
-        """Return and clear the exception set by the latest execute_token(),
-        when it exits due to a failure of a GUARD_EXCEPTION or
-        GUARD_NO_EXCEPTION.  (Returns a GCREF)"""        # XXX remove me
-        raise NotImplementedError
-
     @staticmethod
     def sizeof(S):
         raise NotImplementedError
