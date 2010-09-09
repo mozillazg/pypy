@@ -491,6 +491,8 @@ class WarmEnterState(object):
         #
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
+        jd = self.jitdriver_sd
+        cpu = warmrunnerdesc.cpu
 
         def can_inline_greenargs(*greenargs):
             if can_never_inline(*greenargs):
@@ -505,11 +507,14 @@ class WarmEnterState(object):
         self.can_inline_greenargs = can_inline_greenargs
         self.can_inline_callable = can_inline_callable
 
-        def get_assembler_token(greenkey):
+        def get_assembler_token(greenkey, redboxes):
+            # 'redboxes' is only used to know the types of red arguments
             greenargs = unwrap_greenkey(greenkey)
-            cell = jit_getter(False, *greenargs)
-            if cell is None or cell.counter >= 0:
-                return None
+            cell = jit_getter(True, *greenargs)
+            if cell.entry_loop_token is None:
+                from pypy.jit.metainterp.compile import compile_tmp_callback
+                cell.entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
+                                                             redboxes)
             return cell.entry_loop_token
         self.get_assembler_token = get_assembler_token
         

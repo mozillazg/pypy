@@ -128,7 +128,7 @@ TYPES = {
     'getarrayitem_raw_pure' : (('ref', 'int'), 'intorptr'),
     'arraylen_gc'     : (('ref',), 'int'),
     'call'            : (('ref', 'varargs'), 'intorptr'),
-    'call_assembler'  : (('ref', 'varargs'), 'intorptr'),
+    'call_assembler'  : (('varargs',), 'intorptr'),
     'cond_call_gc_wb' : (('ptr', 'ptr'), None),
     'oosend'          : (('varargs',), 'intorptr'),
     'oosend_pure'     : (('varargs',), 'intorptr'),
