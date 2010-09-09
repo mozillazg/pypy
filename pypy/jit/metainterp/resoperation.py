@@ -74,10 +74,6 @@ class ResOperation(object):
     def is_foldable_guard(self):
         return rop._GUARD_FOLDABLE_FIRST <= self.opnum <= rop._GUARD_FOLDABLE_LAST
 
-    def is_guard_exception(self):
-        return (self.opnum == rop.GUARD_EXCEPTION or
-                self.opnum == rop.GUARD_NO_EXCEPTION)
-
     def is_guard_overflow(self):
         return (self.opnum == rop.GUARD_OVERFLOW or
                 self.opnum == rop.GUARD_NO_OVERFLOW)
@@ -126,8 +122,6 @@ _oplist = [
     'GUARD_ISNULL',
     'GUARD_NONNULL_CLASS',
     '_GUARD_FOLDABLE_LAST',
-    'GUARD_NO_EXCEPTION',
-    'GUARD_EXCEPTION',
     'GUARD_NO_OVERFLOW',
     'GUARD_OVERFLOW',
     'GUARD_NOT_FORCED',
@@ -207,6 +201,7 @@ _oplist = [
     'NEW_ARRAY/1d',
     'FORCE_TOKEN/0',
     'VIRTUAL_REF/2',         # removed before it's passed to the backend
+    'LAST_EXC/0',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'SETARRAYITEM_GC/3d',
@@ -222,6 +217,7 @@ _oplist = [
     'COND_CALL_GC_WB',  # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
+    'CLEAR_EXC/0',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL',
