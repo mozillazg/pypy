@@ -612,9 +612,32 @@ class RecursiveTests:
                 driver.can_enter_jit(codeno=codeno, i=i, j=j)
 
         portal(2, 50)
-        self.meta_interp(portal, [2, 20], inline=True)
-        self.check_loops(call_assembler=0, call_may_force=1,
-                         everywhere=True)
+
+        from pypy.jit.metainterp import compile, pyjitpl
+        pyjitpl._warmrunnerdesc = None
+        trace = []
+        def my_ctc(*args):
+            looptoken = original_ctc(*args)
+            trace.append(looptoken)
+            return looptoken
+        original_ctc = compile.compile_tmp_callback
+        try:
+            compile.compile_tmp_callback = my_ctc
+            self.meta_interp(portal, [2, 20], inline=True)
+            self.check_loops(call_assembler=1, call_may_force=0,
+                             everywhere=True)
+        finally:
+            compile.compile_tmp_callback = original_ctc
+        # check that we made a temporary callback
+        assert len(trace) == 1
+        # and that we later redirected it to something else
+        try:
+            redirected = pyjitpl._warmrunnerdesc.cpu._redirected_call_assembler
+        except AttributeError:
+            pass    # not the llgraph backend
+        else:
+            print redirected
+            assert redirected.keys() == trace
 
     def test_directly_call_assembler_return(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],

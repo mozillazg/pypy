@@ -457,6 +457,7 @@ class WarmRunnerDesc(object):
         jd._green_args_spec = [v.concretetype for v in greens_v]
         jd._red_args_types = [history.getkind(v.concretetype) for v in reds_v]
         jd.num_green_args = len(jd._green_args_spec)
+        jd.num_red_args = len(jd._red_args_types)
         RESTYPE = graph.getreturnvar().concretetype
         (jd._JIT_ENTER_FUNCTYPE,
          jd._PTR_JIT_ENTER_FUNCTYPE) = self.cpu.ts.get_FuncType(ALLARGS, lltype.Void)

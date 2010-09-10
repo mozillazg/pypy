@@ -211,7 +211,11 @@ class WarmEnterState(object):
                                               entry_loop_token):
         cell = self.jit_cell_at_key(greenkey)
         cell.counter = -1
+        old_token = cell.entry_loop_token
         cell.entry_loop_token = entry_loop_token
+        if old_token is not None:
+            cpu = self.warmrunnerdesc.cpu
+            cpu.redirect_call_assembler(old_token, entry_loop_token)
 
     # ----------
 
@@ -492,7 +496,7 @@ class WarmEnterState(object):
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
         jd = self.jitdriver_sd
-        cpu = warmrunnerdesc.cpu
+        cpu = self.warmrunnerdesc.cpu
 
         def can_inline_greenargs(*greenargs):
             if can_never_inline(*greenargs):
