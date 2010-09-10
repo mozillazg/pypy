@@ -331,9 +331,6 @@ class SemiSpaceGC(MovingGCBase):
             size += llmemory.sizeof(lltype.Signed)
         return size
 
-    def get_rpy_memory_usage(self, gcref):
-        return self.get_size_incl_hash(llmemory.cast_ptr_to_adr(gcref))
-
     def scan_copied(self, scan):
         while scan < self.free:
             curr = scan + self.size_gc_header()

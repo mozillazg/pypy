@@ -1063,6 +1063,31 @@ class TestUsingFramework(object):
     def test_get_rpy_type_index(self):
         self.run("get_rpy_type_index")
 
+    filename_dump = str(udir.join('test_dump_rpy_heap'))
+    def define_dump_rpy_heap(self):
+        U = lltype.GcStruct('U', ('x', lltype.Signed))
+        S = lltype.GcStruct('S', ('u', lltype.Ptr(U)))
+        A = lltype.GcArray(lltype.Ptr(S))
+        filename = self.filename_dump
+
+        def fn():
+            s = lltype.malloc(S)
+            s.u = lltype.malloc(U)
+            a = lltype.malloc(A, 1000)
+            s2 = lltype.malloc(S)
+            #
+            fd = os.open(filename, os.O_WRONLY | os.O_CREAT, 0666)
+            rgc.dump_rpy_heap(fd)
+            os.close(fd)
+            return 0
+
+        return fn
+
+    def test_dump_rpy_heap(self):
+        self.run("dump_rpy_heap")
+        assert os.path.exists(self.filename_dump)
+        assert os.path.getsize(self.filename_dump) > 0       # minimal test
+
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
