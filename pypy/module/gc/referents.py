@@ -147,3 +147,7 @@ def get_referrers(space, args_w):
                 pending_w += referents_w
     return space.newlist(result_w.keys())
 get_referrers.unwrap_spec = [ObjSpace, 'args_w']
+
+def dump_rpy_heap(space, fd):
+    rgc.dump_rpy_heap(fd)
+dump_rpy_heap.unwrap_spec = [ObjSpace, int]

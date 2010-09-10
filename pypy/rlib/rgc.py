@@ -368,6 +368,10 @@ def cast_gcref_to_int(gcref):
     else:
         return id(gcref._x)
 
+def dump_rpy_heap(fd):
+    "NOT_RPYTHON"
+    raise NotImplementedError
+
 NULL_GCREF = lltype.nullptr(llmemory.GCREF.TO)
 
 class _GcRef(object):
@@ -509,3 +513,12 @@ class Entry(ExtRegistryEntry):
         vtable = classrepr.getvtable()
         assert lltype.typeOf(vtable) == rclass.CLASSTYPE
         return Constant(vtable, concretetype=rclass.CLASSTYPE)
+
+class Entry(ExtRegistryEntry):
+    _about_ = dump_rpy_heap
+    def compute_result_annotation(self, s_fd):
+        from pypy.annotation.model import s_None
+        return s_None
+    def specialize_call(self, hop):
+        vlist = hop.inputargs(lltype.Signed)
+        return hop.genop('gc_dump_rpy_heap', vlist, resulttype = hop.r_result)

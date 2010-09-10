@@ -139,6 +139,8 @@ class FrameworkGCTransformer(GCTransformer):
     def __init__(self, translator):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
         from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
+        from pypy.rpython.memory.gc import inspect
+
         super(FrameworkGCTransformer, self).__init__(translator, inline=True)
         if hasattr(self, 'GC_PARAMS'):
             # for tests: the GC choice can be specified as class attributes
@@ -388,27 +390,30 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.id_ptr = None
 
-        self.get_rpy_roots_ptr = getfn(GCClass.get_rpy_roots.im_func,
+        self.get_rpy_roots_ptr = getfn(inspect.get_rpy_roots,
                                        [s_gc],
                                        rgc.s_list_of_gcrefs(),
                                        minimal_transform=False)
-        self.get_rpy_referents_ptr = getfn(GCClass.get_rpy_referents.im_func,
+        self.get_rpy_referents_ptr = getfn(inspect.get_rpy_referents,
                                            [s_gc, s_gcref],
                                            rgc.s_list_of_gcrefs(),
                                            minimal_transform=False)
-        self.get_rpy_memory_usage_ptr = getfn(
-                                          GCClass.get_rpy_memory_usage.im_func,
-                                          [s_gc, s_gcref],
-                                          annmodel.SomeInteger(),
-                                          minimal_transform=False)
-        self.get_rpy_type_index_ptr = getfn(GCClass.get_rpy_type_index.im_func,
+        self.get_rpy_memory_usage_ptr = getfn(inspect.get_rpy_memory_usage,
+                                              [s_gc, s_gcref],
+                                              annmodel.SomeInteger(),
+                                              minimal_transform=False)
+        self.get_rpy_type_index_ptr = getfn(inspect.get_rpy_type_index,
                                             [s_gc, s_gcref],
                                             annmodel.SomeInteger(),
                                             minimal_transform=False)
-        self.is_rpy_instance_ptr = getfn(GCClass.is_rpy_instance.im_func,
+        self.is_rpy_instance_ptr = getfn(inspect.is_rpy_instance,
                                          [s_gc, s_gcref],
                                          annmodel.SomeBool(),
                                          minimal_transform=False)
+        self.dump_rpy_heap_ptr = getfn(inspect.dump_rpy_heap,
+                                       [s_gc, annmodel.SomeInteger()],
+                                       annmodel.s_None,
+                                       minimal_transform=False)
 
         self.set_max_heap_size_ptr = getfn(GCClass.set_max_heap_size.im_func,
                                            [s_gc,
@@ -941,6 +946,14 @@ class FrameworkGCTransformer(GCTransformer):
         [v_ptr] = hop.spaceop.args
         hop.genop("direct_call",
                   [self.is_rpy_instance_ptr, self.c_const_gc, v_ptr],
+                  resultvar=hop.spaceop.result)
+        self.pop_roots(hop, livevars)
+
+    def gct_gc_dump_rpy_heap(self, hop):
+        livevars = self.push_roots(hop)
+        [v_fd] = hop.spaceop.args
+        hop.genop("direct_call",
+                  [self.dump_rpy_heap_ptr, self.c_const_gc, v_fd],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
