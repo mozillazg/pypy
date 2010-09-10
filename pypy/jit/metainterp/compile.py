@@ -559,18 +559,20 @@ class PropagateExceptionDescr(AbstractFailDescr):
 
 propagate_exception_descr = PropagateExceptionDescr()
 
-def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
+def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
     """Make a LoopToken that corresponds to assembler code that just
     calls back the interpreter.  Used temporarily: a fully compiled
     version of the code may end up replacing it.
     """
-    # 'redboxes' is only used to know the types of red arguments
+    # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
     loop_token = make_loop_token(len(inputargs), jitdriver_sd)
-    #
+    # 'nb_red_args' might be smaller than len(redboxes),
+    # because it doesn't include the virtualizable boxes.
+    nb_red_args = jitdriver_sd.num_red_args
     k = jitdriver_sd.portal_runner_adr
     funcbox = history.ConstInt(heaptracker.adr2int(k))
-    callargs = [funcbox] + greenkey + inputargs
+    callargs = [funcbox] + greenboxes + inputargs[:nb_red_args]
     #
     result_type = jitdriver_sd.result_type
     if result_type == history.INT:
@@ -584,9 +586,9 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenkey, redboxes):
     else:
         assert 0, "bad result_type"
     if result is not None:
-        finishargs = []
-    else:
         finishargs = [result]
+    else:
+        finishargs = []
     #
     jd = jitdriver_sd
     faildescr = propagate_exception_descr

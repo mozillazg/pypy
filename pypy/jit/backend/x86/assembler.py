@@ -326,8 +326,10 @@ class Assembler386(object):
         looptoken._x86_param_depth = param_depth
 
         looptoken._x86_direct_bootstrap_code = self.mc.tell()
-        self._assemble_bootstrap_direct_call(arglocs, curadr,
-                                             frame_depth+param_depth)
+        finaljmp = self._assemble_bootstrap_direct_call(arglocs, curadr,
+                                                       frame_depth+param_depth)
+        looptoken._x86_redirect_call_assembler = finaljmp
+        #
         debug_print("Loop #", looptoken.number, "has address",
                     looptoken._x86_loop_code, "to", self.mc.tell())
         self.mc.end_function()
@@ -527,7 +529,24 @@ class Assembler386(object):
                 assert isinstance(loc, StackLoc)
                 self.mc.MOVSD_bx(loc.value, xmmtmp.value)
         self.mc.JMP_l(jmpadr)
-        return adr_stackadjust
+        return self.mc.tell()
+
+    def redirect_call_assembler(self, oldlooptoken, newlooptoken):
+        # some minimal sanity checking
+        oldnonfloatlocs, oldfloatlocs = oldlooptoken._x86_arglocs
+        newnonfloatlocs, newfloatlocs = newlooptoken._x86_arglocs
+        assert len(oldnonfloatlocs) == len(newnonfloatlocs)
+        assert len(oldfloatlocs) == len(newfloatlocs)
+        # must patch the JMP at the end of the oldlooptoken's bootstrap-
+        # -direct-call code to go to the new loop's body
+        adr = oldlooptoken._x86_redirect_call_assembler
+        target = newlooptoken._x86_loop_code
+        if IS_X86_64:
+            self.redirect_call_assembler_64(oldlooptoken, newlooptoken)
+        else:
+            mc = codebuf.InMemoryCodeBuilder(adr - 4, adr)
+            mc.writeimm32(target - adr)
+            mc.done()
 
     def _assemble_bootstrap_direct_call_64(self, arglocs, jmpadr, stackdepth):
         # XXX: Very similar to _emit_call_64
@@ -580,9 +599,19 @@ class Assembler386(object):
                 # clobber the scratch register
                 self.mc.MOV(loc, X86_64_SCRATCH_REG)
 
+        finaljmp = self.mc.tell()
         self.mc.JMP(imm(jmpadr))
+        # leave a total of 16 bytes, enough for all encodings of JMP
+        for i in range(self.mc.tell() - finaljmp, 16):
+            self.mc.NOP()
+        return finaljmp
 
-        return adr_stackadjust
+    def redirect_call_assembler_64(self, adr, target):
+        # we have a total of 16 bytes free to overwrite the JMP,
+        # reserved by _assemble_bootstrap_direct_call_64()
+        mc = codebuf.InMemoryCodeBuilder(adr, adr + 16)
+        mc.JMP(imm(target))
+        mc.done()
 
     def _assemble_bootstrap_code(self, inputargs, arglocs):
         nonfloatlocs, floatlocs = arglocs
