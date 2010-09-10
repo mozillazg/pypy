@@ -171,7 +171,7 @@ class CompiledLoop(object):
     def __repr__(self):
         lines = []
         self.as_text(lines, 1)
-        return 'CompiledLoop:\n%s' % '\n'.join(lines)
+        return 'CompiledLoop %s:\n%s' % (self.inputargs, '\n'.join(lines))
 
     def as_text(self, lines, indent):
         for op in self.operations:
