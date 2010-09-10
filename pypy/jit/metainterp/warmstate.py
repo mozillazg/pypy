@@ -513,8 +513,7 @@ class WarmEnterState(object):
 
         def get_assembler_token(greenkey, redboxes):
             # 'redboxes' is only used to know the types of red arguments
-            greenargs = unwrap_greenkey(greenkey)
-            cell = jit_getter(True, *greenargs)
+            cell = self.jit_cell_at_key(greenkey)
             if cell.entry_loop_token is None:
                 from pypy.jit.metainterp.compile import compile_tmp_callback
                 cell.entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
