@@ -146,6 +146,12 @@ class HeapDumper:
             self.flush()
     write._always_inline_ = True
 
+    def write_marker(self):
+        self.write(0)
+        self.write(0)
+        self.write(0)
+        self.write(-1)
+
     def writeobj(self, obj):
         gc = self.gc
         typeid = gc.get_type_id(obj)
@@ -172,15 +178,15 @@ class HeapDumper:
             _hd_add_root,
             _hd_add_root)
         self.gc._heap_dumper = None
-        # a marker to mean "end of the roots"
-        self.write(0)
-        self.write(0)
-        self.write(0)
-        self.write(-1)
+        pendingroots = self.pending
+        self.pending = AddressStack()
+        self.walk(pendingroots)
+        pendingroots.delete()
+        self.write_marker()
 
-    def walk(self):
-        while self.pending.non_empty():
-            self.writeobj(self.pending.pop())
+    def walk(self, pending):
+        while pending.non_empty():
+            self.writeobj(pending.pop())
 
 def _hd_add_root(gc, root):
     gc._heap_dumper.add(root.address[0])
@@ -188,6 +194,6 @@ def _hd_add_root(gc, root):
 def dump_rpy_heap(gc, fd):
     heapdumper = HeapDumper(gc, fd)
     heapdumper.add_roots()
-    heapdumper.walk()
+    heapdumper.walk(heapdumper.pending)
     heapdumper.flush()
     heapdumper.delete()
