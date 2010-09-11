@@ -172,6 +172,11 @@ class HeapDumper:
             _hd_add_root,
             _hd_add_root)
         self.gc._heap_dumper = None
+        # a marker to mean "end of the roots"
+        self.write(0)
+        self.write(0)
+        self.write(0)
+        self.write(-1)
 
     def walk(self):
         while self.pending.non_empty():
