@@ -2,6 +2,7 @@ from pypy.rlib import rgc
 from pypy.interpreter.baseobjspace import W_Root, Wrappable
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import ObjSpace
+from pypy.interpreter.error import wrap_oserror
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -158,5 +159,8 @@ def dump_rpy_heap(space, fd):
     are as get_rpy_type_index() and get_rpy_memory_usage() would return,
     and [addr1]..[addrn] are addresses of other objects that this object
     points to."""
-    rgc.dump_rpy_heap(fd)
+    try:
+        rgc.dump_rpy_heap(fd)
+    except OSError, e:
+        raise wrap_oserror(space, e)
 dump_rpy_heap.unwrap_spec = [ObjSpace, int]
