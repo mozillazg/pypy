@@ -158,7 +158,9 @@ def dump_rpy_heap(space, fd):
     where [addr] is the address of the object, [typeindex] and [size]
     are as get_rpy_type_index() and get_rpy_memory_usage() would return,
     and [addr1]..[addrn] are addresses of other objects that this object
-    points to."""
+    points to.  The full dump is a list of such objects, with a marker
+    [0][0][0][-1] inserted after all GC roots, before all non-roots.
+    """
     try:
         rgc.dump_rpy_heap(fd)
     except OSError, e:
