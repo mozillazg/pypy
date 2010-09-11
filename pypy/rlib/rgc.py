@@ -521,4 +521,5 @@ class Entry(ExtRegistryEntry):
         return s_None
     def specialize_call(self, hop):
         vlist = hop.inputargs(lltype.Signed)
+        hop.exception_is_here()
         return hop.genop('gc_dump_rpy_heap', vlist, resulttype = hop.r_result)
