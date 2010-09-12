@@ -26,8 +26,8 @@ class MicroIter(Wrappable):
     def __init__(self, array):
         self.array = array
         self.i = 0
-        self.step = array.slice_steps[0]
         self.shape = array.shape[0]
+        self.step = array.slice_steps[0]
         self.stride = array.strides[0]
         self.ndim = len(array.shape)
         self.offset = 0
@@ -65,7 +65,7 @@ MicroIter.typedef = TypeDef('iterator',
 
 
 class MicroArray(BaseNumArray):
-    _immutable_fields_ = ['shape', 'parent', 'strides', 'offset', 'slice_starts']
+    _immutable_fields_ = ['parent', 'data', 'offset', 'shape', 'slice_steps', 'strides']
     def __init__(self, shape, dtype,
                  order='C', strides=None, parent=None,
                  offset=0, slice_steps=None):
@@ -199,6 +199,7 @@ class MicroArray(BaseNumArray):
                 offset += start * self.slice_steps[i] * self.strides[i]
                 shape[resdim] = length
                 slice_steps[resdim] = self.slice_steps[i] * step
+                strides[resdim] = self.strides[i]
                 resdim += 1
             elif space.is_w(w_index, space.w_Ellipsis):
                 shape[resdim] = self.shape[i]
@@ -220,7 +221,7 @@ class MicroArray(BaseNumArray):
 
         size = size_from_shape(shape)
 
-        if size == 0:
+        if len(shape) == 0:
             return self.getitem(space, offset)
         else:
             ar = MicroArray(shape,
@@ -261,11 +262,11 @@ class MicroArray(BaseNumArray):
         dtype = self.dtype.dtype
 
         offset, shape, slice_steps, strides = self.index2slices(space, w_index)
+        #print "Shape:", shape, "Steps:", slice_steps, "Strides:", strides
 
         size = size_from_shape(shape)
 
         try:
-            # XXX: if size is 0 we shouldn't really infer
             value_shape = infer_shape(space, w_value)
             value_size = size_from_shape(value_shape)
         except OperationError, e:
@@ -274,7 +275,10 @@ class MicroArray(BaseNumArray):
                 value_size = 0
             else: raise
 
-        if size == 0:
+        if len(value_shape) == 0 and len(shape) > 0:
+            self.set_slice_single_value(space, offset, shape, slice_steps, strides,
+                                        self.dtype.dtype.coerce(space, w_value))
+        elif len(shape) == 0:
             if len(value_shape) > 0:
                 raise OperationError(space.w_ValueError,
                                      space.wrap("shape mismatch: objects cannot"
@@ -282,7 +286,7 @@ class MicroArray(BaseNumArray):
 
             self.setitem(space, offset, self.dtype.dtype.coerce(space, w_value))
         else:
-            if squeeze_shape(value_shape) != squeeze_shape(shape):
+            if shape != value_shape:
                 raise OperationError(space.w_ValueError,
                                      space.wrap("shape mismatch: objects cannot"
                                                 " be broadcast to a single shape"))
