@@ -143,15 +143,71 @@ def test_simple_arena_collection():
     assert ac.arenas_start.nfreepages == 3
     assert ac.arenas_end.nfreepages == 4
     #
-    a0 = getarena(ac, 0, 2)
-    a1 = getarena(ac, 1, 2)
+    a0 = getarena(ac, 0, total=2)
+    a1 = getarena(ac, 1, total=2)
     page = ac.allocate_new_page(1); checkpage(ac, page, a0, 2)
     page = ac.allocate_new_page(2); checkpage(ac, page, a0, 3)
-    assert getarena(ac, 0, 2) is a0
+    assert getarena(ac, 0, total=2) is a0
     page = ac.allocate_new_page(3); checkpage(ac, page, a0, 4)
-    assert getarena(ac, 0, 1) is a1
+    assert getarena(ac, 0, total=1) is a1
     page = ac.allocate_new_page(4); checkpage(ac, page, a1, 0)
     page = ac.allocate_new_page(5); checkpage(ac, page, a1, 2)
     page = ac.allocate_new_page(6); checkpage(ac, page, a1, 3)
     page = ac.allocate_new_page(7); checkpage(ac, page, a1, 4)
     assert ac.arenas_start is ac.arenas_end is None
+
+
+def checkobj(arena, num_page, pos_obj, obj):
+    pageaddr = arena.arena_base + SHIFT + num_page * arena.page_size
+    assert obj == pageaddr + hdrsize + pos_obj
+
+
+def test_malloc_common_case():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "#23..2 ")
+    a0 = getarena(ac, 0, total=1)
+    obj = ac.malloc(2*WORD); checkobj(a0, 5, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 1, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 3, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 3, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 3, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 6, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 6, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 6, 4*WORD, obj)
+
+def test_malloc_mixed_sizes():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "#23..2 ")
+    a0 = getarena(ac, 0, total=1)
+    obj = ac.malloc(2*WORD); checkobj(a0, 5, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); checkobj(a0, 2, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 1, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); checkobj(a0, 3, 0*WORD, obj)  # 3rd page -> size 3
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 0*WORD, obj)  # 4th page -> size 2
+    obj = ac.malloc(3*WORD); checkobj(a0, 3, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 2*WORD, obj)
+    obj = ac.malloc(3*WORD); checkobj(a0, 6, 0*WORD, obj)  # 6th page -> size 3
+    obj = ac.malloc(2*WORD); checkobj(a0, 4, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); checkobj(a0, 6, 3*WORD, obj)
+
+def test_malloc_new_arena():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "#23..2 ")
+    a0 = getarena(ac, 0, total=1)
+    obj = ac.malloc(5*WORD); checkobj(a0, 3, 0*WORD, obj)  # 3rd page -> size 5
+    obj = ac.malloc(4*WORD); checkobj(a0, 4, 0*WORD, obj)  # 4th page -> size 4
+    obj = ac.malloc(1*WORD); checkobj(a0, 6, 0*WORD, obj)  # 6th page -> size 1
+    assert ac.arenas_start is ac.arenas_end is None  # no more free page
+    obj = ac.malloc(1*WORD); checkobj(a0, 6, 1*WORD, obj)
+    obj = ac.malloc(5*WORD)
+    a1 = getarena(ac, 0, total=1)
+    pass;                    checkobj(a1, 0, 0*WORD, obj)  # a1/0 -> size 5
+    obj = ac.malloc(1*WORD); checkobj(a0, 6, 2*WORD, obj)
+    obj = ac.malloc(5*WORD); checkobj(a1, 1, 0*WORD, obj)  # a1/1 -> size 5
+    obj = ac.malloc(1*WORD); checkobj(a0, 6, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 5, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a0, 1, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); checkobj(a1, 2, 0*WORD, obj)  # a1/2 -> size 2

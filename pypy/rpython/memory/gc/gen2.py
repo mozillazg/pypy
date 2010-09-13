@@ -114,6 +114,7 @@ class ArenaCollection(object):
     def __init__(self, arena_size, page_size, small_request_threshold):
         self.arena_size = arena_size
         self.page_size = page_size
+        self.small_request_threshold = small_request_threshold
         #
         # 'pageaddr_for_size': for each size N between WORD and
         # small_request_threshold (included), contains either NULL or
@@ -237,7 +238,7 @@ def _start_of_page_untranslated(addr, page_size):
     assert isinstance(addr, llarena.fakearenaaddress)
     shift = 4     # for testing, we assume that the whole arena is not
                   # on a page boundary
-    ofs = ((addr.offset - shift) & ~(page_size-1)) + shift
+    ofs = ((addr.offset - shift) // page_size) * page_size + shift
     return llarena.fakearenaaddress(addr.arena, ofs)
 
 # ____________________________________________________________
