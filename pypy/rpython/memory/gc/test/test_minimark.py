@@ -1,6 +1,6 @@
-from pypy.rpython.memory.gc import gen2
-from pypy.rpython.memory.gc.gen2 import WORD, PAGE_NULL, PAGE_HEADER, PAGE_PTR
-from pypy.rpython.memory.gc.gen2 import ARENA, ARENA_NULL
+from pypy.rpython.memory.gc import minimark
+from pypy.rpython.memory.gc.minimark import PAGE_NULL, PAGE_HEADER, PAGE_PTR
+from pypy.rpython.memory.gc.minimark import WORD, ARENA, ARENA_NULL
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 
 SHIFT = 4
@@ -9,14 +9,14 @@ arenasize = llmemory.raw_malloc_usage(llmemory.sizeof(ARENA))
 
 
 def test_allocate_arena():
-    a = gen2.allocate_arena(SHIFT + 8*20 + arenasize, 8)
+    a = minimark.allocate_arena(SHIFT + 8*20 + arenasize, 8)
     assert a.freepage == a.arena_base + SHIFT
     assert a.nfreepages == 20
     assert a.nuninitializedpages == 20
     assert a.prevarena == ARENA_NULL
     assert a.nextarena == ARENA_NULL
     #
-    a = gen2.allocate_arena(SHIFT + 8*20 + 7 + arenasize, 8)
+    a = minimark.allocate_arena(SHIFT + 8*20 + 7 + arenasize, 8)
     assert a.freepage == a.arena_base + SHIFT
     assert a.nfreepages == 20
     assert a.nuninitializedpages == 20
@@ -36,7 +36,7 @@ def test_allocate_new_page():
         assert llmemory.cast_ptr_to_adr(page) == page2
         assert page.nextpage == PAGE_NULL
     #
-    ac = gen2.ArenaCollection(arenasize, pagesize, 99)
+    ac = minimark.ArenaCollection(arenasize, pagesize, 99)
     assert ac.arenas_start == ac.arenas_end == ARENA_NULL
     #
     page = ac.allocate_new_page(5)
@@ -64,7 +64,7 @@ def test_allocate_new_page():
 def arena_collection_for_test(pagesize, *pagelayouts):
     nb_pages = len(pagelayouts[0])
     arenasize = pagesize * (nb_pages + 1) - 1
-    ac = gen2.ArenaCollection(arenasize, pagesize, 9*WORD)
+    ac = minimark.ArenaCollection(arenasize, pagesize, 9*WORD)
     #
     def link(pageaddr, size_class, size_block, nblocks, nusedblocks):
         llarena.arena_reserve(pageaddr, llmemory.sizeof(PAGE_HEADER))
@@ -81,7 +81,7 @@ def arena_collection_for_test(pagesize, *pagelayouts):
     for layout in pagelayouts:
         assert len(layout) == nb_pages
         assert " " not in layout.rstrip(" ")
-        a = gen2.allocate_arena(arenasize, pagesize)
+        a = minimark.allocate_arena(arenasize, pagesize)
         alist.append(a)
         assert lltype.typeOf(a.freepage) == llmemory.Address
         startpageaddr = a.freepage
