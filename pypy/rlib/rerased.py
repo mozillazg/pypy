@@ -10,7 +10,7 @@ from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem.rclass import OBJECTPTR
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.error import TyperError
 
 
@@ -72,7 +72,7 @@ class Entry(ExtRegistryEntry):
             c_one = hop.inputconst(lltype.Signed, 1)
             vi = hop.genop('cast_ptr_to_int', [v], resulttype=lltype.Signed)
             return hop.genop('int_rshift', [vi, c_one], resulttype=lltype.Signed)
-        return hop.genop('cast_pointer', [v], resulttype = hop.r_result)
+        return hop.genop('cast_opaque_ptr', [v], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
     _about_ = is_integer
@@ -119,7 +119,7 @@ class __extend__(pairtype(SomeErased, SomeErased)):
 
 
 class ErasedRepr(Repr):
-    lowleveltype = OBJECTPTR
+    lowleveltype = llmemory.GCREF
     def __init__(self, rtyper):
         self.rtyper = rtyper
 
@@ -129,7 +129,9 @@ class ErasedRepr(Repr):
         if (isinstance(s_arg, annmodel.SomeInstance) or
                 (s_arg.is_constant() and s_arg.const is None)):
             hop.exception_cannot_occur()
-            [v] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
+            [v_instance] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
+            v = hop.genop('cast_opaque_ptr', [v_instance],
+                          resulttype=self.lowleveltype)
             return v
         else:
             assert isinstance(s_arg, annmodel.SomeInteger)
@@ -140,9 +142,11 @@ class ErasedRepr(Repr):
                            resulttype = lltype.Signed)
             v2p1 = hop.genop('int_add', [v2, c_one],
                              resulttype = lltype.Signed)
-            v_instance =  hop.genop('cast_int_to_ptr', [v2p1],
-                                    resulttype = self.lowleveltype)
-            return v_instance
+            v_instance = hop.genop('cast_int_to_ptr', [v2p1],
+                                   resulttype=self.lowleveltype)
+            v = hop.genop('cast_opaque_ptr', [v_instance],
+                          resulttype=self.lowleveltype)
+            return v
 
 
     def convert_const(self, value):
@@ -151,5 +155,5 @@ class ErasedRepr(Repr):
         else:
             r_generic_object = getinstancerepr(self.rtyper, None)
             v = r_generic_object.convert_const(value._x)
-            return v
+            return lltype.cast_opaque_ptr(self.lowleveltype, v)
 

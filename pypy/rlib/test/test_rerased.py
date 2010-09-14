@@ -5,7 +5,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.rpython.lltypesystem.rclass import OBJECTPTR
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 
 class X(object):
@@ -70,7 +70,7 @@ def test_rtype_1():
     def f():
         return erase(X())
     x = interpret(f, [])
-    assert lltype.typeOf(x) == OBJECTPTR
+    assert lltype.typeOf(x) == llmemory.GCREF
 
 def test_rtype_2():
     def f():
