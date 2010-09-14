@@ -1,6 +1,6 @@
 import py
 import sys
-from pypy.rlib.rerased import erase, unerase, is_integer, SomeErased
+from pypy.rlib.rerased import *
 from pypy.annotation import model as annmodel
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.test.test_llinterp import interpret
@@ -38,6 +38,12 @@ def test_simple_int_overflow():
     py.test.raises(OverflowError, erase, sys.maxint-1)
     py.test.raises(OverflowError, erase, -sys.maxint)
     py.test.raises(OverflowError, erase, -sys.maxint-1)
+
+def test_list():
+    l = [X()]
+    e = erase_fixedsizelist(l, X)
+    assert is_integer(e) is False
+    assert unerase_fixedsizelist(e, X) is l
 
 def test_annotate_1():
     def f():
@@ -133,3 +139,23 @@ def test_union():
     s_e2 = SomeErased()
     s_e2.const = 3
     assert not annmodel.pair(s_e1, s_e2).union().is_constant()
+
+
+def test_rtype_list():
+    prebuilt_l = [X()]
+    prebuilt_e = erase_fixedsizelist(prebuilt_l, X)
+    def l(flag):
+        if flag == 1:
+            l = [X()]
+            e = erase_fixedsizelist(l, X)
+        elif flag == 2:
+            l = prebuilt_l
+            e = erase_fixedsizelist(l, X)
+        else:
+            l = prebuilt_l
+            e = prebuilt_e
+        assert is_integer(e) is False
+        assert unerase_fixedsizelist(e, X) is l
+    interpret(l, [0])
+    interpret(l, [1])
+    interpret(l, [2])
