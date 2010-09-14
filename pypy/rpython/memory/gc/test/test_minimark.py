@@ -1,27 +1,26 @@
+import py
 from pypy.rpython.memory.gc import minimark
 from pypy.rpython.memory.gc.minimark import PAGE_NULL, PAGE_HEADER, PAGE_PTR
-from pypy.rpython.memory.gc.minimark import WORD, ARENA, ARENA_NULL
+from pypy.rpython.memory.gc.minimark import WORD
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
+from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr
 
 SHIFT = 4
 hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-arenasize = llmemory.raw_malloc_usage(llmemory.sizeof(ARENA))
 
 
 def test_allocate_arena():
-    a = minimark.allocate_arena(SHIFT + 8*20 + arenasize, 8)
-    assert a.freepage == a.arena_base + SHIFT
-    assert a.nfreepages == 20
-    assert a.nuninitializedpages == 20
-    assert a.prevarena == ARENA_NULL
-    assert a.nextarena == ARENA_NULL
+    ac = minimark.ArenaCollection(SHIFT + 8*20, 8, 1)
+    ac.allocate_new_arena()
+    assert ac.num_uninitialized_pages == 20
+    ac.uninitialized_pages + 8*20   # does not raise
+    py.test.raises(llarena.ArenaError, "ac.uninitialized_pages + 8*20 + 1")
     #
-    a = minimark.allocate_arena(SHIFT + 8*20 + 7 + arenasize, 8)
-    assert a.freepage == a.arena_base + SHIFT
-    assert a.nfreepages == 20
-    assert a.nuninitializedpages == 20
-    assert a.prevarena == ARENA_NULL
-    assert a.nextarena == ARENA_NULL
+    ac = minimark.ArenaCollection(SHIFT + 8*20 + 7, 8, 1)
+    ac.allocate_new_arena()
+    assert ac.num_uninitialized_pages == 20
+    ac.uninitialized_pages + 8*20 + 7   # does not raise
+    py.test.raises(llarena.ArenaError, "ac.uninitialized_pages + 8*20 + 8")
 
 
 def test_allocate_new_page():
@@ -30,34 +29,30 @@ def test_allocate_new_page():
     #
     def checknewpage(page, size_class):
         size = WORD * size_class
-        assert page.nfree == (pagesize - hdrsize) // size
-        assert page.nuninitialized == page.nfree
-        page2 = page.freeblock - hdrsize
-        assert llmemory.cast_ptr_to_adr(page) == page2
+        assert page.nuninitialized == (pagesize - hdrsize) // size
+        assert page.nfree == 0
+        page1 = page.freeblock - hdrsize
+        assert llmemory.cast_ptr_to_adr(page) == page1
         assert page.nextpage == PAGE_NULL
     #
     ac = minimark.ArenaCollection(arenasize, pagesize, 99)
-    assert ac.arenas_start == ac.arenas_end == ARENA_NULL
+    assert ac.num_uninitialized_pages == 0
     #
     page = ac.allocate_new_page(5)
     checknewpage(page, 5)
-    a = ac.arenas_start
-    assert a != ARENA_NULL
-    assert a == ac.arenas_end
-    assert a.nfreepages == 2
-    assert a.freepage == a.arena_base + SHIFT + pagesize
+    assert ac.num_uninitialized_pages == 2
+    assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[5] == page
     #
     page = ac.allocate_new_page(3)
     checknewpage(page, 3)
-    assert a == ac.arenas_start == ac.arenas_end
-    assert a.nfreepages == 1
-    assert a.freepage == a.arena_base + SHIFT + 2*pagesize
+    assert ac.num_uninitialized_pages == 1
+    assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[3] == page
     #
     page = ac.allocate_new_page(4)
     checknewpage(page, 4)
-    assert ac.arenas_start == ac.arenas_end == ARENA_NULL  # has been unlinked
+    assert ac.num_uninitialized_pages == 0
     assert ac.page_for_size[4] == page
 
 
@@ -139,12 +134,9 @@ def checkpage(ac, page, arena, nb_page):
 
 
 def test_simple_arena_collection():
-    # Test supposing that we have two partially-used arenas
     pagesize = hdrsize + 16
-    ac = arena_collection_for_test(pagesize,
-                                   "##.. ",
-                                   ".#   ")
-    assert ac.arenas_start.nfreepages == 3
+    ac = arena_collection_for_test(pagesize, "##....#   ")
+    #assert ac....
     assert ac.arenas_end.nfreepages == 4
     #
     a0 = getarena(ac, 0, total=2)

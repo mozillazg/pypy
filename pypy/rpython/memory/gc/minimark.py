@@ -13,7 +13,7 @@ GCFLAG_BIG   = first_gcflag
 
 # ____________________________________________________________
 
-class Gen2GC(MovingGCBase):
+class MiniMarkGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
@@ -58,84 +58,41 @@ class Gen2GC(MovingGCBase):
 
 # ____________________________________________________________
 
-# Terminology: "Arenas" are collection of "pages"; both are fixed-size.
+# Terminology: the memory is subdivided into "pages".
 # A page contains a number of allocated objects, called "blocks".
 
+# The actual allocation occurs in whole arenas, which are subdivided
+# into pages.  We don't keep track of the arenas.  A page can be:
+#
+# - uninitialized: never touched so far.
+#
+# - allocated: contains some objects (all of the same size).  Starts with a
+#   PAGE_HEADER.  The page is on the chained list of pages that still have
+#   room for objects of that size, unless it is completely full.
+#
+# - free: used to be partially full, and is now free again.  The page is
+#   on the chained list of free pages.
 
-ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
-ARENA = lltype.Struct('Arena',
-    ('arena_base', llmemory.Address),  # see allocate_arena() for a description
-    ('freepage', llmemory.Address),
-    ('nfreepages', lltype.Signed),
-    ('nuninitializedpages', lltype.Signed),
-    ('nextarena', ARENA_PTR),
-    ('prevarena', ARENA_PTR),
-    ('arena_index', lltype.Signed),
-    )
-ARENA_PTR.TO.become(ARENA)
-ARENA_NULL = lltype.nullptr(ARENA)
-
-
-# Each initialized page in the arena starts with a PAGE_HEADER.  The
-# arena typically also contains uninitialized pages at the end.
-# Similarily, each page contains blocks of a given size, which can be
-# either allocated or freed, and a number of free blocks at the end of
-# the page are uninitialized.  The free but initialized blocks contain a
-# pointer to the next free block, forming a chained list.
+# Similarily, each allocated page contains blocks of a given size, which can
+# be either uninitialized, allocated or free.
 
 PAGE_PTR = lltype.Ptr(lltype.ForwardReference())
 PAGE_HEADER = lltype.Struct('PageHeader',
-    ('nextpage', PAGE_PTR),  # chained list of pages with the same size class
-    ('prevpage', PAGE_PTR),  #  "", but not initialized for the head of list!
-    ('nfree', lltype.Signed),   # number of free blocks in this page
-    ('nuninitialized', lltype.Signed),   # num. uninitialized blocks (<= nfree)
-    ('freeblock', llmemory.Address),  # first free block, chained list
-    ('arena_index', lltype.Signed),   # index of the arena in 'all_arenas'
+    # -- The following two pointers make a chained list of pages with the same
+    #    size class.  Warning, 'prevpage' contains random garbage for the first
+    #    entry in the list.
+    ('nextpage', PAGE_PTR),
+    ('prevpage', PAGE_PTR),
+    # -- The number of free blocks, and the number of uninitialized blocks.
+    #    The number of allocated blocks is the rest.
+    ('nuninitialized', lltype.Signed),
+    ('nfree', lltype.Signed),
+    # -- The chained list of free blocks.  If there are none, points to the
+    #    first uninitialized block.
+    ('freeblock', llmemory.Address),
     )
 PAGE_PTR.TO.become(PAGE_HEADER)
 PAGE_NULL = lltype.nullptr(PAGE_HEADER)
-
-
-def allocate_arena(arena_size, page_size):
-    # 'arena_base' points to the start of malloced memory; it might not
-    # be a page-aligned address
-    arena_base = llarena.arena_malloc(arena_size, False)
-    if not arena_base:
-        raise MemoryError("couldn't allocate the next arena")
-    #
-    # 'freepage' points to the first unused page
-    freepage = start_of_page(arena_base + page_size - 1, page_size)
-    #
-    # we stick the ARENA structure either at the start or at the end
-    # of the big arena, depending on alignment of the malloc'ed memory
-    arena_end = arena_base + arena_size
-    struct_size = llmemory.raw_malloc_usage(llmemory.sizeof(ARENA))
-    if freepage - arena_base >= struct_size:
-        arena_addr = arena_base
-    else:
-        arena_end -= struct_size
-        arena_addr = arena_end
-    #
-    llarena.arena_reserve(arena_addr, llmemory.sizeof(ARENA), False)
-    arena = llmemory.cast_adr_to_ptr(arena_addr, ARENA_PTR)
-    #
-    arena.arena_base = arena_base
-    arena.freepage = freepage
-    # 'nfreepages' is the number of unused pages
-    arena.nfreepages = (arena_end - freepage) // page_size
-    arena.nuninitializedpages = arena.nfreepages
-    #
-    # The arenas containing at least one free page are linked in a
-    # doubly-linked list.  We keep this chained list in order: it
-    # starts with the arenas with the most number of allocated
-    # pages, so that the least allocated arenas near the end of the
-    # list have a chance to become completely empty and be freed.
-    arena.nextarena = ARENA_NULL
-    arena.prevarena = ARENA_NULL
-    return arena
-
-def free_arena(arena):
-    llarena.arena_free(arena.arena_base)
 
 # ____________________________________________________________
 
@@ -161,13 +118,9 @@ class ArenaCollection(object):
         for i in range(1, length):
             self.nblocks_for_size[i] = (page_size - hdrsize) // (WORD * i)
         #
-        self.arenas_start = ARENA_NULL #the most allocated (but not full) arena
-        self.arenas_end   = ARENA_NULL #the least allocated(but not empty)arena
-        #
-        self.all_arenas = lltype.malloc(rffi.CArray(ARENA_PTR), 0,
-                                        flavor='raw')
-        self.all_arenas_size = 0
-        self.all_arenas_next = 0
+        self.uninitialized_pages = PAGE_NULL
+        self.num_uninitialized_pages = 0
+        self.free_pages = PAGE_NULL
 
 
     def malloc(self, size):
@@ -183,128 +136,90 @@ class ArenaCollection(object):
             page = self.allocate_new_page(size_class)
         #
         # The result is simply 'page.freeblock'
-        ll_assert(page.nfree > 0, "page_for_size lists a page with nfree <= 0")
         result = page.freeblock
-        page.nfree -= 1
-        if page.nfree == 0:
+        if page.nfree > 0:
             #
-            # This was the last free block, so unlink the page from the
-            # chained list.
-            self.page_for_size[size_class] = page.nextpage
+            # The 'result' was part of the chained list; read the next.
+            page.nfree -= 1
+            page.freeblock = result.address[0]
+            llarena.arena_reset(result,
+                                llmemory.sizeof(llmemory.Address),
+                                False)
             #
         else:
-            # This was not the last free block, so update 'page.freeblock'
-            # to point to the next free block.  Two cases here...
-            if page.nfree < page.nuninitialized:
-                # The 'result' was not initialized at all.  We must compute
-                # the next free block by adding 'size' to 'page.freeblock'.
-                page.freeblock = result + size
-                page.nuninitialized -= 1
-                ll_assert(page.nfree == page.nuninitialized,
-                          "bad value of page.nuninitialized")
-            else:
-                # The 'result' was part of the chained list; read the next.
-                page.freeblock = result.address[0]
-                llarena.arena_reset(result,
-                                    llmemory.sizeof(llmemory.Address),
-                                    False)
+            # The 'result' is part of the uninitialized blocks.
+            ll_assert(page.nuninitialized > 0,
+                      "fully allocated page found in the page_for_size list")
+            page.freeblock = result + size
+            page.nuninitialized -= 1
+            if page.nuninitialized == 0:
+                #
+                # This was the last free block, so unlink the page from the
+                # chained list.
+                self.page_for_size[size_class] = page.nextpage
         #
         llarena.arena_reserve(result, _dummy_size(size), False)
         return result
 
 
     def allocate_new_page(self, size_class):
-        """Allocate a new page for the given size_class."""
+        """Allocate and return a new page for the given size_class."""
         #
-        # Get the arena with the highest number of pages already allocated
-        arena = self.arenas_start
-        if arena == ARENA_NULL:
-            # No arenas.  Get a fresh new arena.
-            ll_assert(self.arenas_end == ARENA_NULL,
-                      "!arenas_start && arenas_end")
-            arena = self.allocate_new_arena()
-        #
-        # Get the page from there (same logic as in malloc() except on
-        # pages instead of on blocks)
-        result = arena.freepage
-        arena.nfreepages -= 1
-        if arena.nfreepages == 0:
+        if self.free_pages != PAGE_NULL:
             #
-            # This was the last free page, so unlink the arena from the
-            # chained list.
-            self.arenas_start = arena.nextarena
-            if self.arenas_start == ARENA_NULL:
-                self.arenas_end = ARENA_NULL
-            else:
-                self.arenas_start.prevarena = ARENA_NULL
-            #
+            # Get the page from the chained list 'free_pages'.
+            page = self.free_pages
+            self.free_pages = page.address[0]
+            llarena.arena_reset(self.free_pages,
+                                llmemory.sizeof(llmemory.Address),
+                                False)
         else:
-            # This was not the last free page, so update 'arena.freepage'
-            # to point to the next free page.  Two cases here...
-            if arena.nfreepages < arena.nuninitializedpages:
-                # The 'result' was not initialized at all.  We must compute
-                # the next free page by adding 'page_size' to 'arena.freepage'.
-                arena.freepage = result + self.page_size
-                arena.nuninitializedpages -= 1
-                ll_assert(arena.nfreepages == arena.nuninitializedpages,
-                          "bad value of arena.nuninitializedpages")
-            else:
-                # The 'result' was part of the chained list; read the next.
-                arena.freepage = result.address[0]
-                llarena.arena_reset(result,
-                                    llmemory.sizeof(llmemory.Address),
-                                    False)
+            # Get the next free page from the uninitialized pages.
+            if self.num_uninitialized_pages == 0:
+                self.allocate_new_arena()   # Out of memory.  Get a new arena.
+            page = self.uninitialized_pages
+            self.uninitialized_pages += self.page_size
+            self.num_uninitialized_pages -= 1
         #
         # Initialize the fields of the resulting page
-        llarena.arena_reserve(result, llmemory.sizeof(PAGE_HEADER))
-        page = llmemory.cast_adr_to_ptr(result, PAGE_PTR)
+        llarena.arena_reserve(page, llmemory.sizeof(PAGE_HEADER))
+        result = llmemory.cast_adr_to_ptr(page, PAGE_PTR)
         #
         hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-        page.nfree = self.nblocks_for_size[size_class]
-        page.nuninitialized = page.nfree
-        page.freeblock = result + hdrsize
-        page.nextpage = PAGE_NULL
+        result.nuninitialized = self.nblocks_for_size[size_class]
+        result.nfree = 0
+        result.freeblock = page + hdrsize
+        result.nextpage = PAGE_NULL
         ll_assert(self.page_for_size[size_class] == PAGE_NULL,
                   "allocate_new_page() called but a page is already waiting")
-        self.page_for_size[size_class] = page
-        return page
+        self.page_for_size[size_class] = result
+        return result
 
 
     def allocate_new_arena(self):
-        arena = allocate_arena(self.arena_size, self.page_size)
-        self.arenas_start = arena
-        self.arenas_end = arena
+        ll_assert(self.num_uninitialized_pages == 0,
+                  "some uninitialized pages are already waiting")
         #
-        # Search the next free entry in the 'all_arenas' array
-        i = self.all_arenas_next
-        size = self.all_arenas_size
-        count = size
-        while count > 0:
-            if self.all_arenas[i] == ARENA_NULL:
-                break    # 'i' is the free entry
-            count -= 1
-            i += 1
-            if i == size:
-                i = 0
-        else:
-            #
-            # No more free entry.  Resize the array to get some space.
-            newsize = (size + 3) * 2
-            copy = lltype.malloc(rffi.CArray(ARENA_PTR), newsize,
-                                 flavor='raw', zero=True)
-            i = 0
-            while i < size:
-                copy[i] = self.all_arenas[i]
-                i += 1
-            # 'i' is equal to the old 'size', so it's now a free entry
-            lltype.free(self.all_arenas, flavor='raw')
-            self.all_arenas = copy
-            self.all_arenas_size = newsize
+        # 'arena_base' points to the start of malloced memory; it might not
+        # be a page-aligned address
+        arena_base = llarena.arena_malloc(self.arena_size, False)
+        if not arena_base:
+            raise MemoryError("couldn't allocate the next arena")
+        arena_end = arena_base + self.arena_size
         #
-        self.all_arenas_next = i
-        arena.arena_index = i
-        self.all_arenas[i] = arena
-        return arena
+        # 'firstpage' points to the first unused page
+        firstpage = start_of_page(arena_base + self.page_size - 1,
+                                  self.page_size)
+        # 'npages' is the number of full pages just allocated
+        npages = (arena_end - firstpage) // self.page_size
+        #
+        # add these pages to the list
+        self.uninitialized_pages = firstpage
+        self.num_uninitialized_pages = npages
+        #
+        # increase a bit arena_size for the next time
+        self.arena_size = (self.arena_size // 4 * 5) + (self.page_size - 1)
+        self.arena_size = (self.arena_size // self.page_size) * self.page_size
 
 
     def free(self, obj, size):
