@@ -23,13 +23,28 @@ def erase(x):
         res = 2 * x + 1
         if res > sys.maxint or res < -sys.maxint - 1:
             raise OverflowError
+    assert not isinstance(x, list)
     return Erased(x)
+
+def erase_fixedsizelist(l, type):
+    assert isinstance(l, list)
+    result = Erased(l)
+    result._list_item_type = type
+    return result
 
 def unerase(y, type):
     """Turn an erased object back into an object of type 'type'."""
     if y._x is None:
         return None
     assert isinstance(y._x, type)
+    return y._x
+
+def unerase_fixedsizelist(y, type):
+    if y._x is None:
+        return None
+    assert isinstance(y._x, list)
+    if y._x:
+        assert isinstance(y._x[0], type)
     return y._x
 
 def is_integer(e):
@@ -40,6 +55,7 @@ def is_integer(e):
 # ---------- implementation-specific ----------
 
 class Erased(object):
+    _list_item_type = None
     def __init__(self, x):
         self._x = x
     def __repr__(self):
@@ -49,6 +65,18 @@ class Entry(ExtRegistryEntry):
     _about_ = erase
 
     def compute_result_annotation(self, s_obj):
+        return SomeErased()
+
+    def specialize_call(self, hop):
+        return hop.r_result.specialize_call(hop)
+
+class Entry(ExtRegistryEntry):
+    _about_ = erase_fixedsizelist
+
+    def compute_result_annotation(self, s_arg, s_type):
+        # s_type ignored: only for prebuilt erased lists
+        assert isinstance(s_arg, annmodel.SomeList)
+        s_arg.listdef.never_resize()
         return SomeErased()
 
     def specialize_call(self, hop):
@@ -75,6 +103,21 @@ class Entry(ExtRegistryEntry):
         return hop.genop('cast_opaque_ptr', [v], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
+    _about_ = unerase_fixedsizelist
+
+    def compute_result_annotation(self, s_obj, s_type):
+        assert isinstance(s_type, annmodel.SomePBC)
+        assert len(s_type.descriptions) == 1
+        clsdef = s_type.descriptions.keys()[0].getuniqueclassdef()
+        s_item = annmodel.SomeInstance(clsdef)
+        return self.bookkeeper.newlist(s_item)
+
+    def specialize_call(self, hop):
+        v, t = hop.inputargs(hop.args_r[0], lltype.Void)
+        return hop.genop('cast_opaque_ptr', [v], resulttype = hop.r_result)
+
+
+class Entry(ExtRegistryEntry):
     _about_ = is_integer
 
     def compute_result_annotation(self, s_obj):
@@ -92,16 +135,21 @@ class Entry(ExtRegistryEntry):
     _type_ = Erased
 
     def compute_annotation(self):
-        from pypy.rlib import _jit_vref
         s_obj = self.bookkeeper.immutablevalue(self.instance._x)
+        if self.instance._list_item_type is not None:
+            # only non-resizable lists of instances for now
+            clsdef = self.bookkeeper.getuniqueclassdef(self.instance._list_item_type)
+            s_item = annmodel.SomeInstance(clsdef)
+            s_obj.listdef.generalize(s_item)
+            self.instance._s_list = s_obj
         return SomeErased()
 
-# annotation and rtyping support 
+# annotation and rtyping support
 
 class SomeErased(annmodel.SomeObject):
 
-    def __init__(self):
-        pass
+    def __init__(self, s_obj=None):
+        self.s_obj = s_obj # only non-None for constants
 
     def can_be_none(self):
         return False # cannot be None, but can contain a None
@@ -124,13 +172,20 @@ class ErasedRepr(Repr):
         self.rtyper = rtyper
 
     def specialize_call(self, hop):
-        s_arg, = hop.args_s
+        s_arg = hop.args_s[0]
         r_generic_object = getinstancerepr(hop.rtyper, None)
         if (isinstance(s_arg, annmodel.SomeInstance) or
                 (s_arg.is_constant() and s_arg.const is None)):
             hop.exception_cannot_occur()
             [v_instance] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
             v = hop.genop('cast_opaque_ptr', [v_instance],
+                          resulttype=self.lowleveltype)
+            return v
+        elif isinstance(s_arg, annmodel.SomeList):
+            hop.exception_cannot_occur()
+            r_list = self.rtyper.getrepr(s_arg)
+            v_list = hop.inputarg(r_list, 0)
+            v = hop.genop('cast_opaque_ptr', [v_list],
                           resulttype=self.lowleveltype)
             return v
         else:
@@ -152,6 +207,10 @@ class ErasedRepr(Repr):
     def convert_const(self, value):
         if isinstance(value._x, int):
             return lltype.cast_int_to_ptr(self.lowleveltype, value._x * 2 + 1)
+        if isinstance(value._x, list):
+            r_list = self.rtyper.getrepr(value._s_list)
+            v = r_list.convert_const(value._x)
+            return lltype.cast_opaque_ptr(self.lowleveltype, v)
         else:
             r_generic_object = getinstancerepr(self.rtyper, None)
             v = r_generic_object.convert_const(value._x)
