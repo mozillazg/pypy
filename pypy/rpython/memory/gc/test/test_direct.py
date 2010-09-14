@@ -458,5 +458,5 @@ class TestMarkCompactGC(DirectGCTest):
     test_varsized_from_prebuilt_gc.GC_PARAMS = {'space_size': 3 * 1024 * WORD}
 
 
-class TestGen2GC(DirectGCTest):
-    from pypy.rpython.memory.gc.gen2 import Gen2GC as GCClass
+class TestMiniMarkGC(DirectGCTest):
+    from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
