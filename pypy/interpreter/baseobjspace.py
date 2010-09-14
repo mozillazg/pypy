@@ -169,9 +169,13 @@ class W_Root(object):
     # hooks that the mapdict implementations needs:
     def _get_mapdict_map(self):
         return None
-    def _get_mapdict_storage(self):
-        return None
     def _set_mapdict_map(self, map):
+        raise NotImplementedError
+    def _mapdict_read_storage(self, index):
+        raise NotImplementedError
+    def _mapdict_write_storage(self, index, value):
+        raise NotImplementedError
+    def _mapdict_storage_length(self):
         raise NotImplementedError
     def _set_mapdict_storage(self, storage):
         raise NotImplementedError

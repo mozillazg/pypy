@@ -69,14 +69,14 @@ class AbstractAttribute(object):
         oldattr = obj._get_mapdict_map()
         if not jit.we_are_jitted():
             oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
-        if attr.length() > len(obj._get_mapdict_storage()):
+        if attr.length() > obj._mapdict_storage_length():
             # note that attr.size_estimate() is always at least attr.length()
             new_storage = [None] * attr.size_estimate()
-            for i in range(len(obj._get_mapdict_storage())):
-                new_storage[i] = obj._get_mapdict_storage()[i]
+            for i in range(obj._mapdict_storage_length()):
+                new_storage[i] = obj._mapdict_read_storage(i)
             obj._set_mapdict_storage(new_storage)
 
-        obj._get_mapdict_storage()[attr.position] = w_value
+        obj._mapdict_write_storage(attr.position, w_value)
         obj._set_mapdict_map(attr)
 
     def materialize_r_dict(self, space, obj, w_d):
@@ -84,6 +84,9 @@ class AbstractAttribute(object):
 
     def remove_dict_entries(self, obj):
         raise NotImplementedError("abstract base class")
+
+    def __repr__(self):
+        return "<%s w_cls=%s>" % (self.__class__.__name__, self.w_cls)
 
 
 class Terminator(AbstractAttribute):
@@ -189,12 +192,12 @@ class PlainAttribute(AbstractAttribute):
 
     def read(self, obj, selector):
         if selector == self.selector:
-            return obj._get_mapdict_storage()[self.position]
+            return obj._mapdict_read_storage(self.position)
         return self.back.read(obj, selector)
 
     def write(self, obj, selector, w_value):
         if selector == self.selector:
-            obj._get_mapdict_storage()[self.position] = w_value
+            obj._mapdict_write_storage(self.position, w_value)
             return True
         return self.back.write(obj, selector, w_value)
 
@@ -237,7 +240,7 @@ class PlainAttribute(AbstractAttribute):
         new_obj = self.back.materialize_r_dict(space, obj, w_d)
         if self.selector[1] == DICT:
             w_attr = space.wrap(self.selector[0])
-            w_d.r_dict_content[w_attr] = obj._get_mapdict_storage()[self.position]
+            w_d.r_dict_content[w_attr] = obj._mapdict_read_storage(self.position)
         else:
             self._copy_attr(obj, new_obj)
         return new_obj
@@ -247,6 +250,9 @@ class PlainAttribute(AbstractAttribute):
         if self.selector[1] != DICT:
             self._copy_attr(obj, new_obj)
         return new_obj
+
+    def __repr__(self):
+        return "<PlainAttribute %s %s %r>" % (self.selector, self.position, self.back)
 
 def _become(w_obj, new_obj):
     # this is like the _become method, really, but we cannot use that due to
@@ -273,10 +279,14 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
 
     def _get_mapdict_map(self):
         return jit.hint(self.map, promote=True)
-    def _get_mapdict_storage(self):
-        return self.storage
     def _set_mapdict_map(self, map):
         self.map = map
+    def _mapdict_read_storage(self, index):
+        return self.storage[index]
+    def _mapdict_write_storage(self, index, value):
+        self.storage[index] = value
+    def _mapdict_storage_length(self):
+        return len(self.storage)
     def _set_mapdict_storage(self, storage):
         self.storage = storage
 
@@ -486,13 +496,15 @@ def LOAD_ATTR_caching(pycode, w_obj, nameindex):
             # everything matches, it's incredibly fast
             if pycode.space.config.objspace.std.withmethodcachecounter:
                 entry.success_counter += 1
-            return w_obj._get_mapdict_storage()[entry.index]
+            return w_obj._mapdict_read_storage(entry.index)
     return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)
 LOAD_ATTR_caching._always_inline_ = True
 
 def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
     space = pycode.space
     w_name = pycode.co_names_w[nameindex]
+    if space.str_w(w_name) == "task_holding":
+        print map
     if map is not None:
         w_type = map.w_cls
         w_descr = w_type.getattribute_if_not_from_object()
@@ -523,7 +535,7 @@ def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
                     entry.index = index
                     if space.config.objspace.std.withmethodcachecounter:
                         entry.failure_counter += 1
-                    return w_obj._get_mapdict_storage()[index]
+                    return w_obj._mapdict_read_storage(index)
     if space.config.objspace.std.withmethodcachecounter:
         INVALID_CACHE_ENTRY.failure_counter += 1
     return space.getattr(w_obj, w_name)
