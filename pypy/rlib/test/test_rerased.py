@@ -35,7 +35,9 @@ def test_simple_int():
 
 def test_simple_int_overflow():
     py.test.raises(OverflowError, erase, sys.maxint)
+    py.test.raises(OverflowError, erase, sys.maxint-1)
     py.test.raises(OverflowError, erase, -sys.maxint)
+    py.test.raises(OverflowError, erase, -sys.maxint-1)
 
 def test_annotate_1():
     def f():
