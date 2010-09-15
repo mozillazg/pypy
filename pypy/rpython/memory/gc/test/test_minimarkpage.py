@@ -64,11 +64,16 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
     arenasize = pagesize * (nb_pages + 1) - 1
     ac = ArenaCollection(arenasize, pagesize, 9*WORD)
     #
-    def link(pageaddr, size_class, size_block, nblocks, nusedblocks):
+    def link(pageaddr, size_class, size_block, nblocks, nusedblocks, step=1):
+        assert step in (1, 2)
         llarena.arena_reserve(pageaddr, llmemory.sizeof(PAGE_HEADER))
         page = llmemory.cast_adr_to_ptr(pageaddr, PAGE_PTR)
-        page.nfree = 0
-        page.nuninitialized = nblocks - nusedblocks
+        if step == 1:
+            page.nfree = 0
+            page.nuninitialized = nblocks - nusedblocks
+        else:
+            page.nfree = nusedblocks
+            page.nuninitialized = nblocks - 2*nusedblocks
         if nusedblocks < nblocks:
             page.freeblock = pageaddr + hdrsize + nusedblocks * size_block
             chainedlists = ac.page_for_size
@@ -78,9 +83,19 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
         page.nextpage = chainedlists[size_class]
         chainedlists[size_class] = page
         if fill_with_objects:
-            for i in range(nusedblocks):
+            for i in range(0, nusedblocks*step, step):
                 objaddr = pageaddr + hdrsize + i * size_block
                 llarena.arena_reserve(objaddr, _dummy_size(size_block))
+            if step == 2:
+                prev = 'page.freeblock'
+                for i in range(1, nusedblocks*step, step):
+                    holeaddr = pageaddr + hdrsize + i * size_block
+                    llarena.arena_reserve(holeaddr,
+                                          llmemory.sizeof(llmemory.Address))
+                    exec '%s = holeaddr' % prev in globals(), locals()
+                    prevhole = holeaddr
+                    prev = 'prevhole.address[0]'
+                exec '%s = NULL' % prev in globals(), locals()
     #
     ac.allocate_new_arena()
     num_initialized_pages = len(pagelayout.rstrip(" "))
@@ -105,6 +120,12 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
             size_block = WORD * size_class
             nblocks = (pagesize - hdrsize) // size_block
             link(pageaddr, size_class, size_block, nblocks, nblocks)
+        elif c == '/':    # a page 1/3 allocated, 1/3 freed, 1/3 uninit objs
+            size_class = fill_with_objects or 1
+            size_block = WORD * size_class
+            nblocks = (pagesize - hdrsize) // size_block
+            link(pageaddr, size_class, size_block, nblocks, nblocks // 3,
+                 step=2)
     #
     ac.allocate_new_arena = lambda: should_not_allocate_new_arenas
     return ac
@@ -190,24 +211,30 @@ def test_malloc_new_arena():
 
 class OkToFree(object):
     def __init__(self, ac, answer):
+        assert callable(answer) or 0.0 <= answer <= 1.0
         self.ac = ac
         self.answer = answer
-        self.seen = []
+        self.lastnum = 0.0
+        self.seen = {}
 
     def __call__(self, addr):
-        self.seen.append(addr - self.ac._startpageaddr)
-        if isinstance(self.answer, bool):
-            return self.answer
+        if callable(self.answer):
+            ok_to_free = self.answer(addr)
         else:
-            return self.answer(addr)
+            self.lastnum += self.answer
+            ok_to_free = self.lastnum >= 1.0
+            if ok_to_free:
+                self.lastnum -= 1.0
+        self.seen[addr - self.ac._startpageaddr] = ok_to_free
+        return ok_to_free
 
 def test_mass_free_partial_remains():
     pagesize = hdrsize + 7*WORD
     ac = arena_collection_for_test(pagesize, "2", fill_with_objects=2)
     ok_to_free = OkToFree(ac, False)
     ac.mass_free(ok_to_free)
-    assert ok_to_free.seen == [hdrsize + 0*WORD,
-                               hdrsize + 2*WORD]
+    assert ok_to_free.seen == {hdrsize + 0*WORD: False,
+                               hdrsize + 2*WORD: False}
     page = getpage(ac, 0)
     assert page == ac.page_for_size[2]
     assert page.nextpage == PAGE_NULL
@@ -221,8 +248,8 @@ def test_mass_free_emptied_page():
     ac = arena_collection_for_test(pagesize, "2", fill_with_objects=2)
     ok_to_free = OkToFree(ac, True)
     ac.mass_free(ok_to_free)
-    assert ok_to_free.seen == [hdrsize + 0*WORD,
-                               hdrsize + 2*WORD]
+    assert ok_to_free.seen == {hdrsize + 0*WORD: True,
+                               hdrsize + 2*WORD: True}
     pageaddr = pagenum(ac, 0)
     assert pageaddr == ac.free_pages
     assert pageaddr.address[0] == NULL
@@ -233,9 +260,9 @@ def test_mass_free_full_remains_full():
     ac = arena_collection_for_test(pagesize, "#", fill_with_objects=2)
     ok_to_free = OkToFree(ac, False)
     ac.mass_free(ok_to_free)
-    assert ok_to_free.seen == [hdrsize + 0*WORD,
-                               hdrsize + 2*WORD,
-                               hdrsize + 4*WORD]
+    assert ok_to_free.seen == {hdrsize + 0*WORD: False,
+                               hdrsize + 2*WORD: False,
+                               hdrsize + 4*WORD: False}
     page = getpage(ac, 0)
     assert page == ac.full_page_for_size[2]
     assert page.nextpage == PAGE_NULL
@@ -244,3 +271,52 @@ def test_mass_free_full_remains_full():
     assert page.freeblock == NULL
     assert ac.free_pages == NULL
     assert ac.page_for_size[2] == PAGE_NULL
+
+def test_mass_free_full_is_partially_emptied():
+    pagesize = hdrsize + 9*WORD
+    ac = arena_collection_for_test(pagesize, "#", fill_with_objects=2)
+    ok_to_free = OkToFree(ac, 0.5)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == {hdrsize + 0*WORD: False,
+                               hdrsize + 2*WORD: True,
+                               hdrsize + 4*WORD: False,
+                               hdrsize + 6*WORD: True}
+    page = getpage(ac, 0)
+    pageaddr = pagenum(ac, 0)
+    assert page == ac.page_for_size[2]
+    assert page.nextpage == PAGE_NULL
+    assert page.nuninitialized == 0
+    assert page.nfree == 2
+    assert page.freeblock == pageaddr + hdrsize + 2*WORD
+    assert page.freeblock.address[0] == pageaddr + hdrsize + 6*WORD
+    assert page.freeblock.address[0].address[0] == NULL
+    assert ac.free_pages == NULL
+    assert ac.full_page_for_size[2] == PAGE_NULL
+
+def test_mass_free_half_page_remains():
+    pagesize = hdrsize + 24*WORD
+    ac = arena_collection_for_test(pagesize, "/", fill_with_objects=2)
+    page = getpage(ac, 0)
+    assert page.nuninitialized == 4
+    assert page.nfree == 4
+    #
+    ok_to_free = OkToFree(ac, False)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == {hdrsize +  0*WORD: False,
+                               hdrsize +  4*WORD: False,
+                               hdrsize +  8*WORD: False,
+                               hdrsize + 12*WORD: False}
+    page = getpage(ac, 0)
+    pageaddr = pagenum(ac, 0)
+    assert page == ac.page_for_size[2]
+    assert page.nextpage == PAGE_NULL
+    assert page.nuninitialized == 4
+    assert page.nfree == 4
+    assert page.freeblock == pageaddr + hdrsize + 2*WORD
+    assert page.freeblock.address[0] == pageaddr + hdrsize + 6*WORD
+    assert page.freeblock.address[0].address[0] == \
+                                        pageaddr + hdrsize + 10*WORD
+    assert page.freeblock.address[0].address[0].address[0] == \
+                                        pageaddr + hdrsize + 14*WORD
+    assert ac.free_pages == NULL
+    assert ac.full_page_for_size[2] == PAGE_NULL
