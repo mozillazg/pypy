@@ -326,6 +326,15 @@ class DirectGCTest(object):
         self.gc.collect()
         assert hash == self.gc.identityhash(self.stackroots[-1])
         self.stackroots.pop()
+        # (6) ask for the hash of varsized objects, larger and larger
+        for i in range(10):
+            self.gc.collect()
+            p = self.malloc(VAR, i)
+            self.stackroots.append(p)
+            hash = self.gc.identityhash(p)
+            self.gc.collect()
+            assert hash == self.gc.identityhash(self.stackroots[-1])
+            self.stackroots.pop()
 
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass

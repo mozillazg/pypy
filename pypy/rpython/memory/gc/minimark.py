@@ -1,6 +1,7 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.base import MovingGCBase
+from pypy.rpython.memory.gc import minimarkpage
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
 from pypy.rlib.debug import ll_assert, debug_print
@@ -77,7 +78,7 @@ class MiniMarkGC(MovingGCBase):
         "arena_size": 65536*WORD,
 
         # The maximum size of an object allocated compactly.  All objects
-        # that are larger are just allocated with raw_malloc().
+        # that are larger or equal are just allocated with raw_malloc().
         "small_request_threshold": 32*WORD,
         }
 
@@ -85,7 +86,7 @@ class MiniMarkGC(MovingGCBase):
                  nursery_size=32*WORD,
                  page_size=16*WORD,
                  arena_size=64*WORD,
-                 small_request_threshold=5*WORD,
+                 small_request_threshold=6*WORD,
                  ArenaCollectionClass=None):
         MovingGCBase.__init__(self, config, chunk_size)
         self.nursery_size = nursery_size
@@ -94,8 +95,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
-            from pypy.rpython.memory.gc.minimarkpage import ArenaCollection
-            ArenaCollectionClass = ArenaCollection
+            ArenaCollectionClass = minimarkpage.ArenaCollection
         self.ac = ArenaCollectionClass(arena_size, page_size,
                                        small_request_threshold)
         #
@@ -125,7 +125,7 @@ class MiniMarkGC(MovingGCBase):
         # the start of the nursery: we actually allocate a tiny bit more for
         # the nursery than really needed, to simplify pointer arithmetic
         # in malloc_fixedsize_clear().
-        extra = self.small_request_threshold
+        extra = self.small_request_threshold - WORD
         self.nursery = llarena.arena_malloc(self.nursery_size + extra, True)
         if not self.nursery:
             raise MemoryError("cannot allocate nursery")
@@ -143,9 +143,9 @@ class MiniMarkGC(MovingGCBase):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         #
-        # If totalsize is greater than small_request_threshold, ask for
-        # a rawmalloc.  The following check should be constant-folded.
-        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+        # If totalsize is greater or equal than small_request_threshold,
+        # ask for a rawmalloc.  The following check should be constant-folded.
+        if llmemory.raw_malloc_usage(totalsize)>=self.small_request_threshold:
             result = self.external_malloc(typeid, totalsize)
             #
         else:
@@ -182,7 +182,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # If totalsize is greater than small_request_threshold, ask for
         # a rawmalloc.
-        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+        if llmemory.raw_malloc_usage(totalsize)>=self.small_request_threshold:
             result = self.external_malloc(typeid, totalsize)
             #
         else:
@@ -443,6 +443,8 @@ class MiniMarkGC(MovingGCBase):
             totalsize_incl_hash += llmemory.sizeof(lltype.Signed)
         # 
         # Allocate a new nonmovable location for it.
+        # Note that 'totalsize' must be < small_request_threshold, so
+        # 'totalsize_incl_hash <= small_request_threshold'.
         newhdr = self.ac.malloc(totalsize_incl_hash)
         newobj = newhdr + size_gc_header
         #
@@ -709,15 +711,7 @@ class SimpleArenaCollection(object):
         #
         result = llarena.arena_malloc(nsize, False)
         #
-        # Custom hack for the hash
-        if (isinstance(size, llmemory.CompositeOffset) and
-            isinstance(size.offsets[-1], llmemory.ItemOffset) and
-            size.offsets[-1].TYPE == lltype.Signed):
-            size_of_int = llmemory.sizeof(lltype.Signed)
-            size = sum(size.offsets[1:-1], size.offsets[0])
-            llarena.arena_reserve(result + size, size_of_int)
-        #
-        llarena.arena_reserve(result, size)
+        minimarkpage.reserve_with_hash(result, size)
         self.all_objects.append(result)
         return result
 

@@ -50,6 +50,8 @@ class ArenaCollection(object):
     _alloc_flavor_ = "raw"
 
     def __init__(self, arena_size, page_size, small_request_threshold):
+        # 'small_request_threshold' is the largest size that we
+        # can ask with self.malloc().
         self.arena_size = arena_size
         self.page_size = page_size
         self.small_request_threshold = small_request_threshold
@@ -116,7 +118,7 @@ class ArenaCollection(object):
             page.nextpage = self.full_page_for_size[size_class]
             self.full_page_for_size[size_class] = page
         #
-        llarena.arena_reserve(result, _dummy_size(size))
+        reserve_with_hash(result, _dummy_size(size))
         return result
 
 
@@ -337,3 +339,16 @@ def _dummy_size(size):
     if isinstance(size, int):
         size = llmemory.sizeof(lltype.Char) * size
     return size
+
+def reserve_with_hash(result, size):
+    # XXX translation
+    #
+    # Custom hack for the hash
+    if (isinstance(size, llmemory.CompositeOffset) and
+            isinstance(size.offsets[-1], llmemory.ItemOffset) and
+            size.offsets[-1].TYPE == lltype.Signed):
+        size_of_int = llmemory.sizeof(lltype.Signed)
+        size = sum(size.offsets[1:-1], size.offsets[0])
+        llarena.arena_reserve(result + size, size_of_int)
+    #
+    llarena.arena_reserve(result, size)
