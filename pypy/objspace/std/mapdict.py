@@ -375,7 +375,7 @@ class ObjectMixin(object):
 class Object(ObjectMixin, BaseMapdictObject):
     pass # mainly for tests
 
-def get_subclass_of_correct_size(space, supercls, w_type):
+def get_subclass_of_correct_size(space, cls, supercls, w_type):
     assert space.config.objspace.std.withmapdict
     map = w_type.terminator
     classes = memo_get_subclass_of_correct_size(space, supercls)
@@ -386,6 +386,7 @@ def get_subclass_of_correct_size(space, supercls, w_type):
         return classes[size - 1]
     except IndexError:
         return classes[-1]
+get_subclass_of_correct_size._annspecialcase_ = "specialize:arg(1)"
 
 
 def memo_get_subclass_of_correct_size(space, supercls):
