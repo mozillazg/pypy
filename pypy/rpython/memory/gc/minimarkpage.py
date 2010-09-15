@@ -96,7 +96,7 @@ class ArenaCollection(object):
             freeblock = result.address[0]
             llarena.arena_reset(result,
                                 llmemory.sizeof(llmemory.Address),
-                                False)
+                                0)
             #
         else:
             # The 'result' is part of the uninitialized blocks.
@@ -116,7 +116,7 @@ class ArenaCollection(object):
             page.nextpage = self.full_page_for_size[size_class]
             self.full_page_for_size[size_class] = page
         #
-        llarena.arena_reserve(result, _dummy_size(size), False)
+        llarena.arena_reserve(result, _dummy_size(size))
         return result
 
 
@@ -252,7 +252,7 @@ class ArenaCollection(object):
         # Done by inserting it in the 'free_pages' list.
         pageaddr = llmemory.cast_ptr_to_adr(page)
         pageaddr = llarena.getfakearenaaddress(pageaddr)
-        llarena.arena_reset(pageaddr, llmemory.sizeof(PAGE_HEADER), 0)
+        llarena.arena_reset(pageaddr, self.page_size, 0)
         llarena.arena_reserve(pageaddr, llmemory.sizeof(llmemory.Address))
         pageaddr.address[0] = self.free_pages
         self.free_pages = pageaddr
@@ -294,8 +294,7 @@ class ArenaCollection(object):
                     # The object should die.
                     llarena.arena_reset(obj, _dummy_size(block_size), 0)
                     llarena.arena_reserve(obj,
-                                          llmemory.sizeof(llmemory.Address),
-                                          False)
+                                          llmemory.sizeof(llmemory.Address))
                     # Insert 'obj' in the linked list of free blocks.
                     prevfreeblockat.address[0] = obj
                     prevfreeblockat = obj
