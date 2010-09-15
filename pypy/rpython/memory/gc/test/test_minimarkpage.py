@@ -112,18 +112,8 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
 def pagenum(ac, i):
     return ac._startpageaddr + ac.page_size * i
 
-def getarena(ac, num, total=None):
-    if total is not None:
-        a = getarena(ac, total-1)
-        assert a == ac.arenas_end
-        assert a.nextarena == ARENA_NULL
-    prev = ARENA_NULL
-    a = ac.arenas_start
-    for i in range(num):
-        assert a.prevarena == prev
-        prev = a
-        a = a.nextarena
-    return a
+def getpage(ac, i):
+    return llmemory.cast_adr_to_ptr(pagenum(ac, i), PAGE_PTR)
 
 def checkpage(ac, page, expected_position):
     assert llmemory.cast_ptr_to_adr(page) == pagenum(ac, expected_position)
@@ -217,3 +207,9 @@ def test_mass_free_partial_remains():
     ac.mass_free(ok_to_free)
     assert ok_to_free.seen == [hdrsize + 0*WORD,
                                hdrsize + 2*WORD]
+    page = getpage(ac, 0)
+    assert page == ac.page_for_size[2]
+    assert page.nextpage == PAGE_NULL
+    assert page.nuninitialized == 1
+    assert page.nfree == 0
+    chkob(ac, 0, 4*WORD, page.freeblock)
