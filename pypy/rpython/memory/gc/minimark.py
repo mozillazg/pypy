@@ -1,13 +1,11 @@
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi, llgroup
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.rarithmetic import LONG_BIT
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import ll_assert, debug_print
 
 WORD = LONG_BIT // 8
-NULL = llmemory.NULL
 
 first_gcflag = 1 << (LONG_BIT//2)
 
@@ -90,6 +88,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
+            from pypy.rpython.memory.gc.minimarkpage import ArenaCollection
             ArenaCollectionClass = ArenaCollection
         self.ac = ArenaCollectionClass(arena_size, page_size,
                                        small_request_threshold)
