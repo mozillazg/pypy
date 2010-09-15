@@ -2,7 +2,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
-from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT
 from pypy.rlib.debug import ll_assert, debug_print
 
 WORD = LONG_BIT // 8
@@ -53,8 +53,8 @@ class MiniMarkGC(MovingGCBase):
     # where the object was moved.  This means that all objects in the
     # nursery need to be at least 2 words long, but objects outside the
     # nursery don't need to.
-    minimal_size_in_nursery = (llmemory.sizeof(HDR) +
-                               llmemory.sizeof(llmemory.Address))
+    minimal_size_in_nursery = llmemory.raw_malloc_usage(
+        llmemory.sizeof(HDR) + llmemory.sizeof(llmemory.Address))
 
 
     TRANSLATION_PARAMS = {
@@ -93,9 +93,6 @@ class MiniMarkGC(MovingGCBase):
         self.ac = ArenaCollectionClass(arena_size, page_size,
                                        small_request_threshold)
         #
-        # A list of all raw_malloced objects (the objects too large)
-        self.rawmalloced_objects = self.AddressStack()
-        #
         # Used by minor collection: a list of non-young objects that
         # (may) contain a pointer to a young object.  Populated by
         # the write barrier.
@@ -111,6 +108,9 @@ class MiniMarkGC(MovingGCBase):
         """Called at run-time to initialize the GC."""
         #
         assert self.nursery_size > 0, "XXX"
+        #
+        # A list of all raw_malloced objects (the objects too large)
+        self.rawmalloced_objects = self.AddressStack()
         #
         # the start of the nursery: we actually allocate a tiny bit more for
         # the nursery than really needed, to simplify pointer arithmetic
@@ -136,24 +136,66 @@ class MiniMarkGC(MovingGCBase):
         # If totalsize is greater than small_request_threshold, ask for
         # a rawmalloc.  The following check should be constant-folded.
         if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
-            return self.external_malloc(typeid, size)
+            result = self.external_malloc(typeid, totalsize)
+            #
+        else:
+            # If totalsize is smaller than minimal_size_in_nursery, round it
+            # up.  The following check should also be constant-folded.
+            if (llmemory.raw_malloc_usage(totalsize) <
+                llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
+                totalsize = self.minimal_size_in_nursery
+            #
+            # Get the memory from the nursery.  If there is not enough space
+            # there, do a collect first.
+            result = self.nursery_next
+            self.nursery_next = result + totalsize
+            if self.nursery_next > self.nursery_top:
+                result = self.collect_and_reserve(totalsize)
+            #
+            # Build the object.
+            llarena.arena_reserve(result, totalsize)
+            self.init_gc_object(result, typeid, flags=0)
         #
-        # If totalsize is smaller than minimal_size_in_nursery, round it up.
-        # The following check should also be constant-folded.
-        if (llmemory.raw_malloc_usage(totalsize) <
-            llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
-            totalsize = self.minimal_size_in_nursery
+        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+
+
+    def malloc_varsize_clear(self, typeid, length, size, itemsize,
+                             offset_to_length, can_collect):
+        ll_assert(can_collect, "!can_collect")
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        nonvarsize = size_gc_header + size
+        try:
+            varsize = ovfcheck(itemsize * length)
+            totalsize = ovfcheck(nonvarsize + varsize)
+        except OverflowError:
+            raise MemoryError
         #
-        # Get the memory from the nursery.  If there is not enough space
-        # there, do a collect first.
-        result = self.nursery_next
-        self.nursery_next = result + totalsize
-        if self.nursery_next > self.nursery_top:
-            result = self.collect_and_reserve(totalsize)
+        # If totalsize is greater than small_request_threshold, ask for
+        # a rawmalloc.
+        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+            result = self.external_malloc(typeid, totalsize)
+            #
+        else:
+            # 'totalsize' should contain at least the GC header and
+            # the length word, so it should never be smaller than
+            # 'minimal_size_in_nursery' so far
+            ll_assert(llmemory.raw_malloc_usage(totalsize) >=
+                      self.minimal_size_in_nursery,
+                      "malloc_varsize_clear(): totalsize < minimalsize")
+            #
+            # Get the memory from the nursery.  If there is not enough space
+            # there, do a collect first.
+            result = self.nursery_next
+            self.nursery_next = result + totalsize
+            if self.nursery_next > self.nursery_top:
+                result = self.collect_and_reserve(totalsize)
+            #
+            # Build the object.
+            llarena.arena_reserve(result, totalsize)
+            self.init_gc_object(result, typeid, flags=0)
         #
-        # Build the object.
-        llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid, flags=0)
+        # Set the length and return the object.
+        (result + size_gc_header + offset_to_length).signed[0] = length
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
 
@@ -175,22 +217,19 @@ class MiniMarkGC(MovingGCBase):
     collect_and_reserve._dont_inline_ = True
 
 
-    def external_malloc(self, typeid, size):
+    def external_malloc(self, typeid, totalsize):
         """Allocate a large object using raw_malloc()."""
         #
-        # First check if we are called because we wanted to allocate
-        # an object that is larger than self.small_request_threshold.
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        totalsize = size_gc_header + size
-        xxxxxxx
-        #
-        # Yes: just use a raw_malloc() to get the object.
         result = llmemory.raw_malloc(totalsize)
         if not result:
-            raise MemoryError()
-        raw_memclear(result, totalsize)
+            raise MemoryError("cannot allocate large object")
+        llmemory.raw_memclear(result, totalsize)
+        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS)
+        #
+        size_gc_header = self.gcheaderbuilder.size_gc_header
         self.rawmalloced_objects.append(result + size_gc_header)
         return result
+    external_malloc._dont_inline_ = True
 
 
     # ----------
@@ -300,8 +339,6 @@ class MiniMarkGC(MovingGCBase):
     def minor_collection(self):
         """Perform a minor collection: find the objects from the nursery
         that remain alive and move them out."""
-        #
-        #print "nursery_collect()"
         #
         # First, find the roots that point to nursery objects.  These
         # nursery objects are copied out of the nursery.  Note that
@@ -428,6 +465,10 @@ class MiniMarkGC(MovingGCBase):
         self.collect_roots()
         self.visit_all_objects()
         #
+        # Walk all rawmalloced objects and free the ones that don't
+        # have the GCFLAG_VISITED flag.
+        self.free_unvisited_rawmalloc_objects()
+        #
         # Ask the ArenaCollection to visit all objects.  Free the ones
         # that have not been visited above, and reset GCFLAG_VISITED on
         # the others.
@@ -450,6 +491,21 @@ class MiniMarkGC(MovingGCBase):
 
     def _reset_gcflag_visited(self, obj, ignored=None):
         self.header(obj).tid &= ~GCFLAG_VISITED
+
+    def free_unvisited_rawmalloc_objects(self):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        list = self.rawmalloced_objects
+        self.rawmalloced_objects = self.AddressStack()
+        #
+        while list.non_empty():
+            obj = list.pop()
+            if self.header(obj).tid & GCFLAG_VISITED:
+                self.header(obj).tid &= ~GCFLAG_VISITED   # survives
+                self.rawmalloced_objects.append(obj)
+            else:
+                llmemory.raw_free(obj - size_gc_header)
+        #
+        list.delete()
 
 
     def collect_roots(self):
