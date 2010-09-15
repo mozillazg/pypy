@@ -254,7 +254,9 @@ class OkToFree(object):
             ok_to_free = self.lastnum >= 1.0
             if ok_to_free:
                 self.lastnum -= 1.0
-        self.seen[addr - self.ac._startpageaddr] = ok_to_free
+        key = addr - self.ac._startpageaddr
+        assert key not in self.seen
+        self.seen[key] = ok_to_free
         return ok_to_free
 
 def test_mass_free_partial_remains():
@@ -381,3 +383,42 @@ def test_mass_free_half_page_becomes_more_free():
                                        pageaddr + hdrsize + 14*WORD
     assert ac.free_pages == NULL
     assert ac.full_page_for_size[2] == PAGE_NULL
+
+# ____________________________________________________________
+
+def test_random():
+    import random
+    pagesize = hdrsize + 24*WORD
+    ac = arena_collection_for_test(pagesize, " " * 28)
+    live_objects = {}
+    #
+    # Run the test until ac.allocate_new_arena() is called.
+    class DoneTesting(Exception):
+        pass
+    def done_testing():
+        raise DoneTesting
+    ac.allocate_new_arena = done_testing
+    #
+    try:
+        while True:
+            #
+            # Allocate some more objects
+            for i in range(random.randrange(50, 100)):
+                size_class = random.randrange(1, 7)
+                obj = ac.malloc(size_class * WORD)
+                at = obj - ac._startpageaddr
+                assert at not in live_objects
+                live_objects[at] = None
+            #
+            # Free half the objects, randomly
+            ok_to_free = OkToFree(ac, lambda obj: random.random() < 0.5)
+            ac.mass_free(ok_to_free)
+            #
+            # Check that we have seen all objects
+            assert dict.fromkeys(ok_to_free.seen) == live_objects
+            for at, freed in ok_to_free.seen.items():
+                if freed:
+                    del live_objects[at]
+    except DoneTesting:
+        # the following output looks cool on a 112-character-wide terminal.
+        print ac._startpageaddr.arena.usagemap
