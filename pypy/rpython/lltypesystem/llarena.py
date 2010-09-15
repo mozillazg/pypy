@@ -303,6 +303,7 @@ def arena_free(arena_addr):
     assert isinstance(arena_addr, fakearenaaddress)
     assert arena_addr.offset == 0
     arena_addr.arena.reset(False)
+    assert not arena_addr.arena.objectptrs
     arena_addr.arena.freed = True
 
 def arena_reset(arena_addr, size, zero):

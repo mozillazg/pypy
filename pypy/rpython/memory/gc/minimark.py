@@ -2,7 +2,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
-from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
 from pypy.rlib.debug import ll_assert, debug_print
 
 WORD = LONG_BIT // 8
@@ -24,6 +24,11 @@ GCFLAG_NO_HEAP_PTRS = first_gcflag << 1
 
 # The following flag is set on surviving objects during a major collection.
 GCFLAG_VISITED      = first_gcflag << 2
+
+# The following flag is set on objects that have an extra hash field,
+# except on nursery objects, where it means that it *will* grow a hash
+# field when moving.
+GCFLAG_HASHFIELD    = first_gcflag << 3
 
 # Marker set to 'tid' during a minor collection when an object from
 # the nursery was forwarded.
@@ -85,6 +90,7 @@ class MiniMarkGC(MovingGCBase):
         MovingGCBase.__init__(self, config, chunk_size)
         self.nursery_size = nursery_size
         self.small_request_threshold = small_request_threshold
+        self.nursery_hash_base = -1
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
@@ -376,6 +382,7 @@ class MiniMarkGC(MovingGCBase):
         llarena.arena_reset(self.nursery, self.nursery_size, 2)
         self.nursery_next = self.nursery
         #
+        self.change_nursery_hash_base()
         self.debug_check_consistency()     # XXX expensive!
 
 
@@ -428,16 +435,25 @@ class MiniMarkGC(MovingGCBase):
             return
         #
         # First visit to 'obj': we must move it out of the nursery.
-        # Allocate a new nonmovable location for it.
         size_gc_header = self.gcheaderbuilder.size_gc_header
         size = self.get_size(obj)
         totalsize = size_gc_header + size
-        newhdr = self.ac.malloc(totalsize)
+        totalsize_incl_hash = totalsize
+        if self.header(obj).tid & GCFLAG_HASHFIELD:
+            totalsize_incl_hash += llmemory.sizeof(lltype.Signed)
+        # 
+        # Allocate a new nonmovable location for it.
+        newhdr = self.ac.malloc(totalsize_incl_hash)
         newobj = newhdr + size_gc_header
         #
         # Copy it.  Note that references to other objects in the
         # nursery are kept unchanged in this step.
         llmemory.raw_memcopy(obj - size_gc_header, newhdr, totalsize)
+        #
+        # Write the hash field too, if necessary.
+        if self.header(obj).tid & GCFLAG_HASHFIELD:
+            hash = self._compute_current_nursery_hash(obj)
+            (newhdr + (size_gc_header + size)).signed[0] = hash
         #
         # Set the old object's tid to FORWARDED_MARKER and replace
         # the old object's content with the target address.
@@ -578,9 +594,9 @@ class MiniMarkGC(MovingGCBase):
     # ----------
     # id() support
 
-    def id(self, ptr):
+    def id(self, gcobj):
         """Implement id() of an object, given as a GCREF."""
-        obj = llmemory.cast_ptr_to_adr(ptr)
+        obj = llmemory.cast_ptr_to_adr(gcobj)
         #
         # Is it a tagged pointer?  For them, the result is odd-valued.
         if not self.is_valid_gc_object(obj):
@@ -630,6 +646,46 @@ class MiniMarkGC(MovingGCBase):
             self.id_free_list.append(id)
 
 
+    # ----------
+    # identityhash() support
+
+    def identityhash(self, gcobj):
+        obj = llmemory.cast_ptr_to_adr(gcobj)
+        if self.is_in_nursery(obj):
+            #
+            # A nursery object's identityhash is never stored with the
+            # object, but returned by _compute_current_nursery_hash().
+            # But we must set the GCFLAG_HASHFIELD to remember that
+            # we will have to store it into the object when it moves.
+            self.header(obj).tid |= GCFLAG_HASHFIELD
+            return self._compute_current_nursery_hash(obj)
+        #
+        if self.header(obj).tid & GCFLAG_HASHFIELD:
+            #
+            # An non-moving object with a hash field.
+            objsize = self.get_size(obj)
+            obj = llarena.getfakearenaaddress(obj)
+            return (obj + objsize).signed[0]
+        #
+        # No hash field needed.
+        return llmemory.cast_adr_to_int(obj)
+
+
+    def change_nursery_hash_base(self):
+        # The following should be enough to ensure that young objects
+        # tend to always get a different hash.  It also makes sure that
+        # nursery_hash_base is not a multiple of WORD, to avoid collisions
+        # with the hash of non-young objects.
+        hash_base = self.nursery_hash_base
+        hash_base += self.nursery_size - 1
+        if (hash_base & (WORD-1)) == 0:
+            hash_base -= 1
+        self.nursery_hash_base = intmask(hash_base)
+
+    def _compute_current_nursery_hash(self, obj):
+        return intmask(llmemory.cast_adr_to_int(obj) + self.nursery_hash_base)
+
+
 # ____________________________________________________________
 
 # For testing, a simple implementation of ArenaCollection.
@@ -651,7 +707,17 @@ class SimpleArenaCollection(object):
         ll_assert(nsize <= self.small_request_threshold,"malloc: size too big")
         ll_assert((nsize & (WORD-1)) == 0, "malloc: size is not aligned")
         #
-        result = llmemory.raw_malloc(size)
+        result = llarena.arena_malloc(nsize, False)
+        #
+        # Custom hack for the hash
+        if (isinstance(size, llmemory.CompositeOffset) and
+            isinstance(size.offsets[-1], llmemory.ItemOffset) and
+            size.offsets[-1].TYPE == lltype.Signed):
+            size_of_int = llmemory.sizeof(lltype.Signed)
+            size = sum(size.offsets[1:-1], size.offsets[0])
+            llarena.arena_reserve(result + size, size_of_int)
+        #
+        llarena.arena_reserve(result, size)
         self.all_objects.append(result)
         return result
 
@@ -660,6 +726,6 @@ class SimpleArenaCollection(object):
         self.all_objects = []
         for rawobj in objs:
             if ok_to_free_func(rawobj):
-                llmemory.raw_free(rawobj)
+                llarena.arena_free(rawobj)
             else:
                 self.all_objects.append(rawobj)
