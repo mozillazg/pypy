@@ -69,10 +69,11 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
         page = llmemory.cast_adr_to_ptr(pageaddr, PAGE_PTR)
         page.nfree = 0
         page.nuninitialized = nblocks - nusedblocks
-        page.freeblock = pageaddr + hdrsize + nusedblocks * size_block
         if nusedblocks < nblocks:
+            page.freeblock = pageaddr + hdrsize + nusedblocks * size_block
             chainedlists = ac.page_for_size
         else:
+            page.freeblock = NULL
             chainedlists = ac.full_page_for_size
         page.nextpage = chainedlists[size_class]
         chainedlists[size_class] = page
@@ -225,4 +226,21 @@ def test_mass_free_emptied_page():
     pageaddr = pagenum(ac, 0)
     assert pageaddr == ac.free_pages
     assert pageaddr.address[0] == NULL
+    assert ac.page_for_size[2] == PAGE_NULL
+
+def test_mass_free_full_remains_full():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "#", fill_with_objects=2)
+    ok_to_free = OkToFree(ac, False)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == [hdrsize + 0*WORD,
+                               hdrsize + 2*WORD,
+                               hdrsize + 4*WORD]
+    page = getpage(ac, 0)
+    assert page == ac.full_page_for_size[2]
+    assert page.nextpage == PAGE_NULL
+    assert page.nuninitialized == 0
+    assert page.nfree == 0
+    assert page.freeblock == NULL
+    assert ac.free_pages == NULL
     assert ac.page_for_size[2] == PAGE_NULL

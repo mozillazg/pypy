@@ -187,42 +187,63 @@ class ArenaCollection(object):
         size_class = self.small_request_threshold / WORD
         while size_class >= 1:
             #
-            # Walk the pages in 'page_for_size[size_class]' and free objects.
+            # Walk the pages in 'page_for_size[size_class]' and
+            # 'full_page_for_size[size_class]' and free some objects.
             # Pages completely freed are added to 'self.free_pages', and
             # become available for reuse by any size class.  Pages not
-            # completely freed are re-chained in 'newlist'.
-            self.mass_free_in_partial_list(size_class, ok_to_free_func)
+            # completely freed are re-chained either in
+            # 'full_page_for_size[]' or 'page_for_size[]'.
+            self.mass_free_in_page(size_class, ok_to_free_func)
             #
             size_class -= 1
 
 
-    def mass_free_in_partial_list(self, size_class, ok_to_free_func):
-        page = self.page_for_size[size_class]
+    def mass_free_in_page(self, size_class, ok_to_free_func):
         nblocks = self.nblocks_for_size[size_class]
         block_size = size_class * WORD
-        remaining_pages = PAGE_NULL
+        remaining_partial_pages = PAGE_NULL
+        remaining_full_pages = PAGE_NULL
         #
-        while page != PAGE_NULL:
-            #
-            # Collect the page.
-            surviving = self.walk_page(page, block_size,
-                                       nblocks, ok_to_free_func)
-            nextpage = page.nextpage
-            #
-            if surviving > 0:
-                #
-                # Found at least 1 object surviving.  Re-insert the page
-                # in the chained list.
-                page.nextpage = remaining_pages
-                remaining_pages = page
-                #
+        step = 0
+        while step < 2:
+            if step == 0:
+                page = self.full_page_for_size[size_class]
             else:
-                # No object survives; free the page.
-                self.free_page(page)
+                page = self.page_for_size[size_class]
+            #
+            while page != PAGE_NULL:
+                #
+                # Collect the page.
+                surviving = self.walk_page(page, block_size,
+                                           nblocks, ok_to_free_func)
+                nextpage = page.nextpage
+                #
+                if surviving == nblocks:
+                    #
+                    # The page is still full.  Re-insert it in the
+                    # 'remaining_full_pages' chained list.
+                    ll_assert(step == 0,
+                              "A non-full page became full while freeing")
+                    page.nextpage = remaining_full_pages
+                    remaining_full_pages = page
+                    #
+                elif surviving > 0:
+                    #
+                    # There is at least 1 object surviving.  Re-insert
+                    # the page in the 'remaining_partial_pages' chained list.
+                    page.nextpage = remaining_partial_pages
+                    remaining_partial_pages = page
+                    #
+                else:
+                    # No object survives; free the page.
+                    self.free_page(page)
 
-            page = nextpage
+                page = nextpage
+            #
+            step += 1
         #
-        self.page_for_size[size_class] = remaining_pages
+        self.page_for_size[size_class] = remaining_partial_pages
+        self.full_page_for_size[size_class] = remaining_full_pages
 
 
     def free_page(self, page):
