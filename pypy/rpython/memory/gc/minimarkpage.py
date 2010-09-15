@@ -191,39 +191,76 @@ class ArenaCollection(object):
             # Pages completely freed are added to 'self.free_pages', and
             # become available for reuse by any size class.  Pages not
             # completely freed are re-chained in 'newlist'.
-            newlist = self.mass_free_in_list(self.page_for_size[size_class],
-                                             size_class, ok_to_free_func)
-            self.page_for_size[size_class] = newlist
+            self.mass_free_in_partial_list(size_class, ok_to_free_func)
             #
             size_class -= 1
 
 
-    def mass_free_in_list(self, page, size_class, ok_to_free_func):
-        remaining_list = page   #PAGE_NULL
+    def mass_free_in_partial_list(self, size_class, ok_to_free_func):
+        page = self.page_for_size[size_class]
         nblocks = self.nblocks_for_size[size_class]
         block_size = size_class * WORD
+        remaining_pages = PAGE_NULL
         #
         while page != PAGE_NULL:
-            self.walk_page(page, block_size, nblocks, ok_to_free_func)
-            page = page.nextpage
+            #
+            # Collect the page.
+            surviving = self.walk_page(page, block_size,
+                                       nblocks, ok_to_free_func)
+            nextpage = page.nextpage
+            #
+            if surviving > 0:
+                #
+                # Found at least 1 object surviving.  Re-insert the page
+                # in the chained list.
+                page.nextpage = remaining_pages
+                remaining_pages = page
+                #
+            else:
+                # No object survives; free the page.
+                self.free_page(page)
+
+            page = nextpage
         #
-        return remaining_list
+        self.page_for_size[size_class] = remaining_pages
+
+
+    def free_page(self, page):
+        """Free a whole page."""
+        #
+        # Done by inserting it in the 'free_pages' list.
+        pageaddr = llmemory.cast_ptr_to_adr(page)
+        pageaddr = llarena.getfakearenaaddress(pageaddr)
+        llarena.arena_reset(pageaddr, llmemory.sizeof(PAGE_HEADER), 0)
+        llarena.arena_reserve(pageaddr, llmemory.sizeof(llmemory.Address))
+        pageaddr.address[0] = self.free_pages
+        self.free_pages = pageaddr
 
 
     def walk_page(self, page, block_size, nblocks, ok_to_free_func):
         """Walk over all objects in a page, and ask ok_to_free_func()."""
         #
+        # 'freeblock' is the next free block, or NULL if there isn't any more.
         freeblock = page.freeblock
+        #
+        # 'prevfreeblockat' is the address of where 'freeblock' was read from.
+        prevfreeblockat = lltype.direct_fieldptr(page, 'freeblock')
+        prevfreeblockat = llmemory.cast_ptr_to_adr(prevfreeblockat)
+        #
         obj = llarena.getfakearenaaddress(llmemory.cast_ptr_to_adr(page))
         obj += self.hdrsize
-        surviving_count = 0
+        surviving = 0    # initially
         #
         nblocks -= page.nuninitialized
-        while nblocks > 0:
+        index = nblocks
+        while index > 0:
             #
             if obj == freeblock:
                 #
-                # 'obj' points to a free block.
+                # 'obj' points to a free block.  It means that
+                # 'prevfreeblockat.address[0]' does not need to be updated.
+                # Just read the next free block from 'obj.address[0]'.
+                prevfreeblockat = obj
                 freeblock = obj.address[0]
                 #
             else:
@@ -232,67 +269,29 @@ class ArenaCollection(object):
                           "freeblocks are linked out of order")
                 #
                 if ok_to_free_func(obj):
-                    xxx
+                    #
+                    # The object should die.
+                    llarena.arena_reset(obj, _dummy_size(block_size), 0)
+                    llarena.arena_reserve(obj,
+                                          llmemory.sizeof(llmemory.Address),
+                                          False)
+                    # Insert 'obj' in the linked list of free blocks.
+                    prevfreeblockat.address[0] = obj
+                    prevfreeblockat = obj
+                    obj.address[0] = freeblock
+                    #
                 else:
-                    # The object should survive.
-                    surviving_count += 1
+                    # The object survives.
+                    surviving += 1
             #
             obj += block_size
-            nblocks -= 1
+            index -= 1
         #
-        # Return the number of objects left
-        return surviving_count
-
-
-    def free(self, obj, size):
-        """Free a previously malloc'ed block."""
-        ll_assert(size > 0, "free: size is null or negative")
-        ll_assert(size <= self.small_request_threshold, "free: size too big")
-        ll_assert((size & (WORD-1)) == 0, "free: size is not aligned")
+        # Update the number of free objects.
+        page.nfree = nblocks - surviving
         #
-        llarena.arena_reset(obj, _dummy_size(size), False)
-        pageaddr = start_of_page(obj, self.page_size)
-        if not we_are_translated():
-            hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-            assert obj - pageaddr >= hdrsize
-            assert (obj - pageaddr - hdrsize) % size == 0
-        page = llmemory.cast_adr_to_ptr(pageaddr, PAGE_PTR)
-        size_class = size / WORD
-        #
-        # Increment the number of known free objects
-        nfree = page.nfree + 1
-        if nfree < self.nblocks_for_size[size_class]:
-            #
-            # Not all objects in this page are freed yet.
-            # Add the free block to the chained list.
-            page.nfree = nfree
-            llarena.arena_reserve(obj, llmemory.sizeof(llmemory.Address),
-                                  False)
-            obj.address[0] = page.freeblock
-            page.freeblock = obj
-            #
-            # If the page was full, then it now has space and should be
-            # linked back in the page_for_size[] linked list.
-            if nfree == 1:
-                page.nextpage = self.page_for_size[size_class]
-                if page.nextpage != PAGE_NULL:
-                    page.nextpage.prevpage = page
-                self.page_for_size[size_class] = page
-            #
-        else:
-            # The page becomes completely free.  Remove it from
-            # the page_for_size[] linked list.
-            if page == self.page_for_size[size_class]:
-                self.page_for_size[size_class] = page.nextpage
-            else:
-                prev = page.prevpage
-                next = page.nextpage
-                prev.nextpage = next
-                next.prevpage = prev
-            #
-            # Free the page, putting it back in the chained list of the arena
-            # where it belongs
-            xxx#...
+        # Return the number of surviving objects.
+        return surviving
 
 
 # ____________________________________________________________

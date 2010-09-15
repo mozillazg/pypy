@@ -213,3 +213,16 @@ def test_mass_free_partial_remains():
     assert page.nuninitialized == 1
     assert page.nfree == 0
     chkob(ac, 0, 4*WORD, page.freeblock)
+    assert ac.free_pages == NULL
+
+def test_mass_free_emptied_page():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "2", fill_with_objects=2)
+    ok_to_free = OkToFree(ac, True)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == [hdrsize + 0*WORD,
+                               hdrsize + 2*WORD]
+    pageaddr = pagenum(ac, 0)
+    assert pageaddr == ac.free_pages
+    assert pageaddr.address[0] == NULL
+    assert ac.page_for_size[2] == PAGE_NULL
