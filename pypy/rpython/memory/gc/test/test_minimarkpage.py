@@ -66,8 +66,8 @@ def arena_collection_for_test(pagesize, pagelayout):
     def link(pageaddr, size_class, size_block, nblocks, nusedblocks):
         llarena.arena_reserve(pageaddr, llmemory.sizeof(PAGE_HEADER))
         page = llmemory.cast_adr_to_ptr(pageaddr, PAGE_PTR)
-        page.nfree = nblocks - nusedblocks
-        page.nuninitialized = page.nfree
+        page.nfree = 0
+        page.nuninitialized = nblocks - nusedblocks
         page.freeblock = pageaddr + hdrsize + nusedblocks * size_block
         page.nextpage = ac.page_for_size[size_class]
         ac.page_for_size[size_class] = page
@@ -96,6 +96,7 @@ def arena_collection_for_test(pagesize, pagelayout):
         elif c == '#':    # a random full page, not in any linked list
             pass
     #
+    ac.allocate_new_arena = lambda: should_not_allocate_new_arenas
     return ac
 
 
@@ -140,57 +141,49 @@ def test_simple_arena_collection():
     assert ac.free_pages == NULL and ac.num_uninitialized_pages == 0
 
 
-def ckob(ac, arena, num_page, pos_obj, obj):
-    pageaddr = arena.arena_base + SHIFT + num_page * ac.page_size
+def chkob(ac, num_page, pos_obj, obj):
+    pageaddr = pagenum(ac, num_page)
     assert obj == pageaddr + hdrsize + pos_obj
 
 
 def test_malloc_common_case():
     pagesize = hdrsize + 7*WORD
     ac = arena_collection_for_test(pagesize, "#23..2 ")
-    a0 = getarena(ac, 0, total=1)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 5, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 1, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 3, 0*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 3, 2*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 3, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 0*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 2*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 6, 0*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 6, 2*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 6, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 1, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 5, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 3, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 3, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 3, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 4*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 6, 0*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 6, 2*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 6, 4*WORD, obj)
 
 def test_malloc_mixed_sizes():
     pagesize = hdrsize + 7*WORD
     ac = arena_collection_for_test(pagesize, "#23..2 ")
-    a0 = getarena(ac, 0, total=1)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 5, 4*WORD, obj)
-    obj = ac.malloc(3*WORD); ckob(ac, a0, 2, 3*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 1, 4*WORD, obj)
-    obj = ac.malloc(3*WORD); ckob(ac, a0, 3, 0*WORD, obj)  # 3rd page -> size 3
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 0*WORD, obj)  # 4th page -> size 2
-    obj = ac.malloc(3*WORD); ckob(ac, a0, 3, 3*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 2*WORD, obj)
-    obj = ac.malloc(3*WORD); ckob(ac, a0, 6, 0*WORD, obj)  # 6th page -> size 3
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 4, 4*WORD, obj)
-    obj = ac.malloc(3*WORD); ckob(ac, a0, 6, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 1, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); chkob(ac, 2, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 5, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); chkob(ac, 3, 0*WORD, obj)  # 3rd page -> size 3
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 0*WORD, obj)  # 4th page -> size 2
+    obj = ac.malloc(3*WORD); chkob(ac, 3, 3*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 2*WORD, obj)
+    obj = ac.malloc(3*WORD); chkob(ac, 6, 0*WORD, obj)  # 6th page -> size 3
+    obj = ac.malloc(2*WORD); chkob(ac, 4, 4*WORD, obj)
+    obj = ac.malloc(3*WORD); chkob(ac, 6, 3*WORD, obj)
 
 def test_malloc_new_arena():
     pagesize = hdrsize + 7*WORD
-    ac = arena_collection_for_test(pagesize, "#23..2 ")
-    a0 = getarena(ac, 0, total=1)
-    obj = ac.malloc(5*WORD); ckob(ac, a0, 3, 0*WORD, obj)  # 3rd page -> size 5
-    obj = ac.malloc(4*WORD); ckob(ac, a0, 4, 0*WORD, obj)  # 4th page -> size 4
-    obj = ac.malloc(1*WORD); ckob(ac, a0, 6, 0*WORD, obj)  # 6th page -> size 1
-    assert ac.arenas_start == ac.arenas_end == ARENA_NULL  # no more free page
-    obj = ac.malloc(1*WORD); ckob(ac, a0, 6, 1*WORD, obj)
-    obj = ac.malloc(5*WORD)
-    a1 = getarena(ac, 0, total=1)
-    pass;                    ckob(ac, a1, 0, 0*WORD, obj)  # a1/0 -> size 5
-    obj = ac.malloc(1*WORD); ckob(ac, a0, 6, 2*WORD, obj)
-    obj = ac.malloc(5*WORD); ckob(ac, a1, 1, 0*WORD, obj)  # a1/1 -> size 5
-    obj = ac.malloc(1*WORD); ckob(ac, a0, 6, 3*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 5, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a0, 1, 4*WORD, obj)
-    obj = ac.malloc(2*WORD); ckob(ac, a1, 2, 0*WORD, obj)  # a1/2 -> size 2
+    ac = arena_collection_for_test(pagesize, "### ")
+    obj = ac.malloc(2*WORD); chkob(ac, 3, 0*WORD, obj)  # 3rd page -> size 2
+    #
+    del ac.allocate_new_arena    # restore the one from the class
+    arena_size = ac.arena_size
+    obj = ac.malloc(3*WORD)                             # need a new arena
+    assert ac.num_uninitialized_pages == (arena_size // ac.page_size
+                                          - 1    # for start_of_page()
+                                          - 1    # the just-allocated page
+                                          )
