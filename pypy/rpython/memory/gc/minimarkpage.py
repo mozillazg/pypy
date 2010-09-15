@@ -1,3 +1,11 @@
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
+from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import ll_assert
+
+WORD = LONG_BIT // 8
+NULL = llmemory.NULL
+
 
 # Terminology: the memory is subdivided into "pages".
 # A page contains a number of allocated objects, called "blocks".
@@ -61,7 +69,7 @@ class ArenaCollection(object):
         #
         self.uninitialized_pages = PAGE_NULL
         self.num_uninitialized_pages = 0
-        self.free_pages = PAGE_NULL
+        self.free_pages = NULL
 
 
     def malloc(self, size):
@@ -107,14 +115,12 @@ class ArenaCollection(object):
     def allocate_new_page(self, size_class):
         """Allocate and return a new page for the given size_class."""
         #
-        if self.free_pages != PAGE_NULL:
+        if self.free_pages != NULL:
             #
             # Get the page from the chained list 'free_pages'.
             page = self.free_pages
             self.free_pages = page.address[0]
-            llarena.arena_reset(self.free_pages,
-                                llmemory.sizeof(llmemory.Address),
-                                False)
+            llarena.arena_reset(page, llmemory.sizeof(llmemory.Address), 0)
         else:
             # Get the next free page from the uninitialized pages.
             if self.num_uninitialized_pages == 0:
