@@ -95,7 +95,8 @@ def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
                     exec '%s = holeaddr' % prev in globals(), locals()
                     prevhole = holeaddr
                     prev = 'prevhole.address[0]'
-                exec '%s = NULL' % prev in globals(), locals()
+                endaddr = pageaddr + hdrsize + 2*nusedblocks * size_block
+                exec '%s = endaddr' % prev in globals(), locals()
     #
     ac.allocate_new_arena()
     num_initialized_pages = len(pagelayout.rstrip(" "))
@@ -195,6 +196,34 @@ def test_malloc_mixed_sizes():
     obj = ac.malloc(3*WORD); chkob(ac, 6, 0*WORD, obj)  # 6th page -> size 3
     obj = ac.malloc(2*WORD); chkob(ac, 4, 4*WORD, obj)
     obj = ac.malloc(3*WORD); chkob(ac, 6, 3*WORD, obj)
+
+def test_malloc_from_partial_page():
+    pagesize = hdrsize + 18*WORD
+    ac = arena_collection_for_test(pagesize, "/.", fill_with_objects=2)
+    page = getpage(ac, 0)
+    assert page.nfree == 3
+    assert page.nuninitialized == 3
+    chkob(ac, 0, 2*WORD, page.freeblock)
+    #
+    obj = ac.malloc(2*WORD); chkob(ac, 0,  2*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 0,  6*WORD, obj)
+    assert page.nfree == 1
+    assert page.nuninitialized == 3
+    chkob(ac, 0, 10*WORD, page.freeblock)
+    #
+    obj = ac.malloc(2*WORD); chkob(ac, 0, 10*WORD, obj)
+    assert page.nfree == 0
+    assert page.nuninitialized == 3
+    chkob(ac, 0, 12*WORD, page.freeblock)
+    #
+    obj = ac.malloc(2*WORD); chkob(ac, 0, 12*WORD, obj)
+    assert page.nuninitialized == 2
+    obj = ac.malloc(2*WORD); chkob(ac, 0, 14*WORD, obj)
+    obj = ac.malloc(2*WORD); chkob(ac, 0, 16*WORD, obj)
+    assert page.nfree == 0
+    assert page.nuninitialized == 0
+    obj = ac.malloc(2*WORD); chkob(ac, 1,  0*WORD, obj)
+
 
 def test_malloc_new_arena():
     pagesize = hdrsize + 7*WORD
