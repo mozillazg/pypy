@@ -74,6 +74,11 @@ class ArenaCollection(object):
         self.uninitialized_pages = PAGE_NULL
         self.num_uninitialized_pages = 0
         self.free_pages = NULL
+        self.used_pages = 0     # number of pages at least partially filled
+
+
+    def pages_in_use(self):
+        return self.used_pages
 
 
     def malloc(self, size):
@@ -150,6 +155,7 @@ class ArenaCollection(object):
         ll_assert(self.page_for_size[size_class] == PAGE_NULL,
                   "allocate_new_page() called but a page is already waiting")
         self.page_for_size[size_class] = result
+        self.used_pages += 1
         return result
 
 
@@ -258,6 +264,7 @@ class ArenaCollection(object):
         llarena.arena_reserve(pageaddr, llmemory.sizeof(llmemory.Address))
         pageaddr.address[0] = self.free_pages
         self.free_pages = pageaddr
+        self.used_pages -= 1
 
 
     def walk_page(self, page, block_size, nblocks, ok_to_free_func):
