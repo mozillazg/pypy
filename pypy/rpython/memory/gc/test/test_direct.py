@@ -458,5 +458,11 @@ class TestMarkCompactGC(DirectGCTest):
     test_varsized_from_prebuilt_gc.GC_PARAMS = {'space_size': 3 * 1024 * WORD}
 
 
-class TestMiniMarkGC(DirectGCTest):
+class TestMiniMarkGCSimple(DirectGCTest):
+    from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
+    from pypy.rpython.memory.gc.minimark import SimpleArenaCollection
+    # test the GC itself, providing a simple class for ArenaCollection
+    GC_PARAMS = {'ArenaCollectionClass': SimpleArenaCollection}
+
+class TestMiniMarkGCFull(DirectGCTest):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
