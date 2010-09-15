@@ -403,6 +403,8 @@ memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
 _subclass_cache = {}
 
 def _make_subclass_size_n(supercls, n):
+    if supercls._init_empty.im_func is not BaseMapdictObject._init_empty.im_func:
+        return supercls
     from pypy.rlib import unroll, rerased
     rangen = unroll.unrolling_iterable(range(n))
     nmin1 = n - 1
