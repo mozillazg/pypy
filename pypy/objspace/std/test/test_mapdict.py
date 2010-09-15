@@ -393,6 +393,14 @@ def test_specialized_class():
         assert obj.getdictvalue(space, "a") is w2
         assert obj.getdictvalue(space, "b") is w4
         assert obj.getdictvalue(space, "c") is None
+        abmap = obj.map
+
+        res = obj.deldictvalue(space, "a")
+        assert res
+        assert rerased.unerase(obj._value0, W_Root) is w4
+        assert obj.getdictvalue(space, "a") is None
+        assert obj.getdictvalue(space, "b") is w4
+        assert obj.getdictvalue(space, "c") is None
 
         obj2 = objectcls()
         obj2.user_setup(space, cls)
@@ -400,7 +408,7 @@ def test_specialized_class():
         obj2.setdictvalue(space, "b", w6)
         assert obj2.getdictvalue(space, "a") is w5
         assert obj2.getdictvalue(space, "b") is w6
-        assert obj2.map is obj.map
+        assert obj2.map is abmap
 
 
 # ___________________________________________________________

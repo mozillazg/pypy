@@ -452,7 +452,7 @@ def _make_subclass_size_n(supercls, n):
                 if i < len_storage:
                     erased = rerased.erase(storage[i])
                 else:
-                    erased = rerased.erased(None)
+                    erased = rerased.erase(None)
                 setattr(self, "_value%s" % i, erased)
             if len_storage < n:
                 erased = rerased.erase(None)
