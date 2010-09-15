@@ -2,6 +2,7 @@ import py
 from pypy.rpython.memory.gc.minimarkpage import ArenaCollection
 from pypy.rpython.memory.gc.minimarkpage import PAGE_HEADER, PAGE_PTR
 from pypy.rpython.memory.gc.minimarkpage import PAGE_NULL, WORD
+from pypy.rpython.memory.gc.minimarkpage import _dummy_size
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr
 
@@ -57,7 +58,7 @@ def test_allocate_new_page():
     assert ac.page_for_size[4] == page
 
 
-def arena_collection_for_test(pagesize, pagelayout):
+def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
     assert " " not in pagelayout.rstrip(" ")
     nb_pages = len(pagelayout)
     arenasize = pagesize * (nb_pages + 1) - 1
@@ -69,10 +70,16 @@ def arena_collection_for_test(pagesize, pagelayout):
         page.nfree = 0
         page.nuninitialized = nblocks - nusedblocks
         page.freeblock = pageaddr + hdrsize + nusedblocks * size_block
-        page.nextpage = ac.page_for_size[size_class]
-        ac.page_for_size[size_class] = page
-        if page.nextpage:
-            page.nextpage.prevpage = page
+        if nusedblocks < nblocks:
+            chainedlists = ac.page_for_size
+        else:
+            chainedlists = ac.full_page_for_size
+        page.nextpage = chainedlists[size_class]
+        chainedlists[size_class] = page
+        if fill_with_objects:
+            for i in range(nusedblocks):
+                objaddr = pageaddr + hdrsize + i * size_block
+                llarena.arena_reserve(objaddr, _dummy_size(size_block))
     #
     ac.allocate_new_arena()
     num_initialized_pages = len(pagelayout.rstrip(" "))
@@ -81,20 +88,22 @@ def arena_collection_for_test(pagesize, pagelayout):
     ac.num_uninitialized_pages -= num_initialized_pages
     #
     for i in reversed(range(num_initialized_pages)):
+        pageaddr = pagenum(ac, i)
         c = pagelayout[i]
         if '1' <= c <= '9':   # a partially used page (1 block free)
             size_class = int(c)
             size_block = WORD * size_class
             nblocks = (pagesize - hdrsize) // size_block
-            link(pagenum(ac, i), size_class, size_block,
-                 nblocks, nblocks-1)
+            link(pageaddr, size_class, size_block, nblocks, nblocks-1)
         elif c == '.':    # a free, but initialized, page
-            pageaddr = pagenum(ac, i)
             llarena.arena_reserve(pageaddr, llmemory.sizeof(llmemory.Address))
             pageaddr.address[0] = ac.free_pages
             ac.free_pages = pageaddr
-        elif c == '#':    # a random full page, not in any linked list
-            pass
+        elif c == '#':    # a random full page, in the list 'full_pages'
+            size_class = fill_with_objects or 1
+            size_block = WORD * size_class
+            nblocks = (pagesize - hdrsize) // size_block
+            link(pageaddr, size_class, size_block, nblocks, nblocks)
     #
     ac.allocate_new_arena = lambda: should_not_allocate_new_arenas
     return ac
@@ -187,3 +196,24 @@ def test_malloc_new_arena():
                                           - 1    # for start_of_page()
                                           - 1    # the just-allocated page
                                           )
+
+class OkToFree(object):
+    def __init__(self, ac, answer):
+        self.ac = ac
+        self.answer = answer
+        self.seen = []
+
+    def __call__(self, addr):
+        self.seen.append(addr - self.ac._startpageaddr)
+        if isinstance(self.answer, bool):
+            return self.answer
+        else:
+            return self.answer(addr)
+
+def test_mass_free_partial_remains():
+    pagesize = hdrsize + 7*WORD
+    ac = arena_collection_for_test(pagesize, "2", fill_with_objects=2)
+    ok_to_free = OkToFree(ac, False)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == [hdrsize + 0*WORD,
+                               hdrsize + 2*WORD]
