@@ -199,8 +199,8 @@ def _builduserclswithfeature(config, supercls, *features):
                 body[key] = value
 
     if (config.objspace.std.withmapdict and "dict" in features):
-        from pypy.objspace.std.mapdict import Object
-        add(Object)
+        from pypy.objspace.std.mapdict import BaseMapdictObject
+        add(BaseMapdictObject)
         features = ()
 
     if "user" in features:     # generic feature needed by all subcls

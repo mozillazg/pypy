@@ -76,8 +76,10 @@ class AbstractAttribute(object):
                 new_storage[i] = obj._mapdict_read_storage(i)
             obj._set_mapdict_storage(new_storage)
 
-        obj._mapdict_write_storage(attr.position, w_value)
+        # the order is important here: first change the map, then the storage,
+        # for the benefit of the special subclasses
         obj._set_mapdict_map(attr)
+        obj._mapdict_write_storage(attr.position, w_value)
 
     def materialize_r_dict(self, space, obj, w_d):
         raise NotImplementedError("abstract base class")
@@ -259,6 +261,7 @@ def _become(w_obj, new_obj):
     # RPython reasons
     w_obj._set_mapdict_map(new_obj.map)
     w_obj._set_mapdict_storage(new_obj.storage)
+
 # ____________________________________________________________
 # object implementation
 
@@ -268,28 +271,18 @@ INVALID = 2
 SLOTS_STARTING_FROM = 3
 
 
-class Object(W_Root): # slightly evil to make it inherit from W_Root
+class BaseMapdictObject(W_Root): # slightly evil to make it inherit from W_Root
     def _init_empty(self, map):
-        from pypy.rlib.debug import make_sure_not_resized
-        self.map = map
-        self.storage = make_sure_not_resized([None] * map.size_estimate())
+        raise NotImplementedError("abstract base class")
+
     def _become(self, new_obj):
-        self.map = new_obj.map
-        self.storage = new_obj.storage
+        self._set_mapdict_map(new_obj.map)
+        self._set_mapdict_storage(new_obj.storage)
 
     def _get_mapdict_map(self):
         return jit.hint(self.map, promote=True)
     def _set_mapdict_map(self, map):
         self.map = map
-    def _mapdict_read_storage(self, index):
-        return self.storage[index]
-    def _mapdict_write_storage(self, index, value):
-        self.storage[index] = value
-    def _mapdict_storage_length(self):
-        return len(self.storage)
-    def _set_mapdict_storage(self, storage):
-        self.storage = storage
-
     # _____________________________________________
     # objspace interface
 
@@ -363,6 +356,115 @@ class Object(W_Root): # slightly evil to make it inherit from W_Root
         assert isinstance(weakreflifeline, WeakrefLifeline)
         self._get_mapdict_map().write(self, ("weakref", SPECIAL), weakreflifeline)
 
+class ObjectMixin(object):
+    _mixin_ = True
+    def _init_empty(self, map):
+        from pypy.rlib.debug import make_sure_not_resized
+        self.map = map
+        self.storage = make_sure_not_resized([None] * map.size_estimate())
+
+    def _mapdict_read_storage(self, index):
+        return self.storage[index]
+    def _mapdict_write_storage(self, index, value):
+        self.storage[index] = value
+    def _mapdict_storage_length(self):
+        return len(self.storage)
+    def _set_mapdict_storage(self, storage):
+        self.storage = storage
+
+class Object(ObjectMixin, BaseMapdictObject):
+    pass # mainly for tests
+
+def get_subclass_of_correct_size(space, supercls, w_type):
+    assert space.config.objspace.std.withmapdict
+    map = w_type.terminator
+    classes = memo_get_subclass_of_correct_size(space, supercls)
+    size = map.size_estimate()
+    if not size:
+        size = 1
+    try:
+        return classes[size - 1]
+    except IndexError:
+        return classes[-1]
+
+
+def memo_get_subclass_of_correct_size(space, supercls):
+    key = space, supercls
+    try:
+        return _subclass_cache[key]
+    except KeyError:
+        result = []
+        for i in range(1, 11): # XXX tweak this number
+            result.append(_make_subclass_size_n(supercls, i))
+        _subclass_cache[key] = result
+        return result
+memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
+_subclass_cache = {}
+
+def _make_subclass_size_n(supercls, n):
+    from pypy.rlib import unroll, rerased
+    rangen = unroll.unrolling_iterable(range(n))
+    nmin1 = n - 1
+    rangenmin1 = unroll.unrolling_iterable(range(nmin1))
+    class subcls(supercls):
+        def _init_empty(self, map):
+            from pypy.rlib.debug import make_sure_not_resized
+            for i in rangen:
+                setattr(self, "_value%s" % i, rerased.erase(None))
+            self.map = map
+
+        def _has_storage_list(self):
+            return self.map.length() > n
+
+        def _mapdict_get_storage_list(self):
+            erased = getattr(self, "_value%s" % nmin1)
+            return rerased.unerase_fixedsizelist(erased, W_Root)
+
+        def _mapdict_read_storage(self, index):
+            for i in rangenmin1:
+                if index == i:
+                    erased = getattr(self, "_value%s" % i)
+                    return rerased.unerase(erased, W_Root)
+            if self._has_storage_list():
+                return self._mapdict_get_storage_list()[index - nmin1]
+            erased = getattr(self, "_value%s" % nmin1)
+            return rerased.unerase(erased, W_Root)
+
+        def _mapdict_write_storage(self, index, value):
+            erased = rerased.erase(value)
+            for i in rangenmin1:
+                if index == i:
+                    setattr(self, "_value%s" % i, erased)
+                    return
+            if self._has_storage_list():
+                self._mapdict_get_storage_list()[index - nmin1] = value
+                return
+            setattr(self, "_value%s" % nmin1, erased)
+
+        def _mapdict_storage_length(self):
+            if self._has_storage_list():
+                return len(self._mapdict_get_storage_list()) + n - 1
+            return n
+
+        def _set_mapdict_storage(self, storage):
+            len_storage = len(storage)
+            for i in rangenmin1:
+                if i < len_storage:
+                    erased = rerased.erase(storage[i])
+                else:
+                    erased = rerased.erased(None)
+                setattr(self, "_value%s" % i, erased)
+            if len_storage < n:
+                erased = rerased.erase(None)
+            elif len_storage == n:
+                erased = rerased.erase(storage[nmin1])
+            else:
+                storage_list = storage[nmin1:]
+                erased = rerased.erase_fixedsizelist(storage_list, W_Root)
+            setattr(self, "_value%s" % nmin1, erased)
+
+    subcls.__name__ = supercls.__name__ + "Size%s" % n
+    return subcls
 
 # ____________________________________________________________
 # dict implementation

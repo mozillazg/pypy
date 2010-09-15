@@ -321,6 +321,9 @@ class StdObjSpace(ObjSpace, DescrOperation):
             subcls = get_unique_interplevel_subclass(
                     self.config, cls, w_subtype.hasdict, w_subtype.nslots != 0,
                     w_subtype.needsdel, w_subtype.weakrefable)
+            if self.config.objspace.std.withmapdict:
+                from pypy.objspace.std.mapdict import get_subclass_of_correct_size
+                subcls = get_subclass_of_correct_size(self, subcls, w_subtype)
             instance = instantiate(subcls)
             assert isinstance(instance, cls)
             instance.user_setup(self, w_subtype)

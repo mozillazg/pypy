@@ -354,6 +354,56 @@ def test_setdict():
     assert w_d.getitem_str("c") == 7
 
 # ___________________________________________________________
+# check specialized classes
+
+
+def test_specialized_class():
+    from pypy.rlib import rerased
+    class Object(BaseMapdictObject):
+        class typedef:
+            hasdict = False
+    classes = memo_get_subclass_of_correct_size(space, Object)
+    w1 = W_Root()
+    w2 = W_Root()
+    w3 = W_Root()
+    w4 = W_Root()
+    w5 = W_Root()
+    w6 = W_Root()
+    for objectcls in classes:
+        cls = Class()
+        obj = objectcls()
+        obj.user_setup(space, cls)
+        obj.setdictvalue(space, "a", w1)
+        assert rerased.unerase(obj._value0, W_Root) is w1
+        assert obj.getdictvalue(space, "a") is w1
+        assert obj.getdictvalue(space, "b") is None
+        assert obj.getdictvalue(space, "c") is None
+        obj.setdictvalue(space, "a", w2)
+        assert rerased.unerase(obj._value0, W_Root) is w2
+        assert obj.getdictvalue(space, "a") == w2
+        assert obj.getdictvalue(space, "b") is None
+        assert obj.getdictvalue(space, "c") is None
+
+        obj.setdictvalue(space, "b", w3)
+        #== [20, 30]
+        assert obj.getdictvalue(space, "a") is w2
+        assert obj.getdictvalue(space, "b") is w3
+        assert obj.getdictvalue(space, "c") is None
+        obj.setdictvalue(space, "b", w4)
+        assert obj.getdictvalue(space, "a") is w2
+        assert obj.getdictvalue(space, "b") is w4
+        assert obj.getdictvalue(space, "c") is None
+
+        obj2 = objectcls()
+        obj2.user_setup(space, cls)
+        obj2.setdictvalue(space, "a", w5)
+        obj2.setdictvalue(space, "b", w6)
+        assert obj2.getdictvalue(space, "a") is w5
+        assert obj2.getdictvalue(space, "b") is w6
+        assert obj2.map is obj.map
+
+
+# ___________________________________________________________
 # integration tests
 
 # XXX write more
