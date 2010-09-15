@@ -39,23 +39,27 @@ def test_allocate_new_page():
     #
     ac = ArenaCollection(arenasize, pagesize, 99)
     assert ac.num_uninitialized_pages == 0
+    assert ac.used_pages == 0
     #
     page = ac.allocate_new_page(5)
     checknewpage(page, 5)
     assert ac.num_uninitialized_pages == 2
     assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[5] == page
+    assert ac.used_pages == 1
     #
     page = ac.allocate_new_page(3)
     checknewpage(page, 3)
     assert ac.num_uninitialized_pages == 1
     assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[3] == page
+    assert ac.used_pages == 2
     #
     page = ac.allocate_new_page(4)
     checknewpage(page, 4)
     assert ac.num_uninitialized_pages == 0
     assert ac.page_for_size[4] == page
+    assert ac.used_pages == 3
 
 
 def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
@@ -389,7 +393,8 @@ def test_mass_free_half_page_becomes_more_free():
 def test_random():
     import random
     pagesize = hdrsize + 24*WORD
-    ac = arena_collection_for_test(pagesize, " " * 28)
+    num_pages = 28
+    ac = arena_collection_for_test(pagesize, " " * num_pages)
     live_objects = {}
     #
     # Run the test until ac.allocate_new_arena() is called.
@@ -422,3 +427,4 @@ def test_random():
     except DoneTesting:
         # the following output looks cool on a 112-character-wide terminal.
         print ac._startpageaddr.arena.usagemap
+    assert ac.used_pages == num_pages
