@@ -320,3 +320,35 @@ def test_mass_free_half_page_remains():
                                         pageaddr + hdrsize + 14*WORD
     assert ac.free_pages == NULL
     assert ac.full_page_for_size[2] == PAGE_NULL
+
+def test_mass_free_half_page_becomes_more_free():
+    pagesize = hdrsize + 24*WORD
+    ac = arena_collection_for_test(pagesize, "/", fill_with_objects=2)
+    page = getpage(ac, 0)
+    assert page.nuninitialized == 4
+    assert page.nfree == 4
+    #
+    ok_to_free = OkToFree(ac, 0.5)
+    ac.mass_free(ok_to_free)
+    assert ok_to_free.seen == {hdrsize +  0*WORD: False,
+                               hdrsize +  4*WORD: True,
+                               hdrsize +  8*WORD: False,
+                               hdrsize + 12*WORD: True}
+    page = getpage(ac, 0)
+    pageaddr = pagenum(ac, 0)
+    assert page == ac.page_for_size[2]
+    assert page.nextpage == PAGE_NULL
+    assert page.nuninitialized == 4
+    assert page.nfree == 6
+    fb = page.freeblock
+    assert fb == pageaddr + hdrsize + 2*WORD
+    assert fb.address[0] == pageaddr + hdrsize + 4*WORD
+    assert fb.address[0].address[0] == pageaddr + hdrsize + 6*WORD
+    assert fb.address[0].address[0].address[0] == \
+                                       pageaddr + hdrsize + 10*WORD
+    assert fb.address[0].address[0].address[0].address[0] == \
+                                       pageaddr + hdrsize + 12*WORD
+    assert fb.address[0].address[0].address[0].address[0].address[0] == \
+                                       pageaddr + hdrsize + 14*WORD
+    assert ac.free_pages == NULL
+    assert ac.full_page_for_size[2] == PAGE_NULL
