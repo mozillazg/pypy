@@ -1,15 +1,35 @@
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi, llgroup
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.gc.base import MovingGCBase
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import ll_assert, debug_print
 
 WORD = LONG_BIT // 8
 NULL = llmemory.NULL
 
 first_gcflag = 1 << (LONG_BIT//2)
-GCFLAG_BIG   = first_gcflag
+
+# The following flag is never set on young objects, i.e. the ones living
+# in the nursery.  It is initially set on all prebuilt and old objects,
+# and gets cleared by the write_barrier() when we write in them a
+# pointer to a young object.
+GCFLAG_NO_YOUNG_PTRS = first_gcflag << 0
+
+# The following flag is set on some prebuilt objects.  The flag is set
+# unless the object is already listed in 'prebuilt_root_objects'.
+# When a pointer is written inside an object with GCFLAG_NO_HEAP_PTRS
+# set, the write_barrier clears the flag and adds the object to
+# 'prebuilt_root_objects'.
+GCFLAG_NO_HEAP_PTRS = first_gcflag << 1
+
+# The following flag is set on surviving objects during a major collection.
+GCFLAG_VISITED      = first_gcflag << 2
+
+# Marker set to 'tid' during a minor collection when an object from
+# the nursery was forwarded.
+FORWARDED_MARKER = -1
 
 # ____________________________________________________________
 
@@ -17,11 +37,27 @@ class MiniMarkGC(MovingGCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
-    malloc_zero_filled = True
+    needs_write_barrier = True
+    prebuilt_gc_objects_are_static_roots = False
+    malloc_zero_filled = True    # XXX experiment with False
 
+    # All objects start with a HDR, i.e. with a field 'tid' which contains
+    # a word.  This word is divided in two halves: the lower half contains
+    # the typeid, and the upper half contains various flags, as defined
+    # by GCFLAG_xxx above.
     HDR = lltype.Struct('header', ('tid', lltype.Signed))
     typeid_is_in_field = 'tid'
     #withhash_flag_is_in_field = 'tid', _GCFLAG_HASH_BASE * 0x2
+
+    # During a minor collection, the objects in the nursery that are
+    # moved outside are changed in-place: their header is replaced with
+    # FORWARDED_MARKER, and the following word is set to the address of
+    # where the object was moved.  This means that all objects in the
+    # nursery need to be at least 2 words long, but objects outside the
+    # nursery don't need to.
+    minimal_size_in_nursery = (llmemory.sizeof(HDR) +
+                               llmemory.sizeof(llmemory.Address))
+
 
     TRANSLATION_PARAMS = {
         # The size of the nursery.  -1 means "auto", which means that it
@@ -45,259 +81,456 @@ class MiniMarkGC(MovingGCBase):
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
                  nursery_size=32*WORD,
                  page_size=16*WORD,
-                 arena_size=48*WORD,
-                 small_request_threshold=5*WORD):
+                 arena_size=64*WORD,
+                 small_request_threshold=5*WORD,
+                 ArenaCollectionClass=None):
         MovingGCBase.__init__(self, config, chunk_size)
         self.nursery_size = nursery_size
-        self.page_size = page_size
-        self.arena_size = arena_size
         self.small_request_threshold = small_request_threshold
+        #
+        # The ArenaCollection() handles the nonmovable objects allocation.
+        if ArenaCollectionClass is None:
+            ArenaCollectionClass = ArenaCollection
+        self.ac = ArenaCollectionClass(arena_size, page_size,
+                                       small_request_threshold)
+        #
+        # A list of all raw_malloced objects (the objects too large)
+        self.rawmalloced_objects = self.AddressStack()
+        #
+        # Used by minor collection: a list of non-young objects that
+        # (may) contain a pointer to a young object.  Populated by
+        # the write barrier.
+        self.old_objects_pointing_to_young = self.AddressStack()
+        #
+        # A list of all prebuilt GC objects that contain pointers to the heap
+        self.prebuilt_root_objects = self.AddressStack()
+        #
+        self._init_writebarrier_logic()
+
 
     def setup(self):
-        pass
+        """Called at run-time to initialize the GC."""
+        #
+        assert self.nursery_size > 0, "XXX"
+        #
+        # the start of the nursery: we actually allocate a tiny bit more for
+        # the nursery than really needed, to simplify pointer arithmetic
+        # in malloc_fixedsize_clear().
+        extra = self.small_request_threshold
+        self.nursery = llarena.arena_malloc(self.nursery_size + extra, True)
+        if not self.nursery:
+            raise MemoryError("cannot allocate nursery")
+        # the current position in the nursery:
+        self.nursery_next = self.nursery
+        # the end of the nursery:
+        self.nursery_top = self.nursery + self.nursery_size
+
+
+    def malloc_fixedsize_clear(self, typeid, size, can_collect=True,
+                               needs_finalizer=False, contains_weakptr=False):
+        ll_assert(can_collect, "!can_collect")
+        assert not needs_finalizer   # XXX
+        assert not contains_weakptr  # XXX
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        #
+        # If totalsize is greater than small_request_threshold, ask for
+        # a rawmalloc.  The following check should be constant-folded.
+        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+            return self.external_malloc(typeid, size)
+        #
+        # If totalsize is smaller than minimal_size_in_nursery, round it up.
+        # The following check should also be constant-folded.
+        if (llmemory.raw_malloc_usage(totalsize) <
+            llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
+            totalsize = self.minimal_size_in_nursery
+        #
+        # Get the memory from the nursery.  If there is not enough space
+        # there, do a collect first.
+        result = self.nursery_next
+        self.nursery_next = result + totalsize
+        if self.nursery_next > self.nursery_top:
+            result = self.collect_and_reserve(totalsize)
+        #
+        # Build the object.
+        llarena.arena_reserve(result, totalsize)
+        self.init_gc_object(result, typeid, flags=0)
+        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+
+
+    def collect(self, gen=1):
+        """Do a minor (gen=0) or major (gen>0) collection."""
+        self.minor_collection()
+        if gen > 0:
+            self.major_collection()
+
+    def collect_and_reserve(self, totalsize):
+        """To call when nursery_next overflows nursery_top.
+        Do a minor collection, and possibly also a major collection,
+        and finally reserve 'totalsize' bytes at the start of the
+        now-empty nursery.
+        """
+        self.collect(0)   # XXX
+        self.nursery_next = self.nursery + totalsize
+        return self.nursery
+    collect_and_reserve._dont_inline_ = True
+
+
+    def external_malloc(self, typeid, size):
+        """Allocate a large object using raw_malloc()."""
+        #
+        # First check if we are called because we wanted to allocate
+        # an object that is larger than self.small_request_threshold.
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        xxxxxxx
+        #
+        # Yes: just use a raw_malloc() to get the object.
+        result = llmemory.raw_malloc(totalsize)
+        if not result:
+            raise MemoryError()
+        raw_memclear(result, totalsize)
+        self.rawmalloced_objects.append(result + size_gc_header)
+        return result
+
+
+    # ----------
+    # Simple helpers
+
+    def get_type_id(self, obj):
+        tid = self.header(obj).tid
+        return llop.extract_ushort(llgroup.HALFWORD, tid)
+
+    def combine(self, typeid16, flags):
+        return llop.combine_ushort(lltype.Signed, typeid16, flags)
+
+    def init_gc_object(self, addr, typeid16, flags=0):
+        #print "init_gc_object(%r, 0x%x)" % (addr, flags)
+        # The default 'flags' is zero.  The flags GCFLAG_NO_xxx_PTRS
+        # have been chosen to allow 'flags' to be zero in the common
+        # case (hence the 'NO' in their name).
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.tid = self.combine(typeid16, flags)
+
+    def init_gc_object_immortal(self, addr, typeid16, flags=0):
+        # For prebuilt GC objects, the flags must contain
+        # GCFLAG_NO_xxx_PTRS, at least initially.
+        flags |= GCFLAG_NO_HEAP_PTRS | GCFLAG_NO_YOUNG_PTRS
+        self.init_gc_object(addr, typeid16, flags)
+
+    def is_in_nursery(self, addr):
+        ll_assert(llmemory.cast_adr_to_int(addr) & 1 == 0,
+                  "odd-valued (i.e. tagged) pointer unexpected here")
+        return self.nursery <= addr < self.nursery_top
+
+    def is_forwarded_marker(self, tid):
+        return isinstance(tid, int) and tid == FORWARDED_MARKER
+
+    def debug_check_object(self, obj):
+        # after a minor or major collection, no object should be in the nursery
+        ll_assert(not self.is_in_nursery(obj),
+                  "object in nursery after collection")
+        # similarily, all objects should have this flag:
+        ll_assert(self.header(obj).tid & GCFLAG_NO_YOUNG_PTRS,
+                  "missing GCFLAG_NO_YOUNG_PTRS")
+        # the GCFLAG_VISITED should not be set between collections
+        ll_assert(self.header(obj).tid & GCFLAG_VISITED == 0,
+                  "unexpected GCFLAG_VISITED")
+
+    # ----------
+    # Write barrier
+
+    # for the JIT: a minimal description of the write_barrier() method
+    # (the JIT assumes it is of the shape
+    #  "if addr_struct.int0 & JIT_WB_IF_FLAG: remember_young_pointer()")
+    JIT_WB_IF_FLAG = GCFLAG_NO_YOUNG_PTRS
+
+    def write_barrier(self, newvalue, addr_struct):
+        if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
+            self.remember_young_pointer(addr_struct, newvalue)
+
+    def _init_writebarrier_logic(self):
+        # The purpose of attaching remember_young_pointer to the instance
+        # instead of keeping it as a regular method is to help the JIT call it.
+        # Additionally, it makes the code in write_barrier() marginally smaller
+        # (which is important because it is inlined *everywhere*).
+        # For x86, there is also an extra requirement: when the JIT calls
+        # remember_young_pointer(), it assumes that it will not touch the SSE
+        # registers, so it does not save and restore them (that's a *hack*!).
+        def remember_young_pointer(addr_struct, addr):
+            # 'addr_struct' is the address of the object in which we write;
+            # 'addr' is the address that we write in 'addr_struct'.
+            ll_assert(not self.is_in_nursery(addr_struct),
+                      "nursery object with GCFLAG_NO_YOUNG_PTRS")
+            # if we have tagged pointers around, we first need to check whether
+            # we have valid pointer here, otherwise we can do it after the
+            # is_in_nursery check
+            if (self.config.taggedpointers and
+                not self.is_valid_gc_object(addr)):
+                return
+            #
+            # Core logic: if the 'addr' is in the nursery, then we need
+            # to remove the flag GCFLAG_NO_YOUNG_PTRS and add the old object
+            # to the list 'old_objects_pointing_to_young'.  We know that
+            # 'addr_struct' cannot be in the nursery, because nursery objects
+            # never have the flag GCFLAG_NO_YOUNG_PTRS to start with.
+            objhdr = self.header(addr_struct)
+            if self.is_in_nursery(addr):
+                self.old_objects_pointing_to_young.append(addr_struct)
+                objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+            elif (not self.config.taggedpointers and
+                  not self.is_valid_gc_object(addr)):
+                return
+            #
+            # Second part: if 'addr_struct' is actually a prebuilt GC
+            # object and it's the first time we see a write to it, we
+            # add it to the list 'prebuilt_root_objects'.  Note that we
+            # do it even in the (rare?) case of 'addr' being another
+            # prebuilt object, to simplify code.
+            if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.prebuilt_root_objects.append(addr_struct)
+
+        remember_young_pointer._dont_inline_ = True
+        self.remember_young_pointer = remember_young_pointer
+
+
+    # ----------
+    # Nursery collection
+
+    def minor_collection(self):
+        """Perform a minor collection: find the objects from the nursery
+        that remain alive and move them out."""
+        #
+        #print "nursery_collect()"
+        #
+        # First, find the roots that point to nursery objects.  These
+        # nursery objects are copied out of the nursery.  Note that
+        # references to further nursery objects are not modified by
+        # this step; only objects directly referenced by roots are
+        # copied out.  They are also added to the list
+        # 'old_objects_pointing_to_young'.
+        self.collect_roots_in_nursery()
+        #
+        # Now trace objects from 'old_objects_pointing_to_young'.
+        # All nursery objects they reference are copied out of the
+        # nursery, and again added to 'old_objects_pointing_to_young'.
+        # We proceed until 'old_objects_pointing_to_young' is empty.
+        self.collect_oldrefs_to_nursery()
+        #
+        # Now all live nursery objects should be out, and the rest dies.
+        # Fill the whole nursery with zero and reset the current nursery
+        # pointer.
+        llarena.arena_reset(self.nursery, self.nursery_size, 2)
+        self.nursery_next = self.nursery
+        #
+        self.debug_check_consistency()     # XXX expensive!
+
+
+    def collect_roots_in_nursery(self):
+        # we don't need to trace prebuilt GcStructs during a minor collect:
+        # if a prebuilt GcStruct contains a pointer to a young object,
+        # then the write_barrier must have ensured that the prebuilt
+        # GcStruct is in the list self.old_objects_pointing_to_young.
+        self.root_walker.walk_roots(
+            MiniMarkGC._trace_drag_out,  # stack roots
+            MiniMarkGC._trace_drag_out,  # static in prebuilt non-gc
+            None)                        # static in prebuilt gc
+
+    def collect_oldrefs_to_nursery(self):
+        # Follow the old_objects_pointing_to_young list and move the
+        # young objects they point to out of the nursery.
+        oldlist = self.old_objects_pointing_to_young
+        while oldlist.non_empty():
+            obj = oldlist.pop()
+            #
+            # Add the flag GCFLAG_NO_YOUNG_PTRS.  All live objects should have
+            # this flag after a nursery collection.
+            self.header(obj).tid |= GCFLAG_NO_YOUNG_PTRS
+            #
+            # Trace the 'obj' to replace pointers to nursery with pointers
+            # outside the nursery, possibly forcing nursery objects out
+            # and adding them to 'old_objects_pointing_to_young' as well.
+            self.trace_and_drag_out_of_nursery(obj)
+
+    def trace_and_drag_out_of_nursery(self, obj):
+        """obj must not be in the nursery.  This copies all the
+        young objects it references out of the nursery.
+        """
+        self.trace(obj, self._trace_drag_out, None)
+
+
+    def _trace_drag_out(self, root, ignored=None):
+        obj = root.address[0]
+        #
+        # If 'obj' is not in the nursery, nothing to change.
+        if not self.is_in_nursery(obj):
+            return
+        #size_gc_header = self.gcheaderbuilder.size_gc_header
+        #print '\ttrace_drag_out', llarena.getfakearenaaddress(obj - size_gc_header),
+        #
+        # If 'obj' was already forwarded, change it to its forwarding address.
+        if self.is_forwarded_marker(self.header(obj).tid):
+            obj = llarena.getfakearenaaddress(obj)
+            root.address[0] = obj.address[0]
+            #print '(already forwarded)'
+            return
+        #
+        # First visit to 'obj': we must move it out of the nursery.
+        # Allocate a new nonmovable location for it.
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        size = self.get_size(obj)
+        totalsize = size_gc_header + size
+        newhdr = self.ac.malloc(totalsize)
+        newobj = newhdr + size_gc_header
+        #
+        # Copy it.  Note that references to other objects in the
+        # nursery are kept unchanged in this step.
+        llmemory.raw_memcopy(obj - size_gc_header, newhdr, totalsize)
+        #
+        # Set the old object's tid to FORWARDED_MARKER and replace
+        # the old object's content with the target address.
+        # A bit of no-ops to convince llarena that we are changing
+        # the layout, in non-translated versions.
+        llarena.arena_reset(obj - size_gc_header, totalsize, 0)
+        llarena.arena_reserve(obj - size_gc_header, llmemory.sizeof(self.HDR))
+        llarena.arena_reserve(obj, llmemory.sizeof(llmemory.Address))
+        self.header(obj).tid = FORWARDED_MARKER
+        obj = llarena.getfakearenaaddress(obj)
+        obj.address[0] = newobj
+        #
+        # Change the original pointer to this object.
+        #print
+        #print '\t\t\t->', llarena.getfakearenaaddress(newobj - size_gc_header)
+        root.address[0] = newobj
+        #
+        # Add the newobj to the list 'old_objects_pointing_to_young',
+        # because it can contain further pointers to other young objects.
+        # We will fix such references to point to the copy of the young
+        # objects when we walk 'old_objects_pointing_to_young'.
+        self.old_objects_pointing_to_young.append(newobj)
+
+
+    # ----------
+    # Full collection
+
+    def major_collection(self):
+        """Do a major collection.  Only for when the nursery is empty."""
+        #
+        # Debugging checks
+        ll_assert(self.nursery_next == self.nursery,
+                  "nursery not empty in major_collection()")
+        self.debug_check_consistency()
+        #
+        # Note that a major collection is non-moving.  The goal is only to
+        # find and free some of the objects allocated by the ArenaCollection.
+        # We first visit all objects and toggle the flag GCFLAG_VISITED on
+        # them, starting from the roots.
+        self.collect_roots()
+        self.visit_all_objects()
+        #
+        # Ask the ArenaCollection to visit all objects.  Free the ones
+        # that have not been visited above, and reset GCFLAG_VISITED on
+        # the others.
+        self.ac.mass_free(self._free_if_unvisited)
+        #
+        # We also need to reset the GCFLAG_VISITED on prebuilt GC objects.
+        self.prebuilt_root_objects.foreach(self._reset_gcflag_visited, None)
+        #
+        self.debug_check_consistency()
+
+
+    def _free_if_unvisited(self, hdr):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        obj = hdr + size_gc_header
+        if self.header(obj).tid & GCFLAG_VISITED:
+            self.header(obj).tid &= ~GCFLAG_VISITED
+            return False     # survives
+        else:
+            return True      # dies
+
+    def _reset_gcflag_visited(self, obj, ignored=None):
+        self.header(obj).tid &= ~GCFLAG_VISITED
+
+
+    def collect_roots(self):
+        # Collect all roots.  Starts from all the objects
+        # from 'prebuilt_root_objects'.
+        self.objects_to_trace = self.AddressStack()
+        self.prebuilt_root_objects.foreach(self._collect_obj, None)
+        #
+        # Add the roots from the other sources.
+        self.root_walker.walk_roots(
+            MiniMarkGC._collect_ref,  # stack roots
+            MiniMarkGC._collect_ref,  # static in prebuilt non-gc structures
+            None)   # we don't need the static in all prebuilt gc objects
+
+    def _collect_obj(self, obj, ignored=None):
+        self.objects_to_trace.append(obj)
+
+    def _collect_ref(self, root, ignored=None):
+        self.objects_to_trace.append(root.address[0])
+
+    def visit_all_objects(self):
+        pending = self.objects_to_trace
+        while pending.non_empty():
+            obj = pending.pop()
+            self.visit(obj)
+        pending.delete()
+
+    def visit(self, obj):
+        #
+        # 'obj' is a live object.  Check GCFLAG_VISITED to know if we
+        # have already seen it before.
+        #
+        # Moreover, we can ignore prebuilt objects with GCFLAG_NO_HEAP_PTRS.
+        # If they have this flag set, then they cannot point to heap
+        # objects, so ignoring them is fine.  If they don't have this
+        # flag set, then the object should be in 'prebuilt_root_objects',
+        # and the GCFLAG_VISITED will be reset at the end of the
+        # collection.
+        hdr = self.header(obj)
+        if hdr.tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS):
+            return
+        #
+        # It's the first time.  We set the flag.
+        hdr.tid |= GCFLAG_VISITED
+        #
+        # Trace the content of the object and put all objects it references
+        # into the 'objects_to_trace' list.
+        self.trace(obj, self._collect_ref, None)
+
 
 # ____________________________________________________________
 
-# Terminology: the memory is subdivided into "pages".
-# A page contains a number of allocated objects, called "blocks".
+# For testing, a simple implementation of ArenaCollection.
+# This version could be used together with obmalloc.c, but
+# it requires an extra word per object in the 'all_objects'
+# list.
 
-# The actual allocation occurs in whole arenas, which are subdivided
-# into pages.  We don't keep track of the arenas.  A page can be:
-#
-# - uninitialized: never touched so far.
-#
-# - allocated: contains some objects (all of the same size).  Starts with a
-#   PAGE_HEADER.  The page is on the chained list of pages that still have
-#   room for objects of that size, unless it is completely full.
-#
-# - free: used to be partially full, and is now free again.  The page is
-#   on the chained list of free pages.
-
-# Similarily, each allocated page contains blocks of a given size, which can
-# be either uninitialized, allocated or free.
-
-PAGE_PTR = lltype.Ptr(lltype.ForwardReference())
-PAGE_HEADER = lltype.Struct('PageHeader',
-    # -- The following two pointers make a chained list of pages with the same
-    #    size class.  Warning, 'prevpage' contains random garbage for the first
-    #    entry in the list.
-    ('nextpage', PAGE_PTR),
-    ('prevpage', PAGE_PTR),
-    # -- The number of free blocks, and the number of uninitialized blocks.
-    #    The number of allocated blocks is the rest.
-    ('nuninitialized', lltype.Signed),
-    ('nfree', lltype.Signed),
-    # -- The chained list of free blocks.  If there are none, points to the
-    #    first uninitialized block.
-    ('freeblock', llmemory.Address),
-    )
-PAGE_PTR.TO.become(PAGE_HEADER)
-PAGE_NULL = lltype.nullptr(PAGE_HEADER)
-
-# ____________________________________________________________
-
-
-class ArenaCollection(object):
-    _alloc_flavor_ = "raw"
+class SimpleArenaCollection(object):
 
     def __init__(self, arena_size, page_size, small_request_threshold):
-        self.arena_size = arena_size
+        self.arena_size = arena_size   # ignored
         self.page_size = page_size
         self.small_request_threshold = small_request_threshold
-        #
-        # 'pageaddr_for_size': for each size N between WORD and
-        # small_request_threshold (included), contains either NULL or
-        # a pointer to a page that has room for at least one more
-        # allocation of the given size.
-        length = small_request_threshold / WORD + 1
-        self.page_for_size = lltype.malloc(rffi.CArray(PAGE_PTR), length,
-                                           flavor='raw', zero=True)
-        self.nblocks_for_size = lltype.malloc(rffi.CArray(lltype.Signed),
-                                              length, flavor='raw')
-        hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-        for i in range(1, length):
-            self.nblocks_for_size[i] = (page_size - hdrsize) // (WORD * i)
-        #
-        self.uninitialized_pages = PAGE_NULL
-        self.num_uninitialized_pages = 0
-        self.free_pages = PAGE_NULL
-
+        self.all_objects = []
 
     def malloc(self, size):
-        """Allocate a block from a page in an arena."""
-        ll_assert(size > 0, "malloc: size is null or negative")
-        ll_assert(size <= self.small_request_threshold, "malloc: size too big")
-        ll_assert((size & (WORD-1)) == 0, "malloc: size is not aligned")
+        nsize = llmemory.raw_malloc_usage(size)
+        ll_assert(nsize > 0, "malloc: size is null or negative")
+        ll_assert(nsize <= self.small_request_threshold,"malloc: size too big")
+        ll_assert((nsize & (WORD-1)) == 0, "malloc: size is not aligned")
         #
-        # Get the page to use from the size
-        size_class = size / WORD
-        page = self.page_for_size[size_class]
-        if page == PAGE_NULL:
-            page = self.allocate_new_page(size_class)
-        #
-        # The result is simply 'page.freeblock'
-        result = page.freeblock
-        if page.nfree > 0:
-            #
-            # The 'result' was part of the chained list; read the next.
-            page.nfree -= 1
-            page.freeblock = result.address[0]
-            llarena.arena_reset(result,
-                                llmemory.sizeof(llmemory.Address),
-                                False)
-            #
-        else:
-            # The 'result' is part of the uninitialized blocks.
-            ll_assert(page.nuninitialized > 0,
-                      "fully allocated page found in the page_for_size list")
-            page.freeblock = result + size
-            page.nuninitialized -= 1
-            if page.nuninitialized == 0:
-                #
-                # This was the last free block, so unlink the page from the
-                # chained list.
-                self.page_for_size[size_class] = page.nextpage
-        #
-        llarena.arena_reserve(result, _dummy_size(size), False)
+        result = llmemory.raw_malloc(size)
+        self.all_objects.append(result)
         return result
 
-
-    def allocate_new_page(self, size_class):
-        """Allocate and return a new page for the given size_class."""
-        #
-        if self.free_pages != PAGE_NULL:
-            #
-            # Get the page from the chained list 'free_pages'.
-            page = self.free_pages
-            self.free_pages = page.address[0]
-            llarena.arena_reset(self.free_pages,
-                                llmemory.sizeof(llmemory.Address),
-                                False)
-        else:
-            # Get the next free page from the uninitialized pages.
-            if self.num_uninitialized_pages == 0:
-                self.allocate_new_arena()   # Out of memory.  Get a new arena.
-            page = self.uninitialized_pages
-            self.uninitialized_pages += self.page_size
-            self.num_uninitialized_pages -= 1
-        #
-        # Initialize the fields of the resulting page
-        llarena.arena_reserve(page, llmemory.sizeof(PAGE_HEADER))
-        result = llmemory.cast_adr_to_ptr(page, PAGE_PTR)
-        #
-        hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-        result.nuninitialized = self.nblocks_for_size[size_class]
-        result.nfree = 0
-        result.freeblock = page + hdrsize
-        result.nextpage = PAGE_NULL
-        ll_assert(self.page_for_size[size_class] == PAGE_NULL,
-                  "allocate_new_page() called but a page is already waiting")
-        self.page_for_size[size_class] = result
-        return result
-
-
-    def allocate_new_arena(self):
-        ll_assert(self.num_uninitialized_pages == 0,
-                  "some uninitialized pages are already waiting")
-        #
-        # 'arena_base' points to the start of malloced memory; it might not
-        # be a page-aligned address
-        arena_base = llarena.arena_malloc(self.arena_size, False)
-        if not arena_base:
-            raise MemoryError("couldn't allocate the next arena")
-        arena_end = arena_base + self.arena_size
-        #
-        # 'firstpage' points to the first unused page
-        firstpage = start_of_page(arena_base + self.page_size - 1,
-                                  self.page_size)
-        # 'npages' is the number of full pages just allocated
-        npages = (arena_end - firstpage) // self.page_size
-        #
-        # add these pages to the list
-        self.uninitialized_pages = firstpage
-        self.num_uninitialized_pages = npages
-        #
-        # increase a bit arena_size for the next time
-        self.arena_size = (self.arena_size // 4 * 5) + (self.page_size - 1)
-        self.arena_size = (self.arena_size // self.page_size) * self.page_size
-
-
-    def free(self, obj, size):
-        """Free a previously malloc'ed block."""
-        ll_assert(size > 0, "free: size is null or negative")
-        ll_assert(size <= self.small_request_threshold, "free: size too big")
-        ll_assert((size & (WORD-1)) == 0, "free: size is not aligned")
-        #
-        llarena.arena_reset(obj, _dummy_size(size), False)
-        pageaddr = start_of_page(obj, self.page_size)
-        if not we_are_translated():
-            hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
-            assert obj - pageaddr >= hdrsize
-            assert (obj - pageaddr - hdrsize) % size == 0
-        page = llmemory.cast_adr_to_ptr(pageaddr, PAGE_PTR)
-        size_class = size / WORD
-        #
-        # Increment the number of known free objects
-        nfree = page.nfree + 1
-        if nfree < self.nblocks_for_size[size_class]:
-            #
-            # Not all objects in this page are freed yet.
-            # Add the free block to the chained list.
-            page.nfree = nfree
-            llarena.arena_reserve(obj, llmemory.sizeof(llmemory.Address),
-                                  False)
-            obj.address[0] = page.freeblock
-            page.freeblock = obj
-            #
-            # If the page was full, then it now has space and should be
-            # linked back in the page_for_size[] linked list.
-            if nfree == 1:
-                page.nextpage = self.page_for_size[size_class]
-                if page.nextpage != PAGE_NULL:
-                    page.nextpage.prevpage = page
-                self.page_for_size[size_class] = page
-            #
-        else:
-            # The page becomes completely free.  Remove it from
-            # the page_for_size[] linked list.
-            if page == self.page_for_size[size_class]:
-                self.page_for_size[size_class] = page.nextpage
+    def mass_free(self, ok_to_free_func):
+        objs = self.all_objects
+        self.all_objects = []
+        for rawobj in objs:
+            if ok_to_free_func(rawobj):
+                llmemory.raw_free(rawobj)
             else:
-                prev = page.prevpage
-                next = page.nextpage
-                prev.nextpage = next
-                next.prevpage = prev
-            #
-            # Free the page, putting it back in the chained list of the arena
-            # where it belongs
-            xxx#...
-
-
-# ____________________________________________________________
-# Helpers to go from a pointer to the start of its page
-
-def start_of_page(addr, page_size):
-    """Return the address of the start of the page that contains 'addr'."""
-    if we_are_translated():
-        xxx
-    else:
-        return _start_of_page_untranslated(addr, page_size)
-
-def _start_of_page_untranslated(addr, page_size):
-    assert isinstance(addr, llarena.fakearenaaddress)
-    shift = 4     # for testing, we assume that the whole arena is not
-                  # on a page boundary
-    ofs = ((addr.offset - shift) // page_size) * page_size + shift
-    return llarena.fakearenaaddress(addr.arena, ofs)
-
-def _dummy_size(size):
-    if we_are_translated():
-        return size
-    if isinstance(size, int):
-        size = llmemory.sizeof(lltype.Char) * size
-    return size
-
-# ____________________________________________________________
-
-def nursery_size_from_env():
-    return read_from_env('PYPY_GENERATIONGC_NURSERY')
+                self.all_objects.append(rawobj)
