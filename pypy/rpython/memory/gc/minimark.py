@@ -106,11 +106,15 @@ class MiniMarkGC(MovingGCBase):
 
     def setup(self):
         """Called at run-time to initialize the GC."""
+        MovingGCBase.setup(self)
         #
         assert self.nursery_size > 0, "XXX"
         #
         # A list of all raw_malloced objects (the objects too large)
         self.rawmalloced_objects = self.AddressStack()
+        #
+        # Support for id()
+        self.young_objects_with_id = self.AddressDict()
         #
         # the start of the nursery: we actually allocate a tiny bit more for
         # the nursery than really needed, to simplify pointer arithmetic
@@ -256,6 +260,9 @@ class MiniMarkGC(MovingGCBase):
         flags |= GCFLAG_NO_HEAP_PTRS | GCFLAG_NO_YOUNG_PTRS
         self.init_gc_object(addr, typeid16, flags)
 
+    def _can_never_move(self, obj):
+        return False      # approximate good enough answer for id()
+
     def is_in_nursery(self, addr):
         ll_assert(llmemory.cast_adr_to_int(addr) & 1 == 0,
                   "odd-valued (i.e. tagged) pointer unexpected here")
@@ -263,6 +270,10 @@ class MiniMarkGC(MovingGCBase):
 
     def is_forwarded_marker(self, tid):
         return isinstance(tid, int) and tid == FORWARDED_MARKER
+
+    def get_forwarding_address(self, obj):
+        obj = llarena.getfakearenaaddress(obj)
+        return obj.address[0]
 
     def debug_check_object(self, obj):
         # after a minor or major collection, no object should be in the nursery
@@ -354,6 +365,11 @@ class MiniMarkGC(MovingGCBase):
         # We proceed until 'old_objects_pointing_to_young' is empty.
         self.collect_oldrefs_to_nursery()
         #
+        # Update the id tracking of any object that was moved out of
+        # the nursery.
+        if self.young_objects_with_id.length() > 0:
+            self.update_young_objects_with_id()
+        #
         # Now all live nursery objects should be out, and the rest dies.
         # Fill the whole nursery with zero and reset the current nursery
         # pointer.
@@ -407,8 +423,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # If 'obj' was already forwarded, change it to its forwarding address.
         if self.is_forwarded_marker(self.header(obj).tid):
-            obj = llarena.getfakearenaaddress(obj)
-            root.address[0] = obj.address[0]
+            root.address[0] = self.get_forwarding_address(obj)
             #print '(already forwarded)'
             return
         #
@@ -464,6 +479,10 @@ class MiniMarkGC(MovingGCBase):
         # them, starting from the roots.
         self.collect_roots()
         self.visit_all_objects()
+        #
+        # Walk the 'objects_with_id' list and remove the ones that die,
+        # i.e. that don't have the GCFLAG_VISITED flag.
+        self.update_objects_with_id()
         #
         # Walk all rawmalloced objects and free the ones that don't
         # have the GCFLAG_VISITED flag.
@@ -554,6 +573,61 @@ class MiniMarkGC(MovingGCBase):
         # Trace the content of the object and put all objects it references
         # into the 'objects_to_trace' list.
         self.trace(obj, self._collect_ref, None)
+
+
+    # ----------
+    # id() support
+
+    def id(self, ptr):
+        """Implement id() of an object, given as a GCREF."""
+        obj = llmemory.cast_ptr_to_adr(ptr)
+        #
+        # Is it a tagged pointer?  For them, the result is odd-valued.
+        if not self.is_valid_gc_object(obj):
+            return llmemory.cast_adr_to_int(obj)
+        #
+        # Is the object still in the nursery?
+        if self.is_in_nursery(obj):
+            result = self.young_objects_with_id.get(obj)
+            if not result:
+                result = self._next_id()
+                self.young_objects_with_id.setitem(obj, result)
+        else:
+            result = self.objects_with_id.get(obj)
+            if not result:
+                # An 'obj' not in the nursery and not in 'objects_with_id'
+                # did not have its id() asked for and will not move any more,
+                # so we can just return its address as the result.
+                return llmemory.cast_adr_to_int(obj)
+        #
+        # If we reach here, 'result' is an odd number.  If we double it,
+        # we have a number of the form 4n+2, which cannot collide with
+        # tagged pointers nor with any real address.
+        return llmemory.cast_adr_to_int(result) * 2
+
+
+    def update_young_objects_with_id(self):
+        # Called during a minor collection.
+        self.young_objects_with_id.foreach(self._update_object_id,
+                                           self.objects_with_id)
+        self.young_objects_with_id.clear()
+        # NB. the clear() also makes the dictionary shrink back to its
+        # minimal size, which is actually a good idea: a large, mostly-empty
+        # table is bad for the next call to 'foreach'.
+
+    def _update_object_id(self, obj, id, new_objects_with_id):
+        if self.is_forwarded_marker(self.header(obj).tid):
+            newobj = self.get_forwarding_address(obj)
+            new_objects_with_id.setitem(newobj, id)
+        else:
+            self.id_free_list.append(id)
+
+    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
+        # overrides the parent's version (a bit hackish)
+        if self.header(obj).tid & GCFLAG_VISITED:
+            new_objects_with_id.insertclean(obj, id)
+        else:
+            self.id_free_list.append(id)
 
 
 # ____________________________________________________________
