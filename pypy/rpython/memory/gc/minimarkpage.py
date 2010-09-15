@@ -199,7 +199,7 @@ class ArenaCollection(object):
 
 
     def mass_free_in_list(self, page, size_class, ok_to_free_func):
-        remaining_list = PAGE_NULL
+        remaining_list = page   #PAGE_NULL
         nblocks = self.nblocks_for_size[size_class]
         block_size = size_class * WORD
         #
