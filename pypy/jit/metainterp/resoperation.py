@@ -15,11 +15,20 @@ class ResOperation(object):
         make_sure_not_resized(args)
         assert isinstance(opnum, int)
         self.opnum = opnum
-        self.args = list(args)
-        make_sure_not_resized(self.args)
+        self._args = list(args)
+        make_sure_not_resized(self._args)
         assert not isinstance(result, list)
         self.result = result
         self.setdescr(descr)
+
+    def getarg(self, i):
+        return self._args[i]
+
+    def setarg(self, i, box):
+        self._args[i] = box
+
+    def numargs(self):
+        return len(self._args)
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
@@ -35,10 +44,10 @@ class ResOperation(object):
         descr = self.descr
         if descr is not None:
             descr = descr.clone_if_mutable()
-        op = ResOperation(self.opnum, self.args, self.result, descr)
+        op = ResOperation(self.opnum, self._args, self.result, descr)
         op.fail_args = self.fail_args
+        op.name = self.name
         if not we_are_translated():
-            op.name = self.name
             op.pc = self.pc
         return op
 
@@ -57,10 +66,10 @@ class ResOperation(object):
             prefix = ""
         if self.descr is None or we_are_translated():
             return '%s%s%s(%s)' % (prefix, sres, self.getopname(),
-                                 ', '.join([str(a) for a in self.args]))
+                                 ', '.join([str(a) for a in self._args]))
         else:
             return '%s%s%s(%s, descr=%r)' % (prefix, sres, self.getopname(),
-                            ', '.join([str(a) for a in self.args]), self.descr)
+                            ', '.join([str(a) for a in self._args]), self.descr)
 
     def getopname(self):
         try:

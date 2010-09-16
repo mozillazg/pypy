@@ -159,7 +159,7 @@ class MIFrame(object):
         if got_type == history.INT:
             self.registers_i[target_index] = resultbox
         elif got_type == history.REF:
-            #debug_print(' ->', 
+            #debug_print(' ->',
             #            llmemory.cast_ptr_to_adr(resultbox.getref_base()))
             self.registers_r[target_index] = resultbox
         elif got_type == history.FLOAT:
@@ -446,7 +446,7 @@ class MIFrame(object):
     def opimpl_newlist(self, structdescr, lengthdescr, itemsdescr, arraydescr,
                        sizebox):
         sbox = self.metainterp.execute_and_record(rop.NEW, structdescr)
-        self.metainterp.execute_and_record(rop.SETFIELD_GC, lengthdescr, 
+        self.metainterp.execute_and_record(rop.SETFIELD_GC, lengthdescr,
                                            sbox, sizebox)
         abox = self.metainterp.execute_and_record(rop.NEW_ARRAY, arraydescr,
                                                   sizebox)
@@ -1004,7 +1004,7 @@ class MIFrame(object):
             resumedescr = compile.ResumeGuardDescr(metainterp_sd,
                                                    original_greenkey)
         guard_op = metainterp.history.record(opnum, moreargs, None,
-                                             descr=resumedescr)       
+                                             descr=resumedescr)
         virtualizable_boxes = None
         if metainterp.jitdriver_sd.virtualizable_info is not None:
             virtualizable_boxes = metainterp.virtualizable_boxes
@@ -1463,7 +1463,7 @@ class MetaInterp(object):
             resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
         return resbox
 
-    def _record_helper_pure(self, opnum, resbox, descr, *argboxes): 
+    def _record_helper_pure(self, opnum, resbox, descr, *argboxes):
         canfold = self._all_constants(*argboxes)
         if canfold:
             resbox = resbox.constbox()       # ensure it is a Const
@@ -1472,7 +1472,7 @@ class MetaInterp(object):
             resbox = resbox.nonconstbox()    # ensure it is a Box
             return self._record_helper_nonpure_varargs(opnum, resbox, descr, list(argboxes))
 
-    def _record_helper_pure_varargs(self, opnum, resbox, descr, argboxes): 
+    def _record_helper_pure_varargs(self, opnum, resbox, descr, argboxes):
         canfold = self._all_constants_varargs(argboxes)
         if canfold:
             resbox = resbox.constbox()       # ensure it is a Const
@@ -1485,7 +1485,7 @@ class MetaInterp(object):
         assert resbox is None or isinstance(resbox, Box)
         # record the operation
         profiler = self.staticdata.profiler
-        profiler.count_ops(opnum, RECORDED_OPS)        
+        profiler.count_ops(opnum, RECORDED_OPS)
         op = self.history.record(opnum, argboxes, resbox, descr)
         self.attach_debug_info(op)
         return resbox
@@ -1667,7 +1667,7 @@ class MetaInterp(object):
 
         # Search in current_merge_points for original_boxes with compatible
         # green keys, representing the beginning of the same loop as the one
-        # we end now. 
+        # we end now.
 
         num_green_args = self.jitdriver_sd.num_green_args
         for j in range(len(self.current_merge_points)-1, -1, -1):
@@ -2090,8 +2090,8 @@ class MetaInterp(object):
         op = self.history.operations[-1]
         assert op.opnum == rop.CALL
         resbox_as_const = resbox.constbox()
-        for arg in op.args:
-            if not isinstance(arg, Const):
+        for i in op.numarg():
+            if not isinstance(op.getarg(i), Const):
                 break
         else:
             # all-constants: remove the CALL operation now and propagate a
@@ -2101,7 +2101,8 @@ class MetaInterp(object):
         # not all constants (so far): turn CALL into CALL_PURE, which might
         # be either removed later by optimizeopt or turned back into CALL.
         op.opnum = rop.CALL_PURE
-        op.args = [resbox_as_const] + op.args
+        # XXX XXX replace...
+        op._args = [resbox_as_const] + op._args
         return resbox
 
     def direct_assembler_call(self, targetjitdriver_sd):
