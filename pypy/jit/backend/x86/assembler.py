@@ -390,7 +390,7 @@ class Assembler386(object):
 
         for op in operations:
             if op.opnum == rop.DEBUG_MERGE_POINT:
-                funcname = op.args[0]._get_str()
+                funcname = op.getarg(0)._get_str()
                 break
         else:
             funcname = "<loop %d>" % len(self.loop_run_counters)
@@ -725,7 +725,7 @@ class Assembler386(object):
     def _cmpop(cond, rev_cond):
         def genop_cmp(self, op, arglocs, result_loc):
             rl = result_loc.lowest8bits()
-            if isinstance(op.args[0], Const):
+            if isinstance(op.getarg(0), Const):
                 self.mc.CMP(arglocs[1], arglocs[0])
                 self.mc.SET_ir(rx86.Conditions[rev_cond], rl.value)
             else:
@@ -756,7 +756,7 @@ class Assembler386(object):
     def _cmpop_guard(cond, rev_cond, false_cond, false_rev_cond):
         def genop_cmp_guard(self, op, guard_op, guard_token, arglocs, result_loc):
             guard_opnum = guard_op.opnum
-            if isinstance(op.args[0], Const):
+            if isinstance(op.getarg(0), Const):
                 self.mc.CMP(arglocs[1], arglocs[0])
                 if guard_opnum == rop.GUARD_FALSE:
                     return self.implement_guard(guard_token, rev_cond)
@@ -1120,7 +1120,7 @@ class Assembler386(object):
         assert isinstance(baseofs, ImmedLoc)
         assert isinstance(scale_loc, ImmedLoc)
         dest_addr = AddressLoc(base_loc, ofs_loc, scale_loc.value, baseofs.value)
-        if op.args[2].type == FLOAT:
+        if op.getarg(2).type == FLOAT:
             self.mc.MOVSD(dest_addr, value_loc)
         else:
             if IS_X86_64 and scale_loc.value == 3:
@@ -1244,8 +1244,8 @@ class Assembler386(object):
     genop_guard_guard_isnull = genop_guard_guard_false
 
     def genop_guard_guard_value(self, ign_1, guard_op, guard_token, locs, ign_2):
-        if guard_op.args[0].type == FLOAT:
-            assert guard_op.args[1].type == FLOAT
+        if guard_op.getarg(0).type == FLOAT:
+            assert guard_op.getarg(1).type == FLOAT
             self.mc.UCOMISD(locs[0], locs[1])
         else:
             self.mc.CMP(locs[0], locs[1])
@@ -1636,8 +1636,8 @@ class Assembler386(object):
         assert isinstance(sizeloc, ImmedLoc)
         size = sizeloc.value
 
-        if isinstance(op.args[0], Const):
-            x = imm(op.args[0].getint())
+        if isinstance(op.getarg(0), Const):
+            x = imm(op.getarg(0).getint())
         else:
             x = arglocs[1]
         if x is eax:
