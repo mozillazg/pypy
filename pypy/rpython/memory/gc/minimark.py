@@ -345,6 +345,7 @@ class MiniMarkGC(MovingGCBase):
         if rawtotalsize <= self.small_request_threshold:
             #
             # Ask the ArenaCollection to do the malloc.
+            totalsize = llarena.round_up_for_allocation(totalsize)
             result = self.ac.malloc(totalsize)
             #
         else:
@@ -373,7 +374,7 @@ class MiniMarkGC(MovingGCBase):
         XXX
 
     def can_malloc_nonmovable(self):
-        XXX
+        return True
 
     def can_move(self, obj):
         """Overrides the parent can_move()."""
@@ -400,12 +401,36 @@ class MiniMarkGC(MovingGCBase):
         return True
 
 
+    def malloc_fixedsize_nonmovable(self, typeid):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + self.fixed_size(typeid)
+        #
+        result = self._malloc_nonmovable(typeid, totalsize)
+        return result + size_gc_header
+
     def malloc_varsize_nonmovable(self, typeid, length):
-        XXX
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        nonvarsize = size_gc_header + self.fixed_size(typeid)
+        itemsize = self.varsize_item_sizes(typeid)
+        offset_to_length = self.varsize_offset_to_length(typeid)
+        try:
+            varsize = ovfcheck(itemsize * length)
+            totalsize = ovfcheck(nonvarsize + varsize)
+        except OverflowError:
+            raise MemoryError
+        #
+        result = self._malloc_nonmovable(typeid, totalsize)
+        obj = result + size_gc_header
+        (obj + offset_to_length).signed[0] = length
+        return obj
 
     def malloc_nonmovable(self, typeid, length, zero):
         # helper for testing, same as GCBase.malloc
-        XXX
+        if self.is_varsize(typeid):
+            obj = self.malloc_varsize_nonmovable(typeid, length)
+        else:
+            obj = self.malloc_fixedsize_nonmovable(typeid)
+        return obj
 
 
     # ----------
