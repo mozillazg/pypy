@@ -358,8 +358,9 @@ def test_setdict():
 
 
 def test_specialized_class():
+    from pypy.objspace.std.objectobject import W_ObjectObject
     from pypy.rlib import rerased
-    class Object(BaseMapdictObject):
+    class Object(BaseMapdictObject, W_ObjectObject): # slightly evil
         class typedef:
             hasdict = False
     classes = memo_get_subclass_of_correct_size(space, Object)

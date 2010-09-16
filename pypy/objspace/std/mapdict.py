@@ -4,6 +4,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.dictmultiobject import IteratorImplementation
 from pypy.objspace.std.dictmultiobject import _is_sane_hash
+from pypy.objspace.std.objectobject import W_ObjectObject
 
 # ____________________________________________________________
 # attribute shapes
@@ -376,6 +377,8 @@ class Object(ObjectMixin, BaseMapdictObject):
     pass # mainly for tests
 
 def get_subclass_of_correct_size(space, cls, supercls, w_type):
+    if not hasattr(supercls, "_init_empty"):
+        return supercls # not a mapdict class
     assert space.config.objspace.std.withmapdict
     map = w_type.terminator
     classes = memo_get_subclass_of_correct_size(space, supercls)
@@ -388,23 +391,29 @@ def get_subclass_of_correct_size(space, cls, supercls, w_type):
         return classes[-1]
 get_subclass_of_correct_size._annspecialcase_ = "specialize:arg(1)"
 
+NUM_SUBCLASSES = 10 # XXX tweak this number
 
 def memo_get_subclass_of_correct_size(space, supercls):
     key = space, supercls
     try:
         return _subclass_cache[key]
     except KeyError:
-        result = []
-        for i in range(1, 11): # XXX tweak this number
-            result.append(_make_subclass_size_n(supercls, i))
+        if (not issubclass(supercls, W_ObjectObject) or
+                hasattr(supercls, '__del__')):
+            class subcls(ObjectMixin, supercls):
+                pass
+            subcls.__name__ = supercls.__name__ + "Concrete"
+            result = [subcls] * NUM_SUBCLASSES
+        else:
+            result = []
+            for i in range(1, NUM_SUBCLASSES+1):
+                result.append(_make_subclass_size_n(supercls, i))
         _subclass_cache[key] = result
         return result
 memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
 _subclass_cache = {}
 
 def _make_subclass_size_n(supercls, n):
-    if not hasattr(supercls, "_init_empty"):
-        return supercls
     from pypy.rlib import unroll, rerased
     rangen = unroll.unrolling_iterable(range(n))
     nmin1 = n - 1
