@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
-from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.rlib.rarithmetic import LONG_BIT, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import ll_assert
 
@@ -74,11 +74,7 @@ class ArenaCollection(object):
         self.uninitialized_pages = PAGE_NULL
         self.num_uninitialized_pages = 0
         self.free_pages = NULL
-        self.used_pages = 0     # number of pages at least partially filled
-
-
-    def pages_in_use(self):
-        return self.used_pages
+        self.total_memory_used = r_uint(0)
 
 
     def malloc(self, size):
@@ -87,6 +83,7 @@ class ArenaCollection(object):
         ll_assert(nsize > 0, "malloc: size is null or negative")
         ll_assert(nsize <= self.small_request_threshold,"malloc: size too big")
         ll_assert((nsize & (WORD-1)) == 0, "malloc: size is not aligned")
+        self.total_memory_used += nsize
         #
         # Get the page to use from the size
         size_class = nsize / WORD
@@ -123,7 +120,7 @@ class ArenaCollection(object):
             page.nextpage = self.full_page_for_size[size_class]
             self.full_page_for_size[size_class] = page
         #
-        reserve_with_hash(result, _dummy_size(size))
+        llarena.arena_reserve(result, _dummy_size(size))
         return result
 
 
@@ -155,7 +152,6 @@ class ArenaCollection(object):
         ll_assert(self.page_for_size[size_class] == PAGE_NULL,
                   "allocate_new_page() called but a page is already waiting")
         self.page_for_size[size_class] = result
-        self.used_pages += 1
         return result
 
 
@@ -190,6 +186,7 @@ class ArenaCollection(object):
         """For each object, if ok_to_free_func(obj) returns True, then free
         the object.
         """
+        self.total_memory_used = r_uint(0)
         #
         # For each size class:
         size_class = self.small_request_threshold / WORD
@@ -264,7 +261,6 @@ class ArenaCollection(object):
         llarena.arena_reserve(pageaddr, llmemory.sizeof(llmemory.Address))
         pageaddr.address[0] = self.free_pages
         self.free_pages = pageaddr
-        self.used_pages -= 1
 
 
     def walk_page(self, page, block_size, nblocks, ok_to_free_func):
@@ -316,8 +312,11 @@ class ArenaCollection(object):
             obj += block_size
             index -= 1
         #
-        # Update the number of free objects.
+        # Update the number of free objects in the page.
         page.nfree = nblocks - surviving
+        #
+        # Update the global total size of objects.
+        self.total_memory_used += surviving * block_size
         #
         # Return the number of surviving objects.
         return surviving
@@ -346,16 +345,3 @@ def _dummy_size(size):
     if isinstance(size, int):
         size = llmemory.sizeof(lltype.Char) * size
     return size
-
-def reserve_with_hash(result, size):
-    # XXX translation
-    #
-    # Custom hack for the hash
-    if (isinstance(size, llmemory.CompositeOffset) and
-            isinstance(size.offsets[-1], llmemory.ItemOffset) and
-            size.offsets[-1].TYPE == lltype.Signed):
-        size_of_int = llmemory.sizeof(lltype.Signed)
-        size = sum(size.offsets[1:-1], size.offsets[0])
-        llarena.arena_reserve(result + size, size_of_int)
-    #
-    llarena.arena_reserve(result, size)

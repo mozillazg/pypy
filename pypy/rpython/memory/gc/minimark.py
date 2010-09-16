@@ -1,10 +1,12 @@
+import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rpython.memory.gc.base import MovingGCBase
+from pypy.rpython.memory.gc.base import GCBase, MovingGCBase
 from pypy.rpython.memory.gc import minimarkpage
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
-from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask, r_uint
 from pypy.rlib.debug import ll_assert, debug_print
+from pypy.rlib.objectmodel import we_are_translated
 
 WORD = LONG_BIT // 8
 
@@ -26,10 +28,16 @@ GCFLAG_NO_HEAP_PTRS = first_gcflag << 1
 # The following flag is set on surviving objects during a major collection.
 GCFLAG_VISITED      = first_gcflag << 2
 
-# The following flag is set on objects that have an extra hash field,
-# except on nursery objects, where it means that it *will* grow a hash
-# field when moving.
-GCFLAG_HASHFIELD    = first_gcflag << 3
+# The following flag is set on nursery objects of which we asked the id
+# or the identityhash.  It means that a space of the size of the object
+# has already been allocated in the nonmovable part.  The same flag is
+# abused to mark prebuilt objects whose hash has been taken during
+# translation and is statically recorded.
+GCFLAG_HAS_SHADOW   = first_gcflag << 3
+
+# The following flag is set temporarily on some objects during a major
+# collection.  See pypy/doc/discussion/finalizer-order.txt
+GCFLAG_FINALIZATION_ORDERING = first_gcflag << 4
 
 # Marker set to 'tid' during a minor collection when an object from
 # the nursery was forwarded.
@@ -43,7 +51,7 @@ class MiniMarkGC(MovingGCBase):
     inline_simple_malloc_varsize = True
     needs_write_barrier = True
     prebuilt_gc_objects_are_static_roots = False
-    malloc_zero_filled = True    # XXX experiment with False
+    malloc_zero_filled = True    # xxx experiment with False
 
     # All objects start with a HDR, i.e. with a field 'tid' which contains
     # a word.  This word is divided in two halves: the lower half contains
@@ -51,7 +59,10 @@ class MiniMarkGC(MovingGCBase):
     # by GCFLAG_xxx above.
     HDR = lltype.Struct('header', ('tid', lltype.Signed))
     typeid_is_in_field = 'tid'
-    #withhash_flag_is_in_field = 'tid', _GCFLAG_HASH_BASE * 0x2
+    #withhash_flag_is_in_field = 'tid', GCFLAG_HAS_SHADOW
+    # ^^^ prebuilt objects may have the flag GCFLAG_HAS_SHADOW;
+    #     then they are one word longer, the extra word storing the hash.
+
 
     # During a minor collection, the objects in the nursery that are
     # moved outside are changed in-place: their header is replaced with
@@ -59,7 +70,7 @@ class MiniMarkGC(MovingGCBase):
     # where the object was moved.  This means that all objects in the
     # nursery need to be at least 2 words long, but objects outside the
     # nursery don't need to.
-    minimal_size_in_nursery = llmemory.raw_malloc_usage(
+    minimal_size_in_nursery = (
         llmemory.sizeof(HDR) + llmemory.sizeof(llmemory.Address))
 
 
@@ -78,19 +89,28 @@ class MiniMarkGC(MovingGCBase):
         "arena_size": 65536*WORD,
 
         # The maximum size of an object allocated compactly.  All objects
-        # that are larger or equal are just allocated with raw_malloc().
+        # that are larger are just allocated with raw_malloc().
         "small_request_threshold": 32*WORD,
+
+        # Full collection threshold: after a major collection, we record
+        # the total size consumed; and after every minor collection, if the
+        # total size is now more than 'major_collection_threshold' times,
+        # we trigger the next major collection.
+        "major_collection_threshold": 1.75,
         }
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
                  nursery_size=32*WORD,
                  page_size=16*WORD,
                  arena_size=64*WORD,
-                 small_request_threshold=6*WORD,
+                 small_request_threshold=5*WORD,
+                 major_collection_threshold=2.5,
                  ArenaCollectionClass=None):
         MovingGCBase.__init__(self, config, chunk_size)
+        assert small_request_threshold % WORD == 0
         self.nursery_size = nursery_size
         self.small_request_threshold = small_request_threshold
+        self.major_collection_threshold = major_collection_threshold
         self.nursery_hash_base = -1
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
@@ -107,25 +127,34 @@ class MiniMarkGC(MovingGCBase):
         # A list of all prebuilt GC objects that contain pointers to the heap
         self.prebuilt_root_objects = self.AddressStack()
         #
+        # Support for id and identityhash: map nursery objects with
+        # GCFLAG_HAS_SHADOW to their future location at the next
+        # minor collection.
+        self.young_objects_shadows = self.AddressDict()
+        #
         self._init_writebarrier_logic()
 
 
     def setup(self):
         """Called at run-time to initialize the GC."""
-        MovingGCBase.setup(self)
+        #
+        # Hack: MovingGCBase.setup() sets up stuff related to id(), which
+        # we implement differently anyway.  So directly call GCBase.setup().
+        GCBase.setup(self)
         #
         assert self.nursery_size > 0, "XXX"
         #
         # A list of all raw_malloced objects (the objects too large)
         self.rawmalloced_objects = self.AddressStack()
+        self.rawmalloced_total_size = r_uint(0)
         #
-        # Support for id()
-        self.young_objects_with_id = self.AddressDict()
+        # A list of all objects with finalizers.
+        self.objects_with_finalizers = self.AddressDeque()
         #
         # the start of the nursery: we actually allocate a tiny bit more for
         # the nursery than really needed, to simplify pointer arithmetic
         # in malloc_fixedsize_clear().
-        extra = self.small_request_threshold - WORD
+        extra = self.small_request_threshold
         self.nursery = llarena.arena_malloc(self.nursery_size + extra, True)
         if not self.nursery:
             raise MemoryError("cannot allocate nursery")
@@ -133,27 +162,38 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_next = self.nursery
         # the end of the nursery:
         self.nursery_top = self.nursery + self.nursery_size
+        # initialize the threshold, a bit arbitrarily
+        self.next_major_collection_threshold = (
+            self.nursery_size * self.major_collection_threshold)
 
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect=True,
                                needs_finalizer=False, contains_weakptr=False):
         ll_assert(can_collect, "!can_collect")
-        assert not needs_finalizer   # XXX
         assert not contains_weakptr  # XXX
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
+        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
         #
-        # If totalsize is greater or equal than small_request_threshold,
-        # ask for a rawmalloc.  The following check should be constant-folded.
-        if llmemory.raw_malloc_usage(totalsize)>=self.small_request_threshold:
-            result = self.external_malloc(typeid, totalsize)
+        # If the object needs a finalizer, ask for a rawmalloc.
+        # The following check should be constant-folded.
+        if needs_finalizer:
+            ll_assert(not contains_weakptr,
+                      "needs_finalizer and contains_weakptr both specified")
+            result = self.malloc_with_finalizer(typeid, totalsize)
+        #
+        # If totalsize is greater than small_request_threshold, ask for
+        # a rawmalloc.  The following check should be constant-folded.
+        elif rawtotalsize > self.small_request_threshold:
+            result = self._external_malloc(typeid, totalsize)
             #
         else:
             # If totalsize is smaller than minimal_size_in_nursery, round it
             # up.  The following check should also be constant-folded.
-            if (llmemory.raw_malloc_usage(totalsize) <
-                llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
-                totalsize = self.minimal_size_in_nursery
+            if (rawtotalsize <
+                    llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
+                totalsize = llmemory.raw_malloc_usage(
+                    self.minimal_size_in_nursery)
             #
             # Get the memory from the nursery.  If there is not enough space
             # there, do a collect first.
@@ -182,15 +222,24 @@ class MiniMarkGC(MovingGCBase):
         #
         # If totalsize is greater than small_request_threshold, ask for
         # a rawmalloc.
-        if llmemory.raw_malloc_usage(totalsize)>=self.small_request_threshold:
-            result = self.external_malloc(typeid, totalsize)
+        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+            result = self._external_malloc(typeid, totalsize)
             #
         else:
+            # Round the size up to the next multiple of WORD.  Note that
+            # this is done only if totalsize <= self.small_request_threshold,
+            # i.e. it cannot overflow, and it keeps the property that
+            # totalsize <= self.small_request_threshold.
+            totalsize = llarena.round_up_for_allocation(totalsize)
+            ll_assert(llmemory.raw_malloc_usage(totalsize) <=
+                      self.small_request_threshold,
+                      "round_up_for_allocation() rounded up too much?")
+            #
             # 'totalsize' should contain at least the GC header and
             # the length word, so it should never be smaller than
-            # 'minimal_size_in_nursery' so far
+            # 'minimal_size_in_nursery'
             ll_assert(llmemory.raw_malloc_usage(totalsize) >=
-                      self.minimal_size_in_nursery,
+                      llmemory.raw_malloc_usage(self.minimal_size_in_nursery),
                       "malloc_varsize_clear(): totalsize < minimalsize")
             #
             # Get the memory from the nursery.  If there is not enough space
@@ -221,25 +270,88 @@ class MiniMarkGC(MovingGCBase):
         and finally reserve 'totalsize' bytes at the start of the
         now-empty nursery.
         """
-        self.collect(0)   # XXX
-        self.nursery_next = self.nursery + totalsize
-        return self.nursery
+        self.minor_collection()
+        #
+        if self.get_total_memory_used() > self.next_major_collection_threshold:
+            self.major_collection()
+            #
+            # The nursery might not be empty now, because of
+            # execute_finalizers().  If it is almost full again,
+            # we need to fix it with another call to minor_collection().
+            if self.nursery_next + totalsize > self.nursery_top:
+                self.minor_collection()
+            #
+        else:
+            debug_print('minor collection')
+        #
+        result = self.nursery_next
+        self.nursery_next = result + totalsize
+        ll_assert(self.nursery_next <= self.nursery_top, "nursery overflow")
+        return result
     collect_and_reserve._dont_inline_ = True
 
 
-    def external_malloc(self, typeid, totalsize):
-        """Allocate a large object using raw_malloc()."""
+    def _full_collect_if_needed(self):
+        if self.get_total_memory_used() > self.next_major_collection_threshold:
+            self.collect()
+
+    def _reserve_external_memory(self, totalsize):
+        """Do a raw_malloc() to get some external memory.
+        Note that the returned memory is not cleared."""
         #
         result = llmemory.raw_malloc(totalsize)
         if not result:
             raise MemoryError("cannot allocate large object")
-        llmemory.raw_memclear(result, totalsize)
-        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS)
         #
         size_gc_header = self.gcheaderbuilder.size_gc_header
+        self.rawmalloced_total_size += llmemory.raw_malloc_usage(totalsize)
         self.rawmalloced_objects.append(result + size_gc_header)
         return result
-    external_malloc._dont_inline_ = True
+
+    def _external_malloc(self, typeid, totalsize):
+        """Allocate a large object using raw_malloc()."""
+        #
+        # If somebody calls _external_malloc() a lot, we must eventually
+        # force a full collection.
+        self._full_collect_if_needed()
+        #
+        result = self._reserve_external_memory(totalsize)
+        llmemory.raw_memclear(result, totalsize)
+        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS)
+        return result
+    _external_malloc._dont_inline_ = True
+
+
+    def _malloc_nonmovable(self, typeid, totalsize):
+        """Allocate an object non-movable."""
+        #
+        # If somebody calls _malloc_nonmovable() a lot, we must eventually
+        # force a full collection.
+        self._full_collect_if_needed()
+        #
+        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        if rawtotalsize <= self.small_request_threshold:
+            #
+            # Ask the ArenaCollection to do the malloc.
+            result = self.ac.malloc(totalsize)
+            #
+        else:
+            # The size asked for is too large for the ArenaCollection.
+            result = self._reserve_external_memory(totalsize)
+        #
+        llmemory.raw_memclear(result, totalsize)
+        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS)
+        return result
+
+
+    def malloc_with_finalizer(self, typeid, totalsize):
+        """Allocate an object with a finalizer."""
+        #
+        result = self._malloc_nonmovable(typeid, totalsize)
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        self.objects_with_finalizers.append(result + size_gc_header)
+        return result
+    malloc_with_finalizer._dont_inline_ = True
 
 
     # ----------
@@ -266,9 +378,6 @@ class MiniMarkGC(MovingGCBase):
         flags |= GCFLAG_NO_HEAP_PTRS | GCFLAG_NO_YOUNG_PTRS
         self.init_gc_object(addr, typeid16, flags)
 
-    def _can_never_move(self, obj):
-        return False      # approximate good enough answer for id()
-
     def is_in_nursery(self, addr):
         ll_assert(llmemory.cast_adr_to_int(addr) & 1 == 0,
                   "odd-valued (i.e. tagged) pointer unexpected here")
@@ -281,6 +390,16 @@ class MiniMarkGC(MovingGCBase):
         obj = llarena.getfakearenaaddress(obj)
         return obj.address[0]
 
+    def can_move(self, addr):
+        """Overrides the parent can_move()."""
+        return self.is_in_nursery(addr)
+
+    def get_total_memory_used(self):
+        """Return the total memory used, not counting any object in the
+        nursery: only objects in the ArenaCollection or raw-malloced.
+        """
+        return self.ac.total_memory_used + self.rawmalloced_total_size
+
     def debug_check_object(self, obj):
         # after a minor or major collection, no object should be in the nursery
         ll_assert(not self.is_in_nursery(obj),
@@ -291,6 +410,9 @@ class MiniMarkGC(MovingGCBase):
         # the GCFLAG_VISITED should not be set between collections
         ll_assert(self.header(obj).tid & GCFLAG_VISITED == 0,
                   "unexpected GCFLAG_VISITED")
+        # the GCFLAG_FINALIZATION_ORDERING should not be set between coll.
+        ll_assert(self.header(obj).tid & GCFLAG_FINALIZATION_ORDERING == 0,
+                  "unexpected GCFLAG_FINALIZATION_ORDERING")
 
     # ----------
     # Write barrier
@@ -350,6 +472,43 @@ class MiniMarkGC(MovingGCBase):
         self.remember_young_pointer = remember_young_pointer
 
 
+    def assume_young_pointers(self, addr_struct):
+        """Called occasionally by the JIT to mean 'assume that 'addr_struct'
+        may now contain young pointers.
+        """
+        XXX
+        objhdr = self.header(addr_struct)
+        if objhdr.tid & GCFLAG_NO_YOUNG_PTRS:
+            self.old_objects_pointing_to_young.append(addr_struct)
+            objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
+            objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+            self.last_generation_root_objects.append(addr_struct)
+
+    def writebarrier_before_copy(self, source_addr, dest_addr):
+        """ This has the same effect as calling writebarrier over
+        each element in dest copied from source, except it might reset
+        one of the following flags a bit too eagerly, which means we'll have
+        a bit more objects to track, but being on the safe side.
+        """
+        source_hdr = self.header(source_addr)
+        dest_hdr = self.header(dest_addr)
+        if dest_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            return True
+        # ^^^ a fast path of write-barrier
+        #
+        if source_hdr.tid & GCFLAG_NO_YOUNG_PTRS == 0:
+            # there might be an object in source that is in nursery
+            self.old_objects_pointing_to_young.append(dest_addr)
+            dest_hdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+        #
+        if dest_hdr.tid & GCFLAG_NO_HEAP_PTRS:
+            if source_hdr.tid & GCFLAG_NO_HEAP_PTRS == 0:
+                dest_hdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.prebuilt_root_objects.append(dest_addr)
+        return True
+
+
     # ----------
     # Nursery collection
 
@@ -371,10 +530,9 @@ class MiniMarkGC(MovingGCBase):
         # We proceed until 'old_objects_pointing_to_young' is empty.
         self.collect_oldrefs_to_nursery()
         #
-        # Update the id tracking of any object that was moved out of
-        # the nursery.
-        if self.young_objects_with_id.length() > 0:
-            self.update_young_objects_with_id()
+        # Clear this mapping.
+        if self.young_objects_shadows.length() > 0:
+            self.young_objects_shadows.clear()
         #
         # Now all live nursery objects should be out, and the rest dies.
         # Fill the whole nursery with zero and reset the current nursery
@@ -382,8 +540,8 @@ class MiniMarkGC(MovingGCBase):
         llarena.arena_reset(self.nursery, self.nursery_size, 2)
         self.nursery_next = self.nursery
         #
-        self.change_nursery_hash_base()
-        self.debug_check_consistency()     # XXX expensive!
+        if not we_are_translated():
+            self.debug_check_consistency()     # xxx expensive!
 
 
     def collect_roots_in_nursery(self):
@@ -425,8 +583,6 @@ class MiniMarkGC(MovingGCBase):
         # If 'obj' is not in the nursery, nothing to change.
         if not self.is_in_nursery(obj):
             return
-        #size_gc_header = self.gcheaderbuilder.size_gc_header
-        #print '\ttrace_drag_out', llarena.getfakearenaaddress(obj - size_gc_header),
         #
         # If 'obj' was already forwarded, change it to its forwarding address.
         if self.is_forwarded_marker(self.header(obj).tid):
@@ -438,24 +594,28 @@ class MiniMarkGC(MovingGCBase):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         size = self.get_size(obj)
         totalsize = size_gc_header + size
-        totalsize_incl_hash = totalsize
-        if self.header(obj).tid & GCFLAG_HASHFIELD:
-            totalsize_incl_hash += llmemory.sizeof(lltype.Signed)
-        # 
-        # Allocate a new nonmovable location for it.
-        # Note that 'totalsize' must be < small_request_threshold, so
-        # 'totalsize_incl_hash <= small_request_threshold'.
-        newhdr = self.ac.malloc(totalsize_incl_hash)
-        newobj = newhdr + size_gc_header
+        #
+        if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+            #
+            # Common case: allocate a new nonmovable location for it.
+            newhdr = self.ac.malloc(totalsize)
+            #
+        else:
+            # The object has already a shadow.
+            newobj = self.young_objects_shadows.get(obj)
+            ll_assert(newobj, "GCFLAG_HAS_SHADOW but not shadow found")
+            #print 'moving object %r into shadow %r' % (
+            #    llarena.getfakearenaaddress(obj),
+            #    llarena.getfakearenaaddress(newobj),)
+            newhdr = newobj - size_gc_header
+            #
+            # Remove the flag GCFLAG_HAS_SHADOW, so that it doesn't get
+            # copied to the shadow itself.
+            self.header(obj).tid &= ~GCFLAG_HAS_SHADOW
         #
         # Copy it.  Note that references to other objects in the
         # nursery are kept unchanged in this step.
         llmemory.raw_memcopy(obj - size_gc_header, newhdr, totalsize)
-        #
-        # Write the hash field too, if necessary.
-        if self.header(obj).tid & GCFLAG_HASHFIELD:
-            hash = self._compute_current_nursery_hash(obj)
-            (newhdr + (size_gc_header + size)).signed[0] = hash
         #
         # Set the old object's tid to FORWARDED_MARKER and replace
         # the old object's content with the target address.
@@ -466,6 +626,7 @@ class MiniMarkGC(MovingGCBase):
         llarena.arena_reserve(obj, llmemory.sizeof(llmemory.Address))
         self.header(obj).tid = FORWARDED_MARKER
         obj = llarena.getfakearenaaddress(obj)
+        newobj = newhdr + size_gc_header
         obj.address[0] = newobj
         #
         # Change the original pointer to this object.
@@ -486,6 +647,8 @@ class MiniMarkGC(MovingGCBase):
     def major_collection(self):
         """Do a major collection.  Only for when the nursery is empty."""
         #
+        debug_print('major collection:', self.get_total_memory_used())
+        #
         # Debugging checks
         ll_assert(self.nursery_next == self.nursery,
                   "nursery not empty in major_collection()")
@@ -495,12 +658,18 @@ class MiniMarkGC(MovingGCBase):
         # find and free some of the objects allocated by the ArenaCollection.
         # We first visit all objects and toggle the flag GCFLAG_VISITED on
         # them, starting from the roots.
+        self.objects_to_trace = self.AddressStack()
         self.collect_roots()
         self.visit_all_objects()
         #
-        # Walk the 'objects_with_id' list and remove the ones that die,
-        # i.e. that don't have the GCFLAG_VISITED flag.
-        self.update_objects_with_id()
+        # Finalizer support: adds the flag GCFLAG_VISITED to all objects
+        # with a finalizer and all objects reachable from there (and also
+        # moves some objects from 'objects_with_finalizers' to
+        # 'run_finalizers').
+        if self.objects_with_finalizers.non_empty():
+            self.deal_with_objects_with_finalizers()
+        #
+        self.objects_to_trace.delete()
         #
         # Walk all rawmalloced objects and free the ones that don't
         # have the GCFLAG_VISITED flag.
@@ -515,6 +684,15 @@ class MiniMarkGC(MovingGCBase):
         self.prebuilt_root_objects.foreach(self._reset_gcflag_visited, None)
         #
         self.debug_check_consistency()
+        #
+        debug_print('               ->', self.get_total_memory_used())
+        self.next_major_collection_threshold = (
+            self.get_total_memory_used() * self.major_collection_threshold)
+        #
+        # At the end, we can execute the finalizers of the objects
+        # listed in 'run_finalizers'.  Note that this will typically do
+        # more allocations.
+        self.execute_finalizers()
 
 
     def _free_if_unvisited(self, hdr):
@@ -540,6 +718,9 @@ class MiniMarkGC(MovingGCBase):
                 self.header(obj).tid &= ~GCFLAG_VISITED   # survives
                 self.rawmalloced_objects.append(obj)
             else:
+                totalsize = size_gc_header + self.get_size(obj)
+                rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+                self.rawmalloced_total_size -= rawtotalsize
                 llmemory.raw_free(obj - size_gc_header)
         #
         list.delete()
@@ -548,17 +729,23 @@ class MiniMarkGC(MovingGCBase):
     def collect_roots(self):
         # Collect all roots.  Starts from all the objects
         # from 'prebuilt_root_objects'.
-        self.objects_to_trace = self.AddressStack()
-        self.prebuilt_root_objects.foreach(self._collect_obj, None)
+        self.prebuilt_root_objects.foreach(self._collect_obj,
+                                           self.objects_to_trace)
         #
         # Add the roots from the other sources.
         self.root_walker.walk_roots(
             MiniMarkGC._collect_ref,  # stack roots
             MiniMarkGC._collect_ref,  # static in prebuilt non-gc structures
             None)   # we don't need the static in all prebuilt gc objects
+        #
+        # If we are in an inner collection caused by a call to a finalizer,
+        # the 'run_finalizers' objects also need to kept alive.
+        self.run_finalizers.foreach(self._collect_obj,
+                                    self.objects_to_trace)
 
-    def _collect_obj(self, obj, ignored=None):
-        self.objects_to_trace.append(obj)
+    @staticmethod
+    def _collect_obj(obj, objects_to_trace):
+        objects_to_trace.append(obj)
 
     def _collect_ref(self, root, ignored=None):
         self.objects_to_trace.append(root.address[0])
@@ -568,7 +755,6 @@ class MiniMarkGC(MovingGCBase):
         while pending.non_empty():
             obj = pending.pop()
             self.visit(obj)
-        pending.delete()
 
     def visit(self, obj):
         #
@@ -594,98 +780,155 @@ class MiniMarkGC(MovingGCBase):
 
 
     # ----------
-    # id() support
+    # id() and identityhash() support
 
-    def id(self, gcobj):
-        """Implement id() of an object, given as a GCREF."""
+    def id_or_identityhash(self, gcobj, special_case_prebuilt):
+        """Implement the common logic of id() and identityhash()
+        of an object, given as a GCREF.
+        """
         obj = llmemory.cast_ptr_to_adr(gcobj)
         #
-        # Is it a tagged pointer?  For them, the result is odd-valued.
-        if not self.is_valid_gc_object(obj):
-            return llmemory.cast_adr_to_int(obj)
+        if self.is_valid_gc_object(obj):
+            if self.is_in_nursery(obj):
+                #
+                # The object not a tagged pointer, and is it still in the
+                # nursery.  Find or allocate a "shadow" object, which is
+                # where the object will be moved by the next minor
+                # collection
+                if self.header(obj).tid & GCFLAG_HAS_SHADOW:
+                    shadow = self.young_objects_shadows.get(obj)
+                    ll_assert(shadow, "GCFLAG_HAS_SHADOW but not shadow found")
+                else:
+                    size_gc_header = self.gcheaderbuilder.size_gc_header
+                    size = self.get_size(obj)
+                    shadowhdr = self.ac.malloc(size_gc_header + size)
+                    # initialize to an invalid tid *without* GCFLAG_VISITED,
+                    # so that if the object dies before the next minor
+                    # collection, the shadow will stay around but be collected
+                    # by the next major collection.
+                    shadow = shadowhdr + size_gc_header
+                    self.header(shadow).tid = 0
+                    self.header(obj).tid |= GCFLAG_HAS_SHADOW
+                    self.young_objects_shadows.setitem(obj, shadow)
+                #
+                # The answer is the address of the shadow.
+                obj = shadow
+                #
+            elif special_case_prebuilt:
+                if self.header(obj).tid & GCFLAG_HAS_SHADOW:
+                    #
+                    # For identityhash(), we need a special case for some
+                    # prebuilt objects: their hash must be the same before
+                    # and after translation.  It is stored as an extra word
+                    # after the object.  But we cannot use it for id()
+                    # because the stored value might clash with a real one.
+                    size = self.get_size(obj)
+                    return (obj + size).signed[0]
         #
-        # Is the object still in the nursery?
-        if self.is_in_nursery(obj):
-            result = self.young_objects_with_id.get(obj)
-            if not result:
-                result = self._next_id()
-                self.young_objects_with_id.setitem(obj, result)
-        else:
-            result = self.objects_with_id.get(obj)
-            if not result:
-                # An 'obj' not in the nursery and not in 'objects_with_id'
-                # did not have its id() asked for and will not move any more,
-                # so we can just return its address as the result.
-                return llmemory.cast_adr_to_int(obj)
-        #
-        # If we reach here, 'result' is an odd number.  If we double it,
-        # we have a number of the form 4n+2, which cannot collide with
-        # tagged pointers nor with any real address.
-        return llmemory.cast_adr_to_int(result) * 2
-
-
-    def update_young_objects_with_id(self):
-        # Called during a minor collection.
-        self.young_objects_with_id.foreach(self._update_object_id,
-                                           self.objects_with_id)
-        self.young_objects_with_id.clear()
-        # NB. the clear() also makes the dictionary shrink back to its
-        # minimal size, which is actually a good idea: a large, mostly-empty
-        # table is bad for the next call to 'foreach'.
-
-    def _update_object_id(self, obj, id, new_objects_with_id):
-        if self.is_forwarded_marker(self.header(obj).tid):
-            newobj = self.get_forwarding_address(obj)
-            new_objects_with_id.setitem(newobj, id)
-        else:
-            self.id_free_list.append(id)
-
-    def _update_object_id_FAST(self, obj, id, new_objects_with_id):
-        # overrides the parent's version (a bit hackish)
-        if self.header(obj).tid & GCFLAG_VISITED:
-            new_objects_with_id.insertclean(obj, id)
-        else:
-            self.id_free_list.append(id)
-
-
-    # ----------
-    # identityhash() support
-
-    def identityhash(self, gcobj):
-        obj = llmemory.cast_ptr_to_adr(gcobj)
-        if self.is_in_nursery(obj):
-            #
-            # A nursery object's identityhash is never stored with the
-            # object, but returned by _compute_current_nursery_hash().
-            # But we must set the GCFLAG_HASHFIELD to remember that
-            # we will have to store it into the object when it moves.
-            self.header(obj).tid |= GCFLAG_HASHFIELD
-            return self._compute_current_nursery_hash(obj)
-        #
-        if self.header(obj).tid & GCFLAG_HASHFIELD:
-            #
-            # An non-moving object with a hash field.
-            objsize = self.get_size(obj)
-            obj = llarena.getfakearenaaddress(obj)
-            return (obj + objsize).signed[0]
-        #
-        # No hash field needed.
         return llmemory.cast_adr_to_int(obj)
 
 
-    def change_nursery_hash_base(self):
-        # The following should be enough to ensure that young objects
-        # tend to always get a different hash.  It also makes sure that
-        # nursery_hash_base is not a multiple of WORD, to avoid collisions
-        # with the hash of non-young objects.
-        hash_base = self.nursery_hash_base
-        hash_base += self.nursery_size - 1
-        if (hash_base & (WORD-1)) == 0:
-            hash_base -= 1
-        self.nursery_hash_base = intmask(hash_base)
+    def id(self, gcobj):
+        return self.id_or_identityhash(gcobj, False)
 
-    def _compute_current_nursery_hash(self, obj):
-        return intmask(llmemory.cast_adr_to_int(obj) + self.nursery_hash_base)
+    def identityhash(self, gcobj):
+        return self.id_or_identityhash(gcobj, True)
+
+
+    # ----------
+    # Finalizers
+
+    def deal_with_objects_with_finalizers(self):
+        # Walk over list of objects with finalizers.
+        # If it is not surviving, add it to the list of to-be-called
+        # finalizers and make it survive, to make the finalizer runnable.
+        # We try to run the finalizers in a "reasonable" order, like
+        # CPython does.  The details of this algorithm are in
+        # pypy/doc/discussion/finalizer-order.txt.
+        new_with_finalizer = self.AddressDeque()
+        marked = self.AddressDeque()
+        pending = self.AddressStack()
+        self.tmpstack = self.AddressStack()
+        while self.objects_with_finalizers.non_empty():
+            x = self.objects_with_finalizers.popleft()
+            ll_assert(self._finalization_state(x) != 1,
+                      "bad finalization state 1")
+            if self.header(x).tid & GCFLAG_VISITED:
+                new_with_finalizer.append(x)
+                continue
+            marked.append(x)
+            pending.append(x)
+            while pending.non_empty():
+                y = pending.pop()
+                state = self._finalization_state(y)
+                if state == 0:
+                    self._bump_finalization_state_from_0_to_1(y)
+                    self.trace(y, self._append_if_nonnull, pending)
+                elif state == 2:
+                    self._recursively_bump_finalization_state_from_2_to_3(y)
+            self._recursively_bump_finalization_state_from_1_to_2(x)
+
+        while marked.non_empty():
+            x = marked.popleft()
+            state = self._finalization_state(x)
+            ll_assert(state >= 2, "unexpected finalization state < 2")
+            if state == 2:
+                self.run_finalizers.append(x)
+                # we must also fix the state from 2 to 3 here, otherwise
+                # we leave the GCFLAG_FINALIZATION_ORDERING bit behind
+                # which will confuse the next collection
+                self._recursively_bump_finalization_state_from_2_to_3(x)
+            else:
+                new_with_finalizer.append(x)
+
+        self.tmpstack.delete()
+        pending.delete()
+        marked.delete()
+        self.objects_with_finalizers.delete()
+        self.objects_with_finalizers = new_with_finalizer
+
+    def _append_if_nonnull(pointer, stack):
+        stack.append(pointer.address[0])
+    _append_if_nonnull = staticmethod(_append_if_nonnull)
+
+    def _finalization_state(self, obj):
+        tid = self.header(obj).tid
+        if tid & GCFLAG_VISITED:
+            if tid & GCFLAG_FINALIZATION_ORDERING:
+                return 2
+            else:
+                return 3
+        else:
+            if tid & GCFLAG_FINALIZATION_ORDERING:
+                return 1
+            else:
+                return 0
+
+    def _bump_finalization_state_from_0_to_1(self, obj):
+        ll_assert(self._finalization_state(obj) == 0,
+                  "unexpected finalization state != 0")
+        hdr = self.header(obj)
+        hdr.tid |= GCFLAG_FINALIZATION_ORDERING
+
+    def _recursively_bump_finalization_state_from_2_to_3(self, obj):
+        ll_assert(self._finalization_state(obj) == 2,
+                  "unexpected finalization state != 2")
+        pending = self.tmpstack
+        ll_assert(not pending.non_empty(), "tmpstack not empty")
+        pending.append(obj)
+        while pending.non_empty():
+            y = pending.pop()
+            hdr = self.header(y)
+            if hdr.tid & GCFLAG_FINALIZATION_ORDERING:     # state 2 ?
+                hdr.tid &= ~GCFLAG_FINALIZATION_ORDERING   # change to state 3
+                self.trace(y, self._append_if_nonnull, pending)
+
+    def _recursively_bump_finalization_state_from_1_to_2(self, obj):
+        # recursively convert objects from state 1 to state 2.
+        # The call to visit_all_objects() will add the GCFLAG_VISITED
+        # recursively.
+        self.objects_to_trace.append(obj)
+        self.visit_all_objects()
 
 
 # ____________________________________________________________
@@ -702,6 +945,7 @@ class SimpleArenaCollection(object):
         self.page_size = page_size
         self.small_request_threshold = small_request_threshold
         self.all_objects = []
+        self.total_memory_used = 0
 
     def malloc(self, size):
         nsize = llmemory.raw_malloc_usage(size)
@@ -710,16 +954,18 @@ class SimpleArenaCollection(object):
         ll_assert((nsize & (WORD-1)) == 0, "malloc: size is not aligned")
         #
         result = llarena.arena_malloc(nsize, False)
-        #
-        minimarkpage.reserve_with_hash(result, size)
-        self.all_objects.append(result)
+        llarena.arena_reserve(result, size)
+        self.all_objects.append((result, nsize))
+        self.total_memory_used += nsize
         return result
 
     def mass_free(self, ok_to_free_func):
         objs = self.all_objects
         self.all_objects = []
-        for rawobj in objs:
+        self.total_memory_used = 0
+        for rawobj, nsize in objs:
             if ok_to_free_func(rawobj):
                 llarena.arena_free(rawobj)
             else:
-                self.all_objects.append(rawobj)
+                self.all_objects.append((rawobj, nsize))
+                self.total_memory_used += nsize

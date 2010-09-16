@@ -336,6 +336,18 @@ class DirectGCTest(object):
             assert hash == self.gc.identityhash(self.stackroots[-1])
             self.stackroots.pop()
 
+    def test_memory_alignment(self):
+        A1 = lltype.GcArray(lltype.Char)
+        for i in range(50):
+            p1 = self.malloc(A1, i)
+            if i:
+                p1[i-1] = chr(i)
+            self.stackroots.append(p1)
+        self.gc.collect()
+        for i in range(1, 50):
+            p = self.stackroots[-50+i]
+            assert p[i-1] == chr(i)
+
 class TestSemiSpaceGC(DirectGCTest):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
 
