@@ -39,27 +39,24 @@ def test_allocate_new_page():
     #
     ac = ArenaCollection(arenasize, pagesize, 99)
     assert ac.num_uninitialized_pages == 0
-    assert ac.used_pages == 0
+    assert ac.total_memory_used == 0
     #
     page = ac.allocate_new_page(5)
     checknewpage(page, 5)
     assert ac.num_uninitialized_pages == 2
     assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[5] == page
-    assert ac.used_pages == 1
     #
     page = ac.allocate_new_page(3)
     checknewpage(page, 3)
     assert ac.num_uninitialized_pages == 1
     assert ac.uninitialized_pages - pagesize == cast_ptr_to_adr(page)
     assert ac.page_for_size[3] == page
-    assert ac.used_pages == 2
     #
     page = ac.allocate_new_page(4)
     checknewpage(page, 4)
     assert ac.num_uninitialized_pages == 0
     assert ac.page_for_size[4] == page
-    assert ac.used_pages == 3
 
 
 def arena_collection_for_test(pagesize, pagelayout, fill_with_objects=False):
@@ -175,6 +172,7 @@ def chkob(ac, num_page, pos_obj, obj):
 def test_malloc_common_case():
     pagesize = hdrsize + 7*WORD
     ac = arena_collection_for_test(pagesize, "#23..2 ")
+    assert ac.total_memory_used == 0   # so far
     obj = ac.malloc(2*WORD); chkob(ac, 1, 4*WORD, obj)
     obj = ac.malloc(2*WORD); chkob(ac, 5, 4*WORD, obj)
     obj = ac.malloc(2*WORD); chkob(ac, 3, 0*WORD, obj)
@@ -186,6 +184,7 @@ def test_malloc_common_case():
     obj = ac.malloc(2*WORD); chkob(ac, 6, 0*WORD, obj)
     obj = ac.malloc(2*WORD); chkob(ac, 6, 2*WORD, obj)
     obj = ac.malloc(2*WORD); chkob(ac, 6, 4*WORD, obj)
+    assert ac.total_memory_used == 11*2*WORD
 
 def test_malloc_mixed_sizes():
     pagesize = hdrsize + 7*WORD
@@ -413,18 +412,21 @@ def test_random():
                 obj = ac.malloc(size_class * WORD)
                 at = obj - ac._startpageaddr
                 assert at not in live_objects
-                live_objects[at] = None
+                live_objects[at] = size_class * WORD
             #
             # Free half the objects, randomly
             ok_to_free = OkToFree(ac, lambda obj: random.random() < 0.5)
             ac.mass_free(ok_to_free)
             #
             # Check that we have seen all objects
-            assert dict.fromkeys(ok_to_free.seen) == live_objects
+            assert sorted(ok_to_free.seen) == sorted(live_objects)
+            surviving_total_size = 0
             for at, freed in ok_to_free.seen.items():
                 if freed:
                     del live_objects[at]
+                else:
+                    surviving_total_size += live_objects[at]
+            assert ac.total_memory_used == surviving_total_size
     except DoneTesting:
         # the following output looks cool on a 112-character-wide terminal.
         print ac._startpageaddr.arena.usagemap
-    assert ac.used_pages == num_pages

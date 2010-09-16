@@ -764,3 +764,7 @@ class TestHybridGCSmallHeap(GCTest):
 
     def test_malloc_nonmovable_fixsize(self):
         py.test.skip("Not supported")
+
+
+class TestMiniMarkGC(TestSemiSpaceGC):
+    from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
