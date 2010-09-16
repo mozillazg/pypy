@@ -362,7 +362,8 @@ class Optimizer(Optimization):
                 else:
                     raise AssertionError("uh?")
                 op.opnum = opnum
-                op.args = [op.getarg(0)]
+                # XXX XXX: fix me when the refactoring is complete
+                op._args = [op.getarg(0)]
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.
                 descr.make_a_counter_per_value(op)
