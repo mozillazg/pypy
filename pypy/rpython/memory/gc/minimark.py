@@ -149,8 +149,15 @@ class MiniMarkGC(MovingGCBase):
         self.rawmalloced_objects = self.AddressStack()
         self.rawmalloced_total_size = r_uint(0)
         #
-        # A list of all objects with finalizers.
+        # A list of all objects with finalizers (never in the nursery).
         self.objects_with_finalizers = self.AddressDeque()
+        #
+        # Two lists of the objects with weakrefs.  No weakref can be an
+        # old object weakly pointing to a young object: indeed, weakrefs
+        # are immutable so they cannot point to an object that was
+        # created after it.
+        self.young_objects_with_weakrefs = self.AddressStack()
+        self.old_objects_with_weakrefs = self.AddressStack()
         #
         # the start of the nursery: we actually allocate a tiny bit more for
         # the nursery than really needed, to simplify pointer arithmetic
@@ -171,7 +178,6 @@ class MiniMarkGC(MovingGCBase):
     def malloc_fixedsize_clear(self, typeid, size, can_collect=True,
                                needs_finalizer=False, contains_weakptr=False):
         ll_assert(can_collect, "!can_collect")
-        assert not contains_weakptr  # XXX
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = llmemory.raw_malloc_usage(totalsize)
@@ -180,21 +186,22 @@ class MiniMarkGC(MovingGCBase):
         # The following check should be constant-folded.
         if needs_finalizer:
             ll_assert(not contains_weakptr,
-                      "needs_finalizer and contains_weakptr both specified")
+                     "'needs_finalizer' and 'contains_weakptr' both specified")
             result = self.malloc_with_finalizer(typeid, totalsize)
         #
         # If totalsize is greater than small_request_threshold, ask for
         # a rawmalloc.  The following check should be constant-folded.
         elif rawtotalsize > self.small_request_threshold:
+            ll_assert(not contains_weakptr,
+                      "'contains_weakptr' specified for a large object")
             result = self._external_malloc(typeid, totalsize)
             #
         else:
             # If totalsize is smaller than minimal_size_in_nursery, round it
             # up.  The following check should also be constant-folded.
-            if (rawtotalsize <
-                    llmemory.raw_malloc_usage(self.minimal_size_in_nursery)):
-                totalsize = llmemory.raw_malloc_usage(
-                    self.minimal_size_in_nursery)
+            min_size = llmemory.raw_malloc_usage(self.minimal_size_in_nursery)
+            if rawtotalsize < min_size:
+                totalsize = rawtotalsize = min_size
             #
             # Get the memory from the nursery.  If there is not enough space
             # there, do a collect first.
@@ -206,6 +213,10 @@ class MiniMarkGC(MovingGCBase):
             # Build the object.
             llarena.arena_reserve(result, totalsize)
             self.init_gc_object(result, typeid, flags=0)
+            #
+            # If it is a weakref, record it (check constant-folded).
+            if contains_weakptr:
+                self.young_objects_with_weakrefs.append(result+size_gc_header)
         #
         return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
 
@@ -408,7 +419,9 @@ class MiniMarkGC(MovingGCBase):
                   "odd-valued (i.e. tagged) pointer unexpected here")
         return self.nursery <= addr < self.nursery_top
 
-    def is_forwarded_marker(self, tid):
+    def is_forwarded(self, obj):
+        assert self.is_in_nursery(obj)
+        tid = self.header(obj).tid
         return isinstance(tid, int) and tid == FORWARDED_MARKER
 
     def get_forwarding_address(self, obj):
@@ -551,13 +564,17 @@ class MiniMarkGC(MovingGCBase):
         # We proceed until 'old_objects_pointing_to_young' is empty.
         self.collect_oldrefs_to_nursery()
         #
+        # Now all live nursery objects should be out.  Update the
+        # young weakrefs' targets.
+        if self.young_objects_with_weakrefs.length() > 0:
+            self.invalidate_young_weakrefs()
+        #
         # Clear this mapping.
         if self.young_objects_shadows.length() > 0:
             self.young_objects_shadows.clear()
         #
-        # Now all live nursery objects should be out, and the rest dies.
-        # Fill the whole nursery with zero and reset the current nursery
-        # pointer.
+        # All live nursery objects are out, and the rest dies.  Fill
+        # the whole nursery with zero and reset the current nursery pointer.
         llarena.arena_reset(self.nursery, self.nursery_size, 2)
         self.nursery_next = self.nursery
         #
@@ -606,7 +623,7 @@ class MiniMarkGC(MovingGCBase):
             return
         #
         # If 'obj' was already forwarded, change it to its forwarding address.
-        if self.is_forwarded_marker(self.header(obj).tid):
+        if self.is_forwarded(obj):
             root.address[0] = self.get_forwarding_address(obj)
             #print '(already forwarded)'
             return
@@ -691,6 +708,10 @@ class MiniMarkGC(MovingGCBase):
             self.deal_with_objects_with_finalizers()
         #
         self.objects_to_trace.delete()
+        #
+        # Weakref support: clear the weak pointers to dying objects
+        if self.old_objects_with_weakrefs.non_empty():
+            self.invalidate_old_weakrefs()
         #
         # Walk all rawmalloced objects and free the ones that don't
         # have the GCFLAG_VISITED flag.
@@ -950,6 +971,53 @@ class MiniMarkGC(MovingGCBase):
         # recursively.
         self.objects_to_trace.append(obj)
         self.visit_all_objects()
+
+
+    # ----------
+    # Weakrefs
+
+    # The code relies on the fact that no weakref can be an old object
+    # weakly pointing to a young object.  Indeed, weakrefs are immutable
+    # so they cannot point to an object that was created after it.
+    def invalidate_young_weakrefs(self):
+        """Called during a nursery collection."""
+        # walk over the list of objects that contain weakrefs and are in the
+        # nursery.  if the object it references survives then update the
+        # weakref; otherwise invalidate the weakref
+        while self.young_objects_with_weakrefs.non_empty():
+            obj = self.young_objects_with_weakrefs.pop()
+            if not self.is_forwarded(obj):
+                continue # weakref itself dies
+            obj = self.get_forwarding_address(obj)
+            offset = self.weakpointer_offset(self.get_type_id(obj))
+            pointing_to = (obj + offset).address[0]
+            if self.is_in_nursery(pointing_to):
+                if self.is_forwarded(pointing_to):
+                    (obj + offset).address[0] = self.get_forwarding_address(
+                        pointing_to)
+                else:
+                    (obj + offset).address[0] = llmemory.NULL
+                    continue    # no need to remember this weakref any longer
+            self.old_objects_with_weakrefs.append(obj)
+
+
+    def invalidate_old_weakrefs(self):
+        """Called during a major collection."""
+        # walk over list of objects that contain weakrefs
+        # if the object it references does not survive, invalidate the weakref
+        new_with_weakref = self.AddressStack()
+        while self.old_objects_with_weakrefs.non_empty():
+            obj = self.old_objects_with_weakrefs.pop()
+            if self.header(obj).tid & GCFLAG_VISITED == 0:
+                continue # weakref itself dies
+            offset = self.weakpointer_offset(self.get_type_id(obj))
+            pointing_to = (obj + offset).address[0]
+            if self.header(pointing_to).tid & GCFLAG_VISITED:
+                new_with_weakref.append(obj)
+            else:
+                (obj + offset).address[0] = llmemory.NULL
+        self.old_objects_with_weakrefs.delete()
+        self.old_objects_with_weakrefs = new_with_weakref
 
 
 # ____________________________________________________________
