@@ -80,10 +80,10 @@ class Logger(object):
         for i in range(len(operations)):
             op = operations[i]
             if op.opnum == rop.DEBUG_MERGE_POINT:
-                loc = op.args[0]._get_str()
+                loc = op.getarg(0)._get_str()
                 debug_print("debug_merge_point('%s')" % (loc,))
                 continue
-            args = ", ".join([self.repr_of_arg(memo, arg) for arg in op.args])
+            args = ", ".join([self.repr_of_arg(memo, op.getarg(i)) for i in range(op.numargs())])
             if op.result is not None:
                 res = self.repr_of_arg(memo, op.result) + " = "
             else:

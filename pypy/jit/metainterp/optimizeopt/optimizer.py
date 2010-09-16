@@ -16,12 +16,12 @@ from intutils import IntBound, IntUnbounded
 LEVEL_UNKNOWN    = '\x00'
 LEVEL_NONNULL    = '\x01'
 LEVEL_KNOWNCLASS = '\x02'     # might also mean KNOWNARRAYDESCR, for arrays
-LEVEL_CONSTANT   = '\x03'        
+LEVEL_CONSTANT   = '\x03'
 
 import sys
 MAXINT = sys.maxint
 MININT = -sys.maxint - 1
-        
+
 class OptValue(object):
     _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound')
     last_guard_index = -1
@@ -36,7 +36,7 @@ class OptValue(object):
         if isinstance(box, Const):
             self.make_constant(box)
         # invariant: box is a Const if and only if level == LEVEL_CONSTANT
-        
+
     def force_box(self):
         return self.box
 
@@ -171,7 +171,7 @@ class Optimization(object):
 
     def new_const_item(self, arraydescr):
         return self.optimizer.new_const_item(arraydescr)
-    
+
     def pure(self, opnum, args, result):
         op = ResOperation(opnum, args, result)
         self.optimizer.pure_operations[self.optimizer.make_args_key(op)] = op
@@ -184,7 +184,7 @@ class Optimization(object):
 
     def setup(self, virtuals):
         pass
-    
+
 class Optimizer(Optimization):
 
     def __init__(self, metainterp_sd, loop, optimizations=[], virtuals=True):
@@ -199,7 +199,7 @@ class Optimizer(Optimization):
         self.pure_operations = args_dict()
         self.producer = {}
         self.pendingfields = []
-        
+
         if len(optimizations) == 0:
             self.first_optimization = self
         else:
@@ -323,11 +323,11 @@ class Optimizer(Optimization):
         self._emit_operation(op)
 
     def _emit_operation(self, op):
-        for i in range(len(op.args)):
-            arg = op.args[i]
+        for i in range(op.numargs()):
+            arg = op.getarg(i)
             if arg in self.values:
                 box = self.values[arg].force_box()
-                op.args[i] = box
+                op.setarg(i, box)
         self.metainterp_sd.profiler.count(jitprof.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.OPT_GUARDS)
@@ -368,14 +368,16 @@ class Optimizer(Optimization):
                 descr.make_a_counter_per_value(op)
 
     def make_args_key(self, op):
-        args = op.args[:]
-        for i in range(len(args)):
-            arg = args[i]
+        args = []
+        for i in range(op.numargs()):
+            arg = op.getarg(i)
             if arg in self.values:
-                args[i] = self.values[arg].get_key_box()
+                args.append(self.values[arg].get_key_box())
+            else:
+                args.append(arg)
         args.append(ConstInt(op.opnum))
         return args
-            
+
     def optimize_default(self, op):
         canfold = op.is_always_pure()
         is_ovf = op.is_ovf()
@@ -383,8 +385,8 @@ class Optimizer(Optimization):
             nextop = self.loop.operations[self.i + 1]
             canfold = nextop.opnum == rop.GUARD_NO_OVERFLOW
         if canfold:
-            for arg in op.args:
-                if self.get_constant_box(arg) is None:
+            for i in range(op.numargs()):
+                if self.get_constant_box(op.getarg(i)) is None:
                     break
             else:
                 # all constant arguments: constant-fold away

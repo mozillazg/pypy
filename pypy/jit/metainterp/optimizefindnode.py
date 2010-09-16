@@ -154,7 +154,8 @@ class NodeFinder(object):
 
     def find_nodes_default(self, op):
         if op.is_always_pure():
-            for arg in op.args:
+            for i in range(op.numargs()):
+                arg = op.getarg(i)
                 if self.get_constant_box(arg) is None:
                     break
             else:
@@ -164,8 +165,8 @@ class NodeFinder(object):
                                          op.opnum, argboxes, op.descr)
                 self.set_constant_node(op.result, resbox.constbox())
         # default case: mark the arguments as escaping
-        for box in op.args:
-            self.getnode(box).mark_escaped()
+        for i in range(op.numargs()):
+            self.getnode(op.getarg(i)).mark_escaped()
 
     def find_nodes_no_escape(self, op):
         pass    # for operations that don't escape their arguments
@@ -178,7 +179,7 @@ class NodeFinder(object):
 
     def find_nodes_NEW_WITH_VTABLE(self, op):
         instnode = InstanceNode()
-        box = op.args[0]
+        box = op.getarg(0)
         assert isinstance(box, Const)
         instnode.knownclsbox = box
         self.nodes[op.result] = instnode
@@ -189,7 +190,7 @@ class NodeFinder(object):
         self.nodes[op.result] = instnode
 
     def find_nodes_NEW_ARRAY(self, op):
-        lengthbox = op.args[0]
+        lengthbox = op.getarg(0)
         lengthbox = self.get_constant_box(lengthbox)
         if lengthbox is None:
             return     # var-sized arrays are not virtual
@@ -199,28 +200,28 @@ class NodeFinder(object):
         self.nodes[op.result] = arraynode
 
     def find_nodes_ARRAYLEN_GC(self, op):
-        arraynode = self.getnode(op.args[0])
+        arraynode = self.getnode(op.getarg(0))
         if arraynode.arraydescr is not None:
             resbox = ConstInt(arraynode.arraysize)
             self.set_constant_node(op.result, resbox)
 
     def find_nodes_GUARD_CLASS(self, op):
-        instnode = self.getnode(op.args[0])
+        instnode = self.getnode(op.getarg(0))
         if instnode.fromstart:    # only useful (and safe) in this case
-            box = op.args[1]
+            box = op.getarg(1)
             assert isinstance(box, Const)
             instnode.knownclsbox = box
 
     def find_nodes_GUARD_VALUE(self, op):
-        instnode = self.getnode(op.args[0])
+        instnode = self.getnode(op.getarg(0))
         if instnode.fromstart:    # only useful (and safe) in this case
-            box = op.args[1]
+            box = op.getarg(1)
             assert isinstance(box, Const)
             instnode.knownvaluebox = box
 
     def find_nodes_SETFIELD_GC(self, op):
-        instnode = self.getnode(op.args[0])
-        fieldnode = self.getnode(op.args[1])
+        instnode = self.getnode(op.getarg(0))
+        fieldnode = self.getnode(op.getarg(1))
         if instnode.escaped:
             fieldnode.mark_escaped()
             return     # nothing to be gained from tracking the field
@@ -232,7 +233,7 @@ class NodeFinder(object):
         instnode.add_escape_dependency(fieldnode)
 
     def find_nodes_GETFIELD_GC(self, op):
-        instnode = self.getnode(op.args[0])
+        instnode = self.getnode(op.getarg(0))
         if instnode.escaped:
             return     # nothing to be gained from tracking the field
         field = op.descr
@@ -254,13 +255,13 @@ class NodeFinder(object):
     find_nodes_GETFIELD_GC_PURE = find_nodes_GETFIELD_GC
 
     def find_nodes_SETARRAYITEM_GC(self, op):
-        indexbox = op.args[1]
+        indexbox = op.getarg(1)
         indexbox = self.get_constant_box(indexbox)
         if indexbox is None:
             self.find_nodes_default(op)            # not a Const index
             return
-        arraynode = self.getnode(op.args[0])
-        itemnode = self.getnode(op.args[2])
+        arraynode = self.getnode(op.getarg(0))
+        itemnode = self.getnode(op.getarg(2))
         if arraynode.escaped:
             itemnode.mark_escaped()
             return     # nothing to be gained from tracking the item
@@ -270,12 +271,12 @@ class NodeFinder(object):
         arraynode.add_escape_dependency(itemnode)
 
     def find_nodes_GETARRAYITEM_GC(self, op):
-        indexbox = op.args[1]
+        indexbox = op.getarg(1)
         indexbox = self.get_constant_box(indexbox)
         if indexbox is None:
             self.find_nodes_default(op)            # not a Const index
             return
-        arraynode = self.getnode(op.args[0])
+        arraynode = self.getnode(op.getarg(0))
         if arraynode.escaped:
             return     # nothing to be gained from tracking the item
         index = indexbox.getint()
@@ -298,13 +299,15 @@ class NodeFinder(object):
     def find_nodes_JUMP(self, op):
         # only set up the 'unique' field of the InstanceNodes;
         # real handling comes later (build_result_specnodes() for loops).
-        for box in op.args:
+        for i in range(op.numargs()):
+            box = op.getarg(i)
             self.getnode(box).set_unique_nodes()
 
     def find_nodes_FINISH(self, op):
         # only for bridges, and only for the ones that end in a 'return'
         # or 'raise'; all other cases end with a JUMP.
-        for box in op.args:
+        for i in range(op.numargs()):
+            box = op.getarg(i)
             self.getnode(box).unique = UNIQUE_NO
 
 find_nodes_ops = _findall(NodeFinder, 'find_nodes_')
@@ -344,13 +347,13 @@ class PerfectSpecializationFinder(NodeFinder):
         # computed by NodeFinder.find_nodes().
         op = loop.operations[-1]
         assert op.opnum == rop.JUMP
-        assert len(self.inputnodes) == len(op.args)
+        assert len(self.inputnodes) == op.numargs()
         while True:
             self.restart_needed = False
             specnodes = []
-            for i in range(len(op.args)):
+            for i in range(op.numargs()):
                 inputnode = self.inputnodes[i]
-                exitnode = self.getnode(op.args[i])
+                exitnode = self.getnode(op.getarg(i))
                 specnodes.append(self.intersect(inputnode, exitnode))
             if not self.restart_needed:
                 break
@@ -562,9 +565,9 @@ class BridgeSpecializationFinder(NodeFinder):
 
     def bridge_matches(self, nextloop_specnodes):
         jump_op = self.jump_op
-        assert len(jump_op.args) == len(nextloop_specnodes)
+        assert jump_op.numargs() == len(nextloop_specnodes)
         for i in range(len(nextloop_specnodes)):
-            exitnode = self.getnode(jump_op.args[i])
+            exitnode = self.getnode(jump_op.getarg(i))
             if not nextloop_specnodes[i].matches_instance_node(exitnode):
                 return False
         return True

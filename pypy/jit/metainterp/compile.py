@@ -51,7 +51,7 @@ def make_loop_token(nb_args, jitdriver_sd):
 def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     """Try to compile a new loop by closing the current history back
     to the first operation.
-    """    
+    """
     history = metainterp.history
     loop = create_empty_loop(metainterp)
     loop.greenkey = greenkey
@@ -133,7 +133,7 @@ def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
     metainterp_sd.profiler.end_backend()
     if not we_are_translated():
         metainterp_sd.stats.compiled()
-    metainterp_sd.log("compiled new bridge")            
+    metainterp_sd.log("compiled new bridge")
 
 # ____________________________________________________________
 
@@ -177,7 +177,7 @@ prebuiltNotSpecNode = NotSpecNode()
 
 class TerminatingLoopToken(LoopToken):
     terminating = True
-    
+
     def __init__(self, nargs, finishdescr):
         self.specnodes = [prebuiltNotSpecNode]*nargs
         self.finishdescr = finishdescr
@@ -508,7 +508,7 @@ class ResumeFromInterpDescr(ResumeDescr):
 def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     """Try to compile a new bridge leading from the beginning of the history
     to some existing place.
-    """    
+    """
     # The history contains new operations to attach as the code for the
     # failure of 'resumekey.guard_op'.
     #
@@ -546,7 +546,8 @@ def prepare_last_operation(new_loop, target_loop_token):
         # e.g. loop_tokens_done_with_this_frame_void[0]
         # Replace the operation with the real operation we want, i.e. a FINISH
         descr = target_loop_token.finishdescr
-        new_op = ResOperation(rop.FINISH, op.args, None, descr=descr)
+        args = [op.getarg(i) for i in range(op.numargs())]
+        new_op = ResOperation(rop.FINISH, args, None, descr=descr)
         new_loop.operations[-1] = new_op
 
 # ____________________________________________________________

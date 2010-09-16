@@ -532,7 +532,7 @@ class BoxInt(Box):
 class BoxFloat(Box):
     type = FLOAT
     _attrs_ = ('value',)
-    
+
     def __init__(self, floatval=0.0):
         assert isinstance(floatval, float)
         self.value = floatval
@@ -759,12 +759,13 @@ class TreeLoop(object):
         assert len(seen) == len(inputargs), (
                "duplicate Box in the Loop.inputargs")
         TreeLoop.check_consistency_of_branch(operations, seen)
-        
+
     @staticmethod
     def check_consistency_of_branch(operations, seen):
         "NOT_RPYTHON"
         for op in operations:
-            for box in op.args:
+            for i in range(op.numargs()):
+                box = op.getarg(i)
                 if isinstance(box, Box):
                     assert box in seen
             if op.is_guard():
@@ -885,7 +886,7 @@ class Stats(object):
         self.aborted_count += 1
 
     def entered(self):
-        self.enter_count += 1        
+        self.enter_count += 1
 
     def compiled(self):
         self.compiled_count += 1
@@ -898,7 +899,7 @@ class Stats(object):
 
     def add_new_loop(self, loop):
         self.loops.append(loop)
-        
+
     # test read interface
 
     def get_all_loops(self):

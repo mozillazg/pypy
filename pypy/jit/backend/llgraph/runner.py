@@ -160,7 +160,8 @@ class BaseCPU(model.AbstractCPU):
             if self.is_oo and isinstance(descr, (OODescr, MethDescr)):
                 # hack hack, not rpython
                 c._obj.externalobj.operations[-1].descr = descr
-            for x in op.args:
+            for i in range(op.numargs()):
+                x = op.getarg(i)
                 if isinstance(x, history.Box):
                     llimpl.compile_add_var(c, var2index[x])
                 elif isinstance(x, history.ConstInt):
@@ -280,7 +281,7 @@ class LLtypeCPU(BaseCPU):
     def __init__(self, *args, **kwds):
         BaseCPU.__init__(self, *args, **kwds)
         self.fielddescrof_vtable = self.fielddescrof(rclass.OBJECT, 'typeptr')
-        
+
     def fielddescrof(self, S, fieldname):
         ofs, size = symbolic.get_field_token(S, fieldname)
         token = history.getkind(getattr(S, fieldname))
@@ -504,7 +505,7 @@ class OOtypeCPU_xxx_disabled(BaseCPU):
             return ootype.cast_to_object(e)
         else:
             return ootype.NULL
-        
+
     def get_exc_value(self):
         if llimpl._last_exception:
             earg = llimpl._last_exception.args[1]
@@ -580,7 +581,7 @@ class OOtypeCPU_xxx_disabled(BaseCPU):
         x = descr.callmeth(selfbox, argboxes)
         # XXX: return None if METH.RESULT is Void
         return x
-    
+
 
 def make_getargs(ARGS):
     argsiter = unrolling_iterable(ARGS)
@@ -612,7 +613,7 @@ boxresult._annspecialcase_ = 'specialize:arg(0)'
 class KeyManager(object):
     """
     Helper class to convert arbitrary dictionary keys to integers.
-    """    
+    """
 
     def __init__(self):
         self.keys = {}
@@ -695,7 +696,7 @@ class TypeDescr(OODescr):
         self.ARRAY = ARRAY = ootype.Array(TYPE)
         def create():
             return boxresult(TYPE, ootype.new(TYPE))
-        
+
         def create_array(lengthbox):
             n = lengthbox.getint()
             return boxresult(ARRAY, ootype.oonewarray(ARRAY, n))
@@ -757,7 +758,7 @@ class FieldDescr(OODescr):
             obj = objbox.getref(TYPE)
             value = unwrap(T, valuebox)
             setattr(obj, fieldname, value)
-            
+
         self.getfield = getfield
         self.setfield = setfield
         self._is_pointer_field = (history.getkind(T) == 'ref')
