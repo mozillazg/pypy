@@ -568,7 +568,7 @@ class GCTest(object):
         assert res == 111
 
     def test_writebarrier_before_copy(self):
-        S = lltype.GcStruct('S')
+        S = lltype.GcStruct('S', ('x', lltype.Char))
         TP = lltype.GcArray(lltype.Ptr(S))
         def fn():
             l = lltype.malloc(TP, 100)
@@ -646,9 +646,6 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 
     def test_finalizer_order(self):
         py.test.skip("Not implemented yet")
-    def test_writebarrier_before_copy(self):
-        py.test.skip("Not relevant, and crashes because llarena does not "
-                     "support empty GcStructs")
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
