@@ -193,14 +193,15 @@ def _builduserclswithfeature(config, supercls, *features):
 
     def add(Proto):
         for key, value in Proto.__dict__.items():
-            if not key.startswith('__') or key == '__del__':
+            if not key.startswith('__') or key in ['__del__', '_mixin_']:
                 if hasattr(value, "func_name"):
                     value = func_with_new_name(value, value.func_name)
                 body[key] = value
 
     if (config.objspace.std.withmapdict and "dict" in features):
-        from pypy.objspace.std.mapdict import BaseMapdictObject
+        from pypy.objspace.std.mapdict import BaseMapdictObject, ObjectMixin
         add(BaseMapdictObject)
+        add(ObjectMixin)
         features = ()
 
     if "user" in features:     # generic feature needed by all subcls
