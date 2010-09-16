@@ -2112,8 +2112,9 @@ class MetaInterp(object):
         op = self.history.operations.pop()
         assert op.opnum == rop.CALL_MAY_FORCE
         num_green_args = targetjitdriver_sd.num_green_args
-        greenargs = op.sliceargs(1, num_green_args+1)
-        args = op.sliceargs(num_green_args+1, op.numargs())
+        arglist = op.getarglist()
+        greenargs = arglist[1:num_green_args+1]
+        args = arglist[num_green_args+1:]
         assert len(args) == targetjitdriver_sd.num_red_args
         vinfo = targetjitdriver_sd.virtualizable_info
         if vinfo is not None:

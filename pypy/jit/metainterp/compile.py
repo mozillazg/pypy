@@ -546,7 +546,7 @@ def prepare_last_operation(new_loop, target_loop_token):
         # e.g. loop_tokens_done_with_this_frame_void[0]
         # Replace the operation with the real operation we want, i.e. a FINISH
         descr = target_loop_token.finishdescr
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         new_op = ResOperation(rop.FINISH, args, None, descr=descr)
         new_loop.operations[-1] = new_op
 

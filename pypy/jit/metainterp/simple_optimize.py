@@ -14,10 +14,10 @@ def transform(op):
     if op.opnum == rop.ARRAYCOPY:
         descr = op.getarg(0)
         assert isinstance(descr, AbstractDescr)
-        args = op.sliceargs(1, op.numargs())
+        args = op.getarglist()[1:]
         op = ResOperation(rop.CALL, args, op.result, descr=descr)
     elif op.opnum == rop.CALL_PURE:
-        args = op.sliceargs(1, op.numargs())
+        args = op.getarglist()[1:]
         op = ResOperation(rop.CALL, args, op.result, op.descr)
     elif op.opnum == rop.VIRTUAL_REF:
         op = ResOperation(rop.SAME_AS, [op.getarg(0)], op.result)

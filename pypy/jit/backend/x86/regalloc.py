@@ -462,7 +462,7 @@ class RegAlloc(object):
     def consider_guard_exception(self, op):
         loc = self.rm.make_sure_var_in_reg(op.getarg(0))
         box = TempBox()
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc1 = self.rm.force_allocate_reg(box, args)
         if op.result in self.longevity:
             # this means, is it ever used
@@ -494,7 +494,7 @@ class RegAlloc(object):
     def _consider_binop_part(self, op):
         x = op.getarg(0)
         argloc = self.loc(op.getarg(1))
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc = self.rm.force_result_in_reg(op.result, x, args)
         self.rm.possibly_free_var(op.getarg(1))
         return loc, argloc
@@ -529,7 +529,7 @@ class RegAlloc(object):
             loc2 = self.rm.convert_to_imm(op.getarg(1))
         else:
             loc2 = self.rm.make_sure_var_in_reg(op.getarg(1), selected_reg=ecx)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc1 = self.rm.force_result_in_reg(op.result, op.getarg(0), args)
         self.Perform(op, [loc1, loc2], loc1)
         self.rm.possibly_free_vars_for_op(op)
@@ -570,7 +570,7 @@ class RegAlloc(object):
             pass
         else:
             arglocs[0] = self.rm.make_sure_var_in_reg(vx)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         self.rm.possibly_free_vars(args)
         if guard_op is None:
             loc = self.rm.force_allocate_reg(op.result, args,
@@ -594,7 +594,7 @@ class RegAlloc(object):
 
     def _consider_float_op(self, op):
         loc1 = self.xrm.loc(op.getarg(1))
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc0 = self.xrm.force_result_in_reg(op.result, op.getarg(0), args)
         self.Perform(op, [loc0, loc1], loc0)
         self.xrm.possibly_free_vars_for_op(op)
@@ -605,7 +605,7 @@ class RegAlloc(object):
     consider_float_truediv = _consider_float_op
 
     def _consider_float_cmp(self, op, guard_op):
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc0 = self.xrm.make_sure_var_in_reg(op.getarg(0), args,
                                              imm_fine=False)
         loc1 = self.xrm.loc(op.getarg(1))
@@ -695,7 +695,7 @@ class RegAlloc(object):
         
     def consider_cond_call_gc_wb(self, op):
         assert op.result is None
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         loc_newvalue = self.rm.make_sure_var_in_reg(op.getarg(1), args)
         # ^^^ we force loc_newvalue in a reg (unless it's a Const),
         # because it will be needed anyway by the following setfield_gc.
@@ -849,7 +849,7 @@ class RegAlloc(object):
             need_lower_byte = True
         else:
             need_lower_byte = False
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         value_loc = self.make_sure_var_in_reg(op.getarg(1), args,
                                               need_lower_byte=need_lower_byte)
@@ -859,7 +859,7 @@ class RegAlloc(object):
     consider_setfield_raw = consider_setfield_gc
 
     def consider_strsetitem(self, op):
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         ofs_loc = self.rm.make_sure_var_in_reg(op.getarg(1), args)
         value_loc = self.rm.make_sure_var_in_reg(op.getarg(2), args,
@@ -871,7 +871,7 @@ class RegAlloc(object):
 
     def consider_setarrayitem_gc(self, op):
         scale, ofs, _, ptr = self._unpack_arraydescr(op.descr)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc  = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         if scale == 0:
             need_lower_byte = True
@@ -888,7 +888,7 @@ class RegAlloc(object):
 
     def consider_getfield_gc(self, op):
         ofs_loc, size_loc, _ = self._unpack_fielddescr(op.descr)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         self.rm.possibly_free_vars(args)
         result_loc = self.force_allocate_reg(op.result)
@@ -900,7 +900,7 @@ class RegAlloc(object):
 
     def consider_getarrayitem_gc(self, op):
         scale, ofs, _, _ = self._unpack_arraydescr(op.descr)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         ofs_loc = self.rm.make_sure_var_in_reg(op.getarg(1), args)
         self.rm.possibly_free_vars_for_op(op)
@@ -930,7 +930,7 @@ class RegAlloc(object):
     #consider_cast_ptr_to_int = consider_same_as
 
     def consider_strlen(self, op):
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         self.rm.possibly_free_vars_for_op(op)
         result_loc = self.rm.force_allocate_reg(op.result)
@@ -942,14 +942,14 @@ class RegAlloc(object):
         arraydescr = op.descr
         assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_ofs_length(self.translate_support_code)
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         self.rm.possibly_free_vars_for_op(op)
         result_loc = self.rm.force_allocate_reg(op.result)
         self.Perform(op, [base_loc, imm(ofs)], result_loc)
 
     def consider_strgetitem(self, op):
-        args = op.sliceargs(0, op.numargs())
+        args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         ofs_loc = self.rm.make_sure_var_in_reg(op.getarg(1), args)
         self.rm.possibly_free_vars_for_op(op)

@@ -191,7 +191,7 @@ class ResOpGen(object):
     def getlinks(self):
         boxes = {}
         for op in self.all_operations:
-            args = op.sliceargs(0, op.numargs())
+            args = op.getarglist()
             args.append(op.result)
             for box in args:
                 if getattr(box, 'is_box', False):
