@@ -272,7 +272,9 @@ INVALID = 2
 SLOTS_STARTING_FROM = 3
 
 
-class BaseMapdictObject(W_Root): # slightly evil to make it inherit from W_Root
+class BaseMapdictObject: # slightly evil to make it inherit from W_Root
+    _mixin_ = True # XXX hack hack hack
+
     def _init_empty(self, map):
         raise NotImplementedError("abstract base class")
 
@@ -373,13 +375,13 @@ class ObjectMixin(object):
     def _set_mapdict_storage(self, storage):
         self.storage = storage
 
-class Object(ObjectMixin, BaseMapdictObject):
+class Object(ObjectMixin, BaseMapdictObject, W_Root):
     pass # mainly for tests
 
-def get_subclass_of_correct_size(space, cls, supercls, w_type):
+def get_subclass_of_correct_size(space, cls, w_type):
     assert space.config.objspace.std.withmapdict
     map = w_type.terminator
-    classes = memo_get_subclass_of_correct_size(space, supercls)
+    classes = memo_get_subclass_of_correct_size(space, cls)
     size = map.size_estimate()
     if not size:
         size = 1
@@ -396,18 +398,10 @@ def memo_get_subclass_of_correct_size(space, supercls):
     try:
         return _subclass_cache[key]
     except KeyError:
-	if not hasattr(supercls, "_init_empty"):
-            result = [supercls] * NUM_SUBCLASSES # not a mapdict
-        if (not issubclass(supercls, W_ObjectObject) or
-                hasattr(supercls, '__del__')):
-            class subcls(ObjectMixin, supercls):
-                pass
-            subcls.__name__ = supercls.__name__ + "Concrete"
-            result = [subcls] * NUM_SUBCLASSES
-        else:
-            result = []
-            for i in range(1, NUM_SUBCLASSES+1):
-                result.append(_make_subclass_size_n(supercls, i))
+        assert not hasattr(supercls, "__del__")
+        result = []
+        for i in range(1, NUM_SUBCLASSES+1):
+            result.append(_make_subclass_size_n(supercls, i))
         _subclass_cache[key] = result
         return result
 memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
@@ -418,7 +412,7 @@ def _make_subclass_size_n(supercls, n):
     rangen = unroll.unrolling_iterable(range(n))
     nmin1 = n - 1
     rangenmin1 = unroll.unrolling_iterable(range(nmin1))
-    class subcls(supercls):
+    class subcls(ObjectMixin, BaseMapdictObject, supercls):
         def _init_empty(self, map):
             from pypy.rlib.debug import make_sure_not_resized
             for i in rangen:

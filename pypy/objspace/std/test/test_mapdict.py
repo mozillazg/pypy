@@ -360,10 +360,7 @@ def test_setdict():
 def test_specialized_class():
     from pypy.objspace.std.objectobject import W_ObjectObject
     from pypy.rlib import rerased
-    class Object(BaseMapdictObject, W_ObjectObject): # slightly evil
-        class typedef:
-            hasdict = False
-    classes = memo_get_subclass_of_correct_size(space, Object)
+    classes = memo_get_subclass_of_correct_size(space, W_ObjectObject)
     w1 = W_Root()
     w2 = W_Root()
     w3 = W_Root()
