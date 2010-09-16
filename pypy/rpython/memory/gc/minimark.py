@@ -5,7 +5,7 @@ from pypy.rpython.memory.gc.base import GCBase, MovingGCBase
 from pypy.rpython.memory.gc import minimarkpage
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask, r_uint
-from pypy.rlib.debug import ll_assert, debug_print
+from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
 from pypy.rlib.objectmodel import we_are_translated
 
 WORD = LONG_BIT // 8
@@ -292,9 +292,6 @@ class MiniMarkGC(MovingGCBase):
             # we need to fix it with another call to minor_collection().
             if self.nursery_next + totalsize > self.nursery_top:
                 self.minor_collection()
-            #
-        else:
-            debug_print('minor collection')
         #
         result = self.nursery_next
         self.nursery_next = result + totalsize
@@ -593,6 +590,8 @@ class MiniMarkGC(MovingGCBase):
         """Perform a minor collection: find the objects from the nursery
         that remain alive and move them out."""
         #
+        debug_start("gc-minor")
+        #
         # First, find the roots that point to nursery objects.  These
         # nursery objects are copied out of the nursery.  Note that
         # references to further nursery objects are not modified by
@@ -621,7 +620,10 @@ class MiniMarkGC(MovingGCBase):
         llarena.arena_reset(self.nursery, self.nursery_size, 2)
         self.nursery_next = self.nursery
         #
-        if not we_are_translated():
+        debug_print("minor collect, total memory used:",
+                    self.get_total_memory_used())
+        debug_stop("gc-minor")
+        if 0:  # not we_are_translated():
             self.debug_check_consistency()     # xxx expensive!
 
 
@@ -728,7 +730,14 @@ class MiniMarkGC(MovingGCBase):
     def major_collection(self):
         """Do a major collection.  Only for when the nursery is empty."""
         #
-        debug_print('major collection:', self.get_total_memory_used())
+        debug_start("gc-collect")
+        debug_print()
+        debug_print(".----------- Full collection ------------------")
+        debug_print("| used before collection:")
+        debug_print("|          in ArenaCollection:     ",
+                    self.ac.total_memory_used, "bytes")
+        debug_print("|          raw_malloced:           ",
+                    self.rawmalloced_total_size, "bytes")
         #
         # Debugging checks
         ll_assert(self.nursery_next == self.nursery,
@@ -770,9 +779,16 @@ class MiniMarkGC(MovingGCBase):
         #
         self.debug_check_consistency()
         #
-        debug_print('               ->', self.get_total_memory_used())
         self.next_major_collection_threshold = (
             self.get_total_memory_used() * self.major_collection_threshold)
+        #
+        debug_print("| used after collection:")
+        debug_print("|          in ArenaCollection:     ",
+                    self.ac.total_memory_used, "bytes")
+        debug_print("|          raw_malloced:           ",
+                    self.rawmalloced_total_size, "bytes")
+        debug_print("`----------------------------------------------")
+        debug_stop("gc-collect")
         #
         # At the end, we can execute the finalizers of the objects
         # listed in 'run_finalizers'.  Note that this will typically do
