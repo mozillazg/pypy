@@ -375,12 +375,30 @@ class MiniMarkGC(MovingGCBase):
     def can_malloc_nonmovable(self):
         XXX
 
-    def can_move(self, addr):
+    def can_move(self, obj):
         """Overrides the parent can_move()."""
-        return self.is_in_nursery(addr)
+        return self.is_in_nursery(obj)
 
-    def shrink_array(self, addr, newsize):
-        XXX
+
+    def shrink_array(self, obj, smallerlength):
+        #
+        # Only objects in the nursery can be "resized".  Resizing them
+        # means recording that they have a smaller size, so that when
+        # moved out of the nursery, they will consume less memory.
+        if not self.is_in_nursery(obj):
+            return False
+        #
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        typeid = self.get_type_id(obj)
+        totalsmallersize = (
+            size_gc_header + self.fixed_size(typeid) +
+            self.varsize_item_sizes(typeid) * smallerlength)
+        llarena.arena_shrink_obj(obj - size_gc_header, totalsmallersize)
+        #
+        offset_to_length = self.varsize_offset_to_length(typeid)
+        (obj + offset_to_length).signed[0] = smallerlength
+        return True
+
 
     def malloc_varsize_nonmovable(self, typeid, length):
         XXX
