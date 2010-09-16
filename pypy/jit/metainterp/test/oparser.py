@@ -26,7 +26,7 @@ class ExtendedTreeLoop(TreeLoop):
         def opboxes(operations):
             for op in operations:
                 yield op.result
-                for box in op.args:
+                for box in op.sliceargs(0, op.numargs()):
                     yield box
         def allboxes():
             for box in self.inputargs:

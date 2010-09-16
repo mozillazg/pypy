@@ -12,7 +12,7 @@ def transform(op):
     # change ARRAYCOPY to call, so we don't have to pass around
     # unnecessary information to the backend.  Do the same with VIRTUAL_REF_*.
     if op.opnum == rop.ARRAYCOPY:
-        descr = op.args[0]
+        descr = op.getarg(0)
         assert isinstance(descr, AbstractDescr)
         args = op.sliceargs(1, op.numargs())
         op = ResOperation(rop.CALL, args, op.result, descr=descr)

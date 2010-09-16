@@ -324,7 +324,7 @@ class OptVirtualize(Optimization):
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info
         # op.getarg(1) should really never point to null here
         # - set 'forced' to point to the real object
-        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
+        op1 = ResOperation(rop.SETFIELD_GC, op._args, None,
                           descr = vrefinfo.descr_forced)
         self.optimize_SETFIELD_GC(op1)
         # - set 'virtual_token' to TOKEN_NONE

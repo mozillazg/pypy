@@ -2112,8 +2112,8 @@ class MetaInterp(object):
         op = self.history.operations.pop()
         assert op.opnum == rop.CALL_MAY_FORCE
         num_green_args = targetjitdriver_sd.num_green_args
-        greenargs = op.args[1:num_green_args+1]
-        args = op.args[num_green_args+1:]
+        greenargs = op.sliceargs(1, num_green_args+1)
+        args = op.sliceargs(num_green_args+1, op.numargs())
         assert len(args) == targetjitdriver_sd.num_red_args
         vinfo = targetjitdriver_sd.virtualizable_info
         if vinfo is not None:
@@ -2124,7 +2124,7 @@ class MetaInterp(object):
         warmrunnerstate = targetjitdriver_sd.warmstate
         token = warmrunnerstate.get_assembler_token(greenargs, args)
         op.opnum = rop.CALL_ASSEMBLER
-        op.args = args
+        op.setarglist(args)
         op.descr = token
         self.history.operations.append(op)
 
