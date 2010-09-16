@@ -86,7 +86,7 @@ class OperationBuilder(object):
 
     def process_operation(self, s, op, names, subops):
         args = []
-        for v in op.args:
+        for v in op.sliceargs(0, op.numargs()):
             if v in names:
                 args.append(names[v])
 ##            elif isinstance(v, ConstAddr):
@@ -129,7 +129,7 @@ class OperationBuilder(object):
 
         def print_loop_prebuilt(ops):
             for op in ops:
-                for arg in op.args:
+                for arg in op.sliceargs(0, op.numargs()):
                     if isinstance(arg, ConstPtr):
                         if arg not in names:
                             writevar(arg, 'const_ptr')
@@ -553,7 +553,7 @@ class RandomLoop(object):
         endvars = []
         used_later = {}
         for op in loop.operations:
-            for v in op.args:
+            for v in op.sliceargs(0, op.numargs()):
                 used_later[v] = True
         for v in startvars:
             if v not in used_later:
@@ -581,7 +581,7 @@ class RandomLoop(object):
             return self.should_fail_by.fail_args
         else:
             assert self.should_fail_by.opnum == rop.FINISH
-            return self.should_fail_by.args
+            return self.should_fail_by.sliceargs(0, self.should_fail_by.numargs())
 
     def clear_state(self):
         for v, S, fields in self.prebuilt_ptr_consts:
