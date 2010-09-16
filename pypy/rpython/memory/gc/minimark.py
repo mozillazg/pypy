@@ -89,8 +89,9 @@ class MiniMarkGC(MovingGCBase):
         "arena_size": 65536*WORD,
 
         # The maximum size of an object allocated compactly.  All objects
-        # that are larger are just allocated with raw_malloc().
-        "small_request_threshold": 32*WORD,
+        # that are larger are just allocated with raw_malloc().  The value
+        # chosen here is enough for a unicode string of length 100.
+        "small_request_threshold": 52*WORD,
 
         # Full collection threshold: after a major collection, we record
         # the total size consumed; and after every minor collection, if the
@@ -355,6 +356,30 @@ class MiniMarkGC(MovingGCBase):
 
 
     # ----------
+    # Other functions in the GC API
+
+    def set_max_heap_size(self, size):
+        XXX
+
+    def can_malloc_nonmovable(self):
+        XXX
+
+    def can_move(self, addr):
+        """Overrides the parent can_move()."""
+        return self.is_in_nursery(addr)
+
+    def shrink_array(self, addr, newsize):
+        XXX
+
+    def malloc_varsize_nonmovable(self, typeid, length):
+        XXX
+
+    def malloc_nonmovable(self, typeid, length, zero):
+        # helper for testing, same as GCBase.malloc
+        XXX
+
+
+    # ----------
     # Simple helpers
 
     def get_type_id(self, obj):
@@ -389,10 +414,6 @@ class MiniMarkGC(MovingGCBase):
     def get_forwarding_address(self, obj):
         obj = llarena.getfakearenaaddress(obj)
         return obj.address[0]
-
-    def can_move(self, addr):
-        """Overrides the parent can_move()."""
-        return self.is_in_nursery(addr)
 
     def get_total_memory_used(self):
         """Return the total memory used, not counting any object in the
