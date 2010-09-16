@@ -193,7 +193,8 @@ def _builduserclswithfeature(config, supercls, *features):
 
     def add(Proto):
         for key, value in Proto.__dict__.items():
-            if not key.startswith('__') or key in ['__del__', '_mixin_']:
+            if (not key.startswith('__') and not key.startswith('_mixin_') 
+                    or key == '__del__'):
                 if hasattr(value, "func_name"):
                     value = func_with_new_name(value, value.func_name)
                 body[key] = value
