@@ -128,7 +128,8 @@ class OptRewrite(Optimization):
             self.emit_operation(op)
 
     def optimize_CALL_PURE(self, op):
-        for arg in op.args:
+        for i in range(op.numargs()):
+            arg = op.getarg(i)
             if self.get_constant_box(arg) is None:
                 break
         else:
@@ -136,7 +137,8 @@ class OptRewrite(Optimization):
             self.make_constant(op.result, op.getarg(0))
             return
         # replace CALL_PURE with just CALL
-        self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
+        args = op.sliceargs(1, op.numargs())
+        self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          op.descr))
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.getarg(0))
@@ -178,7 +180,8 @@ class OptRewrite(Optimization):
             old_guard_op = self.optimizer.newoperations[value.last_guard_index]
             old_opnum = old_guard_op.opnum
             old_guard_op.opnum = rop.GUARD_VALUE
-            old_guard_op.args = [old_guard_op.getarg(0), op.getarg(1)]
+            # XXX XXX: implement it when the refactoring is complete
+            old_guard_op._args = [old_guard_op.getarg(0), op.getarg(1)]
             # hack hack hack.  Change the guard_opnum on
             # old_guard_op.descr so that when resuming,
             # the operation is not skipped by pyjitpl.py.
@@ -217,7 +220,8 @@ class OptRewrite(Optimization):
                 # it was a guard_nonnull, which we replace with a
                 # guard_nonnull_class.
                 old_guard_op.opnum = rop.GUARD_NONNULL_CLASS
-                old_guard_op.args = [old_guard_op.getarg(0), op.getarg(1)]
+                # XXX XXX: implement it when the refactoring is complete
+                old_guard_op._args = [old_guard_op.getarg(0), op.getarg(1)]
                 # hack hack hack.  Change the guard_opnum on
                 # old_guard_op.descr so that when resuming,
                 # the operation is not skipped by pyjitpl.py.

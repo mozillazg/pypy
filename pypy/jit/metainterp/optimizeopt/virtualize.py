@@ -292,7 +292,7 @@ class OptVirtualize(Optimization):
         for i in range(len(specnodes)):
             value = self.getvalue(op.getarg(i))
             specnodes[i].teardown_virtual_node(self, value, exitargs)
-        op.args = exitargs[:]
+        op.setarglist(exitargs[:])
         self.emit_operation(op)
 
     def optimize_VIRTUAL_REF(self, op):
@@ -441,7 +441,7 @@ class OptVirtualize(Optimization):
             return # 0-length arraycopy
         descr = op.getarg(0)
         assert isinstance(descr, AbstractDescr)
-        args = [op.getarg(i) for i in range(1, op.numargs())]
+        args = op.sliceargs(1, op.numargs())
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          descr))
 
