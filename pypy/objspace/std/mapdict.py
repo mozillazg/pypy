@@ -377,8 +377,6 @@ class Object(ObjectMixin, BaseMapdictObject):
     pass # mainly for tests
 
 def get_subclass_of_correct_size(space, cls, supercls, w_type):
-    if not hasattr(supercls, "_init_empty"):
-        return supercls # not a mapdict class
     assert space.config.objspace.std.withmapdict
     map = w_type.terminator
     classes = memo_get_subclass_of_correct_size(space, supercls)
@@ -398,6 +396,8 @@ def memo_get_subclass_of_correct_size(space, supercls):
     try:
         return _subclass_cache[key]
     except KeyError:
+	if not hasattr(supercls, "_init_empty"):
+            result = [supercls] * NUM_SUBCLASSES # not a mapdict
         if (not issubclass(supercls, W_ObjectObject) or
                 hasattr(supercls, '__del__')):
             class subcls(ObjectMixin, supercls):
