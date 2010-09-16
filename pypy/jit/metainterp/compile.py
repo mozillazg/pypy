@@ -238,7 +238,7 @@ class ResumeGuardDescr(ResumeDescr):
 
     def make_a_counter_per_value(self, guard_value_op):
         assert guard_value_op.opnum == rop.GUARD_VALUE
-        box = guard_value_op.args[0]
+        box = guard_value_op.getarg(0)
         try:
             i = guard_value_op.fail_args.index(box)
         except ValueError:
@@ -546,7 +546,7 @@ def prepare_last_operation(new_loop, target_loop_token):
         # e.g. loop_tokens_done_with_this_frame_void[0]
         # Replace the operation with the real operation we want, i.e. a FINISH
         descr = target_loop_token.finishdescr
-        args = [op.getarg(i) for i in range(op.numargs())]
+        args = op.sliceargs(0, op.numargs())
         new_op = ResOperation(rop.FINISH, args, None, descr=descr)
         new_loop.operations[-1] = new_op
 

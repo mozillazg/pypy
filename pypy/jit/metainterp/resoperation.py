@@ -21,6 +21,12 @@ class ResOperation(object):
         self.result = result
         self.setdescr(descr)
 
+    # XXX: just for debugging during the refactoring, kill me
+    def __setattr__(self, attr, value):
+        if attr == 'args':
+            import pdb;pdb.set_trace()
+        object.__setattr__(self, attr, value)
+
     def getarg(self, i):
         return self._args[i]
 
@@ -29,6 +35,12 @@ class ResOperation(object):
 
     def numargs(self):
         return len(self._args)
+
+    def setarglist(self, args):
+        self._args = args
+
+    def sliceargs(self, start, stop):
+        return [self.getarg(i) for i in range(start, stop)]
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt

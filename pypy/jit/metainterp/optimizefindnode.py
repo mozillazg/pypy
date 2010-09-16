@@ -160,7 +160,8 @@ class NodeFinder(object):
                     break
             else:
                 # all constant arguments: we can constant-fold
-                argboxes = [self.get_constant_box(arg) for arg in op.args]
+                argboxes = [self.get_constant_box(op.getarg(i))
+                            for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
                                          op.opnum, argboxes, op.descr)
                 self.set_constant_node(op.result, resbox.constbox())

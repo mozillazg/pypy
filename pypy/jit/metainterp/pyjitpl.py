@@ -2090,7 +2090,7 @@ class MetaInterp(object):
         op = self.history.operations[-1]
         assert op.opnum == rop.CALL
         resbox_as_const = resbox.constbox()
-        for i in op.numarg():
+        for i in range(op.numargs()):
             if not isinstance(op.getarg(i), Const):
                 break
         else:
@@ -2101,7 +2101,7 @@ class MetaInterp(object):
         # not all constants (so far): turn CALL into CALL_PURE, which might
         # be either removed later by optimizeopt or turned back into CALL.
         op.opnum = rop.CALL_PURE
-        # XXX XXX replace...
+        # XXX XXX replace when the resoperation refactoring has been finished
         op._args = [resbox_as_const] + op._args
         return resbox
 

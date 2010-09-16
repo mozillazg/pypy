@@ -349,12 +349,12 @@ class Optimizer(Optimization):
         descr.store_final_boxes(op, newboxes)
         #
         if op.opnum == rop.GUARD_VALUE:
-            if self.getvalue(op.args[0]) in self.bool_boxes:
+            if self.getvalue(op.getarg(0)) in self.bool_boxes:
                 # Hack: turn guard_value(bool) into guard_true/guard_false.
                 # This is done after the operation is emitted, to let
                 # store_final_boxes_in_guard set the guard_opnum field
                 # of the descr to the original rop.GUARD_VALUE.
-                constvalue = op.args[1].getint()
+                constvalue = op.getarg(1).getint()
                 if constvalue == 0:
                     opnum = rop.GUARD_FALSE
                 elif constvalue == 1:
@@ -362,7 +362,7 @@ class Optimizer(Optimization):
                 else:
                     raise AssertionError("uh?")
                 op.opnum = opnum
-                op.args = [op.args[0]]
+                op.args = [op.getarg(0)]
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.
                 descr.make_a_counter_per_value(op)
@@ -390,7 +390,8 @@ class Optimizer(Optimization):
                     break
             else:
                 # all constant arguments: constant-fold away
-                argboxes = [self.get_constant_box(arg) for arg in op.args]
+                argboxes = [self.get_constant_box(op.getarg(i))
+                            for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
                                          op.opnum, argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
