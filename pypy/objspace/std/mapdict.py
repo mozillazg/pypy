@@ -403,7 +403,7 @@ memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
 _subclass_cache = {}
 
 def _make_subclass_size_n(supercls, n):
-    if supercls._init_empty.im_func is not BaseMapdictObject._init_empty.im_func:
+    if not hasattr(supercls, "_init_empty"):
         return supercls
     from pypy.rlib import unroll, rerased
     rangen = unroll.unrolling_iterable(range(n))
@@ -585,6 +585,7 @@ class CacheEntry(object):
 INVALID_CACHE_ENTRY = CacheEntry()
 INVALID_CACHE_ENTRY.map = objectmodel.instantiate(AbstractAttribute)
                              # different from any real map ^^^
+INVALID_CACHE_ENTRY.map.w_cls = None
 
 def init_mapdict_cache(pycode):
     num_entries = len(pycode.co_names_w)
