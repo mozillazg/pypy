@@ -772,3 +772,4 @@ class TestHybridGCSmallHeap(GCTest):
 class TestMiniMarkGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
     GC_CAN_SHRINK_BIG_ARRAY = False
+    GC_CANNOT_MALLOC_NONMOVABLE = False
