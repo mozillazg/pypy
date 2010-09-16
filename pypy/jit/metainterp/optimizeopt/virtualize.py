@@ -441,7 +441,7 @@ class OptVirtualize(Optimization):
             return # 0-length arraycopy
         descr = op.getarg(0)
         assert isinstance(descr, AbstractDescr)
-        args = op.sliceargs(1, op.numargs())
+        args = op.getarglist()[1:]
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          descr))
 

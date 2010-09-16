@@ -39,8 +39,8 @@ class ResOperation(object):
     def setarglist(self, args):
         self._args = args
 
-    def sliceargs(self, start, stop):
-        return [self.getarg(i) for i in range(start, stop)]
+    def getarglist(self):
+        return self._args
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt

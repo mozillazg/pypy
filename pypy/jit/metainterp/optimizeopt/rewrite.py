@@ -137,7 +137,7 @@ class OptRewrite(Optimization):
             self.make_constant(op.result, op.getarg(0))
             return
         # replace CALL_PURE with just CALL
-        args = op.sliceargs(1, op.numargs())
+        args = op.getarglist()[1:]
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          op.descr))
     def optimize_guard(self, op, constbox, emit_operation=True):

@@ -167,7 +167,7 @@ class OptHeap(Optimization):
             # - CALL_MAY_FORCE: "call_may_force/setfield_gc/guard_not_forced"
             # - is_ovf(): "int_add_ovf/setfield_gc/guard_no_overflow"
             opnum = prevop.opnum
-            lastop_args = lastop.sliceargs(0, lastop.numargs())
+            lastop_args = lastop.getarglist()
             if ((prevop.is_comparison() or opnum == rop.CALL_MAY_FORCE
                  or prevop.is_ovf())
                 and prevop.result not in lastop_args):

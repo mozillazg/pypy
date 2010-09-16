@@ -794,7 +794,7 @@ class TreeLoop(object):
         # RPython-friendly
         print '%r: inputargs =' % self, self._dump_args(self.inputargs)
         for op in self.operations:
-            args = op.sliceargs(0, op.numargs())
+            args = op.getarglist()
             print '\t', op.getopname(), self._dump_args(args), \
                   self._dump_box(op.result)
 
