@@ -408,7 +408,6 @@ def test_specialized_class():
         assert obj2.getdictvalue(space, "b") is w6
         assert obj2.map is abmap
 
-
 # ___________________________________________________________
 # integration tests
 
@@ -507,6 +506,15 @@ class AppTestWithMapDict(object):
         assert a.y == 2
         assert a.__dict__ is d
         assert isinstance(a, B)
+
+    def test_dict_devolved_bug(self):
+        class A(object):
+            pass
+        a = A()
+        a.x = 1
+        d = a.__dict__
+        d[1] = 3
+        a.__dict__ = {}
 
     def test_change_class_slots(self):
         skip("not supported by pypy yet")
