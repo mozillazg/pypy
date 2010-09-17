@@ -285,7 +285,7 @@ class OptVirtualize(Optimization):
     def optimize_JUMP(self, op):
         orgop = self.optimizer.loop.operations[-1]
         exitargs = []
-        target_loop_token = orgop.descr
+        target_loop_token = orgop.getdescr()
         assert isinstance(target_loop_token, LoopToken)
         specnodes = target_loop_token.specnodes
         assert op.numargs() == len(specnodes)
@@ -344,7 +344,7 @@ class OptVirtualize(Optimization):
         if value.is_virtual():
             # optimizefindnode should ensure that fieldvalue is found
             assert isinstance(value, AbstractVirtualValue)
-            fieldvalue = value.getfield(op.descr, None)
+            fieldvalue = value.getfield(op.getdescr(), None)
             assert fieldvalue is not None
             self.make_equal_to(op.result, fieldvalue)
         else:
@@ -360,7 +360,7 @@ class OptVirtualize(Optimization):
         value = self.getvalue(op.getarg(0))
         fieldvalue = self.getvalue(op.getarg(1))
         if value.is_virtual():
-            value.setfield(op.descr, fieldvalue)
+            value.setfield(op.getdescr(), fieldvalue)
         else:
             value.ensure_nonnull()
             ###self.heap_op_optimizer.optimize_SETFIELD_GC(op, value, fieldvalue)
@@ -370,7 +370,7 @@ class OptVirtualize(Optimization):
         self.make_virtual(op.getarg(0), op.result, op)
 
     def optimize_NEW(self, op):
-        self.make_vstruct(op.descr, op.result, op)
+        self.make_vstruct(op.getdescr(), op.result, op)
 
     def optimize_NEW_ARRAY(self, op):
         sizebox = self.get_constant_box(op.getarg(0))
@@ -379,8 +379,8 @@ class OptVirtualize(Optimization):
             # build a new one with the ConstInt argument
             if not isinstance(op.getarg(0), ConstInt):
                 op = ResOperation(rop.NEW_ARRAY, [sizebox], op.result,
-                                  descr=op.descr)
-            self.make_varray(op.descr, sizebox.getint(), op.result, op)
+                                  descr=op.getdescr())
+            self.make_varray(op.getdescr(), sizebox.getint(), op.result, op)
         else:
             ###self.optimize_default(op)
             self.emit_operation(op)

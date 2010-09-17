@@ -151,7 +151,7 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={}):
         else:
             remap[op2.result] = op1.result
         if op1.getopnum() != rop.JUMP:      # xxx obscure
-            assert op1.descr == op2.descr
+            assert op1.getdescr() == op2.getdescr()
         if op1.fail_args or op2.fail_args:
             assert len(op1.fail_args) == len(op2.fail_args)
             if strict_fail_args:
@@ -2327,7 +2327,7 @@ class BaseTestOptimizeOpt(BaseTest):
         from pypy.jit.metainterp.test.test_resume import MyMetaInterp
         guard_op, = [op for op in self.loop.operations if op.is_guard()]
         fail_args = guard_op.fail_args
-        fdescr = guard_op.descr
+        fdescr = guard_op.getdescr()
         assert fdescr.guard_opnum == guard_opnum
         reader = ResumeDataFakeReader(fdescr, fail_args,
                                       MyMetaInterp(self.cpu))

@@ -19,7 +19,7 @@ def test_basic_parse():
     assert [op.getopnum() for op in loop.operations] == [rop.INT_ADD, rop.INT_SUB,
                                                     rop.FINISH]
     assert len(loop.inputargs) == 2
-    assert loop.operations[-1].descr
+    assert loop.operations[-1].getdescr()
 
 def test_const_ptr_subops():
     x = """
@@ -30,7 +30,7 @@ def test_const_ptr_subops():
     vtable = lltype.nullptr(S)
     loop = parse(x, None, locals())
     assert len(loop.operations) == 1
-    assert loop.operations[0].descr
+    assert loop.operations[0].getdescr()
     assert loop.operations[0].fail_args == []
 
 def test_descr():
@@ -43,7 +43,7 @@ def test_descr():
     """
     stuff = Xyz()
     loop = parse(x, None, locals())
-    assert loop.operations[0].descr is stuff
+    assert loop.operations[0].getdescr() is stuff
 
 def test_after_fail():
     x = """
@@ -64,7 +64,7 @@ def test_descr_setfield():
     """
     stuff = Xyz()
     loop = parse(x, None, locals())
-    assert loop.operations[0].descr is stuff
+    assert loop.operations[0].getdescr() is stuff
 
 def test_boxname():
     x = """
@@ -119,7 +119,7 @@ def test_jump_target():
     jump()
     '''
     loop = parse(x)
-    assert loop.operations[0].descr is loop.token
+    assert loop.operations[0].getdescr() is loop.token
 
 def test_jump_target_other():
     looptoken = LoopToken()
@@ -128,7 +128,7 @@ def test_jump_target_other():
     jump(descr=looptoken)
     '''
     loop = parse(x, namespace=locals())
-    assert loop.operations[0].descr is looptoken
+    assert loop.operations[0].getdescr() is looptoken
 
 def test_floats():
     x = '''

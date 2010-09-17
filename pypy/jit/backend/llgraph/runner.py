@@ -152,14 +152,14 @@ class BaseCPU(model.AbstractCPU):
     def _compile_operations(self, c, operations, var2index):
         for op in operations:
             llimpl.compile_add(c, op.getopnum())
-            descr = op.descr
+            descr = op.getdescr()
             if isinstance(descr, Descr):
                 llimpl.compile_add_descr(c, descr.ofs, descr.typeinfo)
             if isinstance(descr, history.LoopToken) and op.getopnum() != rop.JUMP:
                 llimpl.compile_add_loop_token(c, descr)
             if self.is_oo and isinstance(descr, (OODescr, MethDescr)):
                 # hack hack, not rpython
-                c._obj.externalobj.operations[-1].descr = descr
+                c._obj.externalobj.operations[-1].setdescr(descr)
             for i in range(op.numargs()):
                 x = op.getarg(i)
                 if isinstance(x, history.Box):
@@ -174,7 +174,7 @@ class BaseCPU(model.AbstractCPU):
                     raise Exception("'%s' args contain: %r" % (op.getopname(),
                                                                x))
             if op.is_guard():
-                faildescr = op.descr
+                faildescr = op.getdescr()
                 assert isinstance(faildescr, history.AbstractFailDescr)
                 faildescr._fail_args_types = []
                 for box in op.fail_args:
@@ -205,12 +205,12 @@ class BaseCPU(model.AbstractCPU):
         op = operations[-1]
         assert op.is_final()
         if op.getopnum() == rop.JUMP:
-            targettoken = op.descr
+            targettoken = op.getdescr()
             assert isinstance(targettoken, history.LoopToken)
             compiled_version = targettoken._llgraph_compiled_version
             llimpl.compile_add_jump_target(c, compiled_version)
         elif op.getopnum() == rop.FINISH:
-            faildescr = op.descr
+            faildescr = op.getdescr()
             index = self.get_fail_descr_number(faildescr)
             llimpl.compile_add_fail(c, index)
         else:

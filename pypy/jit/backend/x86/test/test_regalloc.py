@@ -160,7 +160,7 @@ class BaseTestRegalloc(object):
         bridge = self.parse(ops, **kwds)
         assert ([box.type for box in bridge.inputargs] ==
                 [box.type for box in guard_op.fail_args])
-        faildescr = guard_op.descr
+        faildescr = guard_op.getdescr()
         self.cpu.compile_bridge(faildescr, bridge.inputargs, bridge.operations)
         return bridge
 
@@ -607,7 +607,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
 
-        assert loop.operations[-2].descr._x86_bridge_param_depth == self.expected_param_depth(2)
+        assert loop.operations[-2].getdescr()._x86_bridge_param_depth == self.expected_param_depth(2)
 
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        
@@ -630,7 +630,7 @@ class TestRegAllocCallAndStackDepth(BaseTestRegalloc):
         '''
         bridge = self.attach_bridge(ops, loop, -2)
 
-        assert loop.operations[-2].descr._x86_bridge_param_depth == self.expected_param_depth(2)
+        assert loop.operations[-2].getdescr()._x86_bridge_param_depth == self.expected_param_depth(2)
 
         self.cpu.set_future_value_int(0, 4)
         self.cpu.set_future_value_int(1, 7)        

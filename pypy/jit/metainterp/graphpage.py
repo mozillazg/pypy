@@ -17,13 +17,13 @@ def display_loops(loops, errmsg=None, highlight_loops=()):
     for graph, highlight in graphs:
         for op in graph.get_operations():
             if is_interesting_guard(op):
-                graphs.append((SubGraph(op.descr._debug_suboperations),
+                graphs.append((SubGraph(op.getdescr()._debug_suboperations),
                                highlight))
     graphpage = ResOpGraphPage(graphs, errmsg)
     graphpage.display()
 
 def is_interesting_guard(op):
-    return hasattr(op.descr, '_debug_suboperations')
+    return hasattr(op.getdescr(), '_debug_suboperations')
 
 
 class ResOpGraphPage(GraphPage):
@@ -155,7 +155,7 @@ class ResOpGen(object):
             op = operations[opindex]
             lines.append(repr(op))
             if is_interesting_guard(op):
-                tgt = op.descr._debug_suboperations[0]
+                tgt = op.getdescr()._debug_suboperations[0]
                 tgt_g, tgt_i = self.all_operations[tgt]
                 self.genedge((graphindex, opstartindex),
                              (tgt_g, tgt_i),
@@ -168,7 +168,7 @@ class ResOpGen(object):
                              (graphindex, opindex))
                 break
         if op.getopnum() == rop.JUMP:
-            tgt = op.descr
+            tgt = op.getdescr()
             tgt_g = -1
             if tgt is None:
                 tgt_g = graphindex

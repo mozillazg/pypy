@@ -340,7 +340,7 @@ class Optimizer(Optimization):
 
     def store_final_boxes_in_guard(self, op):
         ###pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()
-        descr = op.descr
+        descr = op.getdescr()
         assert isinstance(descr, compile.ResumeGuardDescr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         newboxes = modifier.finish(self.values, self.pendingfields)
@@ -395,7 +395,7 @@ class Optimizer(Optimization):
                 argboxes = [self.get_constant_box(op.getarg(i))
                             for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
-                                         op.getopnum(), argboxes, op.descr)
+                                         op.getopnum(), argboxes, op.getdescr())
                 self.make_constant(op.result, resbox.constbox())
                 if is_ovf:
                     self.i += 1 # skip next operation, it is the unneeded guard
@@ -404,7 +404,7 @@ class Optimizer(Optimization):
             # did we do the exact same operation already?
             args = self.make_args_key(op)
             oldop = self.pure_operations.get(args, None)
-            if oldop is not None and oldop.descr is op.descr:
+            if oldop is not None and oldop.getdescr() is op.getdescr():
                 assert oldop.getopnum() == op.getopnum()
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 if is_ovf:

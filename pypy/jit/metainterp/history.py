@@ -769,9 +769,9 @@ class TreeLoop(object):
                 if isinstance(box, Box):
                     assert box in seen
             if op.is_guard():
-                assert op.descr is not None
-                if hasattr(op.descr, '_debug_suboperations'):
-                    ops = op.descr._debug_suboperations
+                assert op.getdescr() is not None
+                if hasattr(op.getdescr(), '_debug_suboperations'):
+                    ops = op.getdescr()._debug_suboperations
                     TreeLoop.check_consistency_of_branch(ops, seen.copy())
                 for box in op.fail_args or []:
                     if box is not None:
@@ -786,7 +786,7 @@ class TreeLoop(object):
                 seen[box] = True
         assert operations[-1].is_final()
         if operations[-1].getopnum() == rop.JUMP:
-            target = operations[-1].descr
+            target = operations[-1].getdescr()
             if target is not None:
                 assert isinstance(target, LoopToken)
 
@@ -816,9 +816,9 @@ def _list_all_operations(result, operations, omit_finish=True):
         return
     result.extend(operations)
     for op in operations:
-        if op.is_guard() and op.descr:
-            if hasattr(op.descr, '_debug_suboperations'):
-                ops = op.descr._debug_suboperations
+        if op.is_guard() and op.getdescr():
+            if hasattr(op.getdescr(), '_debug_suboperations'):
+                ops = op.getdescr()._debug_suboperations
                 _list_all_operations(result, ops, omit_finish)
 
 # ____________________________________________________________

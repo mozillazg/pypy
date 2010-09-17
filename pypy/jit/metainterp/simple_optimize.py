@@ -18,7 +18,7 @@ def transform(op):
         op = ResOperation(rop.CALL, args, op.result, descr=descr)
     elif op.getopnum() == rop.CALL_PURE:
         args = op.getarglist()[1:]
-        op = ResOperation(rop.CALL, args, op.result, op.descr)
+        op = ResOperation(rop.CALL, args, op.result, op.getdescr())
     elif op.getopnum() == rop.VIRTUAL_REF:
         op = ResOperation(rop.SAME_AS, [op.getarg(0)], op.result)
     elif op.getopnum() == rop.VIRTUAL_REF_FINISH:
@@ -38,7 +38,7 @@ def optimize_loop(metainterp_sd, old_loops, loop):
         newoperations = []
         for op in loop.operations:
             if op.is_guard():
-                descr = op.descr
+                descr = op.getdescr()
                 assert isinstance(descr, compile.ResumeGuardDescr)
                 modifier = resume.ResumeDataVirtualAdder(descr, memo)
                 newboxes = modifier.finish(EMPTY_VALUES)

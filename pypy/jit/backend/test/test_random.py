@@ -105,11 +105,11 @@ class OperationBuilder(object):
                 args.append('ConstInt(%d)' % v.value)
             else:
                 raise NotImplementedError(v)
-        if op.descr is None:
+        if op.getdescr() is None:
             descrstr = ''
         else:
             try:
-                descrstr = ', ' + op.descr._random_info
+                descrstr = ', ' + op.getdescr()._random_info
             except AttributeError:
                 descrstr = ', descr=...'
         print >>s, '        ResOperation(rop.%s, [%s], %s%s),' % (
@@ -284,7 +284,7 @@ class AbstractOvfOperation(AbstractOperation):
             builder.intvars[:] = original_intvars
         else:
             op = ResOperation(rop.GUARD_NO_OVERFLOW, [], None)
-        op.descr = BasicFailDescr()
+        op.setdescr(BasicFailDescr())
         op.fail_args = fail_subset
         builder.loop.operations.append(op)
 
@@ -345,7 +345,7 @@ class GuardOperation(AbstractOperation):
     def produce_into(self, builder, r):
         op, passing = self.gen_guard(builder, r)
         builder.loop.operations.append(op)
-        op.descr = BasicFailDescr()
+        op.setdescr(BasicFailDescr())
         op.fail_args = builder.subset_of_intvars(r)
         if not passing:
             builder.should_fail_by = op
@@ -606,7 +606,7 @@ class RandomLoop(object):
             else:
                 raise NotImplementedError(box)
         fail = cpu.execute_token(self.loop.token)
-        assert fail is self.should_fail_by.descr
+        assert fail is self.should_fail_by.getdescr()
         for i, v in enumerate(self.get_fail_args()):
             if isinstance(v, (BoxFloat, ConstFloat)):
                 value = cpu.get_latest_value_float(i)
@@ -633,7 +633,7 @@ class RandomLoop(object):
             else:
                 op = ResOperation(rop.GUARD_EXCEPTION, [guard_op._exc_box],
                                   BoxPtr())
-            op.descr = BasicFailDescr()
+            op.setdescr(BasicFailDescr())
             op.fail_args = []
             return op
 
@@ -642,7 +642,7 @@ class RandomLoop(object):
         r = self.r
         guard_op = self.guard_op
         fail_args = guard_op.fail_args
-        fail_descr = guard_op.descr
+        fail_descr = guard_op.getdescr()
         op = self.should_fail_by
         if not op.fail_args:
             return False

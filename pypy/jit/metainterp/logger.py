@@ -89,8 +89,8 @@ class Logger(object):
             else:
                 res = ""
             is_guard = op.is_guard()
-            if op.descr is not None:
-                descr = op.descr
+            if op.getdescr() is not None:
+                descr = op.getdescr()
                 if is_guard and self.guard_number:
                     index = self.metainterp_sd.cpu.get_fail_descr_number(descr)
                     r = "<Guard%d>" % index

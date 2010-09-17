@@ -24,7 +24,7 @@ class OptRewrite(Optimization):
         
     def try_boolinvers(self, op, targs):
         oldop = self.optimizer.pure_operations.get(targs, None)
-        if oldop is not None and oldop.descr is op.descr:
+        if oldop is not None and oldop.getdescr() is op.getdescr():
             value = self.getvalue(oldop.result)
             if value.is_constant():
                 if value.box.same_constant(CONST_1):
@@ -50,7 +50,7 @@ class OptRewrite(Optimization):
             oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
             targs = [args[1], args[0], ConstInt(oldopnum)]
             oldop = self.optimizer.pure_operations.get(targs, None)
-            if oldop is not None and oldop.descr is op.descr:
+            if oldop is not None and oldop.getdescr() is op.getdescr():
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 return True
         except KeyError:
@@ -139,7 +139,7 @@ class OptRewrite(Optimization):
         # replace CALL_PURE with just CALL
         args = op.getarglist()[1:]
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
-                                         op.descr))
+                                         op.getdescr()))
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.getarg(0))
         if value.is_constant():
@@ -182,9 +182,9 @@ class OptRewrite(Optimization):
                                              args = [old_guard_op.getarg(0), op.getarg(1)])
             self.optimizer.newoperations[value.last_guard_index] = new_guard_op
             # hack hack hack.  Change the guard_opnum on
-            # new_guard_op.descr so that when resuming,
+            # new_guard_op.getdescr() so that when resuming,
             # the operation is not skipped by pyjitpl.py.
-            descr = new_guard_op.descr
+            descr = new_guard_op.getdescr()
             assert isinstance(descr, compile.ResumeGuardDescr)
             descr.guard_opnum = rop.GUARD_VALUE
             descr.make_a_counter_per_value(new_guard_op)
@@ -222,9 +222,9 @@ class OptRewrite(Optimization):
                                          args = [old_guard_op.getarg(0), op.getarg(1)])
                 self.optimizer.newoperations[value.last_guard_index] = new_guard_op
                 # hack hack hack.  Change the guard_opnum on
-                # new_guard_op.descr so that when resuming,
+                # new_guard_op.getdescr() so that when resuming,
                 # the operation is not skipped by pyjitpl.py.
-                descr = new_guard_op.descr
+                descr = new_guard_op.getdescr()
                 assert isinstance(descr, compile.ResumeGuardDescr)
                 descr.guard_opnum = rop.GUARD_NONNULL_CLASS
                 emit_operation = False
@@ -314,7 +314,7 @@ class OptRewrite(Optimization):
         value = self.getvalue(op.getarg(0))
         realclassbox = value.get_constant_class(self.optimizer.cpu)
         if realclassbox is not None:
-            checkclassbox = self.optimizer.cpu.typedescr2classbox(op.descr)
+            checkclassbox = self.optimizer.cpu.typedescr2classbox(op.getdescr())
             result = self.optimizer.cpu.ts.subclassOf(self.optimizer.cpu,
                                                       realclassbox, 
                                                       checkclassbox)

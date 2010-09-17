@@ -24,6 +24,11 @@ class BaseResOperation(object):
         self.result = result
         self.setdescr(descr)
 
+    def __setattr__(self, name, attr):
+        if name == 'descr':
+            assert False
+        object.__setattr__(self, name, attr)
+
     def copy_and_change(self, opnum, args=None, result=None, descr=None):
         "shallow copy: the returned operation is meant to be used in place of self"
         if args is None:
@@ -62,7 +67,7 @@ class BaseResOperation(object):
         self.fail_args = fail_args
 
     def getdescr(self):
-        return self.descr
+        return self._descr
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
@@ -72,10 +77,10 @@ class BaseResOperation(object):
         # cpu.calldescrof(), and cpu.typedescrof().
         from pypy.jit.metainterp.history import check_descr
         check_descr(descr)
-        self.descr = descr
+        self._descr = descr
 
     def clone(self):
-        descr = self.descr
+        descr = self._descr
         if descr is not None:
             descr = descr.clone_if_mutable()
         op = ResOperation(self._opnum, self._args, self.result, descr)
@@ -98,12 +103,12 @@ class BaseResOperation(object):
             prefix = "%s:%s   " % (self.name, self.pc)
         else:
             prefix = ""
-        if self.descr is None or we_are_translated():
+        if self._descr is None or we_are_translated():
             return '%s%s%s(%s)' % (prefix, sres, self.getopname(),
                                  ', '.join([str(a) for a in self._args]))
         else:
             return '%s%s%s(%s, descr=%r)' % (prefix, sres, self.getopname(),
-                            ', '.join([str(a) for a in self._args]), self.descr)
+                            ', '.join([str(a) for a in self._args]), self._descr)
 
     def getopname(self):
         try:
