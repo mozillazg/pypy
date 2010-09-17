@@ -580,7 +580,7 @@ class RandomLoop(object):
             assert self.should_fail_by.fail_args is not None
             return self.should_fail_by.fail_args
         else:
-            assert self.should_fail_by.opnum == rop.FINISH
+            assert self.should_fail_by.getopnum() == rop.FINISH
             return self.should_fail_by.getarglist()
 
     def clear_state(self):
@@ -620,7 +620,7 @@ class RandomLoop(object):
         exc = cpu.grab_exc_value()
         if (self.guard_op is not None and
             self.guard_op.is_guard_exception()):
-            if self.guard_op.opnum == rop.GUARD_NO_EXCEPTION:
+            if self.guard_op.getopnum() == rop.GUARD_NO_EXCEPTION:
                 assert exc
         else:
             assert not exc

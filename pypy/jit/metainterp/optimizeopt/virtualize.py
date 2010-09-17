@@ -446,7 +446,7 @@ class OptVirtualize(Optimization):
                                          descr))
 
     def propagate_forward(self, op):
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)

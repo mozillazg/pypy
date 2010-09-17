@@ -234,10 +234,10 @@ class ResumeGuardDescr(ResumeDescr):
 
     def store_final_boxes(self, guard_op, boxes):
         guard_op.fail_args = boxes
-        self.guard_opnum = guard_op.opnum
+        self.guard_opnum = guard_op.getopnum()
 
     def make_a_counter_per_value(self, guard_value_op):
-        assert guard_value_op.opnum == rop.GUARD_VALUE
+        assert guard_value_op.getopnum() == rop.GUARD_VALUE
         box = guard_value_op.getarg(0)
         try:
             i = guard_value_op.fail_args.index(box)

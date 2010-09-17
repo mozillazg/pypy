@@ -144,7 +144,7 @@ class NodeFinder(object):
 
     def find_nodes(self, operations):
         for op in operations:
-            opnum = op.opnum
+            opnum = op.getopnum()
             for value, func in find_nodes_ops:
                 if opnum == value:
                     func(self, op)
@@ -163,7 +163,7 @@ class NodeFinder(object):
                 argboxes = [self.get_constant_box(op.getarg(i))
                             for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
-                                         op.opnum, argboxes, op.descr)
+                                         op.getopnum(), argboxes, op.descr)
                 self.set_constant_node(op.result, resbox.constbox())
         # default case: mark the arguments as escaping
         for i in range(op.numargs()):
@@ -328,7 +328,7 @@ class PerfectSpecializationFinder(NodeFinder):
     def show(self):
         from pypy.jit.metainterp.viewnode import viewnodes, view
         op = self._loop.operations[-1]
-        assert op.opnum == rop.JUMP
+        assert op.getopnum() == rop.JUMP
         exitnodes = [self.getnode(arg) for arg in op.args]
         viewnodes(self.inputnodes, exitnodes)
         if hasattr(self._loop.token, "specnodes"):
@@ -347,7 +347,7 @@ class PerfectSpecializationFinder(NodeFinder):
         # Build the list of specnodes based on the result
         # computed by NodeFinder.find_nodes().
         op = loop.operations[-1]
-        assert op.opnum == rop.JUMP
+        assert op.getopnum() == rop.JUMP
         assert len(self.inputnodes) == op.numargs()
         while True:
             self.restart_needed = False

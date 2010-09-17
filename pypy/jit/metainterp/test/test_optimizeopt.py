@@ -140,7 +140,7 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={}):
             print '%-39s| %s' % (txt1[:39], txt2[:39])
             txt1 = txt1[39:]
             txt2 = txt2[39:]
-        assert op1.opnum == op2.opnum
+        assert op1.getopnum() == op2.getopnum()
         assert op1.numargs() == op2.numargs()
         for i in range(op1.numargs()):
             x = op1.getarg(i)
@@ -150,7 +150,7 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={}):
             assert op1.result == remap[op2.result]
         else:
             remap[op2.result] = op1.result
-        if op1.opnum != rop.JUMP:      # xxx obscure
+        if op1.getopnum() != rop.JUMP:      # xxx obscure
             assert op1.descr == op2.descr
         if op1.fail_args or op2.fail_args:
             assert len(op1.fail_args) == len(op2.fail_args)

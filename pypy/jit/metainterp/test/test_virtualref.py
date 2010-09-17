@@ -71,7 +71,7 @@ class VRefTests:
         #
         ops = self.metainterp.staticdata.stats.loops[0].operations
         [guard_op] = [op for op in ops
-                         if op.opnum == rop.GUARD_NOT_FORCED]
+                         if op.getopnum() == rop.GUARD_NOT_FORCED]
         bxs1 = [box for box in guard_op.fail_args
                   if str(box._getrepr_()).endswith('.X')]
         assert len(bxs1) == 1

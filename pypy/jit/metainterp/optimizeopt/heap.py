@@ -105,7 +105,7 @@ class OptHeap(Optimization):
         if op.is_guard():
             self.optimizer.pendingfields = self.force_lazy_setfields_for_guard()
             return
-        opnum = op.opnum
+        opnum = op.getopnum()
         if (opnum == rop.SETFIELD_GC or
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.DEBUG_MERGE_POINT):
@@ -142,7 +142,7 @@ class OptHeap(Optimization):
                 return
             self.force_all_lazy_setfields()
         elif op.is_final() or (not we_are_translated() and
-                               op.opnum < 0):   # escape() operations
+                               op.getopnum() < 0):   # escape() operations
             self.force_all_lazy_setfields()
         self.clean_caches()
 
@@ -166,7 +166,7 @@ class OptHeap(Optimization):
             # - is_comparison() for cases like "int_eq/setfield_gc/guard_true"
             # - CALL_MAY_FORCE: "call_may_force/setfield_gc/guard_not_forced"
             # - is_ovf(): "int_add_ovf/setfield_gc/guard_no_overflow"
-            opnum = prevop.opnum
+            opnum = prevop.getopnum()
             lastop_args = lastop.getarglist()
             if ((prevop.is_comparison() or opnum == rop.CALL_MAY_FORCE
                  or prevop.is_ovf())
@@ -257,7 +257,7 @@ class OptHeap(Optimization):
                                    write=True)
 
     def propagate_forward(self, op):
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)

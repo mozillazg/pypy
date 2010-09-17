@@ -1922,7 +1922,7 @@ class MetaInterp(object):
         vrefbox = self.virtualref_boxes[i+1]
         # record VIRTUAL_REF_FINISH just before the current CALL_MAY_FORCE
         call_may_force_op = self.history.operations.pop()
-        assert call_may_force_op.opnum == rop.CALL_MAY_FORCE
+        assert call_may_force_op.getopnum() == rop.CALL_MAY_FORCE
         self.history.record(rop.VIRTUAL_REF_FINISH,
                             [vrefbox, virtualbox], None)
         self.history.operations.append(call_may_force_op)
@@ -2088,7 +2088,7 @@ class MetaInterp(object):
         """ Patch a CALL into a CALL_PURE.
         """
         op = self.history.operations[-1]
-        assert op.opnum == rop.CALL
+        assert op.getopnum() == rop.CALL
         resbox_as_const = resbox.constbox()
         for i in range(op.numargs()):
             if not isinstance(op.getarg(i), Const):
@@ -2100,7 +2100,7 @@ class MetaInterp(object):
             return resbox_as_const
         # not all constants (so far): turn CALL into CALL_PURE, which might
         # be either removed later by optimizeopt or turned back into CALL.
-        op.opnum = rop.CALL_PURE
+        op._opnum = rop.CALL_PURE
         # XXX XXX replace when the resoperation refactoring has been finished
         op._args = [resbox_as_const] + op._args
         return resbox
@@ -2110,7 +2110,7 @@ class MetaInterp(object):
         patching the CALL_MAY_FORCE that occurred just now.
         """
         op = self.history.operations.pop()
-        assert op.opnum == rop.CALL_MAY_FORCE
+        assert op.getopnum() == rop.CALL_MAY_FORCE
         num_green_args = targetjitdriver_sd.num_green_args
         arglist = op.getarglist()
         greenargs = arglist[1:num_green_args+1]
@@ -2124,7 +2124,7 @@ class MetaInterp(object):
             # ^^^ and not "+=", which makes 'args' a resizable list
         warmrunnerstate = targetjitdriver_sd.warmstate
         token = warmrunnerstate.get_assembler_token(greenargs, args)
-        op.opnum = rop.CALL_ASSEMBLER
+        op._opnum = rop.CALL_ASSEMBLER
         op.setarglist(args)
         op.descr = token
         self.history.operations.append(op)

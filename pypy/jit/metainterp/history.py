@@ -785,7 +785,7 @@ class TreeLoop(object):
                 assert box not in seen
                 seen[box] = True
         assert operations[-1].is_final()
-        if operations[-1].opnum == rop.JUMP:
+        if operations[-1].getopnum() == rop.JUMP:
             target = operations[-1].descr
             if target is not None:
                 assert isinstance(target, LoopToken)
@@ -811,7 +811,7 @@ class TreeLoop(object):
         return '<%s>' % (self.name,)
 
 def _list_all_operations(result, operations, omit_finish=True):
-    if omit_finish and operations[-1].opnum == rop.FINISH:
+    if omit_finish and operations[-1].getopnum() == rop.FINISH:
         # xxx obscure
         return
     result.extend(operations)

@@ -559,7 +559,7 @@ class GcLLDescr_framework(GcLLDescription):
         #
         newops = []
         for op in operations:
-            if op.opnum == rop.DEBUG_MERGE_POINT:
+            if op.getopnum() == rop.DEBUG_MERGE_POINT:
                 continue
             # ---------- replace ConstPtrs with GETFIELD_RAW ----------
             # xxx some performance issue here
@@ -576,7 +576,7 @@ class GcLLDescr_framework(GcLLDescription):
                                                    self.single_gcref_descr))
                         op.setarg(i, box)
             # ---------- write barrier for SETFIELD_GC ----------
-            if op.opnum == rop.SETFIELD_GC:
+            if op.getopnum() == rop.SETFIELD_GC:
                 v = op.getarg(1)
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
@@ -584,7 +584,7 @@ class GcLLDescr_framework(GcLLDescription):
                     op = ResOperation(rop.SETFIELD_RAW, op._args, None,
                                       descr=op.descr)
             # ---------- write barrier for SETARRAYITEM_GC ----------
-            if op.opnum == rop.SETARRAYITEM_GC:
+            if op.getopnum() == rop.SETARRAYITEM_GC:
                 v = op.getarg(2)
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL

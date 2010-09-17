@@ -107,7 +107,7 @@ class LLVMJITCompiler(object):
         # store away the exception into self.backup_exc_xxx, *unless* the
         # branch starts with a further GUARD_EXCEPTION/GUARD_NO_EXCEPTION.
         if exc:
-            opnum = operations[0].opnum
+            opnum = operations[0].getopnum()
             if opnum not in (rop.GUARD_EXCEPTION, rop.GUARD_NO_EXCEPTION):
                 self._store_away_exception()
         # Normal handling of the operations follows.
@@ -115,7 +115,7 @@ class LLVMJITCompiler(object):
             self._generate_op(op)
 
     def _generate_op(self, op):
-        opnum = op.opnum
+        opnum = op.getopnum()
         for i, name in all_operations:
             if opnum == i:
                 meth = getattr(self, name)

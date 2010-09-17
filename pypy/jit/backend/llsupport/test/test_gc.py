@@ -258,7 +258,7 @@ class TestFramework:
         gc_ll_descr._gen_write_barrier(newops, v_base, v_value)
         assert llop1.record == []
         assert len(newops) == 1
-        assert newops[0].opnum == rop.COND_CALL_GC_WB
+        assert newops[0].getopnum() == rop.COND_CALL_GC_WB
         assert newops[0].getarg(0) == v_base
         assert newops[0].getarg(1) == v_value
         assert newops[0].result is None
@@ -298,12 +298,12 @@ class TestFramework:
         gc_ll_descr.gcrefs = MyFakeGCRefList()
         gc_ll_descr.rewrite_assembler(MyFakeCPU(), operations)
         assert len(operations) == 2
-        assert operations[0].opnum == rop.GETFIELD_RAW
+        assert operations[0].getopnum() == rop.GETFIELD_RAW
         assert operations[0].getarg(0) == ConstInt(43)
         assert operations[0].descr == gc_ll_descr.single_gcref_descr
         v_box = operations[0].result
         assert isinstance(v_box, BoxPtr)
-        assert operations[1].opnum == rop.PTR_EQ
+        assert operations[1].getopnum() == rop.PTR_EQ
         assert operations[1].getarg(0) == v_random_box
         assert operations[1].getarg(1) == v_box
         assert operations[1].result == v_result
@@ -337,7 +337,7 @@ class TestFramework:
         finally:
             rgc.can_move = old_can_move
         assert len(operations) == 1
-        assert operations[0].opnum == rop.PTR_EQ
+        assert operations[0].getopnum() == rop.PTR_EQ
         assert operations[0].getarg(0) == v_random_box
         assert operations[0].getarg(1) == ConstPtr(s_gcref)
         assert operations[0].result == v_result
@@ -358,12 +358,12 @@ class TestFramework:
         gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
         assert len(operations) == 2
         #
-        assert operations[0].opnum == rop.COND_CALL_GC_WB
+        assert operations[0].getopnum() == rop.COND_CALL_GC_WB
         assert operations[0].getarg(0) == v_base
         assert operations[0].getarg(1) == v_value
         assert operations[0].result is None
         #
-        assert operations[1].opnum == rop.SETFIELD_RAW
+        assert operations[1].getopnum() == rop.SETFIELD_RAW
         assert operations[1].getarg(0) == v_base
         assert operations[1].getarg(1) == v_value
         assert operations[1].descr == field_descr
@@ -382,12 +382,12 @@ class TestFramework:
         gc_ll_descr.rewrite_assembler(self.fake_cpu, operations)
         assert len(operations) == 2
         #
-        assert operations[0].opnum == rop.COND_CALL_GC_WB
+        assert operations[0].getopnum() == rop.COND_CALL_GC_WB
         assert operations[0].getarg(0) == v_base
         assert operations[0].getarg(1) == v_value
         assert operations[0].result is None
         #
-        assert operations[1].opnum == rop.SETARRAYITEM_RAW
+        assert operations[1].getopnum() == rop.SETARRAYITEM_RAW
         assert operations[1].getarg(0) == v_base
         assert operations[1].getarg(1) == v_index
         assert operations[1].getarg(2) == v_value
