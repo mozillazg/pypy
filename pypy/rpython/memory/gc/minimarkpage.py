@@ -68,10 +68,11 @@ class ArenaCollection(object):
         self.nblocks_for_size = lltype.malloc(rffi.CArray(lltype.Signed),
                                               length, flavor='raw')
         self.hdrsize = llmemory.raw_malloc_usage(llmemory.sizeof(PAGE_HEADER))
+        self.nblocks_for_size[0] = 0    # unused
         for i in range(1, length):
             self.nblocks_for_size[i] = (page_size - self.hdrsize) // (WORD * i)
         #
-        self.uninitialized_pages = PAGE_NULL
+        self.uninitialized_pages = NULL
         self.num_uninitialized_pages = 0
         self.free_pages = NULL
         self.total_memory_used = r_uint(0)
@@ -328,7 +329,8 @@ class ArenaCollection(object):
 def start_of_page(addr, page_size):
     """Return the address of the start of the page that contains 'addr'."""
     if we_are_translated():
-        xxx
+        offset = llmemory.cast_adr_to_int(addr) % page_size
+        return addr - offset
     else:
         return _start_of_page_untranslated(addr, page_size)
 

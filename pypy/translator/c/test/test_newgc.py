@@ -19,10 +19,11 @@ class TestUsingFramework(object):
     removetypeptr = False
     taggedpointers = False
     GC_CAN_MOVE = False
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_SHRINK_ARRAY = False
 
     _isolated_func = None
+    c_allfuncs = None
 
     @classmethod
     def _makefunc_str_int(cls, f):
@@ -111,6 +112,7 @@ class TestUsingFramework(object):
     def teardown_class(cls):
         if hasattr(cls.c_allfuncs, 'close_isolate'):
             cls.c_allfuncs.close_isolate()
+            cls.c_allfuncs = None
 
     def run(self, name, *args):
         if not args:
@@ -690,8 +692,8 @@ class TestUsingFramework(object):
                 rgc.collect()
                 if a:
                     assert not rgc.can_move(a)
-                    return 0
-                return 1
+                    return 1
+                return 0
             except Exception, e:
                 return 2
 
@@ -699,7 +701,7 @@ class TestUsingFramework(object):
 
     def test_malloc_nonmovable(self):
         res = self.run('malloc_nonmovable')
-        assert res == self.GC_CANNOT_MALLOC_NONMOVABLE
+        assert res == self.GC_CAN_MALLOC_NONMOVABLE
 
     def define_resizable_buffer(cls):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -896,7 +898,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
     GC_CAN_MOVE = True
-    GC_CANNOT_MALLOC_NONMOVABLE = True
+    GC_CAN_MALLOC_NONMOVABLE = False
     GC_CAN_SHRINK_ARRAY = True
 
     # for snippets
@@ -1055,7 +1057,7 @@ class TestGenerationalGC(TestSemiSpaceGC):
 class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
     should_be_moving = True
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
 
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
@@ -1125,6 +1127,15 @@ class TestMarkCompactGC(TestSemiSpaceGC):
     def test_adding_a_hash(self):
         res = self.run("adding_a_hash")
         assert res == 0
+
+class TestMiniMarkGC(TestSemiSpaceGC):
+    gcpolicy = "minimark"
+    should_be_moving = True
+    GC_CAN_MALLOC_NONMOVABLE = True
+    GC_CAN_SHRINK_ARRAY = True
+
+    def test_gc_heap_stats(self):
+        py.test.skip("not implemented")
 
 # ____________________________________________________________________
 
