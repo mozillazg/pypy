@@ -178,17 +178,16 @@ class OptRewrite(Optimization):
             # guard_nonnull_class on this value, which is rather silly.
             # replace the original guard with a guard_value
             old_guard_op = self.optimizer.newoperations[value.last_guard_index]
-            old_opnum = old_guard_op.opnum
-            old_guard_op.opnum = rop.GUARD_VALUE
-            # XXX XXX: implement it when the refactoring is complete
-            old_guard_op._args = [old_guard_op.getarg(0), op.getarg(1)]
+            new_guard_op = old_guard_op.copy_and_change(rop.GUARD_VALUE,
+                                             args = [old_guard_op.getarg(0), op.getarg(1)])
+            self.optimizer.newoperations[value.last_guard_index] = new_guard_op
             # hack hack hack.  Change the guard_opnum on
-            # old_guard_op.descr so that when resuming,
+            # new_guard_op.descr so that when resuming,
             # the operation is not skipped by pyjitpl.py.
-            descr = old_guard_op.descr
+            descr = new_guard_op.descr
             assert isinstance(descr, compile.ResumeGuardDescr)
             descr.guard_opnum = rop.GUARD_VALUE
-            descr.make_a_counter_per_value(old_guard_op)
+            descr.make_a_counter_per_value(new_guard_op)
             emit_operation = False
         constbox = op.getarg(1)
         assert isinstance(constbox, Const)
@@ -219,13 +218,13 @@ class OptRewrite(Optimization):
             if old_guard_op.opnum == rop.GUARD_NONNULL:
                 # it was a guard_nonnull, which we replace with a
                 # guard_nonnull_class.
-                old_guard_op.opnum = rop.GUARD_NONNULL_CLASS
-                # XXX XXX: implement it when the refactoring is complete
-                old_guard_op._args = [old_guard_op.getarg(0), op.getarg(1)]
+                new_guard_op = old_guard_op.copy_and_change (rop.GUARD_NONNULL_CLASS,
+                                         args = [old_guard_op.getarg(0), op.getarg(1)])
+                self.optimizer.newoperations[value.last_guard_index] = new_guard_op
                 # hack hack hack.  Change the guard_opnum on
-                # old_guard_op.descr so that when resuming,
+                # new_guard_op.descr so that when resuming,
                 # the operation is not skipped by pyjitpl.py.
-                descr = old_guard_op.descr
+                descr = new_guard_op.descr
                 assert isinstance(descr, compile.ResumeGuardDescr)
                 descr.guard_opnum = rop.GUARD_NONNULL_CLASS
                 emit_operation = False
