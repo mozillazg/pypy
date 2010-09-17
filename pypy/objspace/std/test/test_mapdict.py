@@ -516,6 +516,27 @@ class AppTestWithMapDict(object):
         d[1] = 3
         a.__dict__ = {}
 
+    def test_dict_clear_bug(self):
+        class A(object):
+            pass
+        a = A()
+        a.x1 = 1
+        a.x2 = 1
+        a.x3 = 1
+        a.x4 = 1
+        a.x5 = 1
+        for i in range(100): # change _size_estimate of w_A.terminator
+            a1 = A()
+            a1.x1 = 1
+            a1.x2 = 1
+            a1.x3 = 1
+            a1.x4 = 1
+            a1.x5 = 1
+        d = a.__dict__
+        d.clear()
+        a.__dict__ = {1: 1}
+        assert d == {}
+
     def test_change_class_slots(self):
         skip("not supported by pypy yet")
         class A(object):

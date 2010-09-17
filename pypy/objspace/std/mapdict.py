@@ -70,12 +70,13 @@ class AbstractAttribute(object):
         oldattr = obj._get_mapdict_map()
         if not jit.we_are_jitted():
             oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
+            assert oldattr.size_estimate() >= oldattr.length()
         if attr.length() > obj._mapdict_storage_length():
             # note that attr.size_estimate() is always at least attr.length()
             new_storage = [None] * attr.size_estimate()
             for i in range(obj._mapdict_storage_length()):
                 new_storage[i] = obj._mapdict_read_storage(i)
-            obj._set_mapdict_storage(new_storage)
+            obj._set_mapdict_storage_and_map(new_storage, attr)
 
         # the order is important here: first change the map, then the storage,
         # for the benefit of the special subclasses
@@ -260,8 +261,7 @@ class PlainAttribute(AbstractAttribute):
 def _become(w_obj, new_obj):
     # this is like the _become method, really, but we cannot use that due to
     # RPython reasons
-    w_obj._set_mapdict_map(new_obj.map)
-    w_obj._set_mapdict_storage(new_obj.storage)
+    w_obj._set_mapdict_storage_and_map(new_obj.storage, new_obj.map)
 
 # ____________________________________________________________
 # object implementation
@@ -279,8 +279,7 @@ class BaseMapdictObject: # slightly evil to make it inherit from W_Root
         raise NotImplementedError("abstract base class")
 
     def _become(self, new_obj):
-        self._set_mapdict_map(new_obj.map)
-        self._set_mapdict_storage(new_obj.storage)
+        self._set_mapdict_storage_and_map(new_obj.storage, new_obj.map)
 
     def _get_mapdict_map(self):
         return jit.hint(self.map, promote=True)
@@ -373,8 +372,9 @@ class ObjectMixin(object):
         self.storage[index] = value
     def _mapdict_storage_length(self):
         return len(self.storage)
-    def _set_mapdict_storage(self, storage):
+    def _set_mapdict_storage_and_map(self, storage, map):
         self.storage = storage
+        self.map = map
 
 class Object(ObjectMixin, BaseMapdictObject, W_Root):
     pass # mainly for tests
@@ -453,7 +453,8 @@ def _make_subclass_size_n(supercls, n):
                 return len(self._mapdict_get_storage_list()) + n - 1
             return n
 
-        def _set_mapdict_storage(self, storage):
+        def _set_mapdict_storage_and_map(self, storage, map):
+            self.map = map
             len_storage = len(storage)
             for i in rangenmin1:
                 if i < len_storage:
@@ -462,8 +463,14 @@ def _make_subclass_size_n(supercls, n):
                     erased = rerased.erase(None)
                 setattr(self, "_value%s" % i, erased)
             if len_storage < n:
+                assert not self._has_storage_list()
                 erased = rerased.erase(None)
             elif len_storage == n:
+                assert not self._has_storage_list()
+                erased = rerased.erase(storage[nmin1])
+            elif not self._has_storage_list():
+                # storage is longer than self.map.length() only due to
+                # overallocation
                 erased = rerased.erase(storage[nmin1])
             else:
                 storage_list = storage[nmin1:]
