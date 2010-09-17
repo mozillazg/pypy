@@ -1191,3 +1191,6 @@ class TestHybridTaggedPointers(TaggedPointersTest, TestHybridGC):
 
 class TestMarkCompactGCMostCompact(TaggedPointersTest, TestMarkCompactGC):
     removetypeptr = True
+
+class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
+    removetypeptr = True
