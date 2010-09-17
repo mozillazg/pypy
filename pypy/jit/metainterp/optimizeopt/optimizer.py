@@ -331,7 +331,7 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.OPT_GUARDS)
-            self.store_final_boxes_in_guard(op)
+            op = self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
         elif op.returns_bool_result():
@@ -361,12 +361,13 @@ class Optimizer(Optimization):
                     opnum = rop.GUARD_TRUE
                 else:
                     raise AssertionError("uh?")
-                op.opnum = opnum
-                # XXX XXX: fix me when the refactoring is complete
-                op._args = [op.getarg(0)]
+                newop = ResOperation(opnum, [op.getarg(0)], op.result, descr)
+                newop.fail_args = op.getfailargs()
+                return newop
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.
                 descr.make_a_counter_per_value(op)
+        return op
 
     def make_args_key(self, op):
         args = []

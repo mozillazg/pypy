@@ -1,7 +1,10 @@
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 
-class ResOperation(object):
+def ResOperation(opnum, args, result, descr=None):
+    return BaseResOperation(opnum, args, result, descr)
+
+class BaseResOperation(object):
     """The central ResOperation class, representing one operation."""
 
     # for 'guard_*'
@@ -27,6 +30,19 @@ class ResOperation(object):
             import pdb;pdb.set_trace()
         object.__setattr__(self, attr, value)
 
+    def copy_and_change(self, opnum, args=None, result=None, descr=None):
+        "shallow copy: the returned operation is meant to be used in place of self"
+        if args is None:
+            args = self.getarglist()
+        if result is None:
+            result = self.result
+        if descr is None:
+            descr = self.getdescr()
+        newop = ResOperation(opnum, args, result, descr)
+        #if isinstance(self, GuardOperation)
+        newop.setfailargs(self.getfailargs())
+        return newop
+
     def getarg(self, i):
         return self._args[i]
 
@@ -41,6 +57,15 @@ class ResOperation(object):
 
     def getarglist(self):
         return self._args
+
+    def getfailargs(self):
+        return self.fail_args
+
+    def setfailargs(self, fail_args):
+        self.fail_args = fail_args
+
+    def getdescr(self):
+        return self.descr
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
