@@ -177,7 +177,7 @@ class BaseCPU(model.AbstractCPU):
                 faildescr = op.getdescr()
                 assert isinstance(faildescr, history.AbstractFailDescr)
                 faildescr._fail_args_types = []
-                for box in op.fail_args:
+                for box in op.getfailargs():
                     if box is None:
                         type = history.HOLE
                     else:
@@ -186,7 +186,7 @@ class BaseCPU(model.AbstractCPU):
                 fail_index = self.get_fail_descr_number(faildescr)
                 index = llimpl.compile_add_fail(c, fail_index)
                 faildescr._compiled_fail = c, index
-                for box in op.fail_args:
+                for box in op.getfailargs():
                     if box is not None:
                         llimpl.compile_add_fail_arg(c, var2index[box])
                     else:

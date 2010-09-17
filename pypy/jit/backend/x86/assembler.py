@@ -691,7 +691,7 @@ class Assembler386(object):
         faildescr = guard_op.getdescr()
         assert isinstance(faildescr, AbstractFailDescr)
         faildescr._x86_current_depths = current_depths
-        failargs = guard_op.fail_args
+        failargs = guard_op.getfailargs()
         guard_opnum = guard_op.getopnum()
         guard_token = self.implement_guard_recovery(guard_opnum,
                                                     faildescr, failargs,

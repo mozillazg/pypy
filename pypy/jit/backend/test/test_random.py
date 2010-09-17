@@ -191,7 +191,7 @@ class OperationBuilder(object):
         if self.should_fail_by is None:
             fail_args = self.loop.operations[-1].args
         else:
-            fail_args = self.should_fail_by.fail_args
+            fail_args = self.should_fail_by.getfailargs()
         for i, v in enumerate(fail_args):
             if isinstance(v, (BoxFloat, ConstFloat)):
                 print >>s, ('    assert cpu.get_latest_value_float(%d) == %r'
@@ -285,7 +285,7 @@ class AbstractOvfOperation(AbstractOperation):
         else:
             op = ResOperation(rop.GUARD_NO_OVERFLOW, [], None)
         op.setdescr(BasicFailDescr())
-        op.fail_args = fail_subset
+        op.setfailargs(fail_subset)
         builder.loop.operations.append(op)
 
 class BinaryOvfOperation(AbstractOvfOperation, BinaryOperation):
@@ -346,7 +346,7 @@ class GuardOperation(AbstractOperation):
         op, passing = self.gen_guard(builder, r)
         builder.loop.operations.append(op)
         op.setdescr(BasicFailDescr())
-        op.fail_args = builder.subset_of_intvars(r)
+        op.setfailargs(builder.subset_of_intvars(r))
         if not passing:
             builder.should_fail_by = op
             builder.guard_op = op
@@ -577,8 +577,8 @@ class RandomLoop(object):
 
     def get_fail_args(self):
         if self.should_fail_by.is_guard():
-            assert self.should_fail_by.fail_args is not None
-            return self.should_fail_by.fail_args
+            assert self.should_fail_by.getfailargs() is not None
+            return self.should_fail_by.getfailargs()
         else:
             assert self.should_fail_by.getopnum() == rop.FINISH
             return self.should_fail_by.getarglist()
@@ -634,25 +634,25 @@ class RandomLoop(object):
                 op = ResOperation(rop.GUARD_EXCEPTION, [guard_op._exc_box],
                                   BoxPtr())
             op.setdescr(BasicFailDescr())
-            op.fail_args = []
+            op.setfailargs([])
             return op
 
         if self.dont_generate_more:
             return False
         r = self.r
         guard_op = self.guard_op
-        fail_args = guard_op.fail_args
+        fail_args = guard_op.getfailargs()
         fail_descr = guard_op.getdescr()
         op = self.should_fail_by
-        if not op.fail_args:
+        if not op.getfailargs():
             return False
         # generate the branch: a sequence of operations that ends in a FINISH
         subloop = DummyLoop([])
         if guard_op.is_guard_exception():
             subloop.operations.append(exc_handling(guard_op))
         bridge_builder = self.builder.fork(self.builder.cpu, subloop,
-                                           op.fail_args[:])
-        self.generate_ops(bridge_builder, r, subloop, op.fail_args[:])
+                                           op.getfailargs()[:])
+        self.generate_ops(bridge_builder, r, subloop, op.getfailargs()[:])
         # note that 'self.guard_op' now points to the guard that will fail in
         # this new bridge, while 'guard_op' still points to the guard that
         # has just failed.

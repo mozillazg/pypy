@@ -238,13 +238,13 @@ class OpParser(object):
         rvar = self.box_for_var(res)
         self.vars[res] = rvar
         res = ResOperation(opnum, args, rvar, descr)
-        res.fail_args = fail_args
+        res.setfailargs(fail_args)
         return res
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
         res = ResOperation(opnum, args, None, descr)
-        res.fail_args = fail_args
+        res.setfailargs(fail_args)
         return res
 
     def parse_next_op(self, line):

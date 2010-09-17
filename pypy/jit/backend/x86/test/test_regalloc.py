@@ -159,7 +159,7 @@ class BaseTestRegalloc(object):
         assert guard_op.is_guard()
         bridge = self.parse(ops, **kwds)
         assert ([box.type for box in bridge.inputargs] ==
-                [box.type for box in guard_op.fail_args])
+                [box.type for box in guard_op.getfailargs()])
         faildescr = guard_op.getdescr()
         self.cpu.compile_bridge(faildescr, bridge.inputargs, bridge.operations)
         return bridge

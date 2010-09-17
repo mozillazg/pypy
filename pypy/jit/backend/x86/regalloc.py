@@ -318,7 +318,7 @@ class RegAlloc(object):
         self.assembler.regalloc_perform(op, arglocs, result_loc)
 
     def locs_for_fail(self, guard_op):
-        return [self.loc(v) for v in guard_op.fail_args]
+        return [self.loc(v) for v in guard_op.getfailargs()]
 
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
@@ -330,7 +330,7 @@ class RegAlloc(object):
                                                    current_depths)
         if op.result is not None:
             self.possibly_free_var(op.result)
-        self.possibly_free_vars(guard_op.fail_args)
+        self.possibly_free_vars(guard_op.getfailargs())
 
     def perform_guard(self, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
@@ -344,7 +344,7 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
                                               result_loc,
                                               current_depths)
-        self.possibly_free_vars(guard_op.fail_args)        
+        self.possibly_free_vars(guard_op.getfailargs())        
 
     def PerformDiscard(self, op, arglocs):
         if not we_are_translated():
@@ -369,7 +369,7 @@ class RegAlloc(object):
         if operations[i + 1].getarg(0) is not op.result:
             return False
         if (self.longevity[op.result][1] > i + 1 or
-            op.result in operations[i + 1].fail_args):
+            op.result in operations[i + 1].getfailargs()):
             return False
         return True
 
@@ -416,7 +416,7 @@ class RegAlloc(object):
                         raise AssertionError
                     longevity[arg] = (start_live[arg], i)
             if op.is_guard():
-                for arg in op.fail_args:
+                for arg in op.getfailargs():
                     if arg is None: # hole
                         continue
                     assert isinstance(arg, Box)

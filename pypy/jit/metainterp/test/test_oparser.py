@@ -31,7 +31,7 @@ def test_const_ptr_subops():
     loop = parse(x, None, locals())
     assert len(loop.operations) == 1
     assert loop.operations[0].getdescr()
-    assert loop.operations[0].fail_args == []
+    assert loop.operations[0].getfailargs() == []
 
 def test_descr():
     class Xyz(AbstractDescr):

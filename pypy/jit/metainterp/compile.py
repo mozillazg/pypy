@@ -233,14 +233,14 @@ class ResumeGuardDescr(ResumeDescr):
         self.metainterp_sd = metainterp_sd
 
     def store_final_boxes(self, guard_op, boxes):
-        guard_op.fail_args = boxes
+        guard_op.setfailargs(boxes)
         self.guard_opnum = guard_op.getopnum()
 
     def make_a_counter_per_value(self, guard_value_op):
         assert guard_value_op.getopnum() == rop.GUARD_VALUE
         box = guard_value_op.getarg(0)
         try:
-            i = guard_value_op.fail_args.index(box)
+            i = guard_value_op.getfailargs().index(box)
         except ValueError:
             return     # xxx probably very rare
         else:
@@ -598,6 +598,6 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
         ResOperation(rop.GUARD_NO_EXCEPTION, [], None, descr=faildescr),
         ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
         ]
-    operations[1].fail_args = []
+    operations[1].setfailargs([])
     cpu.compile_loop(inputargs, operations, loop_token)
     return loop_token
