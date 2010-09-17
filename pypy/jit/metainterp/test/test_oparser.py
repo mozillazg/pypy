@@ -16,7 +16,7 @@ def test_basic_parse():
     """
     loop = parse(x)
     assert len(loop.operations) == 3
-    assert [op.opnum for op in loop.operations] == [rop.INT_ADD, rop.INT_SUB,
+    assert [op.getopnum() for op in loop.operations] == [rop.INT_ADD, rop.INT_SUB,
                                                     rop.FINISH]
     assert len(loop.inputargs) == 2
     assert loop.operations[-1].descr

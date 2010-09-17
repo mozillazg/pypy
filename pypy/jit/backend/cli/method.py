@@ -207,7 +207,7 @@ class Method(object):
 
     def _collect_types(self, operations, box2classes):
         for op in operations:
-            if op.opnum in (rop.GETFIELD_GC, rop.SETFIELD_GC):
+            if op.getopnum() in (rop.GETFIELD_GC, rop.SETFIELD_GC):
                 box = op.args[0]
                 descr = op.descr
                 assert isinstance(descr, runner.FieldDescr)
@@ -335,7 +335,7 @@ class Method(object):
         while self.i < N:
             op = oplist[self.i]
             self.emit_debug(op.repr())
-            func = self.operations[op.opnum]
+            func = self.operations[op.getopnum()]
             assert func is not None
             func(self, op)
             self.i += 1
@@ -410,7 +410,7 @@ class Method(object):
 
     def emit_ovf_op(self, op, emit_op):
         next_op = self.oplist[self.i+1]
-        if next_op.opnum == rop.GUARD_NO_OVERFLOW:
+        if next_op.getopnum() == rop.GUARD_NO_OVERFLOW:
                 self.i += 1
                 self.emit_ovf_op_and_guard(op, next_op, emit_op)
                 return

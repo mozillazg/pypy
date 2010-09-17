@@ -308,7 +308,7 @@ class Optimizer(Optimization):
 
     def propagate_forward(self, op):
         self.producer[op.result] = op
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)
@@ -348,7 +348,7 @@ class Optimizer(Optimization):
             compile.giveup()
         descr.store_final_boxes(op, newboxes)
         #
-        if op.opnum == rop.GUARD_VALUE:
+        if op.getopnum() == rop.GUARD_VALUE:
             if self.getvalue(op.getarg(0)) in self.bool_boxes:
                 # Hack: turn guard_value(bool) into guard_true/guard_false.
                 # This is done after the operation is emitted, to let
@@ -377,7 +377,7 @@ class Optimizer(Optimization):
                 args.append(self.values[arg].get_key_box())
             else:
                 args.append(arg)
-        args.append(ConstInt(op.opnum))
+        args.append(ConstInt(op.getopnum()))
         return args
 
     def optimize_default(self, op):
@@ -385,7 +385,7 @@ class Optimizer(Optimization):
         is_ovf = op.is_ovf()
         if is_ovf:
             nextop = self.loop.operations[self.i + 1]
-            canfold = nextop.opnum == rop.GUARD_NO_OVERFLOW
+            canfold = nextop.getopnum() == rop.GUARD_NO_OVERFLOW
         if canfold:
             for i in range(op.numargs()):
                 if self.get_constant_box(op.getarg(i)) is None:
@@ -395,7 +395,7 @@ class Optimizer(Optimization):
                 argboxes = [self.get_constant_box(op.getarg(i))
                             for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
-                                         op.opnum, argboxes, op.descr)
+                                         op.getopnum(), argboxes, op.descr)
                 self.make_constant(op.result, resbox.constbox())
                 if is_ovf:
                     self.i += 1 # skip next operation, it is the unneeded guard
@@ -405,7 +405,7 @@ class Optimizer(Optimization):
             args = self.make_args_key(op)
             oldop = self.pure_operations.get(args, None)
             if oldop is not None and oldop.descr is op.descr:
-                assert oldop.opnum == op.opnum
+                assert oldop.getopnum() == op.getopnum()
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
                 if is_ovf:
                     self.i += 1 # skip next operation, it is the unneeded guard

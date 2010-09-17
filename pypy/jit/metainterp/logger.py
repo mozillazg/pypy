@@ -79,7 +79,7 @@ class Logger(object):
             debug_print('[' + args + ']')
         for i in range(len(operations)):
             op = operations[i]
-            if op.opnum == rop.DEBUG_MERGE_POINT:
+            if op.getopnum() == rop.DEBUG_MERGE_POINT:
                 loc = op.getarg(0)._get_str()
                 debug_print("debug_merge_point('%s')" % (loc,))
                 continue

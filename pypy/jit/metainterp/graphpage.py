@@ -76,7 +76,7 @@ class ResOpGen(object):
             for i, op in enumerate(graph.get_operations()):
                 if is_interesting_guard(op):
                     self.mark_starter(graphindex, i+1)
-                if op.opnum == rop.DEBUG_MERGE_POINT:
+                if op.getopnum() == rop.DEBUG_MERGE_POINT:
                     if not last_was_mergepoint:
                         last_was_mergepoint = True
                         self.mark_starter(graphindex, i)
@@ -167,7 +167,7 @@ class ResOpGen(object):
                 self.genedge((graphindex, opstartindex),
                              (graphindex, opindex))
                 break
-        if op.opnum == rop.JUMP:
+        if op.getopnum() == rop.JUMP:
             tgt = op.descr
             tgt_g = -1
             if tgt is None:

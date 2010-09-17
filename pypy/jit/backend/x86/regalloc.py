@@ -268,7 +268,7 @@ class RegAlloc(object):
                                               selected_reg, need_lower_byte)
 
     def _compute_loop_consts(self, inputargs, jump, looptoken):
-        if jump.opnum != rop.JUMP or jump.descr is not looptoken:
+        if jump.getopnum() != rop.JUMP or jump.descr is not looptoken:
             loop_consts = {}
         else:
             loop_consts = {}
@@ -352,19 +352,19 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_discard(op, arglocs)
 
     def can_merge_with_next_guard(self, op, i, operations):
-        if op.opnum == rop.CALL_MAY_FORCE or op.opnum == rop.CALL_ASSEMBLER:
-            assert operations[i + 1].opnum == rop.GUARD_NOT_FORCED
+        if op.getopnum() == rop.CALL_MAY_FORCE or op.getopnum() == rop.CALL_ASSEMBLER:
+            assert operations[i + 1].getopnum() == rop.GUARD_NOT_FORCED
             return True
         if not op.is_comparison():
             if op.is_ovf():
-                if (operations[i + 1].opnum != rop.GUARD_NO_OVERFLOW and
-                    operations[i + 1].opnum != rop.GUARD_OVERFLOW):
+                if (operations[i + 1].getopnum() != rop.GUARD_NO_OVERFLOW and
+                    operations[i + 1].getopnum() != rop.GUARD_OVERFLOW):
                     print "int_xxx_ovf not followed by guard_(no)_overflow"
                     raise AssertionError
                 return True
             return False
-        if (operations[i + 1].opnum != rop.GUARD_TRUE and
-            operations[i + 1].opnum != rop.GUARD_FALSE):
+        if (operations[i + 1].getopnum() != rop.GUARD_TRUE and
+            operations[i + 1].getopnum() != rop.GUARD_FALSE):
             return False
         if operations[i + 1].getarg(0) is not op.result:
             return False
@@ -385,10 +385,10 @@ class RegAlloc(object):
                 self.possibly_free_vars_for_op(op)
                 continue
             if self.can_merge_with_next_guard(op, i, operations):
-                oplist_with_guard[op.opnum](self, op, operations[i + 1])
+                oplist_with_guard[op.getopnum()](self, op, operations[i + 1])
                 i += 1
             else:
-                oplist[op.opnum](self, op)
+                oplist[op.getopnum()](self, op)
             if op.result is not None:
                 self.possibly_free_var(op.result)
             self.rm._check_invariants()
@@ -412,7 +412,7 @@ class RegAlloc(object):
                 arg = op.getarg(j)
                 if isinstance(arg, Box):
                     if arg not in start_live:
-                        print "Bogus arg in operation %d at %d" % (op.opnum, i)
+                        print "Bogus arg in operation %d at %d" % (op.getopnum(), i)
                         raise AssertionError
                     longevity[arg] = (start_live[arg], i)
             if op.is_guard():
@@ -421,7 +421,7 @@ class RegAlloc(object):
                         continue
                     assert isinstance(arg, Box)
                     if arg not in start_live:
-                        print "Bogus arg in guard %d at %d" % (op.opnum, i)
+                        print "Bogus arg in guard %d at %d" % (op.getopnum(), i)
                         raise AssertionError
                     longevity[arg] = (start_live[arg], i)
         for arg in inputargs:

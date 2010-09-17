@@ -14,7 +14,7 @@ class OptRewrite(Optimization):
         if self.find_rewritable_bool(op, args):
             return
 
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)
@@ -39,7 +39,7 @@ class OptRewrite(Optimization):
 
     def find_rewritable_bool(self, op, args):
         try:
-            oldopnum = opboolinvers[op.opnum]
+            oldopnum = opboolinvers[op.getopnum()]
             targs = [args[0], args[1], ConstInt(oldopnum)]
             if self.try_boolinvers(op, targs):
                 return True
@@ -47,7 +47,7 @@ class OptRewrite(Optimization):
             pass
 
         try:
-            oldopnum = opboolreflex[op.opnum] # FIXME: add INT_ADD, INT_MUL
+            oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
             targs = [args[1], args[0], ConstInt(oldopnum)]
             oldop = self.optimizer.pure_operations.get(targs, None)
             if oldop is not None and oldop.descr is op.descr:
@@ -57,7 +57,7 @@ class OptRewrite(Optimization):
             pass
 
         try:
-            oldopnum = opboolinvers[opboolreflex[op.opnum]]
+            oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
             targs = [args[1], args[0], ConstInt(oldopnum)]
             if self.try_boolinvers(op, targs):
                 return True
@@ -215,7 +215,7 @@ class OptRewrite(Optimization):
             # there already has been a guard_nonnull or guard_class or
             # guard_nonnull_class on this value.
             old_guard_op = self.optimizer.newoperations[value.last_guard_index]
-            if old_guard_op.opnum == rop.GUARD_NONNULL:
+            if old_guard_op.getopnum() == rop.GUARD_NONNULL:
                 # it was a guard_nonnull, which we replace with a
                 # guard_nonnull_class.
                 new_guard_op = old_guard_op.copy_and_change (rop.GUARD_NONNULL_CLASS,
@@ -253,7 +253,7 @@ class OptRewrite(Optimization):
             return
         # change the op to be a normal call, from the backend's point of view
         # there is no reason to have a separate operation for this
-        op.opnum = rop.CALL
+        op._opnum = rop.CALL
         self.emit_operation(op)
         resvalue = self.getvalue(op.result)
         self.optimizer.loop_invariant_results[key] = resvalue

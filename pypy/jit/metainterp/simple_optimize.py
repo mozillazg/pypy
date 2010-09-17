@@ -11,17 +11,17 @@ def transform(op):
     from pypy.jit.metainterp.history import AbstractDescr
     # change ARRAYCOPY to call, so we don't have to pass around
     # unnecessary information to the backend.  Do the same with VIRTUAL_REF_*.
-    if op.opnum == rop.ARRAYCOPY:
+    if op.getopnum() == rop.ARRAYCOPY:
         descr = op.getarg(0)
         assert isinstance(descr, AbstractDescr)
         args = op.getarglist()[1:]
         op = ResOperation(rop.CALL, args, op.result, descr=descr)
-    elif op.opnum == rop.CALL_PURE:
+    elif op.getopnum() == rop.CALL_PURE:
         args = op.getarglist()[1:]
         op = ResOperation(rop.CALL, args, op.result, op.descr)
-    elif op.opnum == rop.VIRTUAL_REF:
+    elif op.getopnum() == rop.VIRTUAL_REF:
         op = ResOperation(rop.SAME_AS, [op.getarg(0)], op.result)
-    elif op.opnum == rop.VIRTUAL_REF_FINISH:
+    elif op.getopnum() == rop.VIRTUAL_REF_FINISH:
         return []
     return [op]
 

@@ -389,7 +389,7 @@ class Assembler386(object):
     def _find_debug_merge_point(self, operations):
 
         for op in operations:
-            if op.opnum == rop.DEBUG_MERGE_POINT:
+            if op.getopnum() == rop.DEBUG_MERGE_POINT:
                 funcname = op.getarg(0)._get_str()
                 break
         else:
@@ -681,10 +681,10 @@ class Assembler386(object):
             self.mc.POP(loc)
 
     def regalloc_perform(self, op, arglocs, resloc):
-        genop_list[op.opnum](self, op, arglocs, resloc)
+        genop_list[op.getopnum()](self, op, arglocs, resloc)
 
     def regalloc_perform_discard(self, op, arglocs):
-        genop_discard_list[op.opnum](self, op, arglocs)
+        genop_discard_list[op.getopnum()](self, op, arglocs)
 
     def regalloc_perform_with_guard(self, op, guard_op, faillocs,
                                     arglocs, resloc, current_depths):
@@ -692,14 +692,14 @@ class Assembler386(object):
         assert isinstance(faildescr, AbstractFailDescr)
         faildescr._x86_current_depths = current_depths
         failargs = guard_op.fail_args
-        guard_opnum = guard_op.opnum
+        guard_opnum = guard_op.getopnum()
         guard_token = self.implement_guard_recovery(guard_opnum,
                                                     faildescr, failargs,
                                                     faillocs)
         if op is None:
             dispatch_opnum = guard_opnum
         else:
-            dispatch_opnum = op.opnum
+            dispatch_opnum = op.getopnum()
         res = genop_guard_list[dispatch_opnum](self, op, guard_op, guard_token,
                                                arglocs, resloc)
         faildescr._x86_adr_jump_offset = res
@@ -755,7 +755,7 @@ class Assembler386(object):
 
     def _cmpop_guard(cond, rev_cond, false_cond, false_rev_cond):
         def genop_cmp_guard(self, op, guard_op, guard_token, arglocs, result_loc):
-            guard_opnum = guard_op.opnum
+            guard_opnum = guard_op.getopnum()
             if isinstance(op.getarg(0), Const):
                 self.mc.CMP(arglocs[1], arglocs[0])
                 if guard_opnum == rop.GUARD_FALSE:
@@ -773,7 +773,7 @@ class Assembler386(object):
     def _cmpop_guard_float(cond, false_cond, need_jp):
         def genop_cmp_guard_float(self, op, guard_op, guard_token, arglocs,
                                   result_loc):
-            guard_opnum = guard_op.opnum
+            guard_opnum = guard_op.getopnum()
             self.mc.UCOMISD(arglocs[0], arglocs[1])
             # 16 is enough space for the rel8 jumps below and the rel32
             # jump in implement_guard
@@ -942,7 +942,7 @@ class Assembler386(object):
     genop_guard_float_ge = _cmpop_guard_float("AE", "B", False)
 
     def genop_guard_float_ne(self, op, guard_op, guard_token, arglocs, result_loc):
-        guard_opnum = guard_op.opnum
+        guard_opnum = guard_op.getopnum()
         self.mc.UCOMISD(arglocs[0], arglocs[1])
         # 16 is enough space for the rel8 jumps below and the rel32
         # jump in implement_guard
@@ -970,7 +970,7 @@ class Assembler386(object):
         self.mc.CVTSI2SD(resloc, arglocs[0])
 
     def genop_guard_int_is_true(self, op, guard_op, guard_token, arglocs, resloc):
-        guard_opnum = guard_op.opnum
+        guard_opnum = guard_op.getopnum()
         self.mc.CMP(arglocs[0], imm(0))
         if guard_opnum == rop.GUARD_TRUE:
             return self.implement_guard(guard_token, 'Z')
@@ -984,7 +984,7 @@ class Assembler386(object):
         self.mc.MOVZX8(resloc, rl)
 
     def genop_guard_int_is_zero(self, op, guard_op, guard_token, arglocs, resloc):
-        guard_opnum = guard_op.opnum
+        guard_opnum = guard_op.getopnum()
         self.mc.CMP(arglocs[0], imm(0))
         if guard_opnum == rop.GUARD_TRUE:
             return self.implement_guard(guard_token, 'NZ')
@@ -1216,7 +1216,7 @@ class Assembler386(object):
         return addr
 
     def _gen_guard_overflow(self, guard_op, guard_token):
-        guard_opnum = guard_op.opnum
+        guard_opnum = guard_op.getopnum()
         if guard_opnum == rop.GUARD_NO_OVERFLOW:
             return self.implement_guard(guard_token, 'O')
         elif guard_opnum == rop.GUARD_OVERFLOW:

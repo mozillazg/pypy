@@ -9,7 +9,7 @@ class OptIntBounds(Optimization):
        remove redundant guards"""
 
     def propagate_forward(self, op):
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)
@@ -30,7 +30,7 @@ class OptIntBounds(Optimization):
             op = self.optimizer.producer[box]
         except KeyError:
             return
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in propagate_bounds_ops:
             if opnum == value:
                 func(self, op)
@@ -84,9 +84,9 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.add_bound(v2.intbound)
         if resbound.has_lower and resbound.has_upper and \
-           self.nextop().opnum == rop.GUARD_NO_OVERFLOW:
+           self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_ADD and remove guard
-            op.opnum = rop.INT_ADD
+            op._opnum = rop.INT_ADD
             self.skip_nextop()
             self.optimize_INT_ADD(op)
         else:
@@ -99,9 +99,9 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.sub_bound(v2.intbound)
         if resbound.has_lower and resbound.has_upper and \
-               self.nextop().opnum == rop.GUARD_NO_OVERFLOW:
+               self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_SUB and remove guard
-            op.opnum = rop.INT_SUB
+            op._opnum = rop.INT_SUB
             self.skip_nextop()
             self.optimize_INT_SUB(op)
         else:
@@ -114,9 +114,9 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.mul_bound(v2.intbound)
         if resbound.has_lower and resbound.has_upper and \
-               self.nextop().opnum == rop.GUARD_NO_OVERFLOW:
+               self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_MUL and remove guard
-            op.opnum = rop.INT_MUL
+            op._opnum = rop.INT_MUL
             self.skip_nextop()
             self.optimize_INT_MUL(op)
         else:
