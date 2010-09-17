@@ -177,7 +177,7 @@ class W_Root(object):
         raise NotImplementedError
     def _mapdict_storage_length(self):
         raise NotImplementedError
-    def _set_mapdict_storage(self, storage):
+    def _set_mapdict_storage_and_map(self, storage, map):
         raise NotImplementedError
 
 
