@@ -18,6 +18,7 @@ import sys
 #  The .s file produced by GCC is then parsed by trackgcroot.py.
 #
 
+IS_64_BITS = sys.maxint > 2147483647
 
 class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
     _asmgcc_save_restore_arguments = None
@@ -114,12 +115,14 @@ class AsmGcRootFrameworkGCTransformer(FrameworkGCTransformer):
                                     fnptr._obj._name + '_reload',
                                     graph=graph2)
         c_fnptr2 = Constant(fnptr2, lltype.Ptr(FUNC2))
-        HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2)], FUNC1.RESULT)
+        HELPERFUNC = lltype.FuncType([lltype.Ptr(FUNC2),
+                                      ASM_FRAMEDATA_HEAD_PTR], FUNC1.RESULT)
         #
         v_asm_stackwalk = hop.genop("cast_pointer", [c_asm_stackwalk],
                                     resulttype=lltype.Ptr(HELPERFUNC))
         hop.genop("indirect_call",
-                  [v_asm_stackwalk, c_fnptr2, Constant(None, lltype.Void)],
+                  [v_asm_stackwalk, c_fnptr2, c_gcrootanchor,
+                   Constant(None, lltype.Void)],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
@@ -151,7 +154,8 @@ class AsmStackRootWalker(BaseRootWalker):
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
         gcdata._gc_collect_stack_root = collect_stack_root
-        pypy_asm_stackwalk(llhelper(ASM_CALLBACK_PTR, self._asm_callback))
+        pypy_asm_stackwalk(llhelper(ASM_CALLBACK_PTR, self._asm_callback),
+                           gcrootanchor)
 
     def walk_stack_from(self):
         curframe = lltype.malloc(WALKFRAME, flavor='raw')
@@ -160,7 +164,7 @@ class AsmStackRootWalker(BaseRootWalker):
         # Walk over all the pieces of stack.  They are in a circular linked
         # list of structures of 7 words, the 2 first words being prev/next.
         # The anchor of this linked list is:
-        anchor = llop.gc_asmgcroot_static(llmemory.Address, 3)
+        anchor = llmemory.cast_ptr_to_adr(gcrootanchor)
         initialframedata = anchor.address[1]
         stackscount = 0
         while initialframedata != anchor:     # while we have not looped back
@@ -323,7 +327,7 @@ class AsmStackRootWalker(BaseRootWalker):
             ll_assert(reg < CALLEE_SAVED_REGS, "bad register location")
             return callee.regs_stored_at[reg]
         elif kind == LOC_ESP_PLUS:    # in the caller stack frame at N(%esp)
-            esp_in_caller = callee.frame_address + 4
+            esp_in_caller = callee.frame_address + sizeofaddr
             return esp_in_caller + offset
         elif kind == LOC_EBP_PLUS:    # in the caller stack frame at N(%ebp)
             ebp_in_caller = callee.regs_stored_at[INDEX_OF_EBP].address[0]
@@ -412,11 +416,12 @@ def _compare_gcmap_entries(addr1, addr2):
     key1 = addr1.address[0]
     key2 = addr2.address[0]
     if key1 < key2:
-        return -1
+        result = -1
     elif key1 == key2:
-        return 0
+        result = 0
     else:
-        return 1
+        result = 1
+    return rffi.cast(rffi.INT, result)
 
 # ____________________________________________________________
 
@@ -461,9 +466,15 @@ class ShapeDecompressor:
 #   - frame address (actually the addr of the retaddr of the current function;
 #                    that's the last word of the frame in memory)
 #
-CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
-INDEX_OF_EBP      = 3
-FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
+
+if IS_64_BITS:
+    CALLEE_SAVED_REGS = 6
+    INDEX_OF_EBP      = 5
+    FRAME_PTR         = CALLEE_SAVED_REGS
+else:
+    CALLEE_SAVED_REGS = 4       # there are 4 callee-saved registers
+    INDEX_OF_EBP      = 3
+    FRAME_PTR         = CALLEE_SAVED_REGS    # the frame is at index 4 in the array
 
 ASM_CALLBACK_PTR = lltype.Ptr(lltype.FuncType([], lltype.Void))
 
@@ -475,8 +486,22 @@ WALKFRAME = lltype.Struct('WALKFRAME',
              llmemory.Address),
     )
 
+# We have a circular doubly-linked list of all the ASM_FRAMEDATAs currently
+# alive.  The list's starting point is given by 'gcrootanchor', which is not
+# a full ASM_FRAMEDATA but only contains the prev/next pointers:
+ASM_FRAMEDATA_HEAD_PTR = lltype.Ptr(lltype.ForwardReference())
+ASM_FRAMEDATA_HEAD_PTR.TO.become(lltype.Struct('ASM_FRAMEDATA_HEAD',
+        ('prev', ASM_FRAMEDATA_HEAD_PTR),
+        ('next', ASM_FRAMEDATA_HEAD_PTR)
+    ))
+gcrootanchor = lltype.malloc(ASM_FRAMEDATA_HEAD_PTR.TO, immortal=True)
+gcrootanchor.prev = gcrootanchor
+gcrootanchor.next = gcrootanchor
+c_gcrootanchor = Constant(gcrootanchor, ASM_FRAMEDATA_HEAD_PTR)
+
 pypy_asm_stackwalk = rffi.llexternal('pypy_asm_stackwalk',
-                                     [ASM_CALLBACK_PTR],
+                                     [ASM_CALLBACK_PTR,
+                                      ASM_FRAMEDATA_HEAD_PTR],
                                      lltype.Signed,
                                      sandboxsafe=True,
                                      _nowrapper=True)

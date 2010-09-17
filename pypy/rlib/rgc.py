@@ -201,7 +201,6 @@ class DumpHeapEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         from pypy.rpython.lltypesystem import lltype
         from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
-        from pypy.rpython.lltypesystem import lltype
         hop.exception_is_here()
         return hop.genop('gc_heap_stats', [], resulttype=hop.r_result)
 
@@ -276,7 +275,7 @@ def ll_arraycopy(source, dest, source_start, dest_start, length):
     keepalive_until_here(dest)
 ll_arraycopy._annenforceargs_ = [None, None, int, int, int]
 ll_arraycopy._annspecialcase_ = 'specialize:ll'
-ll_arraycopy._jit_look_inside_ = False
+ll_arraycopy.oopspec = 'list.ll_arraycopy(source, dest, source_start, dest_start, length)'
 
 def ll_shrink_array(p, smallerlength):
     from pypy.rpython.lltypesystem.lloperation import llop
@@ -309,7 +308,6 @@ def ll_shrink_array(p, smallerlength):
     return newp
 ll_shrink_array._annspecialcase_ = 'specialize:ll'
 ll_shrink_array._jit_look_inside_ = False
-
 
 def no_collect(func):
     func._dont_inline_ = True

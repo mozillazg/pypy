@@ -1,5 +1,4 @@
 import py, sys, os
-from py.impl.test.outcome import Failed
 from pypy.interpreter.gateway import app2interp_temp
 from pypy.interpreter.error import OperationError
 from pypy.tool.pytest import appsupport
@@ -9,14 +8,10 @@ from inspect import isclass, getmro
 from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir
 
-rootdir = py.path.local(__file__).dirpath()
-
 # pytest settings
 pytest_plugins = "resultlog",
-rsyncdirs = ['.', '../lib-python', '../demo']
+rsyncdirs = ['.', '../lib-python', '../lib_pypy', '../demo']
 rsyncignore = ['_cache']
-
-collect_ignore = ['./lib/py']
 
 # PyPy's command line extra options (these are added 
 # to py.test's standard options) 
@@ -45,8 +40,16 @@ def pytest_addoption(parser):
            default="host", callback=_set_platform,
            help="set up tests to use specified platform as compile/run target")
 
+def pytest_sessionstart():
+    # have python subprocesses avoid startup customizations by default
+    try:
+        del os.environ['PYTHONSTARTUP']
+    except KeyError:
+        pass
+
 def pytest_funcarg__space(request):
-    return gettestobjspace()
+    spaceconfig = getattr(request.cls, 'spaceconfig', {})
+    return gettestobjspace(**spaceconfig)
 
 _SPACECACHE={}
 def gettestobjspace(name=None, **kwds):
@@ -62,7 +65,7 @@ def gettestobjspace(name=None, **kwds):
     try:
         return _SPACECACHE[key]
     except KeyError:
-        if option.runappdirect:
+        if getattr(option, 'runappdirect', None):
             if name not in (None, 'std'):
                 myname = getattr(sys, 'pypy_objspaceclass', '')
                 if not myname.lower().startswith(name):
@@ -95,6 +98,14 @@ def maketestobjspace(config=None):
     space.raises_w = appsupport.raises_w.__get__(space)
     space.eq_w = appsupport.eq_w.__get__(space)
     return space
+
+def pytest_runtest_setup(item):
+    if isinstance(item, PyPyTestFunction):
+        appclass = item.getparent(PyPyClassCollector)
+        if appclass is not None:
+            spaceconfig = getattr(appclass.obj, 'spaceconfig', None)
+            if spaceconfig:
+                appclass.obj.space = gettestobjspace(**spaceconfig)
 
 class TinyObjSpace(object):
     def __init__(self, **kwds):
@@ -199,7 +210,10 @@ def ensure_pytest_builtin_helpers(helpers='skip raises'.split()):
         if not hasattr(__builtin__, helper):
             setattr(__builtin__, helper, getattr(py.test, helper))
 
-class Module(py.test.collect.Module): 
+def pytest_pycollect_makemodule(path, parent):
+    return PyPyModule(path, parent)
+
+class PyPyModule(py.test.collect.Module): 
     """ we take care of collecting classes both at app level 
         and at interp-level (because we need to stick a space 
         at the class) ourselves. 
@@ -207,12 +221,14 @@ class Module(py.test.collect.Module):
     def __init__(self, *args, **kwargs):
         if hasattr(sys, 'pypy_objspaceclass'):
             option.conf_iocapture = "sys" # pypy cannot do FD-based
-        super(Module, self).__init__(*args, **kwargs)
+        super(PyPyModule, self).__init__(*args, **kwargs)
 
     def accept_regular_test(self):
         if option.runappdirect:
-            # only collect regular tests if we are in an 'app_test' directory
-            return "app_test" in self.listnames()
+            # only collect regular tests if we are in an 'app_test' directory,
+            # or in test_lib_pypy
+            names = self.listnames()
+            return "app_test" in names or "test_lib_pypy" in names
         else:
             return True
 
@@ -223,7 +239,7 @@ class Module(py.test.collect.Module):
             return True
         return False
 
-    def classnamefilter(self, name): 
+    def classnamefilter(self, name):
         if name.startswith('Test'):
             return self.accept_regular_test()
         if name.startswith('AppTest'):
@@ -238,7 +254,7 @@ class Module(py.test.collect.Module):
     def setup(self): 
         # stick py.test raise in module globals -- carefully
         ensure_pytest_builtin_helpers() 
-        super(Module, self).setup() 
+        super(PyPyModule, self).setup() 
         #    if hasattr(mod, 'objspacename'): 
         #        mod.space = getttestobjspace(mod.objspacename)
 
@@ -374,9 +390,14 @@ class AppTestFunction(PyPyTestFunction):
         if option.runappdirect:
             return target()
         space = gettestobjspace() 
-        func = app2interp_temp(target)
+        filename = self._getdynfilename(target)
+        func = app2interp_temp(target, filename=filename)
         print "executing", func
         self.execute_appex(space, func, space)
+
+    def _getdynfilename(self, func):
+        code = getattr(func, 'im_func', func).func_code
+        return "[%s:%s]" % (code.co_filename, code.co_firstlineno)
 
 class AppTestMethod(AppTestFunction): 
 
@@ -401,18 +422,25 @@ class AppTestMethod(AppTestFunction):
         if option.runappdirect:
             return target()
         space = target.im_self.space 
-        func = app2interp_temp(target.im_func) 
+        filename = self._getdynfilename(target)
+        func = app2interp_temp(target.im_func, filename=filename) 
         w_instance = self.parent.w_instance 
         self.execute_appex(space, func, space, w_instance) 
 
 class PyPyClassCollector(py.test.collect.Class):
     def setup(self):
         cls = self.obj 
-        cls.space = LazyObjSpaceGetter()
+        if not hasattr(cls, 'spaceconfig'):
+            cls.space = LazyObjSpaceGetter() 
+        else:
+            assert hasattr(cls, 'space') # set by pytest_runtest_setup
         super(PyPyClassCollector, self).setup() 
+
+class IntInstanceCollector(py.test.collect.Instance):
+    Function = IntTestFunction 
     
 class IntClassCollector(PyPyClassCollector): 
-    Function = IntTestFunction 
+    Instance = IntInstanceCollector
 
     def _haskeyword(self, keyword):
         return keyword == 'interplevel' or \
@@ -515,14 +543,5 @@ class ExpectClassCollector(py.test.collect.Class):
             py.test.skip("pexpect not found")
 
 
-class Directory(py.test.collect.Directory):
-    def consider_dir(self, path):
-        if path == rootdir.join("lib", "ctypes", "test"):
-            py.test.skip("These are the original ctypes tests.\n"
-                         "You can try to run them with 'pypy-c runtests.py'.")
-        return super(Directory, self).consider_dir(path)
-
-    def recfilter(self, path):
-        # disable recursion in symlinked subdirectories
-        return (py.test.collect.Directory.recfilter(self, path)
-                and path.check(link=0))
+def pytest_ignore_collect(path):
+    return path.check(link=1)

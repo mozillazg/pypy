@@ -72,6 +72,9 @@ class DummySpace(object):
     def newdict(self):
         return {}
 
+    def newlist(self, l=[]):
+        return l
+
     def setitem(self, obj, key, value):
         obj[key] = value
 
@@ -89,6 +92,9 @@ class DummySpace(object):
 
     def int_w(self, x):
         return x
+
+    def eq_w(self, x, y):
+        return x == y
 
     def isinstance(self, obj, cls):
         return isinstance(obj, cls)

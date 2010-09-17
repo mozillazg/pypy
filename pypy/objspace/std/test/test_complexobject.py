@@ -1,7 +1,7 @@
 import py
 from pypy.objspace.std import complexobject as cobj
 from pypy.objspace.std import complextype as cobjtype
-from pypy.objspace.std.objspace import FailedToImplement
+from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std import StdObjSpace
 
@@ -326,6 +326,7 @@ class AppTestAppComplexTest:
         h.assertEqual(repr(1-6j), '(1-6j)')
 
         h.assertNotEqual(repr(-(1+0j)), '(-1+-0j)')
+        assert repr(complex(1e45)) == "(" + repr(1e45) + "+0j)"
 
     def test_neg(self):
         h = self.helper

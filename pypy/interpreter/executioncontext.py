@@ -50,8 +50,7 @@ class ExecutionContext(object):
 
     def enter(self, frame):
         if self.framestackdepth > self.space.sys.recursionlimit:
-            raise OperationError(self.space.w_RuntimeError,
-                                 self.space.wrap("maximum recursion depth exceeded"))
+            raise self.space.prebuilt_recursion_error
         self.framestackdepth += 1
         frame.f_backref = self.topframeref
         self.topframeref = jit.virtual_ref(frame)
@@ -478,10 +477,15 @@ class UserDelAction(AsyncAction):
     def __init__(self, space):
         AsyncAction.__init__(self, space)
         self.dying_objects_w = []
+        self.weakrefs_w = []
         self.finalizers_lock_count = 0
 
     def register_dying_object(self, w_obj):
         self.dying_objects_w.append(w_obj)
+        self.fire()
+
+    def register_weakref_callback(self, w_ref):
+        self.weakrefs_w.append(w_ref)
         self.fire()
 
     def perform(self, executioncontext, frame):
@@ -505,8 +509,12 @@ class UserDelAction(AsyncAction):
             # finally, this calls the interp-level destructor for the
             # cases where there is both an app-level and a built-in __del__.
             w_obj._call_builtin_destructor()
-
-
+        pending_w = self.weakrefs_w
+        self.weakrefs_w = []
+        for i in range(len(pending_w)):
+            w_ref = pending_w[i]
+            w_ref.activate_callback()
+        
 class FrameTraceAction(AsyncAction):
     """An action that calls the local trace functions (w_f_trace)."""
 

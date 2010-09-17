@@ -114,7 +114,10 @@ class Test_r_uint:
         #self.binary_test(lambda x, y: pow(x, y, 42), (2, 3, 5, 1000))
 
     def test_back_to_int(self):
-        assert int(r_uint(-1)) == -1
+        #assert int(r_uint(-1)) == -1
+        # ^^^ that looks wrong IMHO: int(x) should not by itself return
+        #     an integer that has a different value than x, especially
+        #     if x is a subclass of long.
         assert int(r_uint(1)) == 1
 
     def unary_test(self, f):
@@ -197,6 +200,10 @@ def test_intmask_small():
         x = intmask(tp(5))
         assert (type(x), x) == (int, 5)
 
+def test_bug_creating_r_int():
+    minint = -sys.maxint-1
+    assert r_int(r_int(minint)) == minint
+
 def test_ovfcheck():
     one = 1
     x = sys.maxint
@@ -264,26 +271,29 @@ def test_ovfcheck_float_to_int():
     assert ovfcheck_float_to_int(13.0) == 13
     assert ovfcheck_float_to_int(-1.0) == -1
     assert ovfcheck_float_to_int(-13.0) == -13
-    #  strange things happening for float to int on 64 bit
-    maxint32 = 2 ** 31 - 1
-    assert ovfcheck_float_to_int(float(maxint32-1)) == maxint32-1
-    #assert ovfcheck_float_to_int(float(maxint32)) == maxint32
-    assert ovfcheck_float_to_int(float(-maxint32)) == -maxint32
-    #assert ovfcheck_float_to_int(float(-maxint32-1)) == -maxint32-1
 
-    try:
-        ovfcheck_float_to_int(float(-sys.maxint-1)-1)
-    except OverflowError:
-        pass
-    else:
-        assert False
+    # strange things happening for float to int on 64 bit:
+    # int(float(i)) != i  because of rounding issues
+    x = sys.maxint
+    while int(float(x)) > sys.maxint:
+        x -= 1
+    assert ovfcheck_float_to_int(float(x)) == int(float(x))
 
-    try:
-        ovfcheck_float_to_int(float(sys.maxint)+1)
-    except OverflowError:
-        pass
-    else:
-        assert False
+    x = sys.maxint + 1
+    while int(float(x)) <= sys.maxint:
+        x += 1
+    py.test.raises(OverflowError, ovfcheck_float_to_int, x)
+
+    x = -sys.maxint-1
+    while int(float(x)) < -sys.maxint-1:
+        x += 1
+    assert ovfcheck_float_to_int(float(x)) == int(float(x))
+
+    x = -sys.maxint-1
+    while int(float(x)) >= -sys.maxint-1:
+        x -= 1
+    py.test.raises(OverflowError, ovfcheck_float_to_int, x)
+
 
 def test_abs():
     assert type(abs(r_longlong(1))) is r_longlong
@@ -361,3 +371,7 @@ def test_isinf():
 
 def test_isnan():
     assert isnan(NAN)
+
+def test_int_real_union():
+    from pypy.rpython.lltypesystem.rffi import r_int_real
+    assert compute_restype(r_int_real, r_int_real) is r_int_real

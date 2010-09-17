@@ -25,6 +25,11 @@ PY_FROZEN = 7
 # PY_CODERESOURCE = 8
 IMP_HOOK = 9
 
+if sys.platform.startswith('win'):
+    so_extension = ".pyd"
+else:
+    so_extension = ".so"
+
 def find_modtype(space, filepart):
     """Check which kind of module to import for the given filepart,
     which is a path without extension.  Returns PY_SOURCE, PY_COMPILED or
@@ -40,15 +45,17 @@ def find_modtype(space, filepart):
     # look for a lone .pyc file.
     # The "imp" module does not respect this, and is allowed to find
     # lone .pyc files.
-    if not space.config.objspace.lonepycfiles:
-        return SEARCH_ERROR, None, None
-
     # check the .pyc file
-    if space.config.objspace.usepycfiles:
+    if space.config.objspace.usepycfiles and space.config.objspace.lonepycfiles:
         pycfile = filepart + ".pyc"
         if os.path.exists(pycfile) and case_ok(pycfile):
             # existing .pyc file
             return PY_COMPILED, ".pyc", "rb"
+
+    if space.config.objspace.usemodules.cpyext:
+        pydfile = filepart + so_extension
+        if os.path.exists(pydfile) and case_ok(pydfile):
+            return C_EXTENSION, so_extension, "rb"
 
     return SEARCH_ERROR, None, None
 
@@ -138,7 +145,7 @@ def importhook(space, modulename, w_globals=None,
         msg = "Attempted relative import in non-package"
         raise OperationError(space.w_ValueError, w(msg))
     w_mod = absolute_import_try(space, modulename, 0, fromlist_w)
-    if w_mod is None and not space.is_w(w_mod, space.w_None):
+    if w_mod is None or space.is_w(w_mod, space.w_None):
         w_mod = absolute_import(space, modulename, 0, fromlist_w, tentative=0)
     if rel_modulename is not None:
         space.setitem(space.sys.get('modules'), w(rel_modulename), space.w_None)
@@ -171,13 +178,11 @@ def absolute_import_try(space, modulename, baselevel, fromlist_w):
     else:
         level = 0
         first = None
-        while last_dot != -1:
-            assert last_dot >= 0 # bah
+        while last_dot >= 0:
             last_dot = modulename.find('.', last_dot + 1)
-            if last_dot == -1:
+            if last_dot < 0:
                 w_mod = check_sys_modules_w(space, modulename)
             else:
-                assert last_dot >= 0
                 w_mod = check_sys_modules_w(space, modulename[:last_dot])
             if w_mod is None or space.is_w(w_mod, space.w_None):
                 return None
@@ -324,6 +329,7 @@ def find_module(space, modulename, w_modulename, partname, w_path,
             modtype, suffix, filemode = find_modtype(space, filepart)
             try:
                 if modtype in (PY_SOURCE, PY_COMPILED):
+                    assert suffix is not None
                     filename = filepart + suffix
                     stream = streamio.open_file_as_stream(filename, filemode)
                     try:
@@ -331,6 +337,9 @@ def find_module(space, modulename, w_modulename, partname, w_path,
                     except:
                         stream.close()
                         raise
+                if modtype == C_EXTENSION:
+                    filename = filepart + suffix
+                    return FindInfo(modtype, filename, None, suffix, filemode)
             except StreamErrors:
                 pass
 
@@ -345,6 +354,12 @@ def _prepare_module(space, w_mod, filename, pkgdir):
     if pkgdir is not None:
         space.setattr(w_mod, w('__path__'), space.newlist([w(pkgdir)]))
 
+def load_c_extension(space, filename, modulename):
+    # the next line is mandatory to init cpyext
+    space.getbuiltinmodule("cpyext")
+    from pypy.module.cpyext.api import load_extension_module
+    load_extension_module(space, filename, modulename)
+
 @jit.dont_look_inside
 def load_module(space, w_modulename, find_info, reuse=False):
     if find_info is None:
@@ -355,10 +370,15 @@ def load_module(space, w_modulename, find_info, reuse=False):
     if find_info.modtype == C_BUILTIN:
         return space.getbuiltinmodule(find_info.filename, force_init=True)
 
-    if find_info.modtype in (PY_SOURCE, PY_COMPILED, PKG_DIRECTORY):
+    if find_info.modtype in (PY_SOURCE, PY_COMPILED, C_EXTENSION, PKG_DIRECTORY):
+        w_mod = None
         if reuse:
-            w_mod = space.getitem(space.sys.get('modules'), w_modulename)
-        else:
+            try:
+                w_mod = space.getitem(space.sys.get('modules'), w_modulename)
+            except OperationError, oe:
+                if not oe.match(space, space.w_KeyError):
+                    raise
+        if w_mod is None:
             w_mod = space.wrap(Module(space, w_modulename))
         if find_info.modtype == PKG_DIRECTORY:
             pkgdir = find_info.filename
@@ -391,6 +411,9 @@ def load_module(space, w_modulename, find_info, reuse=False):
                 # fetch the module again, in case of "substitution"
                 w_mod = check_sys_modules(space, w_modulename)
                 return w_mod
+            elif find_info.modtype == C_EXTENSION and space.config.objspace.usemodules.cpyext:
+                load_c_extension(space, find_info.filename, space.str_w(w_modulename))
+                return check_sys_modules(space, w_modulename)
         except OperationError:
             w_mods = space.sys.get('modules')
             space.call_method(w_mods, 'pop', w_modulename, space.w_None)

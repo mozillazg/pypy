@@ -1,7 +1,7 @@
 
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
      Arguments
-from pypy.interpreter.error import OperationError, wrap_oserror, operationerrfmt
+from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.interpreter.module import Module
@@ -131,7 +131,7 @@ class W_ZipImporter(Wrappable):
     def _find_relative_path(self, filename):
         if filename.startswith(self.filename):
             filename = filename[len(self.filename):]
-        if filename.startswith(os.sep):
+        if filename.startswith(os.path.sep) or filename.startswith(ZIPSEP):
             filename = filename[1:]
         if ZIPSEP != os.path.sep:
             filename = filename.replace(os.path.sep, ZIPSEP)
@@ -146,7 +146,7 @@ class W_ZipImporter(Wrappable):
     def import_py_file(self, space, modname, filename, buf, pkgpath):
         w = space.wrap
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.filename + os.path.sep + self.corr_zname(filename)
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         code_w = importing.parse_source_module(space, filename, buf)
@@ -193,7 +193,7 @@ class W_ZipImporter(Wrappable):
                                        pkgpath)
         buf = buf[8:] # XXX ugly copy, should use sequential read instead
         w_mod = w(Module(space, w(modname)))
-        real_name = self.name + os.path.sep + self.corr_zname(filename)
+        real_name = self.filename + os.path.sep + self.corr_zname(filename)
         space.setattr(w_mod, w('__loader__'), space.wrap(self))
         importing._prepare_module(space, w_mod, real_name, pkgpath)
         result = importing.load_compiled_module(space, w(modname), w_mod,
@@ -223,11 +223,6 @@ class W_ZipImporter(Wrappable):
 
     def load_module(self, space, fullname):
         w = space.wrap
-        w_modules = space.sys.get('modules')
-        try:
-            return space.getitem(w_modules, w(fullname))
-        except OperationError, e:
-            pass
         filename = self.mangle(fullname)
         last_exc = None
         for compiled, is_package, ext in ENUMERATE_EXTS:
@@ -242,7 +237,7 @@ class W_ZipImporter(Wrappable):
                 pass
             else:
                 if is_package:
-                    pkgpath = self.name
+                    pkgpath = self.name + os.path.sep + filename
                 else:
                     pkgpath = None
                 try:
@@ -326,10 +321,12 @@ def descr_new_zipimporter(space, w_type, name):
     w_ZipImportError = space.getattr(space.getbuiltinmodule('zipimport'),
                                      w('ZipImportError'))
     ok = False
-    parts = name.split(os.path.sep)
+    parts_ends = [i for i in range(0, len(name))
+                    if name[i] == os.path.sep or name[i] == ZIPSEP]
+    parts_ends.append(len(name))
     filename = "" # make annotator happy
-    for i in range(1, len(parts) + 1):
-        filename = os.path.sep.join(parts[:i])
+    for i in parts_ends:
+        filename = name[:i]
         if not filename:
             filename = os.path.sep
         try:
@@ -349,7 +346,6 @@ def descr_new_zipimporter(space, w_type, name):
             raise operationerrfmt(w_ZipImportError,
                 "Cannot import %s from zipfile, recursion detected or"
                 "already tried and failed", name)
-        return w_result
     except KeyError:
         zip_cache.cache[filename] = None
     try:
@@ -359,8 +355,10 @@ def descr_new_zipimporter(space, w_type, name):
             "%s seems not to be a zipfile", filename)
     zip_file.close()
     prefix = name[len(filename):]
-    if prefix.startswith(os.sep):
+    if prefix.startswith(os.path.sep) or prefix.startswith(ZIPSEP):
         prefix = prefix[1:]
+    if prefix and not prefix.endswith(ZIPSEP):
+        prefix += ZIPSEP
     w_result = space.wrap(W_ZipImporter(space, name, filename,
                                         zip_file.NameToInfo, prefix))
     zip_cache.set(filename, w_result)

@@ -13,6 +13,7 @@ from pypy.rpython.rmodel import inputconst
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib.debug import ll_assert
+from pypy.rlib.rstackovf import _StackOverflow
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.tool.sourcetools import func_with_new_name
@@ -60,8 +61,8 @@ class BaseExceptionTransformer(object):
         exc_data, null_type, null_value = self.setup_excdata()
 
         rclass = translator.rtyper.type_system.rclass
-        (runtime_error_ll_exc_type,
-         runtime_error_ll_exc) = self.get_builtin_exception(RuntimeError)
+        (stackovf_ll_exc_type,
+         stackovf_ll_exc) = self.get_builtin_exception(_StackOverflow)
         (assertion_error_ll_exc_type,
          assertion_error_ll_exc) = self.get_builtin_exception(AssertionError)
         (n_i_error_ll_exc_type,
@@ -114,8 +115,8 @@ class BaseExceptionTransformer(object):
                 exc_data.exc_type = rclass.ll_inst_type(evalue)
                 exc_data.exc_value = evalue
 
-        def rpyexc_raise_runtime_error():
-            rpyexc_raise(runtime_error_ll_exc_type, runtime_error_ll_exc)
+        def rpyexc_raise_stack_overflow():
+            rpyexc_raise(stackovf_ll_exc_type, stackovf_ll_exc)
 
         self.rpyexc_occured_ptr = self.build_func(
             "RPyExceptionOccurred",
@@ -151,9 +152,9 @@ class BaseExceptionTransformer(object):
             lltype.Void,
             jitcallkind='rpyexc_raise') # for the JIT
 
-        self.rpyexc_raise_runtime_error_ptr = self.build_func(
-            "RPyRaiseRuntimeError",
-            self.noinline(rpyexc_raise_runtime_error),
+        self.rpyexc_raise_stack_overflow_ptr = self.build_func(
+            "RPyRaiseStackOverflow",
+            self.noinline(rpyexc_raise_stack_overflow),
             [], lltype.Void)
 
         self.rpyexc_fetch_exception_ptr = self.build_func(
@@ -196,7 +197,7 @@ class BaseExceptionTransformer(object):
         for graph in self.translator.graphs:
             self.create_exception_handling(graph)
 
-    def create_exception_handling(self, graph, always_exc_clear=False):
+    def create_exception_handling(self, graph):
         """After an exception in a direct_call (or indirect_call), that is not caught
         by an explicit
         except statement, we need to reraise the exception. So after this
@@ -211,7 +212,6 @@ class BaseExceptionTransformer(object):
             self.raise_analyzer.analyze_direct_call(graph)
             graph.exceptiontransformed = self.exc_data_ptr
 
-        self.always_exc_clear = always_exc_clear
         join_blocks(graph)
         # collect the blocks before changing them
         n_need_exc_matching_blocks = 0
@@ -237,10 +237,10 @@ class BaseExceptionTransformer(object):
             if block.operations[i].opname == 'stack_unwind':
                 # if there are stack_unwind ops left,
                 # the graph was not stackless-transformed
-                # so we need to raise a RuntimeError in any
+                # so we need to raise a StackOverflow in any
                 # case
                 block.operations[i].opname = "direct_call"
-                block.operations[i].args = [self.rpyexc_raise_runtime_error_ptr]
+                block.operations[i].args = [self.rpyexc_raise_stack_overflow_ptr]
 
     def replace_fetch_restore_operations(self, block):
         # the gctransformer will create these operations.  It looks as if the
@@ -454,13 +454,18 @@ class BaseExceptionTransformer(object):
         block.recloseblock(l0, l)
 
         insert_zeroing_op = False
-        # XXX this is not right. it also inserts zero_gc_pointers_inside
-        # XXX on a path that malloc_nonmovable returns null, but does not raise
-        # XXX which might end up with a segfault. But we don't have such gc now
-        if spaceop.opname == 'malloc' or spaceop.opname == 'malloc_nonmovable':
+        if spaceop.opname == 'malloc':
             flavor = spaceop.args[1].value['flavor']
             if flavor == 'gc':
                 insert_zeroing_op = True
+        elif spaceop.opname == 'malloc_nonmovable':
+            # xxx we cannot insert zero_gc_pointers_inside after
+            # malloc_nonmovable, because it can return null.  For now
+            # we simply always force the zero=True flag on
+            # malloc_nonmovable.
+            c_flags = spaceop.args[1]
+            c_flags.value = c_flags.value.copy()
+            spaceop.args[1].value['zero'] = True
 
         if insert_zeroing_op:
             if normalafterblock is None:
@@ -477,16 +482,6 @@ class BaseExceptionTransformer(object):
                 0, SpaceOperation('zero_gc_pointers_inside',
                                   [v_result_after],
                                   varoftype(lltype.Void)))
-
-        if self.always_exc_clear:
-            # insert code that clears the exception even in the non-exceptional
-            # case...  this is a hint for the JIT, but pointless otherwise
-            if normalafterblock is None:
-                normalafterblock = insert_empty_block(None, l0)
-            llops = rtyper.LowLevelOpList(None)
-            self.gen_setfield('exc_value', self.c_null_evalue, llops)
-            self.gen_setfield('exc_type',  self.c_null_etype,  llops)
-            normalafterblock.operations[:0] = llops
 
 
 class LLTypeExceptionTransformer(BaseExceptionTransformer):

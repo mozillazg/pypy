@@ -7,6 +7,7 @@
 import weakref
 from pypy.rlib.objectmodel import Symbolic
 from pypy.rpython.lltypesystem import lltype
+from pypy.tool.uid import uid
 
 class AddressOffset(Symbolic):
 
@@ -360,19 +361,27 @@ class GCHeaderAntiOffset(AddressOffset):
 
 # ____________________________________________________________
 
+def _sizeof_none(TYPE):
+    assert not TYPE._is_varsize()
+    return ItemOffset(TYPE)
+_sizeof_none._annspecialcase_ = 'specialize:memo'
+
+def _sizeof_int(TYPE, n):
+    "NOT_RPYTHON"
+    if isinstance(TYPE, lltype.Struct):
+        return FieldOffset(TYPE, TYPE._arrayfld) + \
+               itemoffsetof(TYPE._flds[TYPE._arrayfld], n)
+    else:
+        raise Exception("don't know how to take the size of a %r"%TYPE)
+
 def sizeof(TYPE, n=None):
     if n is None:
-        assert not TYPE._is_varsize()
-        return ItemOffset(TYPE)
+        return _sizeof_none(TYPE)
+    elif isinstance(TYPE, lltype.Array):
+        return itemoffsetof(TYPE) + _sizeof_none(TYPE.OF) * n
     else:
-        if isinstance(TYPE, lltype.Array):
-            return itemoffsetof(TYPE, n)
-        elif isinstance(TYPE, lltype.Struct):
-            return FieldOffset(TYPE, TYPE._arrayfld) + \
-                   itemoffsetof(TYPE._flds[TYPE._arrayfld], n)
-        else:
-            raise Exception("don't know how to take the size of a %r"%TYPE)
-sizeof._annspecialcase_ = 'specialize:memo'   # only for n == None
+        return _sizeof_int(TYPE, n)
+sizeof._annspecialcase_ = 'specialize:arg(0)'
 
 def offsetof(TYPE, fldname):
     assert fldname in TYPE._flds
@@ -388,6 +397,7 @@ itemoffsetof._annspecialcase_ = 'specialize:memo'
 # -------------------------------------------------------------
 
 class fakeaddress(object):
+    __slots__ = ['ptr']
     # NOTE: the 'ptr' in the addresses must be normalized.
     # Use cast_ptr_to_adr() instead of directly fakeaddress() if unsure.
     def __init__(self, ptr):
@@ -478,11 +488,14 @@ class fakeaddress(object):
         else:
             return lltype.nullptr(EXPECTED_TYPE.TO)
 
-    def _cast_to_int(self):
-        # This is a bit annoying. We want this method to still work when the
-        # pointed-to object is dead
+    def _cast_to_int(self, symbolic=False):
         if self:
-            return self.ptr._cast_to_int(False)
+            if symbolic:
+                return AddressAsInt(self)
+            else:
+                # This is a bit annoying. We want this method to still work
+                # when the pointed-to object is dead
+                return self.ptr._cast_to_int(False)
         else:
             return 0
 
@@ -496,6 +509,29 @@ class fakeaddress(object):
 
 # ____________________________________________________________
 
+class AddressAsInt(Symbolic):
+    # a symbolic, rendered as an address cast to an integer.
+    def __init__(self, adr):
+        self.adr = adr
+    def annotation(self):
+        from pypy.annotation import model
+        return model.SomeInteger()
+    def lltype(self):
+        return lltype.Signed
+    def __eq__(self, other):
+        return self.adr == cast_int_to_adr(other)
+    def __ne__(self, other):
+        return self.adr != cast_int_to_adr(other)
+    def __nonzero__(self):
+        return bool(self.adr)
+    def __repr__(self):
+        try:
+            return '<AddressAsInt %s>' % (self.adr.ptr,)
+        except AttributeError:
+            return '<AddressAsInt at 0x%x>' % (uid(self),)
+
+# ____________________________________________________________
+
 class NullAddressError(Exception):
     pass
 
@@ -503,7 +539,6 @@ class DanglingPointerError(Exception):
     pass
 
 NULL = fakeaddress(None)
-NULL.intaddress = 0      # this is to make memory.lladdress more happy
 Address = lltype.Primitive("Address", NULL)
 
 # GCREF is similar to Address but it is GC-aware
@@ -603,12 +638,31 @@ def cast_ptr_to_adr(obj):
 def cast_adr_to_ptr(adr, EXPECTED_TYPE):
     return adr._cast_to_ptr(EXPECTED_TYPE)
 
-def cast_adr_to_int(adr):
-    return adr._cast_to_int()
+def cast_adr_to_int(adr, mode="emulated"):
+    # The following modes are supported before translation (after
+    # translation, it's all just a cast):
+    # * mode="emulated": goes via lltype.cast_ptr_to_int(), which returns some
+    #     number based on id().  The difference is that it works even if the
+    #     address is that of a dead object.
+    # * mode="symbolic": returns an AddressAsInt instance, which can only be
+    #     cast back to an address later.
+    # * mode="forced": uses rffi.cast() to return a real number.
+    assert mode in ("emulated", "symbolic", "forced")
+    res = adr._cast_to_int(symbolic = (mode != "emulated"))
+    if mode == "forced":
+        from pypy.rpython.lltypesystem.rffi import cast
+        res = cast(lltype.Signed, res)
+    return res
 
 _NONGCREF = lltype.Ptr(lltype.OpaqueType('NONGCREF'))
 def cast_int_to_adr(int):
-    ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
+    if isinstance(int, AddressAsInt):
+        return int.adr
+    try:
+        ptr = lltype.cast_int_to_ptr(_NONGCREF, int)
+    except ValueError:
+        from pypy.rpython.lltypesystem import ll2ctypes
+        ptr = ll2ctypes._int2obj[int]._as_ptr()
     return cast_ptr_to_adr(ptr)
 
 # ____________________________________________________________

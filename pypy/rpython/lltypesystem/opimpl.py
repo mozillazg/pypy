@@ -18,13 +18,20 @@ ops_unary = {'is_true': True, 'neg': True, 'abs': True, 'invert': True}
 
 # global synonyms for some types
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
+from pypy.rlib.rarithmetic import r_int, r_uint, r_longlong, r_ulonglong
 
-type_by_name = {
+if r_longlong is r_int:
+    r_longlong_arg = (r_longlong, int)
+    r_longlong_result = int
+else:
+    r_longlong_arg = r_longlong
+    r_longlong_result = r_longlong
+
+argtype_by_name = {
     'int': int,
     'float': float,
     'uint': r_uint,
-    'llong': r_longlong,
+    'llong': r_longlong_arg,
     'ullong': r_ulonglong,
     }
 
@@ -56,9 +63,9 @@ def get_primitive_op_src(fullopname):
             adjust_result = intmask
         else:
             adjust_result = no_op
-        assert typname in type_by_name, "%s: not a primitive op" % (
+        assert typname in argtype_by_name, "%s: not a primitive op" % (
             fullopname,)
-        argtype = type_by_name[typname]
+        argtype = argtype_by_name[typname]
 
         if opname in ops_unary:
             def op_function(x):
@@ -143,12 +150,7 @@ def op_getinteriorfield(obj, *offsets):
     # we can constant-fold this if the innermost structure from which we
     # read the final field is immutable.
     T = lltype.typeOf(innermostcontainer).TO
-    if T._hints.get('immutable'):
-        pass
-    elif ('immutable_fields' in T._hints and
-          offsets[-1] in T._hints['immutable_fields'].fields):
-        pass
-    else:
+    if not T._immutable_field(offsets[-1]):
         raise TypeError("cannot fold getinteriorfield on mutable struct")
     assert not isinstance(ob, lltype._interior_ptr)
     return ob
@@ -190,6 +192,24 @@ def op_int_sub(x, y):
     assert isinstance(y, int)
     return intmask(x - y)
 
+def op_int_ge(x, y):
+    # special case for 'AddressOffset >= 0'
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, int)
+    return x >= y
+
+def op_int_lt(x, y):
+    # special case for 'AddressOffset < 0'
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, int)
+    return x < y
+
+def op_int_between(a, b, c):
+    assert lltype.typeOf(a) is lltype.Signed
+    assert lltype.typeOf(b) is lltype.Signed
+    assert lltype.typeOf(c) is lltype.Signed
+    return a <= b < c
+
 def op_int_and(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
@@ -209,33 +229,40 @@ def op_int_mul(x, y):
     assert isinstance(y, (int, llmemory.AddressOffset))
     return intmask(x * y)
 
-def op_int_floordiv(x, y):
-    assert isinstance(x, int)
+def op_int_rshift(x, y):
+    if not isinstance(x, int):
+        from pypy.rpython.lltypesystem import llgroup
+        assert isinstance(x, llgroup.CombinedSymbolic)
     assert isinstance(y, int)
+    return x >> y
+
+def op_int_floordiv(x, y):
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, (int, llmemory.AddressOffset))
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_int_mod(x, y):
-    assert isinstance(x, int)
-    assert isinstance(y, int)
+    assert isinstance(x, (int, llmemory.AddressOffset))
+    assert isinstance(y, (int, llmemory.AddressOffset))
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
     return r
 
 def op_llong_floordiv(x, y):
-    assert isinstance(x, r_longlong)
-    assert isinstance(y, r_longlong)
+    assert isinstance(x, r_longlong_arg)
+    assert isinstance(y, r_longlong_arg)
     r = x//y
     if x^y < 0 and x%y != 0:
         r += 1
     return r
 
 def op_llong_mod(x, y):
-    assert isinstance(x, r_longlong)
-    assert isinstance(y, r_longlong)
+    assert isinstance(x, r_longlong_arg)
+    assert isinstance(y, r_longlong_arg)
     r = x%y
     if x^y < 0 and x%y != 0:
         r -= y
@@ -258,7 +285,7 @@ def op_cast_uint_to_float(u):
     return float(u)
 
 def op_cast_longlong_to_float(i):
-    assert type(i) is r_longlong
+    assert isinstance(i, r_longlong_arg)
     # take first 31 bits
     li = float(int(i & r_longlong(0x7fffffff)))
     ui = float(int(i >> 31)) * float(0x80000000)
@@ -290,7 +317,7 @@ def op_cast_float_to_longlong(f):
     small = f / r
     high = int(small)
     truncated = int((small - high) * r)
-    return r_longlong(high) * 0x100000000 + truncated
+    return r_longlong_result(high) * 0x100000000 + truncated
 
 def op_cast_char_to_int(b):
     assert type(b) is str and len(b) == 1
@@ -314,10 +341,10 @@ def op_cast_uint_to_int(b):
 
 def op_cast_int_to_longlong(b):
     assert type(b) is int
-    return r_longlong(b)
+    return r_longlong_result(b)
 
 def op_truncate_longlong_to_int(b):
-    assert type(b) is r_longlong
+    assert isinstance(b, r_longlong_arg)
     return intmask(b)
 
 def op_cast_pointer(RESTYPE, obj):
@@ -405,19 +432,15 @@ def op_gc_writebarrier_before_copy(source, dest):
 def op_getfield(p, name):
     checkptr(p)
     TYPE = lltype.typeOf(p).TO
-    if TYPE._hints.get('immutable'):
-        pass
-    elif ('immutable_fields' in TYPE._hints and
-          name in TYPE._hints['immutable_fields'].fields):
-        pass
-    else:
+    if not TYPE._immutable_field(name):
         raise TypeError("cannot fold getfield on mutable struct")
     return getattr(p, name)
 
 def op_getarrayitem(p, index):
     checkptr(p)
-    if not lltype.typeOf(p).TO._hints.get('immutable'):
-        raise TypeError("cannot fold getfield on mutable array")
+    ARRAY = lltype.typeOf(p).TO
+    if not ARRAY._immutable_field(index):
+        raise TypeError("cannot fold getarrayitem on mutable array")
     return p[index]
 
 def _normalize(x):

@@ -158,13 +158,6 @@ class AppTestFunction:
         assert res[0] == 42
         assert res[1] == {'something': 23}
 
-    def test_kwargs_sets_positional_mixed(self):
-        def func(arg1, **kw):
-            return arg1, kw
-        res = func(arg1=42, something=23)
-        assert res[0] == 42
-        assert res[1] == {'something': 23}
-
     def test_kwargs_sets_positional_twice(self):
         def func(arg1, **kw):
             return arg1, kw
@@ -280,6 +273,19 @@ class AppTestFunction:
             pass
         raises(TypeError, type, 'Foo', (type(f),), {})
         raises(TypeError, type, 'Foo', (type(len),), {})
+
+    def test_lambda_docstring(self):
+        # Like CPython, (lambda:"foo") has a docstring of "foo".
+        # But let's not test that.  Just test that (lambda:42) does not
+        # have 42 as docstring.
+        f = lambda: 42
+        assert f.func_doc is None
+
+    def test_setstate_called_with_wrong_args(self):
+        f = lambda: 42
+        # not sure what it should raise, since CPython doesn't have setstate
+        # on function types
+        raises(ValueError, type(f).__setstate__, f, (1, 2, 3))
 
 class AppTestMethod: 
     def test_simple_call(self):

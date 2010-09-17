@@ -1,4 +1,4 @@
-from pypy.jit.metainterp.policy import JitPolicy
+from pypy.jit.codewriter.policy import JitPolicy
 
 class PyPyJitPolicy(JitPolicy):
 
@@ -8,12 +8,10 @@ class PyPyJitPolicy(JitPolicy):
                 modname == '__builtin__.interp_classobj' or
                 modname == '__builtin__.functional'):
             return True
-        if modname == 'sys.state':
-            return True
         if '.' in modname:
             modname, _ = modname.split('.', 1)
         if modname in ['pypyjit', 'signal', 'micronumpy', 'math', 'exceptions',
-                       'imp']:
+                       'imp', 'sys', 'array']:
             return True
         return False
 
@@ -26,8 +24,7 @@ class PyPyJitPolicy(JitPolicy):
             # gc_id operation
             if func.__name__ == 'id__ANY':
                 return False
-        if mod == 'pypy.rlib.rbigint':
-            #if func.__name__ == '_bigint_true_divide':
+        if mod == 'pypy.rlib.rbigint' or mod == 'pypy.rlib.rlocale':
             return False
         if '_geninterp_' in func.func_globals: # skip all geninterped stuff
             return False

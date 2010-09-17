@@ -1,5 +1,6 @@
 import py, os
-from pypy.translator.platform.linux import Linux, _run_subprocess, GnuMakefile
+from pypy.translator.platform.linux import Linux
+from pypy.translator.platform.posix import _run_subprocess, GnuMakefile
 from pypy.translator.platform import ExecutionResult, log
 from pypy.tool.udir import udir
 from pypy.tool import autopath
@@ -12,7 +13,7 @@ def check_scratchbox():
 class Maemo(Linux):
     name = "maemo"
     
-    available_includedirs = ['/usr/include', '/tmp']
+    available_includedirs = ('/usr/include', '/tmp')
     copied_cache = {}
 
     def _invent_new_name(self, basepath, base):
@@ -41,7 +42,7 @@ class Maemo(Linux):
             self.copied_cache[dir_from] = new_dirpath
             return new_dirpath
     
-    def _preprocess_dirs(self, include_dirs):
+    def _preprocess_include_dirs(self, include_dirs):
         """ Tweak includedirs so they'll be available through scratchbox
         """
         res_incl_dirs = []
@@ -81,11 +82,12 @@ class Maemo(Linux):
         # on the other hand, library lands in usual place...
         return []
 
-    def execute_makefile(self, path_to_makefile):
+    def execute_makefile(self, path_to_makefile, extra_opts=[]):
         if isinstance(path_to_makefile, GnuMakefile):
             path = path_to_makefile.makefile_dir
         else:
             path = path_to_makefile
-        log.execute('make in %s' % (path,))
-        returncode, stdout, stderr = _run_subprocess('/scratchbox/login', ['make', '-C', str(path)])
+        log.execute('make %s in %s' % (" ".join(extra_opts), path))
+        returncode, stdout, stderr = _run_subprocess(
+            '/scratchbox/login', ['make', '-C', str(path)] + extra_opts)
         self._handle_error(returncode, stdout, stderr, path.join('make'))

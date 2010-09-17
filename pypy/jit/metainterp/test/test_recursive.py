@@ -1,9 +1,12 @@
 import py
 from pypy.rlib.jit import JitDriver, we_are_jitted, OPTIMIZER_SIMPLE, hint
+from pypy.rlib.jit import unroll_safe, dont_look_inside
+from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.debug import fatalerror
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
-from pypy.jit.metainterp.warmspot import CannotInlineCanEnterJit, get_stats
+from pypy.jit.metainterp.warmspot import get_stats
 
 class RecursiveTests:
 
@@ -24,6 +27,7 @@ class RecursiveTests:
                 return 1
         res = self.meta_interp(main, [20], optimizer=OPTIMIZER_SIMPLE)
         assert res == main(20)
+        self.check_history(call=0)
 
     def test_simple_recursion_with_exc(self):
         myjitdriver = JitDriver(greens=[], reds=['n', 'm'])
@@ -95,23 +99,18 @@ class RecursiveTests:
                                policy=StopAtXPolicy(opaque))
         assert res == 1
 
-    def get_interpreter(self, codes, always_inline=False):
+    def get_interpreter(self, codes):
         ADD = "0"
         JUMP_BACK = "1"
         CALL = "2"
         EXIT = "3"
 
-        if always_inline:
-            def can_inline(*args):
-                return True
-        else:
-            def can_inline(code, i):
-                code = hlstr(code)
-                return not JUMP_BACK in code
+        def getloc(i, code):
+            return 'code="%s", i=%d' % (code, i)
 
-        jitdriver = JitDriver(greens = ['code', 'i'], reds = ['n'],
-                              can_inline = can_inline)
- 
+        jitdriver = JitDriver(greens = ['i', 'code'], reds = ['n'],
+                              get_printable_location = getloc)
+
         def interpret(codenum, n, i):
             code = codes[codenum]
             while i < len(code):
@@ -159,32 +158,16 @@ class RecursiveTests:
 
         assert self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
                                 inline=True) == 42
-        self.check_loops(call_may_force = 1, call = 0)
-
-    def test_inline_faulty_can_inline(self):
-        code = "021"
-        subcode = "301"
-        codes = [code, subcode]
-
-        f = self.get_interpreter(codes, always_inline=True)
-
-        try:
-            self.meta_interp(f, [0, 0, 0], optimizer=OPTIMIZER_SIMPLE,
-                             inline=True)
-        except CannotInlineCanEnterJit:
-            pass
-        else:
-            py.test.fail("DID NOT RAISE")
+        # the call is fully inlined, because we jump to subcode[1], thus
+        # skipping completely the JUMP_BACK in subcode[0]
+        self.check_loops(call_may_force = 0, call_assembler = 0, call = 0)
 
     def test_guard_failure_in_inlined_function(self):
-        from pypy.rpython.annlowlevel import hlstr
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p)
         def f(code, n):
             pc = 0
             while pc < len(code):
@@ -214,14 +197,11 @@ class RecursiveTests:
         assert res == 0
 
     def test_guard_failure_and_then_exception_in_inlined_function(self):
-        from pypy.rpython.annlowlevel import hlstr
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n', 'flag'],
-                                get_printable_location=p, can_inline=c)
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n', 'flag'],
+                                get_printable_location=p)
         def f(code, n):
             pc = 0
             flag = False
@@ -258,14 +238,11 @@ class RecursiveTests:
         assert res == main(1000)
 
     def test_exception_in_inlined_function(self):
-        from pypy.rpython.annlowlevel import hlstr
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p)
 
         class Exc(Exception):
             pass
@@ -304,14 +281,11 @@ class RecursiveTests:
         # this passes, if the blackholing shortcut for calls is turned off
         # it fails, it is very delicate in terms of parameters,
         # bridge/loop creation order
-        from pypy.rpython.annlowlevel import hlstr
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -394,9 +368,36 @@ class RecursiveTests:
         self.check_aborted_count(8)
         self.check_enter_count_at_most(30)
 
+    def test_trace_limit_with_exception_bug(self):
+        myjitdriver = JitDriver(greens=[], reds=['n'])
+        @unroll_safe
+        def do_stuff(n):
+            while n > 0:
+                n -= 1
+            raise ValueError
+        def loop(n):
+            pc = 0
+            while n > 80:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                try:
+                    do_stuff(n)
+                except ValueError:
+                    # the trace limit is checked when we arrive here, and we
+                    # have the exception still in last_exc_value_box at this
+                    # point -- so when we abort because of a trace too long,
+                    # the exception is passed to the blackhole interp and
+                    # incorrectly re-raised from here
+                    pass
+                n -= 1
+            return n
+        TRACE_LIMIT = 66
+        res = self.meta_interp(loop, [100], trace_limit=TRACE_LIMIT)
+        assert res == 80
+
     def test_max_failure_args(self):
         FAILARGS_LIMIT = 10
-        jitdriver = JitDriver(greens = [], reds = ['o', 'i', 'n'])
+        jitdriver = JitDriver(greens = [], reds = ['i', 'n', 'o'])
 
         class A(object):
             def __init__(self, i0, i1, i2, i3, i4, i5, i6, i7, i8, i9):
@@ -429,7 +430,7 @@ class RecursiveTests:
 
     def test_max_failure_args_exc(self):
         FAILARGS_LIMIT = 10
-        jitdriver = JitDriver(greens = [], reds = ['o', 'i', 'n'])
+        jitdriver = JitDriver(greens = [], reds = ['i', 'n', 'o'])
 
         class A(object):
             def __init__(self, i0, i1, i2, i3, i4, i5, i6, i7, i8, i9):
@@ -494,85 +495,12 @@ class RecursiveTests:
         res = self.meta_interp(main, [1], optimizer=OPTIMIZER_SIMPLE, trace_limit=TRACE_LIMIT)
         self.check_loops(call_may_force=0, call=0)
 
-    def test_leave_jit_hook(self):
-        from pypy.rpython.annlowlevel import hlstr
-        def p(code, pc):
-            code = hlstr(code)
-            return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "L" not in hlstr(code)
-
-        def really_leave(frame):
-            frame.hookcalled = True
-
-        def leave(code, pc, frame):
-            really_leave(frame)
-
-        class ExpectedHook(Exception):
-            pass
-        class UnexpectedHook(Exception):
-            pass
-
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['self'],
-                                get_printable_location=p, can_inline=c,
-                                leave=leave)
-        class Frame(object):
-            hookcalled = True
-            
-            def __init__(self, n):
-                self.n = n
-                self.hookcalled = False
-            def f(self, code):
-                pc = 0
-                while pc < len(code):
-
-                    myjitdriver.jit_merge_point(self=self, code=code, pc=pc)
-                    op = code[pc]
-                    if op == "-":
-                        self.n -= 1
-                    elif op == "c":
-                        frame = Frame(self.n)
-                        self.n = frame.f("---i---")
-                        if we_are_jitted():
-                            if frame.hookcalled:
-                                raise UnexpectedHook
-                    elif op == "C":
-                        frame = Frame(self.n)
-                        self.n = frame.f("cL")
-                        if we_are_jitted():
-                            if not frame.hookcalled:
-                                raise ExpectedHook
-                    elif op == "i":
-                        if self.n % 5 == 1:
-                            return self.n
-                    elif op == "l":
-                        if self.n > 0:
-                            myjitdriver.can_enter_jit(self=self, code=code, pc=0)
-                            pc = 0
-                            continue
-                    elif op == "L":
-                        if self.n > 50:
-                            myjitdriver.can_enter_jit(self=self, code=code, pc=0)
-                            pc = 0
-                            continue
-                    else:
-                        assert 0
-                    pc += 1
-                return self.n
-        def main(n):
-            frame = Frame(n)
-            return frame.f("C-l")
-        res = self.meta_interp(main, [100], optimizer=OPTIMIZER_SIMPLE, inline=True)
-        assert res == main(100)
-
     def test_trace_from_start(self):
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
-            return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+            return "'%s' at %d: %s" % (code, pc, code[pc])
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -582,9 +510,9 @@ class RecursiveTests:
                 op = code[pc]
                 if op == "+":
                     n += 7
-                if op == "-":
+                elif op == "-":
                     n -= 1
-                if op == "c":
+                elif op == "c":
                     n = f('---', n)
                 elif op == "l":
                     if n > 0:
@@ -601,18 +529,19 @@ class RecursiveTests:
             result = 0
             for i in range(m):
                 result += f('+-cl--', i)
+        g(50)
         self.meta_interp(g, [50], backendopt=True)
+        py.test.skip("tracing from start is by now only longer enabled "
+                     "if a trace gets too big")
         self.check_tree_loop_count(3)
         self.check_history(int_add=1)
 
     def test_dont_inline_huge_stuff(self):
-        def p(code, pc):
+        def p(pc, code):
             code = hlstr(code)
             return "%s %d %s" % (code, pc, code[pc])
-        def c(code, pc):
-            return "l" not in hlstr(code)
-        myjitdriver = JitDriver(greens=['code', 'pc'], reds=['n'],
-                                get_printable_location=p, can_inline=c)
+        myjitdriver = JitDriver(greens=['pc', 'code'], reds=['n'],
+                                get_printable_location=p)
         
         def f(code, n):
             pc = 0
@@ -651,8 +580,7 @@ class RecursiveTests:
 
     def test_directly_call_assembler(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -668,28 +596,108 @@ class RecursiveTests:
 
     def test_recursion_cant_call_assembler_directly(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'j'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno, j):
             i = 0
-            while i < 1:
-                driver.can_enter_jit(codeno=codeno, i=i, j=j)
+            while 1:
                 driver.jit_merge_point(codeno=codeno, i=i, j=j)
-                i += 1
-                if j == 0:
+                if i == 1:
+                    if j == 0:
+                        return
+                    portal(2, j - 1)
+                elif i == 3:
                     return
-                portal(2, j - 1)
+                i += 1
+                driver.can_enter_jit(codeno=codeno, i=i, j=j)
 
         portal(2, 50)
-        self.meta_interp(portal, [2, 20], inline=True)
-        self.check_history(call_assembler=0, call_may_force=1)
-        self.check_enter_count_at_most(1)
+
+        from pypy.jit.metainterp import compile, pyjitpl
+        pyjitpl._warmrunnerdesc = None
+        trace = []
+        def my_ctc(*args):
+            looptoken = original_ctc(*args)
+            trace.append(looptoken)
+            return looptoken
+        original_ctc = compile.compile_tmp_callback
+        try:
+            compile.compile_tmp_callback = my_ctc
+            self.meta_interp(portal, [2, 20], inline=True)
+            self.check_loops(call_assembler=1, call_may_force=0,
+                             everywhere=True)
+        finally:
+            compile.compile_tmp_callback = original_ctc
+        # check that we made a temporary callback
+        assert len(trace) == 1
+        # and that we later redirected it to something else
+        try:
+            redirected = pyjitpl._warmrunnerdesc.cpu._redirected_call_assembler
+        except AttributeError:
+            pass    # not the llgraph backend
+        else:
+            print redirected
+            assert redirected.keys() == trace
+
+    def test_recursion_cant_call_assembler_directly_with_virtualizable(self):
+        # exactly the same logic as the previous test, but with 'frame.j'
+        # instead of just 'j'
+        class Frame(object):
+            _virtualizable2_ = ['j']
+            def __init__(self, j):
+                self.j = j
+
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
+                           virtualizables = ['frame'],
+                           get_printable_location = lambda codeno : str(codeno))
+
+        def portal(codeno, frame):
+            i = 0
+            while 1:
+                driver.jit_merge_point(codeno=codeno, i=i, frame=frame)
+                if i == 1:
+                    if frame.j == 0:
+                        return
+                    portal(2, Frame(frame.j - 1))
+                elif i == 3:
+                    return
+                i += 1
+                driver.can_enter_jit(codeno=codeno, i=i, frame=frame)
+
+        def main(codeno, j):
+            portal(codeno, Frame(j))
+
+        main(2, 50)
+
+        from pypy.jit.metainterp import compile, pyjitpl
+        pyjitpl._warmrunnerdesc = None
+        trace = []
+        def my_ctc(*args):
+            looptoken = original_ctc(*args)
+            trace.append(looptoken)
+            return looptoken
+        original_ctc = compile.compile_tmp_callback
+        try:
+            compile.compile_tmp_callback = my_ctc
+            self.meta_interp(main, [2, 20], inline=True)
+            self.check_loops(call_assembler=1, call_may_force=0,
+                             everywhere=True)
+        finally:
+            compile.compile_tmp_callback = original_ctc
+        # check that we made a temporary callback
+        assert len(trace) == 1
+        # and that we later redirected it to something else
+        try:
+            redirected = pyjitpl._warmrunnerdesc.cpu._redirected_call_assembler
+        except AttributeError:
+            pass    # not the llgraph backend
+        else:
+            print redirected
+            assert redirected.keys() == trace
 
     def test_directly_call_assembler_return(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -712,8 +720,7 @@ class RecursiveTests:
                 self.x = x
         
         driver = JitDriver(greens = ['codeno'], reds = ['i'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno):
             i = 0
@@ -734,8 +741,7 @@ class RecursiveTests:
 
     def test_directly_call_assembler_fail_guard(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def portal(codeno, k):
             i = 0
@@ -764,10 +770,9 @@ class RecursiveTests:
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def main(codeno):
             frame = Frame()
@@ -792,7 +797,10 @@ class RecursiveTests:
         res = self.meta_interp(main, [0], inline=True)
         assert res == main(0)
 
-    def test_directly_call_assembler_virtualizable_force(self):
+    def test_directly_call_assembler_virtualizable_reset_token(self):
+        from pypy.rpython.lltypesystem import lltype
+        from pypy.rlib.debug import llinterpcall
+
         class Thing(object):
             def __init__(self, val):
                 self.val = val
@@ -800,10 +808,59 @@ class RecursiveTests:
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
+
+        @dont_look_inside
+        def check_frame(subframe):
+            if we_are_translated():
+                llinterpcall(lltype.Void, check_ll_frame, subframe)
+        def check_ll_frame(ll_subframe):
+            # This is called with the low-level Struct that is the frame.
+            # Check that the vable_token was correctly reset to zero.
+            # Note that in order for that test to catch failures, it needs
+            # three levels of recursion: the vable_token of the subframe
+            # at the level 2 is set to a non-zero value when doing the
+            # call to the level 3 only.  This used to fail when the test
+            # is run via pypy.jit.backend.x86.test.test_recursive.
+            assert ll_subframe.vable_token == 0
+
+        def main(codeno):
+            frame = Frame()
+            frame.thing = Thing(0)
+            portal(codeno, frame)
+            return frame.thing.val
+
+        def portal(codeno, frame):
+            i = 0
+            while i < 5:
+                driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
+                driver.jit_merge_point(frame=frame, codeno=codeno, i=i)
+                nextval = frame.thing.val
+                if codeno < 2:
+                    subframe = Frame()
+                    subframe.thing = Thing(nextval)
+                    nextval = portal(codeno + 1, subframe)
+                    check_frame(subframe)
+                frame.thing = Thing(nextval + 1)
+                i += 1
+            return frame.thing.val
+
+        res = self.meta_interp(main, [0], inline=True)
+        assert res == main(0)
+
+    def test_directly_call_assembler_virtualizable_force1(self):
+        class Thing(object):
+            def __init__(self, val):
+                self.val = val
+        
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+        
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
+                           virtualizables = ['frame'],
+                           get_printable_location = lambda codeno : str(codeno))
         class SomewhereElse(object):
             pass
 
@@ -820,6 +877,7 @@ class RecursiveTests:
             return frame.thing.val
 
         def portal(codeno, frame):
+            print 'ENTER:', codeno, frame.thing.val
             i = 0
             while i < 10:
                 driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
@@ -829,11 +887,15 @@ class RecursiveTests:
                     subframe = Frame()
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
-                elif frame.thing.val > 40:
-                    change(Thing(13))
-                    nextval = 13
+                elif codeno == 1:
+                    if frame.thing.val > 40:
+                        change(Thing(13))
+                        nextval = 13
+                else:
+                    fatalerror("bad codeno = " + str(codeno))
                 frame.thing = Thing(nextval + 1)
                 i += 1
+            print 'LEAVE:', codeno, frame.thing.val
             return frame.thing.val
 
         res = self.meta_interp(main, [0], inline=True,
@@ -841,9 +903,8 @@ class RecursiveTests:
         assert res == main(0)
 
     def test_directly_call_assembler_virtualizable_with_array(self):
-        myjitdriver = JitDriver(greens = ['codeno'], reds = ['n', 'frame', 'x'],
-                                virtualizables = ['frame'],
-                                can_inline = lambda codeno : False)
+        myjitdriver = JitDriver(greens = ['codeno'], reds = ['n', 'x', 'frame'],
+                                virtualizables = ['frame'])
 
         class Frame(object):
             _virtualizable2_ = ['l[*]', 's']
@@ -887,10 +948,9 @@ class RecursiveTests:
         class Frame(object):
             _virtualizable2_ = ['thing']
         
-        driver = JitDriver(greens = ['codeno'], reds = ['frame', 'i'],
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
                            virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
         class SomewhereElse(object):
             pass
 
@@ -932,17 +992,16 @@ class RecursiveTests:
 
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
-                           get_printable_location = lambda codeno : str(codeno),
-                           can_inline = lambda codeno : False)
+                           get_printable_location = lambda codeno : str(codeno))
 
         def residual(k):
-            if k > 40:
+            if k > 150:
                 return 0
             return 1
 
         def portal(codeno, k):
             i = 0
-            while i < 10:
+            while i < 15:
                 driver.can_enter_jit(codeno=codeno, i=i, k=k)
                 driver.jit_merge_point(codeno=codeno, i=i, k=k)
                 if codeno == 2:
@@ -959,10 +1018,130 @@ class RecursiveTests:
         assert res == portal(2, 0)
         self.check_loops(call_assembler=2)
 
-    # There is a test which I fail to write.
-    #   * what happens if we call recursive_call while blackholing
-    #     this seems to be completely corner case and not really happening
-    #     in the wild
+    def test_inline_without_hitting_the_loop(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i'],
+                           get_printable_location = lambda codeno : str(codeno))
+
+        def portal(codeno):
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i)
+                if codeno < 10:
+                    i += portal(20)
+                    codeno += 1
+                elif codeno == 10:
+                    if i > 63:
+                        return i
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i)
+                else:
+                    return 1
+
+        assert portal(0) == 70
+        res = self.meta_interp(portal, [0], inline=True)
+        assert res == 70
+        self.check_loops(call_assembler=0)
+
+    def test_inline_with_hitting_the_loop_sometimes(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno))
+
+        def portal(codeno, k):
+            if k > 2:
+                return 1
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno < 10:
+                    i += portal(codeno + 5, k+1)
+                    codeno += 1
+                elif codeno == 10:
+                    if i > [-1, 2000, 63][k]:
+                        return i
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                else:
+                    return 1
+
+        assert portal(0, 1) == 2095
+        res = self.meta_interp(portal, [0, 1], inline=True)
+        assert res == 2095
+        self.check_loops(call_assembler=6, everywhere=True)
+
+    def test_inline_with_hitting_the_loop_sometimes_exc(self):
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
+                           get_printable_location = lambda codeno : str(codeno))
+        class GotValue(Exception):
+            def __init__(self, result):
+                self.result = result
+
+        def portal(codeno, k):
+            if k > 2:
+                raise GotValue(1)
+            i = 0
+            while True:
+                driver.jit_merge_point(codeno=codeno, i=i, k=k)
+                if codeno < 10:
+                    try:
+                        portal(codeno + 5, k+1)
+                    except GotValue, e:
+                        i += e.result
+                    codeno += 1
+                elif codeno == 10:
+                    if i > [-1, 2000, 63][k]:
+                        raise GotValue(i)
+                    codeno = 0
+                    driver.can_enter_jit(codeno=codeno, i=i, k=k)
+                else:
+                    raise GotValue(1)
+
+        def main(codeno, k):
+            try:
+                portal(codeno, k)
+            except GotValue, e:
+                return e.result
+
+        assert main(0, 1) == 2095
+        res = self.meta_interp(main, [0, 1], inline=True)
+        assert res == 2095
+        self.check_loops(call_assembler=6, everywhere=True)
+
+    def test_handle_jitexception_in_portal(self):
+        # a test for _handle_jitexception_in_portal in blackhole.py
+        driver = JitDriver(greens = ['codeno'], reds = ['i', 'str'],
+                           get_printable_location = lambda codeno: str(codeno))
+        def do_can_enter_jit(codeno, i, str):
+            i = (i+1)-1    # some operations
+            driver.can_enter_jit(codeno=codeno, i=i, str=str)
+        def intermediate(codeno, i, str):
+            if i == 9:
+                do_can_enter_jit(codeno, i, str)
+        def portal(codeno, str):
+            i = value.initial
+            while i < 10:
+                intermediate(codeno, i, str)
+                driver.jit_merge_point(codeno=codeno, i=i, str=str)
+                i += 1
+                if codeno == 64 and i == 10:
+                    str = portal(96, str)
+                str += chr(codeno+i)
+            return str
+        class Value:
+            initial = -1
+        value = Value()
+        def main():
+            value.initial = 0
+            return (portal(64, '') +
+                    portal(64, '') +
+                    portal(64, '') +
+                    portal(64, '') +
+                    portal(64, ''))
+        assert main() == 'ABCDEFGHIabcdefghijJ' * 5
+        for tlimit in [95, 90, 102]:
+            print 'tlimit =', tlimit
+            res = self.meta_interp(main, [], inline=True, trace_limit=tlimit)
+            assert ''.join(res.chars) == 'ABCDEFGHIabcdefghijJ' * 5
+
 
 class TestLLtype(RecursiveTests, LLJitMixin):
     pass

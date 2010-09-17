@@ -3,7 +3,6 @@
 """
 
 from pypy.interpreter import gateway
-from pypy.interpreter.function import Function
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std.proxyobject import *
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -19,6 +18,16 @@ class TypeCache(object):
         return True
 
 type_cache = TypeCache()
+
+
+def setup(space):
+    """Add proxy functions to the __pypy__ module."""
+    w___pypy__ = space.getbuiltinmodule("__pypy__")
+    space.setattr(w___pypy__, space.wrap('tproxy'), space.wrap(app_proxy))
+    space.setattr(w___pypy__, space.wrap('get_tproxy_controller'),
+                  space.wrap(app_proxy_controller))
+
+
 
 def proxy(space, w_type, w_controller):
     """tproxy(typ, controller) -> obj

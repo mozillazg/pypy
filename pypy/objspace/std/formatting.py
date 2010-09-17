@@ -329,7 +329,8 @@ def make_formatter_subclass(do_unicode):
             length = len(r)
             if do_unicode and isinstance(r, str):
                 # convert string to unicode explicitely here
-                r = unicode(r)
+                from pypy.objspace.std.unicodetype import plain_str2unicode
+                r = plain_str2unicode(self.space, r)
             prec = self.prec
             if prec == -1 and self.width == 0:
                 # fast path
@@ -473,12 +474,6 @@ FORMATTER_CHARS = unrolling_iterable(
     [_name[-1] for _name in dir(StringFormatter)
                if len(_name) == 5 and _name.startswith('fmt_')])
 
-def is_list_of_chars_or_unichars(ann, bk):
-    from pypy.annotation.model import SomeChar, SomeUnicodeCodePoint
-    if not isinstance(ann.listdef.listitem.s_value,
-                      (SomeChar, SomeUnicodeCodePoint)):
-        raise TypeError("Formatter should return as a result a list of chars or unichars, otherwise we miss important optimization")
-
 def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
     "Entry point"
     if not do_unicode:
@@ -488,7 +483,8 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
             result = formatter.format()
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
-            fmt = unicode(fmt)
+            from pypy.objspace.std.unicodetype import plain_str2unicode
+            fmt = plain_str2unicode(space, fmt)
         else:
             return space.wrap(result)
     else:

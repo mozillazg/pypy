@@ -223,6 +223,27 @@ class TestAnnotateTestCase:
         # result should be a list of integers
         assert listitem(s).knowntype == int
 
+    def test_staticmethod(self):
+        class X(object):
+            @staticmethod
+            def stat(value):
+                return value + 4
+        def f(v):
+            return X().stat(v)
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s, annmodel.SomeInteger)
+
+    def test_classmethod(self):
+        class X(object):
+            @classmethod
+            def meth(cls):
+                return None
+        def f():
+            return X().meth()
+        a = self.RPythonAnnotator()
+        py.test.raises(AssertionError, a.build_types, f,  [])
+
     def test_methodcall1(self):
         a = self.RPythonAnnotator()
         s = a.build_types(snippet._methodcall1, [int])
@@ -746,7 +767,6 @@ class TestAnnotateTestCase:
         assert s.classdef is a.bookkeeper.getuniqueclassdef(IndexError)  # KeyError ignored because l is a list
 
     def test_overrides(self):
-        import sys
         excs = []
         def record_exc(e):
             """NOT_RPYTHON"""
@@ -848,8 +868,27 @@ class TestAnnotateTestCase:
         def f():
             return large_constant
         a = self.RPythonAnnotator()
+        py.test.raises(Exception, a.build_types, f, [])
+        # if you want to get a r_uint, you have to be explicit about it
+
+    def test_prebuilt_long_that_is_not_too_long(self):
+        small_constant = 12L
+        def f():
+            return small_constant
+        a = self.RPythonAnnotator()
         s = a.build_types(f, [])
-        assert s.knowntype == r_uint
+        assert s.const == 12
+        assert s.nonneg
+        assert not s.unsigned
+        #
+        small_constant = -23L
+        def f():
+            return small_constant
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert s.const == -23
+        assert not s.nonneg
+        assert not s.unsigned
 
     def test_pbc_getattr(self):
         class C:
@@ -1365,7 +1404,6 @@ class TestAnnotateTestCase:
         assert isinstance(a.binding(ev), annmodel.SomeInstance) and a.binding(ev).classdef == a.bookkeeper.getuniqueclassdef(Exception)
 
     def test_sys_attrs(self):
-        import sys
         def f():
             return sys.argv[0]
         a = self.RPythonAnnotator()
@@ -3164,6 +3202,13 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeList)
         assert s.listdef.listitem.resized
 
+    def test_varargs(self):
+        def f(*args):
+            return args[0] + 42
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int, int])
+        assert isinstance(s, annmodel.SomeInteger)
+
     def test_listitem_no_mutating(self):
         from pypy.rlib.debug import check_annotation
         called = []
@@ -3282,6 +3327,37 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
         assert s.knowntype is int
+
+    def test_relax(self):
+        def f(*args):
+            return args[0] + args[1]
+        f.relax_sig_check = True
+        def g(x):
+            return f(x, x - x)
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [int])
+        assert a.bookkeeper.getdesc(f).getuniquegraph()
+
+    def test_cannot_raise_ll_exception(self):
+        from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
+        #
+        def f():
+            e = OverflowError()
+            lle = cast_instance_to_base_ptr(e)
+            raise Exception, lle
+            # ^^^ instead, must cast back from a base ptr to an instance
+        a = self.RPythonAnnotator()
+        py.test.raises(AssertionError, a.build_types, f, [])
+
+    def test_enumerate(self):
+        def f():
+            for i, x in enumerate(['a', 'b', 'c', 'd']):
+                if i == 2:
+                    return x
+            return '?'
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [])
+        assert isinstance(s, annmodel.SomeChar)
 
 
 def g(n):

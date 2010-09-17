@@ -16,10 +16,12 @@ from pypy.conftest import option
 class StandaloneTests(object):
     config = None
 
-    def compile(self, entry_point, debug=True):
+    def compile(self, entry_point, debug=True, shared=False):
         t = TranslationContext(self.config)
         t.buildannotator().build_types(entry_point, [s_list_of_strings])
         t.buildrtyper().specialize()
+
+        t.config.translation.shared = shared
 
         cbuilder = CStandaloneBuilder(t, entry_point, t.config)
         if debug:
@@ -205,16 +207,14 @@ class TestStandalone(StandaloneTests):
         #py.process.cmdexec(exe)
 
     def test_standalone_large_files(self):
-        from pypy.module.posix.test.test_posix2 import need_sparse_files
-        need_sparse_files()
         filename = str(udir.join('test_standalone_largefile'))
         r4800000000 = r_longlong(4800000000L)
         def entry_point(argv):
+            assert str(r4800000000 + len(argv)) == '4800000003'
             fd = os.open(filename, os.O_RDWR | os.O_CREAT, 0644)
             os.lseek(fd, r4800000000, 0)
-            os.write(fd, "$")
             newpos = os.lseek(fd, 0, 1)
-            if newpos == r4800000000 + 1:
+            if newpos == r4800000000:
                 print "OK"
             else:
                 print "BAD POS"
@@ -590,9 +590,50 @@ class TestStandalone(StandaloneTests):
         # The traceback stops at f() because it's the first function that
         # captures the AssertionError, which makes the program abort.
 
+    def test_shared(self, monkeypatch):
+        def f(argv):
+            print len(argv)
+        def entry_point(argv):
+            f(argv)
+            return 0
+        t, cbuilder = self.compile(entry_point, shared=True)
+        assert cbuilder.shared_library_name is not None
+        assert cbuilder.shared_library_name != cbuilder.executable_name
+        monkeypatch.setenv('LD_LIBRARY_PATH',
+                           cbuilder.shared_library_name.dirpath())
+        out, err = cbuilder.cmdexec("a b")
+        assert out == "3"
+
+    def test_gcc_options(self):
+        # check that the env var CC is correctly interpreted, even if
+        # it contains the compiler name followed by some options.
+        if sys.platform == 'win32':
+            py.test.skip("only for gcc")
+
+        from pypy.rpython.lltypesystem import lltype, rffi
+        dir = udir.ensure('test_gcc_options', dir=1)
+        dir.join('someextraheader.h').write('#define someextrafunc() 42\n')
+        eci = ExternalCompilationInfo(includes=['someextraheader.h'])
+        someextrafunc = rffi.llexternal('someextrafunc', [], lltype.Signed,
+                                        compilation_info=eci)
+
+        def entry_point(argv):
+            return someextrafunc()
+
+        old_cc = os.environ.get('CC')
+        try:
+            os.environ['CC'] = 'gcc -I%s' % dir
+            t, cbuilder = self.compile(entry_point)
+        finally:
+            if old_cc is None:
+                del os.environ['CC']
+            else:
+                os.environ['CC'] = old_cc
+
 
 class TestMaemo(TestStandalone):
     def setup_class(cls):
+        py.test.skip("TestMaemo: tests skipped for now")
         from pypy.translator.platform.maemo import check_scratchbox
         check_scratchbox()
         from pypy.config.pypyoption import get_pypy_config
@@ -674,7 +715,10 @@ class TestThread(object):
         def entry_point(argv):
             os.write(1, "hello world\n")
             error = ll_thread.set_stacksize(int(argv[1]))
-            assert error == 0
+            if error != 0:
+                os.write(2, "set_stacksize(%d) returned %d\n" % (
+                    int(argv[1]), error))
+                raise AssertionError
             # malloc a bit
             s1 = State(); s2 = State(); s3 = State()
             s1.x = 0x11111111; s2.x = 0x22222222; s3.x = 0x33333333

@@ -1,9 +1,8 @@
-from pypy.objspace.std.stdtypedef import *
+from pypy.interpreter import gateway
 from pypy.interpreter.error import OperationError
-from pypy.objspace.std.strutil import string_to_float, ParseStringError
+from pypy.objspace.std.stdtypedef import StdTypeDef
+from pypy.objspace.std.strutil import ParseStringError
 from pypy.objspace.std.strutil import interp_string_to_float
-
-USE_NEW_S2F = True
 
 def descr__new__(space, w_floattype, w_x=0.0):
     from pypy.objspace.std.floatobject import W_FloatObject
@@ -11,10 +10,7 @@ def descr__new__(space, w_floattype, w_x=0.0):
     if space.is_true(space.isinstance(w_value, space.w_str)):
         strvalue = space.str_w(w_value)
         try:
-            if USE_NEW_S2F:
-                value = interp_string_to_float(space, strvalue)
-            else:
-                value = string_to_float(strvalue)
+            value = interp_string_to_float(space, strvalue)
         except ParseStringError, e:
             raise OperationError(space.w_ValueError,
                                  space.wrap(e.msg))
@@ -25,10 +21,7 @@ def descr__new__(space, w_floattype, w_x=0.0):
             from unicodeobject import unicode_to_decimal_w
         strvalue = unicode_to_decimal_w(space, w_value)
         try:
-            if USE_NEW_S2F:
-                value = interp_string_to_float(space, strvalue)
-            else:
-                value = string_to_float(strvalue)
+            value = interp_string_to_float(space, strvalue)
         except ParseStringError, e:
             raise OperationError(space.w_ValueError,
                                  space.wrap(e.msg))
@@ -48,5 +41,5 @@ float_typedef = StdTypeDef("float",
     __doc__ = '''float(x) -> floating point number
 
 Convert a string or number to a floating point number, if possible.''',
-    __new__ = newmethod(descr__new__),
+    __new__ = gateway.interp2app(descr__new__),
     )

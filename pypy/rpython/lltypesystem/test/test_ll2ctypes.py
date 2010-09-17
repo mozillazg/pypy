@@ -15,7 +15,6 @@ from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
-from pypy.tool.udir import udir
 
 class TestLL2Ctypes(object):
 
@@ -343,6 +342,17 @@ class TestLL2Ctypes(object):
         lltype.free(ll_timevalp, flavor='raw')
         assert not ALLOCATED     # detects memory leaks in the test
 
+    def test_opaque_obj_2(self):
+        FILEP = rffi.COpaquePtr('FILE')
+        fopen = rffi.llexternal('fopen', [rffi.CCHARP, rffi.CCHARP], FILEP)
+        fclose = rffi.llexternal('fclose', [FILEP], rffi.INT)
+        tmppath = udir.join('test_ll2ctypes.test_opaque_obj_2')
+        ll_file = fopen(str(tmppath), "w")
+        assert ll_file
+        fclose(ll_file)
+        assert tmppath.check(file=1)
+        assert not ALLOCATED     # detects memory leaks in the test
+
     def test_simple_cast(self):
         assert rffi.cast(rffi.SIGNEDCHAR, 0x123456) == 0x56
         assert rffi.cast(rffi.SIGNEDCHAR, 0x123481) == -127
@@ -431,6 +441,29 @@ class TestLL2Ctypes(object):
         assert res == 8
         rffi.free_charp(p)
         assert not ALLOCATED     # detects memory leaks in the test
+
+    def test_funcptr_cast(self):
+        eci = ExternalCompilationInfo(
+            separate_module_sources=["""
+            long mul(long x, long y) { return x*y; }
+            long(*get_mul(long x)) () { return &mul; }
+            """],
+            export_symbols=['get_mul'])
+        get_mul = rffi.llexternal(
+            'get_mul', [],
+            lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Signed)),
+            compilation_info=eci)
+        # This call returns a pointer to a function taking one argument
+        funcptr = get_mul()
+        # cast it to the "real" function type
+        FUNCTYPE2 = lltype.FuncType([lltype.Signed, lltype.Signed],
+                                    lltype.Signed)
+        cmul = rffi.cast(lltype.Ptr(FUNCTYPE2), funcptr)
+        # and it can be called with the expected number of arguments
+        res = cmul(41, 42)
+        assert res == 41 * 42
+        raises(TypeError, cmul, 41)
+        raises(TypeError, cmul, 41, 42, 43)
 
     def test_qsort(self):
         CMPFUNC = lltype.FuncType([rffi.VOIDP, rffi.VOIDP], rffi.INT)
@@ -1041,6 +1074,10 @@ class TestLL2Ctypes(object):
 
         #assert lltype.cast_ptr_to_int(ref1) == intval
 
+    def test_ptr_truth(self):
+        abc = rffi.cast(lltype.Ptr(lltype.FuncType([], lltype.Void)), 0)
+        assert not abc
+
     def test_mixed_gcref_comparison(self):
         NODE = lltype.GcStruct('NODE')
         node = lltype.malloc(NODE)
@@ -1203,6 +1240,15 @@ class TestLL2Ctypes(object):
             return u.x
         res = interpret(f, [])
         assert res == 6
+
+    def test_force_to_int(self):
+        S = lltype.Struct('S')
+        p = lltype.malloc(S, flavor='raw')
+        a = llmemory.cast_ptr_to_adr(p)
+        i = llmemory.cast_adr_to_int(a, "forced")
+        assert type(i) is int
+        assert i == llmemory.cast_adr_to_int(a, "forced")
+        lltype.free(p, flavor='raw')
 
 class TestPlatform(object):
     def test_lib_on_libpaths(self):

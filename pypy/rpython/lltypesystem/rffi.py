@@ -3,7 +3,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
-from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof, raw_memcopy
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
@@ -11,16 +11,12 @@ from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import llmemory
 import os, sys
-
-class UnhandledRPythonException(Exception):
-    pass
 
 class CConstant(Symbolic):
     """ A C-level constant, maybe #define, rendered directly.
@@ -51,6 +47,7 @@ class _IsLLPtrEntry(ExtRegistryEntry):
         result = isinstance(s_p, annmodel.SomePtr)
         return self.bookkeeper.immutablevalue(result)
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.inputconst(lltype.Bool, hop.s_result.const)
 
 def llexternal(name, args, result, _callable=None,
@@ -177,6 +174,15 @@ def llexternal(name, args, result, _callable=None,
                 elif isinstance(arg, str):
                     arg = str2charp(arg)
                     # XXX leaks if a str2charp() fails with MemoryError
+                    # and was not the first in this function
+                    freeme = arg
+            elif TARGET == CWCHARP:
+                if arg is None:
+                    arg = lltype.nullptr(CWCHARP.TO)   # None => (wchar_t*)NULL
+                    freeme = arg
+                elif isinstance(arg, unicode):
+                    arg = unicode2wcharp(arg)
+                    # XXX leaks if a unicode2wcharp() fails with MemoryError
                     # and was not the first in this function
                     freeme = arg
             elif _isfunctype(TARGET) and not _isllptr(arg):
@@ -352,14 +358,15 @@ TYPES += ['signed char', 'unsigned char',
 if os.name != 'nt':
     TYPES.append('mode_t')
     TYPES.append('pid_t')
+    TYPES.append('ssize_t')
 else:
     MODE_T = lltype.Signed
     PID_T = lltype.Signed
+    SSIZE_T = lltype.Signed
 
-def setup():
-    """ creates necessary c-level types
-    """
-    result = []
+def populate_inttypes():
+    names = []
+    populatelist = []
     for name in TYPES:
         c_name = name
         if name.startswith('unsigned'):
@@ -368,7 +375,18 @@ def setup():
         else:
             signed = (name != 'size_t')
         name = name.replace(' ', '')
-        tp = platform.inttype(name.upper(), c_name, signed)
+        names.append(name)
+        populatelist.append((name.upper(), c_name, signed))
+    platform.populate_inttypes(populatelist)
+    return names
+
+def setup():
+    """ creates necessary c-level types
+    """
+    names = populate_inttypes()
+    result = []
+    for name in names:
+        tp = platform.types[name.upper()]
         globals()['r_' + name] = platform.numbertype_to_rclass[tp]
         globals()[name.upper()] = tp
         tpp = lltype.Ptr(lltype.Array(tp, hints={'nolength': True}))
@@ -378,6 +396,11 @@ def setup():
 
 NUMBER_TYPES = setup()
 platform.numbertype_to_rclass[lltype.Signed] = int     # avoid "r_long" for common cases
+r_int_real = rarithmetic.build_int("r_int_real", r_int.SIGN, r_int.BITS, True)
+INT_real = lltype.build_number("INT", r_int_real)
+platform.numbertype_to_rclass[INT_real] = r_int_real
+NUMBER_TYPES.append(INT_real)
+
 # ^^^ this creates at least the following names:
 # --------------------------------------------------------------------
 #        Type           RPython integer class doing wrap-around
@@ -394,6 +417,7 @@ platform.numbertype_to_rclass[lltype.Signed] = int     # avoid "r_long" for comm
 #        ULONGLONG      r_ulonglong
 #        WCHAR_T        r_wchar_t
 #        SIZE_T         r_size_t
+#        SSIZE_T        r_ssize_t
 #        TIME_T         r_time_t
 # --------------------------------------------------------------------
 # Note that rffi.r_int is not necessarily the same as
@@ -434,7 +458,7 @@ def CCallback(args, res):
     return lltype.Ptr(lltype.FuncType(args, res))
 CCallback._annspecialcase_ = 'specialize:memo'
 
-def COpaque(name, hints=None, compilation_info=None):
+def COpaque(name=None, ptr_typedef=None, hints=None, compilation_info=None):
     if compilation_info is None:
         compilation_info = ExternalCompilationInfo()
     if hints is None:
@@ -442,7 +466,10 @@ def COpaque(name, hints=None, compilation_info=None):
     else:
         hints = hints.copy()
     hints['external'] = 'C'
-    hints['c_name'] = name
+    if name is not None:
+        hints['c_name'] = name
+    if ptr_typedef is not None:
+        hints['c_pointer_typedef'] = ptr_typedef
     def lazy_getsize(cache={}):
         from pypy.rpython.tool import rffi_platform
         try:
@@ -456,7 +483,8 @@ def COpaque(name, hints=None, compilation_info=None):
     return lltype.OpaqueType(name, hints)
 
 def COpaquePtr(*args, **kwds):
-    return lltype.Ptr(COpaque(*args, **kwds))
+    typedef = kwds.pop('typedef', None)
+    return lltype.Ptr(COpaque(ptr_typedef=typedef, *args, **kwds))
 
 def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
                     sandboxsafe=False, _nowrapper=False,
@@ -510,6 +538,8 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
 # (use SIGNEDCHAR or UCHAR for the small integer types)
 CHAR = lltype.Char
 
+INTPTR_T = SSIZE_T
+
 # double
 DOUBLE = lltype.Float
 
@@ -520,6 +550,7 @@ r_singlefloat = rarithmetic.r_singlefloat
 
 # void *   - for now, represented as char *
 VOIDP = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True}))
+VOIDP_real = lltype.Ptr(lltype.Array(lltype.Char, hints={'nolength': True, 'render_as_void': True}))
 
 # void **
 VOIDPP = CArrayPtr(VOIDP)
@@ -567,9 +598,12 @@ def make_string_mappings(strtype):
         """ str -> char*
         """
         array = lltype.malloc(TYPEP.TO, len(s) + 1, flavor='raw')
-        for i in range(len(s)):
+        i = len(s)
+        array[i] = lastchar
+        i -= 1
+        while i >= 0:
             array[i] = s[i]
-        array[len(s)] = lastchar
+            i -= 1
         return array
     str2charp._annenforceargs_ = [strtype]
 
@@ -625,16 +659,8 @@ def make_string_mappings(strtype):
         allows for the process to be performed without an extra copy.
         Make sure to call keep_buffer_alive_until_here on the returned values.
         """
-        str_chars_offset = (offsetof(STRTYPE, 'chars') + \
-                            itemoffsetof(STRTYPE.chars, 0))
-        gc_buf = rgc.malloc_nonmovable(STRTYPE, count)
-        if gc_buf:
-            realbuf = cast_ptr_to_adr(gc_buf) + str_chars_offset
-            raw_buf = cast(TYPEP, realbuf)
-            return raw_buf, gc_buf
-        else:
-            raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
-            return raw_buf, lltype.nullptr(STRTYPE)
+        raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
+        return raw_buf, lltype.nullptr(STRTYPE)
     alloc_buffer._always_inline_ = True # to get rid of the returned tuple
 
     # (char*, str, int, int) -> None
@@ -767,7 +793,6 @@ def sizeof(tp):
         # the hint is present in structures probed by rffi_platform.
         size = tp._hints.get('size')
         if size is None:
-            from pypy.rpython.lltypesystem import llmemory
             size = llmemory.sizeof(tp)    # a symbolic result in this case
         return size
     if isinstance(tp, lltype.Ptr):
@@ -778,6 +803,8 @@ def sizeof(tp):
         return r_wchar_t.BITS/8
     if tp is lltype.Float:
         return 8
+    if tp is lltype.SingleFloat:
+        return 4
     assert isinstance(tp, lltype.Number)
     if tp is lltype.Signed:
         return ULONG._type.BITS/8
@@ -796,7 +823,6 @@ def offsetof(STRUCT, fieldname):
             if name == fieldname:
                 return fieldoffsets[index]
     # a symbolic result as a fallback
-    from pypy.rpython.lltypesystem import llmemory
     return llmemory.offsetof(STRUCT, fieldname)
 offsetof._annspecialcase_ = 'specialize:memo'
 

@@ -206,7 +206,6 @@ def _ll_list_resize_really(l, newsize):
             new_allocated = ovfcheck(newsize + some)
         except OverflowError:
             raise MemoryError
-    # XXX consider to have a real realloc
     # new_allocated is a bit more than newsize, enough to ensure an amortized
     # linear complexity for e.g. repeated usage of l.append().
     items = l.items
@@ -389,6 +388,7 @@ class ListIteratorRepr(AbstractListIteratorRepr):
                                          ('index', Signed)))
         self.ll_listiter = ll_listiter
         self.ll_listnext = ll_listnext
+        self.ll_getnextindex = ll_getnextindex
 
 def ll_listiter(ITERPTR, lst):
     iter = malloc(ITERPTR.TO)
@@ -403,3 +403,6 @@ def ll_listnext(iter):
         raise StopIteration
     iter.index = index + 1      # cannot overflow because index < l.length
     return l.ll_getitem_fast(index)
+
+def ll_getnextindex(iter):
+    return iter.index

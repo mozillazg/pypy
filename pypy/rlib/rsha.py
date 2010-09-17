@@ -2,7 +2,7 @@
 
 """A sample implementation of SHA-1 in RPython.
 
-   See also the pure Python implementation in pypy/lib/sha.py, which might
+   See also the pure Python implementation in lib_pypy/sha.py, which might
    or might not be faster than this one on top of CPython.
 
    Framework adapted from Dinu Gherman's MD5 implementation by
@@ -88,7 +88,7 @@ K = [
     0xCA62C1D6L  # (60 <= t <= 79)
     ]
 
-unroll_f_K = unrolling_iterable(zip(f, K))
+unroll_f_K = unrolling_iterable(zip(f, map(r_uint, K)))
 if UNROLL_ALL:
     unroll_range_20 = unrolling_iterable(range(20))
 

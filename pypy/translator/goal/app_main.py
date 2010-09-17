@@ -182,12 +182,27 @@ def get_argument(option, argv, i):
                                    option)
         return argv[i], i
 
+def get_library_path(executable):
+    search = executable
+    while 1:
+        dirname = resolvedirof(search)
+        if dirname == search:
+            # not found!  let's hope that the compiled-in path is ok
+            print >> sys.stderr, ('debug: WARNING: library path not found, '
+                                  'using compiled-in sys.path')
+            newpath = sys.path[:]
+            break
+        newpath = sys.pypy_initial_path(dirname)
+        if newpath is None:
+            search = dirname    # walk to the parent directory
+            continue
+        break      # found!
+    return newpath
 
 def setup_initial_paths(executable, nanos):
     # a substituted os if we are translated
     global os
     os = nanos
-    AUTOSUBPATH = 'share' + os.sep + 'pypy-%d.%d'
     # find the full path to the executable, assuming that if there is no '/'
     # in the provided one then we must look along the $PATH
     if we_are_translated() and IS_WINDOWS and not executable.lower().endswith('.exe'):
@@ -204,28 +219,10 @@ def setup_initial_paths(executable, nanos):
                     break
     sys.executable = os.path.abspath(executable)
 
-    # set up a sys.path that depends on the local machine
-    autosubpath = AUTOSUBPATH % sys.pypy_version_info[:2]
-    search = executable
-    while 1:
-        dirname = resolvedirof(search)
-        if dirname == search:
-            # not found!  let's hope that the compiled-in path is ok
-            print >> sys.stderr, ('debug: WARNING: library path not found, '
-                                  'using compiled-in sys.path')
-            newpath = sys.path[:]
-            break
-        newpath = sys.pypy_initial_path(dirname)
-        if newpath is None:
-            newpath = sys.pypy_initial_path(os.path.join(dirname, autosubpath))
-            if newpath is None:
-                search = dirname    # walk to the parent directory
-                continue
-        break      # found!
+    newpath = get_library_path(executable)
     path = os.getenv('PYTHONPATH')
     if path:
         newpath = path.split(os.pathsep) + newpath
-    newpath.insert(0, '')
     # remove duplicates
     _seen = {}
     del sys.path[:]
@@ -295,8 +292,8 @@ def parse_command_line(argv):
         else:
             raise CommandLineError('unrecognized option %r' % (arg,))
         i += 1
-    sys.argv = argv[i:]
-    if not sys.argv:
+    sys.argv[:] = argv[i:]    # don't change the list that sys.argv is bound to
+    if not sys.argv:          # (relevant in case of "reload(sys)")
         sys.argv.append('')
         run_stdin = True
     return locals()
@@ -328,6 +325,10 @@ def run_command_line(go_interactive,
             import site
         except:
             print >> sys.stderr, "'import site' failed"
+
+    # update sys.path *after* loading site.py, in case there is a
+    # "site.py" file in the script's directory.
+    sys.path.insert(0, '')
 
     if warnoptions:
         sys.warnoptions.append(warnoptions)
@@ -459,8 +460,6 @@ if __name__ == '__main__':
     # obscure! try removing the following line, see how it crashes, and
     # guess why...
     ImStillAroundDontForgetMe = sys.modules['__main__']
-    sys.ps1 = '>>>> '
-    sys.ps2 = '.... '
 
     # debugging only
     def pypy_initial_path(s):
@@ -474,10 +473,26 @@ if __name__ == '__main__':
     # finds its own extension modules :-/
     import os
     os.environ['PYTHONPATH'] = ':'.join(sys.path)
+    reset = []
+    if 'PYTHONINSPECT_' in os.environ:
+        reset.append(('PYTHONINSPECT', os.environ.get('PYTHONINSPECT', '')))
+        os.environ['PYTHONINSPECT'] = os.environ['PYTHONINSPECT_']
+
+    # no one should change to which lists sys.argv and sys.path are bound
+    old_argv = sys.argv
+    old_path = sys.path
 
     from pypy.module.sys.version import PYPY_VERSION
     sys.pypy_version_info = PYPY_VERSION
     sys.pypy_initial_path = pypy_initial_path
     os = nanos.os_module_for_testing
-    sys.exit(entry_point(sys.argv[0], sys.argv[1:], os))
-    #sys.exit(entry_point('app_main.py', sys.argv[1:]))
+    sys.ps1 = '>>>> '
+    sys.ps2 = '.... '
+    try:
+        sys.exit(int(entry_point(sys.argv[0], sys.argv[1:], os)))
+    finally:
+        sys.ps1 = '>>> '     # restore the normal ones, in case
+        sys.ps2 = '... '     # we are dropping to CPython's prompt
+        import os; os.environ.update(reset)
+        assert old_argv is sys.argv
+        assert old_path is sys.path

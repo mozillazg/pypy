@@ -13,6 +13,8 @@ from pypy.rpython.lltypesystem.lltype import ForwardReference, FuncType
 from pypy.rpython.lltypesystem.llmemory import Address
 from pypy.translator.backendopt.ssa import SSI_to_SSA
 from pypy.translator.backendopt.innerloop import find_inner_loops
+from pypy.tool.identity_dict import identity_dict
+
 
 PyObjPtr = Ptr(PyObject)
 LOCALVAR = 'l_%s'
@@ -30,7 +32,7 @@ class FunctionCodeGenerator(object):
                        exception_policy
                        more_ll_values
                        vars all_cached_consts 
-                       lltypes
+                       illtypes
                        functionname
                        blocknum
                        innerloops
@@ -63,7 +65,7 @@ class FunctionCodeGenerator(object):
                 continue
             db.gettype(T)  # force the type to be considered by the database
        
-        self.lltypes = None
+        self.illtypes = None
 
     def collect_var_and_types(self):
         #
@@ -95,11 +97,11 @@ class FunctionCodeGenerator(object):
                 mix.append(cleanupop.result)
              
         uniquemix = []
-        seen = {}
+        seen = identity_dict()
         for v in mix:
-            if id(v) not in seen:
+            if v not in seen:
                 uniquemix.append(v)
-                seen[id(v)] = True
+                seen[v] = True
         self.vars = uniquemix
 
     def name(self, cname):  #virtual
@@ -122,12 +124,12 @@ class FunctionCodeGenerator(object):
         for block in self.graph.iterblocks():
             self.blocknum[block] = len(self.blocknum)
         db = self.db
-        lltypes = {}
+        lltypes = identity_dict()
         for v in self.vars:
             T = getattr(v, 'concretetype', PyObjPtr)
             typename = db.gettype(T)
-            lltypes[id(v)] = T, typename
-        self.lltypes = lltypes
+            lltypes[v] = T, typename
+        self.illtypes = lltypes
         self.innerloops = {}    # maps the loop's header block to a Loop()
         for loop in find_inner_loops(self.graph, Bool):
             self.innerloops[loop.headblock] = loop
@@ -137,7 +139,7 @@ class FunctionCodeGenerator(object):
 
     def implementation_end(self):
         self.all_cached_consts = list(self.allconstantvalues())
-        self.lltypes = None
+        self.illtypes = None
         self.vars = None
         self.blocknum = None
         self.innerloops = None
@@ -161,11 +163,11 @@ class FunctionCodeGenerator(object):
             yield llvalue
 
     def lltypemap(self, v):
-        T, typename = self.lltypes[id(v)]
+        T, typename = self.illtypes[v]
         return T
 
     def lltypename(self, v):
-        T, typename = self.lltypes[id(v)]
+        T, typename = self.illtypes[v]
         return typename
 
     def expr(self, v, special_case_void=True):
@@ -207,6 +209,7 @@ class FunctionCodeGenerator(object):
 
     def cfunction_body(self):
         graph = self.graph
+        yield 'goto block0;'    # to avoid a warning "this label is not used"
 
         # generate the body of each block
         for block in graph.iterblocks():
@@ -298,7 +301,7 @@ class FunctionCodeGenerator(object):
         is_alive = {}
         assignments = []
         for a1, a2 in zip(link.args, link.target.inputargs):
-            a2type, a2typename = self.lltypes[id(a2)]
+            a2type, a2typename = self.illtypes[a2]
             if a2type is Void:
                 continue
             src = self.expr(a1)
@@ -315,6 +318,7 @@ class FunctionCodeGenerator(object):
 
     def gen_op(self, op):
         macro = 'OP_%s' % op.opname.upper()
+        line = None
         if op.opname.startswith('gc_'):
             meth = getattr(self.gcpolicy, macro, None)
             if meth:
@@ -323,7 +327,7 @@ class FunctionCodeGenerator(object):
             meth = getattr(self, macro, None)
             if meth:
                 line = meth(op)
-        if meth is None:
+        if line is None:
             lst = [self.expr(v) for v in op.args]
             lst.append(self.expr(op.result))
             line = '%s(%s);' % (macro, ', '.join(lst))
@@ -482,16 +486,20 @@ class FunctionCodeGenerator(object):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
+        baseexpr_is_const = isinstance(op.args[0], Constant)
         expr = ampersand + structdef.ptr_access_expr(self.expr(op.args[0]),
-                                                     op.args[1].value)
+                                                     op.args[1].value,
+                                                     baseexpr_is_const)
         return self.generic_get(op, expr)
 
     def OP_BARE_SETFIELD(self, op):
         assert isinstance(op.args[1], Constant)
         STRUCT = self.lltypemap(op.args[0]).TO
         structdef = self.db.gettypedefnode(STRUCT)
+        baseexpr_is_const = isinstance(op.args[0], Constant)
         expr = structdef.ptr_access_expr(self.expr(op.args[0]),
-                                         op.args[1].value)
+                                         op.args[1].value,
+                                         baseexpr_is_const)
         return self.generic_set(op, expr)
 
     def OP_GETSUBSTRUCT(self, op):
@@ -842,5 +850,16 @@ class FunctionCodeGenerator(object):
         return 'PYPY_DEBUG_CATCH_EXCEPTION("%s", %s, %s);' % (
             self.getdebugfunctionname(), gottype, ' || '.join(exprs))
 
+    def OP_INT_BETWEEN(self, op):
+        if (isinstance(op.args[0], Constant) and
+            isinstance(op.args[2], Constant) and
+            op.args[2].value - op.args[0].value == 1):
+            # (a <= b < a+1) ----> (b == a)
+            return '%s = (%s == %s);  /* was INT_BETWEEN */' % (
+                self.expr(op.result),
+                self.expr(op.args[1]),
+                self.expr(op.args[0]))
+        else:
+            return None    # use the default
 
 assert not USESLOTS or '__dict__' not in dir(FunctionCodeGenerator)

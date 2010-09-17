@@ -3,7 +3,7 @@ from py.builtin import set
 from pypy.rpython.lltypesystem.lltype import LowLevelType, Signed, Unsigned, Float, Char
 from pypy.rpython.lltypesystem.lltype import Bool, Void, UniChar, typeOf, \
         Primitive, isCompatibleType, enforce, saferecursive, SignedLongLong, UnsignedLongLong
-from pypy.rpython.lltypesystem.lltype import frozendict, isCompatibleType
+from pypy.rpython.lltypesystem.lltype import frozendict
 from pypy.rpython.lltypesystem.lltype import identityhash
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import objectmodel
@@ -267,6 +267,14 @@ class Instance(OOType):
             return self._fields_with_default[:]
         return self._superclass._get_fields_with_default() + self._fields_with_default
 
+    def _immutable_field(self, field):
+        if 'immutable_fields' in self._hints:
+            try:
+                s = self._hints['immutable_fields'].fields[field]
+                return s or True
+            except KeyError:
+                pass
+        return self._hints.get('immutable', False)
 
 
 class SpecializableType(OOType):

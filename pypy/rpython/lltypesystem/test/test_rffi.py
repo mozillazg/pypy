@@ -85,7 +85,7 @@ class BaseTestRffi:
     def test_string_reverse(self):
         c_source = py.code.Source("""
         #include <string.h>
-        #include <Python.h>
+        #include <src/allocator.h>
         #include <src/mem.h>
 
         char *f(char* arg)
@@ -186,6 +186,11 @@ class BaseTestRffi:
     
     def test_externvar(self):
         import os
+        if os.name == 'nt':
+            # Windows CRT badly aborts when an invalid fd is used.
+            bad_fd = 0
+        else:
+            bad_fd = 12312312
     
         def f():
             set_errno(12)
@@ -193,7 +198,7 @@ class BaseTestRffi:
     
         def g():
             try:
-                os.write(12312312, "xxx")
+                os.write(bad_fd, "xxx")
             except OSError:
                 pass
             return get_errno()
@@ -279,6 +284,28 @@ class BaseTestRffi:
     
         f1 = self.compile(f, [])
         assert f1() == 'a'
+
+    def test_opaque_typedef(self):
+        code = """
+        #include <stddef.h>
+        struct stuff;
+        typedef struct stuff *stuff_ptr;
+        static int get(stuff_ptr ptr) { return (ptr != NULL); }
+        """
+
+        eci = ExternalCompilationInfo(
+            post_include_bits = [code]
+        )
+
+        STUFFP = COpaquePtr(typedef='stuff_ptr', compilation_info=eci)
+        ll_get = llexternal('get', [STUFFP], lltype.Signed,
+                            compilation_info=eci)
+
+        def f():
+            return ll_get(lltype.nullptr(STUFFP.TO))
+
+        f1 = self.compile(f, [])
+        assert f1() == 0
 
     def return_char(self, signed):
         ctype_pref = ["un", ""][signed]
@@ -685,6 +712,7 @@ class TestRffiInternals:
             lltype.UniChar:  ctypes.c_wchar,
             lltype.Char:     ctypes.c_ubyte,
             DOUBLE:     ctypes.c_double,
+            FLOAT:      ctypes.c_float,
             SIGNEDCHAR: ctypes.c_byte,
             UCHAR:      ctypes.c_ubyte,
             SHORT:      ctypes.c_short,
