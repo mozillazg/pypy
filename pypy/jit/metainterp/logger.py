@@ -97,9 +97,9 @@ class Logger(object):
                 else:
                     r = self.repr_of_descr(descr)
                 args += ', descr=' +  r
-            if is_guard and op.fail_args is not None:
+            if is_guard and op.getfailargs() is not None:
                 fail_args = ' [' + ", ".join([self.repr_of_arg(memo, arg)
-                                              for arg in op.fail_args]) + ']'
+                                              for arg in op.getfailargs()]) + ']'
             else:
                 fail_args = ''
             debug_print(res + op.getopname() +

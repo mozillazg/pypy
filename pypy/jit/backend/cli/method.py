@@ -357,10 +357,10 @@ class Method(object):
         assert op.is_guard()
         if op in self.cliloop.guard2ops:
             inputargs, suboperations = self.cliloop.guard2ops[op]
-            self.match_var_fox_boxes(op.fail_args, inputargs)
+            self.match_var_fox_boxes(op.getfailargs(), inputargs)
             self.emit_operations(suboperations)
         else:
-            self.emit_return_failed_op(op, op.fail_args)
+            self.emit_return_failed_op(op, op.getfailargs())
 
     def emit_end(self):
         assert self.branches == []

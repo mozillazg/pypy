@@ -362,7 +362,7 @@ class Optimizer(Optimization):
                 else:
                     raise AssertionError("uh?")
                 newop = ResOperation(opnum, [op.getarg(0)], op.result, descr)
-                newop.fail_args = op.getfailargs()
+                newop.setfailargs(op.getfailargs())
                 return newop
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.

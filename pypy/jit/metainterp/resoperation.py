@@ -7,12 +7,12 @@ def ResOperation(opnum, args, result, descr=None):
 class BaseResOperation(object):
     """The central ResOperation class, representing one operation."""
 
-    # for 'guard_*'
-    fail_args = None
+    __slots__ = ['_fail_args', '_opnum', '_args', 'result', '_descr',
+                 'name', 'pc', '_exc_box', '__weakref__']
 
     # debug
-    name = ""
-    pc = 0
+    ## name = ""
+    ## pc = 0
 
     def __init__(self, opnum, args, result, descr=None):
         make_sure_not_resized(args)
@@ -23,11 +23,13 @@ class BaseResOperation(object):
         assert not isinstance(result, list)
         self.result = result
         self.setdescr(descr)
+        
+        self._fail_args = None
+        self.pc = 0
+        self.name = ''
 
-    def __setattr__(self, name, attr):
-        if name == 'descr':
-            assert False
-        object.__setattr__(self, name, attr)
+    ## def __init__(self, result):
+    ##     self.result = result
 
     def copy_and_change(self, opnum, args=None, result=None, descr=None):
         "shallow copy: the returned operation is meant to be used in place of self"
@@ -44,27 +46,35 @@ class BaseResOperation(object):
 
     def getopnum(self):
         return self._opnum
+        #raise NotImplementedError
 
     def getarg(self, i):
         return self._args[i]
+        #raise NotImplementedError
 
     def setarg(self, i, box):
         self._args[i] = box
+        #raise NotImplementedError
 
     def numargs(self):
         return len(self._args)
+        #raise NotImplementedError
 
     def setarglist(self, args):
+        # XXX: is it really needed?
         self._args = args
+        #raise NotImplementedError
 
     def getarglist(self):
         return self._args
+        #raise NotImplementedError
 
     def getfailargs(self):
-        return self.fail_args
+        return self._fail_args
+        #raise NotImplementedError
 
     def setfailargs(self, fail_args):
-        self.fail_args = fail_args
+        self._fail_args = fail_args
 
     def getdescr(self):
         return self._descr
@@ -83,8 +93,8 @@ class BaseResOperation(object):
         descr = self._descr
         if descr is not None:
             descr = descr.clone_if_mutable()
-        op = ResOperation(self._opnum, self._args, self.result, descr)
-        op.fail_args = self.fail_args
+        op = ResOperation(self.getopnum(), self._args, self.result, descr)
+        op._fail_args = self._fail_args
         op.name = self.name
         if not we_are_translated():
             op.pc = self.pc
@@ -103,7 +113,7 @@ class BaseResOperation(object):
             prefix = "%s:%s   " % (self.name, self.pc)
         else:
             prefix = ""
-        if self._descr is None or we_are_translated():
+        if self.getdescr() is None or we_are_translated():
             return '%s%s%s(%s)' % (prefix, sres, self.getopname(),
                                  ', '.join([str(a) for a in self._args]))
         else:
@@ -112,49 +122,51 @@ class BaseResOperation(object):
 
     def getopname(self):
         try:
-            return opname[self._opnum].lower()
+            return opname[self.getopnum()].lower()
         except KeyError:
-            return '<%d>' % self._opnum
+            return '<%d>' % self.getopnum()
 
     def is_guard(self):
-        return rop._GUARD_FIRST <= self._opnum <= rop._GUARD_LAST
+        return rop._GUARD_FIRST <= self.getopnum() <= rop._GUARD_LAST
 
     def is_foldable_guard(self):
-        return rop._GUARD_FOLDABLE_FIRST <= self._opnum <= rop._GUARD_FOLDABLE_LAST
+        return rop._GUARD_FOLDABLE_FIRST <= self.getopnum() <= rop._GUARD_FOLDABLE_LAST
 
     def is_guard_exception(self):
-        return (self._opnum == rop.GUARD_EXCEPTION or
-                self._opnum == rop.GUARD_NO_EXCEPTION)
+        return (self.getopnum() == rop.GUARD_EXCEPTION or
+                self.getopnum() == rop.GUARD_NO_EXCEPTION)
 
     def is_guard_overflow(self):
-        return (self._opnum == rop.GUARD_OVERFLOW or
-                self._opnum == rop.GUARD_NO_OVERFLOW)
+        return (self.getopnum() == rop.GUARD_OVERFLOW or
+                self.getopnum() == rop.GUARD_NO_OVERFLOW)
 
     def is_always_pure(self):
-        return rop._ALWAYS_PURE_FIRST <= self._opnum <= rop._ALWAYS_PURE_LAST
+        return rop._ALWAYS_PURE_FIRST <= self.getopnum() <= rop._ALWAYS_PURE_LAST
 
     def has_no_side_effect(self):
-        return rop._NOSIDEEFFECT_FIRST <= self._opnum <= rop._NOSIDEEFFECT_LAST
+        return rop._NOSIDEEFFECT_FIRST <= self.getopnum() <= rop._NOSIDEEFFECT_LAST
 
     def can_raise(self):
-        return rop._CANRAISE_FIRST <= self._opnum <= rop._CANRAISE_LAST
+        return rop._CANRAISE_FIRST <= self.getopnum() <= rop._CANRAISE_LAST
 
     def is_ovf(self):
-        return rop._OVF_FIRST <= self._opnum <= rop._OVF_LAST
+        return rop._OVF_FIRST <= self.getopnum() <= rop._OVF_LAST
 
     def is_comparison(self):
         return self.is_always_pure() and self.returns_bool_result()
 
     def is_final(self):
-        return rop._FINAL_FIRST <= self._opnum <= rop._FINAL_LAST
+        return rop._FINAL_FIRST <= self.getopnum() <= rop._FINAL_LAST
 
     def returns_bool_result(self):
-        opnum = self._opnum
+        opnum = self.getopnum()
         if we_are_translated():
             assert opnum >= 0
         elif opnum < 0:
             return False     # for tests
         return opboolresult[opnum]
+
+
 
 # ____________________________________________________________
 
