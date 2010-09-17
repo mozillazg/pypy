@@ -581,16 +581,14 @@ class GcLLDescr_framework(GcLLDescription):
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
                     self._gen_write_barrier(newops, op.getarg(0), v)
-                    op = ResOperation(rop.SETFIELD_RAW, op._args, None,
-                                      descr=op.descr)
+                    op = op.copy_and_change(rop.SETFIELD_RAW)
             # ---------- write barrier for SETARRAYITEM_GC ----------
             if op.getopnum() == rop.SETARRAYITEM_GC:
                 v = op.getarg(2)
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
                     self._gen_write_barrier(newops, op.getarg(0), v)
-                    op = ResOperation(rop.SETARRAYITEM_RAW, op._args, None,
-                                      descr=op.descr)
+                    op = op.copy_and_change(rop.SETARRAYITEM_RAW)
             # ----------
             newops.append(op)
         del operations[:]
