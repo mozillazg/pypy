@@ -26,7 +26,7 @@ def stdout_ignore_ll_functions(msg):
 class GCTest(object):
     GC_PARAMS = {}
     GC_CAN_MOVE = False
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_SHRINK_ARRAY = False
     GC_CAN_SHRINK_BIG_ARRAY = False
 
@@ -452,10 +452,10 @@ class GCTest(object):
             a = rgc.malloc_nonmovable(TP, 3)
             if a:
                 assert not rgc.can_move(a)
-                return 0
-            return 1
+                return 1
+            return 0
 
-        assert self.interpret(func, []) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
+        assert self.interpret(func, []) == int(self.GC_CAN_MALLOC_NONMOVABLE)
 
     def test_malloc_nonmovable_fixsize(self):
         S = lltype.GcStruct('S', ('x', lltype.Float))
@@ -466,12 +466,12 @@ class GCTest(object):
                 rgc.collect()
                 if a:
                     assert not rgc.can_move(a)
-                    return 0
-                return 1
+                    return 1
+                return 0
             except Exception, e:
                 return 2
 
-        assert self.interpret(func, []) == int(self.GC_CANNOT_MALLOC_NONMOVABLE)
+        assert self.interpret(func, []) == int(self.GC_CAN_MALLOC_NONMOVABLE)
 
     def test_shrink_array(self):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -628,7 +628,7 @@ class TestMarkSweepGC(GCTest):
 class TestSemiSpaceGC(GCTest, snippet.SemiSpaceGCTests):
     from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
     GC_CAN_MOVE = True
-    GC_CANNOT_MALLOC_NONMOVABLE = True
+    GC_CAN_MALLOC_NONMOVABLE = False
     GC_CAN_SHRINK_ARRAY = True
     GC_CAN_SHRINK_BIG_ARRAY = True
 
@@ -649,7 +649,7 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 
 class TestHybridGC(TestGenerationalGC):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_SHRINK_BIG_ARRAY = False
 
     def test_ref_from_rawmalloced_to_regular(self):
@@ -720,7 +720,7 @@ class TestHybridGCSmallHeap(GCTest):
     from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
     GC_CAN_MOVE = False # with this size of heap, stuff gets allocated
                         # in 3rd gen.
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
     GC_PARAMS = {'space_size': 48*WORD,
                  'min_nursery_size': 12*WORD,
                  'nursery_size': 12*WORD,
@@ -769,4 +769,4 @@ class TestHybridGCSmallHeap(GCTest):
 class TestMiniMarkGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
     GC_CAN_SHRINK_BIG_ARRAY = False
-    GC_CANNOT_MALLOC_NONMOVABLE = False
+    GC_CAN_MALLOC_NONMOVABLE = True
