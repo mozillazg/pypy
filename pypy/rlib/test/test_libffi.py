@@ -18,6 +18,15 @@ def setup_module(mod):
         ffistruct = globals()[name]
         rffi.cast(rffi.VOIDP, ffistruct)
 
+def get_libm_name(platform):
+    if platform == 'win32':
+        return 'msvcrt.dll'
+    elif platform == "darwin":
+        return 'libm.dylib'
+    else:
+        return 'libm.so'
+
+
 class TestLibffi:
     def setup_method(self, meth):
         ALLOCATED.clear()
@@ -26,12 +35,7 @@ class TestLibffi:
         return CDLL(get_libc_name())
     
     def get_libm(self):
-        if sys.platform == 'win32':
-            return CDLL('msvcrt.dll')
-        elif sys.platform == "darwin":
-            return CDLL('libm.dylib')
-        else:
-            return CDLL('libm.so')
+        return CDLL(get_libm_name(sys.platform))
     
     def test_library_open(self):
         lib = self.get_libc()
