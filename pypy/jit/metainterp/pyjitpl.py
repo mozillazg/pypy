@@ -2100,9 +2100,8 @@ class MetaInterp(object):
             return resbox_as_const
         # not all constants (so far): turn CALL into CALL_PURE, which might
         # be either removed later by optimizeopt or turned back into CALL.
-        op._opnum = rop.CALL_PURE
-        # XXX XXX replace when the resoperation refactoring has been finished
-        op._args = [resbox_as_const] + op._args
+        newop = op.copy_and_change(rop.CALL_PURE, args=[resbox_as_const]+op.getarglist())
+        self.history.operations[-1] = newop
         return resbox
 
     def direct_assembler_call(self, targetjitdriver_sd):
@@ -2124,9 +2123,7 @@ class MetaInterp(object):
             # ^^^ and not "+=", which makes 'args' a resizable list
         warmrunnerstate = targetjitdriver_sd.warmstate
         token = warmrunnerstate.get_assembler_token(greenargs, args)
-        op._opnum = rop.CALL_ASSEMBLER
-        op.setarglist(args)
-        op.descr = token
+        op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
         self.history.operations.append(op)
 
 # ____________________________________________________________
