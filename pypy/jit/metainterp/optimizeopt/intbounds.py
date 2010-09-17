@@ -86,9 +86,9 @@ class OptIntBounds(Optimization):
         if resbound.has_lower and resbound.has_upper and \
            self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_ADD and remove guard
-            op._opnum = rop.INT_ADD
+            op = op.copy_and_change(rop.INT_ADD)
             self.skip_nextop()
-            self.optimize_INT_ADD(op)
+            self.optimize_INT_ADD(op) # emit the op
         else:
             self.emit_operation(op)
             r = self.getvalue(op.result)
@@ -101,9 +101,9 @@ class OptIntBounds(Optimization):
         if resbound.has_lower and resbound.has_upper and \
                self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_SUB and remove guard
-            op._opnum = rop.INT_SUB
+            op = op.copy_and_change(rop.INT_SUB)
             self.skip_nextop()
-            self.optimize_INT_SUB(op)
+            self.optimize_INT_SUB(op) # emit the op
         else:
             self.emit_operation(op)
             r = self.getvalue(op.result)
@@ -116,9 +116,9 @@ class OptIntBounds(Optimization):
         if resbound.has_lower and resbound.has_upper and \
                self.nextop().getopnum() == rop.GUARD_NO_OVERFLOW:
             # Transform into INT_MUL and remove guard
-            op._opnum = rop.INT_MUL
+            op = op.copy_and_change(rop.INT_MUL)
             self.skip_nextop()
-            self.optimize_INT_MUL(op)
+            self.optimize_INT_MUL(op) # emit the op
         else:
             self.emit_operation(op)
             r = self.getvalue(op.result)

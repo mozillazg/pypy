@@ -253,7 +253,7 @@ class OptRewrite(Optimization):
             return
         # change the op to be a normal call, from the backend's point of view
         # there is no reason to have a separate operation for this
-        op._opnum = rop.CALL
+        op = op.copy_and_change(rop.CALL)
         self.emit_operation(op)
         resvalue = self.getvalue(op.result)
         self.optimizer.loop_invariant_results[key] = resvalue
