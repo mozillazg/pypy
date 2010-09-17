@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.ootypesystem import rdict as oo_rdict
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.translator.simplify import get_funcobj
 from pypy.translator.unsimplify import split_block
 from pypy.objspace.flow.model import Constant
@@ -216,6 +217,21 @@ def _ll_1_int_abs(x):
         return -x
     else:
         return x
+
+
+# libffi support
+# --------------
+
+def _ll_2_libffi_push_arg(llfunc, value):
+    from pypy.rlib.libffi import FuncPtr
+    func = cast_base_ptr_to_instance(FuncPtr, llfunc)
+    return func.push_arg(value)
+
+def _ll_2_libffi_call(llfunc, RES_TP):
+    from pypy.rlib.libffi import FuncPtr
+    func = cast_base_ptr_to_instance(FuncPtr, llfunc)
+    return func.call(lltype.Float) # XXX: should be RES_TP, but it doesn't work
+
 
 # in the following calls to builtins, the JIT is allowed to look inside:
 inline_calls_to = [

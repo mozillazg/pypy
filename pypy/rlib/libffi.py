@@ -511,6 +511,7 @@ class FuncPtr(AbstractFuncPtr):
                            self.ll_args[self.pushed_args])
         self.pushed_args += 1
     push_arg._annspecialcase_ = 'specialize:argtype(1)'
+    push_arg.oopspec = 'libffi_push_arg(self, value)'
 
     def _check_args(self):
         if self.pushed_args < self.argnum:
@@ -533,6 +534,7 @@ class FuncPtr(AbstractFuncPtr):
         check_fficall_result(ffires, self.flags)
         return res
     call._annspecialcase_ = 'specialize:arg(1)'
+    call.oopspec = 'libffi_call(self, RES_TP)'
 
     def __del__(self):
         if self.ll_args:
