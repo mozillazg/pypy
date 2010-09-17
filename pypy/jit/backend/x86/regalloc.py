@@ -268,7 +268,7 @@ class RegAlloc(object):
                                               selected_reg, need_lower_byte)
 
     def _compute_loop_consts(self, inputargs, jump, looptoken):
-        if jump.getopnum() != rop.JUMP or jump.descr is not looptoken:
+        if jump.getopnum() != rop.JUMP or jump.getdescr() is not looptoken:
             loop_consts = {}
         else:
             loop_consts = {}
@@ -451,7 +451,7 @@ class RegAlloc(object):
     def consider_finish(self, op):
         locs = [self.loc(op.getarg(i)) for i in range(op.numargs())]
         locs_are_ref = [op.getarg(i).type == REF for i in range(op.numargs())]
-        fail_index = self.assembler.cpu.get_fail_descr_number(op.descr)
+        fail_index = self.assembler.cpu.get_fail_descr_number(op.getdescr())
         self.assembler.generate_failure(fail_index, locs, self.exc,
                                         locs_are_ref)
         self.possibly_free_vars_for_op(op)
@@ -663,7 +663,7 @@ class RegAlloc(object):
             self.Perform(op, arglocs, resloc)
 
     def _consider_call(self, op, guard_not_forced_op=None):
-        calldescr = op.descr
+        calldescr = op.getdescr()
         assert isinstance(calldescr, BaseCallDescr)
         assert len(calldescr.arg_classes) == op.numargs() - 1
         size = calldescr.get_result_size(self.translate_support_code)
@@ -678,7 +678,7 @@ class RegAlloc(object):
         self._consider_call(op, guard_op)
 
     def consider_call_assembler(self, op, guard_op):
-        descr = op.descr
+        descr = op.getdescr()
         assert isinstance(descr, LoopToken)
         jd = descr.outermost_jitdriver_sd
         assert jd is not None
@@ -739,10 +739,10 @@ class RegAlloc(object):
 
     def consider_new(self, op):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
-        if gc_ll_descr.can_inline_malloc(op.descr):
-            self._fastpath_malloc(op, op.descr)
+        if gc_ll_descr.can_inline_malloc(op.getdescr()):
+            self._fastpath_malloc(op, op.getdescr())
         else:
-            args = gc_ll_descr.args_for_new(op.descr)
+            args = gc_ll_descr.args_for_new(op.getdescr())
             arglocs = [imm(x) for x in args]
             return self._call(op, arglocs)
 
@@ -813,13 +813,13 @@ class RegAlloc(object):
         gc_ll_descr = self.assembler.cpu.gc_ll_descr
         if gc_ll_descr.get_funcptr_for_newarray is not None:
             # framework GC
-            args = self.assembler.cpu.gc_ll_descr.args_for_new_array(op.descr)
+            args = self.assembler.cpu.gc_ll_descr.args_for_new_array(op.getdescr())
             arglocs = [imm(x) for x in args]
             arglocs.append(self.loc(op.getarg(0)))
             return self._call(op, arglocs)
         # boehm GC (XXX kill the following code at some point)
         scale_of_field, basesize, ofs_length, _ = (
-            self._unpack_arraydescr(op.descr))
+            self._unpack_arraydescr(op.getdescr()))
         return self._malloc_varsize(basesize, ofs_length, scale_of_field,
                                     op.getarg(0), op.result)
 
@@ -843,7 +843,7 @@ class RegAlloc(object):
         return imm(ofs), imm(size), ptr
 
     def consider_setfield_gc(self, op):
-        ofs_loc, size_loc, ptr = self._unpack_fielddescr(op.descr)
+        ofs_loc, size_loc, ptr = self._unpack_fielddescr(op.getdescr())
         assert isinstance(size_loc, ImmedLoc)
         if size_loc.value == 1:
             need_lower_byte = True
@@ -870,7 +870,7 @@ class RegAlloc(object):
     consider_unicodesetitem = consider_strsetitem
 
     def consider_setarrayitem_gc(self, op):
-        scale, ofs, _, ptr = self._unpack_arraydescr(op.descr)
+        scale, ofs, _, ptr = self._unpack_arraydescr(op.getdescr())
         args = op.getarglist()
         base_loc  = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         if scale == 0:
@@ -887,7 +887,7 @@ class RegAlloc(object):
     consider_setarrayitem_raw = consider_setarrayitem_gc
 
     def consider_getfield_gc(self, op):
-        ofs_loc, size_loc, _ = self._unpack_fielddescr(op.descr)
+        ofs_loc, size_loc, _ = self._unpack_fielddescr(op.getdescr())
         args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         self.rm.possibly_free_vars(args)
@@ -899,7 +899,7 @@ class RegAlloc(object):
     consider_getfield_gc_pure = consider_getfield_gc
 
     def consider_getarrayitem_gc(self, op):
-        scale, ofs, _, _ = self._unpack_arraydescr(op.descr)
+        scale, ofs, _, _ = self._unpack_arraydescr(op.getdescr())
         args = op.getarglist()
         base_loc = self.rm.make_sure_var_in_reg(op.getarg(0), args)
         ofs_loc = self.rm.make_sure_var_in_reg(op.getarg(1), args)
@@ -939,7 +939,7 @@ class RegAlloc(object):
     consider_unicodelen = consider_strlen
 
     def consider_arraylen_gc(self, op):
-        arraydescr = op.descr
+        arraydescr = op.getdescr()
         assert isinstance(arraydescr, BaseArrayDescr)
         ofs = arraydescr.get_ofs_length(self.translate_support_code)
         args = op.getarglist()
@@ -961,7 +961,7 @@ class RegAlloc(object):
     def consider_jump(self, op):
         assembler = self.assembler
         assert self.jump_target_descr is None
-        descr = op.descr
+        descr = op.getdescr()
         assert isinstance(descr, LoopToken)
         self.jump_target_descr = descr
         nonfloatlocs, floatlocs = assembler.target_arglocs(self.jump_target_descr)

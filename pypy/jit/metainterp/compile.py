@@ -65,7 +65,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     jitdriver_sd = metainterp.jitdriver_sd
     loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd)
     loop.token = loop_token
-    loop.operations[-1].descr = loop_token     # patch the target of the JUMP
+    loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
         old_loop_token = jitdriver_sd.warmstate.optimize_loop(
             metainterp_sd, old_loop_tokens, loop)
@@ -540,7 +540,7 @@ def prepare_last_operation(new_loop, target_loop_token):
     op = new_loop.operations[-1]
     if not isinstance(target_loop_token, TerminatingLoopToken):
         # normal case
-        op.descr = target_loop_token     # patch the jump target
+        op.setdescr(target_loop_token)     # patch the jump target
     else:
         # The target_loop_token is a pseudo loop token,
         # e.g. loop_tokens_done_with_this_frame_void[0]

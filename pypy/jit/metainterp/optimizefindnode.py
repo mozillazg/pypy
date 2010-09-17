@@ -163,7 +163,7 @@ class NodeFinder(object):
                 argboxes = [self.get_constant_box(op.getarg(i))
                             for i in range(op.numargs())]
                 resbox = execute_nonspec(self.cpu, None,
-                                         op.getopnum(), argboxes, op.descr)
+                                         op.getopnum(), argboxes, op.getdescr())
                 self.set_constant_node(op.result, resbox.constbox())
         # default case: mark the arguments as escaping
         for i in range(op.numargs()):
@@ -187,7 +187,7 @@ class NodeFinder(object):
 
     def find_nodes_NEW(self, op):
         instnode = InstanceNode()
-        instnode.structdescr = op.descr
+        instnode.structdescr = op.getdescr()
         self.nodes[op.result] = instnode
 
     def find_nodes_NEW_ARRAY(self, op):
@@ -197,7 +197,7 @@ class NodeFinder(object):
             return     # var-sized arrays are not virtual
         arraynode = InstanceNode()
         arraynode.arraysize = lengthbox.getint()
-        arraynode.arraydescr = op.descr
+        arraynode.arraydescr = op.getdescr()
         self.nodes[op.result] = arraynode
 
     def find_nodes_ARRAYLEN_GC(self, op):
@@ -226,7 +226,7 @@ class NodeFinder(object):
         if instnode.escaped:
             fieldnode.mark_escaped()
             return     # nothing to be gained from tracking the field
-        field = op.descr
+        field = op.getdescr()
         assert isinstance(field, AbstractValue)
         if instnode.curfields is None:
             instnode.curfields = {}
@@ -237,7 +237,7 @@ class NodeFinder(object):
         instnode = self.getnode(op.getarg(0))
         if instnode.escaped:
             return     # nothing to be gained from tracking the field
-        field = op.descr
+        field = op.getdescr()
         assert isinstance(field, AbstractValue)
         if instnode.curfields is not None and field in instnode.curfields:
             fieldnode = instnode.curfields[field]

@@ -688,7 +688,7 @@ class Assembler386(object):
 
     def regalloc_perform_with_guard(self, op, guard_op, faillocs,
                                     arglocs, resloc, current_depths):
-        faildescr = guard_op.descr
+        faildescr = guard_op.getdescr()
         assert isinstance(faildescr, AbstractFailDescr)
         faildescr._x86_current_depths = current_depths
         failargs = guard_op.fail_args
@@ -1656,7 +1656,7 @@ class Assembler386(object):
     
     def genop_guard_call_may_force(self, op, guard_op, guard_token,
                                    arglocs, result_loc):
-        faildescr = guard_op.descr
+        faildescr = guard_op.getdescr()
         fail_index = self.cpu.get_fail_descr_number(faildescr)
         self.mc.MOV_bi(FORCE_INDEX_OFS, fail_index)
         self.genop_call(op, arglocs, result_loc)
@@ -1665,10 +1665,10 @@ class Assembler386(object):
 
     def genop_guard_call_assembler(self, op, guard_op, guard_token,
                                    arglocs, result_loc):
-        faildescr = guard_op.descr
+        faildescr = guard_op.getdescr()
         fail_index = self.cpu.get_fail_descr_number(faildescr)
         self.mc.MOV_bi(FORCE_INDEX_OFS, fail_index)
-        descr = op.descr
+        descr = op.getdescr()
         assert isinstance(descr, LoopToken)
         assert len(arglocs) - 2 == len(descr._x86_arglocs[0])
         #
@@ -1753,7 +1753,7 @@ class Assembler386(object):
     def genop_discard_cond_call_gc_wb(self, op, arglocs):
         # use 'mc._mc' directly instead of 'mc', to avoid
         # bad surprizes if the code buffer is mostly full
-        descr = op.descr
+        descr = op.getdescr()
         if we_are_translated():
             cls = self.cpu.gc_ll_descr.has_write_barrier_class()
             assert cls is not None and isinstance(descr, cls)

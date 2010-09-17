@@ -262,7 +262,7 @@ class TestFramework:
         assert newops[0].getarg(0) == v_base
         assert newops[0].getarg(1) == v_value
         assert newops[0].result is None
-        wbdescr = newops[0].descr
+        wbdescr = newops[0].getdescr()
         assert isinstance(wbdescr.jit_wb_if_flag, int)
         assert isinstance(wbdescr.jit_wb_if_flag_byteofs, int)
         assert isinstance(wbdescr.jit_wb_if_flag_singlebyte, int)
@@ -300,7 +300,7 @@ class TestFramework:
         assert len(operations) == 2
         assert operations[0].getopnum() == rop.GETFIELD_RAW
         assert operations[0].getarg(0) == ConstInt(43)
-        assert operations[0].descr == gc_ll_descr.single_gcref_descr
+        assert operations[0].getdescr() == gc_ll_descr.single_gcref_descr
         v_box = operations[0].result
         assert isinstance(v_box, BoxPtr)
         assert operations[1].getopnum() == rop.PTR_EQ
@@ -366,7 +366,7 @@ class TestFramework:
         assert operations[1].getopnum() == rop.SETFIELD_RAW
         assert operations[1].getarg(0) == v_base
         assert operations[1].getarg(1) == v_value
-        assert operations[1].descr == field_descr
+        assert operations[1].getdescr() == field_descr
 
     def test_rewrite_assembler_3(self):
         # check write barriers before SETARRAYITEM_GC
@@ -391,4 +391,4 @@ class TestFramework:
         assert operations[1].getarg(0) == v_base
         assert operations[1].getarg(1) == v_index
         assert operations[1].getarg(2) == v_value
-        assert operations[1].descr == array_descr
+        assert operations[1].getdescr() == array_descr
