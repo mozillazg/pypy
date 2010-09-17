@@ -10,6 +10,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.exceptiondata import standardexceptions
 from pypy.tool.pairtype import pairtype
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.tool.identity_dict import identity_dict
 
 OBJECT = ootype.ROOT
 META = ootype.Instance("Meta", ootype.ROOT,
@@ -184,7 +185,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 hints = {}
             hints = self._check_for_immutable_hints(hints)
             self.lowleveltype = ootype.Instance(classdef.name, b, {}, {}, _hints = hints)
-        self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
+        self.iprebuiltinstances = identity_dict()
         self.object_type = self.lowleveltype
         self.gcflavor = gcflavor
 
@@ -193,6 +194,7 @@ class InstanceRepr(AbstractInstanceRepr):
             self.lowleveltype._hints.update(hints)
 
         if self.classdef is None:
+            self.fields = {}
             self.allfields = {}
             self.allmethods = {}
             self.allclassattributes = {}
@@ -209,6 +211,7 @@ class InstanceRepr(AbstractInstanceRepr):
             allclassattributes = {}
 
         fields = {}
+        nonmangledfields = []
         fielddefaults = {}
 
         if llfields:
@@ -223,6 +226,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 allfields[mangled] = repr
                 oot = repr.lowleveltype
                 fields[mangled] = oot
+                nonmangledfields.append(name)
                 try:
                     value = self.classdef.classdesc.read_attribute(name)
                     fielddefaults[mangled] = repr.convert_desc_or_const(value)
@@ -293,6 +297,7 @@ class InstanceRepr(AbstractInstanceRepr):
                     if not attrdef.s_value.is_constant():
                         classattributes[mangled] = attrdef.s_value, value
 
+        self.fields = nonmangledfields
         self.allfields = allfields
         self.allmethods = allmethods
         self.allclassattributes = allclassattributes

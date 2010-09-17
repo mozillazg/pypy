@@ -2,9 +2,11 @@ from pypy.conftest import gettestobjspace
 import sys
 import py
 from pypy.tool.udir import udir
+from pypy.rlib import rsocket
+from pypy.rpython.lltypesystem import lltype, rffi
 
 def setup_module(mod):
-    mod.space = gettestobjspace(usemodules=['_socket'])
+    mod.space = gettestobjspace(usemodules=['_socket', 'array'])
     global socket
     import socket
     mod.w_socket = space.appexec([], "(): import _socket as m; return m")
@@ -32,13 +34,17 @@ def test_gethostbyname_ex():
 
 def test_gethostbyaddr():
     host = "localhost"
+    expected = socket.gethostbyaddr(host)
+    expecteds = (expected, expected[:2]+(['0.0.0.0'],))
     ip = space.appexec([w_socket, space.wrap(host)],
                        "(_socket, host): return _socket.gethostbyaddr(host)")
-    assert space.unwrap(ip) == socket.gethostbyaddr(host)
+    assert space.unwrap(ip) in expecteds
     host = "127.0.0.1"
+    expected = socket.gethostbyaddr(host)
+    expecteds = (expected, expected[:2]+(['0.0.0.0'],))
     ip = space.appexec([w_socket, space.wrap(host)],
                        "(_socket, host): return _socket.gethostbyaddr(host)")
-    assert space.unwrap(ip) == socket.gethostbyaddr(host)
+    assert space.unwrap(ip) in expecteds
 
 def test_getservbyname():
     name = "smtp"
@@ -108,6 +114,12 @@ def test_ntohl():
     w_n = space.appexec([w_socket, space.wrap(125)],
                         "(_socket, x): return _socket.ntohl(x)")
     assert space.unwrap(w_n) == socket.ntohl(125)
+    w_n = space.appexec([w_socket, space.wrap(0x89abcdef)],
+                        "(_socket, x): return _socket.ntohl(x)")
+    assert space.unwrap(w_n) in (0x89abcdef, 0xefcdab89)
+    space.raises_w(space.w_OverflowError, space.appexec,
+                   [w_socket, space.wrap(1<<32)],
+                   "(_socket, x): return _socket.ntohl(x)")
 
 def test_htons():
     w_n = space.appexec([w_socket, space.wrap(125)],
@@ -118,6 +130,12 @@ def test_htonl():
     w_n = space.appexec([w_socket, space.wrap(125)],
                         "(_socket, x): return _socket.htonl(x)")
     assert space.unwrap(w_n) == socket.htonl(125)
+    w_n = space.appexec([w_socket, space.wrap(0x89abcdef)],
+                        "(_socket, x): return _socket.htonl(x)")
+    assert space.unwrap(w_n) in (0x89abcdef, 0xefcdab89)
+    space.raises_w(space.w_OverflowError, space.appexec,
+                   [w_socket, space.wrap(1<<32)],
+                   "(_socket, x): return _socket.htonl(x)")
 
 def test_aton_ntoa():
     ip = '123.45.67.89'
@@ -204,6 +222,45 @@ def test_getaddrinfo():
     w_l = space.appexec([w_socket, space.wrap(unicode(host)), space.wrap(port)],
                         "(_socket, host, port): return _socket.getaddrinfo(host, port)")
     assert space.unwrap(w_l) == info
+
+def test_unknown_addr_as_object():    
+    c_addr = lltype.malloc(rsocket._c.sockaddr, flavor='raw')
+    c_addr.c_sa_data[0] = 'c'
+    rffi.setintfield(c_addr, 'c_sa_family', 15)
+    # XXX what size to pass here? for the purpose of this test it has
+    #     to be short enough so we have some data, 1 sounds good enough
+    #     + sizeof USHORT
+    w_obj = rsocket.Address(c_addr, 1 + 2).as_object(-1, space)
+    assert space.is_true(space.isinstance(w_obj, space.w_tuple))
+    assert space.int_w(space.getitem(w_obj, space.wrap(0))) == 15
+    assert space.str_w(space.getitem(w_obj, space.wrap(1))) == 'c'
+
+def test_addr_raw_packet():
+    if not hasattr(rsocket._c, 'sockaddr_ll'):
+        py.test.skip("posix specific test")
+    c_addr_ll = lltype.malloc(rsocket._c.sockaddr_ll, flavor='raw')
+    addrlen = rffi.sizeof(rsocket._c.sockaddr_ll)
+    c_addr = rffi.cast(lltype.Ptr(rsocket._c.sockaddr), c_addr_ll)
+    rffi.setintfield(c_addr_ll, 'c_sll_ifindex', 1)
+    rffi.setintfield(c_addr_ll, 'c_sll_protocol', 8)
+    rffi.setintfield(c_addr_ll, 'c_sll_pkttype', 13)
+    rffi.setintfield(c_addr_ll, 'c_sll_hatype', 0)
+    rffi.setintfield(c_addr_ll, 'c_sll_halen', 3)
+    c_addr_ll.c_sll_addr[0] = 'a'
+    c_addr_ll.c_sll_addr[1] = 'b'
+    c_addr_ll.c_sll_addr[2] = 'c'
+    rffi.setintfield(c_addr, 'c_sa_family', socket.AF_PACKET)
+    # fd needs to be somehow valid
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    fd = s.fileno()
+    w_obj = rsocket.make_address(c_addr, addrlen).as_object(fd, space)
+    assert space.is_true(space.eq(w_obj, space.newtuple([
+        space.wrap('lo'),
+        space.wrap(socket.ntohs(8)),
+        space.wrap(13),
+        space.wrap(False),
+        space.wrap("abc"),
+        ])))
 
 def test_getnameinfo():
     host = "127.0.0.1"
@@ -314,11 +371,21 @@ class AppTestSocket:
         import _socket, os
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
         # XXX temporarily we use codespeak to test, will have more robust tests in
-        # the absence of a network connection later when mroe parts of the socket
-        # API are implemented.
-        s.connect(("codespeak.net", 80))
+        # the absence of a network connection later when more parts of the socket
+        # API are implemented. currently skip the test if there is no connection.
+        try:
+            s.connect(("codespeak.net", 80))
+        except _socket.gaierror, ex:
+            skip("GAIError - probably no connection: %s" % str(ex.args))
         name = s.getpeername() # Will raise socket.error if not connected
         assert name[1] == 80
+        s.close()
+    
+    def test_socket_connect_ex(self):
+        import _socket
+        s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
+        # Make sure we get an app-level error, not an interp one.
+        raises(_socket.gaierror, s.connect_ex, ("wrong.invalid", 80))
         s.close()
 
     def test_socket_connect_typeerrors(self):
@@ -331,10 +398,11 @@ class AppTestSocket:
         import _socket
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
         for args in tests:
-            raises(TypeError, s.connect, args)
+            raises((TypeError, ValueError), s.connect, args)
         s.close()
 
     def test_NtoH(self):
+        import sys
         import _socket as socket
         # This just checks that htons etc. are their own inverse,
         # when looking at the lower 16 or 32 bits.
@@ -348,7 +416,28 @@ class AppTestSocket:
             swapped = func(mask)
             assert swapped & mask == mask
             try:
-                func(1L<<34)
+                func(-1)
+            except (OverflowError, ValueError):
+                pass
+            else:
+                assert False
+            try:
+                func(sys.maxint*2+2)
+            except OverflowError:
+                pass
+            else:
+                assert False
+
+    def test_NtoH_overflow(self):
+        skip("we are not checking for overflowing values yet")
+        import _socket as socket
+        # Checks that we cannot give too large values to htons etc.
+        # Skipped for now; CPython 2.6 is also not consistent.
+        sizes = {socket.htonl: 32, socket.ntohl: 32,
+                 socket.htons: 16, socket.ntohs: 16}
+        for func, size in sizes.items():
+            try:
+                func(1L << size)
             except OverflowError:
                 pass
             else:
@@ -392,16 +481,18 @@ class AppTestSocket:
         s2 = s.dup()
         assert s.fileno() != s2.fileno()
         assert s.getsockname() == s2.getsockname()
-    
 
     def test_buffer_or_unicode(self):
         # Test that send/sendall/sendto accept a buffer or a unicode as arg
         import _socket, os
         s = _socket.socket(_socket.AF_INET, _socket.SOCK_STREAM, 0)
         # XXX temporarily we use codespeak to test, will have more robust tests in
-        # the absence of a network connection later when mroe parts of the socket
-        # API are implemented.
-        s.connect(("codespeak.net", 80))
+        # the absence of a network connection later when more parts of the socket
+        # API are implemented. currently skip the test if there is no connection.
+        try:
+            s.connect(("codespeak.net", 80))
+        except _socket.gaierror, ex:
+            skip("GAIError - probably no connection: %s" % str(ex.args))
         s.send(buffer(''))
         s.sendall(buffer(''))
         s.send(u'')
@@ -457,9 +548,9 @@ class AppTestSocketTCP:
             return serv
             ''')
     def teardown_method(self, method):
-        space.appexec([self.w_serv], '(serv): serv.close()')
-        self.w_serv = None
-            
+        if hasattr(self, 'w_serv'):
+            space.appexec([self.w_serv], '(serv): serv.close()')
+            self.w_serv = None
 
     def test_timeout(self):
         from _socket import timeout

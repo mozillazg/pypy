@@ -1,9 +1,10 @@
 import __future__
 import py, sys
-from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
+from pypy.interpreter.pycompiler import PythonAstCompiler
 from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.argument import Arguments
+from pypy.conftest import gettestobjspace
 
 class BaseTestCompiler:
     def setup_method(self, method):
@@ -53,6 +54,14 @@ class BaseTestCompiler:
                            'if 1:\n  x x', '?', mode, 0)
             space.raises_w(space.w_SyntaxError, self.compiler.compile_command,
                            ')', '?', mode, 0)
+
+    def test_hidden_applevel(self):
+        code = self.compiler.compile("def f(x): pass", "<test>", "exec", 0,
+                                     True)
+        assert code.hidden_applevel
+        for w_const in code.co_consts_w:
+            if isinstance(w_const, PyCode):
+                assert code.hidden_applevel
 
     def test_indentation_error(self):
         space = self.space
@@ -637,25 +646,6 @@ def test():
         assert 'hello_world' in space.str_w(space.str(ex.get_w_value(space)))
 
 
-class TestPyCCompiler(BaseTestCompiler):
-    def setup_method(self, method):
-        self.compiler = CPythonCompiler(self.space)
-
-    if sys.version_info < (2, 5):
-        def skip_on_2_4(self):
-            py.test.skip("syntax not supported by the CPython 2.4 compiler")
-        _unicode_error_kind = "w_UnicodeError"
-        test_continue_in_nested_finally = skip_on_2_4
-        test_try_except_finally = skip_on_2_4
-        test_yield_in_finally = skip_on_2_4
-    elif sys.version_info < (2, 6):
-        _unicode_error_kind = "w_UnicodeDecodeError"
-    else:
-        def skip_on_2_6(self):
-            py.test.skip("syntax different on CPython 2.6 compiler")
-        test_globals_warnings = skip_on_2_6
-        _unicode_error_kind = "w_SyntaxError"
-
 class TestPythonAstCompiler_25_grammar(BaseTestCompiler):
     def setup_method(self, method):
         self.compiler = PythonAstCompiler(self.space, "2.5")
@@ -849,6 +839,47 @@ class AppTestOptimizer:
             sys.stdout = save_stdout
         output = s.getvalue()
         assert "STOP_CODE" not in output
+    
+    def test_optimize_list_comp(self):
+        source = """def _f(a):
+            return [x for x in a if None]
+        """
+        exec source
+        code = _f.func_code
+        
+        import StringIO, sys, dis
+        s = StringIO.StringIO()
+        out = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = out
+        output = s.getvalue()
+        assert "LOAD_GLOBAL" not in output
+
+class AppTestCallMethod(object):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{'objspace.opcodes.CALL_METHOD': True})
+        
+    def test_call_method_kwargs(self):
+        source = """def _f(a):
+            return a.f(a=a)
+        """
+        exec source
+        code = _f.func_code
+        
+        import StringIO, sys, dis
+        s = StringIO.StringIO()
+        out = sys.stdout
+        sys.stdout = s
+        try:
+            dis.dis(code)
+        finally:
+            sys.stdout = out
+        output = s.getvalue()
+        assert "CALL_METHOD" in output
+            
 
 class AppTestExceptions:
     def test_indentation_error(self):

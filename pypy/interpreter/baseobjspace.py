@@ -1,18 +1,22 @@
+import itertools
+import pypy
 from pypy.interpreter.executioncontext import ExecutionContext, ActionFlag
 from pypy.interpreter.executioncontext import UserDelAction, FrameTraceAction
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.argument import Arguments
-from pypy.interpreter.pycompiler import CPythonCompiler, PythonAstCompiler
 from pypy.interpreter.miscutils import ThreadLocals
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
+from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import jit
-import os, sys
+import os, sys, py
 
 __all__ = ['ObjSpace', 'OperationError', 'Wrappable', 'W_Root']
+
+UINT_MAX_32_BITS = r_uint(4294967295)
 
 
 class W_Root(object):
@@ -37,7 +41,7 @@ class W_Root(object):
     def setdictvalue(self, space, attr, w_value, shadows_type=True):
         w_dict = self.getdict()
         if w_dict is not None:
-            space.set_str_keyed_item(w_dict, attr, w_value, shadows_type)
+            space.setitem_str(w_dict, attr, w_value, shadows_type)
             return True
         return False
 
@@ -204,12 +208,6 @@ class SpaceCache(Cache):
     def ready(self, result):
         pass
 
-class UnpackValueError(ValueError):
-    def __init__(self, msg):
-        self.msg = msg
-    def __str__(self):
-        return self.msg
-
 class DescrMismatch(Exception):
     pass
 
@@ -252,8 +250,10 @@ class ObjSpace(object):
         self.actionflag.register_action(self.user_del_action)
         self.actionflag.register_action(self.frame_trace_action)
 
-        from pypy.interpreter.pyframe import PyFrame
-        self.FrameClass = PyFrame    # can be overridden to a subclass
+        from pypy.interpreter.pycode import cpython_magic, default_magic
+        self.our_magic = default_magic
+        self.host_magic = cpython_magic
+        # can be overridden to a subclass
 
         if self.config.objspace.logbytecodes:
             self.bytecodecounts = [0] * 256
@@ -288,6 +288,7 @@ class ObjSpace(object):
                 self.timer.stop("startup " + modname)
 
     def finish(self):
+        self.wait_for_thread_shutdown()
         w_exitfunc = self.sys.getdictvalue(self, 'exitfunc')
         if w_exitfunc is not None:
             self.call_function(w_exitfunc)
@@ -304,6 +305,23 @@ class ObjSpace(object):
         if self.config.objspace.std.logspaceoptypes:
             for s in self.FrameClass._space_op_types:
                 print s
+
+    def wait_for_thread_shutdown(self):
+        """Wait until threading._shutdown() completes, provided the threading
+        module was imported in the first place.  The shutdown routine will
+        wait until all non-daemon 'threading' threads have completed."""
+        if not self.config.translation.thread:
+            return
+
+        w_modules = self.sys.get('modules')
+        w_mod = self.finditem_str(w_modules, 'threading')
+        if w_mod is None:
+            return
+
+        try:
+            self.call_method(w_mod, "_shutdown")
+        except OperationError, e:
+            e.write_unraisable(self, "threading._shutdown()")
 
     def reportbytecodecounts(self):
         os.write(2, "Starting bytecode report.\n")
@@ -385,6 +403,7 @@ class ObjSpace(object):
 
     def get_builtinmodule_to_install(self):
         """NOT_RPYTHON"""
+        from pypy.tool.lib_pypy import LIB_PYPY
         try:
             return self._builtinmodule_list
         except AttributeError:
@@ -402,12 +421,9 @@ class ObjSpace(object):
         if ('time2' in modules or 'rctime' in modules) and 'time' in modules:
             modules.remove('time')
 
-        import pypy
         if not self.config.objspace.nofaking:
             for modname in self.ALL_BUILTIN_MODULES:
-                if not (os.path.exists(
-                        os.path.join(os.path.dirname(pypy.__file__),
-                                     'lib', modname+'.py'))):
+                if not LIB_PYPY.join(modname+'.py').check(file=True):
                     modules.append('faked+'+modname)
 
         self._builtinmodule_list = modules
@@ -445,19 +461,18 @@ class ObjSpace(object):
         self.builtin_modules['__builtin__'] = self.wrap(w_builtin)
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
-        bootstrap_modules = ['sys', 'imp', '__builtin__', 'exceptions']
-        installed_builtin_modules = bootstrap_modules[:]
+        bootstrap_modules = set(('sys', 'imp', '__builtin__', 'exceptions'))
+        installed_builtin_modules = list(bootstrap_modules)
 
-        self.export_builtin_exceptions()
+        exception_types_w = self.export_builtin_exceptions()
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
-        for name, value in self.__dict__.items():
-            if name.startswith('w_') and not name.endswith('Type'):
-                name = name[2:]
-                #print "setitem: space instance %-20s into builtins" % name
-                self.setitem(self.builtin.w_dict, self.wrap(name), value)
+        types_w = itertools.chain(self.get_builtin_types().iteritems(),
+                                  exception_types_w.iteritems())
+        for name, w_type in types_w:
+            self.setitem(self.builtin.w_dict, self.wrap(name), w_type)
 
-        # install mixed and faked modules and set builtin_module_names on sys
+        # install mixed and faked modules
         for mixedname in self.get_builtinmodule_to_install():
             if (mixedname not in bootstrap_modules
                 and not mixedname.startswith('faked+')):
@@ -475,17 +490,28 @@ class ObjSpace(object):
         self.setitem(self.sys.w_dict, self.wrap('builtin_module_names'),
                      w_builtin_module_names)
 
+    def get_builtin_types(self):
+        """Get a dictionary mapping the names of builtin types to the type
+        objects."""
+        raise NotImplementedError
+
     def export_builtin_exceptions(self):
         """NOT_RPYTHON"""
         w_dic = self.exceptions_module.getdict()
-        names_w = self.unpackiterable(self.call_function(self.getattr(w_dic, self.wrap("keys"))))
-
-        for w_name in names_w:
+        w_keys = self.call_method(w_dic, "keys")
+        exc_types_w = {}
+        for w_name in self.unpackiterable(w_keys):
             name = self.str_w(w_name)
             if not name.startswith('__'):
                 excname = name
                 w_exc = self.getitem(w_dic, w_name)
-                setattr(self, "w_"+excname, w_exc)
+                exc_types_w[name] = w_exc
+                setattr(self, "w_" + excname, w_exc)
+        # Make a prebuilt recursion error
+        w_msg = self.wrap("maximum recursion depth exceeded")
+        self.prebuilt_recursion_error = OperationError(self.w_RuntimeError,
+                                                       w_msg)
+        return exc_types_w
 
     def install_mixedmodule(self, mixedname, installed_builtin_modules):
         """NOT_RPYTHON"""
@@ -569,13 +595,8 @@ class ObjSpace(object):
         try:
             return self.default_compiler
         except AttributeError:
-            if self.config.objspace.compiler == 'cpython':
-                compiler = CPythonCompiler(self)
-            elif self.config.objspace.compiler == 'ast':
-                compiler = PythonAstCompiler(self)
-            else:
-                raise ValueError('unknown --compiler option value: %r' % (
-                    self.config.objspace.compiler,))
+            from pypy.interpreter.pycompiler import PythonAstCompiler
+            compiler = PythonAstCompiler(self)
             self.default_compiler = compiler
             return compiler
 
@@ -620,7 +641,7 @@ class ObjSpace(object):
         """shortcut for space.int_w(space.hash(w_obj))"""
         return self.int_w(self.hash(w_obj))
 
-    def set_str_keyed_item(self, w_obj, key, w_value, shadows_type=True):
+    def setitem_str(self, w_obj, key, w_value, shadows_type=True):
         return self.setitem(w_obj, self.wrap(key), w_value)
 
     def finditem_str(self, w_obj, key):
@@ -666,7 +687,7 @@ class ObjSpace(object):
         w_s = self.interned_strings[s] = self.wrap(s)
         return w_s
 
-    def interpclass_w(space, w_obj):
+    def interpclass_w(self, w_obj):
         """
          If w_obj is a wrapped internal interpreter class instance unwrap to it,
          otherwise return None.  (Can be overridden in specific spaces; you
@@ -713,7 +734,8 @@ class ObjSpace(object):
                     raise
                 break  # done
             if expected_length != -1 and len(items) == expected_length:
-                raise UnpackValueError("too many values to unpack")
+                raise OperationError(self.w_ValueError,
+                                     self.wrap("too many values to unpack"))
             items.append(w_item)
         if expected_length != -1 and len(items) < expected_length:
             i = len(items)
@@ -721,8 +743,9 @@ class ObjSpace(object):
                 plural = ""
             else:
                 plural = "s"
-            raise UnpackValueError("need more than %d value%s to unpack" %
-                                   (i, plural))
+            raise OperationError(self.w_ValueError,
+                      self.wrap("need more than %d value%s to unpack" %
+                                (i, plural)))
         return items
 
     def fixedview(self, w_iterable, expected_length=-1):
@@ -869,6 +892,9 @@ class ObjSpace(object):
         w_objtype = self.type(w_obj)
         return self.issubtype(w_objtype, w_type)
 
+    def isinstance_w(self, w_obj, w_type):
+        return self.is_true(self.isinstance(w_obj, w_type))
+
     # The code below only works
     # for the simple case (new-style instance).
     # These methods are patched with the full logic by the __builtin__
@@ -920,23 +946,30 @@ class ObjSpace(object):
         import types
         from pypy.interpreter.pycode import PyCode
         if isinstance(expression, str):
-            expression = compile(expression, '?', 'eval')
+            compiler = self.createcompiler()
+            expression = compiler.compile(expression, '?', 'eval', 0,
+                                         hidden_applevel=hidden_applevel)
         if isinstance(expression, types.CodeType):
-            expression = PyCode._from_code(self, expression,
-                                          hidden_applevel=hidden_applevel)
+            # XXX only used by appsupport
+            expression = PyCode._from_code(self, expression)
         if not isinstance(expression, PyCode):
             raise TypeError, 'space.eval(): expected a string, code or PyCode object'
         return expression.exec_code(self, w_globals, w_locals)
 
-    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False):
+    def exec_(self, statement, w_globals, w_locals, hidden_applevel=False,
+              filename=None):
         "NOT_RPYTHON: For internal debugging."
         import types
+        if filename is None:
+            filename = '?'
         from pypy.interpreter.pycode import PyCode
         if isinstance(statement, str):
-            statement = compile(statement, '?', 'exec')
+            compiler = self.createcompiler()
+            statement = compiler.compile(statement, filename, 'exec', 0,
+                                         hidden_applevel=hidden_applevel)
         if isinstance(statement, types.CodeType):
-            statement = PyCode._from_code(self, statement,
-                                          hidden_applevel=hidden_applevel)
+            # XXX only used by appsupport
+            statement = PyCode._from_code(self, statement)
         if not isinstance(statement, PyCode):
             raise TypeError, 'space.exec_(): expected a string, code or PyCode object'
         w_key = self.wrap('__builtins__')
@@ -1101,6 +1134,37 @@ class ObjSpace(object):
                                  self.wrap("expected a non-negative integer"))
         return value
 
+    def c_int_w(self, w_obj):
+        # Like space.int_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
+        value = self.int_w(w_obj)
+        if value < -2147483647-1 or value > 2147483647:
+            raise OperationError(self.w_OverflowError,
+                                 self.wrap("expected a 32-bit integer"))
+        return value
+
+    def c_uint_w(self, w_obj):
+        # Like space.uint_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
+        value = self.uint_w(w_obj)
+        if value > UINT_MAX_32_BITS:
+            raise OperationError(self.w_OverflowError,
+                              self.wrap("expected an unsigned 32-bit integer"))
+        return value
+
+    def c_nonnegint_w(self, w_obj):
+        # Like space.int_w(), but raises an app-level ValueError if
+        # the integer is negative or does not fit in 32 bits.  Mostly here
+        # for gateway.py.
+        value = self.int_w(w_obj)
+        if value < 0:
+            raise OperationError(self.w_ValueError,
+                                 self.wrap("expected a non-negative integer"))
+        if value > 2147483647:
+            raise OperationError(self.w_OverflowError,
+                                 self.wrap("expected a 32-bit integer"))
+        return value
+
     def warn(self, msg, w_warningcls):
         self.appexec([self.wrap(msg), w_warningcls], """(msg, warningcls):
             import warnings
@@ -1123,7 +1187,7 @@ class AppExecCache(SpaceCache):
         assert source.startswith('('), "incorrect header in:\n%s" % (source,)
         source = py.code.Source("def anonymous%s\n" % source)
         w_glob = space.newdict()
-        space.exec_(source.compile(), w_glob, w_glob)
+        space.exec_(str(source), w_glob, w_glob)
         return space.getitem(w_glob, space.wrap('anonymous'))
 
 class DummyLock(object):

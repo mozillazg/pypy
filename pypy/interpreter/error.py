@@ -344,7 +344,7 @@ except NameError:
 else:
     _WINDOWS = True
 
-    def wrap_windowserror(space, e):
+    def wrap_windowserror(space, e, w_filename=None):
         from pypy.rlib import rwin32
 
         winerror = e.winerror
@@ -353,16 +353,19 @@ else:
         except ValueError:
             msg = 'Windows Error %d' % winerror
         exc = space.w_WindowsError
-        w_error = space.call_function(exc,
-                                      space.wrap(winerror),
-                                      space.wrap(msg))
+        if w_filename is not None:
+            w_error = space.call_function(exc, space.wrap(winerror),
+                                          space.wrap(msg), w_filename)
+        else:
+            w_error = space.call_function(exc, space.wrap(winerror),
+                                          space.wrap(msg))
         return OperationError(exc, w_error)
 
-def wrap_oserror(space, e, exception_name='w_OSError'): 
-    assert isinstance(e, OSError) 
+def wrap_oserror2(space, e, w_filename=None, exception_name='w_OSError'): 
+    assert isinstance(e, OSError)
 
     if _WINDOWS and isinstance(e, WindowsError):
-        return wrap_windowserror(space, e)
+        return wrap_windowserror(space, e, w_filename)
 
     errno = e.errno
     try:
@@ -370,8 +373,21 @@ def wrap_oserror(space, e, exception_name='w_OSError'):
     except ValueError:
         msg = 'error %d' % errno
     exc = getattr(space, exception_name)
-    w_error = space.call_function(exc,
-                                  space.wrap(errno),
-                                  space.wrap(msg))
+    if w_filename is not None:
+        w_error = space.call_function(exc, space.wrap(errno),
+                                      space.wrap(msg), w_filename)
+    else:
+        w_error = space.call_function(exc, space.wrap(errno),
+                                      space.wrap(msg))
     return OperationError(exc, w_error)
-wrap_oserror._annspecialcase_ = 'specialize:arg(2)'
+wrap_oserror2._annspecialcase_ = 'specialize:arg(3)'
+
+def wrap_oserror(space, e, filename=None, exception_name='w_OSError'):
+    if filename is not None:
+        return wrap_oserror2(space, e, space.wrap(filename),
+                             exception_name=exception_name)
+    else:
+        return wrap_oserror2(space, e, None,
+                             exception_name=exception_name)
+wrap_oserror._annspecialcase_ = 'specialize:arg(3)'
+

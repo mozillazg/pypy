@@ -1,9 +1,10 @@
-from pypy.objspace.flow.objspace import UnwrapException
-from pypy.objspace.flow.model import Constant
+from pypy.objspace.flow.model import Constant, UnwrapException
 from pypy.objspace.flow.operation import OperationName, Arity
 from pypy.interpreter.gateway import ApplevelClass
 from pypy.interpreter.error import OperationError
 from pypy.tool.cache import Cache
+from pypy.rlib.rarithmetic import r_uint
+import py
 
 def sc_import(space, fn, args):
     args_w, kwds_w = args.unpack()
@@ -73,7 +74,7 @@ class FunctionCache(Cache):
         if app.filename is not None:
             dic['__file__'] = app.filename
         dic['__name__'] = app.modname
-        exec app.code in dic
+        exec py.code.Source(app.source).compile() in dic
         return dic
     _build = staticmethod(_build)
 
@@ -120,6 +121,14 @@ def sc_applevel(space, app, name, args_w):
         pass
     return space.do_operation('simple_call', Constant(func), *args_w)
 
+def sc_r_uint(space, r_uint, args):
+    args_w, kwds_w = args.unpack()
+    assert not kwds_w
+    [w_value] = args_w
+    if isinstance(w_value, Constant):
+        return Constant(r_uint(w_value.value))
+    return space.do_operation('simple_call', space.wrap(r_uint), w_value)
+
 def setup(space):
     # fn = pyframe.normalize_exception.get_function(space)
     # this is now routed through the objspace, directly.
@@ -131,3 +140,7 @@ def setup(space):
     # if possible
     for fn in OperationName:
         space.specialcases[fn] = sc_operator
+    # special case to constant-fold r_uint(32-bit-constant)
+    # (normally, the 32-bit constant is a long, and is not allowed to
+    # show up in the flow graphs at all)
+    space.specialcases[r_uint] = sc_r_uint

@@ -85,16 +85,20 @@ class LLOp(object):
     fold = roproperty(get_fold_impl)
 
     def is_pure(self, args_v):
-        return (self.canfold or                # canfold => pure operation
-                self is llop.debug_assert or   # debug_assert is pure enough
-                                               # reading from immutable
-                (self in (llop.getfield, llop.getarrayitem) and
-                 args_v[0].concretetype.TO._hints.get('immutable')) or
-                (self is llop.getfield and     # reading from immutable_field
-                 'immutable_fields' in args_v[0].concretetype.TO._hints and
-                 args_v[1].value in args_v[0].concretetype.TO
-                                           ._hints['immutable_fields'].fields))
-        # XXX: what about ootype immutable arrays?
+        if self.canfold:                # canfold => pure operation
+            return True
+        if self is llop.debug_assert:   # debug_assert is pure enough
+            return True
+        # reading from immutable (lltype)
+        if self is llop.getfield or self is llop.getarrayitem:
+            field = getattr(args_v[1], 'value', None)
+            return args_v[0].concretetype.TO._immutable_field(field)
+        # reading from immutable (ootype) (xxx what about arrays?)
+        if self is llop.oogetfield:
+            field = getattr(args_v[1], 'value', None)
+            return args_v[0].concretetype._immutable_field(field)
+        # default
+        return False
 
     def __repr__(self):
         return '<LLOp %s>' % (getattr(self, 'opname', '?'),)
@@ -227,6 +231,8 @@ LL_OPERATIONS = {
     'int_rshift':           LLOp(canfold=True),
     'int_xor':              LLOp(canfold=True),
 
+    'int_between':          LLOp(canfold=True),   # a <= b < c
+
     'int_add_ovf':          LLOp(canraise=(OverflowError,), tryfold=True),
     'int_add_nonneg_ovf':   LLOp(canraise=(OverflowError,), tryfold=True),
               # ^^^ more efficient version when 2nd arg is nonneg
@@ -263,7 +269,7 @@ LL_OPERATIONS = {
     'uint_rshift':          LLOp(canfold=True),
     'uint_xor':             LLOp(canfold=True),
 
-    'float_is_true':        LLOp(canfold=True),
+    'float_is_true':        LLOp(canfold=True),  # it really means "x != 0.0"
     'float_neg':            LLOp(canfold=True),
     'float_abs':            LLOp(canfold=True),
 
@@ -410,7 +416,7 @@ LL_OPERATIONS = {
     'cast_ptr_to_adr':      LLOp(sideeffects=False),
     'cast_adr_to_ptr':      LLOp(canfold=True),
     'cast_adr_to_int':      LLOp(sideeffects=False),
-    'cast_int_to_adr':      LLOp(canfold=True),   # not implemented in llinterp
+    'cast_int_to_adr':      LLOp(canfold=True),
 
     'get_group_member':     LLOp(canfold=True),
     'get_next_group_member':LLOp(canfold=True),

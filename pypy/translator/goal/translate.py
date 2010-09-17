@@ -7,12 +7,18 @@ Command-line options for translate:
 import sys, os, new
 
 import autopath 
+import py
+# clean up early pypy/_cache
+try:
+    py.path.local(autopath.pypydir).join('_cache').remove()
+except Exception:
+    pass
 
 from pypy.config.config import to_optparse, OptionDescription, BoolOption, \
                                ArbitraryOption, StrOption, IntOption, Config, \
                                ChoiceOption, OptHelpFormatter
 from pypy.config.translationoption import get_combined_translation_config
-from pypy.config.translationoption import set_opt_level
+from pypy.config.translationoption import set_opt_level, final_check_config
 from pypy.config.translationoption import OPT_LEVELS, DEFAULT_OPT_LEVEL
 from pypy.config.translationoption import PLATFORMS, set_platform
 
@@ -82,7 +88,6 @@ OVERRIDES = {
     'translation.debug': False,
 }
 
-import py
 # we want 2.4 expand_default functionality
 import optparse
 from pypy.tool.ansi_print import ansi_log
@@ -169,6 +174,9 @@ def parse_options_and_load_target():
     # based on the config
     if 'handle_config' in targetspec_dic:
         targetspec_dic['handle_config'](config, translateconfig)
+
+    # perform checks (if any) on the final config
+    final_check_config(config)
 
     if translateconfig.help:
         opt_parser.print_help()
@@ -264,6 +272,10 @@ def main():
             if (translateconfig.goals != ['annotate'] and
                 translateconfig.goals != ['rtype']):
                 drv.set_extra_goals(['pyjitpl'])
+            # early check:
+            from pypy.jit.backend.detect_cpu import getcpuclassname
+            getcpuclassname(config.translation.jit_backend)
+
         log_config(config.translation, "translation configuration")
         pdb_plus_show.expose({'drv': drv, 'prof': prof})
 

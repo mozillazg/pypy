@@ -10,6 +10,10 @@ def test_bigint():
     from pypy.rlib.rbigint import rbigint
     assert not pypypolicy.look_inside_function(rbigint.lt.im_func)
 
+def test_rlocale():
+    from pypy.rlib.rlocale import setlocale
+    assert not pypypolicy.look_inside_function(setlocale)    
+
 def test_geninterp():
     d = {'_geninterp_': True}
     exec """def f():
@@ -38,8 +42,4 @@ def test_pypy_module():
 
 def test_see_jit_module():
     assert pypypolicy.look_inside_pypy_module('pypyjit.interp_jit')
-
-def test_module_with_stuff_in_init():
-    from pypy.module.sys import Module
-    assert not pypypolicy.look_inside_function(Module.getdictvalue.im_func)
 

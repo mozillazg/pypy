@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDriver, hint, we_are_jitted
 import pypy.interpreter.pyopcode   # for side-effects
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import ObjSpace, Arguments
-from pypy.interpreter.pycode import PyCode, CO_CONTAINSLOOP
+from pypy.interpreter.pycode import PyCode, CO_GENERATOR
 from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
 from opcode import opmap
@@ -23,9 +23,6 @@ PyFrame._virtualizable2_ = ['last_instr', 'pycode',
                             ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
-
-def can_inline(next_instr, bytecode):
-    return not bool(bytecode.co_flags & CO_CONTAINSLOOP)
 
 def get_printable_location(next_instr, bytecode):
     from pypy.tool.stdlib_opcode import opcode_method_names
@@ -43,6 +40,9 @@ def confirm_enter_jit(next_instr, bytecode, frame, ec):
             ec.profilefunc is None and
             ec.w_tracefunc is None)
 
+def can_never_inline(next_instr, bytecode):
+    return (bytecode.co_flags & CO_GENERATOR) != 0
+
 
 class PyPyJitDriver(JitDriver):
     reds = ['frame', 'ec']
@@ -57,11 +57,11 @@ class PyPyJitDriver(JitDriver):
 ##        blockstack = frame.blockstack
 ##        return (valuestackdepth, blockstack)
 
-pypyjitdriver = PyPyJitDriver(can_inline = can_inline,
-                              get_printable_location = get_printable_location,
+pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
                               get_jitcell_at = get_jitcell_at,
                               set_jitcell_at = set_jitcell_at,
-                              confirm_enter_jit = confirm_enter_jit)
+                              confirm_enter_jit = confirm_enter_jit,
+                              can_never_inline = can_never_inline)
 
 class __extend__(PyFrame):
     __metaclass__ = extendabletype
@@ -79,13 +79,13 @@ class __extend__(PyFrame):
         except ExitFrame:
             return self.popvalue()
 
-    def JUMP_ABSOLUTE(f, jumpto, _, ec=None):
+    def jump_absolute(self, jumpto, _, ec=None):
         if we_are_jitted():
-            f.last_instr = intmask(jumpto)
-            ec.bytecode_trace(f)
-            jumpto = r_uint(f.last_instr)
-        pypyjitdriver.can_enter_jit(frame=f, ec=ec, next_instr=jumpto,
-                                    pycode=f.getcode())
+            self.last_instr = intmask(jumpto)
+            ec.bytecode_trace(self)
+            jumpto = r_uint(self.last_instr)
+        pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
+                                    pycode=self.getcode())
         return jumpto
 
 

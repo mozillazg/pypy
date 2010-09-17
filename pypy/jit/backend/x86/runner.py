@@ -1,16 +1,16 @@
-import sys
-import ctypes
-import py
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import history, compile
 from pypy.jit.backend.x86.assembler import Assembler386
-from pypy.jit.backend.x86.regalloc import FORCE_INDEX_OFS
+from pypy.jit.backend.x86.arch import FORCE_INDEX_OFS
 from pypy.jit.backend.x86.profagent import ProfileAgent
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
+from pypy.jit.backend.x86 import regloc
+import sys
 
-class CPU386(AbstractLLCPU):
+class AbstractX86CPU(AbstractLLCPU):
     debug = True
     supports_floats = True
 
@@ -46,6 +46,7 @@ class CPU386(AbstractLLCPU):
         self.profile_agent.startup()
 
     def finish_once(self):
+        self.assembler.finish_once()
         self.profile_agent.shutdown()
 
     def compile_loop(self, inputargs, operations, looptoken):
@@ -70,18 +71,19 @@ class CPU386(AbstractLLCPU):
         return self.assembler.fail_boxes_float.getitem(index)
 
     def get_latest_value_ref(self, index):
-        ptrvalue = self.assembler.fail_boxes_ptr.getitem(index)
-        # clear after reading
-        self.assembler.fail_boxes_ptr.setitem(index, lltype.nullptr(
-            llmemory.GCREF.TO))
-        return ptrvalue
+        return self.assembler.fail_boxes_ptr.getitem(index)
+
+    def get_latest_value_count(self):
+        return self.assembler.fail_boxes_count
+
+    def clear_latest_values(self, count):
+        setitem = self.assembler.fail_boxes_ptr.setitem
+        null = lltype.nullptr(llmemory.GCREF.TO)
+        for index in range(count):
+            setitem(index, null)
 
     def get_latest_force_token(self):
         return self.assembler.fail_ebp + FORCE_INDEX_OFS
-
-    def make_boxes_from_latest_values(self, faildescr):
-        return self.assembler.make_boxes_from_latest_values(
-            faildescr._x86_failure_recovery_bytecode)
 
     def execute_token(self, executable_token):
         addr = executable_token._x86_bootstrap_code
@@ -132,15 +134,33 @@ class CPU386(AbstractLLCPU):
         assert fail_index == fail_index_2
         return faildescr
 
+    def redirect_call_assembler(self, oldlooptoken, newlooptoken):
+        self.assembler.redirect_call_assembler(oldlooptoken, newlooptoken)
+
+class CPU386(AbstractX86CPU):
+    WORD = 4
+    NUM_REGS = 8
+    CALLEE_SAVE_REGISTERS = [regloc.ebx, regloc.esi, regloc.edi]
+    FRAME_FIXED_SIZE = len(CALLEE_SAVE_REGISTERS) + 2
+
+    def __init__(self, *args, **kwargs):
+        assert sys.maxint == (2**31 - 1)
+        super(CPU386, self).__init__(*args, **kwargs)
 
 class CPU386_NO_SSE2(CPU386):
     supports_floats = False
 
+class CPU_X86_64(AbstractX86CPU):
+    WORD = 8
+    NUM_REGS = 16
+    CALLEE_SAVE_REGISTERS = [regloc.ebx, regloc.r12, regloc.r13, regloc.r14, regloc.r15]
+    FRAME_FIXED_SIZE = len(CALLEE_SAVE_REGISTERS) + 2
+
+    def __init__(self, *args, **kwargs):
+        assert sys.maxint == (2**63 - 1)
+        super(CPU_X86_64, self).__init__(*args, **kwargs)
 
 CPU = CPU386
-
-import pypy.jit.metainterp.executor
-pypy.jit.metainterp.executor.make_execute_list(CPU)
 
 # silence warnings
 
@@ -150,10 +170,10 @@ history.LoopToken._x86_frame_depth = 0
 history.LoopToken._x86_bootstrap_code = 0
 history.LoopToken._x86_direct_bootstrap_code = 0
 history.LoopToken._x86_failure_recovery_bytecode = 0
-history.LoopToken._x86_adr_jump_offset = 0
 history.LoopToken._x86_loop_code = 0
 history.LoopToken._x86_current_depths = (0, 0)
 
 compile._DoneWithThisFrameDescr._x86_current_depths = (0, 0)
 compile._DoneWithThisFrameDescr._x86_failure_recovery_bytecode = 0
 compile._DoneWithThisFrameDescr._x86_adr_jump_offset = 0
+

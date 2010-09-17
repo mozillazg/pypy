@@ -22,6 +22,7 @@ from pypy.tool.algo.unionfind import UnionFind
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import extregistry
+from pypy.tool.identity_dict import identity_dict
 
 class Stats(object):
 
@@ -174,7 +175,7 @@ class Bookkeeper(object):
         self.stats = Stats(self)
 
         # used in SomeObject.__new__ for keeping debugging info
-        self._someobject_coming_from = {}
+        self._isomeobject_coming_from = identity_dict()
 
         delayed_imports()
 
@@ -337,8 +338,12 @@ class Bookkeeper(object):
             result = SomeBool()
         elif tp is int:
             result = SomeInteger(nonneg = x>=0)
-        elif tp is long and 0 <= x <= (sys.maxint * 2 + 1):
-            result = SomeInteger(unsigned = True)
+        elif tp is long:
+            if -sys.maxint-1 <= x <= sys.maxint:
+                x = int(x)
+                result = SomeInteger(nonneg = x>=0)
+            else:
+                raise Exception("seeing a prebuilt long (value %s)" % hex(x))
         elif issubclass(tp, str): # py.lib uses annotated str subclasses
             if len(x) == 1:
                 result = SomeChar()
@@ -430,7 +435,7 @@ class Bookkeeper(object):
         elif isinstance(x, lltype._ptr):
             result = SomePtr(lltype.typeOf(x))
         elif isinstance(x, llmemory.fakeaddress):
-            result = SomeAddress(is_null=not x)
+            result = SomeAddress()
         elif isinstance(x, ootype._static_meth):
             result = SomeOOStaticMeth(ootype.typeOf(x))
         elif isinstance(x, ootype._class):
@@ -738,7 +743,7 @@ class RPythonCallsSpace(object):
     """
     w_tuple = SomeTuple
     def newtuple(self, items_s):
-        if items_s == [Ellipsis]:
+        if len(items_s) == 1 and items_s[0] is Ellipsis:
             res = SomeObject()   # hack to get a SomeObject as the *arg
             res.from_ellipsis = True
             return res

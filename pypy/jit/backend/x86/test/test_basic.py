@@ -1,13 +1,13 @@
 import py
-from pypy.jit.backend.x86.runner import CPU386
+from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.metainterp.warmspot import ll_meta_interp
 from pypy.jit.metainterp.test import test_basic
-from pypy.jit.metainterp.policy import StopAtXPolicy
+from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rlib.jit import JitDriver, OPTIMIZER_SIMPLE
 
 class Jit386Mixin(test_basic.LLJitMixin):
     type_system = 'lltype'
-    CPUClass = CPU386
+    CPUClass = getcpuclass()
 
     def check_jumps(self, maxcount):
         pass

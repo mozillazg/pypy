@@ -10,7 +10,9 @@ from pypy.translator.c.support import USESLOTS # set to False if necessary while
 from pypy.translator.c.support import cdecl, forward_cdecl, somelettersfrom
 from pypy.translator.c.support import c_char_array_constant, barebonearray
 from pypy.translator.c.primitive import PrimitiveType, name_signed
+from pypy.rlib import exports
 from pypy.rlib.rarithmetic import isinf, isnan
+from pypy.rlib.rstackovf import _StackOverflow
 from pypy.translator.c import extfunc
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from py.builtin import BaseException
@@ -37,6 +39,8 @@ class defaultproperty(object):
 
 class StructDefNode:
     typetag = 'struct'
+    extra_union_for_varlength = True
+
     def __init__(self, db, STRUCT, varlength=1):
         self.db = db
         self.STRUCT = STRUCT
@@ -73,6 +77,8 @@ class StructDefNode:
             if db.gcpolicy.need_no_typeptr():
                 assert self.fieldnames == ('typeptr',)
                 self.fieldnames = ()
+        #
+        self.fulltypename = '%s %s @' % (self.typetag, self.name)
 
     def setup(self):
         # this computes self.fields
@@ -82,10 +88,13 @@ class StructDefNode:
         self.fields = []
         db = self.db
         STRUCT = self.STRUCT
-        varlength = self.varlength
+        if self.varlength != 1:
+            self.normalizedtypename = db.gettype(STRUCT, who_asks=self)
         if needs_gcheader(self.STRUCT):
-            for fname, T in db.gcpolicy.struct_gcheader_definition(self):
-                self.fields.append((fname, db.gettype(T, who_asks=self)))
+            HDR = db.gcpolicy.struct_gcheader_definition(self)
+            if HDR is not None:
+                gc_field = ("_gcheader", db.gettype(HDR, who_asks=self))
+                self.fields.append(gc_field)
         for name in self.fieldnames:
             T = self.c_struct_field_type(name)
             if name == STRUCT._arrayfld:
@@ -112,7 +121,7 @@ class StructDefNode:
     gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
-        return '%s %s @' % (self.typetag, self.name)
+        return self.fulltypename
 
     def c_struct_field_name(self, name):
         # occasionally overridden in __init__():
@@ -130,8 +139,10 @@ class StructDefNode:
         fldname = self.c_struct_field_name(fldname)
         return '%s.%s' % (baseexpr, fldname)
 
-    def ptr_access_expr(self, baseexpr, fldname):
+    def ptr_access_expr(self, baseexpr, fldname, baseexpr_is_const=False):
         fldname = self.c_struct_field_name(fldname)
+        if baseexpr_is_const:
+            return '%s->%s' % (baseexpr, fldname)
         return 'RPyField(%s, %s)' % (baseexpr, fldname)
 
     def definition(self):
@@ -149,6 +160,12 @@ class StructDefNode:
         if is_empty:
             yield '\t' + 'char _dummy; /* this struct is empty */'
         yield '};'
+        if self.varlength != 1:
+            assert self.typetag == 'struct'
+            yield 'union %su {' % self.name
+            yield '  struct %s a;' % self.name
+            yield '  %s;' % cdecl(self.normalizedtypename, 'b')
+            yield '};'
 
     def visitor_lines(self, prefix, on_field):
         for name in self.fieldnames:
@@ -160,6 +177,7 @@ class StructDefNode:
 
     def debug_offsets(self):
         # generate number exprs giving the offset of the elements in the struct
+        assert self.varlength == 1
         for name in self.fieldnames:
             FIELD_T = self.c_struct_field_type(name)
             if FIELD_T is Void:
@@ -176,15 +194,15 @@ class StructDefNode:
 
 class ArrayDefNode:
     typetag = 'struct'
+    extra_union_for_varlength = True
 
     def __init__(self, db, ARRAY, varlength=1):
         self.db = db
         self.ARRAY = ARRAY
         self.LLTYPE = ARRAY
-        original_varlength = varlength
         self.gcfields = []
         self.varlength = varlength
-        if original_varlength == 1:
+        if varlength == 1:
             basename = 'array'
             with_number = True
         else:
@@ -195,6 +213,8 @@ class ArrayDefNode:
          self.name) = db.namespace.uniquename(basename, with_number=with_number,
                                               bare=True)
         self.dependencies = {}
+        self.fulltypename =  '%s %s @' % (self.typetag, self.name)
+        self.fullptrtypename = '%s %s *@' % (self.typetag, self.name)
 
     def setup(self):
         if hasattr(self, 'itemtypename'):
@@ -202,9 +222,13 @@ class ArrayDefNode:
         db = self.db
         ARRAY = self.ARRAY
         self.gcinfo    # force it to be computed
+        if self.varlength != 1:
+            self.normalizedtypename = db.gettype(ARRAY, who_asks=self)
         if needs_gcheader(ARRAY):
-            for fname, T in db.gcpolicy.array_gcheader_definition(self):
-                self.gcfields.append((fname, db.gettype(T, who_asks=self)))
+            HDR = db.gcpolicy.array_gcheader_definition(self)
+            if HDR is not None:
+                gc_field = ("_gcheader", db.gettype(HDR, who_asks=self))
+                self.gcfields.append(gc_field)
         self.itemtypename = db.gettype(ARRAY.OF, who_asks=self)
 
     def computegcinfo(self):
@@ -216,16 +240,16 @@ class ArrayDefNode:
     gcinfo = defaultproperty(computegcinfo)
 
     def gettype(self):
-        return '%s %s @' % (self.typetag, self.name)
+        return self.fulltypename
 
     def getptrtype(self):
-        return '%s %s *@' % (self.typetag, self.name)
+        return self.fullptrtypename
 
     def access_expr(self, baseexpr, index):
         return '%s.items[%s]' % (baseexpr, index)
     access_expr_varindex = access_expr
 
-    def ptr_access_expr(self, baseexpr, index):
+    def ptr_access_expr(self, baseexpr, index, dummy=False):
         assert 0 <= index <= sys.maxint, "invalid constant index %r" % (index,)
         return self.itemindex_access_expr(baseexpr, index)
 
@@ -249,8 +273,14 @@ class ArrayDefNode:
                 line = 'char _dummy; ' + line
         yield '\t' + line
         yield '};'
+        if self.varlength != 1:
+            yield 'union %su {' % self.name
+            yield '  struct %s a;' % self.name
+            yield '  %s;' % cdecl(self.normalizedtypename, 'b')
+            yield '};'
 
     def visitor_lines(self, prefix, on_item):
+        assert self.varlength == 1
         ARRAY = self.ARRAY
         # we need a unique name for this C variable, or at least one that does
         # not collide with the expression in 'prefix'
@@ -277,6 +307,7 @@ class ArrayDefNode:
 
     def debug_offsets(self):
         # generate three offsets for debugging inspection
+        assert self.varlength == 1
         if not self.ARRAY._hints.get('nolength', False):
             yield 'offsetof(struct %s, length)' % (self.name,)
         else:
@@ -297,6 +328,7 @@ class BareBoneArrayDefNode:
     gcinfo = None
     name = None
     forward_decl = None
+    extra_union_for_varlength = False
 
     def __init__(self, db, ARRAY, varlength=1):
         self.db = db
@@ -304,23 +336,29 @@ class BareBoneArrayDefNode:
         self.LLTYPE = ARRAY
         self.varlength = varlength
         self.dependencies = {}
-        self.itemtypename = db.gettype(ARRAY.OF, who_asks=self)
+        contained_type = ARRAY.OF
+        if ARRAY._hints.get("render_as_void"):
+            contained_type = Void
+        self.itemtypename = db.gettype(contained_type, who_asks=self)
+        self.fulltypename = self.itemtypename.replace('@', '(@)[%d]' %
+                                                      (self.varlength,))
+        self.fullptrtypename = self.itemtypename.replace('@', '*@')
 
     def setup(self):
         """Array loops are forbidden by ForwardReference.become() because
         there is no way to declare them in C."""
 
     def gettype(self):
-        return self.itemtypename.replace('@', '(@)[%d]' % (self.varlength,))
+        return self.fulltypename
 
     def getptrtype(self):
-        return self.itemtypename.replace('@', '*@')
+        return self.fullptrtypename
 
     def access_expr(self, baseexpr, index):
         return '%s[%d]' % (baseexpr, index)
     access_expr_varindex = access_expr
 
-    def ptr_access_expr(self, baseexpr, index):
+    def ptr_access_expr(self, baseexpr, index, dummy=False):
         assert 0 <= index <= sys.maxint, "invalid constant index %r" % (index,)
         return self.itemindex_access_expr(baseexpr, index)
 
@@ -344,6 +382,7 @@ class FixedSizeArrayDefNode:
     gcinfo = None
     name = None
     typetag = 'struct'
+    extra_union_for_varlength = False
 
     def __init__(self, db, FIXEDARRAY):
         self.db = db
@@ -351,19 +390,21 @@ class FixedSizeArrayDefNode:
         self.LLTYPE = FIXEDARRAY
         self.dependencies = {}
         self.itemtypename = db.gettype(FIXEDARRAY.OF, who_asks=self)
+        self.fulltypename = self.itemtypename.replace('@', '(@)[%d]' %
+                                                      FIXEDARRAY.length)
+        self.fullptrtypename = self.itemtypename.replace('@', '*@')
 
     def setup(self):
         """Loops are forbidden by ForwardReference.become() because
         there is no way to declare them in C."""
 
     def gettype(self):
-        FIXEDARRAY = self.FIXEDARRAY
-        return self.itemtypename.replace('@', '(@)[%d]' % FIXEDARRAY.length)
+        return self.fulltypename
 
     def getptrtype(self):
-        return self.itemtypename.replace('@', '*@')
+        return self.fullptrtypename
 
-    def access_expr(self, baseexpr, index):
+    def access_expr(self, baseexpr, index, dummy=False):
         if not isinstance(index, int):
             assert index.startswith('item')
             index = int(index[4:])
@@ -434,50 +475,76 @@ class ExtTypeOpaqueDefNode:
 
 
 class ContainerNode(object):
-    if USESLOTS:
-        __slots__ = """db T obj 
+    if USESLOTS:      # keep the number of slots down!
+        __slots__ = """db obj 
                        typename implementationtypename
-                        name ptrname
+                        name
                         globalcontainer""".split()
+    eci_name = '_compilation_info'
 
     def __init__(self, db, T, obj):
         self.db = db
-        self.T = T
         self.obj = obj
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
         self.implementationtypename = db.gettype(T, varlength=self.getlength())
         parent, parentindex = parentlink(obj)
-        if parent is None:
+        if obj in exports.EXPORTS_obj2name:
+            self.name = exports.EXPORTS_obj2name[obj]
+            self.globalcontainer = True
+        elif parent is None:
             self.name = db.namespace.uniquename('g_' + self.basename())
             self.globalcontainer = True
         else:
             self.globalcontainer = False
             parentnode = db.getcontainernode(parent)
-            defnode = db.gettypedefnode(parentnode.T)
+            defnode = db.gettypedefnode(parentnode.getTYPE())
             self.name = defnode.access_expr(parentnode.name, parentindex)
-        self.ptrname = '(&%s)' % self.name
         if self.typename != self.implementationtypename:
-            ptrtypename = db.gettype(Ptr(T))
-            self.ptrname = '((%s)(void*)%s)' % (cdecl(ptrtypename, ''),
-                                                self.ptrname)
+            if db.gettypedefnode(T).extra_union_for_varlength:
+                self.name += '.b'
+
+    def getptrname(self):
+        return '(&%s)' % self.name
+
+    def getTYPE(self):
+        return typeOf(self.obj)
 
     def is_thread_local(self):
-        return hasattr(self.T, "_hints") and self.T._hints.get('thread_local')
+        T = self.getTYPE()
+        return hasattr(T, "_hints") and T._hints.get('thread_local')
+
+    def compilation_info(self):
+        return getattr(self.obj, self.eci_name, None)
+
+    def get_declaration(self):
+        if self.name[-2:] == '.b':
+            # xxx fish fish
+            assert self.implementationtypename.startswith('struct ')
+            assert self.implementationtypename.endswith(' @')
+            uniontypename = 'union %su @' % self.implementationtypename[7:-2]
+            return uniontypename, self.name[:-2]
+        else:
+            return self.implementationtypename, self.name
 
     def forward_declaration(self):
         if llgroup.member_of_group(self.obj):
             return
+        type, name = self.get_declaration()
         yield '%s;' % (
-            forward_cdecl(self.implementationtypename,
-                self.name, self.db.standalone, self.is_thread_local()))
+            forward_cdecl(type, name, self.db.standalone,
+                          self.is_thread_local()))
 
     def implementation(self):
         if llgroup.member_of_group(self.obj):
             return []
         lines = list(self.initializationexpr())
+        type, name = self.get_declaration()
+        if name != self.name:
+            lines[0] = '{ ' + lines[0]    # extra braces around the 'a' part
+            lines[-1] += ' }'             # of the union
         lines[0] = '%s = %s' % (
-            cdecl(self.implementationtypename, self.name, self.is_thread_local()),
+            cdecl(type, name, self.is_thread_local()),
             lines[0])
         lines[-1] += ';'
         return lines
@@ -496,42 +563,58 @@ class StructNode(ContainerNode):
         __slots__ = ()
 
     def basename(self):
-        return self.T._name
+        T = self.getTYPE()
+        return T._name
 
     def enum_dependencies(self):
-        for name in self.T._names:
+        T = self.getTYPE()
+        for name in T._names:
             yield getattr(self.obj, name)
 
     def getlength(self):
-        if self.T._arrayfld is None:
+        T = self.getTYPE()
+        if T._arrayfld is None:
             return 1
         else:
-            array = getattr(self.obj, self.T._arrayfld)
+            array = getattr(self.obj, T._arrayfld)
             return len(array.items)
 
     def initializationexpr(self, decoration=''):
+        T = self.getTYPE()
         is_empty = True
         yield '{'
-        defnode = self.db.gettypedefnode(self.T)
+        defnode = self.db.gettypedefnode(T)
 
         data = []
 
-        if needs_gcheader(self.T):
-            for i, thing in enumerate(self.db.gcpolicy.struct_gcheader_initdata(self)):
-                data.append(('gcheader%d'%i, thing))
-        
+        if needs_gcheader(T):
+            gc_init = self.db.gcpolicy.struct_gcheader_initdata(self)
+            data.append(('gcheader', gc_init))
+
         for name in defnode.fieldnames:
             data.append((name, getattr(self.obj, name)))
-        
+
         # Reasonably, you should only initialise one of the fields of a union
         # in C.  This is possible with the syntax '.fieldname value' or
         # '.fieldname = value'.  But here we don't know which of the
         # fields need initialization, so XXX we pick the first one
         # arbitrarily.
-        if hasattr(self.T, "_hints") and self.T._hints.get('union'):
+        if hasattr(T, "_hints") and T._hints.get('union'):
             data = data[0:1]
 
+        if 'get_padding_drop' in T._hints:
+            d = {}
+            for name, _ in data:
+                T1 = defnode.c_struct_field_type(name)
+                typename = self.db.gettype(T1)
+                d[name] = cdecl(typename, '')
+            padding_drop = T._hints['get_padding_drop'](d)
+        else:
+            padding_drop = []
+
         for name, value in data:
+            if name in padding_drop:
+                continue
             c_expr = defnode.access_expr(self.name, name)
             lines = generic_initializationexpr(self.db, value, c_expr,
                                                decoration + name)
@@ -555,8 +638,10 @@ class GcStructNodeWithHash(StructNode):
         return 'struct _hashT_%s @' % self.name
 
     def forward_declaration(self):
+        T = self.getTYPE()
+        assert self.typename == self.implementationtypename  # no array part
         hash_typename = self.get_hash_typename()
-        hash_offset = self.db.gctransformer.get_hash_offset(self.T)
+        hash_offset = self.db.gctransformer.get_hash_offset(T)
         yield '%s {' % cdecl(hash_typename, '')
         yield '\tunion {'
         yield '\t\t%s;' % cdecl(self.implementationtypename, 'head')
@@ -593,10 +678,10 @@ class ArrayNode(ContainerNode):
     if USESLOTS:
         __slots__ = ()
 
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
-        if barebonearray(T):
-            self.ptrname = self.name
+    def getptrname(self):
+        if barebonearray(self.getTYPE()):
+            return self.name
+        return ContainerNode.getptrname(self)
 
     def basename(self):
         return 'array'
@@ -608,23 +693,23 @@ class ArrayNode(ContainerNode):
         return len(self.obj.items)
 
     def initializationexpr(self, decoration=''):
-        defnode = self.db.gettypedefnode(self.T)
+        T = self.getTYPE()
+        defnode = self.db.gettypedefnode(T)
         yield '{'
-        if needs_gcheader(self.T):
-            for i, thing in enumerate(self.db.gcpolicy.array_gcheader_initdata(self)):
-                lines = generic_initializationexpr(self.db, thing,
-                                                   'gcheader%d'%i,
-                                                   '%sgcheader%d' % (decoration, i))
-                for line in lines:
-                    yield line
-        if self.T._hints.get('nolength', False):
+        if needs_gcheader(T):
+            gc_init = self.db.gcpolicy.array_gcheader_initdata(self)
+            lines = generic_initializationexpr(self.db, gc_init, 'gcheader',
+                                               '%sgcheader' % (decoration,))
+            for line in lines:
+                yield line
+        if T._hints.get('nolength', False):
             length = ''
         else:
             length = '%d, ' % len(self.obj.items)
-        if self.T.OF is Void or len(self.obj.items) == 0:
+        if T.OF is Void or len(self.obj.items) == 0:
             yield '\t%s' % length.rstrip(', ')
             yield '}'
-        elif self.T.OF == Char:
+        elif T.OF == Char:
             if len(self.obj.items) and self.obj.items[0] is None:
                 s = ''.join([self.obj.getitem(i) for i in range(len(self.obj.items))])
             else:
@@ -632,7 +717,7 @@ class ArrayNode(ContainerNode):
             yield '\t%s%s' % (length, c_char_array_constant(s))
             yield '}'
         else:
-            barebone = barebonearray(self.T)
+            barebone = barebonearray(T)
             if not barebone:
                 yield '\t%s{' % length
             for j in range(len(self.obj.items)):
@@ -654,13 +739,14 @@ class FixedSizeArrayNode(ContainerNode):
     if USESLOTS:
         __slots__ = ()
 
-    def __init__(self, db, T, obj):
-        ContainerNode.__init__(self, db, T, obj)
-        if not isinstance(obj, _subarray):   # XXX hackish
-            self.ptrname = self.name
+    def getptrname(self):
+        if not isinstance(self.obj, _subarray):   # XXX hackish
+            return self.name
+        return ContainerNode.getptrname(self)
 
     def basename(self):
-        return self.T._name
+        T = self.getTYPE()
+        return T._name
 
     def enum_dependencies(self):
         for i in range(self.obj.getlength()):
@@ -670,10 +756,12 @@ class FixedSizeArrayNode(ContainerNode):
         return 1    # not variable-sized!
 
     def initializationexpr(self, decoration=''):
+        T = self.getTYPE()
+        assert self.typename == self.implementationtypename  # not var-sized
         is_empty = True
         yield '{'
         # _names == ['item0', 'item1', ...]
-        for j, name in enumerate(self.T._names):
+        for j, name in enumerate(T._names):
             value = getattr(self.obj, name)
             lines = generic_initializationexpr(self.db, value,
                                                '%s[%d]' % (self.name, j),
@@ -714,6 +802,7 @@ def generic_initializationexpr(db, value, access_expr, decoration):
 
 class FuncNode(ContainerNode):
     nodekind = 'func'
+    eci_name = 'compilation_info'
     # there not so many node of this kind, slots should not
     # be necessary
 
@@ -731,11 +820,12 @@ class FuncNode(ContainerNode):
         else:
             self.name = (forcename or
                          db.namespace.uniquename('g_' + self.basename()))
-        self.compilation_info = getattr(obj, 'compilation_info', None)
         self.make_funcgens()
         #self.dependencies = {}
         self.typename = db.gettype(T)  #, who_asks=self)
-        self.ptrname = self.name
+
+    def getptrname(self):
+        return self.name
 
     def make_funcgens(self):
         self.funcgens = select_function_code_generators(self.obj, self.db, self.name)
@@ -864,6 +954,8 @@ def select_function_code_generators(fnobj, db, functionname):
         else:
             assert fnobj.external == 'CPython'
             return [CExternalFunctionCodeGenerator(fnobj, db)]
+    elif hasattr(fnobj._callable, "c_name"):
+        return []
     else:
         raise ValueError, "don't know how to generate code for %r" % (fnobj,)
 
@@ -874,18 +966,20 @@ class ExtType_OpaqueNode(ContainerNode):
         return []
 
     def initializationexpr(self, decoration=''):
-        yield 'RPyOpaque_INITEXPR_%s' % (self.T.tag,)
+        T = self.getTYPE()
+        yield 'RPyOpaque_INITEXPR_%s' % (T.tag,)
 
     def startupcode(self):
-        args = [self.ptrname]
+        T = self.getTYPE()
+        args = [self.getptrname()]
         # XXX how to make this code more generic?
-        if self.T.tag == 'ThreadLock':
+        if T.tag == 'ThreadLock':
             lock = self.obj.externalobj
             if lock.locked():
                 args.append('1')
             else:
                 args.append('0')
-        yield 'RPyOpaque_SETUP_%s(%s);' % (self.T.tag, ', '.join(args))
+        yield 'RPyOpaque_SETUP_%s(%s);' % (T.tag, ', '.join(args))
 
 
 def opaquenode_factory(db, T, obj):
@@ -909,12 +1003,14 @@ class PyObjectNode(ContainerNode):
         self.obj = obj
         value = obj.value
         self.name = self._python_c_name(value)
-        self.ptrname = self.name
         self.exported_name = self.name
         # a list of expressions giving places where this constant PyObject
         # must be copied.  Normally just in the global variable of the same
         # name, but see also StructNode.initializationexpr()  :-(
         self.where_to_copy_me = []
+
+    def getptrname(self):
+        return self.name
 
     def _python_c_name(self, value):
         # just some minimal cases: None and builtin exceptions
@@ -923,9 +1019,12 @@ class PyObjectNode(ContainerNode):
         import types, py
         if isinstance(value, (type, types.ClassType)):
             if (issubclass(value, BaseException) and
-                (value.__module__ == 'exceptions'
-                 or value is py.code._AssertionError)):
+                value.__module__ == 'exceptions'):
                 return 'PyExc_' + value.__name__
+            if value is py.code._AssertionError:
+                return 'PyExc_AssertionError'
+            if value is _StackOverflow:
+                return 'PyExc_RuntimeError'
         raise Exception("don't know how to simply render py object: %r" %
                         (value, ))
     
@@ -986,7 +1085,7 @@ class GroupNode(ContainerNode):
             forward_cdecl(ctype, self.name, self.db.standalone,
                           self.is_thread_local()))
         yield '#include "src/llgroup.h"'
-        yield 'PYPY_GROUP_CHECK_SIZE(%s);' % self.name
+        yield 'PYPY_GROUP_CHECK_SIZE(%s)' % (self.name,)
         for i, member in enumerate(self.obj.members):
             structnode = self.db.getcontainernode(member)
             yield '#define %s %s.member%d' % (structnode.name,

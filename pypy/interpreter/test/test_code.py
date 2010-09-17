@@ -6,11 +6,7 @@ class AppTestCodeIntrospection:
     def setup_class(cls):
         space = gettestobjspace()
         cls.space = space
-        if py.test.config.option.runappdirect:
-            filename = __file__
-        else:
-            filename = gateway.__file__
-
+        filename = __file__
         if filename[-3:] != '.py':
             filename = filename[:-1]
 
@@ -188,8 +184,6 @@ class AppTestCodeIntrospection:
         # CO_NESTED
         assert f(4).func_code.co_flags & 0x10
         assert f.func_code.co_flags & 0x10 == 0
-        # check for CO_CONTAINSLOOP
-        assert not f.func_code.co_flags & 0x0080
         # check for CO_CONTAINSGLOBALS
         assert not f.func_code.co_flags & 0x0800
 
@@ -202,9 +196,6 @@ class AppTestCodeIntrospection:
             return [l for l in [1, 2, 3, 4]]
 """
 
-        # check for CO_CONTAINSLOOP
-        assert f.func_code.co_flags & 0x0080
-        assert g.func_code.co_flags & 0x0080
         # check for CO_CONTAINSGLOBALS
         assert f.func_code.co_flags & 0x0800
         assert not g.func_code.co_flags & 0x0800

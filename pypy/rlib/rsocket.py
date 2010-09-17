@@ -6,8 +6,7 @@ a drop-in replacement for the 'socket' module.
 
 # Known missing features:
 #
-#   - support for non-Linux platforms
-#   - address families other than AF_INET, AF_INET6, AF_UNIX
+#   - address families other than AF_INET, AF_INET6, AF_UNIX, AF_PACKET
 #   - methods makefile(),
 #   - SSL
 #
@@ -42,13 +41,15 @@ def ntohs(x):
     return rffi.cast(lltype.Signed, _c.ntohs(x))
 
 def ntohl(x):
-    return rffi.cast(lltype.Signed, _c.ntohl(x))
+    # accepts and returns an Unsigned
+    return rffi.cast(lltype.Unsigned, _c.ntohl(x))
 
 def htons(x):
     return rffi.cast(lltype.Signed, _c.htons(x))
 
 def htonl(x):
-    return rffi.cast(lltype.Signed, _c.htonl(x))
+    # accepts and returns an Unsigned
+    return rffi.cast(lltype.Unsigned, _c.htonl(x))
 
 
 _FAMILIES = {}
@@ -98,8 +99,6 @@ class Address(object):
     def lock(self, TYPE=_c.sockaddr):
         """Return self.addr_p, cast as a pointer to TYPE.  Must call unlock()!
         """
-        if not (self.minlen <= self.addrlen <= self.maxlen):
-            raise RSocketError("invalid address")
         return rffi.cast(lltype.Ptr(TYPE), self.addr_p)
     lock._annspecialcase_ = 'specialize:ll'
 
@@ -109,7 +108,7 @@ class Address(object):
         """
         keepalive_until_here(self)
 
-    def as_object(self, space):
+    def as_object(self, fd, space):
         """Convert the address to an app-level object."""
         # If we don't know the address family, don't raise an
         # exception -- return it as a tuple.
@@ -200,6 +199,66 @@ class IPAddress(Address):
 
 # ____________________________________________________________
 
+if 'AF_PACKET' in constants:
+    class PacketAddress(Address):
+        family = AF_PACKET
+        struct = _c.sockaddr_ll
+        maxlen = minlen = sizeof(struct)
+
+        def get_ifname(self, fd):
+            a = self.lock(_c.sockaddr_ll)
+            p = lltype.malloc(_c.ifreq, flavor='raw')
+            rffi.setintfield(p, 'c_ifr_ifindex',
+                             rffi.getintfield(a, 'c_sll_ifindex'))
+            if (_c.ioctl(fd, _c.SIOCGIFNAME, p) == 0):
+                # eh, the iface name is a constant length array
+                i = 0
+                d = []
+                while p.c_ifr_name[i] != '\x00' and i < len(p.c_ifr_name):
+                    d.append(p.c_ifr_name[i])
+                    i += 1
+                ifname = ''.join(d)
+            else:
+                ifname = ""
+            lltype.free(p, flavor='raw')
+            self.unlock()
+            return ifname
+
+        def get_protocol(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = ntohs(rffi.getintfield(a, 'c_sll_protocol'))
+            self.unlock()
+            return res
+
+        def get_pkttype(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = rffi.getintfield(a, 'c_sll_pkttype')
+            self.unlock()
+            return res
+
+        def get_hatype(self):
+            a = self.lock(_c.sockaddr_ll)
+            res = bool(rffi.getintfield(a, 'c_sll_hatype'))
+            self.unlock()
+            return res
+
+        def get_addr(self):
+            a = self.lock(_c.sockaddr_ll)
+            lgt = rffi.getintfield(a, 'c_sll_halen')
+            d = []
+            for i in range(lgt):
+                d.append(a.c_sll_addr[i])
+            res = "".join(d)
+            self.unlock()
+            return res
+
+        def as_object(self, fd, space):
+            return space.newtuple([space.wrap(self.get_ifname(fd)),
+                                   space.wrap(self.get_protocol()),
+                                   space.wrap(self.get_pkttype()),
+                                   space.wrap(self.get_hatype()),
+                                   space.wrap(self.get_addr())])
+
 class INETAddress(IPAddress):
     family = AF_INET
     struct = _c.sockaddr_in
@@ -228,7 +287,7 @@ class INETAddress(IPAddress):
                 self.get_host() == other.get_host() and
                 self.get_port() == other.get_port())
 
-    def as_object(self, space):
+    def as_object(self, fd, space):
         return space.newtuple([space.wrap(self.get_host()),
                                space.wrap(self.get_port())])
 
@@ -317,7 +376,7 @@ class INET6Address(IPAddress):
                 self.get_flowinfo() == other.get_flowinfo() and
                 self.get_scope_id() == other.get_scope_id())
 
-    def as_object(self, space):
+    def as_object(self, fd, space):
         return space.newtuple([space.wrap(self.get_host()),
                                space.wrap(self.get_port()),
                                space.wrap(self.get_flowinfo()),
@@ -421,7 +480,7 @@ if 'AF_UNIX' in constants:
             return (isinstance(other, UNIXAddress) and
                     self.get_path() == other.get_path())
 
-        def as_object(self, space):
+        def as_object(self, fd, space):
             return space.wrap(self.get_path())
 
         def from_object(space, w_address):
@@ -456,7 +515,7 @@ if 'AF_NETLINK' in constants:
         def __repr__(self):
             return '<NETLINKAddress %r>' % (self.get_pid(), self.get_groups())
         
-        def as_object(self, space):
+        def as_object(self, fd, space):
             return space.newtuple([space.wrap(self.get_pid()),
                                    space.wrap(self.get_groups())])
 
@@ -504,6 +563,10 @@ def make_null_address(family):
     klass = familyclass(family)
     result = instantiate(klass)
     buf = lltype.malloc(rffi.CCHARP.TO, klass.maxlen, flavor='raw', zero=True)
+    # Initialize the family to the correct value.  Avoids surprizes on
+    # Windows when calling a function that unexpectedly does not set
+    # the output address (e.g. recvfrom() on a connected IPv4 socket).
+    rffi.setintfield(rffi.cast(_c.sockaddr_ptr, buf), 'c_sa_family', family)
     result.setdata(buf, 0)
     return result, klass.maxlen
 
@@ -609,7 +672,7 @@ class RSocket(object):
 
     # convert an Address into an app-level object
     def addr_as_object(self, space, address):
-        return address.as_object(space)
+        return address.as_object(self.fd, space)
 
     # convert an app-level object into an Address
     # based on the current socket's family
@@ -1040,8 +1103,7 @@ def last_error():
 class GAIError(SocketErrorWithErrno):
     applevelerrcls = 'gaierror'
     def get_msg(self):
-        # this method may be patched below
-        return rffi.charp2str(_c.gai_strerror(self.errno))
+        return _c.gai_strerror_str(self.errno)
 
 class HSocketError(SocketError):
     applevelerrcls = 'herror'
@@ -1334,17 +1396,3 @@ def setdefaulttimeout(timeout):
     if timeout < 0.0:
         timeout = -1.0
     defaults.timeout = timeout
-
-# _______________________________________________________________
-#
-# Patch module, for platforms without getaddrinfo / getnameinfo
-#
-
-if not getattr(_c, 'getaddrinfo', None):
-    from pypy.rlib.getaddrinfo import getaddrinfo
-    from pypy.rlib.getaddrinfo import GAIError_getmsg
-    GAIError.get_msg = GAIError_getmsg
-
-if not getattr(_c, 'getnameinfo', None):
-    from pypy.rlib.getnameinfo import getnameinfo
-    from pypy.rlib.getnameinfo import NI_NUMERICHOST, NI_NUMERICSERV

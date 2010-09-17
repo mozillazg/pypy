@@ -2,14 +2,17 @@ import sys
 from pypy.rpython.memory.gc.semispace import SemiSpaceGC
 from pypy.rpython.memory.gc.semispace import GCFLAG_EXTERNAL, GCFLAG_FORWARDED
 from pypy.rpython.memory.gc.semispace import GC_HASH_TAKEN_ADDR
+from pypy.rpython.memory.gc.base import read_from_env
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, LONG_BIT
 from pypy.rpython.lltypesystem.lloperation import llop
+
+WORD = LONG_BIT // 8
 
 # The following flag is never set on young objects, i.e. the ones living
 # in the nursery.  It is initially set on all prebuilt and old objects,
@@ -47,10 +50,10 @@ class GenerationGC(SemiSpaceGC):
     nursery_hash_base = -1
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
-                 nursery_size=128,
-                 min_nursery_size=128,
+                 nursery_size=32*WORD,
+                 min_nursery_size=32*WORD,
                  auto_nursery_size=False,
-                 space_size=4096,
+                 space_size=1024*WORD,
                  max_space_size=sys.maxint//2+1):
         SemiSpaceGC.__init__(self, config, chunk_size = chunk_size,
                              space_size = space_size,
@@ -623,18 +626,7 @@ class GenerationGC(SemiSpaceGC):
 import os
 
 def nursery_size_from_env():
-    value = os.environ.get('PYPY_GENERATIONGC_NURSERY')
-    if value:
-        if value[-1] in 'kK':
-            factor = 1024
-            value = value[:-1]
-        else:
-            factor = 1
-        try:
-            return int(value) * factor
-        except ValueError:
-            pass
-    return -1
+    return read_from_env('PYPY_GENERATIONGC_NURSERY')
 
 def best_nursery_size_for_L2cache(L2cache):
     # Heuristically, the best nursery size to choose is about half
@@ -718,7 +710,7 @@ if sys.platform == 'linux2':
         return pos
 
 elif sys.platform == 'darwin':
-    from pypy.rpython.lltypesystem import lltype, rffi
+    from pypy.rpython.lltypesystem import rffi
 
     sysctlbyname = rffi.llexternal('sysctlbyname',
                                    [rffi.CCHARP, rffi.VOIDP, rffi.SIZE_TP,

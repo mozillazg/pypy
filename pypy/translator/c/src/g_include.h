@@ -11,7 +11,9 @@
 #  include "marshal.h"
 #  include "eval.h"
 #else
-#  include "src/standalone.h"
+#  include <stdlib.h>
+#  include <assert.h>
+#  include <math.h>
 #endif
 
 #include "src/mem.h"
@@ -54,9 +56,6 @@
 #ifndef AVR
 #  include "src/ll_os.h"
 #  include "src/ll_strtod.h"
-#  ifdef RPyExc_thread_error
-#    include "src/ll_thread.h"
-#  endif
 #endif
 #endif
 

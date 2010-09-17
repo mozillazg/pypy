@@ -1,18 +1,34 @@
+import StringIO
+import traceback
+import sys
+
 import py
-from pypy.rlib.rarithmetic import r_int, r_uint, intmask, r_singlefloat
-from pypy.rlib.rarithmetic import r_ulonglong, r_longlong, base_int
-from pypy.rlib.rarithmetic import normalizedinttype
+from pypy.rlib.rarithmetic import (r_int, r_uint, intmask, r_singlefloat,
+                                   r_ulonglong, r_longlong, base_int,
+                                   normalizedinttype)
 from pypy.rlib.objectmodel import Symbolic
 from pypy.tool.uid import Hashable
 from pypy.tool.tls import tlsobject
+from pypy.tool.identity_dict import identity_dict
 from types import NoneType
 from sys import maxint
-import struct
 import weakref
 
-log = py.log.Producer('lltype')
-
 TLS = tlsobject()
+
+# Track allocations to detect memory leaks
+# Don't track 'gc' and immortal mallocs
+TRACK_ALLOCATIONS = False
+ALLOCATED = identity_dict()
+
+def start_tracking_allocations():
+    global TRACK_ALLOCATIONS
+    TRACK_ALLOCATIONS = True
+    ALLOCATED.clear()
+
+def stop_tracking_allocations():
+    global TRACK_ALLOCATIONS
+    TRACK_ALLOCATIONS = False
 
 class _uninitialized(object):
     def __init__(self, TYPE):
@@ -21,7 +37,7 @@ class _uninitialized(object):
         return '<Uninitialized %r>'%(self.TYPE,)
         
 
-def saferecursive(func, defl):
+def saferecursive(func, defl, TLS=TLS):
     def safe(*args):
         try:
             seeing = TLS.seeing
@@ -38,7 +54,7 @@ def saferecursive(func, defl):
     return safe
 
 #safe_equal = saferecursive(operator.eq, True)
-def safe_equal(x, y):
+def safe_equal(x, y, TLS=TLS):
     # a specialized version for performance
     try:
         seeing = TLS.seeing_eq
@@ -81,7 +97,7 @@ class LowLevelType(object):
             raise TypeError
         return value
 
-    def __hash__(self):
+    def __hash__(self, TLS=TLS):
         # cannot use saferecursive() -- see test_lltype.test_hash().
         # NB. the __cached_hash should neither be used nor updated
         # if we enter with hash_level > 0, because the computed
@@ -281,12 +297,29 @@ class Struct(ContainerType):
             n = 1
         return _struct(self, n, initialization='example')
 
+    def _immutable_field(self, field):
+        if 'immutable_fields' in self._hints:
+            try:
+                s = self._hints['immutable_fields'].fields[field]
+                return s or True
+            except KeyError:
+                pass
+        return self._hints.get('immutable', False)
+
 class RttiStruct(Struct):
     _runtime_type_info = None
 
+    def _install_extras(self, rtti=False, **kwds):
+        if rtti:
+            self._runtime_type_info = opaqueptr(RuntimeTypeInfo,
+                                                name=self._name,
+                                                about=self)._obj
+        Struct._install_extras(self, **kwds)
+
     def _attach_runtime_type_info_funcptr(self, funcptr, destrptr):
         if self._runtime_type_info is None:
-            self._runtime_type_info = opaqueptr(RuntimeTypeInfo, name=self._name, about=self)._obj
+            raise TypeError("attachRuntimeTypeInfo: %r must have been built "
+                            "with the rtti=True argument" % (self,))
         if funcptr is not None:
             T = typeOf(funcptr)
             if (not isinstance(T, Ptr) or
@@ -367,6 +400,9 @@ class Array(ContainerType):
     def _container_example(self):
         return _array(self, 1, initialization='example')
 
+    def _immutable_field(self, index=None):
+        return self._hints.get('immutable', False)
+
 class GcArray(Array):
     _gckind = 'gc'
     def _inline_is_varsize(self, last):
@@ -376,6 +412,19 @@ class GcArray(Array):
 class FixedSizeArray(Struct):
     # behaves more or less like a Struct with fields item0, item1, ...
     # but also supports __getitem__(), __setitem__(), __len__().
+
+    _cache = weakref.WeakValueDictionary() # cache the length-1 FixedSizeArrays
+    def __new__(cls, OF, length, **kwds):
+        if length == 1 and not kwds:
+            try:
+                obj = FixedSizeArray._cache[OF]
+            except KeyError:
+                obj = FixedSizeArray._cache[OF] = Struct.__new__(cls)
+            except TypeError:
+                obj = Struct.__new__(cls)
+        else:
+            obj = Struct.__new__(cls)
+        return obj
 
     def __init__(self, OF, length, **kwds):
         fields = [('item%d' % i, OF) for i in range(length)]
@@ -586,11 +635,22 @@ UniChar  = Primitive("UniChar", u'\x00')
 class Ptr(LowLevelType):
     __name__ = property(lambda self: '%sPtr' % self.TO.__name__)
 
-    def __init__(self, TO):
+    _cache = weakref.WeakValueDictionary()  # cache the Ptrs
+    def __new__(cls, TO, use_cache=True):
         if not isinstance(TO, ContainerType):
             raise TypeError, ("can only point to a Container type, "
                               "not to %s" % (TO,))
-        self.TO = TO
+        if not use_cache:
+            obj = LowLevelType.__new__(cls)
+        else:
+            try:
+                return Ptr._cache[TO]
+            except KeyError:
+                obj = Ptr._cache[TO] = LowLevelType.__new__(cls)
+            except TypeError:
+                obj = LowLevelType.__new__(cls)
+        obj.TO = TO
+        return obj
 
     def _needsgc(self):
         # XXX deprecated interface
@@ -1320,20 +1380,40 @@ class _parentable(_container):
     __slots__ = ('_TYPE',
                  '_parent_type', '_parent_index', '_keepparent',
                  '_wrparent',
-                 '__weakref__',
-                 '_storage')
+                 '__weakref__', '_traceback',
+                 '__storage')
 
-    def __init__(self, TYPE):
+    def __init__(self, TYPE, track_allocation=None):
         self._wrparent = None
         self._TYPE = TYPE
         self._storage = True    # means "use default storage", as opposed to:
                                 #    None            - container was freed
                                 #    <ctypes object> - using ctypes
                                 #                      (see ll2ctypes.py)
+        if track_allocation is not False and TRACK_ALLOCATIONS:
+            self._traceback = self._get_traceback()
+            ALLOCATED[self] = None
+        else:
+            self._traceback = None
+
+    def _get_traceback(self):
+        frame = sys._getframe().f_back.f_back.f_back.f_back
+        sio = StringIO.StringIO()
+        traceback.print_stack(frame, file=sio)
+        return sio.getvalue()
 
     def _free(self):
         self._check()   # no double-frees
         self._storage = None
+
+    def _storage_get(self):
+        return self.__storage
+
+    def _storage_set(self, value):
+        self.__storage = value
+        if value is not True and self in ALLOCATED:
+            del ALLOCATED[self]
+    _storage = property(_storage_get, _storage_set)
 
     def _was_freed(self):
         if self._storage is None:
@@ -1411,14 +1491,14 @@ def _get_empty_instance_of_struct_variety(flds):
 class _struct(_parentable):
     _kind = "structure"
 
-    __slots__ = ('_hash_cache_',)
+    __slots__ = ('_hash_cache_', '_compilation_info')
 
-    def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
+    def __new__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None, track_allocation=None):
         my_variety = _struct_variety(TYPE._names)
         return object.__new__(my_variety)
 
-    def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None):
-        _parentable.__init__(self, TYPE)
+    def __init__(self, TYPE, n=None, initialization=None, parent=None, parentindex=None, track_allocation=None):
+        _parentable.__init__(self, TYPE, track_allocation)
         if n is not None and TYPE._arrayfld is None:
             raise TypeError("%r is not variable-sized" % (TYPE,))
         if n is None and TYPE._arrayfld is not None:
@@ -1426,7 +1506,8 @@ class _struct(_parentable):
         first, FIRSTTYPE = TYPE._first_struct()
         for fld, typ in TYPE._flds.items():
             if fld == TYPE._arrayfld:
-                value = _array(typ, n, initialization=initialization, parent=self, parentindex=fld)
+                value = _array(typ, n, initialization=initialization, parent=self, parentindex=fld,
+                               track_allocation=track_allocation)
             else:
                 value = typ._allocate(initialization=initialization, parent=self, parentindex=fld)
             setattr(self, fld, value)
@@ -1487,14 +1568,19 @@ class _array(_parentable):
 
     __slots__ = ('items',)
 
-    def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None):
+    def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None, track_allocation=None):
         if not isinstance(n, int):
             raise TypeError, "array length must be an int"
         if n < 0:
             raise ValueError, "negative array length"
-        _parentable.__init__(self, TYPE)
-        self.items = [TYPE.OF._allocate(initialization=initialization, parent=self, parentindex=j)
-                      for j in range(n)]
+        _parentable.__init__(self, TYPE, track_allocation)
+        try:
+            myrange = range(n)
+        except OverflowError:
+            raise MemoryError("definitely too many items")
+        self.items = [TYPE.OF._allocate(initialization=initialization,
+                                        parent=self, parentindex=j)
+                      for j in myrange]
         if parent is not None:
             self._setparentstructure(parent, parentindex)
 
@@ -1554,7 +1640,7 @@ class _subarray(_parentable):     # only for direct_fieldptr()
     _cache = weakref.WeakKeyDictionary()  # parentarray -> {subarrays}
 
     def __init__(self, TYPE, parent, baseoffset_or_fieldname):
-        _parentable.__init__(self, TYPE)
+        _parentable.__init__(self, TYPE, track_allocation=False)
         self._setparentstructure(parent, baseoffset_or_fieldname)
         # Keep the parent array alive, we share the same allocation.
         # Don't do it if we are inside a GC object, though -- it's someone
@@ -1784,9 +1870,9 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False):
     else:
         initialization = 'malloc'
     if isinstance(T, Struct):
-        o = _struct(T, n, initialization=initialization)
+        o = _struct(T, n, initialization=initialization, track_allocation=flavor == "raw" and not immortal)
     elif isinstance(T, Array):
-        o = _array(T, n, initialization=initialization)
+        o = _array(T, n, initialization=initialization, track_allocation=flavor == "raw" and not immortal)
     elif isinstance(T, OpaqueType):
         assert n is None
         o = _opaque(T, initialization=initialization)
@@ -1834,7 +1920,8 @@ def cast_ptr_to_int(ptr):
 def cast_int_to_ptr(PTRTYPE, oddint):
     if oddint == 0:
         return nullptr(PTRTYPE.TO)
-    assert oddint & 1, "only odd integers can be cast back to ptr"
+    if not (oddint & 1):
+        raise ValueError("only odd integers can be cast back to ptr")
     return _ptr(PTRTYPE, oddint, solid=True)
 
 def attachRuntimeTypeInfo(GCSTRUCT, funcptr=None, destrptr=None):
@@ -1935,10 +2022,10 @@ class staticAdtMethod(object):
 
 def dissect_ll_instance(v, t=None, memo=None):
     if memo is None:
-        memo = {}
-    if id(v) in memo:
+        memo = identity_dict()
+    if v in memo:
         return
-    memo[id(v)] = True
+    memo[v] = True
     if t is None:
         t = typeOf(v)
     yield t, v

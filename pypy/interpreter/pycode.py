@@ -4,7 +4,7 @@ PyCode instances have the same co_xxx arguments as CPython code objects.
 The bytecode interpreter itself is implemented by the PyFrame class.
 """
 
-import dis, imp, struct, types, new
+import dis, imp, struct, types, new, sys
 
 from pypy.interpreter import eval
 from pypy.interpreter.argument import Signature
@@ -13,7 +13,7 @@ from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root
 from pypy.interpreter.astcompiler.consts import (CO_OPTIMIZED,
     CO_OPTIMIZED, CO_NEWLOCALS, CO_VARARGS, CO_VARKEYWORDS, CO_NESTED,
-    CO_GENERATOR, CO_CONTAINSLOOP, CO_CONTAINSGLOBALS)
+    CO_GENERATOR, CO_CONTAINSGLOBALS)
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.debug import make_sure_not_resized, make_sure_not_modified
 from pypy.rlib import jit
@@ -117,6 +117,11 @@ class PyCode(eval.Code):
 
         self._compute_flatcall()
 
+    def _freeze_(self):
+        if (self.magic == cpython_magic and
+            '__pypy__' not in sys.builtin_module_names):
+            raise Exception("CPython host codes should not be rendered")
+        return False
 
     def _init_flags(self):
         co_code = self.co_code
@@ -129,9 +134,7 @@ class PyCode(eval.Code):
             while opcode == opcodedesc.EXTENDED_ARG.index:
                 opcode = ord(co_code[next_instr])
                 next_instr += 3
-            if opcode == opcodedesc.JUMP_ABSOLUTE.index:
-                self.co_flags |= CO_CONTAINSLOOP
-            elif opcode == opcodedesc.LOAD_GLOBAL.index:
+            if opcode == opcodedesc.LOAD_GLOBAL.index:
                 self.co_flags |= CO_CONTAINSGLOBALS
             elif opcode == opcodedesc.LOAD_NAME.index:
                 self.co_flags |= CO_CONTAINSGLOBALS
@@ -220,15 +223,10 @@ class PyCode(eval.Code):
 
     def getdocstring(self, space):
         if self.co_consts_w:   # it is probably never empty
-            return self.co_consts_w[0]
-        else:
-            return space.w_None
-
-    def getjoinpoints(self):
-        """Compute the bytecode positions that are potential join points
-        (for FlowObjSpace)"""
-        # first approximation
-        return dis.findlabels(self.co_code)
+            w_first = self.co_consts_w[0]
+            if space.is_true(space.isinstance(w_first, space.w_basestring)):
+                return w_first
+        return space.w_None
 
     def _to_code(self):
         """For debugging only."""

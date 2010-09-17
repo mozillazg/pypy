@@ -1,5 +1,5 @@
 import array, weakref
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import llmemory
 
 # An "arena" is a large area of memory which can hold a number of
 # objects, not necessarily all of the same type or size.  It's used by
@@ -223,7 +223,8 @@ class fakearenaaddress(llmemory.fakeaddress):
         else:
             return self.arena._getid() < arena._getid()
 
-    def _cast_to_int(self):
+    def _cast_to_int(self, symbolic=False):
+        assert not symbolic
         return self.arena._getid() + self.offset
 
 
@@ -357,12 +358,15 @@ if sys.platform == 'linux2':
     # usage hint but a real command.  It guarantees that after MADV_DONTNEED
     # the pages are cleared again.
     from pypy.rpython.tool import rffi_platform
+    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    _eci = ExternalCompilationInfo(includes=['sys/mman.h'])
     MADV_DONTNEED = rffi_platform.getconstantinteger('MADV_DONTNEED',
                                                      '#include <sys/mman.h>')
     linux_madvise = rffi.llexternal('madvise',
                                     [llmemory.Address, rffi.SIZE_T, rffi.INT],
                                     rffi.INT,
-                                    sandboxsafe=True, _nowrapper=True)
+                                    sandboxsafe=True, _nowrapper=True,
+                                    compilation_info=_eci)
     linux_getpagesize = rffi.llexternal('getpagesize', [], rffi.INT,
                                         sandboxsafe=True, _nowrapper=True)
 

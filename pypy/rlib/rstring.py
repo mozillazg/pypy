@@ -1,10 +1,48 @@
-
-""" String builder interface
+""" String builder interface and string functions
 """
 
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation.model import SomeObject, SomeString, s_None,\
      SomeChar, SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString
+
+
+# -------------- public API for string functions -----------------------
+def split(value, by, maxsplit=-1):
+    bylen = len(by)
+    if bylen == 0:
+        raise ValueError("empty separator")
+
+    res = []
+    start = 0
+    while maxsplit != 0:
+        next = value.find(by, start)
+        if next < 0:
+            break
+        res.append(value[start:next])
+        start = next + bylen
+        maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+    res.append(value[start:len(value)])
+    return res
+
+def rsplit(value, by, maxsplit=-1):
+    res = []
+    end = len(value)
+    bylen = len(by)
+    if bylen == 0:
+        raise ValueError("empty separator")
+
+    while maxsplit != 0:
+        next = value.rfind(by, 0, end)
+        if next < 0:
+            break
+        res.append(value[next+bylen:end])
+        end = next
+        maxsplit -= 1   # NB. if it's already < 0, it stays < 0
+
+    res.append(value[:end])
+    res.reverse()
+    return res
 
 # -------------- public API ---------------------------------
 
@@ -18,6 +56,7 @@ class AbstractStringBuilder(object):
         self.l.append(s)
 
     def append_slice(self, s, start, end):
+        assert 0 <= start <= end <= len(s)
         self.l.append(s[start:end])
 
     def append_multiple_char(self, c, times):

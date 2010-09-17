@@ -4,17 +4,20 @@
 
 from pypy.translator.platform import Platform, log, _run_subprocess
 from pypy.tool import autopath
-import py, os
+import py, os, sys
 
 class BasePosix(Platform):
     exe_ext = ''
     make_cmd = 'make'
 
-    relevant_environ=['CPATH', 'LIBRARY_PATH', 'C_INCLUDE_PATH']
+    relevant_environ = ('CPATH', 'LIBRARY_PATH', 'C_INCLUDE_PATH')
 
     def __init__(self, cc=None):
         if cc is None:
-            cc = 'gcc'
+            try:
+                cc = os.environ['CC']
+            except KeyError:
+                cc = 'gcc'
         self.cc = cc
 
     def _libs(self, libraries):
@@ -32,22 +35,50 @@ class BasePosix(Platform):
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='o')
         args = ['-c'] + compile_args + [str(cfile), '-o', str(oname)]
-        self._execute_c_compiler(cc, args, oname)
+        self._execute_c_compiler(cc, args, oname,
+                                 cwd=str(cfile.dirpath()))
         return oname
+
+    def _link_args_from_eci(self, eci, standalone):
+        return Platform._link_args_from_eci(self, eci, standalone)
+
+    def _exportsymbols_link_flags(self, eci, relto=None):
+        if not eci.export_symbols:
+            return []
+
+        response_file = self._make_response_file("dynamic-symbols-")
+        f = response_file.open("w")
+        f.write("{\n")
+        for sym in eci.export_symbols:
+            f.write("%s;\n" % (sym,))
+        f.write("};")
+        f.close()
+
+        if relto:
+            response_file = relto.bestrelpath(response_file)
+        return ["-Wl,--export-dynamic,--version-script=%s" % (response_file,)]
 
     def _link(self, cc, ofiles, link_args, standalone, exe_name):
         args = [str(ofile) for ofile in ofiles] + link_args
         args += ['-o', str(exe_name)]
         if not standalone:
             args = self._args_for_shared(args)
-        self._execute_c_compiler(cc, args, exe_name)
+        self._execute_c_compiler(cc, args, exe_name,
+                                 cwd=str(exe_name.dirpath()))
         return exe_name
 
-    def _preprocess_dirs(self, include_dirs):
-        # hook for maemo
-        return include_dirs
+    def _pkg_config(self, lib, opt, default):
+        try:
+            ret, out, err = _run_subprocess("pkg-config", [lib, opt])
+        except OSError:
+            ret = 1
+        if ret:
+            return default
+        # strip compiler flags
+        return [entry[2:] for entry in out.split()]
 
-    def gen_makefile(self, cfiles, eci, exe_name=None, path=None):
+    def gen_makefile(self, cfiles, eci, exe_name=None, path=None,
+                     shared=False):
         cfiles = [py.path.local(f) for f in cfiles]
         cfiles += [py.path.local(f) for f in eci.separate_module_files]
 
@@ -58,6 +89,27 @@ class BasePosix(Platform):
 
         if exe_name is None:
             exe_name = cfiles[0].new(ext=self.exe_ext)
+        else:
+            exe_name = exe_name.new(ext=self.exe_ext)
+
+        linkflags = list(self.link_flags)
+        if shared:
+            linkflags = self._args_for_shared(linkflags)
+
+        linkflags += self._exportsymbols_link_flags(eci, relto=path)
+
+        if shared:
+            libname = exe_name.new(ext='').basename
+            target_name = 'lib' + exe_name.new(ext=self.so_ext).basename
+        else:
+            target_name = exe_name.basename
+
+        cflags = self.cflags
+        if sys.maxint > 2147483647:   # XXX XXX XXX sort this out
+            if shared:
+                cflags = self.cflags + self.shared_only
+            else:
+                cflags = self.cflags + self.standalone_only
 
         m = GnuMakefile(path)
         m.exe_name = exe_name
@@ -75,20 +127,22 @@ class BasePosix(Platform):
         m.cfiles = rel_cfiles
 
         rel_includedirs = [pypyrel(incldir) for incldir in
-                           self._preprocess_dirs(eci.include_dirs)]
+                           self._preprocess_include_dirs(eci.include_dirs)]
 
         m.comment('automatically generated makefile')
         definitions = [
             ('PYPYDIR', autopath.pypydir),
-            ('TARGET', exe_name.basename),
-            ('DEFAULT_TARGET', '$(TARGET)'),
+            ('TARGET', target_name),
+            ('DEFAULT_TARGET', exe_name.basename),
             ('SOURCES', rel_cfiles),
             ('OBJECTS', rel_ofiles),
             ('LIBS', self._libs(eci.libraries)),
             ('LIBDIRS', self._libdirs(eci.library_dirs)),
             ('INCLUDEDIRS', self._includedirs(rel_includedirs)),
-            ('CFLAGS', self.cflags + list(eci.compile_extra)),
-            ('LDFLAGS', self.link_flags + list(eci.link_extra)),
+            ('CFLAGS', cflags),
+            ('CFLAGSEXTRA', list(eci.compile_extra)),
+            ('LDFLAGS', linkflags),
+            ('LDFLAGSEXTRA', list(eci.link_extra)),
             ('CC', self.cc),
             ('CC_LINK', eci.use_cpp_linker and 'g++' or '$(CC)'),
             ('LINKFILES', eci.link_files),
@@ -98,22 +152,34 @@ class BasePosix(Platform):
 
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
-            ('$(TARGET)', '$(OBJECTS)', '$(CC_LINK) $(LDFLAGS) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS) $(LINKFILES)'),
-            ('%.o', '%.c', '$(CC) $(CFLAGS) -o $@ -c $< $(INCLUDEDIRS)'),
+            ('$(TARGET)', '$(OBJECTS)', '$(CC_LINK) $(LDFLAGS) $(LDFLAGSEXTRA) -o $@ $(OBJECTS) $(LIBDIRS) $(LIBS) $(LINKFILES)'),
+            ('%.o', '%.c', '$(CC) $(CFLAGS) $(CFLAGSEXTRA) -o $@ -c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
             m.rule(*rule)
 
+        if shared:
+            m.definition('SHARED_IMPORT_LIB', libname),
+            m.definition('PYPY_MAIN_FUNCTION', "pypy_main_startup")
+            m.rule('main.c', '',
+                   'echo "'
+                   'int $(PYPY_MAIN_FUNCTION)(int, char*[]); '
+                   'int main(int argc, char* argv[]) '
+                   '{ return $(PYPY_MAIN_FUNCTION)(argc, argv); }" > $@')
+            m.rule('$(DEFAULT_TARGET)', ['$(TARGET)', 'main.o'],
+                   '$(CC_LINK) main.o -L. -l$(SHARED_IMPORT_LIB) -o $@')
+
         return m
 
-    def execute_makefile(self, path_to_makefile):
+    def execute_makefile(self, path_to_makefile, extra_opts=[]):
         if isinstance(path_to_makefile, GnuMakefile):
             path = path_to_makefile.makefile_dir
         else:
             path = path_to_makefile
-        log.execute('make in %s' % (path,))
-        returncode, stdout, stderr = _run_subprocess(self.make_cmd, ['-C', str(path)])
+        log.execute('make %s in %s' % (" ".join(extra_opts), path))
+        returncode, stdout, stderr = _run_subprocess(
+            self.make_cmd, ['-C', str(path)] + extra_opts)
         self._handle_error(returncode, stdout, stderr, path.join('make'))
 
 class Definition(object):
@@ -123,6 +189,7 @@ class Definition(object):
 
     def write(self, f):
         def write_list(prefix, lst):
+            lst = lst or ['']
             for i, fn in enumerate(lst):
                 fn = fn.replace('\\', '\\\\')
                 print >> f, prefix, fn,
@@ -136,9 +203,8 @@ class Definition(object):
             f.write('%s = %s\n' % (name, value.replace('\\', '\\\\')))
         else:
             write_list('%s =' % (name,), value)
-        if value:
-            f.write('\n')
-        
+        f.write('\n')
+
 class Rule(object):
     def __init__(self, target, deps, body):
         self.target = target

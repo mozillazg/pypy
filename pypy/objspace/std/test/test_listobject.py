@@ -2,9 +2,10 @@ import random
 from pypy.objspace.std.listobject import W_ListObject
 from pypy.interpreter.error import OperationError
 
+from pypy.conftest import gettestobjspace
 
 
-class TestW_ListObject:
+class TestW_ListObject(object):
 
     def test_is_true(self):
         w = self.space.wrap
@@ -341,7 +342,7 @@ class TestW_ListObject:
                            self.space.w_True)
 
 
-class AppTestW_ListObject:
+class AppTestW_ListObject(object):
     def test_call_list(self):
         assert list('') == []
         assert list('abc') == ['a', 'b', 'c']
@@ -575,6 +576,12 @@ class AppTestW_ListObject:
         l *= 2
         assert l == [0, 1, 0, 1]
 
+    def test_mul_errors(self):
+        try:
+            [1, 2, 3] * (3,)
+        except TypeError:
+            pass
+
     def test_index(self):
         c = range(10)
         assert c.index(0) == 0
@@ -769,3 +776,18 @@ class AppTestW_ListObject:
         l = [1,2,3,4]
         l.__delslice__(0, 2)
         assert l == [3, 4]
+
+
+class AppTestListFastSubscr:
+
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.optimized_list_getitem" :
+                                       True})
+
+    def test_getitem(self):
+        import operator
+        l = [0, 1, 2, 3, 4]
+        for i in xrange(5):
+            assert l[i] == i
+        assert l[3:] == [3, 4]
+        raises(TypeError, operator.getitem, l, "str")

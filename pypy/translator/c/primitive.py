@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem import rffi, llgroup
 from pypy.rpython.lltypesystem.llmemory import Address, \
      AddressOffset, ItemOffset, ArrayItemsOffset, FieldOffset, \
      CompositeOffset, ArrayLengthOffset, \
-     GCHeaderOffset, GCREF
+     GCHeaderOffset, GCREF, AddressAsInt
 from pypy.rpython.lltypesystem.llarena import RoundedUpForAllocation
 from pypy.translator.c.support import cdecl, barebonearray
 
@@ -58,7 +58,11 @@ def name_signed(value, db):
         elif isinstance(value, ComputedIntSymbolic):
             value = value.compute_fn()
         elif isinstance(value, llgroup.CombinedSymbolic):
-            return '(%s|%dL)' % (name_ushort(value.lowpart, db), value.rest)
+            name = name_small_integer(value.lowpart, db)
+            assert (value.rest & value.MASK) == 0
+            return '(%s+%dL)' % (name, value.rest)
+        elif isinstance(value, AddressAsInt):
+            return '((long)%s)' % name_address(value.adr, db)
         else:
             raise Exception("unimplemented symbolic %r"%value)
     if value is None:
@@ -93,7 +97,9 @@ def name_float(value, db):
     elif isnan(value):
         return '(Py_HUGE_VAL/Py_HUGE_VAL)'
     else:
-        return repr(value)
+        x = repr(value)
+        assert not x.startswith('n')
+        return x
 
 def name_singlefloat(value, db):
     value = float(value)
@@ -139,7 +145,8 @@ def name_gcref(value, db):
     else:
         return 'NULL'
 
-def name_ushort(value, db):
+def name_small_integer(value, db):
+    """Works for integers of size at most INT or UINT."""
     if isinstance(value, Symbolic):
         if isinstance(value, llgroup.GroupMemberOffset):
             groupnode = db.getcontainernode(value.grpptr._as_obj())
@@ -166,7 +173,6 @@ PrimitiveName = {
     Void:     name_void,
     Address:  name_address,
     GCREF:    name_gcref,
-    rffi.USHORT: name_ushort,
     }
 
 PrimitiveType = {
@@ -182,27 +188,26 @@ PrimitiveType = {
     Void:     'void @',
     Address:  'void* @',
     GCREF:    'void* @',
-    rffi.USHORT: 'unsigned short @',
     }
 
-def define_c_primitive(ll_type, c_name):
+def define_c_primitive(ll_type, c_name, suffix=''):
     if ll_type in PrimitiveName:
         return
-    if ll_type._cast(-1) > 0:
-        name_str = '((%s) %%dULL)' % c_name
+    if suffix == '':
+        PrimitiveName[ll_type] = name_small_integer
     else:
-        name_str = '((%s) %%dLL)' % c_name
-    PrimitiveName[ll_type] = lambda value, db: name_str % value
+        name_str = '((%s) %%d%s)' % (c_name, suffix)
+        PrimitiveName[ll_type] = lambda value, db: name_str % value
     PrimitiveType[ll_type] = '%s @'% c_name
-    
-for ll_type, c_name in [(rffi.SIGNEDCHAR, 'signed char'),
-                        (rffi.UCHAR, 'unsigned char'),
-                        (rffi.SHORT, 'short'),
-                        #(rffi.USHORT, 'unsigned short'),
-                        (rffi.INT, 'int'),
-                        (rffi.UINT, 'unsigned int'),
-                        (rffi.LONG, 'long'),
-                        (rffi.ULONG, 'unsigned long'),
-                        (rffi.LONGLONG, 'long long'),
-                        (rffi.ULONGLONG, 'unsigned long long')]:
-    define_c_primitive(ll_type, c_name)
+
+define_c_primitive(rffi.SIGNEDCHAR, 'signed char')
+define_c_primitive(rffi.UCHAR, 'unsigned char')
+define_c_primitive(rffi.SHORT, 'short')
+define_c_primitive(rffi.USHORT, 'unsigned short')
+define_c_primitive(rffi.INT, 'int')
+define_c_primitive(rffi.INT_real, 'int')
+define_c_primitive(rffi.UINT, 'unsigned int')
+define_c_primitive(rffi.LONG, 'long', 'L')
+define_c_primitive(rffi.ULONG, 'unsigned long', 'UL')
+define_c_primitive(rffi.LONGLONG, 'long long', 'LL')
+define_c_primitive(rffi.ULONGLONG, 'unsigned long long', 'ULL')

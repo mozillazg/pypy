@@ -13,14 +13,16 @@ from pypy.rpython.lltypesystem.lltype import \
      Ptr, Struct, GcStruct, malloc, \
      cast_pointer, cast_ptr_to_int, castable, nullptr, \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
-     Array, Char, Void, attachRuntimeTypeInfo, \
-     FuncType, Bool, Signed, functionptr, FuncType, PyObject
+     Array, Char, Void, \
+     FuncType, Bool, Signed, functionptr, PyObject
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import objectmodel
+from pypy.tool.identity_dict import identity_dict
+from pypy.rpython.lltypesystem.lloperation import llop
 
 #
 #  There is one "vtable" per user class, with the following structure:
@@ -59,7 +61,8 @@ OBJECT_VTABLE = lltype.ForwardReference()
 CLASSTYPE = Ptr(OBJECT_VTABLE)
 OBJECT = GcStruct('object', ('typeptr', CLASSTYPE),
                   hints = {'immutable': True, 'shouldntbenull': True,
-                           'typeptr': True})
+                           'typeptr': True},
+                  rtti = True)
 OBJECTPTR = Ptr(OBJECT)
 OBJECT_VTABLE.become(Struct('object_vtable',
                             #('parenttypeptr', CLASSTYPE),
@@ -71,7 +74,7 @@ OBJECT_VTABLE.become(Struct('object_vtable',
                             hints = {'immutable': True}))
 # non-gc case
 NONGCOBJECT = Struct('nongcobject', ('typeptr', CLASSTYPE))
-NONGCOBJECTPTR = Ptr(OBJECT)
+NONGCOBJECTPTR = Ptr(NONGCOBJECT)
 
 OBJECT_BY_FLAVOR = {'gc': OBJECT,
                     'raw': NONGCOBJECT}
@@ -310,7 +313,7 @@ class InstanceRepr(AbstractInstanceRepr):
             ForwardRef = lltype.FORWARDREF_BY_FLAVOR[LLFLAVOR[gcflavor]]
             self.object_type = ForwardRef()
             
-        self.prebuiltinstances = {}   # { id(x): (x, _ptr) }
+        self.iprebuiltinstances = identity_dict()
         self.lowleveltype = Ptr(self.object_type)
         self.gcflavor = gcflavor
 
@@ -347,18 +350,20 @@ class InstanceRepr(AbstractInstanceRepr):
             if hints is None:
                 hints = {}
             hints = self._check_for_immutable_hints(hints)
+            kwds = {}
+            if self.gcflavor == 'gc':
+                kwds['rtti'] = True
             object_type = MkStruct(self.classdef.name,
                                    ('super', self.rbase.object_type),
                                    hints=hints,
                                    adtmeths=adtmeths,
-                                   *llfields)
+                                   *llfields,
+                                   **kwds)
             self.object_type.become(object_type)
             allinstancefields.update(self.rbase.allinstancefields)
         allinstancefields.update(fields)
         self.fields = fields
         self.allinstancefields = allinstancefields
-        if self.gcflavor == 'gc':
-            attachRuntimeTypeInfo(self.object_type)
 
     def _setup_repr_final(self):
         AbstractInstanceRepr._setup_repr_final(self)
@@ -641,10 +646,12 @@ def ll_type(obj):
     return cast_pointer(OBJECTPTR, obj).typeptr
 
 def ll_issubclass(subcls, cls):
-    return cls.subclassrange_min <= subcls.subclassrange_min <= cls.subclassrange_max
+    return llop.int_between(Bool, cls.subclassrange_min,
+                                  subcls.subclassrange_min,
+                                  cls.subclassrange_max)
 
 def ll_issubclass_const(subcls, minid, maxid):
-    return minid <= subcls.subclassrange_min <= maxid
+    return llop.int_between(Bool, minid, subcls.subclassrange_min, maxid)
 
 
 def ll_isinstance(obj, cls): # obj should be cast to OBJECT or NONGCOBJECT

@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
+from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 
 def import_ctypes():
     try:
@@ -256,3 +257,120 @@ def test_external_lib():
         library_dirs = [str(tmpdir)]
         )
     rffi_platform.verify_eci(eci)
+
+def test_generate_padding():
+    # 'padding_drop' is a bit strange, but is what we need to write C code
+    # that defines prebuilt structures of that type.  Normally, the C
+    # backend would generate '0' entries for every field c__pad#.  That's
+    # usually much more than the number of real fields in the real structure
+    # definition.  So 'padding_drop' allows a quick fix: it lists fields
+    # that should be ignored by the C backend.  It should only be used in
+    # that situation because it lists some of the c__pad# fields a bit
+    # randomly -- to the effect that writing '0' for the other fields gives
+    # the right amount of '0's.
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;        /* followed by one byte of padding */
+                short s1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("s1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0',)
+    d = {'c_c1': 'char', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad0']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                char c2;  /* _pad0 */
+                short s1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("s1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0',)
+    d = {'c_c1': 'char', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == []
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                char c2;  /* _pad0 */
+                /* _pad1, _pad2 */
+                int i1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("i1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                char c2;  /* _pad0 */
+                char c3;  /* _pad1 */
+                /* _pad2 */
+                int i1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("i1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad2']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                /* _pad0 */
+                short s1;  /* _pad1, _pad2 */
+                int i1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("i1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2')
+    d = {'c_c1': 'char', 'c_i1': 'int'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                char c2;  /* _pad0 */
+                /* _pad1, _pad2 */
+                int i1;
+                char c3;  /* _pad3 */
+                /* _pad4 */
+                short s1;
+           } foobar_t;
+           """, [("c1", lltype.Signed),
+                 ("i1", lltype.Signed),
+                 ("s1", lltype.Signed)])
+    assert S._hints['padding'] == ('c__pad0', 'c__pad1', 'c__pad2',
+                                   'c__pad3', 'c__pad4')
+    d = {'c_c1': 'char', 'c_i1': 'int', 'c_s1': 'short'}
+    assert S._hints['get_padding_drop'](d) == ['c__pad1', 'c__pad2', 'c__pad4']
+    #
+    S = rffi_platform.getstruct("foobar_t", """
+           typedef struct {
+                char c1;
+                long l2;  /* some number of _pads */
+           } foobar_t;
+           """, [("c1", lltype.Signed)])
+    padding = list(S._hints['padding'])
+    d = {'c_c1': 'char'}
+    assert S._hints['get_padding_drop'](d) == padding
+
+def test_expose_value_as_rpython():
+    def get(x):
+        x = rffi_platform.expose_value_as_rpython(x)
+        return (x, type(x))
+    assert get(5) == (5, int)
+    assert get(-82) == (-82, int)
+    assert get(sys.maxint) == (sys.maxint, int)
+    assert get(sys.maxint+1) == (sys.maxint+1, r_uint)
+    if sys.maxint == 2147483647:
+        assert get(9999999999) == (9999999999, r_longlong)
+        assert get(-9999999999) == (-9999999999, r_longlong)
+        assert get(2**63) == (2**63, r_ulonglong)
+        assert get(-2**63) == (-2**63, r_longlong)
+    py.test.raises(OverflowError, get, -2**63-1)
+    py.test.raises(OverflowError, get, 2**64)

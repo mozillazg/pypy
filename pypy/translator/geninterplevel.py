@@ -62,7 +62,7 @@ from pypy.tool.sourcetools import render_docstr, NiceCompile
 
 from pypy.translator.gensupp import ordered_blocks, UniqueList, builtin_base, \
      uniquemodulename, C_IDENTIFIER, NameManager
-
+from pypy.tool.identity_dict import identity_dict
 
 import pypy # __path__
 import py.path
@@ -71,7 +71,7 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("geninterp")
 py.log.setconsumer("geninterp", ansi_log)
 
-GI_VERSION = '1.2.7'  # bump this for substantial changes
+GI_VERSION = '1.2.8'  # bump this for substantial changes
 # ____________________________________________________________
 
 try:
@@ -161,11 +161,11 @@ class GenRpy:
                          Constant(OperationError).key: late_OperationError,
                          Constant(Arguments).key: late_Arguments,
                        }
-        u = UniqueList
-        self.initcode = u()    # list of lines for the module's initxxx()
-        self.latercode = u()   # list of generators generating extra lines
-                               #   for later in initxxx() -- for recursive
-                               #   objects
+        self.initcode = UniqueList() # list of lines for the module's initxxx()
+        self.latercode = UniqueList()
+        # list of generators generating extra lines
+        #   for later in initxxx() -- for recursive
+        #   objects
         self.namespace = NameManager()
         self.namespace.make_reserved_names('__doc__ __args__ space goto')
         self.globaldecl = []
@@ -194,8 +194,9 @@ class GenRpy:
             def __repr__(self):
                 return '<%s>' % self.__name__
             
-        self.builtin_ids = dict( [
-            (id(value), bltinstub(key))
+        self.ibuiltin_ids = identity_dict()
+        self.ibuiltin_ids.update([
+            (value, bltinstub(key))
             for key, value in __builtin__.__dict__.items()
             if callable(value) and type(value) not in [types.ClassType, type] ] )
         
@@ -391,8 +392,8 @@ class GenRpy:
                 name = self.nameof_instance(obj)
             else:
                 # shortcutting references to __builtin__
-                if id(obj) in self.builtin_ids:
-                    func = self.builtin_ids[id(obj)]
+                if obj in self.ibuiltin_ids:
+                    func = self.ibuiltin_ids[obj]
                     #name = self.get_nameof_builtin_func(func)
                     # the above is quicker in principle, but pulls more
                     # stuff in, so it is slower right now.
@@ -495,21 +496,22 @@ else:
             need_extra_path = True
         name = self.uniquename('mod_%s' % value.__name__)
         if need_extra_path:
-            self.initcode.append1('import pypy')
-            self.initcode.append1('import sys')
-            self.initcode.append1('import os')
-            self.initcode.append1('for pkgdir in pypy.__path__:\n'
-                                  '    libdir = os.path.join(pkgdir, "lib")\n'
-                                  '    if os.path.isdir(libdir):\n'
-                                  '        break\n'
-                                  'else:\n'
-                                  '    raise Exception, "cannot find pypy/lib directory"\n'
-                                  'sys.path.insert(0, libdir)\n')
-            self.initcode.append1('try:\n'
-                                  '    import %s as _tmp\n'
-                                  'finally:\n'
-                                  '    if libdir in sys.path:\n'
-                                  '        sys.path.remove(libdir)\n' % value.__name__)
+            assert False
+            ## self.initcode.append1('import pypy')
+            ## self.initcode.append1('import sys')
+            ## self.initcode.append1('import os')
+            ## self.initcode.append1('for pkgdir in pypy.__path__:\n'
+            ##                       '    libdir = os.path.join(pkgdir, "lib")\n'
+            ##                       '    if os.path.isdir(libdir):\n'
+            ##                       '        break\n'
+            ##                       'else:\n'
+            ##                       '    raise Exception, "cannot find pypy/lib directory"\n'
+            ##                       'sys.path.insert(0, libdir)\n')
+            ## self.initcode.append1('try:\n'
+            ##                       '    import %s as _tmp\n'
+            ##                       'finally:\n'
+            ##                       '    if libdir in sys.path:\n'
+            ##                       '        sys.path.remove(libdir)\n' % value.__name__)
         else:
             self.initcode.append1('import %s as _tmp' % value.__name__)
         self.initcode.append1('%s = space.wrap(_tmp)' % (name))
@@ -705,8 +707,8 @@ else:
         return self._space_arities
         
     def try_space_shortcut_for_builtin(self, v, nargs, args):
-        if isinstance(v, Constant) and id(v.value) in self.builtin_ids:
-            name = self.builtin_ids[id(v.value)].__name__
+        if isinstance(v, Constant) and v.value in self.ibuiltin_ids:
+            name = self.ibuiltin_ids[v.value].__name__
             if hasattr(self.space, name):
                 if self.space_arities().get(name, -1) == nargs:
                     if name != 'isinstance':
@@ -726,8 +728,8 @@ else:
 
     def nameof_builtin_function(self, func):
         # builtin function
-        if id(func) in self.builtin_ids:
-            func = self.builtin_ids[id(func)]
+        if func in self.ibuiltin_ids:
+            func = self.ibuiltin_ids[func]
             return "(space.builtin.get(space.str_w(%s)))" % self.nameof(func.__name__)
         # where does it come from? Python2.2 doesn't have func.__module__
         for modname, module in sys.modules.items():
@@ -1472,12 +1474,10 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
     dic = initfunc(space)
     # and now use the members of the dict
     """
+    from pypy.tool.lib_pypy import LIB_PYPY
     # create something like a module
     if type(sourcetext) is str:
-        if filename is None: 
-            code = py.code.Source(sourcetext).compile()
-        else: 
-            code = NiceCompile(filename)(sourcetext)
+        code = py.code.Source(sourcetext).compile()
     else:
         # assume we got an already compiled source
         code = sourcetext
@@ -1486,12 +1486,7 @@ def translate_as_module(sourcetext, filename=None, modname="app2interpexec",
         dic['__file__'] = filename
 
     # XXX allow the app-level code to contain e.g. "import _formatting"
-    for pkgdir in pypy.__path__:
-        libdir = os.path.join(pkgdir, "lib")
-        if os.path.isdir(libdir):
-            break
-    else:
-        raise Exception, "cannot find pypy/lib directory"
+    libdir = str(LIB_PYPY)
     sys.path.insert(0, libdir)
     try:
         if faked_set:

@@ -2,6 +2,7 @@ from pypy.rlib import rgc
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import fatalerror
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
+from pypy.rpython.lltypesystem import llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
@@ -14,13 +15,12 @@ from pypy.jit.backend.llsupport.descr import BaseSizeDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import GcCache, get_field_descr
 from pypy.jit.backend.llsupport.descr import GcPtrFieldDescr
 from pypy.jit.backend.llsupport.descr import get_call_descr
-from pypy.rlib.rarithmetic import r_ulonglong, r_uint
 
 # ____________________________________________________________
 
 class GcLLDescription(GcCache):
-    def __init__(self, gcdescr, translator=None):
-        GcCache.__init__(self, translator is not None)
+    def __init__(self, gcdescr, translator=None, rtyper=None):
+        GcCache.__init__(self, translator is not None, rtyper)
         self.gcdescr = gcdescr
     def _freeze_(self):
         return True
@@ -41,8 +41,8 @@ class GcLLDescr_boehm(GcLLDescription):
     moving_gc = False
     gcrootmap = None
 
-    def __init__(self, gcdescr, translator):
-        GcLLDescription.__init__(self, gcdescr, translator)
+    def __init__(self, gcdescr, translator, rtyper):
+        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
         # grab a pointer to the Boehm 'malloc' function
         from pypy.rpython.tool import rffi_platform
         compilation_info = rffi_platform.configure_boehm()
@@ -170,7 +170,7 @@ class GcRefList:
         # first look in the hashtable, using an inexact hash (fails after
         # the object moves)
         addr = llmemory.cast_ptr_to_adr(gcref)
-        hash = llmemory.cast_adr_to_int(addr)
+        hash = llmemory.cast_adr_to_int(addr, "forced")
         hash -= hash >> self.HASHTABLE_BITS
         hash &= self.HASHTABLE_SIZE - 1
         addr_ref = self.hashtable[hash]
@@ -251,13 +251,25 @@ class GcRootMap_asmgcc:
         if oldgcmap:
             lltype.free(oldgcmap, flavor='raw')
 
-    def get_basic_shape(self):
-        return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   4(%ebp)
-                chr(self.LOC_EBP_MINUS | 4),    # saved %ebx:  at  -4(%ebp)
-                chr(self.LOC_EBP_MINUS | 8),    # saved %esi:  at  -8(%ebp)
-                chr(self.LOC_EBP_MINUS | 12),   # saved %edi:  at -12(%ebp)
-                chr(self.LOC_EBP_PLUS  | 0),    # saved %ebp:  at    (%ebp)
-                chr(0)]
+    def get_basic_shape(self, is_64_bit=False):
+        # XXX: Should this code even really know about stack frame layout of
+        # the JIT?
+        if is_64_bit:
+            return [chr(self.LOC_EBP_PLUS  | 8),
+                    chr(self.LOC_EBP_MINUS | 8),
+                    chr(self.LOC_EBP_MINUS | 16),
+                    chr(self.LOC_EBP_MINUS | 24),
+                    chr(self.LOC_EBP_MINUS | 32),
+                    chr(self.LOC_EBP_MINUS | 40),
+                    chr(self.LOC_EBP_PLUS  | 0),
+                    chr(0)]
+        else:
+            return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   4(%ebp)
+                    chr(self.LOC_EBP_MINUS | 4),    # saved %ebx:  at  -4(%ebp)
+                    chr(self.LOC_EBP_MINUS | 8),    # saved %esi:  at  -8(%ebp)
+                    chr(self.LOC_EBP_MINUS | 12),   # saved %edi:  at -12(%ebp)
+                    chr(self.LOC_EBP_PLUS  | 0),    # saved %ebp:  at    (%ebp)
+                    chr(0)]
 
     def _encode_num(self, shape, number):
         assert number >= 0
@@ -276,17 +288,9 @@ class GcRootMap_asmgcc:
             num = self.LOC_EBP_MINUS | (-offset)
         self._encode_num(shape, num)
 
-    def add_ebx(self, shape):
-        shape.append(chr(self.LOC_REG | 4))
-
-    def add_esi(self, shape):
-        shape.append(chr(self.LOC_REG | 8))
-
-    def add_edi(self, shape):
-        shape.append(chr(self.LOC_REG | 12))
-
-    def add_ebp(self, shape):
-        shape.append(chr(self.LOC_REG | 16))
+    def add_callee_save_reg(self, shape, reg_index):
+        assert reg_index > 0
+        shape.append(chr(self.LOC_REG | (reg_index << 2)))
 
     def compress_callshape(self, shape):
         # Similar to compress_callshape() in trackgcroot.py.
@@ -310,7 +314,7 @@ class WriteBarrierDescr(AbstractDescr):
         # if convenient for the backend, we also compute the info about
         # the flag as (byte-offset, single-byte-flag).
         import struct
-        value = struct.pack("i", self.jit_wb_if_flag)
+        value = struct.pack("l", self.jit_wb_if_flag)
         assert value.count('\x00') == len(value) - 1    # only one byte is != 0
         i = 0
         while value[i] == '\x00': i += 1
@@ -325,12 +329,13 @@ class WriteBarrierDescr(AbstractDescr):
 
 
 class GcLLDescr_framework(GcLLDescription):
+    DEBUG = False    # forced to True by x86/test/test_zrpy_gc.py
 
-    def __init__(self, gcdescr, translator, llop1=llop):
-        from pypy.rpython.memory.gctypelayout import _check_typeid
+    def __init__(self, gcdescr, translator, rtyper, llop1=llop):
+        from pypy.rpython.memory.gctypelayout import check_typeid
         from pypy.rpython.memory.gcheader import GCHeaderBuilder
         from pypy.rpython.memory.gctransform import framework
-        GcLLDescription.__init__(self, gcdescr, translator)
+        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
         assert self.translate_support_code, "required with the framework GC"
         self.translator = translator
         self.llop1 = llop1
@@ -350,7 +355,7 @@ class GcLLDescr_framework(GcLLDescription):
         gcrootmap = cls()
         self.gcrootmap = gcrootmap
         self.gcrefs = GcRefList()
-        self.single_gcref_descr = GcPtrFieldDescr(0)
+        self.single_gcref_descr = GcPtrFieldDescr('', 0)
 
         # make a TransformerLayoutBuilder and save it on the translator
         # where it can be fished and reused by the FrameworkGCTransformer
@@ -372,9 +377,9 @@ class GcLLDescr_framework(GcLLDescription):
 
         # make a malloc function, with three arguments
         def malloc_basic(size, tid):
-            type_id = llop.extract_ushort(rffi.USHORT, tid)
-            has_finalizer = bool(tid & (1<<16))
-            _check_typeid(type_id)
+            type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
+            has_finalizer = bool(tid & (1<<llgroup.HALFSHIFT))
+            check_typeid(type_id)
             try:
                 res = llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                                       type_id, size, True,
@@ -393,8 +398,8 @@ class GcLLDescr_framework(GcLLDescription):
         self.write_barrier_descr = WriteBarrierDescr(self)
         #
         def malloc_array(itemsize, tid, num_elem):
-            type_id = llop.extract_ushort(rffi.USHORT, tid)
-            _check_typeid(type_id)
+            type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
+            check_typeid(type_id)
             try:
                 return llop1.do_malloc_varsize_clear(
                     llmemory.GCREF,
@@ -436,19 +441,31 @@ class GcLLDescr_framework(GcLLDescription):
         self.malloc_unicode = malloc_unicode
         self.GC_MALLOC_STR_UNICODE = lltype.Ptr(lltype.FuncType(
             [lltype.Signed], llmemory.GCREF))
+        #
+        class ForTestOnly:
+            pass
+        for_test_only = ForTestOnly()
+        for_test_only.x = 1.23
+        def random_usage_of_xmm_registers():
+            x0 = for_test_only.x
+            x1 = x0 * 0.1
+            x2 = x0 * 0.2
+            x3 = x0 * 0.3
+            for_test_only.x = x0 + x1 + x2 + x3
+        #
         def malloc_fixedsize_slowpath(size):
+            if self.DEBUG:
+                random_usage_of_xmm_registers()
             try:
                 gcref = llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
                                             0, size, True, False, False)
             except MemoryError:
                 fatalerror("out of memory (from JITted code)")
-                return r_ulonglong(0)
-            res = rffi.cast(lltype.Signed, gcref)
-            nurs_free = llop1.gc_adr_of_nursery_free(llmemory.Address).signed[0]
-            return r_ulonglong(nurs_free) << 32 | r_ulonglong(r_uint(res))
+                return 0
+            return rffi.cast(lltype.Signed, gcref)
         self.malloc_fixedsize_slowpath = malloc_fixedsize_slowpath
         self.MALLOC_FIXEDSIZE_SLOWPATH = lltype.FuncType([lltype.Signed],
-                                                 lltype.UnsignedLongLong)
+                                                         lltype.Signed)
 
     def get_nursery_free_addr(self):
         nurs_addr = llop.gc_adr_of_nursery_free(llmemory.Address)
@@ -469,9 +486,9 @@ class GcLLDescr_framework(GcLLDescription):
 
     def init_size_descr(self, S, descr):
         type_id = self.layoutbuilder.get_type_id(S)
-        assert not self.layoutbuilder.is_weakref(type_id)
+        assert not self.layoutbuilder.is_weakref_type(S)
         has_finalizer = bool(self.layoutbuilder.has_finalizer(S))
-        flags = int(has_finalizer) << 16
+        flags = int(has_finalizer) << llgroup.HALFSHIFT
         descr.tid = llop.combine_ushort(lltype.Signed, type_id, flags)
 
     def init_array_descr(self, A, descr):
@@ -587,7 +604,7 @@ class GcLLDescr_framework(GcLLDescription):
     def can_inline_malloc(self, descr):
         assert isinstance(descr, BaseSizeDescr)
         if descr.size < self.max_size_of_young_obj:
-            has_finalizer = bool(descr.tid & (1<<16))
+            has_finalizer = bool(descr.tid & (1<<llgroup.HALFSHIFT))
             if has_finalizer:
                 return False
             return True
@@ -598,7 +615,7 @@ class GcLLDescr_framework(GcLLDescription):
 
 # ____________________________________________________________
 
-def get_ll_description(gcdescr, translator=None):
+def get_ll_description(gcdescr, translator=None, rtyper=None):
     # translator is None if translate_support_code is False.
     if gcdescr is not None:
         name = gcdescr.config.translation.gctransformer
@@ -609,4 +626,4 @@ def get_ll_description(gcdescr, translator=None):
     except KeyError:
         raise NotImplementedError("GC transformer %r not supported by "
                                   "the JIT backend" % (name,))
-    return cls(gcdescr, translator)
+    return cls(gcdescr, translator, rtyper)
