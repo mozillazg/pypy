@@ -273,7 +273,7 @@ SLOTS_STARTING_FROM = 3
 
 
 class BaseMapdictObject: # slightly evil to make it inherit from W_Root
-    _mixin_ = True # XXX hack hack hack
+    _mixin_ = True
 
     def _init_empty(self, map):
         raise NotImplementedError("abstract base class")
@@ -318,7 +318,8 @@ class BaseMapdictObject: # slightly evil to make it inherit from W_Root
         w_dict = check_new_dictionary(space, w_dict)
         w_olddict = self.getdict()
         assert isinstance(w_dict, W_DictMultiObject)
-        w_olddict._as_rdict()
+        if w_olddict.r_dict_content is None:
+            w_olddict._as_rdict()
         flag = self._get_mapdict_map().write(self, ("dict", SPECIAL), w_dict)
         assert flag
 
