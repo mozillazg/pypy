@@ -612,8 +612,6 @@ LOAD_ATTR_caching._always_inline_ = True
 def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
     space = pycode.space
     w_name = pycode.co_names_w[nameindex]
-    if space.str_w(w_name) == "task_holding":
-        print map
     if map is not None:
         w_type = map.w_cls
         w_descr = w_type.getattribute_if_not_from_object()
