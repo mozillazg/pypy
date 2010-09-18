@@ -462,19 +462,20 @@ def _make_subclass_size_n(supercls, n):
                 else:
                     erased = rerased.erase(None)
                 setattr(self, "_value%s" % i, erased)
+            has_storage_list = self._has_storage_list()
             if len_storage < n:
-                assert not self._has_storage_list()
+                assert not has_storage_list
                 erased = rerased.erase(None)
             elif len_storage == n:
-                assert not self._has_storage_list()
+                assert not has_storage_list
                 erased = rerased.erase(storage[nmin1])
-            elif not self._has_storage_list():
+            elif not has_storage_list:
                 # storage is longer than self.map.length() only due to
                 # overallocation
                 erased = rerased.erase(storage[nmin1])
                 # in theory, we should be ultra-paranoid and check all entries,
                 # but checking just one should catch most problems anyway:
-                assert storage[n + 1] is None
+                assert storage[n] is None
             else:
                 storage_list = storage[nmin1:]
                 erased = rerased.erase_fixedsizelist(storage_list, W_Root)
