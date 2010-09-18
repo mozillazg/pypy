@@ -109,7 +109,7 @@ class MiniMarkGC(MovingGCBase):
         # the total size consumed; and after every minor collection, if the
         # total size is now more than 'major_collection_threshold' times,
         # we trigger the next major collection.
-        "major_collection_threshold": 1.75,
+        "major_collection_threshold": 1.82,
         }
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
