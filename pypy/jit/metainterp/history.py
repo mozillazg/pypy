@@ -8,7 +8,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
-from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.resoperation import ResOperation, ResOperation_fast, rop
 from pypy.jit.codewriter import heaptracker
 
 # ____________________________________________________________
@@ -831,6 +831,12 @@ class History(object):
 
     def record(self, opnum, argboxes, resbox, descr=None):
         op = ResOperation(opnum, argboxes, resbox, descr)
+        self.operations.append(op)
+        return op
+
+    def record_fast(self, opnum, resbox, descr, *args):
+        #op = ResOperation(opnum, argboxes, resbox, descr)
+        op = ResOperation_fast(opnum, resbox, descr, *args)
         self.operations.append(op)
         return op
 
