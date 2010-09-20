@@ -798,7 +798,7 @@ class RegAlloc(object):
         else:
             tempbox = None
             other_loc = imm(ofs_items + (v.getint() << scale))
-        self._call(ResOperation(rop.NEW, [v], res_v),
+        self._call(ResOperation(rop.NEW, [], res_v),
                    [other_loc], [v])
         loc = self.rm.make_sure_var_in_reg(v, [res_v])
         assert self.loc(res_v) == eax
@@ -806,7 +806,7 @@ class RegAlloc(object):
         self.rm.possibly_free_var(v)
         if tempbox is not None:
             self.rm.possibly_free_var(tempbox)
-        self.PerformDiscard(ResOperation(rop.SETFIELD_GC, [], None),
+        self.PerformDiscard(ResOperation(rop.SETFIELD_GC, [None, None], None),
                             [eax, imm(ofs_length), imm(WORD), loc])
 
     def consider_new_array(self, op):
@@ -1027,12 +1027,21 @@ oplist_with_guard = [RegAlloc.not_implemented_op_with_guard] * rop._LAST
 def add_none_argument(fn):
     return lambda self, op: fn(self, op, None)
 
+def is_comparison_or_ovf_op(opnum):
+    from pypy.jit.metainterp.resoperation import opclasses, AbstractResOp
+    cls = opclasses[opnum]
+    # hack hack: in theory they are instance method, but they don't use
+    # any instance field, we can use a fake object
+    class Fake(cls):
+        pass
+    op = Fake(None)
+    return op.is_comparison() or op.is_ovf()
+
 for name, value in RegAlloc.__dict__.iteritems():
     if name.startswith('consider_'):
         name = name[len('consider_'):]
         num = getattr(rop, name.upper())
-        if (ResOperation(num, [], None).is_comparison()
-            or ResOperation(num, [], None).is_ovf()
+        if (is_comparison_or_ovf_op(num)
             or num == rop.CALL_MAY_FORCE or num == rop.CALL_ASSEMBLER):
             oplist_with_guard[num] = value
             oplist[num] = add_none_argument(value)
