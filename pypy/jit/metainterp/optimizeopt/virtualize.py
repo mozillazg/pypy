@@ -292,7 +292,7 @@ class OptVirtualize(Optimization):
         for i in range(len(specnodes)):
             value = self.getvalue(op.getarg(i))
             specnodes[i].teardown_virtual_node(self, value, exitargs)
-        op.setarglist(exitargs[:])
+        op = op.copy_and_change(op.getopnum(), args=exitargs[:])
         self.emit_operation(op)
 
     def optimize_VIRTUAL_REF(self, op):
