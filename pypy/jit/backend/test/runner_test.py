@@ -1404,8 +1404,8 @@ class LLtypeBackendTest(BaseBackendTest):
         assert not excvalue
 
     def test_cond_call_gc_wb(self):
-        def func_void(a, b):
-            record.append((a, b))
+        def func_void(a):
+            record.append(a)
         record = []
         #
         S = lltype.GcStruct('S', ('tid', lltype.Signed))
@@ -1430,10 +1430,10 @@ class LLtypeBackendTest(BaseBackendTest):
             sgcref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
             del record[:]
             self.execute_operation(rop.COND_CALL_GC_WB,
-                                   [BoxPtr(sgcref), ConstInt(-2121)],
+                                   [BoxPtr(sgcref)],
                                    'void', descr=WriteBarrierDescr())
             if cond:
-                assert record == [(s, -2121)]
+                assert record == [s]
             else:
                 assert record == []
 
