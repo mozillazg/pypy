@@ -269,7 +269,7 @@ class TestFramework:
 
     def test_get_rid_of_debug_merge_point(self):
         operations = [
-            ResOperation(rop.DEBUG_MERGE_POINT, [], None),
+            ResOperation(rop.DEBUG_MERGE_POINT, ['dummy'], None),
             ]
         gc_ll_descr = self.gc_ll_descr
         gc_ll_descr.rewrite_assembler(None, operations)

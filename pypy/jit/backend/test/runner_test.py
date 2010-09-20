@@ -78,7 +78,8 @@ class Runner(object):
             operations[0].setfailargs([])
             if not descr:
                 descr = BasicFailDescr(1)
-        operations[0].setdescr(descr)
+        if descr is not None:
+            operations[0].setdescr(descr)
         inputargs = []
         for box in valueboxes:
             if isinstance(box, Box) and box not in inputargs:
