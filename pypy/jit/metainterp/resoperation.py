@@ -518,6 +518,18 @@ def setup(debug_print=False):
         opboolresult.append(boolresult)
     assert len(opclasses)==len(oparity)==len(opwithdescr)==len(opboolresult)==len(_oplist)
 
+def get_base_class(mixin, base):
+    try:
+        return get_base_class.cache[(mixin, base)]
+    except KeyError:
+        arity_name = mixin.__name__[:-2]  # remove the trailing "Op"
+        name = arity_name + base.__name__ # something like BinaryPlainResOp
+        bases = (mixin, base)
+        cls = type(name, bases, {})
+        get_base_class.cache[(mixin, base)] = cls
+        return cls
+get_base_class.cache = {}
+
 def create_class_for_op(name, opnum, arity, withdescr):
     arity2mixin = {
         0: NullaryOp,
@@ -540,7 +552,7 @@ def create_class_for_op(name, opnum, arity, withdescr):
         return opnum
 
     cls_name = '%s_OP' % name
-    bases = (mixin, baseclass)
+    bases = (get_base_class(mixin, baseclass),)
     dic = {'getopnum': getopnum}
     return type(cls_name, bases, dic)
 
