@@ -9,13 +9,18 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.backend.llsupport.descr import GcCache
 from pypy.jit.backend.detect_cpu import getcpuclass
 from pypy.jit.backend.x86.regalloc import RegAlloc, X86RegisterManager,\
-     FloatConstants
+     FloatConstants, is_comparison_or_ovf_op
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
 from pypy.jit.metainterp.test.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.lltypesystem import rclass, rstr
 from pypy.jit.backend.x86.rx86 import *
+
+def test_is_comparison_or_ovf_op():
+    assert not is_comparison_or_ovf_op(rop.INT_ADD)
+    assert is_comparison_or_ovf_op(rop.INT_ADD_OVF)
+    assert is_comparison_or_ovf_op(rop.INT_EQ)
 
 CPU = getcpuclass()
 class MockGcDescr(GcCache):
