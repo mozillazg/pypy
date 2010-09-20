@@ -62,7 +62,7 @@ class AbstractResOp(object):
     def getdescr(self):
         return None
 
-    def setdescr(self):
+    def setdescr(self, descr):
         raise NotImplementedError
 
     # common methods
