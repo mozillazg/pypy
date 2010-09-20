@@ -42,6 +42,15 @@ def test_concrete_classes():
     assert issubclass(cls, rop.UnaryOp)
     assert cls.getopnum.im_func(None) == rop.rop.GUARD_TRUE
 
+def test_mixins_in_common_base():
+    INT_ADD = rop.opclasses[rop.rop.INT_ADD]
+    assert len(INT_ADD.__bases__) == 1
+    BinaryPlainResOp = INT_ADD.__bases__[0]
+    assert BinaryPlainResOp.__name__ == 'BinaryPlainResOp'
+    assert BinaryPlainResOp.__bases__ == (rop.BinaryOp, rop.PlainResOp)
+    INT_SUB = rop.opclasses[rop.rop.INT_SUB]
+    assert INT_SUB.__bases__[0] is BinaryPlainResOp
+
 def test_instantiate():
     op = rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 'c')
     assert op.getarglist() == ['a', 'b']
