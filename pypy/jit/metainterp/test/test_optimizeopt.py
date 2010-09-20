@@ -42,7 +42,7 @@ def test_store_final_boxes_in_guard():
     opt = optimizeopt.Optimizer(FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
     fdescr = ResumeGuardDescr(None, None)
-    op = ResOperation(rop.GUARD_TRUE, [], None, descr=fdescr)
+    op = ResOperation(rop.GUARD_TRUE, ['dummy'], None, descr=fdescr)
     # setup rd data
     fi0 = resume.FrameInfo(None, "code0", 11)
     fdescr.rd_frame_info_list = resume.FrameInfo(fi0, "code1", 33)
