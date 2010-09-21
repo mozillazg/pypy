@@ -3870,6 +3870,22 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
+    def test_loop_invariant_ovf(self):
+        ops = """
+        [i0, i1]
+        i2 = int_add_ovf(i0, i0)
+        guard_no_overflow() []
+        i3 = int_add_ovf(i2, i1)
+        guard_no_overflow() []
+        jump(i0, i3)
+        """
+        expected = """
+        [i0, i1, i2]
+        i3 = int_add_ovf(i2, i1)
+        guard_no_overflow() []
+        jump(i0, i3, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
 
 
 
