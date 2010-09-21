@@ -714,6 +714,7 @@ class TreeLoop(object):
     inputargs = None
     operations = None
     token = None
+    preamble = None
 
     def __init__(self, name):
         self.name = name

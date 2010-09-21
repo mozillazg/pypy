@@ -1113,6 +1113,32 @@ class PyPyCJITTests(object):
             return sa
         ''', 88, ([], 1997001))
 
+    def test_invariant_mul(self):
+        self.run_source('''
+        def main(a):
+            i = 0
+            sa = 0
+            while i < 2000: 
+                sa += a*a
+                i += 1
+            return sa
+        ''', 34, ([2], 8000))
+
+    def test_invariant_mul_bridge(self):
+        self.run_source('''
+        def main(a):
+            i = 0
+            sa = 0
+            while i < 4000: 
+                sa += a*a
+                if i > 2000:
+                    a = 7
+                i += 1
+            return sa
+        ''', 61, ([2], 105910))
+
+        
+
     # test_circular
 
 class AppTestJIT(PyPyCJITTests):
