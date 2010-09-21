@@ -1122,7 +1122,7 @@ class PyPyCJITTests(object):
                 sa += a*a
                 i += 1
             return sa
-        ''', 34, ([2], 8000))
+        ''', 35, ([2], 8000))
 
     def test_invariant_mul_bridge(self):
         self.run_source('''
@@ -1135,7 +1135,7 @@ class PyPyCJITTests(object):
                     a = 7
                 i += 1
             return sa
-        ''', 61, ([2], 105910))
+        ''', 62, ([2], 105910))
 
         
 

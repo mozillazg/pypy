@@ -42,24 +42,39 @@ class OptInvariant(Optimization):
                 jmp.descr = loop.token
                 preamble.operations.append(jmp)
 
-        elif op.is_always_pure():
-            for a in op.args:
-                if self.get_constant_box(a) is None:
-                    if a not in self.optimizer.values:
-                        break
-                    v = self.getvalue(a)
-                    if not v.invariant:
-                        break
-            else:
-                print "P: ", op, op.opnum
-                op.invariant = True
-                self.emit_operation(op)
-                if self.get_constant_box(op.result) is None:
-                    v = self.getvalue(op.result)
-                    v.invariant = True
-                    box = v.force_box() 
-                    if box not in self.invariant_boxes:
-                        self.invariant_boxes.append(box)
+        elif (op.is_always_pure() or op.is_foldable_guard() or
+              op.is_ovf()):
+            if self.has_invariant_args(op):
+                self.emit_invariant(op)
+                return
+
+        elif op.is_guard_overflow():
+            prev_op = self.optimizer.loop.operations[self.optimizer.i - 1]
+            v = self.getvalue(prev_op.result)
+            if v.invariant:
+                self.emit_invariant(op)
                 return
             
         self.emit_operation(op)
+
+    def emit_invariant(self, op):
+        print "P: ", op, op.opnum
+        op.invariant = True
+        self.emit_operation(op)
+        if self.get_constant_box(op.result) is None:
+            v = self.getvalue(op.result)
+            v.invariant = True
+            box = v.force_box() 
+            if box and box not in self.invariant_boxes:
+                self.invariant_boxes.append(box)
+            
+    def has_invariant_args(self, op):
+        for a in op.args:
+            if self.get_constant_box(a) is None:
+                if a not in self.optimizer.values:
+                    return False
+                v = self.getvalue(a)
+                if not v.invariant:
+                    return False
+        return True
+        
