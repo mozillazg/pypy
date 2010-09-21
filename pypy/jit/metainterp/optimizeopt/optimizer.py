@@ -23,12 +23,14 @@ MAXINT = sys.maxint
 MININT = -sys.maxint - 1
         
 class OptValue(object):
-    _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound')
+    _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound',
+               'invariant')
     last_guard_index = -1
 
     level = LEVEL_UNKNOWN
     known_class = None
     intbound = None
+    invariant = False
 
     def __init__(self, box):
         self.box = box
@@ -199,6 +201,9 @@ class Optimizer(Optimization):
         self.pure_operations = args_dict()
         self.producer = {}
         self.pendingfields = []
+        self.preamble = []
+
+        self.original_inputargs = self.loop.inputargs
 
         if optimizations:
             self.first_optimization = optimizations[0]
@@ -336,7 +341,10 @@ class Optimizer(Optimization):
             self.exception_might_have_happened = True
         elif op.returns_bool_result():
             self.bool_boxes[self.getvalue(op.result)] = None
-        self.newoperations.append(op)
+        if op.invariant:
+            self.preamble.append(op)
+        else:
+            self.newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
         ###pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()

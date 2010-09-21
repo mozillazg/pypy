@@ -34,6 +34,28 @@ class VirtualTests:
         self.check_loops(new=0, new_with_vtable=0,
                                 getfield_gc=0, setfield_gc=0)
 
+    def test_virtualized_and_invariant(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'sa', 'node'])
+        def f(n, sa):
+            node = self._new()
+            node.value = 0
+            node.extra = 0
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, node=node, sa=sa)
+                myjitdriver.jit_merge_point(n=n, node=node, sa=sa)
+                next = self._new()
+                next.value = node.value + n
+                next.extra = node.extra + sa * sa
+                node = next
+                n -= 1
+            return node.value * node.extra
+        assert f(10, 1) == 55 * 10 
+        res = self.meta_interp(f, [10, 1])
+        assert res == 55 * 10
+        self.check_loop_count(2)
+        self.check_loops(new=0, new_with_vtable=0,
+                                getfield_gc=0, setfield_gc=0)
+
     def test_virtualized_float(self):
         myjitdriver = JitDriver(greens = [], reds = ['n', 'node'])
         def f(n):

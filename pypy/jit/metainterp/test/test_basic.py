@@ -303,6 +303,48 @@ class BasicTests:
                     found += 1
             assert found == 1
 
+    def test_loop_invariant_mul(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
+        def f(x, y):
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                res += x * x
+                y -= 1
+            return res
+        res = self.meta_interp(f, [6, 7])
+        assert res == 252
+        self.check_loop_count(2)
+        self.check_loops({'guard_true': 1,
+                          'int_add': 1, 'int_sub': 1, 'int_gt': 1,
+                          'int_mul': 1,
+                          'jump': 2})
+
+    def test_loop_invariant_intbox(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
+        class I:
+            __slots__ = 'intval'
+            _immutable_ = True
+            def __init__(self, intval):
+                self.intval = intval
+        def f(i, y):
+            res = 0
+            x = I(i)
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                res += x.intval * x.intval
+                y -= 1
+            return res
+        res = self.meta_interp(f, [6, 7])
+        assert res == 252
+        self.check_loop_count(2)
+        self.check_loops({'guard_true': 1,
+                          'int_add': 1, 'int_sub': 1, 'int_gt': 1,
+                          'int_mul': 1, 'getfield_gc_pure': 1,
+                          'jump': 2})
+
     def test_loops_are_transient(self):
         import gc, weakref
         myjitdriver = JitDriver(greens = [], reds = ['x', 'y', 'res'])

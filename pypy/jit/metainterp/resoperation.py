@@ -3,13 +3,14 @@ from pypy.rlib.debug import make_sure_not_resized
 
 class ResOperation(object):
     """The central ResOperation class, representing one operation."""
-
     # for 'guard_*'
     fail_args = None
 
     # debug
     name = ""
     pc = 0
+
+    invariant = False
 
     def __init__(self, opnum, args, result, descr=None):
         make_sure_not_resized(args)

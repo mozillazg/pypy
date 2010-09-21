@@ -37,29 +37,67 @@
 ## t2 = time.time()
 ## print t2 - t1
 
+## try:
+##     from array import array
+
+##     def coords(w,h):
+##         y = 0
+##         while y < h:
+##             x = 0
+##             while x < w:
+##                 yield x,y
+##                 x += 1
+##             y += 1
+
+##     def f(img):
+##         sa=0
+##         for x, y in coords(4,4):
+##             sa += x * y
+##         return sa
+
+##     #img=array('h',(1,2,3,4))
+##     print f(3)
+## except Exception, e:
+##     print "Exception: ", type(e)
+##     print e
+
+## try:
+
+##     def f():
+##         i = 0
+##         a = 2
+##         sa = 0
+##         while i < 5:
+##             sa += a*a
+##             i += 1
+##         return sa
+
+##     print f()
+    
+## except Exception, e:
+##     print "Exception: ", type(e)
+##     print e
+
+
 try:
+
     from array import array
 
-    def coords(w,h):
-        y = 0
-        while y < h:
-            x = 0
-            while x < w:
-                yield x,y
-                x += 1
-            y += 1
-
-    def f(img):
-        sa=0
-        for x, y in coords(4,4):
-            sa += x * y
+    def f():
+        i = 0
+        a = 1
+        sa = array('d', (0,0))
+        while i < 500000000:
+            sa[0] += a*a
+            i += 1
         return sa
 
-    #img=array('h',(1,2,3,4))
-    print f(3)
+    print f()
+    
 except Exception, e:
     print "Exception: ", type(e)
     print e
+
     
 ## def f():
 ##     a=7

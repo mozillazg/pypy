@@ -8,7 +8,8 @@ import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimizeopt import optimize_loop_1
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
-from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxInt
+from pypy.jit.metainterp.history import (AbstractDescr, ConstInt, BoxInt,
+                                         TreeLoop, LoopToken)
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp import executor, compile, resume, history
 from pypy.jit.metainterp.resoperation import rop, opname, ResOperation
@@ -255,6 +256,8 @@ class BaseTestOptimizeOpt(BaseTest):
         metainterp_sd = FakeMetaInterpStaticData(self.cpu)
         if hasattr(self, 'vrefinfo'):
             metainterp_sd.virtualref_info = self.vrefinfo
+        loop.preamble = TreeLoop('preamble')
+        loop.preamble.token = LoopToken()
         optimize_loop_1(metainterp_sd, loop)
         #
         expected = self.parse(optops)
@@ -3835,6 +3838,35 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         i5 = int_ge(i3, 2)
         guard_true(i5) []
         jump(i0, i1)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_loop_invariant_simple(self):
+        ops = """
+        [i0, i1]
+        i2 = int_add(i0, 1)
+        i3 = int_add(i2, i1)
+        jump(i0, i3)
+        """
+        expected = """
+        [i0, i1, i2]
+        i3 = int_add(i2, i1)
+        jump(i0, i3, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_loop_invariant_getfield(self):
+        ops = """
+        [p0, i1]
+        i0 = getfield_gc_pure(p0, descr=valuedescr)
+        i2 = int_add(i0, 1)
+        i3 = int_add(i2, i1)
+        jump(p0, i3)
+        """
+        expected = """
+        [p0, i1, i0, i2]
+        i3 = int_add(i2, i1)
+        jump(p0, i3, i0, i2)
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
