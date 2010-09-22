@@ -89,7 +89,8 @@ def effectinfo_from_writeanalyze(effects, cpu,
     return EffectInfo(readonly_descrs_fields,
                       write_descrs_fields,
                       write_descrs_arrays,
-                      extraeffect)
+                      extraeffect,
+                      oopspecindex)
 
 def consider_struct(TYPE, fieldname):
     if fieldType(TYPE, fieldname) is lltype.Void:
