@@ -1,7 +1,10 @@
+
 class AbstractArg(object):
     next = None
 
 class IntArg(AbstractArg):
+    """ An argument holding an integer
+    """
 
     def __init__(self, intval):
         self.intval = intval
@@ -10,13 +13,14 @@ class IntArg(AbstractArg):
         funcptr.push_arg(self.intval)
 
 class FloatArg(AbstractArg):
+    """ An argument holding a float
+    """
 
     def __init__(self, floatval):
         self.floatval = floatval
 
     def push(self, funcptr):
         funcptr.push_arg(self.floatval)
-
 
 class Func(object):
 
