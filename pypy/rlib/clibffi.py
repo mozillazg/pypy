@@ -467,7 +467,6 @@ class RawFuncPtr(AbstractFuncPtr):
         lltype.free(ll_args, flavor='raw')
         check_fficall_result(ffires, self.flags)
 
-
 class FuncPtr(AbstractFuncPtr):
     ll_args = lltype.nullptr(rffi.VOIDPP.TO)
     ll_result = lltype.nullptr(rffi.VOIDP.TO)
@@ -510,7 +509,10 @@ class FuncPtr(AbstractFuncPtr):
         push_arg_as_ffiptr(self.argtypes[self.pushed_args], value,
                            self.ll_args[self.pushed_args])
         self.pushed_args += 1
-    push_arg._annspecialcase_ = 'specialize:argtype(1)'
+    # XXX this is bad, fix it somehow in the future, but specialize:argtype
+    # doesn't work correctly with mixing non-negative and normal integers
+    push_arg._annenforceargs_ = [None, int]
+    #push_arg._annspecialcase_ = 'specialize:argtype(1)'
     push_arg.oopspec = 'libffi_push_arg(self, value)'
 
     def _check_args(self):
@@ -549,7 +551,7 @@ class FuncPtr(AbstractFuncPtr):
             self.ll_result = lltype.nullptr(rffi.VOIDP.TO)
         AbstractFuncPtr.__del__(self)
 
-class CDLL:
+class CDLL(object):
     def __init__(self, libname, unload_on_finalization=True):
         """Load the library, or raises DLOpenError."""
         self.unload_on_finalization = unload_on_finalization
