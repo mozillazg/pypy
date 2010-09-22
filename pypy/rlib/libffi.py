@@ -1,4 +1,6 @@
 
+from pypy.rlib.clibffi import *
+
 class AbstractArg(object):
     next = None
 
