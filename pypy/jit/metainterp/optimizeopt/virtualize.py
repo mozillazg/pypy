@@ -188,11 +188,42 @@ class VArrayValue(AbstractVirtualValue):
                 itemboxes.append(itemvalue.get_key_box())
             modifier.register_virtual_fields(self.keybox, itemboxes)
             for itemvalue in self._items:
-                if itemvalue is not self.constvalue:
-                    itemvalue.get_args_for_fail(modifier)
+                itemvalue.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
         return modifier.make_varray(self.arraydescr)
+
+class VStringLength1Value(AbstractVirtualValue):
+
+    def __init__(self, optimizer, keybox, source_op=None):
+        AbstractVirtualValue.__init__(self, optimizer, keybox, source_op)
+        self._char = CVAL_ZERO
+
+    def getchar(self):
+        return self._char
+
+    def setchar(self, charvalue):
+        assert isinstance(charvalue, OptValue)
+        self._char = charvalue
+
+    def _really_force(self):
+        assert self.source_op is not None
+        newoperations = self.optimizer.newoperations
+        newoperations.append(self.source_op)
+        self.box = box = self.source_op.result
+        charbox = self._char.force_box()
+        op = ResOperation(rop.STRSETITEM,
+                          [box, ConstInt(0), charbox], None)
+        newoperations.append(op)
+
+    def get_args_for_fail(self, modifier):
+        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+            charboxes = [self._char.get_key_box()]
+            modifier.register_virtual_fields(self.keybox, charboxes)
+            self._char.get_args_for_fail(modifier)
+
+    def _make_virtual(self, modifier):
+        return modifier.make_vstring()
 
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
@@ -282,6 +313,11 @@ class OptVirtualize(Optimization):
         self.make_equal_to(box, vvalue)
         return vvalue
 
+    def make_vstring_length1(self, box, source_op=None):
+        vvalue = VStringLength1Value(self.optimizer, box, source_op)
+        self.make_equal_to(box, vvalue)
+        return vvalue
+
     def optimize_JUMP(self, op):
         orgop = self.optimizer.loop.operations[-1]
         exitargs = []
@@ -358,8 +394,8 @@ class OptVirtualize(Optimization):
 
     def optimize_SETFIELD_GC(self, op):
         value = self.getvalue(op.args[0])
-        fieldvalue = self.getvalue(op.args[1])
         if value.is_virtual():
+            fieldvalue = self.getvalue(op.args[1])
             value.setfield(op.descr, fieldvalue)
         else:
             value.ensure_nonnull()
@@ -443,6 +479,44 @@ class OptVirtualize(Optimization):
         assert isinstance(descr, AbstractDescr)
         self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
                                          descr))
+
+    def optimize_NEWSTR(self, op):
+        length_box = self.get_constant_box(op.args[0])
+        if length_box and length_box.getint() == 1:     # NEWSTR(1)
+            # if the original 'op' did not have a ConstInt as argument,
+            # build a new one with the ConstInt argument
+            if not isinstance(op.args[0], ConstInt):
+                op = ResOperation(rop.NEWSTR, [CONST_1], op.result)
+            self.make_vstring_length1(op.result, op)
+        else:
+            self.emit_operation(op)
+
+    def optimize_STRSETITEM(self, op):
+        value = self.getvalue(op.args[0])
+        if value.is_virtual():
+            charvalue = self.getvalue(op.args[2])
+            value.setchar(charvalue)
+        else:
+            value.ensure_nonnull()
+            self.emit_operation(op)
+
+    def optimize_STRGETITEM(self, op):
+        value = self.getvalue(op.args[0])
+        if value.is_virtual():
+            charvalue = value.getchar()
+            assert charvalue is not None
+            self.make_equal_to(op.result, charvalue)
+        else:
+            value.ensure_nonnull()
+            self.emit_operation(op)
+
+    def optimize_STRLEN(self, op):
+        value = self.getvalue(op.args[0])
+        if value.is_virtual():
+            self.make_constant_int(op.result, 1)
+        else:
+            value.ensure_nonnull()
+            self.emit_operation(op)
 
     def propagate_forward(self, op):
         opnum = op.opnum

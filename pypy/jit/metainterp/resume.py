@@ -253,6 +253,9 @@ class ResumeDataVirtualAdder(object):
     def make_varray(self, arraydescr):
         return VArrayInfo(arraydescr)
 
+    def make_vstring(self):
+        return VStringInfo()
+
     def register_virtual_fields(self, virtualbox, fieldboxes):
         tagged = self.liveboxes_from_env.get(virtualbox, UNASSIGNEDVIRTUAL)
         self.liveboxes[virtualbox] = tagged
@@ -486,6 +489,27 @@ class VArrayInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+class VStringInfo(AbstractVirtualInfo):
+    def __init__(self):
+        pass
+        #self.fieldnums = ...
+
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        length = len(self.fieldnums)
+        return decoder.allocate_string(length)
+
+    @specialize.argtype(1)
+    def setfields(self, decoder, string):
+        length = len(self.fieldnums)
+        for i in range(length):
+            decoder.strsetitem(string, i, self.fieldnums[i])
+
+    def debug_prints(self):
+        debug_print("\tvstringinfo")
+        for i in self.fieldnums:
+            debug_print("\t\t", str(untag(i)))
+
 # ____________________________________________________________
 
 class AbstractResumeDataReader(object):
@@ -621,6 +645,9 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     def allocate_array(self, arraydescr, length):
         return self.metainterp.execute_and_record(rop.NEW_ARRAY,
                                                   arraydescr, ConstInt(length))
+
+    def allocate_string(self, length):
+        return self.metainterp.execute_and_record(rop.NEWSTR, ConstInt(length))
 
     def setfield(self, descr, structbox, fieldnum):
         if descr.is_pointer_field():
@@ -838,6 +865,9 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
 
     def allocate_array(self, arraydescr, length):
         return self.cpu.bh_new_array(arraydescr, length)
+
+    def allocate_string(self, length):
+        return self.cpu.bh_newstr(length)
 
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
