@@ -195,7 +195,9 @@ class VArrayValue(AbstractVirtualValue):
     def _make_virtual(self, modifier):
         return modifier.make_varray(self.arraydescr)
 
+
 class VStringPlainValue(AbstractVirtualValue):
+    """A string built with newstr(const)."""
 
     def __init__(self, optimizer, size, keybox, source_op=None):
         AbstractVirtualValue.__init__(self, optimizer, keybox, source_op)
@@ -224,13 +226,37 @@ class VStringPlainValue(AbstractVirtualValue):
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            charboxes = [box.get_key_box() for box in self._chars]
+            charboxes = [value.get_key_box() for value in self._chars]
             modifier.register_virtual_fields(self.keybox, charboxes)
-            for box in self._chars:
-                box.get_args_for_fail(modifier)
+            for value in self._chars:
+                value.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
         return modifier.make_vstrconcat()
+
+
+class VStringConcatValue(AbstractVirtualValue):
+    """The concatenation of two other strings."""
+
+    def __init__(self, optimizer, keybox):
+        AbstractVirtualValue.__init__(self, optimizer, keybox)
+        self._left = None
+        self._right = None
+
+    def _really_force(self):
+        xxx
+
+    def get_args_for_fail(self, modifier):
+        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+            leftbox = self._left.get_key_box()
+            rightbox = self._right.get_key_box()
+            modifier.register_virtual_fields(self.keybox, [leftbox, rightbox])
+            self._left.get_args_for_fail(modifier)
+            self._right.get_args_for_fail(modifier)
+
+    def _make_virtual(self, modifier):
+        return modifier.make_vstrconcat()
+
 
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
@@ -322,6 +348,11 @@ class OptVirtualize(Optimization):
 
     def make_vstring_plain(self, length, box, source_op=None):
         vvalue = VStringPlainValue(self.optimizer, length, box, source_op)
+        self.make_equal_to(box, vvalue)
+        return vvalue
+
+    def make_vstring_concat(self, box):
+        vvalue = VStringConcatValue(self.optimizer, box)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -520,7 +551,7 @@ class OptVirtualize(Optimization):
 
     def optimize_STRGETITEM(self, op):
         value = self.getvalue(op.args[0])
-        if value.is_virtual() and isinstance(value, VStringPlainValue):
+        if isinstance(value, VStringPlainValue):  # even if no longer virtual
             indexbox = self.get_constant_box(op.args[1])
             if indexbox is not None:
                 charvalue = value.getitem(indexbox.getint())
@@ -531,11 +562,17 @@ class OptVirtualize(Optimization):
 
     def optimize_STRLEN(self, op):
         value = self.getvalue(op.args[0])
-        if value.is_virtual():
+        if isinstance(value, VStringPlainValue):  # even if no longer virtual
             self.make_constant_int(op.result, value.getlength())
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
+
+    def opt_call_oopspec_STR_CONCAT(self, op):
+        value = self.make_vstring_concat(op.result)
+        value._left = self.getvalue(op.args[1])
+        value._right = self.getvalue(op.args[2])
+        return True
 
     def propagate_forward(self, op):
         opnum = op.opnum

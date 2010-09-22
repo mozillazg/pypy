@@ -4,7 +4,7 @@ from pypy.rpython.error import TyperError
 from pypy.rlib.objectmodel import malloc_zero_filled, we_are_translated
 from pypy.rlib.objectmodel import _hash_string, enforceargs
 from pypy.rlib.debug import ll_assert
-from pypy.rlib.jit import purefunction
+from pypy.rlib.jit import purefunction, we_are_jitted
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.rmodel import inputconst, IntegerRepr
 from pypy.rpython.rstr import AbstractStringRepr,AbstractCharRepr,\
@@ -318,7 +318,6 @@ class LLHelpers(AbstractLLHelpers):
     def ll_strfasthash(s):
         return s.hash     # assumes that the hash is already computed
 
-    @purefunction
     def ll_strconcat(s1, s2):
         len1 = len(s1.chars)
         len2 = len(s2.chars)
@@ -326,7 +325,7 @@ class LLHelpers(AbstractLLHelpers):
         s1.copy_contents(s1, newstr, 0, 0, len1)
         s1.copy_contents(s2, newstr, 0, len1, len2)
         return newstr
-    #ll_strconcat.oopspec = 'stroruni.concat(s1, s2)'
+    ll_strconcat.oopspec = 'stroruni.concat(s1, s2)'
 
     @purefunction
     def ll_strip(s, ch, left, right):
@@ -704,19 +703,26 @@ class LLHelpers(AbstractLLHelpers):
         return newstr
     ll_stringslice_startonly.oopspec = 'stroruni.slice_startonly(s1, start)'
 
-    def ll_stringslice_startstop(s1, start, stop):
-        if stop >= len(s1.chars):
-            if start == 0:
-                return s1
-            stop = len(s1.chars)
+    def _ll_stringslice_startstop(s1, start, stop):
         newstr = s1.malloc(stop - start)
         assert start >= 0
         lgt = stop - start
         assert lgt >= 0
         s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
-    ll_stringslice_startstop.oopspec = ('stroruni.slice_startstop(s1, '
-                                            'start, stop)')
+    _ll_stringslice_startstop.oopspec = ('stroruni.slice_startstop(s1, '
+                                             'start, stop)')
+
+    def ll_stringslice_startstop(s1, start, stop):
+        if we_are_jitted():
+            if stop > len(s1.chars):
+                stop = len(s1.chars)
+        else:
+            if stop >= len(s1.chars):
+                if start == 0:
+                    return s1
+                stop = len(s1.chars)
+        return LLHelpers._ll_stringslice_startstop(s1, start, stop)
 
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
