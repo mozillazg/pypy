@@ -1,5 +1,6 @@
 
 from pypy.rlib.clibffi import *
+from pypy.rlib.objectmodel import specialize
 
 class AbstractArg(object):
     next = None
@@ -31,6 +32,7 @@ class Func(object):
         # the future it will replace it completely
         self.funcptr = funcptr
 
+    @specialize.arg(2)
     def call(self, argchain, RESULT):
         # implementation detail
         arg = argchain
@@ -38,6 +40,5 @@ class Func(object):
             arg.push(self.funcptr)
             arg = arg.next
         return self.funcptr.call(RESULT)
-    call._annspecialcase_ = 'specialize:arg(1)'
 
 
