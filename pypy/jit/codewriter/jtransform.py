@@ -249,11 +249,13 @@ class Transformer(object):
         kind = self.callcontrol.guess_call_kind(op)
         return getattr(self, 'handle_%s_indirect_call' % kind)(op)
 
-    def rewrite_call(self, op, namebase, initialargs):
+    def rewrite_call(self, op, namebase, initialargs, args=None):
         """Turn 'i0 = direct_call(fn, i1, i2, ref1, ref2)'
            into 'i0 = xxx_call_ir_i(fn, descr, [i1,i2], [ref1,ref2])'.
            The name is one of '{residual,direct}_call_{r,ir,irf}_{i,r,f,v}'."""
-        lst_i, lst_r, lst_f = self.make_three_lists(op.args[1:])
+        if args is None:
+            args = op.args[1:]
+        lst_i, lst_r, lst_f = self.make_three_lists(args)
         reskind = getkind(op.result.concretetype)[0]
         if lst_f or reskind == 'f': kinds = 'irf'
         elif lst_i: kinds = 'ir'
@@ -1026,11 +1028,13 @@ class Transformer(object):
     # Strings and Unicodes.
 
     def _handle_oopspec_call(self, op, args, oopspecindex):
-        cc = self.callcontrol
-        calldescr = cc.getcalldescr(op, oopspecindex=oopspecindex)
-        return SpaceOperation('call_oopspec',
-                              [calldescr, op.args[0]] + args,
-                              op.result)
+        calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
+        op1 = self.rewrite_call(op, 'residual_call',
+                                [op.args[0], calldescr],
+                                args=args)
+        if self.callcontrol.calldescr_canraise(calldescr):
+            op1 = [op1, SpaceOperation('-live-', [], None)]
+        return op1
 
     def _handle_stroruni_call(self, op, oopspec_name, args):
         dict = {"stroruni.concat":          EffectInfo.OS_STR_CONCAT,
