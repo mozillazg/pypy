@@ -27,7 +27,7 @@ def get_libm_name(platform):
         return 'libm.so'
 
 
-class TestLibffi:
+class TestLibffi(object):
     def setup_method(self, meth):
         ALLOCATED.clear()
 
