@@ -277,11 +277,6 @@ class LLtypeHelpers:
 
     _ll_1_str_str2unicode = ll_rstr.LLHelpers.ll_str2unicode
 
-    _ll_2_stroruni_concat          = ll_rstr.LLHelpers.ll_strconcat
-    _ll_2_stroruni_slice_startonly = ll_rstr.LLHelpers.ll_stringslice_startonly
-    _ll_3_stroruni_slice_startstop = ll_rstr.LLHelpers.ll_stringslice_startstop
-    _ll_1_stroruni_slice_minusone  = ll_rstr.LLHelpers.ll_stringslice_minusone
-
     # ---------- malloc with del ----------
 
     def _ll_2_raw_malloc(TP, size):

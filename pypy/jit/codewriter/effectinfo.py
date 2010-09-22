@@ -15,13 +15,27 @@ class EffectInfo(object):
     EF_LOOPINVARIANT                   = 3 #special: call it only once per loop
     EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE = 4 #can raise and force virtualizables
 
+    # the 'oopspecindex' field is one of the following values:
+    OS_NONE                     = 0    # normal case, no oopspec
+    OS_ARRAYCOPY                = 1    # "list.ll_arraycopy"
+    OS_STR_CONCAT               = 2    # "stroruni.concat"
+    OS_STR_SLICE_STARTONLY      = 3    # "stroruni.slice_startonly"
+    OS_STR_SLICE_STARTSTOP      = 4    # "stroruni.slice_startstop"
+    OS_STR_SLICE_MINUSONE       = 5    # "stroruni.slice_minusone"
+    OS_UNI_CONCAT               = 82   # "stroruni.concat" (+80)
+    OS_UNI_SLICE_STARTONLY      = 83   # "stroruni.slice_startonly" (+80)
+    OS_UNI_SLICE_STARTSTOP      = 84   # "stroruni.slice_startstop" (+80)
+    OS_UNI_SLICE_MINUSONE       = 85   # "stroruni.slice_minusone" (+80)
+
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
-                extraeffect=EF_CAN_RAISE):
+                extraeffect=EF_CAN_RAISE,
+                oopspecindex=OS_NONE):
         key = (frozenset(readonly_descrs_fields),
                frozenset(write_descrs_fields),
                frozenset(write_descrs_arrays),
-               extraeffect)
+               extraeffect,
+               oopspecindex)
         if key in cls._cache:
             return cls._cache[key]
         result = object.__new__(cls)
@@ -29,6 +43,7 @@ class EffectInfo(object):
         result.write_descrs_fields = write_descrs_fields
         result.write_descrs_arrays = write_descrs_arrays
         result.extraeffect = extraeffect
+        result.oopspecindex = oopspecindex
         cls._cache[key] = result
         return result
 
@@ -36,7 +51,8 @@ class EffectInfo(object):
         return self.extraeffect >= self.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
 
 def effectinfo_from_writeanalyze(effects, cpu,
-                                 extraeffect=EffectInfo.EF_CAN_RAISE):
+                                 extraeffect=EffectInfo.EF_CAN_RAISE,
+                                 oopspecindex=EffectInfo.OS_NONE):
     from pypy.translator.backendopt.writeanalyze import top_set
     if effects is top_set:
         return None

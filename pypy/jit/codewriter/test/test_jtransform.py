@@ -4,9 +4,9 @@ from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.jit.codewriter.jtransform import Transformer
 from pypy.jit.metainterp.history import getkind
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rlist
 from pypy.translator.unsimplify import varoftype
-from pypy.jit.codewriter import heaptracker
+from pypy.jit.codewriter import heaptracker, effectinfo
 
 def const(x):
     return Constant(x, lltype.typeOf(x))
@@ -21,6 +21,8 @@ class FakeCPU:
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
+    def arraydescrof(self, ARRAY):
+        return FakeDescr(('arraydescr', ARRAY))
     def sizeof(self, STRUCT):
         return FakeDescr(('sizedescr', STRUCT))
 
@@ -74,8 +76,8 @@ class FakeRegularIndirectCallControl:
 class FakeBuiltinCallControl:
     def guess_call_kind(self, op):
         return 'builtin'
-    def getcalldescr(self, op):
-        return 'calldescr'
+    def getcalldescr(self, op, oopspecindex):
+        return 'calldescr-%d' % oopspecindex
     def calldescr_canraise(self, calldescr):
         return False
 
@@ -681,7 +683,6 @@ def test_str_newstr():
     assert op1.result == v2
 
 def test_str_concat():
-    py.test.xfail('later')
     # test that the oopspec is present and correctly transformed
     PSTR = lltype.Ptr(rstr.STR)
     FUNC = lltype.FuncType([PSTR, PSTR], PSTR)
@@ -693,8 +694,28 @@ def test_str_concat():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_r_r'
-    assert list(op1.args[2]) == [v1, v2]
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR_CONCAT
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1, v2]
+    assert op1.result == v3
+
+def test_unicode_concat():
+    # test that the oopspec is present and correctly transformed
+    PSTR = lltype.Ptr(rstr.UNICODE)
+    FUNC = lltype.FuncType([PSTR, PSTR], PSTR)
+    func = lltype.functionptr(FUNC, 'll_strconcat',
+                              _callable=rstr.LLHelpers.ll_strconcat)
+    v1 = varoftype(PSTR)
+    v2 = varoftype(PSTR)
+    v3 = varoftype(PSTR)
+    op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_CONCAT
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1, v2]
     assert op1.result == v3
 
 def test_str_stringslice_startonly():
@@ -710,9 +731,11 @@ def test_str_stringslice_startonly():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_ir_r'
-    assert list(op1.args[2]) == [v2]
-    assert list(op1.args[3]) == [v1]
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % (
+        effectinfo.EffectInfo.OS_STR_SLICE_STARTONLY)
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1, v2]
     assert op1.result == v3
 
 def test_str_stringslice_startstop():
@@ -720,8 +743,8 @@ def test_str_stringslice_startstop():
     PSTR = lltype.Ptr(rstr.STR)
     INT = lltype.Signed
     FUNC = lltype.FuncType([PSTR, INT, INT], PSTR)
-    func = lltype.functionptr(FUNC, 'll_stringslice_startstop',
-                             _callable=rstr.LLHelpers.ll_stringslice_startstop)
+    func = lltype.functionptr(FUNC, '_ll_stringslice_startstop',
+                            _callable=rstr.LLHelpers._ll_stringslice_startstop)
     v1 = varoftype(PSTR)
     v2 = varoftype(INT)
     v3 = varoftype(INT)
@@ -729,9 +752,11 @@ def test_str_stringslice_startstop():
     op = SpaceOperation('direct_call', [const(func), v1, v2, v3], v4)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_ir_r'
-    assert list(op1.args[2]) == [v2, v3]
-    assert list(op1.args[3]) == [v1]
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % (
+        effectinfo.EffectInfo.OS_STR_SLICE_STARTSTOP)
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1, v2, v3]
     assert op1.result == v4
 
 def test_str_stringslice_minusone():
@@ -745,6 +770,31 @@ def test_str_stringslice_minusone():
     op = SpaceOperation('direct_call', [const(func), v1], v2)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_r_r'
-    assert list(op1.args[2]) == [v1]
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % (
+        effectinfo.EffectInfo.OS_STR_SLICE_MINUSONE)
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1]
     assert op1.result == v2
+
+def test_list_ll_arraycopy():
+    from pypy.rlib.rgc import ll_arraycopy
+    LIST = lltype.GcArray(lltype.Signed)
+    PLIST = lltype.Ptr(LIST)
+    INT = lltype.Signed
+    FUNC = lltype.FuncType([PLIST]*2+[INT]*3, lltype.Void)
+    func = lltype.functionptr(FUNC, 'll_arraycopy', _callable=ll_arraycopy)
+    v1 = varoftype(PLIST)
+    v2 = varoftype(PLIST)
+    v3 = varoftype(INT)
+    v4 = varoftype(INT)
+    v5 = varoftype(INT)
+    v6 = varoftype(lltype.Void)
+    op = SpaceOperation('direct_call', [const(func), v1, v2, v3, v4, v5], v6)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'oopspec_call'
+    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ARRAYCOPY
+    assert op1.args[1].value == func
+    assert op1.args[2:] == [v1, v2, v3, v4, v5]
+    assert op1.result == v6

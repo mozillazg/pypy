@@ -6,6 +6,7 @@ from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter import support, heaptracker
+from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.codewriter.policy import log
 from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
@@ -310,6 +311,8 @@ class Transformer(object):
         # dispatch to various implementations depending on the oopspec_name
         if oopspec_name.startswith('list.') or oopspec_name == 'newlist':
             prepare = self._handle_list_call
+        elif oopspec_name.startswith('stroruni.'):
+            prepare = self._handle_stroruni_call
         elif oopspec_name.startswith('virtual_ref'):
             prepare = self._handle_virtual_ref_call
         else:
@@ -982,10 +985,7 @@ class Transformer(object):
         return extraop + [op]
 
     def do_fixed_list_ll_arraycopy(self, op, args, arraydescr):
-        calldescr = self.callcontrol.getcalldescr(op)
-        return SpaceOperation('arraycopy',
-                              [calldescr, op.args[0]] + args + [arraydescr],
-                              op.result)
+        return self._handle_oopspec_call(op, args, EffectInfo.OS_ARRAYCOPY)
 
     # ---------- resizable lists ----------
 
@@ -1021,6 +1021,30 @@ class Transformer(object):
                               itemsdescr, structdescr):
         return SpaceOperation('getfield_gc_i',
                               [args[0], lengthdescr], op.result)
+
+    # ----------
+    # Strings and Unicodes.
+
+    def _handle_oopspec_call(self, op, args, oopspecindex):
+        cc = self.callcontrol
+        calldescr = cc.getcalldescr(op, oopspecindex=oopspecindex)
+        return SpaceOperation('oopspec_call',
+                              [calldescr, op.args[0]] + args,
+                              op.result)
+
+    def _handle_stroruni_call(self, op, oopspec_name, args):
+        dict = {"stroruni.concat":          EffectInfo.OS_STR_CONCAT,
+                "stroruni.slice_startonly": EffectInfo.OS_STR_SLICE_STARTONLY,
+                "stroruni.slice_startstop": EffectInfo.OS_STR_SLICE_STARTSTOP,
+                "stroruni.slice_minusone":  EffectInfo.OS_STR_SLICE_MINUSONE}
+        base = dict[oopspec_name]
+        if args[0].concretetype.TO == rstr.STR:
+            offset = 0
+        elif args[0].concretetype.TO == rstr.UNICODE:
+            offset = 80
+        else:
+            assert 0, "args[0].concretetype must be STR or UNICODE"
+        return self._handle_oopspec_call(op, args, base + offset)
 
     # ----------
     # VirtualRefs.
