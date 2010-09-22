@@ -1,7 +1,6 @@
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import make_sure_not_resized
 
-
 def ResOperation(opnum, args, result, descr=None):
     cls = opclasses[opnum]
     op = cls(result)
@@ -10,17 +9,6 @@ def ResOperation(opnum, args, result, descr=None):
         assert isinstance(op, ResOpWithDescr)
         op.setdescr(descr)
     return op
-
-
-def ResOperation_fast(opnum, result, descr, *args):
-    cls = opclasses[opnum]
-    op = cls(result)
-    op.initarglist_fast(*args)
-    if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        op.setdescr(descr)
-    return op
-
 
 
 class AbstractResOp(object):
@@ -43,10 +31,6 @@ class AbstractResOp(object):
     # ---------------------------------------
 
     def initarglist(self, args):
-        "This is supposed to be called only just after the ResOp has been created"
-        raise NotImplementedError
-
-    def initarglist_fast(self, *args):
         "This is supposed to be called only just after the ResOp has been created"
         raise NotImplementedError
 
@@ -230,9 +214,6 @@ class NullaryOp(object):
     def initarglist(self, args):
         assert len(args) == 0
 
-    def initarglist_fast(self, *args):
-        assert len(args) == 0
-
     def getarglist(self):
         return []
 
@@ -251,10 +232,6 @@ class UnaryOp(object):
     _arg0 = None
 
     def initarglist(self, args):
-        assert len(args) == 1
-        self._arg0, = args
-
-    def initarglist_fast(self, *args):
         assert len(args) == 1
         self._arg0, = args
 
@@ -283,10 +260,6 @@ class BinaryOp(object):
     _arg1 = None
 
     def initarglist(self, args):
-        assert len(args) == 2
-        self._arg0, self._arg1 = args
-
-    def initarglist_fast(self, *args):
         assert len(args) == 2
         self._arg0, self._arg1 = args
 
@@ -326,10 +299,6 @@ class TernaryOp(object):
         assert len(args) == 3
         self._arg0, self._arg1, self._arg2 = args
 
-    def initarglist_fast(self, *args):
-        assert len(args) == 3
-        self._arg0, self._arg1, self._arg2 = args
-
     def getarglist(self):
         return [self._arg0, self._arg1, self._arg2]
 
@@ -362,9 +331,6 @@ class N_aryOp(object):
 
     def initarglist(self, args):
         self._args = args
-
-    def initarglist_fast(self, *args):
-        self._args = list(args)
 
     def getarglist(self):
         return self._args
@@ -489,7 +455,7 @@ _oplist = [
     'STRSETITEM/3',
     'UNICODESETITEM/3',
     'NEWUNICODE/1',
-    #'RUNTIMENEW/1',     # ootype operation
+    #'RUNTIMENEW/1',     # ootype operation    
     'COND_CALL_GC_WB/2d', # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
