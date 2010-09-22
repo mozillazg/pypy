@@ -694,7 +694,7 @@ def test_str_concat():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR_CONCAT
     assert op1.args[1].value == func
     assert op1.args[2:] == [v1, v2]
@@ -712,7 +712,7 @@ def test_unicode_concat():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_CONCAT
     assert op1.args[1].value == func
     assert op1.args[2:] == [v1, v2]
@@ -731,7 +731,7 @@ def test_str_stringslice_startonly():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_STARTONLY)
     assert op1.args[1].value == func
@@ -752,7 +752,7 @@ def test_str_stringslice_startstop():
     op = SpaceOperation('direct_call', [const(func), v1, v2, v3], v4)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_STARTSTOP)
     assert op1.args[1].value == func
@@ -770,7 +770,7 @@ def test_str_stringslice_minusone():
     op = SpaceOperation('direct_call', [const(func), v1], v2)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_MINUSONE)
     assert op1.args[1].value == func
@@ -793,7 +793,7 @@ def test_list_ll_arraycopy():
     op = SpaceOperation('direct_call', [const(func), v1, v2, v3, v4, v5], v6)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'oopspec_call'
+    assert op1.opname == 'call_oopspec'
     assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ARRAYCOPY
     assert op1.args[1].value == func
     assert op1.args[2:] == [v1, v2, v3, v4, v5]

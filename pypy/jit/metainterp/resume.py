@@ -253,8 +253,8 @@ class ResumeDataVirtualAdder(object):
     def make_varray(self, arraydescr):
         return VArrayInfo(arraydescr)
 
-    def make_vstring(self):
-        return VStringInfo()
+    def make_vstrconcat(self):
+        return VStrConcatInfo()
 
     def register_virtual_fields(self, virtualbox, fieldboxes):
         tagged = self.liveboxes_from_env.get(virtualbox, UNASSIGNEDVIRTUAL)
@@ -489,7 +489,11 @@ class VArrayInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
-class VStringInfo(AbstractVirtualInfo):
+class VStrConcatInfo(AbstractVirtualInfo):
+    """Stands for the string made out of the concatenation of all
+    fieldnums.  Each fieldnum can be an integer (the ord() of a single
+    character) or a pointer (another string).     XXX only integers implemented
+    """
     def __init__(self):
         pass
         #self.fieldnums = ...

@@ -165,12 +165,6 @@ def exec_new_with_vtable(cpu, clsbox):
 def do_new_with_vtable(cpu, _, clsbox):
     return BoxPtr(exec_new_with_vtable(cpu, clsbox))
 
-def do_arraycopy(cpu, _, calldescr, funcbox, x1box, x2box,
-                 x3box, x4box, x5box, arraydescr):
-    cpu.bh_call_v(funcbox.getint(), calldescr,
-                  [x3box.getint(), x4box.getint(), x5box.getint()],
-                  [x1box.getref_base(), x2box.getref_base()], None)
-
 def do_int_add_ovf(cpu, metainterp, box1, box2):
     # the overflow operations can be called without a metainterp, if an
     # overflow cannot occur

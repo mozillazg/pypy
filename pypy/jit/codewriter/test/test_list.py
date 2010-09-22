@@ -103,7 +103,7 @@ def test_fixed_ll_arraycopy():
                   varoftype(lltype.Signed), 
                   varoftype(lltype.Signed)],
                  lltype.Void, """
-                     oopspec_call <CallDescrOS1>, $'myfunc', %r0, %r1, %i0, %i1, %i2
+                     call_oopspec <CallDescrOS1>, $'myfunc', %r0, %r1, %i0, %i1, %i2
                  """)
 
 def test_fixed_getitem():
