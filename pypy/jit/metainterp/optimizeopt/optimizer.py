@@ -126,6 +126,12 @@ class OptValue(object):
     def setitem(self, index, value):
         raise NotImplementedError
 
+    def getchar(self):
+        raise NotImplementedError
+
+    def setchar(self, charvalue):
+        raise NotImplementedError
+
 class ConstantValue(OptValue):
     def __init__(self, box):
         self.make_constant(box)

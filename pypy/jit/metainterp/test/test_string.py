@@ -1,5 +1,5 @@
 import py
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, dont_look_inside, we_are_jitted
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.ootypesystem import ootype
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
@@ -71,6 +71,104 @@ class StringTests:
                     return ord(res)
         res = self.meta_interp(f, [6, 10])
         assert res == 6
+
+    def test_char2string_pure(self):
+        for dochr in [chr, ]: #unichr]:
+            jitdriver = JitDriver(greens = [], reds = ['n'])
+            @dont_look_inside
+            def escape(x):
+                pass
+            def f(n):
+                while n > 0:
+                    jitdriver.can_enter_jit(n=n)
+                    jitdriver.jit_merge_point(n=n)
+                    s = dochr(n)
+                    if not we_are_jitted():
+                        s += s     # forces to be a string
+                    if n > 100:
+                        escape(s)
+                    n -= 1
+                return 42
+            self.meta_interp(f, [6])
+            self.check_loops(newstr=0, strsetitem=0, strlen=0,
+                             newunicode=0, unicodesetitem=0, unicodelen=0)
+
+    def test_char2string_escape(self):
+        for dochr in [chr, ]: #unichr]:
+            jitdriver = JitDriver(greens = [], reds = ['n', 'total'])
+            @dont_look_inside
+            def escape(x):
+                return ord(x[0])
+            def f(n):
+                total = 0
+                while n > 0:
+                    jitdriver.can_enter_jit(n=n, total=total)
+                    jitdriver.jit_merge_point(n=n, total=total)
+                    s = dochr(n)
+                    if not we_are_jitted():
+                        s += s    # forces to be a string
+                    total += escape(s)
+                    n -= 1
+                return total
+            res = self.meta_interp(f, [6])
+            assert res == 21
+
+    def test_char2string2char(self):
+        for dochr in [chr, ]: #unichr]:
+            jitdriver = JitDriver(greens = [], reds = ['m', 'total'])
+            def f(m):
+                total = 0
+                while m > 0:
+                    jitdriver.can_enter_jit(m=m, total=total)
+                    jitdriver.jit_merge_point(m=m, total=total)
+                    string = dochr(m)
+                    if m > 100:
+                        string += string    # forces to be a string
+                    # read back the character
+                    c = string[0]
+                    total += ord(c)
+                    m -= 1
+                return total
+            res = self.meta_interp(f, [6])
+            assert res == 21
+            self.check_loops(newstr=0, strgetitem=0, strsetitem=0, strlen=0,
+                             newunicode=0, unicodegetitem=0, unicodesetitem=0,
+                             unicodelen=0)
+
+    def test_slice_startonly(self):
+        if 1:     # xxx unicode
+            jitdriver = JitDriver(greens = [], reds = ['m', 'total'])
+            def f(m):
+                total = 0
+                while m >= 0:
+                    jitdriver.can_enter_jit(m=m, total=total)
+                    jitdriver.jit_merge_point(m=m, total=total)
+                    string = 's0dgkwn349tXOGIEQR!'[m:]
+                    c = string[2*m]
+                    total += ord(c)
+                    m -= 1
+                return total
+            res = self.meta_interp(f, [6])
+            assert res == sum(map(ord, 'sgn9OE!'))
+            self.check_loops(call=0, call_pure=0,
+                             newstr=0, strgetitem=1, strsetitem=0, strlen=0)
+
+    def test_strconcat_pure(self):
+        for dochr in [chr, ]: #unichr]:
+            @dont_look_inside
+            def escape(x):
+                pass
+            def f(n, m):
+                s = dochr(n) + dochr(m)
+                if not we_are_jitted():
+                    escape(s)
+                return 42
+            self.interp_operations(f, [65, 66])
+            py.test.xfail()
+            self.check_operations_history(newstr=0, strsetitem=0,
+                                          newunicode=0, unicodesetitem=0,
+                                          call=0, call_pure=0)
+
 
 class TestOOtype(StringTests, OOJitMixin):
     CALL = "oosend"

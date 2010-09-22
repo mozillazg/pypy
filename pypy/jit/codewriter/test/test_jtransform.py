@@ -1,3 +1,4 @@
+import py
 import random
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
@@ -6,6 +7,9 @@ from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.translator.unsimplify import varoftype
 from pypy.jit.codewriter import heaptracker
+
+def const(x):
+    return Constant(x, lltype.typeOf(x))
 
 class FakeRTyper:
     class type_system: name = 'lltypesystem'
@@ -67,6 +71,14 @@ class FakeRegularIndirectCallControl:
     def calldescr_canraise(self, calldescr):
         return False
 
+class FakeBuiltinCallControl:
+    def guess_call_kind(self, op):
+        return 'builtin'
+    def getcalldescr(self, op):
+        return 'calldescr'
+    def calldescr_canraise(self, calldescr):
+        return False
+
 
 def test_optimize_goto_if_not():
     v1 = Variable()
@@ -107,7 +119,7 @@ def test_optimize_goto_if_not__exit():
     assert block.operations == []
     assert block.exitswitch == ('int_gt', v1, v2)
     assert block.exits == exits
-    assert exits[1].args == [Constant(True, lltype.Bool)]
+    assert exits[1].args == [const(True)]
 
 def test_optimize_goto_if_not__unknownop():
     v3 = Variable(); v3.concretetype = lltype.Bool
@@ -159,8 +171,8 @@ def test_symmetric():
            'float_gt': ('float_gt', 'float_lt'),
            }
     v3 = varoftype(lltype.Signed)
-    for v1 in [varoftype(lltype.Signed), Constant(42, lltype.Signed)]:
-        for v2 in [varoftype(lltype.Signed), Constant(43, lltype.Signed)]:
+    for v1 in [varoftype(lltype.Signed), const(42)]:
+        for v2 in [varoftype(lltype.Signed), const(43)]:
             for name1, name2 in ops.items():
                 op = SpaceOperation(name1, [v1, v2], v3)
                 op1 = Transformer(FakeCPU()).rewrite_operation(op)
@@ -177,8 +189,8 @@ def test_symmetric():
 
 def test_symmetric_int_add_ovf():
     v3 = varoftype(lltype.Signed)
-    for v1 in [varoftype(lltype.Signed), Constant(42, lltype.Signed)]:
-        for v2 in [varoftype(lltype.Signed), Constant(43, lltype.Signed)]:
+    for v1 in [varoftype(lltype.Signed), const(42)]:
+        for v2 in [varoftype(lltype.Signed), const(43)]:
             op = SpaceOperation('int_add_nonneg_ovf', [v1, v2], v3)
             oplist = Transformer(FakeCPU()).rewrite_operation(op)
             op0, op1 = oplist
@@ -218,7 +230,7 @@ def test_calls():
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
     fnptr = lltype.functionptr(FUNC, "g")    # no graph
-    c_fnptr = Constant(fnptr, concretetype=lltype.typeOf(fnptr))
+    c_fnptr = const(fnptr)
     vars = [varoftype(TYPE) for TYPE in argtypes]
     v_result = varoftype(restype)
     op = SpaceOperation('direct_call', [c_fnptr] + vars, v_result)
@@ -465,7 +477,7 @@ def test_int_eq():
     v1 = varoftype(lltype.Signed)
     v2 = varoftype(lltype.Signed)
     v3 = varoftype(lltype.Bool)
-    c0 = Constant(0, lltype.Signed)
+    c0 = const(0)
     #
     for opname, reducedname in [('int_eq', 'int_is_zero'),
                                 ('int_ne', 'int_is_true')]:
@@ -488,7 +500,7 @@ def test_ptr_eq():
     v1 = varoftype(rclass.OBJECTPTR)
     v2 = varoftype(rclass.OBJECTPTR)
     v3 = varoftype(lltype.Bool)
-    c0 = Constant(lltype.nullptr(rclass.OBJECT), rclass.OBJECTPTR)
+    c0 = const(lltype.nullptr(rclass.OBJECT))
     #
     for opname, reducedname in [('ptr_eq', 'ptr_iszero'),
                                 ('ptr_ne', 'ptr_nonzero')]:
@@ -511,7 +523,7 @@ def test_nongc_ptr_eq():
     v1 = varoftype(rclass.NONGCOBJECTPTR)
     v2 = varoftype(rclass.NONGCOBJECTPTR)
     v3 = varoftype(lltype.Bool)
-    c0 = Constant(lltype.nullptr(rclass.NONGCOBJECT), rclass.NONGCOBJECTPTR)
+    c0 = const(lltype.nullptr(rclass.NONGCOBJECT))
     #
     for opname, reducedname in [('ptr_eq', 'int_is_zero'),
                                 ('ptr_ne', 'int_is_true')]:
@@ -656,3 +668,83 @@ def test_int_abs():
     oplist = tr.rewrite_operation(op)
     assert oplist[0].opname == 'inline_call_ir_i'
     assert oplist[0].args[0] == 'somejitcode'
+
+def test_str_newstr():
+    c_STR = Constant(rstr.STR, lltype.Void)
+    c_flavor = Constant({'flavor': 'gc'}, lltype.Void)
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Ptr(rstr.STR))
+    op = SpaceOperation('malloc_varsize', [c_STR, c_flavor, v1], v2)
+    op1 = Transformer().rewrite_operation(op)
+    assert op1.opname == 'newstr'
+    assert op1.args == [v1]
+    assert op1.result == v2
+
+def test_str_concat():
+    py.test.xfail('later')
+    # test that the oopspec is present and correctly transformed
+    PSTR = lltype.Ptr(rstr.STR)
+    FUNC = lltype.FuncType([PSTR, PSTR], PSTR)
+    func = lltype.functionptr(FUNC, 'll_strconcat',
+                              _callable=rstr.LLHelpers.ll_strconcat)
+    v1 = varoftype(PSTR)
+    v2 = varoftype(PSTR)
+    v3 = varoftype(PSTR)
+    op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'residual_call_r_r'
+    assert list(op1.args[2]) == [v1, v2]
+    assert op1.result == v3
+
+def test_str_stringslice_startonly():
+    # test that the oopspec is present and correctly transformed
+    PSTR = lltype.Ptr(rstr.STR)
+    INT = lltype.Signed
+    FUNC = lltype.FuncType([PSTR, INT], PSTR)
+    func = lltype.functionptr(FUNC, 'll_stringslice_startonly',
+                             _callable=rstr.LLHelpers.ll_stringslice_startonly)
+    v1 = varoftype(PSTR)
+    v2 = varoftype(INT)
+    v3 = varoftype(PSTR)
+    op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'residual_call_ir_r'
+    assert list(op1.args[2]) == [v2]
+    assert list(op1.args[3]) == [v1]
+    assert op1.result == v3
+
+def test_str_stringslice_startstop():
+    # test that the oopspec is present and correctly transformed
+    PSTR = lltype.Ptr(rstr.STR)
+    INT = lltype.Signed
+    FUNC = lltype.FuncType([PSTR, INT, INT], PSTR)
+    func = lltype.functionptr(FUNC, 'll_stringslice_startstop',
+                             _callable=rstr.LLHelpers.ll_stringslice_startstop)
+    v1 = varoftype(PSTR)
+    v2 = varoftype(INT)
+    v3 = varoftype(INT)
+    v4 = varoftype(PSTR)
+    op = SpaceOperation('direct_call', [const(func), v1, v2, v3], v4)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'residual_call_ir_r'
+    assert list(op1.args[2]) == [v2, v3]
+    assert list(op1.args[3]) == [v1]
+    assert op1.result == v4
+
+def test_str_stringslice_minusone():
+    # test that the oopspec is present and correctly transformed
+    PSTR = lltype.Ptr(rstr.STR)
+    FUNC = lltype.FuncType([PSTR], PSTR)
+    func = lltype.functionptr(FUNC, 'll_stringslice_minusone',
+                              _callable=rstr.LLHelpers.ll_stringslice_minusone)
+    v1 = varoftype(PSTR)
+    v2 = varoftype(PSTR)
+    op = SpaceOperation('direct_call', [const(func), v1], v2)
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'residual_call_r_r'
+    assert list(op1.args[2]) == [v1]
+    assert op1.result == v2

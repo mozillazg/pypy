@@ -65,8 +65,8 @@ def _new_copy_contents_fun(TP, CHAR_TP, name):
         dst = llmemory.cast_ptr_to_adr(dst) + _str_ofs(dststart)
         llmemory.raw_memcopy(src, dst, llmemory.sizeof(CHAR_TP) * length)
     copy_string_contents._always_inline_ = True
-    copy_string_contents.oopspec = (
-        '%s.copy_contents(src, dst, srcstart, dststart, length)' % name)
+    #copy_string_contents.oopspec = (
+    #    '%s.copy_contents(src, dst, srcstart, dststart, length)' % name)
     return func_with_new_name(copy_string_contents, 'copy_%s_contents' % name)
 
 copy_string_contents = _new_copy_contents_fun(STR, Char, 'string')
@@ -326,6 +326,7 @@ class LLHelpers(AbstractLLHelpers):
         s1.copy_contents(s1, newstr, 0, 0, len1)
         s1.copy_contents(s2, newstr, 0, len1, len2)
         return newstr
+    #ll_strconcat.oopspec = 'stroruni.concat(s1, s2)'
 
     @purefunction
     def ll_strip(s, ch, left, right):
@@ -693,7 +694,6 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return result
 
-    @purefunction
     def ll_stringslice_startonly(s1, start):
         len1 = len(s1.chars)
         newstr = s1.malloc(len1 - start)
@@ -702,8 +702,8 @@ class LLHelpers(AbstractLLHelpers):
         assert start >= 0
         s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
+    ll_stringslice_startonly.oopspec = 'stroruni.slice_startonly(s1, start)'
 
-    @purefunction
     def ll_stringslice_startstop(s1, start, stop):
         if stop >= len(s1.chars):
             if start == 0:
@@ -715,14 +715,16 @@ class LLHelpers(AbstractLLHelpers):
         assert lgt >= 0
         s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
+    ll_stringslice_startstop.oopspec = ('stroruni.slice_startstop(s1, '
+                                            'start, stop)')
 
-    @purefunction
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
         newstr = s1.malloc(newlen)
         assert newlen >= 0
         s1.copy_contents(s1, newstr, 0, 0, newlen)
         return newstr
+    ll_stringslice_minusone.oopspec = 'stroruni.slice_minusone(s1)'
 
     def ll_split_chr(LIST, s, c):
         chars = s.chars
