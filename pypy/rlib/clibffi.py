@@ -552,16 +552,15 @@ class FuncPtr(AbstractFuncPtr):
         AbstractFuncPtr.__del__(self)
 
 class CDLL(object):
-    def __init__(self, libname, unload_on_finalization=True):
+    def __init__(self, libname):
         """Load the library, or raises DLOpenError."""
-        self.unload_on_finalization = unload_on_finalization
         self.lib = lltype.nullptr(rffi.CCHARP.TO)
         ll_libname = rffi.str2charp(libname)
         self.lib = dlopen(ll_libname)
         lltype.free(ll_libname, flavor='raw')
 
     def __del__(self):
-        if self.lib and self.unload_on_finalization:
+        if self.lib:
             dlclose(self.lib)
             self.lib = lltype.nullptr(rffi.CCHARP.TO)
 
