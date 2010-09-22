@@ -44,6 +44,8 @@ class FakeCallControl:
                 return '<CallDescr>'
             else:
                 return '<CallDescrOS%d>' % self.oopspecindex
+    def calldescr_canraise(self, calldescr):
+        return False
 
 def builtin_test(oopspec_name, args, RESTYPE, expected):
     v_result = varoftype(RESTYPE)
@@ -103,7 +105,7 @@ def test_fixed_ll_arraycopy():
                   varoftype(lltype.Signed), 
                   varoftype(lltype.Signed)],
                  lltype.Void, """
-                     call_oopspec <CallDescrOS1>, $'myfunc', %r0, %r1, %i0, %i1, %i2
+                     residual_call_ir_v $'myfunc', <CallDescrOS1>, I[%i0, %i1, %i2], R[%r0, %r1]
                  """)
 
 def test_fixed_getitem():

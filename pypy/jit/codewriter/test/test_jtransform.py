@@ -7,6 +7,7 @@ from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rlist
 from pypy.translator.unsimplify import varoftype
 from pypy.jit.codewriter import heaptracker, effectinfo
+from pypy.jit.codewriter.flatten import ListOfKind
 
 def const(x):
     return Constant(x, lltype.typeOf(x))
@@ -694,10 +695,10 @@ def test_str_concat():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR_CONCAT
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1, v2]
+    assert op1.opname == 'residual_call_r_r'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR_CONCAT
+    assert op1.args[2] == ListOfKind('ref', [v1, v2])
     assert op1.result == v3
 
 def test_unicode_concat():
@@ -712,10 +713,10 @@ def test_unicode_concat():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_CONCAT
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1, v2]
+    assert op1.opname == 'residual_call_r_r'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_CONCAT
+    assert op1.args[2] == ListOfKind('ref', [v1, v2])
     assert op1.result == v3
 
 def test_str_stringslice_startonly():
@@ -731,11 +732,12 @@ def test_str_stringslice_startonly():
     op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % (
+    assert op1.opname == 'residual_call_ir_r'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_STARTONLY)
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1, v2]
+    assert op1.args[2] == ListOfKind('int', [v2])
+    assert op1.args[3] == ListOfKind('ref', [v1])
     assert op1.result == v3
 
 def test_str_stringslice_startstop():
@@ -752,11 +754,12 @@ def test_str_stringslice_startstop():
     op = SpaceOperation('direct_call', [const(func), v1, v2, v3], v4)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % (
+    assert op1.opname == 'residual_call_ir_r'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_STARTSTOP)
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1, v2, v3]
+    assert op1.args[2] == ListOfKind('int', [v2, v3])
+    assert op1.args[3] == ListOfKind('ref', [v1])
     assert op1.result == v4
 
 def test_str_stringslice_minusone():
@@ -770,11 +773,11 @@ def test_str_stringslice_minusone():
     op = SpaceOperation('direct_call', [const(func), v1], v2)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % (
+    assert op1.opname == 'residual_call_r_r'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % (
         effectinfo.EffectInfo.OS_STR_SLICE_MINUSONE)
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1]
+    assert op1.args[2] == ListOfKind('ref', [v1])
     assert op1.result == v2
 
 def test_list_ll_arraycopy():
@@ -793,8 +796,8 @@ def test_list_ll_arraycopy():
     op = SpaceOperation('direct_call', [const(func), v1, v2, v3, v4, v5], v6)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'call_oopspec'
-    assert op1.args[0] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ARRAYCOPY
-    assert op1.args[1].value == func
-    assert op1.args[2:] == [v1, v2, v3, v4, v5]
-    assert op1.result == v6
+    assert op1.opname == 'residual_call_ir_v'
+    assert op1.args[0].value == func
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ARRAYCOPY
+    assert op1.args[2] == ListOfKind('int', [v3, v4, v5])
+    assert op1.args[3] == ListOfKind('ref', [v1, v2])
