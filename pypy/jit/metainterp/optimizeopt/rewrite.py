@@ -138,6 +138,7 @@ class OptRewrite(Optimization):
         # replace CALL_PURE with just CALL
         self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
                                          op.descr))
+
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.args[0])
         if value.is_constant():

@@ -213,7 +213,6 @@ _oplist = [
     'SETARRAYITEM_RAW/3d',
     'SETFIELD_GC/2d',
     'SETFIELD_RAW/2d',
-    'ARRAYCOPY/7d',      # removed before it's passed to the backend
     'NEWSTR/1',
     'STRSETITEM/3',
     'UNICODESETITEM/3',

@@ -115,6 +115,8 @@ class LLtypeMixin(object):
     mayforcevirtdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                  EffectInfo([nextdescr], [], [],
                             EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE))
+    arraycopydescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [], oopspecindex=EffectInfo.OS_ARRAYCOPY))
     class LoopToken(AbstractDescr):
         pass
     asmdescr = LoopToken() # it can be whatever, it's not a descr though

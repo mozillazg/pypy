@@ -1028,7 +1028,7 @@ class Transformer(object):
     def _handle_oopspec_call(self, op, args, oopspecindex):
         cc = self.callcontrol
         calldescr = cc.getcalldescr(op, oopspecindex=oopspecindex)
-        return SpaceOperation('oopspec_call',
+        return SpaceOperation('call_oopspec',
                               [calldescr, op.args[0]] + args,
                               op.result)
 

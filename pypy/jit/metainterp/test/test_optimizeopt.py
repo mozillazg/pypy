@@ -3080,7 +3080,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         setarrayitem_gc(p1, 1, 1, descr=arraydescr)
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p2, 1, 3, descr=arraydescr)
-        arraycopy(0, 0, p1, p2, 1, 1, 2, descr=arraydescr)
+        call(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
         i2 = getarrayitem_gc(p2, 1, descr=arraydescr)
         jump(i2)
         '''
@@ -3097,7 +3097,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p1, 0, i0, descr=arraydescr)
         setarrayitem_gc(p2, 0, 3, descr=arraydescr)
-        arraycopy(0, 0, p1, p2, 1, 1, 2, descr=arraydescr)
+        call(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
         i2 = getarrayitem_gc(p2, 0, descr=arraydescr)
         jump(i2)
         '''
@@ -3114,7 +3114,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p1, 2, 10, descr=arraydescr)
         setarrayitem_gc(p2, 2, 13, descr=arraydescr)
-        arraycopy(0, 0, p1, p2, 0, 0, 3, descr=arraydescr)
+        call(0, p1, p2, 0, 0, 3, descr=arraycopydescr)
         jump(p2)
         '''
         expected = '''
@@ -3131,7 +3131,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         ops = '''
         [p1]
         p0 = new_array(0, descr=arraydescr)
-        arraycopy(0, 0, p0, p1, 0, 0, 0, descr=arraydescr)
+        call(0, p0, p1, 0, 0, 0, descr=arraycopydescr)
         jump(p1)
         '''
         expected = '''

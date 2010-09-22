@@ -155,19 +155,23 @@ class StringTests:
 
     def test_strconcat_pure(self):
         for dochr in [chr, ]: #unichr]:
+            jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
             @dont_look_inside
             def escape(x):
                 pass
             def f(n, m):
-                s = dochr(n) + dochr(m)
-                if not we_are_jitted():
-                    escape(s)
+                while m >= 0:
+                    jitdriver.can_enter_jit(m=m, n=n)
+                    jitdriver.jit_merge_point(m=m, n=n)
+                    s = dochr(n) + dochr(m)
+                    if m > 100:
+                        escape(s)
+                    m -= 1
                 return 42
-            self.interp_operations(f, [65, 66])
-            py.test.xfail()
-            self.check_operations_history(newstr=0, strsetitem=0,
-                                          newunicode=0, unicodesetitem=0,
-                                          call=0, call_pure=0)
+            self.meta_interp(f, [6, 7])
+            self.check_loops(newstr=0, strsetitem=0,
+                             newunicode=0, unicodesetitem=0,
+                             call=0, call_pure=0)
 
 
 class TestOOtype(StringTests, OOJitMixin):

@@ -7,6 +7,8 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import *
+from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.rlib.unroll import unrolling_iterable
 
 
 class AbstractVirtualValue(OptValue):
@@ -193,37 +195,42 @@ class VArrayValue(AbstractVirtualValue):
     def _make_virtual(self, modifier):
         return modifier.make_varray(self.arraydescr)
 
-class VStringLength1Value(AbstractVirtualValue):
+class VStringPlainValue(AbstractVirtualValue):
 
-    def __init__(self, optimizer, keybox, source_op=None):
+    def __init__(self, optimizer, size, keybox, source_op=None):
         AbstractVirtualValue.__init__(self, optimizer, keybox, source_op)
-        self._char = CVAL_ZERO
+        self._chars = [CVAL_ZERO] * size
 
-    def getchar(self):
-        return self._char
+    def getlength(self):
+        return len(self._chars)
 
-    def setchar(self, charvalue):
+    def getitem(self, index):
+        return self._chars[index]
+
+    def setitem(self, index, charvalue):
         assert isinstance(charvalue, OptValue)
-        self._char = charvalue
+        self._chars[index] = charvalue
 
     def _really_force(self):
         assert self.source_op is not None
         newoperations = self.optimizer.newoperations
         newoperations.append(self.source_op)
         self.box = box = self.source_op.result
-        charbox = self._char.force_box()
-        op = ResOperation(rop.STRSETITEM,
-                          [box, ConstInt(0), charbox], None)
+        for i in range(len(self._chars)):
+            charbox = self._chars[i].force_box()
+            op = ResOperation(rop.STRSETITEM,
+                              [box, ConstInt(i), charbox], None)
         newoperations.append(op)
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            charboxes = [self._char.get_key_box()]
+            charboxes = [box.get_key_box() for box in self._chars]
             modifier.register_virtual_fields(self.keybox, charboxes)
-            self._char.get_args_for_fail(modifier)
+            for box in self._chars:
+                box.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
-        return modifier.make_vstring()
+        return modifier.make_vstrconcat()
 
 class __extend__(SpecNode):
     def setup_virtual_node(self, optimizer, box, newinputargs):
@@ -313,8 +320,8 @@ class OptVirtualize(Optimization):
         self.make_equal_to(box, vvalue)
         return vvalue
 
-    def make_vstring_length1(self, box, source_op=None):
-        vvalue = VStringLength1Value(self.optimizer, box, source_op)
+    def make_vstring_plain(self, length, box, source_op=None):
+        vvalue = VStringPlainValue(self.optimizer, length, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -457,12 +464,25 @@ class OptVirtualize(Optimization):
         ###self.heap_op_optimizer.optimize_SETARRAYITEM_GC(op, value, fieldvalue)
         self.emit_operation(op)
 
-    def optimize_ARRAYCOPY(self, op):
-        source_value = self.getvalue(op.args[2])
-        dest_value = self.getvalue(op.args[3])
-        source_start_box = self.get_constant_box(op.args[4])
-        dest_start_box = self.get_constant_box(op.args[5])
-        length = self.get_constant_box(op.args[6])
+    def optimize_CALL(self, op):
+        # dispatch based on 'oopspecindex' to a method that handles
+        # specifically the given oopspec call.  For non-oopspec calls,
+        # oopspecindex is just zero.
+        effectinfo = op.descr.get_extra_info()
+        if effectinfo is not None:
+            oopspecindex = effectinfo.oopspecindex
+            for value, meth in opt_call_oopspec_ops:
+                if oopspecindex == value:
+                    if meth(self, op):
+                        return
+        self.emit_operation(op)
+
+    def opt_call_oopspec_ARRAYCOPY(self, op):
+        source_value = self.getvalue(op.args[1])
+        dest_value = self.getvalue(op.args[2])
+        source_start_box = self.get_constant_box(op.args[3])
+        dest_start_box = self.get_constant_box(op.args[4])
+        length = self.get_constant_box(op.args[5])
         if (source_value.is_virtual() and source_start_box and dest_start_box
             and length and dest_value.is_virtual()):
             # XXX optimize the case where dest value is not virtual,
@@ -472,48 +492,47 @@ class OptVirtualize(Optimization):
             for index in range(length.getint()):
                 val = source_value.getitem(index + source_start)
                 dest_value.setitem(index + dest_start, val)
-            return
+            return True
         if length and length.getint() == 0:
-            return # 0-length arraycopy
-        descr = op.args[0]
-        assert isinstance(descr, AbstractDescr)
-        self.emit_operation(ResOperation(rop.CALL, op.args[1:], op.result,
-                                         descr))
+            return True # 0-length arraycopy
+        return False
 
     def optimize_NEWSTR(self, op):
         length_box = self.get_constant_box(op.args[0])
-        if length_box and length_box.getint() == 1:     # NEWSTR(1)
+        if length_box:
             # if the original 'op' did not have a ConstInt as argument,
             # build a new one with the ConstInt argument
             if not isinstance(op.args[0], ConstInt):
-                op = ResOperation(rop.NEWSTR, [CONST_1], op.result)
-            self.make_vstring_length1(op.result, op)
+                op = ResOperation(rop.NEWSTR, [length_box], op.result)
+            self.make_vstring_plain(length_box.getint(), op.result, op)
         else:
             self.emit_operation(op)
 
     def optimize_STRSETITEM(self, op):
         value = self.getvalue(op.args[0])
-        if value.is_virtual():
-            charvalue = self.getvalue(op.args[2])
-            value.setchar(charvalue)
-        else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+        if value.is_virtual() and isinstance(value, VStringPlainValue):
+            indexbox = self.get_constant_box(op.args[1])
+            if indexbox is not None:
+                value.setitem(indexbox.getint(), self.getvalue(op.args[2]))
+                return
+        value.ensure_nonnull()
+        self.emit_operation(op)
 
     def optimize_STRGETITEM(self, op):
         value = self.getvalue(op.args[0])
-        if value.is_virtual():
-            charvalue = value.getchar()
-            assert charvalue is not None
-            self.make_equal_to(op.result, charvalue)
-        else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+        if value.is_virtual() and isinstance(value, VStringPlainValue):
+            indexbox = self.get_constant_box(op.args[1])
+            if indexbox is not None:
+                charvalue = value.getitem(indexbox.getint())
+                self.make_equal_to(op.result, charvalue)
+                return
+        value.ensure_nonnull()
+        self.emit_operation(op)
 
     def optimize_STRLEN(self, op):
         value = self.getvalue(op.args[0])
         if value.is_virtual():
-            self.make_constant_int(op.result, 1)
+            self.make_constant_int(op.result, value.getlength())
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
@@ -528,3 +547,14 @@ class OptVirtualize(Optimization):
             self.emit_operation(op)
 
 optimize_ops = _findall(OptVirtualize, 'optimize_')
+
+def _findall_call_oopspec():
+    prefix = 'opt_call_oopspec_'
+    result = []
+    for name in dir(OptVirtualize):
+        if name.startswith(prefix):
+            value = getattr(EffectInfo, 'OS_' + name[len(prefix):])
+            assert isinstance(value, int) and value != 0
+            result.append((value, getattr(OptVirtualize, name)))
+    return unrolling_iterable(result)
+opt_call_oopspec_ops = _findall_call_oopspec()
