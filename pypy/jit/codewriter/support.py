@@ -227,10 +227,11 @@ def _ll_2_libffi_push_arg(llfunc, value):
     func = cast_base_ptr_to_instance(FuncPtr, llfunc)
     return func.push_arg(value)
 
-def _ll_2_libffi_call(llfunc, RES_TP):
+def _ll_3_libffi_call(llfunc, symfunc, RES_TP):
     from pypy.rlib.libffi import FuncPtr
     func = cast_base_ptr_to_instance(FuncPtr, llfunc)
-    return func.call(lltype.Float) # XXX: should be RES_TP, but it doesn't work
+    return func.call(symfunc, lltype.Signed)
+# XXX: should be RES_TP, but it doesn't work
 
 
 # in the following calls to builtins, the JIT is allowed to look inside:
