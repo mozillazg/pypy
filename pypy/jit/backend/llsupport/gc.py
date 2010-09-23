@@ -41,9 +41,12 @@ class GcLLDescr_boehm(GcLLDescription):
     moving_gc = False
     gcrootmap = None
 
-    def __init__(self, gcdescr, translator, rtyper):
-        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
-        # grab a pointer to the Boehm 'malloc' function
+    @classmethod
+    def configure_boehm_once(cls):
+        """ Configure boehm only once, since we don't cache failures
+        """
+        if hasattr(cls, 'malloc_fn_ptr'):
+            return cls.malloc_fn_ptr
         from pypy.rpython.tool import rffi_platform
         compilation_info = rffi_platform.configure_boehm()
 
@@ -59,13 +62,20 @@ class GcLLDescr_boehm(GcLLDescription):
             GC_MALLOC = "GC_local_malloc"
         else:
             GC_MALLOC = "GC_malloc"
-
         malloc_fn_ptr = rffi.llexternal(GC_MALLOC,
                                         [lltype.Signed], # size_t, but good enough
                                         llmemory.GCREF,
                                         compilation_info=compilation_info,
                                         sandboxsafe=True,
                                         _nowrapper=True)
+        cls.malloc_fn_ptr = malloc_fn_ptr
+        cls.compilation_info = compilation_info
+        return malloc_fn_ptr
+
+    def __init__(self, gcdescr, translator, rtyper):
+        GcLLDescription.__init__(self, gcdescr, translator, rtyper)
+        # grab a pointer to the Boehm 'malloc' function
+        malloc_fn_ptr = self.configure_boehm_once()
         self.funcptr_for_new = malloc_fn_ptr
 
         # on some platform GC_init is required before any other
@@ -73,7 +83,7 @@ class GcLLDescr_boehm(GcLLDescription):
         # XXX move this to tests
         init_fn_ptr = rffi.llexternal("GC_init",
                                       [], lltype.Void,
-                                      compilation_info=compilation_info,
+                                      compilation_info=self.compilation_info,
                                       sandboxsafe=True,
                                       _nowrapper=True)
 
@@ -559,12 +569,12 @@ class GcLLDescr_framework(GcLLDescription):
         #
         newops = []
         for op in operations:
-            if op.opnum == rop.DEBUG_MERGE_POINT:
+            if op.getopnum() == rop.DEBUG_MERGE_POINT:
                 continue
             # ---------- replace ConstPtrs with GETFIELD_RAW ----------
             # xxx some performance issue here
-            for i in range(len(op.args)):
-                v = op.args[i]
+            for i in range(op.numargs()):
+                v = op.getarg(i)
                 if isinstance(v, ConstPtr) and bool(v.value):
                     addr = self.gcrefs.get_address_of_gcref(v.value)
                     # ^^^even for non-movable objects, to record their presence
@@ -574,23 +584,21 @@ class GcLLDescr_framework(GcLLDescription):
                         newops.append(ResOperation(rop.GETFIELD_RAW,
                                                    [ConstInt(addr)], box,
                                                    self.single_gcref_descr))
-                        op.args[i] = box
+                        op.setarg(i, box)
             # ---------- write barrier for SETFIELD_GC ----------
-            if op.opnum == rop.SETFIELD_GC:
-                v = op.args[1]
+            if op.getopnum() == rop.SETFIELD_GC:
+                v = op.getarg(1)
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
-                    self._gen_write_barrier(newops, op.args[0], v)
-                    op = ResOperation(rop.SETFIELD_RAW, op.args, None,
-                                      descr=op.descr)
+                    self._gen_write_barrier(newops, op.getarg(0), v)
+                    op = op.copy_and_change(rop.SETFIELD_RAW)
             # ---------- write barrier for SETARRAYITEM_GC ----------
-            if op.opnum == rop.SETARRAYITEM_GC:
-                v = op.args[2]
+            if op.getopnum() == rop.SETARRAYITEM_GC:
+                v = op.getarg(2)
                 if isinstance(v, BoxPtr) or (isinstance(v, ConstPtr) and
                                              bool(v.value)): # store a non-NULL
-                    self._gen_write_barrier(newops, op.args[0], v)
-                    op = ResOperation(rop.SETARRAYITEM_RAW, op.args, None,
-                                      descr=op.descr)
+                    self._gen_write_barrier(newops, op.getarg(0), v)
+                    op = op.copy_and_change(rop.SETARRAYITEM_RAW)
             # ----------
             newops.append(op)
         del operations[:]
