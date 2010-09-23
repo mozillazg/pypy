@@ -718,6 +718,11 @@ def test_unicode_concat():
     assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_CONCAT
     assert op1.args[2] == ListOfKind('ref', [v1, v2])
     assert op1.result == v3
+    #
+    # check the callinfo_for_oopspec
+    got = effectinfo.callinfo_for_oopspec(effectinfo.EffectInfo.OS_UNI_CONCAT)
+    assert got[0] == op1.args[1]    # the calldescr
+    assert heaptracker.int2adr(got[1]) == llmemory.cast_ptr_to_adr(func)
 
 def test_str_stringslice_startonly():
     # test that the oopspec is present and correctly transformed

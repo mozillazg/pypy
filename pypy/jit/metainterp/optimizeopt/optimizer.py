@@ -306,6 +306,9 @@ class Optimizer(Optimization):
         # accumulate counters
         self.resumedata_memo.update_counters(self.metainterp_sd.profiler)
 
+    def send_extra_operation(self, op):
+        self.first_optimization.propagate_forward(op)
+
     def propagate_forward(self, op):
         self.producer[op.result] = op
         opnum = op.opnum

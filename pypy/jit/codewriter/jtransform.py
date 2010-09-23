@@ -1,12 +1,12 @@
 import py, sys
-from pypy.rpython.lltypesystem import lltype, rstr, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass
 from pypy.rpython import rlist
 from pypy.jit.metainterp.history import getkind
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.objspace.flow.model import Block, Link, c_last_exception
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter import support, heaptracker
-from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.codewriter.effectinfo import EffectInfo, _callinfo_for_oopspec
 from pypy.jit.codewriter.policy import log
 from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
@@ -1029,6 +1029,8 @@ class Transformer(object):
 
     def _handle_oopspec_call(self, op, args, oopspecindex):
         calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
+        func = heaptracker.adr2int(llmemory.cast_ptr_to_adr(op.args[0].value))
+        _callinfo_for_oopspec[oopspecindex] = calldescr, func
         op1 = self.rewrite_call(op, 'residual_call',
                                 [op.args[0], calldescr],
                                 args=args)
