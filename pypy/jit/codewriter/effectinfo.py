@@ -126,15 +126,24 @@ class VirtualizableAnalyzer(BoolGraphAnalyzer):
 
 _callinfo_for_oopspec = {}
 
-def callinfo_for_oopspec_memo(oopspecindex):
+def _callinfo_for_oopspec_memo(oopspecindex):
     return _callinfo_for_oopspec.get(oopspecindex, (None, 0))
-callinfo_for_oopspec_memo._annspecialcase_ = 'specialize:memo'
+_callinfo_for_oopspec_memo._annspecialcase_ = 'specialize:memo'
 
 def callinfo_for_oopspec(oopspecindex):
     """A memo function that returns the calldescr and the function
     address (as an int) of one of the OS_XYZ functions defined above.
     Don't use this if there might be several implementations of the same
     OS_XYZ specialized by type, e.g. OS_ARRAYCOPY."""
-    calldescr, func = callinfo_for_oopspec_memo(oopspecindex)
+    calldescr, func = _callinfo_for_oopspec_memo(oopspecindex)
     assert calldescr is not None
     return calldescr, func
+
+def funcptr_for_oopspec(oopspecindex):
+    """A memo function that returns a pointer to the function described
+    by OS_XYZ (as a real low-level function pointer)."""
+    from pypy.jit.codewriter import heaptracker
+    _, func_as_int = _callinfo_for_oopspec.get(oopspecindex, (None, 0))
+    funcadr = heaptracker.int2adr(func_as_int)
+    return funcadr.ptr
+funcptr_for_oopspec._annspecialcase_ = 'specialize:memo'
