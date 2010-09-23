@@ -342,10 +342,11 @@ class Optimizer(Optimization):
         elif op.returns_bool_result():
             self.bool_boxes[self.getvalue(op.result)] = None
         if op.invariant:
+            op.invariant = False
             self.preamble.append(op)
         else:
             self.newoperations.append(op)
-
+            
     def store_final_boxes_in_guard(self, op):
         ###pendingfields = self.heap_op_optimizer.force_lazy_setfields_for_guard()
         descr = op.descr

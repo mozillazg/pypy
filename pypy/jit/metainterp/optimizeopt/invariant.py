@@ -42,18 +42,17 @@ class OptInvariant(Optimization):
                 jmp.descr = loop.token
                 preamble.operations.append(jmp)
 
-        elif (op.is_always_pure() or op.is_foldable_guard() or
-              op.is_ovf()):
+        elif (op.is_always_pure()):# or op.is_foldable_guard() or op.is_ovf()):
             if self.has_invariant_args(op):
                 self.emit_invariant(op)
                 return
 
-        elif op.is_guard_overflow():
-            prev_op = self.optimizer.loop.operations[self.optimizer.i - 1]
-            v = self.getvalue(prev_op.result)
-            if v.invariant:
-                self.emit_invariant(op)
-                return
+        #elif op.is_guard_overflow():
+        #    prev_op = self.optimizer.loop.operations[self.optimizer.i - 1]
+        #    v = self.getvalue(prev_op.result)
+        #    if v.invariant:
+        #        self.emit_invariant(op)
+        #        return
             
         self.emit_operation(op)
 
