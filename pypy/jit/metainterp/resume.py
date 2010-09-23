@@ -5,7 +5,8 @@ from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
 from pypy.jit.codewriter.effectinfo import EffectInfo, callinfo_for_oopspec
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.jit.codewriter.effectinfo import funcptr_for_oopspec
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import have_debug_prints
@@ -678,9 +679,8 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_CONCAT)
         str1box = self.decode_box(str1num, REF)
         str2box = self.decode_box(str2num, REF)
-        return self.metainterp.execute_and_record(rop.CALL, calldescr,
-                                                  ConstInt(func),
-                                                  str1box, str2box)
+        return self.metainterp.execute_and_record_varargs(
+            rop.CALL, [ConstInt(func), str1box, str2box], calldescr)
 
     def setfield(self, descr, structbox, fieldnum):
         if descr.is_pointer_field():
@@ -901,6 +901,15 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
 
     def allocate_string(self, length):
         return self.cpu.bh_newstr(length)
+
+    def concat_strings(self, str1num, str2num):
+        str1 = self.decode_ref(str1num)
+        str2 = self.decode_ref(str2num)
+        str1 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str1)
+        str2 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str2)
+        funcptr = funcptr_for_oopspec(EffectInfo.OS_STR_CONCAT)
+        result = funcptr(str1, str2)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
 
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
