@@ -2,7 +2,7 @@
 """
 
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
@@ -202,6 +202,24 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
 
 def do_same_as(cpu, _, box):
     return box.clonebox()
+
+def do_copystrcontent(cpu, _, srcbox, dstbox,
+                      srcstartbox, dststartbox, lengthbox):
+    src = srcbox.getptr(lltype.Ptr(rstr.STR))
+    dst = dstbox.getptr(lltype.Ptr(rstr.STR))
+    srcstart = srcstartbox.getint()
+    dststart = dststartbox.getint()
+    length = lengthbox.getint()
+    rstr.copy_string_contents(src, dst, srcstart, dststart, length)
+
+def do_copyunicodecontent(cpu, _, srcbox, dstbox,
+                          srcstartbox, dststartbox, lengthbox):
+    src = srcbox.getptr(lltype.Ptr(rstr.UNICODE))
+    dst = dstbox.getptr(lltype.Ptr(rstr.UNICODE))
+    srcstart = srcstartbox.getint()
+    dststart = dststartbox.getint()
+    length = lengthbox.getint()
+    rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
 
 # ____________________________________________________________
 

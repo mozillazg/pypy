@@ -221,6 +221,8 @@ _oplist = [
     'COND_CALL_GC_WB',  # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
+    'COPYSTRCONTENT/5',       # src, dst, srcstart, dststart, length
+    'COPYUNICODECONTENT/5',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL',

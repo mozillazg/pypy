@@ -126,6 +126,16 @@ class OptValue(object):
     def setitem(self, index, value):
         raise NotImplementedError
 
+    def getstrlen(self, newoperations):
+        box = self.force_box()
+        lengthbox = BoxInt()
+        newoperations.append(ResOperation(rop.STRLEN, [box], lengthbox))
+        return lengthbox
+
+    def string_copy_parts(self, *args):
+        from pypy.jit.metainterp.optimizeopt import virtualize
+        return virtualize.default_string_copy_parts(self, *args)
+
 class ConstantValue(OptValue):
     def __init__(self, box):
         self.make_constant(box)
