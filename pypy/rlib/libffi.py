@@ -1,6 +1,7 @@
 
 from pypy.rlib.clibffi import *
 from pypy.rlib.objectmodel import specialize
+from pypy.rlib import jit
 
 class AbstractArg(object):
     next = None
@@ -32,6 +33,7 @@ class Func(object):
         # the future it will replace it completely
         self.funcptr = funcptr
 
+    @jit.unroll_safe
     @specialize.arg(2)
     def call(self, argchain, RESULT):
         # implementation detail
@@ -39,6 +41,4 @@ class Func(object):
         while arg:
             arg.push(self.funcptr)
             arg = arg.next
-        return self.funcptr.call(RESULT)
-
-
+        return self.funcptr.call(self.funcptr.funcsym, RESULT)
