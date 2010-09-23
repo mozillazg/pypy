@@ -3891,7 +3891,130 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
+    def test_newstr_1(self):
+        ops = """
+        [i0]
+        p1 = newstr(1)
+        strsetitem(p1, 0, i0)
+        i1 = strgetitem(p1, 0)
+        jump(i1)
+        """
+        expected = """
+        [i0]
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
 
+    def test_newstr_2(self):
+        ops = """
+        [i0, i1]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i0)
+        strsetitem(p1, 1, i1)
+        i2 = strgetitem(p1, 1)
+        i3 = strgetitem(p1, 0)
+        jump(i2, i3)
+        """
+        expected = """
+        [i0, i1]
+        jump(i1, i0)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_concat_1(self):
+        ops = """
+        [p1, p2]
+        p3 = call(0, p1, p2, descr=strconcatdescr)
+        jump(p2, p3)
+        """
+        expected = """
+        [p1, p2]
+        i1 = strlen(p1)
+        i2 = strlen(p2)
+        i3 = int_add(i1, i2)
+        p3 = newstr(i3)
+        i4 = strlen(p1)
+        copystrcontent(p1, p3, 0, 0, i4)
+        i5 = strlen(p2)
+        i6 = int_add(i4, i5)      # will be killed by the backend
+        copystrcontent(p2, p3, 0, i4, i5)
+        jump(p2, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_concat_vstr2_str(self):
+        ops = """
+        [i0, i1, p2]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i0)
+        strsetitem(p1, 1, i1)
+        p3 = call(0, p1, p2, descr=strconcatdescr)
+        jump(i1, i0, p3)
+        """
+        expected = """
+        [i0, i1, p2]
+        i2 = strlen(p2)
+        i3 = int_add(2, i2)
+        p3 = newstr(i3)
+        strsetitem(p3, 0, i0)
+        strsetitem(p3, 1, i1)
+        i4 = strlen(p2)
+        i5 = int_add(2, i4)      # will be killed by the backend
+        copystrcontent(p2, p3, 0, 2, i4)
+        jump(i1, i0, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_concat_str_vstr2(self):
+        ops = """
+        [i0, i1, p2]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i0)
+        strsetitem(p1, 1, i1)
+        p3 = call(0, p2, p1, descr=strconcatdescr)
+        jump(i1, i0, p3)
+        """
+        expected = """
+        [i0, i1, p2]
+        i2 = strlen(p2)
+        i3 = int_add(i2, 2)
+        p3 = newstr(i3)
+        i4 = strlen(p2)
+        copystrcontent(p2, p3, 0, 0, i4)
+        strsetitem(p3, i4, i0)
+        i5 = int_add(i4, 1)
+        strsetitem(p3, i5, i1)
+        i6 = int_add(i5, 1)      # will be killed by the backend
+        jump(i1, i0, p3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_concat_str_str_str(self):
+        ops = """
+        [p1, p2, p3]
+        p4 = call(0, p1, p2, descr=strconcatdescr)
+        p5 = call(0, p4, p3, descr=strconcatdescr)
+        jump(p2, p3, p5)
+        """
+        expected = """
+        [p1, p2, p3]
+        i1 = strlen(p1)
+        i2 = strlen(p2)
+        i12 = int_add(i1, i2)
+        i3 = strlen(p3)
+        i123 = int_add(i12, i3)
+        p5 = newstr(i123)
+        i1b = strlen(p1)
+        copystrcontent(p1, p5, 0, 0, i1b)
+        i2b = strlen(p2)
+        i12b = int_add(i1b, i2b)
+        copystrcontent(p2, p5, 0, i1b, i2b)
+        i3b = strlen(p3)
+        i123b = int_add(i12b, i3b)      # will be killed by the backend
+        copystrcontent(p3, p5, 0, i12b, i3b)
+        jump(p2, p3, p5)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
 
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):

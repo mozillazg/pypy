@@ -7,7 +7,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import *
-from pypy.jit.codewriter.effectinfo import EffectInfo, callinfo_for_oopspec
+from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rlib.unroll import unrolling_iterable
 
 
@@ -198,8 +198,13 @@ class VArrayValue(AbstractVirtualValue):
 
 class VAbstractStringValue(AbstractVirtualValue):
 
-    def getlengthvalue(self):
-        raise NotImplementedError
+    def _really_force(self):
+        assert self.source_op is not None
+        self.box = box = self.source_op.result
+        newoperations = self.optimizer.newoperations
+        lengthbox = self.getstrlen(newoperations)
+        newoperations.append(ResOperation(rop.NEWSTR, [lengthbox], box))
+        self.string_copy_parts(newoperations, box, CONST_0)
 
 
 class VStringPlainValue(VAbstractStringValue):
@@ -207,12 +212,12 @@ class VStringPlainValue(VAbstractStringValue):
 
     def setup(self, size):
         self._chars = [CVAL_ZERO] * size
-        self._lengthvalue = None     # cache only
+        self._lengthbox = None     # cache only
 
-    def getlengthvalue(self):
-        if self._lengthvalue is None:
-            self._lengthvalue = ConstantValue(ConstInt(len(self._chars)))
-        return self._lengthvalue
+    def getstrlen(self, _):
+        if self._lengthbox is None:
+            self._lengthbox = ConstInt(len(self._chars))
+        return self._lengthbox
 
     def getitem(self, index):
         return self._chars[index]
@@ -221,16 +226,14 @@ class VStringPlainValue(VAbstractStringValue):
         assert isinstance(charvalue, OptValue)
         self._chars[index] = charvalue
 
-    def _really_force(self):
-        assert self.source_op is not None
-        newoperations = self.optimizer.newoperations
-        newoperations.append(self.source_op)
-        self.box = box = self.source_op.result
+    def string_copy_parts(self, newoperations, targetbox, offsetbox):
         for i in range(len(self._chars)):
             charbox = self._chars[i].force_box()
-            op = ResOperation(rop.STRSETITEM,
-                              [box, ConstInt(i), charbox], None)
-        newoperations.append(op)
+            newoperations.append(ResOperation(rop.STRSETITEM, [targetbox,
+                                                               offsetbox,
+                                                               charbox], None))
+            offsetbox = _int_add(newoperations, offsetbox, CONST_1)
+        return offsetbox
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
@@ -246,24 +249,20 @@ class VStringPlainValue(VAbstractStringValue):
 class VStringConcatValue(VAbstractStringValue):
     """The concatenation of two other strings."""
 
-    def setup(self, left, right, length):
+    def setup(self, left, right, lengthbox):
         self.left = left
         self.right = right
-        self.lengthvalue = length
+        self.lengthbox = lengthbox
 
-    def getlengthvalue(self):
-        return self.lengthvalue
+    def getstrlen(self, _):
+        return self.lengthbox
 
-    def _really_force(self):
-        assert self.source_op is not None
-        calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_CONCAT)
-        leftbox = self.left.force_box()
-        rightbox = self.right.force_box()
-        self.box = box = self.source_op.result
-        newoperations = self.optimizer.newoperations
-        newoperations.append(ResOperation(rop.CALL,
-                                          [ConstInt(func), leftbox, rightbox],
-                                          box, calldescr))
+    def string_copy_parts(self, newoperations, targetbox, offsetbox):
+        offsetbox = self.left.string_copy_parts(newoperations, targetbox,
+                                                offsetbox)
+        offsetbox = self.right.string_copy_parts(newoperations, targetbox,
+                                                 offsetbox)
+        return offsetbox
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
@@ -277,6 +276,32 @@ class VStringConcatValue(VAbstractStringValue):
 
     def _make_virtual(self, modifier):
         return modifier.make_vstrconcat()
+
+
+def default_string_copy_parts(srcvalue, newoperations, targetbox, offsetbox):
+    # Copies the pointer-to-string 'srcvalue' into the target string
+    # given by 'targetbox', at the specified offset.  Returns the offset
+    # at the end of the copy.
+    srcbox = srcvalue.force_box()
+    lengthbox = BoxInt()
+    newoperations.append(ResOperation(rop.STRLEN, [srcbox], lengthbox))
+    nextoffsetbox = _int_add(newoperations, offsetbox, lengthbox)
+    newoperations.append(ResOperation(rop.COPYSTRCONTENT, [srcbox, targetbox,
+                                                           CONST_0, offsetbox,
+                                                           lengthbox], None))
+    return nextoffsetbox
+
+def _int_add(newoperations, box1, box2):
+    if isinstance(box1, ConstInt):
+        if box1.value == 0:
+            return box2
+        if isinstance(box2, ConstInt):
+            return ConstInt(box1.value + box2.value)
+    elif isinstance(box2, ConstInt) and box2.value == 0:
+        return box1
+    resbox = BoxInt()
+    newoperations.append(ResOperation(rop.INT_ADD, [box1, box2], resbox))
+    return resbox
 
 
 class __extend__(SpecNode):
@@ -584,23 +609,23 @@ class OptVirtualize(Optimization):
     def optimize_STRLEN(self, op):
         value = self.getvalue(op.args[0])
         if isinstance(value, VStringPlainValue):  # even if no longer virtual
-            self.make_equal_to(op.result, value.getlengthvalue())
+            lengthbox = value.getstrlen(self.optimizer.newoperations)
+            self.make_equal_to(op.result, self.getvalue(lengthbox))
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
 
     def opt_call_oopspec_STR_CONCAT(self, op):
-        lengthbox = BoxInt()
-        len1box = BoxInt()
-        len2box = BoxInt()
-        seo = self.optimizer.send_extra_operation
-        seo(ResOperation(rop.STRLEN, [op.args[1]], len1box))
-        seo(ResOperation(rop.STRLEN, [op.args[2]], len2box))
-        seo(ResOperation(rop.INT_ADD, [len1box, len2box], lengthbox))
+        vleft = self.getvalue(op.args[1])
+        vright = self.getvalue(op.args[2])
+        newoperations = self.optimizer.newoperations
+        len1box = vleft.getstrlen(newoperations)
+        len2box = vright.getstrlen(newoperations)
+        lengthbox = _int_add(newoperations, len1box, len2box)
         value = self.make_vstring_concat(op.result, op)
         value.setup(left = self.getvalue(op.args[1]),
                     right = self.getvalue(op.args[2]),
-                    length = self.getvalue(lengthbox))
+                    lengthbox = lengthbox)
         return True
 
     def propagate_forward(self, op):

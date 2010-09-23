@@ -175,25 +175,94 @@ class StringTests:
                              newunicode=0, unicodesetitem=0,
                              call=0, call_pure=0)
 
-    def test_strconcat_escape(self):
-        for somestr in ["abc", ]: #u"def"]:
-            jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
-            @dont_look_inside
-            def escape(x):
-                pass
-            mylist = [somestr+str(i) for i in range(10)]
-            def f(n, m):
-                while m >= 0:
-                    jitdriver.can_enter_jit(m=m, n=n)
-                    jitdriver.jit_merge_point(m=m, n=n)
-                    s = mylist[n] + mylist[m]
-                    escape(s)
-                    m -= 1
-                return 42
-            self.meta_interp(f, [6, 7])
-            self.check_loops(newstr=0, strsetitem=0,
-                             newunicode=0, unicodesetitem=0,
-                             call=2, call_pure=0)   # ll_strconcat, escape
+    def test_strconcat_escape_str_str(self):
+        jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+        @dont_look_inside
+        def escape(x):
+            pass
+        mylist = ["somestr"+str(i) for i in range(10)]
+        def f(n, m):
+            while m >= 0:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                s = mylist[n] + mylist[m]
+                escape(s)
+                m -= 1
+            return 42
+        self.meta_interp(f, [6, 7])
+        self.check_loops(newstr=1, strsetitem=0, copystrcontent=2,
+                         call=1, call_pure=0)   # escape
+
+    def test_strconcat_escape_str_char(self):
+        jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+        @dont_look_inside
+        def escape(x):
+            pass
+        mylist = ["somestr"+str(i) for i in range(10)]
+        def f(n, m):
+            while m >= 0:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                s = mylist[n] + chr(m)
+                escape(s)
+                m -= 1
+            return 42
+        self.meta_interp(f, [6, 7])
+        self.check_loops(newstr=1, strsetitem=1, copystrcontent=1,
+                         call=1, call_pure=0)   # escape
+
+    def test_strconcat_escape_char_str(self):
+        jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+        @dont_look_inside
+        def escape(x):
+            pass
+        mylist = ["somestr"+str(i) for i in range(10)]
+        def f(n, m):
+            while m >= 0:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                s = chr(n) + mylist[m]
+                escape(s)
+                m -= 1
+            return 42
+        self.meta_interp(f, [6, 7])
+        self.check_loops(newstr=1, strsetitem=1, copystrcontent=1,
+                         call=1, call_pure=0)   # escape
+
+    def test_strconcat_escape_char_char(self):
+        jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+        @dont_look_inside
+        def escape(x):
+            pass
+        def f(n, m):
+            while m >= 0:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                s = chr(n) + chr(m)
+                escape(s)
+                m -= 1
+            return 42
+        self.meta_interp(f, [6, 7])
+        self.check_loops(newstr=1, strsetitem=2, copystrcontent=0,
+                         call=1, call_pure=0)   # escape
+
+    def test_strconcat_escape_str_char_str(self):
+        jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+        @dont_look_inside
+        def escape(x):
+            pass
+        mylist = ["somestr"+str(i) for i in range(10)]
+        def f(n, m):
+            while m >= 0:
+                jitdriver.can_enter_jit(m=m, n=n)
+                jitdriver.jit_merge_point(m=m, n=n)
+                s = mylist[n] + chr(n) + mylist[m]
+                escape(s)
+                m -= 1
+            return 42
+        self.meta_interp(f, [6, 7])
+        self.check_loops(newstr=1, strsetitem=1, copystrcontent=2,
+                         call=1, call_pure=0)   # escape
 
     def test_strconcat_guard_fail(self):
         for somestr in ["abc", ]: #u"def"]:
@@ -212,8 +281,6 @@ class StringTests:
                     m -= 1
                 return 42
             self.meta_interp(f, [6, 10])
-            self.check_loops(newstr=0, strsetitem=0,
-                             newunicode=0, unicodesetitem=0)
 
 
 class TestOOtype(StringTests, OOJitMixin):
