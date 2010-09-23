@@ -3,6 +3,7 @@ from rewrite import OptRewrite
 from intbounds import OptIntBounds
 from virtualize import OptVirtualize
 from heap import OptHeap
+from ccall import OptCCall
 
 def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     """Optimize loop.operations to make it match the input of loop.specnodes
@@ -14,6 +15,7 @@ def optimize_loop_1(metainterp_sd, loop, virtuals=True):
                      OptRewrite(),
                      OptVirtualize(),
                      OptHeap(),
+                     OptCCall(),
                     ]
     optimizer = Optimizer(metainterp_sd, loop, optimizations, virtuals)
     optimizer.propagate_all_forward()

@@ -3818,7 +3818,22 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
-        
+    def test_arg_pushing(self):
+        ops = """
+        [p1, i0]
+        p2 = new_with_vtable(ConstClass(IntArgVTable))
+        p3 = new_with_vtable(ConstClass(IntArgVTable))
+        setfield_gc(p3, Const(1), descr=int_arg_intval)
+        setfield_gc(p2, p3, descr=int_arg_next)
+        setfield_gc(p2, i0, descr=int_arg_intval)
+        i4 = call(13, p1, p2, descr=nonwritedescr)
+        guard_no_exception() []
+        """
+        expected = """
+        [p1, i0]
+        call_c(
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
 
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
