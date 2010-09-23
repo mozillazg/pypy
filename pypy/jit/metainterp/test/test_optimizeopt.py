@@ -3818,22 +3818,24 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
-    def test_arg_pushing(self):
+    def test_ffi_call(self):
+        # XXX: do we want to promote p0 and get rid of the getfield?
         ops = """
-        [p1, i0]
-        p2 = new_with_vtable(ConstClass(IntArgVTable))
-        p3 = new_with_vtable(ConstClass(IntArgVTable))
-        setfield_gc(p3, Const(1), descr=int_arg_intval)
-        setfield_gc(p2, p3, descr=int_arg_next)
-        setfield_gc(p2, i0, descr=int_arg_intval)
-        i4 = call(13, p1, p2, descr=nonwritedescr)
-        guard_no_exception() []
+        [p0, i1, f2]
+        call("_libffi_prepare_call", p0, descr=plaincalldescr)
+        call("_libffi_push_arg_Signed", p0, i1, descr=plaincalldescr)
+        call("_libffi_push_arg_Float", p0, f2, descr=plaincalldescr)
+        p3 = getfield_gc_pure(p0) # funcsym
+        i4 = call("_libffi_call", p0, p3, descr=plaincalldescr)
+        jump(p0, i4, f2)
         """
         expected = """
-        [p1, i0]
-        call_c(
+        [p0, i1, f2]
+        p3 = getfield_gc_pure(p0)
+        i4 = call_c(p3, i1, f2)
+        jump(p0, i4, f2)
         """
-        self.optimize_loop(ops, 'Not, Not', expected)
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
 
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
