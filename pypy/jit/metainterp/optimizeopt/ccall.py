@@ -20,7 +20,7 @@ class OptCCall(Optimization):
         return None
 
     def optimize_CALL(self, op):
-        funcbox = op.args[0]
+        funcbox = op.getarg(0)
         oopspec = self.get_oopspec(funcbox)
         if oopspec == 'prepare_call':
             self.do_prepare_call(op)
@@ -33,26 +33,26 @@ class OptCCall(Optimization):
         self.emit_operation(op)
 
     def do_prepare_call(self, op):
-        funcbox = op.args[1]
+        funcbox = op.getarg(1)
         assert funcbox not in self.func_args
         self.func_args[funcbox] = []
 
     def do_push_arg(self, op):
-        funcbox = op.args[1]
+        funcbox = op.getarg(1)
         self.func_args[funcbox].append(op)
 
     def do_call(self, op):
-        funcbox = op.args[1]
-        funcsymbox = op.args[2]
+        funcbox = op.getarg(1)
+        funcsymbox = op.getarg(2)
         arglist = [funcsymbox]
         for push_op in self.func_args[funcbox]:
-            arglist.append(push_op.args[2])
+            arglist.append(push_op.getarg(2))
         newop = ResOperation(rop.CALL_C, arglist, op.result, None)
         del self.func_args[funcbox]
         return newop
 
     def propagate_forward(self, op):
-        opnum = op.opnum
+        opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:
                 func(self, op)
