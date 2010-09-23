@@ -7,7 +7,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import *
-from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.codewriter.effectinfo import EffectInfo, callinfo_for_oopspec
 from pypy.rlib.unroll import unrolling_iterable
 
 
@@ -196,15 +196,23 @@ class VArrayValue(AbstractVirtualValue):
         return modifier.make_varray(self.arraydescr)
 
 
-class VStringPlainValue(AbstractVirtualValue):
+class VAbstractStringValue(AbstractVirtualValue):
+
+    def getlengthvalue(self):
+        raise NotImplementedError
+
+
+class VStringPlainValue(VAbstractStringValue):
     """A string built with newstr(const)."""
 
-    def __init__(self, optimizer, size, keybox, source_op=None):
-        AbstractVirtualValue.__init__(self, optimizer, keybox, source_op)
+    def setup(self, size):
         self._chars = [CVAL_ZERO] * size
+        self._lengthvalue = None     # cache only
 
-    def getlength(self):
-        return len(self._chars)
+    def getlengthvalue(self):
+        if self._lengthvalue is None:
+            self._lengthvalue = ConstantValue(ConstInt(len(self._chars)))
+        return self._lengthvalue
 
     def getitem(self, index):
         return self._chars[index]
@@ -232,27 +240,40 @@ class VStringPlainValue(AbstractVirtualValue):
                 value.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
-        return modifier.make_vstrconcat()
+        return modifier.make_vstrplain()
 
 
-class VStringConcatValue(AbstractVirtualValue):
+class VStringConcatValue(VAbstractStringValue):
     """The concatenation of two other strings."""
 
-    def __init__(self, optimizer, keybox):
-        AbstractVirtualValue.__init__(self, optimizer, keybox)
-        self._left = None
-        self._right = None
+    def setup(self, left, right, length):
+        self.left = left
+        self.right = right
+        self.lengthvalue = length
+
+    def getlengthvalue(self):
+        return self.lengthvalue
 
     def _really_force(self):
-        xxx
+        assert self.source_op is not None
+        calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_CONCAT)
+        leftbox = self.left.force_box()
+        rightbox = self.right.force_box()
+        self.box = box = self.source_op.result
+        newoperations = self.optimizer.newoperations
+        newoperations.append(ResOperation(rop.CALL,
+                                          [ConstInt(func), leftbox, rightbox],
+                                          box, calldescr))
 
     def get_args_for_fail(self, modifier):
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            leftbox = self._left.get_key_box()
-            rightbox = self._right.get_key_box()
+            # we don't store the lengthvalue in guards, because the
+            # guard-failed code starts with a regular STR_CONCAT again
+            leftbox = self.left.get_key_box()
+            rightbox = self.right.get_key_box()
             modifier.register_virtual_fields(self.keybox, [leftbox, rightbox])
-            self._left.get_args_for_fail(modifier)
-            self._right.get_args_for_fail(modifier)
+            self.left.get_args_for_fail(modifier)
+            self.right.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
         return modifier.make_vstrconcat()
@@ -346,13 +367,13 @@ class OptVirtualize(Optimization):
         self.make_equal_to(box, vvalue)
         return vvalue
 
-    def make_vstring_plain(self, length, box, source_op=None):
-        vvalue = VStringPlainValue(self.optimizer, length, box, source_op)
+    def make_vstring_plain(self, box, source_op=None):
+        vvalue = VStringPlainValue(self.optimizer, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
-    def make_vstring_concat(self, box):
-        vvalue = VStringConcatValue(self.optimizer, box)
+    def make_vstring_concat(self, box, source_op=None):
+        vvalue = VStringConcatValue(self.optimizer, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -398,14 +419,13 @@ class OptVirtualize(Optimization):
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info
         # op.args[1] should really never point to null here
         # - set 'forced' to point to the real object
-        op1 = ResOperation(rop.SETFIELD_GC, op.args, None,
-                          descr = vrefinfo.descr_forced)
-        self.optimize_SETFIELD_GC(op1)
+        seo = self.optimizer.send_extra_operation
+        seo(ResOperation(rop.SETFIELD_GC, op.args, None,
+                         descr = vrefinfo.descr_forced))
         # - set 'virtual_token' to TOKEN_NONE
         args = [op.args[0], ConstInt(vrefinfo.TOKEN_NONE)]
-        op1 = ResOperation(rop.SETFIELD_GC, args, None,
-                      descr = vrefinfo.descr_virtual_token)
-        self.optimize_SETFIELD_GC(op1)
+        seo(ResOperation(rop.SETFIELD_GC, args, None,
+                         descr = vrefinfo.descr_virtual_token))
         # Note that in some cases the virtual in op.args[1] has been forced
         # already.  This is fine.  In that case, and *if* a residual
         # CALL_MAY_FORCE suddenly turns out to access it, then it will
@@ -535,7 +555,8 @@ class OptVirtualize(Optimization):
             # build a new one with the ConstInt argument
             if not isinstance(op.args[0], ConstInt):
                 op = ResOperation(rop.NEWSTR, [length_box], op.result)
-            self.make_vstring_plain(length_box.getint(), op.result, op)
+            vvalue = self.make_vstring_plain(op.result, op)
+            vvalue.setup(length_box.getint())
         else:
             self.emit_operation(op)
 
@@ -563,15 +584,23 @@ class OptVirtualize(Optimization):
     def optimize_STRLEN(self, op):
         value = self.getvalue(op.args[0])
         if isinstance(value, VStringPlainValue):  # even if no longer virtual
-            self.make_constant_int(op.result, value.getlength())
+            self.make_equal_to(op.result, value.getlengthvalue())
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
 
     def opt_call_oopspec_STR_CONCAT(self, op):
-        value = self.make_vstring_concat(op.result)
-        value._left = self.getvalue(op.args[1])
-        value._right = self.getvalue(op.args[2])
+        lengthbox = BoxInt()
+        len1box = BoxInt()
+        len2box = BoxInt()
+        seo = self.optimizer.send_extra_operation
+        seo(ResOperation(rop.STRLEN, [op.args[1]], len1box))
+        seo(ResOperation(rop.STRLEN, [op.args[2]], len2box))
+        seo(ResOperation(rop.INT_ADD, [len1box, len2box], lengthbox))
+        value = self.make_vstring_concat(op.result, op)
+        value.setup(left = self.getvalue(op.args[1]),
+                    right = self.getvalue(op.args[2]),
+                    length = self.getvalue(lengthbox))
         return True
 
     def propagate_forward(self, op):

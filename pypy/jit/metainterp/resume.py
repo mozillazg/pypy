@@ -4,6 +4,7 @@ from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof
+from pypy.jit.codewriter.effectinfo import EffectInfo, callinfo_for_oopspec
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated, specialize
@@ -253,6 +254,9 @@ class ResumeDataVirtualAdder(object):
     def make_varray(self, arraydescr):
         return VArrayInfo(arraydescr)
 
+    def make_vstrplain(self):
+        return VStrPlainInfo()
+
     def make_vstrconcat(self):
         return VStrConcatInfo()
 
@@ -489,14 +493,8 @@ class VArrayInfo(AbstractVirtualInfo):
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
-class VStrConcatInfo(AbstractVirtualInfo):
-    """Stands for the string made out of the concatenation of all
-    fieldnums.  Each fieldnum can be an integer (the ord() of a single
-    character) or a pointer (another string).     XXX only integers implemented
-    """
-    def __init__(self):
-        pass
-        #self.fieldnums = ...
+class VStrPlainInfo(AbstractVirtualInfo):
+    """Stands for the string made out of the characters of all fieldnums."""
 
     @specialize.argtype(1)
     def allocate(self, decoder):
@@ -510,7 +508,29 @@ class VStrConcatInfo(AbstractVirtualInfo):
             decoder.strsetitem(string, i, self.fieldnums[i])
 
     def debug_prints(self):
-        debug_print("\tvstringinfo")
+        debug_print("\tvstrplaininfo length", len(self.fieldnums))
+
+
+class VStrConcatInfo(AbstractVirtualInfo):
+    """Stands for the string made out of the concatenation of two
+    other strings."""
+
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        # xxx for blackhole resuming, this will build all intermediate
+        # strings and throw them away immediately, which is a bit sub-
+        # efficient.  Not sure we care.
+        left, right = self.fieldnums
+        return decoder.concat_strings(left, right)
+
+    @specialize.argtype(1)
+    def setfields(self, decoder, string):
+        # we do everything in allocate(); no risk of circular data structure
+        # with strings.
+        pass    
+
+    def debug_prints(self):
+        debug_print("\tvstrconcatinfo")
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
@@ -651,7 +671,16 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
                                                   arraydescr, ConstInt(length))
 
     def allocate_string(self, length):
-        return self.metainterp.execute_and_record(rop.NEWSTR, ConstInt(length))
+        return self.metainterp.execute_and_record(rop.NEWSTR,
+                                                  None, ConstInt(length))
+
+    def concat_strings(self, str1num, str2num):
+        calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_CONCAT)
+        str1box = self.decode_box(str1num, REF)
+        str2box = self.decode_box(str2num, REF)
+        return self.metainterp.execute_and_record(rop.CALL, calldescr,
+                                                  ConstInt(func),
+                                                  str1box, str2box)
 
     def setfield(self, descr, structbox, fieldnum):
         if descr.is_pointer_field():
