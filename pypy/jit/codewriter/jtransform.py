@@ -1029,8 +1029,12 @@ class Transformer(object):
 
     def _handle_oopspec_call(self, op, args, oopspecindex):
         calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
-        func = heaptracker.adr2int(llmemory.cast_ptr_to_adr(op.args[0].value))
-        _callinfo_for_oopspec[oopspecindex] = calldescr, func
+        if isinstance(op.args[0].value, str):
+            pass  # for tests only
+        else:
+            func = heaptracker.adr2int(
+                llmemory.cast_ptr_to_adr(op.args[0].value))
+            _callinfo_for_oopspec[oopspecindex] = calldescr, func
         op1 = self.rewrite_call(op, 'residual_call',
                                 [op.args[0], calldescr],
                                 args=args)
