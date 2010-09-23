@@ -471,6 +471,8 @@ class FuncPtr(AbstractFuncPtr):
     ll_args = lltype.nullptr(rffi.VOIDPP.TO)
     ll_result = lltype.nullptr(rffi.VOIDP.TO)
 
+    _immutable_fields_ = ['funcsym'] # XXX probably more
+
     def __init__(self, name, argtypes, restype, funcsym, flags=FUNCFLAG_CDECL,
                  keepalive=None):
         # initialize each one of pointers with null
@@ -491,9 +493,9 @@ class FuncPtr(AbstractFuncPtr):
                                            flavor='raw')
 
     def push_arg(self, value):
-        if self.pushed_args == self.argnum:
-            raise TypeError("Too many arguments, eats %d, pushed %d" %
-                            (self.argnum, self.argnum + 1))
+        #if self.pushed_args == self.argnum:
+        #    raise TypeError("Too many arguments, eats %d, pushed %d" %
+        #                    (self.argnum, self.argnum + 1))
         if not we_are_translated():
             TP = lltype.typeOf(value)
             if isinstance(TP, lltype.Ptr):
@@ -522,7 +524,7 @@ class FuncPtr(AbstractFuncPtr):
     def _clean_args(self):
         self.pushed_args = 0
 
-    def call(self, RES_TP):
+    def call(self, funcsym, RES_TP):
         self._check_args()
         ffires = c_ffi_call(self.ll_cif, self.funcsym,
                             rffi.cast(rffi.VOIDP, self.ll_result),
@@ -535,8 +537,8 @@ class FuncPtr(AbstractFuncPtr):
         self._clean_args()
         check_fficall_result(ffires, self.flags)
         return res
-    call._annspecialcase_ = 'specialize:arg(1)'
-    call.oopspec = 'libffi_call(self, RES_TP)'
+    call._annspecialcase_ = 'specialize:arg(2)'
+    call.oopspec = 'libffi_call(self, funcsym, RES_TP)'
 
     def __del__(self):
         if self.ll_args:
