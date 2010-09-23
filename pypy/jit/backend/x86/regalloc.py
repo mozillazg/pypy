@@ -955,6 +955,8 @@ class RegAlloc(object):
         self._gen_address_inside_string(base_loc, ofs_loc, dstaddr_loc)
         # call memcpy()
         length_loc = self.loc(op.args[4])
+        self.rm.before_call()
+        self.xrm.before_call()
         self.assembler._emit_call(imm(self.assembler.memcpy_addr),
                                   [dstaddr_loc, srcaddr_loc, length_loc])
         self.rm.possibly_free_var(op.args[4])

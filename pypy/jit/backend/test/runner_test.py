@@ -816,14 +816,20 @@ class BaseBackendTest(Runner):
 
     def test_copystrcontent(self):
         s_box = self.alloc_string("abcdef")
-        for srcstart_box in [BoxInt(2), ConstInt(2)]:
-            for dststart_box in [BoxInt(3), ConstInt(3)]:
-                for length_box in [BoxInt(4), ConstInt(4)]:
-                    r_box = self.alloc_string("!???????!")
-                    self.execute_operation(rop.COPYSTRCONTENT,
-                                           [s_box, r_box, srcstart_box,
-                                            dststart_box, length_box], 'void')
-                    assert self.look_string(r_box) == "!??cdef?!"
+        for s_box in [s_box, s_box.constbox()]:
+            for srcstart_box in [BoxInt(2), ConstInt(2)]:
+                for dststart_box in [BoxInt(3), ConstInt(3)]:
+                    for length_box in [BoxInt(4), ConstInt(4)]:
+                        for r_box_is_const in [False, True]:
+                            r_box = self.alloc_string("!???????!")
+                            if r_box_is_const:
+                                r_box = r_box.constbox()
+                                self.execute_operation(rop.COPYSTRCONTENT,
+                                                       [s_box, r_box,
+                                                        srcstart_box,
+                                                        dststart_box,
+                                                        length_box], 'void')
+                                assert self.look_string(r_box) == "!??cdef?!"
 
     def test_do_unicode_basic(self):
         u = self.cpu.bh_newunicode(5)
