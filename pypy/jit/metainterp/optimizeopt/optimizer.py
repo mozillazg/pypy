@@ -9,7 +9,7 @@ from pypy.jit.metainterp.optimizeutil import descrlist_dict
 from pypy.jit.metainterp.optimizeutil import InvalidLoop, args_dict
 from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded
 
@@ -127,10 +127,16 @@ class OptValue(object):
         raise NotImplementedError
 
     def getstrlen(self, newoperations):
-        box = self.force_box()
-        lengthbox = BoxInt()
-        newoperations.append(ResOperation(rop.STRLEN, [box], lengthbox))
-        return lengthbox
+        if self.is_constant():
+            s = self.box.getref(lltype.Ptr(rstr.STR))
+            length = len(s.chars)
+            return ConstInt(length)
+        else:
+            self.ensure_nonnull()
+            box = self.force_box()
+            lengthbox = BoxInt()
+            newoperations.append(ResOperation(rop.STRLEN, [box], lengthbox))
+            return lengthbox
 
     def string_copy_parts(self, *args):
         from pypy.jit.metainterp.optimizeopt import virtualize

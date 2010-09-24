@@ -314,20 +314,35 @@ def default_string_copy_parts(srcvalue, newoperations, targetbox, offsetbox):
     # Copies the pointer-to-string 'srcvalue' into the target string
     # given by 'targetbox', at the specified offset.  Returns the offset
     # at the end of the copy.
+    lengthbox = srcvalue.getstrlen(newoperations)
     srcbox = srcvalue.force_box()
-    lengthbox = BoxInt()
-    newoperations.append(ResOperation(rop.STRLEN, [srcbox], lengthbox))
     return copy_str_content(newoperations, srcbox, targetbox,
                             CONST_0, offsetbox, lengthbox)
 
 def copy_str_content(newoperations, srcbox, targetbox,
                      srcoffsetbox, offsetbox, lengthbox):
-    nextoffsetbox = _int_add(newoperations, offsetbox, lengthbox)
-    newoperations.append(ResOperation(rop.COPYSTRCONTENT, [srcbox, targetbox,
-                                                           srcoffsetbox,
-                                                           offsetbox,
-                                                           lengthbox], None))
-    return nextoffsetbox
+    if isinstance(srcbox, ConstPtr) and isinstance(srcoffsetbox, Const):
+        M = 5
+    else:
+        M = 2
+    if isinstance(lengthbox, ConstInt) and lengthbox.value <= M:
+        # up to M characters are done "inline", i.e. with STRGETITEM/STRSETITEM
+        # instead of just a COPYSTRCONTENT.
+        for i in range(lengthbox.value):
+            charbox = _strgetitem(newoperations, srcbox, srcoffsetbox)
+            srcoffsetbox = _int_add(newoperations, srcoffsetbox, CONST_1)
+            newoperations.append(ResOperation(rop.STRSETITEM, [targetbox,
+                                                               offsetbox,
+                                                               charbox], None))
+            offsetbox = _int_add(newoperations, offsetbox, CONST_1)
+    else:
+        nextoffsetbox = _int_add(newoperations, offsetbox, lengthbox)
+        op = ResOperation(rop.COPYSTRCONTENT, [srcbox, targetbox,
+                                               srcoffsetbox, offsetbox,
+                                               lengthbox], None)
+        newoperations.append(op)
+        offsetbox = nextoffsetbox
+    return offsetbox
 
 def _int_add(newoperations, box1, box2):
     if isinstance(box1, ConstInt):
@@ -349,6 +364,16 @@ def _int_sub(newoperations, box1, box2):
             return ConstInt(box1.value - box2.value)
     resbox = BoxInt()
     newoperations.append(ResOperation(rop.INT_SUB, [box1, box2], resbox))
+    return resbox
+
+def _strgetitem(newoperations, strbox, indexbox):
+    # hum, this repetition of the operations is not quite right
+    if isinstance(strbox, ConstPtr) and isinstance(indexbox, ConstInt):
+        s = strbox.getref(lltype.Ptr(rstr.STR))
+        return ConstInt(ord(s.chars[indexbox.getint()]))
+    resbox = BoxInt()
+    newoperations.append(ResOperation(rop.STRGETITEM, [strbox, indexbox],
+                                      resbox))
     return resbox
 
 
@@ -661,12 +686,8 @@ class OptVirtualize(Optimization):
 
     def optimize_STRLEN(self, op):
         value = self.getvalue(op.args[0])
-        if isinstance(value, VStringPlainValue):  # even if no longer virtual
-            lengthbox = value.getstrlen(self.optimizer.newoperations)
-            self.make_equal_to(op.result, self.getvalue(lengthbox))
-        else:
-            value.ensure_nonnull()
-            self.emit_operation(op)
+        lengthbox = value.getstrlen(self.optimizer.newoperations)
+        self.make_equal_to(op.result, self.getvalue(lengthbox))
 
     def opt_call_oopspec_STR_CONCAT(self, op):
         vleft = self.getvalue(op.args[1])
