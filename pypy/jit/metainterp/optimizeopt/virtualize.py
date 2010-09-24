@@ -579,7 +579,7 @@ class OptVirtualize(Optimization):
                                   descr=op.descr)
             self.make_varray(op.descr, sizebox.getint(), op.result, op)
         else:
-            ###self.optimize_default(op)
+            self.getvalue(op.result).ensure_nonnull()
             self.emit_operation(op)
 
     def optimize_ARRAYLEN_GC(self, op):
@@ -661,6 +661,7 @@ class OptVirtualize(Optimization):
             vvalue = self.make_vstring_plain(op.result, op)
             vvalue.setup(length_box.getint())
         else:
+            self.getvalue(op.result).ensure_nonnull()
             self.emit_operation(op)
 
     def optimize_STRSETITEM(self, op):
@@ -692,6 +693,8 @@ class OptVirtualize(Optimization):
     def opt_call_oopspec_STR_CONCAT(self, op):
         vleft = self.getvalue(op.args[1])
         vright = self.getvalue(op.args[2])
+        vleft.ensure_nonnull()
+        vright.ensure_nonnull()
         newoperations = self.optimizer.newoperations
         len1box = vleft.getstrlen(newoperations)
         len2box = vright.getstrlen(newoperations)
@@ -705,6 +708,7 @@ class OptVirtualize(Optimization):
         vstr = self.getvalue(op.args[1])
         vstart = self.getvalue(op.args[2])
         vstop = self.getvalue(op.args[3])
+        vstr.ensure_nonnull()
         lengthbox = _int_sub(newoperations, vstop.force_box(),
                                             vstart.force_box())
         value = self.make_vstring_slice(op.result, op)
