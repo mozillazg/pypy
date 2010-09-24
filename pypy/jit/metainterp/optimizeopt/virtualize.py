@@ -297,16 +297,17 @@ class VStringSliceValue(VAbstractStringValue):
                                 lengthbox)
 
     def get_args_for_fail(self, modifier):
-        xxx
         if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            charboxes = [value.get_key_box() for value in self._chars]
-            modifier.register_virtual_fields(self.keybox, charboxes)
-            for value in self._chars:
-                value.get_args_for_fail(modifier)
+            boxes = [self.vstr.get_key_box(),
+                     self.vstart.get_key_box(),
+                     self.vlength.get_key_box()]
+            modifier.register_virtual_fields(self.keybox, boxes)
+            self.vstr.get_args_for_fail(modifier)
+            self.vstart.get_args_for_fail(modifier)
+            self.vlength.get_args_for_fail(modifier)
 
     def _make_virtual(self, modifier):
-        xxx
-        return modifier.make_vstrplain()
+        return modifier.make_vstrslice()
 
 
 def default_string_copy_parts(srcvalue, newoperations, targetbox, offsetbox):

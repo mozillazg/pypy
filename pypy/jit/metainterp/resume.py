@@ -261,6 +261,9 @@ class ResumeDataVirtualAdder(object):
     def make_vstrconcat(self):
         return VStrConcatInfo()
 
+    def make_vstrslice(self):
+        return VStrSliceInfo()
+
     def register_virtual_fields(self, virtualbox, fieldboxes):
         tagged = self.liveboxes_from_env.get(virtualbox, UNASSIGNEDVIRTUAL)
         self.liveboxes[virtualbox] = tagged
@@ -528,10 +531,30 @@ class VStrConcatInfo(AbstractVirtualInfo):
     def setfields(self, decoder, string):
         # we do everything in allocate(); no risk of circular data structure
         # with strings.
-        pass    
+        pass
 
     def debug_prints(self):
         debug_print("\tvstrconcatinfo")
+        for i in self.fieldnums:
+            debug_print("\t\t", str(untag(i)))
+
+
+class VStrSliceInfo(AbstractVirtualInfo):
+    """Stands for the string made out of slicing another string."""
+
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        str, start, length = self.fieldnums
+        return decoder.slice_string(str, start, length)
+
+    @specialize.argtype(1)
+    def setfields(self, decoder, string):
+        # we do everything in allocate(); no risk of circular data structure
+        # with strings.
+        pass
+
+    def debug_prints(self):
+        debug_print("\tvstrsliceinfo")
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
@@ -681,6 +704,16 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         str2box = self.decode_box(str2num, REF)
         return self.metainterp.execute_and_record_varargs(
             rop.CALL, [ConstInt(func), str1box, str2box], calldescr)
+
+    def slice_string(self, strnum, startnum, lengthnum):
+        calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_SLICE)
+        strbox = self.decode_box(strnum, REF)
+        startbox = self.decode_box(startnum, INT)
+        lengthbox = self.decode_box(lengthnum, INT)
+        stopbox = self.metainterp.execute_and_record(rop.INT_ADD, None,
+                                                     startbox, lengthbox)
+        return self.metainterp.execute_and_record_varargs(
+            rop.CALL, [ConstInt(func), strbox, startbox, stopbox], calldescr)
 
     def setfield(self, descr, structbox, fieldnum):
         if descr.is_pointer_field():
@@ -909,6 +942,15 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         str2 = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str2)
         funcptr = funcptr_for_oopspec(EffectInfo.OS_STR_CONCAT)
         result = funcptr(str1, str2)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+
+    def slice_string(self, strnum, startnum, lengthnum):
+        str = self.decode_ref(strnum)
+        start = self.decode_int(startnum)
+        length = self.decode_int(lengthnum)
+        str = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), str)
+        funcptr = funcptr_for_oopspec(EffectInfo.OS_STR_SLICE)
+        result = funcptr(str, start, start + length)
         return lltype.cast_opaque_ptr(llmemory.GCREF, result)
 
     def setfield(self, descr, struct, fieldnum):
