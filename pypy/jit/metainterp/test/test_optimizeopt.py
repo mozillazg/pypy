@@ -3921,7 +3921,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
-    def test_concat_1(self):
+    def test_str_concat_1(self):
         ops = """
         [p1, p2]
         p3 = call(0, p1, p2, descr=strconcatdescr)
@@ -3942,7 +3942,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
-    def test_concat_vstr2_str(self):
+    def test_str_concat_vstr2_str(self):
         ops = """
         [i0, i1, p2]
         p1 = newstr(2)
@@ -3965,7 +3965,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
-    def test_concat_str_vstr2(self):
+    def test_str_concat_str_vstr2(self):
         ops = """
         [i0, i1, p2]
         p1 = newstr(2)
@@ -3989,7 +3989,7 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
-    def test_concat_str_str_str(self):
+    def test_str_concat_str_str_str(self):
         ops = """
         [p1, p2, p3]
         p4 = call(0, p1, p2, descr=strconcatdescr)
@@ -4015,6 +4015,53 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         jump(p2, p3, p5)
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_str_slice_1(self):
+        ops = """
+        [p1, i1, i2]
+        p2 = call(0, p1, i1, i2, descr=slicedescr)
+        jump(p2, i1, i2)
+        """
+        expected = """
+        [p1, i1, i2]
+        i3 = int_sub(i2, i1)
+        p2 = newstr(i3)
+        copystrcontent(p1, p2, i1, 0, i3)
+        jump(p2, i1, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_str_slice_2(self):
+        ops = """
+        [p1, i2]
+        p2 = call(0, p1, 0, i2, descr=slicedescr)
+        jump(p2, i2)
+        """
+        expected = """
+        [p1, i2]
+        p2 = newstr(i2)
+        copystrcontent(p1, p2, 0, 0, i2)
+        jump(p2, i2)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_str_slice_3(self):
+        ops = """
+        [p1, i1, i2, i3, i4]
+        p2 = call(0, p1, i1, i2, descr=slicedescr)
+        p3 = call(0, p2, i3, i4, descr=slicedescr)
+        jump(p3, i1, i2, i3, i4)
+        """
+        expected = """
+        [p1, i1, i2, i3, i4]
+        i0 = int_sub(i2, i1)     # killed by the backend
+        i5 = int_sub(i4, i3)
+        i6 = int_add(i1, i3)
+        p3 = newstr(i5)
+        copystrcontent(p1, p3, i6, 0, i5)
+        jump(p3, i1, i2, i3, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not, Not', expected)
 
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):

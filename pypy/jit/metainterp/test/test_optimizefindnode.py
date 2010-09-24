@@ -119,6 +119,9 @@ class LLtypeMixin(object):
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_ARRAYCOPY))
     strconcatdescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_CONCAT))
+    slicedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_SLICE))
+
     class LoopToken(AbstractDescr):
         pass
     asmdescr = LoopToken() # it can be whatever, it's not a descr though
