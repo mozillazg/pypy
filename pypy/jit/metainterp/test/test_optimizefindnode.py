@@ -124,9 +124,6 @@ class LLtypeMixin(object):
     strequaldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_EQUAL))
 
-    mystr1 = lltype.cast_opaque_ptr(llmemory.GCREF,
-                                    rstr.string_repr.convert_const("x"))
-
     class LoopToken(AbstractDescr):
         pass
     asmdescr = LoopToken() # it can be whatever, it's not a descr though
