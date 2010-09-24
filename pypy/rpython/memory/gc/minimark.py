@@ -108,10 +108,10 @@ class MiniMarkGC(MovingGCBase):
         "arena_size": 65536*WORD,
 
         # The maximum size of an object allocated compactly.  All objects
-        # that are larger are just allocated with raw_malloc().  The value
-        # chosen here is enough for a unicode string of length 56 (on 64-bits)
-        # or 60 (on 32-bits).  See rlib.rstring.INIT_SIZE.
-        "small_request_threshold": 256-WORD,
+        # that are larger are just allocated with raw_malloc().  Note that
+        # the size limit for being first allocated in the nursery is much
+        # larger; see below.
+        "small_request_threshold": 35*WORD,
 
         # Full collection threshold: after a major collection, we record
         # the total size consumed; and after every minor collection, if the
@@ -125,7 +125,16 @@ class MiniMarkGC(MovingGCBase):
         # in regular arrays of pointers; more in arrays whose items are
         # larger.  A value of 0 disables card marking.
         "card_page_indices": 128,
-        "card_page_indices_min": 800,    # minimum number of indices for cards
+
+        # Objects whose total size is at least 'large_object' bytes are
+        # allocated out of the nursery immediately.  If the object
+        # has GC pointers in its varsized part, we use instead the
+        # higher limit 'large_object_gcptrs'.  The idea is that
+        # separately allocated objects are allocated immediately "old"
+        # and it's not good to have too many pointers from old to young
+        # objects.
+        "large_object": 1600*WORD,
+        "large_object_gcptrs": 8250*WORD,
         }
 
     def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
@@ -136,7 +145,8 @@ class MiniMarkGC(MovingGCBase):
                  small_request_threshold=5*WORD,
                  major_collection_threshold=2.5,
                  card_page_indices=0,
-                 card_page_indices_min=None,
+                 large_object=8*WORD,
+                 large_object_gcptrs=10*WORD,
                  ArenaCollectionClass=None):
         MovingGCBase.__init__(self, config, chunk_size)
         assert small_request_threshold % WORD == 0
@@ -150,10 +160,16 @@ class MiniMarkGC(MovingGCBase):
         #
         self.card_page_indices = card_page_indices
         if self.card_page_indices > 0:
-            self.card_page_indices_min = card_page_indices_min
             self.card_page_shift = 0
             while (1 << self.card_page_shift) < self.card_page_indices:
                 self.card_page_shift += 1
+        #
+        # 'large_object' and 'large_object_gcptrs' limit how big objects
+        # can be in the nursery, so they give a lower bound on the allowed
+        # size of the nursery.
+        self.nonlarge_max = large_object - 1
+        self.nonlarge_gcptrs_max = large_object_gcptrs - 1
+        assert self.nonlarge_max <= self.nonlarge_gcptrs_max
         #
         self.nursery      = NULL
         self.nursery_free = NULL
@@ -218,7 +234,7 @@ class MiniMarkGC(MovingGCBase):
         else:
             #
             defaultsize = self.nursery_size
-            minsize = 18 * self.small_request_threshold
+            minsize = 2 * (self.nonlarge_gcptrs_max + 1)
             self.nursery_size = minsize
             self.allocate_nursery()
             #
@@ -247,10 +263,11 @@ class MiniMarkGC(MovingGCBase):
     def allocate_nursery(self):
         debug_start("gc-set-nursery-size")
         debug_print("nursery size:", self.nursery_size)
-        # the start of the nursery: we actually allocate a tiny bit more for
+        # the start of the nursery: we actually allocate a bit more for
         # the nursery than really needed, to simplify pointer arithmetic
-        # in malloc_fixedsize_clear().
-        extra = self.small_request_threshold
+        # in malloc_fixedsize_clear().  The few extra pages are never used
+        # anyway so it doesn't even count.
+        extra = self.nonlarge_gcptrs_max + 1
         self.nursery = llarena.arena_malloc(self.nursery_size + extra, True)
         if not self.nursery:
             raise MemoryError("cannot allocate nursery")
@@ -278,9 +295,10 @@ class MiniMarkGC(MovingGCBase):
                      "'needs_finalizer' and 'contains_weakptr' both specified")
             result = self.malloc_with_finalizer(typeid, totalsize)
         #
-        # If totalsize is greater than small_request_threshold, ask for
-        # a rawmalloc.  The following check should be constant-folded.
-        elif rawtotalsize > self.small_request_threshold:
+        # If totalsize is greater than nonlarge_max (which should never be
+        # the case in practice), ask for a rawmalloc.  The following check
+        # should be constant-folded.
+        elif rawtotalsize > self.nonlarge_max:
             ll_assert(not contains_weakptr,
                       "'contains_weakptr' specified for a large object")
             result = self._external_malloc(typeid, totalsize)
@@ -315,26 +333,38 @@ class MiniMarkGC(MovingGCBase):
         ll_assert(can_collect, "!can_collect")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
-        try:
-            varsize = ovfcheck(itemsize * length)
-            totalsize = ovfcheck(nonvarsize + varsize)
-        except OverflowError:
-            raise MemoryError
         #
-        # If totalsize is greater than small_request_threshold, ask for
-        # a rawmalloc.
-        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
-            result = self._external_malloc_cardmark(typeid, totalsize, length)
+        # Compute the maximal length that makes the object still
+        # below 'nonlarge_max'.  All the following logic is usually
+        # constant-folded because self.nonlarge_max, size and itemsize
+        # are all constants (the arguments are constant due to
+        # inlining) and self.has_gcptr_in_varsize() is constant-folded.
+        if self.has_gcptr_in_varsize(typeid):
+            nonlarge_max = self.nonlarge_gcptrs_max
+        else:
+            nonlarge_max = self.nonlarge_max
+
+        if not llmemory.raw_malloc_usage(itemsize):
+            too_many_items = (llmemory.raw_malloc_usage(nonvarsize) >
+                              nonlarge_max)
+        else:
+            maxlength = nonlarge_max - llmemory.raw_malloc_usage(nonvarsize)
+            maxlength = maxlength // llmemory.raw_malloc_usage(itemsize)
+            too_many_items = length > maxlength
+
+        if too_many_items:
+            #
+            # If the total size of the object would be larger than
+            # 'nonlarge_max', then allocate it externally and give it
+            # card marks.
+            result = self._external_malloc_cardmark(typeid, nonvarsize,
+                                                    itemsize, length)
             #
         else:
-            # Round the size up to the next multiple of WORD.  Note that
-            # this is done only if totalsize <= self.small_request_threshold,
-            # i.e. it cannot overflow, and it keeps the property that
-            # totalsize <= self.small_request_threshold.
+            # With the above checks we know now that totalsize cannot be more
+            # than 'nonlarge_max'; in particular, the + and * cannot overflow.
+            totalsize = nonvarsize + itemsize * length
             totalsize = llarena.round_up_for_allocation(totalsize)
-            ll_assert(llmemory.raw_malloc_usage(totalsize) <=
-                      self.small_request_threshold,
-                      "round_up_for_allocation() rounded up too much?")
             #
             # 'totalsize' should contain at least the GC header and
             # the length word, so it should never be smaller than
@@ -398,13 +428,24 @@ class MiniMarkGC(MovingGCBase):
 
     def _external_malloc(self, typeid, totalsize):
         """Allocate a large object using raw_malloc()."""
-        return self._external_malloc_cardmark(typeid, totalsize, 0)
+        return self._external_malloc_cardmark(typeid, totalsize, 0, 0)
 
 
-    def _external_malloc_cardmark(self, typeid, totalsize, length):
+    def _external_malloc_cardmark(self, typeid, nonvarsize, itemsize, length):
         """Allocate a large object using raw_malloc(), possibly as an
-        object with card marking enabled, if its length is large enough.
-        'length' can be specified as 0 if the object is not varsized."""
+        object with card marking enabled, if it has gc pointers in its
+        var-sized part.  'length' can be specified as 0 if the object
+        is not varsized."""
+        #
+        # Compute the total size, carefully checking for overflows.
+        if length == 0:
+            totalsize = nonvarsize
+        else:
+            try:
+                varsize = ovfcheck(itemsize * length)
+                totalsize = ovfcheck(nonvarsize + varsize)
+            except OverflowError:
+                raise MemoryError
         #
         # If somebody calls this function a lot, we must eventually
         # force a full collection.
@@ -412,7 +453,6 @@ class MiniMarkGC(MovingGCBase):
         #
         # Check if we need to introduce the card marker bits area.
         if (self.card_page_indices <= 0     # <- this check is constant-folded
-            or length < self.card_page_indices_min   # <- must be large enough
             or not self.has_gcptr_in_varsize(typeid)):  # <- must contain ptrs
             #
             # In these cases, we don't want a card marker bits area.
@@ -979,7 +1019,7 @@ class MiniMarkGC(MovingGCBase):
         if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
             #
             # Common case: allocate a new nonmovable location for it.
-            newhdr = self.ac.malloc(totalsize)
+            newhdr = self._alloc_out_of_nursery(totalsize)
             #
         else:
             # The object has already a shadow.
@@ -1015,6 +1055,26 @@ class MiniMarkGC(MovingGCBase):
         # We will fix such references to point to the copy of the young
         # objects when we walk 'old_objects_pointing_to_young'.
         self.old_objects_pointing_to_young.append(newobj)
+
+
+    def _alloc_out_of_nursery(self, totalsize):
+        """Allocate non-movable memory for an object of the given
+        'totalsize' that lives so far in the nursery."""
+        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
+            # for nursery objects that are not small
+            arena = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize),
+                                         False)
+            if not arena:
+                raise MemoryError("cannot allocate object")
+            llarena.arena_reserve(arena, totalsize)
+            #
+            size_gc_header = self.gcheaderbuilder.size_gc_header
+            self.rawmalloced_total_size += llmemory.raw_malloc_usage(totalsize)
+            self.rawmalloced_objects.append(arena + size_gc_header)
+            return arena
+        else:
+            # most common path
+            return self.ac.malloc(totalsize)
 
 
     # ----------
@@ -1242,7 +1302,8 @@ class MiniMarkGC(MovingGCBase):
                 else:
                     size_gc_header = self.gcheaderbuilder.size_gc_header
                     size = self.get_size(obj)
-                    shadowhdr = self.ac.malloc(size_gc_header + size)
+                    shadowhdr = self._alloc_out_of_nursery(size_gc_header +
+                                                           size)
                     # initialize to an invalid tid *without* GCFLAG_VISITED,
                     # so that if the object dies before the next minor
                     # collection, the shadow will stay around but be collected
