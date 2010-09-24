@@ -11,15 +11,18 @@ def optimize_loop_1(metainterp_sd, loop, virtuals=True):
     must be applicable to the loop; you will probably get an AssertionError
     if not.
     """
-    optimizations = [OptIntBounds(),
+    optimizations = [OptInvariant(),
+                     OptIntBounds(),
                      OptRewrite(),
                      OptVirtualize(),
                      OptHeap(),
-                     OptInvariant(),
                      ]
 
     optimizer = Optimizer(metainterp_sd, loop, optimizations, virtuals)
     optimizer.propagate_all_forward()
+    print
+    print
+    print loop.operations
 
 def optimize_bridge_1(metainterp_sd, bridge):
     """The same, but for a bridge.  The only difference is that we don't

@@ -303,7 +303,7 @@ class BasicTests:
                     found += 1
             assert found == 1
 
-    def test_loop_invariant_mul(self):
+    def test_loop_invariant_mul1(self):
         myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
         def f(x, y):
             res = 0
@@ -339,6 +339,22 @@ class BasicTests:
                           'int_add': 1, 'int_sub': 1, 'int_gt': 1,
                           'int_mul': 1,
                           'jump': 2})
+
+    def test_loop_invariant_mul_guard(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
+        def f(x, y):
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                res += x * x
+                if y<8:
+                    x += 1
+                y -= 1
+            return res
+        res = self.meta_interp(f, [6, 16])
+        assert res == 265
+        self.check_loop_count(3)
 
     def test_loop_invariant_intbox(self):
         myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
