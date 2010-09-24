@@ -724,34 +724,13 @@ def test_unicode_concat():
     assert got[0] == op1.args[1]    # the calldescr
     assert heaptracker.int2adr(got[1]) == llmemory.cast_ptr_to_adr(func)
 
-def test_str_stringslice_startonly():
-    # test that the oopspec is present and correctly transformed
-    PSTR = lltype.Ptr(rstr.STR)
-    INT = lltype.Signed
-    FUNC = lltype.FuncType([PSTR, INT], PSTR)
-    func = lltype.functionptr(FUNC, 'll_stringslice_startonly',
-                             _callable=rstr.LLHelpers.ll_stringslice_startonly)
-    v1 = varoftype(PSTR)
-    v2 = varoftype(INT)
-    v3 = varoftype(PSTR)
-    op = SpaceOperation('direct_call', [const(func), v1, v2], v3)
-    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
-    op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_ir_r'
-    assert op1.args[0].value == func
-    assert op1.args[1] == 'calldescr-%d' % (
-        effectinfo.EffectInfo.OS_STR_SLICE_STARTONLY)
-    assert op1.args[2] == ListOfKind('int', [v2])
-    assert op1.args[3] == ListOfKind('ref', [v1])
-    assert op1.result == v3
-
-def test_str_stringslice_startstop():
+def test_str_slice():
     # test that the oopspec is present and correctly transformed
     PSTR = lltype.Ptr(rstr.STR)
     INT = lltype.Signed
     FUNC = lltype.FuncType([PSTR, INT, INT], PSTR)
-    func = lltype.functionptr(FUNC, '_ll_stringslice_startstop',
-                            _callable=rstr.LLHelpers._ll_stringslice_startstop)
+    func = lltype.functionptr(FUNC, '_ll_stringslice',
+                            _callable=rstr.LLHelpers._ll_stringslice)
     v1 = varoftype(PSTR)
     v2 = varoftype(INT)
     v3 = varoftype(INT)
@@ -761,29 +740,31 @@ def test_str_stringslice_startstop():
     op1 = tr.rewrite_operation(op)
     assert op1.opname == 'residual_call_ir_r'
     assert op1.args[0].value == func
-    assert op1.args[1] == 'calldescr-%d' % (
-        effectinfo.EffectInfo.OS_STR_SLICE_STARTSTOP)
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR_SLICE
     assert op1.args[2] == ListOfKind('int', [v2, v3])
     assert op1.args[3] == ListOfKind('ref', [v1])
     assert op1.result == v4
 
-def test_str_stringslice_minusone():
+def test_unicode_slice():
     # test that the oopspec is present and correctly transformed
-    PSTR = lltype.Ptr(rstr.STR)
-    FUNC = lltype.FuncType([PSTR], PSTR)
-    func = lltype.functionptr(FUNC, 'll_stringslice_minusone',
-                              _callable=rstr.LLHelpers.ll_stringslice_minusone)
-    v1 = varoftype(PSTR)
-    v2 = varoftype(PSTR)
-    op = SpaceOperation('direct_call', [const(func), v1], v2)
+    PUNICODE = lltype.Ptr(rstr.UNICODE)
+    INT = lltype.Signed
+    FUNC = lltype.FuncType([PUNICODE, INT, INT], PUNICODE)
+    func = lltype.functionptr(FUNC, '_ll_stringslice',
+                            _callable=rstr.LLHelpers._ll_stringslice)
+    v1 = varoftype(PUNICODE)
+    v2 = varoftype(INT)
+    v3 = varoftype(INT)
+    v4 = varoftype(PUNICODE)
+    op = SpaceOperation('direct_call', [const(func), v1, v2, v3], v4)
     tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'residual_call_r_r'
+    assert op1.opname == 'residual_call_ir_r'
     assert op1.args[0].value == func
-    assert op1.args[1] == 'calldescr-%d' % (
-        effectinfo.EffectInfo.OS_STR_SLICE_MINUSONE)
-    assert op1.args[2] == ListOfKind('ref', [v1])
-    assert op1.result == v2
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_UNI_SLICE
+    assert op1.args[2] == ListOfKind('int', [v2, v3])
+    assert op1.args[3] == ListOfKind('ref', [v1])
+    assert op1.result == v4
 
 def test_list_ll_arraycopy():
     from pypy.rlib.rgc import ll_arraycopy

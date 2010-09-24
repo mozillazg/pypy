@@ -19,13 +19,9 @@ class EffectInfo(object):
     OS_NONE                     = 0    # normal case, no oopspec
     OS_ARRAYCOPY                = 1    # "list.ll_arraycopy"
     OS_STR_CONCAT               = 2    # "stroruni.concat"
-    OS_STR_SLICE_STARTONLY      = 3    # "stroruni.slice_startonly"
-    OS_STR_SLICE_STARTSTOP      = 4    # "stroruni.slice_startstop"
-    OS_STR_SLICE_MINUSONE       = 5    # "stroruni.slice_minusone"
-    OS_UNI_CONCAT               = 82   # "stroruni.concat" (+80)
-    OS_UNI_SLICE_STARTONLY      = 83   # "stroruni.slice_startonly" (+80)
-    OS_UNI_SLICE_STARTSTOP      = 84   # "stroruni.slice_startstop" (+80)
-    OS_UNI_SLICE_MINUSONE       = 85   # "stroruni.slice_minusone" (+80)
+    OS_STR_SLICE                = 3    # "stroruni.slice"
+    OS_UNI_CONCAT               = 4    # "stroruni.concat"
+    OS_UNI_SLICE                = 5    # "stroruni.slice"
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,

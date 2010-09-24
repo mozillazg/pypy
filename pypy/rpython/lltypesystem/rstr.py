@@ -693,25 +693,25 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return result
 
-    def ll_stringslice_startonly(s1, start):
-        len1 = len(s1.chars)
-        newstr = s1.malloc(len1 - start)
-        lgt = len1 - start
-        assert lgt >= 0
-        assert start >= 0
-        s1.copy_contents(s1, newstr, start, 0, lgt)
-        return newstr
-    ll_stringslice_startonly.oopspec = 'stroruni.slice_startonly(s1, start)'
-
-    def _ll_stringslice_startstop(s1, start, stop):
+    def _ll_stringslice(s1, start, stop):
         newstr = s1.malloc(stop - start)
         assert start >= 0
         lgt = stop - start
         assert lgt >= 0
         s1.copy_contents(s1, newstr, start, 0, lgt)
         return newstr
-    _ll_stringslice_startstop.oopspec = ('stroruni.slice_startstop(s1, '
-                                             'start, stop)')
+    _ll_stringslice.oopspec = 'stroruni.slice(s1, start, stop)'
+
+    def ll_stringslice_startonly(s1, start):
+        len1 = len(s1.chars)
+        if we_are_jitted():
+            return LLHelpers._ll_stringslice(s1, start, len1)
+        newstr = s1.malloc(len1 - start)
+        lgt = len1 - start
+        assert lgt >= 0
+        assert start >= 0
+        s1.copy_contents(s1, newstr, start, 0, lgt)
+        return newstr
 
     def ll_stringslice_startstop(s1, start, stop):
         if we_are_jitted():
@@ -722,15 +722,16 @@ class LLHelpers(AbstractLLHelpers):
                 if start == 0:
                     return s1
                 stop = len(s1.chars)
-        return LLHelpers._ll_stringslice_startstop(s1, start, stop)
+        return LLHelpers._ll_stringslice(s1, start, stop)
 
     def ll_stringslice_minusone(s1):
         newlen = len(s1.chars) - 1
+        if we_are_jitted():
+            return LLHelpers._ll_stringslice(s1, 0, newlen)
         newstr = s1.malloc(newlen)
         assert newlen >= 0
         s1.copy_contents(s1, newstr, 0, 0, newlen)
         return newstr
-    ll_stringslice_minusone.oopspec = 'stroruni.slice_minusone(s1)'
 
     def ll_split_chr(LIST, s, c):
         chars = s.chars
