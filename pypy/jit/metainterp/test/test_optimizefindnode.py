@@ -1,6 +1,6 @@
 import py, random
 
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 
@@ -121,6 +121,11 @@ class LLtypeMixin(object):
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_CONCAT))
     slicedescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_SLICE))
+    strequaldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_EQUAL))
+
+    mystr1 = lltype.cast_opaque_ptr(llmemory.GCREF,
+                                    rstr.string_repr.convert_const("x"))
 
     class LoopToken(AbstractDescr):
         pass

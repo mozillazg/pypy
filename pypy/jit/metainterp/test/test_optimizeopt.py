@@ -4016,6 +4016,25 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_str_concat_str_cstr1(self):
+        ops = """
+        [p2]
+        p3 = call(0, p2, ConstPtr(mystr1), descr=strconcatdescr)
+        jump(p3)
+        """
+        expected = """
+        [p2]
+        i2 = strlen(p2)
+        i3 = int_add(i2, 1)
+        p3 = newstr(i3)
+        i4 = strlen(p2)
+        copystrcontent(p2, p3, 0, 0, i4)
+        strsetitem(p3, i4, 120)     # == ord('x') == ord(mystr1)
+        i5 = int_add(i4, 1)      # will be killed by the backend
+        jump(p3)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
     def test_str_slice_1(self):
         ops = """
         [p1, i1, i2]
