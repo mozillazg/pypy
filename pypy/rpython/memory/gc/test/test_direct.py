@@ -505,8 +505,7 @@ class TestMiniMarkGCSimple(DirectGCTest):
                 for index, expected_x in nums.items():
                     assert a[index].x == expected_x
             self.stackroots.pop()
-    test_card_marker.GC_PARAMS = {"card_page_indices": 4,
-                                  "card_page_indices_min": 7}
+    test_card_marker.GC_PARAMS = {"card_page_indices": 4}
 
 class TestMiniMarkGCFull(DirectGCTest):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
