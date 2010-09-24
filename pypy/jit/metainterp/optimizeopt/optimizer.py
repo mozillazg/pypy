@@ -203,7 +203,7 @@ class Optimizer(Optimization):
         self.pendingfields = []
         self.preamble = []
 
-        self.original_inputargs = self.loop.inputargs
+        #self.original_inputargs = self.loop.inputargs
 
         if optimizations:
             self.first_optimization = optimizations[0]

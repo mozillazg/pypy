@@ -284,6 +284,9 @@ class OptVirtualize(Optimization):
 
     def optimize_JUMP(self, op):
         orgop = self.optimizer.loop.operations[-1]
+        #orgop.descr = op.descr
+        orgop = op
+        print 'Nbr: ', op.descr.number
         exitargs = []
         target_loop_token = orgop.descr
         assert isinstance(target_loop_token, LoopToken)
