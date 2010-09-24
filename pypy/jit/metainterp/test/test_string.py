@@ -135,25 +135,6 @@ class StringTests:
                              newunicode=0, unicodegetitem=0, unicodesetitem=0,
                              unicodelen=0)
 
-    def test_slice_startonly(self):
-        if 1:     # xxx unicode
-            jitdriver = JitDriver(greens = [], reds = ['m', 'total'])
-            def f(m):
-                total = 0
-                while m >= 0:
-                    jitdriver.can_enter_jit(m=m, total=total)
-                    jitdriver.jit_merge_point(m=m, total=total)
-                    string = 's0dgkwn349tXOGIEQR!'[m:]
-                    c = string[2*m]
-                    total += ord(c)
-                    m -= 1
-                return total
-            res = self.meta_interp(f, [6])
-            assert res == sum(map(ord, 'sgn9OE!'))
-            py.test.xfail()
-            self.check_loops(call=0, call_pure=0,
-                             newstr=0, strgetitem=1, strsetitem=0, strlen=0)
-
     def test_strconcat_pure(self):
         for somestr in ["abc", ]: #u"def"]:
             jitdriver = JitDriver(greens = [], reds = ['m', 'n'])

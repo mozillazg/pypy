@@ -209,10 +209,10 @@ class VAbstractStringValue(AbstractVirtualValue):
 
 class VStringPlainValue(VAbstractStringValue):
     """A string built with newstr(const)."""
+    _lengthbox = None     # cache only
 
     def setup(self, size):
         self._chars = [CVAL_ZERO] * size
-        self._lengthbox = None     # cache only
 
     def getstrlen(self, _):
         if self._lengthbox is None:
@@ -278,6 +278,37 @@ class VStringConcatValue(VAbstractStringValue):
         return modifier.make_vstrconcat()
 
 
+class VStringSliceValue(VAbstractStringValue):
+    """A slice."""
+
+    def setup(self, vstr, vstart, vlength):
+        self.vstr = vstr
+        self.vstart = vstart
+        self.vlength = vlength
+
+    def getstrlen(self, newoperations):
+        return self.vlength.force_box()
+
+    def string_copy_parts(self, newoperations, targetbox, offsetbox):
+        lengthbox = self.getstrlen(newoperations)
+        return copy_str_content(newoperations,
+                                self.vstr.force_box(), targetbox,
+                                self.vstart.force_box(), offsetbox,
+                                lengthbox)
+
+    def get_args_for_fail(self, modifier):
+        xxx
+        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+            charboxes = [value.get_key_box() for value in self._chars]
+            modifier.register_virtual_fields(self.keybox, charboxes)
+            for value in self._chars:
+                value.get_args_for_fail(modifier)
+
+    def _make_virtual(self, modifier):
+        xxx
+        return modifier.make_vstrplain()
+
+
 def default_string_copy_parts(srcvalue, newoperations, targetbox, offsetbox):
     # Copies the pointer-to-string 'srcvalue' into the target string
     # given by 'targetbox', at the specified offset.  Returns the offset
@@ -285,9 +316,15 @@ def default_string_copy_parts(srcvalue, newoperations, targetbox, offsetbox):
     srcbox = srcvalue.force_box()
     lengthbox = BoxInt()
     newoperations.append(ResOperation(rop.STRLEN, [srcbox], lengthbox))
+    return copy_str_content(newoperations, srcbox, targetbox,
+                            CONST_0, offsetbox, lengthbox)
+
+def copy_str_content(newoperations, srcbox, targetbox,
+                     srcoffsetbox, offsetbox, lengthbox):
     nextoffsetbox = _int_add(newoperations, offsetbox, lengthbox)
     newoperations.append(ResOperation(rop.COPYSTRCONTENT, [srcbox, targetbox,
-                                                           CONST_0, offsetbox,
+                                                           srcoffsetbox,
+                                                           offsetbox,
                                                            lengthbox], None))
     return nextoffsetbox
 
@@ -301,6 +338,16 @@ def _int_add(newoperations, box1, box2):
         return box1
     resbox = BoxInt()
     newoperations.append(ResOperation(rop.INT_ADD, [box1, box2], resbox))
+    return resbox
+
+def _int_sub(newoperations, box1, box2):
+    if isinstance(box2, ConstInt):
+        if box2.value == 0:
+            return box1
+        if isinstance(box1, ConstInt):
+            return ConstInt(box1.value - box2.value)
+    resbox = BoxInt()
+    newoperations.append(ResOperation(rop.INT_SUB, [box1, box2], resbox))
     return resbox
 
 
@@ -399,6 +446,11 @@ class OptVirtualize(Optimization):
 
     def make_vstring_concat(self, box, source_op=None):
         vvalue = VStringConcatValue(self.optimizer, box, source_op)
+        self.make_equal_to(box, vvalue)
+        return vvalue
+
+    def make_vstring_slice(self, box, source_op=None):
+        vvalue = VStringSliceValue(self.optimizer, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
 
@@ -623,9 +675,28 @@ class OptVirtualize(Optimization):
         len2box = vright.getstrlen(newoperations)
         lengthbox = _int_add(newoperations, len1box, len2box)
         value = self.make_vstring_concat(op.result, op)
-        value.setup(left = self.getvalue(op.args[1]),
-                    right = self.getvalue(op.args[2]),
-                    lengthbox = lengthbox)
+        value.setup(vleft, vright, lengthbox)
+        return True
+
+    def opt_call_oopspec_STR_SLICE(self, op):
+        newoperations = self.optimizer.newoperations
+        vstr = self.getvalue(op.args[1])
+        vstart = self.getvalue(op.args[2])
+        vstop = self.getvalue(op.args[3])
+        lengthbox = _int_sub(newoperations, vstop.force_box(),
+                                            vstart.force_box())
+        value = self.make_vstring_slice(op.result, op)
+        #
+        if isinstance(vstr, VStringSliceValue):
+            # double slicing  s[i:j][k:l]
+            vintermediate = vstr
+            vstr = vintermediate.vstr
+            startbox = _int_add(newoperations,
+                                vintermediate.vstart.force_box(),
+                                vstart.force_box())
+            vstart = self.getvalue(startbox)
+        #
+        value.setup(vstr, vstart, self.getvalue(lengthbox))
         return True
 
     def propagate_forward(self, op):
