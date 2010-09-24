@@ -4063,6 +4063,27 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not, Not', expected)
 
+    def test_str_slice_concat(self):
+        ops = """
+        [p1, i1, i2, p2]
+        p3 = call(0, p1, i1, i2, descr=slicedescr)
+        p4 = call(0, p3, p2, descr=strconcatdescr)
+        jump(p4, i1, i2, p2)
+        """
+        expected = """
+        [p1, i1, i2, p2]
+        i3 = int_sub(i2, i1)     # length of p3
+        i4 = strlen(p2)
+        i5 = int_add(i3, i4)
+        p4 = newstr(i5)
+        copystrcontent(p1, p4, i1, 0, i3)
+        i4b = strlen(p2)
+        i6 = int_add(i3, i4b)    # killed by the backend
+        copystrcontent(p2, p4, 0, i3, i4b)
+        jump(p4, i1, i2, p2)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
 
