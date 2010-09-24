@@ -5,6 +5,7 @@ from pypy.jit.metainterp.specnode import VirtualArraySpecNode
 from pypy.jit.metainterp.specnode import VirtualStructSpecNode
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
+from pypy.jit.metainterp.history import get_const_ptr_for_string
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import *
 from pypy.jit.codewriter.effectinfo import EffectInfo
@@ -199,6 +200,11 @@ class VArrayValue(AbstractVirtualValue):
 class VAbstractStringValue(AbstractVirtualValue):
 
     def _really_force(self):
+        s = self.get_constant_string()
+        if s is not None:
+            c_s = get_const_ptr_for_string(s)
+            self.make_constant(c_s)
+            return
         assert self.source_op is not None
         self.box = box = self.source_op.result
         newoperations = self.optimizer.newoperations
@@ -212,7 +218,7 @@ class VStringPlainValue(VAbstractStringValue):
     _lengthbox = None     # cache only
 
     def setup(self, size):
-        self._chars = [CVAL_ZERO] * size
+        self._chars = [CVAL_UNINITIALIZED_ZERO] * size
 
     def getstrlen(self, _):
         if self._lengthbox is None:
@@ -225,6 +231,12 @@ class VStringPlainValue(VAbstractStringValue):
     def setitem(self, index, charvalue):
         assert isinstance(charvalue, OptValue)
         self._chars[index] = charvalue
+
+    def get_constant_string(self):
+        for c in self._chars:
+            if c is CVAL_UNINITIALIZED_ZERO or not c.is_constant():
+                return None
+        return ''.join([chr(c.box.getint()) for c in self._chars])
 
     def string_copy_parts(self, newoperations, targetbox, offsetbox):
         for i in range(len(self._chars)):
@@ -257,6 +269,15 @@ class VStringConcatValue(VAbstractStringValue):
     def getstrlen(self, _):
         return self.lengthbox
 
+    def get_constant_string(self):
+        s1 = self.left.get_constant_string()
+        if s1 is None:
+            return None
+        s2 = self.right.get_constant_string()
+        if s2 is None:
+            return None
+        return s1 + s2
+
     def string_copy_parts(self, newoperations, targetbox, offsetbox):
         offsetbox = self.left.string_copy_parts(newoperations, targetbox,
                                                 offsetbox)
@@ -288,6 +309,16 @@ class VStringSliceValue(VAbstractStringValue):
 
     def getstrlen(self, newoperations):
         return self.vlength.force_box()
+
+    def get_constant_string(self):
+        if self.vstart.is_constant() and self.vlength.is_constant():
+            s1 = self.vstr.get_constant_string()
+            if s1 is None:
+                return None
+            start = self.vstart.box.getint()
+            length = self.vlength.box.getint()
+            return s1[start : start + length]
+        return None
 
     def string_copy_parts(self, newoperations, targetbox, offsetbox):
         lengthbox = self.getstrlen(newoperations)

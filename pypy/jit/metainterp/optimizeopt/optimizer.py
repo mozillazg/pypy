@@ -12,6 +12,7 @@ from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded
+from pypy.rpython import annlowlevel
 
 LEVEL_UNKNOWN    = '\x00'
 LEVEL_NONNULL    = '\x01'
@@ -127,16 +128,22 @@ class OptValue(object):
         raise NotImplementedError
 
     def getstrlen(self, newoperations):
-        if self.is_constant():
-            s = self.box.getref(lltype.Ptr(rstr.STR))
-            length = len(s.chars)
-            return ConstInt(length)
+        s = self.get_constant_string()
+        if s is not None:
+            return ConstInt(len(s))
         else:
             self.ensure_nonnull()
             box = self.force_box()
             lengthbox = BoxInt()
             newoperations.append(ResOperation(rop.STRLEN, [box], lengthbox))
             return lengthbox
+
+    def get_constant_string(self):
+        if self.is_constant():
+            s = self.box.getref(lltype.Ptr(rstr.STR))
+            return annlowlevel.hlstr(s)
+        else:
+            return None
 
     def string_copy_parts(self, *args):
         from pypy.jit.metainterp.optimizeopt import virtualize
@@ -150,6 +157,7 @@ CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
 CVAL_ZERO    = ConstantValue(CONST_0)
 CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(0.0))
+CVAL_UNINITIALIZED_ZERO = ConstantValue(CONST_0)
 llhelper.CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
 oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
 
