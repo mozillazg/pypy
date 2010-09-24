@@ -1043,18 +1043,15 @@ class Transformer(object):
         return op1
 
     def _handle_stroruni_call(self, op, oopspec_name, args):
-        dict = {"stroruni.concat":          EffectInfo.OS_STR_CONCAT,
-                "stroruni.slice_startonly": EffectInfo.OS_STR_SLICE_STARTONLY,
-                "stroruni.slice_startstop": EffectInfo.OS_STR_SLICE_STARTSTOP,
-                "stroruni.slice_minusone":  EffectInfo.OS_STR_SLICE_MINUSONE}
-        base = dict[oopspec_name]
         if args[0].concretetype.TO == rstr.STR:
-            offset = 0
+            dict = {"stroruni.concat": EffectInfo.OS_STR_CONCAT,
+                    "stroruni.slice":  EffectInfo.OS_STR_SLICE}
         elif args[0].concretetype.TO == rstr.UNICODE:
-            offset = 80
+            dict = {"stroruni.concat": EffectInfo.OS_UNI_CONCAT,
+                    "stroruni.slice":  EffectInfo.OS_UNI_SLICE}
         else:
             assert 0, "args[0].concretetype must be STR or UNICODE"
-        return self._handle_oopspec_call(op, args, base + offset)
+        return self._handle_oopspec_call(op, args, dict[oopspec_name])
 
     # ----------
     # VirtualRefs.
