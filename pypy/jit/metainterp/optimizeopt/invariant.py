@@ -1,6 +1,7 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import *
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.compile import prebuiltNotSpecNode
+from pypy.rlib.debug import debug_print
 
 class OptInvariant(Optimization):
     """Move loop invariant code into a preamble.
@@ -64,14 +65,11 @@ class OptInvariant(Optimization):
                 preamble.token.preamble = preamble
                 return
 
-            elif op.descr.preamble:
+            elif op.descr.inlinable:
                 # Bridge calling a loop with preamble, inline it
                 #
-                print
-                print "hi: ", op
-                print loop
-                print
-                self.inline(op.descr.preamble, op.args)
+                debug_print("Inlining: ", op, "into", loop)
+                self.inline(op.descr.inlinable, op.args)
                 return
 
         elif (op.is_always_pure()):# or op.is_foldable_guard() or op.is_ovf()):
@@ -113,6 +111,7 @@ class OptInvariant(Optimization):
             if op.result:
                 newop.result = op.result.clonebox()
                 argmap[op.result] = newop.result
+            debug_print("  ", newop)
             self.emit_operation(newop)
         
         

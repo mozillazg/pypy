@@ -82,16 +82,16 @@
 try:
 
     from array import array
-
     def f():
-        i = 0
-        a = 1
-        sa = array('d', (0,0))
-        while i < 500000000:
-            sa[0] += a*a
-            i += 1
-        return sa
+       i = 0
+       a = 1
+       sa = array('d', (0,0))
+       while i < 5:
+           sa[0] += a*a
+           i += 1
+       return sa
 
+#    from tvid import f
     print f()
     
 except Exception, e:

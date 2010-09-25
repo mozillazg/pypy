@@ -334,11 +334,11 @@ class BasicTests:
             return res
         res = self.meta_interp(f, [6, 7])
         assert res == 308
-        self.check_loop_count(2)
-        self.check_loops({'guard_true': 1,
-                          'int_add': 1, 'int_sub': 1, 'int_gt': 1,
-                          'int_mul': 1,
-                          'jump': 2})
+        self.check_loop_count(1)
+        self.check_loops({'guard_true': 1, 'guard_no_overflow': 1,
+                          'int_add': 2, 'int_sub': 1, 'int_gt': 1,
+                          'int_mul': 1, 'int_mul_ovf': 1,
+                          'jump': 1})
 
     def test_loop_invariant_mul_guard(self):
         myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
@@ -353,7 +353,7 @@ class BasicTests:
                 y -= 1
             return res
         res = self.meta_interp(f, [6, 16])
-        assert res == 265
+        assert res == 919
         self.check_loop_count(3)
 
     def test_loop_invariant_intbox(self):
