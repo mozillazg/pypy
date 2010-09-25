@@ -269,6 +269,7 @@ class WarmEnterState(object):
                 # set counter to -2, to mean "tracing in effect"
                 cell.counter = -2
                 try:
+                    print "compile and run"
                     loop_token = metainterp.compile_and_run_once(jitdriver_sd,
                                                                  *args)
                 finally:
@@ -287,6 +288,8 @@ class WarmEnterState(object):
                 set_future_values(*args[num_green_args:])
                 loop_token = cell.entry_loop_token
 
+            print "# ---------- execute assembler ----------"
+            print "Loop", loop_token.number
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
                 metainterp_sd.profiler.start_running()

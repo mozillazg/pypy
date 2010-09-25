@@ -15,6 +15,7 @@ from pypy.jit.metainterp.specnode import NotSpecNode, more_general_specnodes
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimizeutil import InvalidLoop
 from pypy.jit.codewriter import heaptracker
+from pypy.rlib.debug import debug_print
 
 def giveup():
     from pypy.jit.metainterp.pyjitpl import SwitchToBlackhole
@@ -82,6 +83,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
         send_loop_to_backend(metainterp_sd, loop, "loop")
         send_loop_to_backend(metainterp_sd, loop.preamble, "loop")
         insert_loop_token(old_loop_tokens, loop.preamble.token)
+        loop.preamble.token.inlinable = loop.preamble
         return loop.preamble.token
     else:
         send_loop_to_backend(metainterp_sd, loop, "loop")
@@ -499,6 +501,9 @@ class ResumeFromInterpDescr(ResumeDescr):
         new_loop.greenkey = self.original_greenkey
         new_loop.inputargs = self.redkey
         new_loop.token = new_loop_token
+        print
+        print "HEEEEEEEEEEEEEEEEEEEERRRRRRRRRRRRRRRRRRRRRRRR"
+        print new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
@@ -530,10 +535,13 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     new_loop.operations = [op.clone() for op in metainterp.history.operations]
     metainterp_sd = metainterp.staticdata
     state = metainterp.jitdriver_sd.warmstate
+    debug_print("\ncnb: ")
     try:
         target_loop_token = state.optimize_bridge(metainterp_sd,
                                                   old_loop_tokens,
                                                   new_loop)
+        debug_print("cnb: ", new_loop.operations[-1], target_loop_token)
+
     except InvalidLoop:
         # XXX I am fairly convinced that optimize_bridge cannot actually raise
         # InvalidLoop
@@ -550,7 +558,9 @@ def prepare_last_operation(new_loop, target_loop_token):
     op = new_loop.operations[-1]
     if not isinstance(target_loop_token, TerminatingLoopToken):
         # normal case
-        op.descr = target_loop_token     # patch the jump target
+        # FIXME: When is this patching needed?
+        #op.descr = target_loop_token     # patch the jump target
+        pass
     else:
         # The target_loop_token is a pseudo loop token,
         # e.g. loop_tokens_done_with_this_frame_void[0]

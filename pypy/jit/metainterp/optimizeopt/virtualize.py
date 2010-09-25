@@ -7,7 +7,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import *
-
+from pypy.rlib.debug import debug_print
 
 class AbstractVirtualValue(OptValue):
     _attrs_ = ('optimizer', 'keybox', 'source_op', '_cached_vinfo')
@@ -283,10 +283,10 @@ class OptVirtualize(Optimization):
         return vvalue
 
     def optimize_JUMP(self, op):
+        # FIXME: When do we need orgop instead of op?
         orgop = self.optimizer.loop.operations[-1]
-        #orgop.descr = op.descr
         orgop = op
-        print 'Nbr: ', op.descr.number
+        debug_print("optimize_JUMP(",op,")")
         exitargs = []
         target_loop_token = orgop.descr
         assert isinstance(target_loop_token, LoopToken)
@@ -296,6 +296,7 @@ class OptVirtualize(Optimization):
             value = self.getvalue(op.args[i])
             specnodes[i].teardown_virtual_node(self, value, exitargs)
         op.args = exitargs[:]
+        debug_print("  ", op)
         self.emit_operation(op)
 
     def optimize_VIRTUAL_REF(self, op):
