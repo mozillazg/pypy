@@ -2,6 +2,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import *
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.compile import prebuiltNotSpecNode
 from pypy.rlib.debug import debug_print
+from pypy.jit.metainterp.history import Const
 
 class OptInvariant(Optimization):
     """Move loop invariant code into a preamble.
@@ -25,16 +26,7 @@ class OptInvariant(Optimization):
                 v = self.getvalue(arg_in)
                 v.invariant = True
 
-    def invariant_boxes(self):
-        invariant_boxes = []
-        for op in self.optimizer.preamble:
-            if self.get_constant_box(op.result) is None:
-                v = self.getvalue(op.result)
-                v.invariant = True
-                box = v.force_box() 
-                if box and box not in invariant_boxes:
-                    invariant_boxes.append(box)
-        return invariant_boxes
+        self.invariant_boxes = []
 
     def propagate_forward(self, op):
     
@@ -46,7 +38,7 @@ class OptInvariant(Optimization):
                 preamble = loop.preamble
                 preamble.inputargs = loop.inputargs[:]
 
-                invariant_boxes = self.invariant_boxes()
+                invariant_boxes = self.invariant_boxes
                 loop.inputargs.extend(invariant_boxes)
                 op.args = op.args + invariant_boxes
                 preamble.operations = self.optimizer.preamble
@@ -79,6 +71,10 @@ class OptInvariant(Optimization):
                 if self.get_constant_box(op.result) is None:
                     v = self.getvalue(op.result)
                     v.invariant = True
+                    box = v.force_box() 
+                    if box and box not in self.invariant_boxes:
+                        self.invariant_boxes.append(box)
+
                 return
 
 
@@ -107,7 +103,10 @@ class OptInvariant(Optimization):
            argmap[loop.inputargs[i]] = inputargs[i]
         for op in loop.operations:
             newop = op.clone()
-            newop.args = [argmap[a] for a in op.args]
+            for i in range(len(op.args)):
+                a = op.args[i]
+                if not isinstance(a, Const):
+                    newop.args[i] = argmap[a]
             if op.result:
                 newop.result = op.result.clonebox()
                 argmap[op.result] = newop.result
