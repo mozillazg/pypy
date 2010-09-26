@@ -4,6 +4,7 @@
 
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp import resume, compile
+from pypy.rlib.debug import debug_print
 
 EMPTY_VALUES = {}
 
@@ -47,4 +48,5 @@ def optimize_loop(metainterp_sd, old_loops, loop):
 
 def optimize_bridge(metainterp_sd, old_loops, loop):
     optimize_loop(metainterp_sd, [], loop)
+    loop.operations[-1].descr = old_loops[0]
     return old_loops[0]

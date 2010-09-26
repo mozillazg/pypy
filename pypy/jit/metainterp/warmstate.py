@@ -13,6 +13,7 @@ from pypy.rlib.jit import BaseJitCell
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.jit.metainterp import history
 from pypy.jit.codewriter import support, heaptracker
+from pypy.rlib.debug import debug_print
 
 # ____________________________________________________________
 

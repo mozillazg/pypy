@@ -501,9 +501,7 @@ class ResumeFromInterpDescr(ResumeDescr):
         new_loop.greenkey = self.original_greenkey
         new_loop.inputargs = self.redkey
         new_loop.token = new_loop_token
-        print
-        print "HEEEEEEEEEEEEEEEEEEEERRRRRRRRRRRRRRRRRRRRRRRR"
-        print new_loop_token
+
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
@@ -535,13 +533,10 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     new_loop.operations = [op.clone() for op in metainterp.history.operations]
     metainterp_sd = metainterp.staticdata
     state = metainterp.jitdriver_sd.warmstate
-    debug_print("\ncnb: ")
     try:
         target_loop_token = state.optimize_bridge(metainterp_sd,
                                                   old_loop_tokens,
                                                   new_loop)
-        debug_print("cnb: ", new_loop.operations[-1], target_loop_token)
-
     except InvalidLoop:
         # XXX I am fairly convinced that optimize_bridge cannot actually raise
         # InvalidLoop
