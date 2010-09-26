@@ -123,6 +123,27 @@ class LLtypeMixin(object):
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_SLICE))
     strequaldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                  EffectInfo([], [], [], oopspecindex=EffectInfo.OS_STR_EQUAL))
+    streq_slice_checknull_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_SLICE_CHECKNULL))
+    streq_slice_nonnull_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_SLICE_NONNULL))
+    streq_slice_char_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_SLICE_CHAR))
+    streq_nonnull_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_NONNULL))
+    streq_nonnull_char_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_NONNULL_CHAR))
+    streq_checknull_char_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_CHECKNULL_CHAR))
+    streq_lengthok_descr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
+                 EffectInfo([], [], [],
+                     oopspecindex=EffectInfo.OS_STREQ_LENGTHOK))
 
     class LoopToken(AbstractDescr):
         pass

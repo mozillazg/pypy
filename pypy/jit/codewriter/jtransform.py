@@ -12,6 +12,7 @@ from pypy.jit.metainterp.typesystem import deref, arrayItem
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
 from pypy.translator.simplify import get_funcobj
+from pypy.translator.unsimplify import varoftype
 
 
 def transform_graph(graph, cpu=None, callcontrol=None, portal_jd=None):
@@ -1042,15 +1043,70 @@ class Transformer(object):
             op1 = [op1, SpaceOperation('-live-', [], None)]
         return op1
 
+    def _register_extra_helper(self, oopspecindex, oopspec_name,
+                               argtypes, resulttype):
+        # a bit hackish
+        if oopspecindex in _callinfo_for_oopspec:
+            return
+        c_func, TP = support.builtin_func_for_spec(self.cpu.rtyper,
+                                                   oopspec_name, argtypes,
+                                                   resulttype)
+        op = SpaceOperation('pseudo_call',
+                            [c_func] + [varoftype(T) for T in argtypes],
+                            varoftype(resulttype))
+        calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
+        _callinfo_for_oopspec[oopspecindex] = calldescr, c_func.value
+
     def _handle_stroruni_call(self, op, oopspec_name, args):
         if args[0].concretetype.TO == rstr.STR:
             dict = {"stroruni.concat": EffectInfo.OS_STR_CONCAT,
-                    "stroruni.slice":  EffectInfo.OS_STR_SLICE}
+                    "stroruni.slice":  EffectInfo.OS_STR_SLICE,
+                    "stroruni.equal":  EffectInfo.OS_STR_EQUAL,
+                    }
         elif args[0].concretetype.TO == rstr.UNICODE:
             dict = {"stroruni.concat": EffectInfo.OS_UNI_CONCAT,
-                    "stroruni.slice":  EffectInfo.OS_UNI_SLICE}
+                    "stroruni.slice":  EffectInfo.OS_UNI_SLICE,
+                    "stroruni.equal":  EffectInfo.OS_UNI_EQUAL,
+                    }
         else:
             assert 0, "args[0].concretetype must be STR or UNICODE"
+        #
+        if oopspec_name == "stroruni.equal":
+            SoU = args[0].concretetype     # Ptr(STR) or Ptr(UNICODE)
+            for otherindex, othername, argtypes, resulttype in [
+
+                (EffectInfo.OS_STREQ_SLICE_CHECKNULL,
+                     "str.eq_slice_checknull",
+                     [SoU, lltype.Signed, lltype.Signed, SoU],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_SLICE_NONNULL,
+                     "str.eq_slice_nonnull",
+                     [SoU, lltype.Signed, lltype.Signed, SoU],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_SLICE_CHAR,
+                     "str.eq_slice_char",
+                     [SoU, lltype.Signed, lltype.Signed, lltype.Char],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_NONNULL,
+                     "str.eq_nonnull",
+                     [SoU, SoU],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_NONNULL_CHAR,
+                     "str.eq_nonnull_char",
+                     [SoU, lltype.Char],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_CHECKNULL_CHAR,
+                     "str.eq_checknull_char",
+                     [SoU, lltype.Char],
+                     lltype.Signed),
+                (EffectInfo.OS_STREQ_LENGTHOK,
+                     "str.eq_lengthok",
+                     [SoU, SoU],
+                     lltype.Signed),
+                ]:
+                self._register_extra_helper(otherindex, othername,
+                                            argtypes, resulttype)
+        #
         return self._handle_oopspec_call(op, args, dict[oopspec_name])
 
     # ----------

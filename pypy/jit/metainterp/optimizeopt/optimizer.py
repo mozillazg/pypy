@@ -9,10 +9,10 @@ from pypy.jit.metainterp.optimizeutil import descrlist_dict
 from pypy.jit.metainterp.optimizeutil import InvalidLoop, args_dict
 from pypy.jit.metainterp import resume, compile
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
-from pypy.rpython.lltypesystem import lltype, rstr
+from pypy.rpython.lltypesystem import lltype
 from pypy.jit.metainterp.history import AbstractDescr, make_hashable_int
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded
-from pypy.rpython import annlowlevel
+from pypy.tool.pairtype import extendabletype
 
 LEVEL_UNKNOWN    = '\x00'
 LEVEL_NONNULL    = '\x01'
@@ -24,6 +24,7 @@ MAXINT = sys.maxint
 MININT = -sys.maxint - 1
         
 class OptValue(object):
+    __metaclass__ = extendabletype
     _attrs_ = ('box', 'known_class', 'last_guard_index', 'level', 'intbound')
     last_guard_index = -1
 
@@ -127,27 +128,6 @@ class OptValue(object):
     def setitem(self, index, value):
         raise NotImplementedError
 
-    def getstrlen(self, newoperations):
-        s = self.get_constant_string()
-        if s is not None:
-            return ConstInt(len(s))
-        else:
-            self.ensure_nonnull()
-            box = self.force_box()
-            lengthbox = BoxInt()
-            newoperations.append(ResOperation(rop.STRLEN, [box], lengthbox))
-            return lengthbox
-
-    def get_constant_string(self):
-        if self.is_constant():
-            s = self.box.getref(lltype.Ptr(rstr.STR))
-            return annlowlevel.hlstr(s)
-        else:
-            return None
-
-    def string_copy_parts(self, *args):
-        from pypy.jit.metainterp.optimizeopt import virtualize
-        return virtualize.default_string_copy_parts(self, *args)
 
 class ConstantValue(OptValue):
     def __init__(self, box):
@@ -273,6 +253,7 @@ class Optimizer(Optimization):
         return None
 
     def make_equal_to(self, box, value):
+        assert isinstance(value, OptValue)
         assert box not in self.values
         self.values[box] = value
 

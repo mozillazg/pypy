@@ -83,7 +83,7 @@ def wrap(cpu, value, in_const_box=False):
             return history.ConstFloat(value)
         else:
             return history.BoxFloat(value)
-    elif isinstance(value, (str, unicode)):
+    elif isinstance(value, str) or isinstance(value, unicode):
         assert len(value) == 1     # must be a character
         value = ord(value)
     else:

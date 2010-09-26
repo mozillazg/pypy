@@ -4098,6 +4098,42 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not, Not', expected)
 
+    def test_str_slice_getitem1(self):
+        ops = """
+        [p1, i1, i2, i3]
+        p2 = call(0, p1, i1, i2, descr=slicedescr)
+        i4 = strgetitem(p2, i3)
+        escape(i4)
+        jump(p1, i1, i2, i3)
+        """
+        expected = """
+        [p1, i1, i2, i3]
+        i6 = int_sub(i2, i1)      # killed by the backend
+        i5 = int_add(i1, i3)
+        i4 = strgetitem(p1, i5)
+        escape(i4)
+        jump(p1, i1, i2, i3)
+        """
+        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    def test_str_slice_plain(self):
+        ops = """
+        [i3, i4]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i3)
+        strsetitem(p1, 1, i4)
+        p2 = call(0, p1, 1, 2, descr=slicedescr)
+        i5 = strgetitem(p2, 0)
+        escape(i5)
+        jump(i3, i4)
+        """
+        expected = """
+        [i3, i4]
+        escape(i4)
+        jump(i3, i4)
+        """
+        self.optimize_loop(ops, 'Not, Not', expected)
+
     def test_str_slice_concat(self):
         ops = """
         [p1, i1, i2, p2]
@@ -4118,6 +4154,345 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         jump(p4, i1, i2, p2)
         """
         self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+
+    # ----------
+    def optimize_loop_extradescrs(self, ops, spectext, optops):
+        from pypy.jit.metainterp.optimizeopt import string
+        def my_callinfo_for_oopspec(oopspecindex):
+            calldescrtype = type(LLtypeMixin.strequaldescr)
+            for value in LLtypeMixin.__dict__.values():
+                if isinstance(value, calldescrtype):
+                    if (value.get_extra_info() and
+                        value.get_extra_info().oopspecindex == oopspecindex):
+                        from pypy.rpython.lltypesystem import lltype
+                        func = lltype.nullptr(lltype.FuncType([], lltype.Void))
+                        # returns 0 for 'func' in this test
+                        return value, func
+            raise AssertionError("not found: oopspecindex=%d" % oopspecindex)
+        #
+        saved = string.callinfo_for_oopspec
+        try:
+            string.callinfo_for_oopspec = my_callinfo_for_oopspec
+            self.optimize_loop(ops, spectext, optops)
+        finally:
+            string.callinfo_for_oopspec = saved
+
+    def test_str_equal_noop1(self):
+        ops = """
+        [p1, p2]
+        i0 = call(0, p1, p2, descr=strequaldescr)
+        escape(i0)
+        jump(p1, p2)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not', ops)
+
+    def test_str_equal_noop2(self):
+        ops = """
+        [p1, p2, p3]
+        p4 = call(0, p1, p2, descr=strconcatdescr)
+        i0 = call(0, p3, p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, p2, p3)
+        """
+        expected = """
+        [p1, p2, p3]
+        i1 = strlen(p1)
+        i2 = strlen(p2)
+        i3 = int_add(i1, i2)
+        p4 = newstr(i3)
+        i4 = strlen(p1)
+        copystrcontent(p1, p4, 0, 0, i4)
+        i5 = strlen(p2)
+        i6 = int_add(i4, i5)      # will be killed by the backend
+        copystrcontent(p2, p4, 0, i4, i5)
+        i0 = call(0, p3, p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, p2, p3)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not', expected)
+
+    def test_str_equal_slice1(self):
+        ops = """
+        [p1, i1, i2, p3]
+        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        i0 = call(0, p4, p3, descr=strequaldescr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        expected = """
+        [p1, i1, i2, p3]
+        i3 = int_sub(i2, i1)
+        i0 = call(0, p1, i1, i3, p3, descr=streq_slice_checknull_descr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+
+    def test_str_equal_slice2(self):
+        ops = """
+        [p1, i1, i2, p3]
+        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        i0 = call(0, p3, p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        expected = """
+        [p1, i1, i2, p3]
+        i4 = int_sub(i2, i1)
+        i0 = call(0, p1, i1, i4, p3, descr=streq_slice_checknull_descr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+
+    def test_str_equal_slice3(self):
+        ops = """
+        [p1, i1, i2, p3]
+        guard_nonnull(p3) []
+        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        i0 = call(0, p3, p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        expected = """
+        [p1, i1, i2, p3]
+        guard_nonnull(p3) []
+        i4 = int_sub(i2, i1)
+        i0 = call(0, p1, i1, i4, p3, descr=streq_slice_nonnull_descr)
+        escape(i0)
+        jump(p1, i1, i2, p3)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+
+    def test_str_equal_slice4(self):
+        ops = """
+        [p1, i1, i2]
+        p3 = call(0, p1, i1, i2, descr=slicedescr)
+        i0 = call(0, p3, "x", descr=strequaldescr)
+        escape(i0)
+        jump(p1, i1, i2)
+        """
+        expected = """
+        [p1, i1, i2]
+        i3 = int_sub(i2, i1)
+        i0 = call(0, p1, i1, i3, 120, descr=streq_slice_char_descr)
+        escape(i0)
+        jump(p1, i1, i2)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not', expected)
+
+    def test_str_equal_slice5(self):
+        ops = """
+        [p1, i1, i2, i3]
+        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        p5 = newstr(1)
+        strsetitem(p5, 0, i3)
+        i0 = call(0, p5, p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, i1, i2, i3)
+        """
+        expected = """
+        [p1, i1, i2, i3]
+        i4 = int_sub(i2, i1)
+        i0 = call(0, p1, i1, i4, i3, descr=streq_slice_char_descr)
+        escape(i0)
+        jump(p1, i1, i2, i3)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+
+    def test_str_equal_none1(self):
+        ops = """
+        [p1]
+        i0 = call(0, p1, NULL, descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = ptr_eq(p1, NULL)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_none2(self):
+        ops = """
+        [p1]
+        i0 = call(0, NULL, p1, descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = ptr_eq(p1, NULL)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_nonnull1(self):
+        ops = """
+        [p1]
+        guard_nonnull(p1) []
+        i0 = call(0, p1, "hello world", descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        guard_nonnull(p1) []
+        i0 = call(0, p1, "hello world", descr=streq_nonnull_descr)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_nonnull2(self):
+        ops = """
+        [p1]
+        guard_nonnull(p1) []
+        i0 = call(0, p1, "", descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        guard_nonnull(p1) []
+        i1 = strlen(p1)
+        i0 = int_eq(i1, 0)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_nonnull3(self):
+        ops = """
+        [p1]
+        guard_nonnull(p1) []
+        i0 = call(0, p1, "x", descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        guard_nonnull(p1) []
+        i0 = call(0, p1, 120, descr=streq_nonnull_char_descr)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_nonnull4(self):
+        ops = """
+        [p1, p2]
+        p4 = call(0, p1, p2, descr=strconcatdescr)
+        i0 = call(0, "hello world", p4, descr=strequaldescr)
+        escape(i0)
+        jump(p1, p2)
+        """
+        expected = """
+        [p1, p2]
+        i1 = strlen(p1)
+        i2 = strlen(p2)
+        i3 = int_add(i1, i2)
+        p4 = newstr(i3)
+        i4 = strlen(p1)
+        copystrcontent(p1, p4, 0, 0, i4)
+        i5 = strlen(p2)
+        i6 = int_add(i4, i5)      # will be killed by the backend
+        copystrcontent(p2, p4, 0, i4, i5)
+        i0 = call(0, "hello world", p4, descr=streq_nonnull_descr)
+        escape(i0)
+        jump(p1, p2)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not', expected)
+
+    def test_str_equal_chars0(self):
+        ops = """
+        [i1]
+        p1 = newstr(0)
+        i0 = call(0, p1, "", descr=strequaldescr)
+        escape(i0)
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        escape(1)
+        jump(i1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_chars1(self):
+        ops = """
+        [i1]
+        p1 = newstr(1)
+        strsetitem(p1, 0, i1)
+        i0 = call(0, p1, "x", descr=strequaldescr)
+        escape(i0)
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        i0 = int_eq(i1, 120)     # ord('x')
+        escape(i0)
+        jump(i1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_chars2(self):
+        ops = """
+        [i1, i2]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i1)
+        strsetitem(p1, 1, i2)
+        i0 = call(0, p1, "xy", descr=strequaldescr)
+        escape(i0)
+        jump(i1, i2)
+        """
+        expected = """
+        [i1, i2]
+        p1 = newstr(2)
+        strsetitem(p1, 0, i1)
+        strsetitem(p1, 1, i2)
+        i0 = call(0, p1, "xy", descr=streq_lengthok_descr)
+        escape(i0)
+        jump(i1, i2)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not, Not', expected)
+
+    def test_str_equal_chars3(self):
+        ops = """
+        [p1]
+        i0 = call(0, "x", p1, descr=strequaldescr)
+        escape(i0)
+        jump(p1)
+        """
+        expected = """
+        [p1]
+        i0 = call(0, p1, 120, descr=streq_checknull_char_descr)
+        escape(i0)
+        jump(p1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    def test_str_equal_lengthmismatch1(self):
+        ops = """
+        [i1]
+        p1 = newstr(1)
+        strsetitem(p1, 0, i1)
+        i0 = call(0, "xy", p1, descr=strequaldescr)
+        escape(i0)
+        jump(i1)
+        """
+        expected = """
+        [i1]
+        escape(0)
+        jump(i1)
+        """
+        self.optimize_loop_extradescrs(ops, 'Not', expected)
+
+    # XXX unicode operations
+    # XXX str2unicode
 
 
 ##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
