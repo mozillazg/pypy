@@ -1,6 +1,7 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.memory.gc.base import GCBase, MovingGCBase
 from pypy.rpython.memory.gc import minimarkpage, base, generation
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
@@ -286,14 +287,15 @@ class MiniMarkGC(MovingGCBase):
         ll_assert(can_collect, "!can_collect")
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
-        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        rawtotalsize = raw_malloc_usage(totalsize)
         #
         # If the object needs a finalizer, ask for a rawmalloc.
         # The following check should be constant-folded.
         if needs_finalizer:
             ll_assert(not contains_weakptr,
                      "'needs_finalizer' and 'contains_weakptr' both specified")
-            result = self.malloc_with_finalizer(typeid, totalsize)
+            obj = self.external_malloc(typeid, 0)
+            self.objects_with_finalizers.append(obj)
         #
         # If totalsize is greater than nonlarge_max (which should never be
         # the case in practice), ask for a rawmalloc.  The following check
@@ -301,12 +303,12 @@ class MiniMarkGC(MovingGCBase):
         elif rawtotalsize > self.nonlarge_max:
             ll_assert(not contains_weakptr,
                       "'contains_weakptr' specified for a large object")
-            result = self._external_malloc(typeid, totalsize)
+            obj = self.external_malloc(typeid, 0)
             #
         else:
             # If totalsize is smaller than minimal_size_in_nursery, round it
             # up.  The following check should also be constant-folded.
-            min_size = llmemory.raw_malloc_usage(self.minimal_size_in_nursery)
+            min_size = raw_malloc_usage(self.minimal_size_in_nursery)
             if rawtotalsize < min_size:
                 totalsize = rawtotalsize = min_size
             #
@@ -324,8 +326,10 @@ class MiniMarkGC(MovingGCBase):
             # If it is a weakref, record it (check constant-folded).
             if contains_weakptr:
                 self.young_objects_with_weakrefs.append(result+size_gc_header)
+            #
+            obj = result + size_gc_header
         #
-        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
@@ -344,21 +348,18 @@ class MiniMarkGC(MovingGCBase):
         else:
             nonlarge_max = self.nonlarge_max
 
-        if not llmemory.raw_malloc_usage(itemsize):
-            too_many_items = (llmemory.raw_malloc_usage(nonvarsize) >
-                              nonlarge_max)
+        if not raw_malloc_usage(itemsize):
+            too_many_items = raw_malloc_usage(nonvarsize) > nonlarge_max
         else:
-            maxlength = nonlarge_max - llmemory.raw_malloc_usage(nonvarsize)
-            maxlength = maxlength // llmemory.raw_malloc_usage(itemsize)
+            maxlength = nonlarge_max - raw_malloc_usage(nonvarsize)
+            maxlength = maxlength // raw_malloc_usage(itemsize)
             too_many_items = length > maxlength
 
         if too_many_items:
             #
             # If the total size of the object would be larger than
-            # 'nonlarge_max', then allocate it externally and give it
-            # card marks.
-            result = self._external_malloc_cardmark(typeid, nonvarsize,
-                                                    itemsize, length)
+            # 'nonlarge_max', then allocate it externally.
+            obj = self.external_malloc(typeid, length)
             #
         else:
             # With the above checks we know now that totalsize cannot be more
@@ -369,8 +370,8 @@ class MiniMarkGC(MovingGCBase):
             # 'totalsize' should contain at least the GC header and
             # the length word, so it should never be smaller than
             # 'minimal_size_in_nursery'
-            ll_assert(llmemory.raw_malloc_usage(totalsize) >=
-                      llmemory.raw_malloc_usage(self.minimal_size_in_nursery),
+            ll_assert(raw_malloc_usage(totalsize) >=
+                      raw_malloc_usage(self.minimal_size_in_nursery),
                       "malloc_varsize_clear(): totalsize < minimalsize")
             #
             # Get the memory from the nursery.  If there is not enough space
@@ -383,10 +384,12 @@ class MiniMarkGC(MovingGCBase):
             # Build the object.
             llarena.arena_reserve(result, totalsize)
             self.init_gc_object(result, typeid, flags=0)
+            #
+            # Set the length and return the object.
+            obj = result + size_gc_header
+            (obj + offset_to_length).signed[0] = length
         #
-        # Set the length and return the object.
-        (result + size_gc_header + offset_to_length).signed[0] = length
-        return llmemory.cast_adr_to_ptr(result+size_gc_header, llmemory.GCREF)
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
 
     def collect(self, gen=1):
@@ -419,28 +422,22 @@ class MiniMarkGC(MovingGCBase):
     collect_and_reserve._dont_inline_ = True
 
 
-    def _full_collect_if_needed(self, reserving_size):
-        reserving_size = llmemory.raw_malloc_usage(reserving_size)
-        if (float(self.get_total_memory_used()) + reserving_size >
-                self.next_major_collection_threshold):
-            self.minor_collection()
-            self.major_collection(reserving_size)
-
-    def _external_malloc(self, typeid, totalsize):
-        """Allocate a large object using raw_malloc()."""
-        return self._external_malloc_cardmark(typeid, totalsize, 0, 0)
-
-
-    def _external_malloc_cardmark(self, typeid, nonvarsize, itemsize, length):
-        """Allocate a large object using raw_malloc(), possibly as an
-        object with card marking enabled, if it has gc pointers in its
-        var-sized part.  'length' can be specified as 0 if the object
-        is not varsized."""
+    def external_malloc(self, typeid, length):
+        """Allocate a large object using the ArenaCollection or
+        raw_malloc(), possibly as an object with card marking enabled,
+        if it has gc pointers in its var-sized part.  'length' should be
+        specified as 0 if the object is not varsized.  The returned
+        object is fully initialized and zero-filled."""
         #
         # Compute the total size, carefully checking for overflows.
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        nonvarsize = size_gc_header + self.fixed_size(typeid)
         if length == 0:
+            # this includes the case of fixed-size objects, for which we
+            # should not even ask for the varsize_item_sizes().
             totalsize = nonvarsize
         else:
+            itemsize = self.varsize_item_sizes(typeid)
             try:
                 varsize = ovfcheck(itemsize * length)
                 totalsize = ovfcheck(nonvarsize + varsize)
@@ -449,85 +446,79 @@ class MiniMarkGC(MovingGCBase):
         #
         # If somebody calls this function a lot, we must eventually
         # force a full collection.
-        self._full_collect_if_needed(totalsize)
+        if (float(self.get_total_memory_used()) + raw_malloc_usage(totalsize) >
+                self.next_major_collection_threshold):
+            self.minor_collection()
+            self.major_collection(raw_malloc_usage(totalsize))
         #
-        # Check if we need to introduce the card marker bits area.
-        if (self.card_page_indices <= 0     # <- this check is constant-folded
-            or not self.has_gcptr_in_varsize(typeid)):  # <- must contain ptrs
+        # Check if the object would fit in the ArenaCollection.
+        if raw_malloc_usage(totalsize) <= self.small_request_threshold:
             #
-            # In these cases, we don't want a card marker bits area.
-            cardheadersize = 0
+            # Yes.  Round up 'totalsize' (it cannot overflow and it
+            # must remain <= self.small_request_threshold.)
+            totalsize = llarena.round_up_for_allocation(totalsize)
+            ll_assert(raw_malloc_usage(totalsize) <=
+                      self.small_request_threshold,
+                      "rounding up made totalsize > small_request_threshold")
+            #
+            # Allocate from the ArenaCollection and clear the memory returned.
+            result = self.ac.malloc(totalsize)
+            llmemory.raw_memclear(result, totalsize)
             extra_flags = 0
             #
         else:
-            # Reserve N extra words containing card bits before the object.
-            extra_words = self.card_marking_words_for_length(length)
-            cardheadersize = WORD * extra_words
-            extra_flags = GCFLAG_HAS_CARDS
-        #
-        allocsize = cardheadersize + llmemory.raw_malloc_usage(totalsize)
-        #
-        # Allocate the object using arena_malloc(), which we assume here
-        # is just the same as raw_malloc(), but allows the extra flexibility
-        # of saying that we have extra words in the header.
-        arena = llarena.arena_malloc(allocsize, False)
-        if not arena:
-            raise MemoryError("cannot allocate large object")
-        #
-        # Clear it using method 2 of llarena.arena_reset(), which is the
-        # same as just a raw_memclear().
-        llarena.arena_reset(arena, allocsize, 2)
-        #
-        # Reserve the card mark as a list of single bytes
-        # (the loop is empty in C).
-        i = 0
-        while i < cardheadersize:
-            llarena.arena_reserve(arena + i, llmemory.sizeof(lltype.Char))
-            i += 1
-        #
-        # Initialize the object.
-        result = arena + cardheadersize
-        llarena.arena_reserve(result, totalsize)
-        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS | extra_flags)
-        #
-        # Record the newly allocated object and its size.
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        self.rawmalloced_total_size += llmemory.raw_malloc_usage(totalsize)
-        self.rawmalloced_objects.append(result + size_gc_header)
-        return result
-    _external_malloc_cardmark._dont_inline_ = True
-
-
-    def _malloc_nonmovable(self, typeid, totalsize):
-        """Allocate an object non-movable."""
-        #
-        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
-        if rawtotalsize > self.small_request_threshold:
+            # No, so proceed to allocate it externally with raw_malloc().
+            # Check if we need to introduce the card marker bits area.
+            if (self.card_page_indices <= 0  # <- this check is constant-folded
+                or not self.has_gcptr_in_varsize(typeid) or
+                raw_malloc_usage(totalsize) <= self.nonlarge_gcptrs_max):
+                #
+                # In these cases, we don't want a card marker bits area.
+                # This case also includes all fixed-size objects.
+                cardheadersize = 0
+                extra_flags = 0
+                #
+            else:
+                # Reserve N extra words containing card bits before the object.
+                extra_words = self.card_marking_words_for_length(length)
+                cardheadersize = WORD * extra_words
+                extra_flags = GCFLAG_HAS_CARDS
             #
-            # The size asked for is too large for the ArenaCollection.
-            return self._external_malloc(typeid, totalsize)
+            allocsize = cardheadersize + raw_malloc_usage(totalsize)
+            #
+            # Allocate the object using arena_malloc(), which we assume here
+            # is just the same as raw_malloc(), but allows the extra
+            # flexibility of saying that we have extra words in the header.
+            arena = llarena.arena_malloc(allocsize, False)
+            if not arena:
+                raise MemoryError("cannot allocate large object")
+            #
+            # Clear it using method 2 of llarena.arena_reset(), which is the
+            # same as just a raw_memclear().  This also clears the card mark
+            # bits, if any.
+            llarena.arena_reset(arena, allocsize, 2)
+            #
+            # Reserve the card mark bits as a list of single bytes
+            # (the loop is empty in C).
+            i = 0
+            while i < cardheadersize:
+                llarena.arena_reserve(arena + i, llmemory.sizeof(lltype.Char))
+                i += 1
+            #
+            # Reserve the actual object.  (This is also a no-op in C).
+            result = arena + cardheadersize
+            llarena.arena_reserve(result, totalsize)
+            #
+            # Record the newly allocated object and its size.
+            self.rawmalloced_total_size += raw_malloc_usage(totalsize)
+            self.rawmalloced_objects.append(result + size_gc_header)
         #
-        totalsize = llarena.round_up_for_allocation(totalsize)
-        #
-        # If somebody calls _malloc_nonmovable() a lot, we must eventually
-        # force a full collection.
-        self._full_collect_if_needed(totalsize)
-        #
-        # Ask the ArenaCollection to do the malloc.
-        result = self.ac.malloc(totalsize)
-        llmemory.raw_memclear(result, totalsize)
-        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS)
-        return result
-
-
-    def malloc_with_finalizer(self, typeid, totalsize):
-        """Allocate an object with a finalizer."""
-        #
-        result = self._malloc_nonmovable(typeid, totalsize)
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        self.objects_with_finalizers.append(result + size_gc_header)
-        return result
-    malloc_with_finalizer._dont_inline_ = True
+        # Common code to fill the header and length of the object.
+        self.init_gc_object(result, typeid, GCFLAG_NO_YOUNG_PTRS | extra_flags)
+        if self.is_varsize(typeid):
+            offset_to_length = self.varsize_offset_to_length(typeid)
+            (result + size_gc_header + offset_to_length).signed[0] = length
+        return result + size_gc_header
 
 
     # ----------
@@ -569,37 +560,16 @@ class MiniMarkGC(MovingGCBase):
 
 
     def malloc_fixedsize_nonmovable(self, typeid):
-        """NOT_RPYTHON: not tested translated"""
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        totalsize = size_gc_header + self.fixed_size(typeid)
-        #
-        result = self._malloc_nonmovable(typeid, totalsize)
-        obj = result + size_gc_header
+        obj = self.external_malloc(typeid, 0)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_varsize_nonmovable(self, typeid, length):
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        nonvarsize = size_gc_header + self.fixed_size(typeid)
-        itemsize = self.varsize_item_sizes(typeid)
-        offset_to_length = self.varsize_offset_to_length(typeid)
-        try:
-            varsize = ovfcheck(itemsize * length)
-            totalsize = ovfcheck(nonvarsize + varsize)
-        except OverflowError:
-            raise MemoryError
-        #
-        result = self._malloc_nonmovable(typeid, totalsize)
-        obj = result + size_gc_header
-        (obj + offset_to_length).signed[0] = length
+        obj = self.external_malloc(typeid, length)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_nonmovable(self, typeid, length, zero):
         # helper for testing, same as GCBase.malloc
-        if self.is_varsize(typeid):
-            gcref = self.malloc_varsize_nonmovable(typeid, length)
-        else:
-            gcref = self.malloc_fixedsize_nonmovable(typeid)
-        return llmemory.cast_ptr_to_adr(gcref)
+        return self.external_malloc(typeid, length or 0)    # None -> 0
 
 
     # ----------
@@ -1019,7 +989,7 @@ class MiniMarkGC(MovingGCBase):
         if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
             #
             # Common case: allocate a new nonmovable location for it.
-            newhdr = self._alloc_out_of_nursery(totalsize)
+            newhdr = self._malloc_out_of_nursery(totalsize)
             #
         else:
             # The object has already a shadow.
@@ -1057,24 +1027,27 @@ class MiniMarkGC(MovingGCBase):
         self.old_objects_pointing_to_young.append(newobj)
 
 
-    def _alloc_out_of_nursery(self, totalsize):
+    def _malloc_out_of_nursery(self, totalsize):
         """Allocate non-movable memory for an object of the given
         'totalsize' that lives so far in the nursery."""
-        if llmemory.raw_malloc_usage(totalsize) > self.small_request_threshold:
-            # for nursery objects that are not small
-            arena = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize),
-                                         False)
-            if not arena:
-                raise MemoryError("cannot allocate object")
-            llarena.arena_reserve(arena, totalsize)
-            #
-            size_gc_header = self.gcheaderbuilder.size_gc_header
-            self.rawmalloced_total_size += llmemory.raw_malloc_usage(totalsize)
-            self.rawmalloced_objects.append(arena + size_gc_header)
-            return arena
-        else:
+        if raw_malloc_usage(totalsize) <= self.small_request_threshold:
             # most common path
             return self.ac.malloc(totalsize)
+        else:
+            # for nursery objects that are not small
+            return self._malloc_out_of_nursery_nonsmall(totalsize)
+    _malloc_out_of_nursery._always_inline_ = True
+
+    def _malloc_out_of_nursery_nonsmall(self, totalsize):
+        arena = llarena.arena_malloc(raw_malloc_usage(totalsize), False)
+        if not arena:
+            raise MemoryError("cannot allocate object")
+        llarena.arena_reserve(arena, totalsize)
+        #
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        self.rawmalloced_total_size += raw_malloc_usage(totalsize)
+        self.rawmalloced_objects.append(arena + size_gc_header)
+        return arena
 
 
     # ----------
@@ -1201,7 +1174,7 @@ class MiniMarkGC(MovingGCBase):
                 self.rawmalloced_objects.append(obj)
             else:
                 totalsize = size_gc_header + self.get_size(obj)
-                rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+                rawtotalsize = raw_malloc_usage(totalsize)
                 self.rawmalloced_total_size -= rawtotalsize
                 arena = llarena.getfakearenaaddress(obj - size_gc_header)
                 #
@@ -1302,8 +1275,8 @@ class MiniMarkGC(MovingGCBase):
                 else:
                     size_gc_header = self.gcheaderbuilder.size_gc_header
                     size = self.get_size(obj)
-                    shadowhdr = self._alloc_out_of_nursery(size_gc_header +
-                                                           size)
+                    shadowhdr = self._malloc_out_of_nursery(size_gc_header +
+                                                            size)
                     # initialize to an invalid tid *without* GCFLAG_VISITED,
                     # so that if the object dies before the next minor
                     # collection, the shadow will stay around but be collected
@@ -1497,7 +1470,7 @@ class SimpleArenaCollection(object):
         self.total_memory_used = 0
 
     def malloc(self, size):
-        nsize = llmemory.raw_malloc_usage(size)
+        nsize = raw_malloc_usage(size)
         ll_assert(nsize > 0, "malloc: size is null or negative")
         ll_assert(nsize <= self.small_request_threshold,"malloc: size too big")
         ll_assert((nsize & (WORD-1)) == 0, "malloc: size is not aligned")
