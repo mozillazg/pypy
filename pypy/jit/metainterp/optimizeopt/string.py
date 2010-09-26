@@ -11,7 +11,6 @@ from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.jit.codewriter.effectinfo import EffectInfo, callinfo_for_oopspec
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.objectmodel import missing_value
 
 
 class __extend__(optimizer.OptValue):
@@ -48,6 +47,7 @@ class __extend__(optimizer.OptValue):
 
 
 class VAbstractStringValue(virtualize.AbstractVirtualValue):
+    _attrs_ = ()
 
     def _really_force(self):
         s = self.get_constant_string()
@@ -155,7 +155,7 @@ class VStringConcatValue(VAbstractStringValue):
 
 class VStringSliceValue(VAbstractStringValue):
     """A slice."""
-    vstr = vstart = vlength = missing_value     # annotator fix
+    _attrs_ = ('vstr', 'vstart', 'vlength')
 
     def setup(self, vstr, vstart, vlength):
         self.vstr = vstr
