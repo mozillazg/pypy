@@ -248,13 +248,18 @@ class MiniMarkGC(MovingGCBase):
                 newsize = generation.estimate_best_nursery_size()
                 if newsize <= 0:
                     newsize = defaultsize
+            newsize = max(newsize, minsize)
             #
             major_coll = base.read_float_from_env('PYPY_GC_MAJOR_COLLECT')
             if major_coll >= 1.0:
                 self.major_collection_threshold = major_coll
             #
             min_heap_size = base.read_uint_from_env('PYPY_GC_MIN')
-            self.min_heap_size = float(min_heap_size)
+            if min_heap_size > 0:
+                self.min_heap_size = float(min_heap_size)
+            else:
+                # defaults to 8 times the nursery
+                self.min_heap_size = newsize * 8
             #
             max_heap_size = base.read_uint_from_env('PYPY_GC_MAX')
             if max_heap_size > 0:
@@ -262,7 +267,7 @@ class MiniMarkGC(MovingGCBase):
             #
             self.minor_collection()    # to empty the nursery
             llarena.arena_free(self.nursery)
-            self.nursery_size = max(newsize, minsize)
+            self.nursery_size = newsize
             self.allocate_nursery()
 
 
