@@ -509,7 +509,16 @@ class MiniMarkGC(MovingGCBase):
                 cardheadersize = WORD * extra_words
                 extra_flags = GCFLAG_HAS_CARDS
             #
-            allocsize = cardheadersize + raw_malloc_usage(totalsize)
+            # Detect very rare cases of overflows
+            if raw_malloc_usage(totalsize) > (sys.maxint - (WORD-1)
+                                              - cardheadersize):
+                raise MemoryError("rare case of overflow")
+            #
+            # Now we know that the following computations cannot overflow.
+            # Note that round_up_for_allocation() is also needed to get the
+            # correct number added to 'rawmalloced_total_size'.
+            allocsize = (cardheadersize + raw_malloc_usage(
+                            llarena.round_up_for_allocation(totalsize)))
             #
             # Allocate the object using arena_malloc(), which we assume here
             # is just the same as raw_malloc(), but allows the extra
@@ -534,8 +543,8 @@ class MiniMarkGC(MovingGCBase):
             result = arena + cardheadersize
             llarena.arena_reserve(result, totalsize)
             #
-            # Record the newly allocated object and its size.
-            self.rawmalloced_total_size += raw_malloc_usage(totalsize)
+            # Record the newly allocated object and its full malloced size.
+            self.rawmalloced_total_size += allocsize
             self.rawmalloced_objects.append(result + size_gc_header)
         #
         # Common code to fill the header and length of the object.
@@ -1064,6 +1073,10 @@ class MiniMarkGC(MovingGCBase):
     _malloc_out_of_nursery._always_inline_ = True
 
     def _malloc_out_of_nursery_nonsmall(self, totalsize):
+        # 'totalsize' should be aligned.
+        ll_assert(raw_malloc_usage(totalsize) & (WORD-1) == 0,
+                  "misaligned totalsize in _malloc_out_of_nursery_nonsmall")
+        #
         arena = llarena.arena_malloc(raw_malloc_usage(totalsize), False)
         if not arena:
             raise MemoryError("cannot allocate object")
@@ -1195,8 +1208,7 @@ class MiniMarkGC(MovingGCBase):
                 self.rawmalloced_objects.append(obj)
             else:
                 totalsize = size_gc_header + self.get_size(obj)
-                rawtotalsize = raw_malloc_usage(totalsize)
-                self.rawmalloced_total_size -= rawtotalsize
+                allocsize = raw_malloc_usage(totalsize)
                 arena = llarena.getfakearenaaddress(obj - size_gc_header)
                 #
                 # Must also include the card marker area, if any
@@ -1211,8 +1223,10 @@ class MiniMarkGC(MovingGCBase):
                     length = (obj + offset_to_length).signed[0]
                     extra_words = self.card_marking_words_for_length(length)
                     arena -= extra_words * WORD
+                    allocsize += extra_words * WORD
                 #
                 llarena.arena_free(arena)
+                self.rawmalloced_total_size -= allocsize
         #
         list.delete()
 
