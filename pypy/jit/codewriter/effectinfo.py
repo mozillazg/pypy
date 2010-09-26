@@ -129,20 +129,14 @@ class VirtualizableAnalyzer(BoolGraphAnalyzer):
 
 # ____________________________________________________________
 
-_callinfo_for_oopspec = {}
-
-def _callinfo_for_oopspec_memo(oopspecindex):
-    return _callinfo_for_oopspec.get(oopspecindex, (None, 0))
-_callinfo_for_oopspec_memo._annspecialcase_ = 'specialize:memo'
+_callinfo_for_oopspec = {}      # {oopspecindex: (calldescr, func_as_int)}
 
 def callinfo_for_oopspec(oopspecindex):
-    """A memo function that returns the calldescr and the function
+    """A function that returns the calldescr and the function
     address (as an int) of one of the OS_XYZ functions defined above.
     Don't use this if there might be several implementations of the same
     OS_XYZ specialized by type, e.g. OS_ARRAYCOPY."""
-    calldescr, func = _callinfo_for_oopspec_memo(oopspecindex)
-    assert calldescr is not None
-    return calldescr, func
+    return _callinfo_for_oopspec[oopspecindex]
 
 
 def _funcptr_for_oopspec_memo(oopspecindex):
