@@ -318,6 +318,7 @@ class LLHelpers(AbstractLLHelpers):
     def ll_strfasthash(s):
         return s.hash     # assumes that the hash is already computed
 
+    @purefunction
     def ll_strconcat(s1, s2):
         len1 = len(s1.chars)
         len2 = len(s2.chars)
@@ -443,8 +444,8 @@ class LLHelpers(AbstractLLHelpers):
             if chars1[j] != chars2[j]:
                 return False
             j += 1
-
         return True
+    ll_streq.oopspec = 'stroruni.equal(s1, s2)'
 
     @purefunction
     def ll_startswith(s1, s2):
@@ -693,6 +694,7 @@ class LLHelpers(AbstractLLHelpers):
             i += 1
         return result
 
+    @purefunction
     def _ll_stringslice(s1, start, stop):
         newstr = s1.malloc(stop - start)
         assert start >= 0
