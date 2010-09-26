@@ -19,9 +19,18 @@ class EffectInfo(object):
     OS_NONE                     = 0    # normal case, no oopspec
     OS_ARRAYCOPY                = 1    # "list.ll_arraycopy"
     OS_STR_CONCAT               = 2    # "stroruni.concat"
-    OS_STR_SLICE                = 3    # "stroruni.slice"
-    OS_UNI_CONCAT               = 4    # "stroruni.concat"
+    OS_UNI_CONCAT               = 3    # "stroruni.concat"
+    OS_STR_SLICE                = 4    # "stroruni.slice"
     OS_UNI_SLICE                = 5    # "stroruni.slice"
+    OS_STR_EQUAL                = 6    # "stroruni.equal"
+    OS_UNI_EQUAL                = 7    # "stroruni.equal"
+    OS_STREQ_SLICE_CHECKNULL    = 8    # s2!=NULL and s1[x:x+length]==s2
+    OS_STREQ_SLICE_NONNULL      = 9    # s1[x:x+length]==s2   (assert s2!=NULL)
+    OS_STREQ_SLICE_CHAR         = 10   # s1[x:x+length]==char
+    OS_STREQ_NONNULL            = 11   # s1 == s2    (assert s1!=NULL,s2!=NULL)
+    OS_STREQ_NONNULL_CHAR       = 12   # s1 == char  (assert s1!=NULL)
+    OS_STREQ_CHECKNULL_CHAR     = 13   # s1!=NULL and s1==char
+    OS_STREQ_LENGTHOK           = 14   # s1 == s2    (assert len(s1)==len(s2))
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
@@ -135,11 +144,18 @@ def callinfo_for_oopspec(oopspecindex):
     assert calldescr is not None
     return calldescr, func
 
-def funcptr_for_oopspec(oopspecindex):
-    """A memo function that returns a pointer to the function described
-    by OS_XYZ (as a real low-level function pointer)."""
+
+def _funcptr_for_oopspec_memo(oopspecindex):
     from pypy.jit.codewriter import heaptracker
     _, func_as_int = _callinfo_for_oopspec.get(oopspecindex, (None, 0))
     funcadr = heaptracker.int2adr(func_as_int)
     return funcadr.ptr
-funcptr_for_oopspec._annspecialcase_ = 'specialize:memo'
+_funcptr_for_oopspec_memo._annspecialcase_ = 'specialize:memo'
+
+def funcptr_for_oopspec(oopspecindex):
+    """A memo function that returns a pointer to the function described
+    by OS_XYZ (as a real low-level function pointer)."""
+    funcptr = _funcptr_for_oopspec_memo(oopspecindex)
+    assert funcptr
+    return funcptr
+funcptr_for_oopspec._annspecialcase_ = 'specialize:arg(0)'

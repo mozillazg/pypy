@@ -281,6 +281,24 @@ class StringTests:
                 return 42
             self.meta_interp(f, [10, 10])
 
+    def test_streq_char(self):
+        for somestr in ["?abcdefg", ]: #u"def"]:
+            jitdriver = JitDriver(greens = [], reds = ['m', 'n'])
+            @dont_look_inside
+            def escape(x):
+                pass
+            def f(n, m):
+                assert n >= 0
+                while m >= 0:
+                    jitdriver.can_enter_jit(m=m, n=n)
+                    jitdriver.jit_merge_point(m=m, n=n)
+                    s = somestr[:m]
+                    escape(s == "?")
+                    m -= 1
+                return 42
+            self.meta_interp(f, [6, 7])
+            self.check_loops(newstr=0, newunicode=0)
+
 
 class TestOOtype(StringTests, OOJitMixin):
     CALL = "oosend"

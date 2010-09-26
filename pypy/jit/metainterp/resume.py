@@ -9,7 +9,7 @@ from pypy.jit.codewriter.effectinfo import funcptr_for_oopspec
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.rlib import rarithmetic
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.rlib.debug import have_debug_prints
+from pypy.rlib.debug import have_debug_prints, ll_assert
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 
 # Logic to encode the chain of frames and the state of the boxes at a
@@ -408,9 +408,7 @@ class ResumeDataVirtualAdder(object):
 
 
 class AbstractVirtualInfo(object):
-    #def allocate(self, metainterp):
-    #    raise NotImplementedError
-    #def setfields(self, decoder, struct):
+    #def allocate(self, decoder, index):
     #    raise NotImplementedError
     def equals(self, fieldnums):
         return tagged_list_eq(self.fieldnums, fieldnums)
@@ -430,6 +428,7 @@ class AbstractVirtualStructInfo(AbstractVirtualInfo):
         for i in range(len(self.fielddescrs)):
             descr = self.fielddescrs[i]
             decoder.setfield(descr, struct, self.fieldnums[i])
+        return struct
 
     def debug_prints(self):
         assert len(self.fielddescrs) == len(self.fieldnums)
@@ -444,8 +443,10 @@ class VirtualInfo(AbstractVirtualStructInfo):
         self.known_class = known_class
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
-        return decoder.allocate_with_vtable(self.known_class)
+    def allocate(self, decoder, index):
+        struct = decoder.allocate_with_vtable(self.known_class)
+        decoder.virtuals_cache[index] = struct
+        return self.setfields(decoder, struct)
 
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython())
@@ -457,8 +458,10 @@ class VStructInfo(AbstractVirtualStructInfo):
         self.typedescr = typedescr
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
-        return decoder.allocate_struct(self.typedescr)
+    def allocate(self, decoder, index):
+        struct = decoder.allocate_struct(self.typedescr)
+        decoder.virtuals_cache[index] = struct
+        return self.setfields(decoder, struct)
 
     def debug_prints(self):
         debug_print("\tvstructinfo", self.typedescr.repr_rpython())
@@ -470,14 +473,11 @@ class VArrayInfo(AbstractVirtualInfo):
         #self.fieldnums = ...
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
+    def allocate(self, decoder, index):
         length = len(self.fieldnums)
-        return decoder.allocate_array(self.arraydescr, length)
-
-    @specialize.argtype(1)
-    def setfields(self, decoder, array):
         arraydescr = self.arraydescr
-        length = len(self.fieldnums)
+        array = decoder.allocate_array(arraydescr, length)
+        decoder.virtuals_cache[index] = array
         # NB. the check for the kind of array elements is moved out of the loop
         if arraydescr.is_array_of_pointers():
             for i in range(length):
@@ -491,25 +491,25 @@ class VArrayInfo(AbstractVirtualInfo):
             for i in range(length):
                 decoder.setarrayitem_int(arraydescr, array, i,
                                          self.fieldnums[i])
+        return array
 
     def debug_prints(self):
         debug_print("\tvarrayinfo", self.arraydescr)
         for i in self.fieldnums:
             debug_print("\t\t", str(untag(i)))
 
+
 class VStrPlainInfo(AbstractVirtualInfo):
     """Stands for the string made out of the characters of all fieldnums."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
+    def allocate(self, decoder, index):
         length = len(self.fieldnums)
-        return decoder.allocate_string(length)
-
-    @specialize.argtype(1)
-    def setfields(self, decoder, string):
-        length = len(self.fieldnums)
+        string = decoder.allocate_string(length)
+        decoder.virtuals_cache[index] = string
         for i in range(length):
-            decoder.strsetitem(string, i, self.fieldnums[i])
+            decoder.string_setitem(string, i, self.fieldnums[i])
+        return string
 
     def debug_prints(self):
         debug_print("\tvstrplaininfo length", len(self.fieldnums))
@@ -520,18 +520,14 @@ class VStrConcatInfo(AbstractVirtualInfo):
     other strings."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
+    def allocate(self, decoder, index):
         # xxx for blackhole resuming, this will build all intermediate
         # strings and throw them away immediately, which is a bit sub-
         # efficient.  Not sure we care.
         left, right = self.fieldnums
-        return decoder.concat_strings(left, right)
-
-    @specialize.argtype(1)
-    def setfields(self, decoder, string):
-        # we do everything in allocate(); no risk of circular data structure
-        # with strings.
-        pass
+        string = decoder.concat_strings(left, right)
+        decoder.virtuals_cache[index] = string
+        return string
 
     def debug_prints(self):
         debug_print("\tvstrconcatinfo")
@@ -543,15 +539,11 @@ class VStrSliceInfo(AbstractVirtualInfo):
     """Stands for the string made out of slicing another string."""
 
     @specialize.argtype(1)
-    def allocate(self, decoder):
-        str, start, length = self.fieldnums
-        return decoder.slice_string(str, start, length)
-
-    @specialize.argtype(1)
-    def setfields(self, decoder, string):
-        # we do everything in allocate(); no risk of circular data structure
-        # with strings.
-        pass
+    def allocate(self, decoder, index):
+        largerstr, start, length = self.fieldnums
+        string = decoder.slice_string(largerstr, start, length)
+        decoder.virtuals_cache[index] = string
+        return string
 
     def debug_prints(self):
         debug_print("\tvstrsliceinfo")
@@ -568,7 +560,8 @@ class AbstractResumeDataReader(object):
     blackholing and want the best performance.
     """
     _mixin_ = True
-    virtuals = None
+    rd_virtuals = None
+    virtuals_cache = None
     virtual_default = None
 
     def _init(self, cpu, storage):
@@ -580,17 +573,29 @@ class AbstractResumeDataReader(object):
         self._prepare_virtuals(storage.rd_virtuals)
         self._prepare_pendingfields(storage.rd_pendingfields)
 
+    def getvirtual(self, index):
+        # Returns the index'th virtual, building it lazily if needed.
+        # Note that this may be called recursively; that's why the
+        # allocate() methods must fill in the cache as soon as they
+        # have the object, before they fill its fields.
+        v = self.virtuals_cache[index]
+        if not v:
+            v = self.rd_virtuals[index].allocate(self, index)
+            ll_assert(v == self.virtuals_cache[index], "resume.py: bad cache")
+        return v
+
+    def force_all_virtuals(self):
+        rd_virtuals = self.rd_virtuals
+        if rd_virtuals:
+            for i in range(len(rd_virtuals)):
+                if rd_virtuals[i] is not None:
+                    self.getvirtual(i)
+        return self.virtuals_cache
+
     def _prepare_virtuals(self, virtuals):
         if virtuals:
-            self.virtuals = [self.virtual_default] * len(virtuals)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    self.virtuals[i] = vinfo.allocate(self)
-            for i in range(len(virtuals)):
-                vinfo = virtuals[i]
-                if vinfo is not None:
-                    vinfo.setfields(self, self.virtuals[i])
+            self.rd_virtuals = virtuals
+            self.virtuals_cache = [self.virtual_default] * len(virtuals)
 
     def _prepare_pendingfields(self, pendingfields):
         if pendingfields is not None:
@@ -698,6 +703,11 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         return self.metainterp.execute_and_record(rop.NEWSTR,
                                                   None, ConstInt(length))
 
+    def string_setitem(self, strbox, index, charnum):
+        charbox = self.decode_box(charnum, INT)
+        self.metainterp.execute_and_record(rop.STRSETITEM, None,
+                                           strbox, ConstInt(index), charbox)
+
     def concat_strings(self, str1num, str2num):
         calldescr, func = callinfo_for_oopspec(EffectInfo.OS_STR_CONCAT)
         str1box = self.decode_box(str1num, REF)
@@ -756,9 +766,7 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
             else:
                 box = self.consts[num]
         elif tag == TAGVIRTUAL:
-            virtuals = self.virtuals
-            assert virtuals is not None
-            box = virtuals[num]
+            box = self.getvirtual(num)
         elif tag == TAGINT:
             box = ConstInt(num)
         else:
@@ -843,7 +851,7 @@ def force_from_resumedata(metainterp_sd, storage, vinfo=None):
     resumereader.handling_async_forcing()
     vrefinfo = metainterp_sd.virtualref_info
     resumereader.consume_vref_and_vable(vrefinfo, vinfo)
-    return resumereader.virtuals
+    return resumereader.force_all_virtuals()
 
 class ResumeDataDirectReader(AbstractResumeDataReader):
     unique_id = lambda: None
@@ -861,7 +869,9 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             # special case for resuming after a GUARD_NOT_FORCED: we already
             # have the virtuals
             self.resume_after_guard_not_forced = 2
-            self.virtuals = all_virtuals
+            self.virtuals_cache = all_virtuals
+            # self.rd_virtuals can remain None, because virtuals_cache is
+            # already filled
 
     def handling_async_forcing(self):
         self.resume_after_guard_not_forced = 1
@@ -935,6 +945,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     def allocate_string(self, length):
         return self.cpu.bh_newstr(length)
 
+    def string_setitem(self, str, index, charnum):
+        char = self.decode_int(charnum)
+        self.cpu.bh_strsetitem(str, index, char)
+
     def concat_strings(self, str1num, str2num):
         str1 = self.decode_ref(str1num)
         str2 = self.decode_ref(str2num)
@@ -995,9 +1009,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
                 return self.cpu.ts.NULLREF
             return self.consts[num].getref_base()
         elif tag == TAGVIRTUAL:
-            virtuals = self.virtuals
-            assert virtuals is not None
-            return virtuals[num]
+            return self.getvirtual(num)
         else:
             assert tag == TAGBOX
             if num < 0:
