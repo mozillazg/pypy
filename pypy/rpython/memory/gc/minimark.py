@@ -277,9 +277,20 @@ class MiniMarkGC(MovingGCBase):
         # the end of the nursery:
         self.nursery_top = self.nursery + self.nursery_size
         # initialize the threshold, a bit arbitrarily
-        self.next_major_collection_threshold = (
-            self.nursery_size * self.major_collection_threshold)
+        self.set_major_threshold_from(self.nursery_size *
+                                      self.major_collection_threshold)
         debug_stop("gc-set-nursery-size")
+
+    def set_major_threshold_from(self, threshold):
+        # Set the next_major_collection_threshold.
+        if self.max_heap_size > 0.0 and threshold > self.max_heap_size:
+            threshold = self.max_heap_size
+            bounded = True
+        else:
+            bounded = False
+        #
+        self.next_major_collection_threshold = threshold
+        return bounded
 
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect=True,
@@ -1119,30 +1130,26 @@ class MiniMarkGC(MovingGCBase):
         # Set the threshold for the next major collection to be when we
         # have allocated 'major_collection_threshold' times more than
         # we currently have.
-        self.next_major_collection_threshold = (
+        bounded = self.set_major_threshold_from(
             (self.get_total_memory_used() * self.major_collection_threshold)
             + reserving_size)
         #
         # Max heap size: gives an upper bound on the threshold.  If we
         # already have at least this much allocated, raise MemoryError.
-        if (self.max_heap_size > 0.0 and
-                self.next_major_collection_threshold > self.max_heap_size):
+        if bounded and (float(self.get_total_memory_used()) + reserving_size >=
+                        self.next_major_collection_threshold):
             #
-            self.next_major_collection_threshold = self.max_heap_size
-            if (float(self.get_total_memory_used()) + reserving_size >=
-                    self.next_major_collection_threshold):
-                #
-                # First raise MemoryError, giving the program a chance to
-                # quit cleanly.  It might still allocate in the nursery,
-                # which might eventually be emptied, triggering another
-                # major collect and (possibly) reaching here again with an
-                # even higher memory consumption.  To prevent it, if it's
-                # the second time we are here, then abort the program.
-                if self.max_heap_size_already_raised:
-                    llop.debug_fatalerror(lltype.Void,
-                                          "Using too much memory, aborting")
-                self.max_heap_size_already_raised = True
-                raise MemoryError
+            # First raise MemoryError, giving the program a chance to
+            # quit cleanly.  It might still allocate in the nursery,
+            # which might eventually be emptied, triggering another
+            # major collect and (possibly) reaching here again with an
+            # even higher memory consumption.  To prevent it, if it's
+            # the second time we are here, then abort the program.
+            if self.max_heap_size_already_raised:
+                llop.debug_fatalerror(lltype.Void,
+                                      "Using too much memory, aborting")
+            self.max_heap_size_already_raised = True
+            raise MemoryError
         #
         # At the end, we can execute the finalizers of the objects
         # listed in 'run_finalizers'.  Note that this will typically do
