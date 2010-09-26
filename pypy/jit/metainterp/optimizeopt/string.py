@@ -172,6 +172,8 @@ class VStringSliceValue(VAbstractStringValue):
                 return None
             start = self.vstart.box.getint()
             length = self.vlength.box.getint()
+            assert start >= 0
+            assert length >= 0
             return s1[start : start + length]
         return None
 
@@ -384,6 +386,9 @@ class OptString(optimizer.Optimization):
             return True
         #
         vstr.ensure_nonnull()
+        lengthbox = _int_sub(newoperations, vstop.force_box(),
+                                            vstart.force_box())
+        #
         if isinstance(vstr, VStringSliceValue):
             # double slicing  s[i:j][k:l]
             vintermediate = vstr
@@ -393,8 +398,6 @@ class OptString(optimizer.Optimization):
                                 vstart.force_box())
             vstart = self.getvalue(startbox)
         #
-        lengthbox = _int_sub(newoperations, vstop.force_box(),
-                                            vstart.force_box())
         value = self.make_vstring_slice(op.result, op)
         value.setup(vstr, vstart, self.getvalue(lengthbox))
         return True
@@ -506,12 +509,9 @@ class OptString(optimizer.Optimization):
 
     def generate_modified_call(self, oopspecindex, args, result):
         calldescr, func = callinfo_for_oopspec(oopspecindex)
-        func = llmemory.cast_ptr_to_adr(func)
-        func = heaptracker.adr2int(func)
         op = ResOperation(rop.CALL, [ConstInt(func)] + args, result,
                           descr=calldescr)
         self.optimizer.newoperations.append(op)
-    generate_modified_call._annspecialcase_ = 'specialize:arg(1)'
 
     def propagate_forward(self, op):
         opnum = op.opnum

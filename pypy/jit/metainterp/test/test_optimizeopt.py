@@ -4164,10 +4164,8 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
                 if isinstance(value, calldescrtype):
                     if (value.get_extra_info() and
                         value.get_extra_info().oopspecindex == oopspecindex):
-                        from pypy.rpython.lltypesystem import lltype
-                        func = lltype.nullptr(lltype.FuncType([], lltype.Void))
                         # returns 0 for 'func' in this test
-                        return value, func
+                        return value, 0
             raise AssertionError("not found: oopspecindex=%d" % oopspecindex)
         #
         saved = string.callinfo_for_oopspec

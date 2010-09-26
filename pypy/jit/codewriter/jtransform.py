@@ -1055,7 +1055,9 @@ class Transformer(object):
                             [c_func] + [varoftype(T) for T in argtypes],
                             varoftype(resulttype))
         calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
-        _callinfo_for_oopspec[oopspecindex] = calldescr, c_func.value
+        func = heaptracker.adr2int(
+            llmemory.cast_ptr_to_adr(c_func.value))
+        _callinfo_for_oopspec[oopspecindex] = calldescr, func
 
     def _handle_stroruni_call(self, op, oopspec_name, args):
         if args[0].concretetype.TO == rstr.STR:
