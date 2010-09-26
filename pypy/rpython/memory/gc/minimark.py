@@ -93,7 +93,8 @@ class MiniMarkGC(MovingGCBase):
         # PYPY_GC_NURSERY and fall back to half the size of
         # the L2 cache.  For 'major_collection_threshold' it will look
         # it up in the env var PYPY_GC_MAJOR_COLLECT.  It also sets
-        # 'max_heap_size' to PYPY_GC_MAX.
+        # 'max_heap_size' to PYPY_GC_MAX.  Finally, PYPY_GC_MIN sets
+        # the minimal value of 'next_major_collection_threshold'.
         "read_from_env": True,
 
         # The size of the nursery.  Note that this is only used as a
@@ -156,6 +157,7 @@ class MiniMarkGC(MovingGCBase):
         self.small_request_threshold = small_request_threshold
         self.major_collection_threshold = major_collection_threshold
         self.num_major_collects = 0
+        self.min_heap_size = 0.0
         self.max_heap_size = 0.0
         self.max_heap_size_already_raised = False
         #
@@ -251,6 +253,9 @@ class MiniMarkGC(MovingGCBase):
             if major_coll >= 1.0:
                 self.major_collection_threshold = major_coll
             #
+            min_heap_size = base.read_uint_from_env('PYPY_GC_MIN')
+            self.min_heap_size = float(min_heap_size)
+            #
             max_heap_size = base.read_uint_from_env('PYPY_GC_MAX')
             if max_heap_size > 0:
                 self.max_heap_size = float(max_heap_size)
@@ -276,13 +281,17 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_free = self.nursery
         # the end of the nursery:
         self.nursery_top = self.nursery + self.nursery_size
-        # initialize the threshold, a bit arbitrarily
-        self.set_major_threshold_from(self.nursery_size *
-                                      self.major_collection_threshold)
+        # initialize the threshold
+        self.min_heap_size = max(self.min_heap_size, self.nursery_size *
+                                              self.major_collection_threshold)
+        self.set_major_threshold_from(0.0)
         debug_stop("gc-set-nursery-size")
 
     def set_major_threshold_from(self, threshold):
         # Set the next_major_collection_threshold.
+        if threshold < self.min_heap_size:
+            threshold = self.min_heap_size
+        #
         if self.max_heap_size > 0.0 and threshold > self.max_heap_size:
             threshold = self.max_heap_size
             bounded = True
