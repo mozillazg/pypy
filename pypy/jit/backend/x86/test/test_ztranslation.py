@@ -118,7 +118,7 @@ class TestTranslationRemoveTypePtrX86(CCompiledMixin):
 
     def _get_TranslationContext(self):
         t = TranslationContext()
-        t.config.translation.gc = 'hybrid'
+        t.config.translation.gc = 'minimark'
         t.config.translation.gcrootfinder = 'asmgcc'
         t.config.translation.list_comprehension_operations = True
         t.config.translation.gcremovetypeptr = True
