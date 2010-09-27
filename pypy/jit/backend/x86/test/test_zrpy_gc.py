@@ -127,6 +127,8 @@ def test_compile_boehm():
 # ______________________________________________________________________
 
 class TestCompileHybrid(object):
+    # Test suite using the hybrid GC.  We should ideally also have one
+    # using the minimark GC, but these tests take forever...
     def setup_class(cls):
         funcs = []
         name_to_func = {}
