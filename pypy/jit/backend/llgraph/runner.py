@@ -297,6 +297,18 @@ class LLtypeCPU(BaseCPU):
         return self.getdescr(0, token[0], extrainfo=extrainfo,
                              arg_types=''.join(arg_types))
 
+    def calldescrof_dynamic(self, ffi_args, ffi_result, extrainfo=None):
+        from pypy.jit.backend.llsupport.ffisupport import get_ffi_type_kind
+        arg_types = []
+        for arg in ffi_args:
+            kind = get_ffi_type_kind(arg)
+            if kind != history.VOID:
+                arg_types.append(kind)
+        reskind = get_ffi_type_kind(ffi_result)
+        return self.getdescr(0, reskind, extrainfo=extrainfo,
+                             arg_types=''.join(arg_types))
+
+
     def grab_exc_value(self):
         return llimpl.grab_exc_value()
 

@@ -421,6 +421,7 @@ class BaseBackendTest(Runner):
             assert x == 3.5 - 42
 
     def test_call(self):
+        from pypy.rlib.libffi import ffi_type_sint, ffi_type_uchar, ffi_type_sint16
 
         def func_int(a, b):
             return a + b
@@ -428,23 +429,31 @@ class BaseBackendTest(Runner):
             return chr(ord(c) + ord(c1))
 
         functions = [
-            (func_int, lltype.Signed, 655360),
-            (func_int, rffi.SHORT, 1213),
-            (func_char, lltype.Char, 12)
+            (func_int, lltype.Signed, ffi_type_sint, 655360),
+            (func_int, rffi.SHORT, ffi_type_sint16, 1213),
+            (func_char, lltype.Char, ffi_type_uchar, 12)
             ]
 
-        for func, TP, num in functions:
+        for func, TP, ffi_type, num in functions:
             cpu = self.cpu
             #
             FPTR = self.Ptr(self.FuncType([TP, TP], TP))
             func_ptr = llhelper(FPTR, func)
             FUNC = deref(FPTR)
-            calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
             funcbox = self.get_funcbox(cpu, func_ptr)
+            # first, try it with the "normal" calldescr
+            calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
             res = self.execute_operation(rop.CALL,
                                          [funcbox, BoxInt(num), BoxInt(num)],
                                          'int', descr=calldescr)
             assert res.value == 2 * num
+            # then, try it with the dynamic calldescr
+            dyn_calldescr = cpu.calldescrof_dynamic([ffi_type, ffi_type], ffi_type)
+            res = self.execute_operation(rop.CALL,
+                                         [funcbox, BoxInt(num), BoxInt(num)],
+                                         'int', descr=dyn_calldescr)
+            assert res.value == 2 * num
+            
 
         if cpu.supports_floats:
             def func(f0, f1, f2, f3, f4, f5, f6, i0, i1, f7, f8, f9):
