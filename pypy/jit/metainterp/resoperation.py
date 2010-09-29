@@ -459,7 +459,6 @@ _oplist = [
     'COND_CALL_GC_WB/2d', # [objptr, newvalue]   (for the write barrier)
     'DEBUG_MERGE_POINT/1',      # debugging only
     'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
-    'CALL_C/*', # call directly C code from here (a function addres comes first)
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     'CALL/*d',

@@ -1,6 +1,6 @@
 
 import py
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
 from pypy.rlib.clibffi import FuncPtr, CDLL, ffi_type_sint
 from pypy.rlib.libffi import IntArg, Func
@@ -35,6 +35,7 @@ class TestDirectCall(LLJitMixin):
             while n < 10:
                 driver.jit_merge_point(n=n, func=func)
                 driver.can_enter_jit(n=n, func=func)
+                func = hint(func, promote=True)
                 arg0 = IntArg(n)
                 arg1 = IntArg(1)
                 arg0.next = arg1

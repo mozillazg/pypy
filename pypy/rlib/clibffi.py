@@ -471,7 +471,7 @@ class FuncPtr(AbstractFuncPtr):
     ll_args = lltype.nullptr(rffi.VOIDPP.TO)
     ll_result = lltype.nullptr(rffi.VOIDP.TO)
 
-    _immutable_fields_ = ['funcsym'] # XXX probably more
+    _immutable_fields_ = ['funcsym', 'argtypes'] # XXX probably more
 
     def __init__(self, name, argtypes, restype, funcsym, flags=FUNCFLAG_CDECL,
                  keepalive=None):

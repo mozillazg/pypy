@@ -50,7 +50,8 @@ class OptCCall(Optimization):
         for push_op in self.func_args[funcval]:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
-        newop = ResOperation(rop.CALL_C, arglist, op.result, None)
+        # XXX: add the descr
+        newop = ResOperation(rop.CALL, arglist, op.result, None)
         del self.func_args[funcval]
         return newop
 
