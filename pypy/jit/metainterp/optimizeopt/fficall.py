@@ -2,7 +2,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 
-class OptCCall(Optimization):
+class OptFfiCall(Optimization):
 
     def __init__(self):
         self.func_args = {}
@@ -64,4 +64,4 @@ class OptCCall(Optimization):
         else:
             self.emit_operation(op)
 
-optimize_ops = _findall(OptCCall, 'optimize_')
+optimize_ops = _findall(OptFfiCall, 'optimize_')
