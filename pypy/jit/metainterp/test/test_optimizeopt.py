@@ -3898,25 +3898,45 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         self.optimize_loop(ops, 'Not, Not', expected)
 
 
+# ------------------------------------------------ 
+from pypy.rpython.lltypesystem import llmemory
+from pypy.rlib.libffi import Func
+
+class FakeLLObject(object):
+
+    def __init__(self, **kwds):
+        self.__dict__.update(kwds)
+        self._TYPE = llmemory.GCREF
+
+    def _identityhash(self):
+        return id(self)
+
 class TestFfiCall(OptimizeOptTest, LLtypeMixin):
+
+    class namespace:
+        cpu = LLtypeMixin.cpu
+        plaincalldescr = LLtypeMixin.plaincalldescr
+        funcptr = FakeLLObject()
+        func = FakeLLObject(_fake_class=Func)
+
+    namespace = namespace.__dict__
+
 
     def test_ffi_call(self):
         ops = """
-        [p0, i1, f2]
-        call("_libffi_prepare_call", p0, descr=plaincalldescr)
-        call("_libffi_push_arg_Signed", p0, i1, descr=plaincalldescr)
-        call("_libffi_push_arg_Float", p0, f2, descr=plaincalldescr)
-        p3 = getfield_gc_pure(p0) # funcsym
-        i4 = call("_libffi_call", p0, p3, descr=plaincalldescr)
-        jump(p0, i4, f2)
+        [i0, f1]
+        call("_libffi_prepare_call",    ConstPtr(func),     descr=plaincalldescr)
+        call("_libffi_push_arg_Signed", ConstPtr(func), i0, descr=plaincalldescr)
+        call("_libffi_push_arg_Float",  ConstPtr(func), f1, descr=plaincalldescr)
+        i3 = call("_libffi_call",       ConstPtr(func), 1,  descr=plaincalldescr)
+        jump(i3, f1)
         """
         expected = """
-        [p0, i1, f2]
-        p3 = getfield_gc_pure(p0)
-        i4 = call(p3, i1, f2)
-        jump(p0, i4, f2)
+        [i0, f1]
+        i3 = call(1, i0, f1)
+        jump(i3, f1)
         """
-        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
+        loop = self.optimize_loop(ops, 'Not, Not', expected)
 
 
 
