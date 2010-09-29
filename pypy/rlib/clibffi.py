@@ -515,7 +515,7 @@ class FuncPtr(AbstractFuncPtr):
     # doesn't work correctly with mixing non-negative and normal integers
     push_arg._annenforceargs_ = [None, int]
     #push_arg._annspecialcase_ = 'specialize:argtype(1)'
-    push_arg.oopspec = 'libffi_push_arg(self, value)'
+    #push_arg.oopspec = 'libffi_push_arg(self, value)'
 
     def _check_args(self):
         if self.pushed_args < self.argnum:
@@ -524,7 +524,7 @@ class FuncPtr(AbstractFuncPtr):
     def _clean_args(self):
         self.pushed_args = 0
 
-    def call(self, funcsym, RES_TP):
+    def call(self, RES_TP):
         self._check_args()
         ffires = c_ffi_call(self.ll_cif, self.funcsym,
                             rffi.cast(rffi.VOIDP, self.ll_result),
@@ -537,8 +537,8 @@ class FuncPtr(AbstractFuncPtr):
         self._clean_args()
         check_fficall_result(ffires, self.flags)
         return res
-    call._annspecialcase_ = 'specialize:arg(2)'
-    call.oopspec = 'libffi_call(self, funcsym, RES_TP)'
+    call._annspecialcase_ = 'specialize:arg(1)'
+    #call.oopspec = 'libffi_call(self, RES_TP)'
 
     def __del__(self):
         if self.ll_args:
