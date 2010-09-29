@@ -244,6 +244,9 @@ class ResumeDataVirtualAdder(object):
         self.storage = storage
         self.memo = memo
 
+    def make_vinvop(self, op):
+        return VInvariantOpInfo(op)
+
     def make_virtual(self, known_class, fielddescrs):
         return VirtualInfo(known_class, fielddescrs)
 
@@ -313,6 +316,8 @@ class ResumeDataVirtualAdder(object):
 
         storage.rd_consts = self.memo.consts
         dump_storage(storage, liveboxes)
+        debug_print('liveboxes:', liveboxes)
+        debug_print('liveboxes:', [l.__class__ for l in liveboxes])
         return liveboxes[:]
 
     def _number_virtuals(self, liveboxes, values, num_env_virtuals):
@@ -409,6 +414,11 @@ class AbstractVirtualInfo(object):
     def debug_prints(self):
         raise NotImplementedError
 
+class VFromStartInfo(AbstractVirtualInfo):
+    def __init__(self, box, idx=-1):
+        self.set_content([fieldnums])
+        self.index = idx
+
 class AbstractVirtualStructInfo(AbstractVirtualInfo):
     def __init__(self, fielddescrs):
         self.fielddescrs = fielddescrs
@@ -439,6 +449,23 @@ class VirtualInfo(AbstractVirtualStructInfo):
     def debug_prints(self):
         debug_print("\tvirtualinfo", self.known_class.repr_rpython())
         AbstractVirtualStructInfo.debug_prints(self)
+
+class VInvariantOpInfo(AbstractVirtualInfo):
+    def __init__(self, op):
+        self.op = op
+
+    @specialize.argtype(1)
+    def allocate(self, decoder):
+        #return decoder.allocate_op(self.op)
+        #raise
+        return None
+
+    def debug_prints(self):
+        debug_print("\tVInvariantOpInfo", self.op)
+
+    @specialize.argtype(1)
+    def setfields(self, decoder, array):
+        pass
 
 class VStructInfo(AbstractVirtualStructInfo):
     def __init__(self, typedescr, fielddescrs):
@@ -536,6 +563,7 @@ class AbstractResumeDataReader(object):
         self.cur_numb = self.cur_numb.prev
 
     def _callback_i(self, index, register_index):
+        print "I: ", self.cur_numb.nums[index]
         value = self.decode_int(self.cur_numb.nums[index])
         self.write_an_int(register_index, value)
 
@@ -614,6 +642,9 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     def allocate_with_vtable(self, known_class):
         return self.metainterp.execute_and_record(rop.NEW_WITH_VTABLE,
                                                   None, known_class)
+    #def allocate_op(self, op):
+    #    return self.metainterp.execute_and_record_varargs(
+    #        op.opnum, op.args, op.descr)
 
     def allocate_struct(self, typedescr):
         return self.metainterp.execute_and_record(rop.NEW, typedescr)

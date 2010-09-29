@@ -356,7 +356,7 @@ class BasicTests:
         assert res == 919
         self.check_loop_count(3)
 
-    def test_loop_invariant_mul_bridge_maintaining(self):
+    def test_loop_invariant_mul_bridge_maintaining1(self):
         myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
         def f(x, y):
             res = 0
@@ -370,6 +370,27 @@ class BasicTests:
             return res
         res = self.meta_interp(f, [6, 16])
         assert res == 583
+        self.check_loop_count(3)
+        self.check_loops({'int_lt': 1, 'int_gt': 1,
+                          'guard_false': 1, 'guard_true': 1,
+                          'int_sub': 2, 'int_mul': 2, 'int_add': 2,
+                          'jump': 3})
+
+    def test_loop_invariant_mul_bridge_maintaining2(self):
+        myjitdriver = JitDriver(greens = [], reds = ['y', 'res', 'x'])
+        def f(x, y):
+            res = 0
+            while y > 0:
+                myjitdriver.can_enter_jit(x=x, y=y, res=res)
+                myjitdriver.jit_merge_point(x=x, y=y, res=res)
+                z = x * x
+                res += z
+                if y<8:
+                    res += z
+                y -= 1
+            return res
+        res = self.meta_interp(f, [6, 16])
+        assert res == 828
         self.check_loop_count(3)
         self.check_loops({'int_lt': 1, 'int_gt': 1,
                           'guard_false': 1, 'guard_true': 1,

@@ -3,24 +3,7 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.compile import prebuiltNotSpecNode
 from pypy.rlib.debug import debug_print
 from pypy.jit.metainterp.history import Const
-from pypy.jit.metainterp.optimizeopt.virtualize import AbstractVirtualValue
 
-class VInvariantOpValue(AbstractVirtualValue):
-    def setup(self, op):
-        self.op = op
-        v = self.optimizer.getvalue(self.keybox)
-        self.intbound = v.intbound
-
-    def get_args_for_fail(self, modifier):
-        if self.box is None and not modifier.already_seen_virtual(self.keybox):
-            modifier.register_virtual_fields(self.keybox, [self.keybox])
-
-    def _make_virtual(self, modifier):
-        return modifier.make_vinvop(self.op)
-
-    def force_box(self):
-        return self.keybox
-    
 class OptInvariant(Optimization):
     """Move loop invariant code into a preamble.
     """
@@ -91,11 +74,6 @@ class OptInvariant(Optimization):
                     box = v.force_box() 
                     if box and box not in self.invariant_boxes:
                         self.invariant_boxes.append(box)
-                    box = op.result
-                    vvalue = VInvariantOpValue(self.optimizer, box, op)
-                    vvalue.setup(op)
-                    del self.optimizer.values[box]
-                    self.make_equal_to(box, vvalue)
 
                 return
 
