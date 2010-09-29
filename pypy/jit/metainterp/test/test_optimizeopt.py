@@ -262,6 +262,10 @@ class BaseTestOptimizeOpt(BaseTest):
         expected = self.parse(optops)
         print '\n'.join([str(o) for o in loop.operations])
         self.assert_equal(loop, expected)
+        return loop
+
+
+class OptimizeOptTest(BaseTestOptimizeOpt):
 
     def test_simple(self):
         ops = """
@@ -2643,7 +2647,7 @@ class BaseTestOptimizeOpt(BaseTest):
             ''', rop.GUARD_TRUE)
 
 
-class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
+class TestLLtype(OptimizeOptTest, LLtypeMixin):
 
     def test_residual_call_does_not_invalidate_caches(self):
         ops = """
@@ -3893,8 +3897,10 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
+
+class TestJitFfi(OptimizeOptTest, LLtypeMixin):
+
     def test_ffi_call(self):
-        # XXX: do we want to promote p0 and get rid of the getfield?
         ops = """
         [p0, i1, f2]
         call("_libffi_prepare_call", p0, descr=plaincalldescr)
@@ -3907,14 +3913,14 @@ class TestLLtype(BaseTestOptimizeOpt, LLtypeMixin):
         expected = """
         [p0, i1, f2]
         p3 = getfield_gc_pure(p0)
-        i4 = call_c(p3, i1, f2)
+        i4 = call(p3, i1, f2)
         jump(p0, i4, f2)
         """
-        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
 
 
-##class TestOOtype(BaseTestOptimizeOpt, OOtypeMixin):
+##class TestOOtype(OptimizeOptTest, OOtypeMixin):
 
 ##    def test_instanceof(self):
 ##        ops = """

@@ -222,6 +222,9 @@ def _ll_1_int_abs(x):
 # libffi support
 # --------------
 
+def _ll_4_libffi_prepare_call(llfunc, symfunc, args, result):
+    pass
+
 def _ll_2_libffi_push_arg(llfunc, value):
     from pypy.rlib.libffi import FuncPtr
     func = cast_base_ptr_to_instance(FuncPtr, llfunc)
@@ -232,6 +235,7 @@ def _ll_3_libffi_call(llfunc, symfunc, RES_TP):
     func = cast_base_ptr_to_instance(FuncPtr, llfunc)
     return func.call(symfunc, lltype.Signed)
 # XXX: should be RES_TP, but it doesn't work
+
 
 
 # in the following calls to builtins, the JIT is allowed to look inside:
