@@ -3898,7 +3898,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         self.optimize_loop(ops, 'Not, Not', expected)
 
 
-class TestJitFfi(OptimizeOptTest, LLtypeMixin):
+class TestFfiCall(OptimizeOptTest, LLtypeMixin):
 
     def test_ffi_call(self):
         ops = """
