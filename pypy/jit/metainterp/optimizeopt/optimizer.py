@@ -354,6 +354,7 @@ class Optimizer(Optimization):
         assert isinstance(descr, compile.ResumeGuardDescr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         newboxes = modifier.finish(self.values, self.pendingfields)
+        debug_print('\ndescr:', descr)
         if len(newboxes) > self.metainterp_sd.options.failargs_limit: # XXX be careful here
             compile.giveup()
         descr.store_final_boxes(op, newboxes)
