@@ -3900,7 +3900,24 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
 
 # ------------------------------------------------ 
 from pypy.rpython.lltypesystem import llmemory
-from pypy.rlib.libffi import Func
+from pypy.rlib.libffi import Func, ffi_type_sint, ffi_type_double
+from pypy.jit.metainterp.history import AbstractDescr
+
+class MyCallDescr(AbstractDescr):
+    """
+    Fake calldescr to be used inside the tests.
+
+    The particularity is that it provides an __eq__ method, so that it
+    comparses by value by comparing the arg_types and typeinfo fields, so you
+    can check that the signature of a call is really what you want.
+    """
+
+    def __init__(self, arg_types, typeinfo):
+        self.arg_types = arg_types
+        self.typeinfo = typeinfo   # return type
+
+    def __eq__(self, other):
+        return self.arg_types == other.arg_types and self.typeinfo == other.typeinfo
 
 class FakeLLObject(object):
 
@@ -3916,8 +3933,11 @@ class TestFfiCall(OptimizeOptTest, LLtypeMixin):
     class namespace:
         cpu = LLtypeMixin.cpu
         plaincalldescr = LLtypeMixin.plaincalldescr
+        int_float__int = MyCallDescr('if', 'i')
         funcptr = FakeLLObject()
-        func = FakeLLObject(_fake_class=Func)
+        func = FakeLLObject(_fake_class=Func,
+                            argtypes=[ffi_type_sint, ffi_type_double],
+                            restype=ffi_type_sint)
 
     namespace = namespace.__dict__
 
@@ -3933,7 +3953,7 @@ class TestFfiCall(OptimizeOptTest, LLtypeMixin):
         """
         expected = """
         [i0, f1]
-        i3 = call(1, i0, f1)
+        i3 = call(1, i0, f1, descr=int_float__int)
         jump(i3, f1)
         """
         loop = self.optimize_loop(ops, 'Not, Not', expected)
