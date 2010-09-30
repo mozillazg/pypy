@@ -50,12 +50,12 @@ ARENA_NULL = lltype.nullptr(ARENA)
 #   PAGE_HEADER.  The page is on the chained list of pages that still have
 #   room for objects of that size, unless it is completely full.
 #
-# - free.  The page is on the chained list of free pages 'freepages' from
-#   its arena.
+# - free: used to be partially full, and is now free again.  The page is
+#   on the chained list of free pages 'freepages' from its arena.
 
-# Each allocated page contains blocks of a given size, which can be in
+# Each allocated page contains blocks of a given size, which can again be in
 # one of three states: allocated, free, or uninitialized.  The uninitialized
-# blocks (initially all of them) are a tail of the page.
+# blocks (initially all of them) are at the tail of the page.
 
 PAGE_PTR = lltype.Ptr(lltype.ForwardReference())
 PAGE_HEADER = lltype.Struct('PageHeader',
@@ -214,6 +214,8 @@ class ArenaCollection(object):
         if freepages == NULL:
             # This was the last page, so put the arena away into
             # arenas_lists[0].
+            ll_assert(arena.nfreepages == 0, 
+                      "freepages == NULL but nfreepages > 0")
             arena.nextarena = self.arenas_lists[0]
             self.arenas_lists[0] = arena
             self.current_arena = ARENA_NULL
@@ -242,7 +244,7 @@ class ArenaCollection(object):
 
 
     def allocate_new_arena(self):
-        """Return in self.current_arena the arena to allocate from next."""
+        """Loads in self.current_arena the arena to allocate from next."""
         #
         # Pick an arena from 'arenas_lists[i]', with i as small as possible
         # but > 0.  Use caching with 'min_empty_nfreepages', which guarantees
@@ -261,6 +263,9 @@ class ArenaCollection(object):
             self.min_empty_nfreepages = i
         #
         # No more arena with any free page.  We must allocate a new arena.
+        if not we_are_translated():
+            for a in self._all_arenas():
+                assert a.nfreepages == 0
         #
         # 'arena_base' points to the start of malloced memory; it might not
         # be a page-aligned address
