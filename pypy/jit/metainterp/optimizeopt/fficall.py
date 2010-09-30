@@ -5,17 +5,18 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 
-class FuncDescription(object):
+class FuncInfo(object):
 
     def __init__(self, cpu, func):
         self.func = func
-        self.args = []
+        self.opargs = []
+        self.descr = cpu.calldescrof_dynamic(func.argtypes, func.restype)
 
 
 class OptFfiCall(Optimization):
 
     def __init__(self):
-        self.funcs = {}
+        self.func_infos = {}
 
     def get_oopspec(self, funcval):
         # XXX: not RPython at all, just a hack while waiting to have an
@@ -60,25 +61,25 @@ class OptFfiCall(Optimization):
 
     def do_prepare_call(self, op):
         func = self._get_func(op)
-        assert func not in self.funcs # XXX: do something nice etc. etc.
-        self.funcs[func] = FuncDescription(self.optimizer.cpu, func)
+        assert func not in self.func_infos # XXX: do something nice etc. etc.
+        self.func_infos[func] = FuncInfo(self.optimizer.cpu, func)
 
     def do_push_arg(self, op):
         # we store the op in funcs because we might want to emit it later,
         # in case we give up with the optimization
         func = self._get_func(op)
-        self.funcs[func].args.append(op)
+        self.func_infos[func].opargs.append(op)
 
     def do_call(self, op):
         func = self._get_func(op)
         funcsymval = self.getvalue(op.getarg(2))
         arglist = [funcsymval.force_box()]
-        for push_op in self.funcs[func].args:
+        info = self.func_infos[func]
+        for push_op in info.opargs:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
-        # XXX: add the descr
-        newop = ResOperation(rop.CALL, arglist, op.result, None)
-        del self.funcs[func]
+        newop = ResOperation(rop.CALL, arglist, op.result, descr=info.descr)
+        del self.func_infos[func]
         return newop
 
     def propagate_forward(self, op):
