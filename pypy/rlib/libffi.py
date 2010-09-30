@@ -52,7 +52,7 @@ class Func(object):
 
     def _do_call(self, funcsym, RESULT):
         return self.funcptr.call(RESULT)
-    _do_call._annspecialcase_ = 'specialize:arg(1)'
+    _do_call._annspecialcase_ = 'specialize:arg(2)'
     _do_call.oopspec = 'libffi_call(self, funcsym, RESULT)'
 
     @jit.unroll_safe
