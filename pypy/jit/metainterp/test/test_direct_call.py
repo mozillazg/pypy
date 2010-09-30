@@ -40,5 +40,14 @@ class TestDirectCall(LLJitMixin):
                 arg1 = IntArg(1)
                 arg0.next = arg1
                 n = func.call(arg0, lltype.Signed)
+            return n
             
-        self.meta_interp(f, [0])
+        res = self.meta_interp(f, [0])
+        assert res == 10
+        self.check_loops({
+                'call': 1,
+                'guard_no_exception': 1,
+                'int_lt': 1,
+                'guard_true': 1,
+                'jump': 1})
+
