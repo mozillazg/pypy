@@ -516,6 +516,23 @@ class BaseBackendTest(Runner):
                                          'int', descr=calldescr)
             assert res.value == func_ints(*args)
 
+    def test_call_to_c_function(self):
+        from pypy.rlib.libffi import CDLL, ffi_type_uchar, ffi_type_sint
+        libc = CDLL('libc.so.6')
+        c_tolower = libc.getpointer('tolower', [ffi_type_uchar], ffi_type_sint)
+        c_tolower.push_arg('A')
+        assert c_tolower.call(lltype.Signed) == ord('a')
+
+        func_adr = llmemory.cast_ptr_to_adr(c_tolower.funcsym)
+        funcbox = ConstInt(heaptracker.adr2int(func_adr))
+        calldescr = self.cpu.calldescrof_dynamic([ffi_type_uchar], ffi_type_sint)
+        res = self.execute_operation(rop.CALL,
+                                     [funcbox, BoxInt(ord('A'))],
+                                     'int',
+                                     descr=calldescr)
+        assert res.value == ord('a')
+
+
     def test_field_basic(self):
         t_box, T_box = self.alloc_instance(self.T)
         fielddescr = self.cpu.fielddescrof(self.S, 'value')
