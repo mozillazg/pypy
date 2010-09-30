@@ -12,7 +12,7 @@ from pypy.jit.metainterp import warmspot
 from pypy.rlib.jit import OPTIMIZER_FULL
 
 
-ARGS = ["jittest", "10000"]
+ARGS = ["jittest", "100"]
 
 
 def jittest(driver):
