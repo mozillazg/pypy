@@ -390,6 +390,8 @@ class AbstractCopyContentOperation(AbstractStringOperation):
     def produce_into(self, builder, r):
         v_srcstring = self.get_string(builder, r)
         v_dststring = self.get_string(builder, r)
+        if v_srcstring.value == v_dststring.value:    # because it's not a
+            raise test_random.CannotProduceOperation  # memmove(), but memcpy()
         srclen = len(v_srcstring.getref(self.ptr).chars)
         dstlen = len(v_dststring.getref(self.ptr).chars)
         v_length = builder.get_index(min(srclen, dstlen), r)
