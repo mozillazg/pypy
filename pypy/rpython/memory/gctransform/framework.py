@@ -443,6 +443,7 @@ class FrameworkGCTransformer(GCTransformer):
                 self.write_barrier_from_array_ptr = getfn(func.im_func,
                                            [s_gc,
                                             annmodel.SomeAddress(),
+                                            annmodel.SomeAddress(),
                                             annmodel.SomeInteger()],
                                            annmodel.s_None,
                                            inline=True)
@@ -1023,6 +1024,8 @@ class FrameworkGCTransformer(GCTransformer):
             and not isinstance(v_newvalue, Constant)
             and v_struct.concretetype.TO._gckind == "gc"
             and hop.spaceop not in self.clean_sets):
+            v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
+                                   resulttype = llmemory.Address)
             v_structaddr = hop.genop("cast_ptr_to_adr", [v_struct],
                                      resulttype = llmemory.Address)
             if (self.write_barrier_from_array_ptr is not None and
@@ -1032,12 +1035,11 @@ class FrameworkGCTransformer(GCTransformer):
                 assert v_index.concretetype == lltype.Signed
                 hop.genop("direct_call", [self.write_barrier_from_array_ptr,
                                           self.c_const_gc,
+                                          v_newvalue,
                                           v_structaddr,
                                           v_index])
             else:
                 self.write_barrier_calls += 1
-                v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
-                                       resulttype = llmemory.Address)
                 hop.genop("direct_call", [self.write_barrier_ptr,
                                           self.c_const_gc,
                                           v_newvalue,
