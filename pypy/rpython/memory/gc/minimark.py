@@ -636,6 +636,11 @@ class MiniMarkGC(MovingGCBase):
                   "odd-valued (i.e. tagged) pointer unexpected here")
         return self.nursery <= addr < self.nursery_top
 
+    def appears_to_be_in_nursery(self, addr):
+        # same as is_in_nursery(), but may return True accidentally if
+        # 'addr' is a tagged pointer with just the wrong value.
+        return self.nursery <= addr < self.nursery_top
+
     def is_forwarded(self, obj):
         """Returns True if the nursery obj is marked as forwarded.
         Implemented a bit obscurely by checking an unrelated flag
@@ -752,23 +757,21 @@ class MiniMarkGC(MovingGCBase):
                 ll_assert(not self.is_in_nursery(addr_struct),
                           "nursery object with GCFLAG_NO_YOUNG_PTRS")
             #
-            # We assume that what we are writing is a pointer to the nursery
-            # (and don't care for the fact that this new pointer may not
-            # actually point to the nursery, which seems ok 
-            # XXXXXX XXX wrong !! fix me
-            # ). What we need is
+            # If it seems that what we are writing is a pointer to the nursery
+            # (as checked with appears_to_be_in_nursery()), then we need
             # to remove the flag GCFLAG_NO_YOUNG_PTRS and add the old object
             # to the list 'old_objects_pointing_to_young'.  We know that
             # 'addr_struct' cannot be in the nursery, because nursery objects
             # never have the flag GCFLAG_NO_YOUNG_PTRS to start with.
-            self.old_objects_pointing_to_young.append(addr_struct)
-            objhdr = self.header(addr_struct)
-            objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
+            if self.appears_to_be_in_nursery(newvalue):
+                self.old_objects_pointing_to_young.append(addr_struct)
+                objhdr = self.header(addr_struct)
+                objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
             #
             # Second part: if 'addr_struct' is actually a prebuilt GC
             # object and it's the first time we see a write to it, we
             # add it to the list 'prebuilt_root_objects'.  Note that we
-            # do it even in the (rare?) case of 'addr' being another
+            # do it even in the (rare?) case of 'addr' being NULL or another
             # prebuilt object, to simplify code.
             if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
                 objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
