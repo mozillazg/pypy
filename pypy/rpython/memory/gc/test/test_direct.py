@@ -70,6 +70,7 @@ class DirectGCTest(object):
         GC_PARAMS = self.GC_PARAMS.copy()
         if hasattr(meth, 'GC_PARAMS'):
             GC_PARAMS.update(meth.GC_PARAMS)
+        GC_PARAMS['translated_to_c'] = False
         self.gc = self.GCClass(config, **GC_PARAMS)
         self.gc.DEBUG = True
         self.rootwalker = DirectRootWalker(self)
