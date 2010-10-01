@@ -96,7 +96,7 @@ class DirectGCTest(object):
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
             if hasattr(self.gc, 'write_barrier_from_array'):
-                self.gc.write_barrier_from_array(newvalue, addr_struct, index)
+                self.gc.write_barrier_from_array(newaddr, addr_struct, index)
             else:
                 self.gc.write_barrier(newaddr, addr_struct)
         p[index] = newvalue

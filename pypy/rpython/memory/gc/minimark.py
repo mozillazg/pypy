@@ -753,6 +753,7 @@ class MiniMarkGC(MovingGCBase):
         # registers, so it does not save and restore them (that's a *hack*!).
         def remember_young_pointer(addr_struct, newvalue):
             # 'addr_struct' is the address of the object in which we write.
+            # 'newvalue' is the address that we are going to write in there.
             if DEBUG:
                 ll_assert(not self.is_in_nursery(addr_struct),
                           "nursery object with GCFLAG_NO_YOUNG_PTRS")
@@ -763,9 +764,9 @@ class MiniMarkGC(MovingGCBase):
             # to the list 'old_objects_pointing_to_young'.  We know that
             # 'addr_struct' cannot be in the nursery, because nursery objects
             # never have the flag GCFLAG_NO_YOUNG_PTRS to start with.
+            objhdr = self.header(addr_struct)
             if self.appears_to_be_in_nursery(newvalue):
                 self.old_objects_pointing_to_young.append(addr_struct)
-                objhdr = self.header(addr_struct)
                 objhdr.tid &= ~GCFLAG_NO_YOUNG_PTRS
             #
             # Second part: if 'addr_struct' is actually a prebuilt GC
@@ -785,6 +786,7 @@ class MiniMarkGC(MovingGCBase):
 
 
     def _init_writebarrier_with_card_marker(self):
+        DEBUG = self.DEBUG
         def remember_young_pointer_from_array(addr_array, index):
             # 'addr_array' is the address of the object in which we write,
             # which must have an array part;  'index' is the index of the
