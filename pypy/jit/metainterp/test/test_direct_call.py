@@ -2,8 +2,7 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
-from pypy.rlib.clibffi import FuncPtr, CDLL, ffi_type_sint
-from pypy.rlib.libffi import IntArg, Func
+from pypy.rlib.libffi import CDLL, ffi_type_sint, IntArg, Func
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
@@ -29,9 +28,8 @@ class TestDirectCall(LLJitMixin):
 
         def f(n):
             cdll = CDLL(self.lib_name)
-            fn = cdll.getpointer('sum_xy', [ffi_type_sint, ffi_type_sint],
-                                 ffi_type_sint)
-            func = Func(fn)
+            func = cdll.getpointer('sum_xy', [ffi_type_sint, ffi_type_sint],
+                                   ffi_type_sint)
             while n < 10:
                 driver.jit_merge_point(n=n, func=func)
                 driver.can_enter_jit(n=n, func=func)
