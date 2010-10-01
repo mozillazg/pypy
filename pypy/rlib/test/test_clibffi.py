@@ -11,13 +11,6 @@ import py
 import sys
 import time
 
-def setup_module(mod):
-    for name in type_names:
-        # XXX force this to be seen by ll2ctypes
-        # so that ALLOCATED.clear() clears it
-        ffistruct = globals()[name]
-        rffi.cast(rffi.VOIDP, ffistruct)
-
 def get_libm_name(platform):
     if platform == 'win32':
         return 'msvcrt.dll'
@@ -27,17 +20,26 @@ def get_libm_name(platform):
         return 'libm.so'
 
 class BaseFfiTest(object):
+    
+    def setup_class(cls):
+        for name in type_names:
+            # XXX force this to be seen by ll2ctypes
+            # so that ALLOCATED.clear() clears it
+            ffistruct = globals()[name]
+            rffi.cast(rffi.VOIDP, ffistruct)
+
+    def setup_method(self, meth):
+        ALLOCATED.clear()
+    
+
+class TestCLibffi(BaseFfiTest):
+
     def get_libc(self):
         return CDLL(get_libc_name())
     
     def get_libm(self):
         return CDLL(get_libm_name(sys.platform))
-    
 
-class TestCLibffi(BaseFfiTest):
-    def setup_method(self, meth):
-        ALLOCATED.clear()
-    
     def test_library_open(self):
         lib = self.get_libc()
         del lib
@@ -411,10 +413,11 @@ class TestCLibffi(BaseFfiTest):
 
         assert not ALLOCATED
 
-class TestWin32Handles:
+class TestWin32Handles(BaseFfiTest):
     def setup_class(cls):
         if sys.platform != 'win32':
             py.test.skip("Handle to libc library, Win-only test")
+        BaseFfiTest.setup_class(cls)
     
     def test_get_libc_handle(self):
         handle = get_libc_handle()
