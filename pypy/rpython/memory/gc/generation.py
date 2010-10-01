@@ -5,7 +5,6 @@ from pypy.rpython.memory.gc.semispace import GC_HASH_TAKEN_ADDR
 from pypy.rpython.memory.gc.base import read_from_env
 from pypy.rpython.lltypesystem.llmemory import NULL, raw_malloc_usage
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
-from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.debug import debug_print, debug_start, debug_stop
@@ -49,15 +48,17 @@ class GenerationGC(SemiSpaceGC):
 
     nursery_hash_base = -1
 
-    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
+    def __init__(self, config,
                  nursery_size=32*WORD,
                  min_nursery_size=32*WORD,
                  auto_nursery_size=False,
                  space_size=1024*WORD,
-                 max_space_size=sys.maxint//2+1):
-        SemiSpaceGC.__init__(self, config, chunk_size = chunk_size,
+                 max_space_size=sys.maxint//2+1,
+                 **kwds):
+        SemiSpaceGC.__init__(self, config,
                              space_size = space_size,
-                             max_space_size = max_space_size)
+                             max_space_size = max_space_size,
+                             **kwds)
         assert min_nursery_size <= nursery_size <= space_size // 2
         self.initial_nursery_size = nursery_size
         self.auto_nursery_size = auto_nursery_size
@@ -160,6 +161,9 @@ class GenerationGC(SemiSpaceGC):
     def appears_to_be_in_nursery(self, addr):
         # same as is_in_nursery(), but may return True accidentally if
         # 'addr' is a tagged pointer with just the wrong value.
+        if not self.translated_to_c:
+            if not self.is_valid_gc_object(addr):
+                return False
         return self.nursery <= addr < self.nursery_top
 
     def malloc_fixedsize_clear(self, typeid, size, can_collect,

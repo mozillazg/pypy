@@ -4,7 +4,6 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.memory.gc.base import GCBase, MovingGCBase
 from pypy.rpython.memory.gc import minimarkpage, base, generation
-from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask, r_uint
 from pypy.rlib.rarithmetic import LONG_BIT_SHIFT
 from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
@@ -140,7 +139,7 @@ class MiniMarkGC(MovingGCBase):
         "large_object_gcptrs": 8250*WORD,
         }
 
-    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
+    def __init__(self, config,
                  read_from_env=False,
                  nursery_size=32*WORD,
                  page_size=16*WORD,
@@ -150,8 +149,9 @@ class MiniMarkGC(MovingGCBase):
                  card_page_indices=0,
                  large_object=8*WORD,
                  large_object_gcptrs=10*WORD,
-                 ArenaCollectionClass=None):
-        MovingGCBase.__init__(self, config, chunk_size)
+                 ArenaCollectionClass=None,
+                 **kwds):
+        MovingGCBase.__init__(self, config, **kwds)
         assert small_request_threshold % WORD == 0
         self.read_from_env = read_from_env
         self.nursery_size = nursery_size
@@ -639,6 +639,9 @@ class MiniMarkGC(MovingGCBase):
     def appears_to_be_in_nursery(self, addr):
         # same as is_in_nursery(), but may return True accidentally if
         # 'addr' is a tagged pointer with just the wrong value.
+        if not self.translated_to_c:
+            if not self.is_valid_gc_object(addr):
+                return False
         return self.nursery <= addr < self.nursery_top
 
     def is_forwarded(self, obj):
