@@ -426,6 +426,7 @@ class FrameworkGCTransformer(GCTransformer):
         if GCClass.needs_write_barrier:
             self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
                                            [s_gc,
+                                            annmodel.SomeAddress(),
                                             annmodel.SomeAddress()],
                                            annmodel.s_None,
                                            inline=True)
@@ -434,7 +435,8 @@ class FrameworkGCTransformer(GCTransformer):
                 # func should not be a bound method, but a real function
                 assert isinstance(func, types.FunctionType)
                 self.write_barrier_failing_case_ptr = getfn(func,
-                                               [annmodel.SomeAddress()],
+                                               [annmodel.SomeAddress(),
+                                                annmodel.SomeAddress()],
                                                annmodel.s_None)
             func = getattr(GCClass, 'write_barrier_from_array', None)
             if func is not None:
@@ -1034,8 +1036,11 @@ class FrameworkGCTransformer(GCTransformer):
                                           v_index])
             else:
                 self.write_barrier_calls += 1
+                v_newvalue = hop.genop("cast_ptr_to_adr", [v_newvalue],
+                                       resulttype = llmemory.Address)
                 hop.genop("direct_call", [self.write_barrier_ptr,
                                           self.c_const_gc,
+                                          v_newvalue,
                                           v_structaddr])
         hop.rename('bare_' + opname)
 
