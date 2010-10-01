@@ -517,7 +517,8 @@ class BaseBackendTest(Runner):
             assert res.value == func_ints(*args)
 
     def test_call_to_c_function(self):
-        from pypy.rlib.libffi import CDLL, ffi_type_uchar, ffi_type_sint
+        # XXX: fix this to use libffi instead of clibffi
+        from pypy.rlib.clibffi import CDLL, ffi_type_uchar, ffi_type_sint
         libc = CDLL('libc.so.6')
         c_tolower = libc.getpointer('tolower', [ffi_type_uchar], ffi_type_sint)
         c_tolower.push_arg('A')
