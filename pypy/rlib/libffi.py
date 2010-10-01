@@ -66,8 +66,8 @@ class Func(AbstractFuncPtr):
         ll_args[i] = ll_buf
     # XXX this is bad, fix it somehow in the future, but specialize:argtype
     # doesn't work correctly with mixing non-negative and normal integers
-    #_push_arg._annenforceargs_ = [None, int]
-    _push_arg._annspecialcase_ = 'specialize:argtype(1)'
+    _push_arg._annenforceargs_ = [None, int, None, int]
+    #_push_arg._annspecialcase_ = 'specialize:argtype(1)'
     _push_arg.oopspec = 'libffi_push_arg(self, value, ll_args, i)'
 
     def _do_call(self, funcsym, ll_args, RESULT):
@@ -89,8 +89,8 @@ class Func(AbstractFuncPtr):
         self._free_buffers(ll_result, ll_args)
         #check_fficall_result(ffires, self.flags)
         return res
-    _do_call._annspecialcase_ = 'specialize:arg(2)'
-    _do_call.oopspec = 'libffi_call(self, funcsym, RESULT)'
+    _do_call._annspecialcase_ = 'specialize:arg(3)'
+    _do_call.oopspec = 'libffi_call(self, funcsym, ll_args, RESULT)'
 
     def _free_buffers(self, ll_result, ll_args):
         lltype.free(ll_result, flavor='raw')
