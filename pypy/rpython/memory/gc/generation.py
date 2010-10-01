@@ -157,6 +157,11 @@ class GenerationGC(SemiSpaceGC):
                   "odd-valued (i.e. tagged) pointer unexpected here")
         return self.nursery <= addr < self.nursery_top
 
+    def appears_to_be_in_nursery(self, addr):
+        # same as is_in_nursery(), but may return True accidentally if
+        # 'addr' is a tagged pointer with just the wrong value.
+        return self.nursery <= addr < self.nursery_top
+
     def malloc_fixedsize_clear(self, typeid, size, can_collect,
                                has_finalizer=False, contains_weakptr=False):
         if (has_finalizer or not can_collect or
@@ -326,7 +331,7 @@ class GenerationGC(SemiSpaceGC):
         addr = pointer.address[0]
         newaddr = self.copy(addr)
         pointer.address[0] = newaddr
-        self.write_into_last_generation_obj(obj)
+        self.write_into_last_generation_obj(obj, newaddr)
 
     # ____________________________________________________________
     # Implementation of nursery-only collections
@@ -457,9 +462,9 @@ class GenerationGC(SemiSpaceGC):
     #  "if addr_struct.int0 & JIT_WB_IF_FLAG: remember_young_pointer()")
     JIT_WB_IF_FLAG = GCFLAG_NO_YOUNG_PTRS
 
-    def write_barrier(self, addr_struct):
-        if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
-            self.remember_young_pointer(addr_struct)
+    def write_barrier(self, newvalue, addr_struct):
+         if self.header(addr_struct).tid & GCFLAG_NO_YOUNG_PTRS:
+            self.remember_young_pointer(addr_struct, newvalue)
 
     def _setup_wb(self):
         DEBUG = self.DEBUG
@@ -470,23 +475,33 @@ class GenerationGC(SemiSpaceGC):
         # For x86, there is also an extra requirement: when the JIT calls
         # remember_young_pointer(), it assumes that it will not touch the SSE
         # registers, so it does not save and restore them (that's a *hack*!).
-        def remember_young_pointer(addr_struct):
+        def remember_young_pointer(addr_struct, addr):
             #llop.debug_print(lltype.Void, "\tremember_young_pointer",
             #                 addr_struct, "<-", addr)
             if DEBUG:
                 ll_assert(not self.is_in_nursery(addr_struct),
                           "nursery object with GCFLAG_NO_YOUNG_PTRS")
-            self.old_objects_pointing_to_young.append(addr_struct)
-            self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
-            self.write_into_last_generation_obj(addr_struct)
+            #
+            # What is important in this function is that it *must*
+            # clear the flag GCFLAG_NO_YOUNG_PTRS from 'addr_struct'
+            # if 'addr' is in the nursery.  It is ok if, accidentally,
+            # it also clears the flag in some more rare cases, like
+            # 'addr' being a tagged pointer whose value happens to be
+            # a large integer that fools is_in_nursery().
+            if self.appears_to_be_in_nursery(addr):
+                self.old_objects_pointing_to_young.append(addr_struct)
+                self.header(addr_struct).tid &= ~GCFLAG_NO_YOUNG_PTRS
+            self.write_into_last_generation_obj(addr_struct, addr)
         remember_young_pointer._dont_inline_ = True
         self.remember_young_pointer = remember_young_pointer
 
-    def write_into_last_generation_obj(self, addr_struct):
+    def write_into_last_generation_obj(self, addr_struct, addr):
         objhdr = self.header(addr_struct)
         if objhdr.tid & GCFLAG_NO_HEAP_PTRS:
-            objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
-            self.last_generation_root_objects.append(addr_struct)
+            if (self.is_valid_gc_object(addr) and
+                    not self.is_last_generation(addr)):
+                objhdr.tid &= ~GCFLAG_NO_HEAP_PTRS
+                self.last_generation_root_objects.append(addr_struct)
     write_into_last_generation_obj._always_inline_ = True
 
     def assume_young_pointers(self, addr_struct):

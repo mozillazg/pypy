@@ -94,6 +94,7 @@ class GCManagedHeap(object):
                         assert (type(index) is int    # <- fast path
                                 or lltype.typeOf(index) == lltype.Signed)
                         self.gc.write_barrier_from_array(
+                            llmemory.cast_ptr_to_adr(newvalue),
                             llmemory.cast_ptr_to_adr(toplevelcontainer),
                             index)
                         wb = False
@@ -101,6 +102,7 @@ class GCManagedHeap(object):
             #
             if wb:
                 self.gc.write_barrier(
+                    llmemory.cast_ptr_to_adr(newvalue),
                     llmemory.cast_ptr_to_adr(toplevelcontainer))
         llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
 
