@@ -1,6 +1,15 @@
-from pypy.rlib.clibffi import *
+from pypy.rlib import clibffi
+from pypy.rlib.clibffi import get_libc_name
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib import jit
+
+def import_types():
+    g = globals()
+    for key, value in clibffi.__dict__.iteritems():
+        if key.startswith('ffi_type_'):
+            g[key] = value
+import_types()
+del import_types
 
 
 class AbstractArg(object):
@@ -46,8 +55,8 @@ class Func(object):
         self.funcptr.push_arg(value)
     # XXX this is bad, fix it somehow in the future, but specialize:argtype
     # doesn't work correctly with mixing non-negative and normal integers
-    _push_arg._annenforceargs_ = [None, int]
-    #push_arg._annspecialcase_ = 'specialize:argtype(1)'
+    #_push_arg._annenforceargs_ = [None, int]
+    _push_arg._annspecialcase_ = 'specialize:argtype(1)'
     _push_arg.oopspec = 'libffi_push_arg(self, value)'
 
     def _do_call(self, funcsym, RESULT):
