@@ -15,6 +15,13 @@ def import_types():
 import_types()
 del import_types
 
+def _fits_into_long(TYPE):
+    if not isinstance(TYPE, lltype.Number):
+        return False
+    if TYPE is rffi.FLOAT or TYPE is rffi.DOUBLE:
+        return False
+    sz = rffi.sizeof(TYPE)
+    return sz <= rffi.sizeof(rffi.LONG)
 
 # ----------------------------------------------------------------------
 
@@ -101,12 +108,15 @@ class Func(AbstractFuncPtr):
             arg.push(self, ll_args, i)
             i += 1
             arg = arg.next
-        if RESULT is rffi.LONG:
-            return self._do_call_int(self.funcsym, ll_args)
+        #
+        if _fits_into_long(RESULT):
+            res = self._do_call_int(self.funcsym, ll_args)
         elif RESULT is rffi.DOUBLE:
             return self._do_call_float(self.funcsym, ll_args)
         else:
             raise TypeError, 'Unsupported result type: %s' % RESULT
+        #
+        return rffi.cast(RESULT, res)
 
     # END OF THE PUBLIC INTERFACE
     # ------------------------------------------------------------------------
@@ -118,6 +128,7 @@ class Func(AbstractFuncPtr):
     def _prepare(self):
         ll_args = lltype.malloc(rffi.VOIDPP.TO, len(self.argtypes), flavor='raw')
         return ll_args
+
 
     # _push_* and _do_call_* in theory could be automatically specialize()d by
     # the annotator.  However, specialization doesn't work well with oopspec,
