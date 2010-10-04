@@ -48,7 +48,7 @@ class TestFfiCall(LLJitMixin):
                 func = hint(func, promote=True)
                 argchain = ArgChain()
                 argchain.int(n).float(1.2)
-                n = func.call(argchain, lltype.Signed)
+                n = func.call(argchain, rffi.LONG)
             return n
             
         res = self.meta_interp(f, [0])
@@ -74,7 +74,7 @@ class TestFfiCall(LLJitMixin):
                 func = hint(func, promote=True)
                 argchain = ArgChain()
                 argchain.float(float(-n))
-                res = func.call(argchain, lltype.Float)
+                res = func.call(argchain, rffi.DOUBLE)
                 n += 1
             return res
             
