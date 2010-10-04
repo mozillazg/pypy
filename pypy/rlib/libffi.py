@@ -51,7 +51,7 @@ class IntArg(AbstractArg):
         self.intval = intval
 
     def push(self, func, ll_args, i):
-        func._push_arg(self.intval, ll_args, i)
+        func._push_int(self.intval, ll_args, i)
 
 class FloatArg(AbstractArg):
     """ An argument holding a float
@@ -61,7 +61,7 @@ class FloatArg(AbstractArg):
         self.floatval = floatval
 
     def push(self, func, ll_args, i):
-        func._push_arg(self.floatval, ll_args, i)
+        func._push_float(self.floatval, ll_args, i)
 
 
 class Func(AbstractFuncPtr):
@@ -110,18 +110,23 @@ class Func(AbstractFuncPtr):
         return ll_args
     _prepare.oopspec = 'libffi_prepare_call(self)'
 
-    def _push_arg(self, value, ll_args, i):
+    @specialize.arg(1)
+    def _push_arg(self, TYPE, value, ll_args, i):
         # XXX: check the type is not translated?
         argtype = self.argtypes[i]
         c_size = intmask(argtype.c_size)
         ll_buf = lltype.malloc(rffi.CCHARP.TO, c_size, flavor='raw')
         push_arg_as_ffiptr(argtype, value, ll_buf)
         ll_args[i] = ll_buf
-    # XXX this is bad, fix it somehow in the future, but specialize:argtype
-    # doesn't work correctly with mixing non-negative and normal integers
-    _push_arg._annenforceargs_ = [None, int, None, int]
-    #_push_arg._annspecialcase_ = 'specialize:argtype(1)'
-    _push_arg.oopspec = 'libffi_push_arg(self, value, ll_args, i)'
+
+    def _push_int(self, value, ll_args, i):
+        self._push_arg(lltype.Signed, value, ll_args, i)
+    _push_int.oopspec = 'libffi_push_int(self, value, ll_args, i)'
+    _push_int._annenforceargs_ = [None, int, None, int]
+
+    def _push_float(self, value, ll_args, i):
+        self._push_arg(lltype.Float, value, ll_args, i)
+    _push_float.oopspec = 'libffi_push_float(self, value, ll_args, i)'
 
     def _do_call(self, funcsym, ll_args, RESULT):
         # XXX: check len(args)?

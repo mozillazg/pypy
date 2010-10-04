@@ -222,20 +222,21 @@ def _ll_1_int_abs(x):
 # libffi support
 # --------------
 
-def _ll_1_libffi_prepare_call(llfunc):
+def func(llfunc):
     from pypy.rlib.libffi import Func
-    func = cast_base_ptr_to_instance(Func, llfunc)
-    return func._prepare()
+    return cast_base_ptr_to_instance(Func, llfunc)
 
-def _ll_4_libffi_push_arg(llfunc, value, ll_args, i):
-    from pypy.rlib.libffi import Func
-    func = cast_base_ptr_to_instance(Func, llfunc)
-    return func._push_arg(value, ll_args, i)
+def _ll_1_libffi_prepare_call(llfunc):
+    return func(llfunc)._prepare()
+
+def _ll_4_libffi_push_int(llfunc, value, ll_args, i):
+    return func(llfunc)._push_int(value, ll_args, i)
+
+def _ll_4_libffi_push_float(llfunc, value, ll_args, i):
+    return func(llfunc)._push_float(value, ll_args, i)
 
 def _ll_4_libffi_call(llfunc, funcsym, ll_args, RESULT):
-    from pypy.rlib.libffi import Func
-    func = cast_base_ptr_to_instance(Func, llfunc)
-    return func._do_call(funcsym, ll_args, lltype.Signed)
+    return func(llfunc)._do_call(funcsym, ll_args, lltype.Signed)
 # XXX: should be RESULT, but it doesn't work
 
 

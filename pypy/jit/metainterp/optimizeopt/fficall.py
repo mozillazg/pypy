@@ -63,7 +63,7 @@ class OptFfiCall(Optimization):
         funcname = str(funcval.box)
         if '_libffi_prepare_call' in funcname:
             return 'prepare_call'
-        elif '_libffi_push_arg' in funcname:
+        elif '_libffi_push_' in funcname:
             return 'push_arg'
         elif '_libffi_call' in funcname:
             return 'call'
