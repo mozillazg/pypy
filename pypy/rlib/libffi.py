@@ -105,10 +105,10 @@ class Func(AbstractFuncPtr):
     # the following methods are supposed to be seen opaquely by the JIT
     # optimizer. Don't call them
 
+    @jit.oopspec('libffi_prepare_call(self)')
     def _prepare(self):
         ll_args = lltype.malloc(rffi.VOIDPP.TO, len(self.argtypes), flavor='raw')
         return ll_args
-    _prepare.oopspec = 'libffi_prepare_call(self)'
 
     @specialize.arg(1)
     def _push_arg(self, TYPE, value, ll_args, i):
@@ -119,15 +119,17 @@ class Func(AbstractFuncPtr):
         push_arg_as_ffiptr(argtype, value, ll_buf)
         ll_args[i] = ll_buf
 
+    @jit.oopspec('libffi_push_int(self, value, ll_args, i)')
     def _push_int(self, value, ll_args, i):
         self._push_arg(lltype.Signed, value, ll_args, i)
-    _push_int.oopspec = 'libffi_push_int(self, value, ll_args, i)'
     _push_int._annenforceargs_ = [None, int, None, int]
 
+    @jit.oopspec('libffi_push_float(self, value, ll_args, i)')
     def _push_float(self, value, ll_args, i):
         self._push_arg(lltype.Float, value, ll_args, i)
-    _push_float.oopspec = 'libffi_push_float(self, value, ll_args, i)'
 
+    @specialize.arg(3)
+    @jit.oopspec('libffi_call(self, funcsym, ll_args, RESULT)')
     def _do_call(self, funcsym, ll_args, RESULT):
         # XXX: check len(args)?
         ll_result = lltype.nullptr(rffi.CCHARP.TO)
@@ -147,8 +149,6 @@ class Func(AbstractFuncPtr):
         self._free_buffers(ll_result, ll_args)
         #check_fficall_result(ffires, self.flags)
         return res
-    _do_call._annspecialcase_ = 'specialize:arg(3)'
-    _do_call.oopspec = 'libffi_call(self, funcsym, ll_args, RESULT)'
 
     def _free_buffers(self, ll_result, ll_args):
         lltype.free(ll_result, flavor='raw')
