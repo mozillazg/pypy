@@ -1,5 +1,5 @@
 import sys
-from pypy.rpython.lltypesystem import lltype, rclass
+from pypy.rpython.lltypesystem import lltype, rclass, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython import rlist
 from pypy.rpython.lltypesystem import rstr as ll_rstr, rdict as ll_rdict
@@ -236,10 +236,10 @@ def _ll_4_libffi_push_float(llfunc, value, ll_args, i):
     return func(llfunc)._push_float(value, ll_args, i)
 
 def _ll_3_libffi_call_int(llfunc, funcsym, ll_args):
-    return func(llfunc)._do_call(funcsym, ll_args, lltype.Signed)
+    return func(llfunc)._do_call(funcsym, ll_args, rffi.LONG)
 
 def _ll_3_libffi_call_float(llfunc, funcsym, ll_args):
-    return func(llfunc)._do_call(funcsym, ll_args, lltype.Float)
+    return func(llfunc)._do_call(funcsym, ll_args, rffi.DOUBLE)
 
 
 

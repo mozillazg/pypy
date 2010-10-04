@@ -101,9 +101,9 @@ class Func(AbstractFuncPtr):
             arg.push(self, ll_args, i)
             i += 1
             arg = arg.next
-        if RESULT is lltype.Signed:
+        if RESULT is rffi.LONG:
             return self._do_call_int(self.funcsym, ll_args)
-        elif RESULT is lltype.Float:
+        elif RESULT is rffi.DOUBLE:
             return self._do_call_float(self.funcsym, ll_args)
         else:
             raise TypeError, 'Unsupported result type: %s' % RESULT
@@ -135,11 +135,11 @@ class Func(AbstractFuncPtr):
 
     @jit.oopspec('libffi_call_int(self, funcsym, ll_args)')
     def _do_call_int(self, funcsym, ll_args):
-        return self._do_call(funcsym, ll_args, lltype.Signed)
+        return self._do_call(funcsym, ll_args, rffi.LONG)
 
     @jit.oopspec('libffi_call_float(self, funcsym, ll_args)')
     def _do_call_float(self, funcsym, ll_args):
-        return self._do_call(funcsym, ll_args, lltype.Float)
+        return self._do_call(funcsym, ll_args, rffi.DOUBLE)
 
     # ------------------------------------------------------------------------
     # private methods
