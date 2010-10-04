@@ -2,7 +2,7 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
-from pypy.rlib.libffi import CDLL, ffi_type_sint, IntArg, Func
+from pypy.rlib.libffi import CDLL, ffi_type_sint, ArgChain, Func
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
@@ -34,10 +34,9 @@ class TestDirectCall(LLJitMixin):
                 driver.jit_merge_point(n=n, func=func)
                 driver.can_enter_jit(n=n, func=func)
                 func = hint(func, promote=True)
-                arg0 = IntArg(n)
-                arg1 = IntArg(1)
-                arg0.next = arg1
-                n = func.call(arg0, lltype.Signed)
+                argchain = ArgChain()
+                argchain.int(n).int(1)
+                n = func.call(argchain, lltype.Signed)
             return n
             
         res = self.meta_interp(f, [0])
