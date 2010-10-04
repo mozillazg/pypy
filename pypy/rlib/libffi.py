@@ -74,6 +74,37 @@ class Func(AbstractFuncPtr):
         self.keepalive = keepalive
         self.funcsym = funcsym
 
+    @jit.unroll_safe
+    @specialize.arg(2)
+    def call(self, argchain, RESULT):
+        # WARNING!  This code is written carefully in a way that the JIT
+        # optimizer will see a sequence of calls like the following:
+        #
+        #    libffi_prepare_call
+        #    libffi_push_arg
+        #    libffi_push_arg
+        #    ...
+        #    libffi_call
+        #
+        # It is important that there is no other operation in the middle, else
+        # the optimizer will fail to recognize the pattern and won't turn it
+        # into a fast CALL.  Note that "arg = arg.next" is optimized away,
+        # assuming that archain is completely virtual.
+        ll_args = self._prepare()
+        i = 0
+        arg = argchain.first
+        while arg:
+            arg.push(self, ll_args, i)
+            i += 1
+            arg = arg.next
+        result = self._do_call(self.funcsym, ll_args, RESULT)
+        return result
+
+    # END OF THE PUBLIC INTERFACE
+    # -------------------------------------------------------------------------
+    # the following methods are supposed to be seen opaquely by the JIT
+    # optimizer. Don't call them
+
     def _prepare(self):
         ll_args = lltype.malloc(rffi.VOIDPP.TO, len(self.argtypes), flavor='raw')
         return ll_args
@@ -120,31 +151,6 @@ class Func(AbstractFuncPtr):
             lltype.free(ll_args[i], flavor='raw')
         lltype.free(ll_args, flavor='raw')
 
-    @jit.unroll_safe
-    @specialize.arg(2)
-    def call(self, argchain, RESULT):
-        # WARNING!  This code is written carefully in a way that the JIT
-        # optimizer will see a sequence of calls like the following:
-        #
-        #    libffi_prepare_call
-        #    libffi_push_arg
-        #    libffi_push_arg
-        #    ...
-        #    libffi_call
-        #
-        # It is important that there is no other operation in the middle, else
-        # the optimizer will fail to recognize the pattern and won't turn it
-        # into a fast CALL.  Note that "arg = arg.next" is optimized away,
-        # assuming that archain is completely virtual.
-        ll_args = self._prepare()
-        i = 0
-        arg = argchain.first
-        while arg:
-            arg.push(self, ll_args, i)
-            i += 1
-            arg = arg.next
-        result = self._do_call(self.funcsym, ll_args, RESULT)
-        return result
 
 # ----------------------------------------------------------------------
     
