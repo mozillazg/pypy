@@ -18,6 +18,28 @@ del import_types
 
 # ----------------------------------------------------------------------
 
+class ArgChain(object):
+    first = None
+    last = None
+    numargs = 0
+
+    def int(self, intval):
+        self._append(IntArg(intval))
+        return self
+
+    def float(self, floatval):
+        self._append(FloatArg(floatval))
+        return self
+
+    def _append(self, arg):
+        if self.first is None:
+            self.first = self.last = arg
+        else:
+            self.last.next = arg
+            self.last = arg
+        self.numargs += 1
+    
+
 class AbstractArg(object):
     next = None
 
@@ -116,7 +138,7 @@ class Func(AbstractFuncPtr):
         # assuming that archain is completely virtual.
         ll_args = self._prepare()
         i = 0
-        arg = argchain
+        arg = argchain.first
         while arg:
             arg.push(self, ll_args, i)
             i += 1
