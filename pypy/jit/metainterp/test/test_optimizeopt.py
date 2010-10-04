@@ -3900,7 +3900,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
 
 # ------------------------------------------------ 
 from pypy.rpython.lltypesystem import llmemory
-from pypy.rlib.libffi import Func, ffi_type_sint, ffi_type_double
+from pypy.rlib.libffi import Func, types
 from pypy.jit.metainterp.history import AbstractDescr
 
 class MyCallDescr(AbstractDescr):
@@ -3928,7 +3928,7 @@ class FakeLLObject(object):
     def _identityhash(self):
         return id(self)
 
-class TestFfiCall(OptimizeOptTest, LLtypeMixin):
+class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
 
     class namespace:
         cpu = LLtypeMixin.cpu
@@ -3936,8 +3936,8 @@ class TestFfiCall(OptimizeOptTest, LLtypeMixin):
         int_float__int = MyCallDescr('if', 'i')
         funcptr = FakeLLObject()
         func = FakeLLObject(_fake_class=Func,
-                            argtypes=[ffi_type_sint, ffi_type_double],
-                            restype=ffi_type_sint)
+                            argtypes=[types.sint, types.double],
+                            restype=types.sint)
 
     namespace = namespace.__dict__
 

@@ -2,7 +2,7 @@
 import py
 from pypy.rlib.jit import JitDriver, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
-from pypy.rlib.libffi import CDLL, ffi_type_sint, ffi_type_double, ffi_type_uchar, ArgChain, Func
+from pypy.rlib.libffi import CDLL, types, ArgChain, Func
 from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
@@ -40,8 +40,8 @@ class TestFfiCall(LLJitMixin):
 
         def f(n):
             cdll = CDLL(self.lib_name)
-            func = cdll.getpointer('sum_xy', [ffi_type_sint, ffi_type_double],
-                                   ffi_type_sint)
+            func = cdll.getpointer('sum_xy', [types.sint, types.double],
+                                   types.sint)
             while n < 10:
                 driver.jit_merge_point(n=n, func=func)
                 driver.can_enter_jit(n=n, func=func)
@@ -66,7 +66,7 @@ class TestFfiCall(LLJitMixin):
 
         def f(n):
             cdll = CDLL(self.lib_name)
-            func = cdll.getpointer('abs', [ffi_type_double], ffi_type_double)
+            func = cdll.getpointer('abs', [types.double], types.double)
             res = 0.0
             while n < 10:
                 driver.jit_merge_point(n=n, func=func, res=res)
@@ -87,8 +87,8 @@ class TestFfiCall(LLJitMixin):
 
         def f(n):
             cdll = CDLL(self.lib_name)
-            func = cdll.getpointer('cast_to_uchar', [ffi_type_sint],
-                                   ffi_type_uchar)
+            func = cdll.getpointer('cast_to_uchar', [types.sint],
+                                   types.uchar)
             res = 0
             while n < 10:
                 driver.jit_merge_point(n=n, func=func, res=res)

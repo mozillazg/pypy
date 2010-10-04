@@ -15,7 +15,7 @@ class FuncInfo(object):
     def _get_signature(self, funcval):
         """
         given the funcval, return a tuple (argtypes, restype), where the
-        actuall types are libffi.ffi_type_*
+        actuall types are libffi.types.*
 
         The implementation is tricky because we have three possible cases:
 
