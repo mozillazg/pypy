@@ -235,9 +235,11 @@ def _ll_4_libffi_push_int(llfunc, value, ll_args, i):
 def _ll_4_libffi_push_float(llfunc, value, ll_args, i):
     return func(llfunc)._push_float(value, ll_args, i)
 
-def _ll_4_libffi_call(llfunc, funcsym, ll_args, RESULT):
+def _ll_3_libffi_call_int(llfunc, funcsym, ll_args):
     return func(llfunc)._do_call(funcsym, ll_args, lltype.Signed)
-# XXX: should be RESULT, but it doesn't work
+
+def _ll_3_libffi_call_float(llfunc, funcsym, ll_args):
+    return func(llfunc)._do_call(funcsym, ll_args, lltype.Float)
 
 
 
