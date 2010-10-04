@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, enforceargs
 from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib import jit
 from pypy.rlib import clibffi
@@ -120,11 +120,12 @@ class Func(AbstractFuncPtr):
         ll_args[i] = ll_buf
 
     @jit.oopspec('libffi_push_int(self, value, ll_args, i)')
+    @enforceargs( None, int,   None,    int) # fix the annotation for tests
     def _push_int(self, value, ll_args, i):
         self._push_arg(lltype.Signed, value, ll_args, i)
-    _push_int._annenforceargs_ = [None, int, None, int]
 
     @jit.oopspec('libffi_push_float(self, value, ll_args, i)')
+    @enforceargs(   None, float, None,    int) # fix the annotation for tests
     def _push_float(self, value, ll_args, i):
         self._push_arg(lltype.Float, value, ll_args, i)
 
