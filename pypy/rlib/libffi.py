@@ -74,6 +74,10 @@ class Func(AbstractFuncPtr):
         self.keepalive = keepalive
         self.funcsym = funcsym
 
+    # ========================================================================
+    # PUBLIC INTERFACE
+    # ========================================================================
+
     @jit.unroll_safe
     @specialize.arg(2)
     def call(self, argchain, RESULT):
@@ -97,21 +101,51 @@ class Func(AbstractFuncPtr):
             arg.push(self, ll_args, i)
             i += 1
             arg = arg.next
-        result = self._do_call(self.funcsym, ll_args, RESULT)
-        return result
+        if RESULT is lltype.Signed:
+            return self._do_call_int(self.funcsym, ll_args)
+        elif RESULT is lltype.Float:
+            return self._do_call_float(self.funcsym, ll_args)
+        else:
+            raise TypeError, 'Unsupported result type: %s' % RESULT
 
     # END OF THE PUBLIC INTERFACE
-    # -------------------------------------------------------------------------
-    # the following methods are supposed to be seen opaquely by the JIT
-    # optimizer. Don't call them
+    # ------------------------------------------------------------------------
+
+    # JIT friendly interface
+    # the following methods are supposed to be seen opaquely by the optimizer
 
     @jit.oopspec('libffi_prepare_call(self)')
     def _prepare(self):
         ll_args = lltype.malloc(rffi.VOIDPP.TO, len(self.argtypes), flavor='raw')
         return ll_args
 
-    @specialize.arg(1)
-    def _push_arg(self, TYPE, value, ll_args, i):
+    # _push_* and _do_call_* in theory could be automatically specialize()d by
+    # the annotator.  However, specialization doesn't work well with oopspec,
+    # so we specialize them by hand
+
+    @jit.oopspec('libffi_push_int(self, value, ll_args, i)')
+    @enforceargs( None, int,   None,    int) # fix the annotation for tests
+    def _push_int(self, value, ll_args, i):
+        self._push_arg(value, ll_args, i)
+
+    @jit.oopspec('libffi_push_float(self, value, ll_args, i)')
+    @enforceargs(   None, float, None,    int) # fix the annotation for tests
+    def _push_float(self, value, ll_args, i):
+        self._push_arg(value, ll_args, i)
+
+    @jit.oopspec('libffi_call_int(self, funcsym, ll_args)')
+    def _do_call_int(self, funcsym, ll_args):
+        return self._do_call(funcsym, ll_args, lltype.Signed)
+
+    @jit.oopspec('libffi_call_float(self, funcsym, ll_args)')
+    def _do_call_float(self, funcsym, ll_args):
+        return self._do_call(funcsym, ll_args, lltype.Float)
+
+    # ------------------------------------------------------------------------
+    # private methods
+
+    @specialize.argtype(1)
+    def _push_arg(self, value, ll_args, i):
         # XXX: check the type is not translated?
         argtype = self.argtypes[i]
         c_size = intmask(argtype.c_size)
@@ -119,18 +153,7 @@ class Func(AbstractFuncPtr):
         push_arg_as_ffiptr(argtype, value, ll_buf)
         ll_args[i] = ll_buf
 
-    @jit.oopspec('libffi_push_int(self, value, ll_args, i)')
-    @enforceargs( None, int,   None,    int) # fix the annotation for tests
-    def _push_int(self, value, ll_args, i):
-        self._push_arg(lltype.Signed, value, ll_args, i)
-
-    @jit.oopspec('libffi_push_float(self, value, ll_args, i)')
-    @enforceargs(   None, float, None,    int) # fix the annotation for tests
-    def _push_float(self, value, ll_args, i):
-        self._push_arg(lltype.Float, value, ll_args, i)
-
     @specialize.arg(3)
-    @jit.oopspec('libffi_call(self, funcsym, ll_args, RESULT)')
     def _do_call(self, funcsym, ll_args, RESULT):
         # XXX: check len(args)?
         ll_result = lltype.nullptr(rffi.CCHARP.TO)
