@@ -7,13 +7,31 @@ from pypy.rlib.clibffi import get_libc_name, FUNCFLAG_CDECL, AbstractFuncPtr, \
     push_arg_as_ffiptr, c_ffi_call
 from pypy.rlib.rdynload import dlopen, dlclose, dlsym, dlsym_byordinal
 
-def import_types():
-    g = globals()
-    for key, value in clibffi.__dict__.iteritems():
-        if key.startswith('ffi_type_'):
-            g[key] = value
-import_types()
-del import_types
+class types(object):
+    """
+    This namespace contains the primitive types you can use to declare the
+    signatures of the ffi functions.
+
+    In general, the name of the types are closely related to the ones of the
+    C-level ffi_type_*: e.g, instead of ffi_type_sint you should use
+    libffi.types.sint.
+
+    However, you should not rely on a perfect correspondence: in particular,
+    the exact meaning of ffi_type_{slong,ulong} changes a lot between libffi
+    versions, so types.slong could be different than ffi_type_slong.
+    """
+
+    @classmethod
+    def _import(cls):
+        prefix = 'ffi_type_'
+        for key, value in clibffi.__dict__.iteritems():
+            if key.startswith(prefix):
+                name = key[len(prefix):]
+                setattr(cls, name, value)
+        cls.slong = clibffi.cast_type_to_ffitype(rffi.LONG)
+        cls.ulong = clibffi.cast_type_to_ffitype(rffi.ULONG)
+
+types._import()
 
 def _fits_into_long(TYPE):
     if not isinstance(TYPE, lltype.Number):
@@ -23,7 +41,7 @@ def _fits_into_long(TYPE):
     sz = rffi.sizeof(TYPE)
     return sz <= rffi.sizeof(rffi.LONG)
 
-# ----------------------------------------------------------------------
+# ======================================================================
 
 class ArgChain(object):
     first = None
@@ -69,6 +87,9 @@ class FloatArg(AbstractArg):
 
     def push(self, func, ll_args, i):
         func._push_float(self.floatval, ll_args, i)
+
+
+# ======================================================================
 
 
 class Func(AbstractFuncPtr):
@@ -168,7 +189,7 @@ class Func(AbstractFuncPtr):
     def _do_call(self, funcsym, ll_args, RESULT):
         # XXX: check len(args)?
         ll_result = lltype.nullptr(rffi.CCHARP.TO)
-        if self.restype != ffi_type_void:
+        if self.restype != types.void:
             ll_result = lltype.malloc(rffi.CCHARP.TO,
                                       intmask(self.restype.c_size),
                                       flavor='raw')
@@ -192,8 +213,8 @@ class Func(AbstractFuncPtr):
         lltype.free(ll_args, flavor='raw')
 
 
-# ----------------------------------------------------------------------
-    
+# ======================================================================
+
 
 # XXX: it partially duplicate the code in clibffi.py
 class CDLL(object):

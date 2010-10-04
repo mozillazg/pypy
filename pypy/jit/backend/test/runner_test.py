@@ -421,7 +421,7 @@ class BaseBackendTest(Runner):
             assert x == 3.5 - 42
 
     def test_call(self):
-        from pypy.rlib.libffi import ffi_type_sint, ffi_type_uchar, ffi_type_sint16
+        from pypy.rlib.libffi import types
 
         def func_int(a, b):
             return a + b
@@ -429,9 +429,9 @@ class BaseBackendTest(Runner):
             return chr(ord(c) + ord(c1))
 
         functions = [
-            (func_int, lltype.Signed, ffi_type_sint, 655360),
-            (func_int, rffi.SHORT, ffi_type_sint16, 1213),
-            (func_char, lltype.Char, ffi_type_uchar, 12)
+            (func_int, lltype.Signed, types.sint, 655360),
+            (func_int, rffi.SHORT, types.sint16, 1213),
+            (func_char, lltype.Char, types.uchar, 12)
             ]
 
         for func, TP, ffi_type, num in functions:

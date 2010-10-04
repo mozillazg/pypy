@@ -3,8 +3,7 @@ import sys
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rlib.test.test_clibffi import BaseFfiTest, get_libm_name
-from pypy.rlib.libffi import CDLL, Func, get_libc_name, ArgChain
-from pypy.rlib.libffi import ffi_type_double, ffi_type_void
+from pypy.rlib.libffi import CDLL, Func, get_libc_name, ArgChain, types
 
 
 class TestLibffi(BaseFfiTest):
@@ -41,16 +40,16 @@ class TestLibffi(BaseFfiTest):
 
     def test_library_get_func(self):
         lib = self.get_libc()
-        ptr = lib.getpointer('fopen', [], ffi_type_void)
-        py.test.raises(KeyError, lib.getpointer, 'xxxxxxxxxxxxxxx', [], ffi_type_void)
+        ptr = lib.getpointer('fopen', [], types.void)
+        py.test.raises(KeyError, lib.getpointer, 'xxxxxxxxxxxxxxx', [], types.void)
         del ptr
         del lib
         assert not ALLOCATED
 
     def test_call_argchain(self):
         libm = self.get_libm()
-        pow = libm.getpointer('pow', [ffi_type_double, ffi_type_double],
-                              ffi_type_double)
+        pow = libm.getpointer('pow', [types.double, types.double],
+                              types.double)
         argchain = ArgChain()
         argchain.float(2.0).float(3.0)
         res = pow.call(argchain, rffi.DOUBLE)

@@ -4,7 +4,7 @@ from pypy.jit.backend.llsupport.descr import DynamicIntCallDescr, NonGcPtrCallDe
 
 def get_call_descr_dynamic(ffi_args, ffi_result, extrainfo=None):
     """Get a call descr: the types of result and args are represented by
-    rlib.libffi.ffi_type_*"""
+    rlib.libffi.types.*"""
     try:
         reskind = get_ffi_type_kind(ffi_result)
         argkinds = [get_ffi_type_kind(arg) for arg in ffi_args]
@@ -23,41 +23,41 @@ def get_call_descr_dynamic(ffi_args, ffi_result, extrainfo=None):
 
 
 # XXX: maybe we can turn this into a dictionary, but we need to do it at
-# runtime as libffi.ffi_type_* are pointers
+# runtime as libffi.types.* pointers
 def get_ffi_type_kind(ffi_type):
-    from pypy.rlib import libffi
-    if ffi_type is libffi.ffi_type_void:
+    from pypy.rlib.libffi import types
+    if ffi_type is types.void:
         return history.VOID
-    elif ffi_type is libffi.ffi_type_pointer:
+    elif ffi_type is types.pointer:
         return history.REF
-    elif ffi_type is libffi.ffi_type_double:
+    elif ffi_type is types.double:
         return history.FLOAT
-    elif ffi_type is libffi.ffi_type_uchar:
+    elif ffi_type is types.uchar:
         return history.INT
-    elif ffi_type is libffi.ffi_type_uint8:
+    elif ffi_type is types.uint8:
         return history.INT
-    elif ffi_type is libffi.ffi_type_schar:
+    elif ffi_type is types.schar:
         return history.INT
-    elif ffi_type is libffi.ffi_type_sint8:
+    elif ffi_type is types.sint8:
         return history.INT
-    elif ffi_type is libffi.ffi_type_uint16:
+    elif ffi_type is types.uint16:
         return history.INT
-    elif ffi_type is libffi.ffi_type_ushort:
+    elif ffi_type is types.ushort:
         return history.INT
-    elif ffi_type is libffi.ffi_type_sint16:
+    elif ffi_type is types.sint16:
         return history.INT
-    elif ffi_type is libffi.ffi_type_sshort:
+    elif ffi_type is types.sshort:
         return history.INT
-    elif ffi_type is libffi.ffi_type_uint:
+    elif ffi_type is types.uint:
         return history.INT
-    elif ffi_type is libffi.ffi_type_uint32:
+    elif ffi_type is types.uint32:
         return history.INT
-    elif ffi_type is libffi.ffi_type_sint:
+    elif ffi_type is types.sint:
         return history.INT
-    elif ffi_type is libffi.ffi_type_sint32:
+    elif ffi_type is types.sint32:
         return history.INT
-    ## elif ffi_type is libffi.ffi_type_uint64:
+    ## elif ffi_type is types.uint64:
     ##     return history.INT
-    ## elif ffi_type is libffi.ffi_type_sint64:
+    ## elif ffi_type is types.sint64:
     ##     return history.INT
     raise KeyError
