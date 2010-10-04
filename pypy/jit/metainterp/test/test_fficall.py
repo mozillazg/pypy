@@ -8,7 +8,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 from pypy.rpython.lltypesystem import lltype, rffi
 
-class TestDirectCall(LLJitMixin):
+class TestFfiCall(LLJitMixin):
     def setup_class(cls):
         # prepare C code as an example, so we can load it and call
         # it via rlib.libffi
@@ -16,14 +16,21 @@ class TestDirectCall(LLJitMixin):
         c_file.write(py.code.Source('''
         int sum_xy(int x, double y)
         {
-           return (x + (int)y);
+            return (x + (int)y);
+        }
+
+        float abs(double x)
+        {
+            if (x<0)
+                return -x;
+            return x;
         }
         '''))
         eci = ExternalCompilationInfo(export_symbols=['sum_xy'])
         cls.lib_name = str(platform.compile([c_file], eci, 'x',
                                             standalone=False))
 
-    def test_one(self):
+    def test_simple(self):
         driver = JitDriver(reds = ['n', 'func'], greens = [])        
 
         def f(n):
@@ -47,4 +54,26 @@ class TestDirectCall(LLJitMixin):
                 'int_lt': 1,
                 'guard_true': 1,
                 'jump': 1})
+
+
+    def test_float_result(self):
+        driver = JitDriver(reds = ['n', 'func', 'res'], greens = [])        
+
+        def f(n):
+            cdll = CDLL(self.lib_name)
+            func = cdll.getpointer('abs', [ffi_type_double], ffi_type_double)
+            res = 0.0
+            while n < 10:
+                driver.jit_merge_point(n=n, func=func, res=res)
+                driver.can_enter_jit(n=n, func=func, res=res)
+                func = hint(func, promote=True)
+                argchain = ArgChain()
+                argchain.float(float(-n))
+                res = func.call(argchain, lltype.Float)
+                n += 1
+            return res
+            
+        res = self.meta_interp(f, [0])
+        assert res == 9
+        self.check_loops(call=1)
 
