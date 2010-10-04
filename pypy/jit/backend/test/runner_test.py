@@ -517,16 +517,15 @@ class BaseBackendTest(Runner):
             assert res.value == func_ints(*args)
 
     def test_call_to_c_function(self):
-        # XXX: fix this to use libffi instead of clibffi
-        from pypy.rlib.clibffi import CDLL, ffi_type_uchar, ffi_type_sint
+        from pypy.rlib.libffi import CDLL, types, ArgChain
         libc = CDLL('libc.so.6')
-        c_tolower = libc.getpointer('tolower', [ffi_type_uchar], ffi_type_sint)
-        c_tolower.push_arg('A')
-        assert c_tolower.call(lltype.Signed) == ord('a')
+        c_tolower = libc.getpointer('tolower', [types.uchar], types.sint)
+        argchain = ArgChain().int(ord('A'))
+        assert c_tolower.call(argchain, rffi.INT) == ord('a')
 
         func_adr = llmemory.cast_ptr_to_adr(c_tolower.funcsym)
         funcbox = ConstInt(heaptracker.adr2int(func_adr))
-        calldescr = self.cpu.calldescrof_dynamic([ffi_type_uchar], ffi_type_sint)
+        calldescr = self.cpu.calldescrof_dynamic([types.uchar], types.sint)
         res = self.execute_operation(rop.CALL,
                                      [funcbox, BoxInt(ord('A'))],
                                      'int',
