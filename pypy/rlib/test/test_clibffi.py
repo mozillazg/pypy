@@ -20,7 +20,10 @@ def get_libm_name(platform):
         return 'libm.so'
 
 class BaseFfiTest(object):
-    
+
+    CDLL = None # overridden by subclasses
+
+    @classmethod
     def setup_class(cls):
         for name in type_names:
             # XXX force this to be seen by ll2ctypes
@@ -31,14 +34,17 @@ class BaseFfiTest(object):
     def setup_method(self, meth):
         ALLOCATED.clear()
     
+    def get_libc(self):
+        return self.CDLL(get_libc_name())
+    
+    def get_libm(self):
+        return self.CDLL(get_libm_name(sys.platform))
+
+
 
 class TestCLibffi(BaseFfiTest):
 
-    def get_libc(self):
-        return CDLL(get_libc_name())
-    
-    def get_libm(self):
-        return CDLL(get_libm_name(sys.platform))
+    CDLL = CDLL
 
     def test_library_open(self):
         lib = self.get_libc()
