@@ -47,7 +47,7 @@ class TestFfiCall(LLJitMixin):
                 driver.can_enter_jit(n=n, func=func)
                 func = hint(func, promote=True)
                 argchain = ArgChain()
-                argchain.int(n).float(1.2)
+                argchain.arg(n).arg(1.2)
                 n = func.call(argchain, rffi.LONG)
             return n
             
@@ -73,7 +73,7 @@ class TestFfiCall(LLJitMixin):
                 driver.can_enter_jit(n=n, func=func, res=res)
                 func = hint(func, promote=True)
                 argchain = ArgChain()
-                argchain.float(float(-n))
+                argchain.arg(float(-n))
                 res = func.call(argchain, rffi.DOUBLE)
                 n += 1
             return res
@@ -95,7 +95,7 @@ class TestFfiCall(LLJitMixin):
                 driver.can_enter_jit(n=n, func=func, res=res)
                 func = hint(func, promote=True)
                 argchain = ArgChain()
-                argchain.int(0)
+                argchain.arg(0)
                 res = func.call(argchain, rffi.UCHAR)
                 n += 1
             return res

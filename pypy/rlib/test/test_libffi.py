@@ -20,13 +20,13 @@ class TestLibffi(BaseFfiTest):
     def test_argchain(self):
         chain = ArgChain()
         assert chain.numargs == 0
-        chain2 = chain.int(42)
+        chain2 = chain.arg(42)
         assert chain2 is chain
         assert chain.numargs == 1
         intarg = chain.first
         assert chain.last is intarg
         assert intarg.intval == 42
-        chain.float(123.45)
+        chain.arg(123.45)
         assert chain.numargs == 2
         assert chain.first is intarg
         assert intarg.next is chain.last
@@ -51,6 +51,6 @@ class TestLibffi(BaseFfiTest):
         pow = libm.getpointer('pow', [types.double, types.double],
                               types.double)
         argchain = ArgChain()
-        argchain.float(2.0).float(3.0)
+        argchain.arg(2.0).arg(3.0)
         res = pow.call(argchain, rffi.DOUBLE)
         assert res == 8.0
