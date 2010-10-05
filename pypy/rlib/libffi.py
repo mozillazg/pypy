@@ -48,12 +48,16 @@ class ArgChain(object):
     last = None
     numargs = 0
 
-    def int(self, intval):
-        self._append(IntArg(intval))
-        return self
-
-    def float(self, floatval):
-        self._append(FloatArg(floatval))
+    @specialize.argtype(1)
+    def arg(self, val):
+        TYPE = lltype.typeOf(val)
+        if TYPE is rffi.LONG:
+            cls = IntArg
+        elif TYPE is rffi.DOUBLE:
+            cls = FloatArg
+        else:
+            raise TypeError, 'Unsupported argument type: %s' % TYPE
+        self._append(cls(val))
         return self
 
     def _append(self, arg):
