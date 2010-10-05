@@ -33,10 +33,11 @@ class types(object):
 
 types._import()
 
+@specialize.arg(0)
 def _fits_into_long(TYPE):
-    if not isinstance(TYPE, lltype.Number):
+    if not isinstance(TYPE, lltype.Primitive):
         return False
-    if TYPE is rffi.FLOAT or TYPE is rffi.DOUBLE:
+    if TYPE is lltype.Void or TYPE is rffi.FLOAT or TYPE is rffi.DOUBLE:
         return False
     sz = rffi.sizeof(TYPE)
     return sz <= rffi.sizeof(rffi.LONG)
@@ -51,8 +52,9 @@ class ArgChain(object):
     @specialize.argtype(1)
     def arg(self, val):
         TYPE = lltype.typeOf(val)
-        if TYPE is rffi.LONG:
+        if _fits_into_long(TYPE):
             cls = IntArg
+            val = rffi.cast(rffi.LONG, val)
         elif TYPE is rffi.DOUBLE:
             cls = FloatArg
         else:
