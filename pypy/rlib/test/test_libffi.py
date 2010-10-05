@@ -63,17 +63,17 @@ class TestLibffiCall(BaseFfiTest):
         # prepare C code as an example, so we can load it and call
         # it via rlib.libffi
         c_file = udir.ensure("test_libffi", dir=1).join("foolib.c")
-        c_file.write(py.code.Source('''
-        int sum_xy(int x, double y)
-        {
-            return (x + (int)y);
-        }
-
-        unsigned char cast_to_uchar_and_ovf(int x)
-        {
-            return 200+(unsigned char)x;
-        }
-        '''))
+        # automatically collect the C source from the docstrings of the tests
+        snippets = []
+        for name in dir(cls):
+            if name.startswith('test_'):
+                meth = getattr(cls, name)
+                # the heuristic to determine it it's really C code could be
+                # improved: so far we just check that there is a '{' :-)
+                if meth.__doc__ is not None and '{' in meth.__doc__:
+                    snippets.append(meth.__doc__)
+        #
+        c_file.write(py.code.Source('\n'.join(snippets)))
         eci = ExternalCompilationInfo(export_symbols=[])
         cls.libfoo_name = str(platform.compile([c_file], eci, 'x',
                                                standalone=False))
@@ -110,6 +110,12 @@ class TestLibffiCall(BaseFfiTest):
     # ------------------------------------------------------------------------
 
     def test_simple(self):
+        """
+            int sum_xy(int x, double y)
+            {
+                return (x + (int)y);
+            }
+        """
         libfoo = self.get_libfoo() 
         func = (libfoo, 'sum_xy', [types.sint, types.double], types.sint)
         res = self.call(func, [38, 4.2], rffi.LONG)
@@ -130,8 +136,26 @@ class TestLibffiCall(BaseFfiTest):
         self.check_loops(call=1)
 
     def test_cast_result(self):
+        """
+            unsigned char cast_to_uchar_and_ovf(int x)
+            {
+                return 200+(unsigned char)x;
+            }
+        """
         libfoo = self.get_libfoo()
         func = (libfoo, 'cast_to_uchar_and_ovf', [types.sint], types.uchar)
         res = self.call(func, [0], rffi.UCHAR)
         assert res == 200
         self.check_loops(call=1)
+
+    def test_cast_argument(self):
+        """
+            int many_args(char a, int b)
+            {
+                return a+b;
+            }
+        """
+        libfoo = self.get_libfoo()
+        func = (libfoo, 'many_args', [types.uchar, types.sint], types.sint)
+        res = self.call(func, [chr(20), 22], rffi.LONG)
+        assert res == 42

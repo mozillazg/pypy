@@ -10,6 +10,8 @@ from pypy.jit.metainterp.test.test_basic import LLJitMixin
 
 class TestFfiCall(LLJitMixin, _TestLibffiCall):
 
+    # ===> ../../../rlib/test/test_libffi.py
+
     def call(self, funcspec, args, RESULT, init_result=0):
         """
         Call the function specified by funcspec in a loop, and let the jit to
