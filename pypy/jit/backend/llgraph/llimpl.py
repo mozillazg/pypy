@@ -1018,6 +1018,9 @@ def cast_from_int(TYPE, x):
     if isinstance(TYPE, lltype.Ptr):
         if isinstance(x, (int, long, llmemory.AddressAsInt)):
             x = llmemory.cast_int_to_adr(x)
+        if TYPE is rffi.VOIDP:
+            # assume that we want a "C-style" cast, without typechecking the value
+            return rffi.cast(TYPE, x)
         return llmemory.cast_adr_to_ptr(x, TYPE)
     elif TYPE == llmemory.Address:
         if isinstance(x, (int, long, llmemory.AddressAsInt)):

@@ -1,5 +1,5 @@
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.rlib.objectmodel import specialize, enforceargs
+from pypy.rlib.objectmodel import specialize, enforceargs, we_are_translated
 from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib import jit
 from pypy.rlib import clibffi
@@ -35,6 +35,8 @@ types._import()
 
 @specialize.arg(0)
 def _fits_into_long(TYPE):
+    if isinstance(TYPE, lltype.Ptr):
+        return True # pointers always fits into longs
     if not isinstance(TYPE, lltype.Primitive):
         return False
     if TYPE is lltype.Void or TYPE is rffi.FLOAT or TYPE is rffi.DOUBLE:
@@ -44,6 +46,17 @@ def _fits_into_long(TYPE):
 
 # ======================================================================
 
+@specialize.memo()
+def _check_type(TYPE):
+    if isinstance(TYPE, lltype.Ptr):
+        if TYPE.TO._gckind != 'raw':
+            raise TypeError, "Can only push raw values to C, not 'gc'"
+        # XXX probably we should recursively check for struct fields here,
+        # lets just ignore that for now
+        if isinstance(TYPE.TO, lltype.Array) and 'nolength' not in TYPE.TO._hints:
+            raise TypeError, "Can only push to C arrays without length info"
+
+
 class ArgChain(object):
     first = None
     last = None
@@ -52,6 +65,7 @@ class ArgChain(object):
     @specialize.argtype(1)
     def arg(self, val):
         TYPE = lltype.typeOf(val)
+        _check_type(TYPE)
         if _fits_into_long(TYPE):
             cls = IntArg
             val = rffi.cast(rffi.LONG, val)
