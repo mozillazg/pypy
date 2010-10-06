@@ -29,7 +29,7 @@ def get_ffi_type_kind(ffi_type):
     if ffi_type is types.void:
         return history.VOID
     elif ffi_type is types.pointer:
-        return history.REF
+        return history.INT
     elif ffi_type is types.double:
         return history.FLOAT
     elif ffi_type is types.uchar:
