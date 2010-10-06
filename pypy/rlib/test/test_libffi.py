@@ -195,3 +195,24 @@ class TestLibffiCall(BaseFfiTest):
             # we "leak" memory)
             del libc
             assert not ALLOCATED
+
+    def test_return_pointer(self):
+        """
+            struct pair {
+                long a;
+                long b;
+            };
+
+            struct pair my_static_pair = {10, 20};
+            
+            long* get_pointer_to_b()
+            {
+                return &my_static_pair.b;
+            }
+        """
+        libfoo = self.get_libfoo()
+        func = (libfoo, 'get_pointer_to_b', [], types.pointer)
+        LONGP = lltype.Ptr(rffi.CArray(rffi.LONG))
+        null = lltype.nullptr(LONGP.TO)
+        res = self.call(func, [], LONGP, init_result=null)
+        assert res[0] == 20
