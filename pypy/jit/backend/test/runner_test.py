@@ -520,7 +520,7 @@ class BaseBackendTest(Runner):
         from pypy.rlib.libffi import CDLL, types, ArgChain
         libc = CDLL('libc.so.6')
         c_tolower = libc.getpointer('tolower', [types.uchar], types.sint)
-        argchain = ArgChain().int(ord('A'))
+        argchain = ArgChain().arg(ord('A'))
         assert c_tolower.call(argchain, rffi.INT) == ord('a')
 
         func_adr = llmemory.cast_ptr_to_adr(c_tolower.funcsym)
