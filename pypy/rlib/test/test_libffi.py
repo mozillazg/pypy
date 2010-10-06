@@ -172,29 +172,43 @@ class TestLibffiCall(BaseFfiTest):
         res = self.call(func, [chr(20), 22], rffi.LONG)
         assert res == 42
 
-    def test_call_time(self):
-        import time
-        libc = self.get_libc()
-        # XXX assume time_t is long
-        # XXX: on msvcr80 the name of the function is _time32, fix it in that case
-        func = (libc, 'time', [types.pointer], types.ulong)
-        LONGP = rffi.CArray(rffi.LONG)
-        null = lltype.nullptr(LONGP)
-        t0 = self.call(func, [null], rffi.LONG)
-        time.sleep(1)
-        t1 = self.call(func, [null], rffi.LONG)
-        assert t1 > t0
+    def test_pointer_as_argument(self):
+        """#include <stdlib.h>
+            long inc(long* x)
+            {
+                long oldval;
+                if (x == NULL)
+                    return -1;
+                oldval = *x;
+                *x = oldval+1;
+                return oldval;
+            }
+        """
+        libfoo = self.get_libfoo()
+        func = (libfoo, 'inc', [types.pointer], types.slong)
+        LONGP = lltype.Ptr(rffi.CArray(rffi.LONG))
+        null = lltype.nullptr(LONGP.TO)
+        res = self.call(func, [null], rffi.LONG)
+        assert res == -1
         #
-        ptr_result = lltype.malloc(LONGP, 1, flavor='raw')
-        t2 = self.call(func, [ptr_result], rffi.LONG)
-        assert ptr_result[0] == t2
-        lltype.free(ptr_result, flavor='raw')
+        ptr_result = lltype.malloc(LONGP.TO, 1, flavor='raw')
+        ptr_result[0] = 41
+        res = self.call(func, [ptr_result], rffi.LONG)
         if self.__class__ is TestLibffiCall:
+            # the function was called only once
+            assert res == 41
+            assert ptr_result[0] == 42
+            lltype.free(ptr_result, flavor='raw')
             # the test does not make sense when run with the JIT through
             # meta_interp, because the __del__ are not properly called (hence
             # we "leak" memory)
-            del libc
+            del libfoo
             assert not ALLOCATED
+        else:
+            # the function as been called 9 times
+            assert res == 50
+            assert ptr_result[0] == 51
+            lltype.free(ptr_result, flavor='raw')
 
     def test_return_pointer(self):
         """
@@ -216,3 +230,4 @@ class TestLibffiCall(BaseFfiTest):
         null = lltype.nullptr(LONGP.TO)
         res = self.call(func, [], LONGP, init_result=null)
         assert res[0] == 20
+
