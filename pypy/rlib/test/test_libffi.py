@@ -25,6 +25,18 @@ class TestLibffiMisc(BaseFfiTest):
         floatarg = intarg.next
         assert floatarg.floatval == 123.45
 
+    def test_wrong_args(self):
+        # so far the test passes but for the wrong reason :-), i.e. because
+        # .arg() only supports integers and floats
+        chain = ArgChain()
+        x = lltype.malloc(lltype.GcStruct('xxx'))
+        y = lltype.malloc(lltype.GcArray(rffi.LONG), 3)
+        z = lltype.malloc(lltype.Array(rffi.LONG), 4, flavor='raw')
+        py.test.raises(TypeError, "chain.arg(x)")
+        py.test.raises(TypeError, "chain.arg(y)")
+        py.test.raises(TypeError, "chain.arg(z)")
+        lltype.free(z, flavor='raw')
+
     def test_library_open(self):
         lib = self.get_libc()
         del lib
@@ -159,3 +171,27 @@ class TestLibffiCall(BaseFfiTest):
         func = (libfoo, 'many_args', [types.uchar, types.sint], types.sint)
         res = self.call(func, [chr(20), 22], rffi.LONG)
         assert res == 42
+
+    def test_call_time(self):
+        import time
+        libc = self.get_libc()
+        # XXX assume time_t is long
+        # XXX: on msvcr80 the name of the function is _time32, fix it in that case
+        func = (libc, 'time', [types.pointer], types.ulong)
+        LONGP = rffi.CArray(rffi.LONG)
+        null = lltype.nullptr(LONGP)
+        t0 = self.call(func, [null], rffi.LONG)
+        time.sleep(1)
+        t1 = self.call(func, [null], rffi.LONG)
+        assert t1 > t0
+        #
+        ptr_result = lltype.malloc(LONGP, 1, flavor='raw')
+        t2 = self.call(func, [ptr_result], rffi.LONG)
+        assert ptr_result[0] == t2
+        lltype.free(ptr_result, flavor='raw')
+        if self.__class__ is TestLibffiCall:
+            # the test does not make sense when run with the JIT through
+            # meta_interp, because the __del__ are not properly called (hence
+            # we "leak" memory)
+            del libc
+            assert not ALLOCATED
