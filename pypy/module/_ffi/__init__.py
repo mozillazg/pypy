@@ -5,7 +5,6 @@ class Module(MixedModule):
 
     interpleveldefs = {
         'CDLL'               : 'interp_ffi.W_CDLL',
-#        'FuncPtr'            : 'interp_ffi.W_FuncPtr',
         'types':             'interp_ffi.W_types',
     }
 
