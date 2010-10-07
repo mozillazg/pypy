@@ -6,6 +6,7 @@ from pypy.interpreter.typedef import TypeDef, GetSetProperty
 #
 from pypy.rpython.lltypesystem import lltype, rffi
 #
+from pypy.rlib import jit
 from pypy.rlib import libffi
 from pypy.rlib.rdynload import DLOpenError
 
@@ -49,12 +50,12 @@ class W_FuncPtr(Wrappable):
     def __init__(self, func):
         self.func = func
 
-    @unwrap_spec('self', ObjSpace, 'args_w')
-    def call(self, space, args_w):
-        assert len(args_w) == len(self.func.argtypes) # XXX: raise OperationError
+    @jit.unroll_safe
+    def build_argchain(self, space, argtypes, args_w):
+        assert len(args_w) == len(argtypes) # XXX: raise OperationError
         argchain = libffi.ArgChain()
         for i in range(len(args_w)):
-            argtype = self.func.argtypes[i]
+            argtype = argtypes[i]
             w_arg = args_w[i]
             kind = libffi.types.getkind(argtype)
             if kind == 'i':
@@ -63,7 +64,11 @@ class W_FuncPtr(Wrappable):
                 argchain.arg(space.float_w(w_arg))
             else:
                 assert False # XXX
-        #
+        return argchain
+
+    @unwrap_spec('self', ObjSpace, 'args_w')
+    def call(self, space, args_w):
+        argchain = self.build_argchain(space, self.func.argtypes, args_w)
         reskind = libffi.types.getkind(self.func.restype)
         if reskind == 'i':
             intres = self.func.call(argchain, rffi.LONG)
