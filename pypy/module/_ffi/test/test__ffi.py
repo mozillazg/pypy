@@ -38,7 +38,7 @@ class AppTestFfi:
         cls.space = space
         cls.w_libfoo_name = space.wrap(cls.prepare_c_example())
         cls.w_libc_name = space.wrap(get_libc_name())
-        cls.w_libc_name = space.wrap(get_libm_name(sys.platform))
+        cls.w_libm_name = space.wrap(get_libm_name(sys.platform))
 
     def test_libload(self):
         import _ffi
@@ -52,4 +52,10 @@ class AppTestFfi:
         from _ffi import types
         assert str(types.sint) == '<ffi type sint>'
         assert str(types.uint) == '<ffi type uint>'
+        
+    def test_callfunc(self):
+        from _ffi import CDLL, types
+        libm = CDLL(self.libm_name)
+        pow = libm.getfunc('pow', [types.double, types.double], types.double)
+        assert pow(2, 3) == 8
         
