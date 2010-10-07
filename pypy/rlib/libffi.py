@@ -30,6 +30,7 @@ class types(object):
                 setattr(cls, name, value)
         cls.slong = clibffi.cast_type_to_ffitype(rffi.LONG)
         cls.ulong = clibffi.cast_type_to_ffitype(rffi.ULONG)
+        del cls._import
 
 types._import()
 
