@@ -70,6 +70,10 @@ class OptFfiCall(Optimization):
         return None
 
     def optimize_CALL(self, op):
+        if we_are_translated():
+            self.emit_operation(op)
+            return
+        #
         targetval = self.getvalue(op.getarg(0))
         oopspec = self.get_oopspec(targetval)
         if oopspec == 'prepare_call':

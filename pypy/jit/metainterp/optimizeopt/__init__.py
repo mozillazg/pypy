@@ -15,7 +15,7 @@ def optimize_loop_1(metainterp_sd, loop, virtuals=True):
                      OptRewrite(),
                      OptVirtualize(),
                      OptHeap(),
-                     #OptFfiCall(),
+                     OptFfiCall(),
                     ]
     optimizer = Optimizer(metainterp_sd, loop, optimizations, virtuals)
     optimizer.propagate_all_forward()
