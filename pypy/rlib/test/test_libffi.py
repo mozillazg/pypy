@@ -231,3 +231,21 @@ class TestLibffiCall(BaseFfiTest):
         res = self.call(func, [], LONGP, init_result=null)
         assert res[0] == 20
 
+    def test_void_result(self):
+        """
+            int dummy = 0;
+            void set_dummy(int val) { dummy = val; }
+            int get_dummy() { return dummy; }
+        """
+        libfoo = self.get_libfoo()
+        set_dummy = (libfoo, 'set_dummy', [types.sint], types.void)
+        get_dummy = (libfoo, 'get_dummy', [], types.sint)
+        #
+        res = self.call(get_dummy, [], rffi.LONG)
+        assert res == 0
+        #
+        res = self.call(set_dummy, [42], lltype.Void, init_result=None)
+        assert res is None
+        #
+        res = self.call(get_dummy, [], rffi.LONG)
+        assert res == 42
