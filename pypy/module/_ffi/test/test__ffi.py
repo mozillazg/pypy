@@ -70,3 +70,17 @@ class AppTestFfi:
         libfoo = CDLL(self.libfoo_name)
         sum_xy = libfoo.getfunc('sum_xy', [types.sint, types.sint], types.sint)
         assert sum_xy(30, 12) == 42
+
+    def test_void_result(self):
+        """
+            int dummy = 0;
+            void set_dummy(int val) { dummy = val; }
+            int get_dummy() { return dummy; }
+        """
+        from _ffi import CDLL, types
+        libfoo = CDLL(self.libfoo_name)
+        set_dummy = libfoo.getfunc('set_dummy', [types.sint], types.void)
+        get_dummy = libfoo.getfunc('get_dummy', [], types.sint)
+        assert get_dummy() == 0
+        assert set_dummy(42) is None
+        assert get_dummy() == 42

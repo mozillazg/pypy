@@ -72,7 +72,9 @@ class W_FuncPtr(Wrappable):
             floatres = self.func.call(argchain, rffi.DOUBLE)
             return space.wrap(floatres)
         else:
-            assert False
+            voidres = self.func.call(argchain, lltype.Void)
+            assert voidres is None
+            return space.w_None
 
 W_FuncPtr.typedef = TypeDef(
     'FuncPtr',
