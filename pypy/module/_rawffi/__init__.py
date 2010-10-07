@@ -1,5 +1,5 @@
 
-""" Low-level interface to libffi
+""" Low-level interface to clibffi
 """
 
 from pypy.interpreter.mixedmodule import MixedModule
