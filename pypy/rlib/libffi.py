@@ -162,6 +162,8 @@ class Func(AbstractFuncPtr):
             res = self._do_call_int(self.funcsym, ll_args)
         elif RESULT is rffi.DOUBLE:
             return self._do_call_float(self.funcsym, ll_args)
+        elif RESULT is lltype.Void:
+            return self._do_call_void(self.funcsym, ll_args)
         else:
             raise TypeError, 'Unsupported result type: %s' % RESULT
         #
@@ -201,6 +203,10 @@ class Func(AbstractFuncPtr):
     def _do_call_float(self, funcsym, ll_args):
         return self._do_call(funcsym, ll_args, rffi.DOUBLE)
 
+    @jit.oopspec('libffi_call_void(self, funcsym, ll_args)')
+    def _do_call_void(self, funcsym, ll_args):
+        return self._do_call(funcsym, ll_args, lltype.Void)
+
     # ------------------------------------------------------------------------
     # private methods
 
@@ -235,7 +241,8 @@ class Func(AbstractFuncPtr):
         return res
 
     def _free_buffers(self, ll_result, ll_args):
-        lltype.free(ll_result, flavor='raw')
+        if ll_result:
+            lltype.free(ll_result, flavor='raw')
         for i in range(len(self.argtypes)):
             lltype.free(ll_args[i], flavor='raw')
         lltype.free(ll_args, flavor='raw')

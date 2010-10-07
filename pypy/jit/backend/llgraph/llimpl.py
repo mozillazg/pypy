@@ -1403,7 +1403,7 @@ def do_call_pushfloat(x):
 kind2TYPE = {
     'i': lltype.Signed,
     'f': lltype.Float,
-    'r': rffi.VOIDP, # XXX this is probably wrong
+    'v': lltype.Void,
     }
 
 def _do_call_common(f, args_in_order=None, calldescr=None):
