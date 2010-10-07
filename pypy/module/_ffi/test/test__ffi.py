@@ -47,3 +47,9 @@ class AppTestFfi:
     def test_libload_fail(self):
         import _ffi
         raises(OSError, _ffi.CDLL, "xxxxx_this_name_does_not_exist_xxxxx")
+
+    def test_simple_types(self):
+        from _ffi import types
+        assert str(types.sint) == '<ffi type sint>'
+        assert str(types.uint) == '<ffi type uint>'
+        
