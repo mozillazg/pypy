@@ -7,7 +7,7 @@ def test_call_descr_dynamic():
     args = [types.sint, types.double, types.pointer]
     descr = get_call_descr_dynamic(args, types.void)
     assert isinstance(descr, VoidCallDescr)
-    assert descr.arg_classes == 'ifr'
+    assert descr.arg_classes == 'ifi'
 
     descr = get_call_descr_dynamic([], types.sint8)
     assert isinstance(descr, DynamicIntCallDescr)
