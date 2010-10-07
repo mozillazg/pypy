@@ -59,3 +59,14 @@ class AppTestFfi:
         pow = libm.getfunc('pow', [types.double, types.double], types.double)
         assert pow(2, 3) == 8
         
+    def test_int_args(self):
+        """
+            int sum_xy(int x, int y)
+            {
+                return x+y;
+            }
+        """
+        from _ffi import CDLL, types
+        libfoo = CDLL(self.libfoo_name)
+        sum_xy = libfoo.getfunc('sum_xy', [types.sint, types.sint], types.sint)
+        assert sum_xy(30, 12) == 42

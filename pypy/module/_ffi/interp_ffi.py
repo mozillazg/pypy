@@ -58,15 +58,17 @@ class W_FuncPtr(Wrappable):
             w_arg = args_w[i]
             kind = libffi.types.getkind(argtype)
             if kind == 'i':
-                assert False
-                #argchain.arg(space.int_w(w_arg))
+                argchain.arg(space.int_w(w_arg))
             elif kind == 'f':
                 argchain.arg(space.float_w(w_arg))
             else:
                 assert False # XXX
         #
         reskind = libffi.types.getkind(self.func.restype)
-        if reskind == 'f':
+        if reskind == 'i':
+            intres = self.func.call(argchain, rffi.LONG)
+            return space.wrap(intres)
+        elif reskind == 'f':
             floatres = self.func.call(argchain, rffi.DOUBLE)
             return space.wrap(floatres)
         else:
