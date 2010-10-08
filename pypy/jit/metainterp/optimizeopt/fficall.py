@@ -52,6 +52,9 @@ class FuncInfo(object):
             return f.inst_argtypes, f.inst_restype
 
 
+class NonConstantFuncVal(Exception):
+    pass
+
 class OptFfiCall(Optimization):
 
     def __init__(self):
@@ -76,19 +79,25 @@ class OptFfiCall(Optimization):
         #
         targetval = self.getvalue(op.getarg(0))
         oopspec = self.get_oopspec(targetval)
-        if oopspec == 'prepare_call':
-            self.do_prepare_call(op)
+        if oopspec not in ('prepare_call', 'push_arg', 'call'):
+            self.emit_operation(op) # normal case
             return
-        elif oopspec == 'push_arg':
-            self.do_push_arg(op)
-            return
-        elif oopspec == 'call':
-            op = self.do_call(op)
-        self.emit_operation(op)
+        #
+        try:
+            if oopspec == 'prepare_call':
+                self.do_prepare_call(op)
+            elif oopspec == 'push_arg':
+                self.do_push_arg(op)
+            elif oopspec == 'call':
+                op = self.do_call(op)
+                self.emit_operation(op)
+        except NonConstantFuncVal:
+            self.emit_operation(op)
 
     def _get_funcval(self, op):
         funcval = self.getvalue(op.getarg(1))
-        assert funcval.is_constant() # XXX: do something nice if it's not constant
+        if not funcval.is_constant():
+            raise NonConstantFuncVal
         return funcval
 
     def do_prepare_call(self, op):

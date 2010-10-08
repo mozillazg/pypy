@@ -3941,22 +3941,41 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
 
     namespace = namespace.__dict__
 
-
-    def test_ffi_call(self):
+    def test_ffi_call_opt(self):
         ops = """
         [i0, f1]
-        call("_libffi_prepare_call",    ConstPtr(func),     descr=plaincalldescr)
-        call("_libffi_push_arg_Signed", ConstPtr(func), i0, descr=plaincalldescr)
-        call("_libffi_push_arg_Float",  ConstPtr(func), f1, descr=plaincalldescr)
-        i3 = call("_libffi_call",       ConstPtr(func), 1,  descr=plaincalldescr)
+        call("_libffi_prepare_call",    ConstPtr(func),        descr=plaincalldescr)
+        call("_libffi_push_arg_Signed", ConstPtr(func), i0,    descr=plaincalldescr)
+        call("_libffi_push_arg_Float",  ConstPtr(func), f1,    descr=plaincalldescr)
+        i3 = call("_libffi_call",       ConstPtr(func), 12345, descr=plaincalldescr)
         jump(i3, f1)
         """
         expected = """
         [i0, f1]
-        i3 = call(1, i0, f1, descr=int_float__int)
+        i3 = call(12345, i0, f1, descr=int_float__int)
         jump(i3, f1)
         """
         loop = self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_ffi_call_nonconst(self):
+        ops = """
+        [i0, f1, p2]
+        call("_libffi_prepare_call",    p2,     descr=plaincalldescr)
+        call("_libffi_push_arg_Signed", p2, i0, descr=plaincalldescr)
+        call("_libffi_push_arg_Float",  p2, f1, descr=plaincalldescr)
+        i3 = call("_libffi_call",       p2, 1,  descr=plaincalldescr)
+        jump(i3, f1, p2)
+        """
+        expected = """
+        [i0, f1, p2]
+        call("_libffi_prepare_call",    p2,     descr=plaincalldescr)
+        call("_libffi_push_arg_Signed", p2, i0, descr=plaincalldescr)
+        call("_libffi_push_arg_Float",  p2, f1, descr=plaincalldescr)
+        i3 = call("_libffi_call",       p2, 1,  descr=plaincalldescr)
+        jump(i3, f1, p2)
+
+        """
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
 
 
