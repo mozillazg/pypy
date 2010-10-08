@@ -70,6 +70,7 @@ class DirectGCTest(object):
         GC_PARAMS = self.GC_PARAMS.copy()
         if hasattr(meth, 'GC_PARAMS'):
             GC_PARAMS.update(meth.GC_PARAMS)
+        GC_PARAMS['translated_to_c'] = False
         self.gc = self.GCClass(config, **GC_PARAMS)
         self.gc.DEBUG = True
         self.rootwalker = DirectRootWalker(self)
@@ -507,8 +508,7 @@ class TestMiniMarkGCSimple(DirectGCTest):
                 for index, expected_x in nums.items():
                     assert a[index].x == expected_x
             self.stackroots.pop()
-    test_card_marker.GC_PARAMS = {"card_page_indices": 4,
-                                  "card_page_indices_min": 7}
+    test_card_marker.GC_PARAMS = {"card_page_indices": 4}
 
 class TestMiniMarkGCFull(DirectGCTest):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass

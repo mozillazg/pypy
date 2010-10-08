@@ -139,7 +139,7 @@ class FrameworkGCTransformer(GCTransformer):
     def __init__(self, translator):
         from pypy.rpython.memory.gc.base import choose_gc_from_config
         from pypy.rpython.memory.gc.base import ARRAY_TYPEID_MAP
-        from pypy.rpython.memory.gc import inspect
+        from pypy.rpython.memory.gc import inspector
 
         super(FrameworkGCTransformer, self).__init__(translator, inline=True)
         if hasattr(self, 'GC_PARAMS'):
@@ -391,27 +391,27 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.id_ptr = None
 
-        self.get_rpy_roots_ptr = getfn(inspect.get_rpy_roots,
+        self.get_rpy_roots_ptr = getfn(inspector.get_rpy_roots,
                                        [s_gc],
                                        rgc.s_list_of_gcrefs(),
                                        minimal_transform=False)
-        self.get_rpy_referents_ptr = getfn(inspect.get_rpy_referents,
+        self.get_rpy_referents_ptr = getfn(inspector.get_rpy_referents,
                                            [s_gc, s_gcref],
                                            rgc.s_list_of_gcrefs(),
                                            minimal_transform=False)
-        self.get_rpy_memory_usage_ptr = getfn(inspect.get_rpy_memory_usage,
+        self.get_rpy_memory_usage_ptr = getfn(inspector.get_rpy_memory_usage,
                                               [s_gc, s_gcref],
                                               annmodel.SomeInteger(),
                                               minimal_transform=False)
-        self.get_rpy_type_index_ptr = getfn(inspect.get_rpy_type_index,
+        self.get_rpy_type_index_ptr = getfn(inspector.get_rpy_type_index,
                                             [s_gc, s_gcref],
                                             annmodel.SomeInteger(),
                                             minimal_transform=False)
-        self.is_rpy_instance_ptr = getfn(inspect.is_rpy_instance,
+        self.is_rpy_instance_ptr = getfn(inspector.is_rpy_instance,
                                          [s_gc, s_gcref],
                                          annmodel.SomeBool(),
                                          minimal_transform=False)
-        self.dump_rpy_heap_ptr = getfn(inspect.dump_rpy_heap,
+        self.dump_rpy_heap_ptr = getfn(inspector.dump_rpy_heap,
                                        [s_gc, annmodel.SomeInteger()],
                                        annmodel.s_Bool,
                                        minimal_transform=False)
@@ -455,8 +455,7 @@ class FrameworkGCTransformer(GCTransformer):
                     self.write_barrier_from_array_failing_case_ptr = \
                                              getfn(func,
                                                    [annmodel.SomeAddress(),
-                                                    annmodel.SomeInteger(),
-                                                    annmodel.SomeAddress()],
+                                                    annmodel.SomeInteger()],
                                                    annmodel.s_None)
         self.statistics_ptr = getfn(GCClass.statistics.im_func,
                                     [s_gc, annmodel.SomeInteger()],
@@ -610,8 +609,10 @@ class FrameworkGCTransformer(GCTransformer):
             
         if self.write_barrier_ptr:
             self.clean_sets = (
-                find_clean_setarrayitems(self.collect_analyzer, graph).union(
-                find_initializing_stores(self.collect_analyzer, graph)))
+                find_initializing_stores(self.collect_analyzer, graph))
+            if self.gcdata.gc.can_optimize_clean_setarrayitems():
+                self.clean_sets = self.clean_sets.union(
+                    find_clean_setarrayitems(self.collect_analyzer, graph))
         super(FrameworkGCTransformer, self).transform_graph(graph)
         if self.write_barrier_ptr:
             self.clean_sets = None

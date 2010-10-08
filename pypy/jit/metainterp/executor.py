@@ -2,7 +2,7 @@
 """
 
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rstr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
@@ -168,12 +168,6 @@ def exec_new_with_vtable(cpu, clsbox):
 def do_new_with_vtable(cpu, _, clsbox):
     return BoxPtr(exec_new_with_vtable(cpu, clsbox))
 
-def do_arraycopy(cpu, _, calldescr, funcbox, x1box, x2box,
-                 x3box, x4box, x5box, arraydescr):
-    cpu.bh_call_v(funcbox.getint(), calldescr,
-                  [x3box.getint(), x4box.getint(), x5box.getint()],
-                  [x1box.getref_base(), x2box.getref_base()], None)
-
 def do_int_add_ovf(cpu, metainterp, box1, box2):
     # the overflow operations can be called without a metainterp, if an
     # overflow cannot occur
@@ -211,6 +205,24 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
 
 def do_same_as(cpu, _, box):
     return box.clonebox()
+
+def do_copystrcontent(cpu, _, srcbox, dstbox,
+                      srcstartbox, dststartbox, lengthbox):
+    src = srcbox.getref(lltype.Ptr(rstr.STR))
+    dst = dstbox.getref(lltype.Ptr(rstr.STR))
+    srcstart = srcstartbox.getint()
+    dststart = dststartbox.getint()
+    length = lengthbox.getint()
+    rstr.copy_string_contents(src, dst, srcstart, dststart, length)
+
+def do_copyunicodecontent(cpu, _, srcbox, dstbox,
+                          srcstartbox, dststartbox, lengthbox):
+    src = srcbox.getref(lltype.Ptr(rstr.UNICODE))
+    dst = dstbox.getref(lltype.Ptr(rstr.UNICODE))
+    srcstart = srcstartbox.getint()
+    dststart = dststartbox.getint()
+    length = lengthbox.getint()
+    rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
 
 # ____________________________________________________________
 
@@ -419,6 +431,10 @@ def execute_nonspec(cpu, metainterp, opnum, argboxes, descr=None):
         if arity == 3:
             func = get_execute_funclist(3, False)[opnum]
             return func(cpu, metainterp, argboxes[0], argboxes[1], argboxes[2])
+        if arity == 5:    # copystrcontent, copyunicodecontent
+            func = get_execute_funclist(5, False)[opnum]
+            return func(cpu, metainterp, argboxes[0], argboxes[1],
+                        argboxes[2], argboxes[3], argboxes[4])
     raise NotImplementedError
 
 

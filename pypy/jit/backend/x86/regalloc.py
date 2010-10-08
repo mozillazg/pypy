@@ -224,7 +224,7 @@ class RegAlloc(object):
         assert tmpreg not in nonfloatlocs
         assert xmmtmp not in floatlocs
         # note: we need to make a copy of inputargs because possibly_free_vars
-        # is also used on op.args, which is a non-resizable list
+        # is also used on op args, which is a non-resizable list
         self.possibly_free_vars(list(inputargs))
         return nonfloatlocs, floatlocs
 
@@ -307,7 +307,7 @@ class RegAlloc(object):
             if reg not in used:
                 self.xrm.free_regs.append(reg)
         # note: we need to make a copy of inputargs because possibly_free_vars
-        # is also used on op.args, which is a non-resizable list
+        # is also used on op args, which is a non-resizable list
         self.possibly_free_vars(list(inputargs))
         self.rm._check_invariants()
         self.xrm._check_invariants()
@@ -957,6 +957,47 @@ class RegAlloc(object):
         self.Perform(op, [base_loc, ofs_loc], result_loc)
 
     consider_unicodegetitem = consider_strgetitem
+
+    def consider_copystrcontent(self, op):
+        # compute the source address
+        args = op.getarglist()
+        base_loc = self.rm.make_sure_var_in_reg(args[0], args)
+        ofs_loc = self.rm.make_sure_var_in_reg(args[2], args)
+        assert args[0] is not args[1]    # forbidden case of aliasing
+        self.rm.possibly_free_var(args[0])
+        if args[3] is not args[2] is not args[4]:  # MESS MESS MESS: don't free
+            self.rm.possibly_free_var(args[2])     # it if ==args[3] or args[4]
+        srcaddr_box = TempBox()
+        forbidden_vars = [args[1], args[3], args[4], srcaddr_box]
+        srcaddr_loc = self.rm.force_allocate_reg(srcaddr_box, forbidden_vars)
+        self._gen_address_inside_string(base_loc, ofs_loc, srcaddr_loc)
+        # compute the destination address
+        base_loc = self.rm.make_sure_var_in_reg(args[1], forbidden_vars)
+        ofs_loc = self.rm.make_sure_var_in_reg(args[3], forbidden_vars)
+        self.rm.possibly_free_var(args[1])
+        if args[3] is not args[4]:     # more of the MESS described above
+            self.rm.possibly_free_var(args[3])
+        forbidden_vars = [args[4], srcaddr_box]
+        dstaddr_box = TempBox()
+        dstaddr_loc = self.rm.force_allocate_reg(dstaddr_box, forbidden_vars)
+        self._gen_address_inside_string(base_loc, ofs_loc, dstaddr_loc)
+        # call memcpy()
+        length_loc = self.loc(args[4])
+        self.rm.before_call()
+        self.xrm.before_call()
+        self.assembler._emit_call(imm(self.assembler.memcpy_addr),
+                                  [dstaddr_loc, srcaddr_loc, length_loc])
+        self.rm.possibly_free_var(args[4])
+        self.rm.possibly_free_var(dstaddr_box)
+        self.rm.possibly_free_var(srcaddr_box)
+
+    def _gen_address_inside_string(self, baseloc, ofsloc, resloc):
+        cpu = self.assembler.cpu
+        ofs_items, itemsize, _ = symbolic.get_array_token(rstr.STR,
+                                                  self.translate_support_code)
+        assert itemsize == 1
+        self.assembler.load_effective_addr(ofsloc, ofs_items, 0,
+                                           resloc, baseloc)
 
     def consider_jump(self, op):
         assembler = self.assembler
