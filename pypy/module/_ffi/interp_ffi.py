@@ -47,6 +47,9 @@ W_types.typedef = TypeDef(
 # ========================================================================
 
 class W_FuncPtr(Wrappable):
+
+    _immutable_fields_ = ['func']
+    
     def __init__(self, func):
         self.func = func
 
@@ -68,6 +71,7 @@ class W_FuncPtr(Wrappable):
 
     @unwrap_spec('self', ObjSpace, 'args_w')
     def call(self, space, args_w):
+        self = jit.hint(self, promote=True)
         argchain = self.build_argchain(space, self.func.argtypes, args_w)
         reskind = libffi.types.getkind(self.func.restype)
         if reskind == 'i':
