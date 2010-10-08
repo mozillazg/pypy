@@ -471,8 +471,6 @@ class FuncPtr(AbstractFuncPtr):
     ll_args = lltype.nullptr(rffi.VOIDPP.TO)
     ll_result = lltype.nullptr(rffi.VOIDP.TO)
 
-    _immutable_fields_ = ['funcsym', 'argtypes'] # XXX probably more
-
     def __init__(self, name, argtypes, restype, funcsym, flags=FUNCFLAG_CDECL,
                  keepalive=None):
         # initialize each one of pointers with null
@@ -511,11 +509,7 @@ class FuncPtr(AbstractFuncPtr):
         push_arg_as_ffiptr(self.argtypes[self.pushed_args], value,
                            self.ll_args[self.pushed_args])
         self.pushed_args += 1
-    # XXX this is bad, fix it somehow in the future, but specialize:argtype
-    # doesn't work correctly with mixing non-negative and normal integers
-    push_arg._annenforceargs_ = [None, int]
-    #push_arg._annspecialcase_ = 'specialize:argtype(1)'
-    #push_arg.oopspec = 'libffi_push_arg(self, value)'
+    push_arg._annspecialcase_ = 'specialize:argtype(1)'
 
     def _check_args(self):
         if self.pushed_args < self.argnum:
@@ -538,7 +532,6 @@ class FuncPtr(AbstractFuncPtr):
         check_fficall_result(ffires, self.flags)
         return res
     call._annspecialcase_ = 'specialize:arg(1)'
-    #call.oopspec = 'libffi_call(self, RES_TP)'
 
     def __del__(self):
         if self.ll_args:
