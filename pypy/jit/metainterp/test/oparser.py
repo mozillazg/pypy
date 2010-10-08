@@ -157,8 +157,8 @@ class OpParser(object):
             if arg.startswith('"') or arg.startswith("'"):
                 # XXX ootype
                 info = arg.strip("'\"")
-                return ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF,
-                                                       llstr(info)))
+                llinfo = self._cache.setdefault(info, llstr(info))
+                return ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, llinfo))
             if arg.startswith('ConstClass('):
                 name = arg[len('ConstClass('):-1]
                 return self.get_const(name, 'class')
