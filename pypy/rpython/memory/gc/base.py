@@ -20,12 +20,15 @@ class GCBase(object):
     prebuilt_gc_objects_are_static_roots = True
     object_minimal_size = 0
 
-    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE):
+    def __init__(self, config, chunk_size=DEFAULT_CHUNK_SIZE,
+                 translated_to_c=True):
         self.gcheaderbuilder = GCHeaderBuilder(self.HDR)
         self.AddressStack = get_address_stack(chunk_size)
         self.AddressDeque = get_address_deque(chunk_size)
         self.AddressDict = AddressDict
         self.config = config
+        assert isinstance(translated_to_c, bool)
+        self.translated_to_c = translated_to_c
 
     def setup(self):
         # all runtime mutable values' setup should happen here
@@ -38,6 +41,9 @@ class GCBase(object):
 
     def can_malloc_nonmovable(self):
         return not self.moving_gc
+
+    def can_optimize_clean_setarrayitems(self):
+        return True     # False in case of card marking
 
     # The following flag enables costly consistency checks after each
     # collection.  It is automatically set to True by test_gc.py.  The

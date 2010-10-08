@@ -1,6 +1,6 @@
 
 import os, sys
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.x86.rx86 import X86_32_CodeBuilder, X86_64_CodeBuilder
 from pypy.jit.backend.x86.regloc import LocationCodeBuilder
@@ -152,7 +152,7 @@ class MachineCodeBlock(InMemoryCodeBuilder):
             # Hack to make sure that mcs are not within 32-bits of one
             # another for testing purposes
             from pypy.rlib.rmmap import hint
-            hint.pos += 0xFFFFFFFF
+            hint.pos += 0x80000000 - map_size
             
         self._init(data, map_size)
 
@@ -161,6 +161,12 @@ class MachineCodeBlock(InMemoryCodeBuilder):
         assert size >= 0
         free(self._data, size)
 
+
+# ____________________________________________________________
+
+memcpy_fn = rffi.llexternal('memcpy', [llmemory.Address, llmemory.Address,
+                                       rffi.SIZE_T], lltype.Void,
+                            sandboxsafe=True, _nowrapper=True)
 
 # ____________________________________________________________
 

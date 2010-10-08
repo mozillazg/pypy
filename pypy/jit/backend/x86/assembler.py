@@ -181,6 +181,7 @@ class Assembler386(object):
         self.malloc_fixedsize_slowpath1 = 0
         self.malloc_fixedsize_slowpath2 = 0
         self.pending_guard_tokens = None
+        self.memcpy_addr = 0
         self.setup_failure_recovery()
         self._debug = False
         self.debug_counter_descr = cpu.fielddescrof(DEBUG_COUNTER, 'i')
@@ -212,6 +213,7 @@ class Assembler386(object):
                 ll_new_unicode = gc_ll_descr.get_funcptr_for_newunicode()
                 self.malloc_unicode_func_addr = rffi.cast(lltype.Signed,
                                                           ll_new_unicode)
+            self.memcpy_addr = self.cpu.cast_ptr_to_int(codebuf.memcpy_fn)
             self.mc = MachineCodeBlockWrapper(self, self.mc_size, self.cpu.profile_agent)
             self._build_failure_recovery(False)
             self._build_failure_recovery(True)
@@ -242,7 +244,7 @@ class Assembler386(object):
             f = open_file_as_stream(output_log, "w")
             for i in range(len(self.loop_run_counters)):
                 name, struct = self.loop_run_counters[i]
-                f.write(str(struct.i) + " " * (8 - len(str(struct.i))) + name + "\n")
+                f.write(str(name) + ":" +  str(struct.i) + "\n")
             f.close()
 
     def _build_float_constants(self):
@@ -399,7 +401,7 @@ class Assembler386(object):
         if self._debug:
             struct = lltype.malloc(DEBUG_COUNTER, flavor='raw')
             struct.i = 0
-            self.loop_run_counters.append((funcname, struct))
+            self.loop_run_counters.append((len(self.loop_run_counters), struct))
         return funcname
         
     def patch_jump_for_descr(self, faildescr, adr_new_target):
@@ -709,8 +711,8 @@ class Assembler386(object):
         self.regalloc_perform_with_guard(None, guard_op, faillocs, arglocs,
                                          resloc, current_depths)
 
-    def load_effective_addr(self, sizereg, baseofs, scale, result):
-        self.mc.LEA(result, addr_add(imm(0), sizereg, baseofs, scale))
+    def load_effective_addr(self, sizereg, baseofs, scale, result, frm=imm(0)):
+        self.mc.LEA(result, addr_add(frm, sizereg, baseofs, scale))
 
     def _unaryop(asmop):
         def genop_unary(self, op, arglocs, resloc):
@@ -1028,7 +1030,7 @@ class Assembler386(object):
         if self.cpu.vtable_offset is not None:
             assert isinstance(loc, RegLoc)
             assert isinstance(loc_vtable, ImmedLoc)
-            self.mc.MOV_mi((loc.value, self.cpu.vtable_offset), loc_vtable.value)
+            self.mc.MOV(mem(loc, self.cpu.vtable_offset), loc_vtable)
 
     # XXX genop_new is abused for all varsized mallocs with Boehm, for now
     # (instead of genop_new_array, genop_newstr, genop_newunicode)
@@ -1765,6 +1767,7 @@ class Assembler386(object):
         jz_location = self.mc.get_relative_pos()
         # the following is supposed to be the slow path, so whenever possible
         # we choose the most compact encoding over the most efficient one.
+        # XXX improve a bit, particularly for IS_X86_64.
         for i in range(len(arglocs)-1, -1, -1):
             loc = arglocs[i]
             if isinstance(loc, RegLoc):
@@ -1863,6 +1866,7 @@ class Assembler386(object):
         offset = self.mc.get_relative_pos() - jmp_adr
         assert 0 < offset <= 127
         self.mc.overwrite(jmp_adr-1, [chr(offset)])
+        # on 64-bits, 'tid' is a value that fits in 31 bits
         self.mc.MOV_mi((eax.value, 0), tid)
         self.mc.MOV(heap(nursery_free_adr), edx)
         
