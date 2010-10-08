@@ -37,26 +37,18 @@
 ## t2 = time.time()
 ## print t2 - t1
 
+def main():
+    from _ffi import CDLL, types
+    libm = CDLL('libm.so')
+    pow = libm.getfunc('pow', [types.double, types.double], types.double)
+    i = 0
+    while i < 100:
+        res = pow(2, 3)
+        i += 1
+    print res
+
 try:
-    from array import array
-
-    def coords(w,h):
-        y = 0
-        while y < h:
-            x = 0
-            while x < w:
-                yield x,y
-                x += 1
-            y += 1
-
-    def f(img):
-        sa=0
-        for x, y in coords(4,4):
-            sa += x * y
-        return sa
-
-    #img=array('h',(1,2,3,4))
-    print f(3)
+    main()
 except Exception, e:
     print "Exception: ", type(e)
     print e
