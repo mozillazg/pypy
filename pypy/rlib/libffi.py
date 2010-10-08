@@ -32,8 +32,9 @@ class types(object):
         cls.ulong = clibffi.cast_type_to_ffitype(rffi.ULONG)
         del cls._import
 
-    @classmethod
-    def getkind(cls, ffitype):
+    @staticmethod
+    @jit.purefunction
+    def getkind(ffitype):
         # XXX: move this function outside the jit
         from pypy.jit.backend.llsupport.ffisupport import get_ffi_type_kind
         return get_ffi_type_kind(ffitype)
