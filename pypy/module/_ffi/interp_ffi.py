@@ -55,7 +55,14 @@ class W_FuncPtr(Wrappable):
 
     @jit.unroll_safe
     def build_argchain(self, space, argtypes, args_w):
-        assert len(args_w) == len(argtypes) # XXX: raise OperationError
+        if len(args_w) != len(argtypes):
+            arg = 'arguments'
+            if len(argtypes) == 1:
+                arg = 'argument'
+            raise operationerrfmt(space.w_TypeError,
+                                  '%s() takes exactly %d %s (%d given)',
+                                  self.func.name, len(argtypes), arg, len(args_w))
+        #
         argchain = libffi.ArgChain()
         for i in range(len(args_w)):
             argtype = argtypes[i]

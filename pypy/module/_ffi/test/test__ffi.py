@@ -84,3 +84,10 @@ class AppTestFfi:
         assert get_dummy() == 0
         assert set_dummy(42) is None
         assert get_dummy() == 42
+
+    def test_TypeError_numargs(self):
+        from _ffi import CDLL, types
+        libfoo = CDLL(self.libfoo_name)
+        sum_xy = libfoo.getfunc('sum_xy', [types.sint, types.sint], types.sint)
+        raises(TypeError, "sum_xy(1, 2, 3)")
+        raises(TypeError, "sum_xy(1)")
