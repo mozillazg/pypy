@@ -97,3 +97,6 @@ class AppTestFfi:
         libfoo = CDLL(self.libfoo_name)
         raises(TypeError, "libfoo.getfunc('sum_xy', [types.void], types.sint)")
         
+    def test_OSError_loading(self):
+        from _ffi import CDLL, types
+        raises(OSError, "CDLL('I do not exist')")
