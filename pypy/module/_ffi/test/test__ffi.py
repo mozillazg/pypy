@@ -91,3 +91,9 @@ class AppTestFfi:
         sum_xy = libfoo.getfunc('sum_xy', [types.sint, types.sint], types.sint)
         raises(TypeError, "sum_xy(1, 2, 3)")
         raises(TypeError, "sum_xy(1)")
+
+    def test_TypeError_voidarg(self):
+        from _ffi import CDLL, types
+        libfoo = CDLL(self.libfoo_name)
+        raises(TypeError, "libfoo.getfunc('sum_xy', [types.void], types.sint)")
+        

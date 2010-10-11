@@ -73,7 +73,7 @@ class W_FuncPtr(Wrappable):
             elif kind == 'f':
                 argchain.arg(space.float_w(w_arg))
             else:
-                assert False # XXX
+                assert False, "Argument kind '%s' not supported" % kind
         return argchain
 
     @unwrap_spec('self', ObjSpace, 'args_w')
@@ -111,13 +111,19 @@ class W_CDLL(Wrappable):
         self.name = name
         self.space = space
 
-    def ffitype(self, w_argtype):
-        return self.space.interp_w(W_FFIType, w_argtype).ffitype
+    def ffitype(self, w_argtype, allow_void=False):
+        res = self.space.interp_w(W_FFIType, w_argtype).ffitype
+        if res is libffi.types.void and not allow_void:
+            space = self.space
+            msg = 'void is not a valid argument type'
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        return res
 
     @unwrap_spec('self', ObjSpace, str, W_Root, W_Root)
     def getfunc(self, space, name, w_argtypes, w_restype):
-        argtypes = [self.ffitype(w_argtype) for w_argtype in space.listview(w_argtypes)]
-        restype = self.ffitype(w_restype)
+        argtypes = [self.ffitype(w_argtype) for w_argtype in
+                    space.listview(w_argtypes)]
+        restype = self.ffitype(w_restype, allow_void=True)
         func = self.cdll.getpointer(name, argtypes, restype)
         return W_FuncPtr(func)
 
