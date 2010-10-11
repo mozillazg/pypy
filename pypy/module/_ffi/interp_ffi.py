@@ -1,6 +1,8 @@
 import sys
-from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, Arguments
-from pypy.interpreter.error import OperationError, wrap_oserror, operationerrfmt
+from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, \
+    Arguments
+from pypy.interpreter.error import OperationError, wrap_oserror, \
+    operationerrfmt
 from pypy.interpreter.gateway import interp2app, NoneNotWrapped, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 #
@@ -55,16 +57,18 @@ class W_FuncPtr(Wrappable):
 
     @jit.unroll_safe
     def build_argchain(self, space, argtypes, args_w):
-        if len(args_w) != len(argtypes):
+        expected = len(argtypes)
+        given = len(args_w)
+        if given != expected:
             arg = 'arguments'
             if len(argtypes) == 1:
                 arg = 'argument'
             raise operationerrfmt(space.w_TypeError,
                                   '%s() takes exactly %d %s (%d given)',
-                                  self.func.name, len(argtypes), arg, len(args_w))
+                                  self.func.name, expected, arg, given)
         #
         argchain = libffi.ArgChain()
-        for i in range(len(args_w)):
+        for i in range(expected):
             argtype = argtypes[i]
             w_arg = args_w[i]
             kind = libffi.types.getkind(argtype)
