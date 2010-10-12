@@ -61,19 +61,14 @@ class OptFfiCall(Optimization):
     def __init__(self):
         self.func_infos = {}
 
-    def optimize_CALL(self, op):
-        if we_are_translated():
-            self.emit_operation(op)
-            return
-        #
+    def _get_oopspec(self, op):
         effectinfo = op.getdescr().get_extra_info()
-        oopspec = effectinfo.oopspecindex
-        if oopspec not in (EffectInfo.OS_LIBFFI_PREPARE,
-                           EffectInfo.OS_LIBFFI_PUSH_ARG,
-                           EffectInfo.OS_LIBFFI_CALL):
-            self.emit_operation(op) # normal case
-            return
-        #
+        if effectinfo is not None:
+            return effectinfo.oopspecindex
+        return EffectInfo.OS_NONE
+
+    def optimize_CALL(self, op):
+        oopspec = self._get_oopspec(op)
         try:
             if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
                 self.do_prepare_call(op)
@@ -82,7 +77,10 @@ class OptFfiCall(Optimization):
             elif oopspec == EffectInfo.OS_LIBFFI_CALL:
                 op = self.do_call(op)
                 self.emit_operation(op)
+            else:
+                raise NonConstantFuncVal # it's not a libffi call
         except NonConstantFuncVal:
+            # normal case
             self.emit_operation(op)
 
     def _get_funcval(self, op):
