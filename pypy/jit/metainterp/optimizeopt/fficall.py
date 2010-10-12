@@ -1,6 +1,7 @@
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.libffi import Func
+from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeutil import _findall
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
@@ -60,35 +61,25 @@ class OptFfiCall(Optimization):
     def __init__(self):
         self.func_infos = {}
 
-    def get_oopspec(self, funcval):
-        # XXX: not RPython at all, just a hack while waiting to have an
-        # "official" way to know if and which oopspec we are calling
-        funcname = str(funcval.box)
-        if '_libffi_prepare_call' in funcname:
-            return 'prepare_call'
-        elif '_libffi_push_' in funcname:
-            return 'push_arg'
-        elif '_libffi_call' in funcname:
-            return 'call'
-        return None
-
     def optimize_CALL(self, op):
         if we_are_translated():
             self.emit_operation(op)
             return
         #
-        targetval = self.getvalue(op.getarg(0))
-        oopspec = self.get_oopspec(targetval)
-        if oopspec not in ('prepare_call', 'push_arg', 'call'):
+        effectinfo = op.getdescr().get_extra_info()
+        oopspec = effectinfo.oopspecindex
+        if oopspec not in (EffectInfo.OS_LIBFFI_PREPARE,
+                           EffectInfo.OS_LIBFFI_PUSH_ARG,
+                           EffectInfo.OS_LIBFFI_CALL):
             self.emit_operation(op) # normal case
             return
         #
         try:
-            if oopspec == 'prepare_call':
+            if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
                 self.do_prepare_call(op)
-            elif oopspec == 'push_arg':
+            elif oopspec == EffectInfo.OS_LIBFFI_PUSH_ARG:
                 self.do_push_arg(op)
-            elif oopspec == 'call':
+            elif oopspec == EffectInfo.OS_LIBFFI_CALL:
                 op = self.do_call(op)
                 self.emit_operation(op)
         except NonConstantFuncVal:

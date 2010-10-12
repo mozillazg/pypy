@@ -31,6 +31,9 @@ class EffectInfo(object):
     OS_STREQ_NONNULL_CHAR       = 12   # s1 == char  (assert s1!=NULL)
     OS_STREQ_CHECKNULL_CHAR     = 13   # s1!=NULL and s1==char
     OS_STREQ_LENGTHOK           = 14   # s1 == s2    (assert len(s1)==len(s2))
+    OS_LIBFFI_PREPARE           = 15
+    OS_LIBFFI_PUSH_ARG          = 16
+    OS_LIBFFI_CALL              = 17
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
