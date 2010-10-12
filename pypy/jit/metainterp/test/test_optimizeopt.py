@@ -4503,6 +4503,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
 from pypy.rpython.lltypesystem import llmemory
 from pypy.rlib.libffi import Func, types
 from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.codewriter.effectinfo import EffectInfo
 
 class MyCallDescr(AbstractDescr):
     """
@@ -4534,22 +4535,30 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
 
     class namespace:
         cpu = LLtypeMixin.cpu
-        plaincalldescr = LLtypeMixin.plaincalldescr
+        FUNC = LLtypeMixin.FUNC
         int_float__int = MyCallDescr('if', 'i')
         funcptr = FakeLLObject()
         func = FakeLLObject(_fake_class=Func,
                             argtypes=[types.sint, types.double],
                             restype=types.sint)
-
+        #
+        def calldescr(cpu, FUNC, oopspecindex):
+            einfo = EffectInfo([], [], [], oopspecindex=oopspecindex)
+            return cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, einfo)
+        #
+        libffi_prepare =  calldescr(cpu, FUNC, EffectInfo.OS_LIBFFI_PREPARE)
+        libffi_push_arg = calldescr(cpu, FUNC, EffectInfo.OS_LIBFFI_PUSH_ARG)
+        libffi_call =     calldescr(cpu, FUNC, EffectInfo.OS_LIBFFI_CALL)
+    
     namespace = namespace.__dict__
 
     def test_ffi_call_opt(self):
         ops = """
         [i0, f1]
-        call("_libffi_prepare_call",    ConstPtr(func),        descr=plaincalldescr)
-        call("_libffi_push_arg_Signed", ConstPtr(func), i0,    descr=plaincalldescr)
-        call("_libffi_push_arg_Float",  ConstPtr(func), f1,    descr=plaincalldescr)
-        i3 = call("_libffi_call",       ConstPtr(func), 12345, descr=plaincalldescr)
+        call(0, ConstPtr(func),             descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
+        call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
+        i3 = call(0, ConstPtr(func), 12345, descr=libffi_call)
         jump(i3, f1)
         """
         expected = """
@@ -4562,21 +4571,13 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
     def test_ffi_call_nonconst(self):
         ops = """
         [i0, f1, p2]
-        call("_libffi_prepare_call",    p2,     descr=plaincalldescr)
-        call("_libffi_push_arg_Signed", p2, i0, descr=plaincalldescr)
-        call("_libffi_push_arg_Float",  p2, f1, descr=plaincalldescr)
-        i3 = call("_libffi_call",       p2, 1,  descr=plaincalldescr)
+        call(0, p2,             descr=libffi_prepare)
+        call(0, p2, i0,         descr=libffi_push_arg)
+        call(0, p2, f1,         descr=libffi_push_arg)
+        i3 = call(0, p2, 12345, descr=libffi_call)
         jump(i3, f1, p2)
         """
-        expected = """
-        [i0, f1, p2]
-        call("_libffi_prepare_call",    p2,     descr=plaincalldescr)
-        call("_libffi_push_arg_Signed", p2, i0, descr=plaincalldescr)
-        call("_libffi_push_arg_Float",  p2, f1, descr=plaincalldescr)
-        i3 = call("_libffi_call",       p2, 1,  descr=plaincalldescr)
-        jump(i3, f1, p2)
-
-        """
+        expected = ops
         loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
 

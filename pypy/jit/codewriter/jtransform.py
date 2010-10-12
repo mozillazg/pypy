@@ -318,6 +318,8 @@ class Transformer(object):
             prepare = self._handle_stroruni_call
         elif oopspec_name.startswith('virtual_ref'):
             prepare = self._handle_virtual_ref_call
+        elif oopspec_name.startswith('libffi_'):
+            prepare = self._handle_libffi_call
         else:
             prepare = self.prepare_builtin_call
         try:
@@ -1120,6 +1122,20 @@ class Transformer(object):
                                           vrefinfo.jit_virtual_ref_vtable,
                                           vrefinfo.JIT_VIRTUAL_REF)
         return SpaceOperation(oopspec_name, list(args), op.result)
+
+    # -----------
+    # rlib.libffi
+
+    def _handle_libffi_call(self, op, oopspec_name, args):
+        if oopspec_name == 'libffi_prepare_call':
+            oopspecindex = EffectInfo.OS_LIBFFI_PREPARE
+        elif oopspec_name.startswith('libffi_push_'):
+            oopspecindex = EffectInfo.OS_LIBFFI_PUSH_ARG
+        elif oopspec_name.startswith('libffi_call_'):
+            oopspecindex = EffectInfo.OS_LIBFFI_CALL
+        else:
+            assert False, 'unsupported oopspec: %s' % oopspec_name
+        return self._handle_oopspec_call(op, args, oopspecindex)
 
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
