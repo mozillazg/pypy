@@ -156,6 +156,9 @@ class FloatArg(AbstractArg):
 class Func(AbstractFuncPtr):
 
     _immutable_fields_ = ['funcsym', 'argtypes', 'restype']
+    argtypes = []
+    restype = None
+    funcsym = None
 
     def __init__(self, name, argtypes, restype, funcsym, flags=FUNCFLAG_CDECL,
                  keepalive=None):

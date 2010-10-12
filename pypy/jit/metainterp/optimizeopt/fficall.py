@@ -8,6 +8,10 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 
 class FuncInfo(object):
 
+    argtypes = None
+    restype = None
+    descr = None
+
     def __init__(self, funcval, cpu):
         self.opargs = []
         argtypes, restype = self._get_signature(funcval)
@@ -36,7 +40,8 @@ class FuncInfo(object):
         
         llfunc = funcval.box.getref_base()
         if we_are_translated():
-            XXX
+            func = cast_base_ptr_to_instance(Func, llfunc)
+            return func.argtypes, func.restype
         elif getattr(llfunc, '_fake_class', None) is Func:
             # untranslated
             return llfunc.argtypes, llfunc.restype
