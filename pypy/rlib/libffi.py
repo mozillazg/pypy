@@ -155,10 +155,10 @@ class FloatArg(AbstractArg):
 
 class Func(AbstractFuncPtr):
 
-    _immutable_fields_ = ['funcsym', 'argtypes', 'restype']
+    _immutable_fields_ = ['funcsym']
     argtypes = []
-    restype = None
-    funcsym = None
+    restype = lltype.nullptr(clibffi.FFI_TYPE_P.TO)
+    funcsym = lltype.nullptr(rffi.VOIDP.TO)
 
     def __init__(self, name, argtypes, restype, funcsym, flags=FUNCFLAG_CDECL,
                  keepalive=None):

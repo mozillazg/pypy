@@ -378,6 +378,8 @@ class AbstractFuncPtr(object):
     ll_cif = lltype.nullptr(FFI_CIFP.TO)
     ll_argtypes = lltype.nullptr(FFI_TYPE_PP.TO)
 
+    _immutable_fields_ = ['argtypes', 'restype']
+
     def __init__(self, name, argtypes, restype, flags=FUNCFLAG_CDECL):
         self.name = name
         self.argtypes = argtypes
