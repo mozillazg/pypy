@@ -1,3 +1,4 @@
+from pypy.rlib.rarithmetic import intmask
 from pypy.jit.metainterp import history
 from pypy.jit.backend.llsupport.descr import DynamicIntCallDescr, NonGcPtrCallDescr,\
     FloatCallDescr, VoidCallDescr
@@ -12,7 +13,8 @@ def get_call_descr_dynamic(ffi_args, ffi_result, extrainfo=None):
         return None # ??
     arg_classes = ''.join(argkinds)
     if reskind == history.INT:
-        return DynamicIntCallDescr(arg_classes, ffi_result.c_size, extrainfo)
+        size = intmask(ffi_result.c_size)
+        return DynamicIntCallDescr(arg_classes, size, extrainfo)
     elif reskind == history.REF:
         return  NonGcPtrCallDescr(arg_classes, extrainfo)
     elif reskind == history.FLOAT:
