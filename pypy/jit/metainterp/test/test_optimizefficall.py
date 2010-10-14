@@ -40,6 +40,9 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         func = FakeLLObject(_fake_class=Func,
                             argtypes=[types.sint, types.double],
                             restype=types.sint)
+        func2 = FakeLLObject(_fake_class=Func,
+                             argtypes=[types.sint, types.double],
+                             restype=types.sint)
         #
         def calldescr(cpu, FUNC, oopspecindex):
             einfo = EffectInfo([], [], [], oopspecindex=oopspecindex)
@@ -99,3 +102,21 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         """
         expected = ops
         loop = self.optimize_loop(ops, 'Not, Not', expected)
+
+    def test_rollback_multiple_calls(self):
+        ops = """
+        [i0, i2, f1]
+        call(0, ConstPtr(func),             descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
+        call(0, ConstPtr(func2),             descr=libffi_prepare) # culprit!
+        call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
+        i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        call(0, ConstPtr(func2), i0,         descr=libffi_push_arg)
+        call(0, ConstPtr(func2), f1,         descr=libffi_push_arg)
+        i4 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        jump(i3, i4, f1)
+        """
+        expected = ops
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)

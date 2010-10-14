@@ -100,7 +100,9 @@ class OptFfiCall(Optimization):
     def _get_funcval(self, op):
         funcval = self.getvalue(op.getarg(1))
         if self.funcval:
-            assert self.funcval is funcval # XXX do something nice
+            if self.funcval is not funcval:
+                self.rollback()
+                return None
         if not funcval.is_constant():
             return None
         return funcval
