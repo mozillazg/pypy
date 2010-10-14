@@ -32,13 +32,19 @@ class AppTestFfi:
 
     
     def setup_class(cls):
-        from pypy.rlib.libffi import get_libc_name
+        from pypy.rpython.lltypesystem import rffi
+        from pypy.rlib.libffi import get_libc_name, CDLL, types
         from pypy.rlib.test.test_libffi import get_libm_name
         space = gettestobjspace(usemodules=('_ffi',))
         cls.space = space
         cls.w_libfoo_name = space.wrap(cls.prepare_c_example())
         cls.w_libc_name = space.wrap(get_libc_name())
-        cls.w_libm_name = space.wrap(get_libm_name(sys.platform))
+        libm_name = get_libm_name(sys.platform)
+        cls.w_libm_name = space.wrap(libm_name)
+        libm = CDLL(libm_name)
+        pow = libm.getpointer('pow', [], types.void)
+        pow_addr = rffi.cast(rffi.LONG, pow.funcsym)
+        cls.w_pow_addr = space.wrap(pow_addr)
 
     def test_libload(self):
         import _ffi
@@ -58,6 +64,12 @@ class AppTestFfi:
         libm = CDLL(self.libm_name)
         pow = libm.getfunc('pow', [types.double, types.double], types.double)
         assert pow(2, 3) == 8
+
+    def test_getaddr(self):
+        from _ffi import CDLL, types
+        libm = CDLL(self.libm_name)
+        pow = libm.getfunc('pow', [types.double, types.double], types.double)
+        assert pow.getaddr() == self.pow_addr
         
     def test_int_args(self):
         """
