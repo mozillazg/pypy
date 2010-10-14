@@ -139,6 +139,7 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={}):
     totwidth = py.io.get_terminal_width()
     width = totwidth / 2 - 1
     print ' Comparing lists '.center(totwidth, '-')
+    print '%s| %s' % ('optimized'.center(width), 'expected'.center(width))
     for op1, op2 in zip(oplist1, oplist2):
         txt1 = str(op1)
         txt2 = str(op2)
