@@ -1030,8 +1030,10 @@ class Transformer(object):
     # ----------
     # Strings and Unicodes.
 
-    def _handle_oopspec_call(self, op, args, oopspecindex):
+    def _handle_oopspec_call(self, op, args, oopspecindex, extraeffect=None):
         calldescr = self.callcontrol.getcalldescr(op, oopspecindex)
+        if extraeffect:
+            calldescr.get_extra_info().extraeffect = extraeffect
         if isinstance(op.args[0].value, str):
             pass  # for tests only
         else:
@@ -1129,13 +1131,16 @@ class Transformer(object):
     def _handle_libffi_call(self, op, oopspec_name, args):
         if oopspec_name == 'libffi_prepare_call':
             oopspecindex = EffectInfo.OS_LIBFFI_PREPARE
+            extraeffect = EffectInfo.EF_CANNOT_RAISE
         elif oopspec_name.startswith('libffi_push_'):
             oopspecindex = EffectInfo.OS_LIBFFI_PUSH_ARG
+            extraeffect = EffectInfo.EF_CANNOT_RAISE
         elif oopspec_name.startswith('libffi_call_'):
             oopspecindex = EffectInfo.OS_LIBFFI_CALL
+            extraeffect = EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         else:
             assert False, 'unsupported oopspec: %s' % oopspec_name
-        return self._handle_oopspec_call(op, args, oopspecindex)
+        return self._handle_oopspec_call(op, args, oopspecindex, extraeffect)
 
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
