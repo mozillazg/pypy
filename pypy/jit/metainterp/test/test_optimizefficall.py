@@ -77,7 +77,9 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         call(0, p2,             descr=libffi_prepare)
         call(0, p2, i0,         descr=libffi_push_arg)
         call(0, p2, f1,         descr=libffi_push_arg)
-        i3 = call(0, p2, 12345, descr=libffi_call)
+        i3 = call_may_force(0, p2, 12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
         jump(i3, f1, p2)
         """
         expected = ops
