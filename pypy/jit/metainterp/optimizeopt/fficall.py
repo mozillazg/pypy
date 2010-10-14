@@ -88,6 +88,8 @@ class OptFfiCall(Optimization):
             # normal case
             self.emit_operation(op)
 
+    optimize_CALL_MAY_FORCE = optimize_CALL
+
     def _get_funcval(self, op):
         funcval = self.getvalue(op.getarg(1))
         if not funcval.is_constant():
@@ -113,7 +115,7 @@ class OptFfiCall(Optimization):
         for push_op in info.opargs:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
-        newop = ResOperation(rop.CALL, arglist, op.result, descr=info.descr)
+        newop = ResOperation(rop.CALL_MAY_FORCE, arglist, op.result, descr=info.descr)
         del self.func_infos[funcval]
         return newop
 

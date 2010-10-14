@@ -57,12 +57,16 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         call(0, ConstPtr(func),             descr=libffi_prepare)
         call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
         call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
-        i3 = call(0, ConstPtr(func), 12345, descr=libffi_call)
+        i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
         jump(i3, f1)
         """
         expected = """
         [i0, f1]
-        i3 = call(12345, i0, f1, descr=int_float__int)
+        i3 = call_may_force(12345, i0, f1, descr=int_float__int)
+        guard_not_forced() []
+        guard_no_exception() []
         jump(i3, f1)
         """
         loop = self.optimize_loop(ops, 'Not, Not', expected)

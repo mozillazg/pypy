@@ -133,8 +133,9 @@ class TestLibffiCall(BaseFfiTest):
         res = self.call(func, [38, 4.2], rffi.LONG)
         assert res == 42
         self.check_loops({
-                'call': 1,
+                'call_may_force': 1,
                 'guard_no_exception': 1,
+                'guard_not_forced': 1,
                 'int_add': 1,
                 'int_lt': 1,
                 'guard_true': 1,
@@ -145,7 +146,7 @@ class TestLibffiCall(BaseFfiTest):
         func = (libm, 'pow', [types.double, types.double], types.double)
         res = self.call(func, [2.0, 3.0], rffi.DOUBLE, init_result=0.0)
         assert res == 8.0
-        self.check_loops(call=1)
+        self.check_loops(call_may_force=1, guard_no_exception=1, guard_not_forced=1)
 
     def test_cast_result(self):
         """
@@ -158,7 +159,7 @@ class TestLibffiCall(BaseFfiTest):
         func = (libfoo, 'cast_to_uchar_and_ovf', [types.sint], types.uchar)
         res = self.call(func, [0], rffi.UCHAR)
         assert res == 200
-        self.check_loops(call=1)
+        self.check_loops(call_may_force=1, guard_no_exception=1, guard_not_forced=1)
 
     def test_cast_argument(self):
         """
