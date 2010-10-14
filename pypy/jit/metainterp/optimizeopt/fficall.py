@@ -59,9 +59,6 @@ class FuncInfo(object):
             return f.inst_argtypes, f.inst_restype
 
 
-class NonConstantFuncVal(Exception):
-    pass
-
 class OptFfiCall(Optimization):
 
     def __init__(self):
@@ -88,18 +85,14 @@ class OptFfiCall(Optimization):
 
     def optimize_CALL(self, op):
         oopspec = self._get_oopspec(op)
-        try:
-            if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
-                self.do_prepare_call(op)
-            elif oopspec == EffectInfo.OS_LIBFFI_PUSH_ARG:
-                self.do_push_arg(op)
-            elif oopspec == EffectInfo.OS_LIBFFI_CALL:
-                op = self.do_call(op)
-                self.emit_operation(op)
-            else:
-                raise NonConstantFuncVal # it's not a libffi call
-        except NonConstantFuncVal:
-            # normal case
+        if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
+            op = self.do_prepare_call(op)
+        elif oopspec == EffectInfo.OS_LIBFFI_PUSH_ARG:
+            op = self.do_push_arg(op)
+        elif oopspec == EffectInfo.OS_LIBFFI_CALL:
+            op = self.do_call(op)
+        #
+        if op:
             self.emit_operation(op)
 
     optimize_CALL_MAY_FORCE = optimize_CALL
@@ -109,21 +102,20 @@ class OptFfiCall(Optimization):
         if self.funcval:
             assert self.funcval is funcval # XXX do something nice
         if not funcval.is_constant():
-            raise NonConstantFuncVal
+            return None
         return funcval
 
     def do_prepare_call(self, op):
         funcval = self._get_funcval(op)
+        if not funcval:
+            return op
         assert self.funcval is None # XXX: do something nice etc. etc.
         self.funcval = funcval
         self.funcinfo = FuncInfo(funcval, self.optimizer.cpu, op)
 
     def do_push_arg(self, op):
-        # we store the op in funcs because we might want to emit it later,
-        # in case we give up with the optimization
         if self.funcval is None:
-            self.emit_operation(op)
-            return
+            return op
         funcval = self._get_funcval(op)
         self.funcinfo.opargs.append(op)
 
