@@ -96,9 +96,17 @@ class W_FuncPtr(Wrappable):
             assert voidres is None
             return space.w_None
 
+    @unwrap_spec('self', ObjSpace)
+    def getaddr(self, space):
+        """
+        Return the physical address in memory of the function
+        """
+        return space.wrap(rffi.cast(rffi.LONG, self.func.funcsym))
+
 W_FuncPtr.typedef = TypeDef(
     'FuncPtr',
-    __call__ = interp2app(W_FuncPtr.call)
+    __call__ = interp2app(W_FuncPtr.call),
+    getaddr = interp2app(W_FuncPtr.getaddr),
     )
 
 
