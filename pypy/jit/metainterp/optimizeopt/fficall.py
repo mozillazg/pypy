@@ -12,10 +12,11 @@ class FuncInfo(object):
     restype = None
     descr = None
 
-    def __init__(self, funcval, cpu):
+    def __init__(self, funcval, cpu, prepare_op):
         self.opargs = []
         argtypes, restype = self._get_signature(funcval)
         self.descr = cpu.calldescrof_dynamic(argtypes, restype)
+        self.prepare_op = prepare_op
 
     def _get_signature(self, funcval):
         """
@@ -64,13 +65,26 @@ class NonConstantFuncVal(Exception):
 class OptFfiCall(Optimization):
 
     def __init__(self):
-        self.func_infos = {}
+        self.funcval = None
+        self.funcinfo = None
 
     def _get_oopspec(self, op):
         effectinfo = op.getdescr().get_extra_info()
         if effectinfo is not None:
             return effectinfo.oopspecindex
         return EffectInfo.OS_NONE
+
+    def rollback(self):
+        self.emit_operation(self.funcinfo.prepare_op)
+        for op in self.funcinfo.opargs:
+            self.emit_operation(op)
+        self.funcval = None
+        self.funcinfo = None
+
+    def optimize_default(self, op):
+        if self.funcval:
+            self.rollback()
+        self.emit_operation(op)
 
     def optimize_CALL(self, op):
         oopspec = self._get_oopspec(op)
@@ -92,31 +106,40 @@ class OptFfiCall(Optimization):
 
     def _get_funcval(self, op):
         funcval = self.getvalue(op.getarg(1))
+        if self.funcval:
+            assert self.funcval is funcval # XXX do something nice
         if not funcval.is_constant():
             raise NonConstantFuncVal
         return funcval
 
     def do_prepare_call(self, op):
         funcval = self._get_funcval(op)
-        assert funcval not in self.func_infos # XXX: do something nice etc. etc.
-        self.func_infos[funcval] = FuncInfo(funcval, self.optimizer.cpu)
+        assert self.funcval is None # XXX: do something nice etc. etc.
+        self.funcval = funcval
+        self.funcinfo = FuncInfo(funcval, self.optimizer.cpu, op)
 
     def do_push_arg(self, op):
         # we store the op in funcs because we might want to emit it later,
         # in case we give up with the optimization
+        if self.funcval is None:
+            self.emit_operation(op)
+            return
         funcval = self._get_funcval(op)
-        self.func_infos[funcval].opargs.append(op)
+        self.funcinfo.opargs.append(op)
 
     def do_call(self, op):
+        if self.funcval is None:
+            return op
         funcval = self._get_funcval(op)
-        info = self.func_infos[funcval]
+        info = self.funcinfo
         funcsymval = self.getvalue(op.getarg(2))
         arglist = [funcsymval.force_box()]
         for push_op in info.opargs:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
         newop = ResOperation(rop.CALL_MAY_FORCE, arglist, op.result, descr=info.descr)
-        del self.func_infos[funcval]
+        self.funcval = None
+        self.funcinfo = None
         return newop
 
     def propagate_forward(self, op):
@@ -126,6 +149,6 @@ class OptFfiCall(Optimization):
                 func(self, op)
                 break
         else:
-            self.emit_operation(op)
+            self.optimize_default(op)
 
 optimize_ops = _findall(OptFfiCall, 'optimize_')
