@@ -533,6 +533,8 @@ class GCTransformer(BaseGCTransformer):
                           resulttype=llmemory.Address)
         if flags.get('zero'):
             hop.genop("raw_memclear", [v_raw, c_size])
+        if flags.get('track_allocation', True):
+            hop.genop("track_alloc_start", [v_raw])
         return v_raw
 
     def gct_fv_stack_malloc(self, hop, flags, TYPE, c_size):
@@ -603,6 +605,8 @@ class GCTransformer(BaseGCTransformer):
                                [self.raw_malloc_varsize_ptr, v_length,
                                 c_const_size, c_item_size, c_offset_to_length],
                                resulttype=llmemory.Address)
+        if flags.get('track_allocation', True):
+            hop.genop("track_alloc_start", [v_raw])
         return v_raw
 
     def gct_free(self, hop):
@@ -613,6 +617,8 @@ class GCTransformer(BaseGCTransformer):
         assert flavor != 'cpy', "cannot free CPython objects directly"
         if flavor == 'raw':
             v = hop.genop("cast_ptr_to_adr", [v], resulttype=llmemory.Address)
+            if flags.get('track_allocation', True):
+                hop.genop("track_alloc_stop", [v])
             hop.genop('raw_free', [v])
         else:
             assert False, "%s has no support for free with flavor %r" % (self, flavor)           
