@@ -35,6 +35,7 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
     class namespace:
         cpu = LLtypeMixin.cpu
         FUNC = LLtypeMixin.FUNC
+        vable_token_descr = LLtypeMixin.valuedescr
         int_float__int = MyCallDescr('if', 'i')
         funcptr = FakeLLObject()
         func = FakeLLObject(_fake_class=Func,
@@ -90,6 +91,32 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         jump(i3, f1, p2)
         """
         expected = ops
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_handle_virtualizables(self):
+        # this test needs an explanation to understand what goes on: see the
+        # coment in optimize_FORCE_TOKEN
+        ops = """
+        [i0, f1, p2]
+        call(0, ConstPtr(func),                       descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func), f1,                   descr=libffi_push_arg)
+        i4 = force_token()
+        setfield_gc(p2, i4, descr=vable_token_descr)
+        i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        guard_not_forced() [p2]
+        guard_no_exception() [p2]
+        jump(i3, f1, p2)
+        """
+        expected = """
+        [i0, f1, p2]
+        i4 = force_token()
+        setfield_gc(p2, i4, descr=vable_token_descr)
+        i3 = call_may_force(12345, i0, f1, descr=int_float__int)
+        guard_not_forced() [p2]
+        guard_no_exception() [p2]
+        jump(i3, f1, p2)
+        """
         loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
     # ----------------------------------------------------------------------
@@ -195,3 +222,19 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         """
         loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    def test_rollback_force_token(self):
+        ops = """
+        [i0, f1, p2]
+        call(0, ConstPtr(func),                       descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func), f1,                   descr=libffi_push_arg)
+        i4 = force_token()
+        i5 = int_add(i0, 1) # culprit!
+        setfield_gc(p2, i4, descr=vable_token_descr)
+        i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        guard_not_forced() [p2]
+        guard_no_exception() [p2]
+        jump(i3, f1, p2)
+        """
+        expected = ops
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)

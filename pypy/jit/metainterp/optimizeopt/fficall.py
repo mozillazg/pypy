@@ -18,6 +18,7 @@ class FuncInfo(object):
         argtypes, restype = self._get_signature(funcval)
         self.descr = cpu.calldescrof_dynamic(argtypes, restype)
         self.prepare_op = prepare_op
+        self.force_token_op = None
 
     def _get_signature(self, funcval):
         """
@@ -83,6 +84,8 @@ class OptFfiCall(Optimization):
         self.emit_operation(funcinfo.prepare_op)
         for op in funcinfo.opargs:
             self.emit_operation(op)
+        if funcinfo.force_token_op:
+            self.emit_operation(funcinfo.force_token_op)
 
     def emit_operation(self, op):
         # we cannot emit any operation during the optimization
@@ -91,46 +94,80 @@ class OptFfiCall(Optimization):
 
     def optimize_CALL(self, op):
         oopspec = self._get_oopspec(op)
+        ops = [op]
         if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
-            op = self.do_prepare_call(op)
+            ops = self.do_prepare_call(op)
         elif oopspec == EffectInfo.OS_LIBFFI_PUSH_ARG:
-            op = self.do_push_arg(op)
+            ops = self.do_push_arg(op)
         elif oopspec == EffectInfo.OS_LIBFFI_CALL:
-            op = self.do_call(op)
+            ops = self.do_call(op)
         #
-        if op:
+        for op in ops:
             self.emit_operation(op)
 
     optimize_CALL_MAY_FORCE = optimize_CALL
+
+    def optimize_FORCE_TOKEN(self, op):
+        # The handling of force_token needs a bit of exaplanation.
+        # The original trace which is getting optimized looks like this:
+        #    i1 = force_token()
+        #    setfield_gc(p0, i1, ...)
+        #    call_may_force(...)
+        #
+        # In theory, fficall should take care of both force_token and
+        # setfield_gc.  However, the lazy setfield optimization in heap.py
+        # delays the setfield_gc, with the effect that fficall.py sees them in
+        # this order:
+        #    i1 = force_token()
+        #    call_may_force(...)
+        #    setfield_gc(p0, i1, ...)
+        #
+        # This means that see the setfield_gc only the call_may_force, when
+        # the optimization has already been done, and thus we need to take
+        # special care just of force_token.
+        #
+        # Finally, the method force_lazy_setfield in heap.py reorders the
+        # call_may_force and the setfield_gc, so the final result we get is
+        # again force_token/setfield_gc/call_may_force.
+        #
+        if self.funcinfo is None:
+            self.emit_operation(op)
+        else:
+            self.funcinfo.force_token_op = op
 
     def do_prepare_call(self, op):
         self.rollback_maybe()
         funcval = self._get_funcval(op)
         if not funcval.is_constant():
-            return op # cannot optimize
+            return [op] # cannot optimize
         self.begin_optimization(funcval, op)
-        return None
+        return []
 
     def do_push_arg(self, op):
         funcval = self._get_funcval(op)
         if not self.funcinfo or self.funcinfo.funcval is not funcval:
-            return op # cannot optimize
+            return [op] # cannot optimize
         self.funcinfo.opargs.append(op)
-        return None
+        return []
 
     def do_call(self, op):
         funcval = self._get_funcval(op)
-        if not self.funcinfo or self.funcinfo.funcval is not funcval:
-            return op # cannot optimize
+        funcinfo = self.funcinfo
+        if not funcinfo or funcinfo.funcval is not funcval:
+            return [op] # cannot optimize
         funcsymval = self.getvalue(op.getarg(2))
         arglist = [funcsymval.force_box()]
-        for push_op in self.funcinfo.opargs:
+        for push_op in funcinfo.opargs:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
         newop = ResOperation(rop.CALL_MAY_FORCE, arglist, op.result,
-                             descr=self.funcinfo.descr)
+                             descr=funcinfo.descr)
         self.commit_optimization()
-        return newop
+        ops = []
+        if funcinfo.force_token_op:
+            ops.append(funcinfo.force_token_op)
+        ops.append(newop)
+        return ops
 
     def propagate_forward(self, op):
         opnum = op.getopnum()
