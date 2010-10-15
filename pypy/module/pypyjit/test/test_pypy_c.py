@@ -1151,7 +1151,7 @@ class PyPyCJITTests(object):
                 i += 1
             return res
         ''' % locals(),
-                              70, ([], 8.0*2000), threshold=1000)
+                              76, ([], 8.0*2000), threshold=1000)
         pow_addr = int(out.splitlines()[0])
         ops = self.get_by_bytecode('CALL_FUNCTION')
         assert len(ops) == 2 # we get two loops, because of specialization
