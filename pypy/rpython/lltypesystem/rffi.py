@@ -649,12 +649,13 @@ def make_string_mappings(strtype):
         # if 'buf' points inside 'data'.  This is only possible if we
         # followed the 2nd case in get_nonmovingbuffer(); in the first case,
         # 'buf' points to its own raw-malloced memory.
-        data_start = cast_ptr_to_adr(llstrtype(data)) + \
+        data = llstrtype(data)
+        data_start = cast_ptr_to_adr(data) + \
             offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
-        if buf != cast(TYPEP, data_start):
+        followed_2nd_path = (buf == cast(TYPEP, data_start))
+        keepalive_until_here(data)
+        if not followed_2nd_path:
             lltype.free(buf, flavor='raw')
-        else:
-            keepalive_until_here(data)
 
     # int -> (char*, str)
     def alloc_buffer(count):
