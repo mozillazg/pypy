@@ -13,6 +13,7 @@ class FuncInfo(object):
     descr = None
 
     def __init__(self, funcval, cpu, prepare_op):
+        self.funcval = funcval
         self.opargs = []
         argtypes, restype = self._get_signature(funcval)
         self.descr = cpu.calldescrof_dynamic(argtypes, restype)
@@ -62,26 +63,31 @@ class FuncInfo(object):
 class OptFfiCall(Optimization):
 
     def __init__(self):
-        self.funcval = None
         self.funcinfo = None
 
-    def _get_oopspec(self, op):
-        effectinfo = op.getdescr().get_extra_info()
-        if effectinfo is not None:
-            return effectinfo.oopspecindex
-        return EffectInfo.OS_NONE
+    def begin_optimization(self, funcval, op):
+        self.rollback_maybe()
+        self.funcinfo = FuncInfo(funcval, self.optimizer.cpu, op)
 
-    def rollback(self):
-        self.emit_operation(self.funcinfo.prepare_op)
-        for op in self.funcinfo.opargs:
+    def commit_optimization(self):
+        self.funcinfo = None
+
+    def rollback_maybe(self):
+        if self.funcinfo is None:
+            return # nothing to rollback
+        #
+        # we immediately set funcinfo to None to prevent recursion when
+        # calling emit_op
+        funcinfo = self.funcinfo
+        self.funcinfo = None
+        self.emit_operation(funcinfo.prepare_op)
+        for op in funcinfo.opargs:
             self.emit_operation(op)
-        self.funcval = None
-        self.funcinfo = None
 
-    def optimize_default(self, op):
-        if self.funcval:
-            self.rollback()
-        self.emit_operation(op)
+    def emit_operation(self, op):
+        # we cannot emit any operation during the optimization
+        self.rollback_maybe()
+        Optimization.emit_operation(self, op)
 
     def optimize_CALL(self, op):
         oopspec = self._get_oopspec(op)
@@ -97,43 +103,33 @@ class OptFfiCall(Optimization):
 
     optimize_CALL_MAY_FORCE = optimize_CALL
 
-    def _get_funcval(self, op):
-        funcval = self.getvalue(op.getarg(1))
-        if self.funcval:
-            if self.funcval is not funcval:
-                self.rollback()
-                return None
-        if not funcval.is_constant():
-            return None
-        return funcval
-
     def do_prepare_call(self, op):
+        self.rollback_maybe()
         funcval = self._get_funcval(op)
-        if not funcval:
-            return op
-        assert self.funcval is None # XXX: do something nice etc. etc.
-        self.funcval = funcval
-        self.funcinfo = FuncInfo(funcval, self.optimizer.cpu, op)
+        if not funcval.is_constant():
+            return op # cannot optimize
+        self.begin_optimization(funcval, op)
+        return None
 
     def do_push_arg(self, op):
-        if self.funcval is None:
-            return op
         funcval = self._get_funcval(op)
+        if not self.funcinfo or self.funcinfo.funcval is not funcval:
+            return op # cannot optimize
         self.funcinfo.opargs.append(op)
+        return None
 
     def do_call(self, op):
-        if self.funcval is None:
-            return op
         funcval = self._get_funcval(op)
-        info = self.funcinfo
+        if not self.funcinfo or self.funcinfo.funcval is not funcval:
+            return op # cannot optimize
         funcsymval = self.getvalue(op.getarg(2))
         arglist = [funcsymval.force_box()]
-        for push_op in info.opargs:
+        for push_op in self.funcinfo.opargs:
             argval = self.getvalue(push_op.getarg(2))
             arglist.append(argval.force_box())
-        newop = ResOperation(rop.CALL_MAY_FORCE, arglist, op.result, descr=info.descr)
-        self.funcval = None
-        self.funcinfo = None
+        newop = ResOperation(rop.CALL_MAY_FORCE, arglist, op.result,
+                             descr=self.funcinfo.descr)
+        self.commit_optimization()
         return newop
 
     def propagate_forward(self, op):
@@ -143,6 +139,15 @@ class OptFfiCall(Optimization):
                 func(self, op)
                 break
         else:
-            self.optimize_default(op)
+            self.emit_operation(op)
+
+    def _get_oopspec(self, op):
+        effectinfo = op.getdescr().get_extra_info()
+        if effectinfo is not None:
+            return effectinfo.oopspecindex
+        return EffectInfo.OS_NONE
+
+    def _get_funcval(self, op):
+        return self.getvalue(op.getarg(1))
 
 optimize_ops = _findall(OptFfiCall, 'optimize_')
