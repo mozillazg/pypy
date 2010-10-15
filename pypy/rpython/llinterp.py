@@ -1013,6 +1013,13 @@ class LLFrame(object):
     def op_stack_malloc(self, size): # mmh
         raise NotImplementedError("backend only")
 
+    def op_track_alloc_start(self, addr):
+        # we don't do tracking at this level
+        checkadr(addr)
+
+    def op_track_alloc_stop(self, addr):
+        checkadr(addr)
+
     # ____________________________________________________________
     # Overflow-detecting variants
 
