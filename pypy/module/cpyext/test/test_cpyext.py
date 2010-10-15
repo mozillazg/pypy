@@ -126,17 +126,17 @@ class LeakCheckingTest(object):
         for w_obj in lost_objects_w:
             print >>sys.stderr, "Lost object %r" % (w_obj, )
             leaking = True
-        for llvalue in set(ll2ctypes.ALLOCATED.values()) - self.frozen_ll2callocations:
-            if getattr(llvalue, "_traceback", None): # this means that the allocation should be tracked
-                leaking = True
-                print >>sys.stderr, "Did not deallocate %r (ll2ctypes)" % (llvalue, )
-                print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
-        for llvalue in lltype.ALLOCATED.keys():
+##        for llvalue in set(ll2ctypes.ALLOCATED.values()) - self.frozen_ll2callocations:
+##            if llvalue in lltype.ALLOCATED:
+##                leaking = True
+##                print >>sys.stderr, "Did not deallocate %r (ll2ctypes)" % (llvalue, )
+##                print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+        for llvalue, traceback in lltype.ALLOCATED.items():
             leaking = True
             print >>sys.stderr, "Did not deallocate %r (llvalue)" % (llvalue, )
-            print >>sys.stderr, "\t" + "\n\t".join(llvalue._traceback.splitlines())
+            print >>sys.stderr, "\t" + "\n\t".join(traceback.splitlines())
 
-        lltype.stop_tracking_allocations()
+        lltype.stop_tracking_allocations(check=False)
         return leaking
 
 class AppTestCpythonExtensionBase(LeakCheckingTest):

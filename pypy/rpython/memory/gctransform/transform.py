@@ -430,7 +430,8 @@ class MinimalGCTransformer(BaseGCTransformer):
         return self.parenttransformer.gct_malloc_varsize(hop)
     
     def gct_free(self, hop):
-        flavor = hop.spaceop.args[1].value
+        flags = hop.spaceop.args[1].value
+        flavor = flags['flavor']
         assert flavor == 'raw'
         return self.parenttransformer.gct_free(hop)
 
@@ -606,7 +607,8 @@ class GCTransformer(BaseGCTransformer):
 
     def gct_free(self, hop):
         op = hop.spaceop
-        flavor = op.args[1].value
+        flags = op.args[1].value
+        flavor = flags['flavor']
         v = op.args[0]
         assert flavor != 'cpy', "cannot free CPython objects directly"
         if flavor == 'raw':

@@ -1304,6 +1304,7 @@ class LLtypeBackendTest(BaseBackendTest):
                                    descr=fd)
             res = self.execute_operation(get_op, [s_box], 'int', descr=fd)
             assert res.getint()  == 32
+        lltype.free(s, flavor='raw')
 
     def test_new_with_vtable(self):
         cpu = self.cpu
