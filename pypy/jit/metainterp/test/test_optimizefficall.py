@@ -54,12 +54,16 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
     
     namespace = namespace.__dict__
 
+    # ----------------------------------------------------------------------
+    # this group of tests is the most important, as they represent the "real"
+    # cases you actually get when using rlib.libffi
+    
     def test_ffi_call_opt(self):
         ops = """
         [i0, f1]
-        call(0, ConstPtr(func),             descr=libffi_prepare)
-        call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
-        call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
+        call(0, ConstPtr(func),                       descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func), f1,                   descr=libffi_push_arg)
         i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
         guard_not_forced() []
         guard_no_exception() []
@@ -77,9 +81,9 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
     def test_ffi_call_nonconst(self):
         ops = """
         [i0, f1, p2]
-        call(0, p2,             descr=libffi_prepare)
-        call(0, p2, i0,         descr=libffi_push_arg)
-        call(0, p2, f1,         descr=libffi_push_arg)
+        call(0, p2,                       descr=libffi_prepare)
+        call(0, p2, i0,                   descr=libffi_push_arg)
+        call(0, p2, f1,                   descr=libffi_push_arg)
         i3 = call_may_force(0, p2, 12345, descr=libffi_call)
         guard_not_forced() []
         guard_no_exception() []
@@ -88,13 +92,17 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
         expected = ops
         loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
 
+    # ----------------------------------------------------------------------
+    # in pratice, the situations described in these tests should never happen,
+    # but we still want to ensure correctness
+
     def test_rollback_if_op_in_between(self):
         ops = """
         [i0, f1]
-        call(0, ConstPtr(func),             descr=libffi_prepare)
-        call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
+        call(0, ConstPtr(func),                       descr=libffi_prepare)
+        call(0, ConstPtr(func), i0,                   descr=libffi_push_arg)
         i1 = int_add(i0, 1)
-        call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
+        call(0, ConstPtr(func), f1,                   descr=libffi_push_arg)
         i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
         guard_not_forced() []
         guard_no_exception() []
@@ -106,17 +114,84 @@ class TestFfiCall(BaseTestOptimizeOpt, LLtypeMixin):
     def test_rollback_multiple_calls(self):
         ops = """
         [i0, i2, f1]
-        call(0, ConstPtr(func),             descr=libffi_prepare)
-        call(0, ConstPtr(func), i0,         descr=libffi_push_arg)
-        call(0, ConstPtr(func2),             descr=libffi_prepare) # culprit!
-        call(0, ConstPtr(func), f1,         descr=libffi_push_arg)
-        i3 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
-        call(0, ConstPtr(func2), i0,         descr=libffi_push_arg)
-        call(0, ConstPtr(func2), f1,         descr=libffi_push_arg)
-        i4 = call_may_force(0, ConstPtr(func), 12345, descr=libffi_call)
+        call(0, ConstPtr(func),                        descr=libffi_prepare)
+        call(0, ConstPtr(func),  i0,                   descr=libffi_push_arg)
+        #
+        # this is the culprit!
+        call(0, ConstPtr(func2),                       descr=libffi_prepare)
+        #
+        call(0, ConstPtr(func),  f1,                   descr=libffi_push_arg)
+        i3 = call_may_force(0, ConstPtr(func),  12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        call(0, ConstPtr(func2), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func2), f1,                   descr=libffi_push_arg)
+        i4 = call_may_force(0, ConstPtr(func2), 67890, descr=libffi_call)
         guard_not_forced() []
         guard_no_exception() []
         jump(i3, i4, f1)
         """
         expected = ops
         loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_rollback_multiple_prepare(self):
+        ops = """
+        [i0, i2, f1]
+        call(0, ConstPtr(func),                        descr=libffi_prepare)
+        #
+        # this is the culprit!
+        call(0, ConstPtr(func2),                       descr=libffi_prepare)
+        #
+        call(0, ConstPtr(func),  i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func),  f1,                   descr=libffi_push_arg)
+        i3 = call_may_force(0, ConstPtr(func),  12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        call(0, ConstPtr(func2), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func2), f1,                   descr=libffi_push_arg)
+        i4 = call_may_force(0, ConstPtr(func2), 67890, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        jump(i3, i4, f1)
+        """
+        expected = ops
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
+
+    def test_optimize_nested_call(self):
+        ops = """
+        [i0, i2, f1]
+        call(0, ConstPtr(func),                        descr=libffi_prepare)
+        #
+        # this "nested" call is nicely optimized
+        call(0, ConstPtr(func2),                       descr=libffi_prepare)
+        call(0, ConstPtr(func2), i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func2), f1,                   descr=libffi_push_arg)
+        i4 = call_may_force(0, ConstPtr(func2), 67890, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        #
+        call(0, ConstPtr(func),  i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func),  f1,                   descr=libffi_push_arg)
+        i3 = call_may_force(0, ConstPtr(func),  12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        jump(i3, i4, f1)
+        """
+        expected = """
+        [i0, i2, f1]
+        call(0, ConstPtr(func),                        descr=libffi_prepare)
+        #
+        # this "nested" call is nicely optimized
+        i4 = call_may_force(67890, i0, f1, descr=int_float__int)
+        guard_not_forced() []
+        guard_no_exception() []
+        #
+        call(0, ConstPtr(func),  i0,                   descr=libffi_push_arg)
+        call(0, ConstPtr(func),  f1,                   descr=libffi_push_arg)
+        i3 = call_may_force(0, ConstPtr(func),  12345, descr=libffi_call)
+        guard_not_forced() []
+        guard_no_exception() []
+        jump(i3, i4, f1)
+        """
+        loop = self.optimize_loop(ops, 'Not, Not, Not', expected)
+
