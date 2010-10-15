@@ -1155,11 +1155,14 @@ class PyPyCJITTests(object):
         pow_addr = int(out.splitlines()[0])
         ops = self.get_by_bytecode('CALL_FUNCTION')
         assert len(ops) == 2 # we get two loops, because of specialization
-        op = ops[0]
-        # XXX: there should be a guard_not_forced
-        assert op[-1].getopname() == 'guard_no_exception'
-        call = op[-2]
-        assert call.getopname() == 'call'
+        call_function = ops[0]
+        last_ops = [op.getopname() for op in call_function[-5:]]
+        assert last_ops == ['force_token',
+                            'setfield_gc',
+                            'call_may_force',
+                            'guard_not_forced',
+                            'guard_no_exception']
+        call = call_function[-3]
         assert call.getarg(0).value == pow_addr
         assert call.getarg(1).value == 2.0
         assert call.getarg(2).value == 3.0
