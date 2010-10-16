@@ -93,7 +93,7 @@ class AbstractResOp(object):
     def __repr__(self):
         return self.repr()
 
-    def repr(self, graytext=False):
+    def repr(self):
         # RPython-friendly version
         if self.result is not None:
             sres = '%s = ' % (self.result,)
@@ -101,8 +101,6 @@ class AbstractResOp(object):
             sres = ''
         if self.name:
             prefix = "%s:%s   " % (self.name, self.pc)
-            if graytext:
-                prefix = "\f%s\f" % prefix
         else:
             prefix = ""
         args = self.getarglist()

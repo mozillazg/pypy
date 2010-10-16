@@ -211,9 +211,9 @@ class WarmRunnerDesc(object):
                 "there are multiple jit_merge_points with the same jitdriver"
 
     def split_graph_and_record_jitdriver(self, graph, block, pos):
-        op = block.operations[pos]
         jd = JitDriverStaticData()
-        jd._jit_merge_point_pos = (graph, op)
+        jd._jit_merge_point_pos = (graph, block, pos)
+        op = block.operations[pos]
         args = op.args[2:]
         s_binding = self.translator.annotator.binding
         jd._portal_args_s = [s_binding(v) for v in args]
@@ -457,7 +457,8 @@ class WarmRunnerDesc(object):
             self.make_args_specification(jd)
 
     def make_args_specification(self, jd):
-        graph, op = jd._jit_merge_point_pos
+        graph, block, index = jd._jit_merge_point_pos
+        op = block.operations[index]
         greens_v, reds_v = support.decode_hp_hint_args(op)
         ALLARGS = [v.concretetype for v in (greens_v + reds_v)]
         jd._green_args_spec = [v.concretetype for v in greens_v]
@@ -708,14 +709,8 @@ class WarmRunnerDesc(object):
         # ____________________________________________________________
         # Now mutate origportalgraph to end with a call to portal_runner_ptr
         #
-        _, op = jd._jit_merge_point_pos
-        for origblock in origportalgraph.iterblocks():
-            if op in origblock.operations:
-                break
-        else:
-            assert False, "lost the operation %r in the graph %r" % (
-                op, origportalgraph)
-        origindex = origblock.operations.index(op)
+        _, origblock, origindex = jd._jit_merge_point_pos
+        op = origblock.operations[origindex]
         assert op.opname == 'jit_marker'
         assert op.args[0].value == 'jit_merge_point'
         greens_v, reds_v = support.decode_hp_hint_args(op)
