@@ -4,6 +4,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rsre import rsre_char
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib import jit
 
 
 OPCODE_FAILURE            = 0
@@ -56,15 +57,18 @@ def specializectx(func):
     _seen_specname[specname] = True
     # Install a copy of the function under the name '_spec_funcname' in each
     # concrete subclass
+    specialized_methods = []
     for prefix, concreteclass in [('str', StrMatchContext),
                                   ('uni', UnicodeMatchContext)]:
         newfunc = func_with_new_name(func, prefix + specname)
         assert not hasattr(concreteclass, specname)
         setattr(concreteclass, specname, newfunc)
+        specialized_methods.append(newfunc)
     # Return a dispatcher function, specialized on the exact type of 'ctx'
     def dispatch(ctx, *args):
         return getattr(ctx, specname)(*args)
     dispatch._annspecialcase_ = 'specialize:argtype(0)'
+    dispatch._specialized_methods_ = specialized_methods
     return dispatch
 
 # ____________________________________________________________
@@ -75,6 +79,7 @@ class Error(Exception):
 
 class AbstractMatchContext(object):
     """Abstract base class"""
+    _immutable_fields_ = ['pattern[*]', 'flags']
     match_start = 0
     match_end = 0
     match_marks = None
@@ -238,6 +243,7 @@ class BranchMatchResult(MatchResult):
         self.start_ptr = ptr
         self.start_marks = marks
 
+    @jit.unroll_safe
     def find_first_result(self, ctx):
         ppos = self.ppos
         while ctx.pat(ppos):
@@ -250,6 +256,8 @@ class BranchMatchResult(MatchResult):
     find_next_result = find_first_result
 
 class RepeatOneMatchResult(MatchResult):
+    jitdriver = jit.JitDriver(greens=['nextppos', 'pattern'],
+                              reds=['ptr', 'self', 'ctx'])
 
     def __init__(self, nextppos, minptr, ptr, marks):
         self.nextppos = nextppos
@@ -259,8 +267,18 @@ class RepeatOneMatchResult(MatchResult):
 
     def find_first_result(self, ctx):
         ptr = self.start_ptr
+        nextppos = self.nextppos
         while ptr >= self.minptr:
-            result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
+            #
+            pattern = ctx.pattern
+            self.jitdriver.can_enter_jit(self=self, ptr=ptr, ctx=ctx,
+                                         nextppos=nextppos, pattern=pattern)
+            self.jitdriver.jit_merge_point(self=self, ptr=ptr, ctx=ctx,
+                                           nextppos=nextppos, pattern=pattern)
+            if jit.we_are_jitted():
+                ctx.pattern = pattern
+            #
+            result = sre_match(ctx, nextppos, ptr, self.start_marks)
             ptr -= 1
             if result is not None:
                 self.subresult = result
@@ -270,6 +288,8 @@ class RepeatOneMatchResult(MatchResult):
 
 
 class MinRepeatOneMatchResult(MatchResult):
+    jitdriver = jit.JitDriver(greens=['nextppos', 'ppos3', 'pattern'],
+                              reds=['ptr', 'self', 'ctx'])
 
     def __init__(self, nextppos, ppos3, maxptr, ptr, marks):
         self.nextppos = nextppos
@@ -280,27 +300,39 @@ class MinRepeatOneMatchResult(MatchResult):
 
     def find_first_result(self, ctx):
         ptr = self.start_ptr
+        nextppos = self.nextppos
+        ppos3 = self.ppos3
         while ptr <= self.maxptr:
-            result = sre_match(ctx, self.nextppos, ptr, self.start_marks)
+            #
+            pattern = ctx.pattern
+            self.jitdriver.can_enter_jit(self=self, ptr=ptr, ctx=ctx,
+                                         nextppos=nextppos, pattern=pattern,
+                                         ppos3=ppos3)
+            self.jitdriver.jit_merge_point(self=self, ptr=ptr, ctx=ctx,
+                                           nextppos=nextppos, pattern=pattern,
+                                           ppos3=ppos3)
+            if jit.we_are_jitted():
+                ctx.pattern = pattern
+            #
+            result = sre_match(ctx, nextppos, ptr, self.start_marks)
             if result is not None:
                 self.subresult = result
                 self.start_ptr = ptr
                 return self
-            if not self.next_char_ok(ctx, ptr):
+            if not self.next_char_ok(ctx, ptr, ppos3):
                 break
             ptr += 1
 
     def find_next_result(self, ctx):
         ptr = self.start_ptr
-        if not self.next_char_ok(ctx, ptr):
+        if not self.next_char_ok(ctx, ptr, self.ppos3):
             return
         self.start_ptr = ptr + 1
         return self.find_first_result(ctx)
 
-    def next_char_ok(self, ctx, ptr):
+    def next_char_ok(self, ctx, ptr, ppos):
         if ptr == ctx.end:
             return False
-        ppos = self.ppos3
         op = ctx.pat(ppos)
         for op1, (checkerfn, _) in unroll_char_checker:
             if op1 == op:
@@ -429,6 +461,7 @@ class MinUntilMatchResult(AbstractUntilMatchResult):
 # ____________________________________________________________
 
 @specializectx
+@jit.unroll_safe
 def sre_match(ctx, ppos, ptr, marks):
     """Returns either None or a MatchResult object.  Usually we only need
     the first result, but there is the case of REPEAT...UNTIL where we
