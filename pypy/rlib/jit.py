@@ -358,7 +358,8 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
         driver = self.instance.im_self
         keys = kwds_s.keys()
         keys.sort()
-        expected = ['s_' + name for name in driver.greens + driver.reds]
+        expected = ['s_' + name for name in driver.greens + driver.reds
+                                if '.' not in name]
         expected.sort()
         if keys != expected:
             raise JitHintError("%s expects the following keyword "
@@ -403,7 +404,13 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
         uniquekey = 'jitdriver.%s' % func.func_name
         args_s = args_s[:]
         for name in variables:
-            s_arg = kwds_s['s_' + name]
+            if '.' not in name:
+                s_arg = kwds_s['s_' + name]
+            else:
+                objname, fieldname = name.split('.')
+                s_instance = kwds_s['s_' + objname]
+                s_arg = s_instance.classdef.about_attribute(fieldname)
+                assert s_arg is not None
             args_s.append(s_arg)
         bk.emulate_pbc_call(uniquekey, s_func, args_s)
 
@@ -416,9 +423,33 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
         greens_v = []
         reds_v = []
         for name in driver.greens:
-            i = kwds_i['i_' + name]
-            r_green = hop.args_r[i]
-            v_green = hop.inputarg(r_green, arg=i)
+            if '.' not in name:
+                i = kwds_i['i_' + name]
+                r_green = hop.args_r[i]
+                v_green = hop.inputarg(r_green, arg=i)
+            else:
+                if hop.rtyper.type_system.name == 'ootypesystem':
+                    py.test.skip("lltype only")
+                objname, fieldname = name.split('.')   # see test_green_field
+                assert objname in driver.reds
+                i = kwds_i['i_' + objname]
+                r_red = hop.args_r[i]
+                while True:
+                    try:
+                        mangled_name, r_field = r_red._get_field(fieldname)
+                        break
+                    except KeyError:
+                        pass
+                    assert r_red.rbase is not None, (
+                        "field %r not found in %r" % (name,
+                                                      r_red.lowleveltype.TO))
+                    r_red = r_red.rbase
+                assert r_red.lowleveltype.TO._immutable_field(mangled_name), (
+                    "field %r must be declared as immutable" % name)
+                v_red = hop.inputarg(r_red, arg=i)
+                c_llname = hop.inputconst(lltype.Void, mangled_name)
+                v_green = hop.genop('getfield', [v_red, c_llname],
+                                    resulttype = r_field)
             greens_v.append(v_green)
         for name in driver.reds:
             i = kwds_i['i_' + name]
