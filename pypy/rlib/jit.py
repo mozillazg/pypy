@@ -445,8 +445,13 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                         "field %r not found in %r" % (name,
                                                       r_red.lowleveltype.TO))
                     r_red = r_red.rbase
-                assert r_red.lowleveltype.TO._immutable_field(mangled_name), (
+                GTYPE = r_red.lowleveltype.TO
+                assert GTYPE._immutable_field(mangled_name), (
                     "field %r must be declared as immutable" % name)
+                if not hasattr(driver, 'll_greenfields'):
+                    driver.ll_greenfields = {}
+                driver.ll_greenfields[name] = GTYPE, mangled_name
+                #
                 v_red = hop.inputarg(r_red, arg=i)
                 c_llname = hop.inputconst(lltype.Void, mangled_name)
                 v_green = hop.genop('getfield', [v_red, c_llname],
