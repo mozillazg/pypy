@@ -521,7 +521,12 @@ class Transformer(object):
         # check for deepfrozen structures that force constant-folding
         immut = v_inst.concretetype.TO._immutable_field(c_fieldname.value)
         if immut:
-            pure = '_pure'
+            if (self.callcontrol is not None and
+                self.callcontrol.could_be_green_field(v_inst.concretetype.TO,
+                                                      c_fieldname.value)):
+                pure = '_greenfield'
+            else:
+                pure = '_pure'
             if immut == "[*]":
                 self.immutable_arrays[op.result] = True
         else:

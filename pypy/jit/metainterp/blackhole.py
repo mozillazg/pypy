@@ -1073,6 +1073,10 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
     bhimpl_getfield_vable_f = bhimpl_getfield_gc_f
 
+    bhimpl_getfield_gc_i_greenfield = bhimpl_getfield_gc_i
+    bhimpl_getfield_gc_r_greenfield = bhimpl_getfield_gc_r
+    bhimpl_getfield_gc_f_greenfield = bhimpl_getfield_gc_f
+
     @arguments("cpu", "i", "d", returns="i")
     def bhimpl_getfield_raw_i(cpu, struct, fielddescr):
         return cpu.bh_getfield_raw_i(struct, fielddescr)

@@ -498,6 +498,22 @@ class MIFrame(object):
     opimpl_getfield_gc_r_pure = _opimpl_getfield_gc_pure_any
     opimpl_getfield_gc_f_pure = _opimpl_getfield_gc_pure_any
 
+    @arguments("orgpc", "box", "descr")
+    def _opimpl_getfield_gc_greenfield_any(self, pc, box, fielddescr):
+        ginfo = self.metainterp.jitdriver_sd.greenfield_info
+        if (ginfo is not None and fielddescr in ginfo.green_field_descrs
+            and not self._nonstandard_virtualizable(pc, box)):
+            # fetch the result, but consider it as a Const box and don't
+            # record any operation
+            resbox = executor.execute(self.metainterp.cpu, self.metainterp,
+                                      rop.GETFIELD_GC_PURE, fielddescr, box)
+            return resbox.constbox()
+        # fall-back
+        return self.execute_with_descr(rop.GETFIELD_GC_PURE, fielddescr, box)
+    opimpl_getfield_gc_i_greenfield = _opimpl_getfield_gc_greenfield_any
+    opimpl_getfield_gc_r_greenfield = _opimpl_getfield_gc_greenfield_any
+    opimpl_getfield_gc_f_greenfield = _opimpl_getfield_gc_greenfield_any
+
     @arguments("box", "descr", "box")
     def _opimpl_setfield_gc_any(self, box, fielddescr, valuebox):
         self.execute_with_descr(rop.SETFIELD_GC, fielddescr, box, valuebox)
@@ -529,7 +545,8 @@ class MIFrame(object):
     def _nonstandard_virtualizable(self, pc, box):
         # returns True if 'box' is actually not the "standard" virtualizable
         # that is stored in metainterp.virtualizable_boxes[-1]
-        if self.metainterp.jitdriver_sd.virtualizable_info is None:
+        if (self.metainterp.jitdriver_sd.virtualizable_info is None and
+            self.metainterp.jitdriver_sd.greenfield_info is None):
             return True      # can occur in case of multiple JITs
         standard_box = self.metainterp.virtualizable_boxes[-1]
         if standard_box is box:
@@ -998,13 +1015,15 @@ class MIFrame(object):
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         virtualizable_boxes = None
-        if metainterp.jitdriver_sd.virtualizable_info is not None:
+        if (metainterp.jitdriver_sd.virtualizable_info is not None or
+            metainterp.jitdriver_sd.greenfield_info is not None):
             virtualizable_boxes = metainterp.virtualizable_boxes
         saved_pc = self.pc
         if resumepc >= 0:
             self.pc = resumepc
         resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  metainterp.virtualref_boxes, resumedescr)
+                                  metainterp.virtualref_boxes,
+                                  resumedescr)
         self.pc = saved_pc
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
         # count
@@ -1646,6 +1665,7 @@ class MetaInterp(object):
                                               duplicates)
             live_arg_boxes += self.virtualizable_boxes
             live_arg_boxes.pop()
+        #
         assert len(self.virtualref_boxes) == 0, "missing virtual_ref_finish()?"
         # Called whenever we reach the 'loop_header' hint.
         # First, attempt to make a bridge:
@@ -1832,6 +1852,7 @@ class MetaInterp(object):
         f.setup_call(original_boxes)
         assert self.in_recursion == 0
         self.virtualref_boxes = []
+        self.initialize_withgreenfields(original_boxes)
         self.initialize_virtualizable(original_boxes)
 
     def initialize_state_from_guard_failure(self, resumedescr):
@@ -1855,6 +1876,14 @@ class MetaInterp(object):
             original_boxes += self.virtualizable_boxes
             self.virtualizable_boxes.append(virtualizable_box)
             self.initialize_virtualizable_enter()
+
+    def initialize_withgreenfields(self, original_boxes):
+        ginfo = self.jitdriver_sd.greenfield_info
+        if ginfo is not None:
+            assert self.jitdriver_sd.virtualizable_info is None
+            index = (self.jitdriver_sd.num_green_args +
+                     ginfo.red_index)
+            self.virtualizable_boxes = [original_boxes[index]]
 
     def initialize_virtualizable_enter(self):
         vinfo = self.jitdriver_sd.virtualizable_info
@@ -1949,8 +1978,10 @@ class MetaInterp(object):
 
     def rebuild_state_after_failure(self, resumedescr):
         vinfo = self.jitdriver_sd.virtualizable_info
+        ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
-        boxlists = resume.rebuild_from_resumedata(self, resumedescr, vinfo)
+        boxlists = resume.rebuild_from_resumedata(self, resumedescr, vinfo,
+                                                  ginfo)
         inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
@@ -1975,6 +2006,12 @@ class MetaInterp(object):
             assert not virtualizable.vable_token
             # fill the virtualizable with the local boxes
             self.synchronize_virtualizable()
+        #
+        elif self.jitdriver_sd.greenfield_info:
+            self.virtualizable_boxes = virtualizable_boxes
+        else:
+            assert not virtualizable_boxes
+        #
         return inputargs_and_holes
 
     def check_synchronized_virtualizable(self):
@@ -2048,7 +2085,8 @@ class MetaInterp(object):
         for i in range(len(boxes)):
             if boxes[i] is oldbox:
                 boxes[i] = newbox
-        if self.jitdriver_sd.virtualizable_info is not None:
+        if (self.jitdriver_sd.virtualizable_info is not None or
+            self.jitdriver_sd.greenfield_info is not None):
             boxes = self.virtualizable_boxes
             for i in range(len(boxes)):
                 if boxes[i] is oldbox:

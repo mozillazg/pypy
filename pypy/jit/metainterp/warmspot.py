@@ -286,10 +286,20 @@ class WarmRunnerDesc(object):
     def make_virtualizable_infos(self):
         vinfos = {}
         for jd in self.jitdrivers_sd:
+            #
+            jd.greenfield_info = None
+            for name in jd.jitdriver.greens:
+                if '.' in name:
+                    from pypy.jit.metainterp.greenfield import GreenFieldInfo
+                    jd.greenfield_info = GreenFieldInfo(self.cpu, jd)
+                    break
+            #
             if not jd.jitdriver.virtualizables:
                 jd.virtualizable_info = None
                 jd.index_of_virtualizable = -1
                 continue
+            else:
+                assert jd.greenfield_info is None, "XXX not supported yet"
             #
             jitdriver = jd.jitdriver
             assert len(jitdriver.virtualizables) == 1    # for now
