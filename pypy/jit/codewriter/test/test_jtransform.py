@@ -687,6 +687,40 @@ def test_promote_2():
     assert block.operations[1].result is None
     assert block.exits[0].args == [v1]
 
+def test_jit_merge_point_1():
+    class FakeJitDriverSD:
+        index = 42
+        class jitdriver:
+            greens = ['green1', 'green2', 'voidgreen3']
+            reds = ['red1', 'red2', 'voidred3']
+    jd = FakeJitDriverSD()
+    v1 = varoftype(lltype.Signed)
+    v2 = varoftype(lltype.Signed)
+    vvoid1 = varoftype(lltype.Void)
+    v3 = varoftype(lltype.Signed)
+    v4 = varoftype(lltype.Signed)
+    vvoid2 = varoftype(lltype.Void)
+    v5 = varoftype(lltype.Void)
+    op = SpaceOperation('jit_marker',
+                        [Constant('jit_merge_point', lltype.Void),
+                         Constant(jd.jitdriver, lltype.Void),
+                         v1, v2, vvoid1, v3, v4, vvoid2], v5)
+    tr = Transformer()
+    tr.portal_jd = jd
+    oplist = tr.rewrite_operation(op)
+    assert len(oplist) == 6
+    assert oplist[0].opname == '-live-'
+    assert oplist[1].opname == 'int_guard_value'
+    assert oplist[1].args   == [v1]
+    assert oplist[2].opname == '-live-'
+    assert oplist[3].opname == 'int_guard_value'
+    assert oplist[3].args   == [v2]
+    assert oplist[4].opname == 'jit_merge_point'
+    assert oplist[4].args[0].value == 42
+    assert list(oplist[4].args[1]) == [v1, v2]
+    assert list(oplist[4].args[4]) == [v3, v4]
+    assert oplist[5].opname == '-live-'
+
 def test_int_abs():
     v1 = varoftype(lltype.Signed)
     v2 = varoftype(lltype.Signed)
