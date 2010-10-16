@@ -433,6 +433,7 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                 objname, fieldname = name.split('.')   # see test_green_field
                 assert objname in driver.reds
                 i = kwds_i['i_' + objname]
+                s_red = hop.args_s[i]
                 r_red = hop.args_r[i]
                 while True:
                     try:
@@ -450,6 +451,9 @@ class ExtEnterLeaveMarker(ExtRegistryEntry):
                 c_llname = hop.inputconst(lltype.Void, mangled_name)
                 v_green = hop.genop('getfield', [v_red, c_llname],
                                     resulttype = r_field)
+                s_green = s_red.classdef.about_attribute(fieldname)
+                assert s_green is not None
+                hop.rtyper.annotator.setbinding(v_green, s_green)
             greens_v.append(v_green)
         for name in driver.reds:
             i = kwds_i['i_' + name]

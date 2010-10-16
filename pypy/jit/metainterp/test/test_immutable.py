@@ -1,4 +1,5 @@
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
+from pypy.rlib.jit import JitDriver
 
 
 class ImmutableFieldsTests:
@@ -83,6 +84,29 @@ class ImmutableFieldsTests:
         self.check_operations_history(getfield_gc=0, getfield_gc_pure=2,
                             getarrayitem_gc=0, getarrayitem_gc_pure=1,
                             int_add=3)
+
+
+    def test_green_field(self):
+        myjitdriver = JitDriver(greens=['ctx.x'], reds=['ctx'])
+        class Ctx(object):
+            _immutable_fields_ = ['x']
+            def __init__(self, x, y):
+                self.x = x
+                self.y = y
+        def f(x, y):
+            ctx = Ctx(x, y)
+            while 1:
+                myjitdriver.can_enter_jit(ctx=ctx)
+                myjitdriver.jit_merge_point(ctx=ctx)
+                ctx.y -= 1
+                if ctx.y < 0:
+                    return ctx.y
+        def g(y):
+            return f(5, y) + f(6, y)
+        #
+        res = self.meta_interp(g, [7])
+        assert res == -2
+        self.check_loop_count(2)
 
 
 class TestLLtypeImmutableFieldsTests(ImmutableFieldsTests, LLJitMixin):
