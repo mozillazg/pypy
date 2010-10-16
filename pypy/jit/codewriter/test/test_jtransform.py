@@ -691,18 +691,20 @@ def test_jit_merge_point_1():
     class FakeJitDriverSD:
         index = 42
         class jitdriver:
-            greens = ['green1', 'green2']
-            reds = ['red1', 'red2']
+            greens = ['green1', 'green2', 'voidgreen3']
+            reds = ['red1', 'red2', 'voidred3']
     jd = FakeJitDriverSD()
     v1 = varoftype(lltype.Signed)
     v2 = varoftype(lltype.Signed)
+    vvoid1 = varoftype(lltype.Void)
     v3 = varoftype(lltype.Signed)
     v4 = varoftype(lltype.Signed)
+    vvoid2 = varoftype(lltype.Void)
     v5 = varoftype(lltype.Void)
     op = SpaceOperation('jit_marker',
                         [Constant('jit_merge_point', lltype.Void),
                          Constant(jd.jitdriver, lltype.Void),
-                         v1, v2, v3, v4], v5)
+                         v1, v2, vvoid1, v3, v4, vvoid2], v5)
     tr = Transformer()
     tr.portal_jd = jd
     oplist = tr.rewrite_operation(op)
