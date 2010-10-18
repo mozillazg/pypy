@@ -738,15 +738,18 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         assert (end & 1) == 0
         return [self.decode_ref(nums[i]) for i in range(end)]
 
-    def consume_vref_and_vable_boxes(self, vinfo):
+    def consume_vref_and_vable_boxes(self, vinfo, ginfo):
         nums = self.cur_numb.nums
         self.cur_numb = self.cur_numb.prev
-        if vinfo is None:
-            virtualizable_boxes = None
-            end = len(nums)
-        else:
+        if vinfo is not None:
             virtualizable_boxes = self.consume_virtualizable_boxes(vinfo, nums)
             end = len(nums) - len(virtualizable_boxes)
+        elif ginfo is not None:
+            virtualizable_boxes = [self.decode_ref(nums[-1])]
+            end = len(nums) - 1
+        else:
+            virtualizable_boxes = None
+            end = len(nums)
         virtualref_boxes = self.consume_virtualref_boxes(nums, end)
         return virtualizable_boxes, virtualref_boxes
 

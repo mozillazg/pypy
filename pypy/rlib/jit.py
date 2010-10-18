@@ -139,6 +139,24 @@ class Entry(ExtRegistryEntry):
         return hop.inputconst(lltype.Signed, _we_are_jitted)
 
 
+def jit_debug(string, arg1=-sys.maxint-1, arg2=-sys.maxint-1,
+                      arg3=-sys.maxint-1, arg4=-sys.maxint-1):
+    """When JITted, cause an extra operation DEBUG_MERGE_POINT to appear in
+    the graphs.  Should not be left after debugging."""
+    keepalive_until_here(string) # otherwise the whole function call is removed
+jit_debug.oopspec = 'jit.debug(string, arg1, arg2, arg3, arg4)'
+
+def assert_green(value):
+    """Very strong assert: checks that 'value' is a green
+    (a JIT compile-time constant)."""
+    keepalive_until_here(value)
+assert_green._annspecialcase_ = 'specialize:argtype(0)'
+assert_green.oopspec = 'jit.assert_green(value)'
+
+class AssertGreenFailed(Exception):
+    pass
+
+
 ##def force_virtualizable(virtualizable):
 ##    pass
 
@@ -266,7 +284,8 @@ class JitDriver:
             self.virtualizables = virtualizables
         for v in self.virtualizables:
             assert v in self.reds
-        self._alllivevars = dict.fromkeys(self.greens + self.reds)
+        self._alllivevars = dict.fromkeys(
+            [name for name in self.greens + self.reds if '.' not in name])
         self._make_extregistryentries()
         self.get_jitcell_at = get_jitcell_at
         self.set_jitcell_at = set_jitcell_at
