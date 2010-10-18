@@ -11,6 +11,8 @@ class FuncInfo(object):
     argtypes = None
     restype = None
     descr = None
+    prepare_op = None
+    force_token_op = None
 
     def __init__(self, funcval, cpu, prepare_op):
         self.funcval = funcval
@@ -18,7 +20,6 @@ class FuncInfo(object):
         argtypes, restype = self._get_signature(funcval)
         self.descr = cpu.calldescrof_dynamic(argtypes, restype)
         self.prepare_op = prepare_op
-        self.force_token_op = None
 
     def _get_signature(self, funcval):
         """
