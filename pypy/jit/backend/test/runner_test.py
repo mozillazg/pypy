@@ -15,6 +15,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter import heaptracker
+from pypy.rlib.rarithmetic import intmask
 
 
 class Runner(object):
@@ -2026,6 +2027,38 @@ class LLtypeBackendTest(BaseBackendTest):
         res = self.cpu.execute_token(othertoken)
         assert self.cpu.get_latest_value_float(0) == 13.5
         assert called
+
+    def test_result_of_call(self):
+        # Test that calling a function that returns a CHAR, SHORT or INT,
+        # signed or unsigned, properly gets zero-extended or sign-extended.
+        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        for RESTYPE in [rffi.SIGNEDCHAR, rffi.UCHAR,
+                        rffi.SHORT, rffi.USHORT,
+                        rffi.INT, rffi.UINT,
+                        rffi.LONG, rffi.ULONG]:
+            # Tested with a function that intentionally does not cast the
+            # result to RESTYPE, but makes sure that we return the whole
+            # value in eax or rax.
+            eci = ExternalCompilationInfo(separate_module_sources=["""
+                long fn_test_result_of_call(long x)
+                {
+                    return x + 1;
+                }
+            """])
+            f = rffi.llexternal('fn_test_result_of_call', [lltype.Signed],
+                                RESTYPE, compilation_info=eci, _nowrapper=True)
+            value = intmask(0xFFEEDDCCBBAA9988)
+            expected = rffi.cast(lltype.Signed, rffi.cast(RESTYPE, value + 1))
+            assert intmask(f(value)) == expected
+            #
+            FUNC = self.FuncType([lltype.Signed], RESTYPE)
+            FPTR = self.Ptr(FUNC)
+            calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT)
+            funcbox = self.get_funcbox(self.cpu, f)
+            res = self.execute_operation(rop.CALL, [funcbox, BoxInt(value)],
+                                         'int', descr=calldescr)
+            assert res.value == expected, (
+                "%r: got %r, expected %r" % (RESTYPE, res.value, expected))
 
 
 class OOtypeBackendTest(BaseBackendTest):
