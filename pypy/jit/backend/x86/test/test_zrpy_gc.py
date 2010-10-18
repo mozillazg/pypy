@@ -192,10 +192,11 @@ class TestCompileFramework(object):
         self.main_allfuncs(name, n, x)
 
     def define_libffi_workaround(cls):
-        # This is a workaround for a bug in database.py.  It seems that the
-        # problem is triggered by optimizeopt/fficall.py, and in particular by
-        # the ``cast_base_ptr_to_instance(Func, llfunc)``: in these tests,
-        # that line is the only place where libffi.Func is referenced.
+        # XXX: this is a workaround for a bug in database.py.  It seems that
+        # the problem is triggered by optimizeopt/fficall.py, and in
+        # particular by the ``cast_base_ptr_to_instance(Func, llfunc)``: in
+        # these tests, that line is the only place where libffi.Func is
+        # referenced.
         #
         # The problem occurs because the gctransformer tries to annotate a
         # low-level helper to call the __del__ of libffi.Func when it's too
