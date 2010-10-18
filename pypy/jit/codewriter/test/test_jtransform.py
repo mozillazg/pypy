@@ -721,6 +721,45 @@ def test_jit_merge_point_1():
     assert list(oplist[4].args[4]) == [v3, v4]
     assert oplist[5].opname == '-live-'
 
+def test_getfield_gc():
+    S = lltype.GcStruct('S', ('x', lltype.Char))
+    v1 = varoftype(lltype.Ptr(S))
+    v2 = varoftype(lltype.Char)
+    op = SpaceOperation('getfield', [v1, Constant('x', lltype.Void)], v2)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'getfield_gc_i'
+    assert op1.args == [v1, ('fielddescr', S, 'x')]
+    assert op1.result == v2
+
+def test_getfield_gc_pure():
+    S = lltype.GcStruct('S', ('x', lltype.Char),
+                        hints={'immutable': True})
+    v1 = varoftype(lltype.Ptr(S))
+    v2 = varoftype(lltype.Char)
+    op = SpaceOperation('getfield', [v1, Constant('x', lltype.Void)], v2)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'getfield_gc_i_pure'
+    assert op1.args == [v1, ('fielddescr', S, 'x')]
+    assert op1.result == v2
+
+def test_getfield_gc_greenfield():
+    class FakeCC:
+        def get_vinfo(self, v):
+            return None
+        def could_be_green_field(self, S1, name1):
+            assert S1 is S
+            assert name1 == 'x'
+            return True
+    S = lltype.GcStruct('S', ('x', lltype.Char),
+                        hints={'immutable': True})
+    v1 = varoftype(lltype.Ptr(S))
+    v2 = varoftype(lltype.Char)
+    op = SpaceOperation('getfield', [v1, Constant('x', lltype.Void)], v2)
+    op1 = Transformer(FakeCPU(), FakeCC()).rewrite_operation(op)
+    assert op1.opname == 'getfield_gc_i_greenfield'
+    assert op1.args == [v1, ('fielddescr', S, 'x')]
+    assert op1.result == v2
+
 def test_int_abs():
     v1 = varoftype(lltype.Signed)
     v2 = varoftype(lltype.Signed)

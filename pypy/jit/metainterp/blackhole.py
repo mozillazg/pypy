@@ -760,6 +760,20 @@ class BlackholeInterpreter(object):
     def bhimpl_debug_fatalerror(msg):
         llop.debug_fatalerror(lltype.Void, msg)
 
+    @arguments("r", "i", "i", "i", "i")
+    def bhimpl_jit_debug(string, arg1=0, arg2=0, arg3=0, arg4=0):
+        pass
+
+    @arguments("i")
+    def bhimpl_int_assert_green(x):
+        pass
+    @arguments("r")
+    def bhimpl_ref_assert_green(x):
+        pass
+    @arguments("f")
+    def bhimpl_float_assert_green(x):
+        pass
+
     # ----------
     # the main hints and recursive calls
 

@@ -320,6 +320,8 @@ class Transformer(object):
             prepare = self._handle_str2unicode_call
         elif oopspec_name.startswith('virtual_ref'):
             prepare = self._handle_virtual_ref_call
+        elif oopspec_name.startswith('jit.'):
+            prepare = self._handle_jit_call
         else:
             prepare = self.prepare_builtin_call
         try:
@@ -858,6 +860,15 @@ class Transformer(object):
         log.WARNING("found debug_assert in %r; should have be removed" %
                     (self.graph,))
         return []
+
+    def _handle_jit_call(self, op, oopspec_name, args):
+        if oopspec_name == 'jit.debug':
+            return SpaceOperation('jit_debug', args, None)
+        elif oopspec_name == 'jit.assert_green':
+            kind = getkind(args[0].concretetype)
+            return SpaceOperation('%s_assert_green' % kind, args, None)
+        else:
+            raise AssertionError("missing support for %r" % oopspec_name)
 
     # ----------
     # Lists.

@@ -1,4 +1,4 @@
-import py, os
+import py, os, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -816,12 +816,16 @@ class MIFrame(object):
 
     @arguments("orgpc", "int", "boxes3", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, jdindex, greenboxes, redboxes):
+        any_operation = len(self.metainterp.history.operations) > 0
         jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         self.verify_green_args(jitdriver_sd, greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(jitdriver_sd, greenboxes)
         if self.metainterp.seen_loop_header_for_jdindex < 0:
-            return
+            if not jitdriver_sd.no_loop_header or not any_operation:
+                return
+            # automatically add a loop_header if there is none
+            self.metainterp.seen_loop_header_for_jdindex = jdindex
         #
         assert self.metainterp.seen_loop_header_for_jdindex == jdindex, (
             "found a loop_header for a JitDriver that does not match "
@@ -909,6 +913,40 @@ class MIFrame(object):
         from pypy.rpython.lltypesystem import rstr, lloperation
         msg = box.getref(lltype.Ptr(rstr.STR))
         lloperation.llop.debug_fatalerror(msg)
+
+    @arguments("box", "box", "box", "box", "box")
+    def opimpl_jit_debug(self, stringbox, arg1box, arg2box, arg3box, arg4box):
+        from pypy.rpython.lltypesystem import rstr
+        from pypy.rpython.annlowlevel import hlstr
+        msg = stringbox.getref(lltype.Ptr(rstr.STR))
+        debug_print('jit_debug:', hlstr(msg),
+                    arg1box.getint(), arg2box.getint(),
+                    arg3box.getint(), arg4box.getint())
+        args = [stringbox, arg1box, arg2box, arg3box, arg4box]
+        i = 4
+        while i > 0 and args[i].getint() == -sys.maxint-1:
+            i -= 1
+        assert i >= 0
+        op = self.metainterp.history.record(rop.JIT_DEBUG, args[:i+1], None)
+        self.metainterp.attach_debug_info(op)
+
+    @arguments("box")
+    def _opimpl_assert_green(self, box):
+        if not isinstance(box, Const):
+            msg = "assert_green failed at %s:%d" % (
+                self.jitcode.name,
+                self.pc)
+            if we_are_translated():
+                from pypy.rpython.annlowlevel import llstr
+                from pypy.rpython.lltypesystem import lloperation
+                lloperation.llop.debug_fatalerror(lltype.Void, llstr(msg))
+            else:
+                from pypy.rlib.jit import AssertGreenFailed
+                raise AssertGreenFailed(msg)
+
+    opimpl_int_assert_green   = _opimpl_assert_green
+    opimpl_ref_assert_green   = _opimpl_assert_green
+    opimpl_float_assert_green = _opimpl_assert_green
 
     @arguments("box")
     def opimpl_virtual_ref(self, box):
@@ -1022,8 +1060,7 @@ class MIFrame(object):
         if resumepc >= 0:
             self.pc = resumepc
         resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  metainterp.virtualref_boxes,
-                                  resumedescr)
+                                  metainterp.virtualref_boxes, resumedescr)
         self.pc = saved_pc
         self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
         # count
