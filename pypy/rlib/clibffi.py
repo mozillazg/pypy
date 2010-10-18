@@ -17,7 +17,6 @@ import os
 import sys
 import ctypes.util
 
-
 # maaaybe isinstance here would be better. Think
 _MSVC = platform.name == "msvc"
 _MINGW = platform.name == "mingw32"

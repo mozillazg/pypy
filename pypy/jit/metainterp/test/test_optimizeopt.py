@@ -3498,7 +3498,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         i0 = strlen(p0)
         jump(p0)
         """
-        self.optimize_loop(ops, 'Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not', expected)
 
     def test_addsub_const(self):
         ops = """
@@ -3904,6 +3904,15 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         """
         self.optimize_loop(ops, 'Not, Not', expected)
 
+    # ----------
+    def optimize_strunicode_loop(self, ops, spectext, optops):
+        # check with the arguments passed in
+        self.optimize_loop(ops, spectext, optops)
+        # check with replacing 'str' with 'unicode' everywhere
+        self.optimize_loop(ops.replace('str','unicode').replace('s"', 'u"'),
+                           spectext,
+                           optops.replace('str','unicode').replace('s"', 'u"'))
+
     def test_newstr_1(self):
         ops = """
         [i0]
@@ -3916,7 +3925,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         [i0]
         jump(i0)
         """
-        self.optimize_loop(ops, 'Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not', expected)
 
     def test_newstr_2(self):
         ops = """
@@ -3932,7 +3941,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         [i0, i1]
         jump(i1, i0)
         """
-        self.optimize_loop(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not', expected)
 
     def test_str_concat_1(self):
         ops = """
@@ -3953,7 +3962,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p2, p3, 0, i4, i5)
         jump(p2, p3)
         """
-        self.optimize_loop(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not', expected)
 
     def test_str_concat_vstr2_str(self):
         ops = """
@@ -3976,7 +3985,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p2, p3, 0, 2, i4)
         jump(i1, i0, p3)
         """
-        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not', expected)
 
     def test_str_concat_str_vstr2(self):
         ops = """
@@ -4000,7 +4009,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         i6 = int_add(i5, 1)      # will be killed by the backend
         jump(i1, i0, p3)
         """
-        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not', expected)
 
     def test_str_concat_str_str_str(self):
         ops = """
@@ -4027,12 +4036,12 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p3, p5, 0, i12b, i3b)
         jump(p2, p3, p5)
         """
-        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not', expected)
 
     def test_str_concat_str_cstr1(self):
         ops = """
         [p2]
-        p3 = call(0, p2, "x", descr=strconcatdescr)
+        p3 = call(0, p2, s"x", descr=strconcatdescr)
         jump(p3)
         """
         expected = """
@@ -4046,28 +4055,28 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         i5 = int_add(i4, 1)      # will be killed by the backend
         jump(p3)
         """
-        self.optimize_loop(ops, 'Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not', expected)
 
     def test_str_concat_consts(self):
         ops = """
         []
-        p1 = same_as("ab")
-        p2 = same_as("cde")
+        p1 = same_as(s"ab")
+        p2 = same_as(s"cde")
         p3 = call(0, p1, p2, descr=strconcatdescr)
         escape(p3)
         jump()
         """
         expected = """
         []
-        escape("abcde")
+        escape(s"abcde")
         jump()
         """
-        self.optimize_loop(ops, '', expected)
+        self.optimize_strunicode_loop(ops, '', expected)
 
     def test_str_slice_1(self):
         ops = """
         [p1, i1, i2]
-        p2 = call(0, p1, i1, i2, descr=slicedescr)
+        p2 = call(0, p1, i1, i2, descr=strslicedescr)
         jump(p2, i1, i2)
         """
         expected = """
@@ -4077,12 +4086,12 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p1, p2, i1, 0, i3)
         jump(p2, i1, i2)
         """
-        self.optimize_loop(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not', expected)
 
     def test_str_slice_2(self):
         ops = """
         [p1, i2]
-        p2 = call(0, p1, 0, i2, descr=slicedescr)
+        p2 = call(0, p1, 0, i2, descr=strslicedescr)
         jump(p2, i2)
         """
         expected = """
@@ -4091,13 +4100,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p1, p2, 0, 0, i2)
         jump(p2, i2)
         """
-        self.optimize_loop(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not', expected)
 
     def test_str_slice_3(self):
         ops = """
         [p1, i1, i2, i3, i4]
-        p2 = call(0, p1, i1, i2, descr=slicedescr)
-        p3 = call(0, p2, i3, i4, descr=slicedescr)
+        p2 = call(0, p1, i1, i2, descr=strslicedescr)
+        p3 = call(0, p2, i3, i4, descr=strslicedescr)
         jump(p3, i1, i2, i3, i4)
         """
         expected = """
@@ -4109,12 +4118,12 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p1, p3, i6, 0, i5)
         jump(p3, i1, i2, i3, i4)
         """
-        self.optimize_loop(ops, 'Not, Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not, Not, Not', expected)
 
     def test_str_slice_getitem1(self):
         ops = """
         [p1, i1, i2, i3]
-        p2 = call(0, p1, i1, i2, descr=slicedescr)
+        p2 = call(0, p1, i1, i2, descr=strslicedescr)
         i4 = strgetitem(p2, i3)
         escape(i4)
         jump(p1, i1, i2, i3)
@@ -4127,7 +4136,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i4)
         jump(p1, i1, i2, i3)
         """
-        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not, Not', expected)
 
     def test_str_slice_plain(self):
         ops = """
@@ -4135,7 +4144,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         p1 = newstr(2)
         strsetitem(p1, 0, i3)
         strsetitem(p1, 1, i4)
-        p2 = call(0, p1, 1, 2, descr=slicedescr)
+        p2 = call(0, p1, 1, 2, descr=strslicedescr)
         i5 = strgetitem(p2, 0)
         escape(i5)
         jump(i3, i4)
@@ -4145,12 +4154,12 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i4)
         jump(i3, i4)
         """
-        self.optimize_loop(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not', expected)
 
     def test_str_slice_concat(self):
         ops = """
         [p1, i1, i2, p2]
-        p3 = call(0, p1, i1, i2, descr=slicedescr)
+        p3 = call(0, p1, i1, i2, descr=strslicedescr)
         p4 = call(0, p3, p2, descr=strconcatdescr)
         jump(p4, i1, i2, p2)
         """
@@ -4166,10 +4175,10 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         copystrcontent(p2, p4, 0, i3, i4b)
         jump(p4, i1, i2, p2)
         """
-        self.optimize_loop(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop(ops, 'Not, Not, Not, Not', expected)
 
     # ----------
-    def optimize_loop_extradescrs(self, ops, spectext, optops):
+    def optimize_strunicode_loop_extradescrs(self, ops, spectext, optops):
         from pypy.jit.metainterp.optimizeopt import string
         def my_callinfo_for_oopspec(oopspecindex):
             calldescrtype = type(LLtypeMixin.strequaldescr)
@@ -4184,7 +4193,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         saved = string.callinfo_for_oopspec
         try:
             string.callinfo_for_oopspec = my_callinfo_for_oopspec
-            self.optimize_loop(ops, spectext, optops)
+            self.optimize_strunicode_loop(ops, spectext, optops)
         finally:
             string.callinfo_for_oopspec = saved
 
@@ -4195,7 +4204,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, p2)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not', ops)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not', ops)
 
     def test_str_equal_noop2(self):
         ops = """
@@ -4220,12 +4229,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, p2, p3)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_slice1(self):
         ops = """
         [p1, i1, i2, p3]
-        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        p4 = call(0, p1, i1, i2, descr=strslicedescr)
         i0 = call(0, p4, p3, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
@@ -4237,12 +4247,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, i1, i2, p3)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_slice2(self):
         ops = """
         [p1, i1, i2, p3]
-        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        p4 = call(0, p1, i1, i2, descr=strslicedescr)
         i0 = call(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
@@ -4254,13 +4265,14 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, i1, i2, p3)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_slice3(self):
         ops = """
         [p1, i1, i2, p3]
         guard_nonnull(p3) []
-        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        p4 = call(0, p1, i1, i2, descr=strslicedescr)
         i0 = call(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
@@ -4273,13 +4285,14 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, i1, i2, p3)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_slice4(self):
         ops = """
         [p1, i1, i2]
-        p3 = call(0, p1, i1, i2, descr=slicedescr)
-        i0 = call(0, p3, "x", descr=strequaldescr)
+        p3 = call(0, p1, i1, i2, descr=strslicedescr)
+        i0 = call(0, p3, s"x", descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2)
         """
@@ -4290,12 +4303,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, i1, i2)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_slice5(self):
         ops = """
         [p1, i1, i2, i3]
-        p4 = call(0, p1, i1, i2, descr=slicedescr)
+        p4 = call(0, p1, i1, i2, descr=strslicedescr)
         p5 = newstr(1)
         strsetitem(p5, 0, i3)
         i0 = call(0, p5, p4, descr=strequaldescr)
@@ -4309,7 +4323,8 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1, i1, i2, i3)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not, Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not, Not, Not',
+                                                  expected)
 
     def test_str_equal_none1(self):
         ops = """
@@ -4324,7 +4339,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_none2(self):
         ops = """
@@ -4339,30 +4354,30 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_nonnull1(self):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, "hello world", descr=strequaldescr)
+        i0 = call(0, p1, s"hello world", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
         expected = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, "hello world", descr=streq_nonnull_descr)
+        i0 = call(0, p1, s"hello world", descr=streq_nonnull_descr)
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_nonnull2(self):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, "", descr=strequaldescr)
+        i0 = call(0, p1, s"", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4374,13 +4389,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_nonnull3(self):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, "x", descr=strequaldescr)
+        i0 = call(0, p1, s"x", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4391,13 +4406,13 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_nonnull4(self):
         ops = """
         [p1, p2]
         p4 = call(0, p1, p2, descr=strconcatdescr)
-        i0 = call(0, "hello world", p4, descr=strequaldescr)
+        i0 = call(0, s"hello world", p4, descr=strequaldescr)
         escape(i0)
         jump(p1, p2)
         """
@@ -4412,17 +4427,17 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         i5 = strlen(p2)
         i6 = int_add(i4, i5)      # will be killed by the backend
         copystrcontent(p2, p4, 0, i4, i5)
-        i0 = call(0, "hello world", p4, descr=streq_nonnull_descr)
+        i0 = call(0, s"hello world", p4, descr=streq_nonnull_descr)
         escape(i0)
         jump(p1, p2)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not', expected)
 
     def test_str_equal_chars0(self):
         ops = """
         [i1]
         p1 = newstr(0)
-        i0 = call(0, p1, "", descr=strequaldescr)
+        i0 = call(0, p1, s"", descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4431,14 +4446,14 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(1)
         jump(i1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_chars1(self):
         ops = """
         [i1]
         p1 = newstr(1)
         strsetitem(p1, 0, i1)
-        i0 = call(0, p1, "x", descr=strequaldescr)
+        i0 = call(0, p1, s"x", descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4448,7 +4463,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(i1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_chars2(self):
         ops = """
@@ -4456,7 +4471,7 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         p1 = newstr(2)
         strsetitem(p1, 0, i1)
         strsetitem(p1, 1, i2)
-        i0 = call(0, p1, "xy", descr=strequaldescr)
+        i0 = call(0, p1, s"xy", descr=strequaldescr)
         escape(i0)
         jump(i1, i2)
         """
@@ -4465,16 +4480,16 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         p1 = newstr(2)
         strsetitem(p1, 0, i1)
         strsetitem(p1, 1, i2)
-        i0 = call(0, p1, "xy", descr=streq_lengthok_descr)
+        i0 = call(0, p1, s"xy", descr=streq_lengthok_descr)
         escape(i0)
         jump(i1, i2)
         """
-        self.optimize_loop_extradescrs(ops, 'Not, Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not, Not', expected)
 
     def test_str_equal_chars3(self):
         ops = """
         [p1]
-        i0 = call(0, "x", p1, descr=strequaldescr)
+        i0 = call(0, s"x", p1, descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4484,14 +4499,14 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(i0)
         jump(p1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
     def test_str_equal_lengthmismatch1(self):
         ops = """
         [i1]
         p1 = newstr(1)
         strsetitem(p1, 0, i1)
-        i0 = call(0, "xy", p1, descr=strequaldescr)
+        i0 = call(0, s"xy", p1, descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4500,12 +4515,33 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         escape(0)
         jump(i1)
         """
-        self.optimize_loop_extradescrs(ops, 'Not', expected)
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', expected)
 
-    # XXX unicode operations
-    # XXX str2unicode
+    def test_str2unicode_constant(self):
+        ops = """
+        []
+        p0 = call(0, "xy", descr=s2u_descr)      # string -> unicode
+        escape(p0)
+        jump()
+        """
+        expected = """
+        []
+        escape(u"xy")
+        jump()
+        """
+        self.optimize_strunicode_loop_extradescrs(ops, '', expected)
 
-
+    def test_str2unicode_nonconstant(self):
+        ops = """
+        [p0]
+        p1 = call(0, p0, descr=s2u_descr)      # string -> unicode
+        escape(p1)
+        jump(p1)
+        """
+        self.optimize_strunicode_loop_extradescrs(ops, 'Not', ops)
+        # more generally, supporting non-constant but virtual cases is
+        # not obvious, because of the exception UnicodeDecodeError that
+        # can be raised by ll_str2unicode()
 
 
 ##class TestOOtype(OptimizeOptTest, OOtypeMixin):
