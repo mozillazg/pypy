@@ -32,6 +32,47 @@ def size_from_shape(shape):
     else:
         return 0
 
+def broadcast_shapes(a_shape, a_strides, b_shape, b_strides):
+    a_dim = len(a_shape)
+    b_dim = len(b_shape)
+
+    smaller_dim = a_dim if a_dim < b_dim else b_dim
+
+    if a_dim > b_dim:
+        result = a_shape
+        larger_dim = a_dim
+        smaller_dim = b_dim
+        shorter_strides = b_strides
+    else:
+        result = b_shape
+        larger_dim = b_dim
+        smaller_dim = a_dim
+        shorter_strides = a_strides
+
+    i_a = a_dim - 1
+    i_b = b_dim - 1
+    for i in range(smaller_dim):
+        assert i_a >= 0
+        a = a_shape[i_a]
+
+        assert i_b >= 0
+        b = b_shape[i_b]
+
+        if a == b or a == 1 or b == 1:
+            i_a -= 1
+            i_b -= 1
+            result[len(result) - 1 - i] = a if a > b else b
+        else:
+            raise ValueError("frames are not aligned") # FIXME: applevel?
+    
+    if a_dim < b_dim:
+        i_b += 1
+        a_strides = [0] * i_b + a_strides
+    else:
+        i_a += 1
+        b_strides = [0] * i_a + b_strides
+    return result, a_strides, b_strides
+
 def normalize_slice_starts(slice_starts, shape):
     for i in range(len(slice_starts)):
         if slice_starts[i] < 0:

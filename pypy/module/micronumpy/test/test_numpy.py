@@ -425,6 +425,46 @@ class TestDType(object):
         for w_xs, typecode in data:
             assert typecode == infer_from_iterable(space, w_xs).typecode
 
+class TestArraySupport(object):
+    def test_broadcast_shapes(self, space):
+        from pypy.module.micronumpy.array import broadcast_shapes
+        from pypy.module.micronumpy.array import stride_row as stride
+
+        def test(shape_a, shape_b, expected_result, expected_strides_a=None, expected_strides_b=None):
+            strides_a = [stride(shape_a, i) for i, x in enumerate(shape_a)]
+            strides_a_save = strides_a[:]
+
+            strides_b = [stride(shape_b, i) for i, x in enumerate(shape_b)]
+            strides_b_save = strides_b[:]
+
+            result_shape, result_strides_a, result_strides_b = broadcast_shapes(shape_a, strides_a, shape_b, strides_b)
+            assert result_shape == expected_result
+
+            if expected_strides_a:
+                assert result_strides_a == expected_strides_a
+            else:
+                assert result_strides_a == strides_a_save
+
+            if expected_strides_b:
+                assert result_strides_b == expected_strides_b
+            else:
+                assert result_strides_b == strides_b_save
+
+        shape_a = [256, 256, 3]
+        shape_b = [3]
+
+        test([256, 256, 3], [3],
+             expected_result=[256, 256, 3],
+             expected_strides_b=[0, 0, 1])
+
+        test([3], [256, 256, 3],
+             expected_result=[256, 256, 3],
+             expected_strides_a=[0, 0, 1])
+
+        test([8, 1, 6, 1], [7, 1, 5],
+             expected_result=[8, 7, 6, 5],
+             expected_strides_b=[0, 5, 5, 1])
+
 class TestMicroArray(object):
     @py.test.mark.xfail # XXX: return types changed
     def test_index2strides(self, space):
