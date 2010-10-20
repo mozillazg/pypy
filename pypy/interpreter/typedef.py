@@ -262,16 +262,7 @@ def _builduserclswithfeature(config, supercls, *features):
                 return self.slots_w[index]
         add(Proto)
 
-    wantdict = "dict" in features
-    if wantdict and config.objspace.std.withinlineddict:
-        from pypy.objspace.std.objectobject import W_ObjectObject
-        from pypy.objspace.std.inlinedict import make_mixin
-        if supercls is W_ObjectObject:
-            Mixin = make_mixin(config)
-            add(Mixin)
-            wantdict = False
-
-    if wantdict:
+    if "dict" in features:
         base_user_setup = supercls.user_setup.im_func
         if "user_setup" in body:
             base_user_setup = body["user_setup"]

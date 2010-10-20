@@ -237,15 +237,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "about dictionaries",
                    default=False),
 
-        BoolOption("withinlineddict",
-                   "make instances more compact by revoming a level of indirection",
-                   default=False),
-
         BoolOption("withmapdict",
                    "make instances really small but slow without the JIT",
                    default=False,
-                   requires=[("objspace.std.withinlineddict", False),
-                             ("objspace.std.withsharingdict", False),
+                   requires=[("objspace.std.withsharingdict", False),
                              ("objspace.std.getattributeshortcut", True),
                              ("objspace.std.withtypeversion", True),
                        ]),
@@ -336,7 +331,6 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(newshortcut=True)        
         if type_system != 'ootype':
             config.objspace.std.suggest(withsharingdict=True)
-        config.objspace.std.suggest(withinlineddict=True)
 
     # extra costly optimizations only go in level 3
     if level == '3':
