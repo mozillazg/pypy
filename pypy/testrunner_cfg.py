@@ -15,5 +15,8 @@ def collect_one_testdir(testdirs, reldir, tests):
 
 
 _cherrypick = os.getenv('PYPYCHERRYPICK', '')
+
+_cherrypick = 'module/imp'
+
 if _cherrypick:
     cherrypick = _cherrypick.split(':')
