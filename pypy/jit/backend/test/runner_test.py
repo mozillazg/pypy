@@ -2067,7 +2067,7 @@ class LLtypeBackendTest(BaseBackendTest):
             res = self.execute_operation(rop.GETFIELD_GC, [BoxPtr(s_gcref)],
                                          'int', descr=descrfld_x)
             assert res.value == expected, (
-                "%r: got %r, expected %r" % (RESTYPE, x, expected))
+                "%r: got %r, expected %r" % (RESTYPE, res.value, expected))
 
     def test_short_result_of_getarrayitem_direct(self):
         # Test that a getarrayitem that returns a CHAR, SHORT or INT, signed
