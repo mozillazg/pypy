@@ -87,7 +87,7 @@ class SharedDictImplementation(W_DictMultiObject):
             self._as_rdict().impl_fallback_setitem(w_key, w_value)
 
     @unroll_safe
-    def impl_setitem_str(self, key, w_value, shadows_type=True):
+    def impl_setitem_str(self, key, w_value):
         i = self.structure.lookup_position(key)
         if i != -1:
             self.entries[i] = w_value

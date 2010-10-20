@@ -291,7 +291,7 @@ class BaseMapdictObject: # slightly evil to make it inherit from W_Root
     def getdictvalue(self, space, attrname):
         return self._get_mapdict_map().read(self, (attrname, DICT))
 
-    def setdictvalue(self, space, attrname, w_value, shadows_type=True):
+    def setdictvalue(self, space, attrname, w_value):
         return self._get_mapdict_map().write(self, (attrname, DICT), w_value)
 
     def deldictvalue(self, space, w_name):
@@ -506,8 +506,8 @@ class MapDictImplementation(W_DictMultiObject):
     def impl_getitem_str(self, key):
         return self.w_obj.getdictvalue(self.space, key)
 
-    def impl_setitem_str(self,  key, w_value, shadows_type=True):
-        flag = self.w_obj.setdictvalue(self.space, key, w_value, shadows_type)
+    def impl_setitem_str(self,  key, w_value):
+        flag = self.w_obj.setdictvalue(self.space, key, w_value)
         assert flag
 
     def impl_setitem(self,  w_key, w_value):
@@ -587,8 +587,6 @@ class MapDictIteratorImplementation(IteratorImplementation):
 
 # ____________________________________________________________
 # Magic caching
-
-# XXX we also would like getdictvalue_attr_is_in_class() above
 
 class CacheEntry(object):
     map = None

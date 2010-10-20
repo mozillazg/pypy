@@ -239,14 +239,12 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
 
         BoolOption("withinlineddict",
                    "make instances more compact by revoming a level of indirection",
-                   default=False,
-                   requires=[("objspace.std.withshadowtracking", False)]),
+                   default=False),
 
         BoolOption("withmapdict",
                    "make instances really small but slow without the JIT",
                    default=False,
-                   requires=[("objspace.std.withshadowtracking", False),
-                             ("objspace.std.withinlineddict", False),
+                   requires=[("objspace.std.withinlineddict", False),
                              ("objspace.std.withsharingdict", False),
                              ("objspace.std.getattributeshortcut", True),
                              ("objspace.std.withtypeversion", True),
@@ -265,12 +263,6 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    # weakrefs needed, because of get_subclasses()
                    requires=[("translation.rweakref", True)]),
 
-        BoolOption("withshadowtracking",
-                   "track whether an instance attribute shadows a type"
-                   " attribute",
-                   default=False,
-                   requires=[("objspace.std.withtypeversion", True),
-                             ("translation.rweakref", True)]),
         BoolOption("withmethodcache",
                    "try to cache method lookups",
                    default=False,
