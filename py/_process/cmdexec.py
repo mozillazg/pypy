@@ -30,8 +30,8 @@ def cmdexec(cmd):
             err = unicode(err, process.stderr.encoding or default_encoding)
         except UnicodeDecodeError:
             print 'encoding:', process.stdout.encoding or default_encoding
-            print 'stdout:', repr(stdout)
-            print 'stderr:', repr(stderr)
+            print 'stdout:', repr(out)
+            print 'stderr:', repr(err)
             raise
             
     status = process.poll()
