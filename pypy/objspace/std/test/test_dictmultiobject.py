@@ -632,7 +632,6 @@ class Config:
             withsharingdict = False
             withsmalldicts = False
             withcelldict = False
-            withshadowtracking = False
         class opcodes:
             CALL_LIKELY_BUILTIN = False
 

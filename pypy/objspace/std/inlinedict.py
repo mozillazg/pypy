@@ -91,14 +91,8 @@ def make_inlinedict_mixin(dictimplclass, attrname):
             w_dict = self.getdict()
             return w_dict.getitem_str(attr)
 
-        def getdictvalue_attr_is_in_class(self, space, attr):
-            return self.getdictvalue(space, attr)
-
-        def setdictvalue(self, space, attr, w_value, shadows_type=True):
+        def setdictvalue(self, space, attr, w_value):
             if self._inlined_dict_valid():
-                # XXX so far we ignore shadows_type, which is a small
-                # performance-degradation if the JIT is not used (i.e. shadow
-                # tracking does not work). Maybe we don't care.
                 self.impl_setitem_str(attr, w_value)
                 return True
             w_dict = self.getdict()

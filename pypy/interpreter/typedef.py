@@ -290,15 +290,6 @@ def _builduserclswithfeature(config, supercls, *features):
             def setclass(self, space, w_subtype):
                 # only used by descr_set___class__
                 self.w__class__ = w_subtype
-                if space.config.objspace.std.withshadowtracking:
-                    self.w__dict__.set_shadows_anything()
-
-            def getdictvalue_attr_is_in_class(self, space, name):
-                w_dict = self.w__dict__
-                if space.config.objspace.std.withshadowtracking:
-                    if not w_dict.shadows_anything():
-                        return None
-                return space.finditem_str(w_dict, name)
 
         add(Proto)
 

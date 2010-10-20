@@ -59,7 +59,6 @@ def test_rweakref_required():
 
     assert not conf.objspace.std.withtypeversion
     assert not conf.objspace.std.withmethodcache
-    assert not conf.objspace.std.withshadowtracking
 
 def test_check_documentation():
     def check_file_exists(fn):
