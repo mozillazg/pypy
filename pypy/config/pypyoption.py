@@ -228,10 +228,6 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    requires=[("objspace.opcodes.CALL_LIKELY_BUILTIN", False),
                              ("objspace.honor__builtins__", False)]),
 
-        BoolOption("withsharingdict",
-                   "use dictionaries that share the keys part",
-                   default=False),
-
         BoolOption("withdictmeasurement",
                    "create huge files with masses of information "
                    "about dictionaries",
@@ -240,8 +236,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
         BoolOption("withmapdict",
                    "make instances really small but slow without the JIT",
                    default=False,
-                   requires=[("objspace.std.withsharingdict", False),
-                             ("objspace.std.getattributeshortcut", True),
+                   requires=[("objspace.std.getattributeshortcut", True),
                              ("objspace.std.withtypeversion", True),
                        ]),
 
@@ -329,8 +324,6 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(optimized_list_getitem=True)
         config.objspace.std.suggest(getattributeshortcut=True)
         config.objspace.std.suggest(newshortcut=True)        
-        if type_system != 'ootype':
-            config.objspace.std.suggest(withsharingdict=True)
 
     # extra costly optimizations only go in level 3
     if level == '3':
@@ -359,7 +352,7 @@ def set_pypy_opt_level(config, level):
     # extra optimizations with the JIT
     if level == 'jit':
         config.objspace.std.suggest(withcelldict=True)
-        #config.objspace.std.suggest(withmapdict=True)
+        config.objspace.std.suggest(withmapdict=True)
 
 
 def enable_allworkingmodules(config):

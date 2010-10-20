@@ -49,10 +49,6 @@ class W_DictMultiObject(W_Object):
         elif space.config.objspace.std.withdictmeasurement:
             assert w_type is None
             return MeasuringDictImplementation(space)
-        elif space.config.objspace.std.withsharingdict and instance:
-            from pypy.objspace.std.sharingdict import SharedDictImplementation
-            assert w_type is None
-            return SharedDictImplementation(space)
         elif instance or strdict or module:
             assert w_type is None
             return StrDictImplementation(space)
