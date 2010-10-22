@@ -1,4 +1,4 @@
-from pypy.rlib import jit, objectmodel
+from pypy.rlib import jit, objectmodel, debug
 
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
@@ -10,6 +10,9 @@ from pypy.objspace.std.objectobject import W_ObjectObject
 # attribute shapes
 
 NUM_DIGITS = 4
+NUM_DIGITS_POW2 = 1 << NUM_DIGITS
+# note: we use "x * NUM_DIGITS_POW2" instead of "x << NUM_DIGITS" because
+# we want to propagate knowledge that the result cannot be negative
 
 class AbstractAttribute(object):
     _immutable_fields_ = ['w_cls']
@@ -69,8 +72,10 @@ class AbstractAttribute(object):
         attr = self._get_new_attr(selector[0], selector[1])
         oldattr = obj._get_mapdict_map()
         if not jit.we_are_jitted():
-            oldattr._size_estimate += attr.size_estimate() - oldattr.size_estimate()
-            assert oldattr.size_estimate() >= oldattr.length()
+            size_est = (oldattr._size_estimate + attr.size_estimate()
+                                               - oldattr.size_estimate())
+            assert size_est >= (oldattr.length() * NUM_DIGITS_POW2)
+            oldattr._size_estimate = size_est
         if attr.length() > obj._mapdict_storage_length():
             # note that attr.size_estimate() is always at least attr.length()
             new_storage = [None] * attr.size_estimate()
@@ -188,7 +193,7 @@ class PlainAttribute(AbstractAttribute):
         self.selector = selector
         self.position = back.length()
         self.back = back
-        self._size_estimate = self.length() << NUM_DIGITS
+        self._size_estimate = self.length() * NUM_DIGITS_POW2
 
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.selector)
@@ -384,12 +389,11 @@ def get_subclass_of_correct_size(space, cls, w_type):
     map = w_type.terminator
     classes = memo_get_subclass_of_correct_size(space, cls)
     size = map.size_estimate()
-    if not size:
-        size = 1
-    try:
-        return classes[size - 1]
-    except IndexError:
-        return classes[-1]
+    debug.check_nonneg(size)
+    if size < len(classes):
+        return classes[size]
+    else:
+        return classes[len(classes)-1]
 get_subclass_of_correct_size._annspecialcase_ = "specialize:arg(1)"
 
 NUM_SUBCLASSES = 10 # XXX tweak this number
@@ -403,6 +407,7 @@ def memo_get_subclass_of_correct_size(space, supercls):
         result = []
         for i in range(1, NUM_SUBCLASSES+1):
             result.append(_make_subclass_size_n(supercls, i))
+        result.insert(0, result[0])    # for 0, use the same class as for 1
         _subclass_cache[key] = result
         return result
 memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
