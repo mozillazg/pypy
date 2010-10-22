@@ -136,9 +136,10 @@ class PyPyCJITTests(object):
         assert opslogfile.check()
         log = logparser.parse_log_file(str(opslogfile))
         parts = logparser.extract_category(log, 'jit-log-opt-')
+        self.rawloops = [part for part in parts
+                         if not from_entry_bridge(part, parts)]
         # skip entry bridges, they can contain random things
-        self.loops = [parse(part, no_namespace=True) for part in parts
-                          if not from_entry_bridge(part, parts)]
+        self.loops = [parse(part, no_namespace=True) for part in self.rawloops]
         self.sliced_loops = [] # contains all bytecodes of all loops
         self.total_ops = 0
         for loop in self.loops:
@@ -162,12 +163,11 @@ class PyPyCJITTests(object):
         return [ops for ops in self.sliced_loops if ops.bytecode == name]
 
     def print_loops(self):
-        for loop in self.loops:
+        for rawloop in self.rawloops:
             print
             print '@' * 79
             print
-            for op in loop.operations:
-                print op
+            print rawloop.rstrip()
         print
         print '@' * 79
 
