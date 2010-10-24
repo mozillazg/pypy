@@ -327,6 +327,18 @@ class AppError(Exception):
 class PyPyTestFunction(py.test.collect.Function):
     # All PyPy test items catch and display OperationErrors specially.
     #
+    def runtest(self):
+        leakfinder.start_tracking_allocations()
+        try:
+            self._runtest()
+        finally:
+            if leakfinder.TRACK_ALLOCATIONS:
+                leaks = leakfinder.stop_tracking_allocations(False)
+            else:
+                leaks = None   # stop_tracking_allocations() already called
+        if leaks:        # check for leaks, but only if the test passed so far
+            raise leakfinder.MallocMismatch(leaks)
+
     def execute_appex(self, space, target, *args):
         try:
             target(*args)
@@ -353,16 +365,9 @@ class IntTestFunction(PyPyTestFunction):
     def _keywords(self):
         return super(IntTestFunction, self)._keywords() + ['interplevel']
 
-    def runtest(self):
+    def _runtest(self):
         try:
-            leakfinder.start_tracking_allocations()
-            try:
-                super(IntTestFunction, self).runtest()
-            finally:
-                if leakfinder.TRACK_ALLOCATIONS:
-                    leaks = leakfinder.stop_tracking_allocations(False)
-                else:
-                    leaks = None   # stop_tracking_allocations() already called
+            super(IntTestFunction, self).runtest()
         except OperationError, e:
             check_keyboard_interrupt(e)
             raise
@@ -381,8 +386,6 @@ class IntTestFunction(PyPyTestFunction):
                 _pygame_imported = True
                 assert option.view, ("should not invoke Pygame "
                                      "if conftest.option.view is False")
-        if leaks:        # check for leaks, but only if the test passed so far
-            raise leakfinder.MallocMismatch(leaks)
 
 class AppTestFunction(PyPyTestFunction):
     def _prunetraceback(self, traceback):
@@ -395,7 +398,7 @@ class AppTestFunction(PyPyTestFunction):
     def _keywords(self):
         return ['applevel'] + super(AppTestFunction, self)._keywords()
 
-    def runtest(self):
+    def _runtest(self):
         target = self.obj
         if option.runappdirect:
             return target()
@@ -427,7 +430,7 @@ class AppTestMethod(AppTestFunction):
                     space.setattr(w_instance, space.wrap(name[2:]), 
                                   getattr(instance, name)) 
 
-    def runtest(self):
+    def _runtest(self):
         target = self.obj
         if option.runappdirect:
             return target()
