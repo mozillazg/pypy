@@ -328,16 +328,29 @@ class PyPyTestFunction(py.test.collect.Function):
     # All PyPy test items catch and display OperationErrors specially.
     #
     def runtest(self):
-        leakfinder.start_tracking_allocations()
+        self.runtest_open()
         try:
-            self._runtest()
+            self.runtest_perform()
         finally:
-            if leakfinder.TRACK_ALLOCATIONS:
-                leaks = leakfinder.stop_tracking_allocations(False)
-            else:
-                leaks = None   # stop_tracking_allocations() already called
-        if leaks:        # check for leaks, but only if the test passed so far
-            raise leakfinder.MallocMismatch(leaks)
+            self.runtest_close()
+        self.runtest_finish()
+
+    def runtest_open(self):
+        leakfinder.start_tracking_allocations()
+
+    def runtest_perform(self):
+        super(PyPyTestFunction, self).runtest()
+
+    def runtest_close(self):
+        if leakfinder.TRACK_ALLOCATIONS:
+            self._pypytest_leaks = leakfinder.stop_tracking_allocations(False)
+        else:            # stop_tracking_allocations() already called
+            self._pypytest_leaks = None
+
+    def runtest_finish(self):
+        # check for leaks, but only if the test passed so far
+        if self._pypytest_leaks:
+            raise leakfinder.MallocMismatch(self._pypytest_leaks)
 
     def execute_appex(self, space, target, *args):
         try:
@@ -365,9 +378,9 @@ class IntTestFunction(PyPyTestFunction):
     def _keywords(self):
         return super(IntTestFunction, self)._keywords() + ['interplevel']
 
-    def _runtest(self):
+    def runtest_perform(self):
         try:
-            super(IntTestFunction, self).runtest()
+            super(IntTestFunction, self).runtest_perform()
         except OperationError, e:
             check_keyboard_interrupt(e)
             raise
@@ -380,12 +393,15 @@ class IntTestFunction(PyPyTestFunction):
                         py.test.skip('%s: %s' % (e.__class__.__name__, e))
                 cls = cls.__bases__[0]
             raise
+
+    def runtest_finish(self):
         if 'pygame' in sys.modules:
             global _pygame_imported
             if not _pygame_imported:
                 _pygame_imported = True
                 assert option.view, ("should not invoke Pygame "
                                      "if conftest.option.view is False")
+        super(IntTestFunction, self).runtest_finish()
 
 class AppTestFunction(PyPyTestFunction):
     def _prunetraceback(self, traceback):
@@ -398,7 +414,7 @@ class AppTestFunction(PyPyTestFunction):
     def _keywords(self):
         return ['applevel'] + super(AppTestFunction, self)._keywords()
 
-    def _runtest(self):
+    def runtest_perform(self):
         target = self.obj
         if option.runappdirect:
             return target()
@@ -430,7 +446,7 @@ class AppTestMethod(AppTestFunction):
                     space.setattr(w_instance, space.wrap(name[2:]), 
                                   getattr(instance, name)) 
 
-    def _runtest(self):
+    def runtest_perform(self):
         target = self.obj
         if option.runappdirect:
             return target()
