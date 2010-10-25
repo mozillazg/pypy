@@ -193,10 +193,12 @@ def get_new_method_def(space):
     if state.new_method_def:
         return state.new_method_def
     from pypy.module.cpyext.modsupport import PyMethodDef
-    ptr = lltype.malloc(PyMethodDef, flavor="raw", zero=True)
-    ptr.c_ml_name = rffi.str2charp("__new__")
+    ptr = lltype.malloc(PyMethodDef, flavor="raw", zero=True,
+                        immortal=True)
+    ptr.c_ml_name = rffi.str2charp_immortal("__new__")
     rffi.setintfield(ptr, 'c_ml_flags', METH_VARARGS | METH_KEYWORDS)
-    ptr.c_ml_doc = rffi.str2charp("T.__new__(S, ...) -> a new object with type S, a subtype of T")
+    ptr.c_ml_doc = rffi.str2charp_immortal(
+        "T.__new__(S, ...) -> a new object with type S, a subtype of T")
     state.new_method_def = ptr
     return ptr
 
