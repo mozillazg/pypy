@@ -53,29 +53,6 @@ def dict_reversed__ANY(space, w_dict):
 # This can return when multimethods have been fixed
 #dict_str        = StdObjSpace.str
 
-# default application-level implementations for some operations
-# most of these (notably not popitem and update*) are overwritten
-# in dictmultiobject
-# gateway is imported in the stdtypedef module
-app = gateway.applevel('''
-
-    # in the following functions we use dict.__setitem__ instead of
-    # d[k]=...  because when a subclass of dict override __setitem__,
-    # CPython does not call it when doing builtin operations.  The
-    # same for other operations.
-
-    def popitem(d):
-        for k in dict.iterkeys(d):
-            break
-        else:
-            raise KeyError("popitem(): dictionary is empty")
-        v = dict.__getitem__(d, k)
-        dict.__delitem__(d, k)
-        return k, v
-''', filename=__file__)
-
-dict_popitem__ANY            = app.interphook("popitem")
-
 register_all(vars(), globals())
 
 @gateway.unwrap_spec(ObjSpace, W_Root, W_Root, W_Root)

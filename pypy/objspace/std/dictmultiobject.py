@@ -836,6 +836,16 @@ def dict_pop__DictMulti_ANY(space, w_dict, w_key, w_defaults):
         w_dict.delitem(w_key)
         return w_item
 
+def dict_popitem__DictMulti(space, w_dict):
+    # XXX should somehow use the same trick as CPython: saving the index
+    # of the last popped item in the hash table, so that the next call to
+    # popitem() can be more efficient, instead of always starting from the
+    # beginning of the hash table.
+    iterator = w_dict.iter()
+    w_key, w_value = iterator.next()
+    w_dict.delitem(w_key)
+    return space.newtuple([w_key, w_value])
+
 app = gateway.applevel('''
     def dictrepr(currently_in_repr, d):
         # Now we only handle one implementation of dicts, this one.
