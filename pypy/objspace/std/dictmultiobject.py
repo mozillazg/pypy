@@ -645,7 +645,7 @@ def init__DictMulti(space, w_dict, __args__):
     w_src, w_kwds = __args__.parse_obj(
             None, 'dict',
             init_signature, # signature
-            init_defaults)                           # default argument
+            init_defaults)  # default argument
     if w_src is None:
         pass
     elif space.findattr(w_src, space.wrap("keys")) is None:
@@ -664,6 +664,9 @@ def init__DictMulti(space, w_dict, __args__):
     if space.is_true(w_kwds):
         from pypy.objspace.std.dicttype import update1
         update1(space, w_dict, w_kwds)
+
+def dict_update__DictMulti(space, w_dict, __args__):
+    init__DictMulti(space, w_dict, __args__)
 
 def getitem__DictMulti_ANY(space, w_dict, w_key):
     w_value = w_dict.getitem(w_key)
