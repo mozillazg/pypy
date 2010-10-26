@@ -90,51 +90,17 @@ app = gateway.applevel('''
         dict.__delitem__(d, k)
         return k, v
 
-    def get(d, k, v=None):
-        if k in d:
-            return dict.__getitem__(d, k)
-        else:
-            return v
-
     def setdefault(d, k, v=None):
         if k in d:
             return dict.__getitem__(d, k)
         else:
             dict.__setitem__(d, k, v)
             return v
-
-    def pop(d, k, defaults):     # XXX defaults is actually *defaults
-        if len(defaults) > 1:
-            raise TypeError, "pop expected at most 2 arguments, got %d" % (
-                1 + len(defaults))
-        try:
-            v = dict.__getitem__(d, k)
-            dict.__delitem__(d, k)
-        except KeyError, e:
-            if defaults:
-                return defaults[0]
-            else:
-                raise e
-        return v
-
-    def iteritems(d):
-        return iter(dict.items(d))
-
-    def iterkeys(d):
-        return iter(dict.keys(d))
-
-    def itervalues(d):
-        return iter(dict.values(d))
 ''', filename=__file__)
 
 dict_update__ANY             = app.interphook("update")
 dict_popitem__ANY            = app.interphook("popitem")
-dict_get__ANY_ANY_ANY        = app.interphook("get")
 dict_setdefault__ANY_ANY_ANY = app.interphook("setdefault")
-dict_pop__ANY_ANY            = app.interphook("pop")
-dict_iteritems__ANY          = app.interphook("iteritems")
-dict_iterkeys__ANY           = app.interphook("iterkeys")
-dict_itervalues__ANY         = app.interphook("itervalues")
 update1                      = app.interphook("update1")
 
 register_all(vars(), globals())
