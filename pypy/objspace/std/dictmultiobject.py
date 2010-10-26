@@ -810,6 +810,15 @@ def dict_get__DictMulti_ANY_ANY(space, w_dict, w_key, w_default):
     else:
         return w_default
 
+def dict_setdefault__DictMulti_ANY_ANY(space, w_dict, w_key, w_default):
+    # XXX should be more efficient, with only one dict lookup
+    w_value = w_dict.getitem(w_key)
+    if w_value is not None:
+        return w_value
+    else:
+        w_dict.setitem(w_key, w_default)
+        return w_default
+
 def dict_pop__DictMulti_ANY(space, w_dict, w_key, w_defaults):
     defaults = space.listview(w_defaults)
     len_defaults = len(defaults)

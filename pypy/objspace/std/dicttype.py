@@ -72,17 +72,9 @@ app = gateway.applevel('''
         v = dict.__getitem__(d, k)
         dict.__delitem__(d, k)
         return k, v
-
-    def setdefault(d, k, v=None):
-        if k in d:
-            return dict.__getitem__(d, k)
-        else:
-            dict.__setitem__(d, k, v)
-            return v
 ''', filename=__file__)
 
 dict_popitem__ANY            = app.interphook("popitem")
-dict_setdefault__ANY_ANY_ANY = app.interphook("setdefault")
 
 register_all(vars(), globals())
 
