@@ -641,9 +641,9 @@ def report():
 init_signature = Signature(['seq_or_map'], None, 'kwargs')
 init_defaults = [None]
 
-def init__DictMulti(space, w_dict, __args__):
+def init_or_update(space, w_dict, __args__, funcname):
     w_src, w_kwds = __args__.parse_obj(
-            None, 'dict',
+            None, funcname,
             init_signature, # signature
             init_defaults)  # default argument
     if w_src is None:
@@ -665,8 +665,11 @@ def init__DictMulti(space, w_dict, __args__):
         from pypy.objspace.std.dicttype import update1
         update1(space, w_dict, w_kwds)
 
+def init__DictMulti(space, w_dict, __args__):
+    init_or_update(space, w_dict, __args__, 'dict')
+
 def dict_update__DictMulti(space, w_dict, __args__):
-    init__DictMulti(space, w_dict, __args__)
+    init_or_update(space, w_dict, __args__, 'dict.update')
 
 def getitem__DictMulti_ANY(space, w_dict, w_key):
     w_value = w_dict.getitem(w_key)
