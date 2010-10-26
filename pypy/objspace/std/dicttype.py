@@ -72,15 +72,6 @@ app = gateway.applevel('''
             for k,v in o:
                 dict.__setitem__(d, k, v)
 
-    def update(d, *args, **kwargs):
-        len_args = len(args)
-        if len_args == 1:
-            update1(d, args[0])
-        elif len_args > 1:
-            raise TypeError("update takes at most 1 (non-keyword) argument")
-        if kwargs:
-            update1(d, kwargs)
-
     def popitem(d):
         for k in dict.iterkeys(d):
             break
@@ -98,7 +89,6 @@ app = gateway.applevel('''
             return v
 ''', filename=__file__)
 
-dict_update__ANY             = app.interphook("update")
 dict_popitem__ANY            = app.interphook("popitem")
 dict_setdefault__ANY_ANY_ANY = app.interphook("setdefault")
 update1                      = app.interphook("update1")
