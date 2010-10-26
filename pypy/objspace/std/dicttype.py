@@ -141,18 +141,17 @@ register_all(vars(), globals())
 
 @gateway.unwrap_spec(ObjSpace, W_Root, W_Root, W_Root)
 def descr_fromkeys(space, w_type, w_keys, w_fill=None):
+    from pypy.objspace.std.dictmultiobject import W_DictMultiObject
     if w_fill is None:
         w_fill = space.w_None
-    w_dict = space.call_function(w_type)
-    w_iter = space.iter(w_keys)
-    while True:
-        try:
-            w_key = space.next(w_iter)
-        except OperationError, e:
-            if not e.match(space, space.w_StopIteration):
-                raise
-            break
-        space.setitem(w_dict, w_key, w_fill)
+    if w_type is space.w_dict:
+        w_dict = W_DictMultiObject.allocate_and_init_instance(space, w_type)
+        for w_key in space.listview(w_keys):
+            w_dict.setitem(w_key, w_fill)
+    else:
+        w_dict = space.call_function(w_type)
+        for w_key in space.listview(w_keys):
+            space.setitem(w_dict, w_key, w_fill)
     return w_dict
 
 
