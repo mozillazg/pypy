@@ -57,6 +57,11 @@ class AppTestAppSetTest:
         b = a | set('abc')
         assert type(b) is subset
 
+    def test_union(self):
+        a = set([4, 5])
+        b = a.union([5, 7])
+        assert sorted(b) == [4, 5, 7]
+
     def test_compare(self):
         raises(TypeError, cmp, set('abc'), set('abd'))
         assert set('abc') != 'abc'

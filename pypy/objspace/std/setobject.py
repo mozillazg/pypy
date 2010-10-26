@@ -572,9 +572,9 @@ or__Frozenset_Frozenset = set_union__Set_Set
 
 
 def set_union__Set_ANY(space, w_left, w_other):
-    ld = w_left.setdata()
+    ld = w_left.setdata
     result = ld.copy()
-    for w_key in space.viewlist(w_other):
+    for w_key in space.listview(w_other):
         result[w_key] = None
     return w_left._newobj(space, result)
 
