@@ -538,11 +538,22 @@ def type_realize(space, py_obj):
     w_obj.ready()
 
     finish_type_2(space, py_type, w_obj)
+    render_immortal(py_type, w_obj)
 
     state = space.fromcache(RefcountState)
     state.non_heaptypes_w.append(w_obj)
 
     return w_obj
+
+def render_immortal(py_type, w_obj):
+    lltype.render_immortal(py_type.c_tp_bases)
+    lltype.render_immortal(py_type.c_tp_mro)
+
+    assert isinstance(w_obj, W_TypeObject)
+    if w_obj.is_cpytype():
+        lltype.render_immortal(py_type.c_tp_dict)
+    else:
+        lltype.render_immortal(py_type.c_tp_name)
 
 def finish_type_1(space, pto):
     """
