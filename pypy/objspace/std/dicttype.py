@@ -64,14 +64,6 @@ app = gateway.applevel('''
     # CPython does not call it when doing builtin operations.  The
     # same for other operations.
 
-    def update1(d, o):
-        if hasattr(o, 'keys'):
-            for k in o.keys():
-                dict.__setitem__(d, k, o[k])
-        else:
-            for k,v in o:
-                dict.__setitem__(d, k, v)
-
     def popitem(d):
         for k in dict.iterkeys(d):
             break
@@ -91,7 +83,6 @@ app = gateway.applevel('''
 
 dict_popitem__ANY            = app.interphook("popitem")
 dict_setdefault__ANY_ANY_ANY = app.interphook("setdefault")
-update1                      = app.interphook("update1")
 
 register_all(vars(), globals())
 

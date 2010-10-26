@@ -446,7 +446,9 @@ class AppTest_DictObject:
         d1 = {}
         d2 = D(a='foo')
         d1.update(d2)
-        assert d1['a'] == 42 # fails on CPython, d1['a'] == 'foo'
+        assert d1['a'] == 'foo'
+        # a bit of an obscure case: now (from r78295) we get the same result
+        # as CPython does
 
     def test_index_keyerror_unpacking(self):
         d = {}
