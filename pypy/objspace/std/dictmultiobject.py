@@ -843,6 +843,9 @@ def dict_popitem__DictMulti(space, w_dict):
     # beginning of the hash table.
     iterator = w_dict.iter()
     w_key, w_value = iterator.next()
+    if w_key is None:
+        raise OperationError(space.w_KeyError,
+                             space.wrap("popitem(): dictionary is empty"))
     w_dict.delitem(w_key)
     return space.newtuple([w_key, w_value])
 
