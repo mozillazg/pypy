@@ -238,6 +238,7 @@ class AppTest_DictObject:
         it1 = d.popitem()
         assert len(d) == 0
         assert (it!=it1) and (it1==(1,2) or it1==(3,4))
+        raises(KeyError, d.popitem)
     
     def test_setdefault(self):
         d = {1:2, 3:4}
