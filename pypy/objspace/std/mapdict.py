@@ -418,7 +418,7 @@ def _make_subclass_size_n(supercls, n):
     rangen = unroll.unrolling_iterable(range(n))
     nmin1 = n - 1
     rangenmin1 = unroll.unrolling_iterable(range(nmin1))
-    class subcls(ObjectMixin, BaseMapdictObject, supercls):
+    class subcls(BaseMapdictObject, supercls):
         def _init_empty(self, map):
             from pypy.rlib.debug import make_sure_not_resized
             for i in rangen:
