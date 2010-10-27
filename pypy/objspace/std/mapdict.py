@@ -31,7 +31,11 @@ class AbstractAttribute(object):
         return obj._mapdict_read_storage(index)
 
     def write(self, obj, selector, w_value):
-        raise NotImplementedError("abstract base class")
+        index = self.index(selector)
+        if index < 0:
+            return self.terminator._write_terminator(obj, selector, w_value)
+        obj._mapdict_write_storage(index, w_value)
+        return True
 
     def delete(self, obj, selector):
         return None
@@ -112,7 +116,7 @@ class Terminator(AbstractAttribute):
     def _read_terminator(self, obj, selector):
         return None
 
-    def write(self, obj, selector, w_value):
+    def _write_terminator(self, obj, selector, w_value):
         obj._get_mapdict_map().add_attr(obj, selector, w_value)
         return True
 
@@ -151,10 +155,10 @@ class DictTerminator(Terminator):
 
 
 class NoDictTerminator(Terminator):
-    def write(self, obj, selector, w_value):
+    def _write_terminator(self, obj, selector, w_value):
         if selector[1] == DICT:
             return False
-        return Terminator.write(self, obj, selector, w_value)
+        return Terminator._write_terminator(self, obj, selector, w_value)
 
 
 class DevolvedDictTerminator(Terminator):
@@ -165,13 +169,13 @@ class DevolvedDictTerminator(Terminator):
             return space.finditem_str(w_dict, selector[0])
         return Terminator._read_terminator(self, obj, selector)
 
-    def write(self, obj, selector, w_value):
+    def _write_terminator(self, obj, selector, w_value):
         if selector[1] == DICT:
             w_dict = obj.getdict()
             space = self.space
             space.setitem_str(w_dict, selector[0], w_value)
             return True
-        return Terminator.write(self, obj, selector, w_value)
+        return Terminator._write_terminator(self, obj, selector, w_value)
 
     def delete(self, obj, selector):
         from pypy.interpreter.error import OperationError
@@ -207,12 +211,6 @@ class PlainAttribute(AbstractAttribute):
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.selector)
         new_obj._get_mapdict_map().add_attr(new_obj, self.selector, w_value)
-
-    def write(self, obj, selector, w_value):
-        if selector == self.selector:
-            obj._mapdict_write_storage(self.position, w_value)
-            return True
-        return self.back.write(obj, selector, w_value)
 
     def delete(self, obj, selector):
         if selector == self.selector:
