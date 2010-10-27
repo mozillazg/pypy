@@ -1,4 +1,5 @@
 from pypy.rlib import jit, objectmodel, debug
+from pypy.rlib.rarithmetic import intmask, r_uint
 
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.dictmultiobject import W_DictMultiObject
@@ -40,7 +41,44 @@ class AbstractAttribute(object):
     def delete(self, obj, selector):
         return None
 
+    @jit.purefunction
     def index(self, selector):
+        if self.space.config.objspace.std.withmethodcache:
+            return self._index_cache(selector)
+        else:
+            return self._index(selector)
+
+    def _index_cache(self, selector):
+        space = self.space
+        cache = space.fromcache(IndexCache)
+        SHIFT2 = r_uint.BITS - space.config.objspace.std.methodcachesizeexp
+        SHIFT1 = SHIFT2 - 5
+        attrs_as_int = objectmodel.current_object_addr_as_int(self)
+        # ^^^Note: see comment in typeobject.py for
+        # _pure_lookup_where_with_method_cache()
+        hash_selector = objectmodel.compute_hash(selector)
+        product = intmask(attrs_as_int * hash_selector)
+        index_hash = (r_uint(product) ^ (r_uint(product) << SHIFT1)) >> SHIFT2
+        # ^^^Note2: same comment too
+        cached_attr = cache.attrs[index_hash]
+        if cached_attr is self:
+            cached_selector = cache.selectors[index_hash]
+            if cached_selector == selector:
+                index = cache.indices[index_hash]
+                if space.config.objspace.std.withmethodcachecounter:
+                    name = selector[0]
+                    cache.hits[name] = cache.hits.get(name, 0) + 1
+                return index
+        index = self._index(selector)
+        cache.attrs[index_hash] = self
+        cache.selectors[index_hash] = selector
+        cache.indices[index_hash] = index
+        if space.config.objspace.std.withmethodcachecounter:
+            name = selector[0]
+            cache.misses[name] = cache.misses.get(name, 0) + 1
+        return index
+
+    def _index(self, selector):
         return -1
 
     def copy(self, obj):
@@ -221,10 +259,10 @@ class PlainAttribute(AbstractAttribute):
             self._copy_attr(obj, new_obj)
         return new_obj
 
-    def index(self, selector):
+    def _index(self, selector):
         if selector == self.selector:
             return self.position
-        return self.back.index(selector)
+        return self.back._index(selector)
 
     def copy(self, obj):
         new_obj = self.back.copy(obj)
@@ -266,6 +304,23 @@ def _become(w_obj, new_obj):
     # this is like the _become method, really, but we cannot use that due to
     # RPython reasons
     w_obj._set_mapdict_storage_and_map(new_obj.storage, new_obj.map)
+
+class IndexCache(object):
+    def __init__(self, space):
+        assert space.config.objspace.std.withmethodcache
+        SIZE = 1 << space.config.objspace.std.methodcachesizeexp
+        self.attrs = [None] * SIZE
+        self.selectors = [None] * SIZE
+        self.indices = [0] * SIZE
+        if space.config.objspace.std.withmethodcachecounter:
+            self.hits = {}
+            self.misses = {}
+
+    def clear(self):
+        for i in range(len(self.attrs)):
+            self.attrs[i] = None
+        for i in range(len(self.selectors)):
+            self.selectors[i] = None
 
 # ____________________________________________________________
 # object implementation

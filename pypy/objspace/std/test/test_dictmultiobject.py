@@ -607,6 +607,7 @@ class Config:
             withdictmeasurement = False
             withsmalldicts = False
             withcelldict = False
+            withmethodcache = False
         class opcodes:
             CALL_LIKELY_BUILTIN = False
 

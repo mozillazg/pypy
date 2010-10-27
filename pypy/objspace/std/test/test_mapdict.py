@@ -24,7 +24,6 @@ class Object(Object):
         hasdict = False
 
 def test_plain_attribute():
-    space = " "
     w_cls = "class"
     aa = PlainAttribute(("b", DICT),
                         PlainAttribute(("a", DICT),
@@ -778,3 +777,52 @@ class AppTestWithMapDictAndCounters(object):
         assert res == (0, 0, 1)
         res = self.check(f, 'x')
         assert res == (0, 0, 1)
+
+class AppTestCaching(AppTestWithMapDict):
+    def setup_class(cls):
+        cls.space = gettestobjspace(
+            **{"objspace.std.withmethodcachecounter": True,
+               "objspace.std.withmapdict": True,
+               "objspace.opcodes.CALL_METHOD": True})
+
+    def test_mix_classes(self):
+        import __pypy__
+        class A(object):
+            def f(self):
+                return 42
+        class B(object):
+            def f(self):
+                return 43
+        class C(object):
+            def f(self):
+                return 44
+        l = [A(), B(), C()] * 10
+        __pypy__.reset_method_cache_counter()
+        # 'exec' to make sure that a.f() is compiled with CALL_METHOD
+        exec """for i, a in enumerate(l):
+                    assert a.f() == 42 + i % 3
+"""
+        cache_counter = __pypy__.mapdict_cache_counter("f")
+        assert cache_counter[0] >= 15
+        assert cache_counter[1] >= 3 # should be (27, 3)
+        assert sum(cache_counter) == 30
+
+    def test_mix_classes_attribute(self):
+        import __pypy__
+        class A(object):
+            def __init__(self):
+                self.x = 42
+        class B(object):
+            def __init__(self):
+                self.x = 43
+        class C(object):
+            def __init__(self):
+                self.x = 44
+        l = [A(), B(), C()] * 10
+        __pypy__.reset_method_cache_counter()
+        for i, a in enumerate(l):
+            assert a.x == 42 + i % 3
+        cache_counter = __pypy__.mapdict_cache_counter("x")
+        assert cache_counter[0] >= 15
+        assert cache_counter[1] >= 3 # should be (27, 3)
+        assert sum(cache_counter) == 30

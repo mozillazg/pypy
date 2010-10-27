@@ -122,3 +122,8 @@ class AppTestGcMethodCache(object):
         gc.collect()    # the classes C should all go away here
         for r in rlist:
             assert r() is None
+
+class AppTestGcMapDictIndexCache(AppTestGcMethodCache):
+    def setup_class(cls):
+        cls.space = gettestobjspace(**{"objspace.std.withmethodcache": True,
+                                       "objspace.std.withmapdict": True})
