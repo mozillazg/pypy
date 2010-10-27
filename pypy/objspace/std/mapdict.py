@@ -388,6 +388,8 @@ def get_subclass_of_correct_size(space, cls, w_type):
     assert space.config.objspace.std.withmapdict
     map = w_type.terminator
     classes = memo_get_subclass_of_correct_size(space, cls)
+    if SUBCLASSES_MIN_FIELDS == SUBCLASSES_MAX_FIELDS:
+        return classes[0]
     size = map.size_estimate()
     debug.check_nonneg(size)
     if size < len(classes):
@@ -396,7 +398,8 @@ def get_subclass_of_correct_size(space, cls, w_type):
         return classes[len(classes)-1]
 get_subclass_of_correct_size._annspecialcase_ = "specialize:arg(1)"
 
-NUM_SUBCLASSES = 10 # XXX tweak this number
+SUBCLASSES_MIN_FIELDS = 5 # XXX tweak these numbers
+SUBCLASSES_MAX_FIELDS = 5
 
 def memo_get_subclass_of_correct_size(space, supercls):
     key = space, supercls
@@ -405,9 +408,12 @@ def memo_get_subclass_of_correct_size(space, supercls):
     except KeyError:
         assert not hasattr(supercls, "__del__")
         result = []
-        for i in range(1, NUM_SUBCLASSES+1):
+        for i in range(SUBCLASSES_MIN_FIELDS, SUBCLASSES_MAX_FIELDS+1):
             result.append(_make_subclass_size_n(supercls, i))
-        result.insert(0, result[0])    # for 0, use the same class as for 1
+        for i in range(SUBCLASSES_MIN_FIELDS):
+            result.insert(0, result[0])
+        if SUBCLASSES_MIN_FIELDS == SUBCLASSES_MAX_FIELDS:
+            assert len(set(result)) == 1
         _subclass_cache[key] = result
         return result
 memo_get_subclass_of_correct_size._annspecialcase_ = "specialize:memo"
