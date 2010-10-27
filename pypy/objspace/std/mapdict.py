@@ -310,7 +310,8 @@ class IndexCache(object):
         assert space.config.objspace.std.withmethodcache
         SIZE = 1 << space.config.objspace.std.methodcachesizeexp
         self.attrs = [None] * SIZE
-        self.selectors = [None] * SIZE
+        self._empty_selector = (None, INVALID)
+        self.selectors = [self._empty_selector] * SIZE
         self.indices = [0] * SIZE
         if space.config.objspace.std.withmethodcachecounter:
             self.hits = {}
@@ -320,7 +321,7 @@ class IndexCache(object):
         for i in range(len(self.attrs)):
             self.attrs[i] = None
         for i in range(len(self.selectors)):
-            self.selectors[i] = None
+            self.selectors[i] = self._empty_selector
 
 # ____________________________________________________________
 # object implementation
