@@ -30,7 +30,8 @@ def test_plain_attribute():
                         PlainAttribute(("a", DICT),
                                        Terminator(space, w_cls)))
     assert aa.space is space
-    assert aa.w_cls is w_cls
+    assert aa.terminator.w_cls is w_cls
+    assert aa.get_terminator() is aa.terminator
 
     obj = Object()
     obj.map, obj.storage = aa, [10, 20]

@@ -15,13 +15,14 @@ NUM_DIGITS_POW2 = 1 << NUM_DIGITS
 # we want to propagate knowledge that the result cannot be negative
 
 class AbstractAttribute(object):
-    _immutable_fields_ = ['w_cls']
+    _immutable_fields_ = ['terminator']
     cache_attrs = None
     _size_estimate = 0
 
-    def __init__(self, space, w_cls):
+    def __init__(self, space, terminator):
         self.space = space
-        self.w_cls = w_cls
+        assert isinstance(terminator, Terminator)
+        self.terminator = terminator
 
     def read(self, obj, selector):
         raise NotImplementedError("abstract base class")
@@ -42,7 +43,7 @@ class AbstractAttribute(object):
         raise NotImplementedError("abstract base class")
 
     def get_terminator(self):
-        raise NotImplementedError("abstract base class")
+        return self.terminator
 
     def set_terminator(self, obj, terminator):
         raise NotImplementedError("abstract base class")
@@ -95,10 +96,15 @@ class AbstractAttribute(object):
         raise NotImplementedError("abstract base class")
 
     def __repr__(self):
-        return "<%s w_cls=%s>" % (self.__class__.__name__, self.w_cls)
+        return "<%s>" % (self.__class__.__name__,)
 
 
 class Terminator(AbstractAttribute):
+    _immutable_fields_ = ['w_cls']
+
+    def __init__(self, space, w_cls):
+        AbstractAttribute.__init__(self, space, self)
+        self.w_cls = w_cls
 
     def read(self, obj, selector):
         return None
@@ -116,9 +122,6 @@ class Terminator(AbstractAttribute):
     def length(self):
         return 0
 
-    def get_terminator(self):
-        return self
-
     def set_terminator(self, obj, terminator):
         result = Object()
         result.space = self.space
@@ -127,6 +130,9 @@ class Terminator(AbstractAttribute):
 
     def remove_dict_entries(self, obj):
         return self.copy(obj)
+
+    def __repr__(self):
+        return "<%s w_cls=%s>" % (self.__class__.__name__, self.w_cls)
 
 class DictTerminator(Terminator):
     _immutable_fields_ = ['devolved_dict_terminator']
@@ -189,7 +195,7 @@ class DevolvedDictTerminator(Terminator):
 class PlainAttribute(AbstractAttribute):
     _immutable_fields_ = ['selector', 'position', 'back']
     def __init__(self, selector, back):
-        AbstractAttribute.__init__(self, back.space, back.w_cls)
+        AbstractAttribute.__init__(self, back.space, back.terminator)
         self.selector = selector
         self.position = back.length()
         self.back = back
@@ -231,9 +237,6 @@ class PlainAttribute(AbstractAttribute):
 
     def length(self):
         return self.position + 1
-
-    def get_terminator(self):
-        return self.back.get_terminator()
 
     def set_terminator(self, obj, terminator):
         new_obj = self.back.set_terminator(obj, terminator)
@@ -328,7 +331,7 @@ class BaseMapdictObject: # slightly evil to make it inherit from W_Root
         assert flag
 
     def getclass(self, space):
-        return self._get_mapdict_map().w_cls
+        return self._get_mapdict_map().terminator.w_cls
 
     def setclass(self, space, w_cls):
         new_obj = self._get_mapdict_map().set_terminator(self, w_cls.terminator)
@@ -609,7 +612,7 @@ class CacheEntry(object):
 INVALID_CACHE_ENTRY = CacheEntry()
 INVALID_CACHE_ENTRY.map = objectmodel.instantiate(AbstractAttribute)
                              # different from any real map ^^^
-INVALID_CACHE_ENTRY.map.w_cls = None
+INVALID_CACHE_ENTRY.map.terminator = None
 
 def init_mapdict_cache(pycode):
     num_entries = len(pycode.co_names_w)
@@ -621,7 +624,7 @@ def LOAD_ATTR_caching(pycode, w_obj, nameindex):
     entry = pycode._mapdict_caches[nameindex]
     map = w_obj._get_mapdict_map()
     if map is entry.map:
-        version_tag = map.w_cls.version_tag()
+        version_tag = map.terminator.w_cls.version_tag()
         if version_tag is entry.version_tag:
             # everything matches, it's incredibly fast
             if pycode.space.config.objspace.std.withmethodcachecounter:
@@ -634,7 +637,7 @@ def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
     space = pycode.space
     w_name = pycode.co_names_w[nameindex]
     if map is not None:
-        w_type = map.w_cls
+        w_type = map.terminator.w_cls
         w_descr = w_type.getattribute_if_not_from_object()
         if w_descr is not None:
             return space._handle_getattribute(w_descr, w_obj, w_name)
