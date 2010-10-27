@@ -25,7 +25,10 @@ class AbstractAttribute(object):
         self.terminator = terminator
 
     def read(self, obj, selector):
-        raise NotImplementedError("abstract base class")
+        index = self.index(selector)
+        if index < 0:
+            return self.terminator._read_terminator(obj, selector)
+        return obj._mapdict_read_storage(index)
 
     def write(self, obj, selector, w_value):
         raise NotImplementedError("abstract base class")
@@ -106,7 +109,7 @@ class Terminator(AbstractAttribute):
         AbstractAttribute.__init__(self, space, self)
         self.w_cls = w_cls
 
-    def read(self, obj, selector):
+    def _read_terminator(self, obj, selector):
         return None
 
     def write(self, obj, selector, w_value):
@@ -155,12 +158,12 @@ class NoDictTerminator(Terminator):
 
 
 class DevolvedDictTerminator(Terminator):
-    def read(self, obj, selector):
+    def _read_terminator(self, obj, selector):
         if selector[1] == DICT:
             w_dict = obj.getdict()
             space = self.space
             return space.finditem_str(w_dict, selector[0])
-        return Terminator.read(self, obj, selector)
+        return Terminator._read_terminator(self, obj, selector)
 
     def write(self, obj, selector, w_value):
         if selector[1] == DICT:
@@ -204,11 +207,6 @@ class PlainAttribute(AbstractAttribute):
     def _copy_attr(self, obj, new_obj):
         w_value = self.read(obj, self.selector)
         new_obj._get_mapdict_map().add_attr(new_obj, self.selector, w_value)
-
-    def read(self, obj, selector):
-        if selector == self.selector:
-            return obj._mapdict_read_storage(self.position)
-        return self.back.read(obj, selector)
 
     def write(self, obj, selector, w_value):
         if selector == self.selector:
