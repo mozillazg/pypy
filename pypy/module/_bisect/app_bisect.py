@@ -8,7 +8,8 @@ If x is already in a, insert it to the left of the leftmost x.
 
 Optional args lo (default 0) and hi (default len(a)) bound the
 slice of a to be searched."""
-    a.insert(bisect_left(a, x, lo, hi), x)
+    n = bisect_left(a, x, lo, hi)
+    a.insert(n, x)
 
 
 def insort_right(a, x, lo=0, hi=-1):
@@ -18,4 +19,5 @@ If x is already in a, insert it to the right of the rightmost x.
 
 Optional args lo (default 0) and hi (default len(a)) bound the
 slice of a to be searched."""
-    a.insert(bisect_right(a, x, lo, hi), x)
+    n = bisect_right(a, x, lo, hi)
+    a.insert(n, x)
