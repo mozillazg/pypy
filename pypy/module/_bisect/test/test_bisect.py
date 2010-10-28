@@ -77,3 +77,17 @@ class AppTestBisect:
         assert bisect_right(a, 6, 0, 2) == 2
         assert bisect_right(a, 6, 0, 3) == 3
         assert bisect_right(a, 6, 0, 4) == 3
+
+    def test_insort_left(self):
+        from _bisect import insort_left
+        a = [0, 5, 6, 6, 6, 7]
+        insort_left(a, 6.0)
+        assert a == [0, 5, 6.0, 6, 6, 6, 7]
+        assert map(type, a) == [int, int, float, int, int, int, int]
+
+    def test_insort_right(self):
+        from _bisect import insort_right
+        a = [0, 5, 6, 6, 6, 7]
+        insort_right(a, 6.0)
+        assert a == [0, 5, 6, 6, 6, 6.0, 7]
+        assert map(type, a) == [int, int, int, int, int, float, int]
