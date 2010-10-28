@@ -15,13 +15,13 @@ expensive comparison operations, this can be an improvement over the more
 common approach."""
 
     appleveldefs = {
+        'insort':        'app_bisect.insort_right',
+        'insort_left':   'app_bisect.insort_left',
+        'insort_right':  'app_bisect.insort_right',
         }
 
     interpleveldefs = {
         'bisect':        'interp_bisect.bisect_right',
         'bisect_left':   'interp_bisect.bisect_left',
         'bisect_right':  'interp_bisect.bisect_right',
-        'insort':        'interp_bisect.insort_right',
-        'insort_left':   'interp_bisect.insort_left',
-        'insort_right':  'interp_bisect.insort_right',
         }
