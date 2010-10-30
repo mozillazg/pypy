@@ -41,9 +41,9 @@ class AbstractAttribute(object):
     def delete(self, obj, selector):
         return None
 
-    @jit.purefunction
     def index(self, selector):
-        if self.space.config.objspace.std.withmethodcache:
+        if (self.space.config.objspace.std.withmethodcache and 
+                not jit.we_are_jitted()):
             return self._index_cache(selector)
         else:
             return self._index(selector)
