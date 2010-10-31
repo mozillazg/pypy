@@ -48,6 +48,7 @@ class AbstractAttribute(object):
         else:
             return self._index(selector)
 
+    @jit.dont_look_inside
     def _index_cache(self, selector):
         space = self.space
         cache = space.fromcache(IndexCache)
