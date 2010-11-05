@@ -82,7 +82,6 @@ class CheckSignalAction(PeriodicAsyncAction):
             # need a helper action in case signals arrive in a non-main thread
             self.pending_signals = {}
             self.reissue_signal_action = ReissueSignalAction(space)
-            space.actionflag.register_action(self.reissue_signal_action)
         else:
             self.reissue_signal_action = None
 
