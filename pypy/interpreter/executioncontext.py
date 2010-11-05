@@ -400,9 +400,11 @@ class ActionFlag(AbstractActionFlag):
         self._ticker = value
 
     def decrement_ticker(self):
+        value = self._ticker
         if self.has_bytecode_counter:    # this 'if' is constant-folded
-            self._ticker -= 1
-        return self._ticker
+            value -= 1
+            self._ticker = value
+        return value
 
 
 class AsyncAction(object):
