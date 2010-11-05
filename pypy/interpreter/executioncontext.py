@@ -414,13 +414,13 @@ class AsyncAction(object):
         self.space.actionflag.fire(self)
 
     def fire_after_thread_switch(self):
-        XXX
         """Bit of a hack: fire() the action but only the next time the GIL
         is released and re-acquired (i.e. after a potential thread switch).
-        Don't call this if threads are not enabled.
+        Don't call this if threads are not enabled.  Currently limited to
+        one action (i.e. reserved for CheckSignalAction from module/signal).
         """
         from pypy.module.thread.gil import spacestate
-        spacestate.set_actionflag_bit_after_thread_switch |= self.bitmask
+        spacestate.action_after_thread_switch = self
 
     def perform(self, executioncontext, frame):
         """To be overridden."""
