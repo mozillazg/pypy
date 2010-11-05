@@ -309,6 +309,13 @@ class ExecutionContext(object):
                 frame.last_exception = last_exception
                 self.is_tracing -= 1
 
+    def checksignals(self):
+        """Similar to PyErr_CheckSignals().  If called in the main thread,
+        and if signals are pending for the process, deliver them now
+        (i.e. call the signal handlers)."""
+        if self.space.check_signal_action is not None:
+            self.space.check_signal_action.perform(self, None)
+
     def _freeze_(self):
         raise Exception("ExecutionContext instances should not be seen during"
                         " translation.  Now is a good time to inspect the"
