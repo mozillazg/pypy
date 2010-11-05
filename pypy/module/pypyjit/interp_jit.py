@@ -80,8 +80,9 @@ class __extend__(PyFrame):
 
     def jump_absolute(self, jumpto, _, ec=None):
         if we_are_jitted():
+            decr_by = 5   # XXX adapt dynamically
             self.last_instr = intmask(jumpto)
-            ec.bytecode_trace(self)
+            ec.bytecode_trace(self, decr_by)
             jumpto = r_uint(self.last_instr)
         pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
                                     pycode=self.getcode())
