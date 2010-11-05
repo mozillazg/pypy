@@ -258,6 +258,7 @@ class ObjSpace(object):
 
         self.interned_strings = {}
         self.actionflag = ActionFlag()    # changed by the signal module
+        self.check_signal_action = None   # changed by the signal module
         self.user_del_action = UserDelAction(self)
         self.frame_trace_action = FrameTraceAction(self)
 
