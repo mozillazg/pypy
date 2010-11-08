@@ -303,6 +303,7 @@ class Assembler386(object):
                _x86_frame_depth
                _x86_param_depth
                _x86_arglocs
+               _x86_debug_checksum
         """
         if not we_are_translated():
             # Arguments should be unique
@@ -312,7 +313,7 @@ class Assembler386(object):
         funcname = self._find_debug_merge_point(operations)
         if log:
             self._register_counter()
-            operations = self._inject_debugging_code(operations)
+            operations = self._inject_debugging_code(looptoken, operations)
         
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         arglocs = regalloc.prepare_loop(inputargs, operations, looptoken)
@@ -350,7 +351,7 @@ class Assembler386(object):
         funcname = self._find_debug_merge_point(operations)
         if log:
             self._register_counter()
-            operations = self._inject_debugging_code(operations)
+            operations = self._inject_debugging_code(looptoken, operations)
 
         arglocs = self.rebuild_faillocs_from_descr(
             faildescr._x86_failure_recovery_bytecode)
@@ -432,9 +433,13 @@ class Assembler386(object):
 
         mc.done()
 
-    def _inject_debugging_code(self, operations):
+    def _inject_debugging_code(self, looptoken, operations):
         if self._debug:
             # before doing anything, let's increase a counter
+            s = 0
+            for op in operations:
+                s += op.getopnum()
+            looptoken._x86_debug_checksum = s
             c_adr = ConstInt(rffi.cast(lltype.Signed,
                                      self.loop_run_counters[-1][1]))
             box = BoxInt()
