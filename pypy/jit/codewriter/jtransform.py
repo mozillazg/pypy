@@ -38,7 +38,6 @@ class Transformer(object):
     def optimize_block(self, block):
         if block.operations == ():
             return
-        self.immutable_arrays = {}
         self.vable_array_vars = {}
         self.vable_flags = {}
         renamings = {}
@@ -533,8 +532,6 @@ class Transformer(object):
                 pure = '_greenfield'
             else:
                 pure = '_pure'
-            if immut == "[*]":
-                self.immutable_arrays[op.result] = True
         else:
             pure = ''
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
@@ -994,7 +991,7 @@ class Transformer(object):
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         extra = getkind(op.result.concretetype)[0]
-        if pure or args[0] in self.immutable_arrays:
+        if pure:
             extra = 'pure_' + extra
         op = SpaceOperation('getarrayitem_gc_%s' % extra,
                             [args[0], arraydescr, v_index], op.result)
