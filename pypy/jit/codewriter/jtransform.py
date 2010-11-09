@@ -924,21 +924,19 @@ class Transformer(object):
         # base hints on the name of the ll function, which is a bit xxx-ish
         # but which is safe for now
         assert func.func_name.startswith('ll_')
+        # check that we have carefully placed the oopspec in
+        # pypy/rpython/rlist.py.  There should not be an oopspec on
+        # a ll_getitem or ll_setitem that expects a 'func' argument.
+        # The idea is that a ll_getitem/ll_setitem with dum_checkidx
+        # should get inlined by the JIT, so that we see the potential
+        # 'raise IndexError'.
+        assert 'func' not in func.func_code.co_varnames
         non_negative = '_nonneg' in func.func_name
         fast = '_fast' in func.func_name
-        if fast:
-            can_raise = False
-            non_negative = True
-        else:
-            tag = op.args[1].value
-            assert tag in (rlist.dum_nocheck, rlist.dum_checkidx)
-            can_raise = tag != rlist.dum_nocheck
-        return non_negative, can_raise
+        return non_negative or fast
 
     def _prepare_list_getset(self, op, descr, args, checkname):
-        non_negative, can_raise = self._get_list_nonneg_canraise_flags(op)
-        if can_raise:
-            raise NotSupported("list operation can raise")
+        non_negative = self._get_list_nonneg_canraise_flags(op)
         if non_negative:
             return args[1], []
         else:
@@ -950,9 +948,8 @@ class Transformer(object):
             return v_posindex, [op0, op1]
 
     def _prepare_void_list_getset(self, op):
-        non_negative, can_raise = self._get_list_nonneg_canraise_flags(op)
-        if can_raise:
-            raise NotSupported("list operation can raise")
+        # sanity check:
+        self._get_list_nonneg_canraise_flags(op)
 
     def _get_initial_newlist_length(self, op, args):
         # normalize number of arguments to the 'newlist' function
