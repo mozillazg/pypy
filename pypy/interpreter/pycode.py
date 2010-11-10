@@ -269,10 +269,10 @@ class PyCode(eval.Code):
         dis.dis(co)
 
     def fget_co_consts(space, self):
-        return space.newtuple_imm(self.co_consts_w)
+        return space.newtuple(self.co_consts_w)
     
     def fget_co_names(space, self):
-        return space.newtuple_imm(self.co_names_w)
+        return space.newtuple(self.co_names_w)
 
     def fget_co_varnames(space, self):
         return space.newtuple([space.wrap(name) for name in self.co_varnames])
@@ -383,8 +383,8 @@ class PyCode(eval.Code):
             w(self.co_stacksize), 
             w(self.co_flags),
             w(self.co_code), 
-            space.newtuple_imm(self.co_consts_w), 
-            space.newtuple_imm(self.co_names_w), 
+            space.newtuple(self.co_consts_w), 
+            space.newtuple(self.co_names_w), 
             space.newtuple([w(v) for v in self.co_varnames]), 
             w(self.co_filename),
             w(self.co_name), 

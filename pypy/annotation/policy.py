@@ -1,6 +1,7 @@
 # base annotation policy for specialization
 from pypy.annotation.specialize import default_specialize as default
 from pypy.annotation.specialize import specialize_argvalue, specialize_argtype, specialize_arglistitemtype
+from pypy.annotation.specialize import specialize_list_not_modified_any_more
 from pypy.annotation.specialize import memo
 # for some reason, model must be imported first,
 # or we create a cycle.
@@ -75,6 +76,7 @@ class AnnotatorPolicy(BasicAnnotatorPolicy):
     specialize__arg = staticmethod(specialize_argvalue) # specialize:arg(N)
     specialize__argtype = staticmethod(specialize_argtype) # specialize:argtype(N)
     specialize__arglistitemtype = staticmethod(specialize_arglistitemtype)
+    specialize__list_not_modified_any_more = staticmethod(specialize_list_not_modified_any_more)
 
     def specialize__ll(pol, *args):
         from pypy.rpython.annlowlevel import LowLevelAnnotatorPolicy
