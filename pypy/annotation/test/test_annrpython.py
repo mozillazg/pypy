@@ -10,7 +10,7 @@ from pypy.annotation.annrpython import RPythonAnnotator as _RPythonAnnotator
 from pypy.translator.translator import graphof as tgraphof
 from pypy.annotation import policy
 from pypy.annotation import specialize
-from pypy.annotation.listdef import ListDef, TooLateForChange
+from pypy.annotation.listdef import ListDef, ListChangeUnallowed
 from pypy.annotation.dictdef import DictDef
 from pypy.objspace.flow.model import *
 from pypy.rlib.rarithmetic import r_uint, base_int, r_longlong, r_ulonglong
@@ -3206,7 +3206,7 @@ class TestAnnotateTestCase:
             l.append(4)
 
         a = self.RPythonAnnotator()
-        py.test.raises(TooLateForChange, a.build_types, g, [])
+        py.test.raises(ListChangeUnallowed, a.build_types, g, [])
         assert called
 
     def test_listitem_no_mutating2(self):
@@ -3229,7 +3229,7 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         a.translator.config.translation.list_comprehension_operations = True
-        py.test.raises(TooLateForChange, a.build_types, fn, [int])
+        py.test.raises(ListChangeUnallowed, a.build_types, fn, [int])
 
     def test_listitem_never_resize(self):
         from pypy.rlib.debug import check_annotation
@@ -3243,7 +3243,7 @@ class TestAnnotateTestCase:
             check_annotation(l, checker)
 
         a = self.RPythonAnnotator()
-        py.test.raises(TooLateForChange, a.build_types, f, [])
+        py.test.raises(ListChangeUnallowed, a.build_types, f, [])
 
 
     def test_len_of_empty_list(self):
@@ -3356,6 +3356,38 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeInteger)
         # not a constant: both __enter__ and __exit__ have been annotated
         assert not s.is_constant()
+
+    def test_make_sure_not_modified(self):
+        from pypy.rlib.debug import make_sure_not_modified
+
+        def pycode(consts):
+            make_sure_not_modified(consts)
+        def build1():
+            return pycode(consts=[1])
+        def build2():
+            return pycode(consts=[0])
+        def fn():
+            build1()
+            build2()
+
+        a = self.RPythonAnnotator()
+        a.translator.config.translation.list_comprehension_operations = True
+        a.build_types(fn, [])
+        # assert did not raise ListChangeUnallowed
+
+    def test_return_immutable_list(self):
+        class A:
+            _immutable_fields_ = 'lst[*]'
+        def f(n):
+            a = A()
+            l1 = [n]
+            l1.append(n+1)
+            a.lst = l1
+            return a.lst
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s.listdef.listitem.must_not_mutate
 
 
 def g(n):
