@@ -647,6 +647,7 @@ class ClassDesc(Desc):
         while cdesc is not None:
             if '_immutable_fields_' in cdesc.classdict:
                 if search in cdesc.classdict['_immutable_fields_'].value:
+                    s_result.listdef.never_resize()
                     s_copy = s_result.listdef.offspring()
                     s_copy.listdef.never_mutate()
                     return s_copy

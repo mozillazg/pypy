@@ -3398,14 +3398,27 @@ class TestAnnotateTestCase:
             _immutable_fields_ = 'lst[*]'
         def f(n):
             a = A()
-            l1 = [n]
-            l1.append(n+1)
+            l1 = [n, 0]
+            l1[1] = n+1
             a.lst = l1
             return a.lst
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
         assert s.listdef.listitem.must_not_mutate
+
+    def test_immutable_list_is_actually_resized(self):
+        class A:
+            _immutable_fields_ = 'lst[*]'
+        def f(n):
+            a = A()
+            l1 = [n]
+            l1.append(n+1)
+            a.lst = l1
+            return a.lst
+
+        a = self.RPythonAnnotator()
+        py.test.raises(ListChangeUnallowed, a.build_types, f, [int])
 
 
 def g(n):

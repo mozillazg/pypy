@@ -265,7 +265,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
-        make_sure_not_resized(list_w)
         return W_TupleObject(list_w)
 
     def newlist(self, list_w):
