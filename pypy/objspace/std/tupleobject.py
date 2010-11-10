@@ -53,7 +53,7 @@ def getitem__Tuple_Slice(space, w_tuple, w_slice):
     for i in range(slicelength):
         subitems[i] = items[start]
         start += step
-    return W_TupleObject(subitems)
+    return space.newtuple(subitems)
 
 def getslice__Tuple_ANY_ANY(space, w_tuple, w_start, w_stop):
     length = len(w_tuple.wrappeditems)

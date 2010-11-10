@@ -8,7 +8,7 @@ from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
                                transparent, callmethod, proxyobject)
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate, r_dict, specialize
-from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib.debug import make_sure_not_resized, list_not_modified_any_more
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
@@ -264,6 +264,12 @@ class StdObjSpace(ObjSpace, DescrOperation):
         return W_LongObject.fromint(self, val)
 
     def newtuple(self, list_w):
+        assert isinstance(list_w, list)
+        return W_TupleObject(list_not_modified_any_more(list_w))
+
+    def newtuple_imm(self, list_w):
+        # call this instead of newtuple() if the list already has
+        # the annotation 'list_not_modified_any_more()'
         assert isinstance(list_w, list)
         return W_TupleObject(list_w)
 
