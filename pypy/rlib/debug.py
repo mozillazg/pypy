@@ -247,6 +247,7 @@ class Entry(ExtRegistryEntry):
         # also annotated with a normal list.
         assert not s_arg.listdef.listitem.must_not_mutate, (
             "argument already has the flag 'must_not_mutate'")
+        s_arg.listdef.mutate()
         # the logic behind it is that we try not to propagate
         # make_sure_not_resized, when list comprehension is not on
         if self.bookkeeper.annotator.translator.config.translation.list_comprehension_operations:
