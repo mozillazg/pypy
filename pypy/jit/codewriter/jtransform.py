@@ -82,6 +82,7 @@ class Transformer(object):
         self.follow_constant_exit(block)
         self.optimize_goto_if_not(block)
         for link in block.exits:
+            self._check_no_vable_array(link.args)
             self._do_renaming_on_link(renamings, link)
 
     def _do_renaming(self, rename, op):
@@ -98,6 +99,26 @@ class Transformer(object):
                     newlst.append(x)
                 op.args[i] = ListOfKind(v.kind, newlst)
         return op
+
+    def _check_no_vable_array(self, list):
+        for v in list:
+            if v in self.vable_array_vars:
+                raise AssertionError(
+                    "A virtualizable array is passed around; it should\n"
+                    "only be used immediately after being read.  Note\n"
+                    "that a possible cause is indexing with an index not\n"
+                    "known non-negative, or catching IndexError, or\n"
+                    "not inlining at all (for tests: use listops=True).\n"
+                    "Occurred in: %r" % self.graph)
+            # extra expanation: with the way things are organized in
+            # rpython/rlist.py, the ll_getitem becomes a function call
+            # that is typically meant to be inlined by the JIT, but
+            # this does not work with vable arrays because
+            # jtransform.py expects the getfield and the getarrayitem
+            # to be in the same basic block.  It works a bit as a hack
+            # for simple cases where we performed the backendopt
+            # inlining before (even with a very low threshold, because
+            # there is _always_inline_ on the relevant functions).
 
     def _do_renaming_on_link(self, rename, link):
         for i, v in enumerate(link.args):
@@ -169,7 +190,10 @@ class Transformer(object):
         else:
             return rewrite(self, op)
 
-    def rewrite_op_same_as(self, op): pass
+    def rewrite_op_same_as(self, op):
+        if op.args[0] in self.vable_array_vars:
+            self.vable_array_vars[op.result]= self.vable_array_vars[op.args[0]]
+
     def rewrite_op_cast_pointer(self, op): pass
     def rewrite_op_cast_opaque_ptr(self, op): pass   # rlib.rerased
     def rewrite_op_cast_primitive(self, op): pass
@@ -256,6 +280,7 @@ class Transformer(object):
            The name is one of '{residual,direct}_call_{r,ir,irf}_{i,r,f,v}'."""
         if args is None:
             args = op.args[1:]
+        self._check_no_vable_array(args)
         lst_i, lst_r, lst_f = self.make_three_lists(args)
         reskind = getkind(op.result.concretetype)[0]
         if lst_f or reskind == 'f': kinds = 'irf'
@@ -523,9 +548,8 @@ class Transformer(object):
                                                 arrayfielddescr,
                                                 arraydescr)
             return []
-        # check for deepfrozen structures that force constant-folding
-        immut = v_inst.concretetype.TO._immutable_field(c_fieldname.value)
-        if immut:
+        # check for _immutable_fields_ hints
+        if v_inst.concretetype.TO._immutable_field(c_fieldname.value):
             if (self.callcontrol is not None and
                 self.callcontrol.could_be_green_field(v_inst.concretetype.TO,
                                                       c_fieldname.value)):

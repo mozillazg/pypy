@@ -688,6 +688,7 @@ def ll_getitem_nonneg(func, l, index):
         if index >= l.ll_length():
             raise IndexError
     return l.ll_getitem_fast(index)
+ll_getitem_nonneg._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
 def ll_getitem(func, l, index):
@@ -719,6 +720,7 @@ def ll_getitem_foldable(l, index):
     if index < 0:
         index += l.ll_length()
     return ll_getitem_foldable_nonneg(l, index)
+ll_getitem_foldable._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
 def ll_setitem_nonneg(func, l, index, newitem):
@@ -727,6 +729,7 @@ def ll_setitem_nonneg(func, l, index, newitem):
         if index >= l.ll_length():
             raise IndexError
     l.ll_setitem_fast(index, newitem)
+ll_setitem_nonneg._always_inline_ = True
 # no oopspec -- the function is inlined by the JIT
 
 def ll_setitem(func, l, index, newitem):
