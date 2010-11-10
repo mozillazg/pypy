@@ -266,12 +266,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
         return W_TupleObject(list_not_modified_any_more(list_w))
-
-    def newtuple_imm(self, list_w):
-        # call this instead of newtuple() if the list already has
-        # the annotation 'list_not_modified_any_more()'
-        assert isinstance(list_w, list)
-        return W_TupleObject(list_w)
+    newtuple._annspecialcase_ = 'specialize:list_not_modified_any_more(1)'
 
     def newlist(self, list_w):
         return W_ListObject(list_w)

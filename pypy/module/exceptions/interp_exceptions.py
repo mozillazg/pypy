@@ -113,12 +113,12 @@ class W_BaseException(Wrappable):
         elif lgt == 1:
             return space.str(self.args_w[0])
         else:
-            return space.str(space.newtuple_imm(self.args_w))
+            return space.str(space.newtuple(self.args_w))
     descr_str.unwrap_spec = ['self', ObjSpace]
 
     def descr_repr(self, space):
         if self.args_w:
-            args_repr = space.str_w(space.repr(space.newtuple_imm(self.args_w)))
+            args_repr = space.str_w(space.repr(space.newtuple(self.args_w)))
         else:
             args_repr = "()"
         clsname = self.getclass(space).getname(space, '?')
@@ -126,13 +126,13 @@ class W_BaseException(Wrappable):
     descr_repr.unwrap_spec = ['self', ObjSpace]
 
     def descr_getargs(space, self):
-        return space.newtuple_imm(self.args_w)
+        return space.newtuple(self.args_w)
 
     def descr_setargs(space, self, w_newargs):
         self.args_w = space.fixedview(w_newargs)
 
     def descr_getitem(self, space, w_index):
-        return space.getitem(space.newtuple_imm(self.args_w), w_index)
+        return space.getitem(space.newtuple(self.args_w), w_index)
     descr_getitem.unwrap_spec = ['self', ObjSpace, W_Root]
 
     def getdict(self):
@@ -146,7 +146,7 @@ class W_BaseException(Wrappable):
         self.w_dict = w_dict
 
     def descr_reduce(self, space):
-        lst = [self.getclass(space), space.newtuple_imm(self.args_w)]
+        lst = [self.getclass(space), space.newtuple(self.args_w)]
         if self.w_dict is not None and space.is_true(self.w_dict):
             lst = lst + [self.w_dict]
         return space.newtuple(lst)
@@ -294,7 +294,7 @@ def key_error_str(self, space):
     elif len(self.args_w) == 1:
         return space.repr(self.args_w[0])
     else:
-        return space.str(space.newtuple_imm(self.args_w))
+        return space.str(space.newtuple(self.args_w))
 key_error_str.unwrap_spec = ['self', ObjSpace]
     
 W_KeyError = _new_exception('KeyError', W_LookupError,
@@ -336,7 +336,7 @@ class W_EnvironmentError(W_StandardError):
             lst = [self.getclass(space), space.newtuple(
                 self.args_w + [self.w_filename])]
         else:
-            lst = [self.getclass(space), space.newtuple_imm(self.args_w)]
+            lst = [self.getclass(space), space.newtuple(self.args_w)]
         if self.w_dict is not None and space.is_true(self.w_dict):
             lst = lst + [self.w_dict]
         return space.newtuple(lst)
@@ -520,7 +520,7 @@ class W_SystemExit(W_BaseException):
         if len(args_w) == 1:
             self.w_code = args_w[0]
         elif len(args_w) > 1:
-            self.w_code = space.newtuple_imm(args_w)
+            self.w_code = space.newtuple(args_w)
         W_BaseException.descr_init(self, space, args_w)
     descr_init.unwrap_spec = ['self', ObjSpace, 'args_w']
 
