@@ -239,6 +239,14 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self, s_arg):
         from pypy.annotation.model import SomeList
         assert isinstance(s_arg, SomeList)
+        # check that we don't call list_not_modified_any_more() on a list that
+        # is already the result of a previous list_not_modified_any_more().
+        # This helps locating issues in a pypy translation: if newtuple() is
+        # first annotated with a list that comes e.g. from fixedview(), it
+        # will immediately crash here instead of later when newtuple() is
+        # also annotated with a normal list.
+        assert not s_arg.listdef.listitem.must_not_mutate, (
+            "argument already has the flag 'must_not_mutate'")
         # the logic behind it is that we try not to propagate
         # make_sure_not_resized, when list comprehension is not on
         if self.bookkeeper.annotator.translator.config.translation.list_comprehension_operations:
