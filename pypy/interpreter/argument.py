@@ -3,7 +3,7 @@ Arguments objects.
 """
 
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.rlib.debug import make_sure_not_resized, list_not_modified_any_more
+from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib import jit
 
 
@@ -134,8 +134,7 @@ class Arguments(object):
 
     def replace_arguments(self, args_w):
         "Return a new Arguments with a args_w as positional arguments."
-        return Arguments(self.space, list_not_modified_any_more(args_w),
-                         self.keywords, self.keywords_w)
+        return Arguments(self.space, args_w, self.keywords, self.keywords_w)
 
     def prepend(self, w_firstarg):
         "Return a new Arguments with a new argument inserted first."

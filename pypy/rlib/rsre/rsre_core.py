@@ -91,7 +91,7 @@ class AbstractMatchContext(object):
         # and they must not be more than len(string).
         check_nonneg(match_start)
         check_nonneg(end)
-        self.pattern = list_not_modified_any_more(pattern)
+        self.pattern = pattern
         self.match_start = match_start
         self.end = end
         self.flags = flags
@@ -946,6 +946,7 @@ def _adjust(start, end, length):
 
 def match(pattern, string, start=0, end=sys.maxint, flags=0):
     start, end = _adjust(start, end, len(string))
+    pattern = list_not_modified_any_more(pattern)
     ctx = StrMatchContext(pattern, string, start, end, flags)
     if match_context(ctx):
         return ctx
@@ -954,6 +955,7 @@ def match(pattern, string, start=0, end=sys.maxint, flags=0):
 
 def search(pattern, string, start=0, end=sys.maxint, flags=0):
     start, end = _adjust(start, end, len(string))
+    pattern = list_not_modified_any_more(pattern)
     ctx = StrMatchContext(pattern, string, start, end, flags)
     if search_context(ctx):
         return ctx

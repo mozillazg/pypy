@@ -12,7 +12,7 @@ def descr__new__(space, w_typetype, w_name, w_bases, w_dict):
 
     w_typetype = _precheck_for_new(space, w_typetype)
 
-    bases_w = space.fixedview(w_bases)
+    bases_w = space.fixedview(w_bases)[:]
 
     w_winner = w_typetype
     for base in bases_w:
@@ -115,7 +115,7 @@ def descr_set__bases__(space, w_type, w_value):
                               "can only assign tuple to %s.__bases__, not %s",
                               w_type.name,
                               space.type(w_value).getname(space, '?'))
-    newbases_w = space.fixedview(w_value)
+    newbases_w = space.fixedview(w_value)[:]
     if len(newbases_w) == 0:
         raise operationerrfmt(space.w_TypeError,
                     "can only assign non-empty tuple to %s.__bases__, not ()",

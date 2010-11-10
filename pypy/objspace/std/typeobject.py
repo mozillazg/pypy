@@ -11,6 +11,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.objectmodel import current_object_addr_as_int, compute_hash
 from pypy.rlib.jit import hint, purefunction_promote, we_are_jitted
 from pypy.rlib.jit import dont_look_inside, purefunction
+from pypy.rlib.debug import list_not_modified_any_more
 from pypy.rlib.rarithmetic import intmask, r_uint
 
 from copy_reg import _HEAPTYPE
@@ -618,7 +619,7 @@ def ensure_common_attributes(w_self):
     ensure_doc_attr(w_self)
     if w_self.is_heaptype():
         ensure_module_attr(w_self)
-    w_self.mro_w = []      # temporarily
+    w_self.mro_w = list_not_modified_any_more([])      # temporarily
     compute_mro(w_self)
 
 def ensure_static_new(w_self):
