@@ -24,6 +24,7 @@ def transform_graph(graph, cpu=None, callcontrol=None, portal_jd=None):
 
 
 class Transformer(object):
+    vable_array_vars = None
 
     def __init__(self, cpu=None, callcontrol=None, portal_jd=None):
         self.cpu = cpu
@@ -101,6 +102,8 @@ class Transformer(object):
         return op
 
     def _check_no_vable_array(self, list):
+        if not self.vable_array_vars:
+            return
         for v in list:
             if v in self.vable_array_vars:
                 raise AssertionError(
