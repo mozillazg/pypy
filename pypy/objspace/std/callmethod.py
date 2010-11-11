@@ -61,7 +61,7 @@ def LOOKUP_METHOD(f, nameindex, *ignored):
                     f.pushvalue(w_descr)
                     f.pushvalue(w_obj)
                     if (space.config.objspace.std.withmapdict and
-                            not jit.we_are_jitted():
+                            not jit.we_are_jitted()):
                         # let mapdict cache stuff
                         LOOKUP_METHOD_mapdict_fill_cache_method(
                             f.getcode(), nameindex, w_obj, w_type, w_descr)
