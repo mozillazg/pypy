@@ -77,6 +77,7 @@ from pypy.interpreter.typedef import TypeDef, interp_attrproperty_w,\
 from pypy.interpreter.gateway import interp2app, Arguments
 from pypy.interpreter.error import OperationError
 from pypy.rlib import rwin32
+from pypy.rlib.debug import list_not_modified_any_more
 
 def readwrite_attrproperty_w(name, cls):
     def fget(space, obj):
@@ -92,11 +93,15 @@ class W_BaseException(Wrappable):
     and will be deprecated at some point. 
     """
     w_dict = None
-    args_w = []
+    _empty_args_w = []
 
     def __init__(self, space):
         self.space = space
         self.w_message = space.w_None
+        self.args_w = list_not_modified_any_more(W_BaseException._empty_args_w)
+        # Note that 'self.args_w' is annotated as a list-that-is-not-modified,
+        # which cannot easily be mixed together with a general list annotation.
+        # That's why we use 'list_not_modified_any_more()'.
 
     def descr_init(self, space, args_w):
         self.args_w = args_w
@@ -327,7 +332,7 @@ class W_EnvironmentError(W_StandardError):
             self.w_strerror = args_w[1]
         if len(args_w) == 3:
             self.w_filename = args_w[2]
-            self.args_w = [args_w[0], args_w[1]]
+            self.args_w = list_not_modified_any_more([args_w[0], args_w[1]])
     descr_init.unwrap_spec = ['self', ObjSpace, 'args_w']
 
     # since we rebind args_w, we need special reduce, grump
