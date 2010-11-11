@@ -16,8 +16,9 @@ typedef struct {
     Py_ssize_t size;
 } PyTupleObject;
 
+#define PyTuple_GET_ITEM        PyTuple_GetItem
+
 /* Macro, trading safety for speed */
-#define PyTuple_GET_ITEM(op, i) (((PyTupleObject *)(op))->items[i])
 #define PyTuple_GET_SIZE(op)    (((PyTupleObject *)(op))->size)
 
 /* Macro, *only* to be used to fill in brand new tuples */
