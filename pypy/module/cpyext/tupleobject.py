@@ -103,7 +103,7 @@ def PyTuple_SetItem(space, ref, pos, ref_item):
         msg = "PyTuple_SetItem() called on an already-escaped tuple object"
         raise OperationError(space.w_SystemError, space.wrap(msg))
     ref_old = ref_tup.c_items[pos]
-    ref_tup.c_items[pos] = ref      # SetItem steals a reference!
+    ref_tup.c_items[pos] = ref_item      # SetItem steals a reference!
     Py_DecRef(space, ref_old)
     return 0
 
