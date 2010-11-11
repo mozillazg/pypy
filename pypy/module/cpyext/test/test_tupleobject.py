@@ -31,9 +31,10 @@ class TestTupleObject(BaseApiTest):
     def test_tuple_setup(self, space, api):
         ref_tup = api.PyTuple_New(2)
         ref0 = api.PyInt_FromLong(123)
-        ref1 = api.PyInt_FromLong(456)
         api.PyTuple_SetItem(ref_tup, 0, ref0)
+        ref1 = api.PyInt_FromLong(456)
         api.PyTuple_SetItem(ref_tup, 1, ref1)
 
         w_tup = from_ref(space, ref_tup)
         assert space.is_true(space.eq(w_tup, space.wrap((123, 456))))
+        api.DecRef(ref_tup)
