@@ -4,7 +4,7 @@ from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
                                     build_type_checkers, PyObjectFields,
                                     cpython_struct, bootstrap_function)
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
-    borrow_from, make_ref, from_ref, make_typedescr)
+    borrow_from, make_ref, from_ref, make_typedescr, get_typedescr)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 
 ##
@@ -59,11 +59,8 @@ def tuple_attach(space, py_obj, w_obj):
     """
     items_w = space.fixedview(w_obj)
     py_tup = rffi.cast(PyTupleObject, py_obj)
-    py_tup.c_items = lltype.malloc(ARRAY_OF_PYOBJ.TO, len(items_w),
-                                    flavor='raw')
+    py_tup.c_items = lltype.nullptr(ARRAY_OF_PYOBJ.TO)
     py_tup.c_size = len(items_w)
-    for i in range(len(items_w)):
-        py_tup.c_items[i] = make_ref(space, items_w[i])
 
 def tuple_realize(space, py_obj):
     """
@@ -84,9 +81,10 @@ def tuple_dealloc(space, py_obj):
     """Frees allocated PyTupleObject resources.
     """
     py_tup = rffi.cast(PyTupleObject, py_obj)
-    for i in range(py_tup.c_size):
-        Py_DecRef(space, py_tup.c_items[i])
-    lltype.free(py_tup.c_items, flavor="raw")
+    if py_tup.c_items:
+        for i in range(py_tup.c_size):
+            Py_DecRef(space, py_tup.c_items[i])
+        lltype.free(py_tup.c_items, flavor="raw")
     from pypy.module.cpyext.object import PyObject_dealloc
     PyObject_dealloc(space, py_obj)
 
@@ -101,8 +99,9 @@ def PyTuple_SetItem(space, ref, pos, ref_item):
     # XXX do PyTuple_Check, without forcing ref as an interpreter object
     # XXX -- then if it fails it should also steal a reference, test it!!!
     ref_tup = rffi.cast(PyTupleObject, ref)
-    # XXX raise some exception if PyTuple_SetItem() is called on an
-    # tuple that already has a corresponding interpreter object
+    if not ref_tup.c_items:
+        msg = "PyTuple_SetItem() called on an already-escaped tuple object"
+        raise OperationError(space.w_SystemError, space.wrap(msg))
     ref_old = ref_tup.c_items[pos]
     ref_tup.c_items[pos] = ref      # SetItem steals a reference!
     Py_DecRef(space, ref_old)
@@ -112,7 +111,12 @@ def PyTuple_SetItem(space, ref, pos, ref_item):
 def PyTuple_GetItem(space, ref, pos):
     # XXX do PyTuple_Check, without forcing ref as an interpreter object
     ref_tup = rffi.cast(PyTupleObject, ref)
-    return ref_tup.c_items[pos]     # borrowed reference
+    if ref_tup.c_items:
+        return Reference(ref_tup.c_items[pos])     # borrowed reference
+    else:
+        w_t = from_ref(space, ref)
+        w_obj = space.getitem(w_t, space.wrap(pos))
+        return borrow_from(w_t, w_obj)
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyTuple_Size(space, ref):
@@ -140,11 +144,16 @@ def _PyTuple_Resize(space, refp, newsize):
     c_newitems = lltype.malloc(ARRAY_OF_PYOBJ.TO, newsize,
                                flavor='raw', zero=True)
     c_olditems = ref_tup.c_items
+    if not c_olditems:
+        msg = "_PyTuple_Resize() called on an already-escaped tuple object"
+        raise OperationError(space.w_SystemError, space.wrap(msg))
+    oldsize = ref_tup.c_size
     for i in range(min(oldsize, newsize)):
         c_newitems[i] = c_olditems[i]
     # decref items deleted by shrinkage
     for i in range(newsize, oldsize):
         Py_DecRef(space, c_olditems[i])
     ref_tup.c_items = c_newitems
+    ref_tup.c_size = newsize
     lltype.free(c_olditems, flavor='raw')
     return 0
