@@ -778,7 +778,7 @@ class AppTestWithMapDictAndCounters(object):
         res = self.check(f, 'x')
         assert res == (0, 0, 1)
 
-class AppTestCaching(AppTestWithMapDict):
+class AppTestGlobalCaching(AppTestWithMapDict):
     def setup_class(cls):
         cls.space = gettestobjspace(
             **{"objspace.std.withmethodcachecounter": True,
