@@ -362,20 +362,32 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if isinstance(w_obj, W_TupleObject):
             t = w_obj.wrappeditems
         elif isinstance(w_obj, W_ListObject):
-            t = w_obj.wrappeditems[:]
+            t = list_not_modified_any_more(w_obj.wrappeditems[:])
         else:
             if unroll:
-                return make_sure_not_resized(ObjSpace.unpackiterable_unroll(
-                    self, w_obj, expected_length)[:])
+                r = ObjSpace.unpackiterable_unroll(
+                        self, w_obj, expected_length)
             else:
-                return make_sure_not_resized(ObjSpace.unpackiterable(
-                    self, w_obj, expected_length)[:])
+                r = ObjSpace.unpackiterable(
+                        self, w_obj, expected_length)
+            return list_not_modified_any_more(r[:])
         if expected_length != -1 and len(t) != expected_length:
             raise self._wrap_expected_length(expected_length, len(t))
         return t
 
     def fixedview_unroll(self, w_obj, expected_length=-1):
         return self.fixedview(w_obj, expected_length, unroll=True)
+
+    def fixedunpack(self, w_obj, expected_length=-1):
+        if isinstance(w_obj, W_TupleObject):
+            t = w_obj.wrappeditems[:]
+        elif isinstance(w_obj, W_ListObject):
+            t = w_obj.wrappeditems[:]
+        else:
+            return ObjSpace.fixedunpack(self, w_obj, expected_length)
+        if expected_length != -1 and len(t) != expected_length:
+            raise self._wrap_expected_length(expected_length, len(t))
+        return t
 
     def listview(self, w_obj, expected_length=-1):
         if isinstance(w_obj, W_ListObject):
