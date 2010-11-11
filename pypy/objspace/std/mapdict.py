@@ -659,30 +659,54 @@ class CacheEntry(object):
     map = None
     version_tag = None
     index = 0
+    w_method = None # for callmethod
     success_counter = 0
     failure_counter = 0
+
+    def is_valid_for_obj(self, w_obj):
+        map = w_obj._get_mapdict_map()
+        return self.is_valid_for_map(map)
+
+    def is_valid_for_map(self, map):
+        if map is self.map:
+            version_tag = map.terminator.w_cls.version_tag()
+            if version_tag is self.version_tag:
+                # everything matches, it's incredibly fast
+                if map.space.config.objspace.std.withmethodcachecounter:
+                    self.success_counter += 1
+                return True
+        return False
 
 INVALID_CACHE_ENTRY = CacheEntry()
 INVALID_CACHE_ENTRY.map = objectmodel.instantiate(AbstractAttribute)
                              # different from any real map ^^^
 INVALID_CACHE_ENTRY.map.terminator = None
 
+
 def init_mapdict_cache(pycode):
     num_entries = len(pycode.co_names_w)
     pycode._mapdict_caches = [INVALID_CACHE_ENTRY] * num_entries
+
+def _fill_cache(pycode, nameindex, map, version_tag, index, w_method=None):
+    entry = pycode._mapdict_caches[nameindex]
+    if entry is INVALID_CACHE_ENTRY:
+        entry = CacheEntry()
+        pycode._mapdict_caches[nameindex] = entry
+    entry.map = map
+    entry.version_tag = version_tag
+    entry.index = index
+    entry.w_method = w_method
+    if pycode.space.config.objspace.std.withmethodcachecounter:
+        entry.failure_counter += 1
 
 def LOAD_ATTR_caching(pycode, w_obj, nameindex):
     # this whole mess is to make the interpreter quite a bit faster; it's not
     # used if we_are_jitted().
     entry = pycode._mapdict_caches[nameindex]
     map = w_obj._get_mapdict_map()
-    if map is entry.map:
-        version_tag = map.terminator.w_cls.version_tag()
-        if version_tag is entry.version_tag:
-            # everything matches, it's incredibly fast
-            if pycode.space.config.objspace.std.withmethodcachecounter:
-                entry.success_counter += 1
-            return w_obj._mapdict_read_storage(entry.index)
+    if entry.is_valid_for_map(map):
+        # everything matches, it's incredibly fast
+        return w_obj._mapdict_read_storage(entry.index)
     return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)
 LOAD_ATTR_caching._always_inline_ = True
 
@@ -710,17 +734,30 @@ def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
             if selector[1] != INVALID:
                 index = map.index(selector)
                 if index >= 0:
-                    entry = pycode._mapdict_caches[nameindex]
-                    if entry is INVALID_CACHE_ENTRY:
-                        entry = CacheEntry()
-                        pycode._mapdict_caches[nameindex] = entry
-                    entry.map = map
-                    entry.version_tag = version_tag
-                    entry.index = index
-                    if space.config.objspace.std.withmethodcachecounter:
-                        entry.failure_counter += 1
+                    _fill_cache(pycode, nameindex, map, version_tag, index)
                     return w_obj._mapdict_read_storage(index)
     if space.config.objspace.std.withmethodcachecounter:
         INVALID_CACHE_ENTRY.failure_counter += 1
     return space.getattr(w_obj, w_name)
 LOAD_ATTR_slowpath._dont_inline_ = True
+
+def LOOKUP_METHOD_mapdict(f, nameindex, w_obj):
+    space = f.space
+    pycode = f.getcode()
+    entry = pycode._mapdict_caches[nameindex]
+    if entry.is_valid_for_obj(w_obj):
+        w_method = entry.w_method
+        if w_method is not None:
+            f.pushvalue(w_method)
+            f.pushvalue(w_obj)
+            return True
+    return False
+
+def LOOKUP_METHOD_mapdict_fill_cache_method(pycode, nameindex, w_obj, w_type, w_method):
+    version_tag = w_type.version_tag()
+    if version_tag is None:
+        return
+    map = w_obj._get_mapdict_map()
+    if map is None:
+        return
+    _fill_cache(pycode, nameindex, map, version_tag, -1, w_method)
