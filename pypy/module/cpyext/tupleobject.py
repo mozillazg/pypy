@@ -4,7 +4,8 @@ from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
                                     build_type_checkers, PyObjectFields,
                                     cpython_struct, bootstrap_function)
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
-    borrow_from, make_ref, from_ref, make_typedescr, get_typedescr, Reference)
+    borrow_from, make_ref, from_ref, make_typedescr, get_typedescr, Reference,
+    track_reference)
 from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 
 ##
@@ -96,6 +97,9 @@ def PyTuple_New(space, size):
 
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
 def PyTuple_SetItem(space, ref, pos, ref_item):
+    # XXX steals a reference at the level of PyObjects.  Don't try to
+    # XXX call this function with an interpreter object as ref_item!
+
     # XXX do PyTuple_Check, without forcing ref as an interpreter object
     # XXX -- then if it fails it should also steal a reference, test it!!!
     ref_tup = rffi.cast(PyTupleObject, ref)
