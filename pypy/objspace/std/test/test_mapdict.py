@@ -597,7 +597,8 @@ class AppTestWithMapDictAndCounters(object):
         from pypy.interpreter import gateway
         cls.space = gettestobjspace(
             **{"objspace.std.withmapdict": True,
-               "objspace.std.withmethodcachecounter": True})
+               "objspace.std.withmethodcachecounter": True,
+               "objspace.opcodes.CALL_METHOD": True})
         #
         def check(space, w_func, name):
             w_code = space.getattr(w_func, space.wrap('func_code'))
@@ -777,6 +778,58 @@ class AppTestWithMapDictAndCounters(object):
         assert res == (0, 0, 1)
         res = self.check(f, 'x')
         assert res == (0, 0, 1)
+
+    def test_call_method_uses_cache(self):
+        # bit sucky
+        global C
+
+        class C(object):
+            def m(*args):
+                return args
+        C.sm = staticmethod(C.m.im_func)
+        C.cm = classmethod(C.m.im_func)
+
+        exec """if 1:
+
+            def f():
+                c = C()
+                res = c.m(1)
+                assert res == (c, 1)
+                return 42
+
+            def g():
+                c = C()
+                res = c.sm(1)
+                assert res == (1, )
+                return 42
+
+            def h():
+                c = C()
+                res = c.cm(1)
+                assert res == (C, 1)
+                return 42
+        """
+        res = self.check(f, 'm')
+        assert res == (1, 0, 0)
+        res = self.check(f, 'm')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'm')
+        assert res == (0, 1, 0)
+        res = self.check(f, 'm')
+        assert res == (0, 1, 0)
+
+        # static methods are not cached
+        res = self.check(g, 'sm')
+        assert res == (0, 0, 0)
+        res = self.check(g, 'sm')
+        assert res == (0, 0, 0)
+
+        # neither are class methods
+        res = self.check(h, 'cm')
+        assert res == (0, 0, 0)
+        res = self.check(h, 'cm')
+        assert res == (0, 0, 0)
+
 
 class AppTestGlobalCaching(AppTestWithMapDict):
     def setup_class(cls):
