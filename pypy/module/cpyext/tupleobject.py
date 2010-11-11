@@ -123,6 +123,13 @@ def PyTuple_GetItem(space, ref, pos):
         return borrow_from(w_t, w_obj)
 
 @cpython_api([PyObject], Py_ssize_t, error=-1)
+def _PyTuple_Size_Fast(space, ref):
+    # custom version: it's not a macro, so it can be called from other .py
+    # files; but it doesn't include PyTuple_Check()
+    ref_tup = rffi.cast(PyTupleObject, ref)
+    return ref_tup.c_size
+
+@cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyTuple_Size(space, ref):
     """Take a pointer to a tuple object, and return the size of that tuple."""
     # XXX do PyTuple_Check, without forcing ref as an interpreter object
