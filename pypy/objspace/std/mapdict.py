@@ -428,6 +428,7 @@ class ObjectMixin(object):
         self.storage = make_sure_not_resized([None] * map.size_estimate())
 
     def _mapdict_read_storage(self, index):
+        assert index >= 0
         return self.storage[index]
     def _mapdict_write_storage(self, index, value):
         self.storage[index] = value
@@ -495,6 +496,7 @@ def _make_subclass_size_n(supercls, n):
             return rerased.unerase_fixedsizelist(erased, W_Root)
 
         def _mapdict_read_storage(self, index):
+            assert index >= 0
             for i in rangenmin1:
                 if index == i:
                     erased = getattr(self, "_value%s" % i)
@@ -704,7 +706,7 @@ def LOAD_ATTR_caching(pycode, w_obj, nameindex):
     # used if we_are_jitted().
     entry = pycode._mapdict_caches[nameindex]
     map = w_obj._get_mapdict_map()
-    if entry.is_valid_for_map(map):
+    if entry.is_valid_for_map(map) and entry.w_method is None:
         # everything matches, it's incredibly fast
         return w_obj._mapdict_read_storage(entry.index)
     return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)

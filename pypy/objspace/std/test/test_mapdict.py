@@ -830,6 +830,34 @@ class AppTestWithMapDictAndCounters(object):
         res = self.check(h, 'cm')
         assert res == (0, 0, 0)
 
+    def test_mix_cache_bug(self):
+        # bit sucky
+        global C
+
+        class C(object):
+            def m(*args):
+                return args
+
+        exec """if 1:
+
+            def f():
+                c = C()
+                res = c.m(1)
+                assert res == (c, 1)
+                bm = c.m
+                res = bm(1)
+                assert res == (c, 1)
+                return 42
+
+        """
+        res = self.check(f, 'm')
+        assert res == (1, 1, 1)
+        res = self.check(f, 'm')
+        assert res == (0, 2, 1)
+        res = self.check(f, 'm')
+        assert res == (0, 2, 1)
+        res = self.check(f, 'm')
+        assert res == (0, 2, 1)
 
 class AppTestGlobalCaching(AppTestWithMapDict):
     def setup_class(cls):
