@@ -67,7 +67,8 @@ def ll_meta_interp(function, args, backendopt=False, type_system='lltype',
 
 def jittify_and_run(interp, graph, args, repeat=1,
                     backendopt=False, trace_limit=sys.maxint,
-                    debug_level=DEBUG_STEPS, inline=False, **kwds):
+                    debug_level=DEBUG_STEPS, inline=False,
+                    loop_longevity=0, **kwds):
     from pypy.config.config import ConfigError
     translator = interp.typer.annotator.translator
     try:
@@ -85,6 +86,7 @@ def jittify_and_run(interp, graph, args, repeat=1,
         jd.warmstate.set_param_trace_limit(trace_limit)
         jd.warmstate.set_param_inlining(inline)
         jd.warmstate.set_param_debug(debug_level)
+        jd.warmstate.set_param_loop_longevity(loop_longevity)
     warmrunnerdesc.finish()
     res = interp.eval_graph(graph, args)
     if not kwds.get('translate_support_code', False):
@@ -713,7 +715,7 @@ class WarmRunnerDesc(object):
                         vinfo.VTYPEPTR, virtualizableref)
                     vinfo.reset_vable_token(virtualizable)
                 try:
-                    loop_token = fail_descr.handle_fail(self.metainterp_sd)
+                    loop_token = fail_descr.handle_fail(self.metainterp_sd, jd)
                 except JitException, e:
                     return handle_jitexception(e)
                 fail_descr = self.execute_token(loop_token)
@@ -820,4 +822,5 @@ class WarmRunnerDesc(object):
         debug_stop("jit-running")
         self.metainterp_sd.profiler.end_running()
         self.memory_manager.keep_loop_alive(loop_token)
+        print loop_token
         return fail_descr

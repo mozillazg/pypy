@@ -1048,13 +1048,13 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
-        original_loop_token = metainterp.resumekey.original_loop_token
+        original_greenkey = metainterp.resumekey.original_greenkey
         if opnum == rop.GUARD_NOT_FORCED:
-            resumedescr = compile.ResumeGuardForcedDescr(metainterp.staticdata,
-                                                      original_loop_token,
-                                                      metainterp.jitdriver_sd)
+            resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
+                                                   original_greenkey,
+                                                   metainterp.jitdriver_sd)
         else:
-            resumedescr = compile.ResumeGuardDescr(original_loop_token)
+            resumedescr = compile.ResumeGuardDescr(original_greenkey)
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         virtualizable_boxes = None
@@ -1326,6 +1326,11 @@ class MetaInterpStaticData(object):
                     return jitcode
             return None
 
+    def try_to_free_some_loops(self):
+        # Increase here the generation recorded by the memory manager.
+        if self.warmrunnerdesc is not None:       # for tests
+            self.warmrunnerdesc.memory_manager.next_generation()
+
     # ---------------- logging ------------------------
 
     def log(self, msg):
@@ -1369,9 +1374,6 @@ class MetaInterp(object):
         self.portal_trace_positions = []
         self.free_frames_list = []
         self.last_exc_value_box = None
-        # Increase here the generation recorded by the memory manager.
-        if self.staticdata.warmrunnerdesc is not None:       # for tests
-            self.staticdata.warmrunnerdesc.memory_manager.next_generation()
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -1622,6 +1624,7 @@ class MetaInterp(object):
         # is also available as 'self.jitdriver_sd', because we need to
         # specialize this function and a few other ones for the '*args'.
         debug_start('jit-tracing')
+        self.staticdata.try_to_free_some_loops()
         self.staticdata._setup_once()
         self.staticdata.profiler.start_tracing()
         assert jitdriver_sd is self.jitdriver_sd
@@ -1639,7 +1642,7 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         redkey = original_boxes[num_green_args:]
-        self.resumekey = compile.ResumeFromInterpDescr(self, original_greenkey,
+        self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
                                                        redkey)
         self.seen_loop_header_for_jdindex = -1
         try:
@@ -1652,6 +1655,7 @@ class MetaInterp(object):
 
     def handle_guard_failure(self, key):
         debug_start('jit-tracing')
+        self.staticdata.try_to_free_some_loops()
         self.staticdata.profiler.start_tracing()
         assert isinstance(key, compile.ResumeGuardDescr)
         self.initialize_state_from_guard_failure(key)
@@ -1662,7 +1666,7 @@ class MetaInterp(object):
             debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        original_greenkey = key.original_loop_token.outermost_greenkey
+        original_greenkey = key.original_greenkey
         # notice that here we just put the greenkey
         # use -1 to mark that we will have to give up
         # because we cannot reconstruct the beginning of the proper loop

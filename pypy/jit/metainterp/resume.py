@@ -915,11 +915,10 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 
 # ---------- when resuming for blackholing, get direct values ----------
 
-def blackhole_from_resumedata(blackholeinterpbuilder, storage,
+def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
                               all_virtuals=None):
     resumereader = ResumeDataDirectReader(blackholeinterpbuilder.metainterp_sd,
                                           storage, all_virtuals)
-    jitdriver_sd = storage.get_jitdriver_sd()
     vinfo = jitdriver_sd.virtualizable_info
     ginfo = jitdriver_sd.greenfield_info
     vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info

@@ -59,6 +59,8 @@ class MemoryManager(object):
     def _kill_old_loops_now(self):
         debug_start("jit-free-memmgr")
         oldtotal = len(self.alive_loops)
+        print self.alive_loops.keys()
+        debug_print("Current generation:", self.current_generation)
         debug_print("Loop tokens before:", oldtotal)
         max_generation = self.current_generation - self.max_age
         for looptoken in self.alive_loops.keys():
@@ -67,4 +69,5 @@ class MemoryManager(object):
         newtotal = len(self.alive_loops)
         debug_print("Loop tokens freed: ", oldtotal - newtotal)
         debug_print("Loop tokens left:  ", newtotal)
+        print self.alive_loops.keys()
         debug_stop("jit-free-memmgr")

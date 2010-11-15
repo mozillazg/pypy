@@ -1,7 +1,6 @@
 from pypy.jit.metainterp.memmgr import MemoryManager
-
-##missing:
-##    contains_jumps_to needs to be filled
+from pypy.jit.metainterp.test.test_basic import LLJitMixin
+from pypy.rlib.jit import JitDriver
 
 
 class FakeLoopToken:
@@ -57,3 +56,23 @@ class TestMemoryManager:
                 assert tokens[i] not in memmgr.alive_loops
             else:
                 assert tokens[i] in memmgr.alive_loops
+
+
+class TestIntegration(LLJitMixin):
+
+    def test_loop_kept_alive(self):
+        myjitdriver = JitDriver(greens=[], reds=['n'])
+        def g():
+            n = 10
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n)
+                myjitdriver.jit_merge_point(n=n)
+                n = n - 1
+            return 21
+        def f():
+            for i in range(6):
+                g()
+            return 42
+
+        res = self.meta_interp(f, [], loop_longevity=1)
+        assert res == 42

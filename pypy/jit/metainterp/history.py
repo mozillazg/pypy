@@ -181,7 +181,7 @@ class AbstractFailDescr(AbstractDescr):
     index = -1
     original_loop_token = None
 
-    def handle_fail(self, metainterp_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError
@@ -730,7 +730,6 @@ class LoopToken(AbstractDescr):
     """
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None
-    outermost_greenkey = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
     cpu = None
@@ -758,6 +757,9 @@ class LoopToken(AbstractDescr):
             debug_print("Freeing loop #", self.number)
             self.cpu.free_loop_and_bridges(self)
             debug_stop("jit-free-looptoken")
+
+    def __repr__(self):
+        return '<Loop %d, gen=%d>' % (self.number, self.generation)
 
     def repr_of_descr(self):
         return '<Loop%d>' % self.number

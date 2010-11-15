@@ -42,11 +42,10 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(cpu, nb_args, jitdriver_sd, greenkey):
+def make_loop_token(cpu, nb_args, jitdriver_sd):
     loop_token = LoopToken(cpu)
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
     loop_token.outermost_jitdriver_sd = jitdriver_sd
-    loop_token.outermost_greenkey = greenkey
     return loop_token
 
 # ____________________________________________________________
@@ -66,7 +65,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
     loop_token = make_loop_token(metainterp.cpu, len(loop.inputargs),
-                                 jitdriver_sd, greenkey)
+                                 jitdriver_sd)
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -143,32 +142,32 @@ class _DoneWithThisFrameDescr(AbstractFailDescr):
     pass
 
 class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd):
-        #assert jitdriver_sd.result_type == history.VOID
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        assert jitdriver_sd.result_type == history.VOID
         raise metainterp_sd.DoneWithThisFrameVoid()
 
 class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd):
-        #assert jitdriver_sd.result_type == history.INT
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        assert jitdriver_sd.result_type == history.INT
         result = metainterp_sd.cpu.get_latest_value_int(0)
         raise metainterp_sd.DoneWithThisFrameInt(result)
 
 class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd):
-        #assert jitdriver_sd.result_type == history.REF
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        assert jitdriver_sd.result_type == history.REF
         cpu = metainterp_sd.cpu
         result = cpu.get_latest_value_ref(0)
         cpu.clear_latest_values(1)
         raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
 class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd):
-        #assert jitdriver_sd.result_type == history.FLOAT
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        assert jitdriver_sd.result_type == history.FLOAT
         result = metainterp_sd.cpu.get_latest_value_float(0)
         raise metainterp_sd.DoneWithThisFrameFloat(result)
 
 class ExitFrameWithExceptionDescrRef(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
         cpu = metainterp_sd.cpu
         value = cpu.get_latest_value_ref(0)
         cpu.clear_latest_values(1)
@@ -210,9 +209,8 @@ def make_done_loop_tokens():
             }
 
 class ResumeDescr(AbstractFailDescr):
-    def __init__(self, original_loop_token):
-        assert isinstance(original_loop_token, history.LoopToken)
-        self.original_loop_token = original_loop_token
+    def __init__(self, original_greenkey):
+        self.original_greenkey = original_greenkey
 
 class ResumeGuardDescr(ResumeDescr):
     _counter = 0        # if < 0, there is one counter per value;
@@ -255,29 +253,26 @@ class ResumeGuardDescr(ResumeDescr):
             # a negative value
             self._counter = cnt | i
 
-    def handle_fail(self, metainterp_sd):
-        if self.must_compile(metainterp_sd):
-            return self._trace_and_compile_from_bridge(metainterp_sd)
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        if self.must_compile(metainterp_sd, jitdriver_sd):
+            return self._trace_and_compile_from_bridge(metainterp_sd,
+                                                       jitdriver_sd)
         else:
             from pypy.jit.metainterp.blackhole import resume_in_blackhole
-            resume_in_blackhole(metainterp_sd, self)
+            resume_in_blackhole(metainterp_sd, jitdriver_sd, self)
             assert 0, "unreachable"
 
-    def _trace_and_compile_from_bridge(self, metainterp_sd):
+    def _trace_and_compile_from_bridge(self, metainterp_sd, jitdriver_sd):
+        # 'jitdriver_sd' corresponds to the outermost one, i.e. the one
+        # of the jit_merge_point where we started the loop, even if the
+        # loop itself may contain temporarily recursion into other
+        # jitdrivers.
         from pypy.jit.metainterp.pyjitpl import MetaInterp
-        metainterp = MetaInterp(metainterp_sd, self.get_jitdriver_sd())
+        metainterp = MetaInterp(metainterp_sd, jitdriver_sd)
         return metainterp.handle_guard_failure(self)
     _trace_and_compile_from_bridge._dont_inline_ = True
 
-    def get_jitdriver_sd(self):
-        # Returns the jitdriver_sd that corresponds to the outermost
-        # level, i.e. the level of the jit_merge_point where we started
-        # the loop, even if the loop itself may contain some recursion
-        # into other jitdrivers.
-        return self.original_loop_token.outermost_jitdriver_sd
-
-    def must_compile(self, metainterp_sd):
-        jitdriver_sd = self.get_jitdriver_sd()
+    def must_compile(self, metainterp_sd, jitdriver_sd):
         trace_eagerness = jitdriver_sd.warmstate.trace_eagerness
         if self._counter >= 0:
             self._counter += 1
@@ -335,18 +330,18 @@ class ResumeGuardDescr(ResumeDescr):
         res.rd_pendingfields = self.rd_pendingfields
 
     def _clone_if_mutable(self):
-        res = ResumeGuardDescr(self.original_loop_token)
+        res = ResumeGuardDescr(self.original_greenkey)
         self.copy_all_attrbutes_into(res)
         return res
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
-    def __init__(self, metainterp_sd, original_loop_token, jitdriver_sd):
-        ResumeGuardDescr.__init__(self, original_loop_token)
+    def __init__(self, metainterp_sd, original_greenkey, jitdriver_sd):
+        ResumeGuardDescr.__init__(self, original_greenkey)
         self.metainterp_sd = metainterp_sd
         self.jitdriver_sd = jitdriver_sd
 
-    def handle_fail(self, metainterp_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
         # Failures of a GUARD_NOT_FORCED are never compiled, but
         # always just blackholed.  First fish for the data saved when
         # the virtualrefs and virtualizable have been forced by
@@ -356,7 +351,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         all_virtuals = self.fetch_data(token)
         if all_virtuals is None:
             all_virtuals = []
-        resume_in_blackhole(metainterp_sd, self, all_virtuals)
+        assert jitdriver_sd is self.jitdriver_sd
+        resume_in_blackhole(metainterp_sd, jitdriver_sd, self, all_virtuals)
         assert 0, "unreachable"
 
     @staticmethod
@@ -409,7 +405,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def _clone_if_mutable(self):
         res = ResumeGuardForcedDescr(self.metainterp_sd,
-                                     self.original_loop_token,
+                                     self.original_greenkey,
                                      self.jitdriver_sd)
         self.copy_all_attrbutes_into(res)
         return res
@@ -476,11 +472,8 @@ class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
 
 
 class ResumeFromInterpDescr(ResumeDescr):
-    def __init__(self, metainterp, greenkey, redkey):
-        original_loop_token = make_loop_token(metainterp.cpu, len(redkey),
-                                              metainterp.jitdriver_sd,
-                                              greenkey)
-        ResumeDescr.__init__(self, original_loop_token)
+    def __init__(self, original_greenkey, redkey):
+        ResumeDescr.__init__(self, original_greenkey)
         self.redkey = redkey
 
     def compile_and_attach(self, metainterp, new_loop):
@@ -491,22 +484,22 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd = metainterp.staticdata
         jitdriver_sd = metainterp.jitdriver_sd
         metainterp.history.inputargs = self.redkey
-        new_loop_token = self.original_loop_token
-        original_greenkey = new_loop_token.outermost_greenkey
+        new_loop_token = make_loop_token(metainterp.cpu, len(self.redkey),
+                                         metainterp.jitdriver_sd)
         new_loop.inputargs = self.redkey
         new_loop.token = new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
-            original_greenkey,
+            self.original_greenkey,
             new_loop_token)
         # store the new loop in compiled_merge_points_wref too
         old_loop_tokens = metainterp.get_compiled_merge_points(
-            original_greenkey)
+            self.original_greenkey)
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
-        metainterp.set_compiled_merge_points(original_greenkey,
+        metainterp.set_compiled_merge_points(self.original_greenkey,
                                              old_loop_tokens)
 
     def reset_counter_from_failure(self):
@@ -561,7 +554,7 @@ def prepare_last_operation(new_loop, target_loop_token):
 # ____________________________________________________________
 
 class PropagateExceptionDescr(AbstractFailDescr):
-    def handle_fail(self, metainterp_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
         cpu = metainterp_sd.cpu
         exception = cpu.grab_exc_value()
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, exception)
@@ -575,7 +568,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
     """
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
-    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd, greenboxes)
+    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd)
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args
