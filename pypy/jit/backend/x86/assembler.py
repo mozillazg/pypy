@@ -409,8 +409,9 @@ class Assembler386(object):
 
     def _register_counter(self):
         if self._debug:
+            # YYY leak -- just put it in self.mc instead
             struct = lltype.malloc(DEBUG_COUNTER, flavor='raw',
-                                   track_allocation=False)   # known to leak
+                                   track_allocation=False)
             struct.i = 0
             self.loop_run_counters.append((len(self.loop_run_counters), struct))
         
