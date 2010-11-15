@@ -500,12 +500,14 @@ class ResumeFromInterpDescr(ResumeDescr):
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
             original_greenkey,
             new_loop_token)
-        # store the new loop in compiled_merge_points too
+        # store the new loop in compiled_merge_points_wref too
         old_loop_tokens = metainterp.get_compiled_merge_points(
             original_greenkey)
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
+        metainterp.set_compiled_merge_points(original_greenkey,
+                                             old_loop_tokens)
 
     def reset_counter_from_failure(self):
         pass
