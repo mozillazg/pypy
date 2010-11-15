@@ -271,6 +271,7 @@ PARAMETERS = {'threshold': 1000,
               'inlining': False,
               'optimizer': OPTIMIZER_FULL,
               'debug' : DEBUG_STEPS,
+              'loop_longevity': 1000,
               }
 unroll_parameters = unrolling_iterable(PARAMETERS.keys())
 

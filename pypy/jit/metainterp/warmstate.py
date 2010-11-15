@@ -214,6 +214,10 @@ class WarmEnterState(object):
         if self.profiler is not None:
             self.profiler.set_printing(value >= DEBUG_PROFILE)
 
+    def set_param_loop_longevity(self, value):
+        # note: it's a global parameter, not a per-jitdriver one
+        self.warmrunnerdesc.memory_manager.set_max_age(value)
+
     def disable_noninlinable_function(self, greenkey):
         cell = self.jit_cell_at_key(greenkey)
         cell.dont_trace_here = True
@@ -239,7 +243,8 @@ class WarmEnterState(object):
         if hasattr(self, 'maybe_compile_and_run'):
             return self.maybe_compile_and_run
 
-        metainterp_sd = self.warmrunnerdesc.metainterp_sd
+        warmrunnerdesc = self.warmrunnerdesc
+        metainterp_sd = warmrunnerdesc.metainterp_sd
         jitdriver_sd = self.jitdriver_sd
         vinfo = jitdriver_sd.virtualizable_info
         index_of_virtualizable = jitdriver_sd.index_of_virtualizable
@@ -304,16 +309,11 @@ class WarmEnterState(object):
 
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
-                metainterp_sd.profiler.start_running()
-                debug_start("jit-running")
-                fail_descr = metainterp_sd.cpu.execute_token(loop_token)
-                debug_stop("jit-running")
-                metainterp_sd.profiler.end_running()
+                fail_descr = warmrunnerdesc.execute_token(loop_token)
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)
-                loop_token = fail_descr.handle_fail(metainterp_sd,
-                                                    jitdriver_sd)
-       
+                loop_token = fail_descr.handle_fail(metainterp_sd)
+
         maybe_compile_and_run._dont_inline_ = True
         self.maybe_compile_and_run = maybe_compile_and_run
         return maybe_compile_and_run

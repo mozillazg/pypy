@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, r_dict, Symbolic
 from pypy.rlib.objectmodel import compute_hash, compute_unique_id
-from pypy.rlib.rarithmetic import intmask
+from pypy.rlib.rarithmetic import intmask, r_longlong
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
@@ -178,8 +178,9 @@ class AbstractDescr(AbstractValue):
 
 class AbstractFailDescr(AbstractDescr):
     index = -1
+    original_loop_token = None
 
-    def handle_fail(self, metainterp_sd, jitdriver_sd):
+    def handle_fail(self, metainterp_sd):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError
@@ -727,13 +728,21 @@ class LoopToken(AbstractDescr):
     generated assembler.
     """
     terminating = False # see TerminatingLoopToken in compile.py
+    has_been_freed = False
     outermost_jitdriver_sd = None
+    outermost_greenkey = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
-    number = 0
 
     def __init__(self, number=0):
         self.number = number
+        # See get_fail_descr_number() in backend/model.py: this growing
+        # list gives the 'descr_number' of all fail descrs that belong to
+        # this loop or to a bridge attached to it.
+        self.faildescr_indices = []
+        # For memory management of assembled loops
+        self.contains_jumps_to = {}      # set of other LoopTokens
+        self.generation = r_longlong(0)
 
     def repr_of_descr(self):
         return '<Loop%d>' % self.number

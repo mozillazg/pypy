@@ -12,11 +12,12 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import r_uint, intmask
 from pypy.rlib.debug import debug_print, fatalerror
+from pypy.rlib.debug import debug_start, debug_stop
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.translator.unsimplify import call_final_function
 
-from pypy.jit.metainterp import history, pyjitpl, gc
+from pypy.jit.metainterp import history, pyjitpl, gc, memmgr
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData, MetaInterp
 from pypy.jit.metainterp.typesystem import LLTypeHelper, OOTypeHelper
 from pypy.jit.metainterp.jitprof import Profiler, EmptyProfiler
@@ -183,6 +184,7 @@ class WarmRunnerDesc(object):
         self.rewrite_set_param()
         self.rewrite_force_virtual(vrefinfo)
         self.add_finish()
+        self.memory_manager = memmgr.MemoryManager(self.cpu)
         self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
     def finish(self):
@@ -711,10 +713,10 @@ class WarmRunnerDesc(object):
                         vinfo.VTYPEPTR, virtualizableref)
                     vinfo.reset_vable_token(virtualizable)
                 try:
-                    loop_token = fail_descr.handle_fail(self.metainterp_sd, jd)
+                    loop_token = fail_descr.handle_fail(self.metainterp_sd)
                 except JitException, e:
                     return handle_jitexception(e)
-                fail_descr = self.cpu.execute_token(loop_token)
+                fail_descr = self.execute_token(loop_token)
 
         jd._assembler_call_helper = assembler_call_helper # for debugging
         jd._assembler_helper_ptr = self.helper_func(
@@ -808,3 +810,15 @@ class WarmRunnerDesc(object):
             py.test.skip("rewrite_force_virtual: port it to ootype")
         all_graphs = self.translator.graphs
         vrefinfo.replace_force_virtual_with_call(all_graphs)
+
+    # ____________________________________________________________
+
+    def execute_token(self, loop_token):
+        self.metainterp_sd.profiler.start_running()
+        debug_start("jit-running")
+        self.memory_manager.enter_loop(loop_token)
+        fail_descr = self.cpu.execute_token(loop_token)
+        self.memory_manager.leave_loop(loop_token)
+        debug_stop("jit-running")
+        self.metainterp_sd.profiler.end_running()
+        return fail_descr

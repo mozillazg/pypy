@@ -1362,14 +1362,12 @@ def _handle_jitexception(blackholeinterp, jitexc):
     # We will continue to loop in _run_forever() from the parent level.
     return blackholeinterp, lle
 
-def resume_in_blackhole(metainterp_sd, jitdriver_sd, resumedescr,
-                        all_virtuals=None):
+def resume_in_blackhole(metainterp_sd, resumedescr, all_virtuals=None):
     from pypy.jit.metainterp.resume import blackhole_from_resumedata
     debug_start('jit-blackhole')
     metainterp_sd.profiler.start_blackhole()
     blackholeinterp = blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
-        jitdriver_sd,
         resumedescr,
         all_virtuals)
     current_exc = blackholeinterp._prepare_resume_from_failure(
