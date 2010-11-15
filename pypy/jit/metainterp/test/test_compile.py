@@ -5,6 +5,7 @@ from pypy.jit.metainterp.compile import insert_loop_token, compile_new_loop
 from pypy.jit.metainterp.compile import ResumeGuardDescr
 from pypy.jit.metainterp.compile import ResumeGuardCountersInt
 from pypy.jit.metainterp.compile import compile_tmp_callback
+from pypy.jit.metainterp.compile import send_loop_to_backend
 from pypy.jit.metainterp import optimize, jitprof, typesystem, compile
 from pypy.jit.metainterp.test.test_optimizefindnode import LLtypeMixin
 from pypy.jit.tool.oparser import parse
@@ -207,15 +208,62 @@ def test_compile_tmp_callback():
         class ExitFrameWithExceptionRef(Exception):
             pass
     FakeMetaInterpSD.cpu = cpu
-    class FakeJitDriverSD:
-        pass
     cpu.set_future_value_int(0, -156)
     cpu.set_future_value_int(1, -178)
     cpu.set_future_value_int(2, -190)
     fail_descr = cpu.execute_token(loop_token)
     try:
-        fail_descr.handle_fail(FakeMetaInterpSD(), FakeJitDriverSD())
+        fail_descr.handle_fail(FakeMetaInterpSD())
     except FakeMetaInterpSD.ExitFrameWithExceptionRef, e:
         assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), e.args[1]) == llexc
     else:
         assert 0, "should have raised"
+
+
+def test_send_loop_to_backend():
+    class FakeMetaInterpSD:
+        class globaldata:
+            loopnumbering = 17
+        class warmrunnerdesc:
+            class memory_manager:
+                @staticmethod
+                def record_loop(token):
+                    assert token is FakeLoop.token
+                    token._recorded = True
+        class logger_ops:
+            @staticmethod
+            def log_loop(*args, **kwds):
+                pass
+        class profiler:
+            @staticmethod
+            def start_backend():
+                pass
+            @staticmethod
+            def end_backend():
+                pass
+        class cpu:
+            @staticmethod
+            def compile_loop(inputargs, operations, token):
+                assert inputargs is FakeLoop.inputargs
+                assert operations is FakeLoop.operations
+                assert token is FakeLoop.token
+                token._compiled = True
+        class stats:
+            @staticmethod
+            def add_new_loop(loop):
+                pass
+        def log(self, text):
+            pass
+    class FakeLoop:
+        inputargs = []
+        operations = []
+        class token:
+            number = 0
+            _recorded = _compiled = False
+        def check_consistency(self):
+            pass
+    send_loop_to_backend(FakeMetaInterpSD(), FakeLoop(), "entry bridge")
+    assert FakeMetaInterpSD.globaldata.loopnumbering == 18
+    assert FakeLoop.token.number == 17
+    assert FakeLoop.token._recorded is True
+    assert FakeLoop.token._compiled is True

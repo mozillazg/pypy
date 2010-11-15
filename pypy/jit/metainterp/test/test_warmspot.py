@@ -382,7 +382,7 @@ class TestWarmspotDirect(object):
             def __init__(self, no):
                 self.no = no
             
-            def handle_fail(self, metainterp_sd, jitdrivers_sd):
+            def handle_fail(self, metainterp_sd):
                 if self.no == 0:
                     raise metainterp_sd.warmrunnerdesc.DoneWithThisFrameInt(3)
                 if self.no == 1:

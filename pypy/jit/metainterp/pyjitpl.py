@@ -1048,14 +1048,13 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
-        original_greenkey = metainterp.resumekey.original_greenkey
+        original_loop_token = metainterp.resumekey.original_loop_token
         if opnum == rop.GUARD_NOT_FORCED:
-            resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                   original_greenkey,
-                                                   metainterp.jitdriver_sd)
+            resumedescr = compile.ResumeGuardForcedDescr(metainterp.staticdata,
+                                                      original_loop_token,
+                                                      metainterp.jitdriver_sd)
         else:
-            resumedescr = compile.ResumeGuardDescr(metainterp_sd,
-                                                   original_greenkey)
+            resumedescr = compile.ResumeGuardDescr(original_loop_token)
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         virtualizable_boxes = None
@@ -1370,6 +1369,9 @@ class MetaInterp(object):
         self.portal_trace_positions = []
         self.free_frames_list = []
         self.last_exc_value_box = None
+        # Increase here the generation recorded by the memory manager.
+        if self.staticdata.warmrunnerdesc is not None:       # for tests
+            self.staticdata.warmrunnerdesc.memory_manager.next_generation()
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -1637,7 +1639,7 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         redkey = original_boxes[num_green_args:]
-        self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
+        self.resumekey = compile.ResumeFromInterpDescr(self, original_greenkey,
                                                        redkey)
         self.seen_loop_header_for_jdindex = -1
         try:
@@ -1660,7 +1662,7 @@ class MetaInterp(object):
             debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        original_greenkey = key.original_greenkey
+        original_greenkey = key.original_loop_token.outermost_greenkey
         # notice that here we just put the greenkey
         # use -1 to mark that we will have to give up
         # because we cannot reconstruct the beginning of the proper loop
