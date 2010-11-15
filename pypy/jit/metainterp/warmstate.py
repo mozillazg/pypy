@@ -330,10 +330,13 @@ class WarmEnterState(object):
                 assert cell.counter == -1
                 if not confirm_enter_jit(*args):
                     return
+                loop_token = cell.get_entry_loop_token()
+                if loop_token is None:   # it was a weakref that has been freed
+                    cell.counter = 0
+                    return
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
                 set_future_values(*args[num_green_args:])
-                loop_token = cell.get_entry_loop_token()
 
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception

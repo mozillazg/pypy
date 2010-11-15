@@ -78,6 +78,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
         return old_loop_token
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
+    loop.token = None
     return loop_token
 
 def insert_loop_token(old_loop_tokens, loop_token):
@@ -316,7 +317,7 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corrsponding guard_op and compile from there
         inputargs = metainterp.history.inputargs
         if not we_are_translated():
-            self._debug_suboperations = new_loop.operations
+            pass #self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
                                new_loop.operations)
 
@@ -501,6 +502,7 @@ class ResumeFromInterpDescr(ResumeDescr):
         old_loop_tokens.append(new_loop_token)
         metainterp.set_compiled_merge_points(self.original_greenkey,
                                              old_loop_tokens)
+        new_loop.token = None
 
     def reset_counter_from_failure(self):
         pass
