@@ -394,13 +394,17 @@ class PyPyCJITTests(object):
                 for i in range(x):
                     l = [i, x, 2]
                     s += g(*l)
+                    s += g(i, x, 2)
                 return s
-        ''', 100000, ([100], 300),
-                    ([1000], 3000),
-                    ([10000], 30000),
-                    ([100000], 300000))
+        ''', 100000, ([100], 600),
+                    ([1000], 6000),
+                    ([10000], 60000),
+                    ([100000], 600000))
         assert len(self.loops) == 1
         op, = self.get_by_bytecode("CALL_FUNCTION_VAR")
+        assert len(op.get_opnames("new")) == 0
+        assert len(op.get_opnames("call_may_force")) == 0
+        oplen, op, oplen = self.get_by_bytecode("CALL_FUNCTION")
         assert len(op.get_opnames("new")) == 0
         assert len(op.get_opnames("call_may_force")) == 0
 
