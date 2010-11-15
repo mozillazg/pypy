@@ -340,7 +340,8 @@ class WarmEnterState(object):
                 fail_descr = warmrunnerdesc.execute_token(loop_token)
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)
-                loop_token = fail_descr.handle_fail(metainterp_sd)
+                loop_token = fail_descr.handle_fail(metainterp_sd,
+                                                    jitdriver_sd)
 
         maybe_compile_and_run._dont_inline_ = True
         self.maybe_compile_and_run = maybe_compile_and_run
