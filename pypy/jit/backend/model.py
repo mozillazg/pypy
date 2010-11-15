@@ -10,15 +10,24 @@ class AbstractCPU(object):
 
     def __init__(self):
         self.fail_descr_list = []
+        self.fail_descr_free_list = []
 
     def get_fail_descr_number(self, descr):
         assert isinstance(descr, history.AbstractFailDescr)
         n = descr.index
         if n < 0:
             lst = self.fail_descr_list
-            n = len(lst)
-            lst.append(descr)
+            if len(self.fail_descr_free_list) > 0:
+                n = self.fail_descr_free_list.pop()
+                assert lst[n] is None
+                lst[n] = descr
+            else:
+                n = len(lst)
+                lst.append(descr)
             descr.index = n
+            looptoken = descr.original_loop_token
+            if looptoken is not None:
+                looptoken.faildescr_indices.append(n)
         return n
 
     def get_fail_descr_from_number(self, n):
@@ -112,6 +121,24 @@ class AbstractCPU(object):
         enough to redirect all CALL_ASSEMBLERs already compiled that call
         oldlooptoken so that from now own they will call newlooptoken."""
         raise NotImplementedError
+
+    def free_loop_and_bridges(self, looptoken):
+        """This method is called to free resources (machine code,
+        references to resume guards, etc.) allocated by the compilation
+        of a loop and all bridges attached to it.  After this call, the
+        frontend cannot use this compiled loop any more; in fact, it
+        guarantees that at the point of the call to free_code_group(),
+        none of the corresponding assembler is currently running.
+        """
+        # The base class provides a limited implementation: freeing the
+        # resume descrs.  This is already quite helpful, because the
+        # resume descrs are the largest consumers of memory (about 3x
+        # more than the assembler, in the case of the x86 backend).
+        lst = self.fail_descr_list
+        for n in looptoken.faildescr_indices:
+            lst[n] = None
+        self.fail_descr_free_list.extend(looptoken.faildescr_indices)
+        # We expect 'looptoken' to be itself garbage-collected soon.
 
     @staticmethod
     def sizeof(S):
