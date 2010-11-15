@@ -153,6 +153,7 @@ class WarmRunnerDesc(object):
                  optimizer=None, ProfilerClass=EmptyProfiler, **kwds):
         pyjitpl._warmrunnerdesc = self   # this is a global for debugging only!
         self.set_translator(translator)
+        self.memory_manager = memmgr.MemoryManager()
         self.build_cpu(CPUClass, **kwds)
         self.find_portals()
         self.codewriter = codewriter.CodeWriter(self.cpu, self.jitdrivers_sd)
@@ -184,7 +185,6 @@ class WarmRunnerDesc(object):
         self.rewrite_set_param()
         self.rewrite_force_virtual(vrefinfo)
         self.add_finish()
-        self.memory_manager = memmgr.MemoryManager(self.cpu)
         self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
     def finish(self):
@@ -816,9 +816,8 @@ class WarmRunnerDesc(object):
     def execute_token(self, loop_token):
         self.metainterp_sd.profiler.start_running()
         debug_start("jit-running")
-        self.memory_manager.enter_loop(loop_token)
         fail_descr = self.cpu.execute_token(loop_token)
-        self.memory_manager.leave_loop(loop_token)
         debug_stop("jit-running")
         self.metainterp_sd.profiler.end_running()
+        self.memory_manager.keep_loop_alive(loop_token)
         return fail_descr

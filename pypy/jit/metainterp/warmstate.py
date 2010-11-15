@@ -165,6 +165,7 @@ class WarmEnterState(object):
         "NOT_RPYTHON"
         self.warmrunnerdesc = warmrunnerdesc
         self.jitdriver_sd = jitdriver_sd
+        self.cpu = warmrunnerdesc.cpu
         try:
             self.profiler = warmrunnerdesc.metainterp_sd.profiler
         except AttributeError:       # for tests
@@ -233,8 +234,7 @@ class WarmEnterState(object):
         old_token = cell.entry_loop_token
         cell.entry_loop_token = entry_loop_token
         if old_token is not None:
-            cpu = self.warmrunnerdesc.cpu
-            cpu.redirect_call_assembler(old_token, entry_loop_token)
+            self.cpu.redirect_call_assembler(old_token, entry_loop_token)
 
     # ----------
 
@@ -459,7 +459,7 @@ class WarmEnterState(object):
 
         warmrunnerdesc = self.warmrunnerdesc
         jitdriver_sd   = self.jitdriver_sd
-        cpu = warmrunnerdesc.cpu
+        cpu = self.cpu
         vinfo = jitdriver_sd.virtualizable_info
         red_args_types = unrolling_iterable(jitdriver_sd._red_args_types)
         #
@@ -511,7 +511,7 @@ class WarmEnterState(object):
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
         jd = self.jitdriver_sd
-        cpu = self.warmrunnerdesc.cpu
+        cpu = self.cpu
 
         def can_inline_greenargs(*greenargs):
             if can_never_inline(*greenargs):

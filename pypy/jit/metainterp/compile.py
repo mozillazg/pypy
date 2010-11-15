@@ -42,8 +42,8 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(nb_args, jitdriver_sd, greenkey):
-    loop_token = LoopToken()
+def make_loop_token(cpu, nb_args, jitdriver_sd, greenkey):
+    loop_token = LoopToken(cpu)
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
     loop_token.outermost_jitdriver_sd = jitdriver_sd
     loop_token.outermost_greenkey = greenkey
@@ -65,7 +65,8 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop.operations = [h_ops[i].clone() for i in range(start, len(h_ops))]
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
-    loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd, greenkey)
+    loop_token = make_loop_token(metainterp.cpu, len(loop.inputargs),
+                                 jitdriver_sd, greenkey)
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -98,9 +99,6 @@ def send_loop_to_backend(metainterp_sd, loop, type):
     loop_token = loop.token
     loop_token.number = n = globaldata.loopnumbering
     globaldata.loopnumbering += 1
-    desc = metainterp_sd.warmrunnerdesc
-    if desc is not None:   # for tests
-        desc.memory_manager.record_loop(loop_token)
 
     metainterp_sd.logger_ops.log_loop(loop.inputargs, loop.operations, n, type)
     if not we_are_translated():
@@ -479,7 +477,7 @@ class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
 
 class ResumeFromInterpDescr(ResumeDescr):
     def __init__(self, metainterp, greenkey, redkey):
-        original_loop_token = make_loop_token(len(redkey),
+        original_loop_token = make_loop_token(metainterp.cpu, len(redkey),
                                               metainterp.jitdriver_sd,
                                               greenkey)
         ResumeDescr.__init__(self, original_loop_token)
@@ -575,7 +573,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
     """
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
-    loop_token = make_loop_token(len(inputargs), jitdriver_sd, greenboxes)
+    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd, greenboxes)
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args
