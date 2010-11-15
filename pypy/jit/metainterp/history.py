@@ -747,6 +747,9 @@ class LoopToken(AbstractDescr):
         self.generation = r_longlong(0)
 
     def __del__(self):
+        for i in range(160):
+            print '#',
+        print
         if self.cpu is None:
             return
         if self.generation > r_longlong(0):

@@ -70,9 +70,12 @@ class TestIntegration(LLJitMixin):
                 n = n - 1
             return 21
         def f():
-            for i in range(6):
+            for i in range(15):
                 g()
             return 42
 
         res = self.meta_interp(f, [], loop_longevity=1)
         assert res == 42
+
+        # we should see only the loop and the entry bridge
+        self.check_tree_loop_count(2)
