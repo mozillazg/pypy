@@ -10,13 +10,16 @@ from pypy.module.cppyy import helper, capi
 _converters = {}
 
 class TypeConverter(object):
+    def __init__(self, space, extra=None):
+        pass
+
     def _get_fieldptr(self, space, w_obj, offset):
         obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
         return lltype.direct_ptradd(obj.rawobject, offset)
 
     def _is_abstract(self):
         raise NotImplementedError(
-            "abstract base class (actual: %s)" % type(self).__name__)
+            "abstract base class" ) # more detailed part is not rpython: (actual: %s)" % type(self).__name__)
 
     def convert_argument(self, space, w_obj):
         self._is_abstract()
@@ -170,7 +173,7 @@ class CStringConverter(TypeConverter):
 
 class ShortPtrConverter(TypeConverter):
     _immutable_ = True
-    def __init__(self, detail=None):
+    def __init__(self, space, detail=None):
         if detail is None:
             import sys
             detail = sys.maxint
@@ -203,7 +206,7 @@ class ShortArrayConverter(ShortPtrConverter):
 
 class LongPtrConverter(TypeConverter):
     _immutable_ = True
-    def __init__(self, detail=None):
+    def __init__(self, space, detail=None):
         if detail is None:
             import sys
             detail = sys.maxint
@@ -270,18 +273,19 @@ def get_converter(space, name):
 
     #   1) full, exact match
     try:
-        return _converters[name]()
-    except KeyError:
+        return _converters[name](space)
+    except KeyError, k:
         pass
 
     #   2) match of decorated, unqualified type
-    compound, detail = helper.compound(name)
+    compound = helper.compound(name)
     clean_name = helper.clean_type(name)
     try:
-        if detail:
-            return _converters[clean_name+compound](detail)
-        return _converters[clean_name+compound]()
-    except KeyError:
+        array_index = helper.array_index(name)
+        if array_index:
+            return _converters[clean_name+compound](space, array_index)
+        return _converters[clean_name+compound](space)
+    except KeyError, k:
         pass
         
     cpptype = interp_cppyy.type_byname(space, clean_name)

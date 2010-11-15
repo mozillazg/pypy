@@ -75,7 +75,7 @@ def get_executor(space, name):
     except KeyError:
         pass
 
-    compound, detail = helper.compound(name)
+    compound = helper.compound(name)
     cpptype = interp_cppyy.type_byname(space, helper.clean_type(name))
     if compound == "*":           
         return InstancePtrExecutor(space, cpptype)
