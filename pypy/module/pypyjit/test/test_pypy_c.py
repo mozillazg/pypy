@@ -388,25 +388,32 @@ class PyPyCJITTests(object):
 
             def g(*args):
                 return len(args)
+            def h(a, b, c):
+                return c
 
             def main(x):
                 s = 0
                 for i in range(x):
                     l = [i, x, 2]
                     s += g(*l)
+                    s += h(*l)
                     s += g(i, x, 2)
                 return s
-        ''', 100000, ([100], 600),
-                    ([1000], 6000),
-                    ([10000], 60000),
-                    ([100000], 600000))
+        ''', 100000, ([100], 800),
+                    ([1000], 8000),
+                    ([10000], 80000),
+                    ([100000], 800000))
         assert len(self.loops) == 1
-        op, = self.get_by_bytecode("CALL_FUNCTION_VAR")
-        assert len(op.get_opnames("new")) == 0
-        assert len(op.get_opnames("call_may_force")) == 0
-        oplen, op, oplen = self.get_by_bytecode("CALL_FUNCTION")
-        assert len(op.get_opnames("new")) == 0
-        assert len(op.get_opnames("call_may_force")) == 0
+        ops = self.get_by_bytecode("CALL_FUNCTION_VAR")
+        assert len(ops) == 2
+        for op in ops:
+            assert len(op.get_opnames("new")) == 0
+            assert len(op.get_opnames("call_may_force")) == 0
+
+        ops = self.get_by_bytecode("CALL_FUNCTION")
+        for op in ops:
+            assert len(op.get_opnames("new")) == 0
+            assert len(op.get_opnames("call_may_force")) == 0
 
     def test_virtual_instance(self):
         self.run_source('''
