@@ -1,14 +1,16 @@
 import math
 from pypy.rlib.rarithmetic import r_longlong
+from pypy.rlib.debug import debug_start, debug_print, debug_stop
 
 #
 # Logic to decide which loops are old and not used any more.
 #
-# All the long-lived references to LoopToken are weakrefs, apart from
-# the 'alive_loops' set in MemoryManager, which is the only (long-living)
-# place that keeps them alive.  If a loop was not called for long enough,
-# then it is removed from 'alive_loops'.  It will soon be freed by the
-# GC.  LoopToken.__del__ calls the method cpu.free_loop_and_bridges().
+# All the long-lived references to LoopToken are weakrefs (see JitCell
+# in warmstate.py), apart from the 'alive_loops' set in MemoryManager,
+# which is the only (long-living) place that keeps them alive.  If a
+# loop was not called for long enough, then it is removed from
+# 'alive_loops'.  It will soon be freed by the GC.  LoopToken.__del__
+# calls the method cpu.free_loop_and_bridges().
 #
 # The alive_loops set is maintained using the notion of a global
 # 'current generation' which is, in practice, the total number of loops
@@ -55,7 +57,14 @@ class MemoryManager(object):
             self.alive_loops[looptoken] = None
 
     def _kill_old_loops_now(self):
+        debug_start("jit-free-memmgr")
+        oldtotal = len(self.alive_loops)
+        debug_print("Loop tokens before:", oldtotal)
         max_generation = self.current_generation - self.max_age
         for looptoken in self.alive_loops.keys():
             if 0 <= looptoken.generation < max_generation:
                 del self.alive_loops[looptoken]
+        newtotal = len(self.alive_loops)
+        debug_print("Loop tokens freed: ", oldtotal - newtotal)
+        debug_print("Loop tokens left:  ", newtotal)
+        debug_stop("jit-free-memmgr")

@@ -1,4 +1,4 @@
-import sys
+import sys, weakref
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import hlstr, llstr, cast_base_ptr_to_instance
@@ -150,9 +150,34 @@ class JitCell(BaseJitCell):
     #     counter == -1: there is an entry bridge for this cell
     #     counter == -2: tracing is currently going on for this cell
     counter = 0
-    compiled_merge_points = None
+    compiled_merge_points_wref = None    # list of weakrefs to LoopToken
     dont_trace_here = False
-    entry_loop_token = None
+    wref_entry_loop_token = None         # (possibly) one weakref to LoopToken
+
+    def get_compiled_merge_points(self):
+        result = []
+        if self.compiled_merge_points_wref is not None:
+            for wref in self.compiled_merge_points_wref:
+                looptoken = wref()
+                if looptoken is not None:
+                    result.append(looptoken)
+        return result
+
+    def set_compiled_merge_points(self, looptokens):
+        self.compiled_merge_points_wref = [self._makeref(token)
+                                           for token in looptokens]
+
+    def get_entry_loop_token(self):
+        if self.wref_entry_loop_token is not None:
+            return self.wref_entry_loop_token()
+        return None
+
+    def set_entry_loop_token(self, looptoken):
+        self.wref_entry_loop_token = self._makeref(looptoken)
+
+    def _makeref(self, looptoken):
+        assert looptoken is not None
+        return weakref.ref(looptoken)
 
 # ____________________________________________________________
 
@@ -234,8 +259,8 @@ class WarmEnterState(object):
                                               entry_loop_token):
         cell = self.jit_cell_at_key(greenkey)
         cell.counter = -1
-        old_token = cell.entry_loop_token
-        cell.entry_loop_token = entry_loop_token
+        old_token = cell.get_entry_loop_token()
+        cell.set_entry_loop_token(entry_loop_token)
         if old_token is not None:
             self.cpu.redirect_call_assembler(old_token, entry_loop_token)
 
@@ -308,7 +333,7 @@ class WarmEnterState(object):
                 # machine code was already compiled for these greenargs
                 # get the assembler and fill in the boxes
                 set_future_values(*args[num_green_args:])
-                loop_token = cell.entry_loop_token
+                loop_token = cell.get_entry_loop_token()
 
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
@@ -532,11 +557,13 @@ class WarmEnterState(object):
         def get_assembler_token(greenkey, redboxes):
             # 'redboxes' is only used to know the types of red arguments
             cell = self.jit_cell_at_key(greenkey)
-            if cell.entry_loop_token is None:
+            entry_loop_token = cell.get_entry_loop_token()
+            if entry_loop_token is None:
                 from pypy.jit.metainterp.compile import compile_tmp_callback
-                cell.entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
-                                                             redboxes)
-            return cell.entry_loop_token
+                entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
+                                                        redboxes)
+                cell.set_entry_loop_token(entry_loop_token)
+            return entry_loop_token
         self.get_assembler_token = get_assembler_token
         
         #

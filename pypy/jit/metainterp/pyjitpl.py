@@ -1796,10 +1796,15 @@ class MetaInterp(object):
             raise NotImplementedError(opname[opnum])
 
     def get_compiled_merge_points(self, greenkey):
+        """Get the list of looptokens corresponding to the greenkey.
+        Turns the (internal) list of weakrefs into regular refs.
+        """
         cell = self.jitdriver_sd.warmstate.jit_cell_at_key(greenkey)
-        if cell.compiled_merge_points is None:
-            cell.compiled_merge_points = []
-        return cell.compiled_merge_points
+        return cell.get_compiled_merge_points()
+
+    def set_compiled_merge_points(self, greenkey, looptokens):
+        cell = self.jitdriver_sd.warmstate.jit_cell_at_key(greenkey)
+        cell.set_compiled_merge_points(looptokens)
 
     def compile(self, original_boxes, live_arg_boxes, start):
         num_green_args = self.jitdriver_sd.num_green_args
@@ -1810,6 +1815,7 @@ class MetaInterp(object):
         loop_token = compile.compile_new_loop(self, old_loop_tokens,
                                               greenkey, start)
         if loop_token is not None: # raise if it *worked* correctly
+            self.set_compiled_merge_points(greenkey, old_loop_tokens)
             raise GenerateMergePoint(live_arg_boxes, loop_token)
         self.history.operations.pop()     # remove the JUMP
 

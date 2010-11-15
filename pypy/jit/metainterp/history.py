@@ -5,6 +5,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, r_dict, Symbolic
 from pypy.rlib.objectmodel import compute_hash, compute_unique_id
 from pypy.rlib.rarithmetic import intmask, r_longlong
+from pypy.rlib.debug import debug_start, debug_print, debug_stop
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
@@ -753,7 +754,10 @@ class LoopToken(AbstractDescr):
             # MemoryManager.keep_loop_alive() has been called on this
             # loop token, which means that it has been successfully
             # compiled by the backend.  Free it now.
+            debug_start("jit-free-looptoken")
+            debug_print("Freeing loop #", self.number)
             self.cpu.free_loop_and_bridges(self)
+            debug_stop("jit-free-looptoken")
 
     def repr_of_descr(self):
         return '<Loop%d>' % self.number
