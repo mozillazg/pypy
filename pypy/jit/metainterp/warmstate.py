@@ -165,7 +165,8 @@ class WarmEnterState(object):
         "NOT_RPYTHON"
         self.warmrunnerdesc = warmrunnerdesc
         self.jitdriver_sd = jitdriver_sd
-        self.cpu = warmrunnerdesc.cpu
+        if warmrunnerdesc is not None:       # for tests
+            self.cpu = warmrunnerdesc.cpu
         try:
             self.profiler = warmrunnerdesc.metainterp_sd.profiler
         except AttributeError:       # for tests
@@ -217,7 +218,9 @@ class WarmEnterState(object):
 
     def set_param_loop_longevity(self, value):
         # note: it's a global parameter, not a per-jitdriver one
-        self.warmrunnerdesc.memory_manager.set_max_age(value)
+        if (self.warmrunnerdesc is not None and
+            self.warmrunnerdesc.memory_manager is not None):   # all for tests
+            self.warmrunnerdesc.memory_manager.set_max_age(value)
 
     def disable_noninlinable_function(self, greenkey):
         cell = self.jit_cell_at_key(greenkey)

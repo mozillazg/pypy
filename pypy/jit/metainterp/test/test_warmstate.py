@@ -99,6 +99,8 @@ def test_make_jitcell_getter_custom():
                                          lltype.Float], lltype.Void))
     class FakeWarmRunnerDesc:
         rtyper = FakeRTyper()
+        cpu = None
+        memory_manager = None
     class FakeJitDriverSD:
         _get_jitcell_at_ptr = llhelper(GETTER, getter)
         _set_jitcell_at_ptr = llhelper(SETTER, setter)
@@ -126,6 +128,7 @@ def test_make_set_future_values():
             future_values[j] = "float", value
     class FakeWarmRunnerDesc:
         cpu = FakeCPU()
+        memory_manager = None
     class FakeJitDriverSD:
         _red_args_types = ["int", "float"]
         virtualizable_info = None
@@ -164,6 +167,7 @@ def test_attach_unoptimized_bridge_from_interp():
 def test_make_jitdriver_callbacks_1():
     class FakeWarmRunnerDesc:
         cpu = None
+        memory_manager = None
     class FakeJitDriverSD:
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = None
@@ -189,6 +193,7 @@ def test_make_jitdriver_callbacks_3():
     class FakeWarmRunnerDesc:
         rtyper = None
         cpu = None
+        memory_manager = None
     class FakeJitDriverSD:
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = llhelper(GET_LOCATION, get_location)
@@ -211,6 +216,7 @@ def test_make_jitdriver_callbacks_4():
     class FakeWarmRunnerDesc:
         rtyper = None
         cpu = None
+        memory_manager = None
     class FakeJitDriverSD:
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = None
@@ -233,6 +239,7 @@ def test_make_jitdriver_callbacks_5():
     class FakeWarmRunnerDesc:
         rtyper = None
         cpu = None
+        memory_manager = None
     class FakeJitDriverSD:
         _green_args_spec = [lltype.Signed, lltype.Float]
         _get_printable_location_ptr = None
