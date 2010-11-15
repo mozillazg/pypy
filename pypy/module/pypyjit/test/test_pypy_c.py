@@ -382,7 +382,7 @@ class PyPyCJITTests(object):
         # XXX a bit too many guards, but better than before
         assert len(op.get_opnames("guard")) <= 10
 
-    def test_stararg(self):
+    def test_stararg_virtual(self):
         self.run_source('''
             d = {}
 
@@ -417,6 +417,34 @@ class PyPyCJITTests(object):
         ops = self.get_by_bytecode("CALL_FUNCTION")
         for op in ops:
             assert len(op.get_opnames("new")) == 0
+            assert len(op.get_opnames("call_may_force")) == 0
+
+    def test_stararg(self):
+        self.run_source('''
+            d = {}
+
+            def g(*args):
+                return args[-1]
+            def h(*args):
+                return len(args)
+
+            def main(x):
+                s = 0
+                l = []
+                i = 0
+                while i < x:
+                    l.append(1)
+                    s += g(*l)
+                    i = h(*l)
+                return s
+        ''', 100000, ([100], 100),
+                     ([1000], 1000),
+                     ([2000], 2000),
+                     ([4000], 4000))
+        assert len(self.loops) == 1
+        ops = self.get_by_bytecode("CALL_FUNCTION_VAR")
+        for op in ops:
+            assert len(op.get_opnames("new_with_vtable")) == 0
             assert len(op.get_opnames("call_may_force")) == 0
 
     def test_virtual_instance(self):
