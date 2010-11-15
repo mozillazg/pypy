@@ -728,14 +728,16 @@ class LoopToken(AbstractDescr):
     generated assembler.
     """
     terminating = False # see TerminatingLoopToken in compile.py
-    has_been_freed = False
     outermost_jitdriver_sd = None
     outermost_greenkey = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
+    cpu = None
+    number = 0
 
-    def __init__(self, number=0):
-        self.number = number
+    def __init__(self, cpu=None):
+        assert not isinstance(cpu, int)    # xxx temporary
+        self.cpu = cpu
         # See get_fail_descr_number() in backend/model.py: this growing
         # list gives the 'descr_number' of all fail descrs that belong to
         # this loop or to a bridge attached to it.
@@ -743,6 +745,15 @@ class LoopToken(AbstractDescr):
         # For memory management of assembled loops
         self.contains_jumps_to = {}      # set of other LoopTokens
         self.generation = r_longlong(0)
+
+    def __del__(self):
+        if self.cpu is None:
+            return
+        if self.generation > r_longlong(0):
+            # MemoryManager.keep_loop_alive() has been called on this
+            # loop token, which means that it has been successfully
+            # compiled by the backend.  Free it now.
+            self.cpu.free_loop_and_bridges(self)
 
     def repr_of_descr(self):
         return '<Loop%d>' % self.number
