@@ -112,7 +112,8 @@ class TestLogger(object):
         equaloplists(loop.operations, oloop.operations)
 
     def test_jump(self):
-        namespace = {'target': LoopToken(3)}
+        namespace = {'target': LoopToken()}
+        namespace['target'].number = 3
         inp = '''
         [i0]
         jump(i0, descr=target)
