@@ -255,8 +255,9 @@ class WarmEnterState(object):
         debug_print("disabled inlining", loc)
         debug_stop("jit-disableinlining")
 
-    def attach_unoptimized_bridge_from_interp(self, entry_loop_token):
-        cell = self.jit_cell_at_key(entry_loop_token.outermost_greenkey)
+    def attach_unoptimized_bridge_from_interp(self, greenkey,
+                                              entry_loop_token):
+        cell = self.jit_cell_at_key(greenkey)
         cell.counter = -1
         old_token = cell.get_entry_loop_token()
         cell.set_entry_loop_token(entry_loop_token)

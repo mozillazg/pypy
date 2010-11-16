@@ -144,3 +144,5 @@ class TestIntegration(LLJitMixin):
         res = self.meta_interp(f, [], loop_longevity=3)
         assert res == 42
         self.check_tree_loop_count(2 + 10*4)   # 42 :-)
+
+    #XXXcall_assembler

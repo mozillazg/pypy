@@ -388,7 +388,7 @@ class TestWarmspotDirect(object):
                 assert isinstance(looptoken, FakeLoopToken)
                 self.looptoken = looptoken
             
-            def handle_fail(self, metainterp_sd):
+            def handle_fail(self, metainterp_sd, jitdrivers_sd):
                 no = self.looptoken.no
                 if no == 0:
                     raise metainterp_sd.warmrunnerdesc.DoneWithThisFrameInt(3)

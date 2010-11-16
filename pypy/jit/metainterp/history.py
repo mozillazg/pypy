@@ -179,7 +179,6 @@ class AbstractDescr(AbstractValue):
 
 class AbstractFailDescr(AbstractDescr):
     index = -1
-    original_loop_token = None
 
     def handle_fail(self, metainterp_sd, jitdriver_sd):
         raise NotImplementedError
@@ -730,14 +729,13 @@ class LoopToken(AbstractDescr):
     """
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None
-    outermost_greenkey     = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
     cpu = None
     number = -1
+    generation = r_longlong(0)
 
     def __init__(self, cpu=None):
-        assert 'CPU' in type(cpu).__name__   # xxx temporary
         self.cpu = cpu
         # See get_fail_descr_number() in backend/model.py: this growing
         # list gives the 'descr_number' of all fail descrs that belong to
@@ -745,27 +743,11 @@ class LoopToken(AbstractDescr):
         self.faildescr_indices = []
         # For memory management of assembled loops
         self._keepalive_target_looktokens = {}      # set of other LoopTokens
-        self.generation = r_longlong(0)
 
-    def record_loop_or_bridge(self, loop):
-        # Records that the loop starting at the LoopToken 'self' ends up
-        # with 'loop', which may be either the loop itself or some pseudo-
-        # loop representing some bridge.
-        other_loop_token = loop.operations[-1].getdescr()
-        if isinstance(other_loop_token, LoopToken):
-            # the following test is not enough to prevent more complicated
-            # cases of cycles, but at least it helps in simple tests of
-            # test_memgr.py
-            if other_loop_token is not self:
-                self._keepalive_target_looktokens[other_loop_token] = None
-            loop.operations[-1].setdescr(None)    # clear reference
+    def record_jump_to(self, target_loop_token):
+        self._keepalive_target_looktokens[target_loop_token] = None
 
     def __del__(self):
-        for i in range(160):
-            print '#',
-        print repr(self), self.cpu
-        if self.cpu is None:
-            return
         if self.generation > r_longlong(0):
             # MemoryManager.keep_loop_alive() has been called on this
             # loop token, which means that it has been successfully
