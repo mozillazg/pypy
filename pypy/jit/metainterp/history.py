@@ -744,8 +744,17 @@ class LoopToken(AbstractDescr):
         # this loop or to a bridge attached to it.
         self.faildescr_indices = []
         # For memory management of assembled loops
-        self.contains_jumps_to = {}      # set of other LoopTokens
+        self._keepalive_target_looktokens = {}      # set of other LoopTokens
         self.generation = r_longlong(0)
+
+    def record_loop_or_bridge(self, loop):
+        # Records that the loop starting at the LoopToken 'self' ends up
+        # with 'loop', which may be either the loop itself or some pseudo-
+        # loop representing some bridge.
+        other_loop_token = loop.operations[-1].getdescr()
+        if isinstance(other_loop_token, LoopToken):
+            self._keepalive_target_looktokens[other_loop_token] = None
+            loop.operations[-1].setdescr(None)    # clear reference
 
     def __del__(self):
         for i in range(160):

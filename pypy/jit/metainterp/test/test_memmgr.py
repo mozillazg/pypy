@@ -80,6 +80,37 @@ class TestIntegration(LLJitMixin):
         # we should see only the loop and the entry bridge
         self.check_tree_loop_count(2)
 
+    def test_target_loop_kept_alive(self):
+        myjitdriver = JitDriver(greens=['m'], reds=['n'])
+        def g(m):
+            n = 10
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, m=m)
+                myjitdriver.jit_merge_point(n=n, m=m)
+                n = n - 1
+            return 21
+        import gc
+        def f():
+            # create the loop and the entry bridge for 'g(5)'
+            for i in range(8):
+                g(5)
+            # create another loop and another entry bridge for 'g(7)',
+            # to increase the current_generation
+            for i in range(20):
+                g(7)
+                # reuse the existing loop and entry bridge for 'g(5)'.
+                # the generation of the entry bridge for g(5) should never
+                # grow too old.  The loop itself gets old, but is kept alive
+                # by the entry bridge via contains_jumps_to.
+                g(5)
+            return 42
+
+        res = self.meta_interp(f, [], loop_longevity=3)
+        assert res == 42
+
+        # we should see only the loop and the entry bridge for g(5) and g(7)
+        self.check_tree_loop_count(4)
+
 
     # we need another test that fails because we store
     # self._debug_suboperations in compile.py

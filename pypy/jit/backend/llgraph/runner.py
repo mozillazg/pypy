@@ -118,8 +118,10 @@ class BaseCPU(model.AbstractCPU):
             self._descrs[key] = descr
             return descr
 
-    def compile_bridge(self, faildescr, inputargs, operations, log=True):
+    def compile_bridge(self, faildescr, inputargs, operations,
+                       original_loop_token, log=True):
         c = llimpl.compile_start()
+        original_loop_token._llgraph_loop_and_bridges.append(c)
         self._compile_loop_or_bridge(c, inputargs, operations)
         old, oldindex = faildescr._compiled_fail
         llimpl.compile_redirect_fail(old, oldindex, c)
@@ -131,8 +133,14 @@ class BaseCPU(model.AbstractCPU):
         is not.
         """
         c = llimpl.compile_start()
+        assert not hasattr(loopdescr, '_llgraph_loop_and_bridges')
+        loopdescr._llgraph_loop_and_bridges = [c]
         loopdescr._llgraph_compiled_version = c
         self._compile_loop_or_bridge(c, inputargs, operations)
+
+    def free_loop_and_bridges(self, looptoken):
+        for c in looptoken._llgraph_loop_and_bridges:
+            llimpl.mark_as_free(c)
 
     def _compile_loop_or_bridge(self, c, inputargs, operations):
         var2index = {}

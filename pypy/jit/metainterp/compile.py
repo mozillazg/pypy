@@ -82,6 +82,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
     # mostly for tests: make sure we don't keep a reference to the LoopToken
+    metainterp.original_loop_token.record_loop_or_bridge(loop)
     loop.token = None
     metainterp.original_loop_token = None
     return loop_token
@@ -127,7 +128,8 @@ def send_loop_to_backend(metainterp_sd, loop, type):
     if metainterp_sd.warmrunnerdesc is not None:    # for tests
         metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(loop.token)
 
-def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
+def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations,
+                           original_loop_token):
     n = metainterp_sd.cpu.get_fail_descr_number(faildescr)
     metainterp_sd.logger_ops.log_bridge(inputargs, operations, n)
     if not we_are_translated():
@@ -136,7 +138,8 @@ def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
-        metainterp_sd.cpu.compile_bridge(faildescr, inputargs, operations)
+        metainterp_sd.cpu.compile_bridge(faildescr, inputargs, operations,
+                                         original_loop_token)
     finally:
         debug_stop("jit-backend")
     metainterp_sd.profiler.end_backend()
@@ -326,7 +329,8 @@ class ResumeGuardDescr(ResumeDescr):
         if not we_are_translated():
             self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
-                               new_loop.operations)
+                               new_loop.operations,
+                               metainterp.original_loop_token)
 
     def copy_all_attrbutes_into(self, res):
         # XXX a bit ugly to have to list them all here
@@ -510,10 +514,6 @@ class ResumeFromInterpDescr(ResumeDescr):
         old_loop_tokens.append(new_loop_token)
         metainterp.set_compiled_merge_points(new_loop_token.outermost_greenkey,
                                              old_loop_tokens)
-        # mostly for tests: make sure we don't keep a reference
-        # to the LoopToken
-        new_loop.token = None
-        metainterp.original_loop_token = None
 
     def reset_counter_from_failure(self):
         pass
@@ -548,6 +548,11 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
         prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
+        # mostly for tests: make sure we don't keep a reference
+        # to the LoopToken
+        metainterp.original_loop_token.record_loop_or_bridge(new_loop)
+        metainterp.original_loop_token = None
+        new_loop.token = None
     return target_loop_token
 
 def prepare_last_operation(new_loop, target_loop_token):
