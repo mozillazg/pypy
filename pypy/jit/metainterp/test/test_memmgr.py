@@ -20,7 +20,7 @@ class TestMemoryManager:
 
     def test_basic(self):
         memmgr = MemoryManager()
-        memmgr.set_max_age(3, 1)
+        memmgr.set_max_age(4, 1)
         tokens = [FakeLoopToken() for i in range(10)]
         for token in tokens:
             memmgr.keep_loop_alive(token)
@@ -29,7 +29,7 @@ class TestMemoryManager:
 
     def test_basic_2(self):
         memmgr = MemoryManager()
-        memmgr.set_max_age(3, 1)
+        memmgr.set_max_age(4, 1)
         token = FakeLoopToken()
         memmgr.keep_loop_alive(token)
         for i in range(10):
@@ -41,7 +41,7 @@ class TestMemoryManager:
 
     def test_basic_3(self):
         memmgr = MemoryManager()
-        memmgr.set_max_age(3, 1)
+        memmgr.set_max_age(4, 1)
         tokens = [FakeLoopToken() for i in range(10)]
         for i in range(len(tokens)):
             print 'record tokens[%d]' % i
@@ -74,13 +74,13 @@ class TestIntegration(LLJitMixin):
                 g()
             return 42
 
-        res = self.meta_interp(f, [], loop_longevity=1)
+        res = self.meta_interp(f, [], loop_longevity=2)
         assert res == 42
 
         # we should see only the loop and the entry bridge
         self.check_tree_loop_count(2)
 
-    def test_target_loop_kept_alive(self):
+    def test_target_loop_kept_alive_or_not(self):
         myjitdriver = JitDriver(greens=['m'], reds=['n'])
         def g(m):
             n = 10
@@ -89,28 +89,58 @@ class TestIntegration(LLJitMixin):
                 myjitdriver.jit_merge_point(n=n, m=m)
                 n = n - 1
             return 21
-        import gc
         def f():
-            # create the loop and the entry bridge for 'g(5)'
+            # Depending on loop_longevity, either:
+            # A. create the loop and the entry bridge for 'g(5)'
+            # B. create 8 loops (and throw them away at each iteration)
             for i in range(8):
                 g(5)
             # create another loop and another entry bridge for 'g(7)',
             # to increase the current_generation
             for i in range(20):
                 g(7)
-                # reuse the existing loop and entry bridge for 'g(5)'.
-                # the generation of the entry bridge for g(5) should never
-                # grow too old.  The loop itself gets old, but is kept alive
-                # by the entry bridge via contains_jumps_to.
+                # Depending on loop_longevity, either:
+                # A. reuse the existing loop and entry bridge for 'g(5)'.
+                #    The entry bridge for g(5) should never grow too old.
+                #    The loop itself gets old, but is kept alive by the
+                #    entry bridge via contains_jumps_to.
+                # B. or, create another loop (and throw away the previous one)
+                g(5)
+            return 42
+
+        # case A
+        res = self.meta_interp(f, [], loop_longevity=3)
+        assert res == 42
+        # we should see only the loop and the entry bridge for g(5) and g(7)
+        self.check_tree_loop_count(4)
+
+        # case B, with a lower longevity
+        res = self.meta_interp(f, [], loop_longevity=1)
+        assert res == 42
+        # we should see a loop for each call to g()
+        self.check_tree_loop_count(8 + 20*2)
+
+    def test_throw_away_old_loops(self):
+        myjitdriver = JitDriver(greens=['m'], reds=['n'])
+        def g(m):
+            n = 10
+            while n > 0:
+                myjitdriver.can_enter_jit(n=n, m=m)
+                myjitdriver.jit_merge_point(n=n, m=m)
+                n = n - 1
+            return 21
+        def f():
+            for i in range(10):
+                g(1)   # g(1) gets a loop and an entry bridge, stays alive
+                g(2)   # (and an exit bridge, which does not count in
+                g(1)   # check_tree_loop_count)
+                g(3)
+                g(1)
+                g(4)   # g(2), g(3), g(4), g(5) are thrown away every iteration
+                g(1)   # (no entry bridge for them)
                 g(5)
             return 42
 
         res = self.meta_interp(f, [], loop_longevity=3)
         assert res == 42
-
-        # we should see only the loop and the entry bridge for g(5) and g(7)
-        self.check_tree_loop_count(4)
-
-
-    # we need another test that fails because we store
-    # self._debug_suboperations in compile.py
+        self.check_tree_loop_count(2 + 10*4)   # 42 :-)

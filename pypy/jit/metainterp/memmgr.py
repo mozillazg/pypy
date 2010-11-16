@@ -63,7 +63,7 @@ class MemoryManager(object):
         print self.alive_loops.keys()
         debug_print("Current generation:", self.current_generation)
         debug_print("Loop tokens before:", oldtotal)
-        max_generation = self.current_generation - self.max_age
+        max_generation = self.current_generation - (self.max_age-1)
         for looptoken in self.alive_loops.keys():
             if 0 <= looptoken.generation < max_generation:
                 del self.alive_loops[looptoken]
