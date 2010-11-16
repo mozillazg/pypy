@@ -377,10 +377,10 @@ class PyPyCJITTests(object):
                     ([1000], 49500),
                     ([10000], 495000),
                     ([100000], 4950000))
-        assert len(self.loops) == 2
+        assert len(self.loops) == 3
         op, = self.get_by_bytecode("CALL_FUNCTION_KW")
         # XXX a bit too many guards, but better than before
-        assert len(op.get_opnames("guard")) <= 10
+        assert len(op.get_opnames("guard")) <= 12
 
     def test_stararg_virtual(self):
         self.run_source('''
