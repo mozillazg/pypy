@@ -753,7 +753,11 @@ class LoopToken(AbstractDescr):
         # loop representing some bridge.
         other_loop_token = loop.operations[-1].getdescr()
         if isinstance(other_loop_token, LoopToken):
-            self._keepalive_target_looktokens[other_loop_token] = None
+            # the following test is not enough to prevent more complicated
+            # cases of cycles, but at least it helps in simple tests of
+            # test_memgr.py
+            if other_loop_token is not self:
+                self._keepalive_target_looktokens[other_loop_token] = None
             loop.operations[-1].setdescr(None)    # clear reference
 
     def __del__(self):

@@ -1663,7 +1663,6 @@ class MetaInterp(object):
 
     def handle_guard_failure(self, key):
         debug_start('jit-tracing')
-        self.staticdata.try_to_free_some_loops()
         self.staticdata.profiler.start_tracing()
         assert isinstance(key, compile.ResumeGuardDescr)
         self.initialize_state_from_guard_failure(key)
@@ -1678,6 +1677,7 @@ class MetaInterp(object):
         # alive as long as this MetaInterp
         self.resumekey = key
         self.original_loop_token = key.wref_original_loop_token()
+        self.staticdata.try_to_free_some_loops()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             if self.original_loop_token is None:
