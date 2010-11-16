@@ -26,7 +26,7 @@ def _get_jitcodes(testself, CPUClass, func, values, type_system):
             self.__compiled_merge_points = lst
 
     class FakeWarmRunnerState:
-        def attach_unoptimized_bridge_from_interp(self, greenkey, newloop):
+        def attach_unoptimized_bridge_from_interp(self, newloop):
             pass
 
         def jit_cell_at_key(self, greenkey):

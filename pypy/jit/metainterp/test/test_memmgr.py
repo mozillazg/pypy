@@ -79,3 +79,7 @@ class TestIntegration(LLJitMixin):
 
         # we should see only the loop and the entry bridge
         self.check_tree_loop_count(2)
+
+
+    # we need another test that fails because we store
+    # self._debug_suboperations in compile.py
