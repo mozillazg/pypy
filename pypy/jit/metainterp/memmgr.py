@@ -1,6 +1,7 @@
 import math
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.rlib.debug import debug_start, debug_print, debug_stop
+from pypy.rlib.objectmodel import we_are_translated
 
 #
 # Logic to decide which loops are old and not used any more.
@@ -71,3 +72,6 @@ class MemoryManager(object):
         debug_print("Loop tokens left:  ", newtotal)
         print self.alive_loops.keys()
         debug_stop("jit-free-memmgr")
+        if not we_are_translated():
+            from pypy.rlib import rgc
+            rgc.collect()

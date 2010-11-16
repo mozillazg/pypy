@@ -161,6 +161,8 @@ TYPES = {
 # ____________________________________________________________
 
 class CompiledLoop(object):
+    has_been_freed = False
+
     def __init__(self):
         self.inputargs = []
         self.operations = []
@@ -284,6 +286,11 @@ _variables = []
 def compile_start():
     del _variables[:]
     return _to_opaque(CompiledLoop())
+
+def mark_as_free(loop):
+    loop = _from_opaque(loop)
+    assert not loop.has_been_freed
+    loop.has_been_freed = True
 
 def compile_start_int_var(loop):
     return compile_start_ref_var(loop, lltype.Signed)
@@ -429,6 +436,7 @@ class Frame(object):
         verbose = True
         self.opindex = 0
         while True:
+            assert not self.loop.has_been_freed
             op = self.loop.operations[self.opindex]
             args = [self.getenv(v) for v in op.args]
             if not op.is_final():
@@ -1609,6 +1617,7 @@ setannotation(compile_add_jump_target, annmodel.s_None)
 setannotation(compile_add_fail, annmodel.SomeInteger())
 setannotation(compile_add_fail_arg, annmodel.s_None)
 setannotation(compile_redirect_fail, annmodel.s_None)
+setannotation(mark_as_free, annmodel.s_None)
 
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)

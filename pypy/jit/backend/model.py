@@ -49,7 +49,8 @@ class AbstractCPU(object):
         """
         raise NotImplementedError
 
-    def compile_bridge(self, faildescr, inputargs, operations, log=True):
+    def compile_bridge(self, faildescr, inputargs, operations,
+                       original_loop_token, log=True):
         """Assemble the bridge.
         The FailDescr is the descr of the original guard that failed.
         """
