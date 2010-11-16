@@ -1,4 +1,4 @@
-
+import weakref
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.objspace.flow.model import Constant, Variable
@@ -42,16 +42,43 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(cpu, nb_args, jitdriver_sd, greenkey):
+def make_loop_token(cpu, nb_args, jitdriver_sd):
     loop_token = LoopToken(cpu)
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
     loop_token.outermost_jitdriver_sd = jitdriver_sd
-    loop_token.outermost_greenkey = greenkey
     return loop_token
+
+def record_loop_or_bridge(loop):
+    """Do post-backend recordings and cleanups on 'loop'.
+    """
+    # get the original loop token (corresponding to 'loop', or if that is
+    # a bridge, to the loop that this bridge belongs to)
+    looptoken = loop.token
+    assert looptoken is not None
+    wref = weakref.ref(looptoken)
+    for op in loop.operations:
+        if op.is_guard():
+            resumedescr = op.getdescr()
+            assert isinstance(resumedescr, ResumeDescr)
+            resumedescr.wref_original_loop_token = wref   # stick it there
+            n = resumedescr.index
+            if n >= 0:       # we also record the resumedescr in this list
+                looptoken.faildescr_indices.append(n)
+    # record that 'looptoken' ends up jumping to 'target_loop_token'
+    target_loop_token = loop.operations[-1].getdescr()
+    if isinstance(target_loop_token, LoopToken):
+        # the following test is not enough to prevent more complicated
+        # cases of cycles, but at least it helps in simple tests of
+        # test_memgr.py
+        if target_loop_token is not looptoken:
+            looptoken.record_jump_to(target_loop_token)
+        loop.operations[-1].setdescr(None)    # clear reference
+    # mostly for tests: make sure we don't keep a reference to the LoopToken
+    loop.token = None
 
 # ____________________________________________________________
 
-def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
+def compile_new_loop(metainterp, old_loop_tokens, start):
     """Try to compile a new loop by closing the current history back
     to the first operation.
     """
@@ -64,11 +91,9 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     h_ops = history.operations
     loop.operations = [h_ops[i].clone() for i in range(start, len(h_ops))]
     metainterp_sd = metainterp.staticdata
+    cpu = metainterp.cpu
     jitdriver_sd = metainterp.jitdriver_sd
-    loop_token = metainterp.original_loop_token
-    assert len(loop_token.specnodes) == len(loop.inputargs)
-    assert loop_token.outermost_jitdriver_sd is jitdriver_sd
-    assert loop_token.outermost_greenkey == greenkey
+    loop_token = make_loop_token(cpu, len(loop.inputargs), jitdriver_sd)
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -81,10 +106,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
         return old_loop_token
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
-    # mostly for tests: make sure we don't keep a reference to the LoopToken
-    metainterp.original_loop_token.record_loop_or_bridge(loop)
-    loop.token = None
-    metainterp.original_loop_token = None
+    record_loop_or_bridge(loop)
     return loop_token
 
 def insert_loop_token(old_loop_tokens, loop_token):
@@ -220,8 +242,7 @@ def make_done_loop_tokens():
             }
 
 class ResumeDescr(AbstractFailDescr):
-    def __init__(self, wref_original_loop_token):
-        self.wref_original_loop_token = wref_original_loop_token
+    pass
 
 class ResumeGuardDescr(ResumeDescr):
     _counter = 0        # if < 0, there is one counter per value;
@@ -324,13 +345,13 @@ class ResumeGuardDescr(ResumeDescr):
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
-        # to the corrsponding guard_op and compile from there
+        # to the corresponding guard_op and compile from there
+        new_loop.token = metainterp.resumekey_original_loop_token
         inputargs = metainterp.history.inputargs
         if not we_are_translated():
             self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
-                               new_loop.operations,
-                               metainterp.original_loop_token)
+                               new_loop.operations, new_loop.token)
 
     def copy_all_attrbutes_into(self, res):
         # XXX a bit ugly to have to list them all here
@@ -342,14 +363,13 @@ class ResumeGuardDescr(ResumeDescr):
         res.rd_pendingfields = self.rd_pendingfields
 
     def _clone_if_mutable(self):
-        res = ResumeGuardDescr(self.wref_original_loop_token)
+        res = ResumeGuardDescr()
         self.copy_all_attrbutes_into(res)
         return res
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
-    def __init__(self, metainterp_sd, wref_original_loop_token, jitdriver_sd):
-        ResumeGuardDescr.__init__(self, wref_original_loop_token)
+    def __init__(self, metainterp_sd, jitdriver_sd):
         self.metainterp_sd = metainterp_sd
         self.jitdriver_sd = jitdriver_sd
 
@@ -417,7 +437,6 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def _clone_if_mutable(self):
         res = ResumeGuardForcedDescr(self.metainterp_sd,
-                                     self.wref_original_loop_token,
                                      self.jitdriver_sd)
         self.copy_all_attrbutes_into(res)
         return res
@@ -484,9 +503,8 @@ class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
 
 
 class ResumeFromInterpDescr(ResumeDescr):
-    def __init__(self, wref_original_loop_token, redkey):
-        ResumeDescr.__init__(self, wref_original_loop_token)
-        self.redkey = redkey
+    def __init__(self, original_greenkey):
+        self.original_greenkey = original_greenkey
 
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge going from the interpreter
@@ -494,25 +512,25 @@ class ResumeFromInterpDescr(ResumeDescr):
         # a loop at all but ends in a jump to the target loop.  It starts
         # with completely unoptimized arguments, as in the interpreter.
         metainterp_sd = metainterp.staticdata
+        cpu = metainterp.cpu
         jitdriver_sd = metainterp.jitdriver_sd
-        metainterp.history.inputargs = self.redkey
-        new_loop_token = metainterp.original_loop_token
-        # assert that the wref_original_loop_token was kept alive, because
-        # it's just the same as metainterp.original_loop_token
-        assert new_loop_token is self.wref_original_loop_token()
-        new_loop.inputargs = self.redkey
+        redargs = new_loop.inputargs
+        # We make a new LoopToken for this entry bridge, and stick it
+        # to every guard in the loop.
+        new_loop_token = make_loop_token(cpu, len(redargs), jitdriver_sd)
         new_loop.token = new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
+            self.original_greenkey,
             new_loop_token)
         # store the new loop in compiled_merge_points_wref too
         old_loop_tokens = metainterp.get_compiled_merge_points(
-            new_loop_token.outermost_greenkey)
+            self.original_greenkey)
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
-        metainterp.set_compiled_merge_points(new_loop_token.outermost_greenkey,
+        metainterp.set_compiled_merge_points(self.original_greenkey,
                                              old_loop_tokens)
 
     def reset_counter_from_failure(self):
@@ -548,11 +566,7 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
         prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
-        # mostly for tests: make sure we don't keep a reference
-        # to the LoopToken
-        metainterp.original_loop_token.record_loop_or_bridge(new_loop)
-        metainterp.original_loop_token = None
-        new_loop.token = None
+        record_loop_or_bridge(new_loop)
     return target_loop_token
 
 def prepare_last_operation(new_loop, target_loop_token):
@@ -586,7 +600,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
     """
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
-    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd, greenboxes)
+    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd)
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args

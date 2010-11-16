@@ -1048,14 +1048,11 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
-        resumekey = metainterp.resumekey
-        wref_original_loop_token = resumekey.wref_original_loop_token
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                   wref_original_loop_token,
                                                    metainterp.jitdriver_sd)
         else:
-            resumedescr = compile.ResumeGuardDescr(wref_original_loop_token)
+            resumedescr = compile.ResumeGuardDescr()
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         virtualizable_boxes = None
@@ -1642,16 +1639,8 @@ class MetaInterp(object):
         self.current_merge_points = [(original_boxes, 0)]
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
-        redkey = original_boxes[num_green_args:]
-        # make a new loop token and store a strong ref to it for as long as
-        # this MetaInterp is alive (we will give it to the MemoryManager after
-        # the backend has emitted assembler)
-        self.original_loop_token = compile.make_loop_token(self.cpu,
-                                                           len(redkey),
-                                                           self.jitdriver_sd,
-                                                           original_greenkey)
-        self.resumekey = compile.ResumeFromInterpDescr(
-            weakref.ref(self.original_loop_token), redkey)
+        self.resumekey = compile.ResumeFromInterpDescr(original_greenkey)
+        self.history.inputargs = original_boxes[num_green_args:]
         self.seen_loop_header_for_jdindex = -1
         try:
             self.interpret()
@@ -1665,29 +1654,26 @@ class MetaInterp(object):
         debug_start('jit-tracing')
         self.staticdata.profiler.start_tracing()
         assert isinstance(key, compile.ResumeGuardDescr)
+        # store the resumekey.wref_original_loop_token() on 'self' to make
+        # sure that it stays alive as long as this MetaInterp
+        self.resumekey_original_loop_token = key.wref_original_loop_token()
         self.initialize_state_from_guard_failure(key)
         try:
             return self._handle_guard_failure(key)
         finally:
+            self.resumekey_original_loop_token = None
             self.staticdata.profiler.end_tracing()
             debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        # store the original_loop_token on 'self' to make sure that it stays
-        # alive as long as this MetaInterp
+        self.current_merge_points = []
         self.resumekey = key
-        self.original_loop_token = key.wref_original_loop_token()
+        self.seen_loop_header_for_jdindex = -1
         self.staticdata.try_to_free_some_loops()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
-            if self.original_loop_token is None:
+            if self.resumekey_original_loop_token is None:   # very rare case
                 raise SwitchToBlackhole(ABORT_BRIDGE)
-            # notice that here we just put the greenkey
-            # use -1 to mark that we will have to give up
-            # because we cannot reconstruct the beginning of the proper loop
-            original_greenkey = self.original_loop_token.outermost_greenkey
-            self.current_merge_points = [(original_greenkey, -1)]
-            self.seen_loop_header_for_jdindex = -1
             self.interpret()
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
@@ -1747,7 +1733,7 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         for j in range(len(self.current_merge_points)-1, -1, -1):
             original_boxes, start = self.current_merge_points[j]
-            assert len(original_boxes) == len(live_arg_boxes) or start < 0
+            assert len(original_boxes) == len(live_arg_boxes)
             for i in range(num_green_args):
                 box1 = original_boxes[i]
                 box2 = live_arg_boxes[i]
@@ -1756,10 +1742,6 @@ class MetaInterp(object):
                     break
             else:
                 # Found!  Compile it as a loop.
-                if start < 0:
-                    # we cannot reconstruct the beginning of the proper loop
-                    raise SwitchToBlackhole(ABORT_BRIDGE)
-
                 # raises in case it works -- which is the common case
                 self.compile(original_boxes, live_arg_boxes, start)
                 # creation of the loop was cancelled!
@@ -1829,8 +1811,7 @@ class MetaInterp(object):
         greenkey = original_boxes[:num_green_args]
         old_loop_tokens = self.get_compiled_merge_points(greenkey)
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        loop_token = compile.compile_new_loop(self, old_loop_tokens,
-                                              greenkey, start)
+        loop_token = compile.compile_new_loop(self, old_loop_tokens, start)
         if loop_token is not None: # raise if it *worked* correctly
             self.set_compiled_merge_points(greenkey, old_loop_tokens)
             raise GenerateMergePoint(live_arg_boxes, loop_token)

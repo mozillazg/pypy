@@ -25,9 +25,6 @@ class AbstractCPU(object):
                 n = len(lst)
                 lst.append(descr)
             descr.index = n
-            looptoken = descr.original_loop_token
-            if looptoken is not None:
-                looptoken.faildescr_indices.append(n)
         return n
 
     def get_fail_descr_from_number(self, n):

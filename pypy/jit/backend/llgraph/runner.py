@@ -133,7 +133,8 @@ class BaseCPU(model.AbstractCPU):
         is not.
         """
         c = llimpl.compile_start()
-        assert not hasattr(loopdescr, '_llgraph_loop_and_bridges')
+        if not we_are_translated():
+            assert not hasattr(loopdescr, '_llgraph_loop_and_bridges')
         loopdescr._llgraph_loop_and_bridges = [c]
         loopdescr._llgraph_compiled_version = c
         self._compile_loop_or_bridge(c, inputargs, operations)
