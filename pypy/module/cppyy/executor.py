@@ -7,8 +7,7 @@ _executors = {}
 
 class FunctionExecutor(object):
     def execute(self, space, func, cppthis, num_args, args):
-        raise NotImplementedError(
-            "abstract base class (actual: %s)" % type(self).__name__)
+        raise NotImplementedError
 
 
 class VoidExecutor(FunctionExecutor):
