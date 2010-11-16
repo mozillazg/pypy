@@ -1,3 +1,4 @@
+import sys
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.rarithmetic import r_singlefloat
@@ -10,7 +11,7 @@ from pypy.module.cppyy import helper, capi
 _converters = {}
 
 class TypeConverter(object):
-    def __init__(self, space, extra=None):
+    def __init__(self, space, extra=-1):
         pass
 
     def _get_fieldptr(self, space, w_obj, offset):
@@ -173,14 +174,11 @@ class CStringConverter(TypeConverter):
 
 class ShortPtrConverter(TypeConverter):
     _immutable_ = True
-    def __init__(self, space, detail=None):
-        if detail is None:
-            import sys
-            detail = sys.maxint
+    def __init__(self, space, detail=sys.maxint):
         self.size = detail
     
     def convert_argument(self, space, w_obj):
-        assert "not yet implemented"
+        assert 0, "not yet implemented"
 
     def from_memory(self, space, w_obj, offset):
         # read access, so no copy needed
@@ -206,14 +204,11 @@ class ShortArrayConverter(ShortPtrConverter):
 
 class LongPtrConverter(TypeConverter):
     _immutable_ = True
-    def __init__(self, space, detail=None):
-        if detail is None:
-            import sys
-            detail = sys.maxint
+    def __init__(self, space, detail=sys.maxint):
         self.size = detail
     
     def convert_argument(self, space, w_obj):
-        assert "not yet implemented"
+        assert 0, "not yet implemented"
 
     def from_memory(self, space, w_obj, offset):
         # read access, so no copy needed
