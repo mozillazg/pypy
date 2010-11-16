@@ -730,13 +730,14 @@ class LoopToken(AbstractDescr):
     """
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None
+    outermost_greenkey     = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
     cpu = None
-    number = 0
+    number = -1
 
     def __init__(self, cpu=None):
-        assert not isinstance(cpu, int)    # xxx temporary
+        assert 'CPU' in type(cpu).__name__   # xxx temporary
         self.cpu = cpu
         # See get_fail_descr_number() in backend/model.py: this growing
         # list gives the 'descr_number' of all fail descrs that belong to
@@ -749,7 +750,7 @@ class LoopToken(AbstractDescr):
     def __del__(self):
         for i in range(160):
             print '#',
-        print
+        print repr(self), self.cpu
         if self.cpu is None:
             return
         if self.generation > r_longlong(0):

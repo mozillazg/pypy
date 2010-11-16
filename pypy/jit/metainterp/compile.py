@@ -42,10 +42,11 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(cpu, nb_args, jitdriver_sd):
+def make_loop_token(cpu, nb_args, jitdriver_sd, greenkey):
     loop_token = LoopToken(cpu)
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
     loop_token.outermost_jitdriver_sd = jitdriver_sd
+    loop_token.outermost_greenkey = greenkey
     return loop_token
 
 # ____________________________________________________________
@@ -64,8 +65,10 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
     loop.operations = [h_ops[i].clone() for i in range(start, len(h_ops))]
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
-    loop_token = make_loop_token(metainterp.cpu, len(loop.inputargs),
-                                 jitdriver_sd)
+    loop_token = metainterp.original_loop_token
+    assert len(loop_token.specnodes) == len(loop.inputargs)
+    assert loop_token.outermost_jitdriver_sd is jitdriver_sd
+    assert loop_token.outermost_greenkey == greenkey
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -78,7 +81,9 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start):
         return old_loop_token
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
+    # mostly for tests: make sure we don't keep a reference to the LoopToken
     loop.token = None
+    metainterp.original_loop_token = None
     return loop_token
 
 def insert_loop_token(old_loop_tokens, loop_token):
@@ -210,8 +215,8 @@ def make_done_loop_tokens():
             }
 
 class ResumeDescr(AbstractFailDescr):
-    def __init__(self, original_greenkey):
-        self.original_greenkey = original_greenkey
+    def __init__(self, wref_original_loop_token):
+        self.wref_original_loop_token = wref_original_loop_token
 
 class ResumeGuardDescr(ResumeDescr):
     _counter = 0        # if < 0, there is one counter per value;
@@ -317,7 +322,7 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corrsponding guard_op and compile from there
         inputargs = metainterp.history.inputargs
         if not we_are_translated():
-            pass #self._debug_suboperations = new_loop.operations
+            self._debug_suboperations = new_loop.operations
         send_bridge_to_backend(metainterp.staticdata, self, inputargs,
                                new_loop.operations)
 
@@ -331,14 +336,14 @@ class ResumeGuardDescr(ResumeDescr):
         res.rd_pendingfields = self.rd_pendingfields
 
     def _clone_if_mutable(self):
-        res = ResumeGuardDescr(self.original_greenkey)
+        res = ResumeGuardDescr(self.wref_original_loop_token)
         self.copy_all_attrbutes_into(res)
         return res
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
-    def __init__(self, metainterp_sd, original_greenkey, jitdriver_sd):
-        ResumeGuardDescr.__init__(self, original_greenkey)
+    def __init__(self, metainterp_sd, wref_original_loop_token, jitdriver_sd):
+        ResumeGuardDescr.__init__(self, wref_original_loop_token)
         self.metainterp_sd = metainterp_sd
         self.jitdriver_sd = jitdriver_sd
 
@@ -406,7 +411,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def _clone_if_mutable(self):
         res = ResumeGuardForcedDescr(self.metainterp_sd,
-                                     self.original_greenkey,
+                                     self.wref_original_loop_token,
                                      self.jitdriver_sd)
         self.copy_all_attrbutes_into(res)
         return res
@@ -473,8 +478,8 @@ class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
 
 
 class ResumeFromInterpDescr(ResumeDescr):
-    def __init__(self, original_greenkey, redkey):
-        ResumeDescr.__init__(self, original_greenkey)
+    def __init__(self, wref_original_loop_token, redkey):
+        ResumeDescr.__init__(self, wref_original_loop_token)
         self.redkey = redkey
 
     def compile_and_attach(self, metainterp, new_loop):
@@ -485,24 +490,28 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd = metainterp.staticdata
         jitdriver_sd = metainterp.jitdriver_sd
         metainterp.history.inputargs = self.redkey
-        new_loop_token = make_loop_token(metainterp.cpu, len(self.redkey),
-                                         metainterp.jitdriver_sd)
+        new_loop_token = metainterp.original_loop_token
+        # assert that the wref_original_loop_token was kept alive, because
+        # it's just the same as metainterp.original_loop_token
+        assert new_loop_token is self.wref_original_loop_token()
         new_loop.inputargs = self.redkey
         new_loop.token = new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
-            self.original_greenkey,
             new_loop_token)
         # store the new loop in compiled_merge_points_wref too
         old_loop_tokens = metainterp.get_compiled_merge_points(
-            self.original_greenkey)
+            new_loop_token.outermost_greenkey)
         # it always goes at the end of the list, as it is the most
         # general loop token
         old_loop_tokens.append(new_loop_token)
-        metainterp.set_compiled_merge_points(self.original_greenkey,
+        metainterp.set_compiled_merge_points(new_loop_token.outermost_greenkey,
                                              old_loop_tokens)
+        # mostly for tests: make sure we don't keep a reference
+        # to the LoopToken
         new_loop.token = None
+        metainterp.original_loop_token = None
 
     def reset_counter_from_failure(self):
         pass
@@ -570,7 +579,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
     """
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
-    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd)
+    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd, greenboxes)
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args

@@ -255,9 +255,8 @@ class WarmEnterState(object):
         debug_print("disabled inlining", loc)
         debug_stop("jit-disableinlining")
 
-    def attach_unoptimized_bridge_from_interp(self, greenkey,
-                                              entry_loop_token):
-        cell = self.jit_cell_at_key(greenkey)
+    def attach_unoptimized_bridge_from_interp(self, entry_loop_token):
+        cell = self.jit_cell_at_key(entry_loop_token.outermost_greenkey)
         cell.counter = -1
         old_token = cell.get_entry_loop_token()
         cell.set_entry_loop_token(entry_loop_token)
@@ -341,6 +340,7 @@ class WarmEnterState(object):
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
                 fail_descr = warmrunnerdesc.execute_token(loop_token)
+                loop_token = None     # for test_memmgr
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)
                 loop_token = fail_descr.handle_fail(metainterp_sd,

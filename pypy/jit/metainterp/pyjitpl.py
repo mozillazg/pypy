@@ -1,4 +1,4 @@
-import py, os, sys
+import py, os, sys, weakref
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -1048,13 +1048,14 @@ class MIFrame(object):
         else:
             moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
-        original_greenkey = metainterp.resumekey.original_greenkey
+        resumekey = metainterp.resumekey
+        wref_original_loop_token = resumekey.wref_original_loop_token
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                   original_greenkey,
+                                                   wref_original_loop_token,
                                                    metainterp.jitdriver_sd)
         else:
-            resumedescr = compile.ResumeGuardDescr(original_greenkey)
+            resumedescr = compile.ResumeGuardDescr(wref_original_loop_token)
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
         virtualizable_boxes = None
@@ -1642,8 +1643,15 @@ class MetaInterp(object):
         num_green_args = self.jitdriver_sd.num_green_args
         original_greenkey = original_boxes[:num_green_args]
         redkey = original_boxes[num_green_args:]
-        self.resumekey = compile.ResumeFromInterpDescr(original_greenkey,
-                                                       redkey)
+        # make a new loop token and store a strong ref to it for as long as
+        # this MetaInterp is alive (we will give it to the MemoryManager after
+        # the backend has emitted assembler)
+        self.original_loop_token = compile.make_loop_token(self.cpu,
+                                                           len(redkey),
+                                                           self.jitdriver_sd,
+                                                           original_greenkey)
+        self.resumekey = compile.ResumeFromInterpDescr(
+            weakref.ref(self.original_loop_token), redkey)
         self.seen_loop_header_for_jdindex = -1
         try:
             self.interpret()
@@ -1666,15 +1674,20 @@ class MetaInterp(object):
             debug_stop('jit-tracing')
 
     def _handle_guard_failure(self, key):
-        original_greenkey = key.original_greenkey
-        # notice that here we just put the greenkey
-        # use -1 to mark that we will have to give up
-        # because we cannot reconstruct the beginning of the proper loop
-        self.current_merge_points = [(original_greenkey, -1)]
+        # store the original_loop_token on 'self' to make sure that it stays
+        # alive as long as this MetaInterp
         self.resumekey = key
-        self.seen_loop_header_for_jdindex = -1
+        self.original_loop_token = key.wref_original_loop_token()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
+            if self.original_loop_token is None:
+                raise SwitchToBlackhole(ABORT_BRIDGE)
+            # notice that here we just put the greenkey
+            # use -1 to mark that we will have to give up
+            # because we cannot reconstruct the beginning of the proper loop
+            original_greenkey = self.original_loop_token.outermost_greenkey
+            self.current_merge_points = [(original_greenkey, -1)]
+            self.seen_loop_header_for_jdindex = -1
             self.interpret()
         except GenerateMergePoint, gmp:
             return self.designate_target_loop(gmp)
