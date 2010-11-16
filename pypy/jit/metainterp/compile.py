@@ -124,6 +124,8 @@ def send_loop_to_backend(metainterp_sd, loop, type):
         else:
             loop._ignore_during_counting = True
     metainterp_sd.log("compiled new " + type)
+    if metainterp_sd.warmrunnerdesc is not None:    # for tests
+        metainterp_sd.warmrunnerdesc.memory_manager.keep_loop_alive(loop.token)
 
 def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations):
     n = metainterp_sd.cpu.get_fail_descr_number(faildescr)
