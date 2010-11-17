@@ -91,7 +91,7 @@ class CharConverter(TypeConverter):
         if len(value) != 1:  
             raise OperationError(space.w_TypeError,
                                  space.wrap("char expecter, got string of size %d" % len(value)))
-        return value
+        return value[0] # turn it into a "char" to the annotator
 
     def convert_argument(self, space, w_obj):
         arg = self._from_space(space, w_obj)
