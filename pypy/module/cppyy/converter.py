@@ -9,13 +9,20 @@ from pypy.module.cppyy import helper, capi
 
 _converters = {}
 
+def get_rawobject(space, w_obj):
+    from pypy.module.cppyy.interp_cppyy import W_CPPInstance
+    w_obj = space.findattr(w_obj, space.wrap("_cppinstance"))
+    obj = space.interp_w(W_CPPInstance, w_obj, can_be_None=True)
+    return obj.rawobject
+
+
 class TypeConverter(object):
     def __init__(self, space, extra=-1):
         pass
 
     def _get_fieldptr(self, space, w_obj, offset):
-        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
-        return lltype.direct_ptradd(obj.rawobject, offset)
+        rawobject = get_rawobject(space, w_obj)
+        return lltype.direct_ptradd(rawobject, offset)
 
     def _is_abstract(self):
         raise NotImplementedError(
@@ -188,8 +195,8 @@ class ShortPtrConverter(TypeConverter):
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
-        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
-        byteptr = rffi.cast(rffi.LONGP, obj.rawobject[offset])
+        rawobject = get_rawobject(space, w_obj)
+        byteptr = rffi.cast(rffi.LONGP, rawobject[offset])
         # TODO: now what ... ?? AFAICS, w_value is a pure python list, not an array?
 #        byteptr[0] = space.unwrap(space.id(w_value.getslotvalue(2)))
 
@@ -218,8 +225,8 @@ class LongPtrConverter(TypeConverter):
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
-        obj = space.interpclass_w(space.findattr(w_obj, space.wrap("_cppinstance")))
-        byteptr = rffi.cast(rffi.LONGP, obj.rawobject[offset])
+        rawobject = get_rawobject(space, w_obj)
+        byteptr = rffi.cast(rffi.LONGP, rawobject[offset])
         # TODO: now what ... ?? AFAICS, w_value is a pure python list, not an array?
 #        byteptr[0] = space.unwrap(space.id(w_value.getslotvalue(2)))
 
