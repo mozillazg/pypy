@@ -345,6 +345,7 @@ class ResumeGuardDescr(ResumeDescr):
     def compile_and_attach(self, metainterp, new_loop):
         # We managed to create a bridge.  Attach the new operations
         # to the corresponding guard_op and compile from there
+        assert metainterp.resumekey_original_loop_token is not None
         new_loop.token = metainterp.resumekey_original_loop_token
         inputargs = metainterp.history.inputargs
         if not we_are_translated():
