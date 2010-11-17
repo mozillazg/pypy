@@ -2,7 +2,6 @@ import sys
 from pypy.interpreter.error import OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.rarithmetic import r_singlefloat
-from pypy.objspace.std.intobject import W_IntObject
 
 from pypy.module._rawffi.interp_rawffi import unpack_simple_shape
 
@@ -74,7 +73,7 @@ class BoolConverter(TypeConverter):
 class CharConverter(TypeConverter):
     def _from_space(self, space, w_value):
         # allow int to pass to char and make sure that str is of length 1
-        if type(w_value) == W_IntObject:
+        if space.isinstance_w(w_value, space.w_int):
             try:
                 value = chr(space.c_int_w(w_value))     
             except ValueError, e:
