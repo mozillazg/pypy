@@ -60,7 +60,7 @@ class MemoryManager(object):
     def _kill_old_loops_now(self):
         debug_start("jit-free-memmgr")
         oldtotal = len(self.alive_loops)
-        print self.alive_loops.keys()
+        #print self.alive_loops.keys()
         debug_print("Current generation:", self.current_generation)
         debug_print("Loop tokens before:", oldtotal)
         max_generation = self.current_generation - (self.max_age-1)
@@ -70,8 +70,10 @@ class MemoryManager(object):
         newtotal = len(self.alive_loops)
         debug_print("Loop tokens freed: ", oldtotal - newtotal)
         debug_print("Loop tokens left:  ", newtotal)
-        print self.alive_loops.keys()
-        debug_stop("jit-free-memmgr")
-        if not we_are_translated():
+        #print self.alive_loops.keys()
+        if not we_are_translated() and oldtotal != newtotal:
+            looptoken = None
             from pypy.rlib import rgc
-            rgc.collect()
+            # a single one is not enough for all tests :-(
+            rgc.collect(); rgc.collect(); rgc.collect()
+        debug_stop("jit-free-memmgr")

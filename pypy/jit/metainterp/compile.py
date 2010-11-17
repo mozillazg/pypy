@@ -57,22 +57,20 @@ def record_loop_or_bridge(loop):
     assert looptoken is not None
     wref = weakref.ref(looptoken)
     for op in loop.operations:
-        if op.is_guard():
-            resumedescr = op.getdescr()
-            assert isinstance(resumedescr, ResumeDescr)
-            resumedescr.wref_original_loop_token = wref   # stick it there
-            n = resumedescr.index
+        descr = op.getdescr()
+        if isinstance(descr, ResumeDescr):
+            descr.wref_original_loop_token = wref   # stick it there
+            n = descr.index
             if n >= 0:       # we also record the resumedescr in this list
                 looptoken.faildescr_indices.append(n)
-    # record that 'looptoken' ends up jumping to 'target_loop_token'
-    target_loop_token = loop.operations[-1].getdescr()
-    if isinstance(target_loop_token, LoopToken):
-        # the following test is not enough to prevent more complicated
-        # cases of cycles, but at least it helps in simple tests of
-        # test_memgr.py
-        if target_loop_token is not looptoken:
-            looptoken.record_jump_to(target_loop_token)
-        loop.operations[-1].setdescr(None)    # clear reference
+        elif isinstance(descr, LoopToken):
+            # for a JUMP or a CALL_ASSEMBLER: record it as a potential jump.
+            # (the following test is not enough to prevent more complicated
+            # cases of cycles, but at least it helps in simple tests of
+            # test_memgr.py)
+            if descr is not looptoken:
+                looptoken.record_jump_to(descr)
+            op.setdescr(None)    # clear reference, mostly for tests
     # mostly for tests: make sure we don't keep a reference to the LoopToken
     loop.token = None
 
@@ -593,7 +591,8 @@ class PropagateExceptionDescr(AbstractFailDescr):
 
 propagate_exception_descr = PropagateExceptionDescr()
 
-def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
+def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes,
+                         memory_manager=None):
     """Make a LoopToken that corresponds to assembler code that just
     calls back the interpreter.  Used temporarily: a fully compiled
     version of the code may end up replacing it.
@@ -633,4 +632,6 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes):
         ]
     operations[1].setfailargs([])
     cpu.compile_loop(inputargs, operations, loop_token, log=False)
+    if memory_manager is not None:    # for tests
+        memory_manager.keep_loop_alive(loop_token)
     return loop_token

@@ -822,5 +822,4 @@ class WarmRunnerDesc(object):
         debug_stop("jit-running")
         self.metainterp_sd.profiler.end_running()
         self.memory_manager.keep_loop_alive(loop_token)
-        print loop_token
         return fail_descr
