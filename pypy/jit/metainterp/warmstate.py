@@ -263,6 +263,10 @@ class WarmEnterState(object):
         cell.set_entry_loop_token(entry_loop_token)
         if old_token is not None:
             self.cpu.redirect_call_assembler(old_token, entry_loop_token)
+            # entry_loop_token is also kept alive by any loop that used
+            # to point to old_token.  Actually freeing old_token early
+            # is a pointless optimization (it is tiny).
+            old_token.record_jump_to(entry_loop_token)
 
     # ----------
 
@@ -541,6 +545,7 @@ class WarmEnterState(object):
         if hasattr(self, 'get_location_str'):
             return
         #
+        warmrunnerdesc = self.warmrunnerdesc
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
         jd = self.jitdriver_sd
@@ -565,8 +570,9 @@ class WarmEnterState(object):
             entry_loop_token = cell.get_entry_loop_token()
             if entry_loop_token is None:
                 from pypy.jit.metainterp.compile import compile_tmp_callback
+                memmgr = warmrunnerdesc.memory_manager
                 entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
-                                                        redboxes)
+                                                        redboxes, memmgr)
                 cell.set_entry_loop_token(entry_loop_token)
             return entry_loop_token
         self.get_assembler_token = get_assembler_token

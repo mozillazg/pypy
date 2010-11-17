@@ -4,6 +4,7 @@ This contains all the code that is directly run
 when executing on top of the llinterpreter.
 """
 
+import weakref
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
 from pypy.jit.metainterp.history import (ConstInt, ConstPtr,
@@ -324,7 +325,7 @@ def compile_add_loop_token(loop, descr):
         raise ValueError("CALL_ASSEMBLER not supported")
     loop = _from_opaque(loop)
     op = loop.operations[-1]
-    op.descr = descr
+    op.descr = weakref.ref(descr)
 
 def compile_add_var(loop, intvar):
     loop = _from_opaque(loop)
@@ -847,11 +848,19 @@ class Frame(object):
         finally:
             self._may_force = -1
 
-    def op_call_assembler(self, loop_token, *args):
+    def op_call_assembler(self, wref_loop_token, *args):
+        if we_are_translated():
+            raise ValueError("CALL_ASSEMBLER not supported")
+        return self._do_call_assembler(wref_loop_token, *args)
+
+    def _do_call_assembler(self, wref_loop_token, *args):
         global _last_exception
+        loop_token = wref_loop_token()
+        assert loop_token, "CALL_ASSEMBLER to a target that already died"
+        if hasattr(loop_token, '_llgraph_redirected'):
+            return self._do_call_assembler(loop_token._llgraph_redirected,
+                                           *args)
         assert not self._forced
-        loop_token = self.cpu._redirected_call_assembler.get(loop_token,
-                                                             loop_token)
         self._may_force = self.opindex
         try:
             inpargs = _from_opaque(loop_token._llgraph_compiled_version).inputargs
@@ -1550,7 +1559,8 @@ def redirect_call_assembler(cpu, oldlooptoken, newlooptoken):
     OLD = _from_opaque(oldlooptoken._llgraph_compiled_version).getargtypes()
     NEW = _from_opaque(newlooptoken._llgraph_compiled_version).getargtypes()
     assert OLD == NEW
-    cpu._redirected_call_assembler[oldlooptoken] = newlooptoken
+    assert not hasattr(oldlooptoken, '_llgraph_redirected')
+    oldlooptoken._llgraph_redirected = weakref.ref(newlooptoken)
 
 # ____________________________________________________________
 

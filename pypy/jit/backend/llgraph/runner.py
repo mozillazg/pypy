@@ -102,7 +102,6 @@ class BaseCPU(model.AbstractCPU):
         llimpl._llinterp = LLInterpreter(self.rtyper)
         self._future_values = []
         self._descrs = {}
-        self._redirected_call_assembler = {}
 
     def _freeze_(self):
         assert self.translate_support_code
@@ -142,6 +141,7 @@ class BaseCPU(model.AbstractCPU):
     def free_loop_and_bridges(self, looptoken):
         for c in looptoken._llgraph_loop_and_bridges:
             llimpl.mark_as_free(c)
+        model.AbstractCPU.free_loop_and_bridges(self, looptoken)
 
     def _compile_loop_or_bridge(self, c, inputargs, operations):
         var2index = {}

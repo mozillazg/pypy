@@ -1622,10 +1622,10 @@ class MetaInterp(object):
         # is also available as 'self.jitdriver_sd', because we need to
         # specialize this function and a few other ones for the '*args'.
         debug_start('jit-tracing')
-        self.staticdata.try_to_free_some_loops()
         self.staticdata._setup_once()
         self.staticdata.profiler.start_tracing()
         assert jitdriver_sd is self.jitdriver_sd
+        self.staticdata.try_to_free_some_loops()
         self.create_empty_history()
         try:
             original_boxes = self.initialize_original_boxes(jitdriver_sd, *args)
@@ -1657,6 +1657,7 @@ class MetaInterp(object):
         # store the resumekey.wref_original_loop_token() on 'self' to make
         # sure that it stays alive as long as this MetaInterp
         self.resumekey_original_loop_token = key.wref_original_loop_token()
+        self.staticdata.try_to_free_some_loops()
         self.initialize_state_from_guard_failure(key)
         try:
             return self._handle_guard_failure(key)
@@ -1669,7 +1670,6 @@ class MetaInterp(object):
         self.current_merge_points = []
         self.resumekey = key
         self.seen_loop_header_for_jdindex = -1
-        self.staticdata.try_to_free_some_loops()
         try:
             self.prepare_resume_from_failure(key.guard_opnum)
             if self.resumekey_original_loop_token is None:   # very rare case

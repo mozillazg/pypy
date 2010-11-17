@@ -1,6 +1,6 @@
 from pypy.jit.metainterp.memmgr import MemoryManager
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
-from pypy.rlib.jit import JitDriver
+from pypy.rlib.jit import JitDriver, dont_look_inside
 
 
 class FakeLoopToken:
@@ -145,4 +145,36 @@ class TestIntegration(LLJitMixin):
         assert res == 42
         self.check_tree_loop_count(2 + 10*4)   # 42 :-)
 
-    #XXXcall_assembler
+    def test_call_assembler_keep_alive(self):
+        myjitdriver1 = JitDriver(greens=['m'], reds=['n'])
+        myjitdriver2 = JitDriver(greens=['m'], reds=['n', 'rec'])
+        def h(m, n):
+            while True:
+                myjitdriver1.can_enter_jit(n=n, m=m)
+                myjitdriver1.jit_merge_point(n=n, m=m)
+                n = n >> 1
+                if n == 0:
+                    return 21
+        def g(m, rec):
+            n = 5
+            while n > 0:
+                myjitdriver2.can_enter_jit(n=n, m=m, rec=rec)
+                myjitdriver2.jit_merge_point(n=n, m=m, rec=rec)
+                if rec:
+                    h(m, rec)
+                n = n - 1
+            return 21
+        def f(u):
+            for i in range(8):
+                h(u, 32)  # make a loop and an entry bridge for h(u)
+            g(u, 8)       # make a loop for g(u) with a call_assembler
+            g(u, 0); g(u+1, 0)     # \
+            g(u, 0); g(u+2, 0)     #  \  make more loops for g(u+1) to g(u+4),
+            g(u, 0); g(u+3, 0)     #  /  but keeps g(u) alive
+            g(u, 0); g(u+4, 0)     # /
+            g(u, 8)       # call g(u) again, with its call_assembler to h(u)
+            return 42
+
+        res = self.meta_interp(f, [1], loop_longevity=4, inline=True)
+        assert res == 42
+        self.check_tree_loop_count(8)
