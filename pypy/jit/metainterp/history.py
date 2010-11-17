@@ -734,6 +734,7 @@ class LoopToken(AbstractDescr):
     cpu = None
     number = -1
     generation = r_longlong(0)
+    bridges_count = 0
 
     def __init__(self, cpu=None):
         self.cpu = cpu
@@ -753,7 +754,8 @@ class LoopToken(AbstractDescr):
             # loop token, which means that it has been successfully
             # compiled by the backend.  Free it now.
             debug_start("jit-free-looptoken")
-            debug_print("Freeing loop #", self.number)
+            debug_print("Freeing loop #", self.number, 'with',
+                        self.bridges_count, 'attached bridges')
             self.cpu.free_loop_and_bridges(self)
             debug_stop("jit-free-looptoken")
 
