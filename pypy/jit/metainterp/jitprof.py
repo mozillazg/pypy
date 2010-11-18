@@ -24,6 +24,10 @@ ABORT_ESCAPE
 NVIRTUALS
 NVHOLES
 NVREUSED
+TOTAL_COMPILED_LOOPS
+TOTAL_COMPILED_BRIDGES
+TOTAL_FREED_LOOPS
+TOTAL_FREED_BRIDGES
 """
 
 def _setup():
@@ -91,6 +95,7 @@ class Profiler(BaseProfiler):
     calls = 0
     current = None
     printing = True
+    cpu = None
 
     def start(self):
         self.starttime = self.timer()
@@ -176,6 +181,16 @@ class Profiler(BaseProfiler):
         self._print_intline("nvirtuals", cnt[NVIRTUALS])
         self._print_intline("nvholes", cnt[NVHOLES])
         self._print_intline("nvreused", cnt[NVREUSED])
+        cpu = self.cpu
+        if cpu is not None:   # for some tests
+            self._print_intline("Total # of loops",
+                                cpu.total_compiled_loops)
+            self._print_intline("Total # of bridges",
+                                cpu.total_compiled_bridges)
+            self._print_intline("Freed # of loops",
+                                cpu.total_freed_loops)
+            self._print_intline("Freed # of bridges",
+                                cpu.total_freed_bridges)
 
     def _print_line_time(self, string, i, tim):
         final = "%s:%s\t%d\t%f\n" % (string, " " * max(0, 13-len(string)), i, tim)

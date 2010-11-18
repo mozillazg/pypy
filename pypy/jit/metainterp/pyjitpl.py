@@ -1206,6 +1206,7 @@ class MetaInterpStaticData(object):
         self.logger_ops = Logger(self, guard_number=True)
 
         self.profiler = ProfilerClass()
+        self.profiler.cpu = cpu
         self.warmrunnerdesc = warmrunnerdesc
 
         backendmodule = self.cpu.__module__
