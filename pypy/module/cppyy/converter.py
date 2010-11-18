@@ -90,7 +90,7 @@ class CharConverter(TypeConverter):
 
         if len(value) != 1:  
             raise OperationError(space.w_TypeError,
-                                 space.wrap("char expecter, got string of size %d" % len(value)))
+                                 space.wrap("char expected, got string of size %d" % len(value)))
         return value[0] # turn it into a "char" to the annotator
 
     def convert_argument(self, space, w_obj):
@@ -189,9 +189,9 @@ class ShortPtrConverter(TypeConverter):
     def from_memory(self, space, w_obj, offset):
         # read access, so no copy needed
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        shortptr = rffi.cast(rffi.SHORTP, fieldptr)
+        ptrval = rffi.cast(rffi.UINT, fieldptr)
         w_array = unpack_simple_shape(space, space.wrap('h'))
-        return w_array.fromaddress(space, shortptr, self.size)
+        return w_array.fromaddress(space, ptrval, self.size)
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
@@ -205,6 +205,7 @@ class ShortArrayConverter(ShortPtrConverter):
         # copy the full array (uses byte copy for now)
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         value = w_value.getslotvalue(2)
+        # TODO: get sizeof(short) from system
         for i in range(min(self.size*2, value.getlength())):
             fieldptr[i] = value.getitem(i)
 
@@ -219,9 +220,9 @@ class LongPtrConverter(TypeConverter):
     def from_memory(self, space, w_obj, offset):
         # read access, so no copy needed
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        longptr = rffi.cast(rffi.LONGP, fieldptr)
+        ptrval = rffi.cast(rffi.UINT, fieldptr)
         w_array = unpack_simple_shape(space, space.wrap('l'))
-        return w_array.fromaddress(space, longptr, self.size)
+        return w_array.fromaddress(space, ptrval, self.size)
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
@@ -235,6 +236,7 @@ class LongArrayConverter(LongPtrConverter):
         # copy the full array (uses byte copy for now)
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         value = w_value.getslotvalue(2)
+        # TODO: get sizeof(long) from system
         for i in range(min(self.size*4, value.getlength())):
             fieldptr[i] = value.getitem(i)
 
