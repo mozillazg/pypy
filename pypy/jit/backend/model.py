@@ -8,6 +8,10 @@ class AbstractCPU(object):
     done_with_this_frame_int_v = -1
     done_with_this_frame_ref_v = -1
     done_with_this_frame_float_v = -1
+    total_compiled_loops = 0
+    total_compiled_bridges = 0
+    total_freed_loops = 0
+    total_freed_bridges = 0
 
     def __init__(self):
         self.fail_descr_list = []
@@ -138,6 +142,8 @@ class AbstractCPU(object):
         for n in compiled_loop_token.faildescr_indices:
             lst[n] = None
         self.fail_descr_free_list.extend(compiled_loop_token.faildescr_indices)
+        self.total_freed_loops += 1
+        self.total_freed_bridges += compiled_loop_token.bridges_count
         # We expect 'compiled_loop_token' to be itself garbage-collected soon.
 
     @staticmethod
@@ -268,6 +274,7 @@ class AbstractCPU(object):
 
 class CompiledLoopToken(object):
     def __init__(self, cpu, number):
+        cpu.total_compiled_loops += 1
         self.cpu = cpu
         self.number = number
         self.bridges_count = 0
@@ -278,6 +285,10 @@ class CompiledLoopToken(object):
 
     def record_faildescr_index(self, n):
         self.faildescr_indices.append(n)
+
+    def compiling_a_bridge(self):
+        self.cpu.total_compiled_bridges += 1
+        self.bridges_count += 1
 
     def __del__(self):
         debug_start("jit-free-looptoken")
