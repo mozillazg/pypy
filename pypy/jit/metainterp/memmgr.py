@@ -58,7 +58,7 @@ class MemoryManager(object):
             self.alive_loops[looptoken] = None
 
     def _kill_old_loops_now(self):
-        debug_start("jit-free-memmgr")
+        debug_start("jit-mem-collect")
         oldtotal = len(self.alive_loops)
         #print self.alive_loops.keys()
         debug_print("Current generation:", self.current_generation)
@@ -76,4 +76,4 @@ class MemoryManager(object):
             from pypy.rlib import rgc
             # a single one is not enough for all tests :-(
             rgc.collect(); rgc.collect(); rgc.collect()
-        debug_stop("jit-free-memmgr")
+        debug_stop("jit-mem-collect")
