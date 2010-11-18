@@ -142,8 +142,6 @@ class AbstractCPU(object):
         for n in compiled_loop_token.faildescr_indices:
             lst[n] = None
         self.fail_descr_free_list.extend(compiled_loop_token.faildescr_indices)
-        self.total_freed_loops += 1
-        self.total_freed_bridges += compiled_loop_token.bridges_count
         # We expect 'compiled_loop_token' to be itself garbage-collected soon.
 
     @staticmethod
@@ -295,4 +293,6 @@ class CompiledLoopToken(object):
         debug_print("Freeing loop #", self.number, 'with',
                     self.bridges_count, 'attached bridges')
         self.cpu.free_loop_and_bridges(self)
+        self.cpu.total_freed_loops += 1
+        self.cpu.total_freed_bridges += self.bridges_count
         debug_stop("jit-free-looptoken")
