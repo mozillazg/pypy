@@ -280,6 +280,9 @@ class CompiledLoopToken(object):
         # that belong to this loop or to a bridge attached to it.
         # Filled by the frontend calling record_faildescr_index().
         self.faildescr_indices = []
+        debug_start("jit-mem-looptoken-alloc")
+        debug_print("allocating Loop #", self.number)
+        debug_stop("jit-mem-looptoken-alloc")
 
     def record_faildescr_index(self, n):
         self.faildescr_indices.append(n)
@@ -287,12 +290,15 @@ class CompiledLoopToken(object):
     def compiling_a_bridge(self):
         self.cpu.total_compiled_bridges += 1
         self.bridges_count += 1
+        debug_start("jit-mem-looptoken-alloc")
+        debug_print("allocating Bridge #", self.bridges_count, "of Loop #", self.number)
+        debug_stop("jit-mem-looptoken-alloc")
 
     def __del__(self):
-        debug_start("jit-free-looptoken")
-        debug_print("Freeing loop #", self.number, 'with',
+        debug_start("jit-mem-looptoken-free")
+        debug_print("freeing Loop #", self.number, 'with',
                     self.bridges_count, 'attached bridges')
         self.cpu.free_loop_and_bridges(self)
         self.cpu.total_freed_loops += 1
         self.cpu.total_freed_bridges += self.bridges_count
-        debug_stop("jit-free-looptoken")
+        debug_stop("jit-mem-looptoken-free")
