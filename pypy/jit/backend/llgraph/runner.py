@@ -122,7 +122,7 @@ class BaseCPU(model.AbstractCPU):
         c = llimpl.compile_start()
         clt = original_loop_token.compiled_loop_token
         clt.loop_and_bridges.append(c)
-        clt.bridges_count += 1
+        clt.compiling_a_bridge()
         self._compile_loop_or_bridge(c, inputargs, operations)
         old, oldindex = faildescr._compiled_fail
         llimpl.compile_redirect_fail(old, oldindex, c)

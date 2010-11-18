@@ -371,7 +371,7 @@ class TestX86(LLtypeBackendTest):
         ]
         bridge[1].setfailargs([i1b])
 
-        self.cpu.compile_bridge(faildescr1, [i1b], bridge)        
+        self.cpu.compile_bridge(faildescr1, [i1b], bridge, looptoken)
         name, address, size = agent.functions[1]
         assert name == "Bridge # 0: bye"
         # Would be exactly ==, but there are some guard failure recovery
