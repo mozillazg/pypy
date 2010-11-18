@@ -34,7 +34,6 @@ from pypy.jit.backend.x86.support import values_array
 from pypy.rlib.debug import debug_print
 from pypy.rlib import rgc
 from pypy.jit.backend.x86.jump import remap_frame_layout
-from pypy.rlib.streamio import open_file_as_stream
 from pypy.jit.metainterp.history import ConstInt, BoxInt
 
 # darwin requires the stack to be 16 bytes aligned on calls. Same for gcc 4.5.0,
@@ -244,11 +243,11 @@ class Assembler386(object):
         if self._debug:
             output_log = self._output_loop_log
             assert output_log is not None
-            f = open_file_as_stream(output_log, "w")
+            fd = os.open(output_log, os.O_WRONLY | os.O_CREAT, 0666)
             for i in range(len(self.loop_run_counters)):
                 name, struct = self.loop_run_counters[i]
-                f.write(str(name) + ":" +  str(struct.i) + "\n")
-            f.close()
+                os.write(fd, str(name) + ":" +  str(struct.i) + "\n")
+            os.close(fd)
 
     def _build_float_constants(self):
         # 44 bytes: 32 bytes for the data, and up to 12 bytes for alignment
