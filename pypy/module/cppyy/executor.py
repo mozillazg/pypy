@@ -63,7 +63,7 @@ class InstancePtrExecutor(FunctionExecutor):
         from pypy.module.cppyy import interp_cppyy
         long_result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         ptr_result = rffi.cast(rffi.VOIDP, long_result)
-        return interp_cppyy.W_CPPInstance(self.cpptype, ptr_result)
+        return interp_cppyy.W_CPPInstance(space, self.cpptype, ptr_result)
 
 
 def get_executor(space, name):

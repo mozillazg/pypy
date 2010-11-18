@@ -144,6 +144,7 @@ class CPPMethod(object):
         return "CPPFunction(%s, %s, %r, %s)" % (
             self.cpptype, self.method_index, self.executor, self.arg_types)
 
+
 class CPPFunction(CPPMethod):
     def call(self, cppthis, args_w):
         if self.executor is None:
@@ -167,7 +168,7 @@ class CPPConstructor(CPPMethod):
         except Exception, e:
             capi.c_deallocate(self.cpptype.handle, newthis)
             raise
-        return W_CPPInstance(self.cpptype, newthis)
+        return W_CPPInstance(self.space, self.cpptype, newthis)
 
 
 class W_CPPOverload(Wrappable):
@@ -237,7 +238,7 @@ W_CPPDataMember.typedef = TypeDef(
 
 
 class W_CPPType(Wrappable):
-    _immutable_fields_ = ["name","handle"]
+    _immutable_fields_ = ["name", "handle"]
 
     def __init__(self, space, name, handle):
         self.space = space
@@ -322,9 +323,8 @@ W_CPPType.typedef = TypeDef(
 
 
 class W_CPPInstance(Wrappable):
-    _immutable_ = True
-    def __init__(self, cppclass, rawobject):
-        self.space = cppclass.space
+    def __init__(self, space, cppclass, rawobject):
+        self.space = space
         self.cppclass = cppclass
         self.rawobject = rawobject
 
