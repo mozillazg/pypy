@@ -816,10 +816,6 @@ class WarmRunnerDesc(object):
     # ____________________________________________________________
 
     def execute_token(self, loop_token):
-        self.metainterp_sd.profiler.start_running()
-        debug_start("jit-running")
         fail_descr = self.cpu.execute_token(loop_token)
-        debug_stop("jit-running")
-        self.metainterp_sd.profiler.end_running()
         self.memory_manager.keep_loop_alive(loop_token)
         return fail_descr

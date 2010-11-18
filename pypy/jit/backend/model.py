@@ -1,3 +1,4 @@
+from pypy.rlib.debug import debug_start, debug_print, debug_stop
 from pypy.jit.metainterp import history, compile
 
 
@@ -41,8 +42,9 @@ class AbstractCPU(object):
 
     def compile_loop(self, inputargs, operations, looptoken, log=True):
         """Assemble the given loop.
-        Extra attributes should be put in the LoopToken to
-        point to the compiled loop in assembler.
+        Should create and attach a fresh CompiledLoopToken to
+        looptoken.compiled_loop_token and stick extra attributes
+        on it to point to the compiled loop in assembler.
         """
         raise NotImplementedError
 
@@ -120,7 +122,7 @@ class AbstractCPU(object):
         oldlooptoken so that from now own they will call newlooptoken."""
         raise NotImplementedError
 
-    def free_loop_and_bridges(self, looptoken):
+    def free_loop_and_bridges(self, compiled_loop_token):
         """This method is called to free resources (machine code,
         references to resume guards, etc.) allocated by the compilation
         of a loop and all bridges attached to it.  After this call, the
@@ -133,10 +135,10 @@ class AbstractCPU(object):
         # resume descrs are the largest consumers of memory (about 3x
         # more than the assembler, in the case of the x86 backend).
         lst = self.fail_descr_list
-        for n in looptoken.faildescr_indices:
+        for n in compiled_loop_token.faildescr_indices:
             lst[n] = None
-        self.fail_descr_free_list.extend(looptoken.faildescr_indices)
-        # We expect 'looptoken' to be itself garbage-collected soon.
+        self.fail_descr_free_list.extend(compiled_loop_token.faildescr_indices)
+        # We expect 'compiled_loop_token' to be itself garbage-collected soon.
 
     @staticmethod
     def sizeof(S):
@@ -262,3 +264,24 @@ class AbstractCPU(object):
 
     def force(self, force_token):
         raise NotImplementedError
+
+
+class CompiledLoopToken(object):
+    def __init__(self, cpu, number):
+        self.cpu = cpu
+        self.number = number
+        self.bridges_count = 0
+        # This growing list gives the 'descr_number' of all fail descrs
+        # that belong to this loop or to a bridge attached to it.
+        # Filled by the frontend calling record_faildescr_index().
+        self.faildescr_indices = []
+
+    def record_faildescr_index(self, n):
+        self.faildescr_indices.append(n)
+
+    def __del__(self):
+        debug_start("jit-free-looptoken")
+        debug_print("Freeing loop #", self.number, 'with',
+                    self.bridges_count, 'attached bridges')
+        self.cpu.free_loop_and_bridges(self)
+        debug_stop("jit-free-looptoken")

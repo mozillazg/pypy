@@ -42,8 +42,8 @@ def create_empty_loop(metainterp):
     name = metainterp.staticdata.stats.name_for_new_loop()
     return TreeLoop(name)
 
-def make_loop_token(cpu, nb_args, jitdriver_sd):
-    loop_token = LoopToken(cpu)
+def make_loop_token(nb_args, jitdriver_sd):
+    loop_token = LoopToken()
     loop_token.specnodes = [prebuiltNotSpecNode] * nb_args
     loop_token.outermost_jitdriver_sd = jitdriver_sd
     return loop_token
@@ -61,8 +61,8 @@ def record_loop_or_bridge(loop):
         if isinstance(descr, ResumeDescr):
             descr.wref_original_loop_token = wref   # stick it there
             n = descr.index
-            if n >= 0:       # we also record the resumedescr in this list
-                looptoken.faildescr_indices.append(n)
+            if n >= 0:       # we also record the resumedescr number
+                looptoken.compiled_loop_token.record_faildescr_index(n)
         elif isinstance(descr, LoopToken):
             # for a JUMP or a CALL_ASSEMBLER: record it as a potential jump.
             # (the following test is not enough to prevent more complicated
@@ -89,9 +89,8 @@ def compile_new_loop(metainterp, old_loop_tokens, start):
     h_ops = history.operations
     loop.operations = [h_ops[i].clone() for i in range(start, len(h_ops))]
     metainterp_sd = metainterp.staticdata
-    cpu = metainterp.cpu
     jitdriver_sd = metainterp.jitdriver_sd
-    loop_token = make_loop_token(cpu, len(loop.inputargs), jitdriver_sd)
+    loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd)
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -155,7 +154,6 @@ def send_bridge_to_backend(metainterp_sd, faildescr, inputargs, operations,
     if not we_are_translated():
         show_loop(metainterp_sd)
         TreeLoop.check_consistency_of(inputargs, operations)
-    original_loop_token.bridges_count += 1
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
@@ -512,12 +510,11 @@ class ResumeFromInterpDescr(ResumeDescr):
         # a loop at all but ends in a jump to the target loop.  It starts
         # with completely unoptimized arguments, as in the interpreter.
         metainterp_sd = metainterp.staticdata
-        cpu = metainterp.cpu
         jitdriver_sd = metainterp.jitdriver_sd
         redargs = new_loop.inputargs
         # We make a new LoopToken for this entry bridge, and stick it
         # to every guard in the loop.
-        new_loop_token = make_loop_token(cpu, len(redargs), jitdriver_sd)
+        new_loop_token = make_loop_token(len(redargs), jitdriver_sd)
         new_loop.token = new_loop_token
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
@@ -601,7 +598,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes,
     """
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
-    loop_token = make_loop_token(cpu, len(inputargs), jitdriver_sd)
+    loop_token = make_loop_token(len(inputargs), jitdriver_sd)
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args

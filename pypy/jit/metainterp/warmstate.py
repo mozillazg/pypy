@@ -344,7 +344,11 @@ class WarmEnterState(object):
 
             # ---------- execute assembler ----------
             while True:     # until interrupted by an exception
+                metainterp_sd.profiler.start_running()
+                debug_start("jit-running")
                 fail_descr = warmrunnerdesc.execute_token(loop_token)
+                debug_stop("jit-running")
+                metainterp_sd.profiler.end_running()
                 loop_token = None     # for test_memmgr
                 if vinfo is not None:
                     vinfo.reset_vable_token(virtualizable)

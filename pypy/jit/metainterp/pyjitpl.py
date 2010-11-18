@@ -1,4 +1,4 @@
-import py, os, sys, weakref
+import py, os, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
