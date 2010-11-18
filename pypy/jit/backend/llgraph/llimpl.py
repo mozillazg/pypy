@@ -857,13 +857,13 @@ class Frame(object):
         global _last_exception
         loop_token = wref_loop_token()
         assert loop_token, "CALL_ASSEMBLER to a target that already died"
-        if hasattr(loop_token, '_llgraph_redirected'):
-            return self._do_call_assembler(loop_token._llgraph_redirected,
-                                           *args)
+        ctl = loop_token.compiled_loop_token
+        if hasattr(ctl, 'redirected'):
+            return self._do_call_assembler(ctl.redirected, *args)
         assert not self._forced
         self._may_force = self.opindex
         try:
-            inpargs = _from_opaque(loop_token._llgraph_compiled_version).inputargs
+            inpargs = _from_opaque(ctl.compiled_version).inputargs
             for i, inparg in enumerate(inpargs):
                 TYPE = inparg.concretetype
                 if TYPE is lltype.Signed:
@@ -1556,11 +1556,13 @@ def reset_vable(jd, vable):
         do_setfield_gc_int(vable, fielddescr.ofs, 0)
 
 def redirect_call_assembler(cpu, oldlooptoken, newlooptoken):
-    OLD = _from_opaque(oldlooptoken._llgraph_compiled_version).getargtypes()
-    NEW = _from_opaque(newlooptoken._llgraph_compiled_version).getargtypes()
+    oldclt = oldlooptoken.compiled_loop_token
+    newclt = newlooptoken.compiled_loop_token
+    OLD = _from_opaque(oldclt.compiled_version).getargtypes()
+    NEW = _from_opaque(newclt.compiled_version).getargtypes()
     assert OLD == NEW
-    assert not hasattr(oldlooptoken, '_llgraph_redirected')
-    oldlooptoken._llgraph_redirected = weakref.ref(newlooptoken)
+    assert not hasattr(oldclt, 'redirected')
+    oldclt.redirected = weakref.ref(newlooptoken)
 
 # ____________________________________________________________
 

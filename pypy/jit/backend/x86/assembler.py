@@ -7,6 +7,7 @@ from pypy.rpython.lltypesystem import lltype, rffi, rstr, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.tool.uid import fixid
+from pypy.jit.backend.model import CompiledLoopToken
 from pypy.jit.backend.x86.regalloc import (RegAlloc, X86RegisterManager,
                                            X86XMMRegisterManager, get_ebp_ofs,
                                            _get_scale)
@@ -305,6 +306,8 @@ class Assembler386(object):
                _x86_arglocs
                _x86_debug_checksum
         """
+        looptoken.compiled_loop_token = CompiledLoopToken(self.cpu,
+                                                          looptoken.number)
         if not we_are_translated():
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)

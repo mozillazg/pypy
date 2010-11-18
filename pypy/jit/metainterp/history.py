@@ -5,7 +5,6 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, r_dict, Symbolic
 from pypy.rlib.objectmodel import compute_hash, compute_unique_id
 from pypy.rlib.rarithmetic import intmask, r_longlong
-from pypy.rlib.debug import debug_start, debug_print, debug_stop
 from pypy.tool.uid import uid
 from pypy.conftest import option
 
@@ -731,39 +730,27 @@ class LoopToken(AbstractDescr):
     outermost_jitdriver_sd = None
     # specnodes = ...
     # and more data specified by the backend when the loop is compiled
-    cpu = None
     number = -1
     generation = r_longlong(0)
-    bridges_count = 0
+    # one purpose of LoopToken is to keep alive the CompiledLoopToken
+    # returned by the backend.  When the LoopToken goes away, the
+    # CompiledLoopToken has its __del__ called, which frees the assembler
+    # memory and the ResumeGuards.
+    compiled_loop_token = None
 
-    def __init__(self, cpu=None):
-        self.cpu = cpu
-        # See get_fail_descr_number() in backend/model.py: this growing
-        # list gives the 'descr_number' of all fail descrs that belong to
-        # this loop or to a bridge attached to it.
-        self.faildescr_indices = []
+    def __init__(self):
         # For memory management of assembled loops
         self._keepalive_target_looktokens = {}      # set of other LoopTokens
 
     def record_jump_to(self, target_loop_token):
         self._keepalive_target_looktokens[target_loop_token] = None
 
-    def __del__(self):
-        if self.generation > r_longlong(0):
-            # MemoryManager.keep_loop_alive() has been called on this
-            # loop token, which means that it has been successfully
-            # compiled by the backend.  Free it now.
-            debug_start("jit-free-looptoken")
-            debug_print("Freeing loop #", self.number, 'with',
-                        self.bridges_count, 'attached bridges')
-            self.cpu.free_loop_and_bridges(self)
-            debug_stop("jit-free-looptoken")
-
     def __repr__(self):
         return '<Loop %d, gen=%d>' % (self.number, self.generation)
 
     def repr_of_descr(self):
         return '<Loop%d>' % self.number
+
 
 class TreeLoop(object):
     inputargs = None
