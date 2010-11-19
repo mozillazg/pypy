@@ -7,7 +7,7 @@ def compound(name):
     i = _find_qualifier_index(name)
     return "".join(name[i:].split(" "))
 
-def array_index(name):
+def array_size(name):
     name = "".join(rstring.split(name, "const")) # poor man's replace
     if name[-1] == "]":                          # array type
         i = _find_qualifier_index(name)
@@ -15,7 +15,7 @@ def array_index(name):
             c = name[i]
             if c == "[":
                 return int(name[i+1:-1])
-    return 0
+    return -1
 
 def _find_qualifier_index(name):
     i = len(name)

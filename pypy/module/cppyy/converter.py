@@ -19,7 +19,7 @@ def get_rawobject(space, w_obj):
 
 
 class TypeConverter(object):
-    def __init__(self, space, extra=-1):
+    def __init__(self, space, array_size):
         pass
 
     def _get_fieldptr(self, space, w_obj, offset):
@@ -41,6 +41,14 @@ class TypeConverter(object):
 
     def free_argument(self, arg):
         lltype.free(arg, flavor='raw')
+
+
+class ArrayTypeConverter(TypeConverter):
+    def __init__(self, space, array_size):
+        if array_size <= 0:
+            self.size = sys.maxint
+        else:
+            self.size = array_size
 
 
 class VoidConverter(TypeConverter):
@@ -178,11 +186,8 @@ class CStringConverter(TypeConverter):
         return rffi.cast(rffi.VOIDP, x)
 
 
-class ShortPtrConverter(TypeConverter):
+class ShortPtrConverter(ArrayTypeConverter):
     _immutable_ = True
-    def __init__(self, space, detail=sys.maxint):
-        self.size = detail
-    
     def convert_argument(self, space, w_obj):
         assert 0, "not yet implemented"
 
@@ -209,11 +214,8 @@ class ShortArrayConverter(ShortPtrConverter):
         for i in range(min(self.size*2, buf.getlength())):
             fieldptr[i] = buf.getitem(i)
 
-class LongPtrConverter(TypeConverter):
+class LongPtrConverter(ArrayTypeConverter):
     _immutable_ = True
-    def __init__(self, space, detail=sys.maxint):
-        self.size = detail
-    
     def convert_argument(self, space, w_obj):
         assert 0, "not yet implemented"
 
@@ -276,7 +278,7 @@ def get_converter(space, name):
 
     #   1) full, exact match
     try:
-        return _converters[name](space)
+        return _converters[name](space, -1)
     except KeyError, k:
         pass
 
@@ -284,17 +286,20 @@ def get_converter(space, name):
     compound = helper.compound(name)
     clean_name = helper.clean_type(name)
     try:
-        array_index = helper.array_index(name)
-        if array_index:
-            return _converters[clean_name+compound](space, array_index)
-        return _converters[clean_name+compound](space)
+        # array_index may be negative to indicate no size or no size found
+        array_size = helper.array_size(name)
+        return _converters[clean_name+compound](space, array_size)
     except KeyError, k:
         pass
-        
+
+    #   5) generalized cases (covers basically all user classes)
     cpptype = interp_cppyy.type_byname(space, clean_name)
     if compound == "*":
         return InstancePtrConverter(space, cpptype)
 
+    
+    #   6) void converter, which fails on use
+    #
     # return a void converter here, so that the class can be build even
     # when some types are unknown; this overload will simply fail on use
     return VoidConverter(space, name)
