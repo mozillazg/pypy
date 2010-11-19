@@ -5,7 +5,7 @@ def test_compound():
     assert helper.compound("int* const *&") == "**&"
     assert helper.compound("std::vector<int>*") == "*"
     assert helper.compound("unsigned long int[5]") == "[]"
-    assert helper.array_index("unsigned long int[5]") == 5
+    assert helper.array_size("unsigned long int[5]") == 5
 
 
 def test_clean_type():
