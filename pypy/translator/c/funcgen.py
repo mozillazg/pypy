@@ -769,17 +769,20 @@ class FunctionCodeGenerator(object):
             "if (PYPY_HAVE_DEBUG_PRINTS) { fprintf(PYPY_DEBUG_FILE, %s); %s}"
             % (', '.join(argv), free_line))
 
+    def _op_debug(self, opname, arg):
+        if isinstance(arg, Constant):
+            string_literal = c_string_constant(''.join(arg.value.chars))
+            return "%s(%s);" % (opname, string_literal)
+        else:
+            x = "%s(RPyString_AsCharP(%s));\n" % (opname, self.expr(arg))
+            x += "RPyString_FreeCache();"
+            return x
+
     def OP_DEBUG_START(self, op):
-        arg = op.args[0]
-        assert isinstance(arg, Constant)
-        return "PYPY_DEBUG_START(%s);" % (
-            c_string_constant(''.join(arg.value.chars)),)
+        return self._op_debug('PYPY_DEBUG_START', op.args[0])
 
     def OP_DEBUG_STOP(self, op):
-        arg = op.args[0]
-        assert isinstance(arg, Constant)
-        return "PYPY_DEBUG_STOP(%s);" % (
-            c_string_constant(''.join(arg.value.chars)),)
+        return self._op_debug('PYPY_DEBUG_STOP', op.args[0])
 
     def OP_DEBUG_ASSERT(self, op):
         return 'RPyAssert(%s, %s);' % (self.expr(op.args[0]),
