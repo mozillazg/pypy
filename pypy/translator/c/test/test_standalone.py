@@ -388,6 +388,20 @@ class TestStandalone(StandaloneTests):
         assert not err
         assert path.check(file=0)
 
+    def test_debug_print_start_stop_nonconst(self):
+        def entry_point(argv):
+            debug_start(argv[1])
+            debug_print(argv[2])
+            debug_stop(argv[1])
+            return 0
+        t, cbuilder = self.compile(entry_point)
+        out, err = cbuilder.cmdexec("foo bar", err=True, env={'PYPYLOG': ':-'})
+        lines = err.splitlines()
+        assert '{foo' in lines[0]
+        assert 'bar' == lines[1]
+        assert 'foo}' in lines[2]
+
+
     def test_fatal_error(self):
         def g(x):
             if x == 1:
