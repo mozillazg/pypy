@@ -1,9 +1,11 @@
 import sys
 from pypy.interpreter.error import OperationError
+from pypy.interpreter.buffer import Buffer
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib.rarithmetic import r_singlefloat
 
 from pypy.module._rawffi.interp_rawffi import unpack_simple_shape
+from pypy.module._rawffi.array import W_Array
 
 from pypy.module.cppyy import helper, capi
 
@@ -126,15 +128,13 @@ class LongConverter(TypeConverter):
 class ShortConverter(LongConverter):
     def from_memory(self, space, w_obj, offset):
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        intptr = rffi.cast(rffi.SHORTP, fieldptr)
-        return space.wrap(intptr[0])
+        shortptr = rffi.cast(rffi.SHORTP, fieldptr)
+        return space.wrap(shortptr[0])
 
     def to_memory(self, space, w_obj, w_value, offset):
-        import struct
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        pack = struct.pack('h', space.unwrap(w_value))         # unchecked
-        fieldptr[0] = pack[0]
-        fieldptr[1] = pack[1]
+        shortptr = rffi.cast(rffi.SHORTP, fieldptr)
+        shortptr[0] = rffi.cast(rffi.SHORT, space.c_int_w(w_value))
 
 class FloatConverter(TypeConverter):
     def convert_argument(self, space, w_obj):
@@ -190,8 +190,8 @@ class ShortPtrConverter(TypeConverter):
         # read access, so no copy needed
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         ptrval = rffi.cast(rffi.UINT, fieldptr)
-        w_array = unpack_simple_shape(space, space.wrap('h'))
-        return w_array.fromaddress(space, ptrval, self.size)
+        arr = space.interp_w(W_Array, unpack_simple_shape(space, space.wrap('h')))
+        return arr.fromaddress(space, ptrval, self.size)
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
@@ -204,10 +204,10 @@ class ShortArrayConverter(ShortPtrConverter):
     def to_memory(self, space, w_obj, w_value, offset):
         # copy the full array (uses byte copy for now)
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        value = w_value.getslotvalue(2)
+        buf = space.interp_w(Buffer, w_value.getslotvalue(2))
         # TODO: get sizeof(short) from system
-        for i in range(min(self.size*2, value.getlength())):
-            fieldptr[i] = value.getitem(i)
+        for i in range(min(self.size*2, buf.getlength())):
+            fieldptr[i] = buf.getitem(i)
 
 class LongPtrConverter(TypeConverter):
     _immutable_ = True
@@ -221,8 +221,8 @@ class LongPtrConverter(TypeConverter):
         # read access, so no copy needed
         fieldptr = self._get_fieldptr(space, w_obj, offset)
         ptrval = rffi.cast(rffi.UINT, fieldptr)
-        w_array = unpack_simple_shape(space, space.wrap('l'))
-        return w_array.fromaddress(space, ptrval, self.size)
+        arr = space.interp_w(W_Array, unpack_simple_shape(space, space.wrap('l')))
+        return arr.fromaddress(space, ptrval, self.size)
 
     def to_memory(self, space, w_obj, w_value, offset):
         # copy only the pointer value
@@ -235,10 +235,10 @@ class LongArrayConverter(LongPtrConverter):
     def to_memory(self, space, w_obj, w_value, offset):
         # copy the full array (uses byte copy for now)
         fieldptr = self._get_fieldptr(space, w_obj, offset)
-        value = w_value.getslotvalue(2)
+        buf = space.interp_w(Buffer, w_value.getslotvalue(2))
         # TODO: get sizeof(long) from system
-        for i in range(min(self.size*4, value.getlength())):
-            fieldptr[i] = value.getitem(i)
+        for i in range(min(self.size*4, buf.getlength())):
+            fieldptr[i] = buf.getitem(i)
 
 
 class InstancePtrConverter(TypeConverter):
