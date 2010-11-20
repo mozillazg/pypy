@@ -272,7 +272,7 @@ class TestStandalone(StandaloneTests):
             x = "got:"
             debug_start  ("mycat")
             if have_debug_prints(): x += "b"
-            debug_print    ("foo", 2, "bar", 3)
+            debug_print    ("foo", r_longlong(2), "bar", 3)
             debug_start      ("cat2")
             if have_debug_prints(): x += "c"
             debug_print        ("baz")

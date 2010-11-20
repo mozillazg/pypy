@@ -1,3 +1,4 @@
+import sys
 from pypy.translator.c.support import USESLOTS # set to False if necessary while refactoring
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.support import llvalue_from_constant, gen_assignments
@@ -758,9 +759,15 @@ class FunctionCodeGenerator(object):
                 argv.append('(%s) ? "True" : "False"' % self.expr(arg))
                 continue
             elif T == SignedLongLong:
-                format.append('%lld')
+                if sys.platform == 'win32':
+                    format.append('%I64d')
+                else:
+                    format.append('%lld')
             elif T == UnsignedLongLong:
-                format.append('%llu')
+                if sys.platform == 'win32':
+                    format.append('%I64u')
+                else:
+                    format.append('%llu')
             else:
                 raise Exception("don't know how to debug_print %r" % (T,))
             argv.append(self.expr(arg))
