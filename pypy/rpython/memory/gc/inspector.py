@@ -107,15 +107,20 @@ class HeapDumper:
 
     def __init__(self, gc, fd):
         self.gc = gc
+        self.gcflag = gc.gcflag_extra
         self.fd = rffi.cast(rffi.INT, fd)
         self.writebuffer = lltype.malloc(rffi.LONGP.TO, self.BUFSIZE,
                                          flavor='raw')
         self.buf_count = 0
-        self.seen = AddressDict()
+        if self.gcflag == 0:
+            self.seen = AddressDict()
         self.pending = AddressStack()
 
     def delete(self):
-        self.seen.delete()
+        if self.gcflag == 0:
+            self.seen.delete()
+        else:
+            self.clear_gcflag_again()
         self.pending.delete()
         lltype.free(self.writebuffer, flavor='raw')
         free_non_gc_object(self)
@@ -161,9 +166,15 @@ class HeapDumper:
         self.add(obj)
 
     def add(self, obj):
-        if not self.seen.contains(obj):
-            self.seen.setitem(obj, obj)
-            self.pending.append(obj)
+        if self.gcflag == 0:
+            if not self.seen.contains(obj):
+                self.seen.setitem(obj, obj)
+                self.pending.append(obj)
+        else:
+            hdr = self.gc.header(obj)
+            if (hdr.tid & self.gcflag) == 0:
+                hdr.tid |= self.gcflag
+                self.pending.append(obj)
 
     def add_roots(self):
         self.gc.enumerate_all_roots(_hd_add_root, self)
@@ -177,8 +188,24 @@ class HeapDumper:
         while pending.non_empty():
             self.writeobj(pending.pop())
 
+    def clear_gcflag_again(self):
+        self.gc.enumerate_all_roots(_hd_clear_root, self)
+        pending = self.pending
+        while pending.non_empty():
+            self.clear(pending.pop())
+
+    def clear(self, obj):
+        assert self.gcflag != 0
+        hdr = self.gc.header(obj)
+        if (hdr.tid & self.gcflag) != 0:
+            hdr.tid &= ~self.gcflag
+            self.pending.append(obj)
+
 def _hd_add_root(obj, heap_dumper):
     heap_dumper.add(obj)
+
+def _hd_clear_root(obj, heap_dumper):
+    heap_dumper.clear(obj)
 
 def dump_rpy_heap(gc, fd):
     heapdumper = HeapDumper(gc, fd)
