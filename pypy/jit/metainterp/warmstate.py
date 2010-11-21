@@ -258,9 +258,9 @@ class WarmEnterState(object):
     def attach_unoptimized_bridge_from_interp(self, greenkey,
                                               entry_loop_token):
         cell = self.jit_cell_at_key(greenkey)
-        cell.counter = -1
         old_token = cell.get_entry_loop_token()
         cell.set_entry_loop_token(entry_loop_token)
+        cell.counter = -1       # valid entry bridge attached
         if old_token is not None:
             self.cpu.redirect_call_assembler(old_token, entry_loop_token)
             # entry_loop_token is also kept alive by any loop that used
@@ -574,6 +574,8 @@ class WarmEnterState(object):
             entry_loop_token = cell.get_entry_loop_token()
             if entry_loop_token is None:
                 from pypy.jit.metainterp.compile import compile_tmp_callback
+                if cell.counter == -1:    # used to be a valid entry bridge,
+                    cell.counter = 0      # but was freed in the meantime.
                 memmgr = warmrunnerdesc.memory_manager
                 entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
                                                         redboxes, memmgr)
