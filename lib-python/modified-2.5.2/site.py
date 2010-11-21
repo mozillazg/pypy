@@ -380,6 +380,10 @@ def execsitecustomize():
 
 def main():
     abs__file__()
+    # TMP
+    if sys.platform == "darwin":
+        sys.path.append(sys.path[-1] + "/plat-mac")
+    # /TMP
     paths_in_sys = removeduppaths()
     if (os.name == "posix" and sys.path and
         os.path.basename(sys.path[-1]) == "Modules"):
