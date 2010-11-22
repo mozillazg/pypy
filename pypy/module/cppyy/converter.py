@@ -91,10 +91,12 @@ class CharConverter(TypeConverter):
     def _from_space(self, space, w_value):
         # allow int to pass to char and make sure that str is of length 1
         if space.isinstance_w(w_value, space.w_int):
-            try:
-                value = chr(space.c_int_w(w_value))     
-            except ValueError, e:
-                raise OperationError(space.w_TypeError, space.wrap(str(e)))
+            ival = space.c_int_w(w_value)
+            if ival < 0 or 256 <= ival:
+                raise OperationError(space.w_TypeError,
+                                     space.wrap("char arg not in range(256)"))
+
+            value = rffi.cast(rffi.CHAR, space.c_int_w(w_value))
         else:
             value = space.str_w(w_value)
 
