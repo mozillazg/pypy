@@ -39,6 +39,7 @@ def _setup():
 _setup()
 
 JITPROF_LINES = ncounters + 1 + 1 # one for TOTAL, 1 for calls, update if needed
+_CPU_LINES = 4       # the last 4 lines are stored on the cpu
 
 class BaseProfiler(object):
     pass
@@ -101,7 +102,7 @@ class Profiler(BaseProfiler):
         self.starttime = self.timer()
         self.t1 = self.starttime
         self.times = [0, 0]
-        self.counters = [0] * ncounters
+        self.counters = [0] * (ncounters - _CPU_LINES)
         self.calls = 0
         self.current = []
 
