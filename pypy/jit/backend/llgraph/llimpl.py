@@ -449,7 +449,10 @@ class Frame(object):
                     _stats.exec_conditional_jumps += 1
                     if op.jump_target is not None:
                         # a patched guard, pointing to further code
-                        args = [self.getenv(v) for v in op.fail_args if v]
+                        if op.fail_args:
+                            args = [self.getenv(v) for v in op.fail_args if v]
+                        else:
+                            args = []
                         assert len(op.jump_target.inputargs) == len(args)
                         self.env = dict(zip(op.jump_target.inputargs, args))
                         self.loop = op.jump_target
