@@ -524,7 +524,6 @@ class RandomLoop(object):
         self.prebuilt_ptr_consts = []
         self.r = r
         self.build_random_loop(cpu, builder_factory, r, startvars)
-        self.keepalive_loop_tokens = []
 
     def build_random_loop(self, cpu, builder_factory, r, startvars):
 
@@ -686,8 +685,8 @@ class RandomLoop(object):
             subloop.operations[-1] = jump_op
             self.guard_op = rl.guard_op
             self.prebuilt_ptr_consts += rl.prebuilt_ptr_consts
+            self.loop.token.record_jump_to(rl.loop.token)
             self.dont_generate_more = True
-            self.keepalive_loop_tokens.append(rl.loop.token)
         if r.random() < .05:
             return False
         self.builder.cpu.compile_bridge(fail_descr, fail_args,
