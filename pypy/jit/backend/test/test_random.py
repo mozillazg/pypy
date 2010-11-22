@@ -524,7 +524,8 @@ class RandomLoop(object):
         self.prebuilt_ptr_consts = []
         self.r = r
         self.build_random_loop(cpu, builder_factory, r, startvars)
-        
+        self.keepalive_loop_tokens = []
+
     def build_random_loop(self, cpu, builder_factory, r, startvars):
 
         loop = TreeLoop('test_random_function')
@@ -686,10 +687,11 @@ class RandomLoop(object):
             self.guard_op = rl.guard_op
             self.prebuilt_ptr_consts += rl.prebuilt_ptr_consts
             self.dont_generate_more = True
+            self.keepalive_loop_tokens.append(rl.loop.token)
         if r.random() < .05:
             return False
         self.builder.cpu.compile_bridge(fail_descr, fail_args,
-                                        subloop.operations)
+                                        subloop.operations, self.loop.token)
         return True
 
 def check_random_function(cpu, BuilderClass, r, num=None, max=None):
