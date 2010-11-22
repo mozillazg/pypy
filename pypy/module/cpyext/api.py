@@ -36,6 +36,42 @@ from pypy.rpython.lltypesystem.lloperation import llop
 
 DEBUG_WRAPPER = True
 
+if not we_are_translated() and DEBUG_WRAPPER:
+    from functools import wraps
+else:
+    def wraps(f): return lambda f: f
+
+from pypy.tool.call_logger import CallLogger, SkipArgument
+
+class CPyExtCallLogger(CallLogger):
+    def format_arg(self, arg, args, kwargs, name=''):
+        from pypy.module.cpyext.object import PyObject_Repr
+        from pypy.rpython.lltypesystem.rffi import charp2str, unicode_from_buffer
+        from pypy.rpython.lltypesystem.lltype import direct_arrayitems
+        from pypy.module.cpyext.pyobject import from_ref, InvalidPointerException
+        from pypy.objspace.std.model import UnwrapError
+
+        if isinstance(arg, ObjSpace):
+            raise SkipArgument()
+
+        if is_PyObject(arg):
+            space = args[0]
+            return space.unwrap(PyObject_Repr(space, arg))
+
+        return repr(arg)
+
+    def log(self, logstr, depth=0):
+        from sys import stderr
+        print >>stderr, (' ' * depth) + logstr
+
+    def log_call(self, f):
+        if not we_are_translated() and DEBUG_WRAPPER:
+            return CallLogger.log_call(self, f)
+        else:
+            return f
+
+log_call = CPyExtCallLogger().log_call
+
 # update these for other platforms
 Py_ssize_t = lltype.Signed
 Py_ssize_tP = rffi.CArrayPtr(Py_ssize_t)
@@ -321,6 +357,8 @@ SYMBOLS_C = [
     'PyCObject_Type', 'init_pycobject',
 
     'PyObject_AsReadBuffer', 'PyObject_AsWriteBuffer', 'PyObject_CheckReadBuffer',
+    'PyThread_Get',
+    'PyInterpreter_Head', 'PyInterpreter_Next',
 ]
 TYPES = {}
 GLOBALS = { # this needs to include all prebuilt pto, otherwise segfaults occur
@@ -470,7 +508,10 @@ def make_wrapper(space, callable):
         [name.startswith("w_") for name in names])))
     fatal_value = callable.api_func.restype._defl()
 
+    logged_callable = log_call(callable)
+
     @specialize.ll()
+    @wraps(callable)
     def wrapper(*args):
         from pypy.module.cpyext.pyobject import make_ref, from_ref
         from pypy.module.cpyext.pyobject import Reference
@@ -481,8 +522,6 @@ def make_wrapper(space, callable):
         retval = fatal_value
         boxed_args = ()
         try:
-            if not we_are_translated() and DEBUG_WRAPPER:
-                print >>sys.stderr, callable,
             assert len(args) == len(callable.api_func.argtypes)
             for i, (typ, is_wrapped) in argtypes_enum_ui:
                 arg = args[i]
@@ -496,9 +535,7 @@ def make_wrapper(space, callable):
                 boxed_args += (arg_conv, )
             state = space.fromcache(State)
             try:
-                result = callable(space, *boxed_args)
-                if not we_are_translated() and DEBUG_WRAPPER:
-                    print >>sys.stderr, " DONE"
+                result = logged_callable(space, *boxed_args)
             except OperationError, e:
                 failed = True
                 state.set_exception(e)
