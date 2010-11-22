@@ -39,7 +39,7 @@ def type_byname(space, name):
         cpptype._find_data_members()
         return cpptype
 
-    raise OperationError(space.w_TypeError, space.wrap("no such C++ class %s" % name))
+    raise OperationError(space.w_TypeError, space.wrap(str("no such C++ class %s" % name)))
 type_byname.unwrap_spec = [ObjSpace, str]
 
 
@@ -217,7 +217,6 @@ W_CPPOverload.typedef = TypeDef(
 
 class W_CPPDataMember(Wrappable):
     _immutable_fields_ = ["converter", "offset"]
-
     def __init__(self, space, cpptype, offset):
         self.space = space
         self.converter = converter.get_converter(self.space, cpptype)
@@ -239,7 +238,6 @@ W_CPPDataMember.typedef = TypeDef(
 
 class W_CPPType(Wrappable):
     _immutable_fields_ = ["name", "handle"]
-
     def __init__(self, space, name, handle):
         self.space = space
         self.name = name
