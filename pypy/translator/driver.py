@@ -288,7 +288,7 @@ class TranslationDriver(SimpleTaskEngine):
             return
         else:
             self.log.info("%s..." % title)
-        debug_print_once('gc-collect-task', 'starting', goal)
+        debug_print_once('translation-task', 'starting', goal)
         self.timer.start_event(goal)
         try:
             instrument = False
@@ -311,6 +311,7 @@ class TranslationDriver(SimpleTaskEngine):
                 raise
             except:
                 pass
+        #import gc; gc.dump_rpy_heap('rpyheap-after-%s.dump' % goal)
         return res
 
     def task_annotate(self):
