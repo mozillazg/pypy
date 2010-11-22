@@ -33,6 +33,7 @@ from pypy.module.exceptions import interp_exceptions
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem.lloperation import llop
+from pypy.rlib.debug import debug_print
 
 DEBUG_WRAPPER = True
 
@@ -42,35 +43,66 @@ else:
     def wraps(f): return lambda f: f
 
 from pypy.tool.call_logger import CallLogger, SkipArgument
+from pypy.rlib.objectmodel import specialize
 
-class CPyExtCallLogger(CallLogger):
-    def format_arg(self, arg, args, kwargs, name=''):
-        from pypy.module.cpyext.object import PyObject_Repr
+class CPyExtCallLogger(object):
+    def __init__(self):
+        self.indentation = 0
+
+    @specialize.argtype(2)
+    def format_arg(self, space, arg, argtype):
         from pypy.rpython.lltypesystem.rffi import charp2str, unicode_from_buffer
         from pypy.rpython.lltypesystem.lltype import direct_arrayitems
         from pypy.module.cpyext.pyobject import from_ref, InvalidPointerException
         from pypy.objspace.std.model import UnwrapError
+        from pypy.module.cpyext.object import PyObject_Repr
 
         if isinstance(arg, ObjSpace):
             raise SkipArgument()
 
-        if is_PyObject(arg):
-            space = args[0]
-            return space.unwrap(PyObject_Repr(space, arg))
+        if is_PyObject(argtype):
+            return space.str_w(PyObject_Repr(space, arg))
 
         return repr(arg)
 
     def log(self, logstr, depth=0):
-        from sys import stderr
-        print >>stderr, (' ' * depth) + logstr
+        debug_print((' ' * depth) + logstr)
 
-    def log_call(self, f):
+    def log_cpyext_call(self, f):
         if not we_are_translated() and DEBUG_WRAPPER:
-            return CallLogger.log_call(self, f)
+            api_function = f.api_func
+            name = f.__name__
+            argtypes = api_function.argtypes
+            result_type = api_function.restype
+            def format_args(space, args):
+                argstrs = []
+                for i in unrolling_iterable(range(len(argtypes))):
+                    try:
+                        argtype = argtypes[i]
+                        arg = args[i]
+                        argstrs.append(self.format_arg(space, arg, argtype))
+                    except SkipArgument, e: continue
+                return ', '.join(argstrs)
+                
+            @wraps(f)
+            def wrapped(*args):
+                space = args[0]
+                argstr = format_args(space, args[1:])
+                self.log("%s(%s)" % (name, argstr), depth=self.indentation)
+                self.indentation += 1
+                result = f(*args)
+                self.indentation -= 1
+                try:
+                    resultformat = self.format_arg(result, space, result_type)
+                except SkipArgument:
+                    resultformat = ''
+                self.log("%s(%s)->%s" % (name, argstr, resultformat), depth=self.indentation)
+                return result
+            return wrapped
         else:
             return f
 
-log_call = CPyExtCallLogger().log_call
+log_call = CPyExtCallLogger().log_cpyext_call
 
 # update these for other platforms
 Py_ssize_t = lltype.Signed
