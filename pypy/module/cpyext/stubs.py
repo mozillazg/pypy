@@ -1679,13 +1679,6 @@ def PyInterpreterState_Delete(space, interp):
     PyInterpreterState_Clear()."""
     raise NotImplementedError
 
-@cpython_api([], PyThreadState)
-def PyThreadState_Get(space, ):
-    """Return the current thread state.  The global interpreter lock must be held.
-    When the current thread state is NULL, this issues a fatal error (so that
-    the caller needn't check for NULL)."""
-    raise NotImplementedError
-
 @cpython_api([], PyObject)
 def PyThreadState_GetDict(space, ):
     """Return a dictionary in which extensions can store thread-specific state
@@ -1822,19 +1815,6 @@ def PyEval_GetCallStats(space, self):
     defined."""
     raise NotImplementedError
 
-@cpython_api([], PyInterpreterState)
-def PyInterpreterState_Head(space, ):
-    """Return the interpreter state object at the head of the list of all such objects.
-    """
-    raise NotImplementedError
-
-@cpython_api([PyInterpreterState], PyInterpreterState)
-def PyInterpreterState_Next(space, interp):
-    """Return the next interpreter state object after interp from the list of all
-    such objects.
-    """
-    raise NotImplementedError
-
 @cpython_api([PyInterpreterState], PyThreadState)
 def PyInterpreterState_ThreadHead(space, interp):
     """Return the a pointer to the first PyThreadState object in the list of
@@ -1847,23 +1827,6 @@ def PyThreadState_Next(space, tstate):
     """Return the next thread state object after tstate from the list of all such
     objects belonging to the same PyInterpreterState object.
     """
-    raise NotImplementedError
-
-@cpython_api([rffi.CCHARP, rffi.CCHARPP, rffi.INT_real], PyObject)
-def PyInt_FromString(space, str, pend, base):
-    """Return a new PyIntObject or PyLongObject based on the string
-    value in str, which is interpreted according to the radix in base.  If
-    pend is non-NULL, *pend will point to the first character in str which
-    follows the representation of the number.  If base is 0, the radix will be
-    determined based on the leading characters of str: if str starts with
-    '0x' or '0X', radix 16 will be used; if str starts with '0', radix
-    8 will be used; otherwise radix 10 will be used.  If base is not 0, it
-    must be between 2 and 36, inclusive.  Leading spaces are ignored.  If
-    there are no digits, ValueError will be raised.  If the string represents
-    a number too large to be contained within the machine's long int type
-    and overflow warnings are being suppressed, a PyLongObject will be
-    returned.  If overflow warnings are not being suppressed, NULL will be
-    returned in this case."""
     raise NotImplementedError
 
 @cpython_api([rffi.SIZE_T], PyObject)
