@@ -6,47 +6,59 @@ from pypy.module.cppyy import helper, capi
 _executors = {}
 
 class FunctionExecutor(object):
+    _immutable_ = True
+    def __init__(self, space, cpptype):
+        pass
+
     def execute(self, space, func, cppthis, num_args, args):
         raise NotImplementedError
 
 
 class VoidExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         capi.c_call_v(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.w_None
 
 
 class BoolExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_b(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class CharExecutor(FunctionExecutor):
-     def execute(self, space, func, cppthis, num_args, args):
+    _immutable_ = True
+    def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_c(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class ShortExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_h(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class LongExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class FloatExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_f(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class DoubleExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         result = capi.c_call_d(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         return space.wrap(result)
 
 class CStringExecutor(FunctionExecutor):
+    _immutable_ = True
     def execute(self, space, func, cppthis, num_args, args):
         lresult = capi.c_call_l(func.cpptype.handle, func.method_index, cppthis, num_args, args)
         ccpresult = rffi.cast(rffi.CCHARP, lresult)
@@ -70,7 +82,7 @@ def get_executor(space, name):
     from pypy.module.cppyy import interp_cppyy
 
     try:
-        return _executors[name]
+        return _executors[name](space, None)
     except KeyError:
         pass
 
@@ -79,20 +91,21 @@ def get_executor(space, name):
     if compound == "*":           
         return InstancePtrExecutor(space, cpptype)
 
-    return None # currently used until proper lazy instantiation available in interp_cppyy
+    # currently used until proper lazy instantiation available in interp_cppyy
+    return FunctionExecutor(space, None)
  
  #  raise TypeError("no clue what %s is" % name)
 
-_executors["void"]                = VoidExecutor()
-_executors["bool"]                = BoolExecutor()
-_executors["char"]                = CharExecutor()
-_executors["unsigned char"]       = CharExecutor()
-_executors["short int"]           = ShortExecutor()
-_executors["unsigned short int"]  = ShortExecutor()
-_executors["int"]                 = LongExecutor()
-_executors["unsigned int"]        = LongExecutor()
-_executors["long int"]            = LongExecutor()
-_executors["unsigned long int"]   = LongExecutor()
-_executors["float"]               = FloatExecutor()
-_executors["double"]              = DoubleExecutor()
-_executors["char*"]               = CStringExecutor()
+_executors["void"]                = VoidExecutor
+_executors["bool"]                = BoolExecutor
+_executors["char"]                = CharExecutor
+_executors["unsigned char"]       = CharExecutor
+_executors["short int"]           = ShortExecutor
+_executors["unsigned short int"]  = ShortExecutor
+_executors["int"]                 = LongExecutor
+_executors["unsigned int"]        = LongExecutor
+_executors["long int"]            = LongExecutor
+_executors["unsigned long int"]   = LongExecutor
+_executors["float"]               = FloatExecutor
+_executors["double"]              = DoubleExecutor
+_executors["char*"]               = CStringExecutor
