@@ -1,3 +1,9 @@
+import sys, py
+if len(sys.argv) >= 4 and sys.argv[1] == '--sub':
+    sys.path[:] = eval(sys.argv[2])      # hacks for test_integration
+    from pypy.conftest import option
+    option.__dict__.update(eval(sys.argv[3]))
+
 from pypy.jit.metainterp.memmgr import MemoryManager
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
 from pypy.rlib.jit import JitDriver, dont_look_inside
@@ -7,7 +13,12 @@ class FakeLoopToken:
     generation = 0
 
 
-class TestMemoryManager:
+class _TestMemoryManager:
+    # We spawn a fresh process below to lower the time it takes to do
+    # all these gc.collect() in memmgr.py.  This issue is particularly
+    # important when running all the tests, because test_[a-l]*.py have
+    # left tons of stuff in memory.  To get temporarily the normal
+    # behavior just rename this class to TestMemoryManager.
 
     def test_disabled(self):
         memmgr = MemoryManager()
@@ -58,7 +69,9 @@ class TestMemoryManager:
                 assert tokens[i] in memmgr.alive_loops
 
 
-class TestIntegration(LLJitMixin):
+class _TestIntegration(LLJitMixin):
+    # See comments in TestMemoryManager.  To get temporarily the normal
+    # behavior just rename this class to TestIntegration.
 
     def test_loop_kept_alive(self):
         myjitdriver = JitDriver(greens=[], reds=['n'])
@@ -178,3 +191,28 @@ class TestIntegration(LLJitMixin):
         res = self.meta_interp(f, [1], loop_longevity=4, inline=True)
         assert res == 42
         self.check_tree_loop_count(8)
+
+# ____________________________________________________________
+
+def test_all():
+    if sys.platform == 'win32':
+        py.test.skip(
+            "passing repr() to subprocess.Popen probably doesn't work")
+    import os, subprocess
+    from pypy.conftest import option
+    thisfile = os.path.abspath(__file__)
+    p = subprocess.Popen([sys.executable, thisfile,
+                          '--sub', repr(sys.path), repr(option.__dict__)])
+    result = p.wait()
+    assert result == 0
+
+if __name__ == '__main__':
+    # occurs in the subprocess
+    for test in [_TestMemoryManager(), _TestIntegration()]:
+        for name in dir(test):
+            if name.startswith('test_'):
+                print
+                print '-'*79
+                print '----- Now running test', name, '-----'
+                print
+                getattr(test, name)()
