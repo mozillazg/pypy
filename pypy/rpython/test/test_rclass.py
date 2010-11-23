@@ -6,6 +6,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.rarithmetic import intmask, r_longlong
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.objspace.flow.model import summary
+from pypy.jit.metainterp.typesystem import deref
 
 class EmptyBase(object):
     pass
@@ -733,7 +734,6 @@ class BaseTestRclass(BaseRtypingTest):
         assert summary(graph) == {}
 
     def test_immutable_fields(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             _immutable_fields_ = ["x", "y[*]"]
 
@@ -749,8 +749,24 @@ class BaseTestRclass(BaseRtypingTest):
         assert accessor.fields == {"inst_x" : "", "inst_y" : "[*]"} or \
                accessor.fields == {"ox" : "", "oy" : "[*]"} # for ootype
 
+    def test_jit_invariant_fields(self):
+        class A(object):
+
+            _jit_invariant_fields_ = ['x']
+            
+            def __init__(self, x):
+                self.x = x
+
+        def f():
+            return A(3)
+
+        t, typer, graph = self.gengraph(f, [])
+        A_TYPE = deref(graph.getreturnvar().concretetype)
+        accessor = A_TYPE._hints["jit_invariant_fields"]
+        assert accessor.fields == {'inst_x': ''} or \
+               accessor.fields == {'ox': ''}
+
     def test_immutable_fields_subclass_1(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             _immutable_fields_ = ["x"]
             def __init__(self, x):
@@ -769,7 +785,6 @@ class BaseTestRclass(BaseRtypingTest):
                accessor.fields == {"ox" : ""} # for ootype
 
     def test_immutable_fields_subclass_2(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             _immutable_fields_ = ["x"]
             def __init__(self, x):
@@ -789,7 +804,6 @@ class BaseTestRclass(BaseRtypingTest):
                accessor.fields == {"ox" : "", "oy" : ""} # for ootype
 
     def test_immutable_fields_only_in_subclass(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             def __init__(self, x):
                 self.x = x
@@ -832,7 +846,6 @@ class BaseTestRclass(BaseRtypingTest):
         py.test.raises(ImmutableConflictError, self.gengraph, f, [])
 
     def test_immutable_ok_inheritance_2(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             _immutable_fields_ = ['v']
         class B(A):
@@ -853,7 +866,6 @@ class BaseTestRclass(BaseRtypingTest):
                accessor.fields == {"ov" : ""} # for ootype
 
     def test_immutable_subclass_1(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             _immutable_ = True
         class B(A):
@@ -866,7 +878,6 @@ class BaseTestRclass(BaseRtypingTest):
         assert B_TYPE._hints["immutable"]    # inherited from A
 
     def test_immutable_subclass_2(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             pass
         class B(A):
@@ -879,7 +890,6 @@ class BaseTestRclass(BaseRtypingTest):
         assert B_TYPE._hints["immutable"]
 
     def test_immutable_subclass_void(self):
-        from pypy.jit.metainterp.typesystem import deref
         class A(object):
             pass
         class B(A):
@@ -917,6 +927,7 @@ class TestLLtype(BaseTestRclass, LLRtypeMixin):
         assert destrptr is not None
     
     def test_del_inheritance(self):
+        import gc
         class State:
             pass
         s = State()
@@ -937,6 +948,8 @@ class TestLLtype(BaseTestRclass, LLRtypeMixin):
             A()
             B()
             C()
+            gc.collect()
+            gc.collect()
             return s.a_dels * 10 + s.b_dels
         res = f()
         assert res == 42

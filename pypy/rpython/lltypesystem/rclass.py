@@ -366,7 +366,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 adtmeths = {}
             if hints is None:
                 hints = {}
-            hints = self._check_for_immutable_hints(hints)
+            hints = self._check_for_hints(hints)
             kwds = {}
             if self.gcflavor == 'gc':
                 kwds['rtti'] = True

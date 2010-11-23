@@ -157,19 +157,27 @@ class AbstractInstanceRepr(Repr):
     def _setup_repr(self):
         pass
 
-    def _check_for_immutable_hints(self, hints):
+    def _check_for_hints(self, hints):
         if self.classdef.classdesc.lookup('_immutable_') is not None:
             hints = hints.copy()
             hints['immutable'] = True
-        self.immutable_field_list = []  # unless overwritten below
+        self.immutable_fields = []  # unless overwritten below
+        self.jit_invariant_fields = []
         if self.classdef.classdesc.lookup('_immutable_fields_') is not None:
             hints = hints.copy()
             immutable_fields = self.classdef.classdesc.classdict.get(
                 '_immutable_fields_')
             if immutable_fields is not None:
-                self.immutable_field_list = immutable_fields.value
+                self.immutable_fields = immutable_fields.value
             accessor = FieldListAccessor()
             hints['immutable_fields'] = accessor
+        if self.classdef.classdesc.lookup('_jit_invariant_fields_') is not None:
+            hints = hints.copy()
+            invariant_fields = self.classdef.classdesc.classdict.get(
+                '_jit_invariant_fields_')
+            self.jit_invariant_fields = invariant_fields.value
+            accessor = FieldListAccessor()
+            hints['jit_invariant_fields'] = accessor
         return hints
 
     def __repr__(self):
@@ -187,20 +195,21 @@ class AbstractInstanceRepr(Repr):
         return 'InstanceR %s' % (clsname,)
 
     def _setup_repr_final(self):
-        self._setup_immutable_field_list()
+        self._setup_field_list('immutable_fields')
         self._check_for_immutable_conflicts()
+        self._setup_field_list('jit_invariant_fields')
 
-    def _setup_immutable_field_list(self):
+    def _setup_field_list(self, varname):
         hints = self.object_type._hints
-        if "immutable_fields" in hints:
-            accessor = hints["immutable_fields"]
+        if varname in hints:
+            accessor = hints[varname]
             if not hasattr(accessor, 'fields'):
-                immutable_fields = []
+                fields = []
                 rbase = self
                 while rbase.classdef is not None:
-                    immutable_fields += rbase.immutable_field_list
+                    fields += getattr(rbase, varname)
                     rbase = rbase.rbase
-                self._parse_field_list(immutable_fields, accessor)
+                self._parse_field_list(fields, accessor)
 
     def _parse_field_list(self, fields, accessor):
         with_suffix = {}
@@ -233,7 +242,7 @@ class AbstractInstanceRepr(Repr):
                     continue
                 if r.lowleveltype == Void:
                     continue
-                base._setup_immutable_field_list()
+                base._setup_field_list('immutable_fields')
                 if base.object_type._immutable_field(mangled):
                     continue
                 # 'fieldname' is a mutable, non-Void field in the parent
@@ -242,7 +251,7 @@ class AbstractInstanceRepr(Repr):
                         "class %r has _immutable_=True, but parent class %r "
                         "defines (at least) the mutable field %r" % (
                         self, base, fieldname))
-                if fieldname in self.immutable_field_list:
+                if fieldname in self.immutable_fields:
                     raise ImmutableConflictError(
                         "field %r is defined mutable in class %r, but "
                         "listed in _immutable_fields_ in subclass %r" % (
