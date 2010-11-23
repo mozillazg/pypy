@@ -1,9 +1,11 @@
 import py
-from pypy.conftest import gettestobjspace
+from pypy.conftest import gettestobjspace, option
 from pypy.rlib import debug
 
 class AppTestDebug:
     def setup_class(cls):
+        if option.runappdirect:
+            py.test.skip("not meant to be run with -A")
         cls.space = gettestobjspace(usemodules=['__pypy__'])
         space = cls.space
         cls.w_check_log = cls.space.wrap(cls.check_log)
