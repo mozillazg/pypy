@@ -11,6 +11,7 @@ from pypy.annotation.listdef import s_list_of_strings
 from pypy.annotation import policy as annpolicy
 import optparse
 from pypy.tool.udir import udir
+from pypy.tool.debug_print import debug_start, debug_print, debug_stop
 from pypy.rlib.jit import DEBUG_OFF, DEBUG_DETAILED, DEBUG_PROFILE, DEBUG_STEPS
 from pypy.rlib.entrypoint import secondary_entrypoints
 
@@ -19,11 +20,6 @@ from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer("translation")
 py.log.setconsumer("translation", ansi_log)
 
-try:
-    from __pypy__ import debug_print_once
-except ImportError:
-    def debug_print_once(*args):
-        pass
 
 def taskdef(taskfunc, deps, title, new_state=None, expected_states=[],
             idemp=False, earlycheck=None):
@@ -288,7 +284,8 @@ class TranslationDriver(SimpleTaskEngine):
             return
         else:
             self.log.info("%s..." % title)
-        debug_print_once('translation-task', 'starting', goal)
+        debug_start('translation-task')
+        debug_print('starting', goal)
         self.timer.start_event(goal)
         try:
             instrument = False
@@ -306,6 +303,7 @@ class TranslationDriver(SimpleTaskEngine):
                 assert False, 'we should not get here'
         finally:
             try:
+                debug_stop('translation-task')
                 self.timer.end_event(goal)
             except (KeyboardInterrupt, SystemExit):
                 raise
