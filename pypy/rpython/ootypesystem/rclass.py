@@ -183,7 +183,7 @@ class InstanceRepr(AbstractInstanceRepr):
                 hints = classdef.classdesc.pyobj._rpython_hints
             else:
                 hints = {}
-            hints = self._check_for_immutable_hints(hints)
+            hints = self._check_for_hints(hints)
             self.lowleveltype = ootype.Instance(classdef.name, b, {}, {}, _hints = hints)
         self.iprebuiltinstances = identity_dict()
         self.object_type = self.lowleveltype
