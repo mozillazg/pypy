@@ -15,7 +15,8 @@ class W_TupleObject(W_Object):
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
         # Note that to make annotation happy with respect to
         # _immutable_fields_, wrappeditems must be a list known to
-        # be never mutated.  Use space.newtuple() if you are unsure.
+        # be never mutated.  Use space.newtuple() instead of directly
+        # calling this constructor.
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -61,7 +62,7 @@ def getitem__Tuple_Slice(space, w_tuple, w_slice):
 def getslice__Tuple_ANY_ANY(space, w_tuple, w_start, w_stop):
     length = len(w_tuple.wrappeditems)
     start, stop = normalize_simple_slice(space, length, w_start, w_stop)
-    return W_TupleObject(w_tuple.wrappeditems[start:stop])
+    return space.newtuple(w_tuple.wrappeditems[start:stop])
 
 def contains__Tuple_ANY(space, w_tuple, w_obj):
     for w_item in w_tuple.wrappeditems:
@@ -76,7 +77,7 @@ def iter__Tuple(space, w_tuple):
 def add__Tuple_Tuple(space, w_tuple1, w_tuple2):
     items1 = w_tuple1.wrappeditems
     items2 = w_tuple2.wrappeditems
-    return W_TupleObject(items1 + items2)
+    return space.newtuple(items1 + items2)
 
 def mul_tuple_times(space, w_tuple, w_times):
     try:
@@ -88,7 +89,7 @@ def mul_tuple_times(space, w_tuple, w_times):
     if times == 1 and space.type(w_tuple) == space.w_tuple:
         return w_tuple
     items = w_tuple.wrappeditems
-    return W_TupleObject(items * times)    
+    return space.newtuple(items * times)    
 
 def mul__Tuple_ANY(space, w_tuple, w_times):
     return mul_tuple_times(space, w_tuple, w_times)
