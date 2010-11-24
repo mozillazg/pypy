@@ -50,7 +50,11 @@ class datum(ctypes.Structure):
 
     def __str__(self):
         char_star = ctypes.cast(self.dptr, ctypes.POINTER(ctypes.c_char))
-        return char_star[:self.dsize]
+		  # we can't just slice a char *, so we convert to str, one character (byte) at a time
+        result = []
+        for index in xrange(self.dsize):
+            result.append(char_star[index])
+        return ''.join(result)
 
     def __enter__(self):
         self.free_when_done = True
