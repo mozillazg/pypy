@@ -1,5 +1,5 @@
 import sys
-from pypy.rlib.debug import check_nonneg, list_not_modified_any_more
+from pypy.rlib.debug import check_nonneg, make_sure_not_modified
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rsre import rsre_char
 from pypy.tool.sourcetools import func_with_new_name
@@ -471,6 +471,7 @@ def sre_match(ctx, ppos, ptr, marks):
     while True:
         op = ctx.pat(ppos)
         ppos += 1
+        make_sure_not_modified(ctx.pattern)
 
         #jit.jit_debug("sre_match", op, ppos, ptr)
         #
@@ -946,7 +947,6 @@ def _adjust(start, end, length):
 
 def match(pattern, string, start=0, end=sys.maxint, flags=0):
     start, end = _adjust(start, end, len(string))
-    pattern = list_not_modified_any_more(pattern)
     ctx = StrMatchContext(pattern, string, start, end, flags)
     if match_context(ctx):
         return ctx
@@ -955,7 +955,6 @@ def match(pattern, string, start=0, end=sys.maxint, flags=0):
 
 def search(pattern, string, start=0, end=sys.maxint, flags=0):
     start, end = _adjust(start, end, len(string))
-    pattern = list_not_modified_any_more(pattern)
     ctx = StrMatchContext(pattern, string, start, end, flags)
     if search_context(ctx):
         return ctx

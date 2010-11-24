@@ -8,8 +8,7 @@ from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
                                transparent, callmethod, proxyobject)
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate, r_dict, specialize
-from pypy.rlib.debug import make_sure_not_resized, list_not_modified_any_more
-from pypy.rlib.debug import _list_annotated_as_modifiable_again
+from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
@@ -266,7 +265,8 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
-        return W_TupleObject(list_not_modified_any_more(list_w))
+        make_sure_not_resized(list_w)
+        return W_TupleObject(list_w)
 
     def newlist(self, list_w):
         return W_ListObject(list_w)
@@ -360,7 +360,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         """ Fast paths
         """
         if isinstance(w_obj, W_TupleObject):
-            t = _list_annotated_as_modifiable_again(w_obj.wrappeditems)
+            t = w_obj.wrappeditems
         elif isinstance(w_obj, W_ListObject):
             t = w_obj.wrappeditems[:]
         else:

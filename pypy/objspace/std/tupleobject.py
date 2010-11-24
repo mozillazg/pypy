@@ -6,17 +6,15 @@ from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.interpreter import gateway
+from pypy.rlib.debug import make_sure_not_resized
 
 class W_TupleObject(W_Object):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
     _immutable_fields_ = ['wrappeditems[*]']
 
     def __init__(w_self, wrappeditems):
+        make_sure_not_resized(wrappeditems)
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
-        # Note that to make annotation happy with respect to
-        # _immutable_fields_, wrappeditems must be a list known to
-        # be never mutated.  Use space.newtuple() instead of directly
-        # calling this constructor.
 
     def __repr__(w_self):
         """ representation for debugging purposes """
@@ -57,12 +55,12 @@ def getitem__Tuple_Slice(space, w_tuple, w_slice):
     for i in range(slicelength):
         subitems[i] = items[start]
         start += step
-    return space.newtuple(subitems)
+    return W_TupleObject(subitems)
 
 def getslice__Tuple_ANY_ANY(space, w_tuple, w_start, w_stop):
     length = len(w_tuple.wrappeditems)
     start, stop = normalize_simple_slice(space, length, w_start, w_stop)
-    return space.newtuple(w_tuple.wrappeditems[start:stop])
+    return W_TupleObject(w_tuple.wrappeditems[start:stop])
 
 def contains__Tuple_ANY(space, w_tuple, w_obj):
     for w_item in w_tuple.wrappeditems:
@@ -77,7 +75,7 @@ def iter__Tuple(space, w_tuple):
 def add__Tuple_Tuple(space, w_tuple1, w_tuple2):
     items1 = w_tuple1.wrappeditems
     items2 = w_tuple2.wrappeditems
-    return space.newtuple(items1 + items2)
+    return W_TupleObject(items1 + items2)
 
 def mul_tuple_times(space, w_tuple, w_times):
     try:
@@ -89,7 +87,7 @@ def mul_tuple_times(space, w_tuple, w_times):
     if times == 1 and space.type(w_tuple) == space.w_tuple:
         return w_tuple
     items = w_tuple.wrappeditems
-    return space.newtuple(items * times)    
+    return W_TupleObject(items * times)    
 
 def mul__Tuple_ANY(space, w_tuple, w_times):
     return mul_tuple_times(space, w_tuple, w_times)
