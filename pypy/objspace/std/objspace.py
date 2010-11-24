@@ -363,7 +363,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if isinstance(w_obj, W_TupleObject):
             t = _list_annotated_as_modifiable_again(w_obj.wrappeditems)
         elif isinstance(w_obj, W_ListObject):
-            t = list_not_modified_any_more(w_obj.wrappeditems[:])
+            t = w_obj.wrappeditems[:]
         else:
             if unroll:
                 return make_sure_not_resized(ObjSpace.unpackiterable_unroll(

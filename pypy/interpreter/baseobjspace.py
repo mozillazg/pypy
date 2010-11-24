@@ -8,7 +8,7 @@ from pypy.interpreter.miscutils import ThreadLocals
 from pypy.tool.cache import Cache
 from pypy.tool.uid import HUGEVAL_BYTES
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.debug import make_sure_not_resized, list_not_modified_any_more
+from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib.timer import DummyTimer, Timer
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import jit
@@ -764,10 +764,9 @@ class ObjSpace(object):
                                             'unpackiterable_unroll'))
 
     def fixedview(self, w_iterable, expected_length=-1):
-        """ A fixed list view of w_iterable. The result is supposed to be
-        used temporarily: it is a list with the annotation flag 'do not mutate'.
+        """ A fixed list view of w_iterable. Don't modify the result
         """
-        return list_not_modified_any_more(self.unpackiterable(w_iterable,
+        return make_sure_not_resized(self.unpackiterable(w_iterable,
                                                          expected_length)[:])
 
     fixedview_unroll = fixedview
