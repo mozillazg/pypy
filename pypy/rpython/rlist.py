@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem.lltype import nullptr, Char, UniChar, Number
 from pypy.rpython import robject
 from pypy.rlib.objectmodel import malloc_zero_filled
 from pypy.rlib.debug import ll_assert
-from pypy.rlib.rarithmetic import ovfcheck, widen, r_uint
+from pypy.rlib.rarithmetic import ovfcheck, widen, r_uint, intmask
 from pypy.rpython.annlowlevel import ADTInterface
 from pypy.rlib import rgc
 
@@ -696,12 +696,12 @@ def ll_getitem(func, l, index):
         length = l.ll_length()    # common case: 0 <= index < length
         if r_uint(index) >= r_uint(length):
             # Failed, so either (-length <= index < 0), or we have to raise
-            # IndexError.  Using r_uint, the condition can be rewritten as
-            # (-length-1 < index), which is (~length < index).
-            if r_uint(~length) < r_uint(index):
-                index += length
-            else:
+            # IndexError.  First add 'length' to get the final index, then
+            # check that we now have (0 <= index < length).
+            index = r_uint(index) + r_uint(length)
+            if index >= r_uint(length):
                 raise IndexError
+            index = intmask(index)
     else:
         # We don't want checking, but still want to support index < 0.
         # Only call ll_length() if needed.
@@ -736,14 +736,14 @@ def ll_setitem(func, l, index, newitem):
     if func is dum_checkidx:
         length = l.ll_length()
         if r_uint(index) >= r_uint(length):   # see comments in ll_getitem().
-            if r_uint(~length) < r_uint(index):
-                index += length
-            else:
+            index = r_uint(index) + r_uint(length)
+            if index >= r_uint(length):
                 raise IndexError
+            index = intmask(index)
     else:
         if index < 0:
             index += l.ll_length()
-            ll_assert(index >= 0, "negative list getitem index out of bound")
+            ll_assert(index >= 0, "negative list setitem index out of bound")
     l.ll_setitem_fast(index, newitem)
 # no oopspec -- the function is inlined by the JIT
 
@@ -770,18 +770,19 @@ def ll_delitem_nonneg(func, l, index):
 ll_delitem_nonneg.oopspec = 'list.delitem(l, index)'
 
 def ll_delitem(func, l, i):
-    length = l.ll_length()
-    if i < 0:
-        i += length
     if func is dum_checkidx:
-        if r_uint(i) >= r_uint(length):
-            raise IndexError
+        length = l.ll_length()
+        if r_uint(index) >= r_uint(length):   # see comments in ll_getitem().
+            index = r_uint(index) + r_uint(length)
+            if index >= r_uint(length):
+                raise IndexError
+            index = intmask(index)
     else:
-        ll_assert(i >= 0, "negative list delitem index out of bound")
-        ll_assert(i < length, "list delitem index out of bound")
+        if index < 0:
+            index += l.ll_length()
+            ll_assert(index >= 0, "negative list delitem index out of bound")
     ll_delitem_nonneg(dum_nocheck, l, i)
-ll_delitem.oopspec = 'list.delitem(l, i)'
-
+# no oopspec -- the function is inlined by the JIT
 
 def ll_extend(l1, l2):
     len1 = l1.ll_length()
