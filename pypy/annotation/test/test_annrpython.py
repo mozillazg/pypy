@@ -3405,20 +3405,8 @@ class TestAnnotateTestCase:
     def test_can_merge_immutable_list_with_regular_list(self):
         class A:
             _immutable_fields_ = 'lst[*]'
-        def f(n):
-            a = A()
-            l1 = [n, 0]
-            l1[1] = n+1
-            a.lst = l1
-            if n > 0:
-                lst = a.lst
-            else:
-                lst = []
-            return lst
-
-        a = self.RPythonAnnotator()
-        s = a.build_types(f, [int])
-        assert not s.listdef.listitem.immutable
+        def foo(lst):
+            pass
 
         def f(n):
             a = A()
@@ -3426,14 +3414,29 @@ class TestAnnotateTestCase:
             l1[1] = n+1
             a.lst = l1
             if n > 0:
-                lst = []
+                foo(a.lst)
             else:
-                lst = a.lst
-            return lst
+                lst = [0]
+                lst[0] = n
+                foo(lst)
 
         a = self.RPythonAnnotator()
-        s = a.build_types(f, [int])
-        assert not s.listdef.listitem.immutable
+        a.build_types(f, [int])
+
+        def f(n):
+            a = A()
+            l1 = [n, 0]
+            l1[1] = n+1
+            a.lst = l1
+            if n > 0:
+                lst = [0]
+                lst[0] = n
+                foo(lst)
+            else:
+                foo(a.lst)
+
+        a = self.RPythonAnnotator()
+        a.build_types(f, [int])
 
 
 def g(n):

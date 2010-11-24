@@ -210,9 +210,10 @@ class ListDef(object):
         # is thus expected to live only shortly, mostly for the case
         # of writing 'x.list[n]'.
         self.never_resize()
-        if self.listitem.mutated:
-            raise ListChangeUnallowed("list already mutated")
-        self.listitem.immutable = True
+        if not self.listitem.mutated:
+            self.listitem.immutable = True
+        #else: it's fine, don't set immutable=True at all (see
+        #      test_can_merge_immutable_list_with_regular_list)
 
 MOST_GENERAL_LISTDEF = ListDef(None, SomeObject())
 
