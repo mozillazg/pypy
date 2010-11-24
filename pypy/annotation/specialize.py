@@ -369,8 +369,3 @@ def specialize_arglistitemtype(funcdesc, args_s, i):
     else:
         key = s.listdef.listitem.s_value.knowntype
     return maybe_star_args(funcdesc, key, args_s)
-    
-def specialize_list_not_modified_any_more(funcdesc, args_s, i):
-    s = args_s[i]
-    key = (s.knowntype is list and s.listdef.listitem.must_not_mutate)
-    return maybe_star_args(funcdesc, key, args_s)
