@@ -13,6 +13,9 @@ class W_TupleObject(W_Object):
 
     def __init__(w_self, wrappeditems):
         w_self.wrappeditems = wrappeditems   # a list of wrapped values
+        # Note that to make annotation happy with respect to
+        # _immutable_fields_, wrappeditems must be a list known to
+        # be never mutated.  Use space.newtuple() if you are unsure.
 
     def __repr__(w_self):
         """ representation for debugging purposes """

@@ -9,6 +9,7 @@ from pypy.objspace.std import (builtinshortcut, stdtypedef, frame, model,
 from pypy.objspace.descroperation import DescrOperation, raiseattrerror
 from pypy.rlib.objectmodel import instantiate, r_dict, specialize
 from pypy.rlib.debug import make_sure_not_resized, list_not_modified_any_more
+from pypy.rlib.debug import _list_annotated_as_modifiable_again
 from pypy.rlib.rarithmetic import base_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.jit import hint
@@ -360,17 +361,16 @@ class StdObjSpace(ObjSpace, DescrOperation):
         """ Fast paths
         """
         if isinstance(w_obj, W_TupleObject):
-            t = w_obj.wrappeditems
+            t = _list_annotated_as_modifiable_again(w_obj.wrappeditems)
         elif isinstance(w_obj, W_ListObject):
             t = list_not_modified_any_more(w_obj.wrappeditems[:])
         else:
             if unroll:
-                r = ObjSpace.unpackiterable_unroll(
-                        self, w_obj, expected_length)
+                return make_sure_not_resized(ObjSpace.unpackiterable_unroll(
+                    self, w_obj, expected_length)[:])
             else:
-                r = ObjSpace.unpackiterable(
-                        self, w_obj, expected_length)
-            return list_not_modified_any_more(r[:])
+                return make_sure_not_resized(ObjSpace.unpackiterable(
+                    self, w_obj, expected_length)[:])
         if expected_length != -1 and len(t) != expected_length:
             raise self._wrap_expected_length(expected_length, len(t))
         return t

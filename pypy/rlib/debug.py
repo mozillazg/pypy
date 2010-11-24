@@ -254,6 +254,35 @@ class Entry(ExtRegistryEntry):
         return hop.inputarg(hop.args_r[0], arg=0)
 
 
+def _list_annotated_as_modifiable_again(arg):
+    """ Returns an annotator-time copy of the list 'arg' which is
+    *not* flagged as 'don't mutate me'.  Actually implemented as just
+    returning 'arg'.  This is useful for cases like space.fixedview()
+    where the returned list can escape to a lot of places that don't
+    expect a list flagged 'don't mutate me'.  Of course it relies on
+    the assumption that the code will not actually go ahead and mutate
+    the returned list, in practice.
+    """
+    return arg
+
+class Entry(ExtRegistryEntry):
+    _about_ = _list_annotated_as_modifiable_again
+
+    def compute_result_annotation(self, s_arg):
+        from pypy.annotation.model import SomeList
+        assert isinstance(s_arg, SomeList)
+        if self.bookkeeper.annotator.translator.config.translation.list_comprehension_operations:
+            s_arg = s_arg.listdef.offspring()
+        else:
+            from pypy.annotation.annrpython import log
+            log.WARNING('_list_annotated_as_modified_again called, but has no effect since list_comprehension is off')
+        return s_arg
+    
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        return hop.inputarg(hop.args_r[0], arg=0)
+
+
 class IntegerCanBeNegative(Exception):
     pass
 
