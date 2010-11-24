@@ -3375,24 +3375,6 @@ class TestAnnotateTestCase:
         a.build_types(fn, [])
         # assert did not raise ListChangeUnallowed
 
-    def test_list_not_modified_any_more(self):
-        from pypy.rlib.debug import list_not_modified_any_more
-
-        def pycode(consts):
-            return list_not_modified_any_more(consts)
-        def build1():
-            return pycode(consts=[1])
-        def build2():
-            return pycode(consts=[0])
-        def fn():
-            build1()
-            build2()
-
-        a = self.RPythonAnnotator()
-        a.translator.config.translation.list_comprehension_operations = True
-        a.build_types(fn, [])
-        # assert did not raise ListChangeUnallowed
-
     def test_return_immutable_list(self):
         class A:
             _immutable_fields_ = 'lst[*]'
@@ -3405,7 +3387,7 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         s = a.build_types(f, [int])
-        assert s.listdef.listitem.must_not_mutate
+        assert s.listdef.listitem.immutable
 
     def test_immutable_list_is_actually_resized(self):
         class A:
@@ -3419,6 +3401,39 @@ class TestAnnotateTestCase:
 
         a = self.RPythonAnnotator()
         py.test.raises(ListChangeUnallowed, a.build_types, f, [int])
+
+    def test_can_merge_immutable_list_with_regular_list(self):
+        class A:
+            _immutable_fields_ = 'lst[*]'
+        def f(n):
+            a = A()
+            l1 = [n, 0]
+            l1[1] = n+1
+            a.lst = l1
+            if n > 0:
+                lst = a.lst
+            else:
+                lst = []
+            return lst
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert not s.listdef.listitem.immutable
+
+        def f(n):
+            a = A()
+            l1 = [n, 0]
+            l1[1] = n+1
+            a.lst = l1
+            if n > 0:
+                lst = []
+            else:
+                lst = a.lst
+            return lst
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert not s.listdef.listitem.immutable
 
 
 def g(n):

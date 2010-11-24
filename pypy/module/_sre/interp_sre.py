@@ -6,7 +6,6 @@ from pypy.interpreter.typedef import make_weakref_descr
 from pypy.interpreter.gateway import interp2app, ObjSpace, W_Root
 from pypy.interpreter.error import OperationError
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.debug import list_not_modified_any_more
 from pypy.tool.pairtype import extendabletype
 
 
@@ -112,18 +111,17 @@ class W_SRE_Pattern(Wrappable):
         space = self.space
         if pos < 0: pos = 0
         if endpos < pos: endpos = pos
-        pattern = list_not_modified_any_more(self.code)
         if space.is_true(space.isinstance(w_string, space.w_unicode)):
             unicodestr = space.unicode_w(w_string)
             if pos > len(unicodestr): pos = len(unicodestr)
             if endpos > len(unicodestr): endpos = len(unicodestr)
-            return rsre_core.UnicodeMatchContext(pattern, unicodestr,
+            return rsre_core.UnicodeMatchContext(self.code, unicodestr,
                                                  pos, endpos, self.flags)
         else:
             str = space.bufferstr_w(w_string)
             if pos > len(str): pos = len(str)
             if endpos > len(str): endpos = len(str)
-            return rsre_core.StrMatchContext(pattern, str,
+            return rsre_core.StrMatchContext(self.code, str,
                                              pos, endpos, self.flags)
 
     def getmatch(self, ctx, found):

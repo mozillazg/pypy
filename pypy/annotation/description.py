@@ -649,7 +649,7 @@ class ClassDesc(Desc):
                 if search in cdesc.classdict['_immutable_fields_'].value:
                     s_result.listdef.never_resize()
                     s_copy = s_result.listdef.offspring()
-                    s_copy.listdef.never_mutate()
+                    s_copy.listdef.mark_as_immutable()
                     return s_copy
             cdesc = cdesc.basedesc
         return s_result     # common case
