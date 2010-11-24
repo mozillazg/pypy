@@ -769,7 +769,7 @@ def ll_delitem_nonneg(func, l, index):
     l._ll_resize_le(newlength)
 ll_delitem_nonneg.oopspec = 'list.delitem(l, index)'
 
-def ll_delitem(func, l, i):
+def ll_delitem(func, l, index):
     if func is dum_checkidx:
         length = l.ll_length()
         if r_uint(index) >= r_uint(length):   # see comments in ll_getitem().
@@ -781,7 +781,7 @@ def ll_delitem(func, l, i):
         if index < 0:
             index += l.ll_length()
             ll_assert(index >= 0, "negative list delitem index out of bound")
-    ll_delitem_nonneg(dum_nocheck, l, i)
+    ll_delitem_nonneg(dum_nocheck, l, index)
 # no oopspec -- the function is inlined by the JIT
 
 def ll_extend(l1, l2):
