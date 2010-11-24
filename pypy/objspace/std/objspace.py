@@ -266,7 +266,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def newtuple(self, list_w):
         assert isinstance(list_w, list)
-        return W_TupleObject(list_not_modified_any_more(list_w)
+        return W_TupleObject(list_not_modified_any_more(list_w))
 
     def newlist(self, list_w):
         return W_ListObject(list_w)
