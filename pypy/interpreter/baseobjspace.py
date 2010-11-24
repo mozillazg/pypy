@@ -772,13 +772,6 @@ class ObjSpace(object):
 
     fixedview_unroll = fixedview
 
-    def fixedunpack(self, w_iterable, expected_length=-1):
-        """ A fixed list with the content of w_iterable.
-        For most cases, use fixedview() instead.
-        """
-        return make_sure_not_resized(self.unpackiterable(w_iterable,
-                                                         expected_length)[:])
-
     def listview(self, w_iterable, expected_length=-1):
         """ A non-fixed view of w_iterable. Don't modify the result
         """
