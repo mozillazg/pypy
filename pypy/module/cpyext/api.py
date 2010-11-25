@@ -37,10 +37,7 @@ from pypy.rlib.debug import debug_print
 
 DEBUG_WRAPPER = True
 
-if not we_are_translated() and DEBUG_WRAPPER:
-    from functools import wraps
-else:
-    def wraps(f): return lambda f: f
+from functools import wraps
 
 from pypy.tool.call_logger import CallLogger, SkipArgument
 from pypy.rlib.objectmodel import specialize
@@ -49,55 +46,46 @@ class CPyExtCallLogger(object):
     def __init__(self):
         self.indentation = 0
 
-    @specialize.argtype(2)
-    def format_arg(self, space, arg, argtype):
-        from pypy.rpython.lltypesystem.rffi import charp2str, unicode_from_buffer
-        from pypy.rpython.lltypesystem.lltype import direct_arrayitems
-        from pypy.module.cpyext.pyobject import from_ref, InvalidPointerException
-        from pypy.objspace.std.model import UnwrapError
-        from pypy.module.cpyext.object import PyObject_Repr
-
-        if isinstance(arg, ObjSpace):
-            raise SkipArgument()
-
-        if is_PyObject(argtype):
-            return space.str_w(PyObject_Repr(space, arg))
-
-        return repr(arg)
-
     def log(self, logstr, depth=0):
         debug_print((' ' * depth) + logstr)
 
-    def log_cpyext_call(self, f):
-        if not we_are_translated() and DEBUG_WRAPPER:
+    def log_cpyext_call(self, space, f):
+        if DEBUG_WRAPPER:
+            from pypy.module.cpyext.pyobject import make_ref, from_ref
+            from pypy.module.cpyext.object import PyObject_Repr
+            from pypy.module.cpyext.pyobject import Py_DecRef 
             api_function = f.api_func
-            name = f.__name__
             argtypes = api_function.argtypes
             result_type = api_function.restype
-            def format_args(space, args):
-                argstrs = []
-                for i in unrolling_iterable(range(len(argtypes))):
-                    try:
-                        argtype = argtypes[i]
-                        arg = args[i]
-                        argstrs.append(self.format_arg(space, arg, argtype))
-                    except SkipArgument, e: continue
-                return ', '.join(argstrs)
-                
+            argwrapped = [name.startswith("w_") for name in api_function.argnames]
+            assert len(api_function.argtypes) == len(api_function.argnames)
+            argtypes_enum_ui = unrolling_iterable(enumerate(zip(api_function.argtypes,
+                [name.startswith("w_") for name in api_function.argnames]), start=1))
+            name = f.__name__ # XXX: above line was overwriting name "name"
             @wraps(f)
             def wrapped(*args):
-                space = args[0]
-                argstr = format_args(space, args[1:])
+                argstrs = []
+                for i, (argtype, is_wrapped) in argtypes_enum_ui:
+                    arg = args[i]
+                    if is_PyObject(argtype) and is_wrapped:
+                        if arg is not None:
+                            pyrepr = PyObject_Repr(space, arg)
+                            argstrs.append(space.str_w(pyrepr))
+                        else:
+                            argstrs.append(repr(arg))
+                    else:
+                        argstrs.append(repr(arg))
+                argstr = ', '.join(argstrs)
+
                 self.log("%s(%s)" % (name, argstr), depth=self.indentation)
                 self.indentation += 1
                 result = f(*args)
                 self.indentation -= 1
-                try:
-                    resultformat = self.format_arg(result, space, result_type)
-                except SkipArgument:
-                    resultformat = ''
-                self.log("%s(%s)->%s" % (name, argstr, resultformat), depth=self.indentation)
+
+                result_format = repr(result) # TODO: format nicer!
+                self.log("%s(%s)->%s" % (name, argstr, result_format), depth=self.indentation)
                 return result
+
             return wrapped
         else:
             return f
@@ -540,7 +528,7 @@ def make_wrapper(space, callable):
         [name.startswith("w_") for name in names])))
     fatal_value = callable.api_func.restype._defl()
 
-    logged_callable = log_call(callable)
+    logged_callable = log_call(space, callable)
 
     @specialize.ll()
     @wraps(callable)
@@ -567,7 +555,10 @@ def make_wrapper(space, callable):
                 boxed_args += (arg_conv, )
             state = space.fromcache(State)
             try:
-                result = logged_callable(space, *boxed_args)
+                if not we_are_translated() and DEBUG_WRAPPER:
+                    result = logged_callable(space, *boxed_args)
+                else:
+                    result = callable(space, *boxed_args)
             except OperationError, e:
                 failed = True
                 state.set_exception(e)
