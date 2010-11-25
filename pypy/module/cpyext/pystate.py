@@ -2,7 +2,6 @@ from pypy.module.cpyext.api import cpython_api, generic_cpy_call, CANNOT_FAIL,\
         cpython_struct
 from pypy.rpython.lltypesystem import rffi, lltype
 
-
 PyInterpreterState = lltype.Ptr(cpython_struct("PyInterpreterState", ()))
 PyThreadState = lltype.Ptr(cpython_struct("PyThreadState", [('interp', PyInterpreterState)]))
 
@@ -38,13 +37,20 @@ def PyEval_ThreadsInitialized(space):
 # XXX: might be generally useful
 def encapsulator(T, flavor='raw'):
     class MemoryCapsule(object):
-        def __init__(self):
-            self.memory = lltype.malloc(T, flavor=flavor)
+        def __init__(self, alloc=True):
+            if alloc:
+                self.memory = lltype.malloc(T, flavor=flavor)
+            else:
+                self.memory = lltype.nullptr(T)
         def __del__(self):
-            lltype.free(self.memory, flavor=flavor)
+            if self.memory:
+                lltype.free(self.memory, flavor=flavor)
     return MemoryCapsule
 
 ThreadStateCapsule = encapsulator(PyThreadState.TO)
+
+from pypy.interpreter.executioncontext import ExecutionContext
+ExecutionContext.cpyext_threadstate = ThreadStateCapsule(alloc=False)
 
 class InterpreterState(object):
     def __init__(self, space):
@@ -61,11 +67,7 @@ class InterpreterState(object):
         return self._get_thread_state(ec).memory
 
     def _get_thread_state(self, ec):
-        try:
-            ts = ec.cpyext_threadstate
-            if not ts:
-                ec.cpyext_threadstate = self.new_thread_state()
-        except AttributeError, e:
+        if ec.cpyext_threadstate.memory == lltype.nullptr(PyThreadState.TO):
             ec.cpyext_threadstate = self.new_thread_state()
 
         return ec.cpyext_threadstate
