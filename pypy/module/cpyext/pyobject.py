@@ -171,7 +171,10 @@ class RefcountState:
         lifeline = self.lifeline_dict.get(w_obj)
         if lifeline is not None: # make old PyObject ready for use in C code
             py_obj = lifeline.pyo
-            assert py_obj.c_ob_refcnt == 0, "%r refcount %d" % (py_obj, py_obj.c_ob_refcnt)
+            if we_are_translated():
+                assert py_obj.c_ob_refcnt == 0
+            else:
+                assert py_obj.c_ob_refcnt == 0, "%r refcount %d" % (py_obj, py_obj.c_ob_refcnt)
             return py_obj
         else:
             return lltype.nullptr(PyObject.TO)
