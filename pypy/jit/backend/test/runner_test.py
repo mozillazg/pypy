@@ -2231,6 +2231,9 @@ class LLtypeBackendTest(BaseBackendTest):
                 "%r: got %r, expected %r" % (RESTYPE, res.value, expected))
 
     def test_free_loop_and_bridges(self):
+        from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
+        if not isinstance(self.cpu, AbstractLLCPU):
+            py.test.skip("not a subclass of llmodel.AbstractLLCPU")
         if hasattr(self.cpu, 'setup_once'):
             self.cpu.setup_once()
         mem0 = self.cpu.asmmemmgr.total_mallocs
