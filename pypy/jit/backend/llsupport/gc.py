@@ -357,12 +357,10 @@ class GcRootMap_asmgcc:
         # 'item' points to one of the entries.  Because the whole array
         # is sorted, we know that it points either to the first entry we
         # want to kill, or to the previous entry.
-        while item.address[0] < stopaddr:
+        while item != gcmapend and item.address[0] < stopaddr:
             if item.address[0] >= startaddr:
                 item.address[1] = llmemory.NULL
                 self._gcmap_deadentries += 1
-            if item == gcmapend:
-                break
             item += asmgcroot.arrayitemsize
 
     def get_basic_shape(self, is_64_bit=False):
