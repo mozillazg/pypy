@@ -1,5 +1,7 @@
 import random
-from pypy.jit.backend.llsupport.codebuf import AsmMemoryManager
+from pypy.jit.backend.llsupport.asmmemmgr import AsmMemoryManager
+from pypy.jit.backend.llsupport.asmmemmgr import BlockBuilderMixin
+from pypy.rpython.lltypesystem import lltype, rffi
 
 
 def test_get_index():
@@ -147,3 +149,69 @@ class TestAsmMemoryManager:
                     # than 131072.  Be reasonable and allow up to 147456.
                     assert new_total <= 147456
                     prev_total = new_total
+
+    def test_insert_gcroot_marker(self):
+        class FakeGcRootMap:
+            def add_raw_gcroot_markers(self, asmmemmgr, allblocks, markers,
+                                       total_size, rawstart):
+                self.asmmemmgr = asmmemmgr
+                self.allblocks = allblocks
+                self.markers = markers
+                self.total_size = total_size
+                self.rawstart = rawstart
+        #
+        mc = BlockBuilderMixin()
+        mc.writechar('X')
+        mc.writechar('x')
+        mc.insert_gcroot_marker(['a', 'b', 'c', 'd'])
+        mc.writechar('Y')
+        mc.writechar('y')
+        mc.insert_gcroot_marker(['e', 'f', 'g'])
+        mc.writechar('Z')
+        mc.writechar('z')
+        #
+        gcrootmap = FakeGcRootMap()
+        allblocks = []
+        rawstart = mc.materialize(self.memmgr, allblocks, gcrootmap)
+        p = rffi.cast(rffi.CArrayPtr(lltype.Char), rawstart)
+        assert p[0] == 'X'
+        assert p[1] == 'x'
+        assert p[2] == 'Y'
+        assert p[3] == 'y'
+        assert p[4] == 'Z'
+        assert p[5] == 'z'
+        assert allblocks == [(rawstart, rawstart + 6)]
+        assert gcrootmap.markers == [(2, ['a', 'b', 'c', 'd']),
+                                     (4, ['e', 'f', 'g'])]
+        assert gcrootmap.total_size == 4 + 3
+        assert gcrootmap.rawstart == rawstart
+
+
+def test_blockbuildermixin(translated=True):
+    mc = BlockBuilderMixin(translated)
+    for i in range(mc.SUBBLOCK_SIZE * 2 + 3):
+        assert mc.get_relative_pos() == i
+        mc.writechar(chr(i % 255))
+    if translated:
+        assert mc._cursubindex == 3
+        assert mc._cursubblock
+        assert mc._cursubblock.prev
+        assert mc._cursubblock.prev.prev
+        assert not mc._cursubblock.prev.prev.prev
+    #
+    for i in range(0, mc.SUBBLOCK_SIZE * 2 + 3, 2):
+        mc.overwrite(i, chr((i + 63) % 255))
+    #
+    p = lltype.malloc(rffi.CCHARP.TO, mc.SUBBLOCK_SIZE * 2 + 3, flavor='raw')
+    addr = rffi.cast(lltype.Signed, p)
+    mc.copy_to_raw_memory(addr)
+    #
+    for i in range(mc.SUBBLOCK_SIZE * 2 + 3):
+        if i & 1:
+            assert p[i] == chr(i % 255)
+        else:
+            assert p[i] == chr((i + 63) % 255)
+    lltype.free(p, flavor='raw')
+
+def test_blockbuildermixin2():
+    test_blockbuildermixin(translated=False)
