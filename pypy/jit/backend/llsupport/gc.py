@@ -251,6 +251,9 @@ class GcRootMap_asmgcc:
         addr = self.gcmapstart()
         if self._gcmap_curlength:
             addr += rffi.sizeof(lltype.Signed) * self._gcmap_curlength
+            if not we_are_translated() and type(addr) is long:
+                from pypy.rpython.lltypesystem import ll2ctypes
+                addr = ll2ctypes._lladdress(addr)       # XXX workaround
         return addr
 
     def gcmarksorted(self):
