@@ -239,8 +239,8 @@ class TestGcRootMapAsmGcc:
                 gcrootmap._gcmap[i*2+1] = i * 100 + 1
             assert gcrootmap._gcmap_deadentries == 0
             assert gc.asmgcroot.sort_count == 0
-            gcrootmap._gcmap_maxlength = 700
-            gcrootmap._gcmap_curlength = 700
+            gcrootmap._gcmap_maxlength = 1400
+            gcrootmap._gcmap_curlength = 1400
             gcrootmap._gcmap_sorted = False
             #
             gcrootmap.freeing_block(1200000 - 100, 1200000)
