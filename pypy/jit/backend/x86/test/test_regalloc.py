@@ -41,10 +41,7 @@ class MockAssembler(object):
         self.movs = []
         self.performs = []
         self.lea = []
-        if cpu is None:
-            cpu = CPU(None, None)
-            cpu.setup_once()
-        self.cpu = cpu
+        self.cpu = cpu or CPU(None, None)
         if gc_ll_descr is None:
             gc_ll_descr = MockGcDescr(False)
         self.cpu.gc_ll_descr = gc_ll_descr
@@ -79,7 +76,6 @@ class RegAllocForTests(RegAlloc):
 
 class BaseTestRegalloc(object):
     cpu = CPU(None, None)
-    cpu.setup_once()
 
     def raising_func(i):
         if i:
