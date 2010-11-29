@@ -31,7 +31,8 @@ def autodetect_main_model():
                 'i86pc': 'x86',    # Solaris/Intel
                 'x86':   'x86',    # Apple
                 'Power Macintosh': 'ppc',
-                'x86_64': 'x86', 
+                'x86_64': 'x86',
+                'amd64': 'x86'     # freebsd
                 }[mach]
     except KeyError:
         return mach
@@ -65,7 +66,7 @@ def getcpuclassname(backend_name="auto"):
         return "pypy.jit.backend.x86.runner", "CPU"
     elif backend_name == 'x86-without-sse2':
         return "pypy.jit.backend.x86.runner", "CPU386_NO_SSE2"
-    elif backend_name == 'amd64_64':
+    elif backend_name == 'x86_64':
         return "pypy.jit.backend.x86.runner", "CPU_X86_64"
     elif backend_name == 'cli':
         return "pypy.jit.backend.cli.runner", "CliCPU"
