@@ -1077,7 +1077,7 @@ class BaseTestRlist(BaseRtypingTest):
 
         res = self.interpret(f, [0])
         assert res == 1
-        if self.rlist is ll_rlist:
+        if self.type_system == 'lltype':
             # on lltype we always get an AssertionError
             py.test.raises(AssertionError, self.interpret, f, [1])
         else:
@@ -1128,7 +1128,7 @@ class BaseTestRlist(BaseRtypingTest):
 
         res = self.interpret(f, [0])
         assert res == 1
-        if self.rlist is ll_rlist:
+        if self.type_system == 'lltype':
             # on lltype we always get an AssertionError
             py.test.raises(AssertionError, self.interpret, f, [1])
         else:
@@ -1171,7 +1171,7 @@ class BaseTestRlist(BaseRtypingTest):
 
         res = self.interpret(f, [0])
         assert res == 1
-        if self.rlist is ll_rlist:
+        if self.type_system == 'lltype':
             # on lltype we always get an AssertionError
             py.test.raises(AssertionError, self.interpret, f, [1])
         else:
@@ -1361,6 +1361,7 @@ class BaseTestRlist(BaseRtypingTest):
                    ("y[*]" in immutable_fields)
 
 class TestLLtype(BaseTestRlist, LLRtypeMixin):
+    type_system = 'lltype'
     rlist = ll_rlist
 
     def test_memoryerror(self):
@@ -1464,3 +1465,4 @@ class TestLLtype(BaseTestRlist, LLRtypeMixin):
 
 class TestOOtype(BaseTestRlist, OORtypeMixin):
     rlist = oo_rlist
+    type_system = 'ootype'
