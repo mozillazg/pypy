@@ -151,13 +151,9 @@ class Assembler386(object):
             debug_stop('jit-backend-counts')
 
     def _build_float_constants(self):
-        # 44 bytes: 32 bytes for the data, and up to 12 bytes for alignment
-        addr = lltype.malloc(rffi.CArray(lltype.Char), 44, flavor='raw',
-                             track_allocation=False)
-        if not we_are_translated():
-            self._keepalive_malloced_float_consts = addr
-        float_constants = rffi.cast(lltype.Signed, addr)
-        float_constants = (float_constants + 15) & ~15    # align to 16 bytes
+        datablockwrapper = MachineDataBlockWrapper(self.cpu.asmmemmgr, [])
+        float_constants = datablockwrapper.malloc_aligned(32, alignment=16)
+        datablockwrapper.done()
         addr = rffi.cast(rffi.CArrayPtr(lltype.Char), float_constants)
         qword_padding = '\x00\x00\x00\x00\x00\x00\x00\x00'
         # 0x8000000000000000
