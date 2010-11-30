@@ -197,8 +197,8 @@ class Transformer(object):
         if op.args[0] in self.vable_array_vars:
             self.vable_array_vars[op.result]= self.vable_array_vars[op.args[0]]
 
-    def rewrite_op_cast_pointer(self, op): pass
-    def rewrite_op_cast_opaque_ptr(self, op): pass   # rlib.rerased
+    rewrite_op_cast_pointer = rewrite_op_same_as
+    rewrite_op_cast_pointer = rewrite_op_same_as   # rlib.rerased
     def rewrite_op_cast_primitive(self, op): pass
     def rewrite_op_cast_bool_to_int(self, op): pass
     def rewrite_op_cast_bool_to_uint(self, op): pass
