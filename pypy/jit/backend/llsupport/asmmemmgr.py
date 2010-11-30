@@ -43,6 +43,22 @@ class AsmMemoryManager(object):
         self.total_mallocs -= (stop - start)
         self._add_free_block(start, stop)
 
+    def open_malloc(self, minsize):
+        """Allocate at least minsize bytes.  Returns (start, stop)."""
+        result = self._allocate_block(minsize)
+        (start, stop) = result
+        self.total_mallocs += stop - start
+        return result
+
+    def open_free(self, middle, stop):
+        """Used for freeing the end of an open-allocated block of memory."""
+        if stop - middle >= self.min_fragment:
+            self.total_mallocs -= (stop - middle)
+            self._add_free_block(middle, stop)
+            return True
+        else:
+            return False    # too small to record
+
     def _allocate_large_block(self, minsize):
         # Compute 'size' from 'minsize': it must be rounded up to
         # 'large_alloc_size'.  Additionally, we use the following line
@@ -138,6 +154,40 @@ class AsmMemoryManager(object):
             for data, size in self._allocated:
                 rmmap.free(data, size)
         self._allocated = None
+
+
+class MachineDataBlockWrapper(object):
+    def __init__(self, asmmemmgr, allblocks):
+        self.asmmemmgr = asmmemmgr
+        self.allblocks = allblocks
+        self.rawstart    = 0
+        self.rawposition = 0
+        self.rawstop     = 0
+
+    def done(self):
+        if self.rawstart != 0:
+            if self.asmmemmgr.open_free(self.rawposition, self.rawstop):
+                self.rawstop = self.rawposition
+            self.allblocks.append((self.rawstart, self.rawstop))
+            self.rawstart    = 0
+            self.rawposition = 0
+            self.rawstop     = 0
+
+    def _allocate_next_block(self, minsize):
+        self.done()
+        self.rawstart, self.rawstop = self.asmmemmgr.open_malloc(minsize)
+        self.rawposition = self.rawstart
+
+    def malloc_aligned(self, size, alignment):
+        p = self.rawposition
+        p = (p + alignment - 1) & (-alignment)
+        if p + size > self.rawstop:
+            self._allocate_next_block(size + alignment - 1)
+            p = self.rawposition
+            p = (p + alignment - 1) & (-alignment)
+            assert p + size <= self.rawstop
+        self.rawposition = p + size
+        return p
 
 
 class BlockBuilderMixin(object):

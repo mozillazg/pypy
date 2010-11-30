@@ -1,5 +1,6 @@
 import random
 from pypy.jit.backend.llsupport.asmmemmgr import AsmMemoryManager
+from pypy.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
 from pypy.jit.backend.llsupport.asmmemmgr import BlockBuilderMixin
 from pypy.rpython.lltypesystem import lltype, rffi
 
@@ -215,3 +216,41 @@ def test_blockbuildermixin(translated=True):
 
 def test_blockbuildermixin2():
     test_blockbuildermixin(translated=False)
+
+def test_machinedatablock():
+    ops = []
+    class FakeMemMgr:
+        _addr = 1597
+        def open_malloc(self, minsize):
+            result = (self._addr, self._addr + 100)
+            ops.append(('malloc', minsize) + result)
+            self._addr += 200
+            return result
+        def open_free(self, frm, to):
+            ops.append(('free', frm, to))
+            return to - frm >= 8
+    #
+    allblocks = []
+    md = MachineDataBlockWrapper(FakeMemMgr(), allblocks)
+    p = md.malloc_aligned(26, 16)
+    assert p == 1600
+    assert ops == [('malloc', 26 + 15, 1597, 1697)]
+    del ops[:]
+    #
+    p = md.malloc_aligned(26, 16)
+    assert p == 1632
+    p = md.malloc_aligned(26, 16)
+    assert p == 1664
+    assert allblocks == []
+    assert ops == []
+    #
+    p = md.malloc_aligned(27, 16)
+    assert p == 1808
+    assert allblocks == [(1597, 1697)]
+    assert ops == [('free', 1690, 1697),
+                   ('malloc', 27 + 15, 1797, 1897)]
+    del ops[:]
+    #
+    md.done()
+    assert allblocks == [(1597, 1697), (1797, 1835)]
+    assert ops == [('free', 1835, 1897)]
