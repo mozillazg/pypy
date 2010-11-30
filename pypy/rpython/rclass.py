@@ -209,9 +209,9 @@ class AbstractInstanceRepr(Repr):
                 while rbase.classdef is not None:
                     fields += getattr(rbase, varname)
                     rbase = rbase.rbase
-                self._parse_field_list(fields, accessor)
+                self._parse_field_list(fields, accessor, varname)
 
-    def _parse_field_list(self, fields, accessor):
+    def _parse_field_list(self, fields, accessor, varname):
         with_suffix = {}
         for name in fields:
             if name.endswith('[*]'):
@@ -223,7 +223,10 @@ class AbstractInstanceRepr(Repr):
                 mangled_name, r = self._get_field(name)
             except KeyError:
                 continue
-            with_suffix[mangled_name] = suffix
+            if varname == 'jit_invariant_fields':
+                with_suffix[mangled_name] = 'asmcodes_' + name
+            else:
+                with_suffix[mangled_name] = suffix
         accessor.initialize(self.object_type, with_suffix)
         return with_suffix
 
