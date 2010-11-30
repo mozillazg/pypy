@@ -15,7 +15,7 @@ from pypy.rpython.lltypesystem.lltype import \
      RuntimeTypeInfo, getRuntimeTypeInfo, typeOf, \
      Array, Char, Void, \
      FuncType, Bool, Signed, functionptr, PyObject
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.annotation import model as annmodel
@@ -83,6 +83,12 @@ LLFLAVOR = {'gc'   : 'gc',
             'raw'  : 'raw',
             'stack': 'raw',
             }
+
+# a linked-list of assembler codes to invalidate in case jit_invariant_fields
+# are modified
+ASMCODE = lltype.GcForwardReference()
+ASMCODE.become(GcStruct('asmcode', ('address', llmemory.Address),
+                        ('next', lltype.Ptr(ASMCODE))))
 
 def cast_vtable_to_typeptr(vtable):
     while typeOf(vtable).TO != OBJECT_VTABLE:
@@ -328,10 +334,16 @@ class InstanceRepr(AbstractInstanceRepr):
         if self.classdef is None:
             fields['__class__'] = 'typeptr', get_type_repr(self.rtyper)
         else:
+            myllfields = []
+            invariant_fields = self.classdef.classdesc.classdict.get(
+                '_jit_invariant_fields_')
+            if invariant_fields is not None:
+                for field in invariant_fields.value:
+                    myllfields.append(('asmcodes_' + field,
+                                       lltype.Ptr(ASMCODE)))
             # instance attributes
             attrs = self.classdef.attrs.items()
             attrs.sort()
-            myllfields = []
             for name, attrdef in attrs:
                 if not attrdef.readonly:
                     r = self.rtyper.getrepr(attrdef.s_value)

@@ -763,8 +763,10 @@ class BaseTestRclass(BaseRtypingTest):
         t, typer, graph = self.gengraph(f, [])
         A_TYPE = deref(graph.getreturnvar().concretetype)
         accessor = A_TYPE._hints["jit_invariant_fields"]
-        assert accessor.fields == {'inst_x': ''} or \
-               accessor.fields == {'ox': ''}
+        assert accessor.fields == {'inst_x': 'asmcodes_x'} or \
+               accessor.fields == {'ox': 'asmcodes_x'}
+        if accessor.fields.keys() == ['inst_x']:
+            assert 'asmcodes_x' in A_TYPE._names
 
     def test_immutable_fields_subclass_1(self):
         class A(object):
