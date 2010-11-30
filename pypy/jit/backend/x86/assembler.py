@@ -56,7 +56,6 @@ class GuardToken(object):
 DEBUG_COUNTER = lltype.Struct('DEBUG_COUNTER', ('i', lltype.Signed))
 
 class Assembler386(object):
-    _float_constants = None
     _regalloc = None
     _output_loop_log = None
 
