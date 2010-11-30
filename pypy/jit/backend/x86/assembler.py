@@ -132,7 +132,7 @@ class Assembler386(object):
         self.pending_guard_tokens = []
         self.mc = codebuf.MachineCodeBlockWrapper()
         if self.datablockwrapper is None:
-            allblocks = looptoken.compiled_loop_token.asmmemmgr_blocks
+            allblocks = self.get_asmmemmgr_blocks(looptoken)
             self.datablockwrapper = MachineDataBlockWrapper(self.cpu.asmmemmgr,
                                                             allblocks)
 
@@ -209,6 +209,11 @@ class Assembler386(object):
                _x86_arglocs
                _x86_debug_checksum
         '''
+        # XXX this function is too longish and contains some code
+        # duplication with assemble_bridge().  Also, we should think
+        # about not storing on 'self' attributes that will live only
+        # for the duration of compiling one loop or a one bridge.
+
         clt = CompiledLoopToken(self.cpu, looptoken.number)
         looptoken.compiled_loop_token = clt
         if not we_are_translated():
@@ -334,14 +339,17 @@ class Assembler386(object):
             p = rffi.cast(rffi.INTP, addr)
             p[0] = rffi.cast(rffi.INT, relative_target)
 
-    def materialize_loop(self, looptoken):
-        self.datablockwrapper.done()      # finish using cpu.asmmemmgr
-        self.datablockwrapper = None
+    def get_asmmemmgr_blocks(self, looptoken):
         clt = looptoken.compiled_loop_token
         if clt.asmmemmgr_blocks is None:
             clt.asmmemmgr_blocks = []
-        return self.mc.materialize(self.cpu.asmmemmgr,
-                                   clt.asmmemmgr_blocks,
+        return clt.asmmemmgr_blocks
+
+    def materialize_loop(self, looptoken):
+        self.datablockwrapper.done()      # finish using cpu.asmmemmgr
+        self.datablockwrapper = None
+        allblocks = self.get_asmmemmgr_blocks(looptoken)
+        return self.mc.materialize(self.cpu.asmmemmgr, allblocks,
                                    self.cpu.gc_ll_descr.gcrootmap)
 
     def _find_debug_merge_point(self, operations):
