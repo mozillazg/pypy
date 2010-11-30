@@ -152,14 +152,10 @@ class TestAsmMemoryManager:
                     prev_total = new_total
 
     def test_insert_gcroot_marker(self):
+        puts = []
         class FakeGcRootMap:
-            def add_raw_gcroot_markers(self, asmmemmgr, allblocks, markers,
-                                       total_size, rawstart):
-                self.asmmemmgr = asmmemmgr
-                self.allblocks = allblocks
-                self.markers = markers
-                self.total_size = total_size
-                self.rawstart = rawstart
+            def put(self, retaddr, mark):
+                puts.append((retaddr, mark))
         #
         mc = BlockBuilderMixin()
         mc.writechar('X')
@@ -182,10 +178,8 @@ class TestAsmMemoryManager:
         assert p[4] == 'Z'
         assert p[5] == 'z'
         assert allblocks == [(rawstart, rawstart + 6)]
-        assert gcrootmap.markers == [(2, ['a', 'b', 'c', 'd']),
-                                     (4, ['e', 'f', 'g'])]
-        assert gcrootmap.total_size == 4 + 3
-        assert gcrootmap.rawstart == rawstart
+        assert puts == [(rawstart + 2, ['a', 'b', 'c', 'd']),
+                        (rawstart + 4, ['e', 'f', 'g'])]
 
 
 def test_blockbuildermixin(translated=True):
