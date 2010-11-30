@@ -206,7 +206,6 @@ class BlockBuilderMixin(object):
     SUBBLOCK_PTR.TO.become(SUBBLOCK)
 
     gcroot_markers = None
-    gcroot_markers_total_size = 0
 
     def __init__(self, translated=None):
         if translated is None:
@@ -274,11 +273,8 @@ class BlockBuilderMixin(object):
         self.copy_to_raw_memory(rawstart)
         if self.gcroot_markers is not None:
             assert gcrootmap is not None
-            gcrootmap.add_raw_gcroot_markers(asmmemmgr,
-                                             allblocks,
-                                             self.gcroot_markers,
-                                             self.gcroot_markers_total_size,
-                                             rawstart)
+            for pos, mark in self.gcroot_markers:
+                gcrootmap.put(rawstart + pos, mark)
         return rawstart
 
     def _become_a_plain_block_builder(self):
@@ -297,4 +293,3 @@ class BlockBuilderMixin(object):
         if self.gcroot_markers is None:
             self.gcroot_markers = []
         self.gcroot_markers.append((self.get_relative_pos(), mark))
-        self.gcroot_markers_total_size += len(mark)
