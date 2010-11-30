@@ -1,5 +1,6 @@
 import sys, os
 from pypy.jit.backend.llsupport import symbolic
+from pypy.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
 from pypy.jit.metainterp.history import Const, Box, BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp.history import (AbstractFailDescr, INT, REF, FLOAT,
                                          LoopToken)
@@ -83,6 +84,7 @@ class Assembler386(object):
         self.debug_counter_descr = cpu.fielddescrof(DEBUG_COUNTER, 'i')
         self.fail_boxes_count = 0
         self._current_depths_cache = (0, 0)
+        self.datablockwrapper = None
         self.teardown()
 
     def leave_jitted_hook(self):
@@ -125,10 +127,14 @@ class Assembler386(object):
         self.set_debug(have_debug_prints())
         debug_stop('jit-backend-counts')
 
-    def setup(self):
+    def setup(self, looptoken):
         assert self.memcpy_addr != 0, "setup_once() not called?"
         self.pending_guard_tokens = []
         self.mc = codebuf.MachineCodeBlockWrapper()
+        if self.datablockwrapper is None:
+            allblocks = looptoken.compiled_loop_token.asmmemmgr_blocks
+            self.datablockwrapper = MachineDataBlockWrapper(self.cpu.asmmemmgr,
+                                                            allblocks)
 
     def teardown(self):
         self.pending_guard_tokens = None
@@ -209,7 +215,7 @@ class Assembler386(object):
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)
 
-        self.setup()
+        self.setup(looptoken)
         self.currently_compiling_loop = looptoken
         funcname = self._find_debug_merge_point(operations)
         if log:
@@ -235,7 +241,7 @@ class Assembler386(object):
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #
-        rawstart = self.materialize(looptoken)
+        rawstart = self.materialize_loop(looptoken)
         debug_print("Loop #%d (%s) has address %x to %x" % (
             looptoken.number, funcname,
             rawstart + self.looppos,
@@ -268,7 +274,7 @@ class Assembler386(object):
                         "was already compiled!")
             return
 
-        self.setup()
+        self.setup(original_loop_token)
         funcname = self._find_debug_merge_point(operations)
         if log:
             self._register_counter()
@@ -289,7 +295,7 @@ class Assembler386(object):
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
         #
-        rawstart = self.materialize(original_loop_token)
+        rawstart = self.materialize_loop(original_loop_token)
 
         debug_print("Bridge out of guard %d (%s) has address %x to %x" %
                     (descr_number, funcname, rawstart, rawstart + codeendpos))
@@ -328,7 +334,9 @@ class Assembler386(object):
             p = rffi.cast(rffi.INTP, addr)
             p[0] = rffi.cast(rffi.INT, relative_target)
 
-    def materialize(self, looptoken):
+    def materialize_loop(self, looptoken):
+        self.datablockwrapper.done()      # finish using cpu.asmmemmgr
+        self.datablockwrapper = None
         clt = looptoken.compiled_loop_token
         if clt.asmmemmgr_blocks is None:
             clt.asmmemmgr_blocks = []
