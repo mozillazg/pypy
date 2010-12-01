@@ -749,23 +749,6 @@ class BaseTestRclass(BaseRtypingTest):
         assert accessor.fields == {"inst_x" : "", "inst_y" : "[*]"} or \
                accessor.fields == {"ox" : "", "oy" : "[*]"} # for ootype
 
-    def test_jit_invariant_fields(self):
-        class A(object):
-
-            _jit_invariant_fields_ = ['x']
-            
-            def __init__(self, x):
-                self.x = x
-
-        def f():
-            return A(3)
-
-        t, typer, graph = self.gengraph(f, [])
-        A_TYPE = deref(graph.getreturnvar().concretetype)
-        accessor = A_TYPE._hints["jit_invariant_fields"]
-        assert accessor.fields == {'inst_x': 'asmcodes_x'}
-        assert 'asmcodes_x' in A_TYPE._names
-
     def test_immutable_fields_subclass_1(self):
         class A(object):
             _immutable_fields_ = ["x"]
@@ -1059,11 +1042,37 @@ class TestLLtype(BaseTestRclass, LLRtypeMixin):
             assert sorted([u]) == [6]                    # 32-bit types
             assert sorted([i, r, d, l]) == [2, 3, 4, 5]  # 64-bit types
 
+    def test_jit_invariant_fields(self):
+        class A(object):
+
+            _jit_invariant_fields_ = ['x']
+            
+            def __init__(self, x):
+                self.x = x
+
+        def f():
+            return A(3)
+
+        t, typer, graph = self.gengraph(f, [])
+        A_TYPE = deref(graph.getreturnvar().concretetype)
+        accessor = A_TYPE._hints["jit_invariant_fields"]
+        assert accessor.fields == {'inst_x': 'asmcodes_x'}
+        assert 'asmcodes_x' in A_TYPE._names
+
+    def test_jit_invariant_setfield(self):
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        def f():
+            a = A()
+            a.x = 3
+
+        t, typer, graph = self.gengraph(f, [])
+        block = graph.iterblocks().next()
+        assert 'jit_invariant_setfield' in [op.opname for op
+                                            in block.operations]
 
 class TestOOtype(BaseTestRclass, OORtypeMixin):
-    def test_jit_invariant_fields(self):
-        py.test.skip("no ootype support yet")
-
     def test__del__(self):
         class A(object):
             def __init__(self):
