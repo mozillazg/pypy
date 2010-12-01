@@ -48,7 +48,7 @@ class AbstractVirtualizable2InstanceRepr(AbstractInstanceRepr):
         self.set_vable(llops, vptr)
         return vptr
 
-    def hook_access_field(self, vinst, cname, llops, flags):
+    def hook_access_field(self, op, vinst, cname, llops, flags):
         #if not flags.get('access_directly'):
         if cname.value in self.my_redirected_fields:
             cflags = inputconst(lltype.Void, flags)

@@ -322,6 +322,15 @@ class InstanceRepr(AbstractInstanceRepr):
         self.iprebuiltinstances = identity_dict()
         self.lowleveltype = Ptr(self.object_type)
         self.gcflavor = gcflavor
+        if self.classdef is None:
+            self.jit_invariant_fields = []
+        else:
+            jit_inv = self.classdef.classdesc.classdict.get(
+                '_jit_invariant_fields_')
+            if jit_inv is not None:
+                self.jit_invariant_fields = dict.fromkeys(jit_inv.value)
+            else:
+                self.jit_invariant_fields = []
 
     def _setup_repr(self, llfields=None, hints=None, adtmeths=None):
         # NOTE: don't store mutable objects like the dicts below on 'self'
@@ -335,12 +344,9 @@ class InstanceRepr(AbstractInstanceRepr):
             fields['__class__'] = 'typeptr', get_type_repr(self.rtyper)
         else:
             myllfields = []
-            invariant_fields = self.classdef.classdesc.classdict.get(
-                '_jit_invariant_fields_')
-            if invariant_fields is not None:
-                for field in invariant_fields.value:
-                    myllfields.append(('asmcodes_' + field,
-                                       lltype.Ptr(ASMCODE)))
+            for field in self.jit_invariant_fields:
+                myllfields.append(('asmcodes_' + field,
+                                   lltype.Ptr(ASMCODE)))
             # instance attributes
             attrs = self.classdef.attrs.items()
             attrs.sort()
@@ -483,7 +489,7 @@ class InstanceRepr(AbstractInstanceRepr):
             cname = inputconst(Void, mangled_name)
             if force_cast:
                 vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
-            self.hook_access_field(vinst, cname, llops, flags)
+            self.hook_access_field('getfield', vinst, cname, llops, flags)
             return llops.genop('getfield', [vinst, cname], resulttype=r)
         else:
             if self.classdef is None:
@@ -499,7 +505,7 @@ class InstanceRepr(AbstractInstanceRepr):
             cname = inputconst(Void, mangled_name)
             if force_cast:
                 vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
-            self.hook_access_field(vinst, cname, llops, flags)
+            self.hook_access_field('setfield', vinst, cname, llops, flags)
             llops.genop('setfield', [vinst, cname, vvalue])
         else:
             if self.classdef is None:
@@ -507,8 +513,11 @@ class InstanceRepr(AbstractInstanceRepr):
             self.rbase.setfield(vinst, attr, vvalue, llops, force_cast=True,
                                 flags=flags)
 
-    def hook_access_field(self, vinst, cname, llops, flags):
-        pass        # for virtualizables; see rvirtualizable2.py
+    def hook_access_field(self, op, vinst, cname, llops, flags):
+        # for virtualizables; see rvirtualizable2.py
+        if (op == 'setfield' and cname.value.startswith('inst_') and
+            cname.value[len('inst_'):] in self.jit_invariant_fields):
+            llops.genop('jit_invariant_setfield', [])
 
     def new_instance(self, llops, classcallhop=None):
         """Build a new instance, without calling __init__."""
