@@ -2,9 +2,11 @@ import py
 from pypy.jit.metainterp.warmspot import ll_meta_interp
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, OPTIMIZER_FULL, OPTIMIZER_SIMPLE
-from pypy.rlib.jit import unroll_safe
+from pypy.rlib.jit import unroll_safe, dont_look_inside
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import BoxInt
+from pypy.jit.codewriter.support import annotate
+from pypy.jit.metainterp.warmspot import WarmRunnerDesc
 
 from pypy.jit.metainterp.test.test_basic import LLJitMixin, OOJitMixin
 
@@ -359,7 +361,6 @@ class WarmspotTests(object):
         self.check_loops({'int_sub': 1, 'int_gt': 1, 'guard_true': 1,
                           'jump': 1})
 
-
 class TestLLWarmspot(WarmspotTests, LLJitMixin):
     CPUClass = runner.LLtypeCPU
     type_system = 'lltype'
@@ -371,8 +372,6 @@ class TestOOWarmspot(WarmspotTests, OOJitMixin):
 class TestWarmspotDirect(object):
     def setup_class(cls):
         from pypy.jit.metainterp.typesystem import llhelper
-        from pypy.jit.codewriter.support import annotate
-        from pypy.jit.metainterp.warmspot import WarmRunnerDesc
         from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
         from pypy.rpython.lltypesystem import lltype, llmemory
         exc_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
@@ -437,6 +436,7 @@ class TestWarmspotDirect(object):
 
         rtyper = annotate(f, [0])
         FakeCPU.rtyper = rtyper
+        cls.FakeCPU = FakeCPU
         translator = rtyper.annotator.translator
         translator.config.translation.gc = 'hybrid'
         cls.desc = WarmRunnerDesc(translator, CPUClass=FakeCPU)
@@ -454,3 +454,37 @@ class TestWarmspotDirect(object):
             assert lle[0] == self.exc_vtable
         else:
             py.test.fail("DID NOT RAISE")
+
+    def test_rewrite_invariant_setfield(self):
+        from pypy.jit.metainterp.warmspot import find_jit_invariant_setfield
+        
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        @dont_look_inside
+        def g(a):
+            a.x = 3
+
+        a = A()
+
+        driver = JitDriver(reds = ['i', 'a'], greens = [])
+        
+        def f():
+            i = 0
+            a = A()
+            g(a)
+            while i < 10:
+                driver.can_enter_jit(i=i, a=a)
+                driver.jit_merge_point(i=i, a=a)
+                i += 1
+            return i
+                
+            g(a)
+            return a.x
+
+        rtyper = annotate(f, [])
+        self.FakeCPU.rtyper = rtyper
+        translator = rtyper.annotator.translator
+        translator.config.translation.gc = 'hybrid'
+        desc = WarmRunnerDesc(translator, CPUClass=self.FakeCPU)
+        assert not find_jit_invariant_setfield(translator.graphs)

@@ -114,6 +114,16 @@ def _find_jit_marker(graphs, marker_name):
                     results.append((graph, block, i))
     return results
 
+def find_jit_invariant_setfield(graphs):
+    results = []
+    for graph in graphs:
+        for block in graph.iterblocks():
+            for i in range(len(block.operations)):
+                op = block.operations[i]
+                if op.opname == 'jit_invariant_setfield':
+                    results.append((graph, block, i))
+    return results
+
 def find_can_enter_jit(graphs):
     return _find_jit_marker(graphs, 'can_enter_jit')
 
@@ -181,6 +191,7 @@ class WarmRunnerDesc(object):
         self.rewrite_can_enter_jits()
         self.rewrite_set_param()
         self.rewrite_force_virtual(vrefinfo)
+        self.rewrite_jit_invariant_setfield()
         self.add_finish()
         self.metainterp_sd.finish_setup(self.codewriter, optimizer=optimizer)
 
@@ -801,6 +812,11 @@ class WarmRunnerDesc(object):
                 closures[key] = make_closure(jd, 'set_param_' + funcname)
             op.opname = 'direct_call'
             op.args[:3] = [closures[key]]
+
+    def rewrite_jit_invariant_setfield(self):
+        graphs = self.translator.graphs
+        for graph, block, i in find_jit_invariant_setfield(graphs):
+            del block.operations[i] # for now
 
     def rewrite_force_virtual(self, vrefinfo):
         if self.cpu.ts.name != 'lltype':
