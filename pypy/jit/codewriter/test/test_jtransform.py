@@ -947,7 +947,7 @@ def test_jit_invariant():
     from pypy.rpython.rclass import FieldListAccessor
     from pypy.rpython.lltypesystem.rclass import ASMCODE
     accessor = FieldListAccessor()
-    accessor.initialize(None, {'x': 'asmcodes_x'})
+    accessor.initialize(None, {'inst_x': 'asmcodes_x'})
     v2 = varoftype(lltype.Signed)
     STRUCT = lltype.GcStruct('struct', ('inst_x', lltype.Signed),
                              ('asmcodes_x', lltype.Ptr(ASMCODE)),
@@ -962,7 +962,7 @@ def test_jit_invariant_setfield():
     from pypy.rpython.rclass import FieldListAccessor
     from pypy.rpython.lltypesystem.rclass import ASMCODE
     accessor = FieldListAccessor()
-    accessor.initialize(None, {'x': 'asmcodes_x'})
+    accessor.initialize(None, {'inst_x': 'asmcodes_x'})
     v1 = varoftype(lltype.Signed)
     STRUCT = lltype.GcStruct('struct', ('inst_x', lltype.Signed),
                              ('asmcodes_x', lltype.Ptr(ASMCODE)),
