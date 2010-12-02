@@ -170,7 +170,7 @@ class AbstractInstanceRepr(Repr):
                 self.immutable_fields = immutable_fields.value
             accessor = FieldListAccessor()
             hints['immutable_fields'] = accessor
-        if self.jit_invariant_fields:
+        if self.classdef.classdesc.lookup('_jit_invariant_fields_') is not None:
             hints = hints.copy()
             accessor = FieldListAccessor()
             hints['jit_invariant_fields'] = accessor
