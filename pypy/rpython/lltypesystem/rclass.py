@@ -517,7 +517,8 @@ class InstanceRepr(AbstractInstanceRepr):
         # for virtualizables; see rvirtualizable2.py
         if (op == 'setfield' and cname.value.startswith('inst_') and
             cname.value[len('inst_'):] in self.jit_invariant_fields):
-            llops.genop('jit_invariant_setfield', [])
+            llops.genop('jit_marker', [Constant('invariant_setfield',
+                                                lltype.Void)])
 
     def new_instance(self, llops, classcallhop=None):
         """Build a new instance, without calling __init__."""
