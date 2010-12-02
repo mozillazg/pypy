@@ -468,17 +468,17 @@ class InstanceRepr(AbstractInstanceRepr):
         v_attr = inputconst(ootype.Void, mangled)
         r_value = self.allfields[mangled]
         self.lowleveltype._check_field(mangled)
-        self.hook_access_field(v_inst, v_attr, llops, flags)
+        self.hook_access_field('getfield', v_inst, v_attr, llops, flags)
         return llops.genop('oogetfield', [v_inst, v_attr],
                            resulttype = r_value)
 
     def setfield(self, vinst, attr, vvalue, llops, flags={}):
         mangled_name = mangle(attr, self.rtyper.getconfig())
         cname = inputconst(ootype.Void, mangled_name)
-        self.hook_access_field(vinst, cname, llops, flags)
+        self.hook_access_field('setfield', vinst, cname, llops, flags)
         llops.genop('oosetfield', [vinst, cname, vvalue])
 
-    def hook_access_field(self, vinst, cname, llops, flags):
+    def hook_access_field(self, opname, vinst, cname, llops, flags):
         pass        # for virtualizables; see rvirtualizable2.py
 
     def rtype_is_true(self, hop):
