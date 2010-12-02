@@ -197,7 +197,7 @@ class OptRewrite(Optimization):
 
     def optimize_GUARD_TRUE(self, op):
         value = self.getvalue(op.getarg(0))
-        v = self.optimizer.int_to_bool_nullity.get(value)
+        v = self.optimizer.int_to_bool_nullity.get(value, None)
         if v:
             v, int_is_true = v
             if int_is_true:
@@ -209,7 +209,7 @@ class OptRewrite(Optimization):
 
     def optimize_GUARD_FALSE(self, op):
         value = self.getvalue(op.getarg(0))
-        v = self.optimizer.int_to_bool_nullity.get(value)
+        v = self.optimizer.int_to_bool_nullity.get(value, None)
         if v:
             v, int_is_true = v
             if int_is_true:
