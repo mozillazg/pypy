@@ -12,7 +12,7 @@ from pypy.tool.sourcetools import compile2, func_with_new_name
 from pypy.rlib.objectmodel import instantiate, compute_identity_hash, specialize
 from pypy.rlib.jit import hint
 
-class TypeDef:
+class TypeDef(object):
     def __init__(self, __name, __base=None, **rawdict):
         "NOT_RPYTHON: initialization-time only"
         self.name = __name
