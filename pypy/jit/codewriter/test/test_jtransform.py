@@ -2,7 +2,7 @@ import py
 import random
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
-from pypy.jit.codewriter.jtransform import Transformer
+from pypy.jit.codewriter.jtransform import Transformer, JitInvariantError
 from pypy.jit.metainterp.history import getkind
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rlist
 from pypy.translator.unsimplify import varoftype
@@ -942,3 +942,34 @@ def test_list_ll_arraycopy():
     assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ARRAYCOPY
     assert op1.args[2] == ListOfKind('int', [v3, v4, v5])
     assert op1.args[3] == ListOfKind('ref', [v1, v2])
+
+def test_jit_invariant():
+    from pypy.rpython.rclass import FieldListAccessor
+    from pypy.rpython.lltypesystem.rclass import ASMCODE
+    accessor = FieldListAccessor()
+    accessor.initialize(None, {'x': 'asmcodes_x'})
+    v2 = varoftype(lltype.Signed)
+    STRUCT = lltype.GcStruct('struct', ('inst_x', lltype.Signed),
+                             ('asmcodes_x', lltype.Ptr(ASMCODE)),
+                             hints={'jit_invariant_fields': accessor})
+    op = SpaceOperation('getfield', [const(lltype.malloc(STRUCT)),
+                        Constant('inst_x', lltype.Void)], v2)
+    tr = Transformer(FakeCPU())
+    op1 = tr.rewrite_operation(op)
+    assert op1.opname == 'getfield_gc_i_pure'
+
+def test_jit_invariant_setfield():
+    from pypy.rpython.rclass import FieldListAccessor
+    from pypy.rpython.lltypesystem.rclass import ASMCODE
+    accessor = FieldListAccessor()
+    accessor.initialize(None, {'x': 'asmcodes_x'})
+    v1 = varoftype(lltype.Signed)
+    STRUCT = lltype.GcStruct('struct', ('inst_x', lltype.Signed),
+                             ('asmcodes_x', lltype.Ptr(ASMCODE)),
+                             hints={'jit_invariant_fields': accessor})
+    op = SpaceOperation('setfield', [const(lltype.malloc(STRUCT)),
+                        Constant('inst_x', lltype.Void), v1],
+                        varoftype(lltype.Void))
+    tr = Transformer(FakeCPU())
+    raises(JitInvariantError, tr.rewrite_operation, op)
+    

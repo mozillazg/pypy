@@ -14,6 +14,8 @@ from pypy.rlib.jit import _we_are_jitted
 from pypy.translator.simplify import get_funcobj
 from pypy.translator.unsimplify import varoftype
 
+class JitInvariantError(Exception):
+    pass
 
 def transform_graph(graph, cpu=None, callcontrol=None, portal_jd=None):
     """Transform a control flow graph to make it suitable for
@@ -536,7 +538,11 @@ class Transformer(object):
             if immut == "[*]":
                 self.immutable_arrays[op.result] = True
         else:
-            pure = ''
+            jit_inv = v_inst.concretetype.TO._hints.get('jit_invariant_fields')
+            if jit_inv and op.args[1].value[len('inst_'):] in jit_inv.fields:
+                pure = '_pure'
+            else:
+                pure = ''
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
@@ -560,6 +566,10 @@ class Transformer(object):
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('setfield_vable_%s' % kind,
                                    [v_inst, descr, v_value], None)]
+        jit_inv = v_inst.concretetype.TO._hints.get('jit_invariant_fields')
+        if jit_inv and op.args[1].value[len('inst_'):] in jit_inv.fields:
+            raise JitInvariantError("setfield on jit invariant should not"
+                                    " be ssen by jit")
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
