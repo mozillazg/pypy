@@ -4,7 +4,7 @@ from pypy.jit.metainterp import history
 from pypy.jit.codewriter import heaptracker
 
 
-class VirtualRefInfo:
+class VirtualRefInfo(object):
 
     def __init__(self, warmrunnerdesc):
         self.warmrunnerdesc = warmrunnerdesc
