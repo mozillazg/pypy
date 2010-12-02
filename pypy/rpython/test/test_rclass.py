@@ -1070,11 +1070,10 @@ class TestLLtype(BaseTestRclass, LLRtypeMixin):
         t, typer, graph = self.gengraph(f, [])
         block = graph.iterblocks().next()
         for op in block.operations:
-            if op.opname == 'jit_marker':
-                assert op.args[0].value == 'invariant_setfield'
+            if op.opname == 'jit_invariant_setfield':
                 break
         else:
-            raise Exception("did not find jit invariant setfield marker")
+            raise Exception("did not find jit invariant setfield")
 
 class TestOOtype(BaseTestRclass, OORtypeMixin):
     def test__del__(self):
