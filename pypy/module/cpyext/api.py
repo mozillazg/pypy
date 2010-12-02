@@ -33,7 +33,6 @@ from pypy.module.exceptions import interp_exceptions
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.debug import debug_print
 
 DEBUG_WRAPPER = True
 
@@ -42,18 +41,56 @@ from functools import wraps
 from pypy.tool.call_logger import CallLogger, SkipArgument
 from pypy.rlib.objectmodel import specialize
 
+def debug_func(category):
+    def decorator(f):
+        from pypy.rlib.debug import debug_start, debug_stop
+        @wraps(f)
+        def debugged(*args):
+            debug_start(category)
+            result = f(*args)
+            debug_stop(category)
+            return result
+        return debugged
+    return decorator
+
 class CPyExtCallLogger(object):
     def __init__(self):
         self.indentation = 0
 
+    def get_indent_string(self, depth=None):
+        if depth is None:
+            depth = self.indentation
+
+        return ' ' * depth
+
     def log(self, logstr, depth=0):
-        debug_print((' ' * depth) + logstr)
+        from pypy.rlib.debug import debug_print
+        debug_print(self.get_indent_string() + logstr)
+
+    def log_cpyext_rpython_call(self, f):
+        if DEBUG_WRAPPER:
+            name = f.__name__
+            #@debug_func('cpyext')
+            @wraps(f)
+            def wrapped(space, *args):
+                argstrs = [repr(x) for x in args]
+                argstr = ', '.join(argstrs)
+
+                self.log("%s(%s)" % (name, argstr), depth=self.indentation)
+                self.indentation += 1
+                result = f(space, *args)
+                self.indentation -= 1
+                self.log("%s(%s)->%s" % (name, argstr, repr(result)), depth=self.indentation)
+                return result
+            return wrapped
+        else:
+            return f
 
     def log_cpyext_call(self, space, f):
         if DEBUG_WRAPPER:
             from pypy.module.cpyext.pyobject import make_ref, from_ref
             from pypy.module.cpyext.object import PyObject_Repr
-            from pypy.module.cpyext.pyobject import Py_DecRef 
+            from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef 
             api_function = f.api_func
             argtypes = api_function.argtypes
             result_type = api_function.restype
@@ -62,17 +99,22 @@ class CPyExtCallLogger(object):
             argtypes_enum_ui = unrolling_iterable(enumerate(zip(api_function.argtypes,
                 [name.startswith("w_") for name in api_function.argnames]), start=1))
             name = f.__name__ # XXX: above line was overwriting name "name"
+
+            #@debug_func('cpyext')
             @wraps(f)
             def wrapped(*args):
                 argstrs = []
                 for i, (argtype, is_wrapped) in argtypes_enum_ui:
                     arg = args[i]
                     if is_PyObject(argtype) and is_wrapped:
-                        if arg is not None:
-                            pyrepr = PyObject_Repr(space, arg)
-                            argstrs.append(space.str_w(pyrepr))
+                        w_arg = arg
+                        if w_arg is not None:
+                            Py_IncRef(space, w_arg)
+                            py_repr = PyObject_Repr(space, w_arg)
+                            Py_DecRef(space, w_arg)
+                            argstrs.append(space.str_w(py_repr))
                         else:
-                            argstrs.append(repr(arg))
+                            argstrs.append(repr(w_arg))
                     else:
                         argstrs.append(repr(arg))
                 argstr = ', '.join(argstrs)
@@ -90,7 +132,9 @@ class CPyExtCallLogger(object):
         else:
             return f
 
-log_call = CPyExtCallLogger().log_cpyext_call
+cpy_logger = CPyExtCallLogger()
+log_call = cpy_logger.log_cpyext_call
+rlog_call = cpy_logger.log_cpyext_rpython_call
 
 # update these for other platforms
 Py_ssize_t = lltype.Signed
@@ -278,7 +322,10 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True):
                 zip(api_function.argtypes,
                     [tp_name.startswith("w_") for tp_name in names])))
 
+            logged_func = rlog_call(func)
+
             @specialize.ll()
+            @wraps(func)
             def unwrapper(space, *args):
                 from pypy.module.cpyext.pyobject import Py_DecRef
                 from pypy.module.cpyext.pyobject import make_ref, from_ref
@@ -312,7 +359,10 @@ def cpython_api(argtypes, restype, error=_NOT_SPECIFIED, external=True):
                     newargs += (arg, )
                 try:
                     try:
-                        res = func(space, *newargs)
+                        if not we_are_translated() and DEBUG_WRAPPER:
+                            res = logged_func(space, *newargs)
+                        else:
+                            res = func(space, *newargs)
                     except OperationError, e:
                         if not catch_exception:
                             raise
@@ -757,7 +807,7 @@ def build_bridge(space):
             py_obj.c_ob_type = rffi.cast(PyTypeObjectPtr,
                                          make_ref(space, w_type))
             typedescr.attach(space, py_obj, w_obj)
-            track_reference(space, py_obj, w_obj)
+            track_reference(space, py_obj, w_obj, replace=True)
         else:
             assert False, "Unknown static object: %s %s" % (typ, name)
 
