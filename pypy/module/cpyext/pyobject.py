@@ -250,13 +250,16 @@ class RefcountState:
 class InvalidPointerException(Exception):
     pass
 
-DEBUG_REFCOUNT = False
+DEBUG_REFCOUNT = True
 
 def debug_refcount(*args, **kwargs):
+    from pypy.module.cpyext.api import cpy_logger
     frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
     assert not kwargs
     frame = sys._getframe(frame_stackdepth)
-    print >>sys.stderr, "%25s" % (frame.f_code.co_name, ),
+    sys.stderr.write(cpy_logger.get_indent_string())
+    sys.stderr.write(frame.f_code.co_name)
+    sys.stderr.write(' ')
     for arg in args:
         print >>sys.stderr, arg,
     print >>sys.stderr
@@ -291,7 +294,10 @@ def track_reference(space, py_obj, w_obj, replace=False):
     if DEBUG_REFCOUNT:
         debug_refcount("MAKREF", py_obj, w_obj)
         if not replace:
-            assert w_obj not in state.py_objects_w2r
+            if not we_are_translated():
+                assert w_obj not in state.py_objects_w2r, "%r shouldn't be tracked already" % w_obj
+            else:
+                assert w_obj not in state.py_objects_w2r
         assert ptr not in state.py_objects_r2w
         assert ptr not in state.borrowed_objects
     state.py_objects_w2r[w_obj] = py_obj
