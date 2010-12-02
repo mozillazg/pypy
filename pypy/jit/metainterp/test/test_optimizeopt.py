@@ -537,7 +537,6 @@ class OptimizeOptTest(BaseTestOptimizeOpt):
         self.optimize_loop(ops, 'Not', expected)
 
     def test_int_is_true_is_zero(self):
-        py.test.skip("XXX implement me")
         ops = """
         [i0]
         i1 = int_is_true(i0)
@@ -550,6 +549,23 @@ class OptimizeOptTest(BaseTestOptimizeOpt):
         [i0]
         i1 = int_is_true(i0)
         guard_true(i1) []
+        jump(i0)
+        """
+        self.optimize_loop(ops, 'Not', expected)
+
+    def test_int_is_true_is_zero2(self):
+        ops = """
+        [i0]
+        i2 = int_is_zero(i0)
+        guard_false(i2) []
+        i1 = int_is_true(i0)
+        guard_true(i1) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_is_zero(i0)
+        guard_false(i1) []
         jump(i0)
         """
         self.optimize_loop(ops, 'Not', expected)
@@ -4542,7 +4558,6 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         # more generally, supporting non-constant but virtual cases is
         # not obvious, because of the exception UnicodeDecodeError that
         # can be raised by ll_str2unicode()
-
 
 ##class TestOOtype(OptimizeOptTest, OOtypeMixin):
 
