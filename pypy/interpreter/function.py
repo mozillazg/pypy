@@ -28,6 +28,8 @@ class Function(Wrappable):
 
     can_change_code = True
 
+    _immutable_fields_ = ['w_func_globals', 'closure']
+
     def __init__(self, space, code, w_globals=None, defs_w=[], closure=None,
                  forcename=None):
         self.space = space
