@@ -8,6 +8,8 @@ from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 from pypy.rlib import jit
 
 class ModuleCell(object):
+    _jit_invariant_fields_ = ['w_value']
+
     def __init__(self, w_value=None):
         self.w_value = w_value
 
@@ -47,9 +49,11 @@ class ModuleDictImplementation(W_DictMultiObject):
         else:
             self._as_rdict().impl_fallback_setitem(w_key, w_value)
 
+    @jit.dont_look_inside
     def impl_setitem_str(self, name, w_value):
         self.getcell(name, True).w_value = w_value
 
+    @jit.dont_look_inside
     def impl_delitem(self, w_key):
         space = self.space
         w_key_type = space.type(w_key)
