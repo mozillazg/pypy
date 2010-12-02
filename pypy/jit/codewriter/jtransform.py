@@ -539,7 +539,7 @@ class Transformer(object):
                 self.immutable_arrays[op.result] = True
         else:
             jit_inv = v_inst.concretetype.TO._hints.get('jit_invariant_fields')
-            if jit_inv and op.args[1].value[len('inst_'):] in jit_inv.fields:
+            if jit_inv and op.args[1].value in jit_inv.fields:
                 pure = '_pure'
             else:
                 pure = ''
@@ -567,7 +567,7 @@ class Transformer(object):
                     SpaceOperation('setfield_vable_%s' % kind,
                                    [v_inst, descr, v_value], None)]
         jit_inv = v_inst.concretetype.TO._hints.get('jit_invariant_fields')
-        if jit_inv and op.args[1].value[len('inst_'):] in jit_inv.fields:
+        if jit_inv and op.args[1].value in jit_inv.fields:
             raise JitInvariantError("setfield on jit invariant should not"
                                     " be ssen by jit")
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')

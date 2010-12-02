@@ -718,6 +718,24 @@ class BasicTests:
         assert res == 210
         self.check_operations_history(getfield_gc=0)
 
+    def test_getfield_jit_invariant(self):
+        class A(object):
+            _jit_invariant_fields_ = 'x'
+
+        a1 = A()
+        a1.x = 5
+        a2 = A()
+        a2.x = 8
+
+        def f(x):
+            if x:
+                a = a1
+            else:
+                a = a2
+            return a.x
+        res = self.interp_operations(f, [-3])
+        self.check_operations_history(getfield_gc = 0)
+
     def test_setfield_bool(self):
         class A:
             def __init__(self):
