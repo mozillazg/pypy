@@ -36,7 +36,8 @@ class AbstractVirtualizable2InstanceRepr(AbstractInstanceRepr):
                 self._super()._setup_repr(hints = hints)
             c_vfields = self.classdef.classdesc.classdict['_virtualizable2_']
             self.my_redirected_fields = self._parse_field_list(c_vfields.value,
-                                                               self.accessor)
+                                                               self.accessor,
+                                                             '_virtualizable2_')
         else:
             self._super()._setup_repr()
             # ootype needs my_redirected_fields even for subclass. lltype does
