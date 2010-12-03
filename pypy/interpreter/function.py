@@ -29,7 +29,9 @@ class Function(Wrappable):
     can_change_code = True
 
     _immutable_fields_ = ['w_func_globals', 'closure']
+    _jit_invariant_fields_ = ['defs_w', 'code']
 
+    @jit.dont_look_inside
     def __init__(self, space, code, w_globals=None, defs_w=[], closure=None,
                  forcename=None):
         self.space = space
@@ -334,6 +336,7 @@ class Function(Wrappable):
             return space.w_None
         return space.newtuple(values_w)
 
+    @jit.dont_look_inside
     def fset_func_defaults(space, self, w_defaults):
         if space.is_w(w_defaults, space.w_None):
             self.defs_w = []
@@ -342,6 +345,7 @@ class Function(Wrappable):
             raise OperationError( space.w_TypeError, space.wrap("func_defaults must be set to a tuple object or None") )
         self.defs_w = space.fixedview(w_defaults)
 
+    @jit.dont_look_inside
     def fdel_func_defaults(space, self):
         self.defs_w = []
 
@@ -387,6 +391,7 @@ class Function(Wrappable):
     def fget_func_code(space, self):
         return space.wrap(self.code)
 
+    @jit.dont_look_inside
     def fset_func_code(space, self, w_code):
         from pypy.interpreter.pycode import PyCode
         if not self.can_change_code:

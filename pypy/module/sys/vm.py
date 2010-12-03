@@ -4,6 +4,7 @@ Implementation of interpreter-level 'sys' routines.
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ObjSpace
 from pypy.rlib.runicode import MAXUNICODE
+from pypy.rlib import jit
 import sys
 
 # ____________________________________________________________
@@ -43,6 +44,7 @@ purposes only."""
 
 # directly from the C code in ceval.c, might be moved somewhere else.
 
+@jit.dont_look_inside
 def setrecursionlimit(space, w_new_limit):
     """Set the maximum depth of the Python interpreter stack to n.  This
 limit prevents infinite recursion from causing an overflow of the C
