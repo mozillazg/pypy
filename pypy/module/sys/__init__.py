@@ -5,6 +5,9 @@ import sys
 
 class Module(MixedModule):
     """Sys Builtin Module. """
+
+    _jit_invariant_fields_ = ['recursionlimit']
+    
     def __init__(self, space, w_name):
         """NOT_RPYTHON""" # because parent __init__ isn't
         if space.config.translating:
