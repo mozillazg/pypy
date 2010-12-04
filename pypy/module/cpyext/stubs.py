@@ -668,15 +668,6 @@ def PyDict_MergeFromSeq2(space, a, seq2, override):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARP], PyObject)
-def PyErr_SetFromErrnoWithFilename(space, type, filename):
-    """Similar to PyErr_SetFromErrno(), with the additional behavior that if
-    filename is not NULL, it is passed to the constructor of type as a third
-    parameter.  In the case of exceptions such as IOError and OSError,
-    this is used to define the filename attribute of the exception instance.
-    Return value: always NULL."""
-    raise NotImplementedError
-
 @cpython_api([rffi.INT_real], PyObject)
 def PyErr_SetFromWindowsErr(space, ierr):
     """This is a convenience function to raise WindowsError. If called with
