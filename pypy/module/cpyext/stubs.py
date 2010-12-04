@@ -824,22 +824,6 @@ def PyFile_DecUseCount(space, p):
     """
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.INT_real], PyObject)
-def PyFile_GetLine(space, p, n):
-    """
-    
-    
-    
-    Equivalent to p.readline([n]), this function reads one line from the
-    object p.  p may be a file object or any object with a readline()
-    method.  If n is 0, exactly one line is read, regardless of the length of
-    the line.  If n is greater than 0, no more than n bytes will be read
-    from the file; a partial line can be returned.  In both cases, an empty string
-    is returned if the end of the file is reached immediately.  If n is less than
-    0, however, one line is read regardless of length, but EOFError is
-    raised if the end of the file is reached immediately."""
-    raise NotImplementedError
-
 @cpython_api([PyObject], PyObject)
 def PyFile_Name(space, p):
     """Return the name of the file specified by p as a string object."""
