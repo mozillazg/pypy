@@ -2,12 +2,13 @@ from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (
     cpython_api, generic_cpy_call, CANNOT_FAIL, Py_ssize_t, Py_ssize_tP,
     PyVarObject, Py_TPFLAGS_HEAPTYPE, Py_LT, Py_LE, Py_EQ, Py_NE, Py_GT,
-    Py_GE, CONST_STRING, FILEP, fwrite)
+    Py_GE, CONST_STRING, FILEP, fwrite, build_type_checkers)
 from pypy.module.cpyext.pyobject import (
     PyObject, PyObjectP, create_ref, from_ref, Py_IncRef, Py_DecRef,
     track_reference, get_typedescr, RefcountState)
 from pypy.module.cpyext.typeobject import PyTypeObjectPtr
 from pypy.module.cpyext.pyerrors import PyErr_NoMemory, PyErr_BadInternalCall
+from pypy.module._file.interp_file import W_File
 from pypy.objspace.std.objectobject import W_ObjectObject
 from pypy.objspace.std.typeobject import W_TypeObject
 from pypy.interpreter.error import OperationError
@@ -428,6 +429,8 @@ def PyObject_Print(space, w_obj, fp, flags):
         rffi.free_nonmovingbuffer(data, buf)
     return 0
 
+PyFile_Check, PyFile_CheckExact = build_type_checkers("File", W_File)
+
 @cpython_api([CONST_STRING, CONST_STRING], PyObject)
 def PyFile_FromString(space, filename, mode):
     """
@@ -437,4 +440,3 @@ def PyFile_FromString(space, filename, mode):
     w_filename = space.wrap(rffi.charp2str(filename))
     w_mode = space.wrap(rffi.charp2str(mode))
     return space.call_method(space.builtin, 'file', w_filename, w_mode)
-

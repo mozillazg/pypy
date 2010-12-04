@@ -791,21 +791,6 @@ def Py_LeaveRecursiveCall(space, ):
     successful invocation of Py_EnterRecursiveCall()."""
     raise NotImplementedError
 
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyFile_Check(space, p):
-    """Return true if its argument is a PyFileObject or a subtype of
-    PyFileObject.
-    
-    Allowed subtypes to be accepted."""
-    raise NotImplementedError
-
-@cpython_api([PyObject], rffi.INT_real, error=CANNOT_FAIL)
-def PyFile_CheckExact(space, p):
-    """Return true if its argument is a PyFileObject, but not a subtype of
-    PyFileObject.
-    """
-    raise NotImplementedError
-
 @cpython_api([FILE, rffi.CCHARP, rffi.CCHARP, rffi.INT_real], PyObject)
 def PyFile_FromFile(space, fp, name, mode, close):
     """Create a new PyFileObject from the already-open standard C file
