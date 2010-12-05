@@ -235,8 +235,7 @@ class RefcountState:
         ref = self.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
         if not ref:
             if DEBUG_REFCOUNT:
-                print >>sys.stderr, "Borrowed object is already gone:", \
-                      hex(containee)
+                print >>sys.stderr, "Borrowed object is already gone:", w_obj
             return
 
         containee_ptr = rffi.cast(ADDR, ref)
