@@ -232,3 +232,34 @@ class AppTestObject(AppTestCpythonExtensionBase):
              """)])
         assert module.dump(self.tmpname, None)
         assert open(self.tmpname).read() == 'None'
+
+    def test_functioncallobjargs(self):
+        module = self.import_extension('callfunctiontest', [
+            ("test_CallFunctionObjArgs", "METH_NOARGS",
+             """
+                PyObject * value = PyString_FromString("13");
+                PyObject * radix = PyInt_FromLong(16);
+                PyObject * result = PyObject_CallFunctionObjArgs((PyObject *)&PyInt_Type, value, radix, NULL);
+
+                if (!PyInt_Check(result))
+                {
+                    Py_DECREF(value);
+                    Py_DECREF(radix);
+                    Py_DECREF(result);
+                    Py_RETURN_FALSE;
+                }
+                
+                if (PyInt_AsLong(result) != 0x13)
+                {
+                    Py_DECREF(value);
+                    Py_DECREF(radix);
+                    Py_DECREF(result);
+                    Py_RETURN_FALSE;
+                }
+
+                Py_DECREF(value);
+                Py_DECREF(radix);
+                Py_DECREF(result);
+                Py_RETURN_TRUE;
+             """)])
+        assert module.test_CallFunctionObjArgs()
