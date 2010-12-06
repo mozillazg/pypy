@@ -1,5 +1,6 @@
 from pypy.jit.codewriter import support, heaptracker
-from pypy.jit.codewriter.regalloc import perform_register_allocation
+from pypy.tool.algo.regalloc import perform_register_allocation
+from pypy.jit.metainterp.history import getkind
 from pypy.jit.codewriter.flatten import flatten_graph, KINDS
 from pypy.jit.codewriter.assembler import Assembler, JitCode
 from pypy.jit.codewriter.jtransform import transform_graph
@@ -43,7 +44,8 @@ class CodeWriter(object):
         # step 2: perform register allocation on it
         regallocs = {}
         for kind in KINDS:
-            regallocs[kind] = perform_register_allocation(graph, kind)
+            kind_filter = lambda v: getkind(v.concretetype) == kind
+            regallocs[kind] = perform_register_allocation(graph, kind_filter)
         #
         # step 3: flatten the graph to produce human-readable "assembler",
         # which means mostly producing a linear list of operations and

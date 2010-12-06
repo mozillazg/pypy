@@ -176,6 +176,9 @@ class FunctionCodeGenerator(object):
             if self.lltypemap(v) is Void and special_case_void:
                 return '/* nothing */'
             else:
+                s = self.gcpolicy.special_ref_name_for_local(v)
+                if s:
+                    return s
                 return LOCALVAR % v.name
         elif isinstance(v, Constant):
             value = llvalue_from_constant(v)
@@ -190,6 +193,7 @@ class FunctionCodeGenerator(object):
 
     def cfunction_declarations(self):
         # declare the local variables, excluding the function arguments
+        self.gcpolicy.prepare_declarations_in_function(self)
         seen = {}
         for a in self.graph.getargs():
             seen[a.name] = True
@@ -199,6 +203,8 @@ class FunctionCodeGenerator(object):
             name = v.name
             if name not in seen:
                 seen[name] = True
+                if self.gcpolicy.special_ref_name_for_local(v):
+                    continue
                 result = cdecl(self.lltypename(v), LOCALVAR % name) + ';'
                 if self.lltypemap(v) is Void:
                     continue  #result = '/*%s*/' % result
@@ -209,6 +215,8 @@ class FunctionCodeGenerator(object):
     # ____________________________________________________________
 
     def cfunction_body(self):
+        for line in self.gcpolicy.extra_declarations_in_function(self):
+            yield line
         graph = self.graph
         yield 'goto block0;'    # to avoid a warning "this label is not used"
 
@@ -232,6 +240,8 @@ class FunctionCodeGenerator(object):
                 retval = self.expr(block.inputargs[0])
                 if self.exception_policy != "exc_helper":
                     yield 'RPY_DEBUG_RETURN();'
+                for line in self.gcpolicy.extra_code_at_return(self):
+                    yield line
                 yield 'return %s;' % retval
                 continue
             elif block.exitswitch is None:
@@ -306,7 +316,7 @@ class FunctionCodeGenerator(object):
             if a2type is Void:
                 continue
             src = self.expr(a1)
-            dest = LOCALVAR % a2.name
+            dest = self.expr(a2)
             assignments.append((a2typename, dest, src))
         for line in gen_assignments(assignments):
             yield line

@@ -9,6 +9,18 @@ extern char __gccallshapes;
 extern long pypy_asm_stackwalk(void*, void*);
 #define __gcnoreorderhack __gcmapend
 
+struct pypy_stackref_s {
+  struct pypy_stackref_s *prev;
+  long bitfield;
+};
+extern struct pypy_stackref_s *pypy_stackref;
+extern void *get_pypy_stackref(void);
+
+#ifndef PYPY_NOT_MAIN_FILE
+struct pypy_stackref_s *pypy_stackref = NULL;
+void *get_pypy_stackref(void) { return pypy_stackref; }
+#endif
+
 /* The following pseudo-instruction is used by --gcrootfinder=asmgcc
    just after a call to tell gcc to put a GCROOT mark on each gc-pointer
    local variable.  All such local variables need to go through a "v =
