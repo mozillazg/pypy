@@ -205,6 +205,8 @@ class CBuilder(object):
             name = self.config.translation.gctransformer
             if self.config.translation.gcrootfinder == "asmgcc":
                 name = "%s+asmgcroot" % (name,)
+            elif self.config.translation.gcrootfinder == "inlinestack":
+                name = "%s+inlinestack" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
 

@@ -1,12 +1,12 @@
 import sys
-from pypy.objspace.flow.model import Constant
+from pypy.objspace.flow.model import Constant, Variable
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
 from pypy.rpython.lltypesystem.lltype import \
      typeOf, Ptr, ContainerType, RttiStruct, \
      RuntimeTypeInfo, getRuntimeTypeInfo, top_container
 from pypy.rpython.memory.gctransform import \
-     refcounting, boehm, framework, asmgcroot
+     refcounting, boehm, framework, asmgcroot, inlinestack
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
@@ -69,6 +69,15 @@ class BasicGcPolicy(object):
 
     def rtti_type(self):
         return ''
+
+    def prepare_declarations_in_function(self, funcgen):
+        pass
+    def special_ref_name_for_local(self, v):
+        return False
+    def extra_declarations_in_function(self, funcgen):
+        return []
+    def extra_code_at_return(self, funcgen):
+        return []
 
     def OP_GC_PUSH_ALIVE_PYOBJ(self, funcgen, op):
         expr = funcgen.expr(op.args[0])
@@ -384,6 +393,65 @@ class AsmGcRootFrameworkGcPolicy(FrameworkGcPolicy):
     def OP_GC_STACK_BOTTOM(self, funcgen, op):
         return 'pypy_asm_stack_bottom();'
 
+class InlineStackFrameworkGcPolicy(FrameworkGcPolicy):
+    transformerclass = inlinestack.InlineStackFrameworkGCTransformer
+
+    def prepare_declarations_in_function(self, funcgen):
+        self.gcvar2index = {}    # xxx should be stored on 'funcgen', ideally
+        self.all_gcvars = []
+        for block in funcgen.graph.iterblocks():
+            for op in block.operations:
+                if op.opname == 'gc_push_roots':
+                    for v in op.args:
+                        if not isinstance(v, Variable):
+                            continue
+                        assert funcgen.lltypemap(v) is not lltype.Void
+                        vname = v.name
+                        if vname not in self.gcvar2index:
+                            self.gcvar2index[vname] = len(self.all_gcvars)
+                            self.all_gcvars.append((funcgen.lltypename(v),
+                                                    vname))
+
+    def special_ref_name_for_local(self, v):
+        if v.name in self.gcvar2index:
+            return 'ref.%s' % v.name
+        return None
+
+    def extra_declarations_in_function(self, funcgen):
+        if self.all_gcvars:
+            yield 'struct {'
+            yield '\tstruct pypy_stackref_s hdr;'
+            assert len(self.all_gcvars) < 32      # XXX fix this limitation
+            for vtype, vname in self.all_gcvars:
+                yield '\t%s;' % cdecl(vtype, vname)
+            yield '} ref;'
+            #
+            yield 'ref.hdr.prev = pypy_stackref;'
+            yield 'pypy_stackref = &ref.hdr;'
+            for argname, v in zip(funcgen.argnames(), funcgen.graph.getargs()):
+                s = self.special_ref_name_for_local(v)
+                if s:
+                    yield '%s = %s;' % (s, argname)
+
+    def extra_code_at_return(self, funcgen):
+        if self.all_gcvars:
+            yield 'pypy_stackref = ref.hdr.prev;'
+
+    def OP_GC_PUSH_ROOTS(self, funcgen, op):
+        bitfield = 0
+        vars = []
+        for v in op.args:
+            if isinstance(v, Variable):
+                bitfield |= 1 << self.gcvar2index[v.name]
+                vars.append(v.name)
+        if not self.all_gcvars:
+            assert not vars
+            return ''
+        result = 'ref.hdr.bitfield = %d;' % bitfield
+        if vars:
+            result += ' /* %s */' % (' '.join(vars),)
+        return result
+
 
 name_to_gcpolicy = {
     'boehm': BoehmGcPolicy,
@@ -391,6 +459,5 @@ name_to_gcpolicy = {
     'none': NoneGcPolicy,
     'framework': FrameworkGcPolicy,
     'framework+asmgcroot': AsmGcRootFrameworkGcPolicy,
+    'framework+inlinestack': InlineStackFrameworkGcPolicy,
 }
-
-

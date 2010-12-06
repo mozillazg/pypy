@@ -1,9 +1,9 @@
 import py, sys
 from pypy.jit.codewriter import support
-from pypy.jit.codewriter.regalloc import perform_register_allocation
+from pypy.tool.algo.regalloc import perform_register_allocation
 from pypy.jit.codewriter.flatten import flatten_graph, ListOfKind
 from pypy.jit.codewriter.format import assert_format
-from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.history import AbstractDescr, getkind
 from pypy.objspace.flow.model import Variable, Constant, SpaceOperation
 from pypy.objspace.flow.model import FunctionGraph, Block, Link
 from pypy.objspace.flow.model import c_last_exception
@@ -18,6 +18,10 @@ class TestRegAlloc:
         self.rtyper = support.annotate(func, values, type_system=type_system)
         return self.rtyper.annotator.translator.graphs
 
+    def perform_register_allocation(self, graph, kind):
+        kind_filter = lambda v: getkind(v.concretetype) == kind
+        return perform_register_allocation(graph, kind_filter)
+
     def check_assembler(self, graph, expected, transform=False,
                         callcontrol=None):
         # 'transform' can be False only for simple graphs.  More complex
@@ -26,8 +30,8 @@ class TestRegAlloc:
         if transform:
             from pypy.jit.codewriter.jtransform import transform_graph
             transform_graph(graph, callcontrol=callcontrol)
-        regalloc = perform_register_allocation(graph, 'int')
-        regalloc2 = perform_register_allocation(graph, 'ref')
+        regalloc = self.perform_register_allocation(graph, 'int')
+        regalloc2 = self.perform_register_allocation(graph, 'ref')
         ssarepr = flatten_graph(graph, {'int': regalloc,
                                         'ref': regalloc2})
         assert_format(ssarepr, expected)
@@ -36,7 +40,7 @@ class TestRegAlloc:
         def f(a, b):
             return a + b
         graph = self.make_graphs(f, [5, 6])[0]
-        regalloc = perform_register_allocation(graph, 'int')
+        regalloc = self.perform_register_allocation(graph, 'int')
         va, vb = graph.startblock.inputargs
         vc = graph.startblock.operations[0].result
         assert regalloc.getcolor(va) == 0
@@ -50,7 +54,7 @@ class TestRegAlloc:
                 a -= 1
             return b
         graph = self.make_graphs(f, [5, 6])[0]
-        regalloc = perform_register_allocation(graph, 'float')
+        regalloc = self.perform_register_allocation(graph, 'float')
         # assert did not crash
 
     def test_regalloc_loop(self):
@@ -285,18 +289,18 @@ class TestRegAlloc:
         self.check_assembler(graph, """
             residual_call_r_r $<* fn bar>, <Descr>, R[%r0] -> %r1
             -live-
-            residual_call_ir_r $<* fn g>, <Descr>, I[%i0], R[] -> %r2
+            residual_call_ir_r $<* fn g>, <Descr>, I[%i0], R[] -> %r1
             -live-
             catch_exception L1
-            ref_return %r2
+            ref_return %r1
             ---
             L1:
             goto_if_exception_mismatch $<* struct object_vtable>, L2
-            ref_copy %r0 -> %r2
+            ref_copy %r0 -> %r1
             last_exc_value -> %r0
             residual_call_r_r $<* fn foo>, <Descr>, R[%r0] -> %r0
             -live-
-            ref_return %r2
+            ref_return %r1
             ---
             L2:
             reraise
