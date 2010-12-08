@@ -130,8 +130,8 @@ class Arena(object):
     def mark_freed(self):
         self.freed = True    # this method is a hook for tests
 
-    def set_protect(self, accessible):
-        if not accessible:
+    def set_protect(self, inaccessible):
+        if inaccessible:
             assert self.protect_inaccessible is None
             saved = []
             for ptr in self.objectptrs.values():
@@ -383,15 +383,15 @@ def arena_new_view(ptr):
     """
     return Arena(ptr.arena.nbytes, False).getaddr(0)
 
-def arena_protect(arena_addr, size, accessible):
+def arena_protect(arena_addr, size, inaccessible):
     """For debugging, set or reset memory protection on an arena.
     For now, the starting point and size should reference the whole arena.
-    The value of 'accessible' is a boolean.
+    The value of 'inaccessible' is a boolean.
     """
     arena_addr = getfakearenaaddress(arena_addr)
     assert arena_addr.offset == 0
     assert size == arena_addr.arena.nbytes
-    arena_addr.arena.set_protect(accessible)
+    arena_addr.arena.set_protect(inaccessible)
 
 # ____________________________________________________________
 #
@@ -503,6 +503,37 @@ else:
     # them immediately.
     clear_large_memory_chunk = llmemory.raw_memclear
 
+if os.name == "posix":
+    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    _eci = ExternalCompilationInfo(includes=['sys/mman.h'])
+    raw_mprotect = rffi.llexternal('mprotect',
+                                   [llmemory.Address, rffi.SIZE_T, rffi.INT],
+                                   rffi.INT,
+                                   sandboxsafe=True, _nowrapper=True,
+                                   compilation_info=_eci)
+    def llimpl_arena_protect(addr, size, inaccessible):
+        # do some alignment
+        start = rffi.cast(lltype.Signed, addr)
+        end = start + size
+        start = (start + 4095) & ~ 4095
+        end = end & ~ 4095
+        if end > start:
+            if inaccessible:
+                prot = 0
+            else:
+                from pypy.rlib.rmmap import PROT_READ, PROT_WRITE
+                prot = PROT_READ | PROT_WRITE
+            raw_mprotect(rffi.cast(llmemory.Address, start),
+                         rffi.cast(rffi.SIZE_T, end - start),
+                         rffi.cast(rffi.INT, prot))
+            # ignore potential errors
+    has_protect = True
+
+else:
+    def llimpl_arena_protect(addr, size, inaccessible):
+        pass
+    has_protect = False
+
 
 llimpl_malloc = rffi.llexternal('malloc', [lltype.Signed], llmemory.Address,
                                 sandboxsafe=True, _nowrapper=True)
@@ -571,6 +602,11 @@ def llimpl_arena_new_view(addr):
 register_external(arena_new_view, [llmemory.Address], llmemory.Address,
                   'll_arena.arena_new_view', llimpl=llimpl_arena_new_view,
                   llfakeimpl=arena_new_view, sandboxsafe=True)
+
+register_external(arena_protect, [llmemory.Address, lltype.Signed,
+                                  lltype.Bool], lltype.Void,
+                  'll_arena.arena_protect', llimpl=llimpl_arena_protect,
+                  llfakeimpl=arena_protect, sandboxsafe=True)
 
 def llimpl_getfakearenaaddress(addr):
     return addr
