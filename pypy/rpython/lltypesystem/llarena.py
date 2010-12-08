@@ -511,27 +511,34 @@ if os.name == "posix":
                                    rffi.INT,
                                    sandboxsafe=True, _nowrapper=True,
                                    compilation_info=_eci)
-    def llimpl_arena_protect(addr, size, inaccessible):
-        # do some alignment
-        start = rffi.cast(lltype.Signed, addr)
-        end = start + size
-        start = (start + 4095) & ~ 4095
-        end = end & ~ 4095
-        if end > start:
-            if inaccessible:
-                prot = 0
-            else:
-                from pypy.rlib.rmmap import PROT_READ, PROT_WRITE
-                prot = PROT_READ | PROT_WRITE
-            raw_mprotect(rffi.cast(llmemory.Address, start),
-                         rffi.cast(rffi.SIZE_T, end - start),
-                         rffi.cast(rffi.INT, prot))
-            # ignore potential errors
+    def llimpl_protect(addr, size, inaccessible):
+        if inaccessible:
+            prot = 0
+        else:
+            from pypy.rlib.rmmap import PROT_READ, PROT_WRITE
+            prot = PROT_READ | PROT_WRITE
+        raw_mprotect(addr, rffi.cast(rffi.SIZE_T, size),
+                     rffi.cast(rffi.INT, prot))
+        # ignore potential errors
+    has_protect = True
+
+elif os.name == 'nt':
+    def llimpl_protect(addr, size, inaccessible):
+        from pypy.rlib.rmmap import VirtualProtect, LPDWORD
+        if inaccessible:
+            from pypy.rlib.rmmap import PAGE_NOACCESS as newprotect
+        else:
+            from pypy.rlib.rmmap import PAGE_READWRITE as newprotect
+        arg = lltype.malloc(LPDWORD.TO, 1, zero=True, flavor='raw')
+        VirtualProtect(rffi.cast(rffi.VOIDP, addr),
+                       rffi.cast(rffi.SIZE_T, size),
+                       newprotect,
+                       arg)
+        # ignore potential errors
+        lltype.free(arg, flavor='raw')
     has_protect = True
 
 else:
-    def llimpl_arena_protect(addr, size, inaccessible):
-        pass
     has_protect = False
 
 
@@ -603,6 +610,16 @@ register_external(arena_new_view, [llmemory.Address], llmemory.Address,
                   'll_arena.arena_new_view', llimpl=llimpl_arena_new_view,
                   llfakeimpl=arena_new_view, sandboxsafe=True)
 
+def llimpl_arena_protect(addr, size, inaccessible):
+    if has_protect:
+        # do some alignment
+        start = rffi.cast(lltype.Signed, addr)
+        end = start + size
+        start = (start + 4095) & ~ 4095
+        end = end & ~ 4095
+        if end > start:
+            llimpl_protect(rffi.cast(llmemory.Address, start), end-start,
+                           inaccessible)
 register_external(arena_protect, [llmemory.Address, lltype.Signed,
                                   lltype.Bool], lltype.Void,
                   'll_arena.arena_protect', llimpl=llimpl_arena_protect,
