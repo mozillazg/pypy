@@ -6,6 +6,7 @@ from pypy.rpython.lltypesystem.llarena import arena_reserve, arena_free
 from pypy.rpython.lltypesystem.llarena import round_up_for_allocation
 from pypy.rpython.lltypesystem.llarena import ArenaError, arena_new_view
 from pypy.rpython.lltypesystem.llarena import arena_shrink_obj
+from pypy.rpython.lltypesystem.llarena import arena_protect
 
 def test_arena():
     S = lltype.Struct('S', ('x',lltype.Signed))
@@ -282,3 +283,19 @@ def test_shrink_obj():
     arena_reserve(a, size_gc_header + llmemory.sizeof(S, 10))
     arena_shrink_obj(a, size_gc_header + llmemory.sizeof(S, 5))
     arena_reset(a, size_gc_header + llmemory.sizeof(S, 5), False)
+
+def test_arena_protect():
+    a = arena_malloc(100, False)
+    S = lltype.Struct('S', ('x', lltype.Signed))
+    arena_reserve(a, llmemory.sizeof(S))
+    p = llmemory.cast_adr_to_ptr(a, lltype.Ptr(S))
+    p.x = 123
+    assert p.x == 123
+    arena_protect(a, 100, accessible=False)
+    py.test.raises(ArenaError, arena_reserve, a + 48, llmemory.sizeof(S))
+    py.test.raises(RuntimeError, "p.x")
+    py.test.raises(RuntimeError, "p.x = 124")
+    arena_protect(a, 100, accessible=True)
+    assert p.x == 123
+    p.x = 125
+    assert p.x == 125
