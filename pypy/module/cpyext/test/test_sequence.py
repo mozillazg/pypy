@@ -75,8 +75,10 @@ class TestSequence(BaseApiTest):
         value = api.PyInt_FromLong(42)
         tup = api.PyTuple_New(1)
 
-        exc = raises(OperationError, sequence.PySequence_SetItem, space, tup, 0, value)
-        assert exc.value.match(space, space.w_TypeError)
+        result = api.PySequence_SetItem(tup, 0, value)
+        assert result == -1
+        assert api.PyErr_Occurred()
+        assert api.PyErr_ExceptionMatches(space.w_TypeError)
 
         l = api.PyList_New(1)
 
@@ -84,4 +86,9 @@ class TestSequence(BaseApiTest):
         assert result != -1
 
         assert space.eq_w(space.getitem(l, space.wrap(0)), value)
-        api.Py_DecRef(value)
+
+        result = api.PySequence_SetItem(l, 3, value)
+        assert result == -1
+        assert api.PyErr_Occurred()
+        assert api.PyErr_ExceptionMatches(space.w_IndexError)
+        api.PyErr_Clear()
