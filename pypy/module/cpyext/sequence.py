@@ -6,6 +6,9 @@ from pypy.module.cpyext.pyobject import PyObject, borrow_from
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.objspace.std import listobject, tupleobject
 
+from pypy.module.cpyext.tupleobject import PyTuple_Check, PyTuple_SetItem
+from pypy.module.cpyext.object import Py_IncRef
+
 @cpython_api([PyObject, Py_ssize_t], PyObject)
 def PySequence_Repeat(space, w_obj, count):
     """Return the result of repeating sequence object o count times, or NULL on
@@ -124,3 +127,24 @@ def PySeqIter_New(space, w_seq):
     """
     return space.iter(w_seq)
 
+@cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
+def PySequence_SetItem(space, w_o, i, w_v):
+    """Assign object v to the ith element of o.  Returns -1 on failure.  This
+    is the equivalent of the Python statement o[i] = v.  This function does
+    not steal a reference to v.
+    
+    This function used an int type for i. This might require
+    changes in your code for properly supporting 64-bit systems."""
+
+    Py_IncRef(space, w_v) # XXX: seriously CPython, why should one Py*_SetItem steal but not another!?
+    if PyTuple_Check(space, w_o):
+        return PyTuple_SetItem(space, w_o, i, w_v)
+
+    try:
+        space.setitem(w_o, space.wrap(i), w_v)
+        return 0
+    except OperationError, e:
+        if e.match(space, space.w_IndexError):
+            return -1
+        else:
+            raise

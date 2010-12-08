@@ -2223,16 +2223,6 @@ def PySequence_InPlaceRepeat(space, o, count):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
-def PySequence_SetItem(space, o, i, v):
-    """Assign object v to the ith element of o.  Returns -1 on failure.  This
-    is the equivalent of the Python statement o[i] = v.  This function does
-    not steal a reference to v.
-    
-    This function used an int type for i. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, Py_ssize_t], rffi.INT_real, error=-1)
 def PySequence_DelItem(space, o, i):
     """Delete the ith element of object o.  Returns -1 on failure.  This is the
