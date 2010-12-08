@@ -72,22 +72,18 @@ class TestSequence(BaseApiTest):
         assert exc.value.match(space, space.w_StopIteration)
 
     def test_setitem(self, space, api):
-        def expect_error(w_o, i=0, v=42, w_err=space.w_TypeError):
-            value = space.wrap(v)
-            result = api.PySequence_SetItem(w_o, i, value)
-            assert result == -1
-            assert api.PyErr_Occurred()
-            assert api.PyErr_ExceptionMatches(w_err)
-            api.PyErr_Clear()
+        w_value = space.wrap(42)
 
         l = api.PyList_New(1)
-        w_value = space.wrap(42)
         result = api.PySequence_SetItem(l, 0, w_value)
         assert result != -1
         assert space.eq_w(space.getitem(l, space.wrap(0)), w_value)
 
-        expect_error(l, 3,
-                     w_err=space.w_IndexError)
+        self.raises(space, api, IndexError, api.PySequence_SetItem,
+                    l, 3, w_value)
 
-        expect_error(api.PyTuple_New(1)) # TypeError
-        expect_error(space.newdict()) # TypeError
+        self.raises(space, api, TypeError, api.PySequence_SetItem,
+                    api.PyTuple_New(1), 0, w_value)
+
+        self.raises(space, api, TypeError, api.PySequence_SetItem,
+                    space.newdict(), 0, w_value)
