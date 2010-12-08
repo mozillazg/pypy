@@ -41,14 +41,18 @@ from functools import wraps
 from pypy.tool.call_logger import CallLogger, SkipArgument
 from pypy.rlib.objectmodel import specialize
 
+from pypy.rlib.debug import debug_start, debug_stop
+
 def debug_func(category):
     def decorator(f):
         from pypy.rlib.debug import debug_start, debug_stop
         @wraps(f)
         def debugged(*args):
-            debug_start(category)
-            result = f(*args)
-            debug_stop(category)
+            try:
+                debug_start(category)
+                result = f(*args)
+            finally:
+                debug_stop(category)
             return result
         return debugged
     return decorator
@@ -56,6 +60,7 @@ def debug_func(category):
 class CPyExtCallLogger(object):
     def __init__(self):
         self.indentation = 0
+        self.enabled = True
 
     def get_indent_string(self, depth=None):
         if depth is None:
@@ -63,46 +68,54 @@ class CPyExtCallLogger(object):
 
         return ' ' * depth
 
-    def log(self, logstr, depth=0):
+    def log(self, logstr, depth=None):
+        if depth is None:
+            depth = self.indentation
+
         from pypy.rlib.debug import debug_print
-        debug_print(self.get_indent_string() + logstr)
+        debug_print(self.get_indent_string(depth) + logstr)
 
     def log_cpyext_rpython_call(self, f):
-        if DEBUG_WRAPPER:
-            name = f.__name__
-            #@debug_func('cpyext')
-            @wraps(f)
-            def wrapped(space, *args):
+        name = f.__name__
+        @wraps(f)
+        def wrapped(space, *args):
+            if self.enabled:
                 argstrs = [repr(x) for x in args]
                 argstr = ', '.join(argstrs)
 
-                self.log("%s(%s)" % (name, argstr), depth=self.indentation)
-                self.indentation += 1
-                result = f(space, *args)
-                self.indentation -= 1
-                self.log("%s(%s)->%s" % (name, argstr, repr(result)), depth=self.indentation)
+                debug_start('cpyext')
+                self.log("%s(%s)" % (name, argstr))
+                try:
+                    self.indentation += 1
+                    result = f(space, *args)
+                finally:
+                    self.indentation -= 1
+                    debug_stop('cpyext')
+                self.log("%s(%s)->%s" % (name, argstr, repr(result)))
                 return result
-            return wrapped
-        else:
-            return f
+            else:
+                return f(space, *args)
+        return wrapped
 
     def log_cpyext_call(self, space, f):
-        if DEBUG_WRAPPER:
-            from pypy.module.cpyext.pyobject import make_ref, from_ref
-            from pypy.module.cpyext.object import PyObject_Repr
-            from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef 
-            api_function = f.api_func
-            argtypes = api_function.argtypes
-            result_type = api_function.restype
-            argwrapped = [name.startswith("w_") for name in api_function.argnames]
-            assert len(api_function.argtypes) == len(api_function.argnames)
-            argtypes_enum_ui = unrolling_iterable(enumerate(zip(api_function.argtypes,
-                [name.startswith("w_") for name in api_function.argnames]), start=1))
-            name = f.__name__ # XXX: above line was overwriting name "name"
+        from pypy.module.cpyext.object import PyObject_Repr
+        from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef 
 
-            #@debug_func('cpyext')
-            @wraps(f)
-            def wrapped(*args):
+        api_function = f.api_func
+        argtypes = api_function.argtypes
+
+        assert len(api_function.argtypes) == len(api_function.argnames)
+        argtypes_enum_ui = unrolling_iterable(enumerate(zip(argtypes,
+            [arg_name.startswith("w_") for arg_name in api_function.argnames]), start=1))
+
+        result_type = api_function.restype
+        name = f.__name__
+
+        @wraps(f)
+        def wrapped(*args):
+            if self.enabled:
+                # XXX: looks suspiciously like wrapper
+                self.enabled = False
                 argstrs = []
                 for i, (argtype, is_wrapped) in argtypes_enum_ui:
                     arg = args[i]
@@ -113,24 +126,28 @@ class CPyExtCallLogger(object):
                             py_repr = PyObject_Repr(space, w_arg)
                             Py_DecRef(space, w_arg)
                             argstrs.append(space.str_w(py_repr))
-                        else:
-                            argstrs.append(repr(w_arg))
-                    else:
-                        argstrs.append(repr(arg))
-                argstr = ', '.join(argstrs)
+                            continue
 
-                self.log("%s(%s)" % (name, argstr), depth=self.indentation)
-                self.indentation += 1
-                result = f(*args)
-                self.indentation -= 1
+                    argstrs.append(repr(arg))
+                argstr = ', '.join(argstrs)
+                self.enabled = True
+
+                debug_start('cpyext')
+                self.log("%s(%s)" % (name, argstr))
+                try:
+                    self.indentation += 1
+                    result = f(*args)
+                finally:
+                    self.indentation -= 1
+                    debug_stop('cpyext')
 
                 result_format = repr(result) # TODO: format nicer!
-                self.log("%s(%s)->%s" % (name, argstr, result_format), depth=self.indentation)
+                self.log("%s(%s)->%s" % (name, argstr, result_format))
                 return result
+            else:
+                return f(*args)
 
-            return wrapped
-        else:
-            return f
+        return wrapped
 
 cpy_logger = CPyExtCallLogger()
 log_call = cpy_logger.log_cpyext_call
@@ -628,8 +645,12 @@ def make_wrapper(space, callable):
             if failed:
                 error_value = callable.api_func.error_value
                 if error_value is CANNOT_FAIL:
-                    raise SystemError("The function '%s' was not supposed to fail"
-                                      % (callable.__name__,))
+                    if not we_are_translated():
+                        raise SystemError("The function '%s' was not supposed to fail.  Failed with %s"
+                                          % (callable.__name__, e))
+                    else:
+                        raise SystemError("The function '%s' was not supposed to fail"
+                                          % (callable.__name__,))
                 retval = error_value
 
             elif is_PyObject(callable.api_func.restype):
