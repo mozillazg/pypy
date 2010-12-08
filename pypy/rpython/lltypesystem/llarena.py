@@ -26,6 +26,7 @@ class Arena(object):
         self.objectptrs = {}        # {offset: ptr-to-container}
         self.objectsizes = {}       # {offset: size}
         self.freed = False
+        self.protect_inaccessible = None
         self.reset(zero)
 
     def __repr__(self):
@@ -59,6 +60,8 @@ class Arena(object):
     def check(self):
         if self.freed:
             raise ArenaError("arena was already freed")
+        if self.protect_inaccessible is not None:
+            raise ArenaError("arena is currently arena_protect()ed")
 
     def _getid(self):
         address, length = self.usagemap.buffer_info()
@@ -126,6 +129,21 @@ class Arena(object):
 
     def mark_freed(self):
         self.freed = True    # this method is a hook for tests
+
+    def set_protect(self, accessible):
+        if not accessible:
+            assert self.protect_inaccessible is None
+            saved = []
+            for ptr in self.objectptrs.values():
+                obj = ptr._obj
+                saved.append((obj, obj._protect()))
+            self.protect_inaccessible = saved
+        else:
+            assert self.protect_inaccessible is not None
+            saved = self.protect_inaccessible
+            for obj, storage in saved:
+                obj._unprotect(storage)
+            self.protect_inaccessible = None
 
 class fakearenaaddress(llmemory.fakeaddress):
 
@@ -364,6 +382,16 @@ def arena_new_view(ptr):
     """Return a fresh memory view on an arena
     """
     return Arena(ptr.arena.nbytes, False).getaddr(0)
+
+def arena_protect(arena_addr, size, accessible):
+    """For debugging, set or reset memory protection on an arena.
+    For now, the starting point and size should reference the whole arena.
+    The value of 'accessible' is a boolean.
+    """
+    arena_addr = getfakearenaaddress(arena_addr)
+    assert arena_addr.offset == 0
+    assert size == arena_addr.arena.nbytes
+    arena_addr.arena.set_protect(accessible)
 
 # ____________________________________________________________
 #
