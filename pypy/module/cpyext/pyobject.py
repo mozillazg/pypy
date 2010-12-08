@@ -11,6 +11,8 @@ from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.rweakref import RWeakKeyDictionary
 from pypy.rpython.annlowlevel import llhelper
 
+from pypy.rlib.debug import debug_start, debug_print, debug_stop
+
 #________________________________________________________
 # type description
 
@@ -235,7 +237,9 @@ class RefcountState:
         ref = self.py_objects_w2r.get(w_obj, lltype.nullptr(PyObject.TO))
         if not ref:
             if DEBUG_REFCOUNT:
-                print >>sys.stderr, "Borrowed object is already gone:", w_obj
+                debug_start('cpyext-refcount')
+                debug_print("Borrowed object is already gone:" + str(w_obj))
+                debug_stop('cpyext-refcount')
             return
 
         containee_ptr = rffi.cast(ADDR, ref)
@@ -256,12 +260,11 @@ def debug_refcount(*args, **kwargs):
     frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
     assert not kwargs
     frame = sys._getframe(frame_stackdepth)
-    sys.stderr.write(cpy_logger.get_indent_string())
-    sys.stderr.write(frame.f_code.co_name)
-    sys.stderr.write(' ')
-    for arg in args:
-        print >>sys.stderr, arg,
-    print >>sys.stderr
+    debug_start('cpyext-refcount')
+    debug_print(cpy_logger.get_indent_string())
+    debug_print(frame.f_code.co_name)
+    debug_print(' '.join([frame.f_code.co_name] + [str(arg) for arg in args]))
+    debug_stop('cpyext-refcount')
 
 def create_ref(space, w_obj, itemcount=0):
     """
@@ -377,7 +380,9 @@ def Py_DecRef(space, obj):
         if not we_are_translated() and obj.c_ob_refcnt < 0:
             message = "Negative refcount for obj %s with type %s" % (
                 obj, rffi.charp2str(obj.c_ob_type.c_tp_name))
-            print >>sys.stderr, message
+            debug_start('cpyext-refcount')
+            debug_print(message)
+            debug_stop('cpyext-refcount')
             assert False, message
 
 @cpython_api([PyObject], lltype.Void)
