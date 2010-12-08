@@ -136,10 +136,5 @@ def PySequence_SetItem(space, w_o, i, w_v):
     This function used an int type for i. This might require
     changes in your code for properly supporting 64-bit systems."""
 
-    try:
-        Py_IncRef(space, w_v)
-        space.setitem(w_o, space.wrap(i), w_v)
-        return 0
-    except:
-        Py_DecRef(space, w_v)
-        raise
+    space.setitem(w_o, space.wrap(i), w_v)
+    return 0
