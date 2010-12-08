@@ -70,3 +70,21 @@ class TestSequence(BaseApiTest):
         assert space.unwrap(space.next(w_iter)) == 2
         exc = raises(OperationError, space.next, w_iter)
         assert exc.value.match(space, space.w_StopIteration)
+
+    def test_setitem(self, space, api):
+        value = api.PyInt_FromLong(42)
+        tup = api.PyTuple_New(1)
+
+        result = api.PySequence_SetItem(tup, 0, value)
+        assert result != -1
+
+        assert space.eq_w(space.getitem(tup, space.wrap(0)), value)
+
+        l = api.PyList_New(1)
+
+        result = api.PySequence_SetItem(l, 0, value)
+        assert result != -1
+
+        assert space.eq_w(space.getitem(l, space.wrap(0)), value)
+        api.Py_DecRef(value)
+
