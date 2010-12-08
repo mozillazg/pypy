@@ -72,23 +72,22 @@ class TestSequence(BaseApiTest):
         assert exc.value.match(space, space.w_StopIteration)
 
     def test_setitem(self, space, api):
-        value = api.PyInt_FromLong(42)
-        tup = api.PyTuple_New(1)
-
-        result = api.PySequence_SetItem(tup, 0, value)
-        assert result == -1
-        assert api.PyErr_Occurred()
-        assert api.PyErr_ExceptionMatches(space.w_TypeError)
+        def expect_error(w_o, i=0, v=42, w_err=space.w_TypeError):
+            value = space.wrap(v)
+            result = api.PySequence_SetItem(w_o, i, value)
+            assert result == -1
+            assert api.PyErr_Occurred()
+            assert api.PyErr_ExceptionMatches(w_err)
+            api.PyErr_Clear()
 
         l = api.PyList_New(1)
-
-        result = api.PySequence_SetItem(l, 0, value)
+        w_value = space.wrap(42)
+        result = api.PySequence_SetItem(l, 0, w_value)
         assert result != -1
+        assert space.eq_w(space.getitem(l, space.wrap(0)), w_value)
 
-        assert space.eq_w(space.getitem(l, space.wrap(0)), value)
+        expect_error(l, 3,
+                     w_err=space.w_IndexError)
 
-        result = api.PySequence_SetItem(l, 3, value)
-        assert result == -1
-        assert api.PyErr_Occurred()
-        assert api.PyErr_ExceptionMatches(space.w_IndexError)
-        api.PyErr_Clear()
+        expect_error(api.PyTuple_New(1)) # TypeError
+        expect_error(space.newdict()) # TypeError

@@ -9,6 +9,8 @@ from pypy.objspace.std import listobject, tupleobject
 from pypy.module.cpyext.tupleobject import PyTuple_Check, PyTuple_SetItem
 from pypy.module.cpyext.object import Py_IncRef, Py_DecRef
 
+from pypy.module.cpyext.dictobject import PyDict_Check
+
 @cpython_api([PyObject, Py_ssize_t], PyObject)
 def PySequence_Repeat(space, w_obj, count):
     """Return the result of repeating sequence object o count times, or NULL on
@@ -136,5 +138,7 @@ def PySequence_SetItem(space, w_o, i, w_v):
     This function used an int type for i. This might require
     changes in your code for properly supporting 64-bit systems."""
 
+    if PyDict_Check(space, w_o) or not PySequence_Check(space, w_o):
+        raise OperationError(space.w_TypeError, "object doesn't support sequence assignment") # FIXME: format like CPython
     space.setitem(w_o, space.wrap(i), w_v)
     return 0
