@@ -1087,6 +1087,10 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
+    bhimpl_getfield_gc_i_invariant = bhimpl_getfield_gc_i
+    bhimpl_getfield_gc_r_invariant = bhimpl_getfield_gc_r
+    bhimpl_getfield_gc_f_invariant = bhimpl_getfield_gc_f
+
     bhimpl_getfield_vable_i = bhimpl_getfield_gc_i
     bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
     bhimpl_getfield_vable_f = bhimpl_getfield_gc_f

@@ -87,7 +87,7 @@ LLFLAVOR = {'gc'   : 'gc',
 # a linked-list of assembler codes to invalidate in case jit_invariant_fields
 # are modified
 ASMCODE = lltype.GcForwardReference()
-ASMCODE.become(GcStruct('asmcode', ('address', llmemory.Address),
+ASMCODE.become(GcStruct('asmcode', ('address', llmemory.GCREF),
                         ('next', lltype.Ptr(ASMCODE))))
 
 def cast_vtable_to_typeptr(vtable):
@@ -148,6 +148,9 @@ class ClassRepr(AbstractClassRepr):
             #
             self.rbase = getclassrepr(self.rtyper, self.classdef.basedef)
             self.rbase.setup()
+            # jit_invariant_fields
+            jit_inv_fields = self.classdef.classdesc.classdict.get(
+                '_jit_invariant_fields_')
             kwds = {'hints': {'immutable': True}}
             vtable_type = Struct('%s_vtable' % self.classdef.name,
                                  ('super', self.rbase.vtable_type),
@@ -517,7 +520,9 @@ class InstanceRepr(AbstractInstanceRepr):
         # for virtualizables; see rvirtualizable2.py
         if (op == 'setfield' and cname.value.startswith('inst_') and
             cname.value[len('inst_'):] in self.jit_invariant_fields):
-            llops.genop('jit_invariant_setfield', [])
+            name = cname.value
+            cname = Constant('asmcodes_' + name[len('inst_'):], lltype.Void)
+            llops.genop('jit_invariant_setfield', [vinst, cname])
 
     def new_instance(self, llops, classcallhop=None):
         """Build a new instance, without calling __init__."""

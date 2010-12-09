@@ -723,7 +723,7 @@ class BasicTests:
 
     def test_getfield_jit_invariant(self):
         class A(object):
-            _jit_invariant_fields_ = 'x'
+            _jit_invariant_fields_ = ['x']
 
         a1 = A()
         a1.x = 5
@@ -738,6 +738,31 @@ class BasicTests:
             return a.x
         res = self.interp_operations(f, [-3])
         self.check_operations_history(getfield_gc = 0)
+
+    def test_setfield_jit_invariant(self):
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        a = A()
+        a.x = 1
+
+        myjitdriver = JitDriver(greens = [], reds = ['i'])
+
+        @dont_look_inside
+        def g(i):
+            if i == 5:
+                a.x = 5
+
+        def f():
+            i = 0
+            while i < 10:
+                myjitdriver.can_enter_jit(i=i)
+                myjitdriver.jit_merge_point(i=i)
+                g(i)
+                i += a.x
+
+        self.meta_interp(f, [])
+        self.check_loop_count(2)
 
     def test_setfield_bool(self):
         class A:

@@ -1,5 +1,6 @@
 import py, os, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem.rclass import ASMCODE
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -508,6 +509,14 @@ class MIFrame(object):
     opimpl_getfield_gc_i_pure = _opimpl_getfield_gc_pure_any
     opimpl_getfield_gc_r_pure = _opimpl_getfield_gc_pure_any
     opimpl_getfield_gc_f_pure = _opimpl_getfield_gc_pure_any
+
+    @arguments("box", "descr", "box")
+    def _opimpl_getfield_gc_invariant_any(self, box, fielddescr, c_func):
+        self.metainterp.invariant_structs.append((box, c_func))
+        return self.execute_with_descr(rop.GETFIELD_GC_PURE, fielddescr, box)
+    opimpl_getfield_gc_i_invariant = _opimpl_getfield_gc_invariant_any
+    opimpl_getfield_gc_r_invariant = _opimpl_getfield_gc_invariant_any
+    opimpl_getfield_gc_f_invariant = _opimpl_getfield_gc_invariant_any
 
     @arguments("orgpc", "box", "descr")
     def _opimpl_getfield_gc_greenfield_any(self, pc, box, fielddescr):
@@ -1163,10 +1172,9 @@ class MIFrame(object):
         assert i == len(allboxes)
         #
         effectinfo = descr.get_extra_info()
-        if (effectinfo is None or
-                effectinfo.extraeffect ==
-                             effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
-                assembler_call):
+        force_vir = effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE 
+        if (effectinfo is None or effectinfo.extraeffect >= force_vir or
+            assembler_call):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.clear_exception()
             self.metainterp.vable_and_vrefs_before_residual_call()
@@ -1178,6 +1186,8 @@ class MIFrame(object):
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
             self.metainterp.vable_after_residual_call()
+            if effectinfo.extraeffect >= effectinfo.EF_FORCES_JIT_INVARIANT:
+                self.generate_guard(rop.GUARD_NOT_INVARIANT, None)
             self.generate_guard(rop.GUARD_NOT_FORCED, None)
             self.metainterp.handle_possible_exception()
             return resbox
@@ -1393,6 +1403,7 @@ class MetaInterp(object):
         self.portal_trace_positions = []
         self.free_frames_list = []
         self.last_exc_value_box = None
+        self.invariant_structs = []
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -2226,6 +2237,14 @@ class MetaInterp(object):
         token = warmrunnerstate.get_assembler_token(greenargs, args)
         op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
         self.history.operations.append(op)
+
+    def remember_jit_invariants(self, token):
+        lltoken = lltype.cast_opaque_ptr(llmemory.GCREF, token)
+        seen = {}
+        for b_struct, c_appender in self.invariant_structs:
+            if (b_struct, c_appender) not in seen:
+                heaptracker.int2adr(c_func.value).ptr(b_struct.value, lltoken)
+                seend[(b_struct, c_appender)] = None
 
 # ____________________________________________________________
 

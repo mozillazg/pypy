@@ -488,6 +488,10 @@ class LLtypeCPU(BaseCPU):
         self.latest_frame = frame
         return self.get_fail_descr_from_number(fail_index)
 
+    def get_invalidate_asm(self, TP, fieldname):
+        def invalidate_asm(arg, fieldname):
+            XXX # write me
+        return invalidate_asm
 
 class OOtypeCPU_xxx_disabled(BaseCPU):
     is_oo = True
