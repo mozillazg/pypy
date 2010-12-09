@@ -3,9 +3,8 @@
 Environment variables can be used to fine-tune the following parameters:
     
  PYPY_GC_NURSERY        The nursery size.  Defaults to half the size of
-                        the L2 cache.  Try values like '1.2MB'.  Minimum
-                        is about 64KB.   Use 1 to force every malloc to
-                        do a minor collection for debugging.
+                        the L2 cache.  Try values like '1.2MB'.  Small values
+                        (like 1 or 1KB) are useful for debugging.
 
  PYPY_GC_MAJOR_COLLECT  Major collection memory factor.  Default is '1.82',
                         which means trigger a major collection when the
@@ -230,7 +229,7 @@ class MiniMarkGC(MovingGCBase):
         self.nursery      = NULL
         self.nursery_free = NULL
         self.nursery_top  = NULL
-        self.debug_always_do_minor_collect = False
+        self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
@@ -299,15 +298,20 @@ class MiniMarkGC(MovingGCBase):
             # From there on, the GC is fully initialized and the code
             # below can use it
             newsize = env.read_from_env('PYPY_GC_NURSERY')
-            # PYPY_GC_NURSERY=1 forces a minor collect for every malloc.
-            # Useful to debug external factors, like trackgcroot or the
-            # handling of the write barrier.
-            self.debug_always_do_minor_collect = newsize == 1
+            # PYPY_GC_NURSERY=smallvalue means that minor collects occur
+            # very frequently; the extreme case is PYPY_GC_NURSERY=1, which
+            # forces a minor collect for every malloc.  Useful to debug
+            # external factors, like trackgcroot or the handling of the write
+            # barrier.  Implemented by still using 'minsize' for the nursery
+            # size (needed to handle e.g. mallocs of 8249 words) but hacking
+            # at the current nursery position in collect_and_reserve().
             if newsize <= 0:
                 newsize = env.estimate_best_nursery_size()
                 if newsize <= 0:
                     newsize = defaultsize
-            newsize = max(newsize, minsize)
+            if newsize < minsize:
+                self.debug_tiny_nursery = newsize & ~(WORD-1)
+                newsize = minsize
             #
             major_coll = env.read_float_from_env('PYPY_GC_MAJOR_COLLECT')
             if major_coll > 1.0:
@@ -561,8 +565,9 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_free = result + totalsize
         ll_assert(self.nursery_free <= self.nursery_top, "nursery overflow")
         #
-        if self.debug_always_do_minor_collect:
-            self.nursery_free = self.nursery_top
+        if self.debug_tiny_nursery >= 0:   # for debugging
+            if self.nursery_top - self.nursery_free > self.debug_tiny_nursery:
+                self.nursery_free = self.nursery_top - self.debug_tiny_nursery
         #
         return result
     collect_and_reserve._dont_inline_ = True
