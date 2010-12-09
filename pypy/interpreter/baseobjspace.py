@@ -147,7 +147,7 @@ class W_Root(object):
 
     __already_enqueued_for_destruction = False
 
-    def _enqueue_for_destruction(self, space):
+    def _enqueue_for_destruction(self, space, call_user_del=True):
         """Put the object in the destructor queue of the space.
         At a later, safe point in time, UserDelAction will use
         space.userdel() to call the object's app-level __del__ method.
@@ -160,7 +160,8 @@ class W_Root(object):
                 return
             self.__already_enqueued_for_destruction = True
         self.clear_all_weakrefs()
-        space.user_del_action.register_dying_object(self)
+        if call_user_del:
+            space.user_del_action.register_dying_object(self)
 
     def _call_builtin_destructor(self):
         pass     # method overridden in typedef.py
@@ -861,14 +862,14 @@ class ObjSpace(object):
 
     def call_args_and_c_profile(self, frame, w_func, args):
         ec = self.getexecutioncontext()
-        ec.c_call_trace(frame, w_func)
+        ec.c_call_trace(frame, w_func, args)
         try:
             w_res = self.call_args(w_func, args)
         except OperationError, e:
             w_value = e.get_w_value(self)
             ec.c_exception_trace(frame, w_value)
             raise
-        ec.c_return_trace(frame, w_func)
+        ec.c_return_trace(frame, w_func, args)
         return w_res
 
     def call_method(self, w_obj, methname, *arg_w):
