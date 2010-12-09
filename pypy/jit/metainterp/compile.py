@@ -101,6 +101,7 @@ def compile_new_loop(metainterp, old_loop_tokens, start):
     if old_loop_token is not None:
         metainterp.staticdata.log("reusing old loop")
         return old_loop_token
+    metainterp.remember_jit_invariants(loop)
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
     record_loop_or_bridge(loop)
@@ -563,6 +564,7 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
         prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
+        metainterp.remember_jit_invariants(target_loop_token)
         record_loop_or_bridge(new_loop)
     return target_loop_token
 

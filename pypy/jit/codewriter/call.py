@@ -6,6 +6,7 @@
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.jitcode import JitCode
 from pypy.jit.codewriter.effectinfo import VirtualizableAnalyzer
+from pypy.jit.codewriter.effectinfo import JitInvariantAnalyzer
 from pypy.jit.codewriter.effectinfo import effectinfo_from_writeanalyze
 from pypy.jit.codewriter.effectinfo import EffectInfo, CallInfoCollection
 from pypy.translator.simplify import get_funcobj, get_functype
@@ -30,6 +31,7 @@ class CallControl(object):
             self.raise_analyzer = RaiseAnalyzer(translator)
             self.readwrite_analyzer = ReadWriteAnalyzer(translator)
             self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
+            self.jit_invariant_analyzer = JitInvariantAnalyzer(translator)
         #
         for index, jd in enumerate(jitdrivers_sd):
             jd.index = index
@@ -216,7 +218,9 @@ class CallControl(object):
                 assert not NON_VOID_ARGS, ("arguments not supported for "
                                            "loop-invariant function!")
         # build the extraeffect
-        if self.virtualizable_analyzer.analyze(op):
+        if self.jit_invariant_analyzer.analyze(op):
+            extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
+        elif self.virtualizable_analyzer.analyze(op):
             extraeffect = EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         elif loopinvariant:
             extraeffect = EffectInfo.EF_LOOPINVARIANT
@@ -234,7 +238,7 @@ class CallControl(object):
         #
         if pure or loopinvariant:
             assert effectinfo is not None
-            assert extraeffect != EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+            assert extraeffect < EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         #
         return self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
                                     effectinfo)

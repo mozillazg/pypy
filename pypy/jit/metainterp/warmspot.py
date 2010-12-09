@@ -820,10 +820,19 @@ class WarmRunnerDesc(object):
             op.opname = 'direct_call'
             op.args[:3] = [closures[key]]
 
+    def replace_jit_invariant_with_direct_call(self, op):
+        op.opname = 'direct_call'
+        ARG = op.args[0].concretetype
+        FUNC = lltype.Ptr(lltype.FuncType([ARG, lltype.Void], lltype.Void))
+        llptr = self.helper_func(FUNC, self.cpu.get_invalidate_asm(FUNC,
+                                                             op.args[1].value))
+        cptr = Constant(llptr, lltype.Void)
+        op.args = [cptr, op.args[0], op.args[1]]
+
     def rewrite_jit_invariant_setfield(self):
         graphs = self.translator.graphs
         for graph, block, i in find_jit_invariant_setfield(graphs):
-            del block.operations[i] # for now
+            self.replace_jit_invariant_with_direct_call(block.operations[i])
 
     def rewrite_force_virtual(self, vrefinfo):
         if self.cpu.ts.name != 'lltype':

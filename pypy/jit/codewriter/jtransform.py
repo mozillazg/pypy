@@ -32,6 +32,7 @@ class Transformer(object):
         self.cpu = cpu
         self.callcontrol = callcontrol
         self.portal_jd = portal_jd   # non-None only for the portal graph(s)
+        self.asmcodes_appenders = {}
 
     def transform(self, graph):
         self.graph = graph
@@ -554,6 +555,7 @@ class Transformer(object):
                                                 arrayfielddescr,
                                                 arraydescr)
             return []
+        extrargs = []
         # check for _immutable_fields_ hints
         if v_inst.concretetype.TO._immutable_field(c_fieldname.value):
             if (self.callcontrol is not None and
@@ -565,7 +567,10 @@ class Transformer(object):
         else:
             jit_inv = v_inst.concretetype.TO._hints.get('jit_invariant_fields')
             if jit_inv and op.args[1].value in jit_inv.fields:
-                pure = '_pure'
+                pure = '_invariant'
+                c_func = self._get_appender_for_asmcode(
+                    v_inst.concretetype.TO, c_fieldname.value)
+                extrargs.append(c_func)
             else:
                 pure = ''
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
@@ -573,7 +578,40 @@ class Transformer(object):
                                       c_fieldname.value)
         kind = getkind(RESULT)[0]
         return SpaceOperation('getfield_%s_%s%s' % (argname, kind, pure),
-                              [v_inst, descr], op.result)
+                              [v_inst, descr] + extrargs, op.result)
+
+    def _get_appender_for_asmcode(self, TP, fieldname):
+        from pypy.rpython.lltypesystem.rclass import ASMCODE
+        from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
+        from pypy.annotation.model import lltype_to_annotation
+
+        key = (TP, fieldname)
+        try:
+            return self.asmcodes_appenders[key]
+        except KeyError:
+            name = 'asmcodes_' + fieldname[len('inst_'):]
+            
+            def appender(inst, v):
+                inst = lltype.cast_opaque_ptr(lltype.Ptr(TP), inst)
+                new_asmcode = lltype.malloc(ASMCODE)
+                new_asmcode.address = v
+                next = getattr(inst, name)
+                if not next:
+                    setattr(inst, name, new_asmcode)
+                else:
+                    prev = next
+                    while next:
+                        prev = next
+                        next = next.next
+                    prev.next = new_asmcode
+
+            args_s = [lltype_to_annotation(llmemory.GCREF)] * 2
+            s_result = lltype_to_annotation(lltype.Void)
+            mixlevelann = MixLevelHelperAnnotator(self.cpu.rtyper)
+            c_appender = mixlevelann.constfunc(appender, args_s, s_result)
+            mixlevelann.finish()
+            self.asmcodes_appenders[key] = c_appender
+            return c_appender
 
     def rewrite_op_setfield(self, op):
         if self.is_typeptr_getset(op):

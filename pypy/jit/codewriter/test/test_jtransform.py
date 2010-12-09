@@ -956,7 +956,8 @@ def test_jit_invariant():
                         Constant('inst_x', lltype.Void)], v2)
     tr = Transformer(FakeCPU())
     op1 = tr.rewrite_operation(op)
-    assert op1.opname == 'getfield_gc_i_pure'
+    assert op1.opname == 'getfield_gc_i_invariant'
+    assert len(op1.args) == 3
 
 def test_jit_invariant_setfield():
     from pypy.rpython.rclass import FieldListAccessor

@@ -433,6 +433,7 @@ LL_OPERATIONS = {
     'jit_marker':           LLOp(),
     'jit_force_virtualizable':LLOp(canrun=True),
     'jit_force_virtual':    LLOp(canrun=True),
+    'jit_invariant_setfield': LLOp(canrun=True),
     'get_exception_addr':   LLOp(),
     'get_exc_value_addr':   LLOp(),
     'do_malloc_fixedsize_clear':LLOp(canraise=(MemoryError,),canunwindgc=True),

@@ -14,6 +14,7 @@ class EffectInfo(object):
     EF_CAN_RAISE                       = 2 #normal function (can raise)
     EF_LOOPINVARIANT                   = 3 #special: call it only once per loop
     EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE = 4 #can raise and force virtualizables
+    EF_FORCES_JIT_INVARIANT            = 5 #can force jit invariant
 
     # the 'oopspecindex' field is one of the following values:
     OS_NONE                     = 0    # normal case, no oopspec
@@ -141,6 +142,10 @@ class VirtualizableAnalyzer(BoolGraphAnalyzer):
     def analyze_simple_operation(self, op):
         return op.opname in ('jit_force_virtualizable',
                              'jit_force_virtual')
+
+class JitInvariantAnalyzer(BoolGraphAnalyzer):
+    def analyze_simple_operation(self, op):
+        return op.opname == 'jit_invariant_setfield'
 
 # ____________________________________________________________
 
