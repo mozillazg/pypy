@@ -153,6 +153,7 @@ def ftruncate(space, fd, length):
 ftruncate.unwrap_spec = [ObjSpace, "c_int", r_longlong]
 
 def fsync(space, w_fd):
+    """Force write of file with filedescriptor to disk."""
     fd = space.c_filedescriptor_w(w_fd)
     try:
         os.fsync(fd)
@@ -161,6 +162,8 @@ def fsync(space, w_fd):
 fsync.unwrap_spec = [ObjSpace, W_Root]
 
 def fdatasync(space, w_fd):
+    """Force write of file with filedescriptor to disk.
+Does not force update of metadata."""
     fd = space.c_filedescriptor_w(w_fd)
     try:
         os.fdatasync(fd)
@@ -169,6 +172,8 @@ def fdatasync(space, w_fd):
 fdatasync.unwrap_spec = [ObjSpace, W_Root]
 
 def fchdir(space, w_fd):
+    """Change to the directory of the given file descriptor.  fildes must be
+opened on a directory, not a file."""
     fd = space.c_filedescriptor_w(w_fd)
     try:
         os.fchdir(fd)
@@ -548,6 +553,14 @@ def rename(space, w_old, w_new):
     except OSError, e:
         raise wrap_oserror(space, e) 
 rename.unwrap_spec = [ObjSpace, W_Root, W_Root]
+
+def mkfifo(space, w_filename, mode=0666):
+    """Create a FIFO (a POSIX named pipe)."""
+    try:
+        dispatch_filename(rposix.mkfifo)(space, w_filename, mode)
+    except OSError, e: 
+        raise wrap_oserror2(space, e, w_filename)
+mkfifo.unwrap_spec = [ObjSpace, W_Root, "c_int"]
 
 def umask(space, mask):
     "Set the current numeric umask and return the previous umask."

@@ -659,6 +659,15 @@ class AppTestPosix:
             f.close()
             os.chown(self.path, os.getuid(), os.getgid())
 
+    if hasattr(os, 'mkfifo'):
+        def test_mkfifo(self):
+            os = self.posix
+            os.mkfifo(self.path2 + 'test_mkfifo', 0666)
+            st = os.lstat(self.path2 + 'test_mkfifo')
+            import stat
+            assert stat.S_ISFIFO(st.st_mode)
+
+
 class AppTestEnvironment(object):
     def setup_class(cls): 
         cls.space = space 
