@@ -1388,6 +1388,20 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int, int], s_None, llimpl=kill_llimpl,
                       export_name="ll_os.ll_os_kill")
 
+    @registering_if(os, 'killpg')
+    def register_os_killpg(self):
+        os_killpg = self.llexternal('killpg', [rffi.INT, rffi.INT],
+                                    rffi.INT)
+
+        def killpg_llimpl(pid, sig):
+            res = rffi.cast(lltype.Signed, os_killpg(rffi.cast(rffi.INT, pid),
+                                                     rffi.cast(rffi.INT, sig)))
+            if res < 0:
+                raise OSError(rposix.get_errno(), "os_killpg failed")
+
+        return extdef([int, int], s_None, llimpl=killpg_llimpl,
+                      export_name="ll_os.ll_os_killpg")
+
     @registering_if(os, 'link')
     def register_os_link(self):
         os_link = self.llexternal('link', [rffi.CCHARP, rffi.CCHARP],

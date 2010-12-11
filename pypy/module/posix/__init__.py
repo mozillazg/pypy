@@ -88,6 +88,8 @@ corresponding Unix manual entries for more information on calls."""
     if hasattr(os, 'kill') and sys.platform != 'win32':
         interpleveldefs['kill'] = 'interp_posix.kill'
         interpleveldefs['abort'] = 'interp_posix.abort'
+    if hasattr(os, 'killpg'):
+        interpleveldefs['killpg'] = 'interp_posix.killpg'
     if hasattr(os, 'getpid'):
         interpleveldefs['getpid'] = 'interp_posix.getpid'
     if hasattr(os, 'link'):

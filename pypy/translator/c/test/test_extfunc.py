@@ -539,6 +539,40 @@ elif hasattr(os, 'waitpid'):
         # for what reason do they want us to shift by 8? See the doc
         assert status1 >> 8 == 4
 
+if hasattr(os, 'kill'):
+    def test_kill_to_send_sigusr1():
+        import signal
+        from pypy.module.signal import interp_signal
+        def does_stuff():
+            interp_signal.pypysig_setflag(signal.SIGUSR1)
+            os.kill(os.getpid(), signal.SIGUSR1)
+            interp_signal.pypysig_ignore(signal.SIGUSR1)
+            while True:
+                n = interp_signal.pypysig_poll()
+                if n < 0 or n == signal.SIGUSR1:
+                    break
+            return n
+        f1 = compile(does_stuff, [])
+        got_signal = f1()
+        assert got_signal == signal.SIGUSR1
+
+if hasattr(os, 'killpg'):
+    def test_killpg():
+        import signal
+        from pypy.module.signal import interp_signal
+        def does_stuff():
+            interp_signal.pypysig_setflag(signal.SIGUSR1)
+            os.killpg(os.getpgrp(), signal.SIGUSR1)
+            interp_signal.pypysig_ignore(signal.SIGUSR1)
+            while True:
+                n = interp_signal.pypysig_poll()
+                if n < 0 or n == signal.SIGUSR1:
+                    break
+            return n
+        f1 = compile(does_stuff, [])
+        got_signal = f1()
+        assert got_signal == signal.SIGUSR1
+
 if hasattr(os, 'chown') and hasattr(os, 'lchown'):
     def test_os_chown_lchown():
         path1 = udir.join('test_os_chown_lchown-1.txt')
