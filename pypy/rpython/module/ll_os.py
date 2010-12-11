@@ -99,7 +99,7 @@ class UnicodeTraits:
         return 'll_os.ll_os_w' + name
 
 def registering_str_unicode(posixfunc, condition=True):
-    if not condition:
+    if not condition or posixfunc is None:
         return registering(None, condition=False)
 
     func_name = posixfunc.__name__
@@ -1322,6 +1322,33 @@ class RegisterOs(BaseLazyRegistering):
 
         return extdef([traits.str, traits.str], s_None, llimpl=rename_llimpl,
                       export_name=traits.ll_os_name('rename'))
+
+    @registering_str_unicode(getattr(os, 'mkfifo', None))
+    def register_os_mkfifo(self, traits):
+        os_mkfifo = self.llexternal(traits.posix_function_name('mkfifo'),
+                                    [traits.CCHARP, rffi.MODE_T], rffi.INT)
+
+        def mkfifo_llimpl(path, mode):
+            res = rffi.cast(lltype.Signed, os_mkfifo(path, mode))
+            if res < 0:
+                raise OSError(rposix.get_errno(), "os_mkfifo failed")
+
+        return extdef([traits.str, int], s_None, llimpl=mkfifo_llimpl,
+                      export_name=traits.ll_os_name('mkfifo'))
+
+    @registering_str_unicode(getattr(os, 'mknod', None))
+    def register_os_mknod(self, traits):
+        os_mknod = self.llexternal(traits.posix_function_name('mknod'),
+                                   [traits.CCHARP, rffi.MODE_T, rffi.INT],
+                                   rffi.INT)      # xxx: actually ^^^ dev_t
+
+        def mknod_llimpl(path, mode, dev):
+            res = rffi.cast(lltype.Signed, os_mknod(path, mode, dev))
+            if res < 0:
+                raise OSError(rposix.get_errno(), "os_mknod failed")
+
+        return extdef([traits.str, int, int], s_None, llimpl=mknod_llimpl,
+                      export_name=traits.ll_os_name('mknod'))
 
     @registering(os.umask)
     def register_os_umask(self):

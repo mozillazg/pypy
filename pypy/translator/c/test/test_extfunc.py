@@ -404,6 +404,28 @@ def test_os_rename():
     assert os.path.exists(tmpfile2)
     assert not os.path.exists(tmpfile1)
 
+if hasattr(os, 'mkfifo'):
+    def test_os_mkfifo():
+        tmpfile = str(udir.join('test_os_mkfifo.txt'))
+        def does_stuff():
+            os.mkfifo(tmpfile, 0666)
+        f1 = compile(does_stuff, [])
+        f1()
+        import stat
+        st = os.lstat(tmpfile)
+        assert stat.S_ISFIFO(st.st_mode)
+
+if hasattr(os, 'mknod'):
+    def test_os_mknod():
+        import stat
+        tmpfile = str(udir.join('test_os_mknod.txt'))
+        def does_stuff():
+            os.mknod(tmpfile, 0600 | stat.S_IFIFO, 0)
+        f1 = compile(does_stuff, [])
+        f1()
+        st = os.lstat(tmpfile)
+        assert stat.S_ISFIFO(st.st_mode)
+
 def test_os_umask():
     def does_stuff():
         mask1 = os.umask(0660)
