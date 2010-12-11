@@ -135,6 +135,13 @@ def rmdir(path):
     else:
         return os.rmdir(path.as_bytes())
 
+@specialize.argtype(0)
+def mkfifo(path, mode):
+    if isinstance(path, str):
+        os.mkfifo(path, mode)
+    else:
+        os.mkfifo(path.as_bytes(), mode)
+
 if os.name == 'nt':
     import nt
     def _getfullpathname(path):
