@@ -562,6 +562,19 @@ def mkfifo(space, w_filename, mode=0666):
         raise wrap_oserror2(space, e, w_filename)
 mkfifo.unwrap_spec = [ObjSpace, W_Root, "c_int"]
 
+def mknod(space, w_filename, mode=0600, device=0):
+    """Create a filesystem node (file, device special file or named pipe)
+named filename. mode specifies both the permissions to use and the
+type of node to be created, being combined (bitwise OR) with one of
+S_IFREG, S_IFCHR, S_IFBLK, and S_IFIFO. For S_IFCHR and S_IFBLK,
+device defines the newly created device special file (probably using
+os.makedev()), otherwise it is ignored."""
+    try:
+        dispatch_filename(rposix.mknod)(space, w_filename, mode, device)
+    except OSError, e: 
+        raise wrap_oserror2(space, e, w_filename)
+mknod.unwrap_spec = [ObjSpace, W_Root, "c_int", "c_int"]
+
 def umask(space, mask):
     "Set the current numeric umask and return the previous umask."
     prevmask = os.umask(mask)
