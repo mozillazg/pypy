@@ -539,6 +539,28 @@ elif hasattr(os, 'waitpid'):
         # for what reason do they want us to shift by 8? See the doc
         assert status1 >> 8 == 4
 
+if hasattr(os, 'chown') and hasattr(os, 'lchown'):
+    def test_os_chown_lchown():
+        path1 = udir.join('test_os_chown_lchown-1.txt')
+        path2 = udir.join('test_os_chown_lchown-2.txt')
+        path1.write('foobar')
+        path2.mksymlinkto('some-broken-symlink')
+        tmpfile1 = str(path1)
+        tmpfile2 = str(path2)
+        def does_stuff():
+            # xxx not really a test, just checks that they are callable
+            os.chown(tmpfile1, os.getuid(), os.getgid())
+            os.lchown(tmpfile1, os.getuid(), os.getgid())
+            os.lchown(tmpfile2, os.getuid(), os.getgid())
+            try:
+                os.chown(tmpfile2, os.getuid(), os.getgid())
+            except OSError:
+                pass
+            else:
+                raise AssertionError("os.chown(broken symlink) should raise")
+        f1 = compile(does_stuff, [])
+        f1()
+
 # ____________________________________________________________
 
 def _real_getenv(var):
