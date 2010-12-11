@@ -1471,6 +1471,25 @@ class RegisterOs(BaseLazyRegistering):
         return extdef([int], s_None, llimpl=_exit_llimpl,
                       export_name="ll_os.ll_os__exit")
 
+    @registering_if(os, 'nice')
+    def register_os_nice(self):
+        os_nice = self.llexternal('nice', [rffi.INT], rffi.INT)
+
+        def nice_llimpl(inc):
+            # Assume that the system provides a standard-compliant version
+            # of nice() that returns the new priority.  Nowadays, FreeBSD
+            # might be the last major non-compliant system (xxx check me).
+            rposix.set_errno(0)
+            res = rffi.cast(lltype.Signed, os_nice(inc))
+            if res == -1:
+                err = rposix.get_errno()
+                if err != 0:
+                    raise OSError(err, "os_nice failed")
+            return res
+
+        return extdef([int], int, llimpl=nice_llimpl,
+                      export_name="ll_os.ll_os_nice")
+
 # --------------------------- os.stat & variants ---------------------------
 
     @registering(os.fstat)
