@@ -1011,6 +1011,15 @@ def getloadavg(space):
                            space.wrap(load[2])])
 getloadavg.unwrap_spec = [ObjSpace]
 
+def nice(space, inc):
+    "Decrease the priority of process by inc and return the new priority."
+    try:
+        res = os.nice(inc)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.wrap(res)
+nice.unwrap_spec = [ObjSpace, "c_int"]
+
 if _WIN:
     from pypy.rlib import rwin32
 

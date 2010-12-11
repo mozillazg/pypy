@@ -119,6 +119,8 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['mkfifo'] = 'interp_posix.mkfifo'
     if hasattr(os, 'mknod'):
         interpleveldefs['mknod'] = 'interp_posix.mknod'
+    if hasattr(os, 'nice'):
+        interpleveldefs['nice'] = 'interp_posix.nice'
 
     for name in ['setsid', 'getuid', 'geteuid', 'getgid', 'getegid', 'setuid',
                  'seteuid', 'setgid', 'setegid', 'getpgrp', 'setpgrp',

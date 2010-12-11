@@ -696,6 +696,21 @@ class AppTestPosix:
                     assert stat.S_ISCHR(st.st_mode)
                     assert st.st_rdev == 0x105
 
+    if hasattr(os, 'nice') and hasattr(os, 'fork') and hasattr(os, 'waitpid'):
+        def test_nice(self):
+            os = self.posix
+            myprio = os.nice(0)
+            #
+            pid = os.fork()
+            if pid == 0:    # in the child
+                res = os.nice(3)
+                os._exit(res)
+            #
+            pid1, status1 = os.waitpid(pid, 0)
+            assert pid1 == pid
+            assert os.WIFEXITED(status1)
+            assert os.WEXITSTATUS(status1) == myprio + 3
+
 
 class AppTestEnvironment(object):
     def setup_class(cls): 
