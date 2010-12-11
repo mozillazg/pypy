@@ -598,6 +598,14 @@ def kill(space, pid, sig):
         raise wrap_oserror(space, e)
 kill.unwrap_spec = [ObjSpace, "c_int", "c_int"]
 
+def killpg(space, pgid, sig):
+    "Kill a process group with a signal."
+    try:
+        os.killpg(pgid, sig)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+killpg.unwrap_spec = [ObjSpace, "c_int", "c_int"]
+
 def abort(space):
     """Abort the interpreter immediately.  This 'dumps core' or otherwise fails
 in the hardest way possible on the hosting operating system."""
