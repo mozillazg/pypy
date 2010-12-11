@@ -115,6 +115,8 @@ corresponding Unix manual entries for more information on calls."""
         interpleveldefs['ttyname'] = 'interp_posix.ttyname'
     if hasattr(os, 'getloadavg'):
         interpleveldefs['getloadavg'] = 'interp_posix.getloadavg'
+    if hasattr(os, 'mkfifo'):
+        interpleveldefs['mkfifo'] = 'interp_posix.mkfifo'
 
     for name in ['setsid', 'getuid', 'geteuid', 'getgid', 'getegid', 'setuid',
                  'seteuid', 'setgid', 'setegid', 'getpgrp', 'setpgrp',
