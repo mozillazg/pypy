@@ -4,6 +4,7 @@ import os, time, sys
 from pypy.tool.udir import udir
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.translator.c.test.test_genc import compile
+from pypy.translator.c.test.test_standalone import StandaloneTests
 posix = __import__(os.name)
 
 # note: clock synchronizes itself!
@@ -805,3 +806,19 @@ if hasattr(os, 'fchdir'):
         finally:
             os.chdir(localdir)
         assert res == True
+
+# ____________________________________________________________
+
+
+class TestExtFuncStandalone(StandaloneTests):
+
+    if hasattr(os, 'nice'):
+        def test_os_nice(self):
+            def does_stuff(argv):
+                res =  os.nice(3)
+                print 'os.nice returned', res
+                return 0
+            t, cbuilder = self.compile(does_stuff)
+            data = cbuilder.cmdexec('')
+            res = os.nice(0) + 3
+            assert data.startswith('os.nice returned %d\n' % res)
