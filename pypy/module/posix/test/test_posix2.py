@@ -659,6 +659,14 @@ class AppTestPosix:
             f.close()
             os.chown(self.path, os.getuid(), os.getgid())
 
+    if hasattr(os, 'lchown'):
+        def test_lchown(self):
+            os = self.posix
+            os.unlink(self.path)
+            raises(OSError, os.lchown, self.path, os.getuid(), os.getgid())
+            os.symlink('foobar', self.path)
+            os.lchown(self.path, os.getuid(), os.getgid())
+
     if hasattr(os, 'mkfifo'):
         def test_mkfifo(self):
             os = self.posix

@@ -1000,6 +1000,14 @@ def chown(space, path, uid, gid):
     return space.w_None
 chown.unwrap_spec = [ObjSpace, str, "c_nonnegint", "c_nonnegint"]
 
+def lchown(space, path, uid, gid):
+    try:
+        os.lchown(path, uid, gid)
+    except OSError, e:
+        raise wrap_oserror(space, e, path)
+    return space.w_None
+lchown.unwrap_spec = [ObjSpace, str, "c_nonnegint", "c_nonnegint"]
+
 def getloadavg(space):
     try:
         load = os.getloadavg()

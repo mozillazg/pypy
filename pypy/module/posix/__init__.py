@@ -71,6 +71,8 @@ corresponding Unix manual entries for more information on calls."""
 
     if hasattr(os, 'chown'):
         interpleveldefs['chown'] = 'interp_posix.chown'
+    if hasattr(os, 'lchown'):
+        interpleveldefs['lchown'] = 'interp_posix.lchown'
     if hasattr(os, 'ftruncate'):
         interpleveldefs['ftruncate'] = 'interp_posix.ftruncate'
     if hasattr(os, 'fsync'):
