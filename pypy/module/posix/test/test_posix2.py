@@ -667,6 +667,35 @@ class AppTestPosix:
             import stat
             assert stat.S_ISFIFO(st.st_mode)
 
+    if hasattr(os, 'mknod'):
+        def test_mknod(self):
+            import stat
+            os = self.posix
+            # not very useful: os.mknod() without specifying 'mode'
+            os.mknod(self.path2 + 'test_mknod-1')
+            st = os.lstat(self.path2 + 'test_mknod-1')
+            assert stat.S_ISREG(st.st_mode)
+            # os.mknod() with S_IFIFO
+            os.mknod(self.path2 + 'test_mknod-2', 0600 | stat.S_IFIFO)
+            st = os.lstat(self.path2 + 'test_mknod-2')
+            assert stat.S_ISFIFO(st.st_mode)
+
+        def test_mknod_with_ifchr(self):
+            # os.mknod() with S_IFCHR
+            # -- usually requires root priviledges --
+            os = self.posix
+            if hasattr(os.lstat('.'), 'st_rdev'):
+                import stat
+                try:
+                    os.mknod(self.path2 + 'test_mknod-3', 0600 | stat.S_IFCHR,
+                             0x105)
+                except OSError, e:
+                    skip("os.mknod() with S_IFCHR: got %r" % (e,))
+                else:
+                    st = os.lstat(self.path2 + 'test_mknod-3')
+                    assert stat.S_ISCHR(st.st_mode)
+                    assert st.st_rdev == 0x105
+
 
 class AppTestEnvironment(object):
     def setup_class(cls): 

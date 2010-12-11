@@ -142,6 +142,13 @@ def mkfifo(path, mode):
     else:
         os.mkfifo(path.as_bytes(), mode)
 
+@specialize.argtype(0)
+def mknod(path, mode, device):
+    if isinstance(path, str):
+        os.mknod(path, mode, device)
+    else:
+        os.mknod(path.as_bytes(), mode, device)
+
 if os.name == 'nt':
     import nt
     def _getfullpathname(path):
