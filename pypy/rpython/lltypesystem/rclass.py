@@ -87,7 +87,7 @@ LLFLAVOR = {'gc'   : 'gc',
 # a linked-list of assembler codes to invalidate in case jit_invariant_fields
 # are modified
 ASMCODE = lltype.GcForwardReference()
-ASMCODE.become(GcStruct('asmcode', ('address', llmemory.GCREF),
+ASMCODE.become(GcStruct('asmcode', ('address', llmemory.WeakRefPtr),
                         ('next', lltype.Ptr(ASMCODE))))
 
 def cast_vtable_to_typeptr(vtable):

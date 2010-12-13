@@ -490,6 +490,13 @@ class LLtypeCPU(BaseCPU):
 
     def get_invalidate_asm(self, TP, fieldname):
         def invalidate_asm(arg, fieldname):
+            prev = getattr(arg, fieldname)
+            next = prev
+            while next:
+                prev = next
+                x = llmemory.weakref_deref(history.LoopToken._TYPE,
+                                           prev.address)
+                next = next.next
             XXX # write me
         return invalidate_asm
 
