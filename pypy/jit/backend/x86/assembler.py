@@ -235,7 +235,7 @@ class Assembler386(object):
                 mc.MOVSD_xs(i, 8*i)
             for i, reg in [(6, r9), (5, r8), (4, ecx),
                            (3, edx), (2, esi), (1, edi)]:
-                mc.MOV_rb(reg, -8*i)
+                mc.MOV_rb(reg.value, -8*i)
         #
         mc.MOV_rr(esp.value, ebp.value)
         mc.POP_r(ebp.value)
