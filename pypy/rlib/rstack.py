@@ -7,6 +7,7 @@ import inspect
 
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rarithmetic import r_uint
+from pypy.rlib import rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -67,13 +68,18 @@ def stack_check():
         return
     #
     # Else call the slow path
+    stack_check_slowpath(current)
+stack_check._always_inline_ = True
+
+@rgc.no_collect
+def stack_check_slowpath(current):
     if ord(_stack_too_big_slowpath(current)):
-        #
         # Now we are sure that the stack is really too big.  Note that the
         # stack_unwind implementation is different depending on if stackless
         # is enabled. If it is it unwinds the stack, otherwise it simply
         # raises a RuntimeError.
         stack_unwind()
+stack_check_slowpath._dont_inline_ = True
 
 # ____________________________________________________________
 
