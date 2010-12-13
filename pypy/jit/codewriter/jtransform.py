@@ -605,7 +605,8 @@ class Transformer(object):
                         next = next.next
                     prev.next = new_asmcode
 
-            args_s = [lltype_to_annotation(llmemory.GCREF)] * 2
+            args_s = [lltype_to_annotation(llmemory.GCREF),
+                      lltype_to_annotation(llmemory.WeakRefPtr)]
             s_result = lltype_to_annotation(lltype.Void)
             mixlevelann = MixLevelHelperAnnotator(self.cpu.rtyper)
             c_appender = mixlevelann.constfunc(appender, args_s, s_result)
