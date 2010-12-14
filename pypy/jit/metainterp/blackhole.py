@@ -1087,9 +1087,15 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
-    bhimpl_getfield_gc_i_invariant = bhimpl_getfield_gc_i
-    bhimpl_getfield_gc_r_invariant = bhimpl_getfield_gc_r
-    bhimpl_getfield_gc_f_invariant = bhimpl_getfield_gc_f
+    @arguments("cpu", "r", "d", "i", returns="i")
+    def bhimpl_getfield_gc_i_invariant(cpu, struct, fielddescr, ignored):
+        return cpu.bh_getfield_gc_i(struct, fielddescr)
+    @arguments("cpu", "r", "d", "i", returns="r")
+    def bhimpl_getfield_gc_r_invariant(cpu, struct, fielddescr, ignored):
+        return cpu.bh_getfield_gc_r(struct, fielddescr)
+    @arguments("cpu", "r", "d", "i", returns="f")
+    def bhimpl_getfield_gc_f_invariant(cpu, struct, fielddescr, ignored):
+        return cpu.bh_getfield_gc_f(struct, fielddescr)
 
     bhimpl_getfield_vable_i = bhimpl_getfield_gc_i
     bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
@@ -1241,6 +1247,8 @@ class BlackholeInterpreter(object):
             # because of GUARD_NONNULL_CLASS.
             pass
         #
+        elif opnum == rop.GUARD_NOT_INVARIANT:
+            pass
         elif (opnum == rop.GUARD_NO_EXCEPTION or
               opnum == rop.GUARD_EXCEPTION or
               opnum == rop.GUARD_NOT_FORCED):

@@ -725,7 +725,7 @@ class LoopToken(AbstractDescr):
     was compiled; but the LoopDescr remains alive and points to the
     generated assembler.
     """
-
+    # <hack> to make tests think we're dealing with an actual lltype
     _TYPE = lltype.Ptr(lltype.GcStruct('dummy struct for tests'))
 
     def _normalizedcontainer(self):
@@ -738,6 +738,7 @@ class LoopToken(AbstractDescr):
     _obj = property(_getobj)
     def _was_freed(self):
         return False
+    # </hack>
     
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None
@@ -750,6 +751,10 @@ class LoopToken(AbstractDescr):
     # CompiledLoopToken has its __del__ called, which frees the assembler
     # memory and the ResumeGuards.
     compiled_loop_token = None
+
+    invalidated = False
+    # if True means looptoken was invalidated by setting some field
+    # listed in jit_invariant_setfield that was read in this loop
 
     def __init__(self):
         # For memory management of assembled loops

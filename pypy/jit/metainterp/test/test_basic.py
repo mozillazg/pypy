@@ -746,23 +746,27 @@ class BasicTests:
         a = A()
         a.x = 1
 
-        myjitdriver = JitDriver(greens = [], reds = ['i'])
+        myjitdriver = JitDriver(greens = [], reds = ['i', 'total'])
 
         @dont_look_inside
         def g(i):
             if i == 5:
-                a.x = 5
+                a.x = 2
 
         def f():
             i = 0
-            while i < 10:
-                myjitdriver.can_enter_jit(i=i)
-                myjitdriver.jit_merge_point(i=i)
+            total = 0
+            while i < 20:
+                myjitdriver.can_enter_jit(i=i, total=total)
+                myjitdriver.jit_merge_point(i=i, total=total)
                 g(i)
                 i += a.x
+                total += i
+            return total
 
-        self.meta_interp(f, [])
+        assert self.meta_interp(f, []) == f()
         self.check_loop_count(2)
+        self.check_history(getfield_gc=0, getfield_gc_pure=0)
 
     def test_setfield_bool(self):
         class A:

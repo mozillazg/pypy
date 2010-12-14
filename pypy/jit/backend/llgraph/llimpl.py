@@ -164,6 +164,7 @@ TYPES = {
 
 class CompiledLoop(object):
     has_been_freed = False
+    invalidated = False
 
     def __init__(self):
         self.inputargs = []
@@ -293,6 +294,11 @@ def mark_as_free(loop):
     loop = _from_opaque(loop)
     assert not loop.has_been_freed
     loop.has_been_freed = True
+
+def mark_as_invalid(loop):
+    loop = _from_opaque(loop)
+    assert not loop.has_been_freed
+    loop.invalidated = True
 
 def compile_start_int_var(loop):
     return compile_start_ref_var(loop, lltype.Signed)
@@ -927,7 +933,10 @@ class Frame(object):
             raise GuardFailed
 
     def op_guard_not_invariant(self, descr):
-        pass
+        if self.loop.invalidated:
+            import pdb
+            pdb.set_trace()
+            raise GuardFailed
 
 class OOFrame(Frame):
 
@@ -1641,6 +1650,7 @@ setannotation(compile_add_fail, annmodel.SomeInteger())
 setannotation(compile_add_fail_arg, annmodel.s_None)
 setannotation(compile_redirect_fail, annmodel.s_None)
 setannotation(mark_as_free, annmodel.s_None)
+setannotation(mark_as_invalid, annmodel.s_None)
 
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)

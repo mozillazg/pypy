@@ -22,6 +22,7 @@ class TranslationTest:
         # - jitdriver hooks
         # - two JITs
         # - string concatenation, slicing and comparison
+        # - jit-invariants
 
         class Frame(object):
             _virtualizable2_ = ['i']
@@ -44,7 +45,20 @@ class TranslationTest:
                               get_jitcell_at=get_jitcell_at,
                               set_jitcell_at=set_jitcell_at,
                               get_printable_location=get_printable_location)
+
+
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        @dont_look_inside
+        def g(i):
+            if i == 13:
+                prebuilt_a.x = 2
+
+        prebuilt_a = A()
+
         def f(i):
+            prebuilt_a.x = 1
             for param in unroll_parameters:
                 defl = PARAMETERS[param]
                 jitdriver.set_param(param, defl)
@@ -58,7 +72,8 @@ class TranslationTest:
                 total += frame.i
                 if frame.i >= 20:
                     frame.i -= 2
-                frame.i -= 1
+                g(frame.i)
+                frame.i -= prebuilt_a.x
             return total * 10
         #
         myjitdriver2 = JitDriver(greens = ['g'], reds = ['m', 'x', 's'])
