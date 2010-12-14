@@ -1,5 +1,6 @@
 import py, os, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -2238,7 +2239,11 @@ class MetaInterp(object):
         self.history.operations.append(op)
 
     def remember_jit_invariants(self, loop):
-        lltoken_weakref = llmemory.weakref_create(loop.token)
+        if we_are_translated():
+            looptoken = cast_instance_to_base_ptr(loop.token)
+        else:
+            looptoken = loop.token
+        lltoken_weakref = llmemory.weakref_create(looptoken)
         seen = {}
         for b_struct, c_appender in self.invariant_structs:
             if (b_struct, c_appender) not in seen:

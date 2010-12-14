@@ -564,7 +564,7 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
         prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
-        metainterp.remember_jit_invariants(target_loop_token)
+        metainterp.remember_jit_invariants(new_loop)
         record_loop_or_bridge(new_loop)
     return target_loop_token
 
