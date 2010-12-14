@@ -934,8 +934,6 @@ class Frame(object):
 
     def op_guard_not_invariant(self, descr):
         if self.loop.invalidated:
-            import pdb
-            pdb.set_trace()
             raise GuardFailed
 
 class OOFrame(Frame):
