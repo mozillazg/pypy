@@ -490,8 +490,6 @@ class LLtypeCPU(BaseCPU):
 
     def get_invalidate_asm(self, TP, fieldname):
         def invalidate_asm(arg, fieldname):
-            import pdb
-            pdb.set_trace()
             next = getattr(arg, fieldname)
             while next:
                 prev = next
