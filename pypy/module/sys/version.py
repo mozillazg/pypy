@@ -32,6 +32,7 @@ def rev2int(rev):
 import pypy
 pypydir = os.path.dirname(os.path.abspath(pypy.__file__))
 del pypy
+from pypy.tool.version import get_mercurial_info
 
 import time as t
 gmtime = t.gmtime()
@@ -83,6 +84,18 @@ def get_subversion_info(space):
     return space.newtuple([space.wrap('PyPy'),
                            space.wrap(svnbranch),
                            space.wrap(str(svn_revision()))])
+
+
+def wrap_mercurial_info(space):
+    info = get_mercurial_info()
+    if info:
+        project, hgtag, hgid = info
+        return space.newtuple([space.wrap(project),
+                               space.wrap(hgtag),
+                               space.wrap(hgid)])
+    else:
+        return space.w_None
+
 
 def tuple2hex(ver):
     d = {'alpha':     0xA,
