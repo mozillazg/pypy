@@ -462,6 +462,16 @@ class AppTestSysModulePortedFromCPython:
         assert svnbranch == svnbranch.strip('/')
         assert revision.isdigit()
 
+    def test__mercurial(self):
+        import re
+        project, hgtag, hgid = sys._mercurial
+        assert project == 'PyPy'
+        # the tag or branch may be anything, including the empty string
+        assert isinstance(hgtag, str)
+        # the id is either nothing, or an id of 12 hash digits, with a possible
+        # suffix of '+' if there are local modifications
+        assert hgid == '' or re.match('[0-9a-f]{12}\+?', hgid)
+
     def test_trace_exec_execfile(self):
         found = []
         def do_tracing(f, *args):

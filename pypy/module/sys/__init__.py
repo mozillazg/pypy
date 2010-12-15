@@ -59,9 +59,8 @@ class Module(MixedModule):
         'pypy_version_info'     : 'version.get_pypy_version_info(space)',
         'pypy_svn_url'          : 'version.get_svn_url(space)',
         'subversion'            : 'version.get_subversion_info(space)',
+        '_mercurial'            : 'version.wrap_mercurial_info(space)',
         'hexversion'            : 'version.get_hexversion(space)',
-        'ps1'                   : 'space.wrap(">>>> ")', 
-        'ps2'                   : 'space.wrap(".... ")', 
 
         'displayhook'           : 'hook.displayhook', 
         '__displayhook__'       : 'hook.__displayhook__', 
