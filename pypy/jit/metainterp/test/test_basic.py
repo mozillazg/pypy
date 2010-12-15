@@ -741,12 +741,12 @@ class BasicTests:
 
     def test_setfield_jit_invariant(self):
         class A(object):
-            _jit_invariant_fields_ = ['x']
-
-        a = A()
-        a.x = 1
+            pass
+            #_jit_invariant_fields_ = ['x']
 
         myjitdriver = JitDriver(greens = [], reds = ['i', 'total'])
+        
+        a = A()
 
         @dont_look_inside
         def g(i):
@@ -754,6 +754,7 @@ class BasicTests:
                 a.x = 2
 
         def f():
+            a.x = 1
             i = 0
             total = 0
             while i < 20:
