@@ -741,8 +741,7 @@ class BasicTests:
 
     def test_setfield_jit_invariant(self):
         class A(object):
-            pass
-            #_jit_invariant_fields_ = ['x']
+            _jit_invariant_fields_ = ['x']
 
         myjitdriver = JitDriver(greens = [], reds = ['i', 'total'])
         
@@ -768,6 +767,37 @@ class BasicTests:
         assert self.meta_interp(f, []) == f()
         self.check_loop_count(2)
         self.check_history(getfield_gc=0, getfield_gc_pure=0)
+
+    def test_jit_invariant_bridge(self):
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        myjitdriver = JitDriver(greens = [], reds = ['i', 'total'])
+        
+        a = A()
+
+        @dont_look_inside
+        def g(i):
+            if i == 5:
+                a.x = 2
+
+        def f():
+            a.x = 1
+            i = 0
+            total = 0
+            while i < 40:
+                myjitdriver.can_enter_jit(i=i, total=total)
+                myjitdriver.jit_merge_point(i=i, total=total)
+                g(i)
+                i += a.x
+                if i > 18:
+                    i += 1
+                total += i
+            return total
+
+        assert self.meta_interp(f, []) == f()
+        self.check_loop_count(3)
+        self.check_history(getfield_gc=0, getfield_gc_pure=0)        
 
     def test_setfield_bool(self):
         class A:
