@@ -799,6 +799,38 @@ class BasicTests:
         self.check_loop_count(3)
         self.check_history(getfield_gc=0, getfield_gc_pure=0)        
 
+    def test_jit_invariant_entry_bridge(self):
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        myjitdriver = JitDriver(greens = [], reds = ['i', 'total', 'a'])
+        
+        def f(a):
+            i = 0
+            total = 0
+            while i < 30:
+                myjitdriver.can_enter_jit(i=i, total=total, a=a)
+                myjitdriver.jit_merge_point(i=i, total=total, a=a)
+                a = hint(a, promote=True)
+                total += a.x
+                if i > 11:
+                    i += 1
+                i += 1
+            return total
+
+        def main():
+            total = 0
+            a = A()
+            a.x = 1
+            total += f(a)
+            a.x = 2
+            total += f(a)
+            return total
+
+        assert self.meta_interp(main, []) == main()
+        self.check_loop_count(4)
+        self.check_history(getfield_gc=0, getfield_gc_pure=0)        
+
     def test_setfield_bool(self):
         class A:
             def __init__(self):
