@@ -329,7 +329,8 @@ class WarmEnterState(object):
                 if not confirm_enter_jit(*args):
                     return
                 loop_token = cell.get_entry_loop_token()
-                if loop_token is None:   # it was a weakref that has been freed
+                if loop_token is None or loop_token.invalidated:
+                    # it was a weakref that has been freed or invalidated
                     cell.counter = 0
                     return
                 # machine code was already compiled for these greenargs
