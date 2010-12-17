@@ -1,6 +1,7 @@
 syntax:glob
 *.py[co]
 *.sw[po]
+*~
 
 testresult
 site-packages
