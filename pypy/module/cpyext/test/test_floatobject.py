@@ -1,4 +1,6 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.module.cpyext.api import PyObject
 
 class TestFloatObject(BaseApiTest):
     def test_floatobject(self, space, api):
@@ -17,3 +19,18 @@ class TestFloatObject(BaseApiTest):
                 return 42.5
         assert space.eq_w(api.PyNumber_Float(space.wrap(Coerce())),
                           space.wrap(42.5))
+
+    def test_from_string(self, space, api):
+        def test_number(n, expectfail=False):
+            np = lltype.nullptr(rffi.CCHARPP.TO)
+            n_str = rffi.str2charp(str(n))
+            f = api.PyFloat_FromString(n_str, np)
+            rffi.free_charp(n_str)
+            if expectfail:
+                assert f == None
+            else:
+                assert space.eq_w(f, space.wrap(n))
+
+        test_number(0.0)
+        test_number(42.0)
+        test_number("abcd", True)
