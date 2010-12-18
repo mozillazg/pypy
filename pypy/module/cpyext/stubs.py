@@ -928,13 +928,6 @@ def PyFile_WriteString(space, s, p):
     failure; the appropriate exception will be set."""
     raise NotImplementedError
 
-@cpython_api([PyObject, rffi.CCHARPP], PyObject)
-def PyFloat_FromString(space, str, pend):
-    """Create a PyFloatObject object based on the string value in str, or
-    NULL on failure.  The pend argument is ignored.  It remains only for
-    backward compatibility."""
-    raise NotImplementedError
-
 @cpython_api([rffi.VOIDP_real], PyObject)
 def PyFloat_GetInfo(space, info):
     """Return a structseq instance which contains information about the
