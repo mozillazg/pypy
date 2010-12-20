@@ -1885,5 +1885,36 @@ class BaseLLtypeTests(BasicTests):
 
         self.meta_interp(main, [])
 
+    def test_rerased_is_integer(self):
+        from pypy.rlib import rerased
+        driver = JitDriver(greens = [], reds = ['n', 'm'])
+        class X:
+            pass
+        def g(n):
+            if n > 5:
+                return rerased.erase(X())
+            else:
+                return rerased.erase(42)
+        def h(x):
+            return rerased.is_integer(x)
+        def f(n, m):
+            while True:
+                driver.jit_merge_point(n=n, m=m)
+                x = g(n)
+                res = h(x)
+                m -= 1
+                if m < 0:
+                    return res
+
+        res = self.meta_interp(f, [10, 10], optimizer=OPTIMIZER_SIMPLE)
+        assert res == False
+        res = self.meta_interp(f, [3, 10], optimizer=OPTIMIZER_SIMPLE)
+        assert res == True
+
+        res = self.meta_interp(f, [10, 10])
+        assert res == False
+        self.check_loops(new_with_vtable=0)
+
+
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
     pass

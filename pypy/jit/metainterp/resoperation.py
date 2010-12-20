@@ -440,6 +440,7 @@ _oplist = [
     'GETARRAYITEM_GC_PURE/2d',
     'UNICODELEN/1',
     'UNICODEGETITEM/2',
+    'RERASED_IS_INTEGER/1',
     #
     # ootype operations
     #'INSTANCEOF/1db',

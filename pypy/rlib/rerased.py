@@ -5,6 +5,7 @@ be tag checks everywhere in the C code. """
 import sys
 from pypy.annotation import model as annmodel
 from pypy.tool.pairtype import pairtype
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.rmodel import Repr
@@ -48,10 +49,14 @@ def unerase_fixedsizelist(y, type):
         assert isinstance(y._x[0], type)
     return y._x
 
-def is_integer(e):
+def ll_is_integer(e):
     """Gives information whether the erased argument is a tagged integer or not."""
-    return isinstance(e._x, int)
-is_integer.oopspec = 'rerased.is_integer(e)'
+    if we_are_translated():
+        return (llop.cast_ptr_to_int(lltype.Signed, e) & 1) != 0
+    else:
+        return isinstance(e._x, int)
+ll_is_integer.oopspec = 'rerased.is_integer(e)'
+is_integer = ll_is_integer
 
 
 # ---------- implementation-specific ----------
@@ -117,21 +122,6 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         v, t = hop.inputargs(hop.args_r[0], lltype.Void)
         return hop.genop('cast_opaque_ptr', [v], resulttype = hop.r_result)
-
-
-class Entry(ExtRegistryEntry):
-    _about_ = is_integer
-
-    def compute_result_annotation(self, s_obj):
-        return annmodel.SomeBool()
-
-    def specialize_call(self, hop):
-        v, = hop.inputargs(hop.args_r[0])
-        c_one = hop.inputconst(lltype.Signed, 1)
-        vi = hop.genop('cast_ptr_to_int', [v], resulttype=lltype.Signed)
-        vb = hop.genop('int_and', [vi, c_one], resulttype=lltype.Signed)
-        return hop.genop('int_is_true', [vb], resulttype=lltype.Bool)
-
 
 class Entry(ExtRegistryEntry):
     _type_ = Erased
