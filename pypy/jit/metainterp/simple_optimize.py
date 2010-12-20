@@ -20,6 +20,9 @@ def transform(op):
         op = ResOperation(rop.SAME_AS, [op.getarg(0)], op.result)
     elif op.getopnum() == rop.VIRTUAL_REF_FINISH:
         return []
+    elif op.getopnum() == rop.RERASED_IS_INTEGER:
+        xxx
+        return []
     return [op]
 
 def optimize_loop(metainterp_sd, old_loops, loop):

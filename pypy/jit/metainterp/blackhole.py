@@ -866,6 +866,14 @@ class BlackholeInterpreter(object):
         pass
 
     # ----------
+    # tagged pointers
+
+    @arguments("r", returns="i")
+    def bhimpl_rerased_is_integer(a):
+        from pypy.rlib.rerased import is_integer
+        return is_integer(a)
+
+    # ----------
     # list operations
 
     @arguments("cpu", "r", "d", "i", returns="i")

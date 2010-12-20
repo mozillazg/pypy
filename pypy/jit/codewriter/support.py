@@ -174,6 +174,10 @@ def _ll_1_gc_id(ptr):
 def _ll_1_jit_force_virtual(inst):
     return llop.jit_force_virtual(lltype.typeOf(inst), inst)
 
+def _ll_1_rerased_is_integer(inst):
+    from pypy.rlib import rerased
+    return rerased.is_integer(inst)
+
 
 def _ll_2_int_floordiv_ovf_zer(x, y):
     if y == 0:
