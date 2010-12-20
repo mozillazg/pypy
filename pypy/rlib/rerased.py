@@ -18,7 +18,8 @@ from pypy.rpython.error import TyperError
 def erase(x):
     """Creates an 'erased' object that contains a reference to 'x'. Nothing can
     be done with this object, except calling unerase(y, <type>) on it.
-    x needs to be either an instance or an integer fitting into 31/63 bits."""
+    x needs to be either an instance or an integer (in the latter case,
+    you get reliably an OverflowError if it doesn't fit into 31/63 bits)."""
     if isinstance(x, int):
         res = 2 * x + 1
         if res > sys.maxint or res < -sys.maxint - 1:
@@ -50,6 +51,7 @@ def unerase_fixedsizelist(y, type):
 def is_integer(e):
     """Gives information whether the erased argument is a tagged integer or not."""
     return isinstance(e._x, int)
+is_integer.oopspec = 'rerased.is_integer(e)'
 
 
 # ---------- implementation-specific ----------

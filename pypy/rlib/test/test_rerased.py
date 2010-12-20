@@ -118,13 +118,13 @@ def test_overflow():
         try:
             e = erase(i)
         except OverflowError:
-            return -1
+            return -42
         assert is_integer(e)
         return unerase(e, int)
     x = interpret(f, [16])
     assert x == 16
     x = interpret(f, [sys.maxint])
-    assert x == -1
+    assert x == -42
 
 def test_none():
     def foo():

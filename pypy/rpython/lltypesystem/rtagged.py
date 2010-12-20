@@ -141,6 +141,9 @@ class TaggedInstanceRepr(InstanceRepr):
         return hop.gendirectcall(ll_unboxed_isinstance_const, v_obj,
                                  minid, maxid, c_answer_if_unboxed)
 
+def ll_is_integer(instance):
+    return (lltype.cast_ptr_to_int(instance) & 1) != 0
+ll_is_integer.oopspec = 'rerased.is_integer(instance)'
 
 def ll_int_to_unboxed(PTRTYPE, value):
     return lltype.cast_int_to_ptr(PTRTYPE, value*2+1)
@@ -154,14 +157,14 @@ def ll_unboxed_getclass_canbenone(instance, class_if_unboxed):
     return lltype.nullptr(lltype.typeOf(instance).TO.typeptr.TO)
 
 def ll_unboxed_getclass(instance, class_if_unboxed):
-    if lltype.cast_ptr_to_int(instance) & 1:
+    if ll_is_integer(instance):
         return class_if_unboxed
     return instance.typeptr
 
 def ll_unboxed_isinstance_const(obj, minid, maxid, answer_if_unboxed):
     if not obj:
         return False
-    if lltype.cast_ptr_to_int(obj) & 1:
+    if ll_is_integer(obj):
         return answer_if_unboxed
     else:
         return ll_issubclass_const(obj.typeptr, minid, maxid)
