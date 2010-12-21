@@ -83,14 +83,14 @@ class CPyExtCallLogger(object):
                 argstrs = [repr(x) for x in args]
                 argstr = ', '.join(argstrs)
 
-                debug_start('cpyext')
+                debug_start('cpyext-call')
                 self.log("%s(%s)" % (name, argstr))
                 try:
                     self.indentation += 1
                     result = f(space, *args)
                 finally:
                     self.indentation -= 1
-                    debug_stop('cpyext')
+                    debug_stop('cpyext-call')
                 self.log("%s(%s)->%s" % (name, argstr, repr(result)))
                 return result
             else:
@@ -132,14 +132,14 @@ class CPyExtCallLogger(object):
                 argstr = ', '.join(argstrs)
                 self.enabled = True
 
-                debug_start('cpyext')
+                debug_start('cpyext-call')
                 self.log("%s(%s)" % (name, argstr))
                 try:
                     self.indentation += 1
                     result = f(*args)
                 finally:
                     self.indentation -= 1
-                    debug_stop('cpyext')
+                    debug_stop('cpyext-call')
 
                 result_format = repr(result) # TODO: format nicer!
                 self.log("%s(%s)->%s" % (name, argstr, result_format))
@@ -596,6 +596,7 @@ def make_wrapper(space, callable):
     fatal_value = callable.api_func.restype._defl()
 
     logged_callable = log_call(space, callable)
+    function_name = callable.__name__
 
     @specialize.ll()
     @wraps(callable)
@@ -647,10 +648,10 @@ def make_wrapper(space, callable):
                 if error_value is CANNOT_FAIL:
                     if not we_are_translated():
                         raise SystemError("The function '%s' was not supposed to fail.  Failed with %s"
-                                          % (callable.__name__, e))
+                                          % (function_name, e))
                     else:
                         raise SystemError("The function '%s' was not supposed to fail"
-                                          % (callable.__name__,))
+                                          % (function_name,))
                 retval = error_value
 
             elif is_PyObject(callable.api_func.restype):
