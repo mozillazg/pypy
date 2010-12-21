@@ -23,9 +23,8 @@ class TestFloatObject(BaseApiTest):
     def test_from_string(self, space, api):
         def test_number(n, expectfail=False):
             np = lltype.nullptr(rffi.CCHARPP.TO)
-            n_str = rffi.str2charp(str(n))
-            f = api.PyFloat_FromString(n_str, np)
-            rffi.free_charp(n_str)
+            w_n = space.wrap(n)
+            f = api.PyFloat_FromString(w_n, np)
             if expectfail:
                 assert f == None
             else:
