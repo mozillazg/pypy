@@ -255,15 +255,11 @@ class InvalidPointerException(Exception):
 
 DEBUG_REFCOUNT = True
 
-def debug_refcount(*args, **kwargs):
+def debug_refcount(*args):
     from pypy.module.cpyext.api import cpy_logger
-    frame_stackdepth = kwargs.pop("frame_stackdepth", 2)
-    assert not kwargs
-    frame = sys._getframe(frame_stackdepth)
     debug_start('cpyext-refcount')
-    debug_print(cpy_logger.get_indent_string())
-    debug_print(frame.f_code.co_name)
-    debug_print(' '.join([frame.f_code.co_name] + [str(arg) for arg in args]))
+    debug_print(' '.join([cpy_logger.get_indent_string()] +
+                         [str(arg) for arg in args]))
     debug_stop('cpyext-refcount')
 
 def create_ref(space, w_obj, itemcount=0):
@@ -359,7 +355,7 @@ def Py_DecRef(space, obj):
 
     obj.c_ob_refcnt -= 1
     if DEBUG_REFCOUNT:
-        debug_refcount("DECREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+        debug_refcount("DECREF", obj, obj.c_ob_refcnt)
     if obj.c_ob_refcnt == 0:
         state = space.fromcache(RefcountState)
         ptr = rffi.cast(ADDR, obj)
@@ -392,7 +388,7 @@ def Py_IncRef(space, obj):
     obj.c_ob_refcnt += 1
     assert obj.c_ob_refcnt > 0
     if DEBUG_REFCOUNT:
-        debug_refcount("INCREF", obj, obj.c_ob_refcnt, frame_stackdepth=3)
+        debug_refcount("INCREF", obj, obj.c_ob_refcnt)
 
 @cpython_api([PyObject], lltype.Void)
 def _Py_NewReference(space, obj):
