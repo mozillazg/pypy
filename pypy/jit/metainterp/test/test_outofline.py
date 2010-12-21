@@ -111,7 +111,36 @@ class OutOfLineTests(object):
 
         assert self.meta_interp(main, []) == main()
         self.check_loop_count(4)
-        self.check_history(getfield_gc=0, getfield_gc_pure=0)        
+        self.check_history(getfield_gc=0, getfield_gc_pure=0)
+
+    def test_jit_invariant_invalidate_bridge(self):
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+        driver = JitDriver(greens = [], reds = ['i', 'total', 'a'])
+
+        @dont_look_inside
+        def g(a, i):
+            if i == 25:
+                a.x = 2
+
+        def f():
+            i = 0
+            a = A()
+            a.x = 1
+            total = 0
+            while i < 40:
+                driver.can_enter_jit(i=i, total=total, a=a)
+                driver.jit_merge_point(i=i, total=total, a=a)
+                i += 1
+                a = hint(a, promote=True)
+                if i % 2:
+                    total += a.x
+                    g(a, i)
+                total += 1
+            return total
+
+        assert self.meta_interp(f, []) == f()
 
 class TestLLtype(OutOfLineTests, LLJitMixin):
     pass
