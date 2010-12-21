@@ -3,8 +3,6 @@ from pypy.module.cpyext.api import (CANNOT_FAIL, cpython_api, PyObject,
                                     build_type_checkers)
 from pypy.interpreter.error import OperationError
 
-from pypy.objspace.std.strutil import interp_string_to_float, ParseStringError
-
 PyFloat_Check, PyFloat_CheckExact = build_type_checkers("Float")
 
 @cpython_api([lltype.Float], PyObject)
@@ -28,16 +26,11 @@ def PyNumber_Float(space, w_obj):
     This is the equivalent of the Python expression float(o)."""
     return space.float(w_obj)
 
-@cpython_api([PyObject, rffi.CCHARPP], PyObject)
-def PyFloat_FromString(space, str, pend):
+@cpython_api([PyObject, rffi.CCHARPP], PyObject, error=lltype.nullptr(PyObject.TO))
+def PyFloat_FromString(space, w_str, pend):
     """Create a PyFloatObject object based on the string value in str, or
     NULL on failure.  The pend argument is ignored.  It remains only for
     backward compatibility."""
     
-    str = rffi.charp2str(str)
-    try:
-        float_value = interp_string_to_float(space, str)
-    except ParseStringError, e:
-        return None
-    return space.wrap(float_value)
+    return space.call_function(space.w_float, w_str)
 
