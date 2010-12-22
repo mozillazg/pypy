@@ -1,7 +1,8 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.module.cpyext.api import (cpython_api, PyObject, CANNOT_FAIL,
-                                    build_type_checkers, Py_ssize_t)
+from pypy.interpreter.error import OperationError
+from pypy.module.cpyext.api import (cpython_api, build_type_checkers, PyObject, CONST_STRING, CANNOT_FAIL, Py_ssize_t)
+from pypy.rlib.rarithmetic import r_uint
 
 PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")
 
@@ -18,6 +19,9 @@ def PyInt_AsLong(space, w_obj):
     already one, and then return its value. If there is an error, -1 is
     returned, and the caller should check PyErr_Occurred() to find out whether
     there was an error, or whether the value just happened to be -1."""
+    if w_obj is None:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("an integer is required, got NULL"))
     return space.int_w(space.int(w_obj))
 
 @cpython_api([PyObject], lltype.Unsigned, error=-1)
@@ -25,7 +29,24 @@ def PyInt_AsUnsignedLong(space, w_obj):
     """Return a C unsigned long representation of the contents of pylong.
     If pylong is greater than ULONG_MAX, an OverflowError is
     raised."""
+    if w_obj is None:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("an integer is required, got NULL"))
     return space.uint_w(space.int(w_obj))
+
+@cpython_api([PyObject], rffi.ULONG, error=-1)
+def PyInt_AsUnsignedLongMask(space, w_obj):
+    """Will first attempt to cast the object to a PyIntObject or
+    PyLongObject, if it is not already one, and then return its value as
+    unsigned long.  This function does not check for overflow.
+    """
+    w_int = space.int(w_obj)
+    if space.is_true(space.isinstance(w_int, space.w_int)):
+        num = space.int_w(w_int)
+        return r_uint(num)
+    else:
+        num = space.bigint_w(w_int)
+        return num.uintmask()
 
 @cpython_api([PyObject], lltype.Signed, error=CANNOT_FAIL)
 def PyInt_AS_LONG(space, w_int):
@@ -38,6 +59,9 @@ def PyInt_AsSsize_t(space, w_obj):
     PyLongObject, if it is not already one, and then return its value as
     Py_ssize_t.
     """
+    if w_obj is None:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("an integer is required, got NULL"))
     return space.int_w(w_obj) # XXX this is wrong on win64
 
 @cpython_api([Py_ssize_t], PyObject)
@@ -48,7 +72,7 @@ def PyInt_FromSsize_t(space, ival):
     """
     return space.wrap(ival) # XXX this is wrong on win64
 
-@cpython_api([rffi.CCHARP, rffi.CCHARPP, rffi.INT_real], PyObject)
+@cpython_api([CONST_STRING, rffi.CCHARPP, rffi.INT_real], PyObject)
 def PyInt_FromString(space, str, pend, base):
     """Return a new PyIntObject or PyLongObject based on the string
     value in str, which is interpreted according to the radix in base.  If
@@ -62,17 +86,3 @@ def PyInt_FromString(space, str, pend, base):
     a number too large to be contained within the machine's long int type
     and overflow warnings are being suppressed, a PyLongObject will be
     returned.  If overflow warnings are not being suppressed, NULL will be
-    returned in this case."""
-    # TODO: test!
-    if pend:
-        raise NotImplementedError
-        len = pend - str # FIXME: can sub pointers? right function name?
-        str = rffi.charp2strn(str, len)
-    else:
-        str = rffi.charp2str(str)
-
-    base = int(base)
-
-    value = int(str, base)
-
-    return space.wrap(value)
