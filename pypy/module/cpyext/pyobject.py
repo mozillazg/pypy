@@ -289,7 +289,7 @@ def track_reference(space, py_obj, w_obj, replace=False):
     # XXX looks like a PyObject_GC_TRACK
     ptr = rffi.cast(ADDR, py_obj)
     state = space.fromcache(RefcountState)
-    if DEBUG_REFCOUNT:
+    if DEBUG_REFCOUNT and not we_are_translated():
         debug_refcount("MAKREF", py_obj, w_obj)
         if not replace:
             if not we_are_translated():
@@ -354,7 +354,7 @@ def Py_DecRef(space, obj):
     assert lltype.typeOf(obj) == PyObject
 
     obj.c_ob_refcnt -= 1
-    if DEBUG_REFCOUNT:
+    if DEBUG_REFCOUNT and not we_are_translated():
         debug_refcount("DECREF", obj, obj.c_ob_refcnt)
     if obj.c_ob_refcnt == 0:
         state = space.fromcache(RefcountState)
@@ -387,7 +387,7 @@ def Py_IncRef(space, obj):
         return
     obj.c_ob_refcnt += 1
     assert obj.c_ob_refcnt > 0
-    if DEBUG_REFCOUNT:
+    if DEBUG_REFCOUNT and not we_are_translated():
         debug_refcount("INCREF", obj, obj.c_ob_refcnt)
 
 @cpython_api([PyObject], lltype.Void)

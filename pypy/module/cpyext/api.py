@@ -629,6 +629,7 @@ def make_wrapper(space, callable):
                     result = callable(space, *boxed_args)
             except OperationError, e:
                 failed = True
+                message = str(e)
                 state.set_exception(e)
             except BaseException, e:
                 failed = True
@@ -646,12 +647,12 @@ def make_wrapper(space, callable):
             if failed:
                 error_value = callable.api_func.error_value
                 if error_value is CANNOT_FAIL:
-                    if not we_are_translated():
-                        raise SystemError("The function '%s' was not supposed to fail.  Failed with %s"
-                                          % (function_name, e))
-                    else:
+                    if we_are_translated():
                         raise SystemError("The function '%s' was not supposed to fail"
                                           % (function_name,))
+                    else:
+                        raise SystemError("The function '%s' was not supposed to fail.  Failed with '%s'"
+                                          % (function_name, message))
                 retval = error_value
 
             elif is_PyObject(callable.api_func.restype):
