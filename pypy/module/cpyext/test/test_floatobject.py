@@ -1,4 +1,5 @@
 from pypy.module.cpyext.test.test_api import BaseApiTest
+from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.module.cpyext.api import PyObject
 
@@ -13,6 +14,7 @@ class TestFloatObject(BaseApiTest):
 
     def test_coerce(self, space, api):
         assert space.type(api.PyNumber_Float(space.wrap(3))) is space.w_float
+        assert space.type(api.PyNumber_Float(space.wrap("3"))) is space.w_float
 
         class Coerce(object):
             def __float__(self):
@@ -33,3 +35,17 @@ class TestFloatObject(BaseApiTest):
         test_number(0.0)
         test_number(42.0)
         test_number("abcd", True)
+
+class AppTestFloatObject(AppTestCpythonExtensionBase):
+    def test_fromstring(self):
+        module = self.import_extension('foo', [
+            ("from_string", "METH_NOARGS",
+             """
+                 PyObject* str = PyString_FromString("1234.56");
+                 PyObject* res = PyFloat_FromString(str, NULL);
+                 Py_DECREF(str);
+                 return res;
+             """),
+            ])
+        assert module.from_string() == 1234.56
+        assert type(module.from_string()) is float
