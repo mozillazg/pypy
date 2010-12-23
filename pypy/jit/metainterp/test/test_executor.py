@@ -32,12 +32,12 @@ class FakeArrayDescr(FakeDescr):
     def is_array_of_floats(self):
         return True
 
-class FakeResultR:
+class FakeResultR(object):
     _TYPE = llmemory.GCREF
     def __init__(self, *args):
         self.fakeargs = args
 
-class FakeMetaInterp:
+class FakeMetaInterp(object):
     pass
 
 class FakeCPU(AbstractCPU):
