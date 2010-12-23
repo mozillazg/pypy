@@ -1,7 +1,9 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.interpreter.error import OperationError
-from pypy.module.cpyext.api import (cpython_api, build_type_checkers, PyObject, CONST_STRING, CANNOT_FAIL, Py_ssize_t)
+from pypy.module.cpyext.api import (
+    cpython_api, build_type_checkers, PyObject,
+    CONST_STRING, CANNOT_FAIL, Py_ssize_t)
 from pypy.rlib.rarithmetic import r_uint
 
 PyInt_Check, PyInt_CheckExact = build_type_checkers("Int")
@@ -86,3 +88,10 @@ def PyInt_FromString(space, str, pend, base):
     a number too large to be contained within the machine's long int type
     and overflow warnings are being suppressed, a PyLongObject will be
     returned.  If overflow warnings are not being suppressed, NULL will be
+    returned in this case."""
+    s = rffi.charp2str(str)
+    w_str = space.wrap(s)
+    w_base = space.wrap(rffi.cast(lltype.Signed, base))
+    if pend:
+        pend[0] = rffi.ptradd(str, len(s))
+    return space.call_function(space.w_int, w_str, w_base)
