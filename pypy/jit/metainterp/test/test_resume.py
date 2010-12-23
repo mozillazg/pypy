@@ -9,7 +9,7 @@ from pypy.jit.metainterp.test.test_optimizefindnode import LLtypeMixin
 from pypy.jit.metainterp import executor
 from pypy.jit.codewriter import heaptracker
 
-class Storage:
+class Storage(object):
     rd_frame_info_list = None
     rd_numb = None
     rd_consts = []
@@ -49,7 +49,7 @@ def test_vinfo():
     assert v1.equals([1, 2, 4])
     assert not v1.equals([1, 2, 6])
 
-class MyMetaInterp:
+class MyMetaInterp(object):
     _already_allocated_resume_virtuals = None
     callinfocollection = None
 
@@ -81,7 +81,7 @@ gcref1 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
 gcref2 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S))
 gcrefnull = lltype.nullptr(llmemory.GCREF.TO)
 
-class MyCPU:
+class MyCPU(object):
     class ts:
         NULLREF = gcrefnull
         CONST_NULL = ConstPtr(gcrefnull)
@@ -96,7 +96,7 @@ class MyCPU:
     def get_latest_value_float(self, index):
         return self.values[index]
 
-class MyBlackholeInterp:
+class MyBlackholeInterp(object):
     def __init__(self, ARGS):
         self.written_i = []
         self.written_r = []
@@ -104,7 +104,7 @@ class MyBlackholeInterp:
         self.ARGS = ARGS
 
     def get_current_position_info(self):
-        class MyInfo:
+        class MyInfo(object):
             @staticmethod
             def enumerate_vars(callback_i, callback_r, callback_f, _):
                 count_i = count_r = count_f = 0
@@ -475,10 +475,10 @@ def test_capture_resumedata():
     assert snapshot.boxes == fs[2]._env
 
 
-class FakeMetaInterpStaticData:
+class FakeMetaInterpStaticData(object):
     cpu = LLtypeMixin.cpu
 
-    class options:
+    class options(object):
         failargs_limit = 100
 
 def test_rebuild_from_resumedata():
@@ -574,7 +574,7 @@ def test_rebuild_from_resumedata_two_guards():
 
 
 class FakeOptimizer_VirtualValue(object):
-    class cpu:
+    class cpu(object):
         pass
 fakeoptimizer = FakeOptimizer_VirtualValue()
 
