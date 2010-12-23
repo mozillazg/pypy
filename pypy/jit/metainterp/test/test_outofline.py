@@ -144,7 +144,49 @@ class OutOfLineTests(object):
         assert self.meta_interp(f, []) == f()
 
     def test_jit_invariant_invalidate_call_asm(self):
-        py.test.skip("WRITEME")
+        py.test.skip("Fails")
+        myjitdriver1 = JitDriver(greens=[], reds=['n', 'a'])
+        myjitdriver2 = JitDriver(greens=['g'], reds=['r', 'a'])
+
+        #
+        class A(object):
+            _jit_invariant_fields_ = ['x']
+
+            def __init__(self, x):
+                self.x = x
+
+        @dont_look_inside
+        def possibly_invalidate(r, a):
+            if r == 30:
+                if a.x == 2:
+                    a.x = 1
+                else:
+                    a.x = 2
+            print r
+        
+        def loop1(n, a):
+            while n > 0:
+                myjitdriver1.can_enter_jit(n=n, a=a)
+                myjitdriver1.jit_merge_point(n=n, a=a)
+                a = hint(a, promote=True)
+                n -= a.x
+            return n
+        #
+        def loop2(g, r):
+            a = A(1)
+            while r > 0:
+                myjitdriver2.can_enter_jit(g=g, r=r, a=a)
+                myjitdriver2.jit_merge_point(g=g, r=r, a=a)
+                a = hint(a, promote=True)
+                r += loop1(r, a) + (-1)
+                possibly_invalidate(r, a)
+            return r
+        #
+        res = self.meta_interp(loop2, [4, 40], repeat=7, inline=True)
+        assert res == loop2(4, 40)
+        # we expect only one int_sub, corresponding to the single
+        # compiled instance of loop1()
+        self.check_loops(int_sub=1)
 
 class TestLLtype(OutOfLineTests, LLJitMixin):
     pass
