@@ -869,8 +869,6 @@ class Frame(object):
             self._may_force = -1
 
     def op_call_assembler(self, wref_loop_token, *args):
-        import pdb
-        pdb.set_trace()
         if we_are_translated():
             raise ValueError("CALL_ASSEMBLER not supported")
         return self._do_call_assembler(wref_loop_token, *args)
