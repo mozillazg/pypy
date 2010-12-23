@@ -1172,8 +1172,7 @@ class MIFrame(object):
         assert i == len(allboxes)
         #
         effectinfo = descr.get_extra_info()
-        force_vir = effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE 
-        if (effectinfo is None or effectinfo.extraeffect >= force_vir or
+        if (effectinfo is None or effectinfo.extraeffect >= effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
             assembler_call):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.clear_exception()
