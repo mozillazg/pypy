@@ -1,4 +1,5 @@
 
+import py
 from pypy.rlib.jit import JitDriver, dont_look_inside, hint
 from pypy.jit.metainterp.test.test_basic import LLJitMixin
 
@@ -141,6 +142,9 @@ class OutOfLineTests(object):
             return total
 
         assert self.meta_interp(f, []) == f()
+
+    def test_jit_invariant_invalidate_call_asm(self):
+        py.test.skip("WRITEME")
 
 class TestLLtype(OutOfLineTests, LLJitMixin):
     pass

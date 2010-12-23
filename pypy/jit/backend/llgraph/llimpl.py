@@ -296,8 +296,13 @@ def mark_as_free(loop):
     loop.has_been_freed = True
 
 def mark_as_invalid(loop):
-    loop = _from_opaque(loop)
+    _mark_as_invalid(_from_opaque(loop))
+
+def _mark_as_invalid(loop):
     assert not loop.has_been_freed
+    for op in loop.operations:
+        if op.is_guard() and op.jump_target is not None:
+            _mark_as_invalid(op.jump_target)
     loop.invalidated = True
 
 def compile_start_int_var(loop):
