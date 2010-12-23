@@ -880,6 +880,7 @@ class Frame(object):
         ctl = loop_token.compiled_loop_token
         if hasattr(ctl, 'redirected'):
             return self._do_call_assembler(ctl.redirected, *args)
+        assert not loop_token.invalidated
         assert not self._forced
         self._may_force = self.opindex
         try:
