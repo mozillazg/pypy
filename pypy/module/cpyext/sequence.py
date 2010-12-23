@@ -145,9 +145,19 @@ def PySequence_SetItem(space, w_o, i, w_v):
     
     This function used an int type for i. This might require
     changes in your code for properly supporting 64-bit systems."""
-
     if PyDict_Check(space, w_o) or not PySequence_Check(space, w_o):
         raise operationerrfmt(space.w_TypeError, "'%s' object does not support item assignment",
                              space.str_w(space.repr(space.type(w_o)))) # FIXME: looks like lisp...
     space.setitem(w_o, space.wrap(i), w_v)
     return 0
+
+@cpython_api([PyObject, Py_ssize_t], rffi.INT_real, error=-1)
+def PySequence_DelItem(space, w_o, i):
+    """Delete the ith element of object o.  Returns -1 on failure.  This is the
+    equivalent of the Python statement del o[i].
+    
+    This function used an int type for i. This might require
+    changes in your code for properly supporting 64-bit systems."""
+
+    # FIXME: May be too lenient
+    space.delitem(w_o, space.wrap(i))

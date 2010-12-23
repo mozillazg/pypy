@@ -95,3 +95,14 @@ class TestSequence(BaseApiTest):
 
         self.raises(space, api, TypeError, api.PySequence_SetItem,
                     space.newdict(), 0, w_value)
+
+    def test_delitem(self, space, api):
+        w_l = space.wrap([1, 2, 3, 4])
+
+        result = api.PySequence_DelItem(w_l, 2)
+        assert result != -1
+        assert space.eq_w(w_l, space.wrap([1, 2, 4])
+
+        self.raises(space, api, IndexError, api.PySequence_DelItem,
+                    w_l, 3)
+        

@@ -1965,15 +1965,6 @@ def PySequence_InPlaceRepeat(space, o, count):
     changes in your code for properly supporting 64-bit systems."""
     raise NotImplementedError
 
-@cpython_api([PyObject, Py_ssize_t], rffi.INT_real, error=-1)
-def PySequence_DelItem(space, o, i):
-    """Delete the ith element of object o.  Returns -1 on failure.  This is the
-    equivalent of the Python statement del o[i].
-    
-    This function used an int type for i. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
 @cpython_api([PyObject, PyObject], Py_ssize_t, error=-1)
 def PySequence_Count(space, o, value):
     """Return the number of occurrences of value in o, that is, return the number
