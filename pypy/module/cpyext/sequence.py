@@ -161,3 +161,4 @@ def PySequence_DelItem(space, w_o, i):
 
     # FIXME: May be too lenient
     space.delitem(w_o, space.wrap(i))
+    return 0
