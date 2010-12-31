@@ -753,6 +753,8 @@ class LoopToken(AbstractDescr):
     # memory and the ResumeGuards.
     compiled_loop_token = None
 
+    _tmp_token = None # a token that keeps tmpcallback
+
     invalidated = False
     # if True means looptoken was invalidated by setting some field
     # listed in jit_invariant_setfield that was read in this loop

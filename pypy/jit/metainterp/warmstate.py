@@ -256,6 +256,9 @@ class WarmEnterState(object):
         cell.set_entry_loop_token(entry_loop_token)
         cell.counter = -1       # valid entry bridge attached
         if old_token is not None:
+            entry_loop_token._tmp_token = old_token
+            # keep tmp token in case we invalidate this loop, so loops
+            # can be redirected back to _tmp_token
             self.cpu.redirect_call_assembler(old_token, entry_loop_token)
             # entry_loop_token is also kept alive by any loop that used
             # to point to old_token.  Actually freeing old_token early
@@ -568,14 +571,18 @@ class WarmEnterState(object):
             # 'redboxes' is only used to know the types of red arguments
             cell = self.jit_cell_at_key(greenkey)
             entry_loop_token = cell.get_entry_loop_token()
-            if entry_loop_token is None:
+            if entry_loop_token is None or entry_loop_token._tmp_token is None:
                 from pypy.jit.metainterp.compile import compile_tmp_callback
                 if cell.counter == -1:    # used to be a valid entry bridge,
                     cell.counter = 0      # but was freed in the meantime.
                 memmgr = warmrunnerdesc.memory_manager
-                entry_loop_token = compile_tmp_callback(cpu, jd, greenkey,
-                                                        redboxes, memmgr)
-                cell.set_entry_loop_token(entry_loop_token)
+                tmp_token = compile_tmp_callback(cpu, jd, greenkey,
+                                                 redboxes, memmgr)
+                if entry_loop_token is None:
+                    entry_loop_token = tmp_token
+                    cell.set_entry_loop_token(entry_loop_token)
+                else:
+                    entry_loop_token._tmp_token = tmp_token
             return entry_loop_token
         self.get_assembler_token = get_assembler_token
         
