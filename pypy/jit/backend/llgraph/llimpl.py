@@ -305,6 +305,22 @@ def _mark_as_invalid(loop):
             _mark_as_invalid(op.jump_target)
     loop.invalidated = True
 
+def invalidate_call_asm(from_loop, ctl):
+    from_loop = _from_opaque(from_loop)
+    _invalidate_call_asm(from_loop, ctl)
+
+def _invalidate_call_asm(from_loop, ctl):
+    for op in from_loop.operations:
+        if op.opnum == rop.CALL_ASSEMBLER or op.opnum == rop.JUMP:
+            if op.descr is None:
+                continue
+            call_target = op.descr().compiled_loop_token
+            if call_target is ctl:
+                import pdb
+                pdb.set_trace()
+        if op.is_guard() and op.jump_target is not None:
+            _invalidate_call_asm(op.jump_target, to_loop)
+
 def compile_start_int_var(loop):
     return compile_start_ref_var(loop, lltype.Signed)
 
@@ -1655,6 +1671,7 @@ setannotation(compile_add_fail_arg, annmodel.s_None)
 setannotation(compile_redirect_fail, annmodel.s_None)
 setannotation(mark_as_free, annmodel.s_None)
 setannotation(mark_as_invalid, annmodel.s_None)
+setannotation(invalidate_call_asm, annmodel.s_None)
 
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)

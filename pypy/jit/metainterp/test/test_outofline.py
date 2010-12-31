@@ -144,7 +144,6 @@ class OutOfLineTests(object):
         assert self.meta_interp(f, []) == f()
 
     def test_jit_invariant_invalidate_call_asm(self):
-        py.test.skip("Fails")
         myjitdriver1 = JitDriver(greens=[], reds=['n', 'a'])
         myjitdriver2 = JitDriver(greens=['g'], reds=['r', 'a'])
 

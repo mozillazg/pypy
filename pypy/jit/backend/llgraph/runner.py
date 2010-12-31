@@ -497,8 +497,15 @@ class LLtypeCPU(BaseCPU):
                                            prev.address)
                 if x:
                     x.invalidated = True
-                    llimpl.mark_as_invalid(
-                        x.compiled_loop_token.compiled_version)
+                    compiled = x.compiled_loop_token.compiled_version
+                    llimpl.mark_as_invalid(compiled)
+                    for elem in x._back_looptokens:
+                        token = elem()
+                        if token:
+                            tk = token.compiled_loop_token.compiled_version
+                            llimpl.invalidate_call_asm(tk,
+                                                       x.compiled_loop_token)
+                                
                 next = next.next
         return invalidate_asm
 
