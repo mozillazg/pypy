@@ -316,8 +316,12 @@ def _invalidate_call_asm(from_loop, ctl):
                 continue
             call_target = op.descr().compiled_loop_token
             if call_target is ctl:
-                import pdb
-                pdb.set_trace()
+                tmp = op.descr()._tmp_token.compiled_loop_token
+                if hasattr(call_target, 'redirected'):
+                    import pdb
+                    pdb.set_trace()
+                _redirect_call_assembler(call_target, tmp,
+                                         op.descr()._tmp_token)
         if op.is_guard() and op.jump_target is not None:
             _invalidate_call_asm(op.jump_target, to_loop)
 
@@ -1598,10 +1602,14 @@ def reset_vable(jd, vable):
 def redirect_call_assembler(cpu, oldlooptoken, newlooptoken):
     oldclt = oldlooptoken.compiled_loop_token
     newclt = newlooptoken.compiled_loop_token
+    _redirect_call_assembler(oldclt, newclt, newlooptoken)
+
+def _redirect_call_assembler(oldclt, newclt, newlooptoken):
     OLD = _from_opaque(oldclt.compiled_version).getargtypes()
     NEW = _from_opaque(newclt.compiled_version).getargtypes()
     assert OLD == NEW
     assert not hasattr(oldclt, 'redirected')
+    # XXX fix the above case
     oldclt.redirected = weakref.ref(newlooptoken)
 
 # ____________________________________________________________
