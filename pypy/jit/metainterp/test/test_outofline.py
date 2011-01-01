@@ -183,9 +183,6 @@ class OutOfLineTests(object):
         #
         res = self.meta_interp(loop2, [4, 40], repeat=7, inline=True)
         assert res == loop2(4, 40)
-        # we expect only one int_sub, corresponding to the single
-        # compiled instance of loop1()
-        self.check_loops(int_sub=1)
 
 class TestLLtype(OutOfLineTests, LLJitMixin):
     pass
