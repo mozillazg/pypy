@@ -380,7 +380,7 @@ _oplist = [
     'GUARD_NO_OVERFLOW/0d',
     'GUARD_OVERFLOW/0d',
     'GUARD_NOT_FORCED/0d', # forcing virtualrefs/virtualizables
-    'GUARD_NOT_INVARIANT/0d', # forcing jit invariant fields
+    'GUARD_NOT_INVALIDATED/0d', # forcing jit invariant fields
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----

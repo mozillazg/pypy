@@ -157,7 +157,7 @@ TYPES = {
     'force_token'     : ((), 'int'),
     'call_may_force'  : (('int', 'varargs'), 'intorptr'),
     'guard_not_forced': ((), None),
-    'guard_not_invariant': ((), None),
+    'guard_not_invalidated': ((), None),
 }
 
 # ____________________________________________________________
@@ -958,7 +958,7 @@ class Frame(object):
         if forced:
             raise GuardFailed
 
-    def op_guard_not_invariant(self, descr):
+    def op_guard_not_invalidated(self, descr):
         if self.loop.invalidated:
             raise GuardFailed
 

@@ -1185,9 +1185,9 @@ class MIFrame(object):
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
             self.metainterp.vable_after_residual_call()
-            if effectinfo is None or effectinfo.extraeffect >= effectinfo.EF_FORCES_JIT_INVARIANT:
-                self.generate_guard(rop.GUARD_NOT_INVARIANT, None)
             self.generate_guard(rop.GUARD_NOT_FORCED, None)
+            if effectinfo is None or effectinfo.extraeffect >= effectinfo.EF_FORCES_JIT_INVARIANT:
+                self.generate_guard(rop.GUARD_NOT_INVALIDATED, None)
             self.metainterp.handle_possible_exception()
             return resbox
         else:
