@@ -826,7 +826,7 @@ class WarmRunnerDesc(object):
         FUNC = lltype.Ptr(lltype.FuncType([ARG], lltype.Void))
         llptr = self.helper_func(FUNC, self.cpu.get_invalidate_asm(FUNC,
                                                              op.args[1].value))
-        cptr = Constant(llptr, lltype.Void)
+        cptr = Constant(llptr, FUNC)
         op.args = [cptr, op.args[0]]
 
     def rewrite_jit_invariant_setfield(self):
