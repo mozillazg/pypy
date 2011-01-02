@@ -97,6 +97,11 @@ def effectinfo_from_writeanalyze(effects, cpu,
     for tup in effects:
         if tup[0] == "struct":
             add_struct(write_descrs_fields, tup)
+            if (isinstance(tup[1], lltype.Ptr) and
+                tup[1].TO._hints.get('jit_invariant_fields')):
+                fields = tup[1].TO._hints['jit_invariant_fields'].fields
+                if tup[2] in fields:
+                    extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
         elif tup[0] == "readstruct":
             tupw = ("struct",) + tup[1:]
             if tupw not in effects:
