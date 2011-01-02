@@ -181,7 +181,7 @@ class OutOfLineTests(object):
                 possibly_invalidate(r, a)
             return r
         #
-        res = self.meta_interp(loop2, [4, 40], repeat=7, inline=True)
+        res = self.meta_interp(loop2, [4, 40], inline=True)
         assert res == loop2(4, 40)
 
 class TestLLtype(OutOfLineTests, LLJitMixin):
