@@ -203,6 +203,7 @@ class Assembler386(object):
                _x86_param_depth
                _x86_arglocs
                _x86_debug_checksum
+               _x86_asm_invalidated
         '''
         # XXX this function is too longish and contains some code
         # duplication with assemble_bridge().  Also, we should think
@@ -253,6 +254,10 @@ class Assembler386(object):
         looptoken._x86_bootstrap_code = rawstart + bootstrappos
         looptoken._x86_loop_code = rawstart + self.looppos
         looptoken._x86_direct_bootstrap_code = rawstart + directbootstrappos
+        looptoken._x86_asm_invalidated = lltype.malloc(rffi.CArray(
+            lltype.Signed), 1, flavor='raw', track_allocation=False)
+        # XXX wrong, free it one day
+        looptoken._x86_asm_invalidated[0] = 0
         self.teardown()
         # oprofile support
         if self.cpu.profile_agent is not None:

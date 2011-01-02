@@ -140,6 +140,23 @@ class AbstractX86CPU(AbstractLLCPU):
         assert fail_index == fail_index_2
         return faildescr
 
+    def get_invalidate_asm(self, TP, fieldname):
+        def invalidate_asm(arg):
+            next = getattr(arg, fieldname)
+            while next:
+                prev = next
+                llx =  llmemory.weakref_deref(ropaque.ROPAQUE, prev.address)
+                if llx:
+                    x = ropaque.cast_ropaque_to_obj(history.LoopToken, llx)
+                    x.invalidated = True
+                    x._x86_asm_invalidated[0] = 1
+                    for elem in x._back_looptokens:
+                        token = elem()
+                        if token:
+                            self.redirect_call_assembler(token, x._tmp_token)
+                next = next.next
+        return invalidate_asm
+
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         self.assembler.redirect_call_assembler(oldlooptoken, newlooptoken)
 
