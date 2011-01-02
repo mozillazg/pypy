@@ -5,7 +5,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.debug import make_sure_not_resized
-from pypy.rlib import nonconst
+from pypy.rlib import nonconst, ropaque
 
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
@@ -2238,11 +2238,8 @@ class MetaInterp(object):
         self.history.operations.append(op)
 
     def remember_jit_invariants(self, loop):
-        if we_are_translated():
-            looptoken = cast_instance_to_base_ptr(loop.token)
-        else:
-            looptoken = loop.token
-        lltoken_weakref = llmemory.weakref_create(looptoken)
+        lllooptoken = ropaque.cast_obj_to_ropaque(loop.token)
+        lltoken_weakref = llmemory.weakref_create(lllooptoken)
         seen = {}
         for b_struct, c_appender in self.invariant_structs:
             if (b_struct, c_appender) not in seen:

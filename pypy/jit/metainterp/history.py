@@ -726,20 +726,6 @@ class LoopToken(AbstractDescr):
     was compiled; but the LoopDescr remains alive and points to the
     generated assembler.
     """
-    # <hack> to make tests think we're dealing with an actual lltype
-    _TYPE = lltype.Ptr(lltype.GcStruct('dummy struct for tests'))
-
-    def _normalizedcontainer(self):
-        return self
-
-    def _getobj(self, check=True):
-        return self
-    _as_ptr = _getobj
-    _obj0 = None
-    _obj = property(_getobj)
-    def _was_freed(self):
-        return False
-    # </hack>
     
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None

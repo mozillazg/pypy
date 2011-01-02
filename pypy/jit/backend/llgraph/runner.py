@@ -16,7 +16,7 @@ from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import llimpl, symbolic
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.codewriter import heaptracker
-from pypy.rlib import rgc
+from pypy.rlib import rgc, ropaque
 
 class MiniStats:
     pass
@@ -493,9 +493,9 @@ class LLtypeCPU(BaseCPU):
             next = getattr(arg, fieldname)
             while next:
                 prev = next
-                x = llmemory.weakref_deref(history.LoopToken._TYPE,
-                                           prev.address)
-                if x:
+                llx =  llmemory.weakref_deref(ropaque.ROPAQUE, prev.address)
+                if llx:
+                    x = ropaque.cast_ropaque_to_obj(history.LoopToken, llx)
                     x.invalidated = True
                     compiled = x.compiled_loop_token.compiled_version
                     llimpl.mark_as_invalid(compiled)
