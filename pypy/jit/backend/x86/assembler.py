@@ -130,6 +130,8 @@ class Assembler386(object):
         assert self.memcpy_addr != 0, "setup_once() not called?"
         self.pending_guard_tokens = []
         self.mc = codebuf.MachineCodeBlockWrapper()
+        self.invalidate_adr = rffi.cast(lltype.Signed,
+                                        looptoken._x86_asm_invalidated)
         if self.datablockwrapper is None:
             allblocks = self.get_asmmemmgr_blocks(looptoken)
             self.datablockwrapper = MachineDataBlockWrapper(self.cpu.asmmemmgr,
@@ -140,6 +142,7 @@ class Assembler386(object):
         self.mc = None
         self.looppos = -1
         self.currently_compiling_loop = None
+        self.invalidate_adr = 0
 
     def finish_once(self):
         if self._debug:
@@ -216,6 +219,10 @@ class Assembler386(object):
             # Arguments should be unique
             assert len(set(inputargs)) == len(inputargs)
 
+        looptoken._x86_asm_invalidated = lltype.malloc(rffi.CArray(
+            lltype.Signed), 1, flavor='raw', track_allocation=False)
+        # XXX wrong, free it one day
+        looptoken._x86_asm_invalidated[0] = 0
         self.setup(looptoken)
         self.currently_compiling_loop = looptoken
         funcname = self._find_debug_merge_point(operations)
@@ -254,10 +261,6 @@ class Assembler386(object):
         looptoken._x86_bootstrap_code = rawstart + bootstrappos
         looptoken._x86_loop_code = rawstart + self.looppos
         looptoken._x86_direct_bootstrap_code = rawstart + directbootstrappos
-        looptoken._x86_asm_invalidated = lltype.malloc(rffi.CArray(
-            lltype.Signed), 1, flavor='raw', track_allocation=False)
-        # XXX wrong, free it one day
-        looptoken._x86_asm_invalidated[0] = 0
         self.teardown()
         # oprofile support
         if self.cpu.profile_agent is not None:
@@ -486,7 +489,7 @@ class Assembler386(object):
         if IS_X86_64:
             return self._assemble_bootstrap_direct_call_64(arglocs, jmppos, stackdepth)
         # XXX pushing ebx esi and edi is a bit pointless, since we store
-        #     all regsiters anyway, for the case of guard_not_forced
+        #     all registers anyway, for the case of guard_not_forced
         # XXX this can be improved greatly. Right now it'll behave like
         #     a normal call
         nonfloatlocs, floatlocs = arglocs
@@ -1274,6 +1277,11 @@ class Assembler386(object):
         self.mc.overwrite(jb_location-1, chr(offset))
         #
         self.implement_guard(guard_token, 'NE')
+
+    def genop_guard_guard_not_invalidated(self, ign_1, guard_op, guard_token,
+                                          locs, ign_2):
+        self.mc.CMP(heap(self.invalidate_adr), imm0)
+        self.implement_guard(guard_token, 'NZ')
 
     def implement_guard_recovery(self, guard_opnum, faildescr, failargs,
                                                                fail_locs):
