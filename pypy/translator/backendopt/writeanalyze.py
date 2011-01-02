@@ -6,11 +6,13 @@ empty_set = frozenset()
 
 class WriteAnalyzer(graphanalyze.GraphAnalyzer):
 
+    def __init__(self, t):
+        graphanalyze.GraphAnalyzer.__init__(self, t)
+        self.fresh_items = set()
+
     @staticmethod
     def join_two_results(result1, result2):
-        if result1 is top_set:
-            return top_set
-        if result2 is top_set:
+        if result1 is top_set or result2 is top_set:
             return top_set
         return result1.union(result2)
 
@@ -27,7 +29,14 @@ class WriteAnalyzer(graphanalyze.GraphAnalyzer):
         return result is top_set
 
     def analyze_simple_operation(self, op):
-        if op.opname in ("setfield", "oosetfield"):
+        if op.opname == 'malloc':
+            self.fresh_items.add(op.result)
+        elif op.opname == 'cast_pointer':
+            if op.args[0] in self.fresh_items:
+                self.fresh_items.add(op.result)
+        elif op.opname in ("setfield", "oosetfield"):
+            if op.args[0] in self.fresh_items:
+                return empty_set
             return frozenset([
                 ("struct", op.args[0].concretetype, op.args[1].value)])
         elif op.opname == "setarrayitem":
