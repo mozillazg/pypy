@@ -86,3 +86,14 @@ def test_filter_out_instance_with_void():
     assert not effectinfo.readonly_descrs_fields
     assert not effectinfo.write_descrs_fields
     assert not effectinfo.write_descrs_arrays
+
+def test_jit_invariant_extraeffect():
+    from pypy.rpython.rclass import FieldListAccessor
+
+    fla = FieldListAccessor()
+    fla.initialize(None, {'inst_x':'asmcodes_x'})
+    S = lltype.GcStruct('S', ('inst_x', lltype.Signed),
+                        hints={'jit_invariant_fields':fla})
+    effects = frozenset([('struct', lltype.Ptr(S), 'inst_x')])
+    effectinfo = effectinfo_from_writeanalyze(effects, FakeCPU())
+    assert effectinfo.extraeffect == effectinfo.EF_FORCES_JIT_INVARIANT

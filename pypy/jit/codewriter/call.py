@@ -228,24 +228,16 @@ class CallControl(object):
             extraeffect = EffectInfo.EF_CANNOT_RAISE
         #
         readwrite_res = self.readwrite_analyzer.analyze(op)
-        if readwrite_res is top_set:
-            extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
-        else:
-            for effect, struct, name in readwrite_res:
-                if (effect == 'struct' and
-                    (name in struct.TO._hints.get('jit_invariant_fields', []))):
-                    extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
-                    break
 
         effectinfo = effectinfo_from_writeanalyze(
             readwrite_res, self.cpu, extraeffect, oopspecindex)
         #
-        if pure or loopinvariant:
-            assert effectinfo is not None
-            assert extraeffect < EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
-        #
-        return self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
+        res = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
                                     effectinfo)
+        if pure or loopinvariant:
+            assert res.effectinfo is not None
+            assert res.extraeffect < EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+        return res
 
     def _canraise(self, op):
         if op.opname == 'pseudo_call_cannot_raise':
