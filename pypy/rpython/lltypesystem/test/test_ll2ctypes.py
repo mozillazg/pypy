@@ -1328,3 +1328,10 @@ class TestPlatform(object):
         f = rffi.llexternal('f', [rffi.INT, rffi.INT], rffi.INT,
                             compilation_info=eci)
         assert f(3, 4) == 7
+
+    def test_weakref(self):
+        TP = lltype.GcStruct('x')
+        x = lltype.malloc(TP)
+        wref = llmemory.weakref_create(x)
+        ct = lltype2ctypes(wref)
+        assert ctypes2lltype(llmemory.WeakRefPtr, ct) == wref
