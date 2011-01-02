@@ -143,10 +143,6 @@ class VirtualizableAnalyzer(BoolGraphAnalyzer):
         return op.opname in ('jit_force_virtualizable',
                              'jit_force_virtual')
 
-class JitInvariantAnalyzer(BoolGraphAnalyzer):
-    def analyze_simple_operation(self, op):
-        return op.opname == 'jit_invariant_setfield'
-
 # ____________________________________________________________
 
 class CallInfoCollection(object):

@@ -6,14 +6,12 @@
 from pypy.jit.codewriter import support
 from pypy.jit.codewriter.jitcode import JitCode
 from pypy.jit.codewriter.effectinfo import VirtualizableAnalyzer
-from pypy.jit.codewriter.effectinfo import JitInvariantAnalyzer
 from pypy.jit.codewriter.effectinfo import effectinfo_from_writeanalyze
 from pypy.jit.codewriter.effectinfo import EffectInfo, CallInfoCollection
 from pypy.translator.simplify import get_funcobj, get_functype
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
-from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer
-
+from pypy.translator.backendopt.writeanalyze import ReadWriteAnalyzer, top_set
 
 class CallControl(object):
     virtualref_info = None     # optionally set from outside
@@ -31,7 +29,6 @@ class CallControl(object):
             self.raise_analyzer = RaiseAnalyzer(translator)
             self.readwrite_analyzer = ReadWriteAnalyzer(translator)
             self.virtualizable_analyzer = VirtualizableAnalyzer(translator)
-            self.jit_invariant_analyzer = JitInvariantAnalyzer(translator)
         #
         for index, jd in enumerate(jitdrivers_sd):
             jd.index = index
@@ -218,9 +215,7 @@ class CallControl(object):
                 assert not NON_VOID_ARGS, ("arguments not supported for "
                                            "loop-invariant function!")
         # build the extraeffect
-        if self.jit_invariant_analyzer.analyze(op):
-            extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
-        elif self.virtualizable_analyzer.analyze(op):
+        if self.virtualizable_analyzer.analyze(op):
             extraeffect = EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
         elif loopinvariant:
             extraeffect = EffectInfo.EF_LOOPINVARIANT
@@ -232,9 +227,18 @@ class CallControl(object):
         else:
             extraeffect = EffectInfo.EF_CANNOT_RAISE
         #
+        readwrite_res = self.readwrite_analyzer.analyze(op)
+        if readwrite_res is top_set:
+            extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
+        else:
+            for effect, struct, name in readwrite_res:
+                if (effect == 'struct' and
+                    (name in struct.TO._hints.get('jit_invariant_fields', []))):
+                    extraeffect = EffectInfo.EF_FORCES_JIT_INVARIANT
+                    break
+
         effectinfo = effectinfo_from_writeanalyze(
-            self.readwrite_analyzer.analyze(op), self.cpu, extraeffect,
-            oopspecindex)
+            readwrite_res, self.cpu, extraeffect, oopspecindex)
         #
         if pure or loopinvariant:
             assert effectinfo is not None
