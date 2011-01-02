@@ -26,23 +26,23 @@ class OutOfLineTests(object):
         class A(object):
             _jit_invariant_fields_ = ['x']
 
-        myjitdriver = JitDriver(greens = [], reds = ['i', 'total'])
+        myjitdriver = JitDriver(greens = [], reds = ['i', 'total',  'a'])
         
-        a = A()
-
         @dont_look_inside
-        def g(i):
+        def g(a, i):
             if i == 5:
                 a.x = 2
 
         def f():
+            a = A() 
             a.x = 1
             i = 0
             total = 0
             while i < 20:
-                myjitdriver.can_enter_jit(i=i, total=total)
-                myjitdriver.jit_merge_point(i=i, total=total)
-                g(i)
+                myjitdriver.can_enter_jit(i=i, total=total, a=a)
+                myjitdriver.jit_merge_point(i=i, total=total, a=a)
+                a = hint(a, promote=True)
+                g(a, i)
                 i += a.x
                 total += i
             return total

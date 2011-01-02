@@ -14,7 +14,9 @@ ROPAQUE = lltype.Ptr(lltype.GcOpaqueType('ropaque'))
 
 def cast_obj_to_ropaque(obj):
     if not we_are_translated():
-        return lltype.opaqueptr(ROPAQUE.TO, 'ropaque', _obj=obj)
+        res = lltype.opaqueptr(ROPAQUE.TO, 'ropaque', _obj=obj)
+        obj._ropaqu_ptr = res # XXX ugly hack for weakrefs
+        return res
     else:
         ptr = cast_instance_to_base_ptr(obj)
         return lltype.cast_opaque_ptr(ROPAQUE, ptr)
