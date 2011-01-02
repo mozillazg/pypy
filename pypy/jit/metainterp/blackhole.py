@@ -1247,7 +1247,7 @@ class BlackholeInterpreter(object):
             # because of GUARD_NONNULL_CLASS.
             pass
         #
-        elif opnum == rop.GUARD_NOT_INVARIANT:
+        elif opnum == rop.GUARD_NOT_INVALIDATED:
             pass
         elif (opnum == rop.GUARD_NO_EXCEPTION or
               opnum == rop.GUARD_EXCEPTION or
