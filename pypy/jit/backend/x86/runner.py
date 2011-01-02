@@ -144,18 +144,28 @@ class AbstractX86CPU(AbstractLLCPU):
     def get_invalidate_asm(self, TP, fieldname):
         def invalidate_asm(arg):
             next = getattr(arg, fieldname)
+
+            all = []
             while next:
-                prev = next
-                llx =  llmemory.weakref_deref(ropaque.ROPAQUE, prev.address)
+                llx = llmemory.weakref_deref(ropaque.ROPAQUE, next.address)
                 if llx:
-                    x = ropaque.cast_ropaque_to_obj(history.LoopToken, llx)
-                    x.invalidated = True
-                    x._x86_asm_invalidated[0] = 1
-                    for elem in x._back_looptokens:
-                        token = elem()
-                        if token:
-                            self.redirect_call_assembler(token, x._tmp_token)
+                    all.append(ropaque.cast_ropaque_to_obj(history.LoopToken,
+                                                           llx))
                 next = next.next
+
+            while all:
+                next = all.pop()
+                next.invalidated = True
+                next._x86_asm_invalidated[0] = 1
+                for elem in next._back_looptokens_call_asm:
+                    token = elem()
+                    if token:
+                        self.redirect_call_assembler(next, next._tmp_token)
+                        break
+                for elem in next._back_looptokens:
+                    elem = elem()
+                    if elem:
+                        all.append(elem)
         return invalidate_asm
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
