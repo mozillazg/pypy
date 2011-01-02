@@ -10,9 +10,6 @@ from pypy.rlib import jit
 class ModuleCell(object):
     _jit_invariant_fields_ = ['w_value']
     
-    def __init__(self, w_value=None):
-        self.w_value = w_value
-
     def invalidate(self):
         w_value = self.w_value
         self.w_value = None
@@ -39,8 +36,10 @@ class ModuleDictImplementation(W_DictMultiObject):
         res = self.content.get(key, None)
         if res is not None:
             return res
-        result = self.content[key] = ModuleCell()
-        return result
+        cell = ModuleCell()
+        cell.w_value = None
+        self.content[key] = cell
+        return cell
 
     def impl_setitem(self, w_key, w_value):
         space = self.space
