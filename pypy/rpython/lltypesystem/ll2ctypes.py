@@ -106,7 +106,7 @@ def _setup_ctypes_cache():
         lltype.Bool:     ctypes.c_long, # XXX
         llmemory.Address:  ctypes.c_void_p,
         llmemory.GCREF:    ctypes.c_void_p,
-        llmemory.WeakRef:  ctypes.c_void_p, # XXX
+        llmemory.WeakRef:  ctypes.c_int,
         })
 
     # for unicode strings, do not use ctypes.c_wchar because ctypes
@@ -572,6 +572,10 @@ _all_callbacks_results = []
 _int2obj = {}
 _callback_exc_info = None
 
+_all_weakrefs_cache = [] # this is a cache of all weakrefs. They don't
+# keep alive stuff, but some more advanced scenario for cleaning them up
+# might be useful
+
 def get_rtyper():
     llinterp = LLInterpreter.current_interpreter
     if llinterp is not None:
@@ -611,6 +615,9 @@ def lltype2ctypes(llobj, normalize=True):
             # the same valu
         else:
             container = llobj._obj
+            if T == llmemory.WeakRefPtr:
+                _all_weakrefs_cache.append(llobj)
+                return (ctypes.c_int * 1)(len(_all_weakrefs_cache) - 1)
         if isinstance(T.TO, lltype.FuncType):
             # XXX a temporary workaround for comparison of lltype.FuncType
             key = llobj._obj.__dict__.copy()
@@ -755,6 +762,8 @@ def ctypes2lltype(T, cobj):
     if T is lltype.Void:
         return None
     if isinstance(T, lltype.Ptr):
+        if T == llmemory.WeakRefPtr:
+            return _all_weakrefs_cache[cobj[0]]
         if not cobj or not ctypes.cast(cobj, ctypes.c_void_p).value:   # NULL pointer
             # CFunctionType.__nonzero__ is broken before Python 2.6
             return lltype.nullptr(T.TO)
