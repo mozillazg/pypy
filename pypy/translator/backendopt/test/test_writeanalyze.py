@@ -268,11 +268,15 @@ class TestLLtypeReadWriteAnalyze(BaseTest):
             def f(self):
                 self.x = 1
                 return self.y
-        def h(flag):
+
+        def main(flag):
             obj = A(flag)
+            return h(obj)
+            
+        def h(obj):
             return obj.f()
         
-        t, wa = self.translate(h, [int])
+        t, wa = self.translate(main, [int])
         hgraph = graphof(t, h)
         op_call_f = hgraph.startblock.operations[-1]
 
@@ -290,6 +294,25 @@ class TestLLtypeReadWriteAnalyze(BaseTest):
         assert struct2 == "struct"
         assert name2.endswith("x")
         assert T1 == T2
+
+    def test_not_really_read(self):
+        class A(object):
+            pass
+        
+        def h():
+            a = A()
+            a.x = 3
+            return a
+
+        def main():
+            return h()
+
+        t, wa = self.translate(main, [])
+        maingraph = graphof(t, main)
+        op = maingraph.startblock.operations[0]
+        assert op.opname == 'direct_call'
+        result = wa.analyze(op)
+        assert not result
 
     def test_contains(self):
         def g(x, y, z):
@@ -314,14 +337,14 @@ class TestLLtypeReadWriteAnalyze(BaseTest):
         S = lltype.GcStruct('S', ('x', lltype.Signed),
                             adtmeths = {'yep': True,
                                         'callme': ll_callme})
-        def g(x, y, z):
-            p = lltype.malloc(S)
+        def g(p, x, y, z):
             p.x = x
             if p.yep:
                 z *= p.callme(y)
             return z
         def f(x, y, z):
-            return g(x, y, z)
+            p = lltype.malloc(S)
+            return g(p, x, y, z)
 
         t, wa = self.translate(f, [int, int, int])
         fgraph = graphof(t, f)
