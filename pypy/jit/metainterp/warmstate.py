@@ -267,7 +267,7 @@ class WarmEnterState(object):
             # entry_loop_token is also kept alive by any loop that used
             # to point to old_token.  Actually freeing old_token early
             # is a pointless optimization (it is tiny).
-            old_token.record_jump_to(entry_loop_token)
+            old_token.record_jump_to(entry_loop_token, False)
 
     # ----------
 

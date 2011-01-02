@@ -749,11 +749,15 @@ class LoopToken(AbstractDescr):
         # For memory management of assembled loops
         self._keepalive_target_looktokens = {}      # set of other LoopTokens
         self._back_looptokens = []
+        self._back_looptokens_call_asm = []
         # the reverse of the _keepalive_target_looktokens dict
 
-    def record_jump_to(self, target_loop_token):
+    def record_jump_to(self, target_loop_token, is_call_asm=False):
         self._keepalive_target_looktokens[target_loop_token] = None
-        target_loop_token._back_looptokens.append(weakref.ref(self))
+        if is_call_asm:
+            target_loop_token._back_looptokens_call_asm.append(weakref.ref(self))
+        else:
+            target_loop_token._back_looptokens.append(weakref.ref(self))
 
     def __repr__(self):
         return '<Loop %d, gen=%d>' % (self.number, self.generation)

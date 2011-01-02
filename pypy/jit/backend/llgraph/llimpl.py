@@ -311,17 +311,10 @@ def invalidate_call_asm(from_loop, ctl):
 
 def _invalidate_call_asm(from_loop, ctl):
     for op in from_loop.operations:
-        if op.opnum == rop.CALL_ASSEMBLER or op.opnum == rop.JUMP:
-            if op.descr is None:
-                continue
+        if op.opnum == rop.CALL_ASSEMBLER:
             call_target = op.descr().compiled_loop_token
             if call_target is ctl:
-                tmp = op.descr()._tmp_token.compiled_loop_token
-                if hasattr(call_target, 'redirected'):
-                    import pdb
-                    pdb.set_trace()
-                _redirect_call_assembler(call_target, tmp,
-                                         op.descr()._tmp_token)
+                op.descr = weakref.ref(op.descr()._tmp_token)
         if op.is_guard() and op.jump_target is not None:
             _invalidate_call_asm(op.jump_target, to_loop)
 

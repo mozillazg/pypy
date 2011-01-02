@@ -69,7 +69,8 @@ def record_loop_or_bridge(loop):
             # cases of cycles, but at least it helps in simple tests of
             # test_memgr.py)
             if descr is not looptoken:
-                looptoken.record_jump_to(descr)
+                looptoken.record_jump_to(descr,
+                                         op.getopnum() == rop.CALL_ASSEMBLER)
             op.setdescr(None)    # clear reference, mostly for tests
     # mostly for tests: make sure we don't keep a reference to the LoopToken
     loop.token = None

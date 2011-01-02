@@ -491,22 +491,29 @@ class LLtypeCPU(BaseCPU):
     def get_invalidate_asm(self, TP, fieldname):
         def invalidate_asm(arg):
             next = getattr(arg, fieldname)
+            all = []
             while next:
-                prev = next
-                llx =  llmemory.weakref_deref(ropaque.ROPAQUE, prev.address)
+                llx = llmemory.weakref_deref(ropaque.ROPAQUE, next.address)
                 if llx:
-                    x = ropaque.cast_ropaque_to_obj(history.LoopToken, llx)
-                    x.invalidated = True
-                    compiled = x.compiled_loop_token.compiled_version
-                    llimpl.mark_as_invalid(compiled)
-                    for elem in x._back_looptokens:
-                        token = elem()
-                        if token:
-                            tk = token.compiled_loop_token.compiled_version
-                            llimpl.invalidate_call_asm(tk,
-                                                       x.compiled_loop_token)
-                                
+                    all.append(ropaque.cast_ropaque_to_obj(history.LoopToken,
+                                                           llx))
                 next = next.next
+
+            while all:
+                next = all.pop()
+                next.invalidated = True
+                compiled = next.compiled_loop_token.compiled_version
+                llimpl.mark_as_invalid(compiled)
+                for elem in next._back_looptokens_call_asm:
+                    token = elem()
+                    if token:
+                        tk = token.compiled_loop_token.compiled_version
+                        llimpl.invalidate_call_asm(tk,
+                                                   next.compiled_loop_token)
+                for elem in next._back_looptokens:
+                    elem = elem()
+                    if elem:
+                        all.append(elem)
         return invalidate_asm
 
 class OOtypeCPU_xxx_disabled(BaseCPU):
