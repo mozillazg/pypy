@@ -90,6 +90,10 @@ ASMCODE = lltype.GcForwardReference()
 ASMCODE.become(GcStruct('asmcode', ('address', llmemory.WeakRefPtr),
                         ('next', lltype.Ptr(ASMCODE))))
 
+ASMCODE_APPENDER = lltype.FuncType([llmemory.GCREF, llmemory.WeakRefPtr],
+                                   lltype.Void)
+ASMCODE_APPENDER_PTR = lltype.Ptr(ASMCODE_APPENDER)
+
 def cast_vtable_to_typeptr(vtable):
     while typeOf(vtable).TO != OBJECT_VTABLE:
         vtable = vtable.super

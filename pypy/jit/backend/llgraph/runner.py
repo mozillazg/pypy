@@ -489,7 +489,7 @@ class LLtypeCPU(BaseCPU):
         return self.get_fail_descr_from_number(fail_index)
 
     def get_invalidate_asm(self, TP, fieldname):
-        def invalidate_asm(arg, fieldname):
+        def invalidate_asm(arg):
             next = getattr(arg, fieldname)
             while next:
                 prev = next

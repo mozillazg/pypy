@@ -2243,8 +2243,10 @@ class MetaInterp(object):
         seen = {}
         for b_struct, c_appender in self.invariant_structs:
             if (b_struct, c_appender) not in seen:
-                heaptracker.int2adr(c_appender.value).ptr(b_struct.value,
-                                                          lltoken_weakref)
+                adr = heaptracker.int2adr(c_appender.getint())
+                ptr = llmemory.cast_adr_to_ptr(adr,
+                                               rclass.ASMCODE_APPENDER_PTR)
+                ptr(b_struct.getref_base(), lltoken_weakref)
                 seen[(b_struct, c_appender)] = None
 
 # ____________________________________________________________
