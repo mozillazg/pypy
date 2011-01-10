@@ -232,12 +232,12 @@ class CallControl(object):
         effectinfo = effectinfo_from_writeanalyze(
             readwrite_res, self.cpu, extraeffect, oopspecindex)
         #
-        res = self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
-                                    effectinfo)
         if pure or loopinvariant:
-            assert res.effectinfo is not None
-            assert res.extraeffect < EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
-        return res
+            assert effectinfo is not None
+            assert effectinfo.extraeffect < EffectInfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE
+
+        return self.cpu.calldescrof(FUNC, tuple(NON_VOID_ARGS), RESULT,
+                                    effectinfo)
 
     def _canraise(self, op):
         if op.opname == 'pseudo_call_cannot_raise':
