@@ -1,0 +1,7 @@
+.*\.pyc
+pypy/_cache
+.*~
+pypy/module/cpyext/src/.*.o
+compiled/
+include/
+lib_pypy/ctypes_config_cache
