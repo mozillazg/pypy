@@ -23,18 +23,16 @@ class TestFloatObject(BaseApiTest):
                           space.wrap(42.5))
 
     def test_from_string(self, space, api):
-        def test_number(n, expectfail=False):
-            np = lltype.nullptr(rffi.CCHARPP.TO)
-            w_n = space.wrap(n)
-            f = api.PyFloat_FromString(w_n, np)
-            if expectfail:
-                assert f == None
-            else:
-                assert space.eq_w(f, space.wrap(n))
+        np = lltype.nullptr(rffi.CCHARPP.TO)
+
+        def test_number(n):
+            f = api.PyFloat_FromString(space.wrap(str(n)), np)
+            assert space.eq_w(f, space.wrap(n))
 
         test_number(0.0)
         test_number(42.0)
-        test_number("abcd", True)
+
+        self.raises(space, api, ValueError, api.PyFloat_FromString, space.wrap("abcd"), np)
 
 class AppTestFloatObject(AppTestCpythonExtensionBase):
     def test_fromstring(self):
