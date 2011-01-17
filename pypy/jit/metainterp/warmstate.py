@@ -169,7 +169,7 @@ class JitCell(BaseJitCell):
     def get_entry_loop_token(self):
         if self.wref_entry_loop_token is not None:
             looptoken = self.wref_entry_loop_token()
-            if looptoken.invalidated:
+            if looptoken is not None and looptoken.invalidated:
                 self.wref_entry_loop_token = None
             else:
                 return looptoken
