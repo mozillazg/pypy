@@ -8,8 +8,6 @@ from pypy.objspace.std.dictmultiobject import W_DictMultiObject, _is_sane_hash
 from pypy.rlib import jit
 
 class ModuleCell(object):
-    _jit_invariant_fields_ = ['w_value']
-    
     def invalidate(self):
         w_value = self.w_value
         self.w_value = None
