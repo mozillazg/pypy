@@ -67,6 +67,7 @@ class MemoryManager(object):
         for looptoken in self.alive_loops.keys():
             if (looptoken.invalidated or
                 0 <= looptoken.generation < max_generation):
+                # XXX free looptoken invalidated ptr
                 del self.alive_loops[looptoken]
         newtotal = len(self.alive_loops)
         debug_print("Loop tokens freed: ", oldtotal - newtotal)

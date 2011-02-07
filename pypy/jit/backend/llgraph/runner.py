@@ -5,7 +5,7 @@ Minimal-API wrapper around the llinterpreter to run operations.
 import sys
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.jit.metainterp import history
@@ -20,7 +20,6 @@ from pypy.rlib import rgc, ropaque
 
 class MiniStats:
     pass
-
 
 class Descr(history.AbstractDescr):
 
@@ -285,6 +284,9 @@ class BaseCPU(model.AbstractCPU):
         return self.getdescr(symbolic.get_size(S))
 
 
+# can't be on LLtypeCPU thanks to closures not rendered correctly
+INVALIDATED_ARRAY_TP = rffi.CArray(lltype.Signed)
+
 class LLtypeCPU(BaseCPU):
     is_oo = False
     ts = llhelper
@@ -488,32 +490,21 @@ class LLtypeCPU(BaseCPU):
         self.latest_frame = frame
         return self.get_fail_descr_from_number(fail_index)
 
+    def create_invalidate_array(self):
+        v = lltype.malloc(INVALIDATED_ARRAY_TP, 1, flavor='raw',
+                          track_allocation=False)
+        v[0] = 0
+        return v
+
     def get_invalidate_asm(self, TP, fieldname):
         def invalidate_asm(arg):
             next = getattr(arg, fieldname)
             all = []
             while next:
-                llx = llmemory.weakref_deref(ropaque.ROPAQUE, next.address)
+                llx = rffi.cast(lltype.Ptr(INVALIDATED_ARRAY_TP), next.address)
                 if llx:
-                    all.append(ropaque.cast_ropaque_to_obj(history.LoopToken,
-                                                           llx))
+                    llx[0] = 1
                 next = next.next
-
-            while all:
-                next = all.pop()
-                next.invalidated = True
-                compiled = next.compiled_loop_token.compiled_version
-                llimpl.mark_as_invalid(compiled)
-                for elem in next._back_looptokens_call_asm:
-                    token = elem()
-                    if token:
-                        tk = token.compiled_loop_token.compiled_version
-                        llimpl.invalidate_call_asm(tk,
-                                                   next.compiled_loop_token)
-                for elem in next._back_looptokens:
-                    elem = elem()
-                    if elem:
-                        all.append(elem)
         return invalidate_asm
 
 class OOtypeCPU_xxx_disabled(BaseCPU):

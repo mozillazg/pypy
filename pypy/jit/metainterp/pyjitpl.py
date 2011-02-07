@@ -1,5 +1,5 @@
 import py, os, sys
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
@@ -512,7 +512,7 @@ class MIFrame(object):
 
     @arguments("box", "descr", "box")
     def _opimpl_getfield_gc_invariant_any(self, box, fielddescr, c_func):
-        self.metainterp.invariant_structs.append((box, c_func))
+        self.metainterp.mark_invariant_struct(box, c_func)
         return self.execute_with_descr(rop.GETFIELD_GC_PURE, fielddescr, box)
     opimpl_getfield_gc_i_invariant = _opimpl_getfield_gc_invariant_any
     opimpl_getfield_gc_r_invariant = _opimpl_getfield_gc_invariant_any
@@ -1402,7 +1402,7 @@ class MetaInterp(object):
         self.portal_trace_positions = []
         self.free_frames_list = []
         self.last_exc_value_box = None
-        self.invariant_structs = []
+        self.invalidated_array = self.cpu.create_invalidate_array()
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -1842,13 +1842,16 @@ class MetaInterp(object):
         greenkey = original_boxes[:num_green_args]
         old_loop_tokens = self.get_compiled_merge_points(greenkey)
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        loop_token = compile.compile_new_loop(self, old_loop_tokens, start)
-        if loop_token is not None: # raise if it *worked* correctly
-            self.set_compiled_merge_points(greenkey, old_loop_tokens)
-            raise GenerateMergePoint(live_arg_boxes, loop_token)
+        if not self.invalidated_array[0]:
+            loop_token = compile.compile_new_loop(self, old_loop_tokens, start)
+            if loop_token is not None: # raise if it *worked* correctly
+                self.set_compiled_merge_points(greenkey, old_loop_tokens)
+                raise GenerateMergePoint(live_arg_boxes, loop_token)
         self.history.operations.pop()     # remove the JUMP
 
     def compile_bridge(self, live_arg_boxes):
+        if self.invalidated_array[0]:
+            return
         num_green_args = self.jitdriver_sd.num_green_args
         greenkey = live_arg_boxes[:num_green_args]
         old_loop_tokens = self.get_compiled_merge_points(greenkey)
@@ -1863,6 +1866,9 @@ class MetaInterp(object):
 
     def compile_done_with_this_frame(self, exitbox):
         self.gen_store_back_in_virtualizable()
+        if self.invalidated_array[0]:
+            compile.giveup()
+            return
         # temporarily put a JUMP to a pseudo-loop
         sd = self.staticdata
         result_type = self.jitdriver_sd.result_type
@@ -1889,7 +1895,10 @@ class MetaInterp(object):
 
     def compile_exit_frame_with_exception(self, valuebox):
         self.gen_store_back_in_virtualizable()
-        # temporarily put a JUMP to a pseudo-loop
+        if self.invalidated_array[0]:
+            compile.giveup()
+            return 
+       # temporarily put a JUMP to a pseudo-loop
         self.history.record(rop.JUMP, [valuebox], None)
         sd = self.staticdata
         loop_tokens = sd.loop_tokens_exit_frame_with_exception_ref
@@ -2237,17 +2246,12 @@ class MetaInterp(object):
         op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
         self.history.operations.append(op)
 
-    def remember_jit_invariants(self, loop):
-        lllooptoken = ropaque.cast_obj_to_ropaque(loop.token)
-        lltoken_weakref = llmemory.weakref_create(lllooptoken)
-        seen = {}
-        for b_struct, c_appender in self.invariant_structs:
-            if (b_struct, c_appender) not in seen:
-                adr = heaptracker.int2adr(c_appender.getint())
-                ptr = llmemory.cast_adr_to_ptr(adr,
-                                               rclass.ASMCODE_APPENDER_PTR)
-                ptr(b_struct.getref_base(), lltoken_weakref)
-                seen[(b_struct, c_appender)] = None
+    def mark_invariant_struct(self, b_struct, c_appender):
+        addr = rffi.cast(lltype.Signed, self.invalidated_array)
+        func_addr = heaptracker.int2adr(c_appender.getint())
+        funcptr = llmemory.cast_adr_to_ptr(func_addr,
+                                           rclass.ASMCODE_APPENDER_PTR)
+        funcptr(b_struct.getref_base(), addr)
 
 # ____________________________________________________________
 
