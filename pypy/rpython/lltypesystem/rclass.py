@@ -86,11 +86,13 @@ LLFLAVOR = {'gc'   : 'gc',
 
 # a linked-list of assembler codes to invalidate in case jit_invariant_fields
 # are modified
+# address is a pointer to a loop-level one-element raw array that's
+# either 0 or 1
 ASMCODE = lltype.GcForwardReference()
-ASMCODE.become(GcStruct('asmcode', ('address', llmemory.WeakRefPtr),
+ASMCODE.become(GcStruct('asmcode', ('address', lltype.Signed),
                         ('next', lltype.Ptr(ASMCODE))))
 
-ASMCODE_APPENDER = lltype.FuncType([llmemory.GCREF, llmemory.WeakRefPtr],
+ASMCODE_APPENDER = lltype.FuncType([llmemory.GCREF, lltype.Signed],
                                    lltype.Void)
 ASMCODE_APPENDER_PTR = lltype.Ptr(ASMCODE_APPENDER)
 

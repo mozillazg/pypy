@@ -81,6 +81,7 @@ def compile_new_loop(metainterp, old_loop_tokens, start):
     """Try to compile a new loop by closing the current history back
     to the first operation.
     """
+    assert not metainterp.invalidated_array[0]
     history = metainterp.history
     loop = create_empty_loop(metainterp)
     loop.inputargs = history.inputargs
@@ -92,6 +93,7 @@ def compile_new_loop(metainterp, old_loop_tokens, start):
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
     loop_token = make_loop_token(len(loop.inputargs), jitdriver_sd)
+    loop_token.invalidated_array = metainterp.invalidated_array
     loop.token = loop_token
     loop.operations[-1].setdescr(loop_token)     # patch the target of the JUMP
     try:
@@ -102,9 +104,6 @@ def compile_new_loop(metainterp, old_loop_tokens, start):
     if old_loop_token is not None:
         metainterp.staticdata.log("reusing old loop")
         return old_loop_token
-    if we_are_translated() or hasattr(metainterp, 'remember_jit_invariants'):
-        # for tests
-        metainterp.remember_jit_invariants(loop)
     send_loop_to_backend(metainterp_sd, loop, "loop")
     insert_loop_token(old_loop_tokens, loop_token)
     record_loop_or_bridge(loop)
@@ -547,6 +546,7 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
     #
     # Attempt to use optimize_bridge().  This may return None in case
     # it does not work -- i.e. none of the existing old_loop_tokens match.
+    assert not metainterp.invalidated_array[0]
     new_loop = create_empty_loop(metainterp)
     new_loop.inputargs = metainterp.history.inputargs
     # clone ops, as optimize_bridge can mutate the ops
@@ -567,9 +567,6 @@ def compile_new_bridge(metainterp, old_loop_tokens, resumekey):
         # know exactly what we must do (ResumeGuardDescr/ResumeFromInterpDescr)
         prepare_last_operation(new_loop, target_loop_token)
         resumekey.compile_and_attach(metainterp, new_loop)
-        if we_are_translated() or hasattr(metainterp, 'remember_jit_invariants'):
-            # for tests
-            metainterp.remember_jit_invariants(new_loop)
         record_loop_or_bridge(new_loop)
     return target_loop_token
 
