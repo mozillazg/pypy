@@ -824,8 +824,17 @@ class LLFrame(object):
     def op_gc_thread_run(self):
         self.heap.thread_run()
 
+    def op_gc_thread_start(self):
+        self.heap.thread_start()
+
     def op_gc_thread_die(self):
         self.heap.thread_die()
+
+    def op_gc_thread_before_fork(self):
+        raise NotImplementedError
+
+    def op_gc_thread_after_fork(self):
+        raise NotImplementedError
 
     def op_gc_free(self, addr):
         # what can you do?
@@ -948,6 +957,9 @@ class LLFrame(object):
     def op_set_stack_depth_limit(self):
         raise NotImplementedError("set_stack_depth_limit")
 
+    def op_stack_current(self):
+        return 0
+
     # operations on pyobjects!
     for opname in lloperation.opimpls.keys():
         exec py.code.Source("""
@@ -1037,20 +1049,6 @@ class LLFrame(object):
 
     def op_int_abs_ovf(self, x):
         assert type(x) is int
-        try:
-            return ovfcheck(abs(x))
-        except OverflowError:
-            self.make_llexception()
-
-    def op_llong_neg_ovf(self, x):
-        assert type(x) is r_longlong
-        try:
-            return ovfcheck(-x)
-        except OverflowError:
-            self.make_llexception()
-
-    def op_llong_abs_ovf(self, x):
-        assert type(x) is r_longlong
         try:
             return ovfcheck(abs(x))
         except OverflowError:

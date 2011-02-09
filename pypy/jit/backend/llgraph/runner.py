@@ -85,6 +85,7 @@ history.TreeLoop._compiled_version = lltype.nullptr(llimpl.COMPILEDLOOP.TO)
 
 class BaseCPU(model.AbstractCPU):
     supports_floats = True
+    supports_longlong = True
 
     def __init__(self, rtyper, stats=None, opts=None,
                  translate_support_code=False,
@@ -201,6 +202,7 @@ class BaseCPU(model.AbstractCPU):
                         llimpl.compile_add_fail_arg(c, var2index[box])
                     else:
                         llimpl.compile_add_fail_arg(c, -1)
+                        
             x = op.result
             if x is not None:
                 if isinstance(x, history.BoxInt):

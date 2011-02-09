@@ -52,7 +52,7 @@ class Function(Wrappable):
         return "<%s %s>" % (self.__class__.__name__, name)
 
     def call_args(self, args):
-        # delegate activation to code        
+        # delegate activation to code
         return self.getcode().funcrun(self, args)
 
     def call_obj_args(self, w_obj, args):
@@ -65,17 +65,17 @@ class Function(Wrappable):
                 return _get_immutable_code(self)
             return jit.hint(self.code, promote=True)
         return self.code
-    
+
     def funccall(self, *args_w): # speed hack
         from pypy.interpreter import gateway
         from pypy.interpreter.pycode import PyCode
-        
+
         code = self.getcode() # hook for the jit
         nargs = len(args_w)
         fast_natural_arity = code.fast_natural_arity
         if nargs == fast_natural_arity:
             if nargs == 0:
-                assert isinstance(code, gateway.BuiltinCode0)                
+                assert isinstance(code, gateway.BuiltinCode0)
                 return code.fastcall_0(self.space, self)
             elif nargs == 1:
                 assert isinstance(code, gateway.BuiltinCode1)
@@ -84,22 +84,22 @@ class Function(Wrappable):
                 assert isinstance(code, gateway.BuiltinCode2)
                 return code.fastcall_2(self.space, self, args_w[0], args_w[1])
             elif nargs == 3:
-                assert isinstance(code, gateway.BuiltinCode3)                
+                assert isinstance(code, gateway.BuiltinCode3)
                 return code.fastcall_3(self.space, self, args_w[0],
                                        args_w[1], args_w[2])
             elif nargs == 4:
-                assert isinstance(code, gateway.BuiltinCode4)                
+                assert isinstance(code, gateway.BuiltinCode4)
                 return code.fastcall_4(self.space, self, args_w[0],
                                        args_w[1], args_w[2], args_w[3])
         elif (nargs|PyCode.FLATPYCALL) == fast_natural_arity:
-            assert isinstance(code, PyCode)            
+            assert isinstance(code, PyCode)
             if nargs < 5:
                 new_frame = self.space.createframe(code, self.w_func_globals,
                                                    self.closure)
                 for i in funccallunrolling:
                     if i < nargs:
                         new_frame.fastlocals_w[i] = args_w[i]
-                return new_frame.run()                                    
+                return new_frame.run()
         elif nargs >= 1 and fast_natural_arity == Code.PASSTHROUGHARGS1:
             assert isinstance(code, gateway.BuiltinCodePassThroughArguments1)
             return code.funcrun_obj(self, args_w[0],
@@ -110,9 +110,9 @@ class Function(Wrappable):
     def funccall_valuestack(self, nargs, frame): # speed hack
         from pypy.interpreter import gateway
         from pypy.interpreter.pycode import PyCode
-            
+
         code = self.getcode() # hook for the jit
-        fast_natural_arity = code.fast_natural_arity        
+        fast_natural_arity = code.fast_natural_arity
         if nargs == fast_natural_arity:
             if nargs == 0:
                 assert isinstance(code, gateway.BuiltinCode0)
@@ -147,7 +147,7 @@ class Function(Wrappable):
             w_obj = frame.peekvalue(nargs-1)
             args = frame.make_arguments(nargs-1)
             return code.funcrun_obj(self, w_obj, args)
-                    
+
         args = frame.make_arguments(nargs)
         return self.call_args(args)
 
@@ -159,8 +159,8 @@ class Function(Wrappable):
         for i in xrange(nargs):
             w_arg = frame.peekvalue(nargs-1-i)
             new_frame.fastlocals_w[i] = w_arg
-            
-        return new_frame.run()                        
+
+        return new_frame.run()
 
     @jit.unroll_safe
     def _flat_pycall_defaults(self, code, nargs, frame, defs_to_load):
@@ -170,7 +170,7 @@ class Function(Wrappable):
         for i in xrange(nargs):
             w_arg = frame.peekvalue(nargs-1-i)
             new_frame.fastlocals_w[i] = w_arg
-            
+
         defs_w = self.defs_w
         ndefs = len(defs_w)
         start = ndefs-defs_to_load
@@ -178,7 +178,7 @@ class Function(Wrappable):
         for j in xrange(start, ndefs):
             new_frame.fastlocals_w[i] = defs_w[j]
             i += 1
-        return new_frame.run()                        
+        return new_frame.run()
 
     def getdict(self):
         if self.w_func_dict is None:
@@ -192,7 +192,7 @@ class Function(Wrappable):
 
     # unwrapping is done through unwrap_specs in typedef.py
 
-    def descr_function__new__(space, w_subtype, w_code, w_globals, 
+    def descr_function__new__(space, w_subtype, w_code, w_globals,
                             w_name=None, w_argdefs=None, w_closure=None):
         code = space.interp_w(Code, w_code)
         if not space.is_true(space.isinstance(w_globals, space.w_dict)):
@@ -233,7 +233,7 @@ class Function(Wrappable):
         return self.getrepr(self.space, 'function %s' % (self.name,))
 
 
-    # delicate   
+    # delicate
     _all = {'': None}
 
     def _freeze_(self):
@@ -264,7 +264,7 @@ class Function(Wrappable):
             new_inst = mod.get('builtin_function')
             return space.newtuple([new_inst,
                                    space.newtuple([space.wrap(code.identifier)])])
-            
+
         new_inst = mod.get('func_new')
         w        = space.wrap
         if self.closure is None:
@@ -451,7 +451,7 @@ class Method(Wrappable):
             pre = "bound"
         else:
             pre = "unbound"
-        return "%s method %s" % (pre, self.w_function.getname(self.space, '?'))
+        return "%s method %s" % (pre, self.w_function.getname(self.space))
 
     def call_args(self, args):
         space = self.space
@@ -500,13 +500,13 @@ class Method(Wrappable):
 
     def descr_method_repr(self):
         space = self.space
-        name = self.w_function.getname(self.space, '?')
+        name = self.w_function.getname(self.space)
         # XXX do we handle all cases sanely here?
         if space.is_w(self.w_class, space.w_None):
             w_class = space.type(self.w_instance)
         else:
             w_class = self.w_class
-        typename = w_class.getname(self.space, '?')
+        typename = w_class.getname(self.space)
         if self.w_instance is None:
             s = "<unbound method %s.%s>" % (typename, name)
             return space.wrap(s)
@@ -531,7 +531,7 @@ class Method(Wrappable):
         space = self.space
         other = space.interpclass_w(w_other)
         if not isinstance(other, Method):
-            return space.w_False
+            return space.w_NotImplemented
         if self.w_instance is None:
             if other.w_instance is not None:
                 return space.w_False
@@ -569,7 +569,7 @@ class Method(Wrappable):
         else:
             tup = [self.w_function, w_instance, self.w_class]
         return space.newtuple([new_inst, space.newtuple(tup)])
-        
+
 class StaticMethod(Wrappable):
     """The staticmethod objects."""
     _immutable_ = True
@@ -597,10 +597,6 @@ class ClassMethod(Wrappable):
         return space.wrap(Method(space, self.w_function, w_klass, space.w_None))
 
     def descr_classmethod__new__(space, w_subtype, w_function):
-        if not space.is_true(space.callable(w_function)):
-            typename = space.type(w_function).getname(space, '?')
-            raise operationerrfmt(space.w_TypeError,
-                                  "'%s' object is not callable", typename)
         instance = space.allocate_instance(ClassMethod, w_subtype)
         instance.__init__(w_function)
         return space.wrap(instance)

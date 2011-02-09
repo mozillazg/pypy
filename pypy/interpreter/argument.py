@@ -103,16 +103,13 @@ class Arguments(object):
             make_sure_not_resized(self.keywords_w)
 
         make_sure_not_resized(self.arguments_w)
-        if w_stararg is not None and space.is_true(w_stararg):
+        if w_stararg is not None:
             self._combine_starargs_wrapped(w_stararg)
-        if w_starstararg is not None and space.is_true(w_starstararg):
-            self._combine_starstarargs_wrapped(w_starstararg)
-            # if we have a call where **args are used at the callsite
-            # we shouldn't let the JIT see the argument matching
-            self._dont_jit = True
-        else:
-            self._dont_jit = False
-        
+        # if we have a call where **args are used at the callsite
+        # we shouldn't let the JIT see the argument matching
+        self._dont_jit = (w_starstararg is not None and
+                          self._combine_starstarargs_wrapped(w_starstararg))
+
     def __repr__(self):
         """ NOT_RPYTHON """
         name = self.__class__.__name__
@@ -156,14 +153,35 @@ class Arguments(object):
     def _combine_starstarargs_wrapped(self, w_starstararg):
         # unpack the ** arguments
         space = self.space
-        if not space.is_true(space.isinstance(w_starstararg, space.w_dict)):
-            raise OperationError(space.w_TypeError,
-                                 space.wrap("argument after ** must be "
-                                            "a dictionary"))
-        keywords_w = [None] * space.int_w(space.len(w_starstararg))
-        keywords = [None] * space.int_w(space.len(w_starstararg))
+        if space.isinstance_w(w_starstararg, space.w_dict):
+            if not space.is_true(w_starstararg):
+                return False # don't call unpackiterable - it's jit-opaque
+            keys_w = space.unpackiterable(w_starstararg)
+        else:
+            try:
+                w_keys = space.call_method(w_starstararg, "keys")
+            except OperationError, e:
+                if e.match(space, space.w_AttributeError):
+                    w_type = space.type(w_starstararg)
+                    typename = w_type.getname(space, '?')
+                    raise OperationError(
+                        space.w_TypeError,
+                        space.wrap("argument after ** must be "
+                                   "a mapping, not %s" % (typename,)))
+                raise
+            keys_w = space.unpackiterable(w_keys)
+        if keys_w:
+            self._do_combine_starstarargs_wrapped(keys_w, w_starstararg)
+            return True
+        else:
+            return False    # empty dict; don't disable the JIT
+
+    def _do_combine_starstarargs_wrapped(self, keys_w, w_starstararg):
+        space = self.space
+        keywords_w = [None] * len(keys_w)
+        keywords = [None] * len(keys_w)
         i = 0
-        for w_key in space.unpackiterable(w_starstararg):
+        for w_key in keys_w:
             try:
                 key = space.str_w(w_key)
             except OperationError, e:
@@ -256,6 +274,12 @@ class Arguments(object):
         args_w = self.arguments_w
         num_args = len(args_w)
 
+        keywords = self.keywords
+        keywords_w = self.keywords_w
+        num_kwds = 0
+        if keywords is not None:
+            num_kwds = len(keywords)
+
         avail = num_args + upfront
 
         if input_argcount < co_argcount:
@@ -271,11 +295,24 @@ class Arguments(object):
                 scope_w[i + input_argcount] = args_w[i]
             input_argcount += take
 
-        keywords = self.keywords
-        keywords_w = self.keywords_w
-        num_kwds = 0
-        if keywords is not None:
-            num_kwds = len(keywords)
+        # collect extra positional arguments into the *vararg
+        if has_vararg:
+            args_left = co_argcount - upfront
+            if args_left < 0:  # check required by rpython
+                assert extravarargs is not None
+                starargs_w = extravarargs
+                if num_args:
+                    starargs_w = starargs_w + args_w
+            elif num_args > args_left:
+                starargs_w = args_w[args_left:]
+            else:
+                starargs_w = []
+            scope_w[co_argcount] = self.space.newtuple(starargs_w)
+        elif avail > co_argcount:
+            raise ArgErrCount(avail, num_kwds,
+                              co_argcount, has_vararg, has_kwarg,
+                              defaults_w, 0)
+
         # the code assumes that keywords can potentially be large, but that
         # argnames is typically not too large
         num_remainingkwds = num_kwds
@@ -316,24 +353,6 @@ class Arguments(object):
                     # keyword arguments, which will be checked for below.
                     missing += 1
 
-        # collect extra positional arguments into the *vararg
-        if has_vararg:
-            args_left = co_argcount - upfront
-            if args_left < 0:  # check required by rpython
-                assert extravarargs is not None
-                starargs_w = extravarargs
-                if num_args:
-                    starargs_w = starargs_w + args_w
-            elif num_args > args_left:
-                starargs_w = args_w[args_left:]
-            else:
-                starargs_w = []
-            scope_w[co_argcount] = self.space.newtuple(starargs_w)
-        elif avail > co_argcount:
-            raise ArgErrCount(avail, num_kwds,
-                              co_argcount, has_vararg, has_kwarg,
-                              defaults_w, 0)
-
         # collect extra keyword arguments into the **kwarg
         if has_kwarg:
             w_kwds = self.space.newdict()
@@ -344,6 +363,10 @@ class Arguments(object):
                         self.space.setitem(w_kwds, self.space.wrap(key), keywords_w[i])
             scope_w[co_argcount + has_vararg] = w_kwds
         elif num_remainingkwds:
+            if co_argcount == 0:
+                raise ArgErrCount(avail, num_kwds,
+                              co_argcount, has_vararg, has_kwarg,
+                              defaults_w, missing)
             raise ArgErrUnknownKwds(num_remainingkwds, keywords, used_keywords)
 
         if missing:
@@ -577,21 +600,11 @@ class ArgErrCount(ArgErr):
     def getmsg(self, fnname):
         args = None
         #args_w, kwds_w = args.unpack()
-        if self.has_kwarg or (self.num_kwds and self.num_defaults):
-            msg2 = "non-keyword "
-            if self.missing_args:
-                required_args = self.expected_nargs - self.num_defaults
-                nargs = required_args - self.missing_args
-            else:
-                nargs = self.num_args
-        else:
-            msg2 = ""
-            nargs = self.num_args + self.num_kwds
+        nargs = self.num_args + self.num_kwds
         n = self.expected_nargs
         if n == 0:
-            msg = "%s() takes no %sargument (%d given)" % (
+            msg = "%s() takes no argument (%d given)" % (
                 fnname, 
-                msg2,
                 nargs)
         else:
             defcount = self.num_defaults
@@ -602,17 +615,14 @@ class ArgErrCount(ArgErr):
             else:
                 msg1 = "at least"
                 n -= defcount
-                if not self.num_kwds:  # msg "f() takes at least X non-keyword args"
-                    msg2 = ""   # is confusing if no kwd arg actually provided
             if n == 1:
                 plural = ""
             else:
                 plural = "s"
-            msg = "%s() takes %s %d %sargument%s (%d given)" % (
+            msg = "%s() takes %s %d argument%s (%d given)" % (
                 fnname,
                 msg1,
                 n,
-                msg2,
                 plural,
                 nargs)
         return msg

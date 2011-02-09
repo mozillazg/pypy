@@ -65,7 +65,7 @@ class W_Random(Wrappable):
         if not space.is_true(space.isinstance(w_state, space.w_tuple)):
             errstring = space.wrap("state vector must be tuple")
             raise OperationError(space.w_TypeError, errstring)
-        if space.int_w(space.len(w_state)) != rrandom.N + 1:
+        if space.len_w(w_state) != rrandom.N + 1:
             errstring = space.wrap("state vector is the wrong size")
             raise OperationError(space.w_ValueError, errstring)
         w_zero = space.newint(0)
@@ -81,9 +81,14 @@ class W_Random(Wrappable):
         self._rnd.index = space.int_w(w_item)
     setstate.unwrap_spec = ['self', ObjSpace, W_Root]
 
-    def jumpahead(self, n):
+    def jumpahead(self, space, w_n):
+        if space.is_true(space.isinstance(w_n, space.w_long)):
+            num = space.bigint_w(w_n)
+            n = intmask(num.uintmask())
+        else:
+            n = space.int_w(w_n)
         self._rnd.jumpahead(n)
-    jumpahead.unwrap_spec = ['self', int]
+    jumpahead.unwrap_spec = ['self', ObjSpace, W_Root]
 
     def getrandbits(self, space, k):
         if k <= 0:

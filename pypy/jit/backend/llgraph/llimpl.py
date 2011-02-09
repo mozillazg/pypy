@@ -23,11 +23,15 @@ from pypy.jit.backend.llgraph import symbolic
 
 from pypy.rlib.objectmodel import ComputedIntSymbolic, we_are_translated
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import r_longlong, r_ulonglong, r_uint
+from pypy.rlib.longlong2float import longlong2float, float2longlong
 
 import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer('runner')
 py.log.setconsumer('runner', ansi_log)
+
+IS_32_BIT = r_ulonglong is not r_uint
 
 
 def _from_opaque(opq):
@@ -397,6 +401,13 @@ def compile_add_jump_target(loop, loop_target):
         log.info("compiling new loop")
     else:
         log.info("compiling new bridge")
+
+def compile_add_guard_jump_target(loop, loop_target):
+    loop = _from_opaque(loop)
+    loop_target = _from_opaque(loop_target)
+    op = loop.operations[-1]
+    assert op.is_guard()
+    op.jump_target = loop_target
 
 def compile_add_fail(loop, fail_index):
     loop = _from_opaque(loop)
@@ -866,9 +877,6 @@ class Frame(object):
     def op_cast_ptr_to_int(self, descr, ptr):
         return cast_to_int(ptr)
 
-    def op_uint_xor(self, descr, arg1, arg2):
-        return arg1 ^ arg2
-
     def op_force_token(self, descr):
         opaque_frame = _to_opaque(self)
         return llmemory.cast_ptr_to_adr(opaque_frame)
@@ -1093,14 +1101,26 @@ def cast_to_ptr(x):
 def cast_from_ptr(TYPE, x):
     return lltype.cast_opaque_ptr(TYPE, x)
 
-def cast_to_float(x):      # not really a cast, just a type check
-    assert isinstance(x, float)
-    return x
+def cast_to_float(x):
+    if isinstance(x, float):
+        return x      # common case
+    if IS_32_BIT:
+        if isinstance(x, r_longlong):
+            return longlong2float(x)
+        if isinstance(x, r_ulonglong):
+            return longlong2float(rffi.cast(lltype.SignedLongLong, x))
+    raise TypeError(type(x))
 
-def cast_from_float(TYPE, x):   # not really a cast, just a type check
-    assert TYPE is lltype.Float
+def cast_from_float(TYPE, x):
     assert isinstance(x, float)
-    return x
+    if TYPE is lltype.Float:
+        return x
+    if IS_32_BIT:
+        if TYPE is lltype.SignedLongLong:
+            return float2longlong(x)
+        if TYPE is lltype.UnsignedLongLong:
+            return r_ulonglong(float2longlong(x))
+    raise TypeError(TYPE)
 
 
 def new_frame(is_oo, cpu):
@@ -1540,7 +1560,9 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
                     assert n == 'r'
                 x = argsiter_r.next()
                 x = cast_from_ptr(TYPE, x)
-            elif TYPE is lltype.Float:
+            elif TYPE is lltype.Float or (
+                    IS_32_BIT and TYPE in (lltype.SignedLongLong,
+                                           lltype.UnsignedLongLong)):
                 if args_in_order is not None:
                     n = orderiter.next()
                     assert n == 'f'
@@ -1667,6 +1689,7 @@ setannotation(compile_add_int_result, annmodel.SomeInteger())
 setannotation(compile_add_ref_result, annmodel.SomeInteger())
 setannotation(compile_add_float_result, annmodel.SomeInteger())
 setannotation(compile_add_jump_target, annmodel.s_None)
+setannotation(compile_add_guard_jump_target, annmodel.s_None)
 setannotation(compile_add_fail, annmodel.SomeInteger())
 setannotation(compile_add_fail_arg, annmodel.s_None)
 setannotation(compile_redirect_fail, annmodel.s_None)
