@@ -228,15 +228,8 @@ class OptRewrite(Optimization):
     def optimize_GUARD_TRUE(self, op, dryrun=False):
         self.optimize_guard(op, CONST_1, dryrun=dryrun)
 
-    def optimize_GUARD_FALSE(self, op):
-        value = self.getvalue(op.getarg(0))
-        if value in self.optimizer.int_to_bool_nullity:
-            v, int_is_true = self.optimizer.int_to_bool_nullity[value]
-            if int_is_true:
-                v.make_constant(ConstInt(0))
-            elif not v.is_nonnull():
-                v.make_nonnull(len(self.optimizer.newoperations) - 1)
-        self.optimize_guard(op, CONST_0)
+    def optimize_GUARD_FALSE(self, op, dryrun=False):
+        self.optimize_guard(op, CONST_0, dryrun=dryrun)
 
     def optimize_GUARD_CLASS(self, op, dryrun=False):
         value = self.getvalue(op.getarg(0))
@@ -300,7 +293,7 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
         resvalue = self.getvalue(op.result)
         self.optimizer.loop_invariant_results[key] = resvalue
-    
+
     def _optimize_nullness(self, op, box, expect_nonnull):
         value = self.getvalue(box)
         if value.is_nonnull():
@@ -316,13 +309,9 @@ class OptRewrite(Optimization):
             self.make_equal_to(op.result, v)
             return
         self._optimize_nullness(op, op.getarg(0), True)
-        self.optimizer.int_to_bool_nullity[self.getvalue(op.result)] = (v, True)
 
     def optimize_INT_IS_ZERO(self, op):
-        v = self.getvalue(op.getarg(0))
         self._optimize_nullness(op, op.getarg(0), False)
-        self.optimizer.int_to_bool_nullity[self.getvalue(op.result)] = (v,
-                                                                        False)
 
     def _optimize_oois_ooisnot(self, op, expect_isnot):
         value0 = self.getvalue(op.getarg(0))

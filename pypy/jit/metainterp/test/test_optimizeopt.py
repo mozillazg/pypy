@@ -606,6 +606,7 @@ class OptimizeOptTest(BaseTestOptimizeOpt):
         self.optimize_loop(ops, expected)
 
     def test_int_is_true_is_zero2(self):
+        py.test.skip("Not there yet")
         ops = """
         [i0]
         i2 = int_is_zero(i0)
