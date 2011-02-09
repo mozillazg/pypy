@@ -15,12 +15,14 @@ from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
-from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE
+from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE, \
+                                        ABORT_BAD_LOOP
 from pypy.jit.metainterp.jitexc import JitException, get_llexception
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
-from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
+from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr, MissingLiveness
 from pypy.jit.codewriter import heaptracker
+from pypy.jit.metainterp.optimizeutil import RetraceLoop
 
 # ____________________________________________________________
 
@@ -826,8 +828,8 @@ class MIFrame(object):
         self.generate_guard(rop.GUARD_CLASS, box, [clsbox], resumepc=orgpc)
         return clsbox
 
-    @arguments("int")
-    def opimpl_loop_header(self, jdindex):
+    @arguments("int", "orgpc")
+    def opimpl_loop_header(self, jdindex, orgpc):
         self.metainterp.seen_loop_header_for_jdindex = jdindex
 
     def verify_green_args(self, jitdriver_sd, varargs):
@@ -839,12 +841,16 @@ class MIFrame(object):
     @arguments("orgpc", "int", "boxes3", "jitcode_position", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, jdindex, greenboxes,
                                jcposition, redboxes):
+        resumedescr = compile.ResumeAtPositionDescr()
+        self.capture_resumedata(resumedescr, orgpc)
+        
         any_operation = len(self.metainterp.history.operations) > 0
         jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         self.verify_green_args(jitdriver_sd, greenboxes)
         # xxx we may disable the following line in some context later
         self.debug_merge_point(jitdriver_sd, self.metainterp.in_recursion,
                                greenboxes)
+
         if self.metainterp.seen_loop_header_for_jdindex < 0:
             if not jitdriver_sd.no_loop_header or not any_operation:
                 return
@@ -855,6 +861,7 @@ class MIFrame(object):
             "found a loop_header for a JitDriver that does not match "
             "the following jit_merge_point's")
         self.metainterp.seen_loop_header_for_jdindex = -1
+        
         #
         if not self.metainterp.in_recursion:
             assert jitdriver_sd is self.metainterp.jitdriver_sd
@@ -864,7 +871,7 @@ class MIFrame(object):
             # much less expensive to blackhole out of.
             saved_pc = self.pc
             self.pc = orgpc
-            self.metainterp.reached_loop_header(greenboxes, redboxes)
+            self.metainterp.reached_loop_header(greenboxes, redboxes, resumedescr)
             self.pc = saved_pc
             # no exception, which means that the jit_merge_point did not
             # close the loop.  We have to put the possibly-modified list
@@ -1082,20 +1089,26 @@ class MIFrame(object):
             resumedescr = compile.ResumeGuardDescr()
         guard_op = metainterp.history.record(opnum, moreargs, None,
                                              descr=resumedescr)
+        self.capture_resumedata(resumedescr, resumepc)
+        self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
+        # count
+        metainterp.attach_debug_info(guard_op)
+        return guard_op
+
+    def capture_resumedata(self, resumedescr, resumepc=-1):
+        metainterp = self.metainterp
         virtualizable_boxes = None
         if (metainterp.jitdriver_sd.virtualizable_info is not None or
             metainterp.jitdriver_sd.greenfield_info is not None):
             virtualizable_boxes = metainterp.virtualizable_boxes
         saved_pc = self.pc
-        if resumepc >= 0:
-            self.pc = resumepc
-        resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
-                                  metainterp.virtualref_boxes, resumedescr)
-        self.pc = saved_pc
-        self.metainterp.staticdata.profiler.count_ops(opnum, GUARDS)
-        # count
-        metainterp.attach_debug_info(guard_op)
-        return guard_op
+        try:
+            if resumepc >= 0:
+                self.pc = resumepc
+            resume.capture_resumedata(metainterp.framestack, virtualizable_boxes,
+                                      metainterp.virtualref_boxes, resumedescr)
+        finally:
+            self.pc = saved_pc
 
     def implement_guard_value(self, orgpc, box):
         """Promote the given Box into a Const.  Note: be careful, it's a
@@ -1159,7 +1172,7 @@ class MIFrame(object):
                     src_r += 1
                     if box.type == history.REF:
                         break
-            elif kind == history.FLOAT:
+            elif kind == history.FLOAT or kind == 'L':    # long long
                 while True:
                     box = argboxes[src_f]
                     src_f += 1
@@ -1199,7 +1212,7 @@ class MIFrame(object):
                     self.execute_varargs(rop.CALL, allboxes, descr, False))
             elif effect == effectinfo.EF_LOOPINVARIANT:
                 return self.execute_varargs(rop.CALL_LOOPINVARIANT, allboxes,
-                                            descr, True)
+                                            descr, False)
             else:
                 return self.execute_varargs(rop.CALL, allboxes, descr, True)
 
@@ -1303,6 +1316,10 @@ class MetaInterpStaticData(object):
             num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
             setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
         #
+        tokens = self.loop_tokens_exit_frame_with_exception_ref
+        num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
+        self.cpu.exit_frame_with_exception_v = num
+        #
         self.globaldata = MetaInterpGlobalData(self)
 
     def _setup_once(self):
@@ -1389,6 +1406,11 @@ class MetaInterpGlobalData(object):
 
 # ____________________________________________________________
 
+class RetraceState(object):
+    def __init__(self, metainterp, live_arg_boxes):
+        self.merge_point = len(metainterp.current_merge_points) - 1
+        self.live_arg_boxes = live_arg_boxes
+
 class MetaInterp(object):
     in_recursion = 0
 
@@ -1403,6 +1425,7 @@ class MetaInterp(object):
         self.free_frames_list = []
         self.last_exc_value_box = None
         self.invalidated_array = self.cpu.create_invalidate_array()
+        self.retracing_loop_from = None
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -1701,8 +1724,13 @@ class MetaInterp(object):
         self.current_merge_points = []
         self.resumekey = key
         self.seen_loop_header_for_jdindex = -1
-        try:
-            self.prepare_resume_from_failure(key.guard_opnum)
+        if isinstance(key, compile.ResumeAtPositionDescr):
+            self.seen_loop_header_for_jdindex = self.jitdriver_sd.index
+            dont_change_position = True
+        else:
+            dont_change_position = False
+        try:            
+            self.prepare_resume_from_failure(key.guard_opnum, dont_change_position)
             if self.resumekey_original_loop_token is None:   # very rare case
                 raise SwitchToBlackhole(ABORT_BRIDGE)
             self.interpret()
@@ -1732,7 +1760,7 @@ class MetaInterp(object):
             else:
                 duplicates[box] = None
 
-    def reached_loop_header(self, greenboxes, redboxes):
+    def reached_loop_header(self, greenboxes, redboxes, resumedescr):
         duplicates = {}
         self.remove_consts_and_duplicates(redboxes, len(redboxes),
                                           duplicates)
@@ -1753,7 +1781,15 @@ class MetaInterp(object):
         #   that failed;
         # - if self.resumekey is a ResumeFromInterpDescr, it starts directly
         #   from the interpreter.
-        self.compile_bridge(live_arg_boxes)
+        if not self.retracing_loop_from:
+            try:
+                self.compile_bridge(live_arg_boxes)
+            except RetraceLoop:
+                start = len(self.history.operations)
+                self.current_merge_points.append((live_arg_boxes, start))
+                self.retracing_loop_from = RetraceState(self, live_arg_boxes)
+                return
+
         # raises in case it works -- which is the common case, hopefully,
         # at least for bridges starting from a guard.
 
@@ -1774,9 +1810,18 @@ class MetaInterp(object):
             else:
                 # Found!  Compile it as a loop.
                 # raises in case it works -- which is the common case
-                self.compile(original_boxes, live_arg_boxes, start)
+                if self.retracing_loop_from and \
+                   self.retracing_loop_from.merge_point == j:
+                    bridge_arg_boxes = self.retracing_loop_from.live_arg_boxes
+                    self.compile_bridge_and_loop(original_boxes, \
+                                                 live_arg_boxes, start,
+                                                 bridge_arg_boxes, resumedescr)
+                else:
+                    self.compile(original_boxes, live_arg_boxes, start, resumedescr)
                 # creation of the loop was cancelled!
-                self.staticdata.log('cancelled, going on...')
+                #self.staticdata.log('cancelled, tracing more...')
+                self.staticdata.log('cancelled, stopping tracing')
+                raise SwitchToBlackhole(ABORT_BAD_LOOP)
 
         # Otherwise, no loop found so far, so continue tracing.
         start = len(self.history.operations)
@@ -1785,15 +1830,15 @@ class MetaInterp(object):
     def designate_target_loop(self, gmp):
         loop_token = gmp.target_loop_token
         num_green_args = self.jitdriver_sd.num_green_args
-        residual_args = self.get_residual_args(loop_token.specnodes,
-                                               gmp.argboxes[num_green_args:])
+        residual_args = gmp.argboxes[num_green_args:]
         history.set_future_values(self.cpu, residual_args)
         return loop_token
 
-    def prepare_resume_from_failure(self, opnum):
+    def prepare_resume_from_failure(self, opnum, dont_change_position=False):
         frame = self.framestack[-1]
         if opnum == rop.GUARD_TRUE:     # a goto_if_not that jumps only now
-            frame.pc = frame.jitcode.follow_jump(frame.pc)
+            if not dont_change_position:
+                frame.pc = frame.jitcode.follow_jump(frame.pc)
         elif opnum == rop.GUARD_FALSE:     # a goto_if_not that stops jumping
             pass
         elif opnum == rop.GUARD_VALUE or opnum == rop.GUARD_CLASS:
@@ -1836,18 +1881,21 @@ class MetaInterp(object):
         cell = self.jitdriver_sd.warmstate.jit_cell_at_key(greenkey)
         cell.set_compiled_merge_points(looptokens)
 
-    def compile(self, original_boxes, live_arg_boxes, start):
+    def compile(self, original_boxes, live_arg_boxes, start, start_resumedescr):
         num_green_args = self.jitdriver_sd.num_green_args
         self.history.inputargs = original_boxes[num_green_args:]
         greenkey = original_boxes[:num_green_args]
         old_loop_tokens = self.get_compiled_merge_points(greenkey)
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
         if not self.invalidated_array[0]:
-            loop_token = compile.compile_new_loop(self, old_loop_tokens, start)
+            loop_token = compile.compile_new_loop(self, old_loop_tokens,
+                                                  greenkey, start,
+                                                  start_resumedescr)
             if loop_token is not None: # raise if it *worked* correctly
                 self.set_compiled_merge_points(greenkey, old_loop_tokens)
                 raise GenerateMergePoint(live_arg_boxes, loop_token)
         self.history.operations.pop()     # remove the JUMP
+        # FIXME: Why is self.history.inputargs not restored?
 
     def compile_bridge(self, live_arg_boxes):
         if self.invalidated_array[0]:
@@ -1857,12 +1905,52 @@ class MetaInterp(object):
         old_loop_tokens = self.get_compiled_merge_points(greenkey)
         if len(old_loop_tokens) == 0:
             return
+        #if self.resumekey.guard_opnum == rop.GUARD_CLASS:
+        #    return # Kepp tracing for another iteration
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        target_loop_token = compile.compile_new_bridge(self, old_loop_tokens,
-                                                       self.resumekey)
-        if target_loop_token is not None:   # raise if it *worked* correctly
-            raise GenerateMergePoint(live_arg_boxes, target_loop_token)
+        try:
+            target_loop_token = compile.compile_new_bridge(self,
+                                                           old_loop_tokens,
+                                                           self.resumekey)
+            if target_loop_token is not None: # raise if it *worked* correctly
+                raise GenerateMergePoint(live_arg_boxes, target_loop_token)
+        finally:
+            self.history.operations.pop()     # remove the JUMP
+
+    def compile_bridge_and_loop(self, original_boxes, live_arg_boxes, start,
+                                bridge_arg_boxes, start_resumedescr):
+        num_green_args = self.jitdriver_sd.num_green_args
+        original_inputargs = self.history.inputargs
+        greenkey = original_boxes[:num_green_args]
+        old_loop_tokens = self.get_compiled_merge_points(greenkey)
+        original_operations = self.history.operations
+        self.history.inputargs = original_boxes[num_green_args:]
+        greenkey = original_boxes[:num_green_args]
+        self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
+        loop_token = compile.compile_new_loop(self, [], greenkey, start, start_resumedescr)
         self.history.operations.pop()     # remove the JUMP
+        if loop_token is None:
+            return
+
+        if loop_token.short_preamble:
+            old_loop_tokens[0].short_preamble.extend(loop_token.short_preamble)
+
+        self.history.inputargs = original_inputargs
+        self.history.operations = self.history.operations[:start]
+        live_arg_boxes = bridge_arg_boxes
+        
+        self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
+        try:
+            target_loop_token = compile.compile_new_bridge(self,
+                                                           [loop_token],
+                                                           self.resumekey,
+                                                           True)
+        except RetraceLoop:
+            assert False
+        assert target_loop_token is not None
+
+        self.history.operations = original_operations
+        raise GenerateMergePoint(live_arg_boxes, old_loop_tokens[0])
 
     def compile_done_with_this_frame(self, exitbox):
         self.gen_store_back_in_virtualizable()
@@ -1906,16 +1994,6 @@ class MetaInterp(object):
                                                        self.resumekey)
         if target_loop_token is not loop_tokens[0]:
             compile.giveup()
-
-    def get_residual_args(self, specnodes, args):
-        if specnodes is None:     # it is None only for tests
-            return args
-        assert len(specnodes) == len(args)
-        expanded_args = []
-        for i in range(len(specnodes)):
-            specnode = specnodes[i]
-            specnode.extract_runtime_data(self.cpu, args[i], expanded_args)
-        return expanded_args
 
     @specialize.arg(1)
     def initialize_original_boxes(self, jitdriver_sd, *args):

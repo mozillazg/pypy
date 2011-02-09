@@ -1,6 +1,8 @@
 from pypy.rlib.rarithmetic import LONG_BIT, intmask, r_uint, r_ulonglong
-from pypy.rlib.rarithmetic import ovfcheck, r_longlong, widen
-from pypy.rlib.debug import make_sure_not_resized
+from pypy.rlib.rarithmetic import ovfcheck, r_longlong, widen, isinf, isnan
+from pypy.rlib.rarithmetic import most_neg_value_of_same_type
+from pypy.rlib.debug import make_sure_not_resized, check_regular_int
+from pypy.rlib.objectmodel import we_are_translated
 
 import math, sys
 
@@ -69,6 +71,7 @@ class rbigint(object):
         return len(self.digits)
 
     def fromint(intval):
+        check_regular_int(intval)
         if intval < 0:
             sign = -1
             ival = r_uint(-intval)
@@ -109,7 +112,7 @@ class rbigint(object):
     def fromfloat(dval):
         """ Create a new bigint object from a float """
         neg = 0
-        if isinf(dval):
+        if isinf(dval) or isnan(dval):
             raise OverflowError
         if dval < 0.0:
             neg = 1
@@ -294,7 +297,6 @@ class rbigint(object):
         else:
             result = _x_sub(other, self)
         result.sign *= other.sign
-        result._normalize()
         return result
 
     def sub(self, other):
@@ -554,10 +556,28 @@ class rbigint(object):
         while i > 1 and self.digits[i - 1] == 0:
             i -= 1
         assert i >= 1
-        self.digits = self.digits[:i]
+        if i != self._numdigits():
+            self.digits = self.digits[:i]
         if self._numdigits() == 1 and self.digits[0] == 0:
             self.sign = 0
 
+    def bit_length(self):
+        i = self._numdigits()
+        if i == 1 and self.digits[0] == 0:
+            return 0
+        msd = self.digits[i - 1]
+        msd_bits = 0
+        while msd >= 32:
+            msd_bits += 6
+            msd >>= 6
+        msd_bits += [
+            0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+            5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5
+            ][msd]
+        # yes, this can overflow: a huge number which fits 3 gigabytes of
+        # memory has around 24 gigabits!
+        bits = ovfcheck((i-1) * SHIFT + msd_bits)
+        return bits
 
     def __repr__(self):
         return "<rbigint digits=%s, sign=%s, %s>" % (self.digits, self.sign, self.str())
@@ -612,19 +632,12 @@ def args_from_rarith_int1(x):
         return digits_from_nonneg_long(x), 1
     elif x == 0:
         return [0], 0
+    elif x != most_neg_value_of_same_type(x):
+        # normal case
+        return digits_from_nonneg_long(-x), -1
     else:
-        try:
-            y = ovfcheck(-x)
-        except OverflowError:
-            y = -1
-        # be conservative and check again if the result is >= 0, even
-        # if no OverflowError was raised (e.g. broken CPython/GCC4.2)
-        if y >= 0:
-            # normal case
-            return digits_from_nonneg_long(y), -1
-        else:
-            # the most negative integer! hacks needed...
-            return digits_for_most_neg_long(x), -1
+        # the most negative integer! hacks needed...
+        return digits_for_most_neg_long(x), -1
 args_from_rarith_int1._annspecialcase_ = "specialize:argtype(0)"
 
 def args_from_rarith_int(x):
@@ -1259,9 +1272,6 @@ def _AsScaledDouble(v):
     assert x > 0.0
     return x * sign, exponent
 
-def isinf(x):
-    return x != 0.0 and x / 2 == x
-
 ##def ldexp(x, exp):
 ##    assert type(x) is float
 ##    lb1 = LONG_BIT - 1
@@ -1278,15 +1288,54 @@ def isinf(x):
 # XXX make sure that we don't ignore this!
 # YYY no, we decided to do ignore this!
 
-def _AsDouble(v):
+def _AsDouble(n):
     """ Get a C double from a bigint object. """
-    x, e = _AsScaledDouble(v)
-    if e <= sys.maxint / SHIFT:
-        x = math.ldexp(x, e * SHIFT)
-        #if not isinf(x):
-        # this is checked by math.ldexp
-        return x
-    raise OverflowError # can't say "long int too large to convert to float"
+    # This is a "correctly-rounded" version from Python 2.7.
+    #
+    from pypy.rlib import rfloat
+    DBL_MANT_DIG = rfloat.DBL_MANT_DIG  # 53 for IEEE 754 binary64
+    DBL_MAX_EXP = rfloat.DBL_MAX_EXP    # 1024 for IEEE 754 binary64
+    assert DBL_MANT_DIG < r_ulonglong.BITS
+
+    # Reduce to case n positive.
+    sign = n.sign
+    if sign == 0:
+        return 0.0
+    elif sign < 0:
+        n = n.neg()
+
+    # Find exponent: 2**(exp - 1) <= n < 2**exp
+    exp = n.bit_length()
+
+    # Get top DBL_MANT_DIG + 2 significant bits of n, with a 'sticky'
+    # last bit: that is, the least significant bit of the result is 1
+    # iff any of the shifted-out bits is set.
+    shift = DBL_MANT_DIG + 2 - exp
+    if shift >= 0:
+        q = _AsULonglong_mask(n) << shift
+        if not we_are_translated():
+            assert q == n.tolong() << shift   # no masking actually done
+    else:
+        shift = -shift
+        n2 = n.rshift(shift)
+        q = _AsULonglong_mask(n2)
+        if not we_are_translated():
+            assert q == n2.tolong()           # no masking actually done
+        if not n.eq(n2.lshift(shift)):
+            q |= 1
+
+    # Now remove the excess 2 bits, rounding to nearest integer (with
+    # ties rounded to even).
+    q = (q >> 2) + (bool(q & 2) and bool(q & 5))
+
+    if exp > DBL_MAX_EXP or (exp == DBL_MAX_EXP and
+                             q == r_ulonglong(1) << DBL_MANT_DIG):
+        raise OverflowError("integer too large to convert to float")
+
+    ad = math.ldexp(float(q), exp - DBL_MANT_DIG)
+    if sign < 0:
+        ad = -ad
+    return ad
 
 def _loghelper(func, arg):
     """
@@ -1307,25 +1356,155 @@ def _loghelper(func, arg):
     return func(x) + (e * float(SHIFT) * func(2.0))
 _loghelper._annspecialcase_ = 'specialize:arg(0)'
 
+# ____________________________________________________________
+
+BASE_AS_FLOAT = float(1 << SHIFT)     # note that it may not fit an int
+
+BitLengthTable = ''.join(map(chr, [
+    0, 1, 2, 2, 3, 3, 3, 3, 4, 4, 4, 4, 4, 4, 4, 4,
+    5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 5]))
+
+def bits_in_digit(d):
+    # returns the unique integer k such that 2**(k-1) <= d <
+    # 2**k if d is nonzero, else 0.
+    d_bits = 0
+    while d >= 32:
+        d_bits += 6
+        d >>= 6
+    d_bits += ord(BitLengthTable[d])
+    return d_bits
+
+def _truediv_result(result, negate):
+    if negate:
+        result = -result
+    return result
+
+def _truediv_overflow():
+    raise OverflowError("integer division result too large for a float")
+
 def _bigint_true_divide(a, b):
-    ad, aexp = _AsScaledDouble(a)
-    bd, bexp = _AsScaledDouble(b)
-    if bd == 0.0:
+    # A longish method to obtain the floating-point result with as much
+    # precision as theoretically possible.  The code is almost directly
+    # copied from CPython.  See there (Objects/longobject.c,
+    # long_true_divide) for detailled comments.  Method in a nutshell:
+    #
+    #    0. reduce to case a, b > 0; filter out obvious underflow/overflow
+    #    1. choose a suitable integer 'shift'
+    #    2. use integer arithmetic to compute x = floor(2**-shift*a/b)
+    #    3. adjust x for correct rounding
+    #    4. convert x to a double dx with the same value
+    #    5. return ldexp(dx, shift).
+
+    from pypy.rlib import rfloat
+    DBL_MANT_DIG = rfloat.DBL_MANT_DIG  # 53 for IEEE 754 binary64
+    DBL_MAX_EXP = rfloat.DBL_MAX_EXP    # 1024 for IEEE 754 binary64
+    DBL_MIN_EXP = rfloat.DBL_MIN_EXP
+    MANT_DIG_DIGITS = DBL_MANT_DIG // SHIFT
+    MANT_DIG_BITS = DBL_MANT_DIG % SHIFT
+
+    # Reduce to case where a and b are both positive.
+    negate = (a.sign < 0) ^ (b.sign < 0)
+    if not b.tobool():
         raise ZeroDivisionError("long division or modulo by zero")
+    if not a.tobool():
+        return _truediv_result(0.0, negate)
 
-    # True value is very close to ad/bd * 2**(SHIFT*(aexp-bexp))
-    ad /= bd   # overflow/underflow impossible here
-    aexp -= bexp
-    if aexp > sys.maxint / SHIFT:
-        raise OverflowError
-    elif aexp < -(sys.maxint / SHIFT):
-        return 0.0 # underflow to 0
-    ad = math.ldexp(ad, aexp * SHIFT)
-    ##if isinf(ad):   # ignore underflow to 0.0
-    ##    raise OverflowError
-    # math.ldexp checks and raises
-    return ad
+    a_size = a._numdigits()
+    b_size = b._numdigits()
 
+    # Fast path for a and b small (exactly representable in a double).
+    # Relies on floating-point division being correctly rounded; results
+    # may be subject to double rounding on x86 machines that operate with
+    # the x87 FPU set to 64-bit precision.
+    a_is_small = (a_size <= MANT_DIG_DIGITS or
+                  (a_size == MANT_DIG_DIGITS+1 and
+                   a.digits[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0))
+    b_is_small = (b_size <= MANT_DIG_DIGITS or
+                  (b_size == MANT_DIG_DIGITS+1 and
+                   b.digits[MANT_DIG_DIGITS] >> MANT_DIG_BITS == 0))
+    if a_is_small and b_is_small:
+        a_size -= 1
+        da = float(a.digits[a_size])
+        while True:
+            a_size -= 1
+            if a_size < 0: break
+            da = da * BASE_AS_FLOAT + a.digits[a_size]
+
+        b_size -= 1
+        db = float(b.digits[b_size])
+        while True:
+            b_size -= 1
+            if b_size < 0: break
+            db = db * BASE_AS_FLOAT + b.digits[b_size]
+
+        return _truediv_result(da / db, negate)
+
+    # Catch obvious cases of underflow and overflow
+    diff = a_size - b_size
+    if diff > sys.maxint/SHIFT - 1:
+        return _truediv_overflow()           # Extreme overflow
+    elif diff < 1 - sys.maxint/SHIFT:
+        return _truediv_result(0.0, negate)  # Extreme underflow
+    # Next line is now safe from overflowing integers
+    diff = (diff * SHIFT + bits_in_digit(a.digits[a_size - 1]) -
+                           bits_in_digit(b.digits[b_size - 1]))
+    # Now diff = a_bits - b_bits.
+    if diff > DBL_MAX_EXP:
+        return _truediv_overflow()
+    elif diff < DBL_MIN_EXP - DBL_MANT_DIG - 1:
+        return _truediv_result(0.0, negate)
+
+    # Choose value for shift; see comments for step 1 in CPython.
+    shift = max(diff, DBL_MIN_EXP) - DBL_MANT_DIG - 2
+
+    inexact = False
+
+    # x = abs(a * 2**-shift)
+    if shift <= 0:
+        x = a.lshift(-shift)
+    else:
+        x = a.rshift(shift)
+        # set inexact if any of the bits shifted out is nonzero
+        if not a.eq(x.lshift(shift)):
+            inexact = True
+
+    # x //= b. If the remainder is nonzero, set inexact.
+    x, rem = x.divmod(b)
+    if rem.tobool():
+        inexact = True
+
+    assert x.tobool()    # result of division is never zero
+    x_size = x._numdigits()
+    x_bits = (x_size-1)*SHIFT + bits_in_digit(x.digits[x_size-1])
+
+    # The number of extra bits that have to be rounded away.
+    extra_bits = max(x_bits, DBL_MIN_EXP - shift) - DBL_MANT_DIG
+    assert extra_bits == 2 or extra_bits == 3
+
+    # Round by remembering a modified copy of the low digit of x
+    mask = 1 << (extra_bits - 1)
+    low = x.digits[0] | inexact
+    if (low & mask) != 0 and (low & (3*mask-1)) != 0:
+        low += mask
+    x_digit_0 = low & ~(mask-1)
+
+    # Convert x to a double dx; the conversion is exact.
+    x_size -= 1
+    dx = 0.0
+    while x_size > 0:
+        dx += x.digits[x_size]
+        dx *= BASE_AS_FLOAT
+        x_size -= 1
+    dx += x_digit_0
+
+    # Check whether ldexp result will overflow a double.
+    if (shift + x_bits >= DBL_MAX_EXP and
+        (shift + x_bits > DBL_MAX_EXP or dx == math.ldexp(1.0, x_bits))):
+        return _truediv_overflow()
+
+    return _truediv_result(math.ldexp(dx, shift), negate)
+
+# ____________________________________________________________
 
 BASE8  = '01234567'
 BASE10 = '0123456789'
@@ -1579,15 +1758,23 @@ _AsUInt_mask = make_unsigned_mask_conversion(r_uint)
 def _hash(v):
     # This is designed so that Python ints and longs with the
     # same value hash to the same value, otherwise comparisons
-    # of mapping keys will turn out weird
+    # of mapping keys will turn out weird.  Moreover, purely
+    # to please decimal.py, we return a hash that satisfies
+    # hash(x) == hash(x % ULONG_MAX).  In particular, this
+    # implies that hash(x) == hash(x % (2**64-1)).
     i = v._numdigits() - 1
     sign = v.sign
-    x = 0
+    x = r_uint(0)
     LONG_BIT_SHIFT = LONG_BIT - SHIFT
     while i >= 0:
         # Force a native long #-bits (32 or 64) circular shift
-        x = ((x << SHIFT) & ~MASK) | ((x >> LONG_BIT_SHIFT) & MASK)
-        x += v.digits[i]
+        x = (x << SHIFT) | (x >> LONG_BIT_SHIFT)
+        x += r_uint(v.digits[i])
+        # If the addition above overflowed we compensate by
+        # incrementing.  This preserves the value modulo
+        # ULONG_MAX.
+        if x < r_uint(v.digits[i]):
+            x += 1
         i -= 1
     x = intmask(x * sign)
     return x

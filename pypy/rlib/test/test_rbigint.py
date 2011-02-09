@@ -36,6 +36,12 @@ class TestRLong(object):
                 r2 = op1 / op2
                 assert r1 == r2
 
+    def test_truediv_precision(self):
+        op1 = rbigint.fromlong(12345*2**30)
+        op2 = rbigint.fromlong(98765*7**81)
+        f = op1.truediv(op2)
+        assert f == 4.7298422347492634e-61      # exactly
+
     def test_mod(self):
         for op1 in [-50, -12, -2, -1, 1, 2, 50, 52]:
             for op2 in [-4, -2, -1, 1, 2, 8]:
@@ -86,15 +92,18 @@ class Test_rbigint(object):
 
     def test_args_from_int(self):
         BASE = 1 << SHIFT
+        MAX = int(BASE-1)
         assert rbigint.fromrarith_int(0).eq(rbigint([0], 0))
         assert rbigint.fromrarith_int(17).eq(rbigint([17], 1))
-        assert rbigint.fromrarith_int(BASE-1).eq(rbigint([intmask(BASE-1)], 1))
-        assert rbigint.fromrarith_int(BASE).eq(rbigint([0, 1], 1))
-        assert rbigint.fromrarith_int(BASE**2).eq(rbigint([0, 0, 1], 1))
+        assert rbigint.fromrarith_int(MAX).eq(rbigint([MAX], 1))
+        assert rbigint.fromrarith_int(r_longlong(BASE)).eq(rbigint([0, 1], 1))
+        assert rbigint.fromrarith_int(r_longlong(BASE**2)).eq(
+            rbigint([0, 0, 1], 1))
         assert rbigint.fromrarith_int(-17).eq(rbigint([17], -1))
-        assert rbigint.fromrarith_int(-(BASE-1)).eq(rbigint([intmask(BASE-1)], -1))
-        assert rbigint.fromrarith_int(-BASE).eq(rbigint([0, 1], -1))
-        assert rbigint.fromrarith_int(-(BASE**2)).eq(rbigint([0, 0, 1], -1))
+        assert rbigint.fromrarith_int(-MAX).eq(rbigint([MAX], -1))
+        assert rbigint.fromrarith_int(-MAX-1).eq(rbigint([0, 1], -1))
+        assert rbigint.fromrarith_int(r_longlong(-(BASE**2))).eq(
+            rbigint([0, 0, 1], -1))
 #        assert rbigint.fromrarith_int(-sys.maxint-1).eq((
 #            rbigint.digits_for_most_neg_long(-sys.maxint-1), -1)
 
@@ -175,6 +184,24 @@ class Test_rbigint(object):
         f2 = rbigint([0, 2097152], 1)
         d = f2.tofloat()
         assert d == float(2097152 << SHIFT)
+
+    def test_tofloat_precision(self):
+        assert rbigint.fromlong(0).tofloat() == 0.0
+        for sign in [1, -1]:
+            for p in xrange(100):
+                x = long(2**p * (2**53 + 1) + 1) * sign
+                y = long(2**p * (2**53+ 2)) * sign
+                rx = rbigint.fromlong(x)
+                rxf = rx.tofloat()
+                assert rxf == float(y)
+                assert rbigint.fromfloat(rxf).tolong() == y
+                #
+                x = long(2**p * (2**53 + 1)) * sign
+                y = long(2**p * 2**53) * sign
+                rx = rbigint.fromlong(x)
+                rxf = rx.tofloat()
+                assert rxf == float(y)
+                assert rbigint.fromfloat(rxf).tolong() == y
 
     def test_fromfloat(self):
         x = 1234567890.1234567890
@@ -341,6 +368,33 @@ class Test_rbigint(object):
         a = rbigint.fromlong(-1<<10000)
         b = rbigint.fromlong(-1<<3000)
         assert a.mul(b).tolong() == (-1<<10000)*(-1<<3000)
+
+    def test_bit_length(self):
+        assert rbigint.fromlong(0).bit_length() == 0
+        assert rbigint.fromlong(1).bit_length() == 1
+        assert rbigint.fromlong(2).bit_length() == 2
+        assert rbigint.fromlong(3).bit_length() == 2
+        assert rbigint.fromlong(4).bit_length() == 3
+        assert rbigint.fromlong(-3).bit_length() == 2
+        assert rbigint.fromlong(-4).bit_length() == 3
+        assert rbigint.fromlong(1<<40).bit_length() == 41
+
+    def test_hash(self):
+        for i in [0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+                  sys.maxint-3, sys.maxint-2, sys.maxint-1, sys.maxint,
+                  ] + [randint(0, sys.maxint) for _ in range(100)]:
+            # hash of machine-sized integers
+            assert rbigint.fromint(i).hash() == i
+            # hash of negative machine-sized integers
+            assert rbigint.fromint(-i-1).hash() == -i-1
+        #
+        for i in range(200):
+            # hash of large integers: should be equal to the hash of the
+            # integer reduced modulo 2**64-1, to make decimal.py happy
+            x = randint(0, sys.maxint**5)
+            y = x % (2**64-1)
+            assert rbigint.fromlong(x).hash() == rbigint.fromlong(y).hash()
+            assert rbigint.fromlong(-x).hash() == rbigint.fromlong(-y).hash()
 
 class TestInternalFunctions(object):
     def test__inplace_divrem1(self):

@@ -323,6 +323,7 @@ class TestWarmspotDirect(object):
 
         class FakeCPU(object):
             supports_floats = False
+            supports_longlong = False
             ts = llhelper
             translate_support_code = False
             stats = "stats"

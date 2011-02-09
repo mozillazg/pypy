@@ -10,10 +10,10 @@ EPS = 1e-9
 
 class TestW_ComplexObject:
 
-    def _test_instantiation(self):
+    def test_instantiation(self):
         def _t_complex(r=0.0,i=0.0):
             c = W_ComplexObject(r, i)
-            assert c.real == float(r) and c.imag == float(i)
+            assert c.realval == float(r) and c.imagval == float(i)
         pairs = (
             (1, 1),
             (1.0, 2.0),
@@ -37,6 +37,21 @@ class TestW_ComplexObject:
         test_cparse('3L+3j', '3L', '3')
         test_cparse('3j', '0.0', '3')
         test_cparse('.e+5', '.e+5', '0.0')
+        test_cparse('(1+2j)', '1', '2')
+        test_cparse('(1-6j)', '1', '-6')
+        test_cparse(' ( +3.14-6J )', '+3.14', '-6')
+        test_cparse(' +J', '0.0', '1.0')
+        test_cparse(' -J', '0.0', '-1.0')
+
+    def test_unpackcomplex(self):
+        space = self.space
+        w_z = W_ComplexObject(2.0, 3.5)
+        assert space.unpackcomplex(w_z) == (2.0, 3.5)
+        space.raises_w(space.w_TypeError, space.unpackcomplex, space.w_None)
+        w_f = space.newfloat(42.5)
+        assert space.unpackcomplex(w_f) == (42.5, 0.0)
+        w_l = space.wrap(-42L)
+        assert space.unpackcomplex(w_l) == (-42.0, 0.0)
 
     def test_pow(self):
         def _pow((r1, i1), (r2, i2)):
@@ -122,7 +137,6 @@ class AppTestAppComplexTest:
 
     def test_richcompare(self):
         h = self.helper
-        h.raises(OverflowError, complex.__eq__, 1+1j, 1L<<10000)
         h.assertEqual(complex.__lt__(1+1j, None), NotImplemented)
         h.assertIs(complex.__eq__(1+1j, 1+1j), True)
         h.assertIs(complex.__eq__(1+1j, 2+2j), False)
@@ -132,6 +146,11 @@ class AppTestAppComplexTest:
         h.raises(TypeError, complex.__le__, 1+1j, 2+2j)
         h.raises(TypeError, complex.__gt__, 1+1j, 2+2j)
         h.raises(TypeError, complex.__ge__, 1+1j, 2+2j)
+        large = 1 << 10000
+        assert not (5+0j) == large
+        assert not large == (5+0j)
+        assert (5+0j) != large
+        assert large != (5+0j)
 
     def test_mod(self):
         h = self.helper
@@ -210,8 +229,27 @@ class AppTestAppComplexTest:
             def __complex__(self): return self.value
         h.assertEqual(complex(OS(1+10j)), 1+10j)
         h.assertEqual(complex(NS(1+10j)), 1+10j)
+        h.assertEqual(complex(OS(1+10j), 5), 1+15j)
+        h.assertEqual(complex(NS(1+10j), 5), 1+15j)
+        h.assertEqual(complex(OS(1+10j), 5j), -4+10j)
+        h.assertEqual(complex(NS(1+10j), 5j), -4+10j)
         h.raises(TypeError, complex, OS(None))
         h.raises(TypeError, complex, NS(None))
+        h.raises(TypeError, complex, OS(2.0))   # __complex__ must really
+        h.raises(TypeError, complex, NS(2.0))   # return a complex, not a float
+
+        # -- The following cases are not supported by CPython, but they
+        # -- are supported by PyPy, which is most probably ok
+        #h.raises((TypeError, AttributeError), complex, OS(1+10j), OS(1+10j))
+        #h.raises((TypeError, AttributeError), complex, NS(1+10j), OS(1+10j))
+        #h.raises((TypeError, AttributeError), complex, OS(1+10j), NS(1+10j))
+        #h.raises((TypeError, AttributeError), complex, NS(1+10j), NS(1+10j))
+
+        class F(object):
+            def __float__(self):
+                return 2.0
+        h.assertEqual(complex(OS(1+10j), F()), 1+12j)
+        h.assertEqual(complex(NS(1+10j), F()), 1+12j)
 
         h.assertAlmostEqual(complex("1+10j"), 1+10j)
         h.assertAlmostEqual(complex(10), 10+0j)
@@ -244,6 +282,7 @@ class AppTestAppComplexTest:
         h.assertAlmostEqual(complex(),  0)
         h.assertAlmostEqual(complex("-1"), -1)
         h.assertAlmostEqual(complex("+1"), +1)
+        h.assertAlmostEqual(complex(" ( +3.14-6J )"), 3.14-6j)
 
         class complex2(complex): pass
         h.assertAlmostEqual(complex(complex2(1+1j)), 1+1j)
@@ -326,18 +365,24 @@ class AppTestAppComplexTest:
         x.foo = 42
         assert x.foo == 42
         assert type(complex(x)) == complex
-    
-    def test_overflow(self):
-        h = self.helper
-        raises(ValueError, complex, unicode("1"*500))
-        
-    def test_repr(self):
-        h = self.helper
-        h.assertEqual(repr(1+6j), '(1+6j)')
-        h.assertEqual(repr(1-6j), '(1-6j)')
 
-        h.assertNotEqual(repr(-(1+0j)), '(-1+-0j)')
+    def test_infinity(self):
+        inf = 1e200*1e200
+        assert complex("1"*500) == complex(inf)
+        assert complex("-inf") == complex(-inf)
+
+    def test_repr(self):
+        assert repr(1+6j) == '(1+6j)'
+        assert repr(1-6j) == '(1-6j)'
+
+        assert repr(-(1+0j)) == '(-1-0j)'
+        assert repr(complex( 0.0,  0.0)) == '0j'
+        assert repr(complex( 0.0, -0.0)) == '-0j'
+        assert repr(complex(-0.0,  0.0)) == '(-0+0j)'
+        assert repr(complex(-0.0, -0.0)) == '(-0-0j)'
         assert repr(complex(1e45)) == "(" + repr(1e45) + "+0j)"
+        assert repr(complex(1e200*1e200)) == '(inf+0j)'
+        assert repr(complex(1,-float("nan"))) == '(1+nanj)'
 
     def test_neg(self):
         h = self.helper
@@ -369,3 +414,139 @@ class AppTestAppComplexTest:
     def test_convert(self):
         raises(TypeError, int, 1+1j)
         raises(TypeError, float, 1+1j)
+
+        class complex0(complex):
+            """Test usage of __complex__() when inheriting from 'complex'"""
+            def __complex__(self):
+                return 42j
+        assert complex(complex0(1j)) ==  42j
+
+        class complex1(complex):
+            """Test usage of __complex__() with a __new__() method"""
+            def __new__(self, value=0j):
+                return complex.__new__(self, 2*value)
+            def __complex__(self):
+                return self
+        assert complex(complex1(1j)) == 2j
+
+        class complex2(complex):
+            """Make sure that __complex__() calls fail if anything other than a
+            complex is returned"""
+            def __complex__(self):
+                return None
+        raises(TypeError, complex, complex2(1j))
+
+    def test_getnewargs(self):
+        assert (1+2j).__getnewargs__() == (1.0, 2.0)
+
+    def test_method_not_found_on_newstyle_instance(self):
+        class A(object):
+            pass
+        a = A()
+        a.__complex__ = lambda: 5j     # ignored
+        raises(TypeError, complex, a)
+        A.__complex__ = lambda self: 42j
+        assert complex(a) == 42j
+
+    def test_format(self):
+        skip("FIXME")
+        # empty format string is same as str()
+        assert format(1+3j, '') == str(1+3j)
+        assert format(1.5+3.5j, '') == str(1.5+3.5j)
+        assert format(3j, '') == str(3j)
+        assert format(3.2j, '') == str(3.2j)
+        assert format(3+0j, '') == str(3+0j)
+        assert format(3.2+0j, '') == str(3.2+0j)
+
+        # empty presentation type should still be analogous to str,
+        # even when format string is nonempty (issue #5920).
+        assert format(3.2+0j, '-') == str(3.2+0j)
+        assert format(3.2+0j, '<') == str(3.2+0j)
+        z = 4/7. - 100j/7.
+        assert format(z, '') == str(z)
+        assert format(z, '-') == str(z)
+        assert format(z, '<') == str(z)
+        assert format(z, '10') == str(z)
+        z = complex(0.0, 3.0)
+        assert format(z, '') == str(z)
+        assert format(z, '-') == str(z)
+        assert format(z, '<') == str(z)
+        assert format(z, '2') == str(z)
+        z = complex(-0.0, 2.0)
+        assert format(z, '') == str(z)
+        assert format(z, '-') == str(z)
+        assert format(z, '<') == str(z)
+        assert format(z, '3') == str(z)
+
+        assert format(1+3j, 'g') == '1+3j'
+        assert format(3j, 'g') == '0+3j'
+        assert format(1.5+3.5j, 'g') == '1.5+3.5j'
+
+        assert format(1.5+3.5j, '+g') == '+1.5+3.5j'
+        assert format(1.5-3.5j, '+g') == '+1.5-3.5j'
+        assert format(1.5-3.5j, '-g') == '1.5-3.5j'
+        assert format(1.5+3.5j, ' g') == ' 1.5+3.5j'
+        assert format(1.5-3.5j, ' g') == ' 1.5-3.5j'
+        assert format(-1.5+3.5j, ' g') == '-1.5+3.5j'
+        assert format(-1.5-3.5j, ' g') == '-1.5-3.5j'
+
+        assert format(-1.5-3.5e-20j, 'g') == '-1.5-3.5e-20j'
+        assert format(-1.5-3.5j, 'f') == '-1.500000-3.500000j'
+        assert format(-1.5-3.5j, 'F') == '-1.500000-3.500000j'
+        assert format(-1.5-3.5j, 'e') == '-1.500000e+00-3.500000e+00j'
+        assert format(-1.5-3.5j, '.2e') == '-1.50e+00-3.50e+00j'
+        assert format(-1.5-3.5j, '.2E') == '-1.50E+00-3.50E+00j'
+        assert format(-1.5e10-3.5e5j, '.2G') == '-1.5E+10-3.5E+05j'
+
+        assert format(1.5+3j, '<20g') ==  '1.5+3j              '
+        assert format(1.5+3j, '*<20g') == '1.5+3j**************'
+        assert format(1.5+3j, '>20g') ==  '              1.5+3j'
+        assert format(1.5+3j, '^20g') ==  '       1.5+3j       '
+        assert format(1.5+3j, '<20') ==   '(1.5+3j)            '
+        assert format(1.5+3j, '>20') ==   '            (1.5+3j)'
+        assert format(1.5+3j, '^20') ==   '      (1.5+3j)      '
+        assert format(1.123-3.123j, '^20.2') == '     (1.1-3.1j)     '
+
+        assert format(1.5+3j, '20.2f') == '          1.50+3.00j'
+        assert format(1.5+3j, '>20.2f') == '          1.50+3.00j'
+        assert format(1.5+3j, '<20.2f') == '1.50+3.00j          '
+        assert format(1.5e20+3j, '<20.2f') == '150000000000000000000.00+3.00j'
+        assert format(1.5e20+3j, '>40.2f') == '          150000000000000000000.00+3.00j'
+        assert format(1.5e20+3j, '^40,.2f') == '  150,000,000,000,000,000,000.00+3.00j  '
+        assert format(1.5e21+3j, '^40,.2f') == ' 1,500,000,000,000,000,000,000.00+3.00j '
+        assert format(1.5e21+3000j, ',.2f') == '1,500,000,000,000,000,000,000.00+3,000.00j'
+
+        # alternate is invalid
+        raises(ValueError, (1.5+0.5j).__format__, '#f')
+
+        # zero padding is invalid
+        raises(ValueError, (1.5+0.5j).__format__, '010f')
+
+        # '=' alignment is invalid
+        raises(ValueError, (1.5+3j).__format__, '=20')
+
+        # integer presentation types are an error
+        for t in 'bcdoxX':
+            raises(ValueError, (1.5+0.5j).__format__, t)
+
+        # make sure everything works in ''.format()
+        assert '*{0:.3f}*'.format(3.14159+2.71828j) == '*3.142+2.718j*'
+
+        # issue 3382: 'f' and 'F' with inf's and nan's
+        assert '{0:f}'.format(INF+0j) == 'inf+0.000000j'
+        assert '{0:F}'.format(INF+0j) == 'INF+0.000000j'
+        assert '{0:f}'.format(-INF+0j) == '-inf+0.000000j'
+        assert '{0:F}'.format(-INF+0j) == '-INF+0.000000j'
+        assert '{0:f}'.format(complex(INF, INF)) == 'inf+infj'
+        assert '{0:F}'.format(complex(INF, INF)) == 'INF+INFj'
+        assert '{0:f}'.format(complex(INF, -INF)) == 'inf-infj'
+        assert '{0:F}'.format(complex(INF, -INF)) == 'INF-INFj'
+        assert '{0:f}'.format(complex(-INF, INF)) == '-inf+infj'
+        assert '{0:F}'.format(complex(-INF, INF)) == '-INF+INFj'
+        assert '{0:f}'.format(complex(-INF, -INF)) == '-inf-infj'
+        assert '{0:F}'.format(complex(-INF, -INF)) == '-INF-INFj'
+
+        assert '{0:f}'.format(complex(NAN, 0)) == 'nan+0.000000j'
+        assert '{0:F}'.format(complex(NAN, 0)) == 'NAN+0.000000j'
+        assert '{0:f}'.format(complex(NAN, NAN)) == 'nan+nanj'
+        assert '{0:F}'.format(complex(NAN, NAN)) == 'NAN+NANj'

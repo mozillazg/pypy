@@ -12,7 +12,7 @@ from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std import slicetype
 from pypy.objspace.std.tupleobject import W_TupleObject
 from pypy.rlib.rarithmetic import intmask, ovfcheck
-from pypy.module.unicodedata import unicodedb_3_2_0 as unicodedb
+from pypy.module.unicodedata import unicodedb
 from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.objspace.std.formatting import mod_format
@@ -30,7 +30,7 @@ def unicode_from_string(space, w_str):
         raise operationerrfmt(
             space.w_TypeError,
             "decoder did not return an unicode object (type '%s')",
-            space.type(w_retval).getname(space, '?'))
+            space.type(w_retval).getname(space))
     assert isinstance(w_retval, W_RopeUnicodeObject)
     return w_retval
 
@@ -482,6 +482,10 @@ def unicode_swapcase__RopeUnicode(space, w_self):
 def _convert_idx_params(space, w_self, w_start, w_end):
     self = w_self._node
     length = w_self._node.length()
+    if space.is_w(w_start, space.w_None):
+        w_start = space.wrap(0)
+    if space.is_w(w_end, space.w_None):
+        w_end = space.len(w_self)
     start = slicetype.adapt_bound(space, length, w_start)
     end = slicetype.adapt_bound(space, length, w_end)
 

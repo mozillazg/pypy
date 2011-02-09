@@ -55,7 +55,7 @@ class W_Root(object):
         return False
 
     def setdict(self, space, w_dict):
-        typename = space.type(self).getname(space, '?')
+        typename = space.type(self).getname(space)
         raise operationerrfmt(space.w_TypeError,
                               "attribute '__dict__' of %s objects "
                               "is not writable", typename)
@@ -72,7 +72,7 @@ class W_Root(object):
         raise NotImplementedError("only for interp-level user subclasses "
                                   "from typedef.py")
 
-    def getname(self, space, default):
+    def getname(self, space, default='?'):
         try:
             return space.str_w(space.getattr(self, space.wrap('__name__')))
         except OperationError, e:
@@ -117,7 +117,7 @@ class W_Root(object):
             classname = wrappable_class_name(RequiredClass)
         msg = "'%s' object expected, got '%s' instead"
         raise operationerrfmt(space.w_TypeError, msg,
-            classname, self.getclass(space).getname(space, '?'))
+            classname, self.getclass(space).getname(space))
 
     # used by _weakref implemenation
 
@@ -125,7 +125,7 @@ class W_Root(object):
         return None
 
     def setweakref(self, space, weakreflifeline):
-        typename = space.type(self).getname(space, '?')
+        typename = space.type(self).getname(space)
         raise operationerrfmt(space.w_TypeError,
             "cannot create weak reference to '%s' object", typename)
 
@@ -364,8 +364,6 @@ class ObjSpace(object):
 
     def setbuiltinmodule(self, importname):
         """NOT_RPYTHON. load a lazy pypy/module and put it into sys.modules"""
-        import sys
-
         fullname = "pypy.module.%s" % importname
 
         Module = __import__(fullname,
@@ -555,6 +553,9 @@ class ObjSpace(object):
 
     def setup_builtin_modules(self):
         "NOT_RPYTHON: only for initializing the space."
+        if self.config.objspace.usemodules.cpyext:
+            from pypy.module.cpyext.state import State
+            self.fromcache(State).build_api(self)
         self.getbuiltinmodule('sys')
         self.getbuiltinmodule('imp')
         self.getbuiltinmodule('__builtin__')
@@ -654,6 +655,10 @@ class ObjSpace(object):
         """shortcut for space.int_w(space.hash(w_obj))"""
         return self.int_w(self.hash(w_obj))
 
+    def len_w(self, w_obj):
+        """shotcut for space.int_w(space.len(w_obj))"""
+        return self.int_w(self.len(w_obj))
+
     def setitem_str(self, w_obj, key, w_value):
         return self.setitem(w_obj, self.wrap(key), w_value)
 
@@ -730,7 +735,7 @@ class ObjSpace(object):
             msg = "'%s' object expected, got '%s' instead"
             raise operationerrfmt(self.w_TypeError, msg,
                 wrappable_class_name(RequiredClass),
-                w_obj.getclass(self).getname(self, '?'))
+                w_obj.getclass(self).getname(self))
         return obj
     interp_w._annspecialcase_ = 'specialize:arg(1)'
 
@@ -797,8 +802,8 @@ class ObjSpace(object):
 
     def call_obj_args(self, w_callable, w_obj, args):
         if not self.config.objspace.disable_call_speedhacks:
-            # XXX start of hack for performance            
-            from pypy.interpreter.function import Function        
+            # XXX start of hack for performance
+            from pypy.interpreter.function import Function
             if isinstance(w_callable, Function):
                 return w_callable.call_obj_args(w_obj, args)
             # XXX end of hack for performance
@@ -906,10 +911,6 @@ class ObjSpace(object):
                 return self.w_True
         return self.w_False
 
-    def isinstance(self, w_obj, w_type):
-        w_objtype = self.type(w_obj)
-        return self.issubtype(w_objtype, w_type)
-
     def isinstance_w(self, w_obj, w_type):
         return self.is_true(self.isinstance(w_obj, w_type))
 
@@ -940,7 +941,7 @@ class ObjSpace(object):
     # it with exception_
 
     def exception_is_valid_obj_as_class_w(self, w_obj):
-        if not self.is_true(self.isinstance(w_obj, self.w_type)):
+        if not self.isinstance_w(w_obj, self.w_type):
             return False
         if not self.full_exceptions:
             return True
@@ -1014,20 +1015,9 @@ class ObjSpace(object):
                 (start, stop, step)
         """
         if self.is_true(self.isinstance(w_index_or_slice, self.w_slice)):
-            w_indices = self.call_method(w_index_or_slice, "indices",
-                                         self.wrap(seqlength))
-            w_start, w_stop, w_step = self.fixedview(w_indices, 3)
-            start = self.int_w(w_start)
-            stop  = self.int_w(w_stop)
-            step  = self.int_w(w_step)
-            if step == 0:
-                raise OperationError(self.w_ValueError,
-                                     self.wrap("slice step cannot be zero"))
-            if start < 0:
-                start = 0
-            if stop < start:
-                stop = start
-            assert stop <= seqlength
+            from pypy.objspace.std.sliceobject import W_SliceObject
+            assert isinstance(w_index_or_slice, W_SliceObject)
+            start, stop, step = w_index_or_slice.indices3(self, seqlength)
         else:
             start = self.int_w(w_index_or_slice)
             if start < 0:
@@ -1035,9 +1025,31 @@ class ObjSpace(object):
             if not (0 <= start < seqlength):
                 raise OperationError(self.w_IndexError,
                                      self.wrap("index out of range"))
-            stop  = 0
-            step  = 0
+            stop = 0
+            step = 0
         return start, stop, step
+
+    def decode_index4(self, w_index_or_slice, seqlength):
+        """Helper for custom sequence implementations
+             -> (index, 0, 0, 1) or
+                (start, stop, step, slice_length)
+        """
+        if self.is_true(self.isinstance(w_index_or_slice, self.w_slice)):
+            from pypy.objspace.std.sliceobject import W_SliceObject
+            assert isinstance(w_index_or_slice, W_SliceObject)
+            start, stop, step, length = w_index_or_slice.indices4(self,
+                                                                  seqlength)
+        else:
+            start = self.int_w(w_index_or_slice)
+            if start < 0:
+                start += seqlength
+            if not (0 <= start < seqlength):
+                raise OperationError(self.w_IndexError,
+                                     self.wrap("index out of range"))
+            stop = 0
+            step = 0
+            length = 1
+        return start, stop, step, length
 
     def getindex_w(self, w_obj, w_exception, objdescr=None):
         """Return w_obj.__index__() as an RPython int.
@@ -1051,7 +1063,7 @@ class ObjSpace(object):
                 raise
             msg = "%s must be an integer, not %s"
             raise operationerrfmt(self.w_TypeError, msg,
-                objdescr, self.type(w_obj).getname(self, '?'))
+                objdescr, self.type(w_obj).getname(self))
         try:
             index = self.int_w(w_index)
         except OperationError, err:
@@ -1067,7 +1079,7 @@ class ObjSpace(object):
                 raise operationerrfmt(
                     w_exception,
                     "cannot fit '%s' into an index-sized "
-                    "integer", self.type(w_obj).getname(self, '?'))
+                    "integer", self.type(w_obj).getname(self))
         else:
             return index
 
@@ -1106,6 +1118,13 @@ class ObjSpace(object):
                                  self.wrap('read-write buffer expected'))
         return buffer
 
+    def bufferstr_new_w(self, w_obj):
+        # Implement the "new buffer interface" (new in Python 2.7)
+        # returning an unwrapped string. It doesn't accept unicode
+        # strings
+        buffer = self.buffer_w(w_obj)
+        return buffer.as_str()
+
     def bufferstr_w(self, w_obj):
         # Directly returns an interp-level str.  Note that if w_obj is a
         # unicode string, this is different from str_w(buffer(w_obj)):
@@ -1122,6 +1141,11 @@ class ObjSpace(object):
                 raise
             buffer = self.buffer_w(w_obj)
             return buffer.as_str()
+
+    def str_or_None_w(self, w_obj):
+        if self.is_w(w_obj, self.w_None):
+            return None
+        return self.str_w(w_obj)
 
     def realstr_w(self, w_obj):
         # Like str_w, but only works if w_obj is really of type 'str'.
@@ -1143,38 +1167,66 @@ class ObjSpace(object):
         # This is here mostly just for gateway.int_unwrapping_space_method().
         return bool(self.int_w(w_obj))
 
-    def nonnegint_w(self, w_obj):
-        # Like space.int_w(), but raises an app-level ValueError if
-        # the integer is negative.  Mostly here for gateway.py.
-        value = self.int_w(w_obj)
+    # This is all interface for gateway.py.
+    def gateway_int_w(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_float)):
+            raise OperationError(self.w_TypeError,
+                            self.wrap("integer argument expected, got float"))
+        return self.int_w(self.int(w_obj))
+
+    def gateway_float_w(self, w_obj):
+        return self.float_w(self.float(w_obj))
+
+    def gateway_r_longlong_w(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_float)):
+            raise OperationError(self.w_TypeError,
+                            self.wrap("integer argument expected, got float"))
+        return self.r_longlong_w(self.int(w_obj))
+
+    def gateway_r_uint_w(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_float)):
+            raise OperationError(self.w_TypeError,
+                            self.wrap("integer argument expected, got float"))
+        return self.uint_w(self.int(w_obj))
+
+    def gateway_r_ulonglong_w(self, w_obj):
+        if self.is_true(self.isinstance(w_obj, self.w_float)):
+            raise OperationError(self.w_TypeError,
+                            self.wrap("integer argument expected, got float"))
+        return self.r_ulonglong_w(self.int(w_obj))
+
+    def gateway_nonnegint_w(self, w_obj):
+        # Like space.gateway_int_w(), but raises an app-level ValueError if
+        # the integer is negative.  Here for gateway.py.
+        value = self.gateway_int_w(w_obj)
         if value < 0:
             raise OperationError(self.w_ValueError,
                                  self.wrap("expected a non-negative integer"))
         return value
 
     def c_int_w(self, w_obj):
-        # Like space.int_w(), but raises an app-level OverflowError if
-        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
-        value = self.int_w(w_obj)
+        # Like space.gateway_int_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Here for gateway.py.
+        value = self.gateway_int_w(w_obj)
         if value < -2147483647-1 or value > 2147483647:
             raise OperationError(self.w_OverflowError,
                                  self.wrap("expected a 32-bit integer"))
         return value
 
     def c_uint_w(self, w_obj):
-        # Like space.uint_w(), but raises an app-level OverflowError if
-        # the integer does not fit in 32 bits.  Mostly here for gateway.py.
-        value = self.uint_w(w_obj)
+        # Like space.gateway_uint_w(), but raises an app-level OverflowError if
+        # the integer does not fit in 32 bits.  Here for gateway.py.
+        value = self.gateway_r_uint_w(w_obj)
         if value > UINT_MAX_32_BITS:
             raise OperationError(self.w_OverflowError,
                               self.wrap("expected an unsigned 32-bit integer"))
         return value
 
     def c_nonnegint_w(self, w_obj):
-        # Like space.int_w(), but raises an app-level ValueError if
-        # the integer is negative or does not fit in 32 bits.  Mostly here
+        # Like space.gateway_int_w(), but raises an app-level ValueError if
+        # the integer is negative or does not fit in 32 bits.  Here
         # for gateway.py.
-        value = self.int_w(w_obj)
+        value = self.gateway_int_w(w_obj)
         if value < 0:
             raise OperationError(self.w_ValueError,
                                  self.wrap("expected a non-negative integer"))
@@ -1182,6 +1234,34 @@ class ObjSpace(object):
             raise OperationError(self.w_OverflowError,
                                  self.wrap("expected a 32-bit integer"))
         return value
+
+    def c_filedescriptor_w(self, w_fd):
+        # This is only used sometimes in CPython, e.g. for os.fsync() but
+        # not os.close().  It's likely designed for 'select'.  It's irregular
+        # in the sense that it expects either a real int/long or an object
+        # with a fileno(), but not an object with an __int__().
+        if (not self.isinstance_w(w_fd, self.w_int) and
+            not self.isinstance_w(w_fd, self.w_long)):
+            try:
+                w_fileno = self.getattr(w_fd, self.wrap("fileno"))
+            except OperationError, e:
+                if e.match(self, self.w_AttributeError):
+                    raise OperationError(self.w_TypeError,
+                        self.wrap("argument must be an int, or have a fileno() "
+                            "method.")
+                    )
+                raise
+            w_fd = self.call_function(w_fileno)
+            if not self.isinstance_w(w_fd, self.w_int):
+                raise OperationError(self.w_TypeError,
+                    self.wrap("fileno() must return an integer")
+                )
+        fd = self.int_w(w_fd)
+        if fd < 0:
+            raise operationerrfmt(self.w_ValueError,
+                "file descriptor cannot be a negative integer (%d)", fd
+            )
+        return fd
 
     def warn(self, msg, w_warningcls):
         self.appexec([self.wrap(msg), w_warningcls], """(msg, warningcls):
@@ -1226,9 +1306,11 @@ ObjSpace.MethodTable = [
     ('is_',             'is',        2, []),
     ('id',              'id',        1, []),
     ('type',            'type',      1, []),
-    ('issubtype',       'issubtype', 2, []),  # not for old-style classes
+    ('isinstance',      'isinstance', 2, ['__instancecheck__']),
+    ('issubtype',       'issubtype', 2, ['__subclasscheck__']),  # not for old-style classes
     ('repr',            'repr',      1, ['__repr__']),
     ('str',             'str',       1, ['__str__']),
+    ('format',          'format',    2, ['__format__']),
     ('len',             'len',       1, ['__len__']),
     ('hash',            'hash',      1, ['__hash__']),
     ('getattr',         'getattr',   2, ['__getattribute__']),
@@ -1240,6 +1322,7 @@ ObjSpace.MethodTable = [
     ('getslice',        'getslice',  3, ['__getslice__']),
     ('setslice',        'setslice',  4, ['__setslice__']),
     ('delslice',        'delslice',  3, ['__delslice__']),
+    ('trunc',           'trunc',     1, ['__trunc__']),
     ('pos',             'pos',       1, ['__pos__']),
     ('neg',             'neg',       1, ['__neg__']),
     ('nonzero',         'truth',     1, ['__nonzero__']),
@@ -1382,4 +1465,3 @@ ObjSpace.IrregularOpTable = [
     'call_args',
     'marshal_w',
     ]
-

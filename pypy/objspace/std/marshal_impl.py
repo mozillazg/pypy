@@ -10,8 +10,8 @@ a callback and a state variable.
 
 from pypy.interpreter.error import OperationError
 from pypy.objspace.std.register_all import register_all
-from pypy.rlib.rarithmetic import LONG_BIT
-from pypy.objspace.std import longobject, model
+from pypy.rlib.rarithmetic import LONG_BIT, r_longlong, r_uint
+from pypy.objspace.std import model
 from pypy.objspace.std.longobject import SHIFT as long_bits
 from pypy.interpreter.special import Ellipsis
 from pypy.interpreter.pycode import PyCode
@@ -28,7 +28,7 @@ from pypy.objspace.std.dictmultiobject    import W_DictMultiObject
 from pypy.objspace.std.stringobject  import W_StringObject
 from pypy.objspace.std.ropeobject    import W_RopeObject
 from pypy.objspace.std.typeobject    import W_TypeObject
-from pypy.objspace.std.longobject    import W_LongObject
+from pypy.objspace.std.longobject    import W_LongObject, newlong
 from pypy.objspace.std.noneobject    import W_NoneObject
 from pypy.objspace.std.unicodeobject import W_UnicodeObject
 
@@ -144,27 +144,13 @@ def unmarshal_Int(space, u, tc):
 register(TYPE_INT, unmarshal_Int)
 
 def unmarshal_Int64(space, u, tc):
+    lo = u.get_int()    # get the first 32 bits
+    hi = u.get_int()    # get the next 32 bits
     if LONG_BIT >= 64:
-        lo = u.get_int() & (2**32-1)
-        hi = u.get_int()
-        return space.newint((hi << 32) | lo)
+        x = (hi << 32) | (lo & (2**32-1))    # result fits in an int
     else:
-        # fall back to a long
-        # XXX at some point, we need to extend longobject
-        # by _PyLong_FromByteArray and _PyLong_AsByteArray.
-        # I will do that when implementing cPickle.
-        # for now, this rare case is solved the simple way.
-        lshift = longobject.lshift__Long_Long
-        longor = longobject.or__Long_Long
-        lo1 = space.newlong(u.get_short() & 0xffff)
-        lo2 = space.newlong(u.get_short() & 0xffff)
-        res = space.newlong(u.get_int())
-        nbits = space.newlong(16)
-        res = lshift(space, res, nbits)
-        res = longor(space, res, lo2)
-        res = lshift(space, res, nbits)
-        res = longor(space, res, lo1)
-        return res
+        x = (r_longlong(hi) << 32) | r_longlong(r_uint(lo))  # get a r_longlong
+    return space.wrap(x)
 register(TYPE_INT64, unmarshal_Int64)
 
 def pack_float(f):
@@ -279,7 +265,7 @@ def unmarshal_Long(space, u, tc):
         if digits[-1] == 0:
             raise_exception(space, 'bad marshal data')
         result = rbigint(digits, sign)
-    w_long = W_LongObject(result)
+    w_long = newlong(space, result)
     return w_long
 register(TYPE_LONG, unmarshal_Long)
 

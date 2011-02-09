@@ -16,10 +16,10 @@ from pypy.module.cpyext.pyobject import (
     track_reference, RefcountState, borrow_from)
 from pypy.interpreter.module import Module
 from pypy.module.cpyext import structmemberdefs
-from pypy.module.cpyext.modsupport import convert_method_defs, PyCFunction
+from pypy.module.cpyext.modsupport import convert_method_defs
 from pypy.module.cpyext.state import State
 from pypy.module.cpyext.methodobject import (
-    PyDescr_NewWrapper, PyCFunction_NewEx)
+    PyDescr_NewWrapper, PyCFunction_NewEx, PyCFunction_typedef)
 from pypy.module.cpyext.pyobject import Py_IncRef, Py_DecRef, _Py_Dealloc
 from pypy.module.cpyext.structmember import PyMember_GetOne, PyMember_SetOne
 from pypy.module.cpyext.typeobjectdefs import (
@@ -208,7 +208,7 @@ def get_new_method_def(space):
 
 def setup_new_method_def(space):
     ptr = get_new_method_def(space)
-    ptr.c_ml_meth = rffi.cast(PyCFunction,
+    ptr.c_ml_meth = rffi.cast(PyCFunction_typedef,
         llhelper(tp_new_wrapper.api_func.functype,
                  tp_new_wrapper.api_func.get_wrapper(space)))
 
@@ -356,7 +356,7 @@ def subtype_dealloc(space, obj):
              error=CANNOT_FAIL)
 def str_segcount(space, w_obj, ref):
     if ref:
-        ref[0] = rffi.cast(rffi.INT, space.int_w(space.len(w_obj)))
+        ref[0] = rffi.cast(rffi.INT, space.len_w(w_obj))
     return 1
 
 @cpython_api([PyObject, lltype.Signed, rffi.VOIDPP], lltype.Signed,
@@ -370,7 +370,7 @@ def str_getreadbuffer(space, w_str, segment, ref):
     ref[0] = PyString_AsString(space, pyref)
     # Stolen reference: the object has better exist somewhere else
     Py_DecRef(space, pyref)
-    return space.int_w(space.len(w_str))
+    return space.len_w(w_str)
 
 def setup_string_buffer_procs(space, pto):
     c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
@@ -617,6 +617,3 @@ def _PyType_Lookup(space, type, w_name):
     name = space.str_w(w_name)
     w_obj = w_type.lookup(name)
     return borrow_from(w_type, w_obj)
-
-
-

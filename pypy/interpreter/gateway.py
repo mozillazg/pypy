@@ -125,6 +125,9 @@ class UnwrapSpec_Check(UnwrapSpecRecipe):
     def visit_bufferstr(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
+    def visit_str_or_None(self, el, app_sig):
+        self.checked_space_method(el, app_sig)
+
     def visit_nonnegint(self, el, app_sig):
         self.checked_space_method(el, app_sig)
 
@@ -238,8 +241,12 @@ class UnwrapSpec_EmitRun(UnwrapSpecEmit):
     def visit_bufferstr(self, typ):
         self.run_args.append("space.bufferstr_w(%s)" % (self.scopenext(),))
 
+    def visit_str_or_None(self, typ):
+        self.run_args.append("space.str_or_None_w(%s)" % (self.scopenext(),))
+
     def visit_nonnegint(self, typ):
-        self.run_args.append("space.nonnegint_w(%s)" % (self.scopenext(),))
+        self.run_args.append("space.gateway_nonnegint_w(%s)" % (
+            self.scopenext(),))
 
     def visit_c_int(self, typ):
         self.run_args.append("space.c_int_w(%s)" % (self.scopenext(),))
@@ -365,8 +372,11 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
     def visit_bufferstr(self, typ):
         self.unwrap.append("space.bufferstr_w(%s)" % (self.nextarg(),))
 
+    def visit_str_or_None(self, typ):
+        self.unwrap.append("space.str_or_None_w(%s)" % (self.nextarg(),))
+
     def visit_nonnegint(self, typ):
-        self.unwrap.append("space.nonnegint_w(%s)" % (self.nextarg(),))
+        self.unwrap.append("space.gateway_nonnegint_w(%s)" % (self.nextarg(),))
 
     def visit_c_int(self, typ):
         self.unwrap.append("space.c_int_w(%s)" % (self.nextarg(),))
@@ -409,11 +419,11 @@ class UnwrapSpec_FastFunc_Unwrap(UnwrapSpecEmit):
 def int_unwrapping_space_method(typ):
     assert typ in (int, str, float, unicode, r_longlong, r_uint, r_ulonglong, bool)
     if typ is r_int is r_longlong:
-        return 'r_longlong_w'
-    elif typ is r_uint:
-        return 'uint_w'
-    else:
+        return 'gateway_r_longlong_w'
+    elif typ in (str, unicode, bool):
         return typ.__name__ + '_w'
+    else:
+        return 'gateway_' + typ.__name__ + '_w'
 
 
 def unwrap_spec(*spec):

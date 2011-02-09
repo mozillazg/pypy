@@ -1,7 +1,7 @@
 #! /usr/bin/env python
 """
 Syntax:
-    python logparser.py <action> <logfilename> <options...>
+    python logparser.py <action> <logfilename> <output> <options...>
 
 Actions:
     draw-time   draw a timeline image of the log (format PNG by default)
@@ -92,6 +92,27 @@ def extract_category(log, catprefix='', toplevel=False):
         resulttext.append('')
         got.insert(0, '\n'.join(resulttext))
     return got
+
+def print_log(log):
+    for entry in log:
+        if entry[0] == 'debug_print':
+            print entry[1]
+        else:
+            print "{%s" % entry[0]
+            if len(entry)>3:
+                print_log(entry[3])
+            print "%s}" % entry[0]
+
+def kill_category(log, catprefix=''):
+    newlog = []
+    for entry in log:
+        if not entry[0].startswith(catprefix):
+            if len(entry) > 3:
+                newlog.append(entry[:3] + 
+                              (kill_category(entry[3], catprefix),))
+            else:
+                newlog.append(entry)
+    return newlog
 
 def getsubcategories(log):
     return [entry for entry in log if entry[0] != 'debug_print']

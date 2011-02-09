@@ -149,9 +149,110 @@ class AsmStackRootWalker(BaseRootWalker):
 
     def need_thread_support(self, gctransformer, getfn):
         # Threads supported "out of the box" by the rest of the code.
-        # In particular, we can ignore the gc_thread_prepare,
-        # gc_thread_run and gc_thread_die operations.
-        pass
+        # The whole code in this function is only there to support
+        # fork()ing in a multithreaded process :-(
+        # For this, we need to handle gc_thread_start and gc_thread_die
+        # to record the mapping {thread_id: stack_start}, and
+        # gc_thread_before_fork and gc_thread_after_fork to get rid of
+        # all ASM_FRAMEDATA structures that do no belong to the current
+        # thread after a fork().
+        from pypy.module.thread import ll_thread
+        from pypy.rpython.memory.support import AddressDict
+        from pypy.rpython.memory.support import copy_without_null_values
+        from pypy.annotation import model as annmodel
+        gcdata = self.gcdata
+
+        def get_aid():
+            """Return the thread identifier, cast to an (opaque) address."""
+            return llmemory.cast_int_to_adr(ll_thread.get_ident())
+
+        def thread_start():
+            value = llop.stack_current(llmemory.Address)
+            gcdata.aid2stack.setitem(get_aid(), value)
+        thread_start._always_inline_ = True
+
+        def thread_setup():
+            gcdata.aid2stack = AddressDict()
+            gcdata.dead_threads_count = 0
+            # to also register the main thread's stack
+            thread_start()
+        thread_setup._always_inline_ = True
+
+        def thread_die():
+            gcdata.aid2stack.setitem(get_aid(), llmemory.NULL)
+            # from time to time, rehash the dictionary to remove
+            # old NULL entries
+            gcdata.dead_threads_count += 1
+            if (gcdata.dead_threads_count & 511) == 0:
+                gcdata.aid2stack = copy_without_null_values(gcdata.aid2stack)
+
+        def belongs_to_current_thread(framedata):
+            # xxx obscure: the answer is Yes if, as a pointer, framedata
+            # lies between the start of the current stack and the top of it.
+            stack_start = gcdata.aid2stack.get(get_aid(), llmemory.NULL)
+            ll_assert(stack_start != llmemory.NULL,
+                      "current thread not found in gcdata.aid2stack!")
+            stack_stop  = llop.stack_current(llmemory.Address)
+            return (stack_start <= framedata <= stack_stop or
+                    stack_start >= framedata >= stack_stop)
+
+        def thread_before_fork():
+            # before fork(): collect all ASM_FRAMEDATA structures that do
+            # not belong to the current thread, and move them out of the
+            # way, i.e. out of the main circular doubly linked list.
+            detached_pieces = llmemory.NULL
+            anchor = llmemory.cast_ptr_to_adr(gcrootanchor)
+            initialframedata = anchor.address[1]
+            while initialframedata != anchor:   # while we have not looped back
+                if not belongs_to_current_thread(initialframedata):
+                    # Unlink it
+                    prev = initialframedata.address[0]
+                    next = initialframedata.address[1]
+                    prev.address[1] = next
+                    next.address[0] = prev
+                    # Link it to the singly linked list 'detached_pieces'
+                    initialframedata.address[0] = detached_pieces
+                    detached_pieces = initialframedata
+                    rffi.stackcounter.stacks_counter -= 1
+                # Then proceed to the next piece of stack
+                initialframedata = initialframedata.address[1]
+            return detached_pieces
+
+        def thread_after_fork(result_of_fork, detached_pieces):
+            if result_of_fork == 0:
+                # We are in the child process.  Assumes that only the
+                # current thread survived.  All the detached_pieces
+                # are pointers in other stacks, so have likely been
+                # freed already by the multithreaded library.
+                # Nothing more for us to do.
+                pass
+            else:
+                # We are still in the parent process.  The fork() may
+                # have succeeded or not, but that's irrelevant here.
+                # We need to reattach the detached_pieces now, to the
+                # circular doubly linked list at 'gcrootanchor'.  The
+                # order is not important.
+                anchor = llmemory.cast_ptr_to_adr(gcrootanchor)
+                while detached_pieces != llmemory.NULL:
+                    reattach = detached_pieces
+                    detached_pieces = detached_pieces.address[0]
+                    a_next = anchor.address[1]
+                    reattach.address[0] = anchor
+                    reattach.address[1] = a_next
+                    anchor.address[1] = reattach
+                    a_next.address[0] = reattach
+                    rffi.stackcounter.stacks_counter += 1
+
+        self.thread_setup = thread_setup
+        self.thread_start_ptr = getfn(thread_start, [], annmodel.s_None,
+                                      inline=True)
+        self.thread_die_ptr = getfn(thread_die, [], annmodel.s_None)
+        self.thread_before_fork_ptr = getfn(thread_before_fork, [],
+                                            annmodel.SomeAddress())
+        self.thread_after_fork_ptr = getfn(thread_after_fork,
+                                           [annmodel.SomeInteger(),
+                                            annmodel.SomeAddress()],
+                                           annmodel.s_None)
 
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
@@ -306,6 +407,16 @@ class AsmStackRootWalker(BaseRootWalker):
                 if item:
                     self._shape_decompressor.setaddr(item)
                     return
+            # there is a rare risk that the array contains *two* entries
+            # with the same key, one of which is dead (null value), and we
+            # found the dead one above.  Solve this case by replacing all
+            # dead keys with nulls, sorting again, and then trying again.
+            replace_dead_entries_with_nulls(gcmapstart2, gcmapend2)
+            sort_gcmap(gcmapstart2, gcmapend2)
+            item = search_in_gcmap2(gcmapstart2, gcmapend2, retaddr)
+            if item:
+                self._shape_decompressor.setaddr(item)
+                return
         # the item may have been not found because the main array was
         # not sorted.  Sort it and try again.
         win32_follow_gcmap_jmp(gcmapstart, gcmapend)
@@ -400,6 +511,15 @@ def sort_gcmap(gcmapstart, gcmapend):
           rffi.cast(rffi.SIZE_T, count),
           rffi.cast(rffi.SIZE_T, arrayitemsize),
           llhelper(QSORT_CALLBACK_PTR, _compare_gcmap_entries))
+
+def replace_dead_entries_with_nulls(start, end):
+    # replace the dead entries (null value) with a null key.
+    count = (end - start) // arrayitemsize - 1
+    while count >= 0:
+        item = start + count * arrayitemsize
+        if item.address[1] == llmemory.NULL:
+            item.address[0] = llmemory.NULL
+        count -= 1
 
 if sys.platform == 'win32':
     def win32_follow_gcmap_jmp(start, end):
