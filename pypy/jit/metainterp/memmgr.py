@@ -68,7 +68,7 @@ class MemoryManager(object):
         debug_print("Loop tokens before:", oldtotal)
         max_generation = self.current_generation - (self.max_age-1)
         for looptoken in self.alive_loops.keys():
-            if (looptoken.invalidated or
+            if (looptoken.invalidated_array[0] or
                 0 <= looptoken.generation < max_generation):
                 # XXX free looptoken invalidated ptr
                 del self.alive_loops[looptoken]

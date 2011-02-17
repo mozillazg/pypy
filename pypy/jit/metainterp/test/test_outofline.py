@@ -79,7 +79,7 @@ class OutOfLineTests(object):
             return total
 
         assert self.meta_interp(f, []) == f()
-        self.check_loop_count(3)
+        self.check_loop_count(4)
         self.check_history(getfield_gc=0, getfield_gc_pure=0)        
 
     def test_jit_invariant_entry_bridge(self):
@@ -111,7 +111,7 @@ class OutOfLineTests(object):
             return total
 
         assert self.meta_interp(main, []) == main()
-        self.check_loop_count(4)
+        self.check_loop_count(2)
         self.check_history(getfield_gc=0, getfield_gc_pure=0)
 
     def test_jit_invariant_invalidate_bridge(self):
