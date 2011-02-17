@@ -123,7 +123,8 @@ class BaseCPU(model.AbstractCPU):
         clt = original_loop_token.compiled_loop_token
         clt.loop_and_bridges.append(c)
         clt.compiling_a_bridge()
-        self._compile_loop_or_bridge(c, inputargs, operations)
+        self._compile_loop_or_bridge(c, inputargs, operations,
+                                     original_loop_token.invalidated_array)
         old, oldindex = faildescr._compiled_fail
         llimpl.compile_redirect_fail(old, oldindex, c)
 
@@ -138,14 +139,16 @@ class BaseCPU(model.AbstractCPU):
         clt.loop_and_bridges = [c]
         clt.compiled_version = c
         looptoken.compiled_loop_token = clt
-        self._compile_loop_or_bridge(c, inputargs, operations)
+        self._compile_loop_or_bridge(c, inputargs, operations,
+                                     looptoken.invalidated_array)
 
     def free_loop_and_bridges(self, compiled_loop_token):
         for c in compiled_loop_token.loop_and_bridges:
             llimpl.mark_as_free(c)
         model.AbstractCPU.free_loop_and_bridges(self, compiled_loop_token)
 
-    def _compile_loop_or_bridge(self, c, inputargs, operations):
+    def _compile_loop_or_bridge(self, c, inputargs, operations,
+                                invalidated_array):
         var2index = {}
         for box in inputargs:
             if isinstance(box, history.BoxInt):
@@ -158,6 +161,7 @@ class BaseCPU(model.AbstractCPU):
             else:
                 raise Exception("box is: %r" % (box,))
         self._compile_operations(c, operations, var2index)
+        llimpl.compile_add_inv_array(c, invalidated_array)
         return c
 
     def _compile_operations(self, c, operations, var2index):
