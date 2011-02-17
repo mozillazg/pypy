@@ -375,6 +375,7 @@ class ResumeGuardDescr(ResumeDescr):
         # to the corresponding guard_op and compile from there
         assert metainterp.resumekey_original_loop_token is not None
         new_loop.token = metainterp.resumekey_original_loop_token
+        new_loop.token.invalidated_array = metainterp.invalidated_array
         inputargs = metainterp.history.inputargs
         if not we_are_translated():
             self._debug_suboperations = new_loop.operations
@@ -569,6 +570,7 @@ class ResumeFromInterpDescr(ResumeDescr):
         # to every guard in the loop.
         new_loop_token = make_loop_token(len(redargs), jitdriver_sd)
         new_loop.token = new_loop_token
+        new_loop_token.invalidated_array = metainterp.invalidated_array
         send_loop_to_backend(metainterp_sd, new_loop, "entry bridge")
         # send the new_loop to warmspot.py, to be called directly the next time
         jitdriver_sd.warmstate.attach_unoptimized_bridge_from_interp(
@@ -659,6 +661,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redboxes,
     # 'redboxes' is only used to know the types of red arguments.
     inputargs = [box.clonebox() for box in redboxes]
     loop_token = make_loop_token(len(inputargs), jitdriver_sd)
+    loop_token.invalidated_array = cpu.create_invalidate_array()
     # 'nb_red_args' might be smaller than len(redboxes),
     # because it doesn't include the virtualizable boxes.
     nb_red_args = jitdriver_sd.num_red_args

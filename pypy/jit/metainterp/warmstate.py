@@ -158,7 +158,7 @@ class JitCell(BaseJitCell):
         if self.compiled_merge_points_wref is not None:
             for wref in self.compiled_merge_points_wref:
                 looptoken = wref()
-                if looptoken is not None and not looptoken.invalidated:
+                if looptoken is not None and not looptoken.invalidated_array[0]:
                     result.append(looptoken)
         return result
 
@@ -169,7 +169,7 @@ class JitCell(BaseJitCell):
     def get_entry_loop_token(self):
         if self.wref_entry_loop_token is not None:
             looptoken = self.wref_entry_loop_token()
-            if looptoken is not None and looptoken.invalidated:
+            if looptoken is not None and looptoken.invalidated_array[0]:
                 self.wref_entry_loop_token = None
             else:
                 return looptoken
@@ -336,7 +336,7 @@ class WarmEnterState(object):
                 if not confirm_enter_jit(*args):
                     return
                 loop_token = cell.get_entry_loop_token()
-                if loop_token is None or loop_token.invalidated:
+                if loop_token is None or loop_token.invalidated_array[0]:
                     # it was a weakref that has been freed or invalidated
                     cell.counter = 0
                     return
