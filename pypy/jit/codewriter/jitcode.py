@@ -9,13 +9,15 @@ class JitCode(AbstractDescr):
     _empty_r = []
     _empty_f = []
 
-    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None):
+    def __init__(self, name, fnaddr=None, calldescr=None, called_from=None,
+                 entry_point=False):
         self.name = name
         self.fnaddr = fnaddr
         self.calldescr = calldescr
         self.is_portal = False
         self._called_from = called_from   # debugging
         self._ssarepr     = None          # debugging
+        self.entry_point = entry_point
 
     def setup(self, code='', constants_i=[], constants_r=[], constants_f=[],
               num_regs_i=255, num_regs_r=255, num_regs_f=255,

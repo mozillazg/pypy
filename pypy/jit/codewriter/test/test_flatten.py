@@ -115,7 +115,8 @@ class TestFlatten:
         return self.rtyper.annotator.translator.graphs
 
     def encoding_test(self, func, args, expected,
-                      transform=False, liveness=False, cc=None, jd=None):
+                      transform=False, liveness=False, cc=None, jd=None,
+                      entry_point=False):
         graphs = self.make_graphs(func, args)
         #graphs[0].show()
         if transform:
@@ -123,7 +124,8 @@ class TestFlatten:
             cc = cc or FakeCallControl()
             transform_graph(graphs[0], FakeCPU(self.rtyper), cc, jd)
         ssarepr = flatten_graph(graphs[0], fake_regallocs(),
-                                _include_all_exc_links=not transform)
+                                _include_all_exc_links=not transform,
+                                entry_point=entry_point)
         if liveness:
             from pypy.jit.codewriter.liveness import compute_liveness
             compute_liveness(ssarepr)
@@ -627,6 +629,15 @@ class TestFlatten:
             -live- %i0, %r1
             int_return %i0
         """, transform=True, liveness=True)
+
+    def test_live_at_the_beginning(self):
+        def f(x):
+            return 3 + x
+        self.encoding_test(f, [5], """
+        -live-
+        int_add $3, %i0 -> %i1
+        int_return %i1
+        """, entry_point=True)
 
     def test_ptr_nonzero(self):
         def f(p):

@@ -148,7 +148,7 @@ class CallControl(object):
 
     def grab_initial_jitcodes(self):
         for jd in self.jitdrivers_sd:
-            jd.mainjitcode = self.get_jitcode(jd.portal_graph)
+            jd.mainjitcode = self.get_jitcode(jd.portal_graph, entry_point=True)
             jd.mainjitcode.is_portal = True
 
     def enum_pending_graphs(self):
@@ -156,14 +156,14 @@ class CallControl(object):
             graph = self.unfinished_graphs.pop()
             yield graph, self.jitcodes[graph]
 
-    def get_jitcode(self, graph, called_from=None):
+    def get_jitcode(self, graph, called_from=None, entry_point=False):
         # 'called_from' is only one of the callers, used for debugging.
         try:
             return self.jitcodes[graph]
         except KeyError:
             fnaddr, calldescr = self.get_jitcode_calldescr(graph)
             jitcode = JitCode(graph.name, fnaddr, calldescr,
-                              called_from=called_from)
+                              called_from=called_from, entry_point=entry_point)
             self.jitcodes[graph] = jitcode
             self.unfinished_graphs.append(graph)
             return jitcode

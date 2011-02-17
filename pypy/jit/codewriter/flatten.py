@@ -60,10 +60,12 @@ KINDS = ['int', 'ref', 'float']
 
 # ____________________________________________________________
 
-def flatten_graph(graph, regallocs, _include_all_exc_links=False):
+def flatten_graph(graph, regallocs, _include_all_exc_links=False,
+                  entry_point=False):
     """Flatten the graph into an SSARepr, with already-computed register
     allocations.  'regallocs' in a dict {kind: RegAlloc}."""
-    flattener = GraphFlattener(graph, regallocs, _include_all_exc_links)
+    flattener = GraphFlattener(graph, regallocs, _include_all_exc_links,
+                               entry_point)
     flattener.enforce_input_args()
     flattener.generate_ssa_form()
     return flattener.ssarepr
@@ -71,7 +73,8 @@ def flatten_graph(graph, regallocs, _include_all_exc_links=False):
 
 class GraphFlattener(object):
 
-    def __init__(self, graph, regallocs, _include_all_exc_links=False):
+    def __init__(self, graph, regallocs, _include_all_exc_links=False,
+                 entry_point=False):
         self.graph = graph
         self.regallocs = regallocs
         self._include_all_exc_links = _include_all_exc_links
@@ -81,6 +84,7 @@ class GraphFlattener(object):
         else:
             name = '?'
         self.ssarepr = SSARepr(name)
+        self.entry_point = entry_point
 
     def enforce_input_args(self):
         inputargs = self.graph.startblock.inputargs
@@ -98,6 +102,8 @@ class GraphFlattener(object):
 
     def generate_ssa_form(self):
         self.seen_blocks = {}
+        if self.entry_point:
+            self.emitline('-live-')
         self.make_bytecode_block(self.graph.startblock)
 
     def make_bytecode_block(self, block):
