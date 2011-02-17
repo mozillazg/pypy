@@ -168,7 +168,6 @@ TYPES = {
 
 class CompiledLoop(object):
     has_been_freed = False
-    invalidated = False
 
     def __init__(self):
         self.inputargs = []
@@ -294,33 +293,14 @@ def compile_start():
     del _variables[:]
     return _to_opaque(CompiledLoop())
 
+def compile_add_inv_array(loop, inv_array):
+    loop = _from_opaque(loop)
+    loop.invalidated_array = inv_array
+
 def mark_as_free(loop):
     loop = _from_opaque(loop)
     assert not loop.has_been_freed
     loop.has_been_freed = True
-
-def mark_as_invalid(loop):
-    _mark_as_invalid(_from_opaque(loop))
-
-def _mark_as_invalid(loop):
-    assert not loop.has_been_freed
-    for op in loop.operations:
-        if op.is_guard() and op.jump_target is not None:
-            _mark_as_invalid(op.jump_target)
-    loop.invalidated = True
-
-def invalidate_call_asm(from_loop, ctl):
-    from_loop = _from_opaque(from_loop)
-    _invalidate_call_asm(from_loop, ctl)
-
-def _invalidate_call_asm(from_loop, ctl):
-    for op in from_loop.operations:
-        if op.opnum == rop.CALL_ASSEMBLER:
-            call_target = op.descr().compiled_loop_token
-            if call_target is ctl:
-                op.descr = weakref.ref(op.descr()._tmp_token)
-        if op.is_guard() and op.jump_target is not None:
-            _invalidate_call_asm(op.jump_target, to_loop)
 
 def compile_start_int_var(loop):
     return compile_start_ref_var(loop, lltype.Signed)
@@ -901,7 +881,6 @@ class Frame(object):
         ctl = loop_token.compiled_loop_token
         if hasattr(ctl, 'redirected'):
             return self._do_call_assembler(ctl.redirected, *args)
-        assert not loop_token.invalidated
         assert not self._forced
         self._may_force = self.opindex
         try:
@@ -960,7 +939,7 @@ class Frame(object):
             raise GuardFailed
 
     def op_guard_not_invalidated(self, descr):
-        if self.loop.invalidated:
+        if self.loop.invalidated_array[0]:
             raise GuardFailed
 
 class OOFrame(Frame):
@@ -1693,9 +1672,8 @@ setannotation(compile_add_guard_jump_target, annmodel.s_None)
 setannotation(compile_add_fail, annmodel.SomeInteger())
 setannotation(compile_add_fail_arg, annmodel.s_None)
 setannotation(compile_redirect_fail, annmodel.s_None)
+setannotation(compile_add_inv_array, annmodel.s_None)
 setannotation(mark_as_free, annmodel.s_None)
-setannotation(mark_as_invalid, annmodel.s_None)
-setannotation(invalidate_call_asm, annmodel.s_None)
 
 setannotation(new_frame, s_Frame)
 setannotation(frame_clear, annmodel.s_None)

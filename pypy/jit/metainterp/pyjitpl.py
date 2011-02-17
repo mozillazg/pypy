@@ -1085,6 +1085,9 @@ class MIFrame(object):
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
                                                    metainterp.jitdriver_sd)
+        elif opnum == rop.GUARD_NOT_INVALIDATED:
+            resumedescr = compile.ResumeGuardInvalidatedDescr(metainterp_sd,
+                                                      metainterp.jitdriver_sd)
         else:
             resumedescr = compile.ResumeGuardDescr()
         guard_op = metainterp.history.record(opnum, moreargs, None,
@@ -1696,6 +1699,7 @@ class MetaInterp(object):
         self.resumekey = compile.ResumeFromInterpDescr(original_greenkey)
         self.history.inputargs = original_boxes[num_green_args:]
         self.seen_loop_header_for_jdindex = -1
+        self.record_guard_not_invalidated()
         try:
             self.interpret()
         except GenerateMergePoint, gmp:
@@ -2301,6 +2305,9 @@ class MetaInterp(object):
         newop = op.copy_and_change(rop.CALL_PURE, args=[resbox_as_const]+op.getarglist())
         self.history.operations[-1] = newop
         return resbox
+
+    def record_guard_not_invalidated(self):
+        self.framestack[-1].generate_guard(rop.GUARD_NOT_INVALIDATED, None)
 
     def direct_assembler_call(self, targetjitdriver_sd):
         """ Generate a direct call to assembler for portal entry point,

@@ -49,7 +49,8 @@ class CodeWriter(object):
         # which means mostly producing a linear list of operations and
         # inserting jumps or conditional jumps.  This is a list of tuples
         # of the shape ("opname", arg1, ..., argN) or (Label(...),).
-        ssarepr = flatten_graph(graph, regallocs, jitcode.entry_point)
+        ssarepr = flatten_graph(graph, regallocs,
+                                entry_point=jitcode.entry_point)
         #
         # step 3b: compute the liveness around certain operations
         compute_liveness(ssarepr)

@@ -105,6 +105,7 @@ def compile_new_loop(metainterp, old_loop_tokens, greenkey, start, start_resumed
     loop.preamble = create_empty_loop(metainterp, 'Preamble ')
     loop.preamble.inputargs = loop.inputargs
     loop.preamble.token = make_loop_token(len(loop.inputargs), jitdriver_sd)
+    loop.preamble.token.invalidated_array = metainterp.invalidated_array
     loop.preamble.start_resumedescr = start_resumedescr
 
     try:
@@ -397,6 +398,23 @@ class ResumeGuardDescr(ResumeDescr):
 class ResumeAtPositionDescr(ResumeGuardDescr):
     def _clone_if_mutable(self):
         res = ResumeAtPositionDescr()
+        self.copy_all_attrbutes_into(res)
+        return res
+
+class ResumeGuardInvalidatedDescr(ResumeGuardDescr):
+    def __init__(self, metainterp_sd, jitdriver_sd):
+        self.metainterp_sd = metainterp_sd
+        self.jitdriver_sd = jitdriver_sd
+
+    def handle_fail(self, metainterp_sd, jitdriver_sd):
+        # Failures of GUARD_NOT_INVALIDATED are never compiled,
+        # but always blackhole.
+        from pypy.jit.metainterp.blackhole import resume_in_blackhole
+        resume_in_blackhole(metainterp_sd, jitdriver_sd, self)
+        assert 0
+
+    def _clone_if_mutable(self):
+        res = ResumeGuardInvalidatedDescr(self.metainterp_sd, self.jitdriver_sd)
         self.copy_all_attrbutes_into(res)
         return res
 
