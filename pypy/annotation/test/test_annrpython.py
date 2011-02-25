@@ -1680,6 +1680,14 @@ class TestAnnotateTestCase:
         assert isinstance(s2.dictdef.dictkey.  s_value, annmodel.SomeInteger)
         assert isinstance(s2.dictdef.dictvalue.s_value, annmodel.SomeInteger)
 
+    def test_not_dict(self):
+        def f(x):
+            d = {x: x}
+            return not d
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [str])
+        assert isinstance(s, annmodel.SomeBool)
+
     def test_pbc_union(self):
         class A:
             def meth(self):

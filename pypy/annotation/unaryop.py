@@ -86,7 +86,7 @@ class __extend__(SomeObject):
         knowntypedata = r.knowntypedata = {}
         fn, block, i = bk.position_key
         op = block.operations[i]
-        assert op.opname == "is_true" or op.opname == "nonzero"
+        assert op.opname in ["is_true", "nonzero", "is_false"]
         assert len(op.args) == 1
         arg = op.args[0]
         s_nonnone_obj = s_obj
