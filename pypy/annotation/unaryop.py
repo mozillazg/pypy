@@ -20,7 +20,8 @@ from pypy.rpython import extregistry
 def immutablevalue(x):
     return getbookkeeper().immutablevalue(x)
 
-UNARY_OPERATIONS = set(['len', 'is_true', 'getattr', 'setattr', 'delattr',
+UNARY_OPERATIONS = set(['len', 'is_true', 'is_false',
+                        'getattr', 'setattr', 'delattr',
                         'simple_call', 'call_args', 'str', 'repr',
                         'iter', 'next', 'invert', 'type', 'issubtype',
                         'pos', 'neg', 'nonzero', 'abs', 'hex', 'oct',
@@ -93,7 +94,18 @@ class __extend__(SomeObject):
             s_nonnone_obj = s_obj.nonnoneify()
         add_knowntypedata(knowntypedata, True, [arg], s_nonnone_obj)
         return r
-        
+
+    def is_false(s_obj):
+        s_bool = s_obj.is_true()
+        s_res = SomeBool()
+        if s_bool.is_constant():
+            s_res.const = not s_bool.const
+        if hasattr(s_bool, "knowntypedata"):
+            ktd = {}
+            for (cond, var), s_stuff in s_bool.knowntypedata.iteritems():
+                ktd[not cond, var] = s_stuff
+            s_res.knowntypedata = ktd
+        return s_res
 
     def nonzero(obj):
         return obj.is_true()

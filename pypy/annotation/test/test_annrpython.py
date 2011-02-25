@@ -1415,6 +1415,20 @@ class TestAnnotateTestCase:
         s = a.build_types(snippet.prime, [int])
         assert s.knowntype == bool
 
+    def test_not_bool(self):
+        def f(x):
+            return not x
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert s == annmodel.SomeBool()
+
+        def g():
+            return f(True)
+        a = self.RPythonAnnotator()
+        s = a.build_types(g, [])
+        assert isinstance(s, annmodel.SomeBool)
+        assert s.const is False
+
     def test_and_is_true_coalesce(self):
         def f(a,b,c,d,e):
             x = a and b
@@ -2012,6 +2026,7 @@ class TestAnnotateTestCase:
         assert isinstance(s, annmodel.SomeInstance)
         assert s.classdef == a.bookkeeper.getuniqueclassdef(B)
 
+
     def test_type_is_no_improvement(self):
         class B(object):
             pass
@@ -2026,6 +2041,21 @@ class TestAnnotateTestCase:
         a = self.RPythonAnnotator()
         s = a.build_types(f, [D])
         assert s == annmodel.SomeImpossibleValue()
+
+    def test_type_not_isinstance(self):
+        class B(object):
+            pass
+        class C(B):
+            pass
+        def f(x):
+            c = not isinstance(x, C)
+            if c:
+                return None
+            return x
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [B])
+        assert isinstance(s, annmodel.SomeInstance)
+        assert s.classdef == a.bookkeeper.getuniqueclassdef(C)
 
     def test_is_constant_instance(self):
         class A(object):

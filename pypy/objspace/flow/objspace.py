@@ -333,6 +333,17 @@ class FlowObjSpace(ObjSpace):
         context = self.getexecutioncontext()
         return context.guessbool(w_truthvalue)
 
+    def not_(self, w_obj):
+        try:
+            obj = self.unwrap_for_computation(w_obj)
+        except UnwrapException:
+            pass
+        else:
+            return not obj
+        w_falthvalue = self.do_operation('is_false', w_obj)
+        return w_falthvalue
+
+
     def iter(self, w_iterable):
         try:
             iterable = self.unwrap(w_iterable)
