@@ -215,6 +215,10 @@ class Repr(object):
         else:
             return hop.genop('int_is_true', [vlen], resulttype=Bool)
 
+    def rtype_is_false(self, hop):
+        v = self.rtype_is_true(hop)
+        return hop.genop("bool_not", [v], resulttype=Bool)
+
     def rtype_hash(self, hop):
         ll_hash = self.get_ll_hash_function()
         v, = hop.inputargs(self)
