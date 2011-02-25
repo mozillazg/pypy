@@ -834,6 +834,11 @@ class TestFlowObjSpace(Base):
             return not x
         graph = self.codetest(f)
         assert self.all_operations(graph) == {"is_false": 1}
+        x = True
+        def f():
+            return not x
+        graph = self.codetest(f)
+        assert self.all_operations(graph) == {}
 
 
     def test_context_manager(self):

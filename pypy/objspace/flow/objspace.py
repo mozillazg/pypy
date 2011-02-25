@@ -339,7 +339,7 @@ class FlowObjSpace(ObjSpace):
         except UnwrapException:
             pass
         else:
-            return not obj
+            return self.wrap(not obj)
         w_falthvalue = self.do_operation('is_false', w_obj)
         return w_falthvalue
 
