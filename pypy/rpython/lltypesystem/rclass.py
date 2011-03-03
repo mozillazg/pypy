@@ -86,10 +86,13 @@ LLFLAVOR = {'gc'   : 'gc',
 
 # a linked-list of assembler codes to invalidate in case jit_invariant_fields
 # are modified
-# address is a pointer to a loop-level one-element raw array that's
-# either 0 or 1
+
+# flag - an invalidated flag (0 or 1), used during tracing
+# address - backend-dependent number. typically an address of assembler to patch
 ASMCODE = lltype.GcForwardReference()
-ASMCODE.become(GcStruct('asmcode', ('address', lltype.Signed),
+ASMCODE.become(GcStruct('asmcode',
+                        ('address', lltype.Signed),
+                        ('flag', lltype.Signed),
                         ('next', lltype.Ptr(ASMCODE))))
 
 ASMCODE_APPENDER = lltype.FuncType([llmemory.GCREF, lltype.Signed],
