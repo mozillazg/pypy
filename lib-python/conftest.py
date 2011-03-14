@@ -18,7 +18,7 @@ from pypy.conftest import gettestobjspace, option as pypy_option
 
 from pypy.tool.pytest import appsupport 
 from pypy.tool.pytest.confpath import pypydir, libpythondir, \
-                                      regrtestdir, modregrtestdir, testresultdir
+                                      regrtestdir, testresultdir
 
 pytest_plugins = "resultlog",
 rsyncdirs = ['.', '../pypy/']
@@ -75,13 +75,7 @@ class RegrTest:
         return self._compiler #or pypy_option.compiler 
     compiler = property(compiler)
 
-    def ismodified(self): 
-        return modregrtestdir.join(self.basename).check() 
-
     def getfspath(self): 
-        fn = modregrtestdir.join(self.basename)
-        if fn.check(): 
-            return fn 
         fn = regrtestdir.join(self.basename)
         return fn 
 
@@ -546,7 +540,7 @@ def pytest_collect_file(path, parent, __multicall__):
     regrtest = parent.config._basename2spec.get(path.basename, None)
     if regrtest is None:
         return
-    if path.dirpath() not in (modregrtestdir, regrtestdir):
+    if path.dirpath() != regrtestdir:
         return
     return RunFileExternal(path.basename, parent=parent, regrtest=regrtest)
 
@@ -557,11 +551,7 @@ class RunFileExternal(py.test.collect.File):
         self.fspath = regrtest.getfspath()
 
     def collect(self): 
-        if self.regrtest.ismodified(): 
-            name = 'modified'
-        else:
-            name = 'unmodified'
-        return [ReallyRunFileExternal(name, parent=self)] 
+        return [ReallyRunFileExternal("module", parent=self)] 
 
 #
 # testmethod: 
@@ -711,15 +701,3 @@ class ReallyRunFileExternal(py.test.collect.Item):
         if regrtest.core:
             lst.append('core')
         return lst
-
-#
-# Sanity check  (could be done more nicely too)
-#
-import os
-samefile = getattr(os.path, 'samefile', 
-                   lambda x,y : str(x) == str(y))
-if samefile(os.getcwd(), str(regrtestdir.dirpath())):
-    raise NotImplementedError(
-        "Cannot run py.test with this current directory:\n"
-        "the app-level sys.path will contain %s before %s)." % (
-            regrtestdir.dirpath(), modregrtestdir.dirpath()))

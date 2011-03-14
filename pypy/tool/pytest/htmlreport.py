@@ -75,8 +75,7 @@ class HtmlReport(object):
 
     def render_test_references(self, result): 
         dest = self.make_single_test_result(result)
-        modified = result.ismodifiedtest() and " [mod]" or ""
-        return html.div(html.a(result.path.purebasename + modified, 
+        return html.div(html.a(result.path.purebasename, 
                       href=self.getrelpath(dest)),
                       style="background-color: transparent")
 
