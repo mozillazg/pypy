@@ -370,7 +370,7 @@ class OptString(optimizer.Optimization):
     def reconstruct_for_next_iteration(self, optimizer, valuemap):
         self.enabled = True
         return self
-    
+
     def make_vstring_plain(self, box, source_op, mode):
         vvalue = VStringPlainValue(self.optimizer, box, source_op, mode)
         self.make_equal_to(box, vvalue)
@@ -640,6 +640,27 @@ class OptString(optimizer.Optimization):
             return True
         return False
 
+    def opt_call_stroruni_STR_CMP(self, op, mode):
+        v1 = self.getvalue(op.getarg(1))
+        v2 = self.getvalue(op.getarg(2))
+
+        l1box = v1.getstrlen(None, mode)
+        l2box = v2.getstrlen(None, mode)
+        if (l1box is not None and l2box is not None and
+            isinstance(l1box, ConstInt) and isinstance(l2box, ConstInt) and
+            l1box.value == 1 and l2box.value == 1):
+
+            vchar1 = self.strgetitem(v1, optimizer.CVAL_ZERO, mode)
+            vchar2 = self.strgetitem(v2, optimizer.CVAL_ZERO, mode)
+            self.optimizer.send_extra_operation(
+                ResOperation(
+                    rop.INT_SUB, [vchar1.force_box(), vchar2.force_box()], op.result
+                )
+            )
+            return True
+        return False
+
+
     def generate_modified_call(self, oopspecindex, args, result, mode):
         oopspecindex += mode.OS_offset
         cic = self.optimizer.metainterp_sd.callinfocollection
@@ -652,7 +673,7 @@ class OptString(optimizer.Optimization):
         if not self.enabled:
             self.emit_operation(op)
             return
-            
+
         opnum = op.getopnum()
         for value, func in optimize_ops:
             if opnum == value:

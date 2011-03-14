@@ -122,7 +122,8 @@ class LLtypeMixin(object):
         ('streq_nonnull_char_descr',     'OS_STREQ_NONNULL_CHAR'),
         ('streq_checknull_char_descr',   'OS_STREQ_CHECKNULL_CHAR'),
         ('streq_lengthok_descr',         'OS_STREQ_LENGTHOK'),
-        ]:
+        ('strcmpdescr',                  'OS_STR_CMP'),
+    ]:
         _oopspecindex = getattr(EffectInfo, _os)
         locals()[_name] = \
             cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -165,7 +166,7 @@ class OOtypeMixin_xxx_disabled(object):
 ##    def get_class_of_box(self, box):
 ##        root = box.getref(ootype.ROOT)
 ##        return ootype.classof(root)
-    
+
 ##    cpu = runner.OOtypeCPU(None)
 ##    NODE = ootype.Instance('NODE', ootype.ROOT, {})
 ##    NODE._add_fields({'value': ootype.Signed,
