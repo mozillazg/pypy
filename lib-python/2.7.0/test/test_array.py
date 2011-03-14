@@ -14,7 +14,7 @@ class ArraySubclass(array.array):
 
 class ArraySubclassWithKwargs(array.array):
     def __init__(self, typecode, newarg=None):
-        array.array.__init__(typecode)
+        array.array.__init__(self, typecode)
 
 tests = [] # list to accumulate all tests
 typecodes = "cubBhHiIlLfd"
@@ -295,9 +295,9 @@ class BaseTest(unittest.TestCase):
         )
 
         b = array.array(self.badtypecode())
-        self.assertRaises(TypeError, a.__add__, b)
+        self.assertRaises(TypeError, "a + b")
 
-        self.assertRaises(TypeError, a.__add__, "bad")
+        self.assertRaises(TypeError, "a + 'bad'")
 
     def test_iadd(self):
         a = array.array(self.typecode, self.example[::-1])
@@ -316,9 +316,9 @@ class BaseTest(unittest.TestCase):
         )
 
         b = array.array(self.badtypecode())
-        self.assertRaises(TypeError, a.__add__, b)
+        self.assertRaises(TypeError, "a += b")
 
-        self.assertRaises(TypeError, a.__iadd__, "bad")
+        self.assertRaises(TypeError, "a += 'bad'")
 
     def test_mul(self):
         a = 5*array.array(self.typecode, self.example)
@@ -345,7 +345,7 @@ class BaseTest(unittest.TestCase):
             array.array(self.typecode)
         )
 
-        self.assertRaises(TypeError, a.__mul__, "bad")
+        self.assertRaises(TypeError, "a * 'bad'")
 
     def test_imul(self):
         a = array.array(self.typecode, self.example)
@@ -374,7 +374,7 @@ class BaseTest(unittest.TestCase):
         a *= -1
         self.assertEqual(a, array.array(self.typecode))
 
-        self.assertRaises(TypeError, a.__imul__, "bad")
+        self.assertRaises(TypeError, "a *= 'bad'")
 
     def test_getitem(self):
         a = array.array(self.typecode, self.example)
@@ -769,6 +769,7 @@ class BaseTest(unittest.TestCase):
         p = proxy(s)
         self.assertEqual(p.tostring(), s.tostring())
         s = None
+        test_support.gc_collect()
         self.assertRaises(ReferenceError, len, p)
 
     def test_bug_782369(self):

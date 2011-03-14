@@ -159,6 +159,7 @@ class ThreadTests(BaseTestCase):
 
     # PyThreadState_SetAsyncExc() is a CPython-only gimmick, not (currently)
     # exposed at the Python level.  This test relies on ctypes to get at it.
+    @test.test_support.cpython_only
     def test_PyThreadState_SetAsyncExc(self):
         try:
             import ctypes
@@ -264,6 +265,7 @@ class ThreadTests(BaseTestCase):
         finally:
             threading._start_new_thread = _start_new_thread
 
+    @test.test_support.cpython_only
     def test_finalize_runnning_thread(self):
         # Issue 1402: the PyGILState_Ensure / _Release functions may be called
         # very late on python exit: on deallocation of a running thread for
@@ -384,6 +386,7 @@ class ThreadTests(BaseTestCase):
         finally:
             sys.setcheckinterval(old_interval)
 
+    @test.test_support.cpython_only
     def test_no_refcycle_through_target(self):
         class RunSelfFunction(object):
             def __init__(self, should_raise):
@@ -426,6 +429,9 @@ class ThreadJoinOnShutdown(BaseTestCase):
             def joiningfunc(mainthread):
                 mainthread.join()
                 print 'end of thread'
+                # stdout is fully buffered because not a tty, we have to flush
+                # before exit.
+                sys.stdout.flush()
         \n""" + script
 
         import subprocess

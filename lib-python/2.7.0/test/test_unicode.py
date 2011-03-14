@@ -1045,7 +1045,8 @@ class UnicodeTest(
         # to take a 64-bit long, this test should apply to all platforms.
         if sys.maxint > (1 << 32) or struct.calcsize('P') != 4:
             return
-        self.assertRaises(OverflowError, u't\tt\t'.expandtabs, sys.maxint)
+        self.assertRaises((OverflowError, MemoryError),
+                          u't\tt\t'.expandtabs, sys.maxint)
 
     def test__format__(self):
         def test(value, format, expected):

@@ -8,6 +8,8 @@ import sys
 # We do a bit of trickery here to be able to test both the C implementation
 # and the Python implementation of the module.
 import heapq as c_heapq
+if '_heapq' not in sys.modules:
+    c_heapq = None    # we don't have a _heapq module to test at all
 py_heapq = test_support.import_fresh_module('heapq', blocked=['_heapq'])
 
 class TestHeap(unittest.TestCase):
@@ -362,7 +364,9 @@ class TestErrorHandling(unittest.TestCase):
 
 
 def test_main(verbose=None):
-    test_classes = [TestHeapPython, TestHeapC, TestErrorHandling]
+    test_classes = [TestHeapPython]
+    if c_heapq is not None:
+        test_classes += [TestHeapC, TestErrorHandling]
     test_support.run_unittest(*test_classes)
 
     # verify reference counting

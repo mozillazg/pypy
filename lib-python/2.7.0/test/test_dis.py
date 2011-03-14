@@ -22,14 +22,16 @@ dis_f = """\
      _f.func_code.co_firstlineno + 2)
 
 
+# we "call" rangexxx() instead of range() to disable the
+# pypy optimization that turns it into CALL_LIKELY_BUILTIN.
 def bug708901():
-    for res in range(1,
-                     10):
+    for res in rangexxx(1,
+                        10):
         pass
 
 dis_bug708901 = """\
  %-4d         0 SETUP_LOOP              23 (to 26)
-              3 LOAD_GLOBAL              0 (range)
+              3 LOAD_GLOBAL              0 (rangexxx)
               6 LOAD_CONST               1 (1)
 
  %-4d         9 LOAD_CONST               2 (10)
