@@ -23,8 +23,8 @@ def _get_next_path(ext='.py'):
 def getscript(source):
     p = _get_next_path()
     p.write(str(py.code.Source(source)))
-    # return relative path for testing purposes 
-    return py.path.local().bestrelpath(p) 
+    # return relative path for testing purposes
+    return py.path.local().bestrelpath(p)
 
 def getscript_pyc(space, source):
     p = _get_next_path()
@@ -49,7 +49,7 @@ def getscript_in_dir(source):
     pdir = _get_next_path(ext='')
     p = pdir.ensure(dir=1).join('__main__.py')
     p.write(str(py.code.Source(source)))
-    # return relative path for testing purposes 
+    # return relative path for testing purposes
     return py.path.local().bestrelpath(pdir)
 
 demo_script = getscript("""
@@ -192,7 +192,7 @@ class TestParseCommandLine:
         monkeypatch.setenv('PYTHONNOUSERSITE', '1')
         expected = {"no_user_site": True}
         self.check(['-c', 'pass'], sys_argv=['-c'], run_command='pass', **expected)
-        
+
 
 class TestInteraction:
     """
@@ -780,9 +780,9 @@ class AppTestAppMain:
         # ------------------------------------
         # setup code for test_get_library_path
         # ------------------------------------
-        from pypy.module.sys.version import CPYTHON_VERSION, PYPY_VERSION
+        from pypy.module.sys.version import CPYTHON_VERSION
         cpy_ver = '%d.%d.%d' % CPYTHON_VERSION[:3]
-        
+
         goal_dir = os.path.dirname(app_main)
         # build a directory hierarchy like which contains both bin/pypy-c and
         # lib/pypy1.2/*
@@ -790,9 +790,8 @@ class AppTestAppMain:
         fake_exe = prefix.join('bin/pypy-c').ensure(file=1)
         expected_path = [str(prefix.join(subdir).ensure(dir=1))
                          for subdir in ('lib_pypy',
-                                        'lib-python/modified-%s' % cpy_ver,
                                         'lib-python/%s' % cpy_ver)]
-        
+
         self.w_goal_dir = self.space.wrap(goal_dir)
         self.w_fake_exe = self.space.wrap(str(fake_exe))
         self.w_expected_path = self.space.wrap(expected_path)
@@ -822,7 +821,7 @@ class AppTestAppMain:
             app_main.os = os
             pypy_c = os.path.join(self.trunkdir, 'pypy', 'translator', 'goal', 'pypy-c')
             newpath = app_main.get_library_path(pypy_c)
-            # we get at least lib_pypy, lib-python/modified-X.Y.Z,
+            # we get at least lib_pypy,
             # lib-python/X.Y.Z, and maybe more (e.g. plat-linux2)
             assert len(newpath) >= 3
             for p in newpath:

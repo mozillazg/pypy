@@ -7,7 +7,6 @@ LIB_ROOT = py.path.local(pypy.__path__[0]).dirpath()
 LIB_PYPY =  LIB_ROOT.join('lib_pypy')
 LIB_PYTHON = LIB_ROOT.join('lib-python')
 LIB_PYTHON_VANILLA = LIB_PYTHON.join('%d.%d.%d' % CPYTHON_VERSION[:3])
-LIB_PYTHON_MODIFIED = LIB_PYTHON.join('modified-%d.%d.%d' % CPYTHON_VERSION[:3])
 
 
 def import_from_lib_pypy(modname):

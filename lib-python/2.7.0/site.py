@@ -89,10 +89,7 @@ def abs__file__():
         if hasattr(m, '__loader__'):
             continue   # don't mess with a PEP 302-supplied __file__
         try:
-            prev = m.__file__
-            new = os.path.abspath(m.__file__)
-            if prev != new:
-                m.__file__ = new
+            m.__file__ = os.path.abspath(m.__file__)
         except (AttributeError, OSError):
             pass
 

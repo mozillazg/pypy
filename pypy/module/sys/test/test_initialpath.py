@@ -7,9 +7,8 @@ def build_hierarchy(prefix):
                             CPYTHON_VERSION[1],
                             CPYTHON_VERSION[2])
     a = prefix.join('lib_pypy').ensure(dir=1)
-    b = prefix.join('lib-python', 'modified-%s' % dirname).ensure(dir=1)
-    c = prefix.join('lib-python', dirname).ensure(dir=1)
-    return a, b, c
+    b = prefix.join('lib-python', dirname).ensure(dir=1)
+    return a, b
 
 
 def test_stdlib_in_prefix(tmpdir):

@@ -2,7 +2,6 @@
 Implementation of interpreter-level 'sys' routines.
 """
 import pypy
-from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import unwrap_spec
 
 import sys, os, stat, errno
@@ -10,17 +9,17 @@ import sys, os, stat, errno
 # ____________________________________________________________
 #
 
-class State: 
-    def __init__(self, space): 
-        self.space = space 
+class State:
+    def __init__(self, space):
+        self.space = space
 
         self.w_modules = space.newdict(module=True)
 
         self.w_warnoptions = space.newlist([])
         self.w_argv = space.newlist([])
-        self.setinitialpath(space) 
+        self.setinitialpath(space)
 
-    def setinitialpath(self, space): 
+    def setinitialpath(self, space):
         # Initialize the default path
         pypydir = os.path.dirname(os.path.abspath(pypy.__file__))
         srcdir = os.path.dirname(pypydir)
@@ -43,15 +42,12 @@ def getinitialpath(prefix):
     lib_python = os.path.join(prefix, 'lib-python')
     python_std_lib = os.path.join(lib_python, dirname)
     checkdir(python_std_lib)
-    python_std_lib_modified = os.path.join(lib_python, 'modified-' + dirname)
-    checkdir(python_std_lib_modified)
-    
+
     lib_pypy = os.path.join(prefix, 'lib_pypy')
     checkdir(lib_pypy)
 
     importlist = []
     importlist.append(lib_pypy)
-    importlist.append(python_std_lib_modified)
     importlist.append(python_std_lib)
     #
     # List here the extra platform-specific paths.
