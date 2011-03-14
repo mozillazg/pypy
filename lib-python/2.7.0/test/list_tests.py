@@ -45,8 +45,12 @@ class CommonTest(seq_tests.CommonTest):
         self.assertEqual(str(a2), "[0, 1, 2, [...], 3]")
         self.assertEqual(repr(a2), "[0, 1, 2, [...], 3]")
 
+        if test_support.check_impl_detail():
+            depth = sys.getrecursionlimit() + 100
+        else:
+            depth = 1000 * 1000 # should be enough to exhaust the stack
         l0 = []
-        for i in xrange(sys.getrecursionlimit() + 100):
+        for i in xrange(depth):
             l0 = [l0]
         self.assertRaises(RuntimeError, repr, l0)
 

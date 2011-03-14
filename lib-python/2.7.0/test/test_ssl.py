@@ -105,6 +105,7 @@ class BasicSocketTests(unittest.TestCase):
             print "didn't raise TypeError"
         ssl.RAND_add("this is a random string", 75.0)
 
+    @test_support.impl_detail("obscure test")
     def test_parse_cert(self):
         # note that this uses an 'unofficial' function in _ssl.c,
         # provided solely for this test, to exercise the certificate
@@ -1289,10 +1290,8 @@ def test_main(verbose=False):
         raise unittest.SkipTest("No SSL support")
 
     global CERTFILE, SVN_PYTHON_ORG_ROOT_CERT
-    CERTFILE = os.path.join(os.path.dirname(__file__) or os.curdir,
-                            "keycert.pem")
-    SVN_PYTHON_ORG_ROOT_CERT = os.path.join(
-        os.path.dirname(__file__) or os.curdir,
+    CERTFILE = test_support.findfile("keycert.pem")
+    SVN_PYTHON_ORG_ROOT_CERT =  test_support.findfile(
         "https_svn_python_org_root.pem")
 
     if (not os.path.exists(CERTFILE) or

@@ -1128,7 +1128,7 @@ order (MRO) for bases """
 
         # Test lookup leaks [SF bug 572567]
         import gc
-        if hasattr(gc, 'get_objects'):
+        if test_support.check_impl_detail():
             class G(object):
                 def __cmp__(self, other):
                     return 0
@@ -1740,6 +1740,10 @@ order (MRO) for bases """
                 raise MyException
 
         for name, runner, meth_impl, ok, env in specials:
+            if name == '__length_hint__' or name == '__sizeof__':
+                if not test_support.check_impl_detail():
+                    continue
+
             class X(Checker):
                 pass
             for attr, obj in env.iteritems():
@@ -1979,7 +1983,9 @@ order (MRO) for bases """
         except TypeError, msg:
             self.assertTrue(str(msg).find("weak reference") >= 0)
         else:
-            self.fail("weakref.ref(no) should be illegal")
+            if test_support.check_impl_detail(pypy=False):
+                self.fail("weakref.ref(no) should be illegal")
+            #else: pypy supports taking weakrefs to some more objects
         class Weak(object):
             __slots__ = ['foo', '__weakref__']
         yes = Weak()
@@ -3091,7 +3097,16 @@ order (MRO) for bases """
         class R(J):
             __slots__ = ["__dict__", "__weakref__"]
 
-        for cls, cls2 in ((G, H), (G, I), (I, H), (Q, R), (R, Q)):
+        if test_support.check_impl_detail(pypy=False):
+            lst = ((G, H), (G, I), (I, H), (Q, R), (R, Q))
+        else:
+            # Not supported in pypy: changing the __class__ of an object
+            # to another __class__ that just happens to have the same slots.
+            # If needed, we can add the feature, but what we'll likely do
+            # then is to allow mostly any __class__ assignment, even if the
+            # classes have different __slots__, because we it's easier.
+            lst = ((Q, R), (R, Q))
+        for cls, cls2 in lst:
             x = cls()
             x.a = 1
             x.__class__ = cls2

@@ -398,7 +398,10 @@ class DispatcherWithSendTests_UsePoll(DispatcherWithSendTests):
 class FileWrapperTest(unittest.TestCase):
     def setUp(self):
         self.d = "It's not dead, it's sleeping!"
-        file(TESTFN, 'w').write(self.d)
+        # Fixed in CPython 2.7.2 (release27-maint branch
+        # revision 88046.)
+        with file(TESTFN, 'w') as h:
+            h.write(self.d)
 
     def tearDown(self):
         unlink(TESTFN)
