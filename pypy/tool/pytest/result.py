@@ -173,10 +173,6 @@ class ResultFromMime(Result):
                     unicode(content, candidate) 
                 self.addnamedtext(fn, text) 
 
-    def ismodifiedtest(self): 
-        # XXX we need proper cross-platform paths! 
-        return 'modified' in self.fspath
-
     def __repr__(self): 
         return '<%s (%s) %r rev=%s>' %(self.__class__.__name__, 
                                   self['outcome'], 
