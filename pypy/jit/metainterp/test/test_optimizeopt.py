@@ -5464,6 +5464,26 @@ class TestLLtype(OptimizeOptTest, LLtypeMixin):
         """
         self.optimize_strunicode_loop_extradescrs(ops, expected)
 
+    def test_str_cmp_char(self):
+        ops = """
+        [i0]
+        p0 = newstr(1)
+        strsetitem(p0, 0, i0)
+        i1 = call(0, p0, s"0", descr=strcmpdescr)
+        i2 = int_le(i1, 0)
+        guard_true(i2) []
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        # ord("0")
+        i1 = int_sub(i0, 48)
+        i2 = int_le(i1, 0)
+        guard_true(i2) []
+        jump(i0)
+        """
+        self.optimize_strunicode_loop_extradescrs(ops, expected)
+
     def test_str2unicode_constant(self):
         ops = """
         []

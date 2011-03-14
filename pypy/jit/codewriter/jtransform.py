@@ -1268,12 +1268,14 @@ class Transformer(object):
             dict = {"stroruni.concat": EffectInfo.OS_STR_CONCAT,
                     "stroruni.slice":  EffectInfo.OS_STR_SLICE,
                     "stroruni.equal":  EffectInfo.OS_STR_EQUAL,
+                    "stroruni.cmp":    EffectInfo.OS_STR_CMP,
                     }
             CHR = lltype.Char
         elif SoU.TO == rstr.UNICODE:
             dict = {"stroruni.concat": EffectInfo.OS_UNI_CONCAT,
                     "stroruni.slice":  EffectInfo.OS_UNI_SLICE,
                     "stroruni.equal":  EffectInfo.OS_UNI_EQUAL,
+                    "stroruni.cmp":    EffectInfo.OS_UNI_CMP,
                     }
             CHR = lltype.UniChar
         else:
