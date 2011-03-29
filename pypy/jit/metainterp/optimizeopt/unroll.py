@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import *
-from pypy.jit.metainterp.optimizeopt.virtualize import AbstractVirtualValue
+from pypy.jit.metainterp.optimizeopt.virtualstate import VirtualStateAdder
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.compile import ResumeGuardDescr
 from pypy.jit.metainterp.resume import Snapshot
@@ -128,113 +128,6 @@ class Inliner(object):
         self.snapshot_map[snapshot] = new_snapshot
         return new_snapshot
 
-class VirtualState(object):
-    def __init__(self, state):
-        self.state = state
-
-    def generalization_of(self, other):
-        assert len(self.state) == len(other.state)
-        for i in range(len(self.state)):
-            if not self.state[i].generalization_of(other.state[i]):
-                return False
-        return True
-
-    def generate_guards(self, other, args, cpu, extra_guards):        
-        assert len(self.state) == len(other.state) == len(args)
-        for i in range(len(self.state)):
-            self.state[i].generate_guards(other.state[i], args[i],
-                                          cpu, extra_guards)
-
-class VirtualStateAdder(resume.ResumeDataVirtualAdder):
-    def __init__(self, optimizer):
-        self.fieldboxes = {}
-        self.optimizer = optimizer
-        self.info = {}
-
-    def register_virtual_fields(self, keybox, fieldboxes):
-        self.fieldboxes[keybox] = fieldboxes
-        
-    def already_seen_virtual(self, keybox):
-        return keybox in self.fieldboxes
-
-    def getvalue(self, box):
-        return self.optimizer.getvalue(box)
-
-    def state(self, box):
-        value = self.getvalue(box)
-        box = value.get_key_box()
-        try:
-            info = self.info[box]
-        except KeyError:
-            if value.is_virtual():
-                self.info[box] = info = value.make_virtual_info(self, None)
-                flds = self.fieldboxes[box]
-                info.fieldstate = [self.state(b) for b in flds]
-            else:
-                self.info[box] = info = self.make_not_virtual(value)
-        return info
-
-    def get_virtual_state(self, jump_args):
-        for box in jump_args:
-            value = self.getvalue(box)
-            value.get_args_for_fail(self)
-        return VirtualState([self.state(box) for box in jump_args])
-
-
-    def make_not_virtual(self, value):
-        return NotVirtualInfo(value)
-
-class NotVirtualInfo(resume.AbstractVirtualInfo):
-    def __init__(self, value):
-        self.known_class = value.known_class
-        self.level = value.level
-        if value.intbound is None:
-            self.intbound = IntBound(MININT, MAXINT)
-        else:
-            self.intbound = value.intbound.clone()
-        if value.is_constant():
-            self.constbox = value.box
-        else:
-            self.constbox = None
-
-    def generalization_of(self, other):
-        # XXX This will always retrace instead of forcing anything which
-        # might be what we want sometimes?
-        if not isinstance(other, NotVirtualInfo):
-            return False
-        if other.level < self.level:
-            return False
-        if self.level == LEVEL_CONSTANT:
-            if not self.constbox.same_constant(other.constbox):
-                return False
-        elif self.level == LEVEL_KNOWNCLASS:
-            if self.known_class != other.known_class: # FIXME: use issubclass?
-                return False
-        return self.intbound.contains_bound(other.intbound)
-
-    def _generate_guards(self, other, box, cpu, extra_guards):
-        if not isinstance(other, NotVirtualInfo):
-            raise InvalidLoop
-        if self.level == LEVEL_KNOWNCLASS and \
-           box.nonnull() and \
-           self.known_class.same_constant(cpu.ts.cls_of_box(box)):
-            # Note: This is only a hint on what the class of box was
-            # during the trace. There are actually no guarentees that this
-            # box realy comes from a trace. The hint is used here to choose
-            # between either eimtting a guard_class and jumping to an
-            # excisting compiled loop or retracing the loop. Both
-            # alternatives will always generate correct behaviour, but
-            # performace will differ.
-            op = ResOperation(rop.GUARD_CLASS, [box, self.known_class], None)
-            extra_guards.append(op)
-            return
-        # Remaining cases are probably not interesting
-        raise InvalidLoop
-        if self.level == LEVEL_CONSTANT:
-            import pdb; pdb.set_trace()
-            raise NotImplementedError
-        
-
 class UnrollOptimizer(Optimization):
     """Unroll the loop into two iterations. The first one will
     become the preamble or entry bridge (don't think there is a
@@ -271,7 +164,8 @@ class UnrollOptimizer(Optimization):
 
             try:
                 inputargs = self.inline(self.cloned_operations,
-                                        loop.inputargs, jump_args)
+                                        loop.inputargs, jump_args,
+                                        virtual_state)
             except KeyError:
                 debug_print("Unrolling failed.")
                 loop.preamble.operations = None
@@ -342,29 +236,26 @@ class UnrollOptimizer(Optimization):
                     if op.result:
                         op.result.forget_value()
                 
-    def inline(self, loop_operations, loop_args, jump_args):
+    def inline(self, loop_operations, loop_args, jump_args, virtual_state):
         self.inliner = inliner = Inliner(loop_args, jump_args)
-           
+
+        # FIXME: Move this to reconstruct
         for v in self.optimizer.values.values():
             v.last_guard_index = -1 # FIXME: Are there any more indexes stored?
 
-        inputargs = []
-        seen_inputargs = {}
-        for arg in jump_args:
-            boxes = []
-            self.getvalue(arg).enum_forced_boxes(boxes, seen_inputargs)
-            for a in boxes:
-                if not isinstance(a, Const):
-                    inputargs.append(a)
+        values = [self.getvalue(arg) for arg in jump_args]
+        inputargs = virtual_state.make_inputargs(values)
 
         # This loop is equivalent to the main optimization loop in
         # Optimizer.propagate_all_forward
         for newop in loop_operations:
-            if newop.getopnum() == rop.JUMP:
-                newop.initarglist(inputargs)
             newop = inliner.inline_op(newop, clone=False)
+            if newop.getopnum() == rop.JUMP:
+                values = [self.getvalue(arg) for arg in newop.getarglist()]
+                newop.initarglist(virtual_state.make_inputargs(values))
 
-            self.optimizer.first_optimization.propagate_forward(newop)
+            #self.optimizer.first_optimization.propagate_forward(newop)
+            self.optimizer.send_extra_operation(newop)
 
         # Remove jump to make sure forced code are placed before it
         newoperations = self.optimizer.newoperations
