@@ -10,7 +10,7 @@ from pypy.module.cpyext.api import (
     cpython_api, cpython_struct, bootstrap_function, Py_ssize_t, Py_ssize_tP,
     generic_cpy_call, Py_TPFLAGS_READY, Py_TPFLAGS_READYING,
     Py_TPFLAGS_HEAPTYPE, METH_VARARGS, METH_KEYWORDS, CANNOT_FAIL,
-    Py_TPFLAGS_HAVE_GETCHARBUFFER,
+    Py_TPFLAGS_HAVE_GETCHARBUFFER, Py_buffer,
     build_type_checkers)
 from pypy.module.cpyext.pyobject import (
     PyObject, make_ref, create_ref, from_ref, get_typedescr, make_typedescr,
@@ -406,6 +406,26 @@ def setup_string_buffer_procs(space, pto):
     pto.c_tp_as_buffer = c_buf
     pto.c_tp_flags |= Py_TPFLAGS_HAVE_GETCHARBUFFER
 
+
+@cpython_api([PyObject, lltype.Ptr(Py_buffer), lltype.Signed], lltype.Signed,
+             external=False, error=-1)
+def memoryview_getbuffer(space, w_view, buf, flags):
+    # buf.c_obj = lltype.nullptr(PyObject.TO)
+    buf.c_buf = rffi.cast(rffi.VOIDP, rffi.str2charp(w_view.as_str()))
+    buf.c_len = w_view.getlength()
+    print 'set length to', buf.c_len
+    print 'set buf to', buf.c_buf
+    return 0
+
+def setup_memoryview_buffer_procs(space, pto):
+    c_buf = lltype.malloc(PyBufferProcs, flavor='raw', zero=True)
+    c_buf.c_bf_getbuffer = llhelper(
+        memoryview_getbuffer.api_func.functype,
+        memoryview_getbuffer.api_func.get_wrapper(space))
+    pto.c_tp_as_buffer = c_buf
+    pto.c_tp_flags |= Py_TPFLAGS_HAVE_GETCHARBUFFER
+
+
 @cpython_api([PyObject], lltype.Void, external=False)
 def type_dealloc(space, obj):
     from pypy.module.cpyext.object import PyObject_dealloc
@@ -444,6 +464,9 @@ def type_attach(space, py_obj, w_type):
     # buffer protocol
     if space.is_w(w_type, space.w_str):
         setup_string_buffer_procs(space, pto)
+    elif space.is_w(
+        w_type, space.getattr(space.builtin, space.wrap("memoryview"))):
+        setup_memoryview_buffer_procs(space, pto)
 
     pto.c_tp_flags |= Py_TPFLAGS_HEAPTYPE
     pto.c_tp_free = llhelper(PyObject_Del.api_func.functype,

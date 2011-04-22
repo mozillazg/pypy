@@ -775,17 +775,12 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 	case 's': {/* string */
 		if (*format == '*') {
 			Py_buffer *p = (Py_buffer *)va_arg(*p_va, Py_buffer *);
-
+                        printf("star case\n");
 			if (PyString_Check(arg)) {
 				PyBuffer_FillInfo(p, arg,
 						  PyString_AS_STRING(arg), PyString_GET_SIZE(arg),
 						  1, 0);
-			} else {
-                            PyErr_SetString(
-                                PyExc_NotImplementedError,
-                                "s* not implemented for non-string values");
-                            return NULL;
-                        }
+			}
 #if 0
 #ifdef Py_USING_UNICODE
 			else if (PyUnicode_Check(arg)) {
@@ -798,12 +793,13 @@ convertsimple(PyObject *arg, const char **p_format, va_list *p_va, int flags,
 						  1, 0);
 			}
 #endif
+#endif
 			else { /* any buffer-like object */
 				char *buf;
+                                printf("about to getbuffer\n");
 				if (getbuffer(arg, p, &buf) < 0)
 					return converterr(buf, arg, msgbuf, bufsize);
 			}
-#endif
 			if (addcleanup(p, freelist, cleanup_buffer)) {
 				return converterr(
 					"(cleanup problem)",
@@ -1325,6 +1321,7 @@ convertbuffer(PyObject *arg, void **p, char **errmsg)
 {
 	PyBufferProcs *pb = arg->ob_type->tp_as_buffer;
 	Py_ssize_t count;
+#if 0
 	if (pb == NULL ||
 	    pb->bf_getreadbuffer == NULL ||
 	    pb->bf_getsegcount == NULL ||
@@ -1336,44 +1333,50 @@ convertbuffer(PyObject *arg, void **p, char **errmsg)
 		*errmsg = "string or single-segment read-only buffer";
 		return -1;
 	}
+#endif
 	if ((count = (*pb->bf_getreadbuffer)(arg, 0, p)) < 0) {
 		*errmsg = "(unspecified)";
 	}
 	return count;
 }
 
-#if 0 //YYY
 static int
 getbuffer(PyObject *arg, Py_buffer *view, char **errmsg)
 {
 	void *buf;
 	Py_ssize_t count;
 	PyBufferProcs *pb = arg->ob_type->tp_as_buffer;
+        printf("pb %p\n", pb);
 	if (pb == NULL) {
 		*errmsg = "string or buffer";
 		return -1;
 	}
+
 	if (pb->bf_getbuffer) {
 		if (pb->bf_getbuffer(arg, view, 0) < 0) {
 			*errmsg = "convertible to a buffer";
 			return -1;
 		}
+#if 0
 		if (!PyBuffer_IsContiguous(view, 'C')) {
 			*errmsg = "contiguous buffer";
 			return -1;
 		}
+#endif
 		return 0;
 	}
 
+        printf("about to convertbuffer\n");
 	count = convertbuffer(arg, &buf, errmsg);
 	if (count < 0) {
+            printf("error converting it\n");
 		*errmsg = "convertible to a buffer";
 		return count;
 	}
+        printf("converted it\n");
 	PyBuffer_FillInfo(view, NULL, buf, count, 1, 0);
 	return 0;
 }
-#endif
 
 /* Support for keyword arguments donated by
    Geoff Philbrick <philbric@delphi.hks.com> */

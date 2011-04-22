@@ -129,6 +129,34 @@ class AppTestGetargs(AppTestCpythonExtensionBase):
         assert 'foo\0bar\0baz' == pybuffer('foo\0bar\0baz')
 
 
+    def test_pyarg_parse_buffer_py_buffer(self):
+        """
+        The `s*` format specifier can also be used to parse a memoryview into a
+        Py_buffer structure containing a pointer to the memoryview's data and
+        the length of that data.
+        """
+        memview = self.import_parser(
+            '''
+            Py_buffer buf;
+            PyObject *result;
+            printf("about to parse\\n");
+            if (!PyArg_ParseTuple(args, "s*", &buf)) {
+                printf("parse fail\\n");
+                return NULL;
+            }
+            printf("parse win\\n");
+            result = PyString_FromStringAndSize(buf.buf, buf.len);
+            printf("release\\n");
+            PyBuffer_Release(&buf);
+            printf("return\\n");
+            return result;
+            ''')
+        raises(TypeError, "memview(None)")
+        raises(TypeError, "memview(3)")
+        assert 'foo\0bar\0baz' == memview(memoryview('foo\0bar\0baz'))
+        assert 'foo\0bar\0baz' == memview(buffer('foo\0bar\0baz'))
+
+
     def test_pyarg_parse_charbuf_and_length(self):
         """
         The `t#` format specifier can be used to parse a read-only 8-bit
