@@ -442,4 +442,5 @@ def PyBuffer_FillInfo(space, view, obj, buf, length, readonly, flags):
 
 @cpython_api([lltype.Ptr(Py_buffer)], lltype.Void, error=CANNOT_FAIL)
 def PyBuffer_Release(space, view):
+    print 'releasing', view.c_obj
     Py_DecRef(space, view.c_obj)
