@@ -188,6 +188,20 @@ class TestUnicode(BaseApiTest):
         assert space.unwrap(w_u) == 'sp'
         rffi.free_charp(u)
 
+    def test_encode_utf8(self, space, api):
+        uni = u'abcdefg'
+        data = rffi.unicode2wcharp(uni)
+        w_s = api.PyUnicode_EncodeUTF8(data, len(uni), lltype.nullptr(rffi.CCHARP.TO))
+        assert space.eq_w(space.wrap("abcdefg"), w_s)
+        rffi.free_wcharp(data)
+        
+        uni = u'räksmörgås'
+        data = rffi.unicode2wcharp(uni)
+        w_s = api.PyUnicode_EncodeUTF8(data, len(uni), lltype.nullptr(rffi.CCHARP.TO))
+        assert space.eq_w(space.wrap("r\xc3\xa4ksm\xc3\xb6rg\xc3\xa5s"), w_s)
+        rffi.free_wcharp(data)
+        
+
     def test_IS(self, space, api):
         for char in [0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x1c, 0x1d, 0x1e, 0x1f,
                      0x20, 0x85, 0xa0, 0x1680, 0x2000, 0x2001, 0x2002,
