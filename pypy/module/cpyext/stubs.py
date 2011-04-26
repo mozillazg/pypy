@@ -1,4 +1,4 @@
-from pypy.module.cpyext.api import (
+xfrom pypy.module.cpyext.api import (
     cpython_api, PyObject, PyObjectP, CANNOT_FAIL
     )
 from pypy.module.cpyext.complexobject import Py_complex_ptr as Py_complex
@@ -2540,15 +2540,6 @@ def PyUnicode_DecodeUTF8Stateful(space, s, size, errors, consumed):
     consumed is not NULL, trailing incomplete UTF-8 byte sequences will not be
     treated as an error. Those bytes will not be decoded and the number of bytes
     that have been decoded will be stored in consumed.
-    
-    This function used an int type for size. This might require
-    changes in your code for properly supporting 64-bit systems."""
-    raise NotImplementedError
-
-@cpython_api([rffi.CWCHARP, Py_ssize_t, rffi.CCHARP], PyObject)
-def PyUnicode_EncodeUTF8(space, s, size, errors):
-    """Encode the Py_UNICODE buffer of the given size using UTF-8 and return a
-    Python string object.  Return NULL if an exception was raised by the codec.
     
     This function used an int type for size. This might require
     changes in your code for properly supporting 64-bit systems."""
