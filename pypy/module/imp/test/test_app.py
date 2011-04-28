@@ -1,6 +1,31 @@
 from __future__ import with_statement
 MARKER = 42
 
+try:
+    from pypy.conftest import gettestobjspace    
+    from pypy.module.cpyext.state import State
+    from pypy.module.cpyext.test.test_cpyext import AppTestCpythonExtensionBase
+
+    class AppTestImpCModule(AppTestCpythonExtensionBase):
+        def setup_class(cls):
+            cls.space = gettestobjspace(usemodules=['cpyext', '_rawffi'])
+            cls.w_imp = cls.space.getbuiltinmodule('imp')
+            cls.w_file_module = cls.space.wrap(__file__)
+            state = cls.space.fromcache(State)
+            state.build_api(cls.space)
+
+        def test_find_module_cpyext(self):
+            import os
+            mod = self.compile_module('test_import_module',
+                                      separate_module_files=[self.here + 'test_import_module.c'])
+
+            fp, pathname, description = self.imp.find_module('test_import_module',
+                                                             [os.path.dirname(mod)])
+            assert fp is not None
+            assert pathname == mod
+except ImportError:
+    pass
+
 class AppTestImpModule:
     def setup_class(cls):
         cls.w_imp = cls.space.getbuiltinmodule('imp')
