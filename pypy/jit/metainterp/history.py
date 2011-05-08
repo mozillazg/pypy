@@ -179,6 +179,9 @@ class AbstractDescr(AbstractValue):
         """
         raise NotImplementedError
 
+    def count_fields_if_immutable(self):
+        return -1
+
     def _clone_if_mutable(self):
         return self
     def clone_if_mutable(self):
@@ -522,7 +525,7 @@ class BoxInt(Box):
 
     def forget_value(self):
         self.value = 0
-        
+
     def clonebox(self):
         return BoxInt(self.value)
 
@@ -757,6 +760,7 @@ class LoopToken(AbstractDescr):
     generated assembler.
     """
     short_preamble = None
+    failed_states = None
     terminating = False # see TerminatingLoopToken in compile.py
     outermost_jitdriver_sd = None
     # and more data specified by the backend when the loop is compiled
@@ -786,6 +790,8 @@ class TreeLoop(object):
     inputargs = None
     operations = None
     token = None
+    call_pure_results = None
+    quasi_immutable_deps = None
 
     def __init__(self, name):
         self.name = name
@@ -937,6 +943,9 @@ class NoStats(object):
     def add_new_loop(self, loop):
         pass
 
+    def record_aborted(self, greenkey):
+        pass
+
     def view(self, **kwds):
         pass
 
@@ -951,6 +960,7 @@ class Stats(object):
     def __init__(self):
         self.loops = []
         self.locations = []
+        self.aborted_keys = []
 
     def set_history(self, history):
         self.history = history
@@ -972,6 +982,9 @@ class Stats(object):
 
     def add_new_loop(self, loop):
         self.loops.append(loop)
+
+    def record_aborted(self, greenkey):
+        self.aborted_keys.append(greenkey)
 
     # test read interface
 

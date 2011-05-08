@@ -15,13 +15,13 @@ from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
 from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE, \
-                                        ABORT_BAD_LOOP
+                                        ABORT_BAD_LOOP, ABORT_FORCE_QUASIIMMUT
 from pypy.jit.metainterp.jitexc import JitException, get_llexception
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr, MissingLiveness
 from pypy.jit.codewriter import heaptracker, longlong
-from pypy.jit.metainterp.optimizeutil import RetraceLoop
+from pypy.jit.metainterp.optimizeutil import RetraceLoop, args_dict_box, args_dict
 
 # ____________________________________________________________
 
@@ -555,6 +555,35 @@ class MIFrame(object):
     opimpl_setfield_raw_r = _opimpl_setfield_raw_any
     opimpl_setfield_raw_f = _opimpl_setfield_raw_any
 
+    @arguments("box", "descr", "descr", "orgpc")
+    def opimpl_record_quasiimmut_field(self, box, fielddescr,
+                                       mutatefielddescr, orgpc):
+        from pypy.jit.metainterp.quasiimmut import QuasiImmutDescr
+        cpu = self.metainterp.cpu
+        descr = QuasiImmutDescr(cpu, box, fielddescr, mutatefielddescr)
+        self.metainterp.history.record(rop.QUASIIMMUT_FIELD, [box],
+                                       None, descr=descr)
+        self.generate_guard(rop.GUARD_NOT_INVALIDATED, resumepc=orgpc)
+
+    @arguments("box", "descr", "orgpc")
+    def opimpl_jit_force_quasi_immutable(self, box, mutatefielddescr, orgpc):
+        # During tracing, a 'jit_force_quasi_immutable' usually turns into
+        # the operations that check that the content of 'mutate_xxx' is null.
+        # If it is actually not null already now, then we abort tracing.
+        # The idea is that if we use 'jit_force_quasi_immutable' on a freshly
+        # allocated object, then the GETFIELD_GC will know that the answer is
+        # null, and the guard will be removed.  So the fact that the field is
+        # quasi-immutable will have no effect, and instead it will work as a
+        # regular, probably virtual, structure.
+        mutatebox = self.execute_with_descr(rop.GETFIELD_GC,
+                                            mutatefielddescr, box)
+        if mutatebox.nonnull():
+            from pypy.jit.metainterp.quasiimmut import do_force_quasi_immutable
+            do_force_quasi_immutable(self.metainterp.cpu, box.getref_base(),
+                                     mutatefielddescr)
+            raise SwitchToBlackhole(ABORT_FORCE_QUASIIMMUT)
+        self.generate_guard(rop.GUARD_ISNULL, mutatebox, resumepc=orgpc)
+
     def _nonstandard_virtualizable(self, pc, box):
         # returns True if 'box' is actually not the "standard" virtualizable
         # that is stored in metainterp.virtualizable_boxes[-1]
@@ -834,7 +863,7 @@ class MIFrame(object):
                                jcposition, redboxes):
         resumedescr = compile.ResumeAtPositionDescr()
         self.capture_resumedata(resumedescr, orgpc)
-        
+
         any_operation = len(self.metainterp.history.operations) > 0
         jitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         self.verify_green_args(jitdriver_sd, greenboxes)
@@ -852,7 +881,7 @@ class MIFrame(object):
             "found a loop_header for a JitDriver that does not match "
             "the following jit_merge_point's")
         self.metainterp.seen_loop_header_for_jdindex = -1
-        
+
         #
         if not self.metainterp.in_recursion:
             assert jitdriver_sd is self.metainterp.jitdriver_sd
@@ -1023,6 +1052,10 @@ class MIFrame(object):
             metainterp.history.record(rop.VIRTUAL_REF_FINISH,
                                       [vrefbox, lastbox], None)
 
+    @arguments()
+    def opimpl_ll_read_timestamp(self):
+        return self.metainterp.execute_and_record(rop.READ_TIMESTAMP, None)
+
     # ------------------------------
 
     def setup_call(self, argboxes):
@@ -1076,6 +1109,8 @@ class MIFrame(object):
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
                                                    metainterp.jitdriver_sd)
+        elif opnum == rop.GUARD_NOT_INVALIDATED:
+            resumedescr = compile.ResumeGuardNotInvalidated()
         else:
             resumedescr = compile.ResumeGuardDescr()
         guard_op = metainterp.history.record(opnum, moreargs, None,
@@ -1275,11 +1310,6 @@ class MetaInterpStaticData(object):
         self._addr2name_keys = [key for key, value in list_of_addr2name]
         self._addr2name_values = [value for key, value in list_of_addr2name]
 
-    def setup_jitdrivers_sd(self, optimizer):
-        if optimizer is not None:
-            for jd in self.jitdrivers_sd:
-                jd.warmstate.set_param_optimizer(optimizer)
-
     def finish_setup(self, codewriter, optimizer=None):
         from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
         self.blackholeinterpbuilder = BlackholeInterpBuilder(codewriter, self)
@@ -1293,7 +1323,6 @@ class MetaInterpStaticData(object):
         self.jitdrivers_sd = codewriter.callcontrol.jitdrivers_sd
         self.virtualref_info = codewriter.callcontrol.virtualref_info
         self.callinfocollection = codewriter.callcontrol.callinfocollection
-        self.setup_jitdrivers_sd(optimizer)
         #
         # store this information for fastpath of call_assembler
         # (only the paths that can actually be taken)
@@ -1416,6 +1445,7 @@ class MetaInterp(object):
         self.free_frames_list = []
         self.last_exc_value_box = None
         self.retracing_loop_from = None
+        self.call_pure_results = args_dict_box()
 
     def perform_call(self, jitcode, boxes, greenkey=None):
         # causes the metainterp to enter the given subfunction
@@ -1423,10 +1453,13 @@ class MetaInterp(object):
         f.setup_call(boxes)
         raise ChangeFrame
 
+    def is_main_jitcode(self, jitcode):
+        return self.jitdriver_sd is not None and jitcode is self.jitdriver_sd.mainjitcode
+
     def newframe(self, jitcode, greenkey=None):
         if jitcode.is_portal:
             self.in_recursion += 1
-        if greenkey is not None:
+        if greenkey is not None and self.is_main_jitcode(jitcode):
             self.portal_trace_positions.append(
                     (greenkey, len(self.history.operations)))
         if len(self.free_frames_list) > 0:
@@ -1439,9 +1472,10 @@ class MetaInterp(object):
 
     def popframe(self):
         frame = self.framestack.pop()
-        if frame.jitcode.is_portal:
+        jitcode = frame.jitcode
+        if jitcode.is_portal:
             self.in_recursion -= 1
-        if frame.greenkey is not None:
+        if frame.greenkey is not None and self.is_main_jitcode(jitcode):
             self.portal_trace_positions.append(
                     (None, len(self.history.operations)))
         # we save the freed MIFrames to avoid needing to re-create new
@@ -1632,6 +1666,7 @@ class MetaInterp(object):
         warmrunnerstate = self.jitdriver_sd.warmstate
         if len(self.history.operations) > warmrunnerstate.trace_limit:
             greenkey_of_huge_function = self.find_biggest_function()
+            self.staticdata.stats.record_aborted(greenkey_of_huge_function)
             self.portal_trace_positions = None
             if greenkey_of_huge_function is not None:
                 warmrunnerstate.disable_noninlinable_function(
@@ -1719,7 +1754,7 @@ class MetaInterp(object):
             dont_change_position = True
         else:
             dont_change_position = False
-        try:            
+        try:
             self.prepare_resume_from_failure(key.guard_opnum, dont_change_position)
             if self.resumekey_original_loop_token is None:   # very rare case
                 raise SwitchToBlackhole(ABORT_BRIDGE)
@@ -1848,6 +1883,9 @@ class MetaInterp(object):
                 self.handle_possible_exception()
             except ChangeFrame:
                 pass
+        elif opnum == rop.GUARD_NOT_INVALIDATED:
+            pass # XXX we want to do something special in resume descr,
+                 # but not now
         elif opnum == rop.GUARD_NO_OVERFLOW:   # an overflow now detected
             self.execute_raised(OverflowError(), constant=True)
             try:
@@ -1913,7 +1951,8 @@ class MetaInterp(object):
         self.history.inputargs = original_boxes[num_green_args:]
         greenkey = original_boxes[:num_green_args]
         self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
-        loop_token = compile.compile_new_loop(self, [], greenkey, start, start_resumedescr)
+        loop_token = compile.compile_new_loop(self, [], greenkey, start,
+                                              start_resumedescr, False)
         self.history.operations.pop()     # remove the JUMP
         if loop_token is None:
             return
@@ -1923,12 +1962,12 @@ class MetaInterp(object):
 
         self.history.inputargs = original_inputargs
         self.history.operations = self.history.operations[:start]
-        live_arg_boxes = bridge_arg_boxes
-        
-        self.history.record(rop.JUMP, live_arg_boxes[num_green_args:], None)
+
+        self.history.record(rop.JUMP, bridge_arg_boxes[num_green_args:], None)
         try:
             target_loop_token = compile.compile_new_bridge(self,
-                                                           [loop_token],
+                                                           #[loop_token],
+                                                           old_loop_tokens,
                                                            self.resumekey,
                                                            True)
         except RetraceLoop:
@@ -2278,7 +2317,9 @@ class MetaInterp(object):
             return resbox_as_const
         # not all constants (so far): turn CALL into CALL_PURE, which might
         # be either removed later by optimizeopt or turned back into CALL.
-        newop = op.copy_and_change(rop.CALL_PURE, args=[resbox_as_const]+op.getarglist())
+        arg_consts = [a.constbox() for a in op.getarglist()]
+        self.call_pure_results[arg_consts] = resbox_as_const
+        newop = op.copy_and_change(rop.CALL_PURE, args=op.getarglist())
         self.history.operations[-1] = newop
         return resbox
 

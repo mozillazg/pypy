@@ -23,18 +23,22 @@ class AbstractCPU(object):
         self.fail_descr_list = []
         self.fail_descr_free_list = []
 
+    def reserve_some_free_fail_descr_number(self):
+        lst = self.fail_descr_list
+        if len(self.fail_descr_free_list) > 0:
+            n = self.fail_descr_free_list.pop()
+            assert lst[n] is None
+        else:
+            n = len(lst)
+            lst.append(None)
+        return n
+
     def get_fail_descr_number(self, descr):
         assert isinstance(descr, history.AbstractFailDescr)
         n = descr.index
         if n < 0:
-            lst = self.fail_descr_list
-            if len(self.fail_descr_free_list) > 0:
-                n = self.fail_descr_free_list.pop()
-                assert lst[n] is None
-                lst[n] = descr
-            else:
-                n = len(lst)
-                lst.append(descr)
+            n = self.reserve_some_free_fail_descr_number()
+            self.fail_descr_list[n] = descr
             descr.index = n
         return n
 
@@ -130,6 +134,16 @@ class AbstractCPU(object):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is
         enough to redirect all CALL_ASSEMBLERs already compiled that call
         oldlooptoken so that from now own they will call newlooptoken."""
+        raise NotImplementedError
+
+    def invalidate_loop(self, looptoken):
+        """Activate all GUARD_NOT_INVALIDATED in the loop and its attached
+        bridges.  Before this call, all GUARD_NOT_INVALIDATED do nothing;
+        after this call, they all fail.  Note that afterwards, if one such
+        guard fails often enough, it has a bridge attached to it; it is
+        possible then to re-call invalidate_loop() on the same looptoken,
+        which must invalidate all newer GUARD_NOT_INVALIDATED, but not the
+        old one that already has a bridge attached to it."""
         raise NotImplementedError
 
     def free_loop_and_bridges(self, compiled_loop_token):
@@ -287,12 +301,20 @@ class CompiledLoopToken(object):
         # that belong to this loop or to a bridge attached to it.
         # Filled by the frontend calling record_faildescr_index().
         self.faildescr_indices = []
+        self.invalidate_positions = []
         debug_start("jit-mem-looptoken-alloc")
         debug_print("allocating Loop #", self.number)
         debug_stop("jit-mem-looptoken-alloc")
 
     def record_faildescr_index(self, n):
         self.faildescr_indices.append(n)
+
+    def reserve_and_record_some_faildescr_index(self):
+        # like record_faildescr_index(), but invent and return a new,
+        # unused faildescr index
+        n = self.cpu.reserve_some_free_fail_descr_number()
+        self.record_faildescr_index(n)
+        return n
 
     def compiling_a_bridge(self):
         self.cpu.total_compiled_bridges += 1

@@ -138,11 +138,13 @@ class __extend__(pyframe.PyFrame):
                 # raised after the exception handler block was popped.
                 try:
                     trace = self.w_f_trace
-                    self.w_f_trace = None
+                    if trace is not None:
+                        self.w_f_trace = None
                     try:
                         ec.bytecode_trace_after_exception(self)
                     finally:
-                        self.w_f_trace = trace
+                        if trace is not None:
+                            self.w_f_trace = trace
                 except OperationError, e:
                     operr = e
             pytraceback.record_application_traceback(
@@ -538,11 +540,18 @@ class __extend__(pyframe.PyFrame):
         unroller = SContinueLoop(startofloop)
         return self.unrollstack_and_jump(unroller)
 
+    @jit.unroll_safe
     def RAISE_VARARGS(self, nbargs, next_instr):
         space = self.space
         if nbargs == 0:
-            operror = space.getexecutioncontext().sys_exc_info()
-            if operror is None:
+            frame = self
+            ec = self.space.getexecutioncontext()
+            while frame:
+                if frame.last_exception is not None:
+                    operror = ec._convert_exc(frame.last_exception)
+                    break
+                frame = frame.f_backref()
+            else:
                 raise OperationError(space.w_TypeError,
                     space.wrap("raise: no active exception to re-raise"))
             # re-raise, no new traceback obj will be attached
@@ -1188,6 +1197,7 @@ class SuspendedUnroller(Wrappable):
                 WHY_CONTINUE,   SContinueLoop
                 WHY_YIELD       not needed
     """
+    _immutable_ = True
     def nomoreblocks(self):
         raise BytecodeCorruption("misplaced bytecode - should not return")
 
@@ -1198,6 +1208,7 @@ class SuspendedUnroller(Wrappable):
 class SReturnValue(SuspendedUnroller):
     """Signals a 'return' statement.
     Argument is the wrapped object to return."""
+    _immutable_ = True
     kind = 0x01
     def __init__(self, w_returnvalue):
         self.w_returnvalue = w_returnvalue
@@ -1213,6 +1224,7 @@ class SReturnValue(SuspendedUnroller):
 class SApplicationException(SuspendedUnroller):
     """Signals an application-level exception
     (i.e. an OperationException)."""
+    _immutable_ = True
     kind = 0x02
     def __init__(self, operr):
         self.operr = operr
@@ -1227,6 +1239,7 @@ class SApplicationException(SuspendedUnroller):
 
 class SBreakLoop(SuspendedUnroller):
     """Signals a 'break' statement."""
+    _immutable_ = True
     kind = 0x04
 
     def state_unpack_variables(self, space):
@@ -1240,6 +1253,7 @@ SBreakLoop.singleton = SBreakLoop()
 class SContinueLoop(SuspendedUnroller):
     """Signals a 'continue' statement.
     Argument is the bytecode position of the beginning of the loop."""
+    _immutable_ = True
     kind = 0x08
     def __init__(self, jump_to):
         self.jump_to = jump_to
@@ -1252,9 +1266,10 @@ class SContinueLoop(SuspendedUnroller):
 
 
 class FrameBlock(object):
-
     """Abstract base class for frame blocks from the blockstack,
     used by the SETUP_XXX and POP_BLOCK opcodes."""
+
+    _immutable_ = True
 
     def __init__(self, frame, handlerposition):
         self.handlerposition = handlerposition
@@ -1297,6 +1312,7 @@ class FrameBlock(object):
 class LoopBlock(FrameBlock):
     """A loop block.  Stores the end-of-loop pointer in case of 'break'."""
 
+    _immutable_ = True
     _opname = 'SETUP_LOOP'
     handling_mask = SBreakLoop.kind | SContinueLoop.kind
 
@@ -1316,6 +1332,7 @@ class LoopBlock(FrameBlock):
 class ExceptBlock(FrameBlock):
     """An try:except: block.  Stores the position of the exception handler."""
 
+    _immutable_ = True
     _opname = 'SETUP_EXCEPT'
     handling_mask = SApplicationException.kind
 
@@ -1340,6 +1357,7 @@ class ExceptBlock(FrameBlock):
 class FinallyBlock(FrameBlock):
     """A try:finally: block.  Stores the position of the exception handler."""
 
+    _immutable_ = True
     _opname = 'SETUP_FINALLY'
     handling_mask = -1     # handles every kind of SuspendedUnroller
 
@@ -1366,6 +1384,8 @@ class FinallyBlock(FrameBlock):
 
 
 class WithBlock(FinallyBlock):
+
+    _immutable_ = True
 
     def really_handle(self, frame, unroller):
         if (frame.space.full_exceptions and
@@ -1408,13 +1428,19 @@ app = gateway.applevel(r'''
     def print_item_to(x, stream):
         if file_softspace(stream, False):
            stream.write(" ")
-        stream.write(str(x))
+
+        # give to write() an argument which is either a string or a unicode
+        # (and let it deals itself with unicode handling)
+        if not isinstance(x, unicode):
+            x = str(x)
+        stream.write(x)
 
         # add a softspace unless we just printed a string which ends in a '\t'
         # or '\n' -- or more generally any whitespace character but ' '
-        if isinstance(x, str) and x and x[-1].isspace() and x[-1]!=' ':
-            return
-        # XXX add unicode handling
+        if x:
+            lastchar = x[-1]
+            if lastchar.isspace() and lastchar != ' ':
+                return
         file_softspace(stream, True)
     print_item_to._annspecialcase_ = "specialize:argtype(0)"
 

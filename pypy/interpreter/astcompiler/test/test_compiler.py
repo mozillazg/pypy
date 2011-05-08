@@ -70,6 +70,13 @@ class TestCompiler:
 
     st = simple_test
 
+    def error_test(self, source, exc_type):
+        py.test.raises(exc_type, self.simple_test, source, None, None)
+
+    def test_issue_713(self):
+        func = "def f(_=2): return (_ if _ else _) if False else _"
+        yield self.st, func, "f()", 2
+
     def test_long_jump(self):
         func = """def f(x):
     y = 0
@@ -98,11 +105,13 @@ class TestCompiler:
         self.simple_test(stmt, "type(x)", int)
 
     def test_tuple_assign(self):
+        yield self.error_test, "() = 1", SyntaxError
         yield self.simple_test, "x,= 1,", "x", 1
         yield self.simple_test, "x,y = 1,2", "x,y", (1, 2)
         yield self.simple_test, "x,y,z = 1,2,3", "x,y,z", (1, 2, 3)
         yield self.simple_test, "x,y,z,t = 1,2,3,4", "x,y,z,t", (1, 2, 3, 4)
         yield self.simple_test, "x,y,x,t = 1,2,3,4", "x,y,t", (3, 2, 4)
+        yield self.simple_test, "[] = []", "1", 1
         yield self.simple_test, "[x]= 1,", "x", 1
         yield self.simple_test, "[x,y] = [1,2]", "x,y", (1, 2)
         yield self.simple_test, "[x,y,z] = 1,2,3", "x,y,z", (1, 2, 3)

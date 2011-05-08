@@ -1,7 +1,7 @@
 import py
-from pypy.interpreter.argument import Arguments, ArgumentsForTranslation, ArgErr
-from pypy.interpreter.argument import ArgErrUnknownKwds, ArgErrMultipleValues
-from pypy.interpreter.argument import ArgErrCount, rawshape, Signature
+from pypy.interpreter.argument import (Arguments, ArgumentsForTranslation,
+    ArgErr, ArgErrUnknownKwds, ArgErrMultipleValues, ArgErrCount, rawshape,
+    Signature)
 from pypy.interpreter.error import OperationError
 
 
@@ -69,7 +69,7 @@ class DummySpace(object):
         return list(it)
 
     def listview(self, it):
-        return list(it)        
+        return list(it)
 
     def unpackiterable(self, it):
         return list(it)
@@ -158,18 +158,18 @@ class TestArgumentsNormal(object):
 
     def test_fixedunpacked(self):
         space = DummySpace()
-        
+
         args = Arguments(space, [], ["k"], [1])
         py.test.raises(ValueError, args.fixedunpack, 1)
 
         args = Arguments(space, ["a", "b"])
         py.test.raises(ValueError, args.fixedunpack, 0)
-        py.test.raises(ValueError, args.fixedunpack, 1)        
+        py.test.raises(ValueError, args.fixedunpack, 1)
         py.test.raises(ValueError, args.fixedunpack, 3)
         py.test.raises(ValueError, args.fixedunpack, 4)
 
         assert args.fixedunpack(2) == ['a', 'b']
-    
+
     def test_match0(self):
         space = DummySpace()
         args = Arguments(space, [])
@@ -354,7 +354,8 @@ class TestArgumentsNormal(object):
         calls = []
 
         def _match_signature(w_firstarg, scope_w, signature,
-                             defaults_w=[], blindargs=0):
+                             defaults_w=None, blindargs=0):
+            defaults_w = [] if defaults_w is None else defaults_w
             calls.append((w_firstarg, scope_w, signature.argnames, signature.has_vararg(),
                           signature.has_kwarg(), defaults_w, blindargs))
         args._match_signature = _match_signature
@@ -365,7 +366,7 @@ class TestArgumentsNormal(object):
                             [], 0)
         assert calls[0][1] is scope_w
         calls = []
-            
+
         scope_w = args.parse_obj(None, "foo", Signature(["a", "b"], "args", None),
                                  blindargs=1)
         assert len(calls) == 1
@@ -380,7 +381,7 @@ class TestArgumentsNormal(object):
                             True, True,
                             ["x", "y"], 0)
         calls = []
-        
+
         scope_w = args.parse_obj("obj", "foo", Signature(["a", "b"], "args", "kw"),
                              defaults_w=['x', 'y'], blindargs=1)
         assert len(calls) == 1
@@ -411,7 +412,8 @@ class TestArgumentsNormal(object):
         calls = []
 
         def _match_signature(w_firstarg, scope_w, signature,
-                             defaults_w=[], blindargs=0):
+                             defaults_w=None, blindargs=0):
+            defaults_w = [] if defaults_w is None else defaults_w
             calls.append((w_firstarg, scope_w, signature.argnames, signature.has_vararg(),
                           signature.has_kwarg(), defaults_w, blindargs))
         args._match_signature = _match_signature
@@ -433,7 +435,7 @@ class TestArgumentsNormal(object):
                             ["x", "y"], 0)
         calls = []
 
-        scope_w = [None, None, None, None]        
+        scope_w = [None, None, None, None]
         args.parse_into_scope("obj", scope_w, "foo", Signature(["a", "b"],
                                                       "args", "kw"),
                               defaults_w=['x', 'y'])
@@ -468,7 +470,7 @@ class TestArgumentsNormal(object):
         assert args.arguments_w == [1]
         assert set(args.keywords) == set(['a', 'b'])
         assert args.keywords_w[args.keywords.index('a')] == 2
-        assert args.keywords_w[args.keywords.index('b')] == 3        
+        assert args.keywords_w[args.keywords.index('b')] == 3
 
         args = Arguments(space, [1])
         w_args, w_kwds = args.topacked()
@@ -508,7 +510,7 @@ class TestErrorHandling(object):
     def test_missing_args(self):
         # got_nargs, nkwds, expected_nargs, has_vararg, has_kwarg,
         # defaults_w, missing_args
-        err = ArgErrCount(1, 0, 0, False, False, [], 0)
+        err = ArgErrCount(1, 0, 0, False, False, None, 0)
         s = err.getmsg('foo')
         assert s == "foo() takes no argument (1 given)"
         err = ArgErrCount(0, 0, 1, False, False, [], 1)
@@ -684,7 +686,7 @@ class TestArgumentsForTranslation(object):
         assert rawshape(args) == (2, ('g', ), True, True)
 
     def test_copy_and_shape(self):
-        space = DummySpace()        
+        space = DummySpace()
         args = ArgumentsForTranslation(space, ['a'], ['x'], [1],
                                        ['w1'], {'y': 'w2'})
         args1 = args.copy()

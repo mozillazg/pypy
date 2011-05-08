@@ -92,7 +92,7 @@ class ExecutionContext(object):
             self.topframe = ec.gettopframe()
             self.w_tracefunc = ec.w_tracefunc
             self.profilefunc = ec.profilefunc
-            self.w_profilefuncarg = ec.w_profilefuncarg 
+            self.w_profilefuncarg = ec.w_profilefuncarg
             self.is_tracing = ec.is_tracing
 
         def clear_framestack(self):
@@ -195,13 +195,16 @@ class ExecutionContext(object):
             self._trace(frame, 'exception', None, operationerr)
         #operationerr.print_detailed_traceback(self.space)
 
+    def _convert_exc(self, operr):
+        return operr
+
     def sys_exc_info(self): # attn: the result is not the wrapped sys.exc_info() !!!
         """Implements sys.exc_info().
         Return an OperationError instance or None."""
         frame = self.gettopframe_nohidden()
         while frame:
             if frame.last_exception is not None:
-                return frame.last_exception
+                return self._convert_exc(frame.last_exception)
             frame = self.getnextframe_nohidden(frame)
         return None
 
@@ -262,7 +265,7 @@ class ExecutionContext(object):
             return True
 
         space = self.space
-        
+
         # Tracing cases
         if event == 'call':
             w_callback = self.w_tracefunc
@@ -295,15 +298,18 @@ class ExecutionContext(object):
 
         # Profile cases
         if self.profilefunc is not None:
-            if event not in ['leaveframe', 'call', 'c_call',
-                             'c_return', 'c_exception']:
+            if not (event == 'leaveframe' or
+                    event == 'call' or
+                    event == 'c_call' or
+                    event == 'c_return' or
+                    event == 'c_exception'):
                 return False
 
             last_exception = frame.last_exception
             if event == 'leaveframe':
                 event = 'return'
 
-            assert self.is_tracing == 0 
+            assert self.is_tracing == 0
             self.is_tracing += 1
             try:
                 try:
@@ -506,7 +512,7 @@ class UserDelAction(AsyncAction):
         for i in range(len(pending_w)):
             w_ref = pending_w[i]
             w_ref.activate_callback()
-        
+
 class FrameTraceAction(AsyncAction):
     """An action that calls the local trace functions (w_f_trace)."""
 
@@ -516,7 +522,7 @@ class FrameTraceAction(AsyncAction):
             return
         code = frame.pycode
         if frame.instr_lb <= frame.last_instr < frame.instr_ub:
-            if frame.last_instr <= frame.instr_prev:
+            if frame.last_instr < frame.instr_prev_plus_one:
                 # We jumped backwards in the same line.
                 executioncontext._trace(frame, 'line', self.space.w_None)
         else:
@@ -554,5 +560,5 @@ class FrameTraceAction(AsyncAction):
                 frame.f_lineno = line
                 executioncontext._trace(frame, 'line', self.space.w_None)
 
-        frame.instr_prev = frame.last_instr
+        frame.instr_prev_plus_one = frame.last_instr + 1
         self.space.frame_trace_action.fire()     # continue tracing

@@ -59,7 +59,8 @@ class OptRewrite(Optimization):
     def find_rewritable_bool(self, op, args):
         try:
             oldopnum = opboolinvers[op.getopnum()]
-            targs = [args[0], args[1], ConstInt(oldopnum)]
+            targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[0], args[1]],
+                                                              None))
             if self.try_boolinvers(op, targs):
                 return True
         except KeyError:
@@ -67,7 +68,8 @@ class OptRewrite(Optimization):
 
         try:
             oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
-            targs = [args[1], args[0], ConstInt(oldopnum)]
+            targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[1], args[0]],
+                                                              None))            
             oldop = self.optimizer.pure_operations.get(targs, None)
             if oldop is not None and oldop.getdescr() is op.getdescr():
                 self.make_equal_to(op.result, self.getvalue(oldop.result))
@@ -77,7 +79,8 @@ class OptRewrite(Optimization):
 
         try:
             oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
-            targs = [args[1], args[0], ConstInt(oldopnum)]
+            targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[1], args[0]],
+                                                              None))            
             if self.try_boolinvers(op, targs):
                 return True
         except KeyError:
@@ -154,17 +157,43 @@ class OptRewrite(Optimization):
 
             self.emit_operation(op)
 
+    def optimize_INT_LSHIFT(self, op):
+        v1 = self.getvalue(op.getarg(0))
+        v2 = self.getvalue(op.getarg(1))
+
+        if v2.is_constant() and v2.box.getint() == 0:
+            self.make_equal_to(op.result, v1)
+        else:
+            self.emit_operation(op)
+
+    def optimize_INT_RSHIFT(self, op):
+        v1 = self.getvalue(op.getarg(0))
+        v2 = self.getvalue(op.getarg(1))
+
+        if v2.is_constant() and v2.box.getint() == 0:
+            self.make_equal_to(op.result, v1)
+        else:
+            self.emit_operation(op)
+
     def optimize_CALL_PURE(self, op):
+        arg_consts = []
         for i in range(op.numargs()):
             arg = op.getarg(i)
-            if self.get_constant_box(arg) is None:
+            const = self.get_constant_box(arg)
+            if const is None:
                 break
+            arg_consts.append(const)
         else:
-            # all constant arguments: constant-fold away
-            self.make_constant(op.result, op.getarg(0))
-            return
+            # all constant arguments: check if we already know the reslut
+            try:
+                result = self.optimizer.call_pure_results[arg_consts]
+            except KeyError:
+                pass
+            else:
+                self.make_constant(op.result, result)
+                return
         # replace CALL_PURE with just CALL
-        args = op.getarglist()[1:]
+        args = op.getarglist()
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          op.getdescr()))
 

@@ -150,6 +150,7 @@ def reinit_threads(space):
     "Called in the child process after a fork()"
     space.threadlocals.reinit_threads(space)
     bootstrapper.reinit()
+    thread.thread_after_fork()
 
     # Clean the threading module after a fork()
     w_modules = space.sys.get('modules')
@@ -248,3 +249,8 @@ def exit(space):
     """This is synonymous to ``raise SystemExit''.  It will cause the current
 thread to exit silently unless the exception is caught."""
     raise OperationError(space.w_SystemExit, space.w_None)
+
+def interrupt_main(space):
+    """Raise a KeyboardInterrupt in the main thread.
+A subthread can use this function to interrupt the main thread."""
+    space.check_signal_action.set_interrupt()

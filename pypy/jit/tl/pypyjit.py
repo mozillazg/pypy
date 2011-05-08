@@ -39,6 +39,7 @@ config.objspace.usemodules.pypyjit = True
 config.objspace.usemodules.array = True
 config.objspace.usemodules._weakref = True
 config.objspace.usemodules._sre = False
+config.objspace.usemodules._lsprof = True
 #
 config.objspace.usemodules._ffi = True
 #
@@ -99,9 +100,9 @@ def test_run_translation():
     from pypy.translator.goal.ann_override import PyPyAnnotatorPolicy
     from pypy.rpython.test.test_llinterp import get_interpreter
 
-    # first annotate, rtype, and backendoptimize PyPy
+    # first annotate and rtype
     try:
-        interp, graph = get_interpreter(entry_point, [], backendopt=True,
+        interp, graph = get_interpreter(entry_point, [], backendopt=False,
                                         config=config,
                                         type_system=config.translation.type_system,
                                         policy=PyPyAnnotatorPolicy(space))
@@ -114,6 +115,8 @@ def test_run_translation():
     # print a message, and restart
     unixcheckpoint.restartable_point(auto='run')
 
+    from pypy.jit.codewriter.codewriter import CodeWriter
+    CodeWriter.debug = True
     from pypy.jit.tl.pypyjit_child import run_child, run_child_ootype
     if BACKEND == 'c':
         run_child(globals(), locals())

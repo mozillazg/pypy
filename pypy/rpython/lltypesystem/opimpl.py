@@ -227,6 +227,14 @@ def op_int_or(x, y):
     assert isinstance(y, int)
     return x | y
 
+def op_int_xor(x, y):
+    # used in computing hashes
+    if isinstance(x, AddressAsInt): x = llmemory.cast_adr_to_int(x.adr)
+    if isinstance(y, AddressAsInt): y = llmemory.cast_adr_to_int(y.adr)
+    assert isinstance(x, int)
+    assert isinstance(y, int)
+    return x ^ y
+
 def op_int_mul(x, y):
     assert isinstance(x, (int, llmemory.AddressOffset))
     assert isinstance(y, (int, llmemory.AddressOffset))
@@ -372,7 +380,7 @@ def op_cast_unichar_to_int(b):
     return ord(b)
 
 def op_cast_int_to_unichar(b):
-    assert type(b) is int 
+    assert type(b) is int
     return unichr(b)
 
 def op_cast_int_to_uint(b):
@@ -517,6 +525,9 @@ def op_jit_force_virtualizable(*args):
 def op_jit_force_virtual(x):
     return x
 
+def op_jit_force_quasi_immutable(*args):
+    pass
+
 def op_get_group_member(TYPE, grpptr, memberoffset):
     from pypy.rpython.lltypesystem import llgroup
     assert isinstance(memberoffset, llgroup.GroupMemberOffset)
@@ -569,6 +580,10 @@ def op_gc_assume_young_pointers(addr):
 
 def op_shrink_array(array, smallersize):
     return False
+
+def op_ll_read_timestamp():
+    from pypy.rlib.rtimer import read_timestamp
+    return read_timestamp()
 
 # ____________________________________________________________
 

@@ -7,14 +7,14 @@ from pypy.translator.platform import platform
 from pypy.interpreter import gateway
 
 #XXX # the release serial 42 is not in range(16)
-CPYTHON_VERSION            = (2, 7, 0, "final", 42)   #XXX # sync patchlevel.h
+CPYTHON_VERSION            = (2, 7, 1, "final", 42)   #XXX # sync patchlevel.h
 CPYTHON_API_VERSION        = 1013   #XXX # sync with include/modsupport.h
 
 PYPY_VERSION               = (1, 5, 0, "alpha", 0)    #XXX # sync patchlevel.h
 
 if platform.name == 'msvc':
     COMPILER_INFO = 'MSC v.%d 32 bit' % (platform.version * 10 + 600)
-elif platform.cc == 'gcc':
+elif platform.cc.startswith('gcc'):
     out = platform.execute(platform.cc, '--version').out
     match = re.search(' (\d+\.\d+(\.\d+)*)', out)
     if match:
@@ -28,7 +28,7 @@ else:
 import pypy
 pypydir = os.path.dirname(os.path.abspath(pypy.__file__))
 del pypy
-from pypy.tool.version import get_mercurial_info
+from pypy.tool.version import get_repo_version_info
 
 import time as t
 gmtime = t.gmtime()
@@ -67,7 +67,7 @@ def get_version(space):
         CPYTHON_VERSION[0],
         CPYTHON_VERSION[1],
         CPYTHON_VERSION[2],
-        hg_universal_id(),
+        get_repo_version_info()[2],
         date,
         time,
         ver,
@@ -83,31 +83,21 @@ def get_hexversion(space):
 
 def get_pypy_version_info(space):
     ver = PYPY_VERSION
-    #ver = ver[:-1] + (svn_revision(),)
     w_version_info = app.wget(space, "version_info")
     return space.call_function(w_version_info, space.wrap(ver))
 
 def get_subversion_info(space):
     return space.wrap(('PyPy', '', ''))
 
-
-def wrap_mercurial_info(space):
-    info = get_mercurial_info()
+def get_repo_info(space):
+    info = get_repo_version_info()
     if info:
-        project, hgtag, hgid = info
+        project, repo_tag, repo_version = info
         return space.newtuple([space.wrap(project),
-                               space.wrap(hgtag),
-                               space.wrap(hgid)])
+                               space.wrap(repo_tag),
+                               space.wrap(repo_version)])
     else:
         return space.w_None
-
-def hg_universal_id():
-    info = get_mercurial_info()
-    if info:
-        return info[2]
-    else:
-        return '?'
-
 
 def tuple2hex(ver):
     d = {'alpha':     0xA,

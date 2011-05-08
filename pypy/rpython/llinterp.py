@@ -5,6 +5,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import ComputedIntSymbolic, CDefinedIntSymbolic
+from pypy.rlib.objectmodel import Symbolic
 from pypy.rlib import rstackovf
 
 import sys, os
@@ -531,7 +532,10 @@ class LLFrame(object):
             raise LLFatalError(msg, LLException(ll_exc_type, ll_exc))
 
     def op_debug_llinterpcall(self, pythonfunction, *args_ll):
-        return pythonfunction(*args_ll)
+        try:
+            return pythonfunction(*args_ll)
+        except:
+            self.make_llexception()
 
     def op_debug_start_traceback(self, *args):
         pass    # xxx write debugging code here?
@@ -853,6 +857,9 @@ class LLFrame(object):
     def op_gc_adr_of_nursery_free(self):
         raise NotImplementedError
 
+    def op_gc_adr_of_root_stack_top(self):
+        raise NotImplementedError
+
     def op_gc_call_rtti_destructor(self, rtti, addr):
         if hasattr(rtti._obj, 'destructor_funcptr'):
             d = rtti._obj.destructor_funcptr
@@ -1132,7 +1139,9 @@ class LLFrame(object):
         # special case
         if type(x) is CDefinedIntSymbolic:
             x = x.default
-        assert isinstance(x, int)
+        # if type(x) is a subclass of Symbolic, bool(x) will usually raise
+        # a TypeError -- unless __nonzero__ has been explicitly overridden.
+        assert isinstance(x, (int, Symbolic))
         return bool(x)
 
     # read frame var support

@@ -28,24 +28,24 @@ class W_Root(object):
     _settled_ = True
     user_overridden_class = False
 
-    def getdict(self):
+    def getdict(self, space):
         return None
 
     def getdictvalue(self, space, attr):
-        w_dict = self.getdict()
+        w_dict = self.getdict(space)
         if w_dict is not None:
             return space.finditem_str(w_dict, attr)
         return None
 
     def setdictvalue(self, space, attr, w_value):
-        w_dict = self.getdict()
+        w_dict = self.getdict(space)
         if w_dict is not None:
             space.setitem_str(w_dict, attr, w_value)
             return True
         return False
 
     def deldictvalue(self, space, w_name):
-        w_dict = self.getdict()
+        w_dict = self.getdict(space)
         if w_dict is not None:
             try:
                 space.delitem(w_dict, w_name)
@@ -365,7 +365,11 @@ class ObjSpace(object):
 
     def setbuiltinmodule(self, importname):
         """NOT_RPYTHON. load a lazy pypy/module and put it into sys.modules"""
-        fullname = "pypy.module.%s" % importname
+        if '.' in importname:
+            fullname = importname
+            importname = fullname.rsplit('.', 1)[1]
+        else:
+            fullname = "pypy.module.%s" % importname
 
         Module = __import__(fullname,
                             None, None, ["Module"]).Module
@@ -374,9 +378,9 @@ class ObjSpace(object):
         else:
             name = importname
 
-        w_name = self.wrap(name)
-        w_mod = self.wrap(Module(self, w_name))
-        self.builtin_modules[name] = w_mod
+        mod = Module(self, self.wrap(name))
+        mod.install()
+
         return name
 
     def getbuiltinmodule(self, name, force_init=False):
@@ -428,6 +432,11 @@ class ObjSpace(object):
             if value and name not in modules:
                 modules.append(name)
 
+        if self.config.objspace.extmodules:
+            for name in self.config.objspace.extmodules.split(','):
+                if name not in modules:
+                    modules.append(name)
+
         # a bit of custom logic: time2 or rctime take precedence over time
         # XXX this could probably be done as a "requires" in the config
         if ('time2' in modules or 'rctime' in modules) and 'time' in modules:
@@ -455,22 +464,23 @@ class ObjSpace(object):
         from pypy.module.exceptions import Module
         w_name = self.wrap('exceptions')
         self.exceptions_module = Module(self, w_name)
-        self.builtin_modules['exceptions'] = self.wrap(self.exceptions_module)
+        self.exceptions_module.install()
 
         from pypy.module.sys import Module
         w_name = self.wrap('sys')
         self.sys = Module(self, w_name)
-        self.builtin_modules['sys'] = self.wrap(self.sys)
+        self.sys.install()
 
         from pypy.module.imp import Module
         w_name = self.wrap('imp')
-        self.builtin_modules['imp'] = self.wrap(Module(self, w_name))
+        mod = Module(self, w_name)
+        mod.install()
 
         from pypy.module.__builtin__ import Module
         w_name = self.wrap('__builtin__')
         self.builtin = Module(self, w_name)
         w_builtin = self.wrap(self.builtin)
-        self.builtin_modules['__builtin__'] = self.wrap(w_builtin)
+        w_builtin.install()
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
         bootstrap_modules = set(('sys', 'imp', '__builtin__', 'exceptions'))
@@ -509,7 +519,7 @@ class ObjSpace(object):
 
     def export_builtin_exceptions(self):
         """NOT_RPYTHON"""
-        w_dic = self.exceptions_module.getdict()
+        w_dic = self.exceptions_module.getdict(self)
         w_keys = self.call_method(w_dic, "keys")
         exc_types_w = {}
         for w_name in self.unpackiterable(w_keys):
@@ -744,7 +754,12 @@ class ObjSpace(object):
         """Unpack an iterable object into a real (interpreter-level) list.
         Raise an OperationError(w_ValueError) if the length is wrong."""
         w_iterator = self.iter(w_iterable)
-        items = []
+        # If we know the expected length we can preallocate.
+        if expected_length == -1:
+            items = []
+        else:
+            items = [None] * expected_length
+        idx = 0
         while True:
             try:
                 w_item = self.next(w_iterator)
@@ -752,19 +767,22 @@ class ObjSpace(object):
                 if not e.match(self, self.w_StopIteration):
                     raise
                 break  # done
-            if expected_length != -1 and len(items) == expected_length:
+            if expected_length != -1 and idx == expected_length:
                 raise OperationError(self.w_ValueError,
                                      self.wrap("too many values to unpack"))
-            items.append(w_item)
-        if expected_length != -1 and len(items) < expected_length:
-            i = len(items)
-            if i == 1:
+            if expected_length == -1:
+                items.append(w_item)
+            else:
+                items[idx] = w_item
+            idx += 1
+        if expected_length != -1 and idx < expected_length:
+            if idx == 1:
                 plural = ""
             else:
                 plural = "s"
             raise OperationError(self.w_ValueError,
                       self.wrap("need more than %d value%s to unpack" %
-                                (i, plural)))
+                                (idx, plural)))
         return items
 
     unpackiterable_unroll = jit.unroll_safe(func_with_new_name(unpackiterable,
@@ -1332,6 +1350,11 @@ class DummyLock(object):
         pass
     def _freeze_(self):
         return True
+    def __enter__(self):
+        pass
+    def __exit__(self, *args):
+        pass
+
 dummy_lock = DummyLock()
 
 ## Table describing the regular part of the interface of object spaces,

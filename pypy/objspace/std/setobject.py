@@ -14,7 +14,7 @@ class W_BaseSetObject(W_Object):
     # make sure that Base is used for Set and Frozenset in multimethod
     # declarations
     @classmethod
-    def is_implementation_for(cls, typedef): 
+    def is_implementation_for(cls, typedef):
         if typedef is frozensettypedef or typedef is settypedef:
             assert cls is W_BaseSetObject
             return True
@@ -31,19 +31,6 @@ class W_BaseSetObject(W_Object):
         reprlist = [repr(w_item) for w_item in w_self.setdata.keys()]
         return "<%s(%s)>" % (w_self.__class__.__name__, ', '.join(reprlist))
 
-    def _newobj(w_self, space, rdict_w=None):
-        """Make a new set or frozenset by taking ownership of 'rdict_w'."""
-        #return space.call(space.type(w_self),W_SetIterObject(rdict_w))
-        objtype = type(w_self)
-        if objtype is W_SetObject:
-            obj = W_SetObject(space, rdict_w)
-        elif objtype is W_FrozensetObject:
-            obj = W_FrozensetObject(space, rdict_w)
-        else:
-            itemiterator = space.iter(W_SetIterObject(rdict_w))
-            obj = space.call_function(space.type(w_self),itemiterator)
-        return obj
-
     _lifeline_ = None
     def getweakref(self):
         return self._lifeline_
@@ -53,9 +40,27 @@ class W_BaseSetObject(W_Object):
 class W_SetObject(W_BaseSetObject):
     from pypy.objspace.std.settype import set_typedef as typedef
 
+    def _newobj(w_self, space, rdict_w):
+        """Make a new set by taking ownership of 'rdict_w'."""
+        if type(w_self) is W_SetObject:
+            return W_SetObject(space, rdict_w)
+        w_type = space.type(w_self)
+        w_obj = space.allocate_instance(W_SetObject, w_type)
+        W_SetObject.__init__(w_obj, space, rdict_w)
+        return w_obj
+
 class W_FrozensetObject(W_BaseSetObject):
     from pypy.objspace.std.frozensettype import frozenset_typedef as typedef
     hash = 0
+
+    def _newobj(w_self, space, rdict_w):
+        """Make a new frozenset by taking ownership of 'rdict_w'."""
+        if type(w_self) is W_FrozensetObject:
+            return W_FrozensetObject(space, rdict_w)
+        w_type = space.type(w_self)
+        w_obj = space.allocate_instance(W_FrozensetObject, w_type)
+        W_FrozensetObject.__init__(w_obj, space, rdict_w)
+        return w_obj
 
 registerimplementation(W_BaseSetObject)
 registerimplementation(W_SetObject)
@@ -309,7 +314,7 @@ ne__Frozenset_Set = ne__Set_Set
 
 def ne__Set_settypedef(space, w_left, w_other):
     rd = make_setdata_from_w_iterable(space, w_other)
-    return space.wrap(_is_eq(w_left.setdata, rd))
+    return space.wrap(not _is_eq(w_left.setdata, rd))
 
 ne__Set_frozensettypedef = ne__Set_settypedef
 ne__Frozenset_settypedef = ne__Set_settypedef
@@ -641,7 +646,7 @@ app = gateway.applevel("""
                 del currently_in_repr[set_id]
             except:
                 pass
-""", filename=__file__) 
+""", filename=__file__)
 
 setrepr = app.interphook("setrepr")
 
