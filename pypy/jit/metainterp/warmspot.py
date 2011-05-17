@@ -420,7 +420,13 @@ class WarmRunnerDesc(object):
         crash_in_jit._dont_inline_ = True
 
         if self.translator.rtyper.type_system.name == 'lltypesystem':
+            state._enter_jit_counter = 0
             def maybe_enter_jit(*args):
+                if we_are_translated():
+                    state._enter_jit_counter -= 11
+                    if state._enter_jit_counter >= 0:
+                        return
+                    state._enter_jit_counter += 124
                 try:
                     maybe_compile_and_run(*args)
                 except JitException:
