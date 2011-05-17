@@ -717,10 +717,22 @@ _invalid_cache_entry_map.terminator = None
 INVALID_CACHE_ENTRY = CacheEntry()
 INVALID_CACHE_ENTRY.map_wref = weakref.ref(_invalid_cache_entry_map)
                                  # different from any real map ^^^
+INVALID_CACHE_ENTRY.index = 0
+REBUILD_CACHE_FREQUENCY = 5        # xxx tweak?
+
 
 def init_mapdict_cache(pycode):
     num_entries = len(pycode.co_names_w)
     pycode._mapdict_caches = [INVALID_CACHE_ENTRY] * num_entries
+
+def _rebuild_cache_now():
+    if INVALID_CACHE_ENTRY.index == 0:
+        INVALID_CACHE_ENTRY.index = REBUILD_CACHE_FREQUENCY - 1
+        return True
+    else:
+        INVALID_CACHE_ENTRY.index -= 1
+        return False
+_rebuild_cache_now._always_inline_ = True
 
 @jit.dont_look_inside
 def _fill_cache(pycode, nameindex, map, version_tag, index, w_method=None):
@@ -743,7 +755,12 @@ def LOAD_ATTR_caching(pycode, w_obj, nameindex):
     if entry.is_valid_for_map(map) and entry.w_method is None:
         # everything matches, it's incredibly fast
         return w_obj._mapdict_read_storage(entry.index)
-    return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)
+    #
+    if _rebuild_cache_now():
+        return LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map)
+    else:
+        w_name = pycode.co_names_w[nameindex]
+        return pycode.space.getattr(w_obj, w_name)
 LOAD_ATTR_caching._always_inline_ = True
 
 def LOAD_ATTR_slowpath(pycode, w_obj, nameindex, map):
@@ -807,8 +824,7 @@ def LOOKUP_METHOD_mapdict(f, nameindex, w_obj):
             return True
     return False
 
-def LOOKUP_METHOD_mapdict_fill_cache_method(space, pycode, name, nameindex,
-                                            w_obj, w_type):
+def _LOOKUP_METHOD_mapdict_slow_path(pycode, name, nameindex, w_obj, w_type):
     version_tag = w_type.version_tag()
     if version_tag is None:
         return
@@ -820,13 +836,17 @@ def LOOKUP_METHOD_mapdict_fill_cache_method(space, pycode, name, nameindex,
     # in the class, this time taking care of the result: it can be either a
     # quasi-constant class attribute, or actually a TypeCell --- which we
     # must not cache.  (It should not be None here, but you never know...)
-    assert space.config.objspace.std.withmethodcache
+    assert pycode.space.config.objspace.std.withmethodcache
     _, w_method = w_type._pure_lookup_where_with_method_cache(name,
                                                               version_tag)
     if w_method is None or isinstance(w_method, TypeCell):
         return
     _fill_cache(pycode, nameindex, map, version_tag, -1, w_method)
+_LOOKUP_METHOD_mapdict_slow_path._dont_inline_ = True
 
-# XXX fix me: if a function contains a loop with both LOAD_ATTR and
-# XXX LOOKUP_METHOD on the same attribute name, it keeps trashing and
-# XXX rebuilding the cache
+def LOOKUP_METHOD_mapdict_fill_cache_method(pycode, name, nameindex,
+                                            w_obj, w_type):
+    if _rebuild_cache_now():
+        _LOOKUP_METHOD_mapdict_slow_path(pycode, name, nameindex,
+                                         w_obj, w_type)
+LOOKUP_METHOD_mapdict_fill_cache_method._always_inline_ = True
