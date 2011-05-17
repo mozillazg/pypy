@@ -2,6 +2,12 @@ from pypy.conftest import gettestobjspace, option
 from pypy.objspace.std.test.test_dictmultiobject import FakeSpace, W_DictMultiObject
 from pypy.objspace.std.mapdict import *
 
+def setup_module(mod):
+    # force this value to 1 during testing...
+    from pypy.objspace.std import mapdict
+    mapdict.REBUILD_CACHE_FREQUENCY = 1
+
+
 space = FakeSpace()
 
 class Class(object):
