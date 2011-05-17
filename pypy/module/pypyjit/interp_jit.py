@@ -87,9 +87,9 @@ class __extend__(PyFrame):
             # Python opcode.  Here, to better support JIT compilation of
             # small loops, we decrement it by a possibly smaller constant.
             # We get the maximum 100 when the (unoptimized) trace length
-            # is at least 3200 (a bit randomly).
+            # is at least 6400 (a bit randomly).
             trace_length = r_uint(current_trace_length())
-            decr_by = trace_length // 32
+            decr_by = trace_length // 64
             if decr_by < 1:
                 decr_by = 1
             elif decr_by > 100:    # also if current_trace_length() returned -1
