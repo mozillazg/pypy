@@ -1,5 +1,6 @@
 import weakref
 from pypy.rlib import jit, objectmodel, debug
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rarithmetic import intmask, r_uint
 from pypy.rlib import rerased
 
@@ -718,7 +719,8 @@ INVALID_CACHE_ENTRY = CacheEntry()
 INVALID_CACHE_ENTRY.map_wref = weakref.ref(_invalid_cache_entry_map)
                                  # different from any real map ^^^
 INVALID_CACHE_ENTRY.index = 0
-REBUILD_CACHE_FREQUENCY = 5        # xxx tweak?
+REBUILD_CACHE_DECR = 24        # xxx tweak? corresponds for now to
+REBUILD_CACHE_INCR = 127       # "every 5 or 6 iterations"
 
 
 def init_mapdict_cache(pycode):
@@ -726,11 +728,13 @@ def init_mapdict_cache(pycode):
     pycode._mapdict_caches = [INVALID_CACHE_ENTRY] * num_entries
 
 def _rebuild_cache_now():
-    if INVALID_CACHE_ENTRY.index == 0:
-        INVALID_CACHE_ENTRY.index = REBUILD_CACHE_FREQUENCY - 1
+    if not we_are_translated():    # to get reproductible and testable results
+        return True
+    INVALID_CACHE_ENTRY.index -= REBUILD_CACHE_DECR
+    if INVALID_CACHE_ENTRY.index < 0:
+        INVALID_CACHE_ENTRY.index += REBUILD_CACHE_INCR
         return True
     else:
-        INVALID_CACHE_ENTRY.index -= 1
         return False
 _rebuild_cache_now._always_inline_ = True
 
