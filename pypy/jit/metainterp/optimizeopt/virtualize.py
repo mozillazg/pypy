@@ -336,6 +336,9 @@ class OptVirtualize(optimizer.Optimization):
             elif oopspecindex == EffectInfo.OS_LIST_RESIZE_GE:
                 if self._optimize_CALL_LIST_RESIZE_GE(op):
                     return
+            elif oopspecindex == EffectInfo.OS_LIST_RESIZE_LE:
+                if self._optimize_CALL_LIST_RESIZE_LE(op):
+                    return
         self.emit_operation(op)
 
     def optimize_VIRTUAL_REF(self, op):
@@ -377,7 +380,7 @@ class OptVirtualize(optimizer.Optimization):
         if not self.optimizer.cpu.ts.CONST_NULL.same_constant(objbox):
             seo(ResOperation(rop.SETFIELD_GC, op.getarglist(), None,
                              descr = vrefinfo.descr_forced))
-        
+
         # - set 'virtual_token' to TOKEN_NONE
         args = [op.getarg(0), ConstInt(vrefinfo.TOKEN_NONE)]
         seo(ResOperation(rop.SETFIELD_GC, args, None,
@@ -491,7 +494,7 @@ class OptVirtualize(optimizer.Optimization):
             return True # 0-length arraycopy
         return False
 
-    def _optimize_CALL_LIST_RESIZE_GE(self, op):
+    def _optimize_CALL_LIST_RESIZE(self, op):
         list_value = self.getvalue(op.getarg(1))
         newsize_value = self.getvalue(op.getarg(2))
         newsize_box = self.get_constant_box(op.getarg(2))
@@ -508,6 +511,7 @@ class OptVirtualize(optimizer.Optimization):
                 list_value.setfield(length_descr, newsize_value)
                 return True
         return False
+    _optimize_CALL_LIST_RESIZE_LE = _optimize_CALL_LIST_RESIZE_GE = _optimize_CALL_LIST_RESIZE
 
     def propagate_forward(self, op):
         opnum = op.getopnum()

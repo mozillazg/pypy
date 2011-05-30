@@ -1236,6 +1236,9 @@ class Transformer(object):
     def do_resizable_list__resize_ge(self, op, args, arraydescr, lengthdescr,
                                      itemsdescr, structdescr):
         return self._handle_oopspec_call(op, args, EffectInfo.OS_LIST_RESIZE_GE)
+    def do_resizable_list__resize_le(self, op, args, arraydescr, lengthdescr,
+                                     itemsdescr, structdescr):
+        return self._handle_oopspec_call(op, args, EffectInfo.OS_LIST_RESIZE_LE)
 
 
     # ----------
@@ -1379,10 +1382,10 @@ class Transformer(object):
         assert vinfo is not None
         self.vable_flags[op.args[0]] = op.args[2].value
         return []
-        
+
     # ---------
     # ll_math.sqrt_nonneg()
-    
+
     def _handle_math_sqrt_call(self, op, oopspec_name, args):
         return self._handle_oopspec_call(op, args, EffectInfo.OS_MATH_SQRT,
                                          EffectInfo.EF_PURE)
