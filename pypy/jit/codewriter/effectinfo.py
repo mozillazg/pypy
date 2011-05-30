@@ -75,6 +75,8 @@ class EffectInfo(object):
     #
     OS_MATH_SQRT                = 100
 
+    OS_LIST_RESIZE_GE           = 120
+
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
                 extraeffect=EF_CAN_RAISE,
