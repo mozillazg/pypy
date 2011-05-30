@@ -76,6 +76,7 @@ class EffectInfo(object):
     OS_MATH_SQRT                = 100
 
     OS_LIST_RESIZE_GE           = 120
+    OS_LIST_RESIZE_LE           = 121
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
@@ -92,7 +93,7 @@ class EffectInfo(object):
         result = object.__new__(cls)
         result.readonly_descrs_fields = readonly_descrs_fields
         if extraeffect == EffectInfo.EF_LOOPINVARIANT or \
-           extraeffect == EffectInfo.EF_PURE:            
+           extraeffect == EffectInfo.EF_PURE:
             result.write_descrs_fields = []
             result.write_descrs_arrays = []
         else:

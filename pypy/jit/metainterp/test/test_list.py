@@ -218,6 +218,7 @@ class ListTests:
                 lst += [1]
                 n -= len(lst)
                 s += lst[0]
+                s /= lst.pop()
             return s
         res = self.meta_interp(f, [15], listops=True)
         assert res == f(15)
