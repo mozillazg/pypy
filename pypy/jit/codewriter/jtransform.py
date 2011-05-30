@@ -1233,6 +1233,11 @@ class Transformer(object):
     do_resizable_void_list_getitem_foldable = do_resizable_void_list_getitem
     do_resizable_void_list_setitem = do_resizable_void_list_getitem
 
+    def do_resizable_list__resize_ge(self, op, args, arraydescr, lengthdescr,
+                                     itemsdescr, structdescr):
+        return self._handle_oopspec_call(op, args, EffectInfo.OS_LIST_RESIZE_GE)
+
+
     # ----------
     # Strings and Unicodes.
 

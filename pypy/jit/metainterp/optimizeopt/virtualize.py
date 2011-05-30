@@ -1,11 +1,11 @@
+from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.codewriter.heaptracker import vtable2descr
+from pypy.jit.metainterp.executor import execute
 from pypy.jit.metainterp.history import Const, ConstInt, BoxInt
 from pypy.jit.metainterp.resoperation import rop, ResOperation
-from pypy.jit.metainterp.optimizeutil import _findall, sort_descrs
-from pypy.jit.metainterp.optimizeutil import descrlist_dict
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt import optimizer
-from pypy.jit.metainterp.executor import execute
-from pypy.jit.codewriter.heaptracker import vtable2descr
+from pypy.jit.metainterp.optimizeutil import _findall, sort_descrs, descrlist_dict
+from pypy.rlib.objectmodel import we_are_translated
 
 
 class AbstractVirtualValue(optimizer.OptValue):
@@ -237,6 +237,17 @@ class VArrayValue(AbstractVirtualValue):
         assert isinstance(itemvalue, optimizer.OptValue)
         self._items[index] = itemvalue
 
+    def resize(self, newsize):
+        assert newsize >= 0
+        # The current items up to newsize (if we're growing that's the full
+        # current list), plus as many new items as need (if we're shrinking
+        # that's [self.constvalue] * negative_value, aka an empty list)
+        self._items = self._items[:newsize] + [self.constvalue] * (newsize - len(self._items))
+        # Change source_op, if we are forced it is emitted directly.
+        self.source_op = self.source_op.copy_and_change(
+            self.source_op.getopnum(), args=[ConstInt(newsize)]
+        )
+
     def _really_force(self):
         assert self.source_op is not None
         if not we_are_translated():
@@ -311,6 +322,21 @@ class OptVirtualize(optimizer.Optimization):
         vvalue = VStructValue(self.optimizer, structdescr, box, source_op)
         self.make_equal_to(box, vvalue)
         return vvalue
+
+    def optimize_CALL(self, op):
+        # dispatch based on 'oopspecindex' to a method that handles
+        # specifically the given oopspec call.  For non-oopspec calls,
+        # oopspecindex is just zero.
+        effectinfo = op.getdescr().get_extra_info()
+        if effectinfo is not None:
+            oopspecindex = effectinfo.oopspecindex
+            if oopspecindex == EffectInfo.OS_ARRAYCOPY:
+                if self._optimize_CALL_ARRAYCOPY(op):
+                    return
+            elif oopspecindex == EffectInfo.OS_LIST_RESIZE_GE:
+                if self._optimize_CALL_LIST_RESIZE_GE(op):
+                    return
+        self.emit_operation(op)
 
     def optimize_VIRTUAL_REF(self, op):
         indexbox = op.getarg(1)
@@ -444,6 +470,44 @@ class OptVirtualize(optimizer.Optimization):
         value.ensure_nonnull()
         ###self.heap_op_optimizer.optimize_SETARRAYITEM_GC(op, value, fieldvalue)
         self.emit_operation(op)
+
+    def _optimize_CALL_ARRAYCOPY(self, op):
+        source_value = self.getvalue(op.getarg(1))
+        dest_value = self.getvalue(op.getarg(2))
+        source_start_box = self.get_constant_box(op.getarg(3))
+        dest_start_box = self.get_constant_box(op.getarg(4))
+        length = self.get_constant_box(op.getarg(5))
+        if (source_value.is_virtual() and source_start_box and dest_start_box
+            and length and dest_value.is_virtual()):
+            # XXX optimize the case where dest value is not virtual,
+            #     but we still can avoid a mess
+            source_start = source_start_box.getint()
+            dest_start = dest_start_box.getint()
+            for index in range(length.getint()):
+                val = source_value.getitem(index + source_start)
+                dest_value.setitem(index + dest_start, val)
+            return True
+        if length and length.getint() == 0:
+            return True # 0-length arraycopy
+        return False
+
+    def _optimize_CALL_LIST_RESIZE_GE(self, op):
+        list_value = self.getvalue(op.getarg(1))
+        newsize_value = self.getvalue(op.getarg(2))
+        newsize_box = self.get_constant_box(op.getarg(2))
+
+        if list_value.is_virtual() and newsize_box:
+            # XXX: EVIL HACKS BEGIN HERE
+            length_descr, items_descr = list_value._get_field_descr_list()
+            # XXX: EVIL HACKS END HERE
+            arrayitems = list_value.getfield(items_descr, None)
+            if arrayitems and arrayitems.is_virtual():
+                assert isinstance(arrayitems, VArrayValue)
+                newsize = newsize_box.getint()
+                arrayitems.resize(newsize)
+                list_value.setfield(length_descr, newsize_value)
+                return True
+        return False
 
     def propagate_forward(self, op):
         opnum = op.getopnum()
