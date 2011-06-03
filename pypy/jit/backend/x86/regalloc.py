@@ -326,15 +326,10 @@ class RegAlloc(object):
             self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
         self.assembler.regalloc_perform(op, arglocs, result_loc)
 
-    def PerformLLong(self, op, arglocs, result_loc):
+    def PerformOOPSpecCall(self, op, arglocs, result_loc):
         if not we_are_translated():
             self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
-        self.assembler.regalloc_perform_llong(op, arglocs, result_loc)
-
-    def PerformMath(self, op, arglocs, result_loc):
-        if not we_are_translated():
-            self.assembler.dump('%s <- %s(%s)' % (result_loc, op, arglocs))
-        self.assembler.regalloc_perform_math(op, arglocs, result_loc)
+        self.assembler.regalloc_perform_oopspeccall(op, arglocs, result_loc)
 
     def locs_for_fail(self, guard_op):
         return [self.loc(v) for v in guard_op.getfailargs()]
@@ -699,7 +694,7 @@ class RegAlloc(object):
         args = [op.getarg(1), op.getarg(2)]
         loc1 = self.load_xmm_aligned_16_bytes(args[1])
         loc0 = self.xrm.force_result_in_reg(op.result, args[0], args)
-        self.PerformLLong(op, [loc0, loc1], loc0)
+        self.PerformOOPSpecCall(op, [loc0, loc1], loc0)
         self.xrm.possibly_free_vars(args)
 
     def _consider_llong_eq_ne_xx(self, op):
@@ -713,7 +708,7 @@ class RegAlloc(object):
         loc3 = self.xrm.force_allocate_reg(tmpxvar, args)
         self.xrm.possibly_free_var(tmpxvar)
         loc0 = self.rm.force_allocate_reg(op.result, need_lower_byte=True)
-        self.PerformLLong(op, [loc1, loc2, loc3], loc0)
+        self.PerformOOPSpecCall(op, [loc1, loc2, loc3], loc0)
         self.xrm.possibly_free_vars(args)
 
     def _maybe_consider_llong_lt(self, op):
@@ -728,7 +723,7 @@ class RegAlloc(object):
         assert isinstance(box, BoxFloat)
         loc1 = self.xrm.make_sure_var_in_reg(box)
         loc0 = self.rm.force_allocate_reg(op.result)
-        self.PerformLLong(op, [loc1], loc0)
+        self.PerformOOPSpecCall(op, [loc1], loc0)
         self.xrm.possibly_free_var(box)
         return True
 
@@ -736,7 +731,7 @@ class RegAlloc(object):
         # accept an argument in a xmm register or in the stack
         loc1 = self.xrm.loc(op.getarg(1))
         loc0 = self.rm.force_allocate_reg(op.result)
-        self.PerformLLong(op, [loc1], loc0)
+        self.PerformOOPSpecCall(op, [loc1], loc0)
         self.xrm.possibly_free_var(op.getarg(1))
 
     def _loc_of_const_longlong(self, value64):
@@ -755,19 +750,19 @@ class RegAlloc(object):
             tmpxvar = TempBox()
             loc2 = self.xrm.force_allocate_reg(tmpxvar, [op.result])
             self.xrm.possibly_free_var(tmpxvar)
-        self.PerformLLong(op, [loc1, loc2], loc0)
+        self.PerformOOPSpecCall(op, [loc1, loc2], loc0)
         self.rm.possibly_free_var(box)
 
     def _consider_llong_from_uint(self, op):
         assert IS_X86_32
         loc0 = self.xrm.force_allocate_reg(op.result)
         loc1 = self.rm.make_sure_var_in_reg(op.getarg(1))
-        self.PerformLLong(op, [loc1], loc0)
+        self.PerformOOPSpecCall(op, [loc1], loc0)
         self.rm.possibly_free_vars_for_op(op)
 
     def _consider_math_sqrt(self, op):
         loc0 = self.xrm.force_result_in_reg(op.result, op.getarg(1))
-        self.PerformMath(op, [loc0], loc0)
+        self.PerformOOPSpecCall(op, [loc0], loc0)
         self.xrm.possibly_free_var(op.getarg(1))
 
     def _call(self, op, arglocs, force_store=[], guard_not_forced_op=None):
