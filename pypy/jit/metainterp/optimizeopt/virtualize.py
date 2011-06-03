@@ -501,7 +501,9 @@ class OptVirtualize(optimizer.Optimization):
 
         if list_value.is_virtual() and newsize_box:
             # XXX: EVIL HACKS BEGIN HERE
-            length_descr, items_descr = list_value._get_field_descr_list()
+            lst = list_value._get_field_descr_list()
+            assert len(lst) == 2
+            length_descr, items_descr = lst
             # XXX: EVIL HACKS END HERE
             arrayitems = list_value.getfield(items_descr, None)
             if arrayitems and arrayitems.is_virtual():
@@ -511,7 +513,8 @@ class OptVirtualize(optimizer.Optimization):
                 list_value.setfield(length_descr, newsize_value)
                 return True
         return False
-    _optimize_CALL_LIST_RESIZE_LE = _optimize_CALL_LIST_RESIZE_GE = _optimize_CALL_LIST_RESIZE
+    _optimize_CALL_LIST_RESIZE_LE = _optimize_CALL_LIST_RESIZE
+    _optimize_CALL_LIST_RESIZE_GE = _optimize_CALL_LIST_RESIZE
 
     def propagate_forward(self, op):
         opnum = op.getopnum()
