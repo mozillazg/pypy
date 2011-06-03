@@ -864,15 +864,10 @@ class Assembler386(object):
     def regalloc_perform_discard(self, op, arglocs):
         genop_discard_list[op.getopnum()](self, op, arglocs)
 
-    def regalloc_perform_llong(self, op, arglocs, resloc):
+    def regalloc_perform_oopspeccall(self, op, arglocs, resloc):
         effectinfo = op.getdescr().get_extra_info()
         oopspecindex = effectinfo.oopspecindex
-        genop_llong_list[oopspecindex](self, op, arglocs, resloc)
-        
-    def regalloc_perform_math(self, op, arglocs, resloc):
-        effectinfo = op.getdescr().get_extra_info()
-        oopspecindex = effectinfo.oopspecindex
-        genop_math_list[oopspecindex](self, op, arglocs, resloc)
+        genop_oopspeccall_list[oopspecindex](self, op, arglocs, resloc)
 
     def regalloc_perform_with_guard(self, op, guard_op, faillocs,
                                     arglocs, resloc, current_depths):
@@ -2212,9 +2207,8 @@ class Assembler386(object):
 
 genop_discard_list = [Assembler386.not_implemented_op_discard] * rop._LAST
 genop_list = [Assembler386.not_implemented_op] * rop._LAST
-genop_llong_list = {}
-genop_math_list = {}
 genop_guard_list = [Assembler386.not_implemented_op_guard] * rop._LAST
+genop_oopspeccall_list = {}
 
 for name, value in Assembler386.__dict__.iteritems():
     if name.startswith('genop_discard_'):
@@ -2225,14 +2219,11 @@ for name, value in Assembler386.__dict__.iteritems():
         opname = name[len('genop_guard_'):]
         num = getattr(rop, opname.upper())
         genop_guard_list[num] = value
-    elif name.startswith('genop_llong_'):
-        opname = name[len('genop_llong_'):]
-        num = getattr(EffectInfo, 'OS_LLONG_' + opname.upper())
-        genop_llong_list[num] = value
-    elif name.startswith('genop_math_'):
-        opname = name[len('genop_math_'):]
-        num = getattr(EffectInfo, 'OS_MATH_' + opname.upper())
-        genop_math_list[num] = value
+    elif (name.startswith('genop_llong_') or
+          name.startswith('genop_math_')):
+        opname = name[len('genop_'):]
+        num = getattr(EffectInfo, 'OS_' + opname.upper())
+        genop_oopspeccall_list[num] = value
     elif name.startswith('genop_'):
         opname = name[len('genop_'):]
         num = getattr(rop, opname.upper())
