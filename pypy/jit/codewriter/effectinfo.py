@@ -74,9 +74,8 @@ class EffectInfo(object):
     OS_LLONG_FROM_UINT          = 93
     #
     OS_MATH_SQRT                = 100
-
-    OS_LIST_RESIZE_GE           = 120
-    OS_LIST_RESIZE_LE           = 121
+    OS_LIST_RESIZE_GE           = 101
+    OS_LIST_RESIZE_LE           = 102
 
     def __new__(cls, readonly_descrs_fields,
                 write_descrs_fields, write_descrs_arrays,
