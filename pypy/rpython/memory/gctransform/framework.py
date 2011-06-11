@@ -1009,11 +1009,15 @@ class FrameworkGCTransformer(GCTransformer):
     def gct_gc_walk_stack_roots(self, hop):
         # only available if tealet support is enabled
         assert self.translator.config.translation.tealet
+        # no gc root in the stack around such an llop!
+        assert not self.push_roots(hop)
         hop.genop("direct_call", [self.root_walker.ll_walk_stack_roots_ptr]
                                  + hop.spaceop.args)
 
     def gct_gc_set_stack_roots_count(self, hop):
         assert self.translator.config.translation.tealet
+        # no gc root in the stack around such an llop!
+        assert not self.push_roots(hop)
         if hasattr(self.root_walker, 'set_stack_roots_count_ptr'):
             hop.genop("direct_call",
                       [self.root_walker.set_stack_roots_count_ptr]
