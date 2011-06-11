@@ -483,6 +483,9 @@ LL_OPERATIONS = {
     'gc_dump_rpy_heap'    : LLOp(),
     'gc_typeids_z'        : LLOp(),
 
+    'gc_walk_stack_roots' : LLOp(),        # for tealet support
+    'gc_set_stack_roots_count': LLOp(),    #        "
+
     # ------- JIT & GC interaction, only for some GCs ----------
 
     'gc_adr_of_nursery_free' : LLOp(),
