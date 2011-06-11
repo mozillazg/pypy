@@ -489,6 +489,7 @@ LL_OPERATIONS = {
     # ^^^ returns an address of nursery free pointer, for later modifications
     'gc_adr_of_nursery_top' : LLOp(),
     # ^^^ returns an address of pointer, since it can change at runtime
+    'gc_adr_of_root_stack_base': LLOp(),
     'gc_adr_of_root_stack_top': LLOp(),
     # ^^^ returns the address of gcdata.root_stack_top (for shadowstack only)
 
