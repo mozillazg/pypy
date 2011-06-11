@@ -795,10 +795,15 @@ class FrameworkGCTransformer(GCTransformer):
                              resulttype=llmemory.Address)
         hop.genop('adr_add', [v_gc_adr, c_ofs], resultvar=op.result)
 
+    def gct_gc_adr_of_root_stack_base(self, hop):
+        self._gc_adr_of_root_stack(hop, 'inst_root_stack_base')
+
     def gct_gc_adr_of_root_stack_top(self, hop):
+        self._gc_adr_of_root_stack(hop, 'inst_root_stack_top')
+
+    def _gc_adr_of_root_stack(self, hop, llattr):
         op = hop.spaceop
-        ofs = llmemory.offsetof(self.c_const_gcdata.concretetype.TO,
-                                'inst_root_stack_top')
+        ofs = llmemory.offsetof(self.c_const_gcdata.concretetype.TO, llattr)
         c_ofs = rmodel.inputconst(lltype.Signed, ofs)
         v_gcdata_adr = hop.genop('cast_ptr_to_adr', [self.c_const_gcdata],
                                  resulttype=llmemory.Address)
