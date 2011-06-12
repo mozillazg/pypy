@@ -1423,17 +1423,32 @@ class ShadowStackRootWalker(BaseRootWalker):
             self.collect_stacks_from_other_threads(collect_stack_root)
 
     def need_tealet_support(self, gctransformer, getfn):
-        super(ShadowStackRootWalker, self).need_tealet_support(gctransformer,
-                                                               getfn)
+        assert not gctransformer.translator.config.translation.jit, (
+            "not supported yet: jit + shadowstack + tealet")
+        assert not gctransformer.translator.config.translation.thread, (
+            "not supported yet: thread + shadowstack + tealet")
+        #
+        # We need a custom version of ll_walk_stack_roots because the issue
+        # is that when we try to restore the shadowstack, it initially
+        # contains garbage; and the default ll_walk_stack_roots would skip
+        # the NULL pointers in it.
         gcdata = self.gcdata
+        #
+        def ll_walk_stack_roots(fnptr_stack_root):
+            addr = gcdata.root_stack_base
+            end = gcdata.root_stack_top
+            while addr != end:
+                fnptr_stack_root(addr)
+                addr += sizeofaddr
+        #
+        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+        s_FuncPtr = annmodel.SomePtr(FUNCPTR)
+        self.ll_walk_stack_roots_ptr = getfn(ll_walk_stack_roots,
+                                             [s_FuncPtr], annmodel.s_None)
+        #
         def set_stack_roots_count(count):
             bytes = count * llmemory.sizeof(llmemory.Address)
-            p = gcdata.root_stack_base
-            end = gcdata.root_stack_top = p + bytes
-            INVALID_NONNULL_ADDRESS = llmemory.cast_int_to_adr(8)
-            while p != end:
-                p.address[0] = INVALID_NONNULL_ADDRESS
-                p += llmemory.sizeof(llmemory.Address)
+            gcdata.root_stack_top = gcdata.root_stack_base + bytes
         self.set_stack_roots_count_ptr = getfn(set_stack_roots_count,
                                                [annmodel.SomeInteger()],
                                                annmodel.s_None)
