@@ -22,6 +22,8 @@ def _make_classes(base_class):
 
     class Tealet(base_class):
         lltealet = _tealet_rffi.NULL_TEALET
+        _gc_gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+        _gc_signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
 
         def switch(self):
             _switch(self)
@@ -46,8 +48,6 @@ def _make_classes(base_class):
             _new(self, tealet)
 
     return Tealet, MainTealet
-
-Tealet, MainTealet = _make_classes(object)
 
 ## ------------------------------------------------------------
 ## The code below is implementation details.
@@ -150,9 +150,6 @@ WALKER_PTR   = lltype.Ptr(lltype.Struct('walker',
                                         ('signed_array', SIGNED_ARRAY)))
 walker = lltype.malloc(WALKER_PTR.TO, immortal=True)
 
-Tealet._gc_gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
-Tealet._gc_signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
-
 def _save_shadow_stack():
     llop.gc_save_stack_roots(lltype.Void, walker)
     tealet = switcher.current
@@ -174,3 +171,7 @@ def _restore_shadow_stack():
     walker.gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
     walker.signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
 _restore_shadow_stack._dont_inline_ = True
+
+# ____________________________________________________________
+
+Tealet, MainTealet = _make_classes(object)
