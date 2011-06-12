@@ -11,8 +11,7 @@ eci = ExternalCompilationInfo(
 def llexternal(funcname, args, restype):
     return rffi.llexternal(funcname, args, restype,
                            compilation_info=eci,
-                           sandboxsafe=True, threadsafe=False,
-                           _nowrapper=True)
+                           sandboxsafe=True, _nowrapper=True)
 
 TEALET_P = rffi.COpaquePtr('tealet_t', compilation_info=eci)
 TEALET_RUN_P = lltype.Ptr(lltype.FuncType([TEALET_P, rffi.VOIDP], TEALET_P))
