@@ -75,7 +75,7 @@ def do_switch(tt):
 do_switch._dont_inline_ = True
 
 def do_new(main):
-    MyTealet(main)
+    main.start(MyTealet())
 do_new._dont_inline_ = True
 
 def do(current_tealet_index, x):
