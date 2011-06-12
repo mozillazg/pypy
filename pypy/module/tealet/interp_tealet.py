@@ -32,7 +32,7 @@ def W_Tealet___new__(space, w_subtype, __args__):
     r.space = space
     return space.wrap(r)
 
-def W_Tealet_switch(w_self):
+def W_Tealet_switch(space, w_self):
     self = space.interp_w(W_Tealet, w_self)
     try:
         self.switch()
@@ -55,8 +55,7 @@ def W_MainTealet___new__(space, w_subtype, __args__):
     r.space = space
     return space.wrap(r)
 
-def W_MainTealet_start(w_self, w_tealet):
-    space = self.space
+def W_MainTealet_start(space, w_self, w_tealet):
     self = space.interp_w(W_MainTealet, w_self)
     tealet = space.interp_w(W_Tealet, w_tealet)
     try:
@@ -65,7 +64,7 @@ def W_MainTealet_start(w_self, w_tealet):
         raise wrap_error(space, e)
 
 W_MainTealet.typedef = TypeDef(
-        'MainTealet',
+        'MainTealet', W_Tealet.typedef,
         __module__ = 'tealet',
         __new__ = interp2app(W_MainTealet___new__),
         start = interp2app(W_MainTealet_start),
