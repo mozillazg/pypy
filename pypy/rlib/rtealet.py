@@ -22,7 +22,6 @@ def _make_classes(base_class):
 
     class Tealet(base_class):
         lltealet = _tealet_rffi.NULL_TEALET
-        _ll_saved_stack = None
 
         def switch(self):
             _switch(self)
@@ -58,8 +57,6 @@ Tealet, MainTealet = _make_classes(object)
 class Switcher(object):
     current = None
     target = None
-    count_roots = 0
-    lst = None
     exception = None
 switcher = Switcher()
 
@@ -143,52 +140,37 @@ def _check_exception(r):
         raise e
 
 # ____________________________________________________________
+#
+# Shadow stack saving/restoring.
 
-ROOT_WALKER = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
+GCPTR_ARRAY  = lltype.Ptr(lltype.GcArray(llmemory.GCREF))
+SIGNED_ARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
+WALKER_PTR   = lltype.Ptr(lltype.Struct('walker',
+                                        ('gcptr_array', GCPTR_ARRAY),
+                                        ('signed_array', SIGNED_ARRAY)))
+walker = lltype.malloc(WALKER_PTR.TO, immortal=True)
 
-def _count_roots_walker(root):
-    switcher.count_roots += 1
-
-def _save_root_walker(root):
-    i = switcher.count_roots
-    switcher.count_roots = i + 1
-    gcobj = llmemory.cast_adr_to_ptr(root.address[0], llmemory.GCREF)
-    switcher.lst[i] = gcobj
+Tealet._gc_gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+Tealet._gc_signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
 
 def _save_shadow_stack():
-    switcher.count_roots = 0
-    fn = llhelper(ROOT_WALKER, _count_roots_walker)
-    llop.gc_walk_stack_roots(lltype.Void, fn)
-    n = switcher.count_roots
-    #
+    llop.gc_save_stack_roots(lltype.Void, walker)
     tealet = switcher.current
-    ll_assert(tealet._ll_saved_stack is None, "tealet stack mismatch (save)")
-    tealet._ll_saved_stack = [lltype.nullptr(llmemory.GCREF.TO)] * n
-    switcher.count_roots = 0
-    switcher.lst = tealet._ll_saved_stack
-    fn = llhelper(ROOT_WALKER, _save_root_walker)
-    llop.gc_walk_stack_roots(lltype.Void, fn)
-    ll_assert(n == switcher.count_roots, "tealet stack mismatch (count1)")
-    switcher.lst = None
+    ll_assert(not tealet._gc_gcptr_array, "tealet stack mismatch (save)")
+    tealet._gc_gcptr_array  = walker.gcptr_array
+    tealet._gc_signed_array = walker.signed_array
+    walker.gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+    walker.signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
 _save_shadow_stack._dont_inline_ = True
-
-def _restore_root_walker(root):
-    i = switcher.count_roots
-    switcher.count_roots = i + 1
-    gcobj = switcher.lst[i]
-    root.address[0] = llmemory.cast_ptr_to_adr(gcobj)
 
 def _restore_shadow_stack():
     tealet = switcher.target
-    lst = tealet._ll_saved_stack
-    ll_assert(lst is not None, "tealet stack mismatch (restore)")
-    tealet._ll_saved_stack = None
-    switcher.count_roots = 0
-    switcher.lst = lst
-    n = len(lst)
-    fn = llhelper(ROOT_WALKER, _restore_root_walker)
-    llop.gc_set_stack_roots_count(lltype.Void, n)
-    llop.gc_walk_stack_roots(lltype.Void, fn)
-    ll_assert(n == switcher.count_roots, "tealet stack mismatch (count2)")
-    switcher.lst = None
+    ll_assert(bool(tealet._gc_gcptr_array), "tealet stack mismatch (restore)")
+    walker.gcptr_array  = tealet._gc_gcptr_array
+    walker.signed_array = tealet._gc_signed_array
+    tealet._gc_gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+    tealet._gc_signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
+    llop.gc_restore_stack_roots(lltype.Void, walker)
+    walker.gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+    walker.signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
 _restore_shadow_stack._dont_inline_ = True

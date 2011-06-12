@@ -1006,22 +1006,21 @@ class FrameworkGCTransformer(GCTransformer):
             hop.genop("direct_call", [self.root_walker.thread_after_fork_ptr]
                                      + hop.spaceop.args)
 
-    def gct_gc_walk_stack_roots(self, hop):
+    def gct_gc_save_stack_roots(self, hop):
         # only available if tealet support is enabled
         assert self.translator.config.translation.tealet
         # no gc root in the stack around such an llop!
         assert not self.push_roots(hop)
-        hop.genop("direct_call", [self.root_walker.ll_walk_stack_roots_ptr]
+        hop.genop("direct_call", [self.root_walker.ll_save_stack_roots_ptr]
                                  + hop.spaceop.args)
 
-    def gct_gc_set_stack_roots_count(self, hop):
+    def gct_gc_restore_stack_roots(self, hop):
+        # only available if tealet support is enabled
         assert self.translator.config.translation.tealet
         # no gc root in the stack around such an llop!
         assert not self.push_roots(hop)
-        if hasattr(self.root_walker, 'set_stack_roots_count_ptr'):
-            hop.genop("direct_call",
-                      [self.root_walker.set_stack_roots_count_ptr]
-                      + hop.spaceop.args)
+        hop.genop("direct_call", [self.root_walker.ll_restore_stack_roots_ptr]
+                                 + hop.spaceop.args)
 
     def gct_gc_get_type_info_group(self, hop):
         return hop.cast_result(self.c_type_info_group)
@@ -1347,20 +1346,8 @@ class BaseRootWalker(object):
             self.__class__.__name__,))
 
     def need_tealet_support(self, gctransformer, getfn):
-        #
-        def ll_walk_stack_roots(fnptr_stack_root):
-            gcdata = self.gcdata
-            gcdata._fnptr_stack_root = fnptr_stack_root
-            self.walk_stack_roots(_ll_collect)
-        #
-        def _ll_collect(gc, root):
-            gcdata = self.gcdata
-            gcdata._fnptr_stack_root(root)
-        #
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
-        s_FuncPtr = annmodel.SomePtr(FUNCPTR)
-        self.ll_walk_stack_roots_ptr = getfn(ll_walk_stack_roots,
-                                             [s_FuncPtr], annmodel.s_None)
+        raise Exception("%s does not support tealets" % (
+            self.__class__.__name__,))
 
 
 class ShadowStackRootWalker(BaseRootWalker):
@@ -1424,34 +1411,45 @@ class ShadowStackRootWalker(BaseRootWalker):
 
     def need_tealet_support(self, gctransformer, getfn):
         assert not gctransformer.translator.config.translation.jit, (
-            "not supported yet: jit + shadowstack + tealet")
+            "XXX in-progress: tealet + jit + shadowstack")
         assert not gctransformer.translator.config.translation.thread, (
-            "not supported yet: thread + shadowstack + tealet")
+            "XXX check me: tealet + thread + shadowstack")
         #
-        # We need a custom version of ll_walk_stack_roots because the issue
-        # is that when we try to restore the shadowstack, it initially
-        # contains garbage; and the default ll_walk_stack_roots would skip
-        # the NULL pointers in it.
+        GCPTR_ARRAY  = lltype.Ptr(lltype.GcArray(llmemory.GCREF))
+        SIGNED_ARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
+        WALKER_PTR   = lltype.Ptr(lltype.Struct('walker',
+                           ('gcptr_array', GCPTR_ARRAY),
+                           ('signed_array', SIGNED_ARRAY)))
         gcdata = self.gcdata
         #
-        def ll_walk_stack_roots(fnptr_stack_root):
+        def ll_save_stack_roots(walker):
             addr = gcdata.root_stack_base
             end = gcdata.root_stack_top
-            while addr != end:
-                fnptr_stack_root(addr)
-                addr += sizeofaddr
+            count = (end - addr) // sizeofaddr
+            walker.gcptr_array = array = lltype.malloc(GCPTR_ARRAY.TO, count)
+            n = 0
+            while n < len(array):
+                array[n] = llmemory.cast_adr_to_ptr(addr.address[n],
+                                                    llmemory.GCREF)
+                n += 1
         #
-        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.Address], lltype.Void))
-        s_FuncPtr = annmodel.SomePtr(FUNCPTR)
-        self.ll_walk_stack_roots_ptr = getfn(ll_walk_stack_roots,
-                                             [s_FuncPtr], annmodel.s_None)
+        def ll_restore_stack_roots(walker):
+            array = walker.gcptr_array
+            addr = gcdata.root_stack_base
+            gcdata.root_stack_top = addr + len(array) * sizeofaddr
+            n = 0
+            while n < len(array):
+                addr.address[n] = llmemory.cast_ptr_to_adr(array[n])
+                n += 1
         #
-        def set_stack_roots_count(count):
-            bytes = count * llmemory.sizeof(llmemory.Address)
-            gcdata.root_stack_top = gcdata.root_stack_base + bytes
-        self.set_stack_roots_count_ptr = getfn(set_stack_roots_count,
-                                               [annmodel.SomeInteger()],
-                                               annmodel.s_None)
+        self.ll_save_stack_roots_ptr = getfn(ll_save_stack_roots,
+                                             [annmodel.SomePtr(WALKER_PTR)],
+                                             annmodel.s_None,
+                                             minimal_transform=False)
+        self.ll_restore_stack_roots_ptr = getfn(ll_restore_stack_roots,
+                                                [annmodel.SomePtr(WALKER_PTR)],
+                                                annmodel.s_None,
+                                                minimal_transform=False)
 
     def need_thread_support(self, gctransformer, getfn):
         from pypy.module.thread import ll_thread    # xxx fish
