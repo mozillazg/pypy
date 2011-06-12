@@ -14,34 +14,41 @@ from pypy.rlib import _tealet_rffi
 
 
 class TealetError(Exception):
-    pass
+    def __init__(self, msg):
+        self.msg = msg
 
 
-class Tealet(object):
-    _ll_saved_stack = None
+def _make_classes(base_class):
 
-    def __init__(self, main):
-        assert isinstance(main, MainTealet)
-        self.main = main
-        _new(main, self)
+    class Tealet(base_class):
+        lltealet = _tealet_rffi.NULL_TEALET
+        _ll_saved_stack = None
 
-    def switch(self):
-        _switch(self)
+        def switch(self):
+            _switch(self)
 
-    def run(self):
-        raise NotImplementedError
+        def run(self):
+            raise NotImplementedError
 
+    class MainTealet(Tealet):
+        def __init__(self):
+            assert we_are_translated(), "no support for untranslated runs yet"
+            self.main = self
+            self.current = self
+            self.lltealet = _tealet_rffi.tealet_initialize(_tealet_rffi.NULL)
 
-class MainTealet(Tealet):
-    def __init__(self):
-        assert we_are_translated(), "no support for untranslated runs yet"
-        self.main = self
-        self.current = self
-        self.lltealet = _tealet_rffi.tealet_initialize(_tealet_rffi.NULL)
+        def __del__(self):
+            _tealet_rffi.tealet_finalize(self.lltealet)
 
-    def __del__(self):
-        _tealet_rffi.tealet_finalize(self.lltealet)
+        def start(self, tealet):
+            if tealet.lltealet:
+                raise TealetError("tealet already running")
+            tealet.main = self
+            _new(self, tealet)
 
+    return Tealet, MainTealet
+
+Tealet, MainTealet = _make_classes(object)
 
 ## ------------------------------------------------------------
 ## The code below is implementation details.
@@ -123,12 +130,13 @@ def _switch_critical(lltarget):
 _switch_critical._dont_inline_ = True
 
 def _check_exception(r):
-    if rffi.cast(lltype.Signed, r) != 0:
+    r = rffi.cast(lltype.Signed, r)
+    if r != 0:
         # rare case: tealet.c complains, e.g. out of memory.  I think that
         # in this case it's not really possible to have 'exception != None'.
         # Clean it anyway to avoid it showing up at a random time later.
         switcher.exception = None
-        raise TealetError
+        raise TealetError("internal error %d" % r)
     e = switcher.exception
     if e is not None:
         switcher.exception = None
