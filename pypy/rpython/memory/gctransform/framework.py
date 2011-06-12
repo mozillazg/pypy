@@ -1428,7 +1428,12 @@ class ShadowStackRootWalker(BaseRootWalker):
         gcdata = self.gcdata
         def set_stack_roots_count(count):
             bytes = count * llmemory.sizeof(llmemory.Address)
-            gcdata.root_stack_top = gcdata.root_stack_base + bytes
+            p = gcdata.root_stack_base
+            end = gcdata.root_stack_top = p + bytes
+            INVALID_NONNULL_ADDRESS = llmemory.cast_int_to_adr(8)
+            while p != end:
+                p.address[0] = INVALID_NONNULL_ADDRESS
+                p += llmemory.sizeof(llmemory.Address)
         self.set_stack_roots_count_ptr = getfn(set_stack_roots_count,
                                                [annmodel.SomeInteger()],
                                                annmodel.s_None)
