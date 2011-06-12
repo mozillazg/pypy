@@ -1,0 +1,9 @@
+The C sources for tealets are a direct copy of (one of) the following
+places.  In case they need updating, please consider changing them there
+instead.
+
+    From Armin Rigo's user repository:
+    http://bitbucket.org/arigo/arigo (directory hack/pypy-hack/tealet)
+
+    From Kristján Valur Jónsson's repository:
+    http://bitbucket.org/krisvale/public
