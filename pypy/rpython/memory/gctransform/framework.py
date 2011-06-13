@@ -1419,16 +1419,17 @@ class ShadowStackRootWalker(BaseRootWalker):
         def ll_save_stack_roots(walker):
             if jit_save_stack_roots is not None:
                 jit_save_stack_roots(walker, gcdata)
-                return
-            addr = gcdata.root_stack_base
-            end = gcdata.root_stack_top
-            count = (end - addr) // sizeofaddr
-            walker.gcptr_array = array = lltype.malloc(GCPTR_ARRAY.TO, count)
-            n = 0
-            while n < len(array):
-                array[n] = llmemory.cast_adr_to_ptr(addr.address[n],
-                                                    llmemory.GCREF)
-                n += 1
+            else:
+                addr = gcdata.root_stack_base
+                end = gcdata.root_stack_top
+                count = (end - addr) // sizeofaddr
+                walker.gcptr_array = array = lltype.malloc(GCPTR_ARRAY.TO,count)
+                n = 0
+                while n < len(array):
+                    array[n] = llmemory.cast_adr_to_ptr(addr.address[n],
+                                                        llmemory.GCREF)
+                    n += 1
+            gcdata.root_stack_top = gcdata.root_stack_base   # make it empty
         #
         def ll_restore_stack_roots(walker):
             if jit_restore_stack_roots is not None:
