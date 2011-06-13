@@ -152,13 +152,8 @@ class FrameworkGCTransformer(GCTransformer):
             # for regular translation: pick the GC from the config
             GCClass, GC_PARAMS = choose_gc_from_config(translator.config)
 
-        self.root_stack_jit_hook = None
         if hasattr(translator, '_jit2gc'):
             self.layoutbuilder = translator._jit2gc['layoutbuilder']
-            try:
-                self.root_stack_jit_hook = translator._jit2gc['rootstackhook']
-            except KeyError:
-                pass
         else:
             self.layoutbuilder = TransformerLayoutBuilder(translator, GCClass)
         self.layoutbuilder.transformer = self
@@ -1372,8 +1367,10 @@ class ShadowStackRootWalker(BaseRootWalker):
             return top
         self.decr_stack = decr_stack
 
-        self.rootstackhook = gctransformer.root_stack_jit_hook
-        if self.rootstackhook is None:
+        self.jit2gc = getattr(gctransformer.translator, '_jit2gc', {})
+        try:
+            self.rootstackhook = self.jit2gc['rootstackhook']
+        except KeyError:
             def collect_stack_root(callback, gc, addr):
                 if gc.points_to_valid_gc_object(addr):
                     callback(gc, addr)
@@ -1410,19 +1407,19 @@ class ShadowStackRootWalker(BaseRootWalker):
             self.collect_stacks_from_other_threads(collect_stack_root)
 
     def need_tealet_support(self, gctransformer, getfn):
-        assert not gctransformer.translator.config.translation.jit, (
-            "XXX in-progress: tealet + jit + shadowstack")
-        assert not gctransformer.translator.config.translation.thread, (
-            "XXX check me: tealet + thread + shadowstack")
-        #
         GCPTR_ARRAY  = lltype.Ptr(lltype.GcArray(llmemory.GCREF))
         SIGNED_ARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
         WALKER_PTR   = lltype.Ptr(lltype.Struct('walker',
                            ('gcptr_array', GCPTR_ARRAY),
                            ('signed_array', SIGNED_ARRAY)))
         gcdata = self.gcdata
+        jit_save_stack_roots = self.jit2gc.get('savestackhook')
+        jit_restore_stack_roots = self.jit2gc.get('restorestackhook')
         #
         def ll_save_stack_roots(walker):
+            if jit_save_stack_roots is not None:
+                jit_save_stack_roots(walker, gcdata)
+                return
             addr = gcdata.root_stack_base
             end = gcdata.root_stack_top
             count = (end - addr) // sizeofaddr
@@ -1434,6 +1431,9 @@ class ShadowStackRootWalker(BaseRootWalker):
                 n += 1
         #
         def ll_restore_stack_roots(walker):
+            if jit_restore_stack_roots is not None:
+                jit_restore_stack_roots(walker, gcdata)
+                return
             array = walker.gcptr_array
             addr = gcdata.root_stack_base
             gcdata.root_stack_top = addr + len(array) * sizeofaddr

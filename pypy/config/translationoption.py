@@ -32,8 +32,7 @@ translation_optiondescription = OptionDescription(
                default=False, cmdline="--tealet",
                requires=[("translation.type_system", "lltype"),
                          ("translation.gctransformer", "framework"),
-                         ("translation.gcrootfinder", "shadowstack"),
-                         ("translation.thread", False)]),    # XXX temporary
+                         ("translation.gcrootfinder", "shadowstack")]),
     ChoiceOption("type_system", "Type system to use when RTyping",
                  ["lltype", "ootype"], cmdline=None, default="lltype",
                  requires={
