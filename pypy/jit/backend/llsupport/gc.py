@@ -1,7 +1,7 @@
 import os
 from pypy.rlib import rgc
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.debug import fatalerror
+from pypy.rlib.debug import fatalerror, ll_assert
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem import llgroup
@@ -365,12 +365,24 @@ class GcRootMap_shadowstack(object):
         self.force_index_ofs = gcdescr.force_index_ofs
 
     def add_jit2gc_hooks(self, jit2gc):
+        INTARRAYPTR = self.INTARRAYPTR
+        def read(addr):
+            return rffi.cast(INTARRAYPTR, addr)[0]
+        def write(addr, newvalue):
+            rffi.cast(INTARRAYPTR, addr)[0] = newvalue
+        # for tests:
+        read  = jit2gc.get('test_read',  read)
+        write = jit2gc.get('test_write', write)
+        cast_int_to_adr = jit2gc.get('test_i2a', llmemory.cast_int_to_adr)
+        cast_int_to_ptr = jit2gc.get('test_i2p', lltype.cast_int_to_ptr)
+        cast_ptr_to_int = jit2gc.get('test_p2i', lltype.cast_ptr_to_int)
         #
-        def collect_jit_stack_root(callback, gc, addr):
-            if addr.signed[0] != GcRootMap_shadowstack.MARKER:
+        def collect_jit_stack_root(callback, gc, realaddr):
+            addr = rffi.cast(lltype.Signed, realaddr)
+            if read(addr) != GcRootMap_shadowstack.MARKER:
                 # common case
-                if gc.points_to_valid_gc_object(addr):
-                    callback(gc, addr)
+                if gc.points_to_valid_gc_object(realaddr):
+                    callback(gc, realaddr)
                 return WORD
             else:
                 # case of a MARKER followed by an assembler stack frame
@@ -378,9 +390,8 @@ class GcRootMap_shadowstack(object):
                 return 2 * WORD
         #
         def follow_stack_frame_of_assembler(callback, gc, addr):
-            frame_addr = addr.signed[1]
-            addr = llmemory.cast_int_to_adr(frame_addr + self.force_index_ofs)
-            force_index = addr.signed[0]
+            frame_addr = read(addr + WORD)
+            force_index = read(frame_addr + self.force_index_ofs)
             if force_index < 0:
                 force_index = ~force_index
             callshape = self._callshapes[force_index]
@@ -389,13 +400,145 @@ class GcRootMap_shadowstack(object):
                 offset = rffi.cast(lltype.Signed, callshape[n])
                 if offset == 0:
                     break
-                addr = llmemory.cast_int_to_adr(frame_addr + offset)
+                addr = cast_int_to_adr(frame_addr + offset)
                 if gc.points_to_valid_gc_object(addr):
                     callback(gc, addr)
                 n += 1
         #
+        # ---------- tealet support ----------
+        GCPTR_ARRAY  = lltype.Ptr(lltype.GcArray(llmemory.GCREF))
+        SIGNED_ARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
+        #
+        def save_roots(walker, gcdata):
+            gcptr_count = 0
+            signed_count = 0
+            gcptr_array = walker.gcptr_array
+            #
+            rsbase = gcdata.root_stack_base
+            rsend = gcdata.root_stack_top
+            rsaddr = rsbase
+            while rsaddr != rsend:
+                if read(rsaddr) != GcRootMap_shadowstack.MARKER:
+                    # common case
+                    if gcptr_array:
+                        gcobj = cast_int_to_ptr(llmemory.GCREF, read(rsaddr))
+                        gcptr_array[gcptr_count] = gcobj
+                    gcptr_count += 1
+                    rsaddr += WORD
+                else:
+                    # case of a MARKER followed by an assembler stack frame
+                    frame_addr = read(rsaddr + WORD)
+                    force_index = read(frame_addr + self.force_index_ofs)
+                    if force_index < 0:
+                        force_index = ~force_index
+                    if walker.signed_array:
+                        walker.signed_array[signed_count] = rsaddr - rsbase
+                        walker.signed_array[signed_count+1] = frame_addr
+                        walker.signed_array[signed_count+2] = force_index
+                        # NB. saving force_index is not necessary, but
+                        # we do it anyway because it costs little and would
+                        # find bugs
+                    signed_count += 3
+                    callshape = self._callshapes[force_index]
+                    n = 0
+                    while True:
+                        offset = rffi.cast(lltype.Signed, callshape[n])
+                        if offset == 0:
+                            break
+                        if gcptr_array:
+                            addr = cast_int_to_adr(frame_addr + offset)
+                            gcobj = cast_int_to_ptr(llmemory.GCREF, read(addr))
+                            gcptr_array[gcptr_count] = gcobj
+                        gcptr_count += 1
+                        n += 1
+                    rsaddr += 2 * WORD
+            #
+            if walker.signed_array:
+                walker.signed_array[signed_count] = rsend - rsbase
+            signed_count += 1
+            #
+            if not walker.gcptr_array:
+                walker.gcptr_array = lltype.malloc(GCPTR_ARRAY.TO, gcptr_count)
+            if not walker.signed_array:
+                walker.signed_array = lltype.malloc(SIGNED_ARRAY.TO,
+                                                    signed_count)
+            ll_assert(signed_count == len(walker.signed_array),
+                      "varying stack signed count")
+            ll_assert(gcptr_count == len(walker.gcptr_array),
+                      "varying stack gcptr count")
+        #
+        def jit_save_stack_roots(walker, gcdata):
+            """Save the stack roots from the shadowstack piece of memory,
+            including the stack roots that are in assembler-generated code
+            with a MARKER followed by the address of the assembler frame.
+            Puts all this information in two arrays: walker.gcptr_array and
+            walker.signed_array.
+            """
+            walker.gcptr_array  = lltype.nullptr(GCPTR_ARRAY.TO)
+            walker.signed_array = lltype.nullptr(SIGNED_ARRAY.TO)
+            save_roots(walker, gcdata)      # at first, just to count
+            save_roots(walker, gcdata)      # this time, really save
+        #
+        def jit_restore_stack_roots(walker, gcdata):
+            """Restore the stack roots into the shadowstack piece of memory
+            and into the assembler frames.
+            """
+            gcptr_count = 0
+            signed_count = 0
+            gcptr_array = walker.gcptr_array
+            #
+            rsbase = gcdata.root_stack_base
+            rsaddr = rsbase
+            rsmarker = rsbase + walker.signed_array[signed_count]
+            signed_count += 1
+            while True:
+                if rsaddr != rsmarker:
+                    # common case
+                    gcobj = gcptr_array[gcptr_count]
+                    write(rsaddr, cast_ptr_to_int(gcobj))
+                    gcptr_count += 1
+                    rsaddr += WORD
+                elif signed_count == len(walker.signed_array):
+                    # done
+                    break
+                else:
+                    # case of a MARKER followed by an assembler stack frame
+                    frame_addr = walker.signed_array[signed_count]
+                    write(rsaddr,        GcRootMap_shadowstack.MARKER)
+                    write(rsaddr + WORD, frame_addr)
+                    rsaddr += 2 * WORD
+                    #
+                    force_index = read(frame_addr + self.force_index_ofs)
+                    if force_index < 0:
+                        force_index = ~force_index
+                    ll_assert(force_index ==
+                              walker.signed_array[signed_count+1],
+                              "restoring bogus stack force_index")
+                    callshape = self._callshapes[force_index]
+                    n = 0
+                    while True:
+                        offset = rffi.cast(lltype.Signed, callshape[n])
+                        if offset == 0:
+                            break
+                        addr = cast_int_to_adr(frame_addr + offset)
+                        gcobj = gcptr_array[gcptr_count]
+                        write(addr, cast_ptr_to_int(gcobj))
+                        gcptr_count += 1
+                        n += 1
+                    #
+                    rsmarker = rsbase + walker.signed_array[signed_count+2]
+                    signed_count += 3
+            #
+            gcdata.root_stack_top = rsmarker
+            ll_assert(signed_count == len(walker.signed_array),
+                      "restoring bogus stack signed count")
+            ll_assert(gcptr_count == len(walker.gcptr_array),
+                      "restoring bogus stack gcptr count")
+        #
         jit2gc.update({
             'rootstackhook': collect_jit_stack_root,
+            'savestackhook': jit_save_stack_roots,
+            'restorestackhook': jit_restore_stack_roots,
             })
 
     def initialize(self):

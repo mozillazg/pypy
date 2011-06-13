@@ -1,4 +1,4 @@
-import random
+import sys, random
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
@@ -240,6 +240,162 @@ class TestGcRootMapShadowStack:
         assert rffi.cast(lltype.Signed, p[0]) == 16
         assert rffi.cast(lltype.Signed, p[1]) == -24
         assert rffi.cast(lltype.Signed, p[2]) == 0
+
+    def build_fake_stack(self):
+        self.gcrootmap = GcRootMap_shadowstack(self.FakeGcDescr())
+        self.gcrootmap.force_index_ofs = 16
+        self.writes = {}
+        #
+        def read_for_tests(addr):
+            assert addr % WORD == 0
+            if 3000 <= addr < 3000+8*WORD:
+                return self.shadowstack[(addr - 3000) // WORD]
+            if 20000 <= addr < 29000:
+                base = (addr // 1000) * 1000
+                return frames[base][addr-base]
+            raise AssertionError(addr)
+        def write_for_tests(addr, newvalue):
+            self.writes[addr] = newvalue
+        def cast_int_to_adr_for_tests(value):
+            return value
+        def cast_int_to_ptr_for_tests(TARGET, value):
+            assert TARGET == llmemory.GCREF
+            return lltype.opaqueptr(TARGET.TO, 'foo', x=value)
+        def cast_ptr_to_int_for_tests(value):
+            assert isinstance(value, int)
+            assert 10000 <= value < 11000 or value == 0
+            return value
+        #
+        self.jit2gc = {'test_read': read_for_tests,
+                       'test_write': write_for_tests,
+                       'test_i2a': cast_int_to_adr_for_tests,
+                       'test_i2p': cast_int_to_ptr_for_tests,
+                       'test_p2i': cast_ptr_to_int_for_tests}
+        self.gcrootmap.add_jit2gc_hooks(self.jit2gc)
+        #
+        def someobj(x):
+            return 10000 + x
+        #
+        frames = {}
+        #
+        def someframe(data, force_index):
+            num = 20000 + len(frames) * 1000
+            data[self.gcrootmap.force_index_ofs] = force_index
+            frames[num] = data
+            return num
+        #
+        MARKER = GcRootMap_shadowstack.MARKER
+        self.gcrootmap._callshapes = {61: (32, 64, 80, 0),
+                                      62: (32, 48, 0)}
+        self.shadowstack = [
+            someobj(42),
+            someobj(43),
+            0,
+            MARKER,
+            someframe({32:someobj(132), 64:someobj(164), 80:someobj(180)}, 61),
+            someobj(44),
+            MARKER,
+            someframe({32: someobj(232), 48: someobj(248)}, ~62),
+            ]
+        #
+        class FakeGC:
+            def points_to_valid_gc_object(self, addr):
+                to = read_for_tests(addr)
+                if to == 0:
+                    return False
+                if 10000 <= to < 11000:
+                    return True
+                raise AssertionError(to)
+        class FakeGCData:
+            pass
+        self.gc = FakeGC()
+        self.gcdata = FakeGCData()
+        self.gcdata.root_stack_base = 3000
+        self.gcdata.root_stack_top  = 3000 + 8*WORD
+
+    def test_jit_stack_root(self):
+        self.build_fake_stack()
+        collect_jit_stack_root = self.jit2gc['rootstackhook']
+        seen = []
+        def callback(gc, addr):
+            assert gc == self.gc
+            seen.append(addr)
+        def f(n):
+            return self.gcdata.root_stack_base + n * WORD
+        res = collect_jit_stack_root(callback, self.gc, f(0))   # someobj
+        assert res == WORD
+        assert seen == [3000]
+        res = collect_jit_stack_root(callback, self.gc, f(1))   # someobj
+        assert res == WORD
+        assert seen == [3000, 3000+WORD]
+        res = collect_jit_stack_root(callback, self.gc, f(2))   # 0
+        assert res == WORD
+        assert seen == [3000, 3000+WORD]
+        res = collect_jit_stack_root(callback, self.gc, f(3))   # MARKER
+        assert res == 2 * WORD
+        assert seen == [3000, 3000+WORD, 20032, 20064, 20080]
+        res = collect_jit_stack_root(callback, self.gc, f(5))   # someobj
+        assert res == WORD
+        assert seen == [3000, 3000+WORD, 20032, 20064, 20080, 3000+5*WORD]
+        res = collect_jit_stack_root(callback, self.gc, f(6))   # MARKER
+        assert res == 2 * WORD
+        assert seen == [3000, 3000+WORD, 20032, 20064, 20080, 3000+5*WORD,
+                        21032, 21048]
+
+    def test_jit_save_stack_roots(self):
+        class Walker:
+            pass
+        self.build_fake_stack()
+        jit_save_stack_roots = self.jit2gc['savestackhook']
+        walker = Walker()
+        jit_save_stack_roots(walker, self.gcdata)
+        assert list(walker.signed_array) == [
+            3 * WORD, 20000, 61,
+            6 * WORD, 21000, 62,
+            8 * WORD]
+        assert [gcref._obj.x for gcref in walker.gcptr_array] == [
+            10042,
+            10043,
+            0,
+            10132, 10164, 10180,
+            10044,
+            10232, 10248]
+
+    def test_jit_restore_stack_roots(self):
+        class Walker:
+            pass
+        self.build_fake_stack()
+        jit_restore_stack_roots = self.jit2gc['restorestackhook']
+        walker = Walker()
+        walker.signed_array = [
+            3 * WORD, 20000, 61,
+            6 * WORD, 21000, 62,
+            8 * WORD]
+        walker.gcptr_array = [
+            10042,
+            10043,
+            0,
+            10132, 10164, 10180,
+            10044,
+            10232, 10248]
+        self.gcdata.root_stack_top = 4444
+        jit_restore_stack_roots(walker, self.gcdata)
+        assert self.gcdata.root_stack_top == 3000 + 8*WORD
+        assert self.writes == {
+            3000 + 0*WORD: 10042,
+            3000 + 1*WORD: 10043,
+            3000 + 2*WORD: 0,
+            3000 + 3*WORD: GcRootMap_shadowstack.MARKER,
+            3000 + 4*WORD: 20000,
+            3000 + 5*WORD: 10044,
+            3000 + 6*WORD: GcRootMap_shadowstack.MARKER,
+            3000 + 7*WORD: 21000,
+            20032: 10132,
+            20064: 10164,
+            20080: 10180,
+            21032: 10232,
+            21048: 10248,
+            }
 
 
 class FakeLLOp(object):
