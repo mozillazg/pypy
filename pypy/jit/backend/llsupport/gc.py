@@ -414,8 +414,8 @@ class GcRootMap_shadowstack(object):
             signed_count = 0
             gcptr_array = walker.gcptr_array
             #
-            rsbase = gcdata.root_stack_base
-            rsend = gcdata.root_stack_top
+            rsbase = rffi.cast(lltype.Signed, gcdata.root_stack_base)
+            rsend = rffi.cast(lltype.Signed, gcdata.root_stack_top)
             rsaddr = rsbase
             while rsaddr != rsend:
                 if read(rsaddr) != GcRootMap_shadowstack.MARKER:
@@ -446,8 +446,8 @@ class GcRootMap_shadowstack(object):
                         if offset == 0:
                             break
                         if gcptr_array:
-                            addr = cast_int_to_adr(frame_addr + offset)
-                            gcobj = cast_int_to_ptr(llmemory.GCREF, read(addr))
+                            obj = read(frame_addr + offset)
+                            gcobj = cast_int_to_ptr(llmemory.GCREF, obj)
                             gcptr_array[gcptr_count] = gcobj
                         gcptr_count += 1
                         n += 1
@@ -487,7 +487,7 @@ class GcRootMap_shadowstack(object):
             signed_count = 0
             gcptr_array = walker.gcptr_array
             #
-            rsbase = gcdata.root_stack_base
+            rsbase = rffi.cast(lltype.Signed, gcdata.root_stack_base)
             rsaddr = rsbase
             rsmarker = rsbase + walker.signed_array[signed_count]
             signed_count += 1
@@ -520,16 +520,15 @@ class GcRootMap_shadowstack(object):
                         offset = rffi.cast(lltype.Signed, callshape[n])
                         if offset == 0:
                             break
-                        addr = cast_int_to_adr(frame_addr + offset)
                         gcobj = gcptr_array[gcptr_count]
-                        write(addr, cast_ptr_to_int(gcobj))
+                        write(frame_addr + offset, cast_ptr_to_int(gcobj))
                         gcptr_count += 1
                         n += 1
                     #
                     rsmarker = rsbase + walker.signed_array[signed_count+2]
                     signed_count += 3
             #
-            gcdata.root_stack_top = rsmarker
+            gcdata.root_stack_top = cast_int_to_adr(rsmarker)
             ll_assert(signed_count == len(walker.signed_array),
                       "restoring bogus stack signed count")
             ll_assert(gcptr_count == len(walker.gcptr_array),
