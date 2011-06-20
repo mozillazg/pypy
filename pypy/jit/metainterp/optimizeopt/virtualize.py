@@ -4,7 +4,7 @@ from pypy.jit.metainterp.executor import execute
 from pypy.jit.metainterp.history import Const, ConstInt, BoxInt
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.optimizeopt import optimizer
-from pypy.jit.metainterp.optimizeutil import _findall, sort_descrs, descrlist_dict
+from pypy.jit.metainterp.optimizeopt.util import _findall, sort_descrs, descrlist_dict
 from pypy.rlib.objectmodel import we_are_translated
 
 
