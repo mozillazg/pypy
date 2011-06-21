@@ -175,7 +175,6 @@ class AppTestNumArray(BaseNumpyAppTest):
         a[2] = 20
         assert s[2] == 20
 
-
     def test_slice_invaidate(self):
         # check that slice shares invalidation list with 
         from numpy import array
