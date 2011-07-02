@@ -9,6 +9,7 @@ from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.unsimplify import copyvar
 from pypy.objspace.flow.model import Block, Link, Constant
 from pypy.objspace.flow.model import checkgraph, mkentrymap
+from pypy.annotation import model as annmodel
 
 
 class ShadowStackRootWalker(BaseRootWalker):
