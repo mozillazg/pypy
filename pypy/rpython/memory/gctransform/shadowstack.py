@@ -7,7 +7,8 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.tool.algo.regalloc import perform_register_allocation
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.unsimplify import copyvar
-from pypy.objspace.flow.model import Block, Link, checkgraph, mkentrymap
+from pypy.objspace.flow.model import Block, Link, Constant
+from pypy.objspace.flow.model import checkgraph, mkentrymap
 
 
 class ShadowStackRootWalker(BaseRootWalker):
@@ -247,20 +248,51 @@ class ShadowStackRootWalker(BaseRootWalker):
         def is_interesting(v):
             return spans.find_rep(v) in interesting_vars
         regalloc = perform_register_allocation(graph, is_interesting)
-        numcolors = max([regalloc.getcolor(v) for v in interesting_vars]) + 1
         #
         # Compute the set of "useless stores", i.e. the Variables in the
         # gc_push_roots that are storing the same value as the one previously
         # loaded from the same index.
         useless_stores = self.compute_useless_stores(gct, graph, spans)
         #
+        # We replace gc_push_roots/gc_pop_roots with individual
+        # operations raw_store/raw_load
+        negnumcolors = 0
+        c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
+        for block in graph.iterblocks():
+            if block.operations == ():
+                continue
+            llops = LowLevelOpList()
+            for op in block.operations:
+                if op.opname not in ("gc_push_roots", "gc_pop_roots"):
+                    llops.append(op)
+                    continue
+                top_addr = llops.genop("direct_call",
+                                       [gct.get_stack_top_ptr],
+                                       resulttype=llmemory.Address)
+                for v in op.args:
+                    if isinstance(v, Constant):
+                        continue
+                    k = ~regalloc.getcolor(v)
+                    negnumcolors = min(negnumcolors, k)
+                    c_k = rmodel.inputconst(lltype.Signed, k)
+                    if op.opname == "gc_push_roots":
+                        if (block, op, v) not in useless_stores:
+                            llops.genop("raw_store", [top_addr, c_type,
+                                                      c_k, v])
+                    else:
+                        v_newaddr = llops.genop("raw_load",
+                                                [top_addr, c_type, c_k],
+                                                resulttype=llmemory.Address)
+                        llops.genop("gc_reload_possibly_moved", [v_newaddr, v])
+            block.operations[:] = llops
+        #
         # Put at the start of the graph: "incr_stack(); fill with zeroes"
         llops = LowLevelOpList()
+        numcolors = -negnumcolors
         c_numcolors = rmodel.inputconst(lltype.Signed, numcolors)
         base_addr = llops.genop("direct_call", [gct.incr_stack_ptr,
                                                 c_numcolors],
                                 resulttype=llmemory.Address)
-        c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
         c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
         for k in range(numcolors):
             c_k = rmodel.inputconst(lltype.Signed, k)
@@ -280,34 +312,6 @@ class ShadowStackRootWalker(BaseRootWalker):
         newexitblock.exits = ()
         block.recloseblock(Link([v_return], newexitblock))
         graph.returnblock = newexitblock
-        #
-        # We replace gc_push_roots/gc_pop_roots with individual
-        # operations raw_store/raw_load
-        for block in graph.iterblocks():
-            if block.operations == ():
-                continue
-            llops = LowLevelOpList()
-            for op in block.operations:
-                if op.opname not in ("gc_push_roots", "gc_pop_roots"):
-                    llops.append(op)
-                    continue
-                top_addr = llops.genop("direct_call",
-                                       [gct.get_stack_top_ptr],
-                                       resulttype=llmemory.Address)
-                for v in op.args:
-                    k = regalloc.getcolor(v) - numcolors
-                    assert -numcolors <= k < 0
-                    c_k = rmodel.inputconst(lltype.Signed, k)
-                    if op.opname == "gc_push_roots":
-                        if (block, op, v) not in useless_stores:
-                            llops.genop("raw_store", [top_addr, c_type,
-                                                      c_k, v])
-                    else:
-                        v_newaddr = llops.genop("raw_load",
-                                                [top_addr, c_type, c_k],
-                                                resulttype=llmemory.Address)
-                        llops.genop("gc_reload_possibly_moved", [v_newaddr, v])
-            block.operations[:] = llops
         #
         checkgraph(graph)
 
