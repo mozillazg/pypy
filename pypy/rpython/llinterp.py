@@ -1018,7 +1018,11 @@ class LLFrame(object):
 
     def op_raw_store(self, addr, typ, offset, value):
         checkadr(addr)
-        assert lltype.typeOf(value) == typ
+        if typ is llmemory.Address:
+            if lltype.typeOf(value) != typ:
+                value = llmemory.cast_ptr_to_adr(value)
+        else:
+            assert lltype.typeOf(value) == typ
         getattr(addr, str(typ).lower())[offset] = value
 
     def op_stack_malloc(self, size): # mmh
