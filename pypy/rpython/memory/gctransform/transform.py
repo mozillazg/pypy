@@ -259,6 +259,8 @@ class BaseGCTransformer(object):
                 else:
                     insert_empty_block(self.translator.annotator, link, llops)
 
+        self.postprocess_graph(graph)
+
         # remove the empty block at the start of the graph, which should
         # still be empty (but let's check)
         if starts_with_empty_block(graph) and inserted_empty_startblock:
@@ -276,6 +278,9 @@ class BaseGCTransformer(object):
         self.pop_alive(v, llops)
         graph.exc_cleanup = (v, list(llops))
         return is_borrowed    # xxx for tests only
+
+    def postprocess_graph(self, graph):
+        pass
 
     def annotate_helper(self, ll_helper, ll_args, ll_result, inline=False):
         assert not self.finished_helpers
