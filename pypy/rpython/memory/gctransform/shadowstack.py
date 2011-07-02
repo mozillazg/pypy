@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.tool.algo.regalloc import perform_register_allocation
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.unsimplify import copyvar
-from pypy.objspace.flow.model import Block, Link, checkgraph
+from pypy.objspace.flow.model import Block, Link, checkgraph, mkentrymap
 
 
 class ShadowStackRootWalker(BaseRootWalker):
@@ -252,7 +252,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         # Compute the set of "useless stores", i.e. the Variables in the
         # gc_push_roots that are storing the same value as the one previously
         # loaded from the same index.
-        #useless_stores = self.compute_useless_stores(graph)
+        useless_stores = self.compute_useless_stores(gct, graph, spans)
         #
         # Put at the start of the graph: "incr_stack(); fill with zeroes"
         llops = LowLevelOpList()
@@ -299,7 +299,9 @@ class ShadowStackRootWalker(BaseRootWalker):
                     assert -numcolors <= k < 0
                     c_k = rmodel.inputconst(lltype.Signed, k)
                     if op.opname == "gc_push_roots":
-                        llops.genop("raw_store", [top_addr, c_type, c_k, v])
+                        if (block, op, v) not in useless_stores:
+                            llops.genop("raw_store", [top_addr, c_type,
+                                                      c_k, v])
                     else:
                         v_newaddr = llops.genop("raw_load",
                                                 [top_addr, c_type, c_k],
@@ -308,3 +310,56 @@ class ShadowStackRootWalker(BaseRootWalker):
             block.operations[:] = llops
         #
         checkgraph(graph)
+
+
+    def compute_useless_stores(self, gct, graph, spans):
+        # A "useless store" is a Variable in a gc_push_roots instruction
+        # that is the "same" one, in all paths, as the one loaded by a
+        # previous gc_pop_roots.  Two variables v and w are the "same"
+        # if spans.find_rep(v) is spans.find_rep(w).
+        entrymap = mkentrymap(graph)
+        #
+        def enumerate_previous_gc_pop_roots(block, index):
+            result = []
+            seen = set()
+            pending = [(block, index)]
+            while pending:
+                block, index = pending.pop()
+                for i in range(index-1, -1, -1):
+                    if block.operations[i].opname == 'gc_pop_roots':
+                        # found gc_pop_roots, record it and stop
+                        result.append(block.operations[i])
+                        break
+                else:
+                    # find all blocks that go into this one
+                    if block is graph.startblock:
+                        return None
+                    for link in entrymap[block]:
+                        prevblock = link.prevblock
+                        if prevblock in seen:
+                            continue
+                        seen.add(prevblock)
+                        pending.append((prevblock, len(prevblock.operations)))
+            return result
+        #
+        useless = {}
+        for block in graph.iterblocks():
+            for i, op in enumerate(block.operations):
+                if op.opname == 'gc_push_roots':
+                    result = enumerate_previous_gc_pop_roots(block, i)
+                    if not result:
+                        continue
+                    for original_v in op.args:
+                        v = spans.find_rep(original_v)
+                        # check if 'v' is in all prevop.args
+                        for prevop in result:
+                            for w in prevop.args:
+                                if spans.find_rep(w) is v:
+                                    break    # found 'v' in this prevop.args
+                            else:
+                                break   # did not find 'v' in this prevop.args
+                        else:
+                            # yes, found 'v' in each prevop.args -> useless
+                            useless[block, op, original_v] = True
+                            gct.num_raw_store_avoided += 1
+        return useless

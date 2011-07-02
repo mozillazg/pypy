@@ -188,6 +188,7 @@ class FrameworkGCTransformer(GCTransformer):
         gcdata.set_query_functions(gcdata.gc)
         gcdata.gc.set_root_walker(root_walker)
         self.num_pushs = 0
+        self.num_raw_store_avoided = 0
         self.write_barrier_calls = 0
         self.write_barrier_from_array_calls = 0
 
@@ -570,6 +571,9 @@ class FrameworkGCTransformer(GCTransformer):
         log.info("assigned %s typeids" % (len(group.members), ))
         log.info("added %s push/pop stack root instructions" % (
                      self.num_pushs, ))
+        if self.num_raw_store_avoided:
+            log.info("avoided %s repeated raw_stores" % (
+                self.num_raw_store_avoided,))
         if self.write_barrier_ptr:
             log.info("inserted %s write barrier calls" % (
                          self.write_barrier_calls, ))
