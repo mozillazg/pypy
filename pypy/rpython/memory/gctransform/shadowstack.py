@@ -354,6 +354,8 @@ class ShadowStackRootWalker(BaseRootWalker):
                     if not result:
                         continue
                     for original_v in op.args:
+                        if isinstance(original_v, Constant):
+                            continue
                         v = spans.find_rep(original_v)
                         # check if 'v' is in all prevop.args
                         for prevop in result:
