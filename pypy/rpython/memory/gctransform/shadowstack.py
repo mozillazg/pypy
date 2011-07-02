@@ -252,7 +252,8 @@ class ShadowStackRootWalker(BaseRootWalker):
         # Compute the set of "useless stores", i.e. the Variables in the
         # gc_push_roots that are storing the same value as the one previously
         # loaded from the same index.
-        useless_stores = self.compute_useless_stores(gct, graph, spans)
+        useless_stores = self.compute_useless_stores(gct, graph, spans,
+                                                     regalloc)
         #
         # We replace gc_push_roots/gc_pop_roots with individual
         # operations raw_store/raw_load
@@ -318,7 +319,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         checkgraph(graph)
 
 
-    def compute_useless_stores(self, gct, graph, spans):
+    def compute_useless_stores(self, gct, graph, spans, regalloc):
         # A "useless store" is a Variable in a gc_push_roots instruction
         # that is the "same" one, in all paths, as the one loaded by a
         # previous gc_pop_roots.  Two variables v and w are the "same"
@@ -355,19 +356,23 @@ class ShadowStackRootWalker(BaseRootWalker):
                     result = enumerate_previous_gc_pop_roots(block, i)
                     if not result:
                         continue
-                    for original_v in op.args:
-                        if isinstance(original_v, Constant):
+                    for v in op.args:
+                        if isinstance(v, Constant):
                             continue
-                        v = spans.find_rep(original_v)
+                        vrep = spans.find_rep(v)
                         # check if 'v' is in all prevop.args
                         for prevop in result:
                             for w in prevop.args:
-                                if spans.find_rep(w) is v:
-                                    break    # found 'v' in this prevop.args
+                                # if we find 'v' in this prevop.args, we
+                                # can reuse it if it maps to the same index
+                                if (spans.find_rep(w) is vrep
+                                    and regalloc.getcolor(v) ==
+                                        regalloc.getcolor(w)):
+                                    break
                             else:
                                 break   # did not find 'v' in this prevop.args
                         else:
-                            # yes, found 'v' in each prevop.args -> useless
-                            useless[block, op, original_v] = True
+                            # yes, found 'v' in each prevop.args.
+                            useless[block, op, v] = True
                             gct.num_raw_store_avoided += 1
         return useless
