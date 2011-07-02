@@ -290,13 +290,15 @@ class ShadowStackRootWalker(BaseRootWalker):
         llops = LowLevelOpList()
         numcolors = -negnumcolors
         c_numcolors = rmodel.inputconst(lltype.Signed, numcolors)
-        base_addr = llops.genop("direct_call", [gct.incr_stack_ptr,
-                                                c_numcolors],
-                                resulttype=llmemory.Address)
+        llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
+                    resulttype=llmemory.Address)
+        top_addr = llops.genop("direct_call",
+                               [gct.get_stack_top_ptr],
+                               resulttype=llmemory.Address)
         c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
         for k in range(numcolors):
-            c_k = rmodel.inputconst(lltype.Signed, k)
-            llops.genop("raw_store", [base_addr, c_type, c_k, c_null])
+            c_k = rmodel.inputconst(lltype.Signed, ~k)
+            llops.genop("raw_store", [top_addr, c_type, c_k, c_null])
         graph.startblock.operations[:0] = llops
         #
         # Put at the end of the graph: "decr_stack()"
