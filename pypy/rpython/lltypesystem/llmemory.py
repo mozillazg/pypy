@@ -435,8 +435,17 @@ class fakeaddress(object):
         if isinstance(other, fakeaddress):
             if self == other:
                 return 0
-            else:
-                raise TypeError("cannot subtract fakeaddresses in general")
+            # <*_subarray at n> - <*_subarray at m> == ItemOffset(n-m)
+            obj1 = self.ptr._obj
+            obj2 = other.ptr._obj
+            if (isinstance(obj1, lltype._subarray) and
+                isinstance(obj2, lltype._subarray) and
+                obj1._TYPE == obj2._TYPE and
+                obj1._parentstructure() == obj2._parentstructure()):
+                n = obj1._parent_index
+                m = obj2._parent_index
+                return ItemOffset(obj1._TYPE.OF, n - m)
+            raise TypeError("cannot subtract fakeaddresses in general")
         if other == 0:
             return self
         return NotImplemented
