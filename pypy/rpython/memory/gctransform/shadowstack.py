@@ -55,11 +55,25 @@ class ShadowStackRootWalker(BaseRootWalker):
         return top.address[0]
 
     def allocate_stack(self):
-        return llmemory.raw_malloc(self.rootstacksize)
+        stackbase = llmemory.raw_malloc(self.rootstacksize)
+        if not stackbase:
+            raise MemoryError
+        self.clear_stack(stackbase, stackbase)
+        return stackbase
+
+    def clear_stack(self, stackbase, stacktop):
+        """When a function is called, the current stack top is
+        incremented by as much as needed by this function, but the old
+        content is left in the stack.  This is a speed optimization that
+        may lead to occasional leaks, because the stack may end up
+        containing dead pointers.  Another drawback is that we need to
+        clear the stack manually after every minor collection, to
+        prevent these leftover pointers from pointing to garbage."""
+        size = stackbase + self.rootstacksize - stacktop
+        llmemory.raw_memclear(stacktop, size)
 
     def setup_root_walker(self):
         stackbase = self.allocate_stack()
-        ll_assert(bool(stackbase), "could not allocate root stack")
         self.gcdata.root_stack_top  = stackbase
         self.gcdata.root_stack_base = stackbase
         BaseRootWalker.setup_root_walker(self)
@@ -67,9 +81,10 @@ class ShadowStackRootWalker(BaseRootWalker):
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
         gc = self.gc
-        rootstackhook = self.rootstackhook
         addr = gcdata.root_stack_base
         end = gcdata.root_stack_top
+        self.clear_stack(addr, end)
+        rootstackhook = self.rootstackhook
         while addr != end:
             addr += rootstackhook(collect_stack_root, gc, addr)
         if self.collect_stacks_from_other_threads is not None:
@@ -107,8 +122,6 @@ class ShadowStackRootWalker(BaseRootWalker):
             """
             if not gcdata._fresh_rootstack:
                 gcdata._fresh_rootstack = self.allocate_stack()
-                if not gcdata._fresh_rootstack:
-                    raise MemoryError
 
         def thread_run():
             """Called whenever the current thread (re-)acquired the GIL.
@@ -132,6 +145,7 @@ class ShadowStackRootWalker(BaseRootWalker):
             gcdata.thread_stacks.setitem(aid, llmemory.NULL)
             old = gcdata.root_stack_base
             if gcdata._fresh_rootstack == llmemory.NULL:
+                self.clear_stack(old, old)
                 gcdata._fresh_rootstack = old
             else:
                 llmemory.raw_free(old)
@@ -178,9 +192,10 @@ class ShadowStackRootWalker(BaseRootWalker):
                 # collect all valid stacks from the dict (the entry
                 # corresponding to the current thread is not valid)
                 gc = self.gc
-                rootstackhook = self.rootstackhook
                 end = stacktop - sizeofaddr
                 addr = end.address[0]
+                self.clear_stack(addr, stacktop)
+                rootstackhook = self.rootstackhook
                 while addr != end:
                     addr += rootstackhook(callback, gc, addr)
 
@@ -294,13 +309,6 @@ class ShadowStackRootWalker(BaseRootWalker):
         c_numcolors = rmodel.inputconst(lltype.Signed, numcolors)
         llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
                     resulttype=llmemory.Address)
-        top_addr = llops.genop("direct_call",
-                               [gct.get_stack_top_ptr],
-                               resulttype=llmemory.Address)
-        c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
-        for k in range(numcolors):
-            c_k = rmodel.inputconst(lltype.Signed, ~k)
-            llops.genop("raw_store", [top_addr, c_type, c_k, c_null])
         graph.startblock.operations[:0] = llops
         #
         # Put at the end of the graph: "decr_stack()"
