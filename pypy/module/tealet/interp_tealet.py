@@ -24,7 +24,7 @@ def check(space, main, funcname):
     if main is None:
         raise TealetError("%s to a non-started-yet tealet" % funcname)
     assert isinstance(main, W_MainTealet)
-    if main.execution_context is not space.get_execution_context():
+    if main.executioncontext is not space.getexecutioncontext():
         raise TealetError("%s in a different thread" % funcname)
 
 # ____________________________________________________________
@@ -62,7 +62,7 @@ def W_MainTealet___new__(space, w_subtype, __args__):
     r = space.allocate_instance(W_MainTealet, w_subtype)
     r.__init__()
     r.space = space
-    r.execution_context = space.get_execution_context()
+    r.executioncontext = space.getexecutioncontext()
     return space.wrap(r)
 
 def W_MainTealet_start(space, w_self, w_tealet):

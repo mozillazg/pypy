@@ -52,7 +52,8 @@ def _make_classes(base_class):
 ## ------------------------------------------------------------
 ## The code below is implementation details.
 
-## XXX No support for multithreading so far!
+## No support for multithreading!  The caller is responsible for not
+## mixing threads.
 
 class Switcher(object):
     current = None
