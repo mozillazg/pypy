@@ -9,7 +9,7 @@ from pypy.jit.metainterp.gc import get_description
 from pypy.jit.metainterp.resoperation import get_deep_immutable_oplist
 from pypy.jit.tool.oparser import parse
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
-from pypy.jit.metainterp.test.test_optimizeopt import equaloplists
+from pypy.jit.metainterp.optimizeopt.util import equaloplists
 
 def test_boehm():
     gc_ll_descr = GcLLDescr_boehm(None, None, None)
@@ -716,8 +716,8 @@ class TestFramework(object):
             else:
                 assert operations[0].getopnum() == rop.COND_CALL_GC_WB_ARRAY
                 assert operations[0].getarg(0) == v_base
-                assert operations[0].getarg(1) == v_value
-                assert operations[0].getarg(2) == v_index
+                assert operations[0].getarg(1) == v_index
+                assert operations[0].getarg(2) == v_value
             assert operations[0].result is None
             #
             assert operations[1].getopnum() == rop.SETARRAYITEM_RAW

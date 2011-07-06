@@ -527,8 +527,9 @@ class FunctionGcRootTracker(object):
         target = match.group("target")
         if target == self.ESP:
             # only for  andl $-16, %esp  used to align the stack in main().
-            # main() should not be seen at all.
-            raise AssertionError("instruction unexpected outside of main()")
+            # main() should not be seen at all.  But on e.g. MSVC we see
+            # the instruction somewhere else too...
+            return InsnCannotFollowEsp()
         else:
             return self.binary_insn(line)
 
@@ -1176,7 +1177,7 @@ class MsvcFunctionGcRootTracker(FunctionGcRootTracker32):
     r_gcroot_marker = re.compile(r"$1") # never matches
     r_gcroot_marker_var = re.compile(r"DWORD PTR .+_constant_always_one_.+pypy_asm_gcroot")
     r_gcnocollect_marker = re.compile(r"\spypy_asm_gc_nocollect\(("+OPERAND+")\);")
-    r_bottom_marker = re.compile(r"; .+\tpypy_asm_stack_bottom\(\);")
+    r_bottom_marker = re.compile(r"; .+\spypy_asm_stack_bottom\(\);")
 
     FUNCTIONS_NOT_RETURNING = {
         '__exit': None,

@@ -11,21 +11,14 @@ class TestCall(BaseTestPyPyC):
                 return 1 + rec(n-1)
             #
             # this loop is traced and then aborted, because the trace is too
-            # long. But then "rec" is marked as "don't inline"
-            i = 0
-            j = 0
-            while i < 20:
-                i += 1
-                j += rec(100)
-            #
-            # next time we try to trace "rec", instead of inlining we compile
-            # it separately and generate a call_assembler
+            # long. But then "rec" is marked as "don't inline". Since we
+            # already traced function from the start (because of number),
+            # now we can inline it as call assembler
             i = 0
             j = 0
             while i < 20:
                 i += 1
                 j += rec(100) # ID: call_rec
-                a = 0
             return j
         #
         log = self.run(fn, [], threshold=18)
@@ -37,6 +30,20 @@ class TestCall(BaseTestPyPyC):
             guard_no_exception(descr=...)
             ...
         """)
+
+    def test_fib(self):
+        def fib(n):
+            if n == 0 or n == 1:
+                return 1
+            return fib(n - 1) + fib(n - 2) # ID: call_rec
+
+        log = self.run(fib, [7], function_threshold=15)
+        loop, = log.loops_by_filename(self.filepath, is_entry_bridge='*')
+        #assert loop.match_by_id('call_rec', '''
+        #...
+        #p1 = call_assembler(..., descr=...)
+        #...
+        #''')
 
     def test_simple_call(self):
         src = """
@@ -59,13 +66,13 @@ class TestCall(BaseTestPyPyC):
         ops = entry_bridge.ops_by_id('cond', opcode='LOAD_GLOBAL')
         assert log.opnames(ops) == ["guard_value",
                                     "getfield_gc", "guard_value",
-                                    "getfield_gc", "guard_isnull",
+                                    "getfield_gc", "guard_value",
                                     "getfield_gc", "guard_nonnull_class"]
         # LOAD_GLOBAL of OFFSET but in different function partially folded
         # away
         # XXX could be improved
         ops = entry_bridge.ops_by_id('add', opcode='LOAD_GLOBAL')
-        assert log.opnames(ops) == ["guard_value", "getfield_gc", "guard_isnull"]
+        assert log.opnames(ops) == ["guard_value", "getfield_gc", "guard_value"]
         #
         # two LOAD_GLOBAL of f, the second is folded away
         ops = entry_bridge.ops_by_id('call', opcode='LOAD_GLOBAL')
@@ -180,7 +187,7 @@ class TestCall(BaseTestPyPyC):
             guard_no_overflow(descr=<Guard5>)
             i18 = force_token()
             --TICK--
-            jump(p0, p1, p2, p3, p4, p5, i8, p7, i17, i9, p10, p11, p12, descr=<Loop0>)
+            jump(p0, p1, p2, p3, p4, i8, p7, i17, p8, i9, p10, p11, p12, descr=<Loop0>)
         """)
 
     def test_default_and_kw(self):
@@ -202,6 +209,26 @@ class TestCall(BaseTestPyPyC):
             i16 = force_token()
         """)
 
+    def test_kwargs_empty(self):
+        def main(x):
+            def g(**args):
+                return len(args) + 1
+            #
+            s = 0
+            d = {}
+            i = 0
+            while i < x:
+                s += g(**d)       # ID: call
+                i += 1
+            return s
+        #
+        log = self.run(main, [1000])
+        assert log.result == 1000
+        loop, = log.loops_by_id('call')
+        ops = log.opnames(loop.ops_by_id('call'))
+        guards = [ops for ops in ops if ops.startswith('guard')]
+        assert guards == ["guard_no_overflow"]
+
     def test_kwargs(self):
         # this is not a very precise test, could be improved
         def main(x):
@@ -209,20 +236,24 @@ class TestCall(BaseTestPyPyC):
                 return len(args)
             #
             s = 0
-            d = {}
-            for i in range(x):
+            d = {"a": 1}
+            i = 0
+            while i < x:
                 s += g(**d)       # ID: call
                 d[str(i)] = i
                 if i % 100 == 99:
-                    d = {}
+                    d = {"a": 1}
+                i += 1
             return s
         #
         log = self.run(main, [1000])
-        assert log.result == 49500
+        assert log.result == 50500
         loop, = log.loops_by_id('call')
+        print loop.ops_by_id('call')
         ops = log.opnames(loop.ops_by_id('call'))
         guards = [ops for ops in ops if ops.startswith('guard')]
-        assert len(guards) <= 5
+        print guards
+        assert len(guards) <= 20
 
     def test_stararg_virtual(self):
         def main(x):
@@ -270,12 +301,12 @@ class TestCall(BaseTestPyPyC):
             i21 = force_token()
             setfield_gc(p4, i20, descr=<.* .*W_AbstractSeqIterObject.inst_index .*>)
             i23 = int_add_ovf(i9, 3)
-            guard_no_overflow(descr=<Guard37>)
+            guard_no_overflow(descr=...)
         """)
         assert loop1.match_by_id('h2', """
             i25 = force_token()
             i27 = int_add_ovf(i23, 2)
-            guard_no_overflow(descr=<Guard38>)
+            guard_no_overflow(descr=...)
         """)
 
     def test_stararg(self):

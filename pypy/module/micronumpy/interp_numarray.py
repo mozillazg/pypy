@@ -1,10 +1,11 @@
 from pypy.interpreter.baseobjspace import ObjSpace, W_Root, Wrappable
 from pypy.interpreter.error import operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
-from pypy.interpreter.typedef import TypeDef
+from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rlib import jit
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
+import math
 
 
 def dummy1(v):
@@ -30,6 +31,12 @@ class Signature(object):
         self.transitions[target] = new = Signature()
         return new
 
+def pos(v):
+    return v
+def neg(v):
+    return -v
+def absolute(v):
+    return abs(v)
 def add(v1, v2):
     return v1 + v2
 def sub(v1, v2):
@@ -38,15 +45,39 @@ def mul(v1, v2):
     return v1 * v2
 def div(v1, v2):
     return v1 / v2
+def pow(v1, v2):
+    return math.pow(v1, v2)
+def mod(v1, v2):
+    return math.fmod(v1, v2)
 
 class BaseArray(Wrappable):
     def __init__(self):
         self.invalidates = []
 
     def invalidated(self):
+        if self.invalidates:
+            self._invalidated()
+
+    def _invalidated(self):
         for arr in self.invalidates:
             arr.force_if_needed()
         del self.invalidates[:]
+
+    def _unop_impl(function):
+        signature = Signature()
+        def impl(self, space):
+            new_sig = self.signature.transition(signature)
+            res = Call1(
+                function,
+                self,
+                new_sig)
+            self.invalidates.append(res)
+            return space.wrap(res)
+        return func_with_new_name(impl, "uniop_%s_impl" % function.__name__)
+
+    descr_pos = _unop_impl(pos)
+    descr_neg = _unop_impl(neg)
+    descr_abs = _unop_impl(absolute)
 
     def _binop_impl(function):
         signature = Signature()
@@ -76,9 +107,14 @@ class BaseArray(Wrappable):
     descr_sub = _binop_impl(sub)
     descr_mul = _binop_impl(mul)
     descr_div = _binop_impl(div)
+    descr_pow = _binop_impl(pow)
+    descr_mod = _binop_impl(mod)
 
     def get_concrete(self):
         raise NotImplementedError
+
+    def descr_get_shape(self, space):
+        return space.newtuple([self.descr_len(space)])
 
     def descr_len(self, space):
         return self.get_concrete().descr_len(space)
@@ -98,6 +134,15 @@ class BaseArray(Wrappable):
     def descr_setitem(self, space, item, value):
         self.invalidated()
         return self.get_concrete().descr_setitem(space, item, value)
+
+    def descr_mean(self, space):
+        s = 0
+        concrete = self.get_concrete()
+        size = concrete.find_size()
+        for i in xrange(size):
+            s += concrete.getitem(i)
+        return space.wrap(s / size)
+
 
 class FloatWrapper(BaseArray):
     """
@@ -185,6 +230,7 @@ class Call2(VirtualArray):
     Intermediate class for performing binary operations.
     """
     _immutable_fields_ = ["function", "left", "right"]
+
     def __init__(self, function, left, right, signature):
         VirtualArray.__init__(self, signature)
         self.function = function
@@ -208,9 +254,11 @@ class Call2(VirtualArray):
 
 class ViewArray(BaseArray):
     """
-    Class for representing views of arrays, they will reflect changes of parrent arrays. Example: slices
+    Class for representing views of arrays, they will reflect changes of parent
+    arrays. Example: slices
     """
     _immutable_fields_ = ["parent"]
+
     def __init__(self, parent, signature):
         BaseArray.__init__(self)
         self.signature = signature
@@ -218,7 +266,10 @@ class ViewArray(BaseArray):
         self.invalidates = parent.invalidates
 
     def get_concrete(self):
-        return self # in fact, ViewArray never gets "concrete" as it never stores data. This implementation is needed for BaseArray getitem/setitem to work, can be refactored.
+        # in fact, ViewArray never gets "concrete" as it never stores data.
+        # This implementation is needed for BaseArray getitem/setitem to work,
+        # can be refactored.
+        return self
 
     def eval(self, i):
         return self.parent.eval(self.calc_index(i))
@@ -308,20 +359,36 @@ def descr_new_numarray(space, w_type, w_size_or_iterable):
         i += 1
     return space.wrap(arr)
 
-@unwrap_spec(ObjSpace, int)
+@unwrap_spec(size=int)
 def zeros(space, size):
     return space.wrap(SingleDimArray(size))
 
+@unwrap_spec(size=int)
+def ones(space, size):
+    arr = SingleDimArray(size)
+    for i in xrange(size):
+        arr.storage[i] = 1.0
+    return space.wrap(arr)
 
 BaseArray.typedef = TypeDef(
     'numarray',
     __new__ = interp2app(descr_new_numarray),
+
+    shape = GetSetProperty(BaseArray.descr_get_shape),
+
     __len__ = interp2app(BaseArray.descr_len),
     __getitem__ = interp2app(BaseArray.descr_getitem),
     __setitem__ = interp2app(BaseArray.descr_setitem),
 
+    __pos__ = interp2app(BaseArray.descr_pos),
+    __neg__ = interp2app(BaseArray.descr_neg),
+    __abs__ = interp2app(BaseArray.descr_abs),
     __add__ = interp2app(BaseArray.descr_add),
     __sub__ = interp2app(BaseArray.descr_sub),
     __mul__ = interp2app(BaseArray.descr_mul),
     __div__ = interp2app(BaseArray.descr_div),
+    __pow__ = interp2app(BaseArray.descr_pow),
+    __mod__ = interp2app(BaseArray.descr_mod),
+
+    mean = interp2app(BaseArray.descr_mean),
 )
