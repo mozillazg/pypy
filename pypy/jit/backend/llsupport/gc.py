@@ -356,6 +356,7 @@ class GcRootMap_shadowstack(object):
     # frame is initially set to a non-negative value x, but it is
     # occasionally turned into (~x) in case of forcing.
 
+    SIGNEDARRAYPTR = rffi.CArrayPtr(lltype.Signed)
     INTARRAYPTR = rffi.CArrayPtr(rffi.INT)
     CALLSHAPES_ARRAY = rffi.CArray(INTARRAYPTR)
 
@@ -365,11 +366,11 @@ class GcRootMap_shadowstack(object):
         self.force_index_ofs = gcdescr.force_index_ofs
 
     def add_jit2gc_hooks(self, jit2gc):
-        INTARRAYPTR = self.INTARRAYPTR
+        SIGNEDARRAYPTR = self.SIGNEDARRAYPTR
         def read(addr):
-            return rffi.cast(INTARRAYPTR, addr)[0]
+            return rffi.cast(SIGNEDARRAYPTR, addr)[0]
         def write(addr, newvalue):
-            rffi.cast(INTARRAYPTR, addr)[0] = newvalue
+            rffi.cast(SIGNEDARRAYPTR, addr)[0] = newvalue
         # for tests:
         read  = jit2gc.get('test_read',  read)
         write = jit2gc.get('test_write', write)
