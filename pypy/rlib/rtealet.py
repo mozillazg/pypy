@@ -61,8 +61,6 @@ class Switcher(object):
 switcher = Switcher()
 
 def _new(main, starting_tealet):
-    #if main.ll_stack_base != _getstackbase():
-    #    raise TealetError("starting a new tealet in the wrong thread")
     switcher.current = main.current
     switcher.target = starting_tealet
     llmain = main.lltealet
@@ -107,8 +105,6 @@ def _run(lltealet, llarg):
     return llresult
 
 def _switch(target):
-    #if target.main.ll_stack_base != _getstackbase():
-    #    raise TealetError("cannot switch to a tealet in a different thread")
     main = target.main
     switcher.current = main.current
     switcher.target = target
