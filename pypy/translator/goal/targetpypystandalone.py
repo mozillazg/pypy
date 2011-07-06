@@ -182,6 +182,10 @@ class PyPyTarget(object):
                 raise ConflictConfigError("please use the --stackless option "
                                           "to translate.py instead of "
                                           "--withmod-_stackless directly")
+        if config.translation.tealet:
+            config.objspace.usemodules.tealet = True
+        elif config.objspace.usemodules.tealet:
+            config.translation.tealet = True
 
         if not config.translation.rweakref:
             config.objspace.usemodules._weakref = False
