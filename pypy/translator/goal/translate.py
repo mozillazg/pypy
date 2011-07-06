@@ -103,6 +103,8 @@ def load_target(targetspec):
     specname = os.path.splitext(os.path.basename(targetspec))[0]
     sys.path.insert(0, os.path.dirname(targetspec))
     mod = __import__(specname)
+    if 'target' not in mod.__dict__:
+        raise Exception("file %r is not a valid targetxxx.py." % (targetspec,))
     return mod.__dict__
 
 def parse_options_and_load_target():
@@ -184,7 +186,7 @@ def parse_options_and_load_target():
             print "\n\nTarget specific help:\n\n"
             targetspec_dic['print_help'](config)
         print "\n\nFor detailed descriptions of the command line options see"
-        print "http://codespeak.net/pypy/dist/pypy/doc/config/commandline.html"
+        print "http://pypy.readthedocs.org/en/latest/config/commandline.html"
         sys.exit(0)
     
     return targetspec_dic, translateconfig, config, args
