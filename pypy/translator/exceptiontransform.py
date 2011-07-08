@@ -52,8 +52,9 @@ def constant_value(llvalue):
 
 class BaseExceptionTransformer(object):
 
-    def __init__(self, translator):
+    def __init__(self, translator, standalone):
         self.translator = translator
+        self.standalone = standalone
         self.raise_analyzer = canraise.RaiseAnalyzer(translator)
         edata = translator.rtyper.getexceptiondata()
         self.lltype_of_exception_value = edata.lltype_of_exception_value
@@ -73,19 +74,21 @@ class BaseExceptionTransformer(object):
             assertion_error_ll_exc_type)
         self.c_n_i_error_ll_exc_type = constant_value(n_i_error_ll_exc_type)
 
-        if register.register_number is not None:
+        use_special_reg = standalone and register.register_number is not None
+        self.use_special_reg = use_special_reg
+        if use_special_reg:
             self.c_nonnull_specialregister = constant_value(register.nonnull)
             self.c_load_from_reg = constant_value(register.load_from_reg)
             self.c_reg_is_nonnull = constant_value(register.reg_is_nonnull)
             self.c_store_into_reg = constant_value(register.store_into_reg)
 
         def rpyexc_occured():
-            if register.register_number is None:
-                exc_type = exc_data.exc_type
-                return bool(exc_type)
-            else:
+            if use_special_reg:
                 # an exception occurred iff the special register is 0
                 return register.load_from_reg() == llmemory.NULL
+            else:
+                exc_type = exc_data.exc_type
+                return bool(exc_type)
 
         def rpyexc_fetch_type():
             return exc_data.exc_type
@@ -94,7 +97,7 @@ class BaseExceptionTransformer(object):
             return exc_data.exc_value
 
         def rpyexc_clear():
-            if register.register_number is not None:
+            if use_special_reg:
                 register.store_into_reg(register.nonnull)
             exc_data.exc_type = null_type
             exc_data.exc_value = null_value
@@ -112,14 +115,14 @@ class BaseExceptionTransformer(object):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
             lloperation.llop.debug_start_traceback(lltype.Void, etype)
-            if register.register_number is not None:
+            if use_special_reg:
                 register.store_into_reg(llmemory.NULL)
 
         def rpyexc_reraise(etype, evalue):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
             lloperation.llop.debug_reraise_traceback(lltype.Void, etype)
-            if register.register_number is not None:
+            if use_special_reg:
                 register.store_into_reg(llmemory.NULL)
 
         def rpyexc_fetch_exception():
@@ -131,7 +134,7 @@ class BaseExceptionTransformer(object):
             if evalue:
                 exc_data.exc_type = rclass.ll_inst_type(evalue)
                 exc_data.exc_value = evalue
-                if register.register_number is not None:
+                if use_special_reg:
                     register.store_into_reg(llmemory.NULL)
 
         def rpyexc_raise_stack_overflow():
@@ -428,7 +431,7 @@ class BaseExceptionTransformer(object):
         #
         self.gen_setfield('exc_value', self.c_null_evalue, llops)
         self.gen_setfield('exc_type',  self.c_null_etype,  llops)
-        if register.register_number is not None:
+        if self.use_special_reg:
             self.gen_setspecialregister(self.c_nonnull_specialregister, llops)
         excblock.operations[:] = llops
         newgraph.exceptblock.inputargs[0].concretetype = self.lltype_of_exception_type
@@ -453,11 +456,11 @@ class BaseExceptionTransformer(object):
         if alloc_shortcut:
             T = spaceop.result.concretetype
             var_no_exc = self.gen_nonnull(spaceop.result, llops)
-        elif register.register_number is None:
+        elif self.use_special_reg:
+            var_no_exc = self.gen_specialreg_no_exc(llops)
+        else:
             v_exc_type = self.gen_getfield('exc_type', llops)
             var_no_exc = self.gen_isnull(v_exc_type, llops)
-        else:
-            var_no_exc = self.gen_specialreg_no_exc(llops)
 
         block.operations.extend(llops)
         
@@ -647,10 +650,10 @@ class OOTypeExceptionTransformer(BaseExceptionTransformer):
     def build_extra_funcs(self):
         pass
 
-def ExceptionTransformer(translator):
+def ExceptionTransformer(translator, standalone):
     type_system = translator.rtyper.type_system.name
     if type_system == 'lltypesystem':
-        return LLTypeExceptionTransformer(translator)
+        return LLTypeExceptionTransformer(translator, standalone)
     else:
         assert type_system == 'ootypesystem'
-        return OOTypeExceptionTransformer(translator)
+        return OOTypeExceptionTransformer(translator, standalone)
