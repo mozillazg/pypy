@@ -14,6 +14,7 @@ from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rstackovf import _StackOverflow
+from pypy.rlib import register
 from pypy.annotation import model as annmodel
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.tool.sourcetools import func_with_new_name
@@ -72,9 +73,19 @@ class BaseExceptionTransformer(object):
             assertion_error_ll_exc_type)
         self.c_n_i_error_ll_exc_type = constant_value(n_i_error_ll_exc_type)
 
+        if register.register_number is not None:
+            self.c_nonnull_specialregister = constant_value(register.nonnull)
+            self.c_load_from_reg = constant_value(register.load_from_reg)
+            self.c_reg_is_nonnull = constant_value(register.reg_is_nonnull)
+            self.c_store_into_reg = constant_value(register.store_into_reg)
+
         def rpyexc_occured():
-            exc_type = exc_data.exc_type
-            return bool(exc_type)
+            if register.register_number is None:
+                exc_type = exc_data.exc_type
+                return bool(exc_type)
+            else:
+                # an exception occurred iff the special register is 0
+                return register.load_from_reg() == llmemory.NULL
 
         def rpyexc_fetch_type():
             return exc_data.exc_type
@@ -83,6 +94,8 @@ class BaseExceptionTransformer(object):
             return exc_data.exc_value
 
         def rpyexc_clear():
+            if register.register_number is not None:
+                register.store_into_reg(register.nonnull)
             exc_data.exc_type = null_type
             exc_data.exc_value = null_value
 
@@ -99,11 +112,15 @@ class BaseExceptionTransformer(object):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
             lloperation.llop.debug_start_traceback(lltype.Void, etype)
+            if register.register_number is not None:
+                register.store_into_reg(llmemory.NULL)
 
         def rpyexc_reraise(etype, evalue):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
             lloperation.llop.debug_reraise_traceback(lltype.Void, etype)
+            if register.register_number is not None:
+                register.store_into_reg(llmemory.NULL)
 
         def rpyexc_fetch_exception():
             evalue = rpyexc_fetch_value()
@@ -114,6 +131,8 @@ class BaseExceptionTransformer(object):
             if evalue:
                 exc_data.exc_type = rclass.ll_inst_type(evalue)
                 exc_data.exc_value = evalue
+                if register.register_number is not None:
+                    register.store_into_reg(llmemory.NULL)
 
         def rpyexc_raise_stack_overflow():
             rpyexc_raise(stackovf_ll_exc_type, stackovf_ll_exc)
@@ -409,6 +428,8 @@ class BaseExceptionTransformer(object):
         #
         self.gen_setfield('exc_value', self.c_null_evalue, llops)
         self.gen_setfield('exc_type',  self.c_null_etype,  llops)
+        if register.register_number is not None:
+            self.gen_setspecialregister(self.c_nonnull_specialregister, llops)
         excblock.operations[:] = llops
         newgraph.exceptblock.inputargs[0].concretetype = self.lltype_of_exception_type
         newgraph.exceptblock.inputargs[1].concretetype = self.lltype_of_exception_value
@@ -432,9 +453,11 @@ class BaseExceptionTransformer(object):
         if alloc_shortcut:
             T = spaceop.result.concretetype
             var_no_exc = self.gen_nonnull(spaceop.result, llops)
-        else:
+        elif register.register_number is None:
             v_exc_type = self.gen_getfield('exc_type', llops)
             var_no_exc = self.gen_isnull(v_exc_type, llops)
+        else:
+            var_no_exc = self.gen_specialreg_no_exc(llops)
 
         block.operations.extend(llops)
         
@@ -526,6 +549,17 @@ class LLTypeExceptionTransformer(BaseExceptionTransformer):
 
     def gen_nonnull(self, v, llops):
         return llops.genop('ptr_nonzero', [v], lltype.Bool)
+
+    def gen_getspecialregister(self, llops):
+        return llops.genop('direct_call', [self.c_load_from_reg],
+                           resulttype = llmemory.Address)
+
+    def gen_specialreg_no_exc(self, llops):
+        return llops.genop('direct_call', [self.c_reg_is_nonnull],
+                           resulttype = lltype.Bool)
+
+    def gen_setspecialregister(self, v, llops):
+        llops.genop('direct_call', [self.c_store_into_reg, v])
 
     def same_obj(self, ptr1, ptr2):
         return ptr1._same_obj(ptr2)
