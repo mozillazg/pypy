@@ -1,6 +1,7 @@
 import py
 from pypy.rlib import register
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.translator.c.test.test_standalone import StandaloneTests
 
 
 def test_register():
@@ -36,13 +37,19 @@ class TestLoadStore(object):
         res = interpret(f, [41])
         assert res == 41
 
+
+class TestLoadStoreCompiled(StandaloneTests):
+    def setup_class(cls):
+        if register.register_number is None:
+            py.test.skip("rlib/register not supported on this platform")
+
     def test_compiled(self):
-        from pypy.translator.c.test.test_genc import compile
-        def f(n):
-            a = rffi.cast(llmemory.Address, n)
+        def f(argv):
+            a = rffi.cast(llmemory.Address, 43)
             register.store_into_reg(a)
             b = register.load_from_reg()
-            return rffi.cast(lltype.Signed, b)
-        cfn = compile(f, [int])
-        res = cfn(43)
-        assert res == 43
+            print rffi.cast(lltype.Signed, b)
+            return 0
+        t, cbuilder = self.compile(f)
+        data = cbuilder.cmdexec('')
+        assert data.startswith('43\n')
