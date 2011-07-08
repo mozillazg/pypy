@@ -15,10 +15,12 @@ from pypy.rpython.tool import rffi_platform
 
 # For now, only for x86-64.  Tries to use the register r15.
 eci = ExternalCompilationInfo(
-    post_include_bits=['register void* pypy_r15 asm("r15");\n'
-                       '#define PYPY_GET_R15() pypy_r15\n'
-                       '#define PYPY_SET_R15(x) (pypy_r15 = x)\n'
-                       ],
+    post_include_bits=[
+        'register void *pypy_r15 asm("r15");\n'
+        '#define PYPY_GET_SPECIAL_REG() pypy_r15\n'
+        '#define PYPY_SPECIAL_REG_NONNULL() (pypy_r15 != NULL)\n'
+        '#define PYPY_SET_SPECIAL_REG(x) (pypy_r15 = x)\n'
+        ],
     )
 
 _test_eci = eci.merge(ExternalCompilationInfo(
@@ -38,27 +40,42 @@ else:
 
     from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 
-    # use load_from_reg(TYPE) and store_into_reg(llvalue) to load and store
-    # a value out of the special register.  When running on top of Python.
+    # use addr=load_from_reg() and store_into_reg(addr) to load and store
+    # an Address out of the special register.  When running on top of Python,
     # the behavior is emulated.
 
     _value_reg = None
 
-    def _pypy_get_r15():
+    def _pypy_get_special_reg():
         assert _value_reg is not None
         return _value_reg
 
-    def _pypy_set_r15(addr):
+    def _pypy_special_reg_nonnull():
+        assert _value_reg is not None
+        return bool(_value_reg)
+
+    def _pypy_set_special_reg(addr):
         global _value_reg
         _value_reg = addr
 
-    load_from_reg = rffi.llexternal('PYPY_GET_R15', [], llmemory.Address,
-                                    _callable=_pypy_get_r15,
+    load_from_reg = rffi.llexternal('PYPY_GET_SPECIAL_REG', [],
+                                    llmemory.Address,
+                                    _callable=_pypy_get_special_reg,
                                     compilation_info=eci,
                                     _nowrapper=True)
 
-    store_into_reg = rffi.llexternal('PYPY_SET_R15', [llmemory.Address],
-                                     lltype.Void,
-                                     _callable=_pypy_set_r15,
+    reg_is_nonnull = rffi.llexternal('PYPY_SPECIAL_REG_NONNULL', [],
+                                     lltype.Bool,
+                                     _callable=_pypy_special_reg_nonnull,
                                      compilation_info=eci,
                                      _nowrapper=True)
+
+    store_into_reg = rffi.llexternal('PYPY_SET_SPECIAL_REG',
+                                     [llmemory.Address],
+                                     lltype.Void,
+                                     _callable=_pypy_set_special_reg,
+                                     compilation_info=eci,
+                                     _nowrapper=True)
+
+    # xxx temporary
+    nonnull = llmemory.cast_int_to_adr(-1)
