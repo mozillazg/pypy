@@ -34,12 +34,9 @@ int pypy_main_function(int argc, char *argv[])
     char *errmsg;
     int i, exitcode;
     RPyListOfString *list;
-#ifdef PYPY_GET_SPECIAL_REG
-    void *pypy_reg_oldvalue = PYPY_GET_SPECIAL_REG();
-    PYPY_SET_SPECIAL_REG((void*)-1);
-#endif
+    void *saved;
 
-    pypy_asm_stack_bottom();
+    OP_GC_STACK_BOTTOM(saved);
     instrument_setup();
 
     if (sizeof(void*) != SIZEOF_LONG) {
@@ -74,10 +71,7 @@ int pypy_main_function(int argc, char *argv[])
         pypy_debug_catch_fatal_exception();
     }
 
-#ifdef PYPY_GET_SPECIAL_REG
-    PYPY_SET_SPECIAL_REG(pypy_reg_oldvalue);
-#endif
-
+    OP_GC_STACK_BOTTOM_STOP(saved, /*nothing*/);
     return exitcode;
 
  memory_out:

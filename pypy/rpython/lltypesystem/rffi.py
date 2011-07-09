@@ -248,7 +248,7 @@ def _make_wrapper_for(TP, callable, callbackholder=None, aroundstate=None):
     """ Function creating wrappers for callbacks. Note that this is
     cheating as we assume constant callbacks and we just memoize wrappers
     """
-    from pypy.rpython.lltypesystem import lltype
+    from pypy.rpython.lltypesystem import lltype, llmemory
     from pypy.rpython.lltypesystem.lloperation import llop
     if hasattr(callable, '_errorcode_'):
         errorcode = callable._errorcode_
@@ -260,13 +260,15 @@ def _make_wrapper_for(TP, callable, callbackholder=None, aroundstate=None):
     args = ', '.join(['a%d' % i for i in range(len(TP.TO.ARGS))])
     source = py.code.Source(r"""
         def wrapper(%s):    # no *args - no GIL for mallocing the tuple
-            llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
             if aroundstate is not None:
                 after = aroundstate.after
                 if after:
                     after()
             # from now on we hold the GIL
             stackcounter.stacks_counter += 1
+            # marker for trackgcroot.py and for rlib/register.py:
+            # initialize the value of the special register
+            saved = llop.gc_stack_bottom(llmemory.Address)
             try:
                 result = callable(%s)
             except Exception, e:
@@ -277,6 +279,7 @@ def _make_wrapper_for(TP, callable, callbackholder=None, aroundstate=None):
                     import traceback
                     traceback.print_exc()
                 result = errorcode
+            llop.gc_stack_bottom_stop(lltype.Void, saved)
             stackcounter.stacks_counter -= 1
             if aroundstate is not None:
                 before = aroundstate.before
