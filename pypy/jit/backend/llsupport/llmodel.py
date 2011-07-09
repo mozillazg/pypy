@@ -116,9 +116,12 @@ class AbstractLLCPU(AbstractCPU):
         self.pos_exc_value = pos_exc_value
         self.save_exception = save_exception
         self.insert_stack_check = lambda: (0, 0, 0)
+        self.special_register = None
 
 
     def _setup_exception_handling_translated(self):
+        from pypy.rlib import register
+        from pypy.rlib.register import register_number
 
         def pos_exception():
             addr = llop.get_exception_addr(llmemory.Address)
@@ -129,6 +132,8 @@ class AbstractLLCPU(AbstractCPU):
             return heaptracker.adr2int(addr)
 
         def save_exception():
+            if register_number is not None:
+                register.store_into_reg(register.nonnull)
             addr = llop.get_exception_addr(llmemory.Address)
             addr.address[0] = llmemory.NULL
             addr = llop.get_exc_value_addr(llmemory.Address)
@@ -153,6 +158,9 @@ class AbstractLLCPU(AbstractCPU):
         self.pos_exc_value = pos_exc_value
         self.save_exception = save_exception
         self.insert_stack_check = insert_stack_check
+        self.special_register = register_number
+        self.special_register_nonnull = llmemory.cast_adr_to_int(
+                                                          register.nonnull)
 
     def _setup_on_leave_jitted_untranslated(self):
         # assume we don't need a backend leave in this case
