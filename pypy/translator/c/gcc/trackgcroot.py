@@ -103,7 +103,15 @@ class FunctionGcRootTracker(object):
                 else:
                     regindex = self.CALLEE_SAVE_REGISTERS.index(tag)
                     shape[1 + regindex] = loc
-            if LOC_NOWHERE in shape and not self.is_stack_bottom:
+            #
+            if self.special_register is None:
+                shape_wo_specialreg = shape
+            else:
+                tag = self.special_register
+                regindex = self.CALLEE_SAVE_REGISTERS.index(tag)
+                shape_wo_specialreg = shape[:]
+                del shape_wo_specialreg[1 + regindex]
+            if LOC_NOWHERE in shape_wo_specialreg and not self.is_stack_bottom:
                 reg = self.CALLEE_SAVE_REGISTERS[shape.index(LOC_NOWHERE) - 1]
                 raise AssertionError("cannot track where register %s is saved"
                                      % (reg,))
@@ -1346,6 +1354,7 @@ class AssemblerParser(object):
     def process_function(self, lines, filename):
         tracker = self.FunctionGcRootTracker(
             lines, filetag=getidentifier(filename))
+        tracker.special_register = special_register
         if self.verbose == 1:
             sys.stderr.write('.')
         elif self.verbose > 1:
@@ -1548,10 +1557,12 @@ PARSERS = {
 
 class GcRootTracker(object):
 
-    def __init__(self, verbose=0, shuffle=False, format='elf'):
+    def __init__(self, verbose=0, shuffle=False, format='elf',
+                 special_register=None):
         self.verbose = verbose
         self.shuffle = shuffle     # to debug the sorting logic in asmgcroot.py
         self.format = format
+        self.special_register = special_register
         self.gcmaptable = []
 
     def dump_raw_table(self, output):
@@ -1892,6 +1903,7 @@ if __name__ == '__main__':
     verbose = 0
     shuffle = False
     output_raw_table = False
+    special_register = None
     if sys.platform == 'darwin':
         if sys.maxint > 2147483647:
             format = 'darwin64'
@@ -1917,12 +1929,16 @@ if __name__ == '__main__':
         elif sys.argv[1].startswith('-f'):
             format = sys.argv[1][2:]
             del sys.argv[1]
+        elif sys.argv[1].startswith('-%'):
+            special_register = sys.argv[1][1:]
+            del sys.argv[1]
         elif sys.argv[1].startswith('-'):
             print >> sys.stderr, "unrecognized option:", sys.argv[1]
             sys.exit(1)
         else:
             break
-    tracker = GcRootTracker(verbose=verbose, shuffle=shuffle, format=format)
+    tracker = GcRootTracker(verbose=verbose, shuffle=shuffle, format=format,
+                            special_register=special_register)
     for fn in sys.argv[1:]:
         f = open(fn, 'r')
         firstline = f.readline()

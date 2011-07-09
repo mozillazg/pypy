@@ -558,6 +558,12 @@ class CStandaloneBuilder(CBuilder):
         for rule in rules:
             mk.rule(*rule)
 
+        from pypy.rlib.register import register_number
+        if register_number is None:
+            extra_trackgcroot_arg = ''
+        else:
+            extra_trackgcroot_arg = '-%%r%d' % register_number
+
         if self.config.translation.gcrootfinder == 'asmgcc':
             trackgcfiles = [cfile[:-2] for cfile in mk.cfiles]
             if self.translator.platform.name == 'msvc':
@@ -605,7 +611,7 @@ class CStandaloneBuilder(CBuilder):
                         'cmd /c $(MASM) /nologo /Cx /Cp /Zm /coff /Fo$@ /c $< $(INCLUDEDIRS)')
                 mk.rule('.c.gcmap', '',
                         ['$(CC) /nologo $(ASM_CFLAGS) /c /FAs /Fa$*.s $< $(INCLUDEDIRS)',
-                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -t $*.s > $@']
+                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc -t %s $*.s > $@' % extra_trackgcroot_arg]
                         )
                 mk.rule('gcmaptable.c', '$(GCMAPFILES)',
                         'cmd /c ' + python + '$(PYPYDIR)/translator/c/gcc/trackgcroot.py -fmsvc $(GCMAPFILES) > $@')
@@ -616,7 +622,7 @@ class CStandaloneBuilder(CBuilder):
                 mk.rule('%.lbl.s %.gcmap', '%.s',
                         [python +
                              '$(PYPYDIR)/translator/c/gcc/trackgcroot.py '
-                             '-t $< > $*.gctmp',
+                             '-t %s $< > $*.gctmp' % extra_trackgcroot_arg,
                          'mv $*.gctmp $*.gcmap'])
                 mk.rule('gcmaptable.s', '$(GCMAPFILES)',
                         [python +
