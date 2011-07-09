@@ -6,7 +6,7 @@ from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.annotation.listdef import s_list_of_strings
 from pypy import conftest
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rlib.entrypoint import entrypoint, secondary_entrypoints
 from pypy.rpython.lltypesystem.lloperation import llop
 
@@ -180,9 +180,10 @@ class TestAsmGCRootWithSemiSpaceGC(AbstractTestAsmGCRoot,
         
         @entrypoint("x42", [lltype.Signed, lltype.Signed], c_name='callback')
         def mycallback(a, b):
-            llop.gc_stack_bottom(lltype.Void)
             rffi.stackcounter.stacks_counter += 1
+            saved = llop.gc_stack_bottom(llmemory.Address)
             gc.collect()
+            llop.gc_stack_bottom_stop(lltype.Void, saved)
             rffi.stackcounter.stacks_counter -= 1
             return a + b
 
