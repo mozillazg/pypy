@@ -263,9 +263,14 @@ class Assembler386(object):
         # esp is now aligned to a multiple of 16 again
         mc.CALL(imm(slowpathaddr))
         #
-        mc.MOV(eax, heap(self.cpu.pos_exception()))
-        mc.TEST_rr(eax.value, eax.value)
-        mc.J_il8(rx86.Conditions['NZ'], 0)
+        if self.cpu.special_register is None:
+            mc.MOV(eax, heap(self.cpu.pos_exception()))
+            mc.TEST_rr(eax.value, eax.value)
+            mc.J_il8(rx86.Conditions['NZ'], 0)
+        else:
+            rnum = self.cpu.special_register
+            mc.TEST_rr(rnum, rnum)
+            mc.J_il8(rx86.Conditions['Z'], 0)
         jnz_location = mc.get_relative_pos()
         #
         if IS_X86_32:
@@ -286,8 +291,7 @@ class Assembler386(object):
         mc.overwrite(jnz_location-1, chr(offset))
         # clear the exception from the global position
         mc.MOV(eax, heap(self.cpu.pos_exc_value()))
-        mc.MOV(heap(self.cpu.pos_exception()), imm0)
-        mc.MOV(heap(self.cpu.pos_exc_value()), imm0)
+        self.clear_current_exception(mc)
         # save the current exception instance into fail_boxes_ptr[0]
         adr = self.fail_boxes_ptr.get_addr_for_num(0)
         mc.MOV(heap(adr), eax)
@@ -307,6 +311,13 @@ class Assembler386(object):
         #
         rawstart = mc.materialize(self.cpu.asmmemmgr, [])
         self.stack_check_slowpath = rawstart
+
+    def clear_current_exception(self, mc):
+        if self.cpu.special_register is not None:
+            mc.MOV_ri(self.cpu.special_register,
+                      self.cpu.special_register_nonnull)
+        mc.MOV(heap(self.cpu.pos_exception()), imm0)
+        mc.MOV(heap(self.cpu.pos_exc_value()), imm0)
 
     @staticmethod
     def _release_gil_asmgcc(css):
@@ -1563,8 +1574,13 @@ class Assembler386(object):
 
     def genop_guard_guard_no_exception(self, ign_1, guard_op, guard_token,
                                        locs, ign_2):
-        self.mc.CMP(heap(self.cpu.pos_exception()), imm0)
-        self.implement_guard(guard_token, 'NZ')
+        if self.cpu.special_register is None:
+            self.mc.CMP(heap(self.cpu.pos_exception()), imm0)
+            self.implement_guard(guard_token, 'NZ')
+        else:
+            rnum = self.cpu.special_register
+            self.mc.TEST_rr(rnum, rnum)
+            self.implement_guard(guard_token, 'Z')
 
     def genop_guard_guard_not_invalidated(self, ign_1, guard_op, guard_token,
                                      locs, ign_2):
@@ -1575,14 +1591,11 @@ class Assembler386(object):
     def genop_guard_guard_exception(self, ign_1, guard_op, guard_token,
                                     locs, resloc):
         loc = locs[0]
-        loc1 = locs[1]
-        self.mc.MOV(loc1, heap(self.cpu.pos_exception()))
-        self.mc.CMP(loc1, loc)
+        self.mc.CMP(heap(self.cpu.pos_exception()), loc)
         self.implement_guard(guard_token, 'NE')
         if resloc is not None:
             self.mc.MOV(resloc, heap(self.cpu.pos_exc_value()))
-        self.mc.MOV(heap(self.cpu.pos_exception()), imm0)
-        self.mc.MOV(heap(self.cpu.pos_exc_value()), imm0)
+        self.clear_current_exception(self.mc)
 
     def _gen_guard_overflow(self, guard_op, guard_token):
         guard_opnum = guard_op.getopnum()

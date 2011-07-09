@@ -19,7 +19,7 @@ from pypy.jit.backend.llsupport.descr import BaseFieldDescr, BaseArrayDescr
 from pypy.jit.backend.llsupport.descr import BaseCallDescr, BaseSizeDescr
 from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
      TempBox
-from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE
+from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE, special_register
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64, MY_COPY_OF_REGS
 from pypy.rlib.rarithmetic import r_longlong, r_uint
 
@@ -56,8 +56,11 @@ class X86RegisterManager(RegisterManager):
             not_implemented("convert_to_imm: got a %s" % c)
 
 class X86_64_RegisterManager(X86RegisterManager):
-    # r11 omitted because it's used as scratch
-    all_regs = [eax, ecx, edx, ebx, esi, edi, r8, r9, r10, r12, r13, r14, r15]
+    # r11 omitted because it's used as scratch; r15 is omitted if used
+    # as a special register
+    all_regs = [eax, ecx, edx, ebx, esi, edi, r8, r9, r10, r12, r13, r14]
+    if special_register is None:
+        all_regs.append(r15)
     no_lower_byte_regs = []
     save_around_call_regs = [eax, ecx, edx, esi, edi, r8, r9, r10]
 
@@ -79,8 +82,9 @@ class X86_64_RegisterManager(X86RegisterManager):
         r12: MY_COPY_OF_REGS + 7 * WORD,
         r13: MY_COPY_OF_REGS + 8 * WORD,
         r14: MY_COPY_OF_REGS + 9 * WORD,
-        r15: MY_COPY_OF_REGS + 10 * WORD,
     }
+    if special_register is None:
+        REGLOC_TO_COPY_AREA_OFS[r15] = MY_COPY_OF_REGS + 10 * WORD
 
 class X86XMMRegisterManager(RegisterManager):
 
@@ -518,17 +522,13 @@ class RegAlloc(object):
 
     def consider_guard_exception(self, op):
         loc = self.rm.make_sure_var_in_reg(op.getarg(0))
-        box = TempBox()
-        args = op.getarglist()
-        loc1 = self.rm.force_allocate_reg(box, args)
         if op.result in self.longevity:
             # this means, is it ever used
-            resloc = self.rm.force_allocate_reg(op.result, args + [box])
+            resloc = self.rm.force_allocate_reg(op.result)
         else:
             resloc = None
-        self.perform_guard(op, [loc, loc1], resloc)
+        self.perform_guard(op, [loc], resloc)
         self.rm.possibly_free_vars_for_op(op)
-        self.rm.possibly_free_var(box)
 
     consider_guard_no_overflow = consider_guard_no_exception
     consider_guard_overflow    = consider_guard_no_exception
