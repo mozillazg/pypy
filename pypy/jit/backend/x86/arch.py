@@ -19,18 +19,19 @@ if sys.maxint == (2**31 - 1):
     assert special_register is None
 else:
     WORD = 8
-    # rbp + rbx + r12 + r13 + r14 + r15? + 11 extra words + force_index = 18
-    FRAME_FIXED_SIZE = 18
-    FORCE_INDEX_OFS = -17*WORD
-    MY_COPY_OF_REGS = -16*WORD
-    IS_X86_32 = False
-    IS_X86_64 = True
     if special_register is not None:
         assert special_register == 15
-        # remove r15 from the saved registers and from the extra words
+        # rbp + rbx + r12 + r13 + r14 + 10 extra words + force_index = 16
         FRAME_FIXED_SIZE = 16
         FORCE_INDEX_OFS = -15*WORD
         MY_COPY_OF_REGS = -14*WORD
+    else:
+        # rbp + rbx + r12 + r13 + r14 + r15 + 11 extra words + force_index = 18
+        FRAME_FIXED_SIZE = 18
+        FORCE_INDEX_OFS = -17*WORD
+        MY_COPY_OF_REGS = -16*WORD
+    IS_X86_32 = False
+    IS_X86_64 = True
 
 # The extra space has room for almost all registers, apart from eax and edx
 # which are used in the malloc itself.  They are:
