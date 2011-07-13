@@ -1259,6 +1259,25 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         self.optimize_loop(ops, expected)
 
+    def test_fill_heap_cache_on_forcing(self):
+        ops = """
+        [i, p0]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        p3 = new_with_vtable(ConstClass(node_vtable))
+        setfield_gc(p2, p3, descr=nextdescr)
+        setarrayitem_gc(p0, i, p2, descr=arraydescr2)
+        setfield_gc(p2, NULL, descr=nextdescr)
+        jump(i, p0)
+        """
+        expected = """
+        [i, p0]
+        p2 = new_with_vtable(ConstClass(node_vtable))
+        setarrayitem_gc(p0, i, p2, descr=arraydescr2)
+        setfield_gc(p2, NULL, descr=nextdescr)
+        jump(i, p0)
+        """
+        self.optimize_loop(ops, expected)
+
     def test_getfield_gc_pure_1(self):
         ops = """
         [i]

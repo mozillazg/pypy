@@ -34,6 +34,12 @@ class AbstractVirtualValue(optimizer.OptValue):
             self._really_force()
         return self.box
 
+    def force_box_shallow(self):
+        if self.box is None:
+            self.optimizer.forget_numberings(self.keybox)
+            return self._really_force_shallow()
+        return False
+
     def make_virtual_info(self, modifier, fieldnums):
         if fieldnums is None:
             return self._make_virtual(modifier)
@@ -50,6 +56,10 @@ class AbstractVirtualValue(optimizer.OptValue):
 
     def _really_force(self):
         raise NotImplementedError("abstract base")
+
+    def _really_force_shallow(self):
+        self._really_force()
+        return False
 
     def reconstruct_for_next_iteration(self, _optimizer):
         return optimizer.OptValue(self.force_box())
@@ -90,6 +100,16 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
                 return False
         return True
 
+    def _force_immutable(self):
+        box = self.optimizer.constant_fold(self.source_op)
+        self.make_constant(box)
+        for ofs, value in self._fields.iteritems():
+            subbox = value.force_box()
+            assert isinstance(subbox, Const)
+            execute(self.optimizer.cpu, None, rop.SETFIELD_GC,
+                    ofs, box, subbox)
+        # keep self._fields, because it's all immutable anyway
+
     def _really_force(self):
         op = self.source_op
         assert op is not None
@@ -99,14 +119,7 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
             op.name = 'FORCE ' + self.source_op.name
 
         if self._is_immutable_and_filled_with_constants():
-            box = self.optimizer.constant_fold(op)
-            self.make_constant(box)
-            for ofs, value in self._fields.iteritems():
-                subbox = value.force_box()
-                assert isinstance(subbox, Const)
-                execute(self.optimizer.cpu, None, rop.SETFIELD_GC,
-                        ofs, box, subbox)
-            # keep self._fields, because it's all immutable anyway
+            self._force_immutable()
         else:
             newoperations = self.optimizer.newoperations
             newoperations.append(op)
@@ -123,6 +136,27 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
                 op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
                                   descr=ofs)
                 newoperations.append(op)
+
+    def _really_force_shallow(self):
+        op = self.source_op
+        if self._is_immutable_and_filled_with_constants():
+            self._force_immutable()
+            return False
+        else:
+            self.optimizer.newoperations.append(op)
+            self.box = box = op.result
+            #
+            iteritems = self._fields.iteritems()
+            if not we_are_translated(): #random order is fine, except for tests
+                iteritems = list(iteritems)
+                iteritems.sort(key = lambda (x,y): x.sort_key())
+            for ofs, value in iteritems:
+                if value.is_null():
+                    continue
+                op = ResOperation(rop.SETFIELD_GC, [box, value.get_key_box()], None,
+                                  descr=ofs)
+                self.optimizer.send_extra_operation(op)
+            return True
 
     def _get_field_descr_list(self):
         _cached_sorted_fields = self._cached_sorted_fields

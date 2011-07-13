@@ -42,6 +42,14 @@ class OptValue(object):
     def force_box(self):
         return self.box
 
+    def force_box_shallow(self):
+        """ similar to force box, but only forces the top level, the other
+        fields are storage-sunk. returns a bool that says whether something was
+        forced. the caller needs to start the optimization of the current
+        operations again. use with extreme care."""
+        self.force_box()
+        return False
+
     def get_key_box(self):
         return self.box
 
@@ -444,6 +452,15 @@ class Optimizer(Optimization):
         self._emit_operation(op)
 
     def _emit_operation(self, op):
+        restart = False
+        for i in range(op.numargs()):
+            arg = op.getarg(i)
+            if arg in self.values:
+                restart = restart or self.values[arg].force_box_shallow()
+        if restart:
+            self.first_optimization.propagate_forward(op)
+            return
+
         for i in range(op.numargs()):
             arg = op.getarg(i)
             if arg in self.values:
