@@ -483,8 +483,8 @@ LL_OPERATIONS = {
     'gc_dump_rpy_heap'    : LLOp(),
     'gc_typeids_z'        : LLOp(),
 
-    'gc_save_stack_roots'   : LLOp(),        # for tealet support
-    'gc_restore_stack_roots': LLOp(),        # for tealet support
+    'gc_save_stack_roots'   : LLOp(canunwindgc=True),   # for tealet support
+    'gc_restore_stack_roots': LLOp(canunwindgc=True),   # for tealet support
 
     # ------- JIT & GC interaction, only for some GCs ----------
 
