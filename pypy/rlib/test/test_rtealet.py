@@ -29,5 +29,3 @@ class TestTealetShadowstack(BaseTestTealet):
 
 class TestTealetAsmgcc(BaseTestTealet):
     gcrootfinder = "asmgcc"
-    def setup_class(cls):
-        py.test.skip("XXX in-progress")

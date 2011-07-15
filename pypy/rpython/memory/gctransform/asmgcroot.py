@@ -1,3 +1,4 @@
+from pypy.annotation import model as annmodel
 from pypy.rpython.memory.gctransform.framework import FrameworkGCTransformer
 from pypy.rpython.memory.gctransform.framework import BaseRootWalker
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
@@ -146,6 +147,54 @@ class AsmStackRootWalker(BaseRootWalker):
             self._extra_gcmapstart  = lambda: llmemory.NULL
             self._extra_gcmapend    = lambda: llmemory.NULL
             self._extra_mark_sorted = lambda: True
+
+    def need_tealet_support(self, gctransformer, getfn):
+        # tealet support: hooks to save and restore the GC pointers
+        # from the stack before it is whisked away by "tealet.c".
+        GCPTR_ARRAY  = lltype.Ptr(lltype.GcArray(llmemory.GCREF))
+        SIGNED_ARRAY = lltype.Ptr(lltype.GcArray(lltype.Signed))
+        WALKER_PTR   = lltype.Ptr(lltype.Struct('walker',
+                           ('gcptr_array', GCPTR_ARRAY),
+                           ('signed_array', SIGNED_ARRAY)))
+        gcdata = self.gcdata
+        #
+        def ll_count_locations(gc, addr):
+            gcdata._gc_tealet_count += 1
+        #
+        def ll_save_locations(gc, addr):
+            gcref = llmemory.cast_adr_to_ptr(addr.address[0], llmemory.GCREF)
+            gcdata._gc_tealet_array[gcdata._gc_tealet_count] = gcref
+            gcdata._gc_tealet_count += 1
+        #
+        def ll_restore_locations(gc, addr):
+            gcref = gcdata._gc_tealet_array[gcdata._gc_tealet_count]
+            gcdata._gc_tealet_count += 1
+            addr.address[0] = llmemory.cast_ptr_to_adr(gcref)
+        #
+        def ll_save_stack_roots(walker):
+            gcdata._gc_tealet_count = 0
+            self.walk_stack_roots(ll_count_locations)
+            count = gcdata._gc_tealet_count
+            gcdata._gc_tealet_count = 0
+            gcdata._gc_tealet_array = lltype.malloc(GCPTR_ARRAY.TO, count)
+            self.walk_stack_roots(ll_save_locations)
+            walker.gcptr_array = gcdata._gc_tealet_array
+            gcdata._gc_tealet_array = lltype.nullptr(GCPTR_ARRAY.TO)
+        #
+        def ll_restore_stack_roots(walker):
+            gcdata._gc_tealet_array = walker.gcptr_array
+            gcdata._gc_tealet_count = 0
+            self.walk_stack_roots(ll_restore_locations)
+            gcdata._gc_tealet_array = lltype.nullptr(GCPTR_ARRAY.TO)
+        #
+        self.ll_save_stack_roots_ptr = getfn(ll_save_stack_roots,
+                                             [annmodel.SomePtr(WALKER_PTR)],
+                                             annmodel.s_None,
+                                             minimal_transform=False)
+        self.ll_restore_stack_roots_ptr = getfn(ll_restore_stack_roots,
+                                                [annmodel.SomePtr(WALKER_PTR)],
+                                                annmodel.s_None,
+                                                minimal_transform=False)
 
     def need_thread_support(self, gctransformer, getfn):
         # Threads supported "out of the box" by the rest of the code.
