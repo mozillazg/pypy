@@ -244,6 +244,12 @@ class BaseArray(Wrappable):
     def descr_len(self, space):
         return self.get_concrete().descr_len(space)
 
+    def descr_get_size(self, space):
+        return space.wrap(self.find_size())
+
+    def descr_get_ndim(self, space):
+        return space.wrap(self.find_ndim())
+
     def descr_getitem(self, space, w_idx):
         # TODO: indexing by tuples
         start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
@@ -285,6 +291,9 @@ class FloatWrapper(BaseArray):
         self.float_value = float_value
 
     def find_size(self):
+        raise ValueError
+
+    def find_ndim(self):
         raise ValueError
 
     def eval(self, i):
@@ -336,6 +345,12 @@ class VirtualArray(BaseArray):
             return self.forced_result.find_size()
         return self._find_size()
 
+    def find_ndim(self):
+        if self.forced_result is not None:
+            # The result has been computed and sources may be unavailable
+            return self.forced_result.find_ndim()
+        return self._find_ndim()
+
 
 class Call1(VirtualArray):
     _immutable_fields_ = ["function", "values"]
@@ -350,6 +365,9 @@ class Call1(VirtualArray):
 
     def _find_size(self):
         return self.values.find_size()
+
+    def _find_ndim(self):
+        return self.values.find_ndim()
 
     def _eval(self, i):
         return self.function(self.values.eval(i))
@@ -376,6 +394,13 @@ class Call2(VirtualArray):
         except ValueError:
             pass
         return self.right.find_size()
+
+    def _find_ndim(self):
+        try:
+            return self.left.find_ndim()
+        except ValueError:
+            pass
+        return self.right.find_ndim()
 
     def _eval(self, i):
         lhs, rhs = self.left.eval(i), self.right.eval(i)
@@ -426,9 +451,13 @@ class SingleDimSlice(ViewArray):
         self.stop = stop
         self.step = step
         self.size = slice_length
+        self.ndim = 1
 
     def find_size(self):
         return self.size
+
+    def find_ndim(self):
+        return self.ndim
 
     def calc_index(self, item):
         return (self.start + item * self.step)
@@ -440,6 +469,7 @@ class SingleDimArray(BaseArray):
     def __init__(self, size):
         BaseArray.__init__(self)
         self.size = size
+        self.ndim = 1
         self.storage = lltype.malloc(TP, size, zero=True,
                                      flavor='raw', track_allocation=False)
         # XXX find out why test_zjit explodes with trackign of allocations
@@ -449,6 +479,9 @@ class SingleDimArray(BaseArray):
 
     def find_size(self):
         return self.size
+
+    def find_ndim(self):
+        return self.ndim
 
     def eval(self, i):
         return self.storage[i]
@@ -507,6 +540,8 @@ BaseArray.typedef = TypeDef(
     __new__ = interp2app(descr_new_numarray),
 
     shape = GetSetProperty(BaseArray.descr_get_shape),
+    size = GetSetProperty(BaseArray.descr_get_size),
+    ndim = GetSetProperty(BaseArray.descr_get_ndim),
 
     __len__ = interp2app(BaseArray.descr_len),
     __getitem__ = interp2app(BaseArray.descr_getitem),
