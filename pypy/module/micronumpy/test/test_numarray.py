@@ -50,12 +50,30 @@ class AppTestNumArray(BaseNumpyAppTest):
         a = zeros(1001)
         assert repr(a) == "array([0.0, 0.0, 0.0, ..., 0.0, 0.0, 0.0])"
 
+    def test_repr_slice(self):
+        from numpy import array, zeros
+        a = array(range(5))
+        b = a[1::2]
+        assert repr(b) == "array([1.0, 3.0])"
+        a = zeros(2002)
+        b = a[::2]
+        assert repr(b) == "array([0.0, 0.0, 0.0, ..., 0.0, 0.0, 0.0])"
+
     def test_str(self):
         from numpy import array, zeros
         a = array(range(5))
         assert str(a) == "[0.0 1.0 2.0 3.0 4.0]"
         a = zeros(1001)
         assert str(a) == "[0.0 0.0 0.0 ..., 0.0 0.0 0.0]" 
+
+    def test_str_slice(self):
+        from numpy import array, zeros
+        a = array(range(5))
+        b = a[1::2]
+        assert str(b) == "[1.0 3.0]"
+        a = zeros(2002)
+        b = a[::2]
+        assert str(b) == "[0.0 0.0 0.0 ..., 0.0 0.0 0.0]"
 
     def test_getitem(self):
         from numpy import array

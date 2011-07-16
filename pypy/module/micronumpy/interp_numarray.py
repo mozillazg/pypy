@@ -341,10 +341,10 @@ class BaseArray(Wrappable):
         return space.wrap(self.find_ndim())
 
     def descr_repr(self, space):
-        return self.get_concrete().descr_repr(space)
+        return self.get_concrete()._repr(space)
 
     def descr_str(self, space):
-        return self.get_concrete().descr_str(space)
+        return self.get_concrete()._str(space)
 
     def descr_getitem(self, space, w_idx):
         # TODO: indexing by tuples and lists
@@ -548,6 +548,26 @@ class ViewArray(BaseArray):
     def calc_index(self, item):
         raise NotImplementedError
 
+    def _getnums(self, comma):
+        if self.find_size() > 1000:
+            nums = [str(self.getitem(index)) for index \
+                in range(3)]
+            nums.append("..." + "," * comma)
+            nums.extend([str(self.getitem(index)) for index \
+                in range(self.find_size() - 3, self.find_size())])
+        else:
+            nums = [str(self.getitem(index)) for index \
+                in range(self.find_size())]
+        return nums
+
+    def _repr(self, space):
+        # Simple implementation so that we can see the array. Needs work.
+        return space.wrap("array([" + ", ".join(self._getnums(False)) + "])")
+
+    def _str(self,space):
+        # Simple implementation so that we can see the array. Needs work.
+        return space.wrap("[" + " ".join(self._getnums(True)) + "]")
+
 class SingleDimSlice(ViewArray):
     _immutable_fields_ = ["start", "stop", "step", "size"]
     static_signature = Signature()
@@ -624,11 +644,11 @@ class SingleDimArray(BaseArray):
                 in range(self.find_size())]
         return nums
 
-    def descr_repr(self, space):
+    def _repr(self, space):
         # Simple implementation so that we can see the array. Needs work.
         return space.wrap("array([" + ", ".join(self._getnums(False)) + "])")
 
-    def descr_str(self,space):
+    def _str(self,space):
         # Simple implementation so that we can see the array. Needs work.
         return space.wrap("[" + " ".join(self._getnums(True)) + "]")
 
