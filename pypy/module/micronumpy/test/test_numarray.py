@@ -120,6 +120,12 @@ class AppTestNumArray(BaseNumpyAppTest):
         for i in range(5):
             assert c[i] == 4
 
+    def test_add_unequal_size(self):
+        from numpy import array
+        a = array(range(5))
+        b = array(range(3))
+        raises(ValueError, "a + b")
+
     def test_subtract(self):
         from numpy import array
         a = array(range(5))
