@@ -2619,5 +2619,42 @@ class BaseLLtypeTests(BasicTests):
         self.meta_interp(f, [], enable_opts='')
         self.check_loops(new_with_vtable=1)
 
+
+    def test_release_gil_flush_heap_cache(self):
+        from pypy.rpython.lltypesystem import rffi
+
+        T = rffi.CArrayPtr(rffi.TIME_T)
+
+        external = rffi.llexternal("time", [T], rffi.TIME_T, threadsafe=True)
+        class Lock(object):
+            @dont_look_inside
+            def acquire(self):
+                external(lltype.nullptr(T.TO))
+            @dont_look_inside
+            def release(self):
+                external(lltype.nullptr(T.TO))
+            def dealloc(self):
+                pass
+        @dont_look_inside
+        def get_lst():
+            return [0]
+        myjitdriver = JitDriver(greens=[], reds=["n", "l", "lock"])
+        def f(n):
+            lock = Lock()
+            l = 0
+            while n > 0:
+                myjitdriver.jit_merge_point(lock=lock, l=l, n=n)
+                x = get_lst()
+                l += len(x)
+                lock.acquire()
+                # Thist must not reuse the previous one.
+                n -= len(x)
+                lock.release()
+            lock.dealloc()
+            return n
+        res = self.meta_interp(f, [10])
+        self.check_loops(arraylen_gc=2)
+
+
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
     pass
