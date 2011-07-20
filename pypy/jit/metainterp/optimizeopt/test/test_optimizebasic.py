@@ -1755,6 +1755,48 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
+    def test_duplicate_getarrayitem_after_setarrayitem_bug(self):
+        ops = """
+        [p0, i0, i1]
+        setarrayitem_gc(p0, 0, i0, descr=arraydescr)
+        i6 = int_add(i0, 1)
+        setarrayitem_gc(p0, i1, i6, descr=arraydescr)
+        i10 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i11 = int_add(i10, i0)
+        jump(p0, i11, i1)
+        """
+        expected = """
+        [p0, i0, i1]
+        i6 = int_add(i0, 1)
+        setarrayitem_gc(p0, 0, i0, descr=arraydescr)
+        setarrayitem_gc(p0, i1, i6, descr=arraydescr)
+        i10 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i11 = int_add(i10, i0)
+        jump(p0, i11, i1)
+        """
+        self.optimize_loop(ops, expected)
+
+    def test_duplicate_getarrayitem_after_setarrayitem_bug2(self):
+        ops = """
+        [p0, i0, i1]
+        i2 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i6 = int_add(i0, 1)
+        setarrayitem_gc(p0, i1, i6, descr=arraydescr)
+        i10 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i11 = int_add(i10, i2)
+        jump(p0, i11, i1)
+        """
+        expected = """
+        [p0, i0, i1]
+        i2 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i6 = int_add(i0, 1)
+        setarrayitem_gc(p0, i1, i6, descr=arraydescr)
+        i10 = getarrayitem_gc(p0, 0, descr=arraydescr)
+        i11 = int_add(i10, i2)
+        jump(p0, i11, i1)
+        """
+        self.optimize_loop(ops, expected)
+
     def test_bug_1(self):
         ops = """
         [i0, p1]
@@ -4511,7 +4553,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
-    def test_strslice_with_other_stuff(self):
+    def test_strslice_subtraction_folds(self):
         ops = """
         [p0, i0]
         i1 = int_add(i0, 1)
@@ -4529,6 +4571,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         jump(p0, i1)
         """
         self.optimize_strunicode_loop(ops, expected)
+
+    def test_float_mul_reversed(self):
+        ops = """
+        [f0, f1]
+        f2 = float_mul(f0, f1)
+        f3 = float_mul(f1, f0)
+        jump(f2, f3)
+        """
+        expected = """
+        [f0, f1]
+        f2 = float_mul(f0, f1)
+        jump(f2, f2)
+        """
+        self.optimize_loop(ops, expected)
 
 
 class TestLLtype(BaseTestOptimizeBasic, LLtypeMixin):
