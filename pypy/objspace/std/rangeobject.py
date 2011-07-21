@@ -161,29 +161,6 @@ def list_pop__RangeList_ANY(space, w_rangelist, w_idx=-1):
                              space.wrap("pop index out of range"))
     raise FailedToImplement
 
-def list_reverse__RangeList(space, w_rangelist):
-    # probably somewhat useless, but well...
-    if w_rangelist.w_list is not None:
-        raise FailedToImplement
-    w_rangelist.start = w_rangelist.getitem_unchecked(w_rangelist.length-1)
-    w_rangelist.step = -w_rangelist.step
-
-def list_sort__RangeList_None_None_ANY(space, w_rangelist, w_cmp,
-                                       w_keyfunc, w_reverse):
-    # even more useless but fun
-    has_reverse = space.is_true(w_reverse)
-    if w_rangelist.w_list is not None:
-        raise FailedToImplement
-    if has_reverse:
-        factor = -1
-    else:
-        factor = 1
-    reverse = w_rangelist.step * factor < 0
-    if reverse:
-        w_rangelist.start = w_rangelist.getitem_unchecked(w_rangelist.length-1)
-        w_rangelist.step = -w_rangelist.step
-    return space.w_None
-
 
 class W_RangeIterObject(iterobject.W_AbstractSeqIterObject):
     pass
