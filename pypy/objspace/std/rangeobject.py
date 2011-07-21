@@ -23,6 +23,8 @@ def length(start, stop, step):
 
 class W_RangeListObject(W_Object):
     typedef = listtype.list_typedef
+
+    _immutable_fields_ = ['start', 'step', 'length']
     
     def __init__(w_self, start, step, length):
         assert step != 0
@@ -193,16 +195,6 @@ def next__RangeIter(space, w_rangeiter):
     w_rangeiter.index = index + 1
     return w_item
 
-# XXX __length_hint__()
-##def len__RangeIter(space,  w_rangeiter):
-##    if w_rangeiter.w_seq is None:
-##        return wrapint(space, 0)
-##    index = w_rangeiter.index
-##    w_length = space.len(w_rangeiter.w_seq)
-##    w_len = space.sub(w_length, wrapint(space, index))
-##    if space.is_true(space.lt(w_len, wrapint(space, 0))):
-##        w_len = wrapint(space, 0)
-##    return w_len
 
 registerimplementation(W_RangeListObject)
 registerimplementation(W_RangeIterObject)
