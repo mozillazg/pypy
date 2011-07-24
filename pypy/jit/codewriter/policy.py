@@ -58,6 +58,8 @@ class JitPolicy(object):
                             self._reject_function(func))
             contains_loop = contains_loop and not getattr(
                     func, '_jit_unroll_safe_', False)
+            contains_loop = contains_loop and not getattr(
+                    func, '_jit_unroll_if_const_', False)
 
         unsupported = contains_unsupported_variable_type(graph,
                                                          self.supports_floats,

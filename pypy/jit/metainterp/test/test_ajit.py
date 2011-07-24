@@ -3,7 +3,7 @@ import sys
 from pypy.rlib.jit import JitDriver, we_are_jitted, hint, dont_look_inside
 from pypy.rlib.jit import loop_invariant, elidable, promote
 from pypy.rlib.jit import jit_debug, assert_green, AssertGreenFailed
-from pypy.rlib.jit import unroll_safe, current_trace_length
+from pypy.rlib.jit import unroll_safe, current_trace_length, unroll_if_const
 from pypy.jit.metainterp import pyjitpl, history
 from pypy.jit.metainterp.warmstate import set_future_value
 from pypy.jit.metainterp.warmspot import get_stats
@@ -2400,6 +2400,34 @@ class BasicTests:
         # 1 preamble and 6 speciealized versions of each loop
         self.check_tree_loop_count(2*(1 + 6))
 
+    def test_unroll_if_const(self):
+        @unroll_if_const(0)
+        def f(arg):
+            s = 0
+            while arg > 0:
+                s += arg
+                arg -= 1
+            return s
+
+        driver = JitDriver(greens = ['code'], reds = ['n', 'arg', 's'])
+
+        def main(code, n, arg):
+            s = 0
+            while n > 0:
+                driver.jit_merge_point(code=code, n=n, arg=arg, s=s)
+                if code == 0:
+                    s += f(arg)
+                else:
+                    s += f(1)
+                n -= 1
+            return s
+
+        res = self.meta_interp(main, [0, 10, 2], enable_opts='')
+        assert res == main(0, 10, 2)
+        self.check_loops(call=1)
+        res = self.meta_interp(main, [1, 10, 2], enable_opts='')
+        assert res == main(0, 10, 2)
+        self.check_loops(call=0)
 
 class TestOOtype(BasicTests, OOJitMixin):
 

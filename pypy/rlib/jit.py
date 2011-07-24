@@ -41,6 +41,14 @@ def hint(x, **kwds):
     """
     return x
 
+def unroll_if_const(argno):
+    """ Mark function as loop unrollable if arg number argno is a constant
+    """
+    def decorator(f):
+        f._jit_unroll_if_const_ = (argno,)
+        return f
+    return decorator
+
 @specialize.argtype(0)
 def promote(x):
     return hint(x, promote=True)

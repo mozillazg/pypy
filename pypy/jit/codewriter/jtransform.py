@@ -337,6 +337,15 @@ class Transformer(object):
         op1 = SpaceOperation('-live-', [], None)
         return [op0, op1]
 
+    def handle_regularifconst_call(self, op):
+        """ A direct call that turns into inline_ifconst_call_xxx. The first
+        argument is jitcode, then number of const arg then calldescr and
+        finally all other args
+        """
+        import pdb
+        pdb.set_trace()
+        [targetgraph] = self.callcontrol.graphs_from(op)
+
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
         # dispatch to various implementations depending on the oopspec_name
