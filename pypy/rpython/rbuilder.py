@@ -12,7 +12,7 @@ class AbstractStringBuilderRepr(Repr):
             v_arg = hop.inputconst(lltype.Signed, INIT_SIZE)
         else:
             v_arg = hop.inputarg(lltype.Signed, 0)
-        hop.exception_cannot_occur()
+        hop.exception_is_here()
         return hop.gendirectcall(self.ll_new, v_arg)
 
     def rtype_method_append(self, hop):
@@ -22,18 +22,18 @@ class AbstractStringBuilderRepr(Repr):
         else:
             vlist = hop.inputargs(self, self.string_repr)
             func = self.ll_append
-        hop.exception_cannot_occur()
+        hop.exception_is_here()
         return hop.gendirectcall(func, *vlist)
 
     def rtype_method_append_slice(self, hop):
         vlist = hop.inputargs(self, self.string_repr,
                               lltype.Signed, lltype.Signed)
-        hop.exception_cannot_occur()
+        hop.exception_is_here()
         return hop.gendirectcall(self.ll_append_slice, *vlist)
 
     def rtype_method_append_multiple_char(self, hop):
         vlist = hop.inputargs(self, self.char_repr, lltype.Signed)
-        hop.exception_cannot_occur()
+        hop.exception_is_here()
         return hop.gendirectcall(self.ll_append_multiple_char, *vlist)
 
     def rtype_method_getlength(self, hop):
@@ -43,5 +43,5 @@ class AbstractStringBuilderRepr(Repr):
 
     def rtype_method_build(self, hop):
         vlist = hop.inputargs(self)
-        hop.exception_cannot_occur()
+        hop.exception_is_here()
         return hop.gendirectcall(self.ll_build, *vlist)
