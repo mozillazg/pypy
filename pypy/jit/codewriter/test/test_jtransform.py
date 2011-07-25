@@ -330,6 +330,8 @@ def regular_ifconst_call_test(argtypes, restype, expectedkind):
     reskind = getkind(restype)[0]
     assert op0.opname == 'inline_ifconst_call_%s_%s' % (expectedkind, reskind)
     assert op0.args[0] == 'somejitcode'
+    assert op0.args[1].value == 0
+    assert op0.args[2] == 'calldescr'
 
 def direct_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)
