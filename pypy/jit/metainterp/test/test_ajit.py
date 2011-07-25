@@ -2424,10 +2424,10 @@ class BasicTests:
 
         res = self.meta_interp(main, [0, 10, 2], enable_opts='')
         assert res == main(0, 10, 2)
-        self.check_loops(call=1)
+        self.check_loops(call_may_force=1)
         res = self.meta_interp(main, [1, 10, 2], enable_opts='')
-        assert res == main(0, 10, 2)
-        self.check_loops(call=0)
+        assert res == main(1, 10, 2)
+        self.check_loops(call_may_force=0)
 
 class TestOOtype(BasicTests, OOJitMixin):
 

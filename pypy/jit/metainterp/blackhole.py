@@ -1035,6 +1035,53 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
                              args_i, args_r, args_f)
 
+    @arguments("cpu", "j", "i", "R", returns="i")
+    def bhimpl_inline_ifconst_call_r_i(cpu, jitcode, no, args_r):
+        return cpu.bh_call_i(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             None, args_r, None)
+    @arguments("cpu", "j", "i", "R", returns="r")
+    def bhimpl_inline_ifconst_call_r_r(cpu, jitcode, no, args_r):
+        return cpu.bh_call_r(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             None, args_r, None)
+    @arguments("cpu", "j", "i", "R")
+    def bhimpl_inline_ifconst_call_r_v(cpu, jitcode, no, args_r):
+        return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             None, args_r, None)
+
+    @arguments("cpu", "j", "i", "I", "R", returns="i")
+    def bhimpl_inline_ifconst_call_ir_i(cpu, jitcode, no, args_i, args_r):
+        return cpu.bh_call_i(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, None)
+    @arguments("cpu", "j", "i", "I", "R", returns="r")
+    def bhimpl_inline_ifconst_call_ir_r(cpu, jitcode, no, args_i, args_r):
+        return cpu.bh_call_r(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, None)
+    @arguments("cpu", "j", "i", "I", "R")
+    def bhimpl_inline_ifconst_call_ir_v(cpu, jitcode, no, args_i, args_r):
+        return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, None)
+
+    @arguments("cpu", "j", "i", "I", "R", "F", returns="i")
+    def bhimpl_inline_ifconst_call_irf_i(cpu, jitcode, no, args_i, args_r,
+                                         args_f):
+        return cpu.bh_call_i(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, args_f)
+    @arguments("cpu", "j", "i", "I", "R", "F", returns="r")
+    def bhimpl_inline_ifconst_call_irf_r(cpu, jitcode, no, args_i, args_r,
+                                         args_f):
+        return cpu.bh_call_r(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, args_f)
+    @arguments("cpu", "j", "i", "I", "R", "F", returns="f")
+    def bhimpl_inline_ifconst_call_irf_f(cpu, jitcode, no, args_i, args_r,
+                                         args_f):
+        return cpu.bh_call_f(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, args_f)
+    @arguments("cpu", "j", "i", "I", "R", "F")
+    def bhimpl_inline_ifconst_call_irf_v(cpu, jitcode, no, args_i, args_r,
+                                         args_f):
+        return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
+                             args_i, args_r, args_f)
+
     @arguments("cpu", "d", "i", returns="r")
     def bhimpl_new_array(cpu, arraydescr, length):
         return cpu.bh_new_array(arraydescr, length)
