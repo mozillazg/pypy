@@ -144,6 +144,17 @@ def test_guess_call_kind_and_calls_from_graphs():
     assert res is None
     assert cc.guess_call_kind(op) == 'residual'
 
+    class funcptr:
+        class graph:
+            class func:
+                _jit_unroll_if_const_ = (0,)
+
+    op = SpaceOperation('direct_call', [Constant(funcptr), Variable()],
+                        Variable())
+    res = cc.graphs_from(op)
+    assert res is None
+    assert cc.guess_call_kind(op) == 'regular_ifconst'
+
 # ____________________________________________________________
 
 def test_get_jitcode():
