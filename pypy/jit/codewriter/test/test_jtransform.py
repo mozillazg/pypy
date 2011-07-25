@@ -60,7 +60,7 @@ class FakeRegularIfConstCallControl:
             _jit_unroll_if_const_ = (0,)
     
     def guess_call_kind(self, op):
-        return 'regularifconst'
+        return 'regular_ifconst'
     def graphs_from(self, op):
         return [self.somegraph]
     def get_jitcode(self, graph, called_from=None):

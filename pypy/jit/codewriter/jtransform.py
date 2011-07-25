@@ -337,7 +337,7 @@ class Transformer(object):
         op1 = SpaceOperation('-live-', [], None)
         return [op0, op1]
 
-    def handle_regularifconst_call(self, op):
+    def handle_regular_ifconst_call(self, op):
         """ A direct call that turns into inline_ifconst_call_xxx. The first
         argument is jitcode, then number of const arg then calldescr and
         finally all other args
