@@ -139,7 +139,7 @@ class CallControl(object):
                 return 'builtin'
             if (hasattr(targetgraph, 'func') and
                 hasattr(targetgraph.func, '_jit_unroll_if_const_')):
-                return 'regularifconst'
+                return 'regular_ifconst'
         elif op.opname == 'oosend':
             SELFTYPE, methname, opargs = support.decompose_oosend(op)
             if SELFTYPE.oopspec_name is not None:
