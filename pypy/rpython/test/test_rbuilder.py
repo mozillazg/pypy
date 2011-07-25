@@ -27,7 +27,9 @@ class BaseTestStringBuilder(BaseRtypingTest):
             s.append("a")
             s.append("abc")
             s.append_slice("abc", 1, 2)
+            s.append_slice("abc", 1, 1)
             s.append_multiple_char('d', 4)
+            s.append_multiple_char('d', 0)
             return s.build()
         res = self.ll_to_string(self.interpret(func, []))
         assert res == "aabcbdddd"
@@ -36,6 +38,7 @@ class BaseTestStringBuilder(BaseRtypingTest):
         def func():
             s = StringBuilder(4)
             s.append("abcd")
+            s.append("")
             s.append("defg")
             s.append("rty")
             return s.build()
@@ -47,6 +50,7 @@ class BaseTestStringBuilder(BaseRtypingTest):
             s = UnicodeBuilder()
             s.append(u'a')
             s.append(u'abc')
+            s.append(u'')
             s.append(u'abcdef')
             s.append_slice(u'abc', 1, 2)
             s.append_multiple_char(u'u', 4)
