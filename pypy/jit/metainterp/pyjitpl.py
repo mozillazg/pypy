@@ -751,6 +751,27 @@ class MIFrame(object):
     opimpl_inline_call_irf_f = _opimpl_inline_call3
     opimpl_inline_call_irf_v = _opimpl_inline_call3
 
+    @arguments("jitcode", "int", "boxes")
+    def _opimpl_inline_ifconst_call1(self, jitcode, no, argboxes):
+        return self.do_inline_ifconst_call(jitcode, no, argboxes)
+    @arguments("jitcode", "int", "boxes2")
+    def _opimpl_inline_ifconst_call2(self, jitcode, no, argboxes):
+        return self.do_inline_ifconst_call(jitcode, no, argboxes)
+    @arguments("jitcode", "int", "boxes3")
+    def _opimpl_inline_ifconst_call3(self, jitcode, no, argboxes):
+        return self.do_inline_ifconst_call(jitcode, no, argboxes)
+
+    opimpl_inline_ifconst_call_r_i = _opimpl_inline_ifconst_call1
+    opimpl_inline_ifconst_call_r_r = _opimpl_inline_ifconst_call1
+    opimpl_inline_ifconst_call_r_v = _opimpl_inline_ifconst_call1
+    opimpl_inline_ifconst_call_ir_i = _opimpl_inline_ifconst_call2
+    opimpl_inline_ifconst_call_ir_r = _opimpl_inline_ifconst_call2
+    opimpl_inline_ifconst_call_ir_v = _opimpl_inline_ifconst_call2
+    opimpl_inline_ifconst_call_irf_i = _opimpl_inline_ifconst_call3
+    opimpl_inline_ifconst_call_irf_r = _opimpl_inline_ifconst_call3
+    opimpl_inline_ifconst_call_irf_f = _opimpl_inline_ifconst_call3
+    opimpl_inline_ifconst_call_irf_v = _opimpl_inline_ifconst_call3
+
     @arguments("box", "descr", "boxes")
     def _opimpl_residual_call1(self, funcbox, calldescr, argboxes):
         return self.do_residual_or_indirect_call(funcbox, calldescr, argboxes)
@@ -1293,6 +1314,14 @@ class MIFrame(object):
             return self.metainterp.perform_call(jitcode, argboxes)
         else:
             # but we should not follow calls to that graph
+            return self.do_residual_call(funcbox, calldescr, argboxes)
+
+    def do_inline_ifconst_call(self, jitcode, no, argboxes):
+        if isinstance(argboxes[no], Const):
+            return self.metainterp.perform_call(jitcode, argboxes)
+        else:
+            calldescr = jitcode.calldescr
+            funcbox = ConstInt(jitcode.get_fnaddr_as_int())
             return self.do_residual_call(funcbox, calldescr, argboxes)
 
 # ____________________________________________________________
