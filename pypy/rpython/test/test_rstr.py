@@ -502,6 +502,11 @@ class AbstractTestRstr(BaseRtypingTest):
         res = self.interpret(moreThanOne, list(args))
         assert self.ll_to_string(res) == moreThanOne(*args)
 
+        def onething(a):
+            return const("%x" % a)
+        res = self.interpret(onething, [10])
+        assert self.ll_to_string(res) == onething(10)
+
     def test_strformat_nontuple(self):
         const = self.const
         def percentD(i):
