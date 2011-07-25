@@ -347,7 +347,8 @@ class Transformer(object):
                                                called_from=self.graph)
         no = targetgraph.func._jit_unroll_if_const_[0]
         c_no = Constant(no, lltype.Signed)
-        op0 = self.rewrite_call(op, 'inline_ifconst_call', [jitcode, c_no])
+        op0 = self.rewrite_call(op, 'inline_ifconst_call', [jitcode, c_no,
+                                                            op.args[0]])
         op1 = SpaceOperation('-live-', [], None)
         return [op0, op1]
 
