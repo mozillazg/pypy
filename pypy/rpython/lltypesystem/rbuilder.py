@@ -68,6 +68,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     def ll_append(ll_builder, ll_str):
         used = ll_builder.used
         lgt = len(ll_str.chars)
+        if lgt == 0:
+            return
         needed = lgt + used
         if needed > ll_builder.allocated:
             ll_builder.grow(ll_builder, lgt)
@@ -84,6 +86,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
     @staticmethod
     def ll_append_slice(ll_builder, ll_str, start, end):
         needed = end - start
+        if needed == 0:
+            return
         used = ll_builder.used
         if needed + used > ll_builder.allocated:
             ll_builder.grow(ll_builder, needed)
@@ -93,6 +97,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 
     @staticmethod
     def ll_append_multiple_char(ll_builder, char, times):
+        if times == 0:
+            return
         used = ll_builder.used
         if times + used > ll_builder.allocated:
             ll_builder.grow(ll_builder, times)
