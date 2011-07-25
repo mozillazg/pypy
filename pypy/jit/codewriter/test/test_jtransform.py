@@ -54,6 +54,21 @@ class FakeRegularCallControl:
         assert graph == 'somegraph'
         return 'somejitcode'
 
+class FakeRegularIfConstCallControl:
+    class somegraph:
+        class func:
+            _jit_unroll_if_const_ = (0,)
+    
+    def guess_call_kind(self, op):
+        return 'regularifconst'
+    def graphs_from(self, op):
+        return [self.somegraph]
+    def get_jitcode(self, graph, called_from=None):
+        assert graph is self.somegraph
+        return 'somejitcode'
+    def getcalldescr(self, op):
+        return 'calldescr'
+
 class FakeResidualIndirectCallControl:
     def guess_call_kind(self, op):
         return 'residual'
@@ -274,6 +289,7 @@ def test_calls():
               yield direct_call_test, ARGS, RESTYPE, expectedkind
               yield indirect_residual_call_test, ARGS, RESTYPE, expectedkind
               yield indirect_regular_call_test, ARGS, RESTYPE, expectedkind
+              yield regular_ifconst_call_test, ARGS, RESTYPE, expectedkind
 
 def get_direct_call_op(argtypes, restype):
     FUNC = lltype.FuncType(argtypes, restype)
@@ -304,6 +320,16 @@ def residual_call_test(argtypes, restype, expectedkind):
         assert kind == 'void' or kind[0] in expectedkind
     assert op1.opname == '-live-'
     assert op1.args == []
+
+def regular_ifconst_call_test(argtypes, restype, expectedkind):
+    op = get_direct_call_op(argtypes, restype)
+    tr = Transformer(FakeCPU(), FakeRegularIfConstCallControl())
+    tr.graph = 'graph'
+    oplist = tr.rewrite_operation(op)
+    op0, op1 = oplist
+    reskind = getkind(restype)[0]
+    assert op0.opname == 'inline_ifconst_call_%s_%s' % (expectedkind, reskind)
+    assert op0.args[0] == 'somejitcode'
 
 def direct_call_test(argtypes, restype, expectedkind):
     op = get_direct_call_op(argtypes, restype)

@@ -342,9 +342,15 @@ class Transformer(object):
         argument is jitcode, then number of const arg then calldescr and
         finally all other args
         """
-        import pdb
-        pdb.set_trace()
         [targetgraph] = self.callcontrol.graphs_from(op)
+        jitcode = self.callcontrol.get_jitcode(targetgraph,
+                                               called_from=self.graph)
+        no = targetgraph.func._jit_unroll_if_const_[0]
+        calldescr = self.callcontrol.getcalldescr(op)
+        op0 = self.rewrite_call(op, 'inline_ifconst_call', [jitcode, no,
+                                                            calldescr])
+        op1 = SpaceOperation('-live-', [], None)
+        return [op0, op1]
 
     def handle_builtin_call(self, op):
         oopspec_name, args = support.decode_builtin_call(op)
