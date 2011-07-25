@@ -70,7 +70,7 @@ class CallControl(object):
                     continue
                 kind = self.guess_call_kind(op, is_candidate)
                 # use callers() to view the calling chain in pdb
-                if kind != "regular":
+                if kind != "regular" and kind != 'regular_ifconst':
                     continue
                 for graph in self.graphs_from(op, is_candidate):
                     if graph in candidate_graphs:
