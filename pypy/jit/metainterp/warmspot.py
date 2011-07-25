@@ -194,8 +194,7 @@ class WarmRunnerDesc(object):
         self.make_enter_functions()
         self.rewrite_jit_merge_points(policy)
 
-        verbose = not self.cpu.translate_support_code
-        self.codewriter.make_jitcodes(verbose=verbose)
+        self.codewriter.make_jitcodes(verbose=False)
         self.rewrite_can_enter_jits()
         self.rewrite_set_param()
         self.rewrite_force_virtual(vrefinfo)
