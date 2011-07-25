@@ -920,6 +920,39 @@ class LLHelpers(AbstractLLHelpers):
         return string_repr.convert_const(s)
     ll_constant._annspecialcase_ = 'specialize:memo'
 
+    @classmethod
+    def _stringformat_one_elem(cls, thing, argsiter, hop):
+        InstanceRepr = hop.rtyper.type_system.rclass.InstanceRepr
+        if isinstance(thing, tuple):
+            code = thing[0]
+            vitem, r_arg = argsiter.next()
+            if not hasattr(r_arg, 'll_str'):
+                raise TyperError("ll_str unsupported for: %r" % r_arg)
+            if code == 's' or (code == 'r' and isinstance(r_arg, InstanceRepr)):
+                vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
+            elif code == 'd':
+                assert isinstance(r_arg, IntegerRepr)
+                #vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
+                vchunk = hop.gendirectcall(ll_str.ll_int2dec, vitem)
+            elif code == 'f':
+                #assert isinstance(r_arg, FloatRepr)
+                vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
+            elif code == 'x':
+                assert isinstance(r_arg, IntegerRepr)
+                vchunk = hop.gendirectcall(ll_str.ll_int2hex, vitem,
+                                           inputconst(Bool, False))
+            elif code == 'o':
+                assert isinstance(r_arg, IntegerRepr)
+                vchunk = hop.gendirectcall(ll_str.ll_int2oct, vitem,
+                                           inputconst(Bool, False))
+            else:
+                raise TyperError, "%%%s is not RPython" % (code, )
+        else:
+            from pypy.rpython.lltypesystem.rstr import string_repr
+            vchunk = inputconst(string_repr, thing)
+        return vchunk
+
+    @classmethod
     def do_stringformat(cls, hop, sourcevarsrepr):
         s_str = hop.args_s[0]
         assert s_str.is_constant()
@@ -928,46 +961,20 @@ class LLHelpers(AbstractLLHelpers):
         size = inputconst(Signed, len(things)) # could be unsigned?
         cTEMP = inputconst(Void, TEMP)
         cflags = inputconst(Void, {'flavor': 'gc'})
+        argsiter = iter(sourcevarsrepr)
+
+        if len(things) == 1:
+            return cls._stringformat_one_elem(things[0], argsiter, hop)
         vtemp = hop.genop("malloc_varsize", [cTEMP, cflags, size],
                           resulttype=Ptr(TEMP))
 
-        argsiter = iter(sourcevarsrepr)
-
-        InstanceRepr = hop.rtyper.type_system.rclass.InstanceRepr
         for i, thing in enumerate(things):
-            if isinstance(thing, tuple):
-                code = thing[0]
-                vitem, r_arg = argsiter.next()
-                if not hasattr(r_arg, 'll_str'):
-                    raise TyperError("ll_str unsupported for: %r" % r_arg)
-                if code == 's' or (code == 'r' and isinstance(r_arg, InstanceRepr)):
-                    vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-                elif code == 'd':
-                    assert isinstance(r_arg, IntegerRepr)
-                    #vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-                    vchunk = hop.gendirectcall(ll_str.ll_int2dec, vitem)
-                elif code == 'f':
-                    #assert isinstance(r_arg, FloatRepr)
-                    vchunk = hop.gendirectcall(r_arg.ll_str, vitem)
-                elif code == 'x':
-                    assert isinstance(r_arg, IntegerRepr)
-                    vchunk = hop.gendirectcall(ll_str.ll_int2hex, vitem,
-                                               inputconst(Bool, False))
-                elif code == 'o':
-                    assert isinstance(r_arg, IntegerRepr)
-                    vchunk = hop.gendirectcall(ll_str.ll_int2oct, vitem,
-                                               inputconst(Bool, False))
-                else:
-                    raise TyperError, "%%%s is not RPython" % (code, )
-            else:
-                from pypy.rpython.lltypesystem.rstr import string_repr
-                vchunk = inputconst(string_repr, thing)
             i = inputconst(Signed, i)
+            vchunk = cls._stringformat_one_elem(thing, argsiter, hop)
             hop.genop('setarrayitem', [vtemp, i, vchunk])
 
         hop.exception_cannot_occur()   # to ignore the ZeroDivisionError of '%'
         return hop.gendirectcall(cls.ll_join_strs, size, vtemp)
-    do_stringformat = classmethod(do_stringformat)
 
 TEMP = GcArray(Ptr(STR))
 
