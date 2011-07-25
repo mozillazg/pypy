@@ -95,10 +95,14 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         ll_str.copy_contents(ll_str, ll_builder.buf, start, used, needed)
         ll_builder.used = needed + used
 
-    @staticmethod
-    def ll_append_multiple_char(ll_builder, char, times):
+    @classmethod
+    def ll_append_multiple_char(cls, ll_builder, char, times):
         if times == 0:
             return
+        cls._ll_append_multiple_char(ll_builder, char, times)
+
+    @staticmethod
+    def _ll_append_multiple_char(ll_builder, char, times):
         used = ll_builder.used
         if times + used > ll_builder.allocated:
             ll_builder.grow(ll_builder, times)
