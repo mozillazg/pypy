@@ -4,6 +4,7 @@ String formatting routines.
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.rfloat import formatd, DTSF_ALT, isnan, isinf
+from pypy.rlib import jit
 from pypy.interpreter.error import OperationError
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
@@ -233,6 +234,7 @@ def make_formatter_subclass(do_unicode):
 
             return w_value
 
+        @jit.unroll_safe
         def peel_flags(self):
             self.f_ljust = False
             self.f_sign  = False
@@ -255,6 +257,7 @@ def make_formatter_subclass(do_unicode):
                     break
                 self.forward()
 
+        @jit.unroll_safe
         def peel_num(self):
             space = self.space
             c = self.peekchr()
@@ -276,7 +279,9 @@ def make_formatter_subclass(do_unicode):
                 c = self.peekchr()
             return result
 
-        def format(self):
+        # Note: fmt is passed here only to specialize on
+        @jit.unroll_if_const(1)
+        def format(self, fmt):
             lgt = len(self.fmt) + 4 * len(self.values_w) + 10
             if do_unicode:
                 result = UnicodeBuilder(lgt)
@@ -496,7 +501,7 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
         fmt = space.str_w(w_fmt)
         formatter = StringFormatter(space, fmt, values_w, w_valuedict)
         try:
-            result = formatter.format()
+            result = formatter.format(fmt)
         except NeedUnicodeFormattingError:
             # fall through to the unicode case
             from pypy.objspace.std.unicodetype import plain_str2unicode
@@ -506,7 +511,7 @@ def format(space, w_fmt, values_w, w_valuedict=None, do_unicode=False):
     else:
         fmt = space.unicode_w(w_fmt)
     formatter = UnicodeFormatter(space, fmt, values_w, w_valuedict)
-    result = formatter.format()
+    result = formatter.format(fmt)
     return space.wrap(result)
 
 def mod_format(space, w_format, w_values, do_unicode=False):
