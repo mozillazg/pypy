@@ -31,7 +31,8 @@ translation_optiondescription = OptionDescription(
     BoolOption("tealet", "enable stackless features via tealets",
                default=False, cmdline="--tealet",
                requires=[("translation.type_system", "lltype"),
-                         ("translation.gctransformer", "framework")]),
+                         ("translation.gctransformer", "framework"),
+                         ("translation.gcrootfinder", "asmgcc")]), #XXX for now
     ChoiceOption("type_system", "Type system to use when RTyping",
                  ["lltype", "ootype"], cmdline=None, default="lltype",
                  requires={

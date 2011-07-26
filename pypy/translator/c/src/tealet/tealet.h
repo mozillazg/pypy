@@ -144,4 +144,10 @@ tealet_t *tealet_stub_new(tealet_t *main);
 TEALET_API
 int tealet_stub_run(tealet_t *stub, tealet_run_t run, void *run_arg);
 
+/* Hack: translate a pointer into the stack of a tealet into a pointer
+ * to where it is really stored so far.  Only to access word-sized data.
+ */
+TEALET_API
+char **_tealet_translate_pointer(tealet_t *context, char **ptr);
+
 #endif /* _TEALET_H_ */
