@@ -598,3 +598,21 @@ void tealet_delete(tealet_t *target)
     stack_free(g_main, g_target->stack_copy);
     g_free(g_main, g_target);
 }
+
+#if STACK_DIRECTION != 0
+#  error "fix _tealet_translate_pointer below"
+#endif
+char **_tealet_translate_pointer(tealet_t *context, char **ptr)
+{
+  tealet_sub_t *g_tealet = (tealet_sub_t *)context;
+  /* if g_tealet is not suspended, then stack_start is probably NULL,
+     giving nonsense in the following computation.  But then stack_saved
+     is 0, so the following test can never be true. */
+  char *p = (char *)ptr;
+  long delta = p - g_tealet->stack_start;
+  if (((unsigned long)delta) < ((unsigned long)g_tealet->stack_saved)) {
+    /* a pointer to a saved away word */
+    return (char **)(g_tealet->stack_copy + delta);
+  }
+  return ptr;
+}

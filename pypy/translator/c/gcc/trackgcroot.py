@@ -1593,31 +1593,20 @@ class GcRootTracker(object):
             {
                __asm {
                 mov\tedx, DWORD PTR [esp+4]\t; 1st argument, which is the callback
-                mov\tecx, DWORD PTR [esp+8]\t; 2nd argument, which is gcrootanchor
                 mov\teax, esp\t\t; my frame top address
                 push\teax\t\t\t; ASM_FRAMEDATA[6]
                 push\tebp\t\t\t; ASM_FRAMEDATA[5]
                 push\tedi\t\t\t; ASM_FRAMEDATA[4]
                 push\tesi\t\t\t; ASM_FRAMEDATA[3]
                 push\tebx\t\t\t; ASM_FRAMEDATA[2]
-
-            ; Add this ASM_FRAMEDATA to the front of the circular linked
-            ; list.  Let's call it 'self'.
-
-                mov\teax, DWORD PTR [ecx+4]\t\t; next = gcrootanchor->next
-                push\teax\t\t\t\t\t\t\t\t\t; self->next = next
-                push\tecx              ; self->prev = gcrootanchor
-                mov\tDWORD PTR [ecx+4], esp\t\t; gcrootanchor->next = self
-                mov\tDWORD PTR [eax+0], esp\t\t\t\t\t; next->prev = self
+                xor\teax, eax
+                push\teax\t\t\t; ASM_FRAMEDATA[1]
+                push\teax\t\t\t; ASM_FRAMEDATA[0]
 
                 call\tedx\t\t\t\t\t\t; invoke the callback
 
-            ; Detach this ASM_FRAMEDATA from the circular linked list
-                pop\tesi\t\t\t\t\t\t\t; prev = self->prev
-                pop\tedi\t\t\t\t\t\t\t; next = self->next
-                mov\tDWORD PTR [esi+4], edi\t\t; prev->next = next
-                mov\tDWORD PTR [edi+0], esi\t\t; next->prev = prev
-
+                pop\tecx\t\t\t\t; ignored      ASM_FRAMEDATA[0]
+                pop\tecx\t\t\t\t; ignored      ASM_FRAMEDATA[1]
                 pop\tebx\t\t\t\t; restore from ASM_FRAMEDATA[2]
                 pop\tesi\t\t\t\t; restore from ASM_FRAMEDATA[3]
                 pop\tedi\t\t\t\t; restore from ASM_FRAMEDATA[4]
@@ -1640,7 +1629,6 @@ class GcRootTracker(object):
             /* See description in asmgcroot.py */
             .cfi_startproc
             /* %rdi is the 1st argument, which is the callback */
-            /* %rsi is the 2nd argument, which is gcrootanchor */
             movq\t%rsp, %rax\t/* my frame top address */
             pushq\t%rax\t\t/* ASM_FRAMEDATA[8] */
             pushq\t%rbp\t\t/* ASM_FRAMEDATA[7] */
@@ -1649,26 +1637,17 @@ class GcRootTracker(object):
             pushq\t%r13\t\t/* ASM_FRAMEDATA[4] */
             pushq\t%r12\t\t/* ASM_FRAMEDATA[3] */
             pushq\t%rbx\t\t/* ASM_FRAMEDATA[2] */
+            xorq\t%rax,%rax
+            pushq\t%rax\t\t/* ASM_FRAMEDATA[1] */
+            pushq\t%rax\t\t/* ASM_FRAMEDATA[0] */
 
-            /* Add this ASM_FRAMEDATA to the front of the circular linked */
-            /* list.  Let's call it 'self'.                               */
-
-            movq\t8(%rsi), %rax\t/* next = gcrootanchor->next */
-            pushq\t%rax\t\t\t\t/* self->next = next */
-            pushq\t%rsi\t\t\t/* self->prev = gcrootanchor */
-            movq\t%rsp, 8(%rsi)\t/* gcrootanchor->next = self */
-            movq\t%rsp, 0(%rax)\t\t\t/* next->prev = self */
             .cfi_def_cfa_offset 80\t/* 9 pushes + the retaddr = 80 bytes */
 
             /* note: the Mac OS X 16 bytes aligment must be respected. */
             call\t*%rdi\t\t/* invoke the callback */
 
-            /* Detach this ASM_FRAMEDATA from the circular linked list */
-            popq\t%rsi\t\t/* prev = self->prev */
-            popq\t%rdi\t\t/* next = self->next */
-            movq\t%rdi, 8(%rsi)\t/* prev->next = next */
-            movq\t%rsi, 0(%rdi)\t/* next->prev = prev */
-
+            popq\t%rcx\t\t/* ignored      ASM_FRAMEDATA[0] */
+            popq\t%rcx\t\t/* ignored      ASM_FRAMEDATA[1] */
             popq\t%rbx\t\t/* restore from ASM_FRAMEDATA[2] */
             popq\t%r12\t\t/* restore from ASM_FRAMEDATA[3] */
             popq\t%r13\t\t/* restore from ASM_FRAMEDATA[4] */
@@ -1701,32 +1680,21 @@ class GcRootTracker(object):
             print >> output, """\
             /* See description in asmgcroot.py */
             movl\t4(%esp), %edx\t/* 1st argument, which is the callback */
-            movl\t8(%esp), %ecx\t/* 2nd argument, which is gcrootanchor */
             movl\t%esp, %eax\t/* my frame top address */
             pushl\t%eax\t\t/* ASM_FRAMEDATA[6] */
             pushl\t%ebp\t\t/* ASM_FRAMEDATA[5] */
             pushl\t%edi\t\t/* ASM_FRAMEDATA[4] */
             pushl\t%esi\t\t/* ASM_FRAMEDATA[3] */
             pushl\t%ebx\t\t/* ASM_FRAMEDATA[2] */
-
-            /* Add this ASM_FRAMEDATA to the front of the circular linked */
-            /* list.  Let's call it 'self'.                               */
-
-            movl\t4(%ecx), %eax\t/* next = gcrootanchor->next */
-            pushl\t%eax\t\t\t\t/* self->next = next */
-            pushl\t%ecx\t\t\t/* self->prev = gcrootanchor */
-            movl\t%esp, 4(%ecx)\t/* gcrootanchor->next = self */
-            movl\t%esp, 0(%eax)\t\t\t/* next->prev = self */
+            xorl\t%eax,%eax
+            pushl\t%eax\t\t/* ASM_FRAMEDATA[1] */
+            pushl\t%eax\t\t/* ASM_FRAMEDATA[0] */
 
             /* note: the Mac OS X 16 bytes aligment must be respected. */
             call\t*%edx\t\t/* invoke the callback */
 
-            /* Detach this ASM_FRAMEDATA from the circular linked list */
-            popl\t%esi\t\t/* prev = self->prev */
-            popl\t%edi\t\t/* next = self->next */
-            movl\t%edi, 4(%esi)\t/* prev->next = next */
-            movl\t%esi, 0(%edi)\t/* next->prev = prev */
-
+            popl\t%ecx\t\t/* ignored      ASM_FRAMEDATA[0] */
+            popl\t%ecx\t\t/* ignored      ASM_FRAMEDATA[1] */
             popl\t%ebx\t\t/* restore from ASM_FRAMEDATA[2] */
             popl\t%esi\t\t/* restore from ASM_FRAMEDATA[3] */
             popl\t%edi\t\t/* restore from ASM_FRAMEDATA[4] */

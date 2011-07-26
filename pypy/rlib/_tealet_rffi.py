@@ -24,3 +24,7 @@ tealet_new        = llexternal("tealet_new", [TEALET_P, TEALET_RUN_P,
                                               rffi.VOIDP], rffi.INT)
 tealet_switch     = llexternal("tealet_switch", [TEALET_P], rffi.INT)
 tealet_current    = llexternal("tealet_current", [TEALET_P], TEALET_P)
+
+_tealet_translate_pointer = llexternal("_tealet_translate_pointer",
+                                       [TEALET_P, llmemory.Address],
+                                       llmemory.Address)
