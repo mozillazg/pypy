@@ -61,13 +61,13 @@ class Switcher(object):
 switcher = Switcher()
 
 llswitcher = lltype.malloc(rffi.CArray(_tealet_rffi.TEALET_P), 1,
-                           flavor='raw', zero=True)
+                           flavor='raw', zero=True, track_allocation=False)
 
 def _new(main, starting_tealet):
     switcher.current = main.current
     switcher.target = starting_tealet
     llswitcher[0] = main.lltealet
-    r = _stack_protected_call(llhelper(FUNCNOARG, _new_critical))
+    r = _stack_protected_call(llhelper(FUNCNOARG_P, _new_critical))
     _check_exception(r)
 
 def _new_critical():
@@ -110,7 +110,7 @@ def _switch(target):
     switcher.target = target
     main.current = target
     llswitcher[0] = target.lltealet
-    r = _stack_protected_call(llhelper(FUNCNOARG, _switch_critical))
+    r = _stack_protected_call(llhelper(FUNCNOARG_P, _switch_critical))
     _check_exception(r)
 
 def _switch_critical():
@@ -154,7 +154,7 @@ def get_tealetrootwalker():
         return _tealetrootwalker
 
     from pypy.rpython.memory.gctransform.asmgcroot import (
-        WALKFRAME, CALLEE_SAVED_REGS)
+        WALKFRAME, CALLEE_SAVED_REGS, sizeofaddr)
 
     assert _asmstackrootwalker is not None, "should have been monkey-patched"
     basewalker = _asmstackrootwalker
@@ -170,12 +170,28 @@ def get_tealetrootwalker():
             if not p.context:
                 return False
             self.context = p.context
-            initialframedata = p.initialframedata
+            anchor = p.anchor
             del p
             self.curframe = lltype.malloc(WALKFRAME, flavor='raw')
             self.otherframe = lltype.malloc(WALKFRAME, flavor='raw')
-            basewalker.fill_initial_frame(self.curframe, self.initialframedata)
+            initialframedata = anchor[1]
+            ll_assert(initialframedata != llmemory.cast_ptr_to_adr(anchor),
+                      "no anchored tealet stack found")
+            ll_assert(initialframedata == anchor[0],
+                      "more than one anchored tealet stack found")
+            self.fill_initial_frame(self.curframe, initialframedata)
             return True
+
+        def fill_initial_frame(self, curframe, initialframedata):
+            # Copy&paste :-(
+            initialframedata += 2*sizeofaddr
+            reg = 0
+            while reg < CALLEE_SAVED_REGS:
+                curframe.regs_stored_at[reg] = initialframedata+reg*sizeofaddr
+                reg += 1
+            retaddraddr = initialframedata + CALLEE_SAVED_REGS * sizeofaddr
+            retaddraddr = self.translateptr(retaddraddr)
+            curframe.frame_address = retaddraddr.address[0]
 
         def teardown(self):
             lltype.free(self.curframe, flavor='raw')
@@ -197,13 +213,12 @@ def get_tealetrootwalker():
             # of course the stack itself is full of non-translated pointers.
             #
             while True:
-                callee = self.curframe
-                #
                 if not self.enumerating:
                     if not prev:
                         if not self.setup(obj):      # one-time initialization
                             return llmemory.NULL
                         prev = obj   # random value, but non-NULL
+                    callee = self.curframe
                     retaddraddr = self.translateptr(callee.frame_address)
                     retaddr = retaddraddr.address[0]
                     basewalker.locate_caller_based_on_retaddr(retaddr)
@@ -211,6 +226,7 @@ def get_tealetrootwalker():
                 #
                 # not really a loop, but kept this way for similarity
                 # with asmgcroot:
+                callee = self.curframe
                 while True:
                     location = basewalker._shape_decompressor.next()
                     if location == 0:
@@ -275,10 +291,14 @@ class SuspendedStacks:
             p = lltype.malloc(SUSPSTACK)
             p.context = _tealet_rffi.NULL_TEALET
             p.my_index = len(self.lst)
+            p.next_unused = -42000000
+            p.anchor = lltype.malloc(ASM_FRAMEDATA_HEAD_PTR.TO, flavor='raw',
+                                     track_allocation=False)
             self.lst.append(p)
         else:
             p = self.lst[self.first_unused]
             self.first_unused = p.next_unused
+        p.anchor[0] = p.anchor[1] = llmemory.cast_ptr_to_adr(p.anchor)
         return p
 
     def release(self, p):
@@ -288,21 +308,19 @@ class SuspendedStacks:
 suspendedstacks = SuspendedStacks()
 
 def _stack_protected_call(callback):
-    # :-/
     p = suspendedstacks.acquire()
-    suspendedstacks.callback = callback
-    anchor = lltype.malloc(ASM_FRAMEDATA_HEAD_PTR.TO, flavor='raw')
-    anchor[0] = anchor[1] = llmemory.cast_ptr_to_adr(anchor)
-    p.anchor = anchor
-    r = pypy_asm_stackwalk2(callback, anchor)
+    p.context = switcher.current.lltealet
+    llop.gc_assume_young_pointers(lltype.Void,
+                                  llmemory.cast_ptr_to_adr(p))
+    r = pypy_asm_stackwalk2(callback, p.anchor)
+    p.context = _tealet_rffi.NULL_TEALET
     suspendedstacks.release(p)
-    lltype.free(anchor, flavor='raw')
     return r
 
-FUNCNOARG = lltype.FuncType([], rffi.INT)
+FUNCNOARG_P = lltype.Ptr(lltype.FuncType([], rffi.INT))
 
 pypy_asm_stackwalk2 = rffi.llexternal('pypy_asm_stackwalk',
-                                      [lltype.Ptr(FUNCNOARG),
+                                      [FUNCNOARG_P,
                                        ASM_FRAMEDATA_HEAD_PTR],
                                       rffi.INT, sandboxsafe=True,
                                       _nowrapper=True)
