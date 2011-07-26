@@ -1,5 +1,5 @@
 import os
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 eci = ExternalCompilationInfo(

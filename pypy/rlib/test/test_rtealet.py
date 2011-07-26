@@ -1,4 +1,5 @@
 import py
+from pypy.config.config import ConflictConfigError
 from pypy.translator.c.test.test_standalone import StandaloneTests
 
 
@@ -9,7 +10,10 @@ class BaseTestTealet(StandaloneTests):
         config = get_pypy_config(translating=True)
         config.translation.gc = "minimark"
         config.translation.gcrootfinder = cls.gcrootfinder
-        config.translation.tealet = True
+        try:
+            config.translation.tealet = True
+        except ConflictConfigError, e:
+            py.test.skip(str(e))
         cls.config = config
 
     def test_demo1(self):
