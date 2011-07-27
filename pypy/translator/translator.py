@@ -108,14 +108,13 @@ class TranslationContext(object):
                                    type_system = type_system)
         return self.rtyper
 
-    def getexceptiontransformer(self, standalone):
+    def getexceptiontransformer(self):
         if self.rtyper is None:
             raise ValueError("no rtyper")
         if self.exceptiontransformer is not None:
-            assert self.exceptiontransformer.standalone == standalone
             return self.exceptiontransformer
         from pypy.translator.exceptiontransform import ExceptionTransformer
-        self.exceptiontransformer = ExceptionTransformer(self, standalone)
+        self.exceptiontransformer = ExceptionTransformer(self)
         return self.exceptiontransformer
 
     def checkgraphs(self):
