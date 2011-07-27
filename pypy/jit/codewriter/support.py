@@ -185,7 +185,7 @@ def _ll_2_int_floordiv_ovf_zer(x, y):
     return llop.int_floordiv(lltype.Signed, x, y)
 
 def _ll_2_int_floordiv_ovf(x, y):
-    if x == -sys.maxint - 1 and y == -1:        
+    if x == -sys.maxint - 1 and y == -1:
         raise OverflowError
     return llop.int_floordiv(lltype.Signed, x, y)
 
@@ -222,7 +222,7 @@ def _ll_1_int_abs(x):
         return -x
     else:
         return x
-        
+
 # math support
 # ------------
 
@@ -395,7 +395,7 @@ inline_calls_to = [
     ('int_lshift_ovf',       [lltype.Signed, lltype.Signed], lltype.Signed),
     ('int_abs',              [lltype.Signed],                lltype.Signed),
     ('ll_math.ll_math_sqrt', [lltype.Float],                 lltype.Float),
-    ]
+]
 
 
 class LLtypeHelpers:
@@ -419,10 +419,6 @@ class LLtypeHelpers:
     _ll_1_dict_keys  .need_result_type = True
     _ll_1_dict_values.need_result_type = True
     _ll_1_dict_items .need_result_type = True
-
-    def _ll_1_newdictiter(ITER, d):
-        return ll_rdict.ll_dictiter(lltype.Ptr(ITER), d)
-    _ll_1_newdictiter.need_result_type = True
 
     _dictnext_keys   = staticmethod(ll_rdict.ll_dictnext_group['keys'])
     _dictnext_values = staticmethod(ll_rdict.ll_dictnext_group['values'])
@@ -573,10 +569,6 @@ class OOtypeHelpers:
     _ll_1_dict_keys  .need_result_type = True
     _ll_1_dict_values.need_result_type = True
     _ll_1_dict_items .need_result_type = True
-
-    def _ll_1_newdictiter(ITER, d):
-        return oo_rdict.ll_dictiter(ITER, d)
-    _ll_1_newdictiter.need_result_type = True
 
     _dictnext_keys   = staticmethod(oo_rdict.ll_dictnext_group['keys'])
     _dictnext_values = staticmethod(oo_rdict.ll_dictnext_group['values'])
