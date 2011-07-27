@@ -243,21 +243,16 @@ class FrameworkGCTransformer(GCTransformer):
                                                annmodel.s_None)
         
         if root_walker.need_root_stack:
-            self.incr_stack_ptr = getfn(root_walker.incr_stack,
-                                       [annmodel.SomeInteger()],
-                                       annmodel.SomeAddress(),
-                                       inline = True)
-            self.decr_stack_ptr = getfn(root_walker.decr_stack,
-                                       [annmodel.SomeInteger()],
-                                       annmodel.SomeAddress(),
-                                       inline = True)
             self.get_stack_top_ptr = getfn(root_walker.get_stack_top,
                                            [], annmodel.SomeAddress(),
                                            inline = True)
+            self.set_stack_top_ptr = getfn(root_walker.set_stack_top,
+                                           [annmodel.SomeAddress()],
+                                           annmodel.s_None,
+                                           inline = True)
         else:
-            self.incr_stack_ptr = None
-            self.decr_stack_ptr = None
             self.get_stack_top_ptr = None
+            self.set_stack_top_ptr = None
         self.weakref_deref_ptr = self.inittime_helper(
             ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
         
@@ -1191,7 +1186,7 @@ class FrameworkGCTransformer(GCTransformer):
         return livevars
 
     def push_roots(self, hop, keep_current_args=False):
-        if self.incr_stack_ptr is None:
+        if self.get_stack_top_ptr is None:
             return
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         if livevars:
@@ -1200,7 +1195,7 @@ class FrameworkGCTransformer(GCTransformer):
         return livevars
 
     def pop_roots(self, hop, livevars):
-        if self.decr_stack_ptr is None:
+        if self.get_stack_top_ptr is None:
             return
         if livevars:
             hop.genop("gc_pop_roots", livevars)
