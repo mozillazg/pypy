@@ -298,7 +298,8 @@ class ShadowStackRootWalker(BaseRootWalker):
                                                       c_k, v])
                     else:
                         v_topaddr = llops.genop("direct_call",
-                                                [gct.get_stack_top_ptr])
+                                                [gct.get_stack_top_ptr],
+                                                resulttype=llmemory.Address)
                         v_newaddr = llops.genop("raw_load",
                                                 [v_topaddr, c_type, c_k],
                                                 resulttype=llmemory.Address)
