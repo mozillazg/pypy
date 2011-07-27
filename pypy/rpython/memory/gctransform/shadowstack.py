@@ -268,12 +268,17 @@ class ShadowStackRootWalker(BaseRootWalker):
             topaddrs_v[block] = (firstuse, v_topaddr)
             return v_topaddr
         #
+        # Handling of v_topaddr: the idea is that a gc_push_roots should try
+        # to reuse the v_topaddr already loaded for the current block, but
+        # not a gc_pop_roots, because that would force it to be in one of the
+        # relatively few callee-saved registers.
         negnumcolors = 0
         c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
         for block in graph.iterblocks():
             if block.operations == ():
                 continue
             llops = LowLevelOpList()
+            v_topaddr = None
             for op in block.operations:
                 if op.opname not in ("gc_push_roots", "gc_pop_roots"):
                     llops.append(op)
@@ -281,16 +286,19 @@ class ShadowStackRootWalker(BaseRootWalker):
                 for v in op.args:
                     if isinstance(v, Constant):
                         continue
-                    v_topaddr = get_v_topaddr(block, firstuse=len(llops))
                     k = ~regalloc.getcolor(v)
                     negnumcolors = min(negnumcolors, k)
                     c_k = rmodel.inputconst(lltype.Signed, k)
                     if op.opname == "gc_push_roots":
+                        v_topaddr = (v_topaddr or
+                                     get_v_topaddr(block, firstuse=len(llops)))
                         blocks_push_roots.setdefault(block, len(llops))
                         if (block, op, v) not in useless_stores:
                             llops.genop("raw_store", [v_topaddr, c_type,
                                                       c_k, v])
                     else:
+                        v_topaddr = llops.genop("direct_call",
+                                                [gct.get_stack_top_ptr])
                         v_newaddr = llops.genop("raw_load",
                                                 [v_topaddr, c_type, c_k],
                                                 resulttype=llmemory.Address)
