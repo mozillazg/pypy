@@ -6,7 +6,7 @@ from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.tool.algo.regalloc import perform_register_allocation
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
-from pypy.translator.unsimplify import copyvar
+from pypy.translator.unsimplify import copyvar, insert_empty_block
 from pypy.objspace.flow.model import Block, Link, Constant
 from pypy.objspace.flow.model import checkgraph, mkentrymap
 from pypy.annotation import model as annmodel
@@ -235,7 +235,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         added in this complete graph, and replace them with real operations.
         """
         #
-        # Use the SSA builder to find "spans" of variables that come a
+        # Use the SSA builder to find "spans" of variables that come from a
         # single point but may extend over several blocks.
         spans = DataFlowFamilyBuilder(graph).get_variable_families()
         interesting_vars = set()
@@ -243,9 +243,13 @@ class ShadowStackRootWalker(BaseRootWalker):
             for op in block.operations:
                 if op.opname in ('gc_push_roots', 'gc_pop_roots'):
                     for v in op.args:
+                        if isinstance(v, Constant):
+                            continue
                         interesting_vars.add(spans.find_rep(v))
         if not interesting_vars:
             return
+        #
+        # ---------------------------------------------------
         #
         def is_interesting(v):
             return spans.find_rep(v) in interesting_vars
@@ -259,6 +263,8 @@ class ShadowStackRootWalker(BaseRootWalker):
         #
         # We replace gc_push_roots/gc_pop_roots with individual
         # operations raw_store/raw_load
+        blocks_push_roots = {}    # {block: index-of-the-first}
+        blocks_pop_roots = {}     # {block: index-just-after-the-last}
         negnumcolors = 0
         c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
         for block in graph.iterblocks():
@@ -269,12 +275,16 @@ class ShadowStackRootWalker(BaseRootWalker):
                 if op.opname not in ("gc_push_roots", "gc_pop_roots"):
                     llops.append(op)
                     continue
-                top_addr = llops.genop("direct_call",
-                                       [gct.get_stack_top_ptr],
-                                       resulttype=llmemory.Address)
+                top_addr = None
                 for v in op.args:
                     if isinstance(v, Constant):
                         continue
+                    if op.opname == "gc_push_roots":
+                        blocks_push_roots.setdefault(block, len(llops))
+                    if top_addr is None:
+                        top_addr = llops.genop("direct_call",
+                                               [gct.get_stack_top_ptr],
+                                               resulttype=llmemory.Address)
                     k = ~regalloc.getcolor(v)
                     negnumcolors = min(negnumcolors, k)
                     c_k = rmodel.inputconst(lltype.Signed, k)
@@ -287,36 +297,119 @@ class ShadowStackRootWalker(BaseRootWalker):
                                                 [top_addr, c_type, c_k],
                                                 resulttype=llmemory.Address)
                         llops.genop("gc_reload_possibly_moved", [v_newaddr, v])
+                        blocks_pop_roots[block] = len(llops)
             block.operations[:] = llops
-        #
-        # Put at the start of the graph: "incr_stack(); fill with zeroes"
-        llops = LowLevelOpList()
         numcolors = -negnumcolors
         c_numcolors = rmodel.inputconst(lltype.Signed, numcolors)
-        llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
-                    resulttype=llmemory.Address)
-        top_addr = llops.genop("direct_call",
-                               [gct.get_stack_top_ptr],
-                               resulttype=llmemory.Address)
-        c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
-        for k in range(numcolors):
-            c_k = rmodel.inputconst(lltype.Signed, ~k)
-            llops.genop("raw_store", [top_addr, c_type, c_k, c_null])
-        graph.startblock.operations[:0] = llops
         #
-        # Put at the end of the graph: "decr_stack()"
-        llops = LowLevelOpList()
-        llops.genop("direct_call", [gct.decr_stack_ptr, c_numcolors],
-                    resulttype=llmemory.Address)
-        block = graph.returnblock
-        block.operations = list(llops)
-        [v_return] = block.inputargs
-        v_return2 = copyvar(gct.translator.annotator, v_return)
-        newexitblock = Block([v_return2])
-        newexitblock.operations = ()
-        newexitblock.exits = ()
-        block.recloseblock(Link([v_return], newexitblock))
-        graph.returnblock = newexitblock
+        # For each block, determine in which category it is:
+        #
+        #  - dead: the block does not contain any gc_push_roots/gc_pop_roots
+        #    and is not between two non-dead blocks
+        #
+        #  - start: the block contains gc_push_roots, and all blocks
+        #    leading to it are dead
+        #
+        #  - stop: the block contains gc_pop_roots, and all blocks it
+        #    goes to are dead
+        #
+        #  - startstop: the block is both starting and stopping
+        #
+        #  - alive: all other blocks
+        #
+        # The idea is to delay "incr_stack()" because sometimes the function
+        # has fast paths that don't call anything else.  Also, it is important
+        # to delay it for functions that start without having the GIL, and only
+        # acquire it as they progress.
+        #
+        # Note that it is possible to transition directly from "dead" to
+        # "alive" or back; some graphs may not have any "start" or "stop"
+        # blocks.
+        #
+        blockstate = {}
+        push_roots_and_down = self.close_downwards(graph, blocks_push_roots)
+        pop_roots_and_up = self.close_upwards(graph, blocks_pop_roots)
+        assert push_roots_and_down.issuperset(blocks_pop_roots)
+        assert pop_roots_and_up.issuperset(blocks_push_roots)
+        # dead blocks are the ones that are not in both sets at once
+        non_dead_blocks = set()
+        for block in graph.iterblocks():
+            if block in push_roots_and_down and block in pop_roots_and_up:
+                non_dead_blocks.add(block)
+            else:
+                blockstate[block] = "dead"
+        #
+        entrymap = mkentrymap(graph)
+        for block in blocks_push_roots:
+            for link in entrymap[block]:
+                if link.prevblock in non_dead_blocks:
+                    break
+            else:
+                assert block not in blockstate
+                blockstate[block] = "start"
+        for block in blocks_pop_roots:
+            for link in block.exits:
+                if link.target in non_dead_blocks:
+                    break
+            else:
+                prev = blockstate.get(block, "")
+                assert prev in ("", "start")
+                blockstate[block] = prev + "stop"
+        #
+        for block in graph.iterblocks():
+            blockstate.setdefault(block, "alive")
+        #
+        # If graph.startblock is "alive", then we need a new startblock
+        # in which to put the "incr_stack()" operation later
+        if blockstate[graph.startblock] == "alive":
+            insert_empty_startblock(gct.translator.annotator, graph)
+            blocks_push_roots[graph.startblock] = 0
+            blockstate[graph.startblock] = "start"
+        #
+        # Now detect direct transitions from "dead" to "alive", and
+        # insert new "start" blocks along the links.  Similarly, detect
+        # direct transitions from "alive" to "dead" and put a "stop" block.
+        for block in blockstate.keys():
+            if blockstate[block] == "dead":
+                for link in block.exits:
+                    if blockstate[link.target] == "alive":
+                        newblock = insert_empty_block(gct.translator.annotator,
+                                                      link)
+                        blocks_push_roots[newblock] = 0
+                        blockstate[newblock] = "start"
+            if blockstate[block] == "alive":
+                for link in block.exits:
+                    if blockstate[link.target] == "dead":
+                        newblock = insert_empty_block(gct.translator.annotator,
+                                                      link)
+                        blocks_pop_roots[newblock] = 0
+                        blockstate[newblock] = "stop"
+        #
+        # Now we can put "incr_stack(); fill with zeroes" in all "start"
+        # blocks; similarly, we put "decr_stack()" in all "stop" blocks.
+        for block in blockstate:
+            if "stop" in blockstate[block]:     # "stop" or "startstop"
+                llops = LowLevelOpList()
+                llops.genop("direct_call", [gct.decr_stack_ptr, c_numcolors],
+                            resulttype=llmemory.Address)
+                i = blocks_pop_roots[block]
+                block.operations[i:i] = llops
+                # ^^^ important: done first, in case it's a startstop block,
+                #     otherwise the index in 'blocks_push_roots[block]' is
+                #     off by one
+            if "start" in blockstate[block]:    # "start" or "startstop"
+                llops = LowLevelOpList()
+                llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
+                            resulttype=llmemory.Address)
+                top_addr = llops.genop("direct_call",
+                                       [gct.get_stack_top_ptr],
+                                       resulttype=llmemory.Address)
+                c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
+                for k in range(numcolors):
+                    c_k = rmodel.inputconst(lltype.Signed, ~k)
+                    llops.genop("raw_store", [top_addr, c_type, c_k, c_null])
+                i = blocks_push_roots[block]
+                block.operations[i:i] = llops
         #
         checkgraph(graph)
 
@@ -378,3 +471,29 @@ class ShadowStackRootWalker(BaseRootWalker):
                             useless[block, op, v] = True
                             gct.num_raw_store_avoided += 1
         return useless
+
+
+    def close_downwards(self, graph, blockset):
+        blockset = set(blockset)
+        pending = list(blockset)
+        while pending:
+            block1 = pending.pop()
+            for link in block1.exits:
+                block2 = link.target
+                if block2 not in blockset:
+                    blockset.add(block2)
+                    pending.append(block2)
+        return blockset
+
+    def close_upwards(self, graph, blockset):
+        blockset = set(blockset)
+        pending = list(blockset)
+        entrymap = mkentrymap(graph)
+        while pending:
+            block1 = pending.pop()
+            for link in entrymap[block1]:
+                block2 = link.prevblock
+                if block2 and block2 not in blockset:
+                    blockset.add(block2)
+                    pending.append(block2)
+        return blockset
