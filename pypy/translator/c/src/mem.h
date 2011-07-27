@@ -246,3 +246,9 @@ void boehm_gc_startup_code(void)
 #define OP_GC_GET_RPY_TYPE_INDEX(x, r)   r = -1
 #define OP_GC_IS_RPY_INSTANCE(x, r)      r = 0
 #define OP_GC_DUMP_RPY_HEAP(fd, r)       r = 0
+
+
+
+
+#define OP__D_INCR(r)  assert(!dbg); dbg = (&pypy_g_pypy_rpython_memory_gctypelayout_GCData)->gcd_inst_root_stack_top
+#define OP__D_DECR(r)  assert(dbg==(&pypy_g_pypy_rpython_memory_gctypelayout_GCData)->gcd_inst_root_stack_top); dbg = 0

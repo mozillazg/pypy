@@ -210,6 +210,7 @@ class FunctionCodeGenerator(object):
 
     def cfunction_body(self):
         graph = self.graph
+        yield 'void *dbg=0;'
         yield 'goto block0;'    # to avoid a warning "this label is not used"
 
         # generate the body of each block

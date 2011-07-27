@@ -393,12 +393,14 @@ class ShadowStackRootWalker(BaseRootWalker):
                 llops.genop("direct_call", [gct.decr_stack_ptr, c_numcolors],
                             resulttype=llmemory.Address)
                 i = blocks_pop_roots[block]
+                llops.genop("_d_decr", [])
                 block.operations[i:i] = llops
                 # ^^^ important: done first, in case it's a startstop block,
                 #     otherwise the index in 'blocks_push_roots[block]' is
                 #     off by one
             if "start" in blockstate[block]:    # "start" or "startstop"
                 llops = LowLevelOpList()
+                llops.genop("_d_incr", [])
                 llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
                             resulttype=llmemory.Address)
                 top_addr = llops.genop("direct_call",
