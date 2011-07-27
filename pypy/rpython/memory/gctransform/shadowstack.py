@@ -6,7 +6,7 @@ from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.tool.algo.regalloc import perform_register_allocation
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
-from pypy.translator.unsimplify import copyvar, insert_empty_block
+from pypy.translator.unsimplify import insert_empty_block, varoftype
 from pypy.objspace.flow.model import Block, Link, Constant
 from pypy.objspace.flow.model import checkgraph, mkentrymap
 from pypy.annotation import model as annmodel
@@ -22,21 +22,13 @@ class ShadowStackRootWalker(BaseRootWalker):
         # NB. 'self' is frozen, but we can use self.gcdata to store state
         gcdata = self.gcdata
 
-        def incr_stack(n):
-            top = gcdata.root_stack_top
-            gcdata.root_stack_top = top + n*sizeofaddr
-            return top
-        self.incr_stack = incr_stack
-
-        def decr_stack(n):
-            top = gcdata.root_stack_top - n*sizeofaddr
-            gcdata.root_stack_top = top
-            return top
-        self.decr_stack = decr_stack
-
         def get_stack_top():
             return gcdata.root_stack_top
         self.get_stack_top = get_stack_top
+
+        def set_stack_top(addr):
+            gcdata.root_stack_top = addr
+        self.set_stack_top = set_stack_top
 
         self.rootstackhook = gctransformer.root_stack_jit_hook
         if self.rootstackhook is None:
@@ -47,11 +39,13 @@ class ShadowStackRootWalker(BaseRootWalker):
             self.rootstackhook = collect_stack_root
 
     def push_stack(self, addr):
-        top = self.incr_stack(1)
+        top = self.get_stack_top()
         top.address[0] = addr
+        self.set_stack_top(top + sizeofaddr)
 
     def pop_stack(self):
-        top = self.decr_stack(1)
+        top = self.get_stack_top() - sizeofaddr
+        self.set_stack_top(top)
         return top.address[0]
 
     def allocate_stack(self):
@@ -265,6 +259,15 @@ class ShadowStackRootWalker(BaseRootWalker):
         # operations raw_store/raw_load
         blocks_push_roots = {}    # {block: index-of-the-first}
         blocks_pop_roots = {}     # {block: index-just-after-the-last}
+        topaddrs_v = {}           # {block: (index-of-first-use, v_topaddr)}
+        #
+        def get_v_topaddr(block, firstuse=0):
+            if block in topaddrs_v:
+                return topaddrs_v[block][1]
+            v_topaddr = varoftype(llmemory.Address, 'top')
+            topaddrs_v[block] = (firstuse, v_topaddr)
+            return v_topaddr
+        #
         negnumcolors = 0
         c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
         for block in graph.iterblocks():
@@ -275,32 +278,27 @@ class ShadowStackRootWalker(BaseRootWalker):
                 if op.opname not in ("gc_push_roots", "gc_pop_roots"):
                     llops.append(op)
                     continue
-                top_addr = None
                 for v in op.args:
                     if isinstance(v, Constant):
                         continue
-                    if op.opname == "gc_push_roots":
-                        blocks_push_roots.setdefault(block, len(llops))
-                    if top_addr is None:
-                        top_addr = llops.genop("direct_call",
-                                               [gct.get_stack_top_ptr],
-                                               resulttype=llmemory.Address)
+                    v_topaddr = get_v_topaddr(block, firstuse=len(llops))
                     k = ~regalloc.getcolor(v)
                     negnumcolors = min(negnumcolors, k)
                     c_k = rmodel.inputconst(lltype.Signed, k)
                     if op.opname == "gc_push_roots":
+                        blocks_push_roots.setdefault(block, len(llops))
                         if (block, op, v) not in useless_stores:
-                            llops.genop("raw_store", [top_addr, c_type,
+                            llops.genop("raw_store", [v_topaddr, c_type,
                                                       c_k, v])
                     else:
                         v_newaddr = llops.genop("raw_load",
-                                                [top_addr, c_type, c_k],
+                                                [v_topaddr, c_type, c_k],
                                                 resulttype=llmemory.Address)
                         llops.genop("gc_reload_possibly_moved", [v_newaddr, v])
                         blocks_pop_roots[block] = len(llops)
             block.operations[:] = llops
         numcolors = -negnumcolors
-        c_numcolors = rmodel.inputconst(lltype.Signed, numcolors)
+        c_framesize = rmodel.inputconst(lltype.Signed, numcolors * sizeofaddr)
         #
         # For each block, determine in which category it is:
         #
@@ -391,28 +389,37 @@ class ShadowStackRootWalker(BaseRootWalker):
         for block in blockstate:
             if "stop" in blockstate[block]:     # "stop" or "startstop"
                 llops = LowLevelOpList()
-                llops.genop("direct_call", [gct.decr_stack_ptr, c_numcolors],
-                            resulttype=llmemory.Address)
                 i = blocks_pop_roots[block]
-                llops.genop("_d_decr", [])
+                v_topaddr = get_v_topaddr(block, firstuse=i)
+                v_baseaddr = llops.genop("adr_sub", [v_topaddr, c_framesize],
+                                         resulttype=llmemory.Address)
+                llops.genop("direct_call", [gct.set_stack_top_ptr, v_baseaddr])
                 block.operations[i:i] = llops
                 # ^^^ important: done first, in case it's a startstop block,
                 #     otherwise the index in 'blocks_push_roots[block]' is
                 #     off by one
             if "start" in blockstate[block]:    # "start" or "startstop"
                 llops = LowLevelOpList()
-                llops.genop("_d_incr", [])
-                llops.genop("direct_call", [gct.incr_stack_ptr, c_numcolors],
-                            resulttype=llmemory.Address)
-                top_addr = llops.genop("direct_call",
-                                       [gct.get_stack_top_ptr],
-                                       resulttype=llmemory.Address)
+                v_topaddr = get_v_topaddr(block)
+                v_baseaddr = llops.genop("direct_call",[gct.get_stack_top_ptr],
+                                         resulttype=llmemory.Address)
+                llops.genop("adr_add", [v_baseaddr, c_framesize])
+                llops[-1].result = v_topaddr
+                llops.genop("direct_call", [gct.set_stack_top_ptr, v_topaddr])
                 c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
                 for k in range(numcolors):
                     c_k = rmodel.inputconst(lltype.Signed, ~k)
-                    llops.genop("raw_store", [top_addr, c_type, c_k, c_null])
+                    llops.genop("raw_store", [v_topaddr, c_type, c_k, c_null])
                 i = blocks_push_roots[block]
                 block.operations[i:i] = llops
+            else:
+                if block in topaddrs_v:
+                    # we need to get the current stack top for this block
+                    i, topaddr_v = topaddrs_v[block]
+                    llops = LowLevelOpList()
+                    llops.genop("direct_call", [gct.get_stack_top_ptr])
+                    llops[-1].result = topaddr_v
+                    block.operations[i:i] = llops
         #
         checkgraph(graph)
 

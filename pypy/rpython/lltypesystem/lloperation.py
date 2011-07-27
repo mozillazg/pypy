@@ -483,9 +483,6 @@ LL_OPERATIONS = {
     'gc_dump_rpy_heap'    : LLOp(),
     'gc_typeids_z'        : LLOp(),
 
-    '_d_incr': LLOp(sideeffects=False),
-    '_d_decr': LLOp(sideeffects=False),
-
     # ------- JIT & GC interaction, only for some GCs ----------
 
     'gc_adr_of_nursery_free' : LLOp(),
