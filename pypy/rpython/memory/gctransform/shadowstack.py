@@ -366,18 +366,19 @@ class ShadowStackRootWalker(BaseRootWalker):
             blocks_push_roots[graph.startblock] = 0
             blockstate[graph.startblock] = "start"
         #
-        # Now detect direct transitions from "dead" to "alive", and
+        # Now detect direct transitions from "dead" to "alive"/"stop", and
         # insert new "start" blocks along the links.  Similarly, detect
-        # direct transitions from "alive" to "dead" and put a "stop" block.
+        # direct transitions from "alive"/"start" to "dead" and put a
+        # "stop" block.
         for block in blockstate.keys():
             if blockstate[block] == "dead":
                 for link in block.exits:
-                    if blockstate[link.target] == "alive":
+                    if blockstate[link.target] in ("alive", "stop"):
                         newblock = insert_empty_block(gct.translator.annotator,
                                                       link)
                         blocks_push_roots[newblock] = 0
                         blockstate[newblock] = "start"
-            if blockstate[block] == "alive":
+            if blockstate[block] in ("alive", "start"):
                 for link in block.exits:
                     if blockstate[link.target] == "dead":
                         newblock = insert_empty_block(gct.translator.annotator,
