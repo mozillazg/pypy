@@ -34,10 +34,6 @@ int pypy_main_function(int argc, char *argv[])
     char *errmsg;
     int i, exitcode;
     RPyListOfString *list;
-#ifdef PYPY_GET_SPECIAL_REG
-    void *pypy_reg_oldvalue = PYPY_GET_SPECIAL_REG();
-    PYPY_SET_SPECIAL_REG((void*)-1);
-#endif
 
     pypy_asm_stack_bottom();
     instrument_setup();
@@ -74,10 +70,6 @@ int pypy_main_function(int argc, char *argv[])
         pypy_debug_catch_fatal_exception();
     }
 
-#ifdef PYPY_GET_SPECIAL_REG
-    PYPY_SET_SPECIAL_REG(pypy_reg_oldvalue);
-#endif
-
     return exitcode;
 
  memory_out:
@@ -87,7 +79,7 @@ int pypy_main_function(int argc, char *argv[])
     fprintf(stderr, "Fatal error during initialization: %s\n", errmsg);
 #endif
     abort();
-    return 1;   /* not actually reachable */
+    return 1;
 }
 
 int PYPY_MAIN_FUNCTION(int argc, char *argv[])
