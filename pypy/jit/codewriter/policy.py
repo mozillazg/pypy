@@ -1,9 +1,7 @@
-from pypy.translator.simplify import get_funcobj
 from pypy.jit.metainterp import history
-from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.tool.udir import udir
 
-import py, sys
+import py
 from pypy.tool.ansi_print import ansi_log
 log = py.log.Producer('jitcodewriter')
 py.log.setconsumer('jitcodewriter', ansi_log)
@@ -35,8 +33,8 @@ class JitPolicy(object):
     def _reject_function(self, func):
         if hasattr(func, '_jit_look_inside_'):
             return not func._jit_look_inside_
-        # explicitly pure functions are always opaque
-        if getattr(func, '_pure_function_', False):
+        # explicitly elidable functions are always opaque
+        if getattr(func, '_elidable_function_', False):
             return True
         # pypy.rpython.module.* are opaque helpers
         mod = func.__module__ or '?'

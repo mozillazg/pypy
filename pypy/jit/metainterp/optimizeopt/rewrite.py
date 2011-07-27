@@ -1,10 +1,11 @@
-from pypy.jit.metainterp.optimizeopt.optimizer import *
-from pypy.jit.metainterp.resoperation import opboolinvers, opboolreflex
-from pypy.jit.metainterp.history import ConstInt
-from pypy.jit.metainterp.optimizeopt.util import _findall
-from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.jit.metainterp.history import ConstInt, make_hashable_int
+from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound
+from pypy.jit.metainterp.optimizeopt.optimizer import *
+from pypy.jit.metainterp.optimizeopt.util import _findall, make_dispatcher_method
+from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
+    ResOperation)
 from pypy.rlib.rarithmetic import highest_bit
 
 
@@ -21,18 +22,13 @@ class OptRewrite(Optimization):
         if self.find_rewritable_bool(op, args):
             return
 
-        opnum = op.getopnum()
-        for value, func in optimize_ops:
-            if opnum == value:
-                func(self, op)
-                break
-        else:
-            self.emit_operation(op)
+        dispatch_opt(self, op)
 
     def test_emittable(self, op):
         opnum = op.getopnum()
-        for value, func in optimize_guards:
+        for value, cls, func in optimize_guards:
             if opnum == value:
+                assert isinstance(op, cls)
                 try:
                     func(self, op, dryrun=True)
                     return self.is_emittable(op)
@@ -204,6 +200,7 @@ class OptRewrite(Optimization):
                     ))
                     return
         self.emit_operation(op)
+        self.pure(rop.FLOAT_MUL, [arg2, arg1], op.result)
 
     def optimize_FLOAT_NEG(self, op):
         v1 = op.getarg(0)
@@ -477,5 +474,6 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
 
 
-optimize_ops = _findall(OptRewrite, 'optimize_')
+dispatch_opt = make_dispatcher_method(OptRewrite, 'optimize_',
+        default=OptRewrite.emit_operation)
 optimize_guards = _findall(OptRewrite, 'optimize_', 'GUARD')
