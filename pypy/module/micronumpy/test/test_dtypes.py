@@ -6,3 +6,5 @@ class AppTestDtype(BaseNumpyAppTest):
     def test_dtype(self):
         from numpy import dtype
         d = dtype('l')
+        assert d.num == 7
+        assert d.kind == 'i'

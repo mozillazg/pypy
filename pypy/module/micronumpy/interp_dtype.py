@@ -1,7 +1,7 @@
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
-from pypy.interpreter.typedef import TypeDef
+from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
 
 _letters_to_nums = [-1]*128
@@ -57,6 +57,12 @@ class Dtype(Wrappable):
         self.wrap = wrapfunc
         self.num = num
         self.kind = kind
+
+    def descr_num(self, space):
+        return space.wrap(self.num)
+
+    def descr_kind(self, space):
+        return space.wrap(self.kind)
 
 def conv_float(space, val):
     return space.float(val)
@@ -120,4 +126,7 @@ def descr_new_dtype(space, w_type, w_string_or_type):
 Dtype.typedef = TypeDef(
     'numpy.dtype',
     __new__  = interp2app(descr_new_dtype),
+
+    num = GetSetProperty(Dtype.descr_num),
+    kind = GetSetProperty(Dtype.descr_kind),
 )
