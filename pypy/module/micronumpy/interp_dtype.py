@@ -2,6 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
+from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
 
 _letters_to_nums = [-1]*128
 
@@ -23,9 +24,19 @@ _letters_to_nums[ord('g')] = 13 # longdouble (float128)
 
 # typenums
 Bool_num = 0
+Int8_num = 1
+UInt8_num = 2
+Int16_num = 3
+UInt16_num = 4
 Int32_num = 5
 UInt32_num = 6
+Long_num = 7
+ULong_num = 8
+Int64_num = 9
+UInt64_num = 10
+Float32_num = 11
 Float64_num = 12
+Float128_num = 13
 
 # dtype 'kinds'. Used to determine which operations can be performed on array
 BOOLLTR = 'b'
@@ -39,12 +50,12 @@ class Dtype(Wrappable):
     # fields, names, f?, metadata. I'll just implement the base minimum for 
     # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
     # 
-    def __init__(self, convfunc, wrapfunc, typenum, kind):
+    def __init__(self, convfunc, wrapfunc, num, kind):
         # doesn't handle align and copy parameters yet
         # only deals with simple strings e.g., 'uint32', and type objects
-        self.convfunc = convfunc
-        self.wrapfunc = wrapfunc
-        self.typenum = typenum
+        self.conv = convfunc
+        self.wrap = wrapfunc
+        self.num = num
         self.kind = kind
 
 def conv_float(space, val):
@@ -53,19 +64,34 @@ def conv_float(space, val):
 def wrap_float(space, val):
     return space.float_w(val)
 
-def conv_int(space, val):
-    return space.int(val)
+def conv_long(space, val):
+    return r_int(val)
 
 def wrap_int(space, val):
     return space.int_w(val)
 
+def conv_ulong(space, val):
+    return r_uint(val)
+
 Float64_dtype = Dtype(conv_float, wrap_float, Float64_num,
                         FLOATINGLTR)
-Int32_dtype = Dtype(conv_int, wrap_int, Int32_num, SIGNEDLTR)
+#Int32_dtype = Dtype(conv_int32, wrap_int, Int32_num, SIGNEDLTR)
+#UInt32_dtype = Dtype(conv_uint32, wrap_int, UIn32_num, UNSIGNEDLTR)
+Long_dtype = Dtype(conv_long, wrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = Dtype(conv_long, wrap_int, Long_num, UNSIGNEDLTR)
 
 _dtype_list = [None] * 14
 _dtype_list[Float64_num] = Float64_dtype
-_dtype_list[Int32_num] = Int32_dtype
+#_dtype_list[Int32_num] = Int32_dtype
+#_dtype_list[UInt32_num] = UInt32_dtype
+_dtype_list[Long_num] = Long_dtype
+_dtype_list[ULong_num] = ULong_dtype
+
+def find_scalar_dtype(space, scalar):
+    if space.is_true(space.isinstance(scalar, space.w_int)):
+        return Long_dtype
+    if space.is_true(space.isinstance(scalar, space.w_float)):
+        return Float64_dtype
 
 def get_dtype(space, w_type, w_string_or_type):
     if space.is_true(space.isinstance(w_string_or_type, space.gettypeobject(Dtype.typedef))):

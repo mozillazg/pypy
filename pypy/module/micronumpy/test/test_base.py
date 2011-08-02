@@ -1,5 +1,5 @@
 from pypy.conftest import gettestobjspace
-from pypy.module.micronumpy.interp_numarray import SingleDimArray, FloatWrapper
+from pypy.module.micronumpy.interp_numarray import SingleDimArray, FloatWrapper, ScalarWrapper
 from pypy.module.micronumpy.interp_dtype import Float64_dtype
 
 class BaseNumpyAppTest(object):

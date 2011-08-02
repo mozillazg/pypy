@@ -2,13 +2,13 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype
+from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.objspace.std.floatobject import float2string as float2string_orig
 from pypy.rlib import jit
 from pypy.rlib.rfloat import DTSF_STR_PRECISION
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
 import math
 
@@ -17,8 +17,8 @@ TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
        None, # uint8
        None, # int16
        None, # uint16
-       lltype.Array(lltype.Signed, hints={'nolength': True}), #int32
-       lltype.Array(lltype.Unsigned, hints={'nolength': True}), # uint32
+       lltype.Array(rffi.INT, hints={'nolength': True}), #int32
+       lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
        None, # long
        None, # ulong
        None, # longlong
@@ -83,7 +83,7 @@ class BaseArray(Wrappable):
 
     def _binop_right_impl(w_ufunc):
         def impl(self, space, w_other):
-            w_other = FloatWrapper(space.float_w(w_other))
+            w_other = wrap_scalar(space, w_other, self.dtype)
             return w_ufunc(space, w_other, self)
         return func_with_new_name(impl, "binop_right_%s_impl" % w_ufunc.__name__)
 
@@ -309,24 +309,35 @@ def convert_to_array (space, w_obj):
         return new_numarray(space, w_obj, Float64_dtype)
     else:
         # If it's a scalar
-        return FloatWrapper(space.float_w(w_obj))
+        return wrap_scalar(space, w_obj)
 
-class FloatWrapper(BaseArray):
+def wrap_scalar(space, scalar, dtype=None):
+    if dtype is None:
+        dtype = find_scalar_dtype(space, scalar)
+    return ScalarWrapper(dtype.wrap(space, scalar), dtype)
+
+class ScalarWrapper(BaseArray):
     """
     Intermediate class representing a float literal.
     """
-    _immutable_fields_ = ["float_value"]
+    _immutable_fields_ = ["value", "dtype"]
     signature = Signature()
 
-    def __init__(self, float_value):
+    def __init__(self, value, dtype):
         BaseArray.__init__(self)
-        self.float_value = float_value
+        self.value = value
+        self.dtype = dtype
 
     def find_size(self):
         raise ValueError
 
     def eval(self, i):
-        return self.float_value
+        return self.value
+
+# this is really only to simplify the tests. Maybe it should be moved?
+class FloatWrapper(ScalarWrapper):
+    def __init__(self, value):
+        ScalarWrapper.__init__(self, value, Float64_dtype)
 
 class VirtualArray(BaseArray):
     """
@@ -505,7 +516,7 @@ class SingleDimArray(BaseArray):
         BaseArray.__init__(self)
         self.size = size
         self.dtype = dtype
-        TP = TPs[dtype.typenum]
+        TP = TPs[dtype.num]
         self.storage = lltype.malloc(TP, size, zero=True,
                                      flavor='raw', track_allocation=False,
                                      add_memory_pressure=True)
@@ -547,10 +558,10 @@ def new_numarray(space, iterable, dtype):
     dtype = get_dtype(space, Dtype, dtype)
     arr = SingleDimArray(len(l), dtype)
     i = 0
-    convfunc = dtype.convfunc
-    wrapfunc = dtype.wrapfunc
+    conv = dtype.conv
+    wrap = dtype.wrap
     for w_elem in l:
-        arr.storage[i] = wrapfunc(space, convfunc(space, w_elem))
+        arr.storage[i] = wrap(space, conv(space, w_elem))
         i += 1
     return arr
 
