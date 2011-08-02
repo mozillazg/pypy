@@ -1,3 +1,4 @@
+from pypy.module.micronumpy.interp_dtype import Float64_dtype
 from pypy.rlib.rstruct.runpack import runpack
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.interpreter.error import OperationError
@@ -17,7 +18,7 @@ def fromstring(space, s):
         raise OperationError(space.w_ValueError, space.wrap(
             "string length %d not divisable by %d" % (length, FLOAT_SIZE)))
 
-    a = SingleDimArray(number)
+    a = SingleDimArray(number, Float64_dtype)
 
     start = 0
     end = FLOAT_SIZE

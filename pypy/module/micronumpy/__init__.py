@@ -34,6 +34,9 @@ class Module(MixedModule):
         'arcsin': 'interp_ufuncs.arcsin',
         'arccos': 'interp_ufuncs.arccos',
         'arctan': 'interp_ufuncs.arctan',
+
+        # dtype
+        'dtype': 'interp_dtype.Dtype',
     }
 
     appleveldefs = {
