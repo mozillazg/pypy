@@ -334,6 +334,9 @@ class ScalarWrapper(BaseArray):
     def eval(self, i):
         return self.value
 
+    def find_dtype(self):
+        return self.dtype
+
 # this is really only to simplify the tests. Maybe it should be moved?
 class FloatWrapper(ScalarWrapper):
     def __init__(self, value):
@@ -417,19 +420,24 @@ class Call2(VirtualArray):
         self.function = function
         self.left = left
         self.right = right
-        try:
-            self.size = self.left.find_size()
-            self.dtype = self.left.find_dtype()
-        except:
-            self.size = self.right.find_size()
-            self.dtype = self.right.find_dtype()
+        dtype = self.left.find_dtype()
+        dtype2 = self.right.find_dtype()
+        if dtype.num >= dtype2.num:
+            self.dtype = dtype
+        elif dtype.num < dtype2.num:
+            self.dtype = dtype2
+        else:
+            self.dtype = dtype
 
     def _del_sources(self):
         self.left = None
         self.right = None
 
     def _find_size(self):
-        return self.size
+        try:
+            return self.left.find_size()
+        except:
+            return self.right.find_size()
 
     def _eval(self, i):
         lhs, rhs = self.left.eval(i), self.right.eval(i)
