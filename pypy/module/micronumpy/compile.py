@@ -3,13 +3,14 @@
 It should not be imported by the module itself
 """
 
+from pypy.module.micronumpy.interp_dtype import Float64_dtype
 from pypy.module.micronumpy.interp_numarray import FloatWrapper, SingleDimArray, BaseArray
 
 class BogusBytecode(Exception):
     pass
 
 def create_array(size):
-    a = SingleDimArray(size)
+    a = SingleDimArray(size, Float64_dtype)
     for i in range(size):
         a.storage[i] = float(i % 10)
     return a

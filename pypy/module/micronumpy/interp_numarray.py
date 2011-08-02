@@ -12,11 +12,21 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
 import math
 
-TPs = [None] * 14
-TPs[Float64_num] = lltype.Array(lltype.Float, hints={'nolength': True})
-TPs[Int32_num] = lltype.Array(lltype.Signed, hints={'nolength': True})
-TP_bool = lltype.Array(lltype.Bool, hints={'nolength': True})
-TP_uint = lltype.Array(lltype.Unsigned, hints={'nolength': True})
+TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
+       None, # int8
+       None, # uint8
+       None, # int16
+       None, # uint16
+       lltype.Array(lltype.Signed, hints={'nolength': True}), #int32
+       lltype.Array(lltype.Unsigned, hints={'nolength': True}), # uint32
+       None, # long
+       None, # ulong
+       None, # longlong
+       None, # ulonglong
+       None, # float32
+       lltype.Array(lltype.Float, hints={'nolength': True}), # float64
+       None, # float128
+)
 
 numpy_driver = jit.JitDriver(greens = ['signature'],
                              reds = ['result_size', 'i', 'self', 'result'])
@@ -214,7 +224,7 @@ class BaseArray(Wrappable):
         return new_numarray(space, self, self.dtype)
 
     def descr_get_dtype(self, space):
-        return space.wrap(self.dtype)
+        return space.wrap(self.find_dtype())
 
     def descr_get_shape(self, space):
         return space.newtuple([self.descr_len(space)])
@@ -364,6 +374,8 @@ class VirtualArray(BaseArray):
             return self.forced_result.find_size()
         return self._find_size()
 
+    def find_dtype(self):
+        return self.dtype
 
 class Call1(VirtualArray):
     _immutable_fields_ = ["function", "values"]
@@ -372,7 +384,7 @@ class Call1(VirtualArray):
         VirtualArray.__init__(self, signature)
         self.function = function
         self.values = values
-        self.dtype = self.values.dtype
+        self.dtype = self.values.find_dtype()
 
     def _del_sources(self):
         self.values = None
@@ -396,10 +408,10 @@ class Call2(VirtualArray):
         self.right = right
         try:
             self.size = self.left.find_size()
-            self.dtype = self.left.dtype
+            self.dtype = self.left.find_dtype()
         except:
             self.size = self.right.find_size()
-            self.dtype = self.right.dtype
+            self.dtype = self.right.find_dtype()
 
     def _del_sources(self):
         self.left = None
@@ -444,6 +456,9 @@ class ViewArray(BaseArray):
 
     def calc_index(self, item):
         raise NotImplementedError
+
+    def find_dtype(self):
+        return self.parent.dtype
 
 class SingleDimSlice(ViewArray):
     _immutable_fields_ = ["start", "stop", "step", "size"]
@@ -510,6 +525,9 @@ class SingleDimArray(BaseArray):
 
     def descr_len(self, space):
         return space.wrap(self.size)
+
+    def find_dtype(self):
+        return self.dtype
 
     def setitem(self, item, value):
         self.invalidated()
