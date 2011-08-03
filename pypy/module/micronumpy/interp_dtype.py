@@ -67,19 +67,28 @@ class Dtype(Wrappable):
     # fields, names, f?, metadata. I'll just implement the base minimum for 
     # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
     # 
-    def __init__(self, castfunc, unwrapfunc, num, kind):
+    def __init__(self, name, castfunc, unwrapfunc, num, kind):
         # doesn't handle align and copy parameters yet
         # only deals with simple strings e.g., 'uint32', and type objects
         self.cast = castfunc
         self.unwrap = unwrapfunc
         self.num = num
         self.kind = kind
+        self.name = name
 
     def descr_num(self, space):
         return space.wrap(self.num)
 
     def descr_kind(self, space):
         return space.wrap(self.kind)
+
+    def descr_name(self, space):
+        return space.wrap(self.name)
+
+    def descr_repr(self, space):
+        return space.wrap("dtype('%s')" % self.name)
+
+    descr_str = descr_name
 
 def unwrap_float(space, val):
     return space.float_w(space.float(val))
@@ -132,20 +141,22 @@ def cast_float64(val):
 def cast_float96(val):
     return rffi.cast(lltype.LongFloat, val)
 
-Bool_dtype = Dtype(cast_bool, unwrap_bool, Bool_num, BOOLLTR)
-Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
-UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
-Int16_dtype = Dtype(cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
-UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
-Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
-UInt32_dtype = Dtype(cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
-Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = Dtype(cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
-Int64_dtype = Dtype(cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
-UInt64_dtype = Dtype(cast_uint64, unwrap_int, UInt64_num, UNSIGNEDLTR)
-Float32_dtype = Dtype(cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
-Float64_dtype = Dtype(cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
-Float96_dtype = Dtype(cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
+Bool_dtype = Dtype('bool', cast_bool, unwrap_bool, Bool_num, BOOLLTR)
+Int8_dtype = Dtype('int8', cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
+UInt8_dtype = Dtype('uint8', cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
+Int16_dtype = Dtype('int16', cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
+UInt16_dtype = Dtype('uint16', cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
+Int32_dtype = Dtype('int32', cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
+UInt32_dtype = Dtype('uint32', cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
+Long_dtype = Dtype('int32' if LONG_BIT == 32 else 'int64', 
+                    cast_long, unwrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = Dtype('uint32' if LONG_BIT == 32 else 'uint64',
+                    cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
+Int64_dtype = Dtype('int64', cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
+UInt64_dtype = Dtype('uint64', cast_uint64, unwrap_int, UInt64_num, UNSIGNEDLTR)
+Float32_dtype = Dtype('float32', cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
+Float64_dtype = Dtype('float64', cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
+Float96_dtype = Dtype('float96', cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
 
 _dtype_list = (Bool_dtype,
                Int8_dtype,
@@ -241,4 +252,8 @@ Dtype.typedef = TypeDef(
 
     num = GetSetProperty(Dtype.descr_num),
     kind = GetSetProperty(Dtype.descr_kind),
+    name = GetSetProperty(Dtype.descr_name),
+
+    __repr__ = interp2app(Dtype.descr_repr),
+    __str__ = interp2app(Dtype.descr_str),
 )

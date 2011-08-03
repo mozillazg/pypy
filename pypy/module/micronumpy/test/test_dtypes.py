@@ -17,6 +17,12 @@ class AppTestDtype(BaseNumpyAppTest):
         assert dtype(int).num == 7
         assert dtype(long).num == 9
         assert dtype(float).num == 12
+
+    def test_repr_str(self):
+        from numpy import dtype
+        d = dtype('?')
+        assert repr(d) == "dtype('bool')"
+        assert str(d) == "bool"
     
     def test_bool_array(self):
         from numpy import array
