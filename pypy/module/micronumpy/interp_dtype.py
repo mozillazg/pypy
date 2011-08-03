@@ -217,8 +217,9 @@ def find_result_dtype(d1, d2):
     return dtype2
 
 def get_dtype(space, str_or_type):
-    if space.is_true(space.isinstance(str_or_type, space.gettypeobject(Dtype.typedef))):
-        return str_or_type
+    as_dtype = space.interpclass_w(str_or_type)
+    if as_dtype is not None and isinstance(as_dtype, Dtype):
+        return as_dtype
     if space.is_true(space.isinstance(str_or_type, space.w_str)):
         s = space.str_w(str_or_type)
         if len(s) == 1:
