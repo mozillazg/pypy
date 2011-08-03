@@ -51,4 +51,13 @@ class AppTestDtype(BaseNumpyAppTest):
         a = array([True], '?')
         for i in xrange(N):
             assert (a + array([0], types[i])).dtype is dtypes[i]
-# need more tests for binop result types
+
+    def test_binop_types(self):
+        from numpy import array, dtype
+        tests = (('b','B','h'), ('b','h','h'), ('b','H','i'), ('b','I','q'),
+                 ('b','Q','d'), ('B','H','H'), ('B','I','I'), ('B','Q','Q'),
+                 ('B','h','h'), ('h','H','i'), ('h','i','i'), ('H','i','i'),
+                 ('H','I','I'), ('i','I','q'), ('I','q','q'), ('q','Q','d'),
+                 ('i','f','f'), ('q','f','d'), ('Q','f','d'))
+        for d1, d2, dout in tests:
+            assert (array([1], d1) + array([1], d2)).dtype is dtype(dout)
