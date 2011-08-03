@@ -24,8 +24,10 @@ class AppTestDtype(BaseNumpyAppTest):
         assert array([256], 'B')[0] == 0
         assert array([32768], 'h')[0] == -32768
         assert array([65536], 'H')[0] == 0
-        raises(OverflowError, "array([2147483648], 'l')")
+        raises(OverflowError, "array([2147483648], 'i')")
+        raises(OverflowError, "array([4294967296], 'I')")
         raises(OverflowError, "array([9223372036854775808], 'q')")
+        raises(OverflowError, "array([18446744073709551616], 'Q')")
 
     def test_int_array(self):
         from numpy import array

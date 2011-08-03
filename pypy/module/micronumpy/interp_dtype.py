@@ -89,6 +89,12 @@ def cast_int16(val):
 def cast_uint16(val):
     return rffi.cast(rffi.USHORT, val)
 
+def cast_int32(val):
+    return rffi.cast(rffi.INT, val)
+
+def cast_uint32(val):
+    return rffi.cast(rffi.UINT, val)
+
 def cast_long(val):
     return rffi.cast(rffi.LONG, val)
 
@@ -109,8 +115,8 @@ Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
 UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, SIGNEDLTR)
 Int16_dtype = Dtype(cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
 UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, SIGNEDLTR)
-#Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
-#UInt32_dtype = Dtype(cast_uint32, unwrap_int, UIn32_num, UNSIGNEDLTR)
+Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
+UInt32_dtype = Dtype(cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
 Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
 ULong_dtype = Dtype(cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
 Int64_dtype = Dtype(cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
@@ -123,8 +129,8 @@ _dtype_list = (Bool_dtype, # bool
                UInt8_dtype,
                Int16_dtype,
                UInt16_dtype,
-               None,
-               None,
+               Int32_dtype,
+               UInt32_dtype,
                Long_dtype,
                ULong_dtype,
                Int64_dtype,
