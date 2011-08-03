@@ -35,3 +35,13 @@ class AppTestDtype(BaseNumpyAppTest):
         assert a[0] == 1
         assert a[1] == 2
         assert a[2] == 3
+
+    def test_bool_binop_types(self):
+        from numpy import array, dtype
+        types = ('?','b','B','h','H','i','I','l','L','q','Q','f','d','g')
+        dtypes = [dtype(t) for t in types]
+        N = len(types)
+        a = array([True],'?')
+        for i in xrange(N):
+            assert (a + array([0], types[i])).dtype is dtypes[i]
+# need more tests for binop result types

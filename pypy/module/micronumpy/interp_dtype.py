@@ -46,6 +46,8 @@ SIGNEDLTR = 'i'
 UNSIGNEDLTR = 'u'
 COMPLEXLTR = 'c'
 
+kind_dict = {'b': 0, 'u': 1, 'i': 1, 'f': 2, 'c': 2}
+
 class Dtype(Wrappable):
     # attributes: type, kind, typeobj?(I think it should point to np.float64 or
     # the like), byteorder, flags, type_num, elsize, alignment, subarray,
@@ -174,14 +176,41 @@ def get_dtype(space, w_type, w_string_or_type):
         raise OperationError(space.w_TypeError,
                             space.wrap("data type not understood"))
 
-def find_base_dtype(dtype1, dtype2):
+def find_result_dtype(d1, d2):
+    # this function is for determining the result dtype of bin ops, etc.
+    # it is kind of a mess so feel free to improve it
+
+    # first make sure larger num is in d2
+    if d1.num > d2.num:
+        dtype1 = d2
+        dtype2 = d1
+    else:
+        dtype1 = d1
+        dtype2 = d2
     num1 = dtype1.num
     num2 = dtype2.num
-    # this is much more complex
-    if num1 < num2:
+    kind1 = dtype1.kind
+    kind2 = dtype2.kind
+    if kind1 == kind2:
+        # dtype2 has the greater number
         return dtype2
-    return dtype
-
+    kind_num1 = kind_dict[kind1]
+    kind_num2 = kind_dict[kind2]
+    if kind_num1 == kind_num2: # two kinds of integers or float and complex
+        # XXX: Need to deal with float and complex combo here also
+        if kind2 == SIGNEDLTR:
+            return dtype2
+        if num2 < UInt32_num:
+            return _dtype_list[num2+1]
+        if num2 == UInt64_num or (LONG_BIT == 64 and num2 == Long_num): # UInt64
+            return Float64_dtype
+        # dtype2 is uint32
+        return Int64_dtype
+    if kind_num1 == 1: # is an integer
+        if num2 == Float32_num and num2 == UInt64_num or \
+                (LONG_BIT == 64 and num2 == Long_num):
+            return Float64_dtype
+    return dtype2
 
 def descr_new_dtype(space, w_type, w_string_or_type):
     return space.wrap(get_dtype(space, w_type, w_string_or_type))

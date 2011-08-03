@@ -2,7 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_base_dtype
+from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_result_dtype
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.objspace.std.floatobject import float2string as float2string_orig
@@ -417,16 +417,24 @@ class Call2(VirtualArray):
 
     def __init__(self, function, left, right, signature):
         VirtualArray.__init__(self, signature)
-        self.function = function
         self.left = left
         self.right = right
         dtype = self.left.find_dtype()
         dtype2 = self.right.find_dtype()
-        # this is more complicated than this.
-        # for instance int32 + uint32 = int64
-        if dtype.num != dtype.num:
-            dtype = find_base_dtype(dtype, dtype2)
-        self.dtype = dtype
+        if dtype.num != dtype2.num:
+            newdtype = find_result_dtype(dtype, dtype2)
+            cast = newdtype.cast
+            if dtype.num != newdtype.num:
+                if dtype2.num != newdtype.num:
+                    self.function = lambda x, y: function(cast(x), cast(y))
+                else:
+                    self.function = lambda x, y: function(cast(x), y)
+            else:
+                self.function = lambda x, y: function(x, cast(y))
+            self.dtype = newdtype
+        else:
+            self.dtype = dtype
+            self.function = function
 
     def _del_sources(self):
         self.left = None
