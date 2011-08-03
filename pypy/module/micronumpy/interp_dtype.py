@@ -180,33 +180,6 @@ def find_scalar_dtype(space, scalar):
     if space.is_true(space.isinstance(scalar, space.w_float)):
         return Float64_dtype
 
-def get_dtype(space, w_type, w_string_or_type):
-    if space.is_true(space.isinstance(w_string_or_type, space.gettypeobject(Dtype.typedef))):
-        return w_string_or_type
-    if space.is_true(space.isinstance(w_string_or_type, space.w_str)):
-        s = space.str_w(w_string_or_type)
-        if len(s) == 1:
-            typenum = _letters_to_nums[ord(s)]
-            dtype = _dtype_list[typenum]
-            if typenum != -1 and dtype is not None:
-                return _dtype_list[typenum]
-        # XXX: can improve this part. will need to for endianness
-        if s in num_dict:
-            return _dtype_list[num_dict[s]]
-        raise OperationError(space.w_ValueError,
-                            space.wrap("type not recognized"))
-    elif space.is_true(space.isinstance(w_string_or_type, space.w_type)):
-        if space.is_w(w_string_or_type, space.gettypeobject(W_IntObject.typedef)):
-            return Long_dtype
-        if space.is_w(w_string_or_type, space.gettypeobject(W_LongObject.typedef)):
-            return Int64_dtype
-        if space.is_w(w_string_or_type, space.gettypeobject(W_FloatObject.typedef)):
-            return Float64_dtype
-        if space.is_w(w_string_or_type, space.gettypeobject(W_BoolObject.typedef)):
-            return Bool_dtype
-    raise OperationError(space.w_TypeError,
-                            space.wrap("data type not understood"))
-
 def find_result_dtype(d1, d2):
     # this function is for determining the result dtype of bin ops, etc.
     # it is kind of a mess so feel free to improve it
@@ -243,8 +216,35 @@ def find_result_dtype(d1, d2):
             return Float64_dtype
     return dtype2
 
+def get_dtype(space, str_or_type):
+    if space.is_true(space.isinstance(str_or_type, space.gettypeobject(Dtype.typedef))):
+        return str_or_type
+    if space.is_true(space.isinstance(str_or_type, space.w_str)):
+        s = space.str_w(str_or_type)
+        if len(s) == 1:
+            typenum = _letters_to_nums[ord(s)]
+            dtype = _dtype_list[typenum]
+            if typenum != -1 and dtype is not None:
+                return _dtype_list[typenum]
+        # XXX: can improve this part. will need to for endianness
+        if s in num_dict:
+            return _dtype_list[num_dict[s]]
+        raise OperationError(space.w_ValueError,
+                            space.wrap("type not recognized"))
+    elif space.is_true(space.isinstance(str_or_type, space.w_type)):
+        if space.is_w(str_or_type, space.gettypeobject(W_IntObject.typedef)):
+            return Long_dtype
+        if space.is_w(str_or_type, space.gettypeobject(W_LongObject.typedef)):
+            return Int64_dtype
+        if space.is_w(str_or_type, space.gettypeobject(W_FloatObject.typedef)):
+            return Float64_dtype
+        if space.is_w(str_or_type, space.gettypeobject(W_BoolObject.typedef)):
+            return Bool_dtype
+    raise OperationError(space.w_TypeError,
+                            space.wrap("data type not understood"))
+
 def descr_new_dtype(space, w_type, w_string_or_type):
-    return space.wrap(get_dtype(space, w_type, w_string_or_type))
+    return space.wrap(get_dtype(space, w_string_or_type))
 
 Dtype.typedef = TypeDef(
     'numpy.dtype',

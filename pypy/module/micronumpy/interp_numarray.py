@@ -574,7 +574,7 @@ class SingleDimArray(BaseArray):
 
 def new_numarray(space, iterable, dtype):
     l = space.listview(iterable)
-    dtype = get_dtype(space, Dtype, dtype)
+    dtype = get_dtype(space, dtype)
     arr = SingleDimArray(len(l), dtype)
     i = 0
     unwrap = dtype.unwrap
@@ -588,14 +588,14 @@ def descr_new_numarray(space, w_type, __args__):
     # this isn't such a great check. We should improve it including exceptions.
     # Also needs to be able to handle keywords better
     iterable = __args__.arguments_w[0]
-    if __args__.keywords:
+    if len(__args__.arguments_w) == 2:
+        dtype = __args__.arguments_w[1]
+    elif __args__.keywords:
         if __args__.keywords[0] == 'dtype':
             dtype = __args__.keywords_w[0]
         else:
             msg = "array() got unexpected keyword argument"
             raise OperationError(space.w_TypeError, space.wrap(msg))
-    elif len(__args__.arguments_w) == 2:
-        dtype = __args__.arguments_w[1]
     else:
         # can just use the dtype for float for now. We need to actually be
         # able to determine the base dtype of an iterable
