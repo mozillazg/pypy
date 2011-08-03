@@ -76,10 +76,9 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_add_types(self):
         from numpy import array, add
-        a = array([-5.0, -0.0, 1.0], 'l')
+        a = array([-5.2, -0.0, 1.0], 'd')
         b = array([3, -2, 3], 'l')
         c = add(a, b)
-        print c
         assert c.dtype is a.dtype
         for i in range(3):
             assert c[i] == a[i] + b[i]

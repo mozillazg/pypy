@@ -9,9 +9,13 @@ class AppTestDtype(BaseNumpyAppTest):
         assert d.num == 7
         assert d.kind == 'i'
 
-    def test_too_large_int(self):
+    def test_overflow(self):
         from numpy import array
         # only one 32-bit system for now.. will change to 'i' when we can
+        assert array([128], 'b')[0] == -128
+        assert array([256], 'B')[0] == 0
+        assert array([32768], 'h')[0] == -32768
+        assert array([65536], 'H')[0] == 0
         raises(OverflowError, "array([2147483648], 'l')")
 
     def test_int_array(self):
