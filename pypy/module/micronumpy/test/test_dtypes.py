@@ -8,6 +8,8 @@ class AppTestDtype(BaseNumpyAppTest):
         d = dtype('l')
         assert d.num == 7
         assert d.kind == 'i'
+        assert dtype('int8').num == 1
+        assert dtype('i1').num == 1
 
     def test_dtype_with_types(self):
         from numpy import dtype
