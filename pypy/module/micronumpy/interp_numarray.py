@@ -19,7 +19,7 @@ TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
        None, # uint16
        lltype.Array(rffi.INT, hints={'nolength': True}), #int32
        lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
-       None, # long
+       lltype.Array(rffi.LONG, hints={'nolength': True}), # long
        None, # ulong
        None, # longlong
        None, # ulonglong
@@ -314,7 +314,7 @@ def convert_to_array (space, w_obj):
 def wrap_scalar(space, scalar, dtype=None):
     if dtype is None:
         dtype = find_scalar_dtype(space, scalar)
-    return ScalarWrapper(dtype.wrap(space, scalar), dtype)
+    return ScalarWrapper(dtype.unwrap(space, scalar), dtype)
 
 class ScalarWrapper(BaseArray):
     """
@@ -422,12 +422,11 @@ class Call2(VirtualArray):
         self.right = right
         dtype = self.left.find_dtype()
         dtype2 = self.right.find_dtype()
-        if dtype.num >= dtype2.num:
-            self.dtype = dtype
-        elif dtype.num < dtype2.num:
-            self.dtype = dtype2
-        else:
-            self.dtype = dtype
+        # this is more complicated than this.
+        # for instance int32 + uint32 = int64
+        if dtype.num != dtype.num and dtype.num < dtype2.num:
+            dtype = dtype2
+        self.dtype = dtype
 
     def _del_sources(self):
         self.left = None
@@ -566,15 +565,17 @@ def new_numarray(space, iterable, dtype):
     dtype = get_dtype(space, Dtype, dtype)
     arr = SingleDimArray(len(l), dtype)
     i = 0
-    conv = dtype.conv
-    wrap = dtype.wrap
+    unwrap = dtype.unwrap
+    # the types seem to be casting on their own so I've omitted the cast for now
+    #cast = dtype.cast
     for w_elem in l:
-        arr.storage[i] = wrap(space, conv(space, w_elem))
+        arr.storage[i] = unwrap(space, w_elem)
         i += 1
     return arr
 
 def descr_new_numarray(space, w_type, __args__):
     # this isn't such a great check. We should improve it including exceptions.
+    # Also needs to be able to handle keywords
     iterable = __args__.arguments_w[0]
     if len(__args__.arguments_w) == 2:
         dtype = __args__.arguments_w[1]

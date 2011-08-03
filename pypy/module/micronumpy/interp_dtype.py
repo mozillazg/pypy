@@ -3,6 +3,7 @@ from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
+from pypy.rpython.lltypesystem import lltype, rffi
 
 _letters_to_nums = [-1]*128
 
@@ -50,11 +51,11 @@ class Dtype(Wrappable):
     # fields, names, f?, metadata. I'll just implement the base minimum for 
     # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
     # 
-    def __init__(self, convfunc, wrapfunc, num, kind):
+    def __init__(self, castfunc, unwrapfunc, num, kind):
         # doesn't handle align and copy parameters yet
         # only deals with simple strings e.g., 'uint32', and type objects
-        self.conv = convfunc
-        self.wrap = wrapfunc
+        self.cast = castfunc
+        self.unwrap = unwrapfunc
         self.num = num
         self.kind = kind
 
@@ -64,27 +65,27 @@ class Dtype(Wrappable):
     def descr_kind(self, space):
         return space.wrap(self.kind)
 
-def conv_float(space, val):
-    return space.float(val)
+def cast_float(val):
+    return rffi.cast(lltype.Float, val)
 
-def wrap_float(space, val):
-    return space.float_w(val)
+def unwrap_float(space, val):
+    return space.float_w(space.float(val))
 
-def conv_long(space, val):
-    return r_int(val)
+def cast_long(val):
+    return rffi.cast(rffi.INT, val)
 
-def wrap_int(space, val):
-    return space.int_w(val)
+def unwrap_int(space, val):
+    return space.int_w(space.int(val))
 
-def conv_ulong(space, val):
-    return r_uint(val)
+def cast_ulong(val):
+    return rffi.cast(rffi.UINT, val)
 
-Float64_dtype = Dtype(conv_float, wrap_float, Float64_num,
+Float64_dtype = Dtype(cast_float, unwrap_float, Float64_num,
                         FLOATINGLTR)
-#Int32_dtype = Dtype(conv_int32, wrap_int, Int32_num, SIGNEDLTR)
-#UInt32_dtype = Dtype(conv_uint32, wrap_int, UIn32_num, UNSIGNEDLTR)
-Long_dtype = Dtype(conv_long, wrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = Dtype(conv_long, wrap_int, Long_num, UNSIGNEDLTR)
+#Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
+#UInt32_dtype = Dtype(cast_uint32, unwrap_int, UIn32_num, UNSIGNEDLTR)
+Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = Dtype(cast_ulong, unwrap_int, Long_num, UNSIGNEDLTR)
 
 _dtype_list = [None] * 14
 _dtype_list[Float64_num] = Float64_dtype

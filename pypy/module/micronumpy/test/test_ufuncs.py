@@ -74,6 +74,16 @@ class AppTestUfuncs(BaseNumpyAppTest):
         for i in range(3):
             assert c[i] == a[i] + b[i]
 
+    def test_add_types(self):
+        from numpy import array, add
+        a = array([-5.0, -0.0, 1.0], 'l')
+        b = array([3, -2, 3], 'l')
+        c = add(a, b)
+        print c
+        assert c.dtype is a.dtype
+        for i in range(3):
+            assert c[i] == a[i] + b[i]
+
     def test_divide(self):
         from numpy import array, divide
 
