@@ -268,7 +268,6 @@ class BaseArray(Wrappable):
                 # part of itself. can be improved.
                 if (concrete.get_root_storage() ==
                     w_value.get_concrete().get_root_storage()):
-                    # XXX: Need to fill in dtype
                     w_value = new_numarray(space, w_value, self.dtype)
             else:
                 w_value = convert_to_array(space, w_value)
@@ -582,12 +581,16 @@ def new_numarray(space, iterable, dtype):
 
 def descr_new_numarray(space, w_type, __args__):
     # this isn't such a great check. We should improve it including exceptions.
-    # Also needs to be able to handle keywords
+    # Also needs to be able to handle keywords better
     iterable = __args__.arguments_w[0]
-    if len(__args__.arguments_w) == 2:
+    if __args__.keywords:
+        if __args__.keywords[0] == 'dtype':
+            dtype = __args__.keywords_w[0]
+        else:
+            msg = "array() got unexpected keyword argument"
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+    elif len(__args__.arguments_w) == 2:
         dtype = __args__.arguments_w[1]
-        return space.wrap(new_numarray(space, __args__.arguments_w[0],
-            __args__.arguments_w[1]))
     else:
         # can just use the dtype for float for now. We need to actually be
         # able to determine the base dtype of an iterable

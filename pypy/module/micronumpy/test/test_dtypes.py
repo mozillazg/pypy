@@ -18,10 +18,10 @@ class AppTestDtype(BaseNumpyAppTest):
     
     def test_bool_array(self):
         from numpy import array
-        a = array([0, 1, 2, 2.5], '?')
-        assert a[0] == False
+        a = array([0, 1, 2, 2.5], dtype='?')
+        assert a[0] is False
         for i in xrange(1, 4):
-            assert a[i] == True
+            assert a[i] is True
 
     def test_overflow(self):
         from numpy import array
