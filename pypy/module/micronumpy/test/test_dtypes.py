@@ -8,6 +8,13 @@ class AppTestDtype(BaseNumpyAppTest):
         d = dtype('l')
         assert d.num == 7
         assert d.kind == 'i'
+
+    def test_dtype_with_types(self):
+        from numpy import dtype
+        assert dtype(bool).num == 0
+        assert dtype(int).num == 7
+        assert dtype(long).num == 9
+        assert dtype(float).num == 12
     
     def test_bool_array(self):
         from numpy import array
@@ -41,7 +48,7 @@ class AppTestDtype(BaseNumpyAppTest):
         types = ('?','b','B','h','H','i','I','l','L','q','Q','f','d','g')
         dtypes = [dtype(t) for t in types]
         N = len(types)
-        a = array([True],'?')
+        a = array([True], '?')
         for i in xrange(N):
             assert (a + array([0], types[i])).dtype is dtypes[i]
 # need more tests for binop result types
