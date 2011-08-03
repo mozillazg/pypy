@@ -10,6 +10,7 @@ class AppTestDtype(BaseNumpyAppTest):
         assert d.kind == 'i'
         assert dtype('int8').num == 1
         assert dtype('i1').num == 1
+        assert dtype(d) is d
 
     def test_dtype_with_types(self):
         from numpy import dtype
