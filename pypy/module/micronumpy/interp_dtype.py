@@ -2,6 +2,10 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.objspace.std.boolobject import W_BoolObject
+from pypy.objspace.std.floatobject import W_FloatObject
+from pypy.objspace.std.intobject import W_IntObject
+from pypy.objspace.std.longobject import W_LongObject
 from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
 from pypy.rpython.lltypesystem import lltype, rffi
 
@@ -170,10 +174,15 @@ def get_dtype(space, w_type, w_string_or_type):
         raise OperationError(space.w_ValueError,
                             space.wrap("type not recognized"))
     elif space.is_true(space.isinstance(w_string_or_type, space.w_type)):
-        # XXX: need to implement this
-        return Float64_dtype
-    else:
-        raise OperationError(space.w_TypeError,
+        if space.is_w(w_string_or_type, space.gettypeobject(W_IntObject.typedef)):
+            return Long_dtype
+        if space.is_w(w_string_or_type, space.gettypeobject(W_LongObject.typedef)):
+            return Int64_dtype
+        if space.is_w(w_string_or_type, space.gettypeobject(W_FloatObject.typedef)):
+            return Float64_dtype
+        if space.is_w(w_string_or_type, space.gettypeobject(W_BoolObject.typedef)):
+            return Bool_dtype
+    raise OperationError(space.w_TypeError,
                             space.wrap("data type not understood"))
 
 def find_result_dtype(d1, d2):
