@@ -125,9 +125,9 @@ def cast_float96(val):
 
 Bool_dtype = Dtype(cast_bool, unwrap_bool, Bool_num, BOOLLTR)
 Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
-UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, SIGNEDLTR)
+UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
 Int16_dtype = Dtype(cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
-UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, SIGNEDLTR)
+UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
 Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
 UInt32_dtype = Dtype(cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
 Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
@@ -216,8 +216,8 @@ def find_result_dtype(d1, d2):
         # dtype2 is uint32
         return Int64_dtype
     if kind_num1 == 1: # is an integer
-        if num2 == Float32_num and num2 == UInt64_num or \
-                (LONG_BIT == 64 and num2 == Long_num):
+        if num2 == Float32_num and (num1 == UInt64_num or num1 == Int64_num or \
+                (LONG_BIT == 64 and (num1 == Long_num or num1 == ULong_num))):
             return Float64_dtype
     return dtype2
 
