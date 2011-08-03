@@ -52,6 +52,15 @@ COMPLEXLTR = 'c'
 
 kind_dict = {'b': 0, 'u': 1, 'i': 1, 'f': 2, 'c': 2}
 
+# this probably doesn't contain all possibilities yet
+num_dict = {'b1': Bool_num, 'i1': Int8_num, 'i2': Int16_num, 'i4': Int32_num,
+            'i8': Int64_num, 'f4': Float32_num, 'f8': Float64_num, 
+            'f12': Float96_num,
+            'bool': Bool_num, 'bool8': Bool_num, 'int8': Int8_num,
+            'int16': Int16_num, 'int32': Int32_num, 'int64': Int64_num,
+            'float32': Float32_num, 'float64': Float64_num,
+            'float96': Float96_num}
+
 class Dtype(Wrappable):
     # attributes: type, kind, typeobj?(I think it should point to np.float64 or
     # the like), byteorder, flags, type_num, elsize, alignment, subarray,
@@ -170,7 +179,9 @@ def get_dtype(space, w_type, w_string_or_type):
             dtype = _dtype_list[typenum]
             if typenum != -1 and dtype is not None:
                 return _dtype_list[typenum]
-        # XXX: need to put in 2 letters strings
+        # XXX: can improve this part. will need to for endianness
+        if s in num_dict:
+            return _dtype_list[num_dict[s]]
         raise OperationError(space.w_ValueError,
                             space.wrap("type not recognized"))
     elif space.is_true(space.isinstance(w_string_or_type, space.w_type)):
