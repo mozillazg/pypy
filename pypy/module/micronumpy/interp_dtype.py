@@ -37,13 +37,14 @@ Int64_num = 9
 UInt64_num = 10
 Float32_num = 11
 Float64_num = 12
-Float128_num = 13
+Float96_num = 13
 
 # dtype 'kinds'. Used to determine which operations can be performed on array
 BOOLLTR = 'b'
 FLOATINGLTR = 'f'
 SIGNEDLTR = 'i'
 UNSIGNEDLTR = 'u'
+COMPLEXLTR = 'c'
 
 class Dtype(Wrappable):
     # attributes: type, kind, typeobj?(I think it should point to np.float64 or
@@ -107,8 +108,14 @@ def cast_int64(val):
 def cast_uint64(val):
     return rffi.cast(rffi.ULONGLONG, val)
 
-def cast_float(val):
+def cast_float32(val):
+    return rffi.cast(lltype.SingleFloat, val)
+
+def cast_float64(val):
     return rffi.cast(lltype.Float, val)
+
+def cast_float96(val):
+    return rffi.cast(lltype.LongFloat, val)
 
 Bool_dtype = Dtype(cast_bool, unwrap_bool, Bool_num, BOOLLTR)
 Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
@@ -121,10 +128,11 @@ Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
 ULong_dtype = Dtype(cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
 Int64_dtype = Dtype(cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
 UInt64_dtype = Dtype(cast_uint64, unwrap_int, UInt64_num, UNSIGNEDLTR)
-Float64_dtype = Dtype(cast_float, unwrap_float, Float64_num,
-                        FLOATINGLTR)
+Float32_dtype = Dtype(cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
+Float64_dtype = Dtype(cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
+Float96_dtype = Dtype(cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
 
-_dtype_list = (Bool_dtype, # bool
+_dtype_list = (Bool_dtype,
                Int8_dtype,
                UInt8_dtype,
                Int16_dtype,
@@ -135,9 +143,9 @@ _dtype_list = (Bool_dtype, # bool
                ULong_dtype,
                Int64_dtype,
                UInt64_dtype,
-               None,
+               Float32_dtype,
                Float64_dtype,
-               None,
+               Float96_dtype,
 )
 
 def find_scalar_dtype(space, scalar):
