@@ -200,19 +200,24 @@ class BaseArray(Wrappable):
             return self.descr_mul(space, w_other)
 
     def _getnums(self, comma):
+        kind = self.find_dtype().kind
+        if kind == 'f':
+            format_func = float2string
+        else:
+            format_func = str
         if self.find_size() > 1000:
             nums = [
-                float2string(self.eval(index))
+                format_func(self.eval(index))
                 for index in range(3)
             ]
             nums.append("..." + "," * comma)
             nums.extend([
-                float2string(self.eval(index))
+                format_func(self.eval(index))
                 for index in range(self.find_size() - 3, self.find_size())
             ])
         else:
             nums = [
-                float2string(self.eval(index))
+                format_func(self.eval(index))
                 for index in range(self.find_size())
             ]
         return nums
