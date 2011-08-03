@@ -64,11 +64,18 @@ class Dtype(Wrappable):
 
     def descr_kind(self, space):
         return space.wrap(self.kind)
+
 def unwrap_float(space, val):
     return space.float_w(space.float(val))
 
 def unwrap_int(space, val):
     return space.int_w(space.int(val))
+
+def unwrap_bool(space, val):
+    return space.is_true(val)
+
+def cast_bool(val):
+    return rffi.cast(lltype.Bool, val)
 
 def cast_int8(val):
     return rffi.cast(rffi.SIGNEDCHAR, val)
@@ -82,24 +89,36 @@ def cast_int16(val):
 def cast_uint16(val):
     return rffi.cast(rffi.USHORT, val)
 
-def cast_int(val):
+def cast_long(val):
     return rffi.cast(rffi.LONG, val)
+
+def cast_ulong(val):
+    return rffi.cast(rffi.ULONG, val)
+
+def cast_int64(val):
+    return rffi.cast(rffi.LONGLONG, val)
+
+def cast_uint64(val):
+    return rffi.cast(rffi.ULONGLONG, val)
 
 def cast_float(val):
     return rffi.cast(lltype.Float, val)
 
+Bool_dtype = Dtype(cast_bool, unwrap_bool, Bool_num, BOOLLTR)
 Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
 UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, SIGNEDLTR)
 Int16_dtype = Dtype(cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
 UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, SIGNEDLTR)
 #Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
 #UInt32_dtype = Dtype(cast_uint32, unwrap_int, UIn32_num, UNSIGNEDLTR)
-Long_dtype = Dtype(cast_int, unwrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = Dtype(cast_int, unwrap_int, Long_num, UNSIGNEDLTR)
+Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = Dtype(cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
+Int64_dtype = Dtype(cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
+UInt64_dtype = Dtype(cast_uint64, unwrap_int, UInt64_num, UNSIGNEDLTR)
 Float64_dtype = Dtype(cast_float, unwrap_float, Float64_num,
                         FLOATINGLTR)
 
-_dtype_list = (None, # bool
+_dtype_list = (Bool_dtype, # bool
                Int8_dtype,
                UInt8_dtype,
                Int16_dtype,
@@ -108,8 +127,8 @@ _dtype_list = (None, # bool
                None,
                Long_dtype,
                ULong_dtype,
-               None,
-               None,
+               Int64_dtype,
+               UInt64_dtype,
                None,
                Float64_dtype,
                None,
@@ -140,6 +159,14 @@ def get_dtype(space, w_type, w_string_or_type):
     else:
         raise OperationError(space.w_TypeError,
                             space.wrap("data type not understood"))
+
+def find_base_dtype(dtype1, dtype2):
+    num1 = dtype1.num
+    num2 = dtype2.num
+    # this is much more complex
+    if num1 < num2:
+        return dtype2
+    return dtype
 
 
 def descr_new_dtype(space, w_type, w_string_or_type):

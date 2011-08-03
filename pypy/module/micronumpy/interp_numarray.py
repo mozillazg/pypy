@@ -2,7 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype
+from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_base_dtype
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.objspace.std.floatobject import float2string as float2string_orig
@@ -21,8 +21,8 @@ TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
        lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
        lltype.Array(rffi.LONG, hints={'nolength': True}), # long
        lltype.Array(rffi.ULONG, hints={'nolength': True}), # ulong
-       None, # longlong
-       None, # ulonglong
+       lltype.Array(rffi.LONGLONG, hints={'nolength': True}), # longlong
+       lltype.Array(rffi.ULONGLONG, hints={'nolength': True}), # ulonglong
        lltype.Array(lltype.SingleFloat, hints={'nolength': True}), # float32
        lltype.Array(lltype.Float, hints={'nolength': True}), # float64
        None, # float128
@@ -424,8 +424,8 @@ class Call2(VirtualArray):
         dtype2 = self.right.find_dtype()
         # this is more complicated than this.
         # for instance int32 + uint32 = int64
-        if dtype.num != dtype.num and dtype.num < dtype2.num:
-            dtype = dtype2
+        if dtype.num != dtype.num:
+            dtype = find_base_dtype(dtype, dtype2)
         self.dtype = dtype
 
     def _del_sources(self):
