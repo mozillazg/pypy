@@ -13,17 +13,17 @@ from pypy.tool.sourcetools import func_with_new_name
 import math
 
 TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
-       None, # int8
-       None, # uint8
-       None, # int16
-       None, # uint16
+       lltype.Array(rffi.SIGNEDCHAR, hints={'nolength': True}), # int8
+       lltype.Array(rffi.UCHAR, hints={'nolength': True}), # uint8
+       lltype.Array(rffi.SHORT, hints={'nolength': True}), # int16
+       lltype.Array(rffi.USHORT, hints={'nolength': True}), # uint16
        lltype.Array(rffi.INT, hints={'nolength': True}), #int32
        lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
        lltype.Array(rffi.LONG, hints={'nolength': True}), # long
-       None, # ulong
+       lltype.Array(rffi.ULONG, hints={'nolength': True}), # ulong
        None, # longlong
        None, # ulonglong
-       None, # float32
+       lltype.Array(lltype.SingleFloat, hints={'nolength': True}), # float32
        lltype.Array(lltype.Float, hints={'nolength': True}), # float64
        None, # float128
 )
@@ -566,10 +566,9 @@ def new_numarray(space, iterable, dtype):
     arr = SingleDimArray(len(l), dtype)
     i = 0
     unwrap = dtype.unwrap
-    # the types seem to be casting on their own so I've omitted the cast for now
-    #cast = dtype.cast
+    cast = dtype.cast
     for w_elem in l:
-        arr.storage[i] = unwrap(space, w_elem)
+        arr.storage[i] = cast(unwrap(space, w_elem))
         i += 1
     return arr
 

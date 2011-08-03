@@ -64,35 +64,56 @@ class Dtype(Wrappable):
 
     def descr_kind(self, space):
         return space.wrap(self.kind)
-
-def cast_float(val):
-    return rffi.cast(lltype.Float, val)
-
 def unwrap_float(space, val):
     return space.float_w(space.float(val))
-
-def cast_long(val):
-    return rffi.cast(rffi.INT, val)
 
 def unwrap_int(space, val):
     return space.int_w(space.int(val))
 
-def cast_ulong(val):
-    return rffi.cast(rffi.UINT, val)
+def cast_int8(val):
+    return rffi.cast(rffi.SIGNEDCHAR, val)
 
-Float64_dtype = Dtype(cast_float, unwrap_float, Float64_num,
-                        FLOATINGLTR)
+def cast_uint8(val):
+    return rffi.cast(rffi.UCHAR, val)
+
+def cast_int16(val):
+    return rffi.cast(rffi.SHORT, val)
+
+def cast_uint16(val):
+    return rffi.cast(rffi.USHORT, val)
+
+def cast_int(val):
+    return rffi.cast(rffi.LONG, val)
+
+def cast_float(val):
+    return rffi.cast(lltype.Float, val)
+
+Int8_dtype = Dtype(cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
+UInt8_dtype = Dtype(cast_uint8, unwrap_int, UInt8_num, SIGNEDLTR)
+Int16_dtype = Dtype(cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
+UInt16_dtype = Dtype(cast_uint16, unwrap_int, UInt16_num, SIGNEDLTR)
 #Int32_dtype = Dtype(cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
 #UInt32_dtype = Dtype(cast_uint32, unwrap_int, UIn32_num, UNSIGNEDLTR)
-Long_dtype = Dtype(cast_long, unwrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = Dtype(cast_ulong, unwrap_int, Long_num, UNSIGNEDLTR)
+Long_dtype = Dtype(cast_int, unwrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = Dtype(cast_int, unwrap_int, Long_num, UNSIGNEDLTR)
+Float64_dtype = Dtype(cast_float, unwrap_float, Float64_num,
+                        FLOATINGLTR)
 
-_dtype_list = [None] * 14
-_dtype_list[Float64_num] = Float64_dtype
-#_dtype_list[Int32_num] = Int32_dtype
-#_dtype_list[UInt32_num] = UInt32_dtype
-_dtype_list[Long_num] = Long_dtype
-_dtype_list[ULong_num] = ULong_dtype
+_dtype_list = (None, # bool
+               Int8_dtype,
+               UInt8_dtype,
+               Int16_dtype,
+               UInt16_dtype,
+               None,
+               None,
+               Long_dtype,
+               ULong_dtype,
+               None,
+               None,
+               None,
+               Float64_dtype,
+               None,
+)
 
 def find_scalar_dtype(space, scalar):
     if space.is_true(space.isinstance(scalar, space.w_int)):
