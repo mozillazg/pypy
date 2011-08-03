@@ -21,11 +21,11 @@ TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
        lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
        lltype.Array(rffi.LONG, hints={'nolength': True}), # long
        lltype.Array(rffi.ULONG, hints={'nolength': True}), # ulong
-       lltype.Array(rffi.LONGLONG, hints={'nolength': True}), # longlong
-       lltype.Array(rffi.ULONGLONG, hints={'nolength': True}), # ulonglong
+       lltype.Array(rffi.LONGLONG, hints={'nolength': True}), # int64
+       lltype.Array(rffi.ULONGLONG, hints={'nolength': True}), # uint64
        lltype.Array(lltype.SingleFloat, hints={'nolength': True}), # float32
        lltype.Array(lltype.Float, hints={'nolength': True}), # float64
-       None, # float128
+       lltype.Array(lltype.LongFloat, hints={'nolength': True}), # float96
 )
 
 numpy_driver = jit.JitDriver(greens = ['signature'],
