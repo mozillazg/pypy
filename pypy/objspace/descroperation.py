@@ -1,11 +1,13 @@
 import operator
-from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.interpreter.baseobjspace import ObjSpace
-from pypy.interpreter.function import Function, Method, FunctionWithFixedCode
+
 from pypy.interpreter.argument import Arguments
+from pypy.interpreter.baseobjspace import ObjSpace
+from pypy.interpreter.error import OperationError, operationerrfmt
+from pypy.interpreter.function import Function, Method, FunctionWithFixedCode
 from pypy.interpreter.typedef import default_identity_hash
-from pypy.tool.sourcetools import compile2, func_with_new_name
 from pypy.module.__builtin__.interp_classobj import W_InstanceObject
+from pypy.tool.sourcetools import compile2, func_with_new_name
+
 
 def object_getattribute(space):
     "Utility that returns the app-level descriptor object.__getattribute__."

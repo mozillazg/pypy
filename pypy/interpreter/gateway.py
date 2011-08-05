@@ -7,26 +7,27 @@ Gateway between app-level and interpreter-level:
 
 """
 
-import types, sys, os
-from pypy.tool.compat import md5
 
-NoneNotWrapped = object()
+import os
+import sys
+import types
 
-from pypy.tool.sourcetools import func_with_new_name
-from pypy.interpreter.error import OperationError
 from pypy.interpreter import eval
-from pypy.interpreter.function import Function, Method, ClassMethod
-from pypy.interpreter.function import FunctionWithFixedCode
-from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable
-from pypy.interpreter.baseobjspace import Wrappable, SpaceCache, DescrMismatch
 from pypy.interpreter.argument import Arguments, Signature
-from pypy.tool.sourcetools import NiceCompile, compile2
-from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
+from pypy.interpreter.baseobjspace import W_Root, ObjSpace, Wrappable, SpaceCache, DescrMismatch
+from pypy.interpreter.error import OperationError
+from pypy.interpreter.function import Function, Method, ClassMethod, FunctionWithFixedCode
 from pypy.rlib import rstackovf
 from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.rarithmetic import r_longlong, r_int, r_ulonglong, r_uint
+from pypy.tool.compat import md5
+from pypy.tool.sourcetools import func_with_new_name, NiceCompile, compile2
 
 # internal non-translatable parts:
 import py
+
+
+NoneNotWrapped = object()
 
 class SignatureBuilder(object):
     "NOT_RPYTHON"

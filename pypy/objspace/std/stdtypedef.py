@@ -1,18 +1,16 @@
-from pypy.interpreter import gateway, baseobjspace, argument
+from pypy.interpreter import baseobjspace, gateway
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.interpreter.typedef import TypeDef, GetSetProperty, Member
-from pypy.interpreter.typedef import descr_get_dict, descr_set_dict
-from pypy.interpreter.typedef import descr_del_dict
-from pypy.interpreter.baseobjspace import SpaceCache
+from pypy.interpreter.typedef import (TypeDef, GetSetProperty, Member,
+    descr_get_dict, descr_set_dict, descr_del_dict)
 from pypy.objspace.std import model
-from pypy.objspace.std.model import StdObjSpaceMultiMethod
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib import jit
 from pypy.tool.sourcetools import compile2
 
+
 __all__ = ['StdTypeDef', 'SMM']
 
-SMM = StdObjSpaceMultiMethod
+SMM = StdObjSpaceMultiMethod = model.StdObjSpaceMultiMethod
 
 
 class StdTypeDef(TypeDef):
@@ -48,7 +46,7 @@ std_dict_descr.name = '__dict__'
 # the descriptors to put into the W_TypeObjects.
 #
 
-class TypeCache(SpaceCache):
+class TypeCache(baseobjspace.SpaceCache):
     def build(cache, typedef):
         "NOT_RPYTHON: initialization-time only."
         # build a W_TypeObject from this StdTypeDef
@@ -102,7 +100,7 @@ def hack_out_multimethods(ns):
     result = []
     seen = {}
     for value in ns.itervalues():
-        if isinstance(value, StdObjSpaceMultiMethod):
+        if isinstance(value, model.StdObjSpaceMultiMethod):
             if value.name in seen:
                 raise Exception("duplicate multimethod name %r" %
                                 (value.name,))
@@ -162,7 +160,7 @@ def gettypeerror(space, operatorsymbol, *args_w):
 
 def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, selfindex=0,
                             allow_NotImplemented_results=False):
-    """NOT_RPYTHON"""    
+    """NOT_RPYTHON"""
     # mess to figure out how to put a gateway around executing expr
     argnames = ['_%d'%(i+1) for i in range(multimethod.arity)]
     explicit_argnames = multimethod.extras.get('argnames', [])
@@ -179,7 +177,7 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
 
     miniglobals.update({ 'OperationError': OperationError,
                          'gettypeerror': gettypeerror})
-    
+
     app_defaults = multimethod.extras.get('defaults', ())
     i = len(argnames) - len(app_defaults)
     wrapper_signature = wrapper_arglist[:]
@@ -235,7 +233,7 @@ def make_perform_trampoline(prefix, exprargs, expr, miniglobals,  multimethod, s
                       return w_res
 """        % (prefix, wrapper_sig, renaming, expr,
               multimethod.operatorsymbol, ', '.join(solid_arglist))
-    exec compile2(code, '', 'exec') in miniglobals 
+    exec compile2(code, '', 'exec') in miniglobals
     return miniglobals["%s_perform_call" % prefix]
 
 def wrap_trampoline_in_gateway(func, methname, multimethod):
@@ -245,7 +243,7 @@ def wrap_trampoline_in_gateway(func, methname, multimethod):
     return gateway.interp2app(func, app_name=methname)
 
 def slicemultimethod(space, multimethod, typedef, result, local=False):
-    """NOT_RPYTHON"""    
+    """NOT_RPYTHON"""
     for i in range(len(multimethod.specialnames)):
         methname = multimethod.specialnames[i]
         if methname in result:

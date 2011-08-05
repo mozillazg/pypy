@@ -5,13 +5,11 @@ to provide in this version of PyPy, along with conversion rules.
 
 from pypy.objspace.std.multimethod import MultiMethodTable, FailedToImplement
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
-import pypy.interpreter.pycode
-import pypy.interpreter.special
 
 _registered_implementations = set()
 def registerimplementation(implcls):
     """Hint to objspace.std.model to register the implementation class."""
-    assert issubclass(implcls, W_Object)
+    assert issubclass(implcls, W_Root)
     _registered_implementations.add(implcls)
 
 option_to_typename = {
@@ -37,6 +35,8 @@ class StdTypeModel:
         """NOT_RPYTHON: inititialization only"""
         self.config = config
         # All the Python types that we want to provide in this StdObjSpace
+        from pypy.objspace.std.bytearraytype import W_BytearrayObject
+
         class result:
             from pypy.objspace.std.objecttype import object_typedef
             from pypy.objspace.std.booltype   import bool_typedef
@@ -50,7 +50,7 @@ class StdTypeModel:
             from pypy.objspace.std.dicttype   import dict_typedef
             from pypy.objspace.std.basestringtype import basestring_typedef
             from pypy.objspace.std.stringtype import str_typedef
-            from pypy.objspace.std.bytearraytype import bytearray_typedef
+            bytearray_typedef = W_BytearrayObject.typedef
             from pypy.objspace.std.typetype   import type_typedef
             from pypy.objspace.std.slicetype  import slice_typedef
             from pypy.objspace.std.longtype   import long_typedef
@@ -76,7 +76,6 @@ class StdTypeModel:
         from pypy.objspace.std import listobject
         from pypy.objspace.std import dictmultiobject
         from pypy.objspace.std import stringobject
-        from pypy.objspace.std import bytearrayobject
         from pypy.objspace.std import ropeobject
         from pypy.objspace.std import ropeunicodeobject
         from pypy.objspace.std import strsliceobject
@@ -109,7 +108,7 @@ class StdTypeModel:
             dictmultiobject.W_DictMultiObject: [],
             dictmultiobject.W_DictMultiIterObject: [],
             stringobject.W_StringObject: [],
-            bytearrayobject.W_BytearrayObject: [],
+            W_BytearrayObject: [],
             typeobject.W_TypeObject: [],
             sliceobject.W_SliceObject: [],
             longobject.W_LongObject: [],
@@ -127,9 +126,7 @@ class StdTypeModel:
             dictmultiobject.W_DictViewKeysObject: [],
             dictmultiobject.W_DictViewItemsObject: [],
             dictmultiobject.W_DictViewValuesObject: [],
-            pypy.interpreter.pycode.PyCode: [],
-            pypy.interpreter.special.Ellipsis: [],
-            }
+        }
 
         self.imported_but_not_registered = {
             dictmultiobject.W_DictMultiObject: True, # XXXXXX
