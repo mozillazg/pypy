@@ -257,6 +257,14 @@ class AppTestBytesArray:
         b.insert(-12, 'h')
         assert b == bytearray('hdgabecf')
 
+        # A long value
+        b.insert(0L, 'q')
+        assert b == bytearray('qhdgabecf')
+
+        # A bool
+        b.insert(False, 't')
+        assert b == bytearray('tqhdgabecf')
+
         raises(ValueError, b.insert, 1, 'go')
         raises(TypeError, b.insert, 'g', 'o')
 
