@@ -2,7 +2,7 @@ import sys
 
 from pypy.interpreter import gateway
 from pypy.interpreter.argument import Signature
-from pypy.interpreter.baseobjspace import ObjSpace, Wrappable
+from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.buffer import RWBuffer
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.objspace.std import stringobject, slicetype
@@ -12,8 +12,8 @@ from pypy.objspace.std.listobject import (_delitem_slice_helper,
 from pypy.objspace.std.model import registerimplementation
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
-from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
+from pypy.objspace.std.sliceobject import W_SliceObject
+from pypy.objspace.std.stdtypedef import StdTypeDef
 from pypy.objspace.std.stringobject import W_StringObject
 from pypy.objspace.std.stringtype import (str_decode, str_count, str_index,
     str_rindex, str_find, str_rfind, str_replace, str_startswith, str_endswith,
@@ -23,8 +23,6 @@ from pypy.objspace.std.stringtype import (str_decode, str_count, str_index,
     str_zfill, str_join, str_split, str_rsplit, str_partition, str_rpartition,
     str_splitlines, str_translate)
 from pypy.objspace.std.tupleobject import W_TupleObject
-from pypy.rlib.debug import check_annotation
-from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.rstring import StringBuilder
 from pypy.tool.sourcetools import func_with_new_name
 
@@ -421,10 +419,6 @@ def add__String_Bytearray(space, w_str, w_bytearray):
     data2 = w_bytearray.data
     data1 = [c for c in space.str_w(w_str)]
     return W_BytearrayObject(data1 + data2)
-
-def inplace_add__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2):
-    list_extend__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2)
-    return w_bytearray1
 
 def inplace_add__Bytearray_ANY(space, w_bytearray1, w_iterable2):
     w_bytearray1.data += space.bufferstr_new_w(w_iterable2)
