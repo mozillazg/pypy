@@ -106,6 +106,7 @@ class W_BytearrayObject(Wrappable):
 
     def descr_extend(self, space, w_other):
         if space.isinstance_w(w_other, space.w_bytearray):
+            assert isinstance(w_other, W_BytearrayObject)
             self.data += w_other.data
         else:
             self.data += makebytearraydata_w(space, w_other)
