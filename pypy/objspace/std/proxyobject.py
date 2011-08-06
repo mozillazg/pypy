@@ -19,20 +19,20 @@ def transparent_class(name, BaseCls):
         def __init__(self, space, w_type, w_controller):
             self.w_type = w_type
             self.w_controller = w_controller
-    
+
         def descr_call_mismatch(self, space, name, reqcls, args):
             args_w = args.arguments_w[:]
             args_w[0] = space.wrap(name)
             args = args.replace_arguments(args_w)
             return space.call_args(self.w_controller, args)
-    
+
         def getclass(self, space):
             return self.w_type
-        
+
         def setclass(self, space, w_subtype):
             raise OperationError(space.w_TypeError,
                                  space.wrap("You cannot override __class__ for transparent proxies"))
-        
+
         def getdictvalue(self, space, attr):
             try:
                 return space.call_function(self.w_controller, space.wrap('__getattribute__'),
@@ -41,7 +41,7 @@ def transparent_class(name, BaseCls):
                 if not e.match(space, space.w_AttributeError):
                     raise
                 return None
-        
+
         def setdictvalue(self, space, attr, w_value):
             try:
                 space.call_function(self.w_controller, space.wrap('__setattr__'),
@@ -51,7 +51,7 @@ def transparent_class(name, BaseCls):
                 if not e.match(space, space.w_AttributeError):
                     raise
                 return False
-        
+
         def deldictvalue(self, space, attr):
             try:
                 space.call_function(self.w_controller, space.wrap('__delattr__'),
@@ -61,14 +61,14 @@ def transparent_class(name, BaseCls):
                 if not e.match(space, space.w_AttributeError):
                     raise
                 return False
-        
+
         def getdict(self, space):
             return self.getdictvalue(space, '__dict__')
-        
+
         def setdict(self, space, w_dict):
             if not self.setdictvalue(space, '__dict__', w_dict):
                 baseobjspace.W_Root.setdict(self, space, w_dict)
-        
+
     W_Transparent.__name__ = name
     return W_Transparent
 
@@ -101,8 +101,8 @@ class W_TransparentList(W_TransparentObject):
     from pypy.objspace.std.listtype import list_typedef as typedef
 
 class W_TransparentDict(W_TransparentObject):
-    from pypy.objspace.std.dictmultiobject import W_DictMultiObject as original
-    from pypy.objspace.std.dicttype import dict_typedef as typedef
+    from pypy.objspace.std.dicttype import W_DictMultiObject as original
+    typedef = original.typedef
 
 registerimplementation(W_TransparentList)
 registerimplementation(W_TransparentDict)

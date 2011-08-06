@@ -1,9 +1,9 @@
 import py
 import sys
 from pypy.interpreter.error import OperationError
-from pypy.objspace.std.dictmultiobject import \
-     W_DictMultiObject, setitem__DictMulti_ANY_ANY, getitem__DictMulti_ANY, \
-     StringDictStrategy, ObjectDictStrategy
+from pypy.objspace.std.dicttype import (W_DictMultiObject,
+    setitem__DictMulti_ANY_ANY, getitem__DictMulti_ANY, StringDictStrategy,
+    ObjectDictStrategy)
 
 from pypy.objspace.std.celldict import ModuleDictStrategy
 from pypy.conftest import gettestobjspace

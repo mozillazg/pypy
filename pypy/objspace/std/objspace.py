@@ -18,7 +18,7 @@ from pypy.tool.sourcetools import func_with_new_name
 # Object imports
 from pypy.objspace.std.boolobject import W_BoolObject
 from pypy.objspace.std.complexobject import W_ComplexObject
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+from pypy.objspace.std.dicttype import W_DictMultiObject
 from pypy.objspace.std.floatobject import W_FloatObject
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.listobject import W_ListObject

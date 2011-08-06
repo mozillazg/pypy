@@ -1,7 +1,6 @@
 from pypy.objspace.std.model import registerimplementation, W_Object
 from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject, IteratorImplementation
-from pypy.objspace.std.dictmultiobject import DictStrategy
+from pypy.objspace.std.dicttype import W_DictMultiObject, IteratorImplementation, DictStrategy
 from pypy.objspace.std.typeobject import unwrap_cell
 from pypy.interpreter.error import OperationError
 

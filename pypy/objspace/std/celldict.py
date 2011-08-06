@@ -3,9 +3,8 @@ This ensures that the function (dict, key) -> cell is pure. By itself, this
 optimization is not helping at all, but in conjunction with the JIT it can
 speed up global lookups a lot."""
 
-from pypy.objspace.std.dictmultiobject import IteratorImplementation
-from pypy.objspace.std.dictmultiobject import DictStrategy, _never_equal_to_string
-from pypy.objspace.std.dictmultiobject import ObjectDictStrategy
+from pypy.objspace.std.dicttype import (IteratorImplementation, DictStrategy,
+    _never_equal_to_string, ObjectDictStrategy)
 from pypy.rlib import jit, rerased
 
 class ModuleCell(object):

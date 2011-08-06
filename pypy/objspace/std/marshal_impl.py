@@ -23,7 +23,7 @@ from pypy.objspace.std.intobject     import W_IntObject
 from pypy.objspace.std.floatobject   import W_FloatObject
 from pypy.objspace.std.tupleobject   import W_TupleObject
 from pypy.objspace.std.listobject    import W_ListObject
-from pypy.objspace.std.dictmultiobject    import W_DictMultiObject
+from pypy.objspace.std.dicttype      import W_DictMultiObject
 from pypy.objspace.std.stringobject  import W_StringObject
 from pypy.objspace.std.ropeobject    import W_RopeObject
 from pypy.objspace.std.typeobject    import W_TypeObject

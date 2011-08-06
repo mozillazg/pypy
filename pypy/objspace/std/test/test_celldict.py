@@ -1,6 +1,6 @@
 import py
 from pypy.conftest import gettestobjspace, option
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+from pypy.objspace.std.dicttype import W_DictMultiObject
 from pypy.objspace.std.celldict import ModuleCell, ModuleDictStrategy
 from pypy.objspace.std.test.test_dictmultiobject import FakeSpace
 from pypy.interpreter import gateway
