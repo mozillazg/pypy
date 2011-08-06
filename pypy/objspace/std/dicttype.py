@@ -129,7 +129,7 @@ class W_DictMultiObject(Wrappable):
         (if E has keys else: for (k, v) in E: D[k] = v) then: for k in F: D[k] = F[k]"""
         init_or_update(space, self, __args__, 'dict.update')
 
-    def descr_setdefault(self, space, w_key, w_value):
+    def descr_setdefault(self, space, w_key, w_value=None):
         """D.setdefault(k[,d]) -> D.get(k,d), also set D[k]=d if k not in D"""
         return self.setdefault(w_key, w_value)
 

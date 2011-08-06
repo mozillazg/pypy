@@ -269,6 +269,9 @@ class AppTest_DictObject:
         d[33] = 99
         assert d == dd
         assert x == 99
+        x = dd.setdefault(12)
+        assert x is None
+        assert dd[12] is None
 
     def test_setdefault_fast(self):
         class Key(object):
