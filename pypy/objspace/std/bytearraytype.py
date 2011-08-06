@@ -425,6 +425,10 @@ def inplace_add__Bytearray_ANY(space, w_bytearray1, w_iterable2):
     w_bytearray1.data += space.bufferstr_new_w(w_iterable2)
     return w_bytearray1
 
+def inplace_add__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2):
+    w_bytearray1.data += w_bytearray2.data
+    return w_bytearray1
+
 def mul_bytearray_times(space, w_bytearray, w_times):
     try:
         times = space.getindex_w(w_times, space.w_OverflowError)
