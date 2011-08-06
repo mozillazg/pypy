@@ -406,9 +406,10 @@ class AppTestAppComplexTest:
         b = 5.1+2.3j
 
         fo = None
+        pth = None
         try:
             pth = tempfile.mktemp()
-            fo = open(pth,"wb")
+            fo = open(pth, "wb")
             print >>fo, a, b
             fo.close()
             fo = open(pth, "rb")
@@ -417,10 +418,11 @@ class AppTestAppComplexTest:
         finally:
             if (fo is not None) and (not fo.closed):
                 fo.close()
-            try:
-                os.remove(pth)
-            except (OSError, IOError):
-                pass
+            if pth is not None:
+                try:
+                    os.remove(pth)
+                except (OSError, IOError):
+                    pass
 
     def test_convert(self):
         raises(TypeError, int, 1+1j)

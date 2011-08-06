@@ -176,7 +176,7 @@ class CPythonFakeFrame(eval.Frame):
         assert isinstance(code, CPythonFakeCode)
         fn = code.cpy_callable
         try:
-            result = apply(fn, self.unwrappedargs, self.unwrappedkwds)
+            result = fn(*self.unwrappedargs, **self.unwrappedkwds)
         except:
             wrap_exception(self.space)
             raise
