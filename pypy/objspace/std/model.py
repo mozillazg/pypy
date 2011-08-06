@@ -5,6 +5,8 @@ to provide in this version of PyPy, along with conversion rules.
 
 from pypy.objspace.std.multimethod import MultiMethodTable, FailedToImplement
 from pypy.interpreter.baseobjspace import W_Root, ObjSpace
+from pypy.interpreter import pycode, special
+
 
 _registered_implementations = set()
 def registerimplementation(implcls):
@@ -126,6 +128,8 @@ class StdTypeModel:
             dictmultiobject.W_DictViewKeysObject: [],
             dictmultiobject.W_DictViewItemsObject: [],
             dictmultiobject.W_DictViewValuesObject: [],
+            pycode.PyCode: [],
+            special.Ellipsis: [],
         }
 
         self.imported_but_not_registered = {
