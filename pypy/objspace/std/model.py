@@ -37,7 +37,7 @@ class StdTypeModel:
         """NOT_RPYTHON: inititialization only"""
         self.config = config
         # All the Python types that we want to provide in this StdObjSpace
-        from pypy.objspace.std.bytearraytype import W_BytearrayObject
+        from pypy.objspace.std import bytearraytype, dicttype
 
         class result:
             from pypy.objspace.std.objecttype import object_typedef
@@ -49,10 +49,10 @@ class StdTypeModel:
             from pypy.objspace.std.frozensettype import frozenset_typedef
             from pypy.objspace.std.tupletype  import tuple_typedef
             from pypy.objspace.std.listtype   import list_typedef
-            from pypy.objspace.std.dicttype   import dict_typedef
+            dict_typedef = dicttype.W_DictMultiObject.typedef
             from pypy.objspace.std.basestringtype import basestring_typedef
             from pypy.objspace.std.stringtype import str_typedef
-            bytearray_typedef = W_BytearrayObject.typedef
+            bytearray_typedef = bytearraytype.W_BytearrayObject.typedef
             from pypy.objspace.std.typetype   import type_typedef
             from pypy.objspace.std.slicetype  import slice_typedef
             from pypy.objspace.std.longtype   import long_typedef
@@ -76,7 +76,6 @@ class StdTypeModel:
         from pypy.objspace.std import tupleobject
         from pypy.objspace.std import smalltupleobject
         from pypy.objspace.std import listobject
-        from pypy.objspace.std import dictmultiobject
         from pypy.objspace.std import stringobject
         from pypy.objspace.std import ropeobject
         from pypy.objspace.std import ropeunicodeobject
@@ -107,10 +106,10 @@ class StdTypeModel:
             floatobject.W_FloatObject: [],
             tupleobject.W_TupleObject: [],
             listobject.W_ListObject: [],
-            dictmultiobject.W_DictMultiObject: [],
-            dictmultiobject.W_DictMultiIterObject: [],
+            dicttype.W_DictMultiObject: [],
+            dicttype.W_DictMultiIterObject: [],
             stringobject.W_StringObject: [],
-            W_BytearrayObject: [],
+            bytearraytype.W_BytearrayObject: [],
             typeobject.W_TypeObject: [],
             sliceobject.W_SliceObject: [],
             longobject.W_LongObject: [],
@@ -125,16 +124,16 @@ class StdTypeModel:
             iterobject.W_FastTupleIterObject: [],
             iterobject.W_ReverseSeqIterObject: [],
             unicodeobject.W_UnicodeObject: [],
-            dictmultiobject.W_DictViewKeysObject: [],
-            dictmultiobject.W_DictViewItemsObject: [],
-            dictmultiobject.W_DictViewValuesObject: [],
+            dicttype.W_DictViewKeysObject: [],
+            dicttype.W_DictViewItemsObject: [],
+            dicttype.W_DictViewValuesObject: [],
             pycode.PyCode: [],
             special.Ellipsis: [],
         }
 
         self.imported_but_not_registered = {
-            dictmultiobject.W_DictMultiObject: True, # XXXXXX
-            dictmultiobject.W_DictMultiIterObject: True,
+            dicttype.W_DictMultiObject: True, # XXXXXX
+            dicttype.W_DictMultiIterObject: True,
             listobject.W_ListObject: True,
             stringobject.W_StringObject: True,
             tupleobject.W_TupleObject: True,

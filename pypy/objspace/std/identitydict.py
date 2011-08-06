@@ -3,10 +3,8 @@
 
 from pypy.rlib import rerased
 from pypy.rlib.debug import mark_dict_non_null
-from pypy.objspace.std.dictmultiobject import (AbstractTypedStrategy,
-                                               DictStrategy,
-                                               IteratorImplementation,
-                                               _UnwrappedIteratorMixin)
+from pypy.objspace.std.dicttype import (AbstractTypedStrategy, DictStrategy,
+    IteratorImplementation, _UnwrappedIteratorMixin)
 
 
 # this strategy is selected by EmptyDictStrategy.switch_to_correct_strategy

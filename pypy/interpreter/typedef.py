@@ -28,14 +28,14 @@ class TypeDef:
         # xxx used by faking
         self.fakedcpytype = None
         self.add_entries(**rawdict)
-    
+
     def add_entries(self, **rawdict):
         # xxx fix the names of the methods to match what app-level expects
         for key, value in rawdict.items():
             if isinstance(value, (interp2app, GetSetProperty)):
                 value.name = key
         self.rawdict.update(rawdict)
-    
+
     def _freeze_(self):
         # hint for the annotator: track individual constant instances of TypeDef
         return True
@@ -187,7 +187,7 @@ def _builduserclswithfeature(config, supercls, *features):
 
     def add(Proto):
         for key, value in Proto.__dict__.items():
-            if (not key.startswith('__') and not key.startswith('_mixin_') 
+            if (not key.startswith('__') and not key.startswith('_mixin_')
                     or key == '__del__'):
                 if hasattr(value, "func_name"):
                     value = func_with_new_name(value, value.func_name)
@@ -274,10 +274,10 @@ def _builduserclswithfeature(config, supercls, *features):
         class Proto(object):
             def getdict(self, space):
                 return self.w__dict__
-            
+
             def setdict(self, space, w_dict):
                 self.w__dict__ = check_new_dictionary(space, w_dict)
-            
+
             def user_setup(self, space, w_subtype):
                 self.w__dict__ = space.newdict(
                     instance=True, classofinstance=w_subtype)
@@ -299,8 +299,8 @@ def check_new_dictionary(space, w_dict):
     if not space.is_true(space.isinstance(w_dict, space.w_dict)):
         raise OperationError(space.w_TypeError,
                 space.wrap("setting dictionary to a non-dict"))
-    from pypy.objspace.std import dictmultiobject
-    assert isinstance(w_dict, dictmultiobject.W_DictMultiObject)
+    from pypy.objspace.std import dicttype
+    assert isinstance(w_dict, dicttype.W_DictMultiObject)
     return w_dict
 check_new_dictionary._dont_inline_ = True
 
@@ -342,7 +342,7 @@ def _make_descr_typecheck_wrapper(tag, func, extraargs, cls, use_closure):
             return %(name)s(%(args)s, %(extra)s)
         """
         miniglobals[cls_name] = cls
-    
+
     name = func.__name__
     extra = ', '.join(extraargs)
     from pypy.interpreter import pycode
@@ -462,7 +462,7 @@ class GetSetProperty(Wrappable):
                 space, '__delattr__',
                 self.reqcls, Arguments(space, [w_obj,
                                                space.wrap(self.name)]))
-    
+
     def descr_get_objclass(space, property):
         return property.objclass_getter(space)
 
@@ -480,7 +480,7 @@ def interp_attrproperty_w(name, cls, doc=None):
             return space.w_None
         else:
             return w_value
-    
+
     return GetSetProperty(fget, cls=cls, doc=doc)
 
 GetSetProperty.typedef = TypeDef(
@@ -502,7 +502,7 @@ class Member(Wrappable):
         self.index = index
         self.name = name
         self.w_cls = w_cls
-    
+
     def typecheck(self, space, w_obj):
         if not space.is_true(space.isinstance(w_obj, self.w_cls)):
             raise operationerrfmt(space.w_TypeError,
@@ -511,7 +511,7 @@ class Member(Wrappable):
                                   self.name,
                                   self.w_cls.name,
                                   space.type(w_obj).getname(space))
-    
+
     def descr_member_get(self, space, w_obj, w_w_cls=None):
         """member.__get__(obj[, type]) -> value
         Read the slot 'member' of the given 'obj'."""
@@ -524,13 +524,13 @@ class Member(Wrappable):
                 raise OperationError(space.w_AttributeError,
                                      space.wrap(self.name)) # XXX better message
             return w_result
-    
+
     def descr_member_set(self, space, w_obj, w_value):
         """member.__set__(obj, value)
         Write into the slot 'member' of the given 'obj'."""
         self.typecheck(space, w_obj)
         w_obj.setslotvalue(self.index, w_value)
-    
+
     def descr_member_del(self, space, w_obj):
         """member.__delete__(obj)
         Delete the value of the slot 'member' from the given 'obj'."""

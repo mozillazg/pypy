@@ -9,7 +9,6 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.module.__builtin__ import Module
 from pypy.objspace.std import intobject, smallintobject
 from pypy.objspace.std.multimethod import FailedToImplement
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject
 from pypy.objspace.std.listobject import W_ListObject
 
 

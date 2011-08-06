@@ -77,7 +77,7 @@ class MethodCache(object):
         for i in range(len(self.lookup_where)):
             self.lookup_where[i] = None_None
 
-# possible values of compares_by_identity_status 
+# possible values of compares_by_identity_status
 UNKNOWN = 0
 COMPARES_BY_IDENTITY = 1
 OVERRIDES_EQ_CMP_OR_HASH = 2
@@ -355,7 +355,7 @@ class W_TypeObject(W_Object):
                 if w_value is not None:
                     return w_value
         return None
-                
+
     @unroll_safe
     def _lookup(w_self, key):
         space = w_self.space
@@ -463,7 +463,7 @@ class W_TypeObject(W_Object):
 
     def getdict(w_self, space): # returning a dict-proxy!
         from pypy.objspace.std.dictproxyobject import DictProxyStrategy
-        from pypy.objspace.std.dictmultiobject import W_DictMultiObject
+        from pypy.objspace.std.dicttype import W_DictMultiObject
         if w_self.lazyloaders:
             w_self._freeze_()    # force un-lazification
         strategy = space.fromcache(DictProxyStrategy)
