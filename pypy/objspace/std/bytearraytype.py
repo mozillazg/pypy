@@ -138,6 +138,28 @@ class W_BytearrayObject(Wrappable):
     def descr__buffer__(self, space):
         return space.wrap(BytearrayBuffer(self.data))
 
+    def descr__mul__(self, space, w_times):
+        try:
+            times = space.getindex_w(w_times, space.w_OverflowError)
+        except OperationError, e:
+            if e.match(space, space.w_TypeError):
+                return space.w_NotImplemented
+            raise
+        return W_BytearrayObject(self.data * times)
+
+    def descr__rmul__(self, space, w_times):
+        return self.descr__mul__(space, w_times)
+
+    def descr__imul__(self, space, w_times):
+        try:
+            times = space.getindex_w(w_times, space.w_OverflowError)
+        except OperationError, e:
+            if e.match(space, space.w_TypeError):
+                return space.w_NotImplemented
+            raise
+        self.data *= times
+        return self
+
     @gateway.unwrap_spec(idx=int)
     def descr_insert(self, space, idx, w_other):
         """B.insert(index, int) -> None
@@ -208,8 +230,6 @@ class W_BytearrayObject(Wrappable):
 
         Reverse the order of the values in B in place."""
         self.data.reverse()
-
-
 
 class BytearrayBuffer(RWBuffer):
     def __init__(self, data):
@@ -409,32 +429,6 @@ def inplace_add__Bytearray_ANY(space, w_bytearray1, w_iterable2):
 def inplace_add__Bytearray_Bytearray(space, w_bytearray1, w_bytearray2):
     w_bytearray1.data += w_bytearray2.data
     return w_bytearray1
-
-def mul_bytearray_times(space, w_bytearray, w_times):
-    try:
-        times = space.getindex_w(w_times, space.w_OverflowError)
-    except OperationError, e:
-        if e.match(space, space.w_TypeError):
-            raise FailedToImplement
-        raise
-    data = w_bytearray.data
-    return W_BytearrayObject(data * times)
-
-def mul__Bytearray_ANY(space, w_bytearray, w_times):
-    return mul_bytearray_times(space, w_bytearray, w_times)
-
-def mul__ANY_Bytearray(space, w_times, w_bytearray):
-    return mul_bytearray_times(space, w_bytearray, w_times)
-
-def inplace_mul__Bytearray_ANY(space, w_bytearray, w_times):
-    try:
-        times = space.getindex_w(w_times, space.w_OverflowError)
-    except OperationError, e:
-        if e.match(space, space.w_TypeError):
-            raise FailedToImplement
-        raise
-    w_bytearray.data *= times
-    return w_bytearray
 
 def contains__Bytearray_ANY(space, w_bytearray, w_sub):
     # XXX slow - copies, needs rewriting
@@ -748,6 +742,9 @@ If the argument is a bytearray, the return value is the same object.''',
 
     __init__ = gateway.interp2app(W_BytearrayObject.descr__init__),
     __len__ = gateway.interp2app(W_BytearrayObject.descr__len__),
+    __mul__ = gateway.interp2app(W_BytearrayObject.descr__mul__),
+    __rmul__ = gateway.interp2app(W_BytearrayObject.descr__rmul__),
+    __imul__ = gateway.interp2app(W_BytearrayObject.descr__imul__),
     __reduce__ = gateway.interp2app(W_BytearrayObject.descr__reduce__),
     __buffer__ = gateway.interp2app(W_BytearrayObject.descr__buffer__),
     __str__ = gateway.interp2app(W_BytearrayObject.descr__str__),
