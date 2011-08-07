@@ -66,6 +66,7 @@ class AppTestBytesArray:
         assert b1 + b2 == bytearray('hello world')
         assert b1 * 2 == bytearray('hello hello ')
         assert b1 * 1 is not b1
+        assert 2 * b1 == bytearray('hello hello ')
 
         b3 = b1
         b3 *= 3
