@@ -124,6 +124,30 @@ class W_DictMultiObject(Wrappable):
             w_currently_in_repr = ec._py_repr = space.newdict()
         return dictrepr(space, w_currently_in_repr, self)
 
+    def descr__eq__(self, space, w_other):
+        if not isinstance(w_other, W_DictMultiObject):
+            return space.w_NotImplemented
+
+        if space.is_w(self, w_other):
+            return space.w_True
+
+        if self.length() != w_other.length():
+            return space.w_False
+        iteratorimplementation = self.iter()
+        while 1:
+            w_key, w_val = iteratorimplementation.next()
+            if w_key is None:
+                break
+            w_rightval = w_other.getitem(w_key)
+            if w_rightval is None:
+                return space.w_False
+            if not space.eq_w(w_val, w_rightval):
+                return space.w_False
+        return space.w_True
+
+    def descr__ne__(self, space, w_other):
+        return space.not_(self.descr__eq__(space, w_other))
+
     def descr_items(self, space):
         """D.items() -> list of D's (key, value) pairs, as 2-tuples"""
         return space.newlist(self.items())
@@ -326,6 +350,12 @@ class W_DictViewObject(Wrappable):
 
     def descr__len__(self, space):
         return space.len(self.w_dict)
+
+    def descr__repr__(self, space):
+        w_seq = space.call_function(space.w_list, self)
+        w_repr = space.repr(w_seq)
+        return space.wrap("%s(%s)" % (space.type(self).getname(space),
+                                      space.str_w(w_repr)))
 
 class W_DictViewItemsObject(W_DictViewObject):
     def descr__iter__(self, space):
@@ -835,25 +865,6 @@ def init_or_update(space, w_dict, __args__, funcname):
 
 ### MULTIMETHOD STUFF
 
-
-def eq__DictMulti_DictMulti(space, w_left, w_right):
-    if space.is_w(w_left, w_right):
-        return space.w_True
-
-    if w_left.length() != w_right.length():
-        return space.w_False
-    iteratorimplementation = w_left.iter()
-    while 1:
-        w_key, w_val = iteratorimplementation.next()
-        if w_key is None:
-            break
-        w_rightval = w_right.getitem(w_key)
-        if w_rightval is None:
-            return space.w_False
-        if not space.eq_w(w_val, w_rightval):
-            return space.w_False
-    return space.w_True
-
 def characterize(space, w_a, w_b):
     """ (similar to CPython)
     returns the smallest key in acontent for which b's value is different or absent and this value """
@@ -923,14 +934,6 @@ eq__DictViewKeys_DictViewItems = eq__DictViewKeys_DictViewKeys
 eq__DictViewItems_DictViewItems = eq__DictViewKeys_DictViewKeys
 eq__DictViewItems_settypedef = eq__DictViewItems_DictViewItems
 
-def repr__DictViewKeys(space, w_dictview):
-    w_seq = space.call_function(space.w_list, w_dictview)
-    w_repr = space.repr(w_seq)
-    return space.wrap("%s(%s)" % (space.type(w_dictview).getname(space),
-                                  space.str_w(w_repr)))
-repr__DictViewItems  = repr__DictViewKeys
-repr__DictViewValues = repr__DictViewKeys
-
 def and__DictViewKeys_DictViewKeys(space, w_dictview, w_otherview):
     w_set = space.call_function(space.w_set, w_dictview)
     space.call_method(w_set, "intersection_update", w_otherview)
@@ -974,6 +977,8 @@ dict(**kwargs) -> new dictionary initialized with the name=value pairs
     __hash__ = None,
     __repr__ = gateway.interp2app(W_DictMultiObject.descr__repr__),
     __reversed__ = gateway.interp2app(W_DictMultiObject.descr__reversed__),
+    __eq__ = gateway.interp2app(W_DictMultiObject.descr__eq__),
+    __ne__ = gateway.interp2app(W_DictMultiObject.descr__ne__),
 
     __len__ = gateway.interp2app(W_DictMultiObject.descr__len__),
     __getitem__ = gateway.interp2app(W_DictMultiObject.descr__getitem__),
@@ -1019,17 +1024,20 @@ W_DictMultiIterObject.typedef = StdTypeDef("dictionaryiterator",
 
 W_DictViewKeysObject.typedef = StdTypeDef("dict_keys",
     __len__ = gateway.interp2app(W_DictViewKeysObject.descr__len__),
-    __iter__ = gateway.interp2app(W_DictViewKeysObject.descr__iter__)
+    __iter__ = gateway.interp2app(W_DictViewKeysObject.descr__iter__),
+    __repr__ = gateway.interp2app(W_DictViewKeysObject.descr__repr__),
 )
 
 W_DictViewItemsObject.typedef = StdTypeDef("dict_items",
     __len__ = gateway.interp2app(W_DictViewItemsObject.descr__len__),
     __iter__ = gateway.interp2app(W_DictViewItemsObject.descr__iter__),
+    __repr__ = gateway.interp2app(W_DictViewItemsObject.descr__repr__),
 )
 
 W_DictViewValuesObject.typedef = StdTypeDef("dict_values",
     __len__ = gateway.interp2app(W_DictViewValuesObject.descr__len__),
     __iter__ = gateway.interp2app(W_DictViewValuesObject.descr__iter__),
+    __repr__ = gateway.interp2app(W_DictViewValuesObject.descr__repr__),
 )
 
 
