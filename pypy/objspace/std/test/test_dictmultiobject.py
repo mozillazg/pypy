@@ -181,6 +181,11 @@ class AppTest_DictObject:
         assert d.has_key(1)
         assert not d.has_key(33)
 
+    def test_contains(self):
+        d = {1: 2, 3: 4}
+        assert 1 in d
+        assert 33 not in d
+
     def test_items(self):
         d = {1: 2, 3: 4}
         its = d.items()

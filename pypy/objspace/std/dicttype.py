@@ -984,6 +984,7 @@ dict(**kwargs) -> new dictionary initialized with the name=value pairs
     __getitem__ = gateway.interp2app(W_DictMultiObject.descr__getitem__),
     __setitem__ = gateway.interp2app(W_DictMultiObject.descr__setitem__),
     __delitem__ = gateway.interp2app(W_DictMultiObject.descr__delitem__),
+    __contains__ = gateway.interp2app(W_DictMultiObject.descr__contains__),
     __iter__ = gateway.interp2app(W_DictMultiObject.descr__iter__),
 
     items = gateway.interp2app(W_DictMultiObject.descr_items),
