@@ -1,13 +1,13 @@
-import py
 import sys
+
+import py
+
+from pypy.conftest import gettestobjspace, option
 from pypy.interpreter.error import OperationError
-from pypy.objspace.std.dicttype import (W_DictMultiObject,
-    setitem__DictMulti_ANY_ANY, getitem__DictMulti_ANY, StringDictStrategy,
+from pypy.objspace.std.celldict import ModuleDictStrategy
+from pypy.objspace.std.dicttype import (W_DictMultiObject, StringDictStrategy,
     ObjectDictStrategy)
 
-from pypy.objspace.std.celldict import ModuleDictStrategy
-from pypy.conftest import gettestobjspace
-from pypy.conftest import option
 
 class TestW_DictObject:
 
@@ -917,10 +917,10 @@ class TestDictImplementation:
         pydict = {}
         for i in range(N):
             x = randint(-N, N)
-            setitem__DictMulti_ANY_ANY(self.space, d, x, i)
+            d.descr__setitem__(self.space, x, i)
             pydict[x] = i
         for key, value in pydict.iteritems():
-            assert value == getitem__DictMulti_ANY(self.space, d, key)
+            assert value == d.descr__getitem__(self.space, key)
 
 class BaseTestRDictImplementation:
 
