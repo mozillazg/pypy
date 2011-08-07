@@ -2,7 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
-from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_result_dtype
+from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_result_dtype, _dtype_list
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.objspace.std.floatobject import float2string as float2string_orig
@@ -184,12 +184,12 @@ class BaseArray(Wrappable):
     def descr_any(self, space):
         return space.wrap(self._any())
 
-    descr_sum = _reduce_sum_prod_impl(add, 0.0)
-    descr_prod = _reduce_sum_prod_impl(mul, 1.0)
-    descr_max = _reduce_max_min_impl(maximum)
-    descr_min = _reduce_max_min_impl(minimum)
-    descr_argmax = _reduce_argmax_argmin_impl(maximum)
-    descr_argmin = _reduce_argmax_argmin_impl(minimum)
+#    descr_sum = _reduce_sum_prod_impl(add, 0.0)
+#    descr_prod = _reduce_sum_prod_impl(mul, 1.0)
+#    descr_max = _reduce_max_min_impl(maximum)
+#    descr_min = _reduce_max_min_impl(minimum)
+#    descr_argmax = _reduce_argmax_argmin_impl(maximum)
+#    descr_argmin = _reduce_argmax_argmin_impl(minimum)
 
     def descr_dot(self, space, w_other):
         if isinstance(w_other, BaseArray):
@@ -200,11 +200,12 @@ class BaseArray(Wrappable):
             return self.descr_mul(space, w_other)
 
     def _getnums(self, comma):
-        kind = self.find_dtype().kind
-        if kind == 'f':
-            format_func = float2string
-        else:
-            format_func = str
+        #d = self.find_dtype()
+        #kind = d.kind
+        #if kind == 'f':
+        format_func = float2string
+        #else:
+        #    format_func = str
         if self.find_size() > 1000:
             nums = [
                 format_func(self.eval(index))
@@ -324,7 +325,7 @@ class ScalarWrapper(BaseArray):
     """
     Intermediate class representing a float literal.
     """
-    _immutable_fields_ = ["value", "dtype"]
+    _immutable_fields_ = ["value"]
     signature = Signature()
 
     def __init__(self, value, dtype):
@@ -363,7 +364,7 @@ class VirtualArray(BaseArray):
         i = 0
         signature = self.signature
         result_size = self.find_size()
-        result = SingleDimArray(result_size, self.dtype)
+        result = create_sdarray(result_size, self.dtype)
         while i < result_size:
             numpy_driver.jit_merge_point(signature=signature,
                                          result_size=result_size, i=i,
@@ -465,6 +466,7 @@ class ViewArray(BaseArray):
         BaseArray.__init__(self)
         self.signature = signature
         self.parent = parent
+        self.dtype = parent.dtype
         self.invalidates = parent.invalidates
 
     def get_concrete(self):
@@ -488,7 +490,7 @@ class ViewArray(BaseArray):
         raise NotImplementedError
 
     def find_dtype(self):
-        return self.parent.dtype
+        return self.dtype
 
 class SingleDimSlice(ViewArray):
     _immutable_fields_ = ["start", "stop", "step", "size"]
@@ -527,41 +529,20 @@ class SingleDimSlice(ViewArray):
     def calc_index(self, item):
         return (self.start + item * self.step)
 
-
 class SingleDimArray(BaseArray):
     signature = Signature()
 
-    def __init__(self, size, dtype):
+    def __init__(self):
         BaseArray.__init__(self)
-        self.size = size
-        self.dtype = dtype
-        TP = TPs[dtype.num]
-        self.storage = lltype.malloc(TP, size, zero=True,
-                                     flavor='raw', track_allocation=False,
-                                     add_memory_pressure=True)
-        # XXX find out why test_zjit explodes with trackign of allocations
 
     def get_concrete(self):
         return self
 
-    def get_root_storage(self):
-        return self.storage
-
     def find_size(self):
         return self.size
 
-    def eval(self, i):
-        return self.storage[i]
-
     def descr_len(self, space):
         return space.wrap(self.size)
-
-    def find_dtype(self):
-        return self.dtype
-
-    def setitem(self, item, value):
-        self.invalidated()
-        self.storage[item] = value
 
     def setslice(self, space, start, stop, step, slice_length, arr):
         if step > 0:
@@ -569,13 +550,46 @@ class SingleDimArray(BaseArray):
         else:
             self._sliceloop2(start, stop, step, arr, self)
 
-    def __del__(self):
-        lltype.free(self.storage, flavor='raw', track_allocation=False)
+def make_class(num):
+    TP = TPs[num]
+    class TypedSingleDimArray(SingleDimArray):
+        def __init__(self, size, dtype):
+            SingleDimArray.__init__(self)
+            self.size = size
+            self.dtype = dtype
+            self.storage = lltype.malloc(TP, size, zero=True,
+                                     flavor='raw', track_allocation=False,
+                                     add_memory_pressure=True)
+            # XXX find out why test_zjit explodes with trackign of allocations
+
+        def get_root_storage(self):
+            return self.storage
+
+        def eval(self, i):
+            return self.storage[i]
+
+        def setitem(self, item, value):
+            self.invalidated()
+            self.storage[item] = value
+
+        def find_dtype(self):
+            return self.dtype
+
+        def __del__(self):
+            lltype.free(self.storage, flavor='raw', track_allocation=False)
+
+    TypedSingleDimArray.__name__ = 'SingleDimArray' + str(num)
+    return TypedSingleDimArray
+
+_array_classes = tuple(make_class(i) for i in xrange(14))
+
+def create_sdarray(L, dtype):
+    return _array_classes[dtype.num](L, dtype)
 
 def new_numarray(space, iterable, dtype):
     l = space.listview(iterable)
     dtype = get_dtype(space, dtype)
-    arr = SingleDimArray(len(l), dtype)
+    arr = create_sdarray(len(l), dtype)
     i = 0
     unwrap = dtype.unwrap
     cast = dtype.cast
@@ -604,11 +618,11 @@ def descr_new_numarray(space, w_type, __args__):
 
 @unwrap_spec(size=int)
 def zeros(space, size):
-    return space.wrap(SingleDimArray(size, Float64_dtype))
+    return space.wrap(create_sdarray(size, Float64_dtype))
 
 @unwrap_spec(size=int)
 def ones(space, size):
-    arr = SingleDimArray(size, Float64_dtype)
+    arr = create_sdarray(size, Float64_dtype)
     for i in xrange(size):
         arr.storage[i] = 1.0
     return space.wrap(arr)
@@ -643,14 +657,14 @@ BaseArray.typedef = TypeDef(
     __repr__ = interp2app(BaseArray.descr_repr),
     __str__ = interp2app(BaseArray.descr_str),
 
-    mean = interp2app(BaseArray.descr_mean),
-    sum = interp2app(BaseArray.descr_sum),
-    prod = interp2app(BaseArray.descr_prod),
-    max = interp2app(BaseArray.descr_max),
-    min = interp2app(BaseArray.descr_min),
-    argmax = interp2app(BaseArray.descr_argmax),
-    argmin = interp2app(BaseArray.descr_argmin),
-    all = interp2app(BaseArray.descr_all),
-    any = interp2app(BaseArray.descr_any),
-    dot = interp2app(BaseArray.descr_dot),
+#    mean = interp2app(BaseArray.descr_mean),
+#    sum = interp2app(BaseArray.descr_sum),
+#    prod = interp2app(BaseArray.descr_prod),
+#    max = interp2app(BaseArray.descr_max),
+#    min = interp2app(BaseArray.descr_min),
+#    argmax = interp2app(BaseArray.descr_argmax),
+#    argmin = interp2app(BaseArray.descr_argmin),
+#    all = interp2app(BaseArray.descr_all),
+#    any = interp2app(BaseArray.descr_any),
+#    dot = interp2app(BaseArray.descr_dot),
 )
