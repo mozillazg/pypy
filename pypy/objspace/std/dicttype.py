@@ -146,6 +146,9 @@ class W_DictMultiObject(Wrappable):
         return space.w_True
 
     def descr__ne__(self, space, w_other):
+        if not isinstance(w_other, W_DictMultiObject):
+            return space.w_NotImplemented
+
         return space.not_(self.descr__eq__(space, w_other))
 
     def descr_items(self, space):

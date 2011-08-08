@@ -349,6 +349,12 @@ class AppTest_DictObject:
         bool = d1 != d3
         assert bool == True
 
+    def test_ne(self):
+        class x(dict):
+            def __eq__(self, other):
+                return False
+        assert x() != set(["a"])
+
     def test_lt(self):
         d1 = {1: 2, 3: 4}
         d2 = {1: 2, 3: 4}
