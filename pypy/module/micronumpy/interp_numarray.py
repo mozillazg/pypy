@@ -266,7 +266,7 @@ class BaseArray(Wrappable):
                                                               self.find_size())
         if step == 0:
             # Single index
-            self.get_concrete().setitem(start, space.float_w(w_value))
+            self.get_concrete().setitem(start, self.dtype.cast(self.dtype.unwrap(w_value)))
         else:
             concrete = self.get_concrete()
             if isinstance(w_value, BaseArray):
@@ -286,22 +286,24 @@ class BaseArray(Wrappable):
     def _sliceloop1(self, start, stop, step, source, dest):
         i = start
         j = 0
+        storage = dest.get_root_storage()
         while i < stop:
             slice_driver1.jit_merge_point(signature=source.signature,
                     step=step, stop=stop, i=i, j=j, source=source,
                     dest=dest)
-            dest.storage[i] = source.eval(j)
+            storage[i] = source.eval(j)
             j += 1
             i += step
 
     def _sliceloop2(self, start, stop, step, source, dest):
         i = start
         j = 0
+        storage = dest.get_root_storage()
         while i > stop:
             slice_driver2.jit_merge_point(signature=source.signature,
                     step=step, stop=stop, i=i, j=j, source=source,
                     dest=dest)
-            dest.storage[i] = source.eval(j)
+            storage[i] = source.eval(j)
             j += 1
             i += step
 
@@ -319,7 +321,7 @@ def convert_to_array (space, w_obj):
 def wrap_scalar(space, scalar, dtype=None):
     if dtype is None:
         dtype = find_scalar_dtype(space, scalar)
-    return ScalarWrapper(dtype.unwrap(space, scalar), dtype)
+    return ScalarWrapper(dtype.cast(dtype.unwrap(space, scalar)), dtype)
 
 class ScalarWrapper(BaseArray):
     """
@@ -365,11 +367,12 @@ class VirtualArray(BaseArray):
         signature = self.signature
         result_size = self.find_size()
         result = create_sdarray(result_size, self.dtype)
+        storage = result.get_root_storage()
         while i < result_size:
             numpy_driver.jit_merge_point(signature=signature,
                                          result_size=result_size, i=i,
                                          self=self, result=result)
-            result.storage[i] = self.eval(i)
+            storage[i] = self.eval(i)
             i += 1
         return result
 
@@ -511,7 +514,7 @@ class SingleDimSlice(ViewArray):
         self.size = slice_length
 
     def get_root_storage(self):
-        return self.parent.storage
+        return self.parent.get_root_storage()
 
     def find_size(self):
         return self.size
