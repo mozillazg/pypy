@@ -14,6 +14,15 @@ def names_and_fields(self, _fields_, superclass, anonymous_fields=None):
             raise TypeError("Expected CData subclass, got %s" % (tp,))
         if isinstance(tp, StructOrUnionMeta):
             tp._make_final()
+        if len(f) == 3:
+            if (not hasattr(tp, '_type_')
+                or not isinstance(tp._type_, str)
+                or tp._type_ not in "iIhHbBlL"):
+                #XXX: are those all types?
+                #     we just dont get the type name
+                #     in the interp levle thrown TypeError
+                #     from rawffi if there are more
+                raise TypeError('bit fields not allowed for type ' + tp.__name__)
 
     all_fields = []
     for cls in reversed(inspect.getmro(superclass)):
@@ -34,16 +43,18 @@ def names_and_fields(self, _fields_, superclass, anonymous_fields=None):
     for i, field in enumerate(all_fields):
         name = field[0]
         value = field[1]
+        is_bitfield = (len(field) == 3)
         fields[name] = Field(name,
                              self._ffistruct.fieldoffset(name),
                              self._ffistruct.fieldsize(name),
-                             value, i)
+                             value, i, is_bitfield)
 
     if anonymous_fields:
         resnames = []
         for i, field in enumerate(all_fields):
             name = field[0]
             value = field[1]
+            is_bitfield = (len(field) == 3)
             startpos = self._ffistruct.fieldoffset(name)
             if name in anonymous_fields:
                 for subname in value._names:
@@ -52,7 +63,7 @@ def names_and_fields(self, _fields_, superclass, anonymous_fields=None):
                     subvalue = value._fieldtypes[subname].ctype
                     fields[subname] = Field(subname,
                                             relpos, subvalue._sizeofinstances(),
-                                            subvalue, i)
+                                            subvalue, i, is_bitfield)
             else:
                 resnames.append(name)
         names = resnames
@@ -60,8 +71,8 @@ def names_and_fields(self, _fields_, superclass, anonymous_fields=None):
     self._fieldtypes = fields
 
 class Field(object):
-    def __init__(self, name, offset, size, ctype, num):
-        for k in ('name', 'offset', 'size', 'ctype', 'num'):
+    def __init__(self, name, offset, size, ctype, num, is_bitfield):
+        for k in ('name', 'offset', 'size', 'ctype', 'num', 'is_bitfield'):
             self.__dict__[k] = locals()[k]
 
     def __setattr__(self, name, value):
@@ -89,7 +100,7 @@ def struct_setattr(self, name, value):
     if name == '_fields_':
         if self.__dict__.get('_fields_', None) is not None:
             raise AttributeError("_fields_ is final")
-        if self in [v for k, v in value]:
+        if self in [f[1] for f in value]:
             raise AttributeError("Structure or union cannot contain itself")
         names_and_fields(
             self,
@@ -225,7 +236,7 @@ class StructOrUnion(_CData):
             field = self._fieldtypes[name]
         except KeyError:
             return _CData.__getattribute__(self, name)
-        if field.size >> 16:
+        if field.is_bitfield:
             # bitfield member, use direct access
             return self._buffer.__getattr__(name)
         else:
