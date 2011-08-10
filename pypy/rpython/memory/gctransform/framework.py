@@ -386,6 +386,18 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.malloc_varsize_nonmovable_ptr = None
 
+        if getattr(GCClass, 'raw_malloc_memory_pressure', False):
+            def raw_malloc_memory_pressure(length, itemsize):
+                totalmem = length * itemsize
+                if totalmem > 0:
+                    gcdata.gc.raw_malloc_memory_pressure(totalmem)
+                #else: probably an overflow -- the following rawmalloc
+                #      will fail then
+            self.raw_malloc_memory_pressure_ptr = getfn(
+                raw_malloc_memory_pressure,
+                [annmodel.SomeInteger(), annmodel.SomeInteger()],
+                annmodel.s_None, minimal_transform = False)
+
         self.identityhash_ptr = getfn(GCClass.identityhash.im_func,
                                       [s_gc, s_gcref],
                                       annmodel.SomeInteger(),
@@ -935,10 +947,10 @@ class FrameworkGCTransformer(GCTransformer):
     def gct_gc_identityhash(self, hop):
         livevars = self.push_roots(hop)
         [v_ptr] = hop.spaceop.args
-        v_adr = hop.genop("cast_ptr_to_adr", [v_ptr],
-                          resulttype=llmemory.Address)
+        v_ptr = hop.genop("cast_opaque_ptr", [v_ptr],
+                          resulttype=llmemory.GCREF)
         hop.genop("direct_call",
-                  [self.identityhash_ptr, self.c_const_gc, v_adr],
+                  [self.identityhash_ptr, self.c_const_gc, v_ptr],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
