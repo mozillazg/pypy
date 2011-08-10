@@ -27,12 +27,27 @@ class ShadowStackRootWalker(BaseRootWalker):
             return top
         self.decr_stack = decr_stack
 
-        self.rootstackhook = gctransformer.root_stack_jit_hook
-        if self.rootstackhook is None:
-            def collect_stack_root(callback, gc, addr):
-                if gc.points_to_valid_gc_object(addr):
-                    callback(gc, addr)
-            self.rootstackhook = collect_stack_root
+        translator = gctransformer.translator
+        if (hasattr(translator, '_jit2gc') and
+                'root_iterator' in translator._jit2gc):
+            root_iterator = translator._jit2gc['root_iterator']
+            def jit_walk_stack_root(callback, addr, end):
+                gc = self.gc
+                root_iterator.setup(gc)
+                while True:
+                    end = root_iterator.next(end, addr)
+                    if end == llmemory.NULL:
+                        return
+                    callback(gc, end)
+            self.rootstackhook = jit_walk_stack_root
+        else:
+            def default_walk_stack_root(callback, addr, end):
+                gc = self.gc
+                while addr != end:
+                    if gc.points_to_valid_gc_object(addr):
+                        callback(gc, addr)
+                    addr += sizeofaddr
+            self.rootstackhook = default_walk_stack_root
 
     def push_stack(self, addr):
         top = self.incr_stack(1)
@@ -54,17 +69,13 @@ class ShadowStackRootWalker(BaseRootWalker):
 
     def walk_stack_roots(self, collect_stack_root):
         gcdata = self.gcdata
-        gc = self.gc
-        rootstackhook = self.rootstackhook
-        addr = gcdata.root_stack_base
-        end = gcdata.root_stack_top
-        while addr != end:
-            rootstackhook(collect_stack_root, gc, addr)
-            addr += sizeofaddr
+        self.rootstackhook(collect_stack_root,
+                           gcdata.root_stack_base, gcdata.root_stack_top)
         if self.collect_stacks_from_other_threads is not None:
             self.collect_stacks_from_other_threads(collect_stack_root)
 
     def need_thread_support(self, gctransformer, getfn):
+        XXXXXX   # FIXME
         from pypy.module.thread import ll_thread    # xxx fish
         from pypy.rpython.memory.support import AddressDict
         from pypy.rpython.memory.support import copy_without_null_values
