@@ -189,12 +189,12 @@ class BaseArray(Wrappable):
             return self.descr_mul(space, w_other)
 
     def _getnums(self, comma):
-        #d = self.find_dtype()
-        #kind = d.kind
-        #if kind == 'f':
-        format_func = float2string
-        #else:
-        #    format_func = str
+        d = self.find_dtype()
+        kind = d.kind
+        if kind == 'f':
+            format_func = float2string
+        else:
+            format_func = str
         if self.find_size() > 1000:
             nums = [
                 format_func(self.eval(index))
@@ -255,13 +255,15 @@ class BaseArray(Wrappable):
                                                               self.find_size())
         if step == 0:
             # Single index
-            self.get_concrete().setitem_wrap(space, start, w_value)
+            self.get_concrete().setitem_w(space, start, w_value)
         else:
             raise OperationError(space.w_ValueError, space.wrap("No slices"))
             #concrete = self.get_concrete()
             #if isinstance(w_value, BaseArray):
                 # for now we just copy if setting part of an array from 
                 # part of itself. can be improved.
+                # need to put in a function that checks all storages of 
+                # w_value because it could be a Call2 class (binop)
             #    if (concrete.get_root_storage() ==
             #        w_value.get_concrete().get_root_storage()):
             #        w_value = new_numarray(space, w_value, self.dtype)
@@ -470,6 +472,9 @@ class ViewArray(BaseArray):
     def eval(self, i):
         return self.parent.eval(self.calc_index(i))
 
+    def setitem_w(self, space, item, value):
+        return self.parent.setitem_w(space, self.calc_index(item), value)
+
     @unwrap_spec(item=int, value=float)
     def setitem(self, item, value):
         return self.parent.setitem(self.calc_index(item), value)
@@ -501,7 +506,6 @@ class SingleDimSlice(ViewArray):
             self.start = start
             self.stop = stop
             self.step = step
-            self.parent = parent
         self.size = slice_length
 
     def get_root_storage(self):
@@ -593,7 +597,7 @@ def make_class(_dtype):
         def setitem(self, item, value):
             self.storage[item] = value
 
-        def setitem_wrap(self, space, item, value):
+        def setitem_w(self, space, item, value):
             self.storage[item] = rffi.cast(_dtype.TP.OF, _dtype.unwrap(space, value))
 
         def find_dtype(self):
@@ -617,7 +621,7 @@ def new_numarray(space, iterable, dtype):
     arr = create_sdarray(len(l), dtype)
     i = 0
     for w_elem in l:
-        arr.setitem_wrap(space, i, w_elem)
+        arr.setitem_w(space, i, w_elem)
         i += 1
     return arr
 
