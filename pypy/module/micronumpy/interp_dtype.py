@@ -9,7 +9,7 @@ from pypy.objspace.std.longobject import W_LongObject
 from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
 from pypy.rpython.lltypesystem import lltype, rffi
 
-_letters_to_nums = [-1]*128
+_letters_to_nums = [-1]*256
 
 _letters_to_nums[ord('?')] = 0 # bool
 _letters_to_nums[ord('b')] = 1 # int8
@@ -67,11 +67,9 @@ class Dtype(Wrappable):
     # fields, names, f?, metadata. I'll just implement the base minimum for 
     # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
     # 
-    def __init__(self, name, castfunc, unwrapfunc, num, kind):
+    def __init__(self, name, num, kind):
         # doesn't handle align and copy parameters yet
         # only deals with simple strings e.g., 'uint32', and type objects
-        self.cast = castfunc
-        self.unwrap = unwrapfunc
         self.num = num
         self.kind = kind
         self.name = name
@@ -90,11 +88,29 @@ class Dtype(Wrappable):
 
     descr_str = descr_name
 
+
+def make_dtype(TP, name, convfunc, castfunc, unwrapfunc, num, kind):
+    class A_Dtype(Dtype):
+        def __init__(self):
+            Dtype.__init__(self, name, num, kind)
+            self.TP = TP
+            self.conv = convfunc
+            self.cast = castfunc
+            self.unwrap = unwrapfunc
+    A_Dtype.__name__ = "Dtype_" + name
+    return A_Dtype()
+
 def unwrap_float(space, val):
     return space.float_w(space.float(val))
 
 def unwrap_int(space, val):
     return space.int_w(space.int(val))
+
+def unwrap_bigint(space, val):
+    return space.r_longlong_w(space.long(val))
+
+def unwrap_ubigint(space, val):
+    return space.r_ulonglong_w(space.long(val))
 
 def unwrap_bool(space, val):
     return space.is_true(val)
@@ -141,24 +157,56 @@ def cast_float64(val):
 def cast_float96(val):
     return rffi.cast(lltype.LongFloat, val)
 
-Bool_dtype = Dtype('bool', cast_bool, unwrap_bool, Bool_num, BOOLLTR)
-Int8_dtype = Dtype('int8', cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
-UInt8_dtype = Dtype('uint8', cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
-Int16_dtype = Dtype('int16', cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
-UInt16_dtype = Dtype('uint16', cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
-Int32_dtype = Dtype('int32', cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
-UInt32_dtype = Dtype('uint32', cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
-Long_dtype = Dtype('int32' if LONG_BIT == 32 else 'int64', 
-                    cast_long, unwrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = Dtype('uint32' if LONG_BIT == 32 else 'uint64',
-                    cast_ulong, unwrap_int, ULong_num, UNSIGNEDLTR)
-Int64_dtype = Dtype('int64', cast_int64, unwrap_int, Int64_num, SIGNEDLTR)
-UInt64_dtype = Dtype('uint64', cast_uint64, unwrap_int, UInt64_num, UNSIGNEDLTR)
-Float32_dtype = Dtype('float32', cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
-Float64_dtype = Dtype('float64', cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
-Float96_dtype = Dtype('float96', cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
+def conv_bool(space, val):
+    return bool(val)
+#    return space.bool(val)
 
-_dtype_list = (Bool_dtype,
+def conv_int(space, val):
+    return int(val)
+#    return space.int(val)
+
+def conv_float(space, val):
+    return float(val)
+#    return space.float(val)
+
+Bool_dtype = make_dtype(lltype.Array(lltype.Bool, hints={'nolength': True}),
+    'bool', conv_bool, cast_bool, unwrap_bool, Bool_num, BOOLLTR)
+Int8_dtype = make_dtype(lltype.Array(rffi.SIGNEDCHAR, hints={'nolength': True}),
+    'int8', conv_int, cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
+UInt8_dtype = make_dtype(lltype.Array(rffi.UCHAR, hints={'nolength': True}),
+    'uint8', conv_int, cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
+Int16_dtype = make_dtype(lltype.Array(rffi.SHORT, hints={'nolength': True}),
+    'int16', conv_int, cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
+UInt16_dtype = make_dtype(lltype.Array(rffi.USHORT, hints={'nolength': True}),
+    'uint16', conv_int, cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
+Int32_dtype = make_dtype(lltype.Array(rffi.INT, hints={'nolength': True}),
+    'int32', conv_int, cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
+UInt32_dtype = make_dtype(lltype.Array(rffi.UINT, hints={'nolength': True}),
+    'uint32', conv_int, cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
+Long_dtype = make_dtype(lltype.Array(rffi.LONG, hints={'nolength': True}),
+    'int32' if LONG_BIT == 32 else 'int64', 
+                    conv_int, cast_long, unwrap_int, Long_num, SIGNEDLTR)
+ULong_dtype = make_dtype(lltype.Array(rffi.ULONG, hints={'nolength': True}),
+    'uint32' if LONG_BIT == 32 else 'uint64',
+                    conv_int, cast_ulong, 
+                    unwrap_ubigint if LONG_BIT == 32 else unwrap_int,
+                    ULong_num, UNSIGNEDLTR)
+
+Int64_dtype = make_dtype(lltype.Array(rffi.LONGLONG, hints={'nolength': True}),
+    'int64', conv_int, cast_int64, 
+    unwrap_bigint if LONG_BIT == 32 else unwrap_bigint, Int64_num, SIGNEDLTR)
+UInt64_dtype = make_dtype(lltype.Array(rffi.ULONGLONG, hints={'nolength': True}),
+    'uint64', conv_int, cast_uint64, unwrap_ubigint, UInt64_num, UNSIGNEDLTR)
+#Float32_dtype = make_dtype('float32', conv_float, cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
+Float64_dtype = make_dtype(lltype.Array(lltype.Float, hints={'nolength': True}),
+    'float64', conv_float, cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
+#Float96_dtype = make_dtype('float96', conv_float, cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
+# This is until we get ShortFloat and LongFloat implemented in the annotator and what not
+Float32_dtype = Float64_dtype
+Float96_dtype = Float64_dtype
+
+
+_dtype_list = [Bool_dtype,
                Int8_dtype,
                UInt8_dtype,
                Int16_dtype,
@@ -172,13 +220,15 @@ _dtype_list = (Bool_dtype,
                Float32_dtype,
                Float64_dtype,
                Float96_dtype,
-)
+]
 
 def find_scalar_dtype(space, scalar):
     if space.is_true(space.isinstance(scalar, space.w_int)):
         return Long_dtype
     if space.is_true(space.isinstance(scalar, space.w_float)):
         return Float64_dtype
+    if space.is_true(space.isinstance(scalar, space.w_bool)):
+        return Bool_dtype
 
 def find_result_dtype(d1, d2):
     # this function is for determining the result dtype of bin ops, etc.
@@ -223,10 +273,11 @@ def get_dtype(space, str_or_type):
     if space.is_true(space.isinstance(str_or_type, space.w_str)):
         s = space.str_w(str_or_type)
         if len(s) == 1:
-            typenum = _letters_to_nums[ord(s)]
-            dtype = _dtype_list[typenum]
-            if typenum != -1 and dtype is not None:
-                return _dtype_list[typenum]
+            typenum = _letters_to_nums[ord(s[0])]
+            if typenum != -1:
+                dtype = _dtype_list[typenum]
+                if dtype is not None:
+                    return _dtype_list[typenum]
         # XXX: can improve this part. will need to for endianness
         if s in num_dict:
             return _dtype_list[num_dict[s]]

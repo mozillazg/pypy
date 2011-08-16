@@ -2,31 +2,20 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.module.cpyext.api import cpython_api, PyObject
+from pypy.module.cpyext.longobject import PyLong_FromLongLong, PyLong_FromUnsignedLongLong
 from pypy.module.micronumpy.interp_dtype import Dtype, Float64_num, Int32_num, Float64_dtype, get_dtype, find_scalar_dtype, find_result_dtype, _dtype_list
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.objspace.std.floatobject import float2string as float2string_orig
+from pypy.objspace.std.objspace import newlong
 from pypy.rlib import jit
+from pypy.rlib import rbigint
+from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.rfloat import DTSF_STR_PRECISION
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
 import math
-
-TPs = (lltype.Array(lltype.Bool, hints={'nolength': True}), # bool
-       lltype.Array(rffi.SIGNEDCHAR, hints={'nolength': True}), # int8
-       lltype.Array(rffi.UCHAR, hints={'nolength': True}), # uint8
-       lltype.Array(rffi.SHORT, hints={'nolength': True}), # int16
-       lltype.Array(rffi.USHORT, hints={'nolength': True}), # uint16
-       lltype.Array(rffi.INT, hints={'nolength': True}), #int32
-       lltype.Array(rffi.UINT, hints={'nolength': True}), # uint32
-       lltype.Array(rffi.LONG, hints={'nolength': True}), # long
-       lltype.Array(rffi.ULONG, hints={'nolength': True}), # ulong
-       lltype.Array(rffi.LONGLONG, hints={'nolength': True}), # int64
-       lltype.Array(rffi.ULONGLONG, hints={'nolength': True}), # uint64
-       lltype.Array(lltype.SingleFloat, hints={'nolength': True}), # float32
-       lltype.Array(lltype.Float, hints={'nolength': True}), # float64
-       lltype.Array(lltype.LongFloat, hints={'nolength': True}), # float96
-)
 
 numpy_driver = jit.JitDriver(greens = ['signature'],
                              reds = ['result_size', 'i', 'self', 'result'])
@@ -184,12 +173,12 @@ class BaseArray(Wrappable):
     def descr_any(self, space):
         return space.wrap(self._any())
 
-#    descr_sum = _reduce_sum_prod_impl(add, 0.0)
-#    descr_prod = _reduce_sum_prod_impl(mul, 1.0)
-#    descr_max = _reduce_max_min_impl(maximum)
-#    descr_min = _reduce_max_min_impl(minimum)
-#    descr_argmax = _reduce_argmax_argmin_impl(maximum)
-#    descr_argmin = _reduce_argmax_argmin_impl(minimum)
+    descr_sum = _reduce_sum_prod_impl(add, 0.0)
+    descr_prod = _reduce_sum_prod_impl(mul, 1.0)
+    descr_max = _reduce_max_min_impl(maximum)
+    descr_min = _reduce_max_min_impl(minimum)
+    descr_argmax = _reduce_argmax_argmin_impl(maximum)
+    descr_argmin = _reduce_argmax_argmin_impl(minimum)
 
     def descr_dot(self, space, w_other):
         if isinstance(w_other, BaseArray):
@@ -253,7 +242,7 @@ class BaseArray(Wrappable):
         start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
         if step == 0:
             # Single index
-            return space.wrap(self.get_concrete().eval(start))
+            return self.get_concrete().getitem(space, start)
         else:
             # Slice
             res = SingleDimSlice(start, stop, step, slice_length, self, self.signature.transition(SingleDimSlice.static_signature))
@@ -266,19 +255,20 @@ class BaseArray(Wrappable):
                                                               self.find_size())
         if step == 0:
             # Single index
-            self.get_concrete().setitem(start, self.dtype.cast(self.dtype.unwrap(w_value)))
+            self.get_concrete().setitem_wrap(space, start, w_value)
         else:
-            concrete = self.get_concrete()
-            if isinstance(w_value, BaseArray):
+            raise OperationError(space.w_ValueError, space.wrap("No slices"))
+            #concrete = self.get_concrete()
+            #if isinstance(w_value, BaseArray):
                 # for now we just copy if setting part of an array from 
                 # part of itself. can be improved.
-                if (concrete.get_root_storage() ==
-                    w_value.get_concrete().get_root_storage()):
-                    w_value = new_numarray(space, w_value, self.dtype)
-            else:
-                w_value = convert_to_array(space, w_value)
-            concrete.setslice(space, start, stop, step, 
-                                               slice_length, w_value)
+            #    if (concrete.get_root_storage() ==
+            #        w_value.get_concrete().get_root_storage()):
+            #        w_value = new_numarray(space, w_value, self.dtype)
+            #else:
+            #    w_value = convert_to_array(space, w_value)
+            #concrete.setslice(space, start, stop, step, 
+            #                                    slice_length, w_value)
 
     def descr_mean(self, space):
         return space.wrap(space.float_w(self.descr_sum(space))/self.find_size())
@@ -286,24 +276,22 @@ class BaseArray(Wrappable):
     def _sliceloop1(self, start, stop, step, source, dest):
         i = start
         j = 0
-        storage = dest.get_root_storage()
         while i < stop:
             slice_driver1.jit_merge_point(signature=source.signature,
                     step=step, stop=stop, i=i, j=j, source=source,
                     dest=dest)
-            storage[i] = source.eval(j)
+            dest.setitem(i, source.eval(j))
             j += 1
             i += step
 
     def _sliceloop2(self, start, stop, step, source, dest):
         i = start
         j = 0
-        storage = dest.get_root_storage()
         while i > stop:
             slice_driver2.jit_merge_point(signature=source.signature,
                     step=step, stop=stop, i=i, j=j, source=source,
                     dest=dest)
-            storage[i] = source.eval(j)
+            dest.setitem(i, source.eval(j))
             j += 1
             i += step
 
@@ -367,12 +355,12 @@ class VirtualArray(BaseArray):
         signature = self.signature
         result_size = self.find_size()
         result = create_sdarray(result_size, self.dtype)
-        storage = result.get_root_storage()
+        #storage = result.get_root_storage()
         while i < result_size:
             numpy_driver.jit_merge_point(signature=signature,
                                          result_size=result_size, i=i,
                                          self=self, result=result)
-            storage[i] = self.eval(i)
+            result.setitem(i, self.eval(i))
             i += 1
         return result
 
@@ -486,6 +474,9 @@ class ViewArray(BaseArray):
     def setitem(self, item, value):
         return self.parent.setitem(self.calc_index(item), value)
 
+    def getitem(self, space, value):
+        return self.parent.getitem(space, self.calc_index(value))
+
     def descr_len(self, space):
         return space.wrap(self.find_size())
 
@@ -553,14 +544,26 @@ class SingleDimArray(BaseArray):
         else:
             self._sliceloop2(start, stop, step, arr, self)
 
-def make_class(num):
-    TP = TPs[num]
+def fromlong(val):
+    if val >= 0:
+        if val == 0:
+            digits = [rbigint.NULLDIGIT]
+            sign = 0
+        else:
+            digits = rbigint.digits_from_nonneg_long(val)
+            sign = 1
+    else:
+        digits = rbigint.digits_from_nonneg_long(-val)
+        sign = -1
+    return rbigint.rbigint(digits, sign)
+
+def make_class(_dtype):
     class TypedSingleDimArray(SingleDimArray):
-        def __init__(self, size, dtype):
+        dtype = _dtype
+        def __init__(self, size):
             SingleDimArray.__init__(self)
             self.size = size
-            self.dtype = dtype
-            self.storage = lltype.malloc(TP, size, zero=True,
+            self.storage = lltype.malloc(_dtype.TP, size, zero=True,
                                      flavor='raw', track_allocation=False,
                                      add_memory_pressure=True)
             # XXX find out why test_zjit explodes with trackign of allocations
@@ -570,10 +573,28 @@ def make_class(num):
 
         def eval(self, i):
             return self.storage[i]
+        
+        if _dtype.kind == 'b':
+            def getitem(self, space, i):
+                return space.wrap(bool(self.storage[i]))
+        elif _dtype.kind == 'f':
+            def getitem(self, space, i):
+                return space.wrap(float(self.storage[i]))
+        elif _dtype.num < 8 or (LONG_BIT == 64 and _dtype.num == 9):
+            def getitem(self, space, i):
+                return space.wrap(rffi.cast(lltype.Signed, self.storage[i]))
+        elif LONG_BIT == 64 or _dtype.num == 8:
+            def getitem(self, space, i):
+                return space.wrap(self.storage[i])
+        else: # unsigned longlong and signed longlong for 32-bit
+            def getitem(self, space, i):
+                return newlong(space, fromlong(self.storage[i]))
 
         def setitem(self, item, value):
-            self.invalidated()
             self.storage[item] = value
+
+        def setitem_wrap(self, space, item, value):
+            self.storage[item] = rffi.cast(_dtype.TP.OF, _dtype.unwrap(space, value))
 
         def find_dtype(self):
             return self.dtype
@@ -581,23 +602,22 @@ def make_class(num):
         def __del__(self):
             lltype.free(self.storage, flavor='raw', track_allocation=False)
 
-    TypedSingleDimArray.__name__ = 'SingleDimArray' + str(num)
+    TypedSingleDimArray.__name__ = 'SingleDimArray_' + _dtype.name
     return TypedSingleDimArray
 
-_array_classes = tuple(make_class(i) for i in xrange(14))
+_array_classes = [make_class(d) for d in _dtype_list]
 
 def create_sdarray(L, dtype):
-    return _array_classes[dtype.num](L, dtype)
+    arr_type = _array_classes[dtype.num]
+    return arr_type(L)
 
 def new_numarray(space, iterable, dtype):
     l = space.listview(iterable)
     dtype = get_dtype(space, dtype)
     arr = create_sdarray(len(l), dtype)
     i = 0
-    unwrap = dtype.unwrap
-    cast = dtype.cast
     for w_elem in l:
-        arr.storage[i] = cast(unwrap(space, w_elem))
+        arr.setitem_wrap(space, i, w_elem)
         i += 1
     return arr
 
@@ -627,7 +647,7 @@ def zeros(space, size):
 def ones(space, size):
     arr = create_sdarray(size, Float64_dtype)
     for i in xrange(size):
-        arr.storage[i] = 1.0
+        arr.setitem(space, i, 1.0)
     return space.wrap(arr)
 
 BaseArray.typedef = TypeDef(
@@ -642,32 +662,32 @@ BaseArray.typedef = TypeDef(
     __getitem__ = interp2app(BaseArray.descr_getitem),
     __setitem__ = interp2app(BaseArray.descr_setitem),
 
-    __pos__ = interp2app(BaseArray.descr_pos),
-    __neg__ = interp2app(BaseArray.descr_neg),
-    __abs__ = interp2app(BaseArray.descr_abs),
-    __add__ = interp2app(BaseArray.descr_add),
-    __sub__ = interp2app(BaseArray.descr_sub),
-    __mul__ = interp2app(BaseArray.descr_mul),
-    __div__ = interp2app(BaseArray.descr_div),
-    __pow__ = interp2app(BaseArray.descr_pow),
-    __mod__ = interp2app(BaseArray.descr_mod),
-    __radd__ = interp2app(BaseArray.descr_radd),
-    __rsub__ = interp2app(BaseArray.descr_rsub),
-    __rmul__ = interp2app(BaseArray.descr_rmul),
-    __rdiv__ = interp2app(BaseArray.descr_rdiv),
-    __rpow__ = interp2app(BaseArray.descr_rpow),
-    __rmod__ = interp2app(BaseArray.descr_rmod),
-    __repr__ = interp2app(BaseArray.descr_repr),
-    __str__ = interp2app(BaseArray.descr_str),
+    #__pos__ = interp2app(BaseArray.descr_pos),
+    #__neg__ = interp2app(BaseArray.descr_neg),
+    #__abs__ = interp2app(BaseArray.descr_abs),
+    #__add__ = interp2app(BaseArray.descr_add),
+    #__sub__ = interp2app(BaseArray.descr_sub),
+    #__mul__ = interp2app(BaseArray.descr_mul),
+    #__div__ = interp2app(BaseArray.descr_div),
+    #__pow__ = interp2app(BaseArray.descr_pow),
+    #__mod__ = interp2app(BaseArray.descr_mod),
+    #__radd__ = interp2app(BaseArray.descr_radd),
+    #__rsub__ = interp2app(BaseArray.descr_rsub),
+    #__rmul__ = interp2app(BaseArray.descr_rmul),
+    #__rdiv__ = interp2app(BaseArray.descr_rdiv),
+    #__rpow__ = interp2app(BaseArray.descr_rpow),
+    #__rmod__ = interp2app(BaseArray.descr_rmod),
+    #__repr__ = interp2app(BaseArray.descr_repr),
+    #__str__ = interp2app(BaseArray.descr_str),
 
-#    mean = interp2app(BaseArray.descr_mean),
-#    sum = interp2app(BaseArray.descr_sum),
-#    prod = interp2app(BaseArray.descr_prod),
-#    max = interp2app(BaseArray.descr_max),
-#    min = interp2app(BaseArray.descr_min),
-#    argmax = interp2app(BaseArray.descr_argmax),
-#    argmin = interp2app(BaseArray.descr_argmin),
-#    all = interp2app(BaseArray.descr_all),
-#    any = interp2app(BaseArray.descr_any),
-#    dot = interp2app(BaseArray.descr_dot),
+    #mean = interp2app(BaseArray.descr_mean),
+    #sum = interp2app(BaseArray.descr_sum),
+    #prod = interp2app(BaseArray.descr_prod),
+    #max = interp2app(BaseArray.descr_max),
+    #min = interp2app(BaseArray.descr_min),
+    #argmax = interp2app(BaseArray.descr_argmax),
+    #argmin = interp2app(BaseArray.descr_argmin),
+    #all = interp2app(BaseArray.descr_all),
+    #any = interp2app(BaseArray.descr_any),
+    #dot = interp2app(BaseArray.descr_dot),
 )
