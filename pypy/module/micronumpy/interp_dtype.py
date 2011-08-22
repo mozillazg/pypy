@@ -7,7 +7,9 @@ from pypy.objspace.std.floatobject import W_FloatObject
 from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.longobject import W_LongObject
 from pypy.rlib.rarithmetic import r_int, r_uint, LONG_BIT, LONGLONG_BIT
+from pypy.rlib.objectmodel import specialize
 from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem.rffi import r_signedchar, r_uchar, r_short, r_ushort, r_long, r_ulong, r_longlong, r_ulonglong
 
 _letters_to_nums = [-1]*256
 
@@ -60,45 +62,6 @@ num_dict = {'b1': Bool_num, 'i1': Int8_num, 'i2': Int16_num, 'i4': Int32_num,
             'int16': Int16_num, 'int32': Int32_num, 'int64': Int64_num,
             'float32': Float32_num, 'float64': Float64_num,
             'float96': Float96_num}
-
-class Dtype(Wrappable):
-    # attributes: type, kind, typeobj?(I think it should point to np.float64 or
-    # the like), byteorder, flags, type_num, elsize, alignment, subarray,
-    # fields, names, f?, metadata. I'll just implement the base minimum for 
-    # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
-    # 
-    def __init__(self, name, num, kind):
-        # doesn't handle align and copy parameters yet
-        # only deals with simple strings e.g., 'uint32', and type objects
-        self.num = num
-        self.kind = kind
-        self.name = name
-
-    def descr_num(self, space):
-        return space.wrap(self.num)
-
-    def descr_kind(self, space):
-        return space.wrap(self.kind)
-
-    def descr_name(self, space):
-        return space.wrap(self.name)
-
-    def descr_repr(self, space):
-        return space.wrap("dtype('%s')" % self.name)
-
-    descr_str = descr_name
-
-
-def make_dtype(TP, name, convfunc, castfunc, unwrapfunc, num, kind):
-    class A_Dtype(Dtype):
-        def __init__(self):
-            Dtype.__init__(self, name, num, kind)
-            self.TP = TP
-            self.conv = convfunc
-            self.cast = castfunc
-            self.unwrap = unwrapfunc
-    A_Dtype.__name__ = "Dtype_" + name
-    return A_Dtype()
 
 def unwrap_float(space, val):
     return space.float_w(space.float(val))
@@ -169,41 +132,93 @@ def conv_float(space, val):
     return float(val)
 #    return space.float(val)
 
-Bool_dtype = make_dtype(lltype.Array(lltype.Bool, hints={'nolength': True}),
+class Dtype(Wrappable):
+    pass
+    # attributes: type, kind, typeobj?(I think it should point to np.float64 or
+    # the like), byteorder, flags, type_num, elsize, alignment, subarray,
+    # fields, names, f?, metadata. I'll just implement the base minimum for 
+    # now. This will include type, kind, typeobj?, byteorder, type_num, elsize,
+    # 
+#    def descr_num(self, space):
+#        return space.wrap(self.num)
+
+    def descr_kind(self, space):
+        return space.wrap(self.kind)
+
+    def descr_name(self, space):
+        return space.wrap(self.name)
+
+    def descr_repr(self, space):
+        return space.wrap("dtype('%s')" % self.name)
+
+    descr_str = descr_name
+
+def make_dtype(_valtype, _TP, _name, convfunc, castfunc, unwrapfunc, _num, _kind):
+    class A_Dtype(Dtype):
+        #_immutable_fields_ = ["num", "kind", "TP", "conv", "cast", "unwrap"]
+        valtype = _valtype
+        TP = _TP
+        name = _name
+        kind = _kind
+        num = _num
+        def __init__(self):
+            self.conv = convfunc
+            self.cast = castfunc
+            self.unwrap = unwrapfunc
+
+        def getnum(self):
+            return _num
+
+        @specialize.argtype(1)
+        def convval(self, val):
+            return rffi.cast(_TP.OF, val)
+
+    A_Dtype.__name__ = "Dtype_" + _name
+    return A_Dtype()
+
+Bool_dtype = make_dtype(True.__class__, lltype.Array(lltype.Bool, hints={'nolength': True}),
     'bool', conv_bool, cast_bool, unwrap_bool, Bool_num, BOOLLTR)
-Int8_dtype = make_dtype(lltype.Array(rffi.SIGNEDCHAR, hints={'nolength': True}),
-    'int8', conv_int, cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
-UInt8_dtype = make_dtype(lltype.Array(rffi.UCHAR, hints={'nolength': True}),
-    'uint8', conv_int, cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
-Int16_dtype = make_dtype(lltype.Array(rffi.SHORT, hints={'nolength': True}),
+#Int8_dtype = make_dtype(r_signedchar, lltype.Array(rffi.SIGNEDCHAR, hints={'nolength': True}),
+#    'int8', conv_int, cast_int8, unwrap_int, Int8_num, SIGNEDLTR)
+#UInt8_dtype = make_dtype(r_uchar, lltype.Array(rffi.UCHAR, hints={'nolength': True}),
+#    'uint8', conv_int, cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
+#Int16_dtype = make_dtype(r_short, lltype.Array(rffi.SHORT, hints={'nolength': True}),
     'int16', conv_int, cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
-UInt16_dtype = make_dtype(lltype.Array(rffi.USHORT, hints={'nolength': True}),
-    'uint16', conv_int, cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
-Int32_dtype = make_dtype(lltype.Array(rffi.INT, hints={'nolength': True}),
+#UInt16_dtype = make_dtype(r_ushort, lltype.Array(rffi.USHORT, hints={'nolength': True}),
+#    'uint16', conv_int, cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
+Int32_dtype = make_dtype(r_int, lltype.Array(rffi.INT, hints={'nolength': True}),
     'int32', conv_int, cast_int32, unwrap_int, Int32_num, SIGNEDLTR)
-UInt32_dtype = make_dtype(lltype.Array(rffi.UINT, hints={'nolength': True}),
-    'uint32', conv_int, cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
-Long_dtype = make_dtype(lltype.Array(rffi.LONG, hints={'nolength': True}),
+#UInt32_dtype = make_dtype(r_uint, lltype.Array(rffi.UINT, hints={'nolength': True}),
+#    'uint32', conv_int, cast_uint32, unwrap_int, UInt32_num, UNSIGNEDLTR)
+Long_dtype = make_dtype(r_long, lltype.Array(rffi.LONG, hints={'nolength': True}),
     'int32' if LONG_BIT == 32 else 'int64', 
                     conv_int, cast_long, unwrap_int, Long_num, SIGNEDLTR)
-ULong_dtype = make_dtype(lltype.Array(rffi.ULONG, hints={'nolength': True}),
-    'uint32' if LONG_BIT == 32 else 'uint64',
-                    conv_int, cast_ulong, 
-                    unwrap_ubigint if LONG_BIT == 32 else unwrap_int,
-                    ULong_num, UNSIGNEDLTR)
+#ULong_dtype = make_dtype(r_ulong, lltype.Array(rffi.ULONG, hints={'nolength': True}),
+#    'uint32' if LONG_BIT == 32 else 'uint64',
+#                    conv_int, cast_ulong, 
+                    #unwrap_ubigint if LONG_BIT == 32 else unwrap_int,
+                    #ULong_num, UNSIGNEDLTR)
 
-Int64_dtype = make_dtype(lltype.Array(rffi.LONGLONG, hints={'nolength': True}),
-    'int64', conv_int, cast_int64, 
-    unwrap_bigint if LONG_BIT == 32 else unwrap_bigint, Int64_num, SIGNEDLTR)
-UInt64_dtype = make_dtype(lltype.Array(rffi.ULONGLONG, hints={'nolength': True}),
-    'uint64', conv_int, cast_uint64, unwrap_ubigint, UInt64_num, UNSIGNEDLTR)
+#Int64_dtype = make_dtype(r_longlong, lltype.Array(rffi.LONGLONG, hints={'nolength': True}),
+#    'int64', conv_int, cast_int64, 
+#    unwrap_bigint if LONG_BIT == 32 else unwrap_bigint, Int64_num, SIGNEDLTR)
+#UInt64_dtype = make_dtype(r_ulonglong, lltype.Array(rffi.ULONGLONG, hints={'nolength': True}),
+#    'uint64', conv_int, cast_uint64, unwrap_ubigint, UInt64_num, UNSIGNEDLTR)
 #Float32_dtype = make_dtype('float32', conv_float, cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
-Float64_dtype = make_dtype(lltype.Array(lltype.Float, hints={'nolength': True}),
+Float64_dtype = make_dtype(float, lltype.Array(lltype.Float, hints={'nolength': True}),
     'float64', conv_float, cast_float64, unwrap_float, Float64_num, FLOATINGLTR)
 #Float96_dtype = make_dtype('float96', conv_float, cast_float96, unwrap_float, Float96_num, FLOATINGLTR)
 # This is until we get ShortFloat and LongFloat implemented in the annotator and what not
 Float32_dtype = Float64_dtype
 Float96_dtype = Float64_dtype
+Int8_dtype = Int32_dtype
+UInt8_dtype = Int32_dtype
+#Int16_dtype = Int32_dtype
+UInt16_dtype = Int32_dtype
+UInt32_dtype = Int32_dtype
+ULong_dtype = Int32_dtype
+Int64_dtype = Int32_dtype
+UInt64_dtype = Int32_dtype
 
 
 _dtype_list = [Bool_dtype,
@@ -302,7 +317,7 @@ Dtype.typedef = TypeDef(
     'numpy.dtype',
     __new__  = interp2app(descr_new_dtype),
 
-    num = GetSetProperty(Dtype.descr_num),
+#    num = GetSetProperty(Dtype.descr_num),
     kind = GetSetProperty(Dtype.descr_kind),
     name = GetSetProperty(Dtype.descr_name),
 
