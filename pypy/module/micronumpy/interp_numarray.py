@@ -11,6 +11,7 @@ from pypy.objspace.std.floatobject import float2string as float2string_orig
 from pypy.objspace.std.objspace import newlong
 from pypy.rlib import jit
 from pypy.rlib import rbigint
+from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rlib.rfloat import DTSF_STR_PRECISION
 from pypy.rpython.lltypesystem import lltype, rffi
@@ -54,21 +55,21 @@ class BaseArray(Wrappable):
             return w_ufunc(space, self)
         return func_with_new_name(impl, "unaryop_%s_impl" % w_ufunc.__name__)
 
-    descr_pos = _unaryop_impl(interp_ufuncs.positive)
-    descr_neg = _unaryop_impl(interp_ufuncs.negative)
-    descr_abs = _unaryop_impl(interp_ufuncs.absolute)
+    #descr_pos = _unaryop_impl(interp_ufuncs.positive)
+    #descr_neg = _unaryop_impl(interp_ufuncs.negative)
+    #descr_abs = _unaryop_impl(interp_ufuncs.absolute)
 
     def _binop_impl(w_ufunc):
         def impl(self, space, w_other):
             return w_ufunc(space, self, w_other)
         return func_with_new_name(impl, "binop_%s_impl" % w_ufunc.__name__)
 
-    descr_add = _binop_impl(interp_ufuncs.add)
+    """descr_add = _binop_impl(interp_ufuncs.add)
     descr_sub = _binop_impl(interp_ufuncs.subtract)
     descr_mul = _binop_impl(interp_ufuncs.multiply)
     descr_div = _binop_impl(interp_ufuncs.divide)
     descr_pow = _binop_impl(interp_ufuncs.power)
-    descr_mod = _binop_impl(interp_ufuncs.mod)
+    descr_mod = _binop_impl(interp_ufuncs.mod)"""
 
     def _binop_right_impl(w_ufunc):
         def impl(self, space, w_other):
@@ -76,12 +77,12 @@ class BaseArray(Wrappable):
             return w_ufunc(space, w_other, self)
         return func_with_new_name(impl, "binop_right_%s_impl" % w_ufunc.__name__)
 
-    descr_radd = _binop_right_impl(interp_ufuncs.add)
+    """descr_radd = _binop_right_impl(interp_ufuncs.add)
     descr_rsub = _binop_right_impl(interp_ufuncs.subtract)
     descr_rmul = _binop_right_impl(interp_ufuncs.multiply)
     descr_rdiv = _binop_right_impl(interp_ufuncs.divide)
     descr_rpow = _binop_right_impl(interp_ufuncs.power)
-    descr_rmod = _binop_right_impl(interp_ufuncs.mod)
+    descr_rmod = _binop_right_impl(interp_ufuncs.mod)"""
 
     def _reduce_sum_prod_impl(function, init):
         reduce_driver = jit.JitDriver(greens=['signature'],
@@ -244,9 +245,10 @@ class BaseArray(Wrappable):
             # Single index
             return self.get_concrete().getitem(space, start)
         else:
+            raise OperationError(space.w_ValueError, space.wrap("No slices"))
             # Slice
-            res = SingleDimSlice(start, stop, step, slice_length, self, self.signature.transition(SingleDimSlice.static_signature))
-            return space.wrap(res)
+            #res = SingleDimSlice(start, stop, step, slice_length, self, self.signature.transition(SingleDimSlice.static_signature))
+            #return space.wrap(res)
 
     def descr_setitem(self, space, w_idx, w_value):
         # TODO: indexing by tuples and lists
@@ -257,45 +259,25 @@ class BaseArray(Wrappable):
             # Single index
             self.get_concrete().setitem_w(space, start, w_value)
         else:
-            raise OperationError(space.w_ValueError, space.wrap("No slices"))
-            #concrete = self.get_concrete()
+            #raise OperationError(space.w_ValueError, space.wrap("No slices"))
+            concrete = self.get_concrete()
             #if isinstance(w_value, BaseArray):
-                # for now we just copy if setting part of an array from 
-                # part of itself. can be improved.
-                # need to put in a function that checks all storages of 
-                # w_value because it could be a Call2 class (binop)
+                #for now we just copy if setting part of an array from 
+                #part of itself. can be improved.
+                #need to put in a function that checks all storages of 
+                #w_value because it could be a Call2 class (binop)
             #    if (concrete.get_root_storage() ==
             #        w_value.get_concrete().get_root_storage()):
             #        w_value = new_numarray(space, w_value, self.dtype)
             #else:
-            #    w_value = convert_to_array(space, w_value)
-            #concrete.setslice(space, start, stop, step, 
-            #                                    slice_length, w_value)
+            w_value = convert_to_array(space, w_value)
+            concrete.setslice(space, start, stop, step, 
+                                                slice_length, w_value)
 
     def descr_mean(self, space):
         return space.wrap(space.float_w(self.descr_sum(space))/self.find_size())
 
-    def _sliceloop1(self, start, stop, step, source, dest):
-        i = start
-        j = 0
-        while i < stop:
-            slice_driver1.jit_merge_point(signature=source.signature,
-                    step=step, stop=stop, i=i, j=j, source=source,
-                    dest=dest)
-            dest.setitem(i, source.eval(j))
-            j += 1
-            i += step
 
-    def _sliceloop2(self, start, stop, step, source, dest):
-        i = start
-        j = 0
-        while i > stop:
-            slice_driver2.jit_merge_point(signature=source.signature,
-                    step=step, stop=stop, i=i, j=j, source=source,
-                    dest=dest)
-            dest.setitem(i, source.eval(j))
-            j += 1
-            i += step
 
 def convert_to_array (space, w_obj):
     if isinstance(w_obj, BaseArray):
@@ -305,8 +287,9 @@ def convert_to_array (space, w_obj):
         # XXX: Need to fill in the dtype
         return new_numarray(space, w_obj, Float64_dtype)
     else:
+        raise OperationError(space.w_ValueError, space.wrap("no scalars"))
         # If it's a scalar
-        return wrap_scalar(space, w_obj)
+        #return wrap_scalar(space, w_obj)
 
 def wrap_scalar(space, scalar, dtype=None):
     if dtype is None:
@@ -339,121 +322,140 @@ class FloatWrapper(ScalarWrapper):
     def __init__(self, value):
         ScalarWrapper.__init__(self, value, Float64_dtype)
 
-class VirtualArray(BaseArray):
-    """
-    Class for representing virtual arrays, such as binary ops or ufuncs
-    """
-    def __init__(self, signature):
-        BaseArray.__init__(self)
-        self.forced_result = None
-        self.signature = signature
+def make_virtualarray(_dtype):
+    class VirtualArray(BaseArray):
+        dtype = _dtype
+        """
+        Class for representing virtual arrays, such as binary ops or ufuncs
+        """
+        def __init__(self, signature):
+            BaseArray.__init__(self)
+            self.forced_result = None
+            self.signature = signature
 
-    def _del_sources(self):
-        # Function for deleting references to source arrays, to allow garbage-collecting them
-        raise NotImplementedError
+        def _del_sources(self):
+            # Function for deleting references to source arrays, to allow garbage-collecting them
+            raise NotImplementedError
 
-    def compute(self):
-        i = 0
-        signature = self.signature
-        result_size = self.find_size()
-        result = create_sdarray(result_size, self.dtype)
-        #storage = result.get_root_storage()
-        while i < result_size:
-            numpy_driver.jit_merge_point(signature=signature,
-                                         result_size=result_size, i=i,
-                                         self=self, result=result)
-            result.setitem(i, self.eval(i))
-            i += 1
-        return result
+        def compute(self):
+            i = 0
+            signature = self.signature
+            result_size = self.find_size()
+            result = create_sdarray(result_size, _dtype)
+            #storage = result.get_root_storage()
+            while i < result_size:
+                numpy_driver.jit_merge_point(signature=signature,
+                                             result_size=result_size, i=i,
+                                             self=self, result=result)
+                temp = self.eval(i)
+                #assert isinstance(temp, _dtype.TP.OF)
+                result.setitem_cast(i, temp)
+                i += 1
+            return result
 
-    def force_if_needed(self):
-        if self.forced_result is None:
-            self.forced_result = self.compute()
-            self._del_sources()
+        def force_if_needed(self):
+            if self.forced_result is None:
+                self.forced_result = self.compute()
+                self._del_sources()
 
-    def get_concrete(self):
-        self.force_if_needed()
-        return self.forced_result
+        def get_concrete(self):
+            self.force_if_needed()
+            return self.forced_result
 
-    def eval(self, i):
-        if self.forced_result is not None:
-            return self.forced_result.eval(i)
-        return self._eval(i)
+        def eval(self, i):
+            if self.forced_result is not None:
+                return self.forced_result.eval(i)
+            return self._eval(i)
 
-    def find_size(self):
-        if self.forced_result is not None:
-            # The result has been computed and sources may be unavailable
-            return self.forced_result.find_size()
-        return self._find_size()
+        def find_size(self):
+            if self.forced_result is not None:
+                # The result has been computed and sources may be unavailable
+                return self.forced_result.find_size()
+            return self._find_size()
 
-    def find_dtype(self):
-        return self.dtype
+        def find_dtype(self):
+            return _dtype
+    VirtualArray.__name__ = "VirtualArray_" + _dtype.name
+    return VirtualArray
 
-class Call1(VirtualArray):
-    _immutable_fields_ = ["function", "values"]
+_virtualarray_classes = [make_virtualarray(d) for d in _dtype_list]
 
-    def __init__(self, function, values, signature):
-        VirtualArray.__init__(self, signature)
-        self.function = function
-        self.values = values
-        self.dtype = self.values.find_dtype()
+def make_call1(VirtualArrayClass):
+    class Call1(VirtualArrayClass):
+        _immutable_fields_ = ["function", "values"]
 
-    def _del_sources(self):
-        self.values = None
-
-    def _find_size(self):
-        return self.values.find_size()
-
-    def _eval(self, i):
-        return self.function(self.values.eval(i))
-
-class Call2(VirtualArray):
-    """
-    Intermediate class for performing binary operations.
-    """
-    _immutable_fields_ = ["function", "left", "right"]
-
-    def __init__(self, function, left, right, signature):
-        VirtualArray.__init__(self, signature)
-        self.left = left
-        self.right = right
-        dtype = self.left.find_dtype()
-        dtype2 = self.right.find_dtype()
-        if dtype.num != dtype2.num:
-            newdtype = find_result_dtype(dtype, dtype2)
-            cast = newdtype.cast
-            if dtype.num != newdtype.num:
-                if dtype2.num != newdtype.num:
-                    self.function = lambda x, y: function(cast(x), cast(y))
-                else:
-                    self.function = lambda x, y: function(cast(x), y)
-            else:
-                self.function = lambda x, y: function(x, cast(y))
-            self.dtype = newdtype
-        else:
-            self.dtype = dtype
+        def __init__(self, function, values, signature):
+            VirtualArrayClass.__init__(self, signature)
             self.function = function
+            self.values = values
 
-    def _del_sources(self):
-        self.left = None
-        self.right = None
+        def _del_sources(self):
+            self.values = None
 
-    def _find_size(self):
-        try:
-            return self.left.find_size()
-        except:
-            return self.right.find_size()
+        def _find_size(self):
+            return self.values.find_size()
 
-    def _eval(self, i):
-        lhs, rhs = self.left.eval(i), self.right.eval(i)
-        return self.function(lhs, rhs)
+        def _eval(self, i):
+            return self.function(self.values.eval(i))
+    Call1.__name__ = "Call1_" + Call1.dtype.name
+    return Call1
 
-class ViewArray(BaseArray):
-    """
-    Class for representing views of arrays, they will reflect changes of parent
-    arrays. Example: slices
-    """
-    _immutable_fields_ = ["parent"]
+_call1_classes = [make_call1(c) for c in _virtualarray_classes]
+
+def make_call2(VirtualArrayClass):
+    class Call2(VirtualArrayClass):
+        """
+        Intermediate class for performing binary operations.
+        """
+        _immutable_fields_ = ["function", "left", "right"]
+
+        def __init__(self, function, left, right, signature):
+            VirtualArrayClass.__init__(self, signature)
+            self.left = left
+            self.right = right
+            dtype1 = self.left.find_dtype()
+            dtype2 = self.right.find_dtype()
+            if dtype1.num != dtype2.num:
+                cast = self.dtype.cast
+                if dtype.num != newdtype.num:
+                    if dtype2.num != newdtype.num:
+                        self.function = lambda x, y: function(cast(x), cast(y))
+                    else:
+                        self.function = lambda x, y: function(cast(x), y)
+                else:
+                    self.function = lambda x, y: function(x, cast(y))
+            else:
+                self.function = function
+
+        def _del_sources(self):
+            self.left = None
+            self.right = None
+
+        def _find_size(self):
+            try:
+                return self.left.find_size()
+            except:
+                return self.right.find_size()
+
+        def _eval(self, i):
+            lhs, rhs = self.left.eval(i), self.right.eval(i)
+            return self.function(lhs, rhs)
+    Call2.__name__ = "Call2_" + Call2.dtype.name
+    return Call2
+
+_call2_classes = [make_call2(c) for c in _virtualarray_classes]
+
+def pick_call2(dtype1, dtype2):
+    if dtype1.num == dtype2.num:
+        return _call2_classes[dtype1.num]
+    return _call2_classes[find_result_dtype(dtype1, dtype2)]
+
+#class ViewArray(BaseArray):
+#    """
+#    Class for representing views of arrays, they will reflect changes of parent
+#    arrays. Example: slices
+#    """
+"""    _immutable_fields_ = ["parent"]
 
     def __init__(self, parent, signature):
         BaseArray.__init__(self)
@@ -475,7 +477,6 @@ class ViewArray(BaseArray):
     def setitem_w(self, space, item, value):
         return self.parent.setitem_w(space, self.calc_index(item), value)
 
-    @unwrap_spec(item=int, value=float)
     def setitem(self, item, value):
         return self.parent.setitem(self.calc_index(item), value)
 
@@ -525,28 +526,11 @@ class SingleDimSlice(ViewArray):
             self._sliceloop2(start, stop, step, arr, self.parent)
 
     def calc_index(self, item):
-        return (self.start + item * self.step)
+        return (self.start + item * self.step)"""
 
 class SingleDimArray(BaseArray):
-    signature = Signature()
-
     def __init__(self):
         BaseArray.__init__(self)
-
-    def get_concrete(self):
-        return self
-
-    def find_size(self):
-        return self.size
-
-    def descr_len(self, space):
-        return space.wrap(self.size)
-
-    def setslice(self, space, start, stop, step, slice_length, arr):
-        if step > 0:
-            self._sliceloop1(start, stop, step, arr, self)
-        else:
-            self._sliceloop2(start, stop, step, arr, self)
 
 def fromlong(val):
     if val >= 0:
@@ -562,22 +546,36 @@ def fromlong(val):
     return rbigint.rbigint(digits, sign)
 
 def make_class(_dtype):
-    class TypedSingleDimArray(SingleDimArray):
+    class TypedSingleDimArray(BaseArray):
+        signature = Signature()
         dtype = _dtype
         def __init__(self, size):
-            SingleDimArray.__init__(self)
+            BaseArray.__init__(self)
             self.size = size
             self.storage = lltype.malloc(_dtype.TP, size, zero=True,
                                      flavor='raw', track_allocation=False,
                                      add_memory_pressure=True)
             # XXX find out why test_zjit explodes with trackign of allocations
 
+        def get_concrete(self):
+            return self
+
+        def find_size(self):
+            return self.size
+
+        def descr_len(self, space):
+            return space.wrap(self.size)
+
         def get_root_storage(self):
             return self.storage
 
         def eval(self, i):
             return self.storage[i]
-        
+
+        @specialize.argtype(2)
+        def eval_cast(self, i, d):
+            return d.convval(self.storage[i])
+
         if _dtype.kind == 'b':
             def getitem(self, space, i):
                 return space.wrap(bool(self.storage[i]))
@@ -595,7 +593,41 @@ def make_class(_dtype):
                 return newlong(space, fromlong(self.storage[i]))
 
         def setitem(self, item, value):
+            assert isinstance(value, _dtype.valtype)
             self.storage[item] = value
+
+        #def setitem_cast(self, item, value):
+        #    self.storage[item] = rffi.cast(_dtype.TP.OF, value)
+
+        def _sliceloop1(self, start, stop, step, source):
+            i = start
+            j = 0
+            conv = _dtype.convval
+            while i < stop:
+                #slice_driver1.jit_merge_point(signature=source.signature,
+                        #step=step, stop=stop, i=i, j=j, source=source,
+                        #dest=dest)
+                self.storage[i] = conv(source.eval(j))
+                j += 1
+                i += step
+
+        def _sliceloop2(self, start, stop, step, source):
+            i = start
+            j = 0
+            conv = _dtype.convval
+            while i > stop:
+                #slice_driver2.jit_merge_point(signature=source.signature,
+                        #step=step, stop=stop, i=i, j=j, source=source,
+                        #dest=dest)
+                self.storage[i] = conv(source.eval(j))
+                j += 1
+                i += step
+
+        def setslice(self, space, start, stop, step, slice_length, arr):
+            if step > 0:
+                self._sliceloop1(start, stop, step, arr)
+            else:
+                self._sliceloop2(start, stop, step, arr)
 
         def setitem_w(self, space, item, value):
             self.storage[item] = rffi.cast(_dtype.TP.OF, _dtype.unwrap(space, value))
@@ -649,9 +681,11 @@ def zeros(space, size):
 
 @unwrap_spec(size=int)
 def ones(space, size):
-    arr = create_sdarray(size, Float64_dtype)
-    for i in xrange(size):
-        arr.setitem(space, i, 1.0)
+    dtype = _dtype_list[12]
+    arr = _array_classes[dtype.num](size)
+    one = dtype.cast(1)
+    #for i in xrange(size):
+    arr.setitem(0, one)
     return space.wrap(arr)
 
 BaseArray.typedef = TypeDef(

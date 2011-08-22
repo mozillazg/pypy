@@ -7,33 +7,33 @@ from pypy.tool.sourcetools import func_with_new_name
 def ufunc(func):
     signature = Signature()
     def impl(space, w_obj):
-        from pypy.module.micronumpy.interp_numarray import Call1, convert_to_array
+        from pypy.module.micronumpy.interp_numarray import _call1_classes, convert_to_array
         if space.issequence_w(w_obj):
             w_obj_arr = convert_to_array(space, w_obj)
-            w_res = Call1(func, w_obj_arr, w_obj_arr.signature.transition(signature))
+            w_res = _call1_classes[w_obj_arr.dtype.num](func, w_obj_arr, w_obj_arr.signature.transition(signature))
             w_obj_arr.invalidates.append(w_res)
             return w_res
         else:
             return space.wrap(func(space.float_w(w_obj)))
     return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
 
-def ufunc2(func):
+"""def ufunc2(func):
     signature = Signature()
     def impl(space, w_lhs, w_rhs):
-        from pypy.module.micronumpy.interp_numarray import Call2, convert_to_array
+        from pypy.module.micronumpy.interp_numarray import pick_call2, convert_to_array
         if space.issequence_w(w_lhs) or space.issequence_w(w_rhs):
             w_lhs_arr = convert_to_array(space, w_lhs)
             w_rhs_arr = convert_to_array(space, w_rhs)
             new_sig = w_lhs_arr.signature.transition(signature).transition(w_rhs_arr.signature)
-            w_res = Call2(func, w_lhs_arr, w_rhs_arr, new_sig)
+            w_res = pick_call2(w_lhs_arr.dtype, w_rhs_arr.dtype)(func, w_lhs_arr, w_rhs_arr, new_sig)
             w_lhs_arr.invalidates.append(w_res)
             w_rhs_arr.invalidates.append(w_res)
             return w_res
         else:
             return space.wrap(func(space.float_w(w_lhs), space.float_w(w_rhs)))
-    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
+    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)"""
 
-@ufunc
+"""@ufunc
 def absolute(value):
     return abs(value)
 
@@ -70,14 +70,14 @@ def minimum(lvalue, rvalue):
 
 @ufunc2
 def multiply(lvalue, rvalue):
-    return lvalue * rvalue
+    return lvalue * rvalue"""
 
 # Used by numarray for __pos__. Not visible from numpy application space.
 @ufunc
 def positive(value):
     return value
 
-@ufunc
+"""@ufunc
 def negative(value):
     return -value
 
@@ -121,7 +121,6 @@ def power(lvalue, rvalue):
 def mod(lvalue, rvalue):
     return math.fmod(lvalue, rvalue)
 
-
 @ufunc
 def arcsin(value):
     if value < -1.0 or  value > 1.0:
@@ -136,4 +135,4 @@ def arccos(value):
 
 @ufunc
 def arctan(value):
-    return math.atan(value)
+    return math.atan(value)"""
