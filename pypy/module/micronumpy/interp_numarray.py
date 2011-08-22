@@ -71,11 +71,11 @@ class BaseArray(Wrappable):
     descr_pow = _binop_impl(interp_ufuncs.power)
     descr_mod = _binop_impl(interp_ufuncs.mod)"""
 
-    def _binop_right_impl(w_ufunc):
-        def impl(self, space, w_other):
-            w_other = wrap_scalar(space, w_other, self.dtype)
-            return w_ufunc(space, w_other, self)
-        return func_with_new_name(impl, "binop_right_%s_impl" % w_ufunc.__name__)
+    #def _binop_right_impl(w_ufunc):
+    #    def impl(self, space, w_other):
+    #        w_other = wrap_scalar(space, w_other, self.dtype)
+    #        return w_ufunc(space, w_other, self)
+    #    return func_with_new_name(impl, "binop_right_%s_impl" % w_ufunc.__name__)
 
     """descr_radd = _binop_right_impl(interp_ufuncs.add)
     descr_rsub = _binop_right_impl(interp_ufuncs.subtract)
@@ -277,8 +277,6 @@ class BaseArray(Wrappable):
     def descr_mean(self, space):
         return space.wrap(space.float_w(self.descr_sum(space))/self.find_size())
 
-
-
 def convert_to_array (space, w_obj):
     if isinstance(w_obj, BaseArray):
         return w_obj
@@ -287,40 +285,46 @@ def convert_to_array (space, w_obj):
         # XXX: Need to fill in the dtype
         return new_numarray(space, w_obj, Float64_dtype)
     else:
-        raise OperationError(space.w_ValueError, space.wrap("no scalars"))
         # If it's a scalar
-        #return wrap_scalar(space, w_obj)
+        dtype = find_scalar_dtype(space, w_obj)
+        return wrap_scalar(space, w_obj, dtype)
 
-def wrap_scalar(space, scalar, dtype=None):
-    if dtype is None:
-        dtype = find_scalar_dtype(space, scalar)
-    return ScalarWrapper(dtype.cast(dtype.unwrap(space, scalar)), dtype)
+def make_scalarwrapper(_dtype):
+    class ScalarWrapper(BaseArray):
+        """
+        Intermediate class representing a float literal.
+        """
+        _immutable_fields_ = ["value"]
+        signature = Signature()
 
-class ScalarWrapper(BaseArray):
-    """
-    Intermediate class representing a float literal.
-    """
-    _immutable_fields_ = ["value"]
-    signature = Signature()
+        def __init__(self, space, value):
+            BaseArray.__init__(self)
+            self.value = _dtype.valtype(_dtype.unwrap(space, value))
+            self.dtype = _dtype
 
-    def __init__(self, value, dtype):
-        BaseArray.__init__(self)
-        self.value = value
-        self.dtype = dtype
+        def find_size(self):
+            raise ValueError
 
-    def find_size(self):
-        raise ValueError
+        def eval(self, i):
+            return self.value
 
-    def eval(self, i):
-        return self.value
+        def find_dtype(self):
+            return _dtype
+    ScalarWrapper.__name__ = "ScalarWrapper_" + _dtype.name
+    return ScalarWrapper
 
-    def find_dtype(self):
-        return self.dtype
+_scalarwrappers = [make_scalarwrapper(d) for d in _dtype_list]
+
+def wrap_scalar(space, scalar, dtype):
+    assert isinstance(dtype, Dtype)
+    return _scalarwrappers[dtype.num](space, scalar)
+    #return ScalarWrapper(dtype.cast(dtype.unwrap(space, scalar)), dtype)
 
 # this is really only to simplify the tests. Maybe it should be moved?
-class FloatWrapper(ScalarWrapper):
-    def __init__(self, value):
-        ScalarWrapper.__init__(self, value, Float64_dtype)
+FloatWrapper = _scalarwrappers[12]
+#class FloatWrapper(ScalarWrapper):
+#    def __init__(self, value):
+#        ScalarWrapper.__init__(self, value, Float64_dtype)
 
 def make_virtualarray(_dtype):
     class VirtualArray(BaseArray):
@@ -450,12 +454,12 @@ def pick_call2(dtype1, dtype2):
         return _call2_classes[dtype1.num]
     return _call2_classes[find_result_dtype(dtype1, dtype2)]
 
-#class ViewArray(BaseArray):
-#    """
-#    Class for representing views of arrays, they will reflect changes of parent
-#    arrays. Example: slices
-#    """
-"""    _immutable_fields_ = ["parent"]
+class ViewArray(BaseArray):
+    """
+    Class for representing views of arrays, they will reflect changes of parent
+    arrays. Example: slices
+    """
+    _immutable_fields_ = ["parent"]
 
     def __init__(self, parent, signature):
         BaseArray.__init__(self)
@@ -520,13 +524,10 @@ class SingleDimSlice(ViewArray):
         if stop != -1:
             stop = self.calc_index(stop)
         step = self.step * step
-        if step > 0:
-            self._sliceloop1(start, stop, step, arr, self.parent)
-        else:
-            self._sliceloop2(start, stop, step, arr, self.parent)
+        self.parent.setslice(space, start, stop, step, slice_length, arr)
 
     def calc_index(self, item):
-        return (self.start + item * self.step)"""
+        return (self.start + item * self.step)
 
 class SingleDimArray(BaseArray):
     def __init__(self):
