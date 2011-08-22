@@ -183,7 +183,7 @@ Bool_dtype = make_dtype(True.__class__, lltype.Array(lltype.Bool, hints={'noleng
 #UInt8_dtype = make_dtype(r_uchar, lltype.Array(rffi.UCHAR, hints={'nolength': True}),
 #    'uint8', conv_int, cast_uint8, unwrap_int, UInt8_num, UNSIGNEDLTR)
 #Int16_dtype = make_dtype(r_short, lltype.Array(rffi.SHORT, hints={'nolength': True}),
-    'int16', conv_int, cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
+#    'int16', conv_int, cast_int16, unwrap_int, Int16_num, SIGNEDLTR)
 #UInt16_dtype = make_dtype(r_ushort, lltype.Array(rffi.USHORT, hints={'nolength': True}),
 #    'uint16', conv_int, cast_uint16, unwrap_int, UInt16_num, UNSIGNEDLTR)
 Int32_dtype = make_dtype(r_int, lltype.Array(rffi.INT, hints={'nolength': True}),
@@ -199,9 +199,9 @@ Long_dtype = make_dtype(r_long, lltype.Array(rffi.LONG, hints={'nolength': True}
                     #unwrap_ubigint if LONG_BIT == 32 else unwrap_int,
                     #ULong_num, UNSIGNEDLTR)
 
-#Int64_dtype = make_dtype(r_longlong, lltype.Array(rffi.LONGLONG, hints={'nolength': True}),
-#    'int64', conv_int, cast_int64, 
-#    unwrap_bigint if LONG_BIT == 32 else unwrap_bigint, Int64_num, SIGNEDLTR)
+Int64_dtype = make_dtype(r_longlong, lltype.Array(rffi.LONGLONG, hints={'nolength': True}),
+    'int64', conv_int, cast_int64, 
+    unwrap_bigint if LONG_BIT == 32 else unwrap_bigint, Int64_num, SIGNEDLTR)
 #UInt64_dtype = make_dtype(r_ulonglong, lltype.Array(rffi.ULONGLONG, hints={'nolength': True}),
 #    'uint64', conv_int, cast_uint64, unwrap_ubigint, UInt64_num, UNSIGNEDLTR)
 #Float32_dtype = make_dtype('float32', conv_float, cast_float32, unwrap_float, Float32_num, FLOATINGLTR)
@@ -213,11 +213,10 @@ Float32_dtype = Float64_dtype
 Float96_dtype = Float64_dtype
 Int8_dtype = Int32_dtype
 UInt8_dtype = Int32_dtype
-#Int16_dtype = Int32_dtype
+Int16_dtype = Int32_dtype
 UInt16_dtype = Int32_dtype
 UInt32_dtype = Int32_dtype
 ULong_dtype = Int32_dtype
-Int64_dtype = Int32_dtype
 UInt64_dtype = Int32_dtype
 
 
