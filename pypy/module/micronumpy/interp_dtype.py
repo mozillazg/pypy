@@ -239,10 +239,11 @@ _dtype_list = [Bool_dtype,
 def find_scalar_dtype(space, scalar):
     if space.is_true(space.isinstance(scalar, space.w_int)):
         return Long_dtype
-    if space.is_true(space.isinstance(scalar, space.w_float)):
-        return Float64_dtype
     if space.is_true(space.isinstance(scalar, space.w_bool)):
         return Bool_dtype
+    if space.is_true(space.isinstance(scalar, space.w_long)):
+        return Int64_dtype
+    return Float64_dtype
 
 def find_result_dtype(d1, d2):
     # this function is for determining the result dtype of bin ops, etc.
