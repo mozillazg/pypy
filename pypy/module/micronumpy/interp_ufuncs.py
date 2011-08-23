@@ -75,11 +75,6 @@ def absolute(value):
 #def multiply(lvalue, rvalue):
 #    return lvalue * rvalue
 
-# Used by numarray for __pos__. Not visible from numpy application space.
-@ufunc
-def positive(value):
-    return value
-
 @ufunc
 @specialize.argtype(0)
 def negative(value):

@@ -55,7 +55,9 @@ class BaseArray(Wrappable):
             return w_ufunc(space, self)
         return func_with_new_name(impl, "unaryop_%s_impl" % w_ufunc.__name__)
 
-    #descr_pos = _unaryop_impl(interp_ufuncs.positive)
+    def descr_pos(space, w_obj):
+        return w_obj
+
     descr_neg = _unaryop_impl(interp_ufuncs.negative)
     descr_abs = _unaryop_impl(interp_ufuncs.absolute)
 
@@ -705,7 +707,7 @@ BaseArray.typedef = TypeDef(
     __getitem__ = interp2app(BaseArray.descr_getitem),
     __setitem__ = interp2app(BaseArray.descr_setitem),
 
-    #__pos__ = interp2app(BaseArray.descr_pos),
+    __pos__ = interp2app(BaseArray.descr_pos),
     __neg__ = interp2app(BaseArray.descr_neg),
     __abs__ = interp2app(BaseArray.descr_abs),
     #__add__ = interp2app(BaseArray.descr_add),
