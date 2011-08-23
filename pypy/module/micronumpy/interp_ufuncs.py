@@ -2,15 +2,17 @@ import math
 
 from pypy.module.micronumpy.interp_support import Signature
 from pypy.rlib import rfloat
+from pypy.rlib.objectmodel import specialize
 from pypy.tool.sourcetools import func_with_new_name
 
 def ufunc(func):
     signature = Signature()
     def impl(space, w_obj):
-        from pypy.module.micronumpy.interp_numarray import _call1_classes, convert_to_array
+        from pypy.module.micronumpy.interp_numarray import pick_call1, convert_to_array
         if space.issequence_w(w_obj):
             w_obj_arr = convert_to_array(space, w_obj)
-            w_res = _call1_classes[w_obj_arr.dtype.num](func, w_obj_arr, w_obj_arr.signature.transition(signature))
+            w_res = pick_call1(w_obj_arr.find_dtype())(func,w_obj_arr, w_obj_arr.signature.transition(signature))
+            #w_res = _call1_classes[w_obj_arr.dtype.num](func, w_obj_arr, w_obj_arr.signature.transition(signature))
             w_obj_arr.invalidates.append(w_res)
             return w_res
         else:
@@ -77,10 +79,11 @@ def multiply(lvalue, rvalue):
 def positive(value):
     return value
 
-"""@ufunc
+@ufunc
+@specialize.argtype(0)
 def negative(value):
     return -value
-
+"""
 @ufunc
 def reciprocal(value):
     if value == 0.0:
