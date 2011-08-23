@@ -91,6 +91,8 @@ class Assembler386(object):
         self._current_depths_cache = (0, 0)
         self.datablockwrapper = None
         self.stack_check_slowpath = 0
+        self.propagate_exception_path = 0
+        self.gcrootmap_retaddr_forced = 0
         self.teardown()
 
     def leave_jitted_hook(self):
@@ -127,6 +129,7 @@ class Assembler386(object):
             self._build_failure_recovery(True, withfloats=True)
             support.ensure_sse2_floats()
             self._build_float_constants()
+        self._build_propagate_exception_path()
         if gc_ll_descr.get_malloc_slowpath_addr is not None:
             self._build_malloc_slowpath()
         self._build_stack_check_slowpath()
@@ -140,6 +143,9 @@ class Assembler386(object):
         assert self.memcpy_addr != 0, "setup_once() not called?"
         self.current_clt = looptoken.compiled_loop_token
         self.pending_guard_tokens = []
+        if WORD == 8:
+            self.pending_memoryerror_trampoline_from = []
+            self.error_trampoline_64 = 0
         self.mc = codebuf.MachineCodeBlockWrapper()
         #assert self.datablockwrapper is None --- but obscure case
         # possible, e.g. getting MemoryError and continuing
@@ -149,6 +155,8 @@ class Assembler386(object):
 
     def teardown(self):
         self.pending_guard_tokens = None
+        if WORD == 8:
+            self.pending_memoryerror_trampoline_from = None
         self.mc = None
         self.looppos = -1
         self.currently_compiling_loop = None
@@ -237,15 +245,47 @@ class Assembler386(object):
         if self.cpu.supports_floats:          # restore the XMM registers
             for i in range(self.cpu.NUM_REGS):# from where they were saved
                 mc.MOVSD_xs(i, (WORD*2)+8*i)
+        #
+        # Note: we check this after the code above, just because the code
+        # above is more than 127 bytes on 64-bits...
+        mc.TEST_rr(eax.value, eax.value)
+        mc.J_il8(rx86.Conditions['Z'], 0) # patched later
+        jz_location = mc.get_relative_pos()
+        #
         nursery_free_adr = self.cpu.gc_ll_descr.get_nursery_free_addr()
         mc.MOV(edx, heap(nursery_free_adr))   # load this in EDX
         mc.RET()
+        #
+        # If the slowpath malloc failed, we raise a MemoryError that
+        # always interrupts the current loop, as a "good enough"
+        # approximation.  Also note that we didn't RET from this helper;
+        # but the code we jump to will actually restore the stack
+        # position based on EBP, which will get us out of here for free.
+        offset = mc.get_relative_pos() - jz_location
+        assert 0 < offset <= 127
+        mc.overwrite(jz_location-1, chr(offset))
+        mc.JMP(imm(self.propagate_exception_path))
+        #
         rawstart = mc.materialize(self.cpu.asmmemmgr, [])
         self.malloc_slowpath2 = rawstart
 
+    def _build_propagate_exception_path(self):
+        if self.cpu.propagate_exception_v < 0:
+            return      # not supported (for tests, or non-translated)
+        #
+        self.mc = codebuf.MachineCodeBlockWrapper()
+        # call on_leave_jitted_save_exc()
+        addr = self.cpu.get_on_leave_jitted_int(save_exception=True)
+        self.mc.CALL(imm(addr))
+        self.mc.MOV_ri(eax.value, self.cpu.propagate_exception_v)
+        self._call_footer()
+        rawstart = self.mc.materialize(self.cpu.asmmemmgr, [])
+        self.propagate_exception_path = rawstart
+        self.mc = None
+
     def _build_stack_check_slowpath(self):
         _, _, slowpathaddr = self.cpu.insert_stack_check()
-        if slowpathaddr == 0 or self.cpu.exit_frame_with_exception_v < 0:
+        if slowpathaddr == 0 or self.cpu.propagate_exception_v < 0:
             return      # no stack check (for tests, or non-translated)
         #
         # make a "function" that is called immediately at the start of
@@ -301,19 +341,11 @@ class Assembler386(object):
         offset = mc.get_relative_pos() - jnz_location
         assert 0 < offset <= 127
         mc.overwrite(jnz_location-1, chr(offset))
-        # clear the exception from the global position
-        mc.MOV(eax, heap(self.cpu.pos_exc_value()))
-        mc.MOV(heap(self.cpu.pos_exception()), imm0)
-        mc.MOV(heap(self.cpu.pos_exc_value()), imm0)
-        # save the current exception instance into fail_boxes_ptr[0]
-        adr = self.fail_boxes_ptr.get_addr_for_num(0)
-        mc.MOV(heap(adr), eax)
-        # call the helper function to set the GC flag on the fail_boxes_ptr
-        # array (note that there is no exception any more here)
-        addr = self.cpu.get_on_leave_jitted_int(save_exception=False)
+        # call on_leave_jitted_save_exc()
+        addr = self.cpu.get_on_leave_jitted_int(save_exception=True)
         mc.CALL(imm(addr))
         #
-        mc.MOV_ri(eax.value, self.cpu.exit_frame_with_exception_v)
+        mc.MOV_ri(eax.value, self.cpu.propagate_exception_v)
         #
         # footer -- note the ADD, which skips the return address of this
         # function, and will instead return to the caller's caller.  Note
@@ -326,6 +358,7 @@ class Assembler386(object):
         self.stack_check_slowpath = rawstart
 
     @staticmethod
+    @rgc.no_collect
     def _release_gil_asmgcc(css):
         # similar to trackgcroot.py:pypy_asm_stackwalk, first part
         from pypy.rpython.memory.gctransform import asmgcroot
@@ -341,6 +374,7 @@ class Assembler386(object):
             before()
 
     @staticmethod
+    @rgc.no_collect
     def _reacquire_gil_asmgcc(css):
         # first reacquire the GIL
         after = rffi.aroundstate.after
@@ -355,12 +389,14 @@ class Assembler386(object):
         next.prev = prev
 
     @staticmethod
+    @rgc.no_collect
     def _release_gil_shadowstack():
         before = rffi.aroundstate.before
         if before:
             before()
 
     @staticmethod
+    @rgc.no_collect
     def _reacquire_gil_shadowstack():
         after = rffi.aroundstate.after
         if after:
@@ -525,6 +561,8 @@ class Assembler386(object):
         # at the end of self.mc.
         for tok in self.pending_guard_tokens:
             tok.pos_recovery_stub = self.generate_quick_failure(tok)
+        if WORD == 8 and len(self.pending_memoryerror_trampoline_from) > 0:
+            self.error_trampoline_64 = self.generate_propagate_error_64()
 
     def patch_pending_failure_recoveries(self, rawstart):
         # after we wrote the assembler to raw memory, set up
@@ -561,6 +599,12 @@ class Assembler386(object):
                 # less, we would run into the issue that overwriting the
                 # 5 bytes here might get a few nonsense bytes at the
                 # return address of the following CALL.
+        if WORD == 8:
+            for pos_after_jz in self.pending_memoryerror_trampoline_from:
+                assert self.error_trampoline_64 != 0     # only if non-empty
+                mc = codebuf.MachineCodeBlockWrapper()
+                mc.writeimm32(self.error_trampoline_64 - pos_after_jz)
+                mc.copy_to_raw_memory(rawstart + pos_after_jz - 4)
 
     def get_asmmemmgr_blocks(self, looptoken):
         clt = looptoken.compiled_loop_token
@@ -1422,7 +1466,7 @@ class Assembler386(object):
         assert isinstance(loc_vtable, ImmedLoc)
         arglocs = arglocs[:-1]
         self.call(self.malloc_func_addr, arglocs, eax)
-        # xxx ignore NULL returns for now
+        self.propagate_memoryerror_if_eax_is_null()
         self.set_vtable(eax, loc_vtable)
 
     def set_vtable(self, loc, loc_vtable):
@@ -1441,18 +1485,35 @@ class Assembler386(object):
     def genop_new(self, op, arglocs, result_loc):
         assert result_loc is eax
         self.call(self.malloc_func_addr, arglocs, eax)
+        self.propagate_memoryerror_if_eax_is_null()
 
     def genop_new_array(self, op, arglocs, result_loc):
         assert result_loc is eax
         self.call(self.malloc_array_func_addr, arglocs, eax)
+        self.propagate_memoryerror_if_eax_is_null()
 
     def genop_newstr(self, op, arglocs, result_loc):
         assert result_loc is eax
         self.call(self.malloc_str_func_addr, arglocs, eax)
+        self.propagate_memoryerror_if_eax_is_null()
 
     def genop_newunicode(self, op, arglocs, result_loc):
         assert result_loc is eax
         self.call(self.malloc_unicode_func_addr, arglocs, eax)
+        self.propagate_memoryerror_if_eax_is_null()
+
+    def propagate_memoryerror_if_eax_is_null(self):
+        # if self.propagate_exception_path == 0 (tests), this may jump to 0
+        # and segfaults.  too bad.  the alternative is to continue anyway
+        # with eax==0, but that will segfault too.
+        self.mc.TEST_rr(eax.value, eax.value)
+        if WORD == 4:
+            self.mc.J_il(rx86.Conditions['Z'], self.propagate_exception_path)
+            self.mc.add_pending_relocation()
+        elif WORD == 8:
+            self.mc.J_il(rx86.Conditions['Z'], 0)
+            pos = self.mc.get_relative_pos()
+            self.pending_memoryerror_trampoline_from.append(pos)
 
     # ----------
 
@@ -1723,6 +1784,12 @@ class Assembler386(object):
         is_guard_not_invalidated = guard_opnum == rop.GUARD_NOT_INVALIDATED
         return GuardToken(faildescr, failargs, fail_locs, exc,
                           is_guard_not_invalidated)
+
+    def generate_propagate_error_64(self):
+        assert WORD == 8
+        startpos = self.mc.get_relative_pos()
+        self.mc.JMP(imm(self.propagate_exception_path))
+        return startpos
 
     def generate_quick_failure(self, guardtok):
         """Generate the initial code for handling a failure.  We try to
@@ -2156,13 +2223,27 @@ class Assembler386(object):
                 css = get_ebp_ofs(pos + use_words - 1)
                 self._regalloc.close_stack_struct = css
             # The location where the future CALL will put its return address
-            # will be [ESP-WORD], so save that as the next frame's top address
-            self.mc.LEA_rs(eax.value, -WORD)        # LEA EAX, [ESP-4]
+            # will be [ESP-WORD].  But we can't use that as the next frame's
+            # top address!  As the code after releasegil() runs without the
+            # GIL, it might not be set yet by the time we need it (very
+            # unlikely), or it might be overwritten by the following call
+            # to reaquiregil() (much more likely).  So we hack even more
+            # and use a dummy location containing a dummy value (a pointer
+            # to itself) which we pretend is the return address :-/ :-/ :-/
+            # It prevents us to store any %esp-based stack locations but we
+            # don't so far.
+            adr = self.datablockwrapper.malloc_aligned(WORD, WORD)
+            rffi.cast(rffi.CArrayPtr(lltype.Signed), adr)[0] = adr
+            self.gcrootmap_retaddr_forced = adr
             frame_ptr = css + WORD * (2+asmgcroot.FRAME_PTR)
-            self.mc.MOV_br(frame_ptr, eax.value)    # MOV [css.frame], EAX
+            if rx86.fits_in_32bits(adr):
+                self.mc.MOV_bi(frame_ptr, adr)          # MOV [css.frame], adr
+            else:
+                self.mc.MOV_ri(eax.value, adr)          # MOV EAX, adr
+                self.mc.MOV_br(frame_ptr, eax.value)    # MOV [css.frame], EAX
             # Save ebp
             index_of_ebp = css + WORD * (2+asmgcroot.INDEX_OF_EBP)
-            self.mc.MOV_br(index_of_ebp, ebp.value) # MOV [css.ebp], EBP
+            self.mc.MOV_br(index_of_ebp, ebp.value)     # MOV [css.ebp], EBP
             # Call the closestack() function (also releasing the GIL)
             if IS_X86_32:
                 reg = eax
@@ -2190,6 +2271,9 @@ class Assembler386(object):
         if gcrootmap.is_shadow_stack:
             args = []
         else:
+            assert self.gcrootmap_retaddr_forced == -1, (
+                      "missing mark_gc_roots() in CALL_RELEASE_GIL")
+            self.gcrootmap_retaddr_forced = 0
             css = self._regalloc.close_stack_struct
             assert css != 0
             if IS_X86_32:
@@ -2440,7 +2524,13 @@ class Assembler386(object):
             if gcrootmap.is_shadow_stack:
                 gcrootmap.write_callshape(mark, force_index)
             else:
-                self.mc.insert_gcroot_marker(mark)
+                if self.gcrootmap_retaddr_forced == 0:
+                    self.mc.insert_gcroot_marker(mark)   # common case
+                else:
+                    assert self.gcrootmap_retaddr_forced != -1, (
+                              "two mark_gc_roots() in a CALL_RELEASE_GIL")
+                    gcrootmap.put(self.gcrootmap_retaddr_forced, mark)
+                    self.gcrootmap_retaddr_forced = -1
 
     def target_arglocs(self, loop_token):
         return loop_token._x86_arglocs

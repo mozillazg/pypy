@@ -198,7 +198,6 @@ class Transformer(object):
             self.vable_array_vars[op.result]= self.vable_array_vars[op.args[0]]
 
     rewrite_op_cast_pointer = rewrite_op_same_as
-    rewrite_op_cast_opaque_ptr = rewrite_op_same_as   # rlib.rerased
     def rewrite_op_cast_bool_to_int(self, op): pass
     def rewrite_op_cast_bool_to_uint(self, op): pass
     def rewrite_op_cast_char_to_int(self, op): pass
@@ -572,6 +571,7 @@ class Transformer(object):
                 pure = '_pure'
         else:
             pure = ''
+        self.check_field_access(v_inst.concretetype.TO)
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
@@ -605,6 +605,7 @@ class Transformer(object):
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('setfield_vable_%s' % kind,
                                    [v_inst, descr, v_value], None)]
+        self.check_field_access(v_inst.concretetype.TO)
         argname = getattr(v_inst.concretetype.TO, '_gckind', 'gc')
         descr = self.cpu.fielddescrof(v_inst.concretetype.TO,
                                       c_fieldname.value)
@@ -616,6 +617,22 @@ class Transformer(object):
     def is_typeptr_getset(self, op):
         return (op.args[1].value == 'typeptr' and
                 op.args[0].concretetype.TO._hints.get('typeptr'))
+
+    def check_field_access(self, STRUCT):
+        # check against a GcStruct with a nested GcStruct as a first argument
+        # but which is not an object at all; see metainterp/test/test_loop,
+        # test_regular_pointers_in_short_preamble.
+        if not isinstance(STRUCT, lltype.GcStruct):
+            return
+        if STRUCT._first_struct() == (None, None):
+            return
+        PARENT = STRUCT
+        while not PARENT._hints.get('typeptr'):
+            _, PARENT = PARENT._first_struct()
+            if PARENT is None:
+                raise NotImplementedError("%r is a GcStruct using nesting but "
+                                          "not inheriting from object" %
+                                          (STRUCT,))
 
     def get_vinfo(self, v_virtualizable):
         if self.callcontrol is None:      # for tests
