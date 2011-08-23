@@ -173,6 +173,9 @@ def make_dtype(_valtype, _TP, _name, convfunc, castfunc, unwrapfunc, _num, _kind
         def convval(self, val):
             return rffi.cast(_TP.OF, val)
 
+        def no_cast(self, val):
+            return val
+
     A_Dtype.__name__ = "Dtype_" + _name
     return A_Dtype()
 

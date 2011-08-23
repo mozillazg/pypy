@@ -55,8 +55,8 @@ class BaseArray(Wrappable):
             return w_ufunc(space, self)
         return func_with_new_name(impl, "unaryop_%s_impl" % w_ufunc.__name__)
 
-    def descr_pos(space, w_obj):
-        return w_obj
+    def descr_pos(self, space):
+        return self
 
     descr_neg = _unaryop_impl(interp_ufuncs.negative)
     descr_abs = _unaryop_impl(interp_ufuncs.absolute)
@@ -66,12 +66,12 @@ class BaseArray(Wrappable):
             return w_ufunc(space, self, w_other)
         return func_with_new_name(impl, "binop_%s_impl" % w_ufunc.__name__)
 
-    """descr_add = _binop_impl(interp_ufuncs.add)
-    descr_sub = _binop_impl(interp_ufuncs.subtract)
-    descr_mul = _binop_impl(interp_ufuncs.multiply)
-    descr_div = _binop_impl(interp_ufuncs.divide)
-    descr_pow = _binop_impl(interp_ufuncs.power)
-    descr_mod = _binop_impl(interp_ufuncs.mod)"""
+    descr_add = _binop_impl(interp_ufuncs.add)
+    #descr_sub = _binop_impl(interp_ufuncs.subtract)
+    #descr_mul = _binop_impl(interp_ufuncs.multiply)
+    #descr_div = _binop_impl(interp_ufuncs.divide)
+    #descr_pow = _binop_impl(interp_ufuncs.power)
+    #descr_mod = _binop_impl(interp_ufuncs.mod)
 
     #def _binop_right_impl(w_ufunc):
     #    def impl(self, space, w_other):
@@ -414,53 +414,76 @@ _call1_classes = [make_call1(d) for d in _dtype_list]
 def pick_call1(dtype):
     return _call1_classes[dtype.num]
 
-#def make_call2(VirtualArrayClass):
-#    class Call2(VirtualArrayClass):
-#        """
-#        Intermediate class for performing binary operations.
-#        """
-#        _immutable_fields_ = ["function", "left", "right"]
+def make_call2(_dtype):
+    class Call2(VirtualArray):
+        """
+        Intermediate class for performing binary operations.
+        """
+        _immutable_fields_ = ["function", "left", "right"]
 
-#        def __init__(self, function, left, right, signature):
-#            VirtualArrayClass.__init__(self, signature)
-#            self.left = left
-#            self.right = right
-#            dtype1 = self.left.find_dtype()
-#            dtype2 = self.right.find_dtype()
-#            if dtype1.num != dtype2.num:
-#                cast = self.dtype.cast
-#                if dtype.num != newdtype.num:
-#                    if dtype2.num != newdtype.num:
-#                        self.function = lambda x, y: function(cast(x), cast(y))
-#                    else:
-#                        self.function = lambda x, y: function(cast(x), y)
-#                else:
-#                    self.function = lambda x, y: function(x, cast(y))
-#            else:
-#                self.function = function
+        dtype = _dtype
+        def __init__(self, function, left, right, signature):
+            VirtualArray.__init__(self, signature)
+            self.left = left
+            self.right = right
+            dtype1 = self.left.find_dtype()
+            dtype2 = self.right.find_dtype()
+            self.function = function
+            #if dtype1.num != _dtype.num:
+            #    self.cast1 = _dtype.convval
+            #else:
+            #    self.cast1 = _dtype.nocast
+            #if dtype2.num != _dtype.num:
+            #    self.cast2 = _dtype.convval
+            #else:
+            #    self.cast2 = _dtype.nocast
+            #if dtype1.num != dtype2.num:
+            #    cast = self.dtype.cast
+            #    if dtype1.num != _dtype.num:
+            #        if dtype2.num != _dtype.num:
+            #            self.cast1 = 
+            #            self.function = lambda x, y: function(cast(x), cast(y))
+            #        else:
+            #            self.function = lambda x, y: function(cast(x), y)
+            #    else:
+            #        self.function = lambda x, y: function(x, cast(y))
+            #else:
+            #    self.function = function
 
-#        def _del_sources(self):
-#            self.left = None
-#            self.right = None
+        def _del_sources(self):
+            self.left = None
+            self.right = None
 
-#        def _find_size(self):
-#            try:
-#                return self.left.find_size()
-#            except:
-#                return self.right.find_size()
+        def compute(self):
+            i = 0
+            signature = self.signature
+            result_size = self.find_size()
+            result = create_sdarray(result_size, _dtype)
+            while i < result_size:
+                #numpy_driver.jit_merge_point(signature=signature,
+                #                             result_size=result_size, i=i,
+                #                             self=self, result=result)
+                result.setitem(i, self.eval(i))
+                i += 1
+            return result
+        def _find_size(self):
+            try:
+                return self.left.find_size()
+            except:
+                return self.right.find_size()
 
-#        def _eval(self, i):
-#            lhs, rhs = self.left.eval(i), self.right.eval(i)
-#            return self.function(lhs, rhs)
-#    Call2.__name__ = "Call2_" + Call2.dtype.name
-#    return Call2
+        def _eval(self, i):
+            lhs, rhs = _dtype.convval(self.left.eval(i)), _dtype.convval(self.right.eval(i))
+            return self.function(lhs, rhs)
+    Call2.__name__ = "Call2_" + Call2.dtype.name
+    return Call2
 
-#_call2_classes = [make_call2(c) for c in _virtualarray_classes]
+_call2_classes = [make_call2(d) for d in _dtype_list]
 
-#def pick_call2(dtype1, dtype2):
-#    if dtype1.num == dtype2.num:
-#        return _call2_classes[dtype1.num]
-#    return _call2_classes[find_result_dtype(dtype1, dtype2)]
+def pick_call2(dtype1, dtype2):
+    if dtype1.num == dtype2.num:
+        return _call2_classes[dtype1.num]
+    return _call2_classes[find_result_dtype(dtype1, dtype2).num]
 
 class ViewArray(BaseArray):
     """
@@ -710,7 +733,7 @@ BaseArray.typedef = TypeDef(
     __pos__ = interp2app(BaseArray.descr_pos),
     __neg__ = interp2app(BaseArray.descr_neg),
     __abs__ = interp2app(BaseArray.descr_abs),
-    #__add__ = interp2app(BaseArray.descr_add),
+    __add__ = interp2app(BaseArray.descr_add),
     #__sub__ = interp2app(BaseArray.descr_sub),
     #__mul__ = interp2app(BaseArray.descr_mul),
     #__div__ = interp2app(BaseArray.descr_div),

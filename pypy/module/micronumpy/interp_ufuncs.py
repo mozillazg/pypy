@@ -19,7 +19,7 @@ def ufunc(func):
             return space.wrap(func(space.float_w(w_obj)))
     return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
 
-"""def ufunc2(func):
+def ufunc2(func):
     signature = Signature()
     def impl(space, w_lhs, w_rhs):
         from pypy.module.micronumpy.interp_numarray import pick_call2, convert_to_array
@@ -33,16 +33,17 @@ def ufunc(func):
             return w_res
         else:
             return space.wrap(func(space.float_w(w_lhs), space.float_w(w_rhs)))
-    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)"""
+    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
 
 @ufunc
 @specialize.argtype(0)
 def absolute(value):
     return abs(value)
 
-#@ufunc2
-#def add(lvalue, rvalue):
-#    return lvalue + rvalue
+@ufunc2
+@specialize.argtype(0,1)
+def add(lvalue, rvalue):
+    return lvalue + rvalue
 
 #@ufunc2
 #def copysign(lvalue, rvalue):
