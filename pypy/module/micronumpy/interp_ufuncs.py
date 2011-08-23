@@ -35,44 +35,45 @@ def ufunc(func):
             return space.wrap(func(space.float_w(w_lhs), space.float_w(w_rhs)))
     return func_with_new_name(impl, "%s_dispatcher" % func.__name__)"""
 
-"""@ufunc
+@ufunc
+@specialize.argtype(0)
 def absolute(value):
     return abs(value)
 
-@ufunc2
-def add(lvalue, rvalue):
-    return lvalue + rvalue
+#@ufunc2
+#def add(lvalue, rvalue):
+#    return lvalue + rvalue
 
-@ufunc2
-def copysign(lvalue, rvalue):
-    return rfloat.copysign(lvalue, rvalue)
+#@ufunc2
+#def copysign(lvalue, rvalue):
+#    return rfloat.copysign(lvalue, rvalue)
 
-@ufunc2
-def divide(lvalue, rvalue):
-    return lvalue / rvalue
+#@ufunc2
+#def divide(lvalue, rvalue):
+#    return lvalue / rvalue
 
-@ufunc
-def exp(value):
-    try:
-        return math.exp(value)
-    except OverflowError:
-        return rfloat.INFINITY
+#@ufunc
+#def exp(value):
+#    try:
+#        return math.exp(value)
+#    except OverflowError:
+#        return rfloat.INFINITY
 
-@ufunc
-def fabs(value):
-    return math.fabs(value)
+#@ufunc
+#def fabs(value):
+#    return math.fabs(value)
 
-@ufunc2
-def maximum(lvalue, rvalue):
-    return max(lvalue, rvalue)
+#@ufunc2
+#def maximum(lvalue, rvalue):
+#    return max(lvalue, rvalue)
 
-@ufunc2
-def minimum(lvalue, rvalue):
-    return min(lvalue, rvalue)
+#@ufunc2
+#def minimum(lvalue, rvalue):
+#    return min(lvalue, rvalue)
 
-@ufunc2
-def multiply(lvalue, rvalue):
-    return lvalue * rvalue"""
+#@ufunc2
+#def multiply(lvalue, rvalue):
+#    return lvalue * rvalue
 
 # Used by numarray for __pos__. Not visible from numpy application space.
 @ufunc
@@ -83,59 +84,59 @@ def positive(value):
 @specialize.argtype(0)
 def negative(value):
     return -value
-"""
-@ufunc
-def reciprocal(value):
-    if value == 0.0:
-        return rfloat.copysign(rfloat.INFINITY, value)
-    return 1.0 / value
 
-@ufunc2
-def subtract(lvalue, rvalue):
-    return lvalue - rvalue
+#@ufunc
+#def reciprocal(value):
+#    if value == 0.0:
+#        return rfloat.copysign(rfloat.INFINITY, value)
+#    return 1.0 / value
 
-@ufunc
-def floor(value):
-    return math.floor(value)
+#@ufunc2
+#def subtract(lvalue, rvalue):
+#    return lvalue - rvalue
 
-@ufunc
-def sign(value):
-    if value == 0.0:
-        return 0.0
-    return rfloat.copysign(1.0, value)
+#@ufunc
+#def floor(value):
+#    return math.floor(value)
 
-@ufunc
-def sin(value):
-    return math.sin(value)
+#@ufunc
+#def sign(value):
+#    if value == 0.0:
+#        return 0.0
+#    return rfloat.copysign(1.0, value)
 
-@ufunc
-def cos(value):
-    return math.cos(value)
+#@ufunc
+#def sin(value):
+#    return math.sin(value)
 
-@ufunc
-def tan(value):
-    return math.tan(value)
+#@ufunc
+#def cos(value):
+#    return math.cos(value)
 
-@ufunc2
-def power(lvalue, rvalue):
-    return math.pow(lvalue, rvalue)
+#@ufunc
+#def tan(value):
+#    return math.tan(value)
 
-@ufunc2
-def mod(lvalue, rvalue):
-    return math.fmod(lvalue, rvalue)
+#@ufunc2
+#def power(lvalue, rvalue):
+#    return math.pow(lvalue, rvalue)
 
-@ufunc
-def arcsin(value):
-    if value < -1.0 or  value > 1.0:
-        return rfloat.NAN
-    return math.asin(value)
+#@ufunc2
+#def mod(lvalue, rvalue):
+#    return math.fmod(lvalue, rvalue)
 
-@ufunc
-def arccos(value):
-    if value < -1.0 or  value > 1.0:
-        return rfloat.NAN
-    return math.acos(value)
+#@ufunc
+#def arcsin(value):
+#    if value < -1.0 or  value > 1.0:
+#        return rfloat.NAN
+#    return math.asin(value)
 
-@ufunc
-def arctan(value):
-    return math.atan(value)"""
+#@ufunc
+#def arccos(value):
+#    if value < -1.0 or  value > 1.0:
+#        return rfloat.NAN
+#    return math.acos(value)
+
+#@ufunc
+#def arctan(value):
+#    return math.atan(value)
