@@ -22,8 +22,8 @@ numpy_driver = jit.JitDriver(greens = ['signature'],
                              reds = ['result_size', 'i', 'self', 'result'])
 all_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self'])
 any_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self'])
-slice_driver1 = jit.JitDriver(greens=['signature'], reds=['i', 'j', 'step', 'stop', 'source', 'dest'])
-slice_driver2 = jit.JitDriver(greens=['signature'], reds=['i', 'j', 'step', 'stop', 'source', 'dest'])
+slice_driver1 = jit.JitDriver(greens=['signature','dtype'], reds=['i', 'j', 'step', 'stop', 'source', 'self'])
+slice_driver2 = jit.JitDriver(greens=['signature','dtype'], reds=['i', 'j', 'step', 'stop', 'source', 'self'])
 
 def add(v1, v2):
     return v1 + v2
@@ -55,8 +55,8 @@ class BaseArray(Wrappable):
             return w_ufunc(space, self)
         return func_with_new_name(impl, "unaryop_%s_impl" % w_ufunc.__name__)
 
-    #descr_pos = _unaryop_impl(interp_ufuncs.positive)
-    #descr_neg = _unaryop_impl(interp_ufuncs.negative)
+    descr_pos = _unaryop_impl(interp_ufuncs.positive)
+    descr_neg = _unaryop_impl(interp_ufuncs.negative)
     #descr_abs = _unaryop_impl(interp_ufuncs.absolute)
 
     def _binop_impl(w_ufunc):
@@ -318,141 +318,147 @@ _scalarwrappers = [make_scalarwrapper(d) for d in _dtype_list]
 def wrap_scalar(space, scalar, dtype):
     assert isinstance(dtype, Dtype)
     return _scalarwrappers[dtype.num](space, scalar)
-    #return ScalarWrapper(dtype.cast(dtype.unwrap(space, scalar)), dtype)
 
 # this is really only to simplify the tests. Maybe it should be moved?
 FloatWrapper = _scalarwrappers[12]
-#class FloatWrapper(ScalarWrapper):
-#    def __init__(self, value):
-#        ScalarWrapper.__init__(self, value, Float64_dtype)
 
-def make_virtualarray(_dtype):
-    class VirtualArray(BaseArray):
-        dtype = _dtype
-        """
-        Class for representing virtual arrays, such as binary ops or ufuncs
-        """
-        def __init__(self, signature):
-            BaseArray.__init__(self)
-            self.forced_result = None
-            self.signature = signature
+class VirtualArray(BaseArray):
+    """
+    Class for representing virtual arrays, such as binary ops or ufuncs
+    """
+    def __init__(self, signature):
+        BaseArray.__init__(self)
+        self.forced_result = None
+        self.signature = signature
 
-        def _del_sources(self):
-            # Function for deleting references to source arrays, to allow garbage-collecting them
-            raise NotImplementedError
+    def _del_sources(self):
+        # Function for deleting references to source arrays, to allow garbage-collecting them
+        raise NotImplementedError
 
-        def compute(self):
-            i = 0
-            signature = self.signature
-            result_size = self.find_size()
-            result = create_sdarray(result_size, _dtype)
-            #storage = result.get_root_storage()
-            while i < result_size:
-                numpy_driver.jit_merge_point(signature=signature,
-                                             result_size=result_size, i=i,
-                                             self=self, result=result)
-                temp = self.eval(i)
-                #assert isinstance(temp, _dtype.TP.OF)
-                result.setitem_cast(i, temp)
-                i += 1
-            return result
+    #def compute(self):
+    #    i = 0
+    #    signature = self.signature
+    #    result_size = self.find_size()
+    #    result = create_sdarray(result_size, _dtype)
+    #    #storage = result.get_root_storage()
+    #    while i < result_size:
+    #        #numpy_driver.jit_merge_point(signature=signature,
+    #        #                             result_size=result_size, i=i,
+    #        #                             self=self, result=result)
+    #        #assert isinstance(temp, _dtype.TP.OF)
+    #        result.setitem(i, self.eval(i))
+    #        i += 1
+    #    return result
 
-        def force_if_needed(self):
-            if self.forced_result is None:
-                self.forced_result = self.compute()
-                self._del_sources()
+    def force_if_needed(self):
+        if self.forced_result is None:
+            self.forced_result = self.compute()
+            self._del_sources()
 
-        def get_concrete(self):
-            self.force_if_needed()
-            return self.forced_result
+    def get_concrete(self):
+        self.force_if_needed()
+        return self.forced_result
 
-        def eval(self, i):
-            if self.forced_result is not None:
-                return self.forced_result.eval(i)
-            return self._eval(i)
+    def eval(self, i):
+        if self.forced_result is not None:
+            return self.forced_result.eval(i)
+        return self._eval(i)
 
-        def find_size(self):
-            if self.forced_result is not None:
-                # The result has been computed and sources may be unavailable
-                return self.forced_result.find_size()
-            return self._find_size()
+    def find_size(self):
+        if self.forced_result is not None:
+            # The result has been computed and sources may be unavailable
+            return self.forced_result.find_size()
+        return self._find_size()
 
-        def find_dtype(self):
-            return _dtype
-    VirtualArray.__name__ = "VirtualArray_" + _dtype.name
-    return VirtualArray
+    def find_dtype(self):
+        return self.dtype
 
-_virtualarray_classes = [make_virtualarray(d) for d in _dtype_list]
-
-def make_call1(VirtualArrayClass):
-    class Call1(VirtualArrayClass):
+def make_call1(_dtype):
+    class Call1(VirtualArray):
         _immutable_fields_ = ["function", "values"]
 
+        dtype = _dtype
         def __init__(self, function, values, signature):
-            VirtualArrayClass.__init__(self, signature)
+            VirtualArray.__init__(self, signature)
             self.function = function
             self.values = values
 
         def _del_sources(self):
             self.values = None
 
+        def compute(self):
+            i = 0
+            signature = self.signature
+            result_size = self.find_size()
+            result = create_sdarray(result_size, _dtype)
+            while i < result_size:
+                #numpy_driver.jit_merge_point(signature=signature,
+                #                             result_size=result_size, i=i,
+                #                             self=self, result=result)
+                result.setitem(i, self.eval(i))
+                i += 1
+            return result
+
         def _find_size(self):
             return self.values.find_size()
 
         def _eval(self, i):
-            return self.function(self.values.eval(i))
+            return self.function(_dtype.convval(self.values.eval(i)))
     Call1.__name__ = "Call1_" + Call1.dtype.name
     return Call1
 
-_call1_classes = [make_call1(c) for c in _virtualarray_classes]
+_call1_classes = [make_call1(d) for d in _dtype_list]
 
-def make_call2(VirtualArrayClass):
-    class Call2(VirtualArrayClass):
-        """
-        Intermediate class for performing binary operations.
-        """
-        _immutable_fields_ = ["function", "left", "right"]
+def pick_call1(dtype):
+    return _call1_classes[dtype.num]
 
-        def __init__(self, function, left, right, signature):
-            VirtualArrayClass.__init__(self, signature)
-            self.left = left
-            self.right = right
-            dtype1 = self.left.find_dtype()
-            dtype2 = self.right.find_dtype()
-            if dtype1.num != dtype2.num:
-                cast = self.dtype.cast
-                if dtype.num != newdtype.num:
-                    if dtype2.num != newdtype.num:
-                        self.function = lambda x, y: function(cast(x), cast(y))
-                    else:
-                        self.function = lambda x, y: function(cast(x), y)
-                else:
-                    self.function = lambda x, y: function(x, cast(y))
-            else:
-                self.function = function
+#def make_call2(VirtualArrayClass):
+#    class Call2(VirtualArrayClass):
+#        """
+#        Intermediate class for performing binary operations.
+#        """
+#        _immutable_fields_ = ["function", "left", "right"]
 
-        def _del_sources(self):
-            self.left = None
-            self.right = None
+#        def __init__(self, function, left, right, signature):
+#            VirtualArrayClass.__init__(self, signature)
+#            self.left = left
+#            self.right = right
+#            dtype1 = self.left.find_dtype()
+#            dtype2 = self.right.find_dtype()
+#            if dtype1.num != dtype2.num:
+#                cast = self.dtype.cast
+#                if dtype.num != newdtype.num:
+#                    if dtype2.num != newdtype.num:
+#                        self.function = lambda x, y: function(cast(x), cast(y))
+#                    else:
+#                        self.function = lambda x, y: function(cast(x), y)
+#                else:
+#                    self.function = lambda x, y: function(x, cast(y))
+#            else:
+#                self.function = function
 
-        def _find_size(self):
-            try:
-                return self.left.find_size()
-            except:
-                return self.right.find_size()
+#        def _del_sources(self):
+#            self.left = None
+#            self.right = None
 
-        def _eval(self, i):
-            lhs, rhs = self.left.eval(i), self.right.eval(i)
-            return self.function(lhs, rhs)
-    Call2.__name__ = "Call2_" + Call2.dtype.name
-    return Call2
+#        def _find_size(self):
+#            try:
+#                return self.left.find_size()
+#            except:
+#                return self.right.find_size()
 
-_call2_classes = [make_call2(c) for c in _virtualarray_classes]
+#        def _eval(self, i):
+#            lhs, rhs = self.left.eval(i), self.right.eval(i)
+#            return self.function(lhs, rhs)
+#    Call2.__name__ = "Call2_" + Call2.dtype.name
+#    return Call2
 
-def pick_call2(dtype1, dtype2):
-    if dtype1.num == dtype2.num:
-        return _call2_classes[dtype1.num]
-    return _call2_classes[find_result_dtype(dtype1, dtype2)]
+#_call2_classes = [make_call2(c) for c in _virtualarray_classes]
+
+#def pick_call2(dtype1, dtype2):
+#    if dtype1.num == dtype2.num:
+#        return _call2_classes[dtype1.num]
+#    return _call2_classes[find_result_dtype(dtype1, dtype2)]
 
 class ViewArray(BaseArray):
     """
@@ -573,10 +579,6 @@ def make_class(_dtype):
         def eval(self, i):
             return self.storage[i]
 
-        @specialize.argtype(2)
-        def eval_cast(self, i, d):
-            return d.convval(self.storage[i])
-
         if _dtype.kind == 'b':
             def getitem(self, space, i):
                 return space.wrap(bool(self.storage[i]))
@@ -606,9 +608,10 @@ def make_class(_dtype):
             conv = _dtype.convval
             while i < stop:
                 #slice_driver1.jit_merge_point(signature=source.signature,
+                        #dtype=_dtype,
                         #step=step, stop=stop, i=i, j=j, source=source,
-                        #dest=dest)
-                self.storage[i] = conv(source.eval(j))
+                        #self=self)
+                self.storage[i] = _dtype.convval(source.eval(j))
                 j += 1
                 i += step
 
@@ -618,9 +621,10 @@ def make_class(_dtype):
             conv = _dtype.convval
             while i > stop:
                 #slice_driver2.jit_merge_point(signature=source.signature,
-                        #step=step, stop=stop, i=i, j=j, source=source,
-                        #dest=dest)
-                self.storage[i] = conv(source.eval(j))
+                #        dtype=_dtype,
+                #        step=step, stop=stop, i=i, j=j, source=source,
+                #        self=self)
+                self.storage[i] = _dtype.convval(source.eval(j))
                 j += 1
                 i += step
 
@@ -702,7 +706,7 @@ BaseArray.typedef = TypeDef(
     __setitem__ = interp2app(BaseArray.descr_setitem),
 
     #__pos__ = interp2app(BaseArray.descr_pos),
-    #__neg__ = interp2app(BaseArray.descr_neg),
+    __neg__ = interp2app(BaseArray.descr_neg),
     #__abs__ = interp2app(BaseArray.descr_abs),
     #__add__ = interp2app(BaseArray.descr_add),
     #__sub__ = interp2app(BaseArray.descr_sub),
