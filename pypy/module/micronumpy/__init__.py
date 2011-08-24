@@ -24,7 +24,7 @@ class Module(MixedModule):
         #'maximum': 'interp_ufuncs.maximum',
         #'minimum': 'interp_ufuncs.minimum',
         #'multiply': 'interp_ufuncs.multiply',
-        #'negative': 'interp_ufuncs.negative',
+        'negative': 'interp_ufuncs.negative',
         #'reciprocal': 'interp_ufuncs.reciprocal',
         #'sign': 'interp_ufuncs.sign',
         #'subtract': 'interp_ufuncs.subtract',
