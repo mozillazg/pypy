@@ -59,14 +59,14 @@ class BaseArray(Wrappable):
         return self
 
     descr_neg = _unaryop_impl(interp_ufuncs.negative)
-    descr_abs = _unaryop_impl(interp_ufuncs.absolute)
+    #descr_abs = _unaryop_impl(interp_ufuncs.absolute)
 
     def _binop_impl(w_ufunc):
         def impl(self, space, w_other):
             return w_ufunc(space, self, w_other)
         return func_with_new_name(impl, "binop_%s_impl" % w_ufunc.__name__)
 
-    descr_add = _binop_impl(interp_ufuncs.add)
+    #descr_add = _binop_impl(interp_ufuncs.add)
     #descr_sub = _binop_impl(interp_ufuncs.subtract)
     #descr_mul = _binop_impl(interp_ufuncs.multiply)
     #descr_div = _binop_impl(interp_ufuncs.divide)
@@ -273,7 +273,7 @@ class BaseArray(Wrappable):
             #        w_value = new_numarray(space, w_value, self.dtype)
             #else:
             w_value = convert_to_array(space, w_value)
-            concrete.setslice(space, start, stop, step, 
+            concrete.setslice(start, stop, step, 
                                                 slice_length, w_value)
 
     def descr_mean(self, space):
@@ -328,10 +328,8 @@ class VirtualArray(BaseArray):
     """
     Class for representing virtual arrays, such as binary ops or ufuncs
     """
-    def __init__(self, signature):
+    def __init__(self):
         BaseArray.__init__(self)
-        self.forced_result = None
-        self.signature = signature
 
     def _del_sources(self):
         # Function for deleting references to source arrays, to allow garbage-collecting them
@@ -352,38 +350,17 @@ class VirtualArray(BaseArray):
     #        i += 1
     #    return result
 
-    def force_if_needed(self):
-        if self.forced_result is None:
-            self.forced_result = self.compute()
-            self._del_sources()
-
-    def get_concrete(self):
-        self.force_if_needed()
-        return self.forced_result
-
-    def eval(self, i):
-        if self.forced_result is not None:
-            return self.forced_result.eval(i)
-        return self._eval(i)
-
-    def find_size(self):
-        if self.forced_result is not None:
-            # The result has been computed and sources may be unavailable
-            return self.forced_result.find_size()
-        return self._find_size()
-
-    def find_dtype(self):
-        return self.dtype
-
 def make_call1(_dtype):
     class Call1(VirtualArray):
         _immutable_fields_ = ["function", "values"]
 
         dtype = _dtype
         def __init__(self, function, values, signature):
-            VirtualArray.__init__(self, signature)
+            VirtualArray.__init__(self)
             self.function = function
             self.values = values
+            self.forced_result = None
+            self.signature = signature
 
         def _del_sources(self):
             self.values = None
@@ -393,16 +370,40 @@ def make_call1(_dtype):
             signature = self.signature
             result_size = self.find_size()
             result = create_sdarray(result_size, _dtype)
-            while i < result_size:
-                #numpy_driver.jit_merge_point(signature=signature,
-                #                             result_size=result_size, i=i,
-                #                             self=self, result=result)
-                result.setitem(i, self.eval(i))
-                i += 1
+            result.setslice(0, result_size, 1, result_size, self)
+            #while i < result_size:
+            #    #numpy_driver.jit_merge_point(signature=signature,
+            #    #                             result_size=result_size, i=i,
+            #    #                             self=self, result=result)
+            #    result.setitem(i, self.eval(i))
+            #    i += 1
             return result
 
         def _find_size(self):
             return self.values.find_size()
+
+        def force_if_needed(self):
+            if self.forced_result is None:
+                self.forced_result = self.compute()
+                self._del_sources()
+
+        def get_concrete(self):
+            self.force_if_needed()
+            return self.forced_result
+
+        def eval(self, i):
+            if self.forced_result is not None:
+                return self.forced_result.eval(i)
+            return self._eval(i)
+
+        def find_size(self):
+            if self.forced_result is not None:
+                # The result has been computed and sources may be unavailable
+                return self.forced_result.find_size()
+            return self._find_size()
+
+        def find_dtype(self):
+            return self.dtype
 
         def _eval(self, i):
             return self.function(_dtype.convval(self.values.eval(i)))
@@ -423,12 +424,14 @@ def make_call2(_dtype):
 
         dtype = _dtype
         def __init__(self, function, left, right, signature):
-            VirtualArray.__init__(self, signature)
+            VirtualArray.__init__(self)
             self.left = left
             self.right = right
             dtype1 = self.left.find_dtype()
             dtype2 = self.right.find_dtype()
             self.function = function
+            self.forced_result = None
+            self.signature = signature
             #if dtype1.num != _dtype.num:
             #    self.cast1 = _dtype.convval
             #else:
@@ -466,11 +469,37 @@ def make_call2(_dtype):
                 result.setitem(i, self.eval(i))
                 i += 1
             return result
+
         def _find_size(self):
             try:
                 return self.left.find_size()
             except:
                 return self.right.find_size()
+
+        def force_if_needed(self):
+            if self.forced_result is None:
+                self.forced_result = self.compute()
+                self._del_sources()
+
+        def get_concrete(self):
+            self.force_if_needed()
+            return self.forced_result
+
+        def eval(self, i):
+            if self.forced_result is not None:
+                return self.forced_result.eval(i)
+            return self._eval(i)
+
+        def find_size(self):
+            if self.forced_result is not None:
+                # The result has been computed and sources may be unavailable
+                return self.forced_result.find_size()
+            return self._find_size()
+
+        def find_dtype(self):
+            return self.dtype
+
+
 
         def _eval(self, i):
             lhs, rhs = _dtype.convval(self.left.eval(i)), _dtype.convval(self.right.eval(i))
@@ -550,12 +579,12 @@ class SingleDimSlice(ViewArray):
     def find_size(self):
         return self.size
 
-    def setslice(self, space, start, stop, step, slice_length, arr):
+    def setslice(self, start, stop, step, slice_length, arr):
         start = self.calc_index(start)
         if stop != -1:
             stop = self.calc_index(stop)
         step = self.step * step
-        self.parent.setslice(space, start, stop, step, slice_length, arr)
+        self.parent.setslice(start, stop, step, slice_length, arr)
 
     def calc_index(self, item):
         return (self.start + item * self.step)
@@ -653,7 +682,7 @@ def make_class(_dtype):
                 j += 1
                 i += step
 
-        def setslice(self, space, start, stop, step, slice_length, arr):
+        def setslice(self, start, stop, step, slice_length, arr):
             if step > 0:
                 self._sliceloop1(start, stop, step, arr)
             else:
@@ -732,8 +761,8 @@ BaseArray.typedef = TypeDef(
 
     __pos__ = interp2app(BaseArray.descr_pos),
     __neg__ = interp2app(BaseArray.descr_neg),
-    __abs__ = interp2app(BaseArray.descr_abs),
-    __add__ = interp2app(BaseArray.descr_add),
+    #__abs__ = interp2app(BaseArray.descr_abs),
+    #__add__ = interp2app(BaseArray.descr_add),
     #__sub__ = interp2app(BaseArray.descr_sub),
     #__mul__ = interp2app(BaseArray.descr_mul),
     #__div__ = interp2app(BaseArray.descr_div),

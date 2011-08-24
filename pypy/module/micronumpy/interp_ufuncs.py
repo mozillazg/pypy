@@ -19,31 +19,31 @@ def ufunc(func):
             return space.wrap(func(space.float_w(w_obj)))
     return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
 
-def ufunc2(func):
-    signature = Signature()
-    def impl(space, w_lhs, w_rhs):
-        from pypy.module.micronumpy.interp_numarray import pick_call2, convert_to_array
-        if space.issequence_w(w_lhs) or space.issequence_w(w_rhs):
-            w_lhs_arr = convert_to_array(space, w_lhs)
-            w_rhs_arr = convert_to_array(space, w_rhs)
-            new_sig = w_lhs_arr.signature.transition(signature).transition(w_rhs_arr.signature)
-            w_res = pick_call2(w_lhs_arr.dtype, w_rhs_arr.dtype)(func, w_lhs_arr, w_rhs_arr, new_sig)
-            w_lhs_arr.invalidates.append(w_res)
-            w_rhs_arr.invalidates.append(w_res)
-            return w_res
-        else:
-            return space.wrap(func(space.float_w(w_lhs), space.float_w(w_rhs)))
-    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
+#def ufunc2(func):
+#    signature = Signature()
+#    def impl(space, w_lhs, w_rhs):
+#        from pypy.module.micronumpy.interp_numarray import pick_call2, convert_to_array
+#        if space.issequence_w(w_lhs) or space.issequence_w(w_rhs):
+#            w_lhs_arr = convert_to_array(space, w_lhs)
+#            w_rhs_arr = convert_to_array(space, w_rhs)
+#            new_sig = w_lhs_arr.signature.transition(signature).transition(w_rhs_arr.signature)
+#            w_res = pick_call2(w_lhs_arr.dtype, w_rhs_arr.dtype)(func, w_lhs_arr, w_rhs_arr, new_sig)
+#            w_lhs_arr.invalidates.append(w_res)
+#            w_rhs_arr.invalidates.append(w_res)
+#            return w_res
+#        else:
+#            return space.wrap(func(space.float_w(w_lhs), space.float_w(w_rhs)))
+#    return func_with_new_name(impl, "%s_dispatcher" % func.__name__)
 
-@ufunc
-@specialize.argtype(0)
-def absolute(value):
-    return abs(value)
+#@ufunc
+#@specialize.argtype(1)
+#def absolute(value):
+#    return abs(value)
 
-@ufunc2
-@specialize.argtype(0,1)
-def add(lvalue, rvalue):
-    return lvalue + rvalue
+#@specialize.argtype(1,2)
+#@ufunc2
+#def add(lvalue, rvalue):
+#    return lvalue + rvalue
 
 #@ufunc2
 #def copysign(lvalue, rvalue):
