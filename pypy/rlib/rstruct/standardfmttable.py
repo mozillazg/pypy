@@ -198,7 +198,7 @@ def make_int_unpacker(size, signed, _memo={}):
     @specialize.argtype(0)
     def unpack_int(fmtiter):
         intvalue = inttype(0)
-        s = fmtiter.input
+        s = fmtiter.get_input()
         idx = fmtiter.get_pos_and_advance(size)
         if fmtiter.bigendian:
             for i in unroll_range_size:

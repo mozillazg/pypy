@@ -23,6 +23,13 @@ class MasterReader(object):
         self.inputpos = end
         return s
 
+    def get_pos_and_advance(self, count):
+        pos = self.inputpos
+        self.inputpos += count
+        if self.inputpos > len(self.input):
+            raise StructError("unpack str size too short for format")
+        return pos
+
     def align(self, mask):
         self.inputpos = (self.inputpos + mask) & ~mask
 
@@ -38,6 +45,12 @@ def reader_for_pos(pos):
         def read(self, count):
             return self.mr.read(count)
 
+        def get_input(self):
+            return self.mr.input
+
+        def get_pos_and_advance(self, count):
+            return self.mr.get_pos_and_advance(count)
+
         def appendobj(self, value):
             self.value = value
     ReaderForPos.__name__ = 'ReaderForPos%d' % pos
@@ -47,7 +60,7 @@ class FrozenUnpackIterator(FormatIterator):
     def __init__(self, fmt):
         self.formats = []
         self.fmt = fmt
-    
+
     def operate(self, fmtdesc, repetitions):
         if fmtdesc.needcount:
             self.formats.append((fmtdesc, repetitions, None))
@@ -111,5 +124,3 @@ def runpack(fmt, input):
     unpacker = create_unpacker(fmt)
     return unpacker.unpack(input)
 runpack._annspecialcase_ = 'specialize:arg(0)'
-
-    
