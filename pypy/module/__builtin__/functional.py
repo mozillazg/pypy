@@ -366,12 +366,11 @@ empty, returns start."""
                     raise
                 return space.wrap(result_f)
             if space.isinstance_w(w_item, space.w_float):
-                num_f = space.float_w(w_item)
-                result_f += space.w_float(w_item)
+                result_f += space.float_w(w_item)
                 continue
             if space.isinstance_w(w_item, space.w_int):
-                num_f = float(space.w_int(w_item))
-                result_f += space.w_float(w_item)
+                num_f = float(space.int_w(w_item))
+                result_f += num_f
                 continue
         w_last = space.wrap(result_f)
         w_last = space.add(w_last, w_item)
