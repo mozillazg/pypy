@@ -8,7 +8,7 @@ from pypy.interpreter.gateway import NoneNotWrapped
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.rlib.rarithmetic import r_uint, intmask
+from pypy.rlib.rarithmetic import ovfcheck, r_uint, intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rbigint import rbigint
 
@@ -336,6 +336,46 @@ empty, returns start."""
         raise OperationError(space.w_TypeError, space.wrap(msg))
     w_iter = space.iter(w_sequence)
     w_last = w_start
+    if space.isinstance_w(w_start, space.w_int):
+        result_i = space.int_w(w_start)
+        while True:
+            try:
+                w_item = space.next(w_iter)
+            except OperationError, e:
+                if not e.match(space, space.w_StopIteration):
+                    raise
+                return space.wrap(result_i)
+            if space.isinstance_w(w_item, space.w_int):
+                num = space.int_w(w_item)
+                try:
+                    x = ovfcheck(result_i + num)
+                except OverflowError, e:
+                    pass
+                else:
+                    result_i = x
+                    continue
+            w_last = space.wrap(result_i)
+            w_last = space.add(w_last, w_item)
+    elif space.isinstance_w(w_start, space.w_float):
+        result_f = space.float_w(w_start)
+        while True:
+            try:
+                w_item = space.next(w_iter)
+            except OperationError, e:
+                if not e.match(space, space.w_StopIteration):
+                    raise
+                return space.wrap(result_f)
+            if space.isinstance_w(w_item, space.w_float):
+                num_f = space.float_w(w_item)
+                result_f += space.w_float(w_item)
+                continue
+            if space.isinstance_w(w_item, space.w_int):
+                num_f = float(space.w_int(w_item))
+                result_f += space.w_float(w_item)
+                continue
+        w_last = space.wrap(result_f)
+        w_last = space.add(w_last, w_item)
+
     while True:
         try:
             w_next = space.next(w_iter)
