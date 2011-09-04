@@ -15,18 +15,20 @@ from pypy.rpython.tool import rffi_platform
 
 # For now, only for x86-64.  Tries to use the register r15.
 eci = ExternalCompilationInfo(
-    post_include_bits=[
-        'register void *pypy_r15 asm("r15");\n'
-        '#define PYPY_GET_SPECIAL_REG() pypy_r15\n'
-        '#define PYPY_SPECIAL_REG_NONNULL() (pypy_r15 != NULL)\n'
-        '#define PYPY_SET_SPECIAL_REG(x) (pypy_r15 = x)\n'
-        ],
+    post_include_bits=["""
+register long pypy_r15 asm("r15");
+#define PYPY_GET_SPECIAL_REG() ((void *)(pypy_r15 & ~1))
+#define PYPY_SET_SPECIAL_REG(x) (pypy_r15 = (long)(x) | (pypy_r15 & 1))
+#define PYPY_INCR_SPECIAL_REG(d) (pypy_r15 += (d))
+#define PYPY_SPECIAL_REG_GETEXC() (pypy_r15 & 1)
+#define PYPY_SPECIAL_REG_SETEXC(x) (pypy_r15 = (x) ? pypy_r15|1 : pypy_r15&~1)
+"""],
     )
 
 _test_eci = eci.merge(ExternalCompilationInfo(
     post_include_bits=["""
             void f(void) {
-                pypy_r15 = &f;
+                pypy_r15 = 12345;
             }
     """]))
 
@@ -45,30 +47,33 @@ else:
     # the behavior is emulated.
 
     _value_reg = None
+    _exc_marker = False
 
     def _pypy_get_special_reg():
         assert _value_reg is not None
         return _value_reg
 
-    def _pypy_special_reg_nonnull():
-        assert _value_reg is not None
-        return bool(_value_reg)
-
     def _pypy_set_special_reg(addr):
         global _value_reg
         _value_reg = addr
+
+    def _pypy_incr_special_reg(delta):
+        global _value_reg
+        assert _value_reg is not None
+        _value_reg += delta
+
+    def _pypy_special_reg_getexc():
+        return _exc_marker
+
+    def _pypy_special_reg_setexc(flag):
+        global _value_reg
+        _exc_marker = flag
 
     load_from_reg = rffi.llexternal('PYPY_GET_SPECIAL_REG', [],
                                     llmemory.Address,
                                     _callable=_pypy_get_special_reg,
                                     compilation_info=eci,
                                     _nowrapper=True)
-
-    reg_is_nonnull = rffi.llexternal('PYPY_SPECIAL_REG_NONNULL', [],
-                                     lltype.Bool,
-                                     _callable=_pypy_special_reg_nonnull,
-                                     compilation_info=eci,
-                                     _nowrapper=True)
 
     store_into_reg = rffi.llexternal('PYPY_SET_SPECIAL_REG',
                                      [llmemory.Address],
@@ -77,5 +82,21 @@ else:
                                      compilation_info=eci,
                                      _nowrapper=True)
 
-    # xxx temporary
-    nonnull = llmemory.cast_int_to_adr(-1)
+    incr_reg = rffi.llexternal('PYPY_INCR_SPECIAL_REG',
+                               [lltype.Signed],
+                               lltype.Void,
+                               _callable=_pypy_set_special_reg,
+                               compilation_info=eci,
+                               _nowrapper=True)
+
+    get_exception = rffi.llexternal('PYPY_SPECIAL_REG_GETEXC', [],
+                                    lltype.Bool,
+                                    _callable=_pypy_special_reg_getexc,
+                                    compilation_info=eci,
+                                    _nowrapper=True)
+
+    set_exception = rffi.llexternal('PYPY_SPECIAL_REG_SETEXC', [lltype.Bool],
+                                    lltype.Void,
+                                    _callable=_pypy_special_reg_setexc,
+                                    compilation_info=eci,
+                                    _nowrapper=True)

@@ -77,15 +77,12 @@ class BaseExceptionTransformer(object):
         use_special_reg = standalone and register.register_number is not None
         self.use_special_reg = use_special_reg
         if use_special_reg:
-            self.c_nonnull_specialregister = constant_value(register.nonnull)
-            self.c_load_from_reg = constant_value(register.load_from_reg)
-            self.c_reg_is_nonnull = constant_value(register.reg_is_nonnull)
-            self.c_store_into_reg = constant_value(register.store_into_reg)
+            self.c_get_exception = constant_value(register.get_exception)
+            self.c_set_exception = constant_value(register.set_exception)
 
         def rpyexc_occured():
             if use_special_reg:
-                # an exception occurred iff the special register is 0
-                return register.load_from_reg() == llmemory.NULL
+                return register.get_exception()
             else:
                 exc_type = exc_data.exc_type
                 return bool(exc_type)
@@ -98,7 +95,7 @@ class BaseExceptionTransformer(object):
 
         def rpyexc_clear():
             if use_special_reg:
-                register.store_into_reg(register.nonnull)
+                register.set_exception(False)
             exc_data.exc_type = null_type
             exc_data.exc_value = null_value
 
@@ -116,14 +113,14 @@ class BaseExceptionTransformer(object):
             exc_data.exc_value = evalue
             lloperation.llop.debug_start_traceback(lltype.Void, etype)
             if use_special_reg:
-                register.store_into_reg(llmemory.NULL)
+                register.set_exception(True)
 
         def rpyexc_reraise(etype, evalue):
             exc_data.exc_type = etype
             exc_data.exc_value = evalue
             lloperation.llop.debug_reraise_traceback(lltype.Void, etype)
             if use_special_reg:
-                register.store_into_reg(llmemory.NULL)
+                register.set_exception(True)
 
         def rpyexc_fetch_exception():
             evalue = rpyexc_fetch_value()
@@ -135,7 +132,7 @@ class BaseExceptionTransformer(object):
                 exc_data.exc_type = rclass.ll_inst_type(evalue)
                 exc_data.exc_value = evalue
                 if use_special_reg:
-                    register.store_into_reg(llmemory.NULL)
+                    register.set_exception(True)
 
         def rpyexc_raise_stack_overflow():
             rpyexc_raise(stackovf_ll_exc_type, stackovf_ll_exc)
@@ -432,7 +429,7 @@ class BaseExceptionTransformer(object):
         self.gen_setfield('exc_value', self.c_null_evalue, llops)
         self.gen_setfield('exc_type',  self.c_null_etype,  llops)
         if self.use_special_reg:
-            self.gen_setspecialregister(self.c_nonnull_specialregister, llops)
+            self.gen_setexception(False, llops)
         excblock.operations[:] = llops
         newgraph.exceptblock.inputargs[0].concretetype = self.lltype_of_exception_type
         newgraph.exceptblock.inputargs[1].concretetype = self.lltype_of_exception_value
@@ -553,16 +550,14 @@ class LLTypeExceptionTransformer(BaseExceptionTransformer):
     def gen_nonnull(self, v, llops):
         return llops.genop('ptr_nonzero', [v], lltype.Bool)
 
-    def gen_getspecialregister(self, llops):
-        return llops.genop('direct_call', [self.c_load_from_reg],
-                           resulttype = llmemory.Address)
-
     def gen_specialreg_no_exc(self, llops):
-        return llops.genop('direct_call', [self.c_reg_is_nonnull],
-                           resulttype = lltype.Bool)
+        v = llops.genop('direct_call', [self.c_get_exception],
+                        resulttype = lltype.Bool)
+        return llops.genop('bool_not', [v], resulttype=lltype.Bool)
 
-    def gen_setspecialregister(self, v, llops):
-        llops.genop('direct_call', [self.c_store_into_reg, v])
+    def gen_setexception(self, flag, llops):
+        v = inputconst(lltype.Bool, flag)
+        llops.genop('direct_call', [self.c_set_exception, v])
 
     def same_obj(self, ptr1, ptr2):
         return ptr1._same_obj(ptr2)
