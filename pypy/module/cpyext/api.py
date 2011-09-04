@@ -498,12 +498,13 @@ def make_wrapper(space, callable):
 
     @specialize.ll()
     def wrapper(*args):
+        from pypy.rpython.lltypesystem import llmemory
         from pypy.module.cpyext.pyobject import make_ref, from_ref
         from pypy.module.cpyext.pyobject import Reference
         # we hope that malloc removal removes the newtuple() that is
         # inserted exactly here by the varargs specializer
-        llop.gc_stack_bottom(lltype.Void)   # marker for trackgcroot.py
         rffi.stackcounter.stacks_counter += 1
+        saved = llop.gc_stack_bottom(llmemory.Address)   # for trackgcroot.py
         retval = fatal_value
         boxed_args = ()
         try:
@@ -572,6 +573,7 @@ def make_wrapper(space, callable):
             else:
                 print str(e)
                 pypy_debug_catch_fatal_exception()
+        llop.gc_stack_bottom_stop(lltype.Void, saved)
         rffi.stackcounter.stacks_counter -= 1
         return retval
     callable._always_inline_ = True

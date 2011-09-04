@@ -503,6 +503,7 @@ LL_OPERATIONS = {
     # see translator/c/src/mem.h for the valid indices
     'gc_asmgcroot_static':  LLOp(sideeffects=False),
     'gc_stack_bottom':      LLOp(canrun=True),
+    'gc_stack_bottom_stop': LLOp(canrun=True),
 
     # NOTE NOTE NOTE! don't forget *** canunwindgc=True *** for anything that
     # can go through a stack unwind, in particular anything that mallocs!
