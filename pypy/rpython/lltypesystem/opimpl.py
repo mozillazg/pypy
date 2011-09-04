@@ -527,7 +527,10 @@ def op_have_debug_prints():
     return debug.have_debug_prints()
 
 def op_gc_stack_bottom():
-    pass       # marker for trackgcroot.py
+    return llmemory.NULL       # marker for trackgcroot.py
+
+def op_gc_stack_bottom_stop(saved):
+    pass                       # for rlib/register.py
 
 def op_jit_force_virtualizable(*args):
     pass

@@ -5,7 +5,7 @@ from pypy.rpython.llinterp import LLInterpreter
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp import history, compile
 from pypy.jit.backend.x86.assembler import Assembler386
-from pypy.jit.backend.x86.arch import FORCE_INDEX_OFS
+from pypy.jit.backend.x86.arch import FORCE_INDEX_OFS, special_register
 from pypy.jit.backend.x86.profagent import ProfileAgent
 from pypy.jit.backend.llsupport.llmodel import AbstractLLCPU
 from pypy.jit.backend.x86 import regloc
@@ -205,7 +205,9 @@ class CPU_X86_64(AbstractX86CPU):
     backend_name = 'x86_64'
     WORD = 8
     NUM_REGS = 16
-    CALLEE_SAVE_REGISTERS = [regloc.ebx, regloc.r12, regloc.r13, regloc.r14, regloc.r15]
+    CALLEE_SAVE_REGISTERS = [regloc.ebx, regloc.r12, regloc.r13, regloc.r14]
+    if special_register is None:
+        CALLEE_SAVE_REGISTERS.append(regloc.r15)
 
     def __init__(self, *args, **kwargs):
         assert sys.maxint == (2**63 - 1)
