@@ -229,11 +229,6 @@ class FrameworkGCTransformer(GCTransformer):
 
         def getfn(ll_function, args_s, s_result, inline=False,
                   minimal_transform=True):
-            if isinstance(ll_function, lltype._ptr):
-                # assume that args_s and s_result match
-                from pypy.objspace.flow.model import Constant
-                return Constant(ll_function, lltype.typeOf(ll_function))
-            #
             graph = annhelper.getgraph(ll_function, args_s, s_result)
             if minimal_transform:
                 self.need_minimal_transform(graph)
@@ -246,23 +241,7 @@ class FrameworkGCTransformer(GCTransformer):
         # for tests
         self.frameworkgc__teardown_ptr = getfn(frameworkgc__teardown, [],
                                                annmodel.s_None)
-        
-        if root_walker.need_root_stack:
-            self.get_stack_top_ptr = getfn(root_walker.get_stack_top,
-                                           [], annmodel.SomeAddress(),
-                                           inline = True)
-            self.set_stack_top_ptr = getfn(root_walker.set_stack_top,
-                                           [annmodel.SomeAddress()],
-                                           annmodel.s_None,
-                                           inline = True)
-            self.incr_stack_top_ptr = getfn(root_walker.incr_stack_top,
-                                            [annmodel.SomeInteger()],
-                                            annmodel.s_None,
-                                            inline = True)
-        else:
-            self.get_stack_top_ptr = None
-            self.set_stack_top_ptr = None
-            self.incr_stack_top_ptr = None
+
         self.weakref_deref_ptr = self.inittime_helper(
             ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
         
@@ -1196,7 +1175,7 @@ class FrameworkGCTransformer(GCTransformer):
         return livevars
 
     def push_roots(self, hop, keep_current_args=False):
-        if self.get_stack_top_ptr is None:
+        if not self.root_walker.need_root_stack:
             return
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         if livevars:
@@ -1205,7 +1184,7 @@ class FrameworkGCTransformer(GCTransformer):
         return livevars
 
     def pop_roots(self, hop, livevars):
-        if self.get_stack_top_ptr is None:
+        if not self.root_walker.need_root_stack:
             return
         if livevars:
             hop.genop("gc_pop_roots", livevars)

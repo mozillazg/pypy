@@ -24,9 +24,17 @@ class ShadowStackRootWalker(BaseRootWalker):
         gcdata = self.gcdata
 
         if register.register_number is not None:
-            self.get_stack_top = register.load_from_reg
-            self.set_stack_top = register.store_into_reg
-            self.incr_stack_top = register.incr_reg
+            self.get_stack_top_nomark = register.load_from_reg_nomark
+            self.get_stack_top = register.load_from_reg_mark
+            self.set_stack_top = register.store_into_reg_nomark
+            self.incr_stack_top = register.incr_reg_mark
+            for name in ['get_stack_top_nomark',
+                         'get_stack_top',
+                         'set_stack_top',
+                         'incr_stack_top']:
+                fptr = getattr(self, name)
+                c = Constant(fptr, lltype.typeOf(fptr))
+                setattr(self, name + '_ptr', c)
         else:
             def get_stack_top():
                 return gcdata.root_stack_top
@@ -37,6 +45,19 @@ class ShadowStackRootWalker(BaseRootWalker):
             def incr_stack_top(delta):
                 gcdata.root_stack_top += delta
             self.incr_stack_top = incr_stack_top
+
+            self.get_stack_top_ptr = getfn(root_walker.get_stack_top,
+                                           [], annmodel.SomeAddress(),
+                                           inline = True)
+            self.set_stack_top_ptr = getfn(root_walker.set_stack_top,
+                                           [annmodel.SomeAddress()],
+                                           annmodel.s_None,
+                                           inline = True)
+            self.incr_stack_top_ptr = getfn(root_walker.incr_stack_top,
+                                            [annmodel.SomeInteger()],
+                                            annmodel.s_None,
+                                            inline = True)
+            self.get_stack_top_nomark_ptr = self.get_stack_top_ptr
 
         self.rootstackhook = gctransformer.root_stack_jit_hook
         if self.rootstackhook is None:
@@ -306,7 +327,7 @@ class ShadowStackRootWalker(BaseRootWalker):
                                                       c_k, v])
                     else:
                         v_topaddr = llops.genop("direct_call",
-                                                [gct.get_stack_top_ptr],
+                                                [self.get_stack_top_ptr],
                                                 resulttype=llmemory.Address)
                         v_newaddr = llops.genop("raw_load",
                                                 [v_topaddr, c_type, c_k],
@@ -409,7 +430,7 @@ class ShadowStackRootWalker(BaseRootWalker):
             if "stop" in blockstate[block]:     # "stop" or "startstop"
                 llops = LowLevelOpList()
                 i = blocks_pop_roots[block]
-                llops.genop("direct_call", [gct.incr_stack_top_ptr,
+                llops.genop("direct_call", [self.incr_stack_top_ptr,
                                             c_minusframesize])
                 block.operations[i:i] = llops
                 # ^^^ important: done first, in case it's a startstop block,
@@ -418,11 +439,12 @@ class ShadowStackRootWalker(BaseRootWalker):
             if "start" in blockstate[block]:    # "start" or "startstop"
                 llops = LowLevelOpList()
                 v_topaddr = get_v_topaddr(block)
-                v_baseaddr = llops.genop("direct_call",[gct.get_stack_top_ptr],
+                v_baseaddr = llops.genop("direct_call",
+                                         [self.get_stack_top_nomark_ptr],
                                          resulttype=llmemory.Address)
                 llops.genop("adr_add", [v_baseaddr, c_framesize])
                 llops[-1].result = v_topaddr
-                llops.genop("direct_call", [gct.set_stack_top_ptr, v_topaddr])
+                llops.genop("direct_call", [self.set_stack_top_ptr, v_topaddr])
                 c_null = rmodel.inputconst(llmemory.Address, llmemory.NULL)
                 for k in range(numcolors):
                     c_k = rmodel.inputconst(lltype.Signed, ~k)
@@ -434,7 +456,7 @@ class ShadowStackRootWalker(BaseRootWalker):
                     # we need to get the current stack top for this block
                     i, topaddr_v = topaddrs_v[block]
                     llops = LowLevelOpList()
-                    llops.genop("direct_call", [gct.get_stack_top_ptr])
+                    llops.genop("direct_call", [self.get_stack_top_nomark_ptr])
                     llops[-1].result = topaddr_v
                     block.operations[i:i] = llops
         #

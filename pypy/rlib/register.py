@@ -17,9 +17,10 @@ from pypy.rpython.tool import rffi_platform
 eci = ExternalCompilationInfo(
     post_include_bits=["""
 register long pypy_r15 asm("r15");
-#define PYPY_GET_SPECIAL_REG() ((void *)(pypy_r15 & ~1))
-#define PYPY_SET_SPECIAL_REG(x) (pypy_r15 = (long)(x) | (pypy_r15 & 1))
-#define PYPY_INCR_SPECIAL_REG(d) (pypy_r15 += (d))
+#define PYPY_GET_SPECIAL_REG_NOMARK() ((void *)pypy_r15)
+#define PYPY_SET_SPECIAL_REG_NOMARK(x) (pypy_r15 = (long)(x))
+#define PYPY_GET_SPECIAL_REG_MARK() ((void *)(pypy_r15 & ~1))
+#define PYPY_INCR_SPECIAL_REG_MARK(d) (pypy_r15 += (d))
 #define PYPY_SPECIAL_REG_GETEXC() (pypy_r15 & 1)
 #define PYPY_SPECIAL_REG_SETEXC(x) (pypy_r15 = (x) ? pypy_r15|1 : pypy_r15&~1)
 """],
@@ -49,15 +50,25 @@ else:
     _value_reg = None
     _exc_marker = False
 
-    def _pypy_get_special_reg():
+    def _pypy_get_special_reg_nomark():
+        # this must not be called if _exc_marker is set
+        assert _value_reg is not None
+        assert not _exc_marker
+        return _value_reg
+
+    def _pypy_set_special_reg_nomark(addr):
+        # this must not be called if _exc_marker is set
+        global _value_reg
+        assert not _exc_marker
+        _value_reg = addr
+
+    def _pypy_get_special_reg_mark():
+        # this can be called if _exc_marker is set
         assert _value_reg is not None
         return _value_reg
 
-    def _pypy_set_special_reg(addr):
-        global _value_reg
-        _value_reg = addr
-
-    def _pypy_incr_special_reg(delta):
+    def _pypy_incr_special_reg_mark(delta):
+        # this can be called if _exc_marker is set
         global _value_reg
         assert _value_reg is not None
         _value_reg += delta
@@ -69,25 +80,31 @@ else:
         global _value_reg
         _exc_marker = flag
 
-    load_from_reg = rffi.llexternal('PYPY_GET_SPECIAL_REG', [],
-                                    llmemory.Address,
-                                    _callable=_pypy_get_special_reg,
+    load_from_reg_nomark = rffi.llexternal('PYPY_GET_SPECIAL_REG_NOMARK', [],
+                                           llmemory.Address,
+                                        _callable=_pypy_get_special_reg_nomark,
+                                           compilation_info=eci,
+                                           _nowrapper=True)
+
+    store_into_reg_nomark = rffi.llexternal('PYPY_SET_SPECIAL_REG_NOMARK',
+                                            [llmemory.Address],
+                                            lltype.Void,
+                                        _callable=_pypy_set_special_reg_nomark,
+                                            compilation_info=eci,
+                                            _nowrapper=True)
+
+    load_from_reg_mark = rffi.llexternal('PYPY_GET_SPECIAL_REG_MARK', [],
+                                         llmemory.Address,
+                                         _callable=_pypy_get_special_reg_mark,
+                                         compilation_info=eci,
+                                         _nowrapper=True)
+
+    incr_reg_mark = rffi.llexternal('PYPY_INCR_SPECIAL_REG_MARK',
+                                    [lltype.Signed],
+                                    lltype.Void,
+                                    _callable=_pypy_incr_special_reg_mark,
                                     compilation_info=eci,
                                     _nowrapper=True)
-
-    store_into_reg = rffi.llexternal('PYPY_SET_SPECIAL_REG',
-                                     [llmemory.Address],
-                                     lltype.Void,
-                                     _callable=_pypy_set_special_reg,
-                                     compilation_info=eci,
-                                     _nowrapper=True)
-
-    incr_reg = rffi.llexternal('PYPY_INCR_SPECIAL_REG',
-                               [lltype.Signed],
-                               lltype.Void,
-                               _callable=_pypy_set_special_reg,
-                               compilation_info=eci,
-                               _nowrapper=True)
 
     get_exception = rffi.llexternal('PYPY_SPECIAL_REG_GETEXC', [],
                                     lltype.Bool,
