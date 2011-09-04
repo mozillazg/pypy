@@ -2,6 +2,7 @@ from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.memory.gctransform.framework import BaseRootWalker
 from pypy.rpython.memory.gctransform.framework import sizeofaddr
 from pypy.rpython import rmodel
+from pypy.rlib import register
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.tool.algo.regalloc import perform_register_allocation
@@ -22,13 +23,20 @@ class ShadowStackRootWalker(BaseRootWalker):
         # NB. 'self' is frozen, but we can use self.gcdata to store state
         gcdata = self.gcdata
 
-        def get_stack_top():
-            return gcdata.root_stack_top
-        self.get_stack_top = get_stack_top
-
-        def set_stack_top(addr):
-            gcdata.root_stack_top = addr
-        self.set_stack_top = set_stack_top
+        if register.register_number is not None:
+            self.get_stack_top = register.load_from_reg
+            self.set_stack_top = register.store_into_reg
+            self.incr_stack_top = register.incr_reg
+        else:
+            def get_stack_top():
+                return gcdata.root_stack_top
+            self.get_stack_top = get_stack_top
+            def set_stack_top(addr):
+                gcdata.root_stack_top = addr
+            self.set_stack_top = set_stack_top
+            def incr_stack_top(delta):
+                gcdata.root_stack_top += delta
+            self.incr_stack_top = incr_stack_top
 
         self.rootstackhook = gctransformer.root_stack_jit_hook
         if self.rootstackhook is None:
@@ -40,12 +48,12 @@ class ShadowStackRootWalker(BaseRootWalker):
 
     def push_stack(self, addr):
         top = self.get_stack_top()
+        self.incr_stack_top(sizeofaddr)
         top.address[0] = addr
-        self.set_stack_top(top + sizeofaddr)
 
     def pop_stack(self):
         top = self.get_stack_top() - sizeofaddr
-        self.set_stack_top(top)
+        self.incr_stack_top(-sizeofaddr)
         return top.address[0]
 
     def allocate_stack(self):
@@ -54,7 +62,7 @@ class ShadowStackRootWalker(BaseRootWalker):
     def setup_root_walker(self):
         stackbase = self.allocate_stack()
         ll_assert(bool(stackbase), "could not allocate root stack")
-        self.gcdata.root_stack_top  = stackbase
+        self.set_stack_top(stackbase)
         self.gcdata.root_stack_base = stackbase
         BaseRootWalker.setup_root_walker(self)
 
@@ -63,7 +71,7 @@ class ShadowStackRootWalker(BaseRootWalker):
         gc = self.gc
         rootstackhook = self.rootstackhook
         addr = gcdata.root_stack_base
-        end = gcdata.root_stack_top
+        end = self.get_stack_top()
         while addr != end:
             addr += rootstackhook(collect_stack_root, gc, addr)
         if self.collect_stacks_from_other_threads is not None:
@@ -307,7 +315,9 @@ class ShadowStackRootWalker(BaseRootWalker):
                         blocks_pop_roots[block] = len(llops)
             block.operations[:] = llops
         numcolors = -negnumcolors
-        c_framesize = rmodel.inputconst(lltype.Signed, numcolors * sizeofaddr)
+        framesize = numcolors * sizeofaddr
+        c_framesize = rmodel.inputconst(lltype.Signed, framesize)
+        c_minusframesize = rmodel.inputconst(lltype.Signed, -framesize)
         #
         # For each block, determine in which category it is:
         #
@@ -399,10 +409,8 @@ class ShadowStackRootWalker(BaseRootWalker):
             if "stop" in blockstate[block]:     # "stop" or "startstop"
                 llops = LowLevelOpList()
                 i = blocks_pop_roots[block]
-                v_topaddr = get_v_topaddr(block, firstuse=i)
-                v_baseaddr = llops.genop("adr_sub", [v_topaddr, c_framesize],
-                                         resulttype=llmemory.Address)
-                llops.genop("direct_call", [gct.set_stack_top_ptr, v_baseaddr])
+                llops.genop("direct_call", [gct.incr_stack_top_ptr,
+                                            c_minusframesize])
                 block.operations[i:i] = llops
                 # ^^^ important: done first, in case it's a startstop block,
                 #     otherwise the index in 'blocks_push_roots[block]' is

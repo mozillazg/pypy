@@ -87,7 +87,7 @@ static __declspec(noinline) void pypy_asm_stack_bottom() { }
 #ifdef PYPY_GET_SPECIAL_REG      /* pypy/rlib/register.py */
 #  define OP_GC_STACK_BOTTOM(r)        pypy_asm_stack_bottom();        \
                                        r = PYPY_GET_SPECIAL_REG();     \
-                                       PYPY_SET_SPECIAL_REG((void*)-1)
+                                       PYPY_SPECIAL_REG_SETEXC(0)
 #  define OP_GC_STACK_BOTTOM_STOP(v,r) PYPY_SET_SPECIAL_REG(v)
 #else
 #  define OP_GC_STACK_BOTTOM(r)         pypy_asm_stack_bottom()
