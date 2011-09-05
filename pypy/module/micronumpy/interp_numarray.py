@@ -217,7 +217,6 @@ class BaseArray(Wrappable):
         return space.wrap("[" + " ".join(concrete._getnums(True)) + "]")
 
     def descr_getitem(self, space, w_idx):
-        # TODO: indexing by arrays and lists
         if space.isinstance_w(w_idx, space.w_tuple):
             length = space.len_w(w_idx)
             if length == 0:
@@ -226,6 +225,24 @@ class BaseArray(Wrappable):
                 raise OperationError(space.w_IndexError,
                                      space.wrap("invalid index"))
             w_idx = space.getitem(w_idx, space.wrap(0))
+        elif space.issequence_w(w_idx):
+            w_idx = convert_to_array(space, w_idx)
+            bool_dtype = space.fromcache(interp_dtype.W_BoolDtype)
+            int_dtype = space.fromcache(interp_dtype.W_Int64Dtype)
+            if w_idx.find_dtype() is bool_dtype:
+                # TODO: indexing by bool array
+                raise NotImplementedError("sorry, not yet implemented")
+            else:
+                # Indexing by array
+
+                # FIXME: should raise exception if any index in
+                # array is out od bound, but this kills lazy execution
+                new_sig = signature.Signature.find_sig([
+                    IndexedByArray.signature, self.signature
+                ])                
+                res = IndexedByArray(new_sig, int_dtype, self, w_idx)
+                return space.wrap(res)
+
         start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
         if step == 0:
             # Single index
@@ -429,6 +446,29 @@ class Call2(VirtualArray):
         call_sig = sig.components[0]
         assert isinstance(call_sig, signature.Call2)
         return call_sig.func(self.res_dtype, lhs, rhs)
+
+class IndexedByArray(VirtualArray):
+    """
+    Intermediate class for performing indexing of array by another array
+    """
+    signature = signature.BaseSignature()
+    def __init__(self, signature, int_dtype, source, index):
+        VirtualArray.__init__(self, signature, source.find_dtype())
+        self.source = source
+        self.index = index
+        self.int_dtype = int_dtype
+
+    def _del_sources(self):
+        self.source = None
+        self.index = None
+
+    def _find_size(self):
+        return self.index.find_size()
+
+    def _eval(self, i):
+        idx = self.int_dtype.unbox(self.index.eval(i).convert_to(self.int_dtype))
+        val = self.source.eval(idx).convert_to(self.res_dtype)
+        return val
 
 class ViewArray(BaseArray):
     """
