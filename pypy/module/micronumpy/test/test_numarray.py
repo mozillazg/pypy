@@ -119,6 +119,20 @@ class AppTestNumArray(BaseNumpyAppTest):
         for i in xrange(5):
             assert a[i] == b[i]
 
+    def test_index_by_array(self):
+        from numpy import array
+        a = array(range(5))
+        idx_list = [3, 1, 3, 2, 0, 4]
+        idx_arr = array(idx_list)
+        a_by_arr = a[idx_arr]
+        assert len(a_by_arr) == 6
+        for i in xrange(6):
+            assert a_by_arr[i] == range(5)[idx_list[i]]
+        a_by_list = a[idx_list]
+        assert len(a_by_list) == 6
+        for i in xrange(6):
+            assert a_by_list[i] == range(5)[idx_list[i]]
+
     def test_setitem(self):
         from numpy import array
         a = array(range(5))

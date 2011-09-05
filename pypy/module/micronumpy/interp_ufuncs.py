@@ -200,7 +200,7 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
     int64_dtype = space.fromcache(interp_dtype.W_Int64Dtype)
 
     if space.is_w(w_type, space.w_bool):
-        if current_guess is None:
+        if current_guess is None or current_guess is bool_dtype:
             return bool_dtype
     elif space.is_w(w_type, space.w_int):
         if (current_guess is None or current_guess is bool_dtype or
