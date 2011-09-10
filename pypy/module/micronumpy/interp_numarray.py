@@ -230,8 +230,12 @@ class BaseArray(Wrappable):
             bool_dtype = space.fromcache(interp_dtype.W_BoolDtype)
             int_dtype = space.fromcache(interp_dtype.W_Int64Dtype)
             if w_idx.find_dtype() is bool_dtype:
-                # TODO: indexing by bool array
-                raise NotImplementedError("sorry, not yet implemented")
+                # Indexing by boolean array
+                new_sig = signature.Signature.find_sig([
+                    IndexedByBoolArray.signature, self.signature
+                ])                
+                res = IndexedByBoolArray(new_sig, bool_dtype, self, w_idx)
+                return space.wrap(res)
             else:
                 # Indexing by array
 
@@ -468,6 +472,54 @@ class IndexedByArray(VirtualArray):
     def _eval(self, i):
         idx = self.int_dtype.unbox(self.index.eval(i).convert_to(self.int_dtype))
         val = self.source.eval(idx).convert_to(self.res_dtype)
+        return val
+
+class IndexedByBoolArray(VirtualArray):
+    """
+    Intermediate class for performing indexing of array by another array
+    """
+    # TODO: override "compute" to optimize (?)
+    signature = signature.BaseSignature()
+    def __init__(self, signature, bool_dtype, source, index):
+        VirtualArray.__init__(self, signature, source.find_dtype())
+        self.source = source
+        self.index = index
+        self.bool_dtype = bool_dtype
+        self.size = -1
+        self.cur_idx = 0
+
+    def _del_sources(self):
+        self.source = None
+        self.index = None
+
+    def _find_size(self):
+        # Finding size may be long, so we store the result for reuse.
+        if self.size != -1:
+            return self.size
+        # TODO: avoid index.get_concrete by using "sum" (reduce with "add")
+        idxs = self.index.get_concrete()
+        s = 0
+        i = 0
+        while i < self.index.find_size():
+            idx_val = self.bool_dtype.unbox(idxs.eval(i).convert_to(self.bool_dtype))
+            assert(isinstance(idx_val, bool))
+            if idx_val is True:
+                s += 1
+            i += 1
+        self.size = s
+        return self.size
+
+    def _eval(self, i):
+        if i == 0:
+            self.cur_idx = 0
+        while True:
+            idx_val = self.bool_dtype.unbox(self.index.eval(self.cur_idx).convert_to(self.bool_dtype))
+            assert(isinstance(idx_val, bool))
+            if idx_val is True:
+                break
+            self.cur_idx += 1
+        val = self.source.eval(self.cur_idx).convert_to(self.res_dtype)
+        self.cur_idx += 1
         return val
 
 class ViewArray(BaseArray):
