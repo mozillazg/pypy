@@ -133,6 +133,22 @@ class AppTestNumArray(BaseNumpyAppTest):
         for i in xrange(6):
             assert a_by_list[i] == range(5)[idx_list[i]]
 
+    def test_index_by_bool_array(self):
+        from numpy import array, dtype
+        a = array(range(5))
+        ind = array([False, True, False, True, False])
+        assert ind.dtype is dtype(bool)
+        # get length before actual calculation
+        b0 = a[ind]
+        assert len(b0) == 2
+        assert b0[0] == 1
+        assert b0[1] == 3
+        # get length after actual calculation
+        b1 = a[ind]
+        assert b1[0] == 1
+        assert b1[1] == 3
+        assert len(b1) == 2
+
     def test_setitem(self):
         from numpy import array
         a = array(range(5))
