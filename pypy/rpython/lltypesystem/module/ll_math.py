@@ -69,6 +69,8 @@ math_hypot = llexternal(underscore + 'hypot',
                         [rffi.DOUBLE, rffi.DOUBLE], rffi.DOUBLE)
 math_floor = llexternal('floor', [rffi.DOUBLE], rffi.DOUBLE, elidable_function=True)
 math_sqrt = llexternal('sqrt', [rffi.DOUBLE], rffi.DOUBLE)
+math_sin = llexternal('sin', [rffi.DOUBLE], rffi.DOUBLE)
+math_cos = llexternal('cos', [rffi.DOUBLE], rffi.DOUBLE)
 
 @jit.elidable
 def sqrt_nonneg(x):
@@ -221,22 +223,13 @@ def ll_math_modf(x):
 
 
 def ll_math_fmod(x, y):
-    if isinf(y):
-        if isinf(x):
-            raise ValueError("math domain error")
-        return x  # fmod(x, +/-Inf) returns x for finite x (or if x is a NaN).
+    if isinf(x) and not isnan(y):
+        raise ValueError("math domain error")
 
-    _error_reset()
-    r = math_fmod(x, y)
-    errno = rposix.get_errno()
-    if isnan(r):
-        if isnan(x) or isnan(y):
-            errno = 0
-        else:
-            errno = EDOM
-    if errno:
-        _likely_raise(errno, r)
-    return r
+    if y == 0:
+        raise ValueError("math domain error")
+
+    return math_fmod(x, y)
 
 
 def ll_math_hypot(x, y):
@@ -340,6 +333,16 @@ def ll_math_log10(x):
         raise ValueError("math domain error")
     return math_log10(x)
 
+def ll_math_sin(x):
+    if isinf(x):
+        raise ValueError("math domain error")
+    return math_sin(x)
+
+def ll_math_cos(x):
+    if isinf(x):
+        raise ValueError("math domain error")
+    return math_cos(x)
+
 # ____________________________________________________________
 #
 # Default implementations
@@ -377,8 +380,8 @@ def new_unary_math_function(name, can_overflow, c99):
 
 unary_math_functions = [
     'acos', 'asin', 'atan',
-    'ceil', 'cos', 'cosh', 'exp', 'fabs',
-    'sin', 'sinh', 'tan', 'tanh',
+    'ceil', 'cosh', 'exp', 'fabs',
+    'sinh', 'tan', 'tanh',
     'acosh', 'asinh', 'atanh', 'log1p', 'expm1',
     ]
 unary_math_functions_can_overflow = [

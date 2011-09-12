@@ -15,7 +15,7 @@ from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.jit.metainterp.jitprof import GUARDS, RECORDED_OPS, ABORT_ESCAPE
 from pypy.jit.metainterp.jitprof import ABORT_TOO_LONG, ABORT_BRIDGE, \
-                                        ABORT_FORCE_QUASIIMMUT
+                                        ABORT_FORCE_QUASIIMMUT, ABORT_BAD_LOOP
 from pypy.jit.metainterp.jitexc import JitException, get_llexception
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
@@ -215,6 +215,7 @@ class MIFrame(object):
 
     for _opimpl in ['int_is_true', 'int_is_zero', 'int_neg', 'int_invert',
                     'cast_float_to_int', 'cast_int_to_float',
+                    'cast_float_to_singlefloat', 'cast_singlefloat_to_float',
                     'float_neg', 'float_abs',
                     ]:
         exec py.code.Source('''
@@ -230,6 +231,10 @@ class MIFrame(object):
     @arguments("box")
     def opimpl_ptr_iszero(self, box):
         return self.execute(rop.PTR_EQ, box, history.CONST_NULL)
+
+    @arguments("box")
+    def opimpl_cast_opaque_ptr(self, box):
+        return self.execute(rop.CAST_OPAQUE_PTR, box)
 
     @arguments("box")
     def _opimpl_any_return(self, box):
@@ -1220,7 +1225,7 @@ class MIFrame(object):
         return self.metainterp.execute_and_record(opnum, descr, *argboxes)
 
     @specialize.arg(1)
-    def execute_varargs(self, opnum, argboxes, descr, exc):
+    def execute_varargs(self, opnum, argboxes, descr, exc, pure):
         self.metainterp.clear_exception()
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
@@ -1228,6 +1233,9 @@ class MIFrame(object):
             self.make_result_of_lastop(resbox)
             # ^^^ this is done before handle_possible_exception() because we
             # need the box to show up in get_list_of_active_boxes()
+        if pure and self.metainterp.last_exc_value_box is None:
+            resbox = self.metainterp.record_result_of_call_pure(resbox)
+            exc = exc and not isinstance(resbox, Const)
         if exc:
             self.metainterp.handle_possible_exception()
         else:
@@ -1245,7 +1253,7 @@ class MIFrame(object):
         src_i = src_r = src_f = 0
         i = 1
         for kind in descr.get_arg_types():
-            if kind == history.INT:
+            if kind == history.INT or kind == 'S':        # single float
                 while True:
                     box = argboxes[src_i]
                     src_i += 1
@@ -1270,10 +1278,8 @@ class MIFrame(object):
         assert i == len(allboxes)
         #
         effectinfo = descr.get_extra_info()
-        if (effectinfo is None or
-                effectinfo.extraeffect ==
-                             effectinfo.EF_FORCES_VIRTUAL_OR_VIRTUALIZABLE or
-                assembler_call):
+        if (assembler_call or
+                effectinfo.check_forces_virtual_or_virtualizable()):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.clear_exception()
             self.metainterp.vable_and_vrefs_before_residual_call()
@@ -1290,16 +1296,14 @@ class MIFrame(object):
             return resbox
         else:
             effect = effectinfo.extraeffect
-            if effect == effectinfo.EF_CANNOT_RAISE:
-                return self.execute_varargs(rop.CALL, allboxes, descr, False)
-            elif effect == effectinfo.EF_ELIDABLE:
-                return self.metainterp.record_result_of_call_pure(
-                    self.execute_varargs(rop.CALL, allboxes, descr, False))
-            elif effect == effectinfo.EF_LOOPINVARIANT:
+            if effect == effectinfo.EF_LOOPINVARIANT:
                 return self.execute_varargs(rop.CALL_LOOPINVARIANT, allboxes,
-                                            descr, False)
-            else:
-                return self.execute_varargs(rop.CALL, allboxes, descr, True)
+                                            descr, False, False)
+            exc = (effect != effectinfo.EF_CANNOT_RAISE and
+                   effect != effectinfo.EF_ELIDABLE_CANNOT_RAISE)
+            pure = (effect == effectinfo.EF_ELIDABLE_CAN_RAISE or
+                    effect == effectinfo.EF_ELIDABLE_CANNOT_RAISE)
+            return self.execute_varargs(rop.CALL, allboxes, descr, exc, pure)
 
     def do_residual_or_indirect_call(self, funcbox, calldescr, argboxes):
         """The 'residual_call' operation is emitted in two cases:
@@ -1406,9 +1410,9 @@ class MetaInterpStaticData(object):
             num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
             setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
         #
-        tokens = self.loop_tokens_exit_frame_with_exception_ref
-        num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
-        self.cpu.exit_frame_with_exception_v = num
+        exc_descr = compile.PropagateExceptionDescr()
+        num = self.cpu.get_fail_descr_number(exc_descr)
+        self.cpu.propagate_exception_v = num
         #
         self.globaldata = MetaInterpGlobalData(self)
 
@@ -1452,6 +1456,7 @@ class MetaInterpStaticData(object):
                 # can change from run to run.
                 d = {}
                 for jitcode in self.indirectcalltargets:
+                    assert jitcode.fnaddr not in d
                     d[jitcode.fnaddr] = jitcode
                 self.globaldata.indirectcall_dict = d
             return d.get(fnaddress, None)
@@ -1715,7 +1720,10 @@ class MetaInterp(object):
             return
         if opnum == rop.CALL:
             effectinfo = descr.get_extra_info()
-            if effectinfo.extraeffect == effectinfo.EF_ELIDABLE:
+            ef = effectinfo.extraeffect
+            if ef == effectinfo.EF_LOOPINVARIANT or \
+               ef == effectinfo.EF_ELIDABLE_CANNOT_RAISE or \
+               ef == effectinfo.EF_ELIDABLE_CAN_RAISE:
                 return
         if self.heap_cache:
             self.heap_cache.clear()
@@ -2404,6 +2412,7 @@ class MetaInterp(object):
                 tobox = newbox
             if change:
                 self.heap_cache[descr] = frombox, tobox
+        # XXX what about self.heap_array_cache?
 
     def find_biggest_function(self):
         start_stack = []
