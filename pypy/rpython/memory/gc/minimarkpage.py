@@ -3,6 +3,41 @@ from pypy.rlib.rarithmetic import LONG_BIT, r_uint
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import ll_assert
 
+# ____________________________________________________________
+#
+# Interface exported by the class ArenaCollection:
+#
+#    malloc(size)
+#        Allocate 'size' bytes from the ArenaCollection.
+#
+#    reset_start()
+#        Enters the "resetting" state.  Causes the arenas not used since
+#        the last resetting state to be returned to the OS.
+#
+#    mark_still_in_use(addr, size)
+#        Mark the object at address 'addr' as still being in use.
+#        Call this in the resetting state on all objects that must survive.
+#        Returns True if the marking was successful, or False if it was
+#        already marked.
+#
+#    reset_stop()
+#        Leaves the "resetting" state.  All objects on which still_in_use()
+#        was not called are considered as free.
+#
+#    total_memory_used
+#        A r_uint.  Not valid in the resetting state.
+#
+# This is done by keeping one bit per object, in off-object bitfields
+# (to speed up looking for a free bit and to be more fork()-friendly).
+# Initially OFF=0 and ON=1.  malloc() finds an old location which is
+# OFF, and mark it as ON.  reset_start() finds all locations still at
+# OFF and returns to the OS completely OFF arenas, and mark all
+# remaining bits as ON.  Then it switches the meaning of ON and OFF, so
+# that all bits are instantly OFF.  mark_still_in_use() marks the bit as
+# ON again.
+# ____________________________________________________________
+#
+
 WORD = LONG_BIT // 8
 NULL = llmemory.NULL
 WORD_POWER_2 = {32: 2, 64: 3}[LONG_BIT]
@@ -15,20 +50,25 @@ assert 1 << WORD_POWER_2 == WORD
 # The actual allocation occurs in whole arenas, which are then subdivided
 # into pages.  For each arena we allocate one of the following structures:
 
-ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
-ARENA = lltype.Struct('ArenaReference',
-    # -- The address of the arena, as returned by malloc()
-    ('base', llmemory.Address),
-    # -- The number of free and the total number of pages in the arena
-    ('nfreepages', lltype.Signed),
-    ('totalpages', lltype.Signed),
-    # -- A chained list of free pages in the arena.  Ends with NULL.
-    ('freepages', llmemory.Address),
-    # -- A linked list of arenas.  See below.
-    ('nextarena', ARENA_PTR),
-    )
-ARENA_PTR.TO.become(ARENA)
-ARENA_NULL = lltype.nullptr(ARENA)
+def get_arena_type(num_words):
+    ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
+    ARENA = lltype.Struct('ArenaReference',
+        # --- One bit per "basic unit" of size in the whole arena, set if
+        # --- this basic unit contains the start of a live object.  "Basic
+        # --- unit" is 2 WORDs by default.
+        ('usage_bits', lltype.FixedSizeArray(lltype.Unsigned, num_words)),
+        # -- The address of the arena, as returned by malloc()
+        ('base', llmemory.Address),
+        # -- The number of free and the total number of pages in the arena
+        ('nfreepages', lltype.Signed),
+        ('totalpages', lltype.Signed),
+        # -- A chained list of free pages in the arena.  Ends with NULL.
+        ('freepages', llmemory.Address),
+        # -- A linked list of arenas.  See below.
+        ('nextarena', ARENA_PTR),
+        )
+    ARENA_PTR.TO.become(ARENA)
+    return ARENA
 
 # The idea is that when we need a free page, we take it from the arena
 # which currently has the *lowest* number of free pages.  This allows
@@ -67,13 +107,7 @@ PAGE_HEADER = lltype.Struct('PageHeader',
     ('nextpage', PAGE_PTR),
     # -- The arena this page is part of.
     ('arena', ARENA_PTR),
-    # -- The number of free blocks.  The numbers of uninitialized and
-    #    allocated blocks can be deduced from the context if needed.
-    ('nfree', lltype.Signed),
-    # -- The chained list of free blocks.  It ends as a pointer to the
-    #    first uninitialized block (pointing to data that is uninitialized,
-    #    or to the end of the page).
-    ('freeblock', llmemory.Address),
+                            # XXX FIXME:
     # -- The structure above is 4 words, which is a good value:
     #    '(1024-4) % N' is zero or very small for various small N's,
     #    i.e. there is not much wasted space.
@@ -95,8 +129,8 @@ class ArenaCollection(object):
         self.small_request_threshold = small_request_threshold
         #
         # 'pageaddr_for_size': for each size N between WORD and
-        # small_request_threshold (included), contains either NULL or
-        # a pointer to a page that has room for at least one more
+        # small_request_threshold (included), it is a chained list
+        # of pages that have room for at least one more
         # allocation of the given size.
         length = small_request_threshold / WORD + 1
         self.page_for_size = lltype.malloc(rffi.CArray(PAGE_PTR), length,

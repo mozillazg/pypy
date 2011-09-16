@@ -48,7 +48,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.memory.gc.base import GCBase, MovingGCBase
-from pypy.rpython.memory.gc import minimarkpage, env
+from pypy.rpython.memory.gc import env
 from pypy.rpython.memory.support import mangle_hash
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask, r_uint
 from pypy.rlib.rarithmetic import LONG_BIT_SHIFT
@@ -96,26 +96,32 @@ GCFLAG_NO_HEAP_PTRS = first_gcflag << 1
 
 # The following flag is set on surviving objects during a major collection,
 # and on surviving raw-malloced young objects during a minor collection.
+# Note that to avoid tons of writes to pages during a major collection, it
+# is never set on objects in the ArenaCollection.
 GCFLAG_VISITED      = first_gcflag << 2
+
+# The following flag is set on all raw-malloced objects and all prebuilt
+# objects, and is cleared on in-nursery and in-ArenaCollection objects.
+GCFLAG_EXTERNAL_MALLOC = first_gcflag << 3
 
 # The following flag is set on nursery objects of which we asked the id
 # or the identityhash.  It means that a space of the size of the object
 # has already been allocated in the nonmovable part.  The same flag is
 # abused to mark prebuilt objects whose hash has been taken during
 # translation and is statically recorded.
-GCFLAG_HAS_SHADOW   = first_gcflag << 3
+GCFLAG_HAS_SHADOW   = first_gcflag << 4
 
 # The following flag is set temporarily on some objects during a major
 # collection.  See pypy/doc/discussion/finalizer-order.txt
-GCFLAG_FINALIZATION_ORDERING = first_gcflag << 4
+GCFLAG_FINALIZATION_ORDERING = first_gcflag << 5
 
 # The following flag is set on externally raw_malloc'ed arrays of pointers.
 # They are allocated with some extra space in front of them for a bitfield,
 # one bit per 'card_page_indices' indices.
-GCFLAG_HAS_CARDS    = first_gcflag << 5
-GCFLAG_CARDS_SET    = first_gcflag << 6     # <- at least one card bit is set
+GCFLAG_HAS_CARDS    = first_gcflag << 6
+GCFLAG_CARDS_SET    = first_gcflag << 7     # <- at least one card bit is set
 
-TID_MASK            = (first_gcflag << 7) - 1
+TID_MASK            = (first_gcflag << 8) - 1
 
 
 FORWARDSTUB = lltype.GcStruct('forwarding_stub',
@@ -249,6 +255,7 @@ class MiniMarkGC(MovingGCBase):
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
+            from pypy.rpython.memory.gc import minimarkpage
             ArenaCollectionClass = minimarkpage.ArenaCollection
         self.ac = ArenaCollectionClass(arena_size, page_size,
                                        small_request_threshold)
@@ -660,13 +667,14 @@ class MiniMarkGC(MovingGCBase):
                 # In these cases, we don't want a card marker bits area.
                 # This case also includes all fixed-size objects.
                 cardheadersize = 0
-                extra_flags = 0
+                extra_flags = GCFLAG_EXTERNAL_MALLOC
                 #
             else:
                 # Reserve N extra words containing card bits before the object.
                 extra_words = self.card_marking_words_for_length(length)
                 cardheadersize = WORD * extra_words
-                extra_flags = GCFLAG_HAS_CARDS | GCFLAG_TRACK_YOUNG_PTRS
+                extra_flags = (GCFLAG_HAS_CARDS | GCFLAG_TRACK_YOUNG_PTRS |
+                               GCFLAG_EXTERNAL_MALLOC)
                 # if 'can_make_young', then we also immediately set
                 # GCFLAG_CARDS_SET, but without adding the object to
                 # 'old_objects_with_cards_set'.  In this way it should
@@ -811,9 +819,9 @@ class MiniMarkGC(MovingGCBase):
         hdr.tid = self.combine(typeid16, flags)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
-        # For prebuilt GC objects, the flags must contain
-        # GCFLAG_NO_xxx_PTRS, at least initially.
-        flags |= GCFLAG_NO_HEAP_PTRS | GCFLAG_TRACK_YOUNG_PTRS
+        # For prebuilt GC objects.
+        flags |= (GCFLAG_NO_HEAP_PTRS | GCFLAG_TRACK_YOUNG_PTRS |
+                  GCFLAG_EXTERNAL_MALLOC)
         self.init_gc_object(addr, typeid16, flags)
 
     def is_in_nursery(self, addr):
@@ -1422,20 +1430,27 @@ class MiniMarkGC(MovingGCBase):
         size = self.get_size(obj)
         totalsize = size_gc_header + size
         #
-        if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+        if raw_malloc_usage(totalsize) <= self.small_request_threshold:
             #
-            # Common case: allocate a new nonmovable location for it.
-            newhdr = self._malloc_out_of_nursery(totalsize)
-            #
+            # Common case: the object is small, so it fits ArenaCollection
+            if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+                #
+                # Common case: just allocate a new nonmovable location for it.
+                newhdr = self.ac.malloc(totalsize)
+            else:
+                # The object has already a shadow.
+                newhdr = self._get_existing_shadow(obj)
         else:
-            # The object has already a shadow.
-            newobj = self.nursery_objects_shadows.get(obj)
-            ll_assert(newobj != NULL, "GCFLAG_HAS_SHADOW but no shadow found")
-            newhdr = newobj - size_gc_header
+            # The object is too big to fit in the nursery.  Add the flag
+            # GCFLAG_EXTERNAL_MALLOC, so that it will be copied into the
+            # new object.
+            self.header(obj).tid |= GCFLAG_EXTERNAL_MALLOC
             #
-            # Remove the flag GCFLAG_HAS_SHADOW, so that it doesn't get
-            # copied to the shadow itself.
-            self.header(obj).tid &= ~GCFLAG_HAS_SHADOW
+            # Same as above, but allocating with a raw_malloc.
+            if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+                newhdr = self._malloc_out_of_nursery_nonsmall(totalsize)
+            else:
+                newhdr = self._get_existing_shadow(obj)
         #
         # Copy it.  Note that references to other objects in the
         # nursery are kept unchanged in this step.
@@ -1462,6 +1477,17 @@ class MiniMarkGC(MovingGCBase):
         # objects when we walk 'old_objects_pointing_to_young'.
         self.old_objects_pointing_to_young.append(newobj)
     _trace_drag_out._always_inline_ = True
+
+    def _get_existing_shadow(self, obj):
+        newobj = self.nursery_objects_shadows.get(obj)
+        ll_assert(newobj != NULL, "GCFLAG_HAS_SHADOW but no shadow found")
+        newhdr = newobj - self.gcheaderbuilder.size_gc_header
+        #
+        # Remove the flag GCFLAG_HAS_SHADOW, so that it doesn't get
+        # copied to the shadow itself.
+        self.header(obj).tid &= ~GCFLAG_HAS_SHADOW
+        return newhdr
+    _get_existing_shadow._dont_inline_ = True
 
     def _visit_young_rawmalloced_object(self, obj):
         # 'obj' points to a young, raw-malloced object.
@@ -1501,7 +1527,6 @@ class MiniMarkGC(MovingGCBase):
         else:
             # for nursery objects that are not small
             return self._malloc_out_of_nursery_nonsmall(totalsize)
-    _malloc_out_of_nursery._always_inline_ = True
 
     def _malloc_out_of_nursery_nonsmall(self, totalsize):
         # 'totalsize' should be aligned.
@@ -1562,9 +1587,13 @@ class MiniMarkGC(MovingGCBase):
                   "nursery not empty in major_collection()")
         self.debug_check_consistency()
         #
+        # Enters the "resetting" state on the ArenaCollection.  See
+        # documentation at the start of minimarkpage.py.
+        self.ac.reset_start()
+        #
         # Note that a major collection is non-moving.  The goal is only to
         # find and free some of the objects allocated by the ArenaCollection.
-        # We first visit all objects and toggle the flag GCFLAG_VISITED on
+        # We first visit all objects and set the flag GCFLAG_VISITED on
         # them, starting from the roots.
         self.objects_to_trace = self.AddressStack()
         self.collect_roots()
@@ -1587,10 +1616,8 @@ class MiniMarkGC(MovingGCBase):
         # have the GCFLAG_VISITED flag.
         self.free_unvisited_rawmalloc_objects()
         #
-        # Ask the ArenaCollection to visit all objects.  Free the ones
-        # that have not been visited above, and reset GCFLAG_VISITED on
-        # the others.
-        self.ac.mass_free(self._free_if_unvisited)
+        # Leave the "resetting" state in the ArenaCollection.
+        self.ac.reset_stop()
         #
         # We also need to reset the GCFLAG_VISITED on prebuilt GC objects.
         self.prebuilt_root_objects.foreach(self._reset_gcflag_visited, None)
@@ -1641,21 +1668,15 @@ class MiniMarkGC(MovingGCBase):
         self.execute_finalizers()
 
 
-    def _free_if_unvisited(self, hdr):
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        obj = hdr + size_gc_header
-        if self.header(obj).tid & GCFLAG_VISITED:
-            self.header(obj).tid &= ~GCFLAG_VISITED
-            return False     # survives
-        else:
-            return True      # dies
-
     def _reset_gcflag_visited(self, obj, ignored):
         self.header(obj).tid &= ~GCFLAG_VISITED
 
     def free_rawmalloced_object_if_unvisited(self, obj):
-        if self.header(obj).tid & GCFLAG_VISITED:
-            self.header(obj).tid &= ~GCFLAG_VISITED   # survives
+        hdr = self.header(obj)
+        if hdr.tid & GCFLAG_VISITED:
+            hdr.tid &= ~GCFLAG_VISITED   # survives
+            ll_assert(hdr.tid & GCFLAG_EXTERNAL_MALLOC != 0,
+                      "external_malloc flag missing")
             self.old_rawmalloced_objects.append(obj)
         else:
             size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -1665,7 +1686,7 @@ class MiniMarkGC(MovingGCBase):
             #
             # Must also include the card marker area, if any
             if (self.card_page_indices > 0    # <- this is constant-folded
-                and self.header(obj).tid & GCFLAG_HAS_CARDS):
+                and hdr.tid & GCFLAG_HAS_CARDS):
                 #
                 # Get the length and compute the number of extra bytes
                 typeid = self.get_type_id(obj)
@@ -1732,21 +1753,32 @@ class MiniMarkGC(MovingGCBase):
 
     def visit(self, obj):
         #
-        # 'obj' is a live object.  Check GCFLAG_VISITED to know if we
-        # have already seen it before.
-        #
-        # Moreover, we can ignore prebuilt objects with GCFLAG_NO_HEAP_PTRS.
-        # If they have this flag set, then they cannot point to heap
-        # objects, so ignoring them is fine.  If they don't have this
-        # flag set, then the object should be in 'prebuilt_root_objects',
-        # and the GCFLAG_VISITED will be reset at the end of the
-        # collection.
+        # 'obj' is a live object.
         hdr = self.header(obj)
-        if hdr.tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS):
-            return
-        #
-        # It's the first time.  We set the flag.
-        hdr.tid |= GCFLAG_VISITED
+        if hdr.tid & GCFLAG_EXTERNAL_MALLOC == 0:
+            #
+            # For objects in the ArenaCollection, we don't use GCFLAG_VISITED.
+            # Instead we ask the ArenaCollection itself to look up its
+            # internal usage bits.
+            if not self.ac.mark_still_in_use(llmemory.cast_ptr_to_adr(hdr)):
+                return       # already visited
+            #
+            # Else it's the first time.  Continue...
+            #
+        else:
+            # Check GCFLAG_VISITED to know if we have already seen it before.
+            #
+            # Moreover, we can ignore prebuilt objects with
+            # GCFLAG_NO_HEAP_PTRS.  If they have this flag set, then
+            # they cannot point to heap objects, so ignoring them is
+            # fine.  If they don't have this flag set, then the object
+            # should be in 'prebuilt_root_objects', and the
+            # GCFLAG_VISITED will be reset at the end of the collection.
+            if hdr.tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS):
+                return
+            #
+            # It's the first time.  We set the flag.
+            hdr.tid |= GCFLAG_VISITED
         #
         # Trace the content of the object and put all objects it references
         # into the 'objects_to_trace' list.
@@ -1980,9 +2012,8 @@ class MiniMarkGC(MovingGCBase):
 # ____________________________________________________________
 
 # For testing, a simple implementation of ArenaCollection.
-# This version could be used together with obmalloc.c, but
-# it requires an extra word per object in the 'all_objects'
-# list.
+# This version doesn't translate.  See the documentation
+# at the start of minimarkpage.py for the interface exposed.
 
 class SimpleArenaCollection(object):
 
@@ -1991,9 +2022,13 @@ class SimpleArenaCollection(object):
         self.page_size = page_size
         self.small_request_threshold = small_request_threshold
         self.all_objects = []
-        self.total_memory_used = 0
+        self.total_memory_used = r_uint(0)
+        self.resetting_state = False
+        self.surviving = set()
 
     def malloc(self, size):
+        assert not we_are_translated()
+        assert not self.resetting_state
         nsize = raw_malloc_usage(size)
         ll_assert(nsize > 0, "malloc: size is null or negative")
         ll_assert(nsize <= self.small_request_threshold,"malloc: size too big")
@@ -2002,16 +2037,37 @@ class SimpleArenaCollection(object):
         result = llarena.arena_malloc(nsize, False)
         llarena.arena_reserve(result, size)
         self.all_objects.append((result, nsize))
+        self.surviving.add((result.arena, result.offset))
         self.total_memory_used += nsize
         return result
 
-    def mass_free(self, ok_to_free_func):
+    def reset_start(self):
+        assert not self.resetting_state
+        self.resetting_state = True
+        self.surviving = set()
+        del self.total_memory_used
+
+    def mark_still_in_use(self, addr):
+        assert self.resetting_state
+        addr = llarena.getfakearenaaddress(addr)
+        key = (addr.arena, addr.offset)
+        if key not in self.surviving:
+            self.surviving.add(key)
+            return True
+        else:
+            return False    # it was already marked
+
+    def reset_stop(self):
+        assert self.resetting_state
+        totalsize = 0
         objs = self.all_objects
         self.all_objects = []
-        self.total_memory_used = 0
-        for rawobj, nsize in objs:
-            if ok_to_free_func(rawobj):
-                llarena.arena_free(rawobj)
+        for addr, nsize in objs:
+            key = (addr.arena, addr.offset)
+            if key in self.surviving:
+                self.all_objects.append((addr, nsize))
+                totalsize += nsize
             else:
-                self.all_objects.append((rawobj, nsize))
-                self.total_memory_used += nsize
+                llarena.arena_free(addr)
+        self.total_memory_used = r_uint(totalsize)
+        self.resetting_state = False
