@@ -686,7 +686,7 @@ if _POSIX:
         flags = MAP_PRIVATE | MAP_ANONYMOUS
         prot = PROT_EXEC | PROT_READ | PROT_WRITE
         hintp = rffi.cast(PTR, hint.pos)
-        res = c_mmap_safe(hintp, map_size, prot, flags, -1, 0)
+        res = c_mmap_safe(NULL, map_size, prot, flags, -1, 0)
         if res == rffi.cast(PTR, -1):
             # some systems (some versions of OS/X?) complain if they
             # are passed a non-zero address.  Try again.
