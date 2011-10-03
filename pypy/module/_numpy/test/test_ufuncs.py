@@ -287,7 +287,7 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_arctan(self):
         import math
-        from _numpy import array, arctan
+        from numpy import array, arctan
 
         a = array([-3, -2, -1, 0, 1, 2, 3, float('inf'), float('-inf')])
         b = arctan(a)
@@ -300,8 +300,7 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_arcsinh(self):
         import math
-        from _numpy import arcsinh
-        from numpy import inf
+        from numpy import arcsinh, inf
 
         for v in [inf, -inf, 1.0, math.e]:
             assert math.asinh(v) == arcsinh(v)
