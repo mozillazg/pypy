@@ -14,6 +14,8 @@ from _numpy import (
         arccos,
         arcsin,
         arctan,
+        arctanh,
+        arcsinh,
         copysign,
         cos,
         divide,
