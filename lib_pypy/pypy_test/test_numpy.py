@@ -74,3 +74,11 @@ class AppTestNumPyModule:
         raises(ValueError, "bincount(c, w)")
         raises(ValueError, "bincount([])")
 
+    def test_constants(self):
+        import math
+        from numpy import inf, e
+        assert type(inf) is float
+        assert inf == float("inf")
+        assert e == math.e
+        assert type(e) is float
+
