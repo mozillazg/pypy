@@ -39,6 +39,8 @@ from _numpy import (
         tan,
     )
 
+from math import e
+
 inf = float("inf")
 
 def average(a):
