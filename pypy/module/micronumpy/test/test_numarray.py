@@ -136,6 +136,8 @@ class AppTestNumArray(BaseNumpyAppTest):
     def test_index_by_bool_array(self):
         from numpy import array, dtype
         a = array(range(5))
+        ind = array([False,True])
+        raises(ValueError, "a[ind]")
         ind = array([False, True, False, True, False])
         assert ind.dtype is dtype(bool)
         # get length before actual calculation
