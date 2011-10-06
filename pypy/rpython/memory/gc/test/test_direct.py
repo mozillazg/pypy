@@ -599,3 +599,7 @@ class TestMiniMarkGCSimple(DirectGCTest):
 
 class TestMiniMarkGCFull(DirectGCTest):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
+
+class TestMostlyConcurrentMarkSweepGC(DirectGCTest):
+    from pypy.rpython.memory.gc.concurrentms \
+            import MostlyConcurrentMarkSweepGC as GCClass
