@@ -3,7 +3,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup, rffi
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rlib.debug import ll_assert
-from pypy.rlib.rarithmetic import LONG_BIT, r_uint
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
 from pypy.rpython.memory.gc.base import GCBase
 from pypy.module.thread import ll_thread
 
@@ -144,7 +144,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
         if rawtotalsize <= self.small_request_threshold:
-            n = (rawtotalsize + WORD - 1) >> WORD_POWER_2
+            ll_assert(rawtotalsize & (WORD - 1) == 0,
+                      "fixedsize not properly rounded")
+            n = rawtotalsize >> WORD_POWER_2
             result = self.free_lists[n]
             if result != llmemory.NULL:
                 self.free_lists[n] = result.address[0]
@@ -160,6 +162,55 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
                 #
         return self._malloc_slowpath(typeid, size)
+
+    def malloc_varsize_clear(self, typeid, length, size, itemsize,
+                             offset_to_length):
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        nonvarsize = size_gc_header + size
+        #
+        # Compute the maximal length that makes the object still below
+        # 'small_request_threshold'.  All the following logic is usually
+        # constant-folded because size and itemsize are constants (due
+        # to inlining).
+        maxsize = self.small_request_threshold - raw_malloc_usage(nonvarsize)
+        if maxsize < 0:
+            toobig = r_uint(0)    # the nonvarsize alone is too big
+        elif raw_malloc_usage(itemsize):
+            toobig = r_uint(maxsize // raw_malloc_usage(itemsize)) + 1
+        else:
+            toobig = r_uint(sys.maxint) + 1
+
+        if r_uint(length) < r_uint(toobig):
+            # With the above checks we know now that totalsize cannot be more
+            # than 'small_request_threshold'; in particular, the + and *
+            # cannot overflow.
+            totalsize = nonvarsize + itemsize * length
+            totalsize = llarena.round_up_for_allocation(totalsize)
+            rawtotalsize = raw_malloc_usage(totalsize)
+            ll_assert(rawtotalsize & (WORD - 1) == 0,
+                      "round_up_for_allocation failed")
+            #
+            n = rawtotalsize >> WORD_POWER_2
+            result = self.free_lists[n]
+            if result != llmemory.NULL:
+                self.free_lists[n] = result.address[0]
+                #
+                llarena.arena_reset(result, size_of_addr, 0)
+                llarena.arena_reserve(result, totalsize)
+                hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
+                hdr.typeid16 = typeid
+                hdr.mark = self.current_mark
+                hdr.flags = '\x00'
+                #
+                obj = result + size_gc_header
+                (obj + offset_to_length).signed[0] = length
+                return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+        #
+        # If the total size of the object would be larger than
+        # 'small_request_threshold', or if the free_list is empty,
+        # then allocate it externally.  We also go there if 'length'
+        # is actually negative.
+        return self._malloc_varsize_slowpath(typeid, length)
 
     def _malloc_slowpath(self, typeid, size):
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -216,6 +267,30 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # with the system malloc().
             xxxxx
     _malloc_slowpath._dont_inline_ = True
+
+    def _malloc_varsize_slowpath(self, typeid, length):
+        #
+        if length < 0:
+            # negative length!  This likely comes from an overflow
+            # earlier.  We will just raise MemoryError here.
+            raise MemoryError
+        #
+        # Compute the total size, carefully checking for overflows.
+        nonvarsize = self.fixed_size(typeid)
+        itemsize = self.varsize_item_sizes(typeid)
+        try:
+            varsize = ovfcheck(itemsize * length)
+            totalsize = ovfcheck(nonvarsize + varsize)
+        except OverflowError:
+            raise MemoryError
+        #
+        result = self._malloc_slowpath(typeid, totalsize)
+        #
+        offset_to_length = self.varsize_offset_to_length(typeid)
+        obj = llmemory.cast_ptr_to_adr(result)
+        (obj + offset_to_length).signed[0] = length
+        return result
+    _malloc_varsize_slowpath._dont_inline_ = True
 
     def allocate_next_arena(self):
         # xxx for now, allocate one page at a time with the system malloc()
