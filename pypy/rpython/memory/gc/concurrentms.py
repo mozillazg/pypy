@@ -26,6 +26,7 @@ NULL = llmemory.NULL
 WORD_POWER_2 = {32: 2, 64: 3}[LONG_BIT]
 assert 1 << WORD_POWER_2 == WORD
 size_of_addr = llmemory.sizeof(llmemory.Address)
+MAXIMUM_SIZE = sys.maxint - (2*WORD-1)
 
 # XXX assumes little-endian machines for now: the byte at offset 0 in
 # the object is either a mark byte (equal to an odd value), or if the
@@ -168,6 +169,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         if rawtotalsize <= self.small_request_threshold:
             ll_assert(rawtotalsize & (WORD - 1) == 0,
                       "fixedsize not properly rounded")
+            #
             n = rawtotalsize >> WORD_POWER_2
             result = self.free_lists[n]
             if result != llmemory.NULL:
@@ -235,9 +237,14 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return self._malloc_varsize_slowpath(typeid, length)
 
     def _malloc_slowpath(self, typeid, size):
+        # Slow-path malloc.  Call this with 'size' being a valid and
+        # rounded number, between WORD and up to MAXIMUM_SIZE.
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
+        ll_assert(rawtotalsize & (WORD - 1) == 0,
+                  "malloc_slowpath: non-rounded size")
+        #
         if rawtotalsize <= self.small_request_threshold:
             #
             # Case 1: we have run out of the free list corresponding to
@@ -250,7 +257,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             # Put the free page in the list 'nonfree_pages[n]'.  This is
             # a linked list chained through the first word of each page.
-            n = (rawtotalsize + WORD - 1) >> WORD_POWER_2
+            n = rawtotalsize >> WORD_POWER_2
             newpage.address[0] = self.nonfree_pages[n]
             self.nonfree_pages[n] = newpage
             #
@@ -280,11 +287,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Case 2: the object is too large, so allocate it directly
             # with the system malloc().  XXX on 32-bit, we should prefer
             # 64-bit alignment of the object
-            try:
-                rawtotalsize = ovfcheck(raw_malloc_usage(size_of_addr) +
-                                        rawtotalsize)
-            except OverflowError:
-                raise MemoryError
+            rawtotalsize += raw_malloc_usage(size_of_addr)
             block = llarena.arena_malloc(rawtotalsize, 2)
             if not block:
                 raise MemoryError
@@ -320,6 +323,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         except OverflowError:
             raise MemoryError
         #
+        # Detect very rare cases of overflows
+        if raw_malloc_usage(totalsize) > MAXIMUM_SIZE:
+            raise MemoryError("rare case of overflow")
+        #
+        totalsize = llarena.round_up_for_allocation(totalsize)
         result = self._malloc_slowpath(typeid, totalsize)
         #
         offset_to_length = self.varsize_offset_to_length(typeid)
