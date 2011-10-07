@@ -86,6 +86,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # 1-35: free list of non-allocated locations; 0: unused
         self.free_lists    = list_of_addresses_per_small_size()
         # 1-35: head and tail of the free list built by the collector thread
+        # 0: head and tail of the linked list of surviving large objects
         self.collect_heads = list_of_addresses_per_small_size()
         self.collect_tails = list_of_addresses_per_small_size()
         #
@@ -136,12 +137,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def _teardown(self):
         "NOT_RPYTHON.  Stop the collector thread after tests have run."
+        if self._teardown_now:
+            return
         self.wait_for_the_end_of_collection()
         #
         # start the next collection, but with "stop" in _teardown_now,
         # which should shut down the collector thread
         self._teardown_now.append("stop")
-        self.collect()
+        self.ready_to_start_lock.release()
+        self.acquire(self.finished_lock)
+        del self.ready_to_start_lock, self.finished_lock
 
     def get_type_id(self, obj):
         return self.header(obj).typeid16
@@ -390,7 +395,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Grab the results of the last collection: read the collector's
             # 'collect_heads/collect_tails' and merge them with the mutator's
             # 'free_lists'.
-            n = 1
+            n = 0
             while n < self.pagelists_length:
                 if self.collect_tails[n] != NULL:
                     self.collect_tails[n].address[0] = self.free_lists[n]
@@ -545,10 +550,32 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.gray_objects.append(root.address[0])
 
     def collector_sweep(self):
+        self._collect_sweep_large_objects()
         n = 1
         while n < self.pagelists_length:
             self._collect_sweep_pages(n)
             n += 1
+
+    def _collect_sweep_large_objects(self):
+        block = self.collect_pages[0]
+        nonmarked = self.other_mark(self.current_mark)
+        linked_list = NULL
+        first_block_in_linked_list = NULL
+        while block != llmemory.NULL:
+            hdr = block + size_of_addr
+            if maybe_read_mark_byte(hdr) == nonmarked:
+                # the object is still not marked.  Free it.
+                llarena.arena_free(block)
+                #
+            else:
+                # the object was marked: relink it
+                block.address[0] = linked_list
+                linked_list = block
+                if first_block_in_linked_list == NULL:
+                    first_block_in_linked_list = block
+        #
+        self.collect_heads[0] = linked_list
+        self.collect_tails[0] = first_block_in_linked_list
 
     def _collect_sweep_pages(self, n):
         # sweep all pages from the linked list starting at 'page',
@@ -556,7 +583,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         page = self.collect_pages[n]
         object_size = n << WORD_POWER_2
         linked_list = NULL
-        first_freed_object = NULL
+        first_loc_in_linked_list = NULL
         nonmarked = self.other_mark(self.current_mark)
         while page != llmemory.NULL:
             i = self.page_size - object_size
@@ -573,8 +600,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     llarena.arena_reserve(hdr, size_of_addr)
                     hdr.address[0] = linked_list
                     linked_list = hdr
-                    if first_freed_object == NULL:
-                        first_freed_object = hdr
+                    if first_loc_in_linked_list == NULL:
+                        first_loc_in_linked_list = hdr
                     # XXX detect when the whole page is freed again
                     #
                     # Clear the data, in prevision for the following
@@ -587,7 +614,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             page = page.address[0]
         #
         self.collect_heads[n] = linked_list
-        self.collect_tails[n] = first_freed_object
+        self.collect_tails[n] = first_loc_in_linked_list
 
 
 def maybe_read_mark_byte(addr):
