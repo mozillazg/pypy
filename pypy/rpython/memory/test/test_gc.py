@@ -926,3 +926,12 @@ class TestMiniMarkGC(TestSemiSpaceGC):
 
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
     GC_PARAMS = {'card_page_indices': 4}
+
+class TestMostlyConcurrentMarkSweepGC(TestMiniMarkGC):
+    from pypy.rpython.memory.gc.concurrentms \
+            import MostlyConcurrentMarkSweepGC as GCClass
+
+    def test_finalizer_order(self):
+        py.test.skip("in-progress")
+    def test_from_objwithfinalizer_to_youngobj(self):
+        py.test.skip("in-progress")

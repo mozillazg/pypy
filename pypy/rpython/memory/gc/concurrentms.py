@@ -343,6 +343,13 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         if mark != self.current_mark:
             self.force_scan(addr_struct)
 
+    def writebarrier_before_copy(self, source_addr, dest_addr,
+                                 source_start, dest_start, length):
+        mark = self.header(dest_addr).mark
+        if mark != self.current_mark:
+            self.force_scan(dest_addr)
+        return True
+
     def _init_writebarrier_logic(self):
         #
         def force_scan(obj):
