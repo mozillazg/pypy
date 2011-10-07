@@ -567,6 +567,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         linked_list = NULL
         first_block_in_linked_list = NULL
         while block != llmemory.NULL:
+            nextblock = block.address[0]
             hdr = block + size_of_addr
             if maybe_read_mark_byte(hdr) == nonmarked:
                 # the object is still not marked.  Free it.
@@ -578,6 +579,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 linked_list = block
                 if first_block_in_linked_list == NULL:
                     first_block_in_linked_list = block
+            block = nextblock
         #
         self.collect_heads[0] = linked_list
         self.collect_tails[0] = first_block_in_linked_list
