@@ -1415,3 +1415,14 @@ class TestMarkCompactTaggedpointerGC(TaggedPointerGCTests):
             GC_PARAMS = {'space_size': 4096*WORD,
                          'translated_to_c': False}
             root_stack_depth = 200
+
+
+class TestMostlyConcurrentMarkSweepGC(GenericGCTests):
+    gcname = "concurrentms"
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.concurrentms \
+                    import MostlyConcurrentMarkSweepGC as GCClass
+            GC_PARAMS = {'page_size': 128*WORD,
+                         'translated_to_c': False}
+            root_stack_depth = 200
