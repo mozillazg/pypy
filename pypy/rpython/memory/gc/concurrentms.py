@@ -71,15 +71,32 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.free_pages = NULL
         self.pagelists_length = small_request_threshold // WORD + 1
         #
+        # The following are arrays of 36 linked lists: the linked lists
+        # at indices 1 to 35 correspond to pages that store objects of
+        # size  1 * WORD  to  35 * WORD,  and the linked list at index 0
+        # is a list of all larger objects.
         def list_of_addresses_per_small_size():
             return lltype.malloc(rffi.CArray(llmemory.Address),
                                  self.pagelists_length, flavor='raw',
                                  zero=True, immortal=True)
+        # 1-35: a linked list of all pages; 0: a linked list of all larger objs
         self.nonfree_pages = list_of_addresses_per_small_size()
+        # a snapshot of 'nonfree_pages' done when the collection starts
         self.collect_pages = list_of_addresses_per_small_size()
+        # 1-35: free list of non-allocated locations; 0: unused
         self.free_lists    = list_of_addresses_per_small_size()
+        # 1-35: head and tail of the free list built by the collector thread
         self.collect_heads = list_of_addresses_per_small_size()
         self.collect_tails = list_of_addresses_per_small_size()
+        #
+        # The following character is either MARK_VALUE_1 or MARK_VALUE_2,
+        # and represents the character that must be in the 'mark' field
+        # of an object header in order for the object to be considered as
+        # marked.  Objects whose 'mark' field have the opposite value are
+        # not marked yet; the collector thread will mark them if they are
+        # still alive, or sweep them away if they are not reachable.
+        # The special value MARK_VALUE_STATIC is initially used in the
+        # 'mark' field of static prebuilt GC objects.
         self.current_mark = MARK_VALUE_1
         #
         # When the mutator thread wants to trigger the next collection,
@@ -253,19 +270,33 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # 4096-WORD, there are a few wasted WORDs, which we place at
             # the start of the page rather than at the end (Hans Boehm,
             # xxx ref).
-            llarena.arena_reserve(result, totalsize)
-            hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
-            hdr.typeid16 = typeid
-            hdr.mark = self.current_mark
-            hdr.flags = '\x00'
-            #
-            obj = result + size_gc_header
-            return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
             #
         else:
-            # Case 2: the object is too big, so allocate it directly
-            # with the system malloc().
-            xxxxx
+            # Case 2: the object is too large, so allocate it directly
+            # with the system malloc().  XXX on 32-bit, we should prefer
+            # 64-bit alignment of the object
+            try:
+                rawtotalsize = ovfcheck(raw_malloc_usage(size_of_addr) +
+                                        rawtotalsize)
+            except OverflowError:
+                raise MemoryError
+            block = llarena.arena_malloc(rawtotalsize, 2)
+            if not block:
+                raise MemoryError
+            llarena.arena_reserve(block, size_of_addr)
+            block.address[0] = self.free_lists[0]
+            self.free_lists[0] = block
+            result = block + size_of_addr
+        #
+        llarena.arena_reserve(result, totalsize)
+        hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
+        hdr.typeid16 = typeid
+        hdr.mark = self.current_mark
+        hdr.flags = '\x00'
+        #
+        obj = result + size_gc_header
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+        #
     _malloc_slowpath._dont_inline_ = True
 
     def _malloc_varsize_slowpath(self, typeid, length):
@@ -295,7 +326,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def allocate_next_arena(self):
         # xxx for now, allocate one page at a time with the system malloc()
         page = llarena.arena_malloc(self.page_size, 2)     # zero-filled
-        ll_assert(bool(page), "out of memory!")
+        if not page:
+            raise MemoryError
         llarena.arena_reserve(page, size_of_addr)
         page.address[0] = NULL
         self.free_pages = page
@@ -394,7 +426,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # 'collect_pages' make linked lists of all nonfree pages at the
         # start of the collection (unlike the 'nonfree_pages' lists, which
         # the mutator will continue to grow).
-        n = 1
+        n = 0
         while n < self.pagelists_length:
             self.collect_pages[n] = self.nonfree_pages[n]
             n += 1
@@ -544,6 +576,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     if first_freed_object == NULL:
                         first_freed_object = hdr
                     # XXX detect when the whole page is freed again
+                    #
+                    # Clear the data, in prevision for the following
+                    # malloc_fixedsize_clear().
+                    llarena.arena_reset(hdr + size_of_addr,
+                        object_size - raw_malloc_usage(size_of_addr), 2)
                 #
                 i -= object_size
             #
