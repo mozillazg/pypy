@@ -289,8 +289,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             if not block:
                 raise MemoryError
             llarena.arena_reserve(block, size_of_addr)
-            block.address[0] = self.free_lists[0]
-            self.free_lists[0] = block
+            block.address[0] = self.nonfree_pages[0]
+            self.nonfree_pages[0] = block
             result = block + size_of_addr
         #
         llarena.arena_reserve(result, totalsize)
@@ -395,12 +395,17 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Grab the results of the last collection: read the collector's
             # 'collect_heads/collect_tails' and merge them with the mutator's
             # 'free_lists'.
-            n = 0
+            n = 1
             while n < self.pagelists_length:
                 if self.collect_tails[n] != NULL:
                     self.collect_tails[n].address[0] = self.free_lists[n]
                     self.free_lists[n] = self.collect_heads[n]
                 n += 1
+            #
+            # Do the same with 'collect_heads[0]/collect_tails[0]'.
+            if self.collect_tails[0] != NULL:
+                self.collect_tails[0].address[0] = self.nonfree_pages[0]
+                self.nonfree_pages[0] = self.collect_heads[0]
 
 
     def collect(self, gen=0):
