@@ -36,6 +36,7 @@ assert sys.byteorder == 'little'
 
 MARK_VALUE_1      = 'M'     #  77, 0x4D
 MARK_VALUE_2      = 'k'     # 107, 0x6B
+MARK_VALUE_STATIC = 'S'     #  83, 0x53
 GCFLAG_WITH_HASH  = 0x01
 
 
@@ -102,6 +103,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.mutex_lock = ll_thread.allocate_lock()
         self.gray_objects = self.AddressStack()
         self.extra_objects_to_mark = self.AddressStack()
+        self.prebuilt_root_objects = self.AddressStack()
         #
         # Write barrier: actually a deletion barrier, triggered when there
         # is a collection running and the mutator tries to change an object
@@ -126,6 +128,13 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def get_type_id(self, obj):
         return self.header(obj).typeid16
+
+    def init_gc_object_immortal(self, addr, typeid, flags=0):
+        # 'flags' is ignored here
+        hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
+        hdr.typeid16 = typeid
+        hdr.mark = MARK_VALUE_STATIC
+        hdr.flags = '\x00'
 
     def malloc_fixedsize_clear(self, typeid, size,
                                needs_finalizer=False, contains_weakptr=False):
@@ -226,15 +235,29 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         def force_scan(obj):
             self.mutex_lock.acquire(True)
-            if not self.is_marked(obj, self.current_mark):
-                # it is only possible to reach this point if there is
-                # a collection running in collector_mark(), before it
-                # does mutex_lock itself.  Check this:
-                ll_assert(self.collection_running == 1,
-                          "write barrier: wrong call?")
+            mark = self.header(obj).mark
+            if mark != self.current_mark:
                 #
-                self.set_mark(obj, self.current_mark)
-                self.trace(obj, self._barrier_add_extra, None)
+                if mark == MARK_VALUE_STATIC:
+                    # This is the first write into a prebuilt GC object.
+                    # Record it in 'prebuilt_root_objects'.  Even if a
+                    # collection marking phase is running now, we can
+                    # ignore this object, because at the snapshot-at-the-
+                    # beginning it didn't contain any pointer to non-
+                    # prebuilt objects.
+                    self.prebuilt_root_objects.append(obj)
+                    self.set_mark(obj, self.current_mark)
+                    #
+                else:
+                    # it is only possible to reach this point if there is
+                    # a collection running in collector_mark(), before it
+                    # does mutex_lock itself.  Check this:
+                    ll_assert(self.collection_running == 1,
+                              "write barrier: wrong call?")
+                    #
+                    self.set_mark(obj, self.current_mark)
+                    self.trace(obj, self._barrier_add_extra, None)
+                #
             self.mutex_lock.release()
         #
         force_scan._dont_inline_ = True
@@ -285,6 +308,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             MostlyConcurrentMarkSweepGC._add_stack_root,  # in prebuilt non-gc
             None)                         # static in prebuilt gc
         #
+        # Add the prebuilt root objects that have been written to
+        self.prebuilt_root_objects.foreach(self._add_prebuilt_root, None)
+        #
         # Invert this global variable, which has the effect that on all
         # objects' state go instantly from "marked" to "non marked"
         self.current_mark = self.other_mark(self.current_mark)
@@ -304,6 +330,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def _add_stack_root(self, root):
         obj = root.address[0]
+        self.gray_objects.append(obj)
+
+    def _add_prebuilt_root(self, obj, ignored):
         self.gray_objects.append(obj)
 
     def acquire(self, lock):
@@ -354,7 +383,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def is_marked(self, obj, current_mark):
         mark = self.header(obj).mark
-        ll_assert(mark == MARK_VALUE_1 or mark == MARK_VALUE_2,
+        ll_assert(mark in (MARK_VALUE_1, MARK_VALUE_2, MARK_VALUE_STATIC),
                   "bad mark byte in object")
         return mark == current_mark
 
