@@ -77,8 +77,20 @@ class Arena(object):
         bytes = llmemory.raw_malloc_usage(size)
         if offset + bytes > self.nbytes:
             raise ArenaError("object overflows beyond the end of the arena")
+        # common case: 'size' starts with a GCHeaderOffset.  In this case
+        # we allocate with 'zero' even if the header doesn't have null
+        # bytes, as long as the rest of the object is over null bytes.
+        sz1 = size
+        while isinstance(sz1, RoundedUpForAllocation):
+            sz1 = sz1.basesize
+        if (isinstance(sz1, llmemory.CompositeOffset) and
+            isinstance(sz1.offsets[0], llmemory.GCHeaderOffset)):
+            hdrbytes = llmemory.raw_malloc_usage(sz1.offsets[0])
+            assert bytes >= hdrbytes
+        else:
+            hdrbytes = 0
         zero = True
-        for c in self.usagemap[offset:offset+bytes]:
+        for c in self.usagemap[offset+hdrbytes:offset+bytes]:
             if c == '0':
                 pass
             elif c == '#':
@@ -90,14 +102,10 @@ class Arena(object):
         pattern = letter.upper() + letter*(bytes-1)
         self.usagemap[offset:offset+bytes] = array.array('c', pattern)
         self.setobject(addr2, offset, bytes)
-        # common case: 'size' starts with a GCHeaderOffset.  In this case
-        # we can also remember that the real object starts after the header.
-        while isinstance(size, RoundedUpForAllocation):
-            size = size.basesize
-        if (isinstance(size, llmemory.CompositeOffset) and
-            isinstance(size.offsets[0], llmemory.GCHeaderOffset)):
-            objaddr = addr2 + size.offsets[0]
-            hdrbytes = llmemory.raw_malloc_usage(size.offsets[0])
+        # in the common case where 'size' starts with a GCHeaderOffset,
+        # we also remember that the real object starts after the header.
+        if hdrbytes > 0:
+            objaddr = addr2 + sz1.offsets[0]
             objoffset = offset + hdrbytes
             self.setobject(objaddr, objoffset, bytes - hdrbytes)
         return addr2
