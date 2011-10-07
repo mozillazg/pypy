@@ -10,10 +10,13 @@ from types import NoneType
 from sys import maxint
 import weakref
 
-class State(object):
-    pass
+try:
+    from thread import _local as tlsobject
+except ImportError:
+    class tlsobject(object):
+        pass
 
-TLS = State()
+TLS = tlsobject()
 
 class WeakValueDictionary(weakref.WeakValueDictionary):
     """A subclass of weakref.WeakValueDictionary

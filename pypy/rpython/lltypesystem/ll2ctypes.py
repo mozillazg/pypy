@@ -27,11 +27,6 @@ from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.rpython import raddress
 from pypy.translator.platform import platform
 from array import array
-try:
-    from thread import _local as tlsobject
-except ImportError:
-    class tlsobject(object):
-        pass
 
 # ____________________________________________________________
 
@@ -1339,7 +1334,7 @@ class CastAdrToIntEntry(ExtRegistryEntry):
 # call to the next.  Otherwise a non-zero value left behind will confuse
 # CPython itself a bit later, and/or CPython will stamp on it before we
 # try to inspect it via rposix.get_errno().
-TLS = tlsobject()
+TLS = lltype.tlsobject()
 
 # helpers to save/restore the C-level errno -- platform-specific because
 # ctypes doesn't just do the right thing and expose it directly :-(
