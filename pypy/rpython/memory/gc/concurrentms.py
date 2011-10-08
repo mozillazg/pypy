@@ -1,6 +1,7 @@
 import time, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup, rffi
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
@@ -663,10 +664,24 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         else:
             return llmemory.cast_adr_to_int(obj)
 
+# ____________________________________________________________
+#
+# Hack to read the first byte of a location, which may be the
+# "mark" byte in an object or, if the location is free, the lowest
+# byte of the "next" pointer.
 
-def maybe_read_mark_byte(addr):
+def emulate_read_mark_byte(addr):
     "NOT_RPYTHON"
     try:
         return addr.ptr.mark
     except AttributeError:
         return '\x00'
+
+eci = ExternalCompilationInfo(
+    post_include_bits = ["""
+        #define pypy_concurrentms_read_byte(addr)  (*(char*)(addr))
+    """])
+maybe_read_mark_byte = rffi.llexternal("pypy_concurrentms_read_byte",
+                                       [llmemory.Address], lltype.Char,
+                                       compilation_info=eci, _nowrapper=True,
+                                       _callable=emulate_read_mark_byte)
