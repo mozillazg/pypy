@@ -118,11 +118,10 @@ class Lock(object):
 
     def release(self):
         # Sanity check: the lock must be locked
-        if self.acquire(False):
-            c_thread_releaselock(self._lock)
+        error = self.acquire(False)
+        c_thread_releaselock(self._lock)
+        if error:
             raise error("bad lock")
-        else:
-            c_thread_releaselock(self._lock)
 
     def __del__(self):
         if free_ll_lock is None:  # happens when tests are shutting down

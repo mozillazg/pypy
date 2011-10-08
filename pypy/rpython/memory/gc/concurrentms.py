@@ -111,17 +111,25 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # When done it releases 'finished_lock'.  The mutator thread is
         # responsible for resetting 'collection_running' to 0.
         self.collection_running = 0
-        self.ready_to_start_lock = ll_thread.allocate_lock()
-        self.finished_lock = ll_thread.allocate_lock()
+        #self.ready_to_start_lock = ...built in setup()
+        #self.finished_lock = ...built in setup()
         #
         # NOT_RPYTHON: set to non-empty in _teardown()
         self._teardown_now = []
         #
         def collector_start():
-            self.collector_run()
+            if we_are_translated():
+                self.collector_run()
+            else:
+                try:
+                    self.collector_run()
+                except Exception, e:
+                    print 'Crash!', e.__class__.__name__, e
+                    self._exc_info = sys.exc_info()
+        #
         self.collector_start = collector_start
         #
-        self.mutex_lock = ll_thread.allocate_lock()
+        #self.mutex_lock = ...built in setup()
         self.gray_objects = self.AddressStack()
         self.extra_objects_to_mark = self.AddressStack()
         self.prebuilt_root_objects = self.AddressStack()
@@ -133,8 +141,15 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def setup(self):
         "Start the concurrent collector thread."
+        GCBase.setup(self)
+        #
+        self.ready_to_start_lock = ll_thread.allocate_ll_lock()
+        self.finished_lock = ll_thread.allocate_ll_lock()
+        self.mutex_lock = ll_thread.allocate_ll_lock()
+        #
         self.acquire(self.finished_lock)
         self.acquire(self.ready_to_start_lock)
+        #
         self.collector_ident = ll_thread.start_new_thread(
             self.collector_start, ())
 
@@ -147,7 +162,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # start the next collection, but with "stop" in _teardown_now,
         # which should shut down the collector thread
         self._teardown_now.append(-1)
-        self.ready_to_start_lock.release()
+        self.release(self.ready_to_start_lock)
         self.acquire(self.finished_lock)
         if not we_are_translated():
             del self.ready_to_start_lock, self.finished_lock
@@ -364,7 +379,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _init_writebarrier_logic(self):
         #
         def force_scan(obj):
-            self.mutex_lock.acquire(True)
+            self.acquire(self.mutex_lock)
             mark = self.header(obj).mark
             if mark != self.current_mark:
                 #
@@ -388,7 +403,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     self.set_mark(obj, self.current_mark)
                     self.trace(obj, self._barrier_add_extra, None)
                 #
-            self.mutex_lock.release()
+            self.release(self.mutex_lock)
         #
         force_scan._dont_inline_ = True
         self.force_scan = force_scan
@@ -478,7 +493,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         # Start the collector thread
         self.collection_running = 1
-        self.ready_to_start_lock.release()
+        self.release(self.ready_to_start_lock)
 
     def _add_stack_root(self, root):
         obj = root.address[0]
@@ -498,6 +513,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def debug_check_list(self, page):
         try:
             while page != llmemory.NULL:
+                # prevent constant-folding:
+                byte = ord(maybe_read_mark_byte(page))
+                ll_assert((byte & 3) == 0, "misaligned?")
                 page = page.address[0]
         except KeyboardInterrupt:
             ll_assert(False, "interrupted")
@@ -505,13 +523,17 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def acquire(self, lock):
         if we_are_translated():
-            lock.acquire(True)
+            ll_thread.c_thread_acquirelock(lock, 1)
         else:
-            while not lock.acquire(False):
+            while rffi.cast(lltype.Signed,
+                            ll_thread.c_thread_acquirelock(lock, 0)) == 0:
                 time.sleep(0.001)
                 # ---------- EXCEPTION FROM THE COLLECTOR THREAD ----------
                 if hasattr(self, '_exc_info'):
                     self._reraise_from_collector_thread()
+
+    def release(self, lock):
+        ll_thread.c_thread_releaselock(lock)
 
     def _reraise_from_collector_thread(self):
         exc, val, tb = self._exc_info
@@ -520,29 +542,25 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def collector_run(self):
         """Main function of the collector's thread."""
-        try:
-            while True:
-                #
-                # Wait for the lock to be released
-                self.acquire(self.ready_to_start_lock)
-                #
-                # For tests: detect when we have to shut down
-                if not we_are_translated():
-                    if self._teardown_now:
-                        self.finished_lock.release()
-                        break
-                #
-                # Mark
-                self.collector_mark()
-                self.collection_running = 2
-                #
-                # Sweep
-                self.collector_sweep()
-                self.finished_lock.release()
-                #
-        except Exception, e:
-            print 'Crash!', e.__class__.__name__, e
-            self._exc_info = sys.exc_info()
+        while True:
+            #
+            # Wait for the lock to be released
+            self.acquire(self.ready_to_start_lock)
+            #
+            # For tests: detect when we have to shut down
+            if not we_are_translated():
+                if self._teardown_now:
+                    self.release(finished_lock)
+                    break
+            #
+            # Mark
+            self.collector_mark()
+            self.collection_running = 2
+            #
+            # Sweep
+            self.collector_sweep()
+            self.release(self.finished_lock)
+
 
     def other_mark(self, mark):
         ll_assert(mark == MARK_VALUE_1 or mark == MARK_VALUE_2,
@@ -570,11 +588,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # 'gray_objects'.  This requires the mutex lock.
             # There are typically only a few objects to move here,
             # unless XXX we've hit the write barrier of a large array
-            self.mutex_lock.acquire(True)
+            self.acquire(self.mutex_lock)
             while self.extra_objects_to_mark.non_empty():
                 obj = self.extra_objects_to_mark.pop()
                 self.gray_objects.append(obj)
-            self.mutex_lock.release()
+            self.release(self.mutex_lock)
             #
             # If 'gray_objects' is empty, we are done: there should be
             # no possible case in which more objects are being added to

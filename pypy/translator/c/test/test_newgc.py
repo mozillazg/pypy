@@ -1515,3 +1515,6 @@ class TestMarkCompactGCMostCompact(TaggedPointersTest, TestMarkCompactGC):
 
 class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
     removetypeptr = True
+
+class TestMostlyConcurrentMarkSweepGC(TestUsingFramework):
+    gcpolicy = "concurrentms"
