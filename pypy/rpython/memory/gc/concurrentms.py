@@ -424,6 +424,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             if self.collect_tails[0] != NULL:
                 self.collect_tails[0].address[0] = self.nonfree_pages[0]
                 self.nonfree_pages[0] = self.collect_heads[0]
+            #
+            if self.DEBUG:
+                self.debug_check_lists()
 
 
     def collect(self, gen=2):
@@ -471,6 +474,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while n < self.pagelists_length:
             self.collect_pages[n] = self.nonfree_pages[n]
             n += 1
+        self.nonfree_pages[0] = NULL
         #
         # Start the collector thread
         self.collection_running = 1
@@ -482,6 +486,22 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def _add_prebuilt_root(self, obj, ignored):
         self.gray_objects.append(obj)
+
+    def debug_check_lists(self):
+        # just check that they are correct, non-infinite linked lists
+        self.debug_check_list(self.nonfree_pages[0])
+        n = 1
+        while n < self.pagelists_length:
+            self.debug_check_list(self.free_lists[n])
+            n += 1
+
+    def debug_check_list(self, page):
+        try:
+            while page != llmemory.NULL:
+                page = page.address[0]
+        except KeyboardInterrupt:
+            ll_assert(False, "interrupted")
+            raise
 
     def acquire(self, lock):
         if we_are_translated():
@@ -600,12 +620,15 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while block != llmemory.NULL:
             nextblock = block.address[0]
             hdr = block + size_of_addr
-            if maybe_read_mark_byte(hdr) == nonmarked:
+            mark = maybe_read_mark_byte(hdr)
+            if mark == nonmarked:
                 # the object is still not marked.  Free it.
                 llarena.arena_free(block)
                 #
             else:
                 # the object was marked: relink it
+                ll_assert(mark == self.current_mark,
+                          "bad mark in large object")
                 block.address[0] = linked_list
                 linked_list = block
                 if first_block_in_linked_list == NULL:
