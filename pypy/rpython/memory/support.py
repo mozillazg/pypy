@@ -1,7 +1,7 @@
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rlib.objectmodel import free_non_gc_object, we_are_translated
 from pypy.rlib.rarithmetic import r_uint, LONG_BIT
-from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import ll_assert, fatalerror
 from pypy.tool.identity_dict import identity_dict
 
 
@@ -39,10 +39,17 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
             if not self.free_list:
                 # we zero-initialize the chunks to make the translation
                 # backends happy, but we don't need to do it at run-time.
-                zero = not we_are_translated()
-                return lltype.malloc(CHUNK, flavor="raw", zero=zero,
-                                     track_allocation=False)
-                
+                if we_are_translated():
+                    zero = 0
+                else:
+                    zero = 2
+                size = llmemory.raw_malloc_usage(llmemory.sizeof(CHUNK))
+                addr = llarena.arena_malloc(size, zero)
+                if not addr:
+                    fatalerror("out of memory in GC support code")
+                llarena.arena_reserve(addr, llmemory.sizeof(CHUNK))
+                return llmemory.cast_adr_to_ptr(addr, lltype.Ptr(CHUNK))
+
             result = self.free_list
             self.free_list = result.next
             return result

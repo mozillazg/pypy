@@ -1,6 +1,7 @@
 import time, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup, rffi
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
+from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rlib.debug import ll_assert
@@ -127,6 +128,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     print 'Crash!', e.__class__.__name__, e
                     self._exc_info = sys.exc_info()
         #
+        collector_start._should_never_raise_ = True
         self.collector_start = collector_start
         #
         #self.mutex_lock = ...built in setup()
@@ -150,8 +152,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.acquire(self.finished_lock)
         self.acquire(self.ready_to_start_lock)
         #
-        self.collector_ident = ll_thread.start_new_thread(
-            self.collector_start, ())
+        self.collector_ident = ll_thread.c_thread_start_nowrapper(
+            llhelper(ll_thread.CALLBACK, self.collector_start))
+        assert self.collector_ident != -1
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
@@ -542,7 +545,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def collector_run(self):
         """Main function of the collector's thread."""
-        while True:
+        #
+        # hack: make it an infinite loop, but in a way that the annotator
+        # doesn't notice.  It prevents the caller from ending automatically
+        # in a "raise AssertionError", annoyingly, because we don't want
+        # any exception in this thread
+        while self.collection_running < 99:
             #
             # Wait for the lock to be released
             self.acquire(self.ready_to_start_lock)
@@ -601,7 +609,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # acquired the 'mutex_lock', so all reachable objects have
             # been marked.
             if not self.gray_objects.non_empty():
-                return
+                break
 
     def _collect_mark(self):
         current_mark = self.current_mark

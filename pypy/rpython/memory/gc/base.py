@@ -231,7 +231,7 @@ class GCBase(object):
                     j += 1
                 item += itemlength
                 length -= 1
-        if self.has_custom_trace(typeid):
+        if self.has_custom_trace(typeid) and 0: # XXX XXX temporarily disabled
             generator = self.get_custom_trace(typeid)
             item = llmemory.NULL
             while True:

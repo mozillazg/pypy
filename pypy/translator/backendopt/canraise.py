@@ -12,20 +12,31 @@ py.log.setconsumer("canraise", ansi_log)
 class RaiseAnalyzer(graphanalyze.BoolGraphAnalyzer):
     def analyze_simple_operation(self, op, graphinfo):
         try:
-            return bool(LL_OPERATIONS[op.opname].canraise)
+            if LL_OPERATIONS[op.opname].canraise:
+                self.reason = op
+                return True
+            return False
         except KeyError:
             log.WARNING("Unknown operation: %s" % op.opname)
+            self.reason = op
             return True
 
     def analyze_external_call(self, op, seen=None):
         fnobj = get_funcobj(op.args[0].value)
-        return getattr(fnobj, 'canraise', True)
+        if getattr(fnobj, 'canraise', True):
+            self.reason = 'external call:', fnobj
+            return True
+        return False
 
     def analyze_external_method(self, op, TYPE, meth):
         assert op.opname == 'oosend'
-        return getattr(meth, '_can_raise', True)
+        if getattr(meth, '_can_raise', True):
+            self.reason = 'external method:', meth
+            return True
+        return False
 
     def analyze_exceptblock(self, block, seen=None):
+        self.reason = "except block:", block
         return True
 
     # backward compatible interface

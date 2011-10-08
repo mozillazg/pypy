@@ -198,8 +198,19 @@ class BaseExceptionTransformer(object):
             assert self.same_obj(self.exc_data_ptr, graph.exceptiontransformed)
             return
         else:
-            self.raise_analyzer.analyze_direct_call(graph)
+            # side-effect: perform the analysis of all graphs reachable from
+            # 'graph'
+            can_raise = self.raise_analyzer.analyze_direct_call(graph)
             graph.exceptiontransformed = self.exc_data_ptr
+            func = getattr(graph, 'func', None)
+            if getattr(func, '_should_never_raise_', False):
+                if not can_raise:
+                    return
+                ra = canraise.RaiseAnalyzer(self.translator)
+                ra.analyze_direct_call(graph)
+                raise Exception("%r is marked as _should_never_raise_, "
+                                "but is found to raise.  Reason: %r" % (
+                    graph, ra.reason))
 
         join_blocks(graph)
         # collect the blocks before changing them

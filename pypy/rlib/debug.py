@@ -210,7 +210,7 @@ class Entry(ExtRegistryEntry):
         c_pythonfunction = hop.inputconst(lltype.Void, pythonfunction)
         args_v = [hop.inputarg(hop.args_r[i], arg=i)
                   for i in range(2, hop.nb_args)]
-        hop.exception_is_here()
+        hop.exception_cannot_occur()
         return hop.genop('debug_llinterpcall', [c_pythonfunction] + args_v,
                          resulttype=RESTYPE)
 

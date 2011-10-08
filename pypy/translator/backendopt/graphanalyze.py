@@ -4,6 +4,7 @@ from pypy.rpython.lltypesystem import lltype
 
 class GraphAnalyzer(object):
     verbose = False
+    reason = None
 
     def __init__(self, translator):
         self.translator = translator
@@ -86,6 +87,7 @@ class GraphAnalyzer(object):
             if graphs is None:
                 if self.verbose:
                     print '\t%s to unknown' % (op,)
+                self.reason = op
                 return self.top_result()
             x = self.analyze_indirect_call(graphs, seen)
             if self.verbose and x:
