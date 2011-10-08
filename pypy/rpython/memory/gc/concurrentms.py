@@ -38,7 +38,8 @@ assert sys.byteorder == 'little'
 MARK_VALUE_1      = 'M'     #  77, 0x4D
 MARK_VALUE_2      = 'k'     # 107, 0x6B
 MARK_VALUE_STATIC = 'S'     #  83, 0x53
-GCFLAG_WITH_HASH  = 0x01
+
+FL_WITHHASH = 0x01
 
 
 class MostlyConcurrentMarkSweepGC(GCBase):
@@ -54,7 +55,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                                   ('flags', lltype.Char),
                                   ('typeid16', llgroup.HALFWORD))
     typeid_is_in_field = 'typeid16'
-    withhash_flag_is_in_field = 'flags', GCFLAG_WITH_HASH
+    withhash_flag_is_in_field = 'flags', FL_WITHHASH
 
     TRANSLATION_PARAMS = {'page_size': 4096,
                           'small_request_threshold': 35*WORD,
@@ -137,17 +138,18 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             self.collector_start, ())
 
     def _teardown(self):
-        "NOT_RPYTHON.  Stop the collector thread after tests have run."
+        "Stop the collector thread after tests have run."
         if self._teardown_now:
             return
         self.wait_for_the_end_of_collection()
         #
         # start the next collection, but with "stop" in _teardown_now,
         # which should shut down the collector thread
-        self._teardown_now.append("stop")
+        self._teardown_now.append(-1)
         self.ready_to_start_lock.release()
         self.acquire(self.finished_lock)
-        del self.ready_to_start_lock, self.finished_lock
+        if not we_are_translated():
+            del self.ready_to_start_lock, self.finished_lock
 
     def get_type_id(self, obj):
         return self.header(obj).typeid16
@@ -423,10 +425,23 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 self.nonfree_pages[0] = self.collect_heads[0]
 
 
-    def collect(self, gen=0):
-        """Trigger a complete collection, and wait for it to finish."""
-        self.trigger_next_collection()
-        self.wait_for_the_end_of_collection()
+    def collect(self, gen=2):
+        """
+        gen=0: Trigger a collection if none is running.  Never blocks.
+        
+        gen=1: The same, but if a collection is running, wait for it
+        to finish before triggering the next one.  Guarantees that
+        objects not reachable when collect() is called will soon be
+        freed.
+
+        gen>=2: The same, but wait for the triggered collection to
+        finish.  Guarantees that objects not reachable when collect()
+        is called will be freed by the time collect() returns.
+        """
+        if gen >= 1 or self.collection_running == 0:
+            self.trigger_next_collection()
+            if gen >= 2:
+                self.wait_for_the_end_of_collection()
 
     def trigger_next_collection(self):
         """In the mutator thread: triggers the next collection."""
@@ -637,6 +652,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         self.collect_heads[n] = linked_list
         self.collect_tails[n] = first_loc_in_linked_list
+
+
+    def identityhash(self, obj):
+        obj = llmemory.cast_ptr_to_adr(obj)
+        hdr = self.header(obj)
+        if ord(hdr.flags) & FL_WITHHASH:
+            obj += self.get_size(obj)
+            return obj.signed[0]
+        else:
+            return llmemory.cast_adr_to_int(obj)
 
 
 def maybe_read_mark_byte(addr):
