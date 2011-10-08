@@ -572,6 +572,15 @@ def op_combine_ushort(ushort, rest):
     from pypy.rpython.lltypesystem import llgroup
     return llgroup.CombinedSymbolic(ushort, rest)
 
+def op_extract_high_ushort(combinedoffset):
+    from pypy.rpython.lltypesystem import llgroup
+    assert isinstance(combinedoffset, llgroup.HighCombinedSymbolic)
+    return combinedoffset.hipart
+
+def op_combine_high_ushort(ushort, rest):
+    from pypy.rpython.lltypesystem import llgroup
+    return llgroup.HighCombinedSymbolic(ushort, rest)
+
 def op_gc_gettypeptr_group(TYPE, obj, grpptr, skipoffset, vtableinfo):
     HDR            = vtableinfo[0]
     size_gc_header = vtableinfo[1]

@@ -159,3 +159,62 @@ class CombinedSymbolic(llmemory.Symbolic):
             return self.rest != other.rest
         else:
             return NotImplemented
+
+
+class HighCombinedSymbolic(llmemory.Symbolic):
+    """Same as CombinedSymbolic, but the symbolic half-word is in the high
+    half, and the flags are in the low part.
+    """
+    __slots__ = ['hipart', 'rest']
+    MASK = ~((1<<HALFSHIFT)-1)     # 0xFFFF0000 or 0xFFFFFFFF000000000
+
+    def annotation(self):
+        from pypy.annotation import model
+        return model.SomeInteger()
+
+    def lltype(self):
+        return lltype.Signed
+
+    def __init__(self, hipart, rest):
+        assert (rest & HighCombinedSymbolic.MASK) == 0
+        self.hipart = hipart
+        self.rest = rest
+
+    def __repr__(self):
+        return '<HighCombinedSymbolic %r|%s>' % (self.hipart, self.rest)
+
+    def __nonzero__(self):
+        return True
+
+    def __and__(self, other):
+        if (other & HighCombinedSymbolic.MASK) == 0:
+            return self.rest & other
+        if (other & HighCombinedSymbolic.MASK) == HighCombinedSymbolic.MASK:
+            return HighCombinedSymbolic(self.hipart, self.rest & other)
+        raise Exception("other=0x%x" % other)
+
+    def __or__(self, other):
+        assert (other & HighCombinedSymbolic.MASK) == 0
+        return HighCombinedSymbolic(self.hipart, self.rest | other)
+
+    def __add__(self, other):
+        assert (other & HighCombinedSymbolic.MASK) == 0
+        return HighCombinedSymbolic(self.hipart, self.rest + other)
+
+    def __sub__(self, other):
+        assert (other & HighCombinedSymbolic.MASK) == 0
+        return HighCombinedSymbolic(self.hipart, self.rest - other)
+
+    def __eq__(self, other):
+        if (isinstance(other, HighCombinedSymbolic) and
+            self.hipart is other.hipart):
+            return self.rest == other.rest
+        else:
+            return NotImplemented
+
+    def __ne__(self, other):
+        if (isinstance(other, HighCombinedSymbolic) and
+            self.hipart is other.hipart):
+            return self.rest != other.rest
+        else:
+            return NotImplemented

@@ -1,6 +1,7 @@
 import time, sys
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup, rffi
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
@@ -24,24 +25,20 @@ from pypy.module.thread import ll_thread
 #
 
 WORD = LONG_BIT // 8
-NULL = llmemory.NULL
 WORD_POWER_2 = {32: 2, 64: 3}[LONG_BIT]
 assert 1 << WORD_POWER_2 == WORD
-size_of_addr = llmemory.sizeof(llmemory.Address)
-MAXIMUM_SIZE = sys.maxint - (2*WORD-1)
-
-# XXX assumes little-endian machines for now: the byte at offset 0 in
-# the object is either a mark byte (equal to an odd value), or if the
-# location is free, it is the low byte of a pointer to the next free
-# location (and then it is an even value, by pointer alignment).
-assert sys.byteorder == 'little'
+MAXIMUM_SIZE = sys.maxint - (3*WORD-1)
 
 
-MARK_VALUE_1      = 'M'     #  77, 0x4D
-MARK_VALUE_2      = 'k'     # 107, 0x6B
-MARK_VALUE_STATIC = 'S'     #  83, 0x53
-
-FL_WITHHASH = 0x01
+# Objects start with an integer 'tid', which is decomposed as follows.
+# Lowest byte: one of the the following values (which are all odd, so
+# let us know if the 'tid' is valid or is just a word-aligned address):
+MARK_VALUE_1      = 0x4D    # 'M', 77
+MARK_VALUE_2      = 0x6B    # 'k', 107
+MARK_VALUE_STATIC = 0x53    # 'S', 83
+# Next lower byte: a combination of flags.
+FL_WITHHASH = 0x0100
+# And the high half of the word contains the numeric typeid.
 
 
 class MostlyConcurrentMarkSweepGC(GCBase):
@@ -53,11 +50,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     malloc_zero_filled = True
     #gcflag_extra = GCFLAG_FINALIZATION_ORDERING
 
-    HDR = lltype.Struct('header', ('mark', lltype.Char),  # MARK_VALUE_{1,2}
-                                  ('flags', lltype.Char),
-                                  ('typeid16', llgroup.HALFWORD))
-    typeid_is_in_field = 'typeid16'
-    withhash_flag_is_in_field = 'flags', FL_WITHHASH
+    HDR = lltype.Struct('header', ('tid', lltype.Signed))
+    HDRPTR = lltype.Ptr(HDR)
+    HDRSIZE = llmemory.sizeof(HDR)
+    NULL = lltype.nullptr(HDR)
+    typeid_is_in_field = 'tid'
+    withhash_flag_is_in_field = 'tid', FL_WITHHASH
 
     TRANSLATION_PARAMS = {'page_size': 4096,
                           'small_request_threshold': 35*WORD,
@@ -72,7 +70,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         assert small_request_threshold % WORD == 0
         self.small_request_threshold = small_request_threshold
         self.page_size = page_size
-        self.free_pages = NULL
+        self.free_pages = lltype.nullptr(self.HDR)
         self.pagelists_length = small_request_threshold // WORD + 1
         #
         # The following are arrays of 36 linked lists: the linked lists
@@ -80,7 +78,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # size  1 * WORD  to  35 * WORD,  and the linked list at index 0
         # is a list of all larger objects.
         def list_of_addresses_per_small_size():
-            return lltype.malloc(rffi.CArray(llmemory.Address),
+            return lltype.malloc(rffi.CArray(self.HDRPTR),
                                  self.pagelists_length, flavor='raw',
                                  zero=True, immortal=True)
         # 1-35: a linked list of all pages; 0: a linked list of all larger objs
@@ -171,14 +169,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             del self.ready_to_start_lock, self.finished_lock
 
     def get_type_id(self, obj):
-        return self.header(obj).typeid16
+        tid = self.header(obj).tid
+        return llop.extract_high_ushort(llgroup.HALFWORD, tid)
+
+    def combine(self, typeid16, mark, flags):
+        return llop.combine_high_ushort(lltype.Signed, typeid16, mark | flags)
 
     def init_gc_object_immortal(self, addr, typeid, flags=0):
         # 'flags' is ignored here
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid
-        hdr.mark = MARK_VALUE_STATIC
-        hdr.flags = '\x00'
+        hdr.tid = self.combine(typeid, MARK_VALUE_STATIC, 0)
 
     def malloc_fixedsize_clear(self, typeid, size,
                                needs_finalizer=False, contains_weakptr=False):
@@ -193,17 +193,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             n = rawtotalsize >> WORD_POWER_2
             result = self.free_lists[n]
-            if result != llmemory.NULL:
-                self.free_lists[n] = result.address[0]
-                #
-                llarena.arena_reset(result, size_of_addr, 0)
-                llarena.arena_reserve(result, totalsize)
-                hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
-                hdr.typeid16 = typeid
-                hdr.mark = self.current_mark
-                hdr.flags = '\x00'
-                #
-                obj = result + size_gc_header
+            if result != self.NULL:
+                self.free_lists[n] = self.cast_int_to_hdrptr(result.tid)
+                obj = self.grow_reservation(result, totalsize)
+                hdr = self.header(obj)
+                hdr.tid = self.combine(typeid, self.current_mark, 0)
                 return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
                 #
         return self._malloc_slowpath(typeid, size)
@@ -237,17 +231,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             n = rawtotalsize >> WORD_POWER_2
             result = self.free_lists[n]
-            if result != llmemory.NULL:
-                self.free_lists[n] = result.address[0]
-                #
-                llarena.arena_reset(result, size_of_addr, 0)
-                llarena.arena_reserve(result, totalsize)
-                hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
-                hdr.typeid16 = typeid
-                hdr.mark = self.current_mark
-                hdr.flags = '\x00'
-                #
-                obj = result + size_gc_header
+            if result != self.NULL:
+                self.free_lists[n] = self.cast_int_to_hdrptr(result.tid)
+                obj = self.grow_reservation(result, totalsize)
+                hdr = self.header(obj)
+                hdr.tid = self.combine(typeid, self.current_mark, 0)
                 (obj + offset_to_length).signed[0] = length
                 return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
         #
@@ -271,15 +259,15 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Case 1: we have run out of the free list corresponding to
             # the size.  Grab the next free page.
             newpage = self.free_pages
-            if newpage == llmemory.NULL:
+            if newpage == self.NULL:
                 self.allocate_next_arena()
                 newpage = self.free_pages
-            self.free_pages = newpage.address[0]
+            self.free_pages = self.cast_int_to_hdrptr(newpage.tid)
             #
             # Put the free page in the list 'nonfree_pages[n]'.  This is
             # a linked list chained through the first word of each page.
             n = rawtotalsize >> WORD_POWER_2
-            newpage.address[0] = self.nonfree_pages[n]
+            newpage.tid = self.cast_hdrptr_to_int(self.nonfree_pages[n])
             self.nonfree_pages[n] = newpage
             #
             # Initialize the free page to contain objects of the given
@@ -288,14 +276,18 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             head = self.free_lists[n]
             ll_assert(not head, "_malloc_slowpath: unexpected free_lists[n]")
             i = self.page_size - rawtotalsize
-            limit = rawtotalsize + raw_malloc_usage(size_of_addr)
+            limit = rawtotalsize + raw_malloc_usage(self.HDRSIZE)
+            newpageadr = llmemory.cast_ptr_to_adr(newpage)
+            newpageadr = llarena.getfakearenaaddress(newpageadr)
             while i >= limit:
-                llarena.arena_reserve(newpage + i, size_of_addr)
-                (newpage + i).address[0] = head
-                head = newpage + i
+                adr = newpageadr + i
+                llarena.arena_reserve(adr, self.HDRSIZE)
+                p = llmemory.cast_adr_to_ptr(adr, self.HDRPTR)
+                p.tid = self.cast_hdrptr_to_int(head)
+                head = p
                 i -= rawtotalsize
             self.free_lists[n] = head
-            result = head - rawtotalsize
+            result = newpageadr + i
             #
             # Done: all object locations are linked, apart from
             # 'result', which is the first object location in the page.
@@ -306,22 +298,21 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
         else:
             # Case 2: the object is too large, so allocate it directly
-            # with the system malloc().  XXX on 32-bit, we should prefer
-            # 64-bit alignment of the object
-            rawtotalsize += raw_malloc_usage(size_of_addr)
+            # with the system malloc().  xxx on 32-bit, we'll prefer 64-bit
+            # alignment of the object by always allocating an 8-bytes header
+            rawtotalsize += 8
             block = llarena.arena_malloc(rawtotalsize, 2)
             if not block:
                 raise MemoryError
-            llarena.arena_reserve(block, size_of_addr)
-            block.address[0] = self.nonfree_pages[0]
-            self.nonfree_pages[0] = block
-            result = block + size_of_addr
+            llarena.arena_reserve(block, self.HDRSIZE)
+            blockhdr = llmemory.cast_adr_to_ptr(block, self.HDRPTR)
+            blockhdr.tid = self.cast_hdrptr_to_int(self.nonfree_pages[0])
+            self.nonfree_pages[0] = blockhdr
+            result = block + 8
         #
         llarena.arena_reserve(result, totalsize)
-        hdr = llmemory.cast_adr_to_ptr(result, lltype.Ptr(self.HDR))
-        hdr.typeid16 = typeid
-        hdr.mark = self.current_mark
-        hdr.flags = '\x00'
+        hdr = llmemory.cast_adr_to_ptr(result, self.HDRPTR)
+        hdr.tid = self.combine(typeid, self.current_mark, 0)
         #
         obj = result + size_gc_header
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
@@ -362,19 +353,30 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         page = llarena.arena_malloc(self.page_size, 2)     # zero-filled
         if not page:
             raise MemoryError
-        llarena.arena_reserve(page, size_of_addr)
-        page.address[0] = NULL
+        llarena.arena_reserve(page, self.HDRSIZE)
+        page = llmemory.cast_adr_to_ptr(page, self.HDRPTR)
+        page.tid = 0
         self.free_pages = page
 
+    def grow_reservation(self, hdr, totalsize):
+        # Transform 'hdr', which used to point to just a HDR,
+        # into a pointer to a full object of size 'totalsize'.
+        # This is a no-op after translation.  Returns the
+        # address of the full object.
+        adr = llmemory.cast_ptr_to_adr(hdr)
+        adr = llarena.getfakearenaaddress(adr)
+        llarena.arena_reset(adr, self.HDRSIZE, 0)
+        llarena.arena_reserve(adr, totalsize)
+        return adr + llmemory.raw_malloc_usage(self.HDRSIZE)
 
     def write_barrier(self, newvalue, addr_struct):
-        mark = self.header(addr_struct).mark
+        mark = self.header(addr_struct).tid & 0xFF
         if mark != self.current_mark:
             self.force_scan(addr_struct)
 
     def writebarrier_before_copy(self, source_addr, dest_addr,
                                  source_start, dest_start, length):
-        mark = self.header(dest_addr).mark
+        mark = self.header(dest_addr).tid & 0xFF
         if mark != self.current_mark:
             self.force_scan(dest_addr)
         return True
@@ -383,7 +385,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         def force_scan(obj):
             self.acquire(self.mutex_lock)
-            mark = self.header(obj).mark
+            mark = self.header(obj).tid & 0xFF
             if mark != self.current_mark:
                 #
                 if mark == MARK_VALUE_STATIC:
@@ -433,14 +435,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # 'free_lists'.
             n = 1
             while n < self.pagelists_length:
-                if self.collect_tails[n] != NULL:
-                    self.collect_tails[n].address[0] = self.free_lists[n]
+                if self.collect_tails[n] != self.NULL:
+                    self.collect_tails[n].tid = self.cast_hdrptr_to_int(
+                        self.free_lists[n])
                     self.free_lists[n] = self.collect_heads[n]
                 n += 1
             #
             # Do the same with 'collect_heads[0]/collect_tails[0]'.
-            if self.collect_tails[0] != NULL:
-                self.collect_tails[0].address[0] = self.nonfree_pages[0]
+            if self.collect_tails[0] != self.NULL:
+                self.collect_tails[0].tid = self.cast_hdrptr_to_int(
+                    self.nonfree_pages[0])
                 self.nonfree_pages[0] = self.collect_heads[0]
             #
             if self.DEBUG:
@@ -492,7 +496,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while n < self.pagelists_length:
             self.collect_pages[n] = self.nonfree_pages[n]
             n += 1
-        self.nonfree_pages[0] = NULL
+        self.nonfree_pages[0] = self.NULL
         #
         # Start the collector thread
         self.collection_running = 1
@@ -515,11 +519,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def debug_check_list(self, page):
         try:
-            while page != llmemory.NULL:
-                # prevent constant-folding:
-                byte = ord(maybe_read_mark_byte(page))
-                ll_assert((byte & 3) == 0, "misaligned?")
-                page = page.address[0]
+            previous_page = self.NULL
+            while page != self.NULL:
+                # prevent constant-folding, and detects loops of length 1
+                ll_assert(page != previous_page, "loop!")
+                previous_page = page
+                page = self.cast_int_to_hdrptr(page.tid)
         except KeyboardInterrupt:
             ll_assert(False, "interrupted")
             raise
@@ -541,6 +546,14 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _reraise_from_collector_thread(self):
         exc, val, tb = self._exc_info
         raise exc, val, tb
+
+    def cast_int_to_hdrptr(self, tid):
+        return llmemory.cast_adr_to_ptr(llmemory.cast_int_to_adr(tid),
+                                        self.HDRPTR)
+
+    def cast_hdrptr_to_int(self, hdr):
+        return llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(hdr),
+                                        "symbolic")
 
 
     def collector_run(self):
@@ -573,16 +586,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def other_mark(self, mark):
         ll_assert(mark == MARK_VALUE_1 or mark == MARK_VALUE_2,
                   "bad mark value")
-        return chr(ord(mark) ^ (ord(MARK_VALUE_1) ^ ord(MARK_VALUE_2)))
+        return mark ^ (MARK_VALUE_1 ^ MARK_VALUE_2)
 
     def is_marked(self, obj, current_mark):
-        mark = self.header(obj).mark
+        mark = self.header(obj).tid & 0xFF
         ll_assert(mark in (MARK_VALUE_1, MARK_VALUE_2, MARK_VALUE_STATIC),
                   "bad mark byte in object")
         return mark == current_mark
 
-    def set_mark(self, obj, current_mark):
-        self.header(obj).mark = current_mark
+    def set_mark(self, obj, newmark):
+        _set_mark(self.header(obj), newmark)
 
     def collector_mark(self):
         while True:
@@ -641,23 +654,25 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _collect_sweep_large_objects(self):
         block = self.collect_pages[0]
         nonmarked = self.other_mark(self.current_mark)
-        linked_list = NULL
-        first_block_in_linked_list = NULL
-        while block != llmemory.NULL:
-            nextblock = block.address[0]
-            hdr = block + size_of_addr
-            mark = maybe_read_mark_byte(hdr)
+        linked_list = self.NULL
+        first_block_in_linked_list = self.NULL
+        while block != self.NULL:
+            nextblock = self.cast_int_to_hdrptr(block.tid)
+            blockadr = llmemory.cast_ptr_to_adr(block)
+            blockadr = llarena.getfakearenaaddress(blockadr)
+            hdr = llmemory.cast_adr_to_ptr(blockadr + 8, self.HDRPTR)
+            mark = hdr.tid & 0xFF
             if mark == nonmarked:
                 # the object is still not marked.  Free it.
-                llarena.arena_free(block)
+                llarena.arena_free(blockadr)
                 #
             else:
                 # the object was marked: relink it
                 ll_assert(mark == self.current_mark,
                           "bad mark in large object")
-                block.address[0] = linked_list
+                block.tid = self.cast_hdrptr_to_int(linked_list)
                 linked_list = block
-                if first_block_in_linked_list == NULL:
+                if first_block_in_linked_list == self.NULL:
                     first_block_in_linked_list = block
             block = nextblock
         #
@@ -669,36 +684,42 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # containing objects of fixed size 'object_size'.
         page = self.collect_pages[n]
         object_size = n << WORD_POWER_2
-        linked_list = NULL
-        first_loc_in_linked_list = NULL
+        linked_list = self.NULL
+        first_loc_in_linked_list = self.NULL
         nonmarked = self.other_mark(self.current_mark)
-        while page != llmemory.NULL:
+        while page != self.NULL:
             i = self.page_size - object_size
-            limit = raw_malloc_usage(size_of_addr)
+            limit = raw_malloc_usage(self.HDRSIZE)
+            pageadr = llmemory.cast_ptr_to_adr(page)
+            pageadr = llarena.getfakearenaaddress(pageadr)
             while i >= limit:
-                hdr = page + i
+                adr = pageadr + i
+                hdr = llmemory.cast_adr_to_ptr(adr, self.HDRPTR)
                 #
-                if maybe_read_mark_byte(hdr) == nonmarked:
+                if (hdr.tid & 0xFF) == nonmarked:
                     # the location contains really an object (and is not just
                     # part of a linked list of free locations), and moreover
                     # the object is still not marked.  Free it by inserting
                     # it into the linked list.
-                    llarena.arena_reset(hdr, object_size, 0)
-                    llarena.arena_reserve(hdr, size_of_addr)
-                    hdr.address[0] = linked_list
+                    llarena.arena_reset(adr, object_size, 0)
+                    llarena.arena_reserve(adr, self.HDRSIZE)
+                    hdr = llmemory.cast_adr_to_ptr(adr, self.HDRPTR)
+                    hdr.tid = self.cast_hdrptr_to_int(linked_list)
                     linked_list = hdr
-                    if first_loc_in_linked_list == NULL:
+                    if first_loc_in_linked_list == self.NULL:
                         first_loc_in_linked_list = hdr
                     # XXX detect when the whole page is freed again
                     #
                     # Clear the data, in prevision for the following
                     # malloc_fixedsize_clear().
-                    llarena.arena_reset(hdr + size_of_addr,
-                        object_size - raw_malloc_usage(size_of_addr), 2)
+                    size_of_int = raw_malloc_usage(
+                        llmemory.sizeof(lltype.Signed))
+                    llarena.arena_reset(adr + size_of_int,
+                                        object_size - size_of_int, 2)
                 #
                 i -= object_size
             #
-            page = page.address[0]
+            page = self.cast_int_to_hdrptr(page.tid)
         #
         self.collect_heads[n] = linked_list
         self.collect_tails[n] = first_loc_in_linked_list
@@ -706,8 +727,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def identityhash(self, obj):
         obj = llmemory.cast_ptr_to_adr(obj)
-        hdr = self.header(obj)
-        if ord(hdr.flags) & FL_WITHHASH:
+        if self.header(obj).tid & FL_WITHHASH:
             obj += self.get_size(obj)
             return obj.signed[0]
         else:
@@ -715,22 +735,46 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
 # ____________________________________________________________
 #
-# Hack to read the first byte of a location, which may be the
-# "mark" byte in an object or, if the location is free, the lowest
-# byte of the "next" pointer.
+# Hack to write the 'mark' or the 'flags' bytes of an object header
+# without overwriting the whole word.  Essential in the rare case where
+# the other thread might be concurrently writing the other byte.
 
-def emulate_read_mark_byte(addr):
+concurrent_setter_lock = ll_thread.allocate_lock()
+
+def emulate_set_mark(p, v):
     "NOT_RPYTHON"
-    try:
-        return addr.ptr.mark
-    except AttributeError:
-        return '\x00'
+    assert v in (MARK_VALUE_1, MARK_VALUE_2, MARK_VALUE_STATIC)
+    concurrent_setter_lock.acquire(True)
+    p.tid = (p.tid &~ 0xFF) | v
+    concurrent_setter_lock.release()
 
-eci = ExternalCompilationInfo(
-    post_include_bits = ["""
-        #define pypy_concurrentms_read_byte(addr)  (*(char*)(addr))
-    """])
-maybe_read_mark_byte = rffi.llexternal("pypy_concurrentms_read_byte",
-                                       [llmemory.Address], lltype.Char,
-                                       compilation_info=eci, _nowrapper=True,
-                                       _callable=emulate_read_mark_byte)
+def emulate_set_flags(p, v):
+    "NOT_RPYTHON"
+    assert (v & ~0xFF00) == 0
+    concurrent_setter_lock.acquire(True)
+    p.tid = (p.tid &~ 0xFF00) | v
+    concurrent_setter_lock.release()
+
+if sys.byteorder == 'little':
+    eci = ExternalCompilationInfo(
+        post_include_bits = ["""
+#define pypy_concurrentms_set_mark(p, v)   ((char*)p)[0] = v
+#define pypy_concurrentms_set_flags(p, v)  ((char*)p)[1] = v
+        """])
+elif sys.byteorder == 'big':
+    eci = ExternalCompilationInfo(
+        post_include_bits = [r"""
+#define pypy_concurrentms_set_mark(p, v)   ((char*)p)[sizeof(long)-1] = v
+#define pypy_concurrentms_set_flags(p, v)  ((char*)p)[sizeof(long)-2] = v
+        """])
+else:
+    raise NotImplementedError(sys.byteorder)
+
+_set_mark = rffi.llexternal("pypy_concurrentms_set_mark",
+                           [MostlyConcurrentMarkSweepGC.HDRPTR, lltype.Signed],
+                           lltype.Void, compilation_info=eci, _nowrapper=True,
+                           _callable=emulate_set_mark)
+_set_flags = rffi.llexternal("pypy_concurrentms_set_flags",
+                           [MostlyConcurrentMarkSweepGC.HDRPTR, lltype.Signed],
+                           lltype.Void, compilation_info=eci, _nowrapper=True,
+                           _callable=emulate_set_flags)

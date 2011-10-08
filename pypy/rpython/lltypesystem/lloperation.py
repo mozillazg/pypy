@@ -420,6 +420,8 @@ LL_OPERATIONS = {
     'is_group_member_nonzero':LLOp(canfold=True),
     'extract_ushort':       LLOp(canfold=True),
     'combine_ushort':       LLOp(canfold=True),
+    'extract_high_ushort':  LLOp(canfold=True),
+    'combine_high_ushort':  LLOp(canfold=True),
     'gc_gettypeptr_group':  LLOp(canfold=True),
     'get_member_index':     LLOp(canfold=True),
 

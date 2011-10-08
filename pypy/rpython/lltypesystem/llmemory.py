@@ -532,11 +532,27 @@ class AddressAsInt(Symbolic):
         return self.adr != cast_int_to_adr(other)
     def __nonzero__(self):
         return bool(self.adr)
+    def __and__(self, other):
+        assert type(other) is int
+        if 0 <= other <= 3:
+            return 0
+        return MultipleOf4()
     def __repr__(self):
         try:
             return '<AddressAsInt %s>' % (self.adr.ptr,)
         except AttributeError:
             return '<AddressAsInt at 0x%x>' % (uid(self),)
+
+class MultipleOf4(Symbolic):
+    # support for "i & 0xFF == <odd value>", which is always False if i is
+    # an AddressAsInt (at least assuming the address is of some word-aligned
+    # location).
+    def __eq__(self, other):
+        assert (other & 3) != 0
+        return False
+    def __ne__(self, other):
+        assert (other & 3) != 0
+        return True
 
 # ____________________________________________________________
 
