@@ -5,7 +5,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
-from pypy.rlib.debug import ll_assert
+from pypy.rlib.debug import ll_assert, debug_print
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
 from pypy.rpython.memory.gc.base import GCBase
 from pypy.module.thread import ll_thread
@@ -70,7 +70,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         assert small_request_threshold % WORD == 0
         self.small_request_threshold = small_request_threshold
         self.page_size = page_size
-        self.free_pages = lltype.nullptr(self.HDR)
         self.pagelists_length = small_request_threshold // WORD + 1
         #
         # The following are arrays of 36 linked lists: the linked lists
@@ -80,7 +79,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         def list_of_addresses_per_small_size():
             return lltype.malloc(rffi.CArray(self.HDRPTR),
                                  self.pagelists_length, flavor='raw',
-                                 zero=True, immortal=True)
+                                 immortal=True)
         # 1-35: a linked list of all pages; 0: a linked list of all larger objs
         self.nonfree_pages = list_of_addresses_per_small_size()
         # a snapshot of 'nonfree_pages' done when the collection starts
@@ -91,6 +90,38 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # 0: head and tail of the linked list of surviving large objects
         self.collect_heads = list_of_addresses_per_small_size()
         self.collect_tails = list_of_addresses_per_small_size()
+        #
+        def collector_start():
+            if we_are_translated():
+                self.collector_run()
+            else:
+                self.collector_run_nontranslated()
+        #
+        collector_start._should_never_raise_ = True
+        self.collector_start = collector_start
+        #
+        self._initialize()
+        #
+        # Write barrier: actually a deletion barrier, triggered when there
+        # is a collection running and the mutator tries to change an object
+        # that was not scanned yet.
+        self._init_writebarrier_logic()
+
+    def _clear_list(self, array):
+        i = 0
+        while i < self.pagelists_length:
+            array[i] = lltype.nullptr(self.HDR)
+            i += 1
+
+    def _initialize(self):
+        self.free_pages = lltype.nullptr(self.HDR)
+        #
+        # Clear the lists
+        self._clear_list(self.nonfree_pages)
+        self._clear_list(self.collect_pages)
+        self._clear_list(self.free_lists)
+        self._clear_list(self.collect_heads)
+        self._clear_list(self.collect_tails)
         #
         # The following character is either MARK_VALUE_1 or MARK_VALUE_2,
         # and represents the character that must be in the 'mark' field
@@ -113,38 +144,19 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #self.ready_to_start_lock = ...built in setup()
         #self.finished_lock = ...built in setup()
         #
-        # NOT_RPYTHON: set to non-empty in _teardown()
+        # set to non-empty in _teardown()
         self._teardown_now = []
-        #
-        def collector_start():
-            if we_are_translated():
-                self.collector_run()
-            else:
-                try:
-                    self.collector_run()
-                except Exception, e:
-                    print 'Crash!', e.__class__.__name__, e
-                    self._exc_info = sys.exc_info()
-        #
-        collector_start._should_never_raise_ = True
-        self.collector_start = collector_start
         #
         #self.mutex_lock = ...built in setup()
         self.gray_objects = self.AddressStack()
         self.extra_objects_to_mark = self.AddressStack()
         self.prebuilt_root_objects = self.AddressStack()
-        #
-        # Write barrier: actually a deletion barrier, triggered when there
-        # is a collection running and the mutator tries to change an object
-        # that was not scanned yet.
-        self._init_writebarrier_logic()
-        #
-        self.main_thread_ident = ll_thread.get_ident()
 
     def setup(self):
         "Start the concurrent collector thread."
         GCBase.setup(self)
         #
+        self.main_thread_ident = ll_thread.get_ident()
         self.ready_to_start_lock = ll_thread.allocate_ll_lock()
         self.finished_lock = ll_thread.allocate_ll_lock()
         self.mutex_lock = ll_thread.allocate_ll_lock()
@@ -166,9 +178,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # which should shut down the collector thread
         self._teardown_now.append(-1)
         self.release(self.ready_to_start_lock)
+        print "teardown!"
         self.acquire(self.finished_lock)
-        if not we_are_translated():
-            del self.ready_to_start_lock, self.finished_lock
+        self._initialize()
 
     def get_type_id(self, obj):
         tid = self.header(obj).tid
@@ -533,6 +545,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             raise
 
     def acquire(self, lock):
+        debug_print("acquire", ll_thread.get_ident(), self.main_thread_ident)
         if (we_are_translated() or
                 ll_thread.get_ident() != self.main_thread_ident):
             ll_thread.c_thread_acquirelock(lock, 1)
@@ -543,6 +556,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 # ---------- EXCEPTION FROM THE COLLECTOR THREAD ----------
                 if hasattr(self, '_exc_info'):
                     self._reraise_from_collector_thread()
+        debug_print("ok", ll_thread.get_ident(), self.main_thread_ident)
 
     def release(self, lock):
         ll_thread.c_thread_releaselock(lock)
@@ -558,6 +572,24 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def cast_hdrptr_to_int(self, hdr):
         return llmemory.cast_adr_to_int(llmemory.cast_ptr_to_adr(hdr),
                                         "symbolic")
+
+
+    def collector_run_nontranslated(self):
+        if hasattr(self, 'ready_to_start_lock'):      # normal tests
+            try:
+                self.collector_run()
+            except Exception, e:
+                print 'Crash!', e.__class__.__name__, e
+                self._exc_info = sys.exc_info()
+        else:
+            # this case is for test_transformed_gc: we need to spawn
+            # another LLInterpreter for this new thread.
+            from pypy.rpython.llinterp import LLInterpreter
+            prev = LLInterpreter.current_interpreter
+            llinterp = LLInterpreter(prev.typer)
+            # XXX FISH HORRIBLY for the graph...
+            graph = sys._getframe(2).f_locals['self']._obj.graph
+            llinterp.eval_graph(graph)
 
 
     def collector_run(self):

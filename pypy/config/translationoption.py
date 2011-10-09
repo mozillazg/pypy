@@ -90,6 +90,8 @@ translation_optiondescription = OptionDescription(
                  }),
     BoolOption("gcremovetypeptr", "Remove the typeptr from every object",
                default=IS_64_BITS, cmdline="--gcremovetypeptr"),
+    BoolOption("gctesttransformed", "Set to True by test_transformed_gc",
+               default=False),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
                  ["n/a", "shadowstack", "asmgcc"],

@@ -594,7 +594,13 @@ def op_gc_gettypeptr_group(TYPE, obj, grpptr, skipoffset, vtableinfo):
     hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
     typeid = getattr(hdr, fieldname)
     if lltype.typeOf(typeid) == lltype.Signed:
-        typeid = op_extract_ushort(typeid)
+        from pypy.rpython.lltypesystem import llgroup
+        if isinstance(typeid, llgroup.CombinedSymbolic):
+            typeid = op_extract_ushort(typeid)
+        elif isinstance(typeid, llgroup.HighCombinedSymbolic):
+            typeid = op_extract_high_ushort(typeid)
+        else:
+            raise TypeError(typeid)
     return op_get_next_group_member(TYPE, grpptr, typeid, skipoffset)
 op_gc_gettypeptr_group.need_result_type = True
 

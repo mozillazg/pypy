@@ -105,6 +105,7 @@ class GCTest(object):
             if fixup:
                 fixup(t)
 
+        t.config.translation.gctesttransformed = True
         cbuild = CStandaloneBuilder(t, entrypoint, config=t.config,
                                     gcpolicy=cls.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()

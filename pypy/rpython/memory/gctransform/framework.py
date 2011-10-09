@@ -230,8 +230,9 @@ class FrameworkGCTransformer(GCTransformer):
         self.frameworkgc_setup_ptr = getfn(frameworkgc_setup, [],
                                            annmodel.s_None)
         # for tests
-        self.frameworkgc__teardown_ptr = getfn(frameworkgc__teardown, [],
-                                               annmodel.s_None)
+        if self.translator.config.translation.gctesttransformed:
+            self.frameworkgc__teardown_ptr = getfn(frameworkgc__teardown, [],
+                                                   annmodel.s_None)
         
         if root_walker.need_root_stack:
             self.incr_stack_ptr = getfn(root_walker.incr_stack,
