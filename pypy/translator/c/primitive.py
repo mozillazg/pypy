@@ -1,7 +1,7 @@
 import sys
 from pypy.rlib.objectmodel import Symbolic, ComputedIntSymbolic
 from pypy.rlib.objectmodel import CDefinedIntSymbolic
-from pypy.rlib.rarithmetic import r_longlong
+from pypy.rlib.rarithmetic import r_longlong, LONG_BIT
 from pypy.rlib.rfloat import isinf, isnan
 from pypy.rpython.lltypesystem.lltype import *
 from pypy.rpython.lltypesystem import rffi, llgroup
@@ -62,6 +62,11 @@ def name_signed(value, db):
             name = name_small_integer(value.lowpart, db)
             assert (value.rest & value.MASK) == 0
             return '(%s+%dL)' % (name, value.rest)
+        elif isinstance(value, llgroup.HighCombinedSymbolic):
+            name = name_small_integer(value.hipart, db)
+            assert (value.rest & value.MASK) == 0
+            return '((((long)%s)<<%d)+%dL)' % (name, LONG_BIT//2,
+                                               value.rest)
         elif isinstance(value, AddressAsInt):
             return '((long)%s)' % name_address(value.adr, db)
         else:

@@ -58,4 +58,9 @@ typedef unsigned int pypy_halfword_t;
 #define OP_EXTRACT_USHORT(value, r)         r = (pypy_halfword_t)value
 #define OP_COMBINE_USHORT(ushort, rest, r)  r = ((long)ushort) | rest
 
+#define OP_EXTRACT_HIGH_USHORT(value, r)         \
+    r = (pypy_halfword_t)(value >> (PYPY_LONG_BIT/2))
+#define OP_COMBINE_HIGH_USHORT(ushort, rest, r)  \
+    r = (((long)ushort) << (PYPY_LONG_BIT/2)) | rest
+
 #endif /* _PYPY_LL_GROUP_H_ */

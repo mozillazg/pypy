@@ -138,6 +138,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # is a collection running and the mutator tries to change an object
         # that was not scanned yet.
         self._init_writebarrier_logic()
+        #
+        self.main_thread_ident = ll_thread.get_ident()
 
     def setup(self):
         "Start the concurrent collector thread."
@@ -368,6 +370,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         llarena.arena_reset(adr, self.HDRSIZE, 0)
         llarena.arena_reserve(adr, totalsize)
         return adr + llmemory.raw_malloc_usage(self.HDRSIZE)
+    grow_reservation._always_inline_ = True
 
     def write_barrier(self, newvalue, addr_struct):
         mark = self.header(addr_struct).tid & 0xFF
@@ -530,7 +533,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             raise
 
     def acquire(self, lock):
-        if we_are_translated():
+        if (we_are_translated() or
+                ll_thread.get_ident() != self.main_thread_ident):
             ll_thread.c_thread_acquirelock(lock, 1)
         else:
             while rffi.cast(lltype.Signed,
