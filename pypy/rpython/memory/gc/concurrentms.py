@@ -148,8 +148,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #self.ready_to_start_lock = ...built in setup()
         #self.finished_lock = ...built in setup()
         #
-        # set to non-empty in _teardown()
-        self._teardown_now = []
+        # set to True in _teardown()
+        self._teardown_now = False
         #
         #self.mutex_lock = ...built in setup()
         self.gray_objects.clear()
@@ -174,15 +174,14 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
-        if self._teardown_now:
-            return
+        assert not self._teardown_now
         self.wait_for_the_end_of_collection()
         #
         # start the next collection, but with "stop" in _teardown_now,
         # which should shut down the collector thread
-        self._teardown_now.append(-1)
-        self.release(self.ready_to_start_lock)
+        self._teardown_now = True
         print "teardown!"
+        self.release(self.ready_to_start_lock)
         self.acquire(self.finished_lock)
         self._initialize()
 
@@ -609,10 +608,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             self.acquire(self.ready_to_start_lock)
             #
             # For tests: detect when we have to shut down
-            if not we_are_translated():
-                if self._teardown_now:
-                    self.release(finished_lock)
-                    break
+            if self._teardown_now:
+                self.release(self.finished_lock)
+                break
             #
             # Mark
             self.collector_mark()
