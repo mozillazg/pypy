@@ -119,20 +119,26 @@ class GCTest(object):
         cls.rtyper = t.rtyper
         cls.db = db
 
+    def do_teardown(self):
+        if self.__class__.__dict__.get('_used', False):
+            from pypy.rpython.llinterp import LLInterpreter
+            llinterp = LLInterpreter(self.rtyper)
+            gct = self.db.gctransformer
+            teardowngraph = gct.frameworkgc__teardown_ptr.value._obj.graph
+            llinterp.eval_graph(teardowngraph, [])
+            self.__class__._used = False
+
     def runner(self, name, statistics=False, transformer=False):
         db = self.db
         name_to_func = self.name_to_func
         entrygraph = self.entrygraph
         from pypy.rpython.llinterp import LLInterpreter
 
-        llinterp = LLInterpreter(self.rtyper)
-
-        gct = db.gctransformer
-
-        if self.__class__.__dict__.get('_used', False):
-            teardowngraph = gct.frameworkgc__teardown_ptr.value._obj.graph
-            llinterp.eval_graph(teardowngraph, [])
+        self.do_teardown()
         self.__class__._used = True
+
+        llinterp = LLInterpreter(self.rtyper)
+        gct = db.gctransformer
 
         # FIIIIISH
         setupgraph = gct.frameworkgc_setup_ptr.value._obj.graph
@@ -144,6 +150,7 @@ class GCTest(object):
             for i in range(len(args)):
                 ll_args[1+i] = args[i]
             res = llinterp.eval_graph(entrygraph, [ll_args])
+            self.do_teardown()
             return res
 
         if statistics:

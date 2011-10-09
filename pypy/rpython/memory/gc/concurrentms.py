@@ -176,7 +176,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # start the next collection, but with collection_running set to 42,
         # which should shut down the collector thread
         self.collection_running = 42
-        #print "teardown!"
+        debug_print("teardown!")
         self.release(self.ready_to_start_lock)
         self.acquire(self.finished_lock)
         self._initialize()
@@ -261,6 +261,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _malloc_slowpath(self, typeid, size):
         # Slow-path malloc.  Call this with 'size' being a valid and
         # rounded number, between WORD and up to MAXIMUM_SIZE.
+        #
+        # For now, we always start the next collection immediately.
+        if self.collection_running <= 0:
+            self.trigger_next_collection()
+        #
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
@@ -269,7 +274,18 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         if rawtotalsize <= self.small_request_threshold:
             #
-            # Case 1: we have run out of the free list corresponding to
+            # Case 1: unless trigger_next_collection() happened to get us
+            # more locations in free_lists[n], we have run out of them
+            n = rawtotalsize >> WORD_POWER_2
+            head = self.free_lists[n]
+            if head:
+                self.free_lists[n] = self.cast_int_to_hdrptr(head.tid)
+                obj = self.grow_reservation(head, totalsize)
+                hdr = self.header(obj)
+                hdr.tid = self.combine(typeid, self.current_mark, 0)
+                return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+            #
+            # We really have run out of the free list corresponding to
             # the size.  Grab the next free page.
             newpage = self.free_pages
             if newpage == self.NULL:
@@ -279,15 +295,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             # Put the free page in the list 'nonfree_pages[n]'.  This is
             # a linked list chained through the first word of each page.
-            n = rawtotalsize >> WORD_POWER_2
             newpage.tid = self.cast_hdrptr_to_int(self.nonfree_pages[n])
             self.nonfree_pages[n] = newpage
             #
             # Initialize the free page to contain objects of the given
             # size.  This requires setting up all object locations in the
             # page, linking them in the free list.
-            head = self.free_lists[n]
-            ll_assert(not head, "_malloc_slowpath: unexpected free_lists[n]")
             i = self.page_size - rawtotalsize
             limit = rawtotalsize + raw_malloc_usage(self.HDRSIZE)
             newpageadr = llmemory.cast_ptr_to_adr(newpage)
@@ -478,7 +491,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         finish.  Guarantees that objects not reachable when collect()
         is called will be freed by the time collect() returns.
         """
-        if gen >= 1 or self.collection_running == 0:
+        if gen >= 1 or self.collection_running <= 0:
             self.trigger_next_collection()
             if gen >= 2:
                 self.wait_for_the_end_of_collection()
@@ -550,7 +563,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         else:
             while rffi.cast(lltype.Signed,
                             ll_thread.c_thread_acquirelock(lock, 0)) == 0:
-                time.sleep(0.001)
+                time.sleep(0.05)
                 # ---------- EXCEPTION FROM THE COLLECTOR THREAD ----------
                 if hasattr(self, '_exc_info'):
                     self._reraise_from_collector_thread()
@@ -572,22 +585,21 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
 
     def collector_run_nontranslated(self):
-        if hasattr(self, 'ready_to_start_lock'):      # normal tests
-            try:
+        try:
+            if hasattr(self, 'ready_to_start_lock'):      # normal tests
                 self.collector_run()
-            except Exception, e:
-                print 'Crash!', e.__class__.__name__, e
-                self._exc_info = sys.exc_info()
-        else:
-            # this case is for test_transformed_gc: we need to spawn
-            # another LLInterpreter for this new thread.
-            from pypy.rpython.llinterp import LLInterpreter
-            prev = LLInterpreter.current_interpreter
-            llinterp = LLInterpreter(prev.typer)
-            # XXX FISH HORRIBLY for the graph...
-            graph = sys._getframe(2).f_locals['self']._obj.graph
-            llinterp.eval_graph(graph)
-
+            else:
+                # this case is for test_transformed_gc: we need to spawn
+                # another LLInterpreter for this new thread.
+                from pypy.rpython.llinterp import LLInterpreter
+                prev = LLInterpreter.current_interpreter
+                llinterp = LLInterpreter(prev.typer)
+                # XXX FISH HORRIBLY for the graph...
+                graph = sys._getframe(2).f_locals['self']._obj.graph
+                llinterp.eval_graph(graph)
+        except Exception, e:
+            print 'Crash!', e.__class__.__name__, e
+            self._exc_info = sys.exc_info()
 
     def collector_run(self):
         """Main function of the collector's thread."""
@@ -613,6 +625,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             # Sweep
             self.collector_sweep()
+            #
+            # Done!
+            self.collection_running = -1
             self.release(self.finished_lock)
 
 
