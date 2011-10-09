@@ -184,14 +184,16 @@ def op_bool_not(b):
 def op_int_add(x, y):
     if not isinstance(x, (int, llmemory.AddressOffset)):
         from pypy.rpython.lltypesystem import llgroup
-        assert isinstance(x, llgroup.CombinedSymbolic)
+        assert isinstance(x, (llgroup.CombinedSymbolic,
+                              llgroup.HighCombinedSymbolic))
     assert isinstance(y, (int, llmemory.AddressOffset))
     return intmask(x + y)
 
 def op_int_sub(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
-        assert isinstance(x, llgroup.CombinedSymbolic)
+        assert isinstance(x, (llgroup.CombinedSymbolic,
+                              llgroup.HighCombinedSymbolic))
     assert isinstance(y, int)
     return intmask(x - y)
 
@@ -216,14 +218,16 @@ def op_int_between(a, b, c):
 def op_int_and(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
-        assert isinstance(x, llgroup.CombinedSymbolic)
+        assert isinstance(x, (llgroup.CombinedSymbolic,
+                              llgroup.HighCombinedSymbolic))
     assert isinstance(y, int)
     return x & y
 
 def op_int_or(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
-        assert isinstance(x, llgroup.CombinedSymbolic)
+        assert isinstance(x, (llgroup.CombinedSymbolic,
+                              llgroup.HighCombinedSymbolic))
     assert isinstance(y, int)
     return x | y
 
