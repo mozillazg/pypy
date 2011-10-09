@@ -4,6 +4,7 @@ import inspect
 from pypy.translator.c import gc
 from pypy.annotation import model as annmodel
 from pypy.annotation import policy as annpolicy
+from pypy.annotation.listdef import s_list_of_strings
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi, llgroup
 from pypy.rpython.memory.gctransform import framework
 from pypy.rpython.lltypesystem.lloperation import llop, void
@@ -36,8 +37,6 @@ def rtype(func, inputtypes, specialize=True, gcname='ref',
     if conftest.option.view:
         t.viewcg()
     return t
-
-ARGS = lltype.FixedSizeArray(lltype.Signed, 3)
 
 class GCTest(object):
     gcpolicy = None
@@ -83,13 +82,13 @@ class GCTest(object):
             cleanups.append(cleanup)
 
         def entrypoint(args):
-            num = args[0]
+            num = int(args[0])
             func = funcs0[num]
             if func:
                 res = func()
             else:
                 func = funcs2[num]
-                res = func(args[1], args[2])
+                res = func(int(args[1]), int(args[2]))
             cleanup = cleanups[num]
             if cleanup:
                 cleanup()
@@ -97,8 +96,7 @@ class GCTest(object):
 
         from pypy.translator.c.genc import CStandaloneBuilder
 
-        s_args = annmodel.SomePtr(lltype.Ptr(ARGS))
-        t = rtype(entrypoint, [s_args], gcname=cls.gcname,
+        t = rtype(entrypoint, [s_list_of_strings], gcname=cls.gcname,
                   taggedpointers=cls.taggedpointers)
 
         for fixup in mixlevelstuff:
@@ -109,6 +107,8 @@ class GCTest(object):
         cbuild = CStandaloneBuilder(t, entrypoint, config=t.config,
                                     gcpolicy=cls.gcpolicy)
         db = cbuild.generate_graphs_for_llinterp()
+        gc = cbuild.db.gctransformer.gcdata.gc
+        gc.currently_running_in_rtyper = t.rtyper
         entrypointptr = cbuild.getentrypointptr()
         entrygraph = entrypointptr._obj.graph
         if conftest.option.view:
@@ -145,11 +145,14 @@ class GCTest(object):
         # setup => resets the gc
         llinterp.eval_graph(setupgraph, [])
         def run(args):
-            ll_args = lltype.malloc(ARGS, immortal=True)
-            ll_args[0] = name_to_func[name]
+            ll_args = lltype.malloc(rffi.CCHARPP.TO, 1+len(args),
+                                    immortal=True)
+            ll_args[0] = rffi.str2charp(str(name_to_func[name]))
             for i in range(len(args)):
-                ll_args[1+i] = args[i]
-            res = llinterp.eval_graph(entrygraph, [ll_args])
+                ll_args[1+i] = rffi.str2charp(str(args[i]))
+            res = llinterp.eval_graph(entrygraph, [1+len(args), ll_args])
+            for i in range(1+len(args)):
+                rffi.free_charp(ll_args[i])
             self.do_teardown()
             return res
 

@@ -594,14 +594,13 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def collector_run_nontranslated(self):
         try:
-            if hasattr(self, 'ready_to_start_lock'):      # normal tests
-                self.collector_run()
+            if not hasattr(self, 'currently_running_in_rtyper'):
+                self.collector_run()     # normal tests
             else:
                 # this case is for test_transformed_gc: we need to spawn
                 # another LLInterpreter for this new thread.
                 from pypy.rpython.llinterp import LLInterpreter
-                prev = LLInterpreter.current_interpreter
-                llinterp = LLInterpreter(prev.typer)
+                llinterp = LLInterpreter(self.currently_running_in_rtyper)
                 # XXX FISH HORRIBLY for the graph...
                 graph = sys._getframe(2).f_locals['self']._obj.graph
                 llinterp.eval_graph(graph)
