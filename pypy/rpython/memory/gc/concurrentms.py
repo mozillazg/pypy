@@ -100,6 +100,10 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         collector_start._should_never_raise_ = True
         self.collector_start = collector_start
         #
+        self.gray_objects = self.AddressStack()
+        self.extra_objects_to_mark = self.AddressStack()
+        self.prebuilt_root_objects = self.AddressStack()
+        #
         self._initialize()
         #
         # Write barrier: actually a deletion barrier, triggered when there
@@ -148,9 +152,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self._teardown_now = []
         #
         #self.mutex_lock = ...built in setup()
-        self.gray_objects = self.AddressStack()
-        self.extra_objects_to_mark = self.AddressStack()
-        self.prebuilt_root_objects = self.AddressStack()
+        self.gray_objects.clear()
+        self.extra_objects_to_mark.clear()
+        self.prebuilt_root_objects.clear()
 
     def setup(self):
         "Start the concurrent collector thread."
