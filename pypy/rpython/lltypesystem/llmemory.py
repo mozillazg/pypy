@@ -547,6 +547,11 @@ class MultipleOf4(Symbolic):
     # support for "i & 0xFF == <odd value>", which is always False if i is
     # an AddressAsInt (at least assuming the address is of some word-aligned
     # location).
+    def annotation(self):
+        from pypy.annotation import model
+        return model.SomeInteger()
+    def lltype(self):
+        return lltype.Signed
     def __eq__(self, other):
         assert (other & 3) != 0
         return False

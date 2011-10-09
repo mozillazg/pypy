@@ -197,6 +197,12 @@ def op_int_sub(x, y):
     assert isinstance(y, int)
     return intmask(x - y)
 
+def op_int_eq(x, y):
+    # specail case for MultipleOf4
+    assert isinstance(x, (int, llmemory.MultipleOf4))
+    assert isinstance(y, int)
+    return x == y
+
 def op_int_ge(x, y):
     # special case for 'AddressOffset >= 0'
     assert isinstance(x, (int, llmemory.AddressOffset))
@@ -219,7 +225,8 @@ def op_int_and(x, y):
     if not isinstance(x, int):
         from pypy.rpython.lltypesystem import llgroup
         assert isinstance(x, (llgroup.CombinedSymbolic,
-                              llgroup.HighCombinedSymbolic))
+                              llgroup.HighCombinedSymbolic,
+                              llmemory.AddressAsInt))
     assert isinstance(y, int)
     return x & y
 
