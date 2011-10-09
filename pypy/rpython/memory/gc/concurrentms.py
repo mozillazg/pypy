@@ -5,7 +5,7 @@ from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
-from pypy.rlib.debug import ll_assert, debug_print
+from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
 from pypy.rpython.memory.gc.base import GCBase
 from pypy.module.thread import ll_thread
@@ -448,6 +448,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         """In the mutator thread: wait for the collection currently
         running (if any) to finish."""
         if self.collection_running != 0:
+            debug_start("gc-stop")
+            #
             self.acquire(self.finished_lock)
             self.collection_running = 0
             #
@@ -476,6 +478,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             if self.DEBUG:
                 self.debug_check_lists()
+            #
+            debug_stop("gc-stop")
 
 
     def collect(self, gen=2):
@@ -501,6 +505,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         # In case the previous collection is not over yet, wait for it
         self.wait_for_the_end_of_collection()
+        #
+        debug_start("gc-start")
         #
         # Scan the stack roots and the refs in non-GC objects
         self.root_walker.walk_roots(
@@ -528,6 +534,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # Start the collector thread
         self.collection_running = 1
         self.release(self.ready_to_start_lock)
+        #
+        debug_stop("gc-start")
 
     def _add_stack_root(self, root):
         obj = root.address[0]
