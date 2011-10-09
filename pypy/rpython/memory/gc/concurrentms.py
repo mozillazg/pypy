@@ -148,9 +148,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #self.ready_to_start_lock = ...built in setup()
         #self.finished_lock = ...built in setup()
         #
-        # set to True in _teardown()
-        self._teardown_now = False
-        #
         #self.mutex_lock = ...built in setup()
         self.gray_objects.clear()
         self.extra_objects_to_mark.clear()
@@ -174,13 +171,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
-        assert not self._teardown_now
         self.wait_for_the_end_of_collection()
         #
-        # start the next collection, but with "stop" in _teardown_now,
+        # start the next collection, but with collection_running set to 42,
         # which should shut down the collector thread
-        self._teardown_now = True
-        print "teardown!"
+        self.collection_running = 42
+        #print "teardown!"
         self.release(self.ready_to_start_lock)
         self.acquire(self.finished_lock)
         self._initialize()
@@ -548,7 +544,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             raise
 
     def acquire(self, lock):
-        debug_print("acquire", ll_thread.get_ident(), self.main_thread_ident)
+        #debug_print("acquire", ll_thread.get_ident(), self.main_thread_ident)
         if (we_are_translated() or
                 ll_thread.get_ident() != self.main_thread_ident):
             ll_thread.c_thread_acquirelock(lock, 1)
@@ -559,7 +555,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 # ---------- EXCEPTION FROM THE COLLECTOR THREAD ----------
                 if hasattr(self, '_exc_info'):
                     self._reraise_from_collector_thread()
-        debug_print("ok", ll_thread.get_ident(), self.main_thread_ident)
+        #debug_print("ok", ll_thread.get_ident(), self.main_thread_ident)
 
     def release(self, lock):
         ll_thread.c_thread_releaselock(lock)
@@ -598,17 +594,18 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def collector_run(self):
         """Main function of the collector's thread."""
         #
-        # hack: make it an infinite loop, but in a way that the annotator
-        # doesn't notice.  It prevents the caller from ending automatically
-        # in a "raise AssertionError", annoyingly, because we don't want
+        # hack: this is an infinite loop in practice.  During tests it can
+        # be interrupted.  In all cases the annotator must not conclude that
+        # it is an infinite loop: otherwise, the caller would automatically
+        # end in a "raise AssertionError", annoyingly, because we don't want
         # any exception in this thread
-        while self.collection_running < 99:
+        while True:
             #
             # Wait for the lock to be released
             self.acquire(self.ready_to_start_lock)
             #
             # For tests: detect when we have to shut down
-            if self._teardown_now:
+            if self.collection_running == 42:
                 self.release(self.finished_lock)
                 break
             #
