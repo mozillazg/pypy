@@ -380,7 +380,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         adr = llarena.getfakearenaaddress(adr)
         llarena.arena_reset(adr, self.HDRSIZE, 0)
         llarena.arena_reserve(adr, totalsize)
-        return adr + llmemory.raw_malloc_usage(self.HDRSIZE)
+        return adr + self.gcheaderbuilder.size_gc_header
     grow_reservation._always_inline_ = True
 
     def write_barrier(self, newvalue, addr_struct):
@@ -544,7 +544,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             raise
 
     def acquire(self, lock):
-        #debug_print("acquire", ll_thread.get_ident(), self.main_thread_ident)
         if (we_are_translated() or
                 ll_thread.get_ident() != self.main_thread_ident):
             ll_thread.c_thread_acquirelock(lock, 1)
@@ -555,7 +554,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 # ---------- EXCEPTION FROM THE COLLECTOR THREAD ----------
                 if hasattr(self, '_exc_info'):
                     self._reraise_from_collector_thread()
-        #debug_print("ok", ll_thread.get_ident(), self.main_thread_ident)
 
     def release(self, lock):
         ll_thread.c_thread_releaselock(lock)

@@ -198,7 +198,7 @@ def op_int_sub(x, y):
     return intmask(x - y)
 
 def op_int_eq(x, y):
-    # specail case for MultipleOf4
+    # special case for MultipleOf4
     assert isinstance(x, (int, llmemory.MultipleOf4))
     assert isinstance(y, int)
     return x == y
