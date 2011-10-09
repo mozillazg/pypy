@@ -57,7 +57,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     typeid_is_in_field = 'tid'
     withhash_flag_is_in_field = 'tid', FL_WITHHASH
 
-    TRANSLATION_PARAMS = {'page_size': 4096,
+    TRANSLATION_PARAMS = {'page_size': 16384,
                           'small_request_threshold': 35*WORD,
                           }
 
