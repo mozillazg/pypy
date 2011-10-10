@@ -199,7 +199,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def malloc_fixedsize_clear(self, typeid, size,
                                needs_finalizer=False, contains_weakptr=False):
         assert not needs_finalizer  # XXX
-        assert not contains_weakptr # XXX
+        # contains_weakptr: detected during collection
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
@@ -733,11 +733,14 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.gray_objects.append(root.address[0])
 
     def collector_sweep(self):
-        self._collect_sweep_large_objects()
         n = 1
         while n < self.pagelists_length:
             self._collect_sweep_pages(n)
             n += 1
+        # do this *after* the other one, so that objects are not free'd
+        # before we get a chance to inspect if they contain objects that
+        # are still alive (needed for weakrefs)
+        self._collect_sweep_large_objects()
 
     def _collect_sweep_large_objects(self):
         block = self.collect_pages[0]
@@ -774,7 +777,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         object_size = n << WORD_POWER_2
         linked_list = self.NULL
         first_loc_in_linked_list = self.NULL
-        nonmarked = self.other_mark(self.current_mark)
+        marked = self.current_mark
+        nonmarked = self.other_mark(marked)
         while page != self.NULL:
             i = self.page_size - object_size
             limit = raw_malloc_usage(self.HDRSIZE)
@@ -783,8 +787,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             while i >= limit:
                 adr = pageadr + i
                 hdr = llmemory.cast_adr_to_ptr(adr, self.HDRPTR)
+                mark = hdr.tid & 0xFF
                 #
-                if (hdr.tid & 0xFF) == nonmarked:
+                if mark == nonmarked:
                     # the location contains really an object (and is not just
                     # part of a linked list of free locations), and moreover
                     # the object is still not marked.  Free it by inserting
@@ -804,6 +809,26 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                         llmemory.sizeof(lltype.Signed))
                     llarena.arena_reset(adr + size_of_int,
                                         object_size - size_of_int, 2)
+                #
+                elif mark == marked:
+                    # the location contains really an object, which is marked.
+                    # check the typeid to see if it's a weakref.  XXX could
+                    # be faster
+                    tid = hdr.tid
+                    type_id = llop.extract_high_ushort(llgroup.HALFWORD, tid)
+                    wroffset = self.weakpointer_offset(type_id)
+                    if wroffset >= 0:
+                        size_gc_header = self.gcheaderbuilder.size_gc_header
+                        obj = adr + size_gc_header
+                        pointing_to = (obj + wroffset).address[0]
+                        if pointing_to != llmemory.NULL:
+                            pt_adr = pointing_to - size_gc_header
+                            pt_hdr = llmemory.cast_adr_to_ptr(pt_adr,
+                                                              self.HDRPTR)
+                            if (pt_hdr.tid & 0xFF) == nonmarked:
+                                # this weakref points to an object that is still
+                                # not marked, so clear it
+                                (obj + wroffset).address[0] = llmemory.NULL
                 #
                 i -= object_size
             #

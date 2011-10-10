@@ -931,20 +931,3 @@ class TestMiniMarkGCCardMarking(TestMiniMarkGC):
 class TestMostlyConcurrentMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.concurrentms \
             import MostlyConcurrentMarkSweepGC as GCClass
-
-    def test_finalizer_order(self):
-        py.test.skip("in-progress")
-    def test_from_objwithfinalizer_to_youngobj(self):
-        py.test.skip("in-progress")
-    def test_finalizer(self):
-        py.test.skip("in-progress")
-    def test_finalizer_calls_malloc(self):
-        py.test.skip("in-progress")
-    def test_finalizer_calls_collect(self):
-        py.test.skip("in-progress")
-    def test_finalizer_resurrects(self):
-        py.test.skip("in-progress")
-    def test_weakref(self):
-        py.test.skip("in-progress")
-    def test_weakref_to_object_with_finalizer(self):
-        py.test.skip("in-progress")
