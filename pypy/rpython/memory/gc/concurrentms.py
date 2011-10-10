@@ -37,7 +37,8 @@ MARK_VALUE_1      = 0x4D    # 'M', 77
 MARK_VALUE_2      = 0x6B    # 'k', 107
 MARK_VALUE_STATIC = 0x53    # 'S', 83
 # Next lower byte: a combination of flags.
-FL_WITHHASH = 0x0100
+FL_WITHHASH              = 0x0100
+FL_EXTRA                 = 0x0200
 # And the high half of the word contains the numeric typeid.
 
 
@@ -48,14 +49,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     needs_write_barrier = True
     prebuilt_gc_objects_are_static_roots = False
     malloc_zero_filled = True
-    #gcflag_extra = GCFLAG_FINALIZATION_ORDERING
+    gcflag_extra = FL_EXTRA
 
     HDR = lltype.Struct('header', ('tid', lltype.Signed))
     HDRPTR = lltype.Ptr(HDR)
     HDRSIZE = llmemory.sizeof(HDR)
     NULL = lltype.nullptr(HDR)
-    typeid_is_in_field = 'tid'
+    typeid_is_in_field = 'tid', llgroup.HALFSHIFT
     withhash_flag_is_in_field = 'tid', FL_WITHHASH
+    # ^^^ prebuilt objects may have the flag FL_WITHHASH;
+    #     then they are one word longer, the extra word storing the hash.
 
     TRANSLATION_PARAMS = {'page_size': 16384,
                           'small_request_threshold': 35*WORD,
@@ -374,6 +377,33 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return result
     _malloc_varsize_slowpath._dont_inline_ = True
 
+    # ----------
+    # Other functions in the GC API
+
+    #def set_max_heap_size(self, size):
+    #    XXX
+
+    #def raw_malloc_memory_pressure(self, sizehint):
+    #    XXX
+
+    #def shrink_array(self, obj, smallerlength):
+    #    return False
+
+    def enumerate_all_roots(self, callback, arg):
+        self.prebuilt_root_objects.foreach(callback, arg)
+        GCBase.enumerate_all_roots(self, callback, arg)
+    enumerate_all_roots._annspecialcase_ = 'specialize:arg(1)'
+
+    def identityhash(self, obj):
+        obj = llmemory.cast_ptr_to_adr(obj)
+        if self.header(obj).tid & FL_WITHHASH:
+            obj += self.get_size(obj)
+            return obj.signed[0]
+        else:
+            return llmemory.cast_adr_to_int(obj)
+
+    # ----------
+
     def allocate_next_arena(self):
         # xxx for now, allocate one page at a time with the system malloc()
         page = llarena.arena_malloc(self.page_size, 2)     # zero-filled
@@ -407,6 +437,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         if mark != self.current_mark:
             self.force_scan(dest_addr)
         return True
+
+    def assume_young_pointers(self, addr_struct):
+        XXX
 
     def _init_writebarrier_logic(self):
         #
@@ -779,14 +812,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.collect_heads[n] = linked_list
         self.collect_tails[n] = first_loc_in_linked_list
 
-
-    def identityhash(self, obj):
-        obj = llmemory.cast_ptr_to_adr(obj)
-        if self.header(obj).tid & FL_WITHHASH:
-            obj += self.get_size(obj)
-            return obj.signed[0]
-        else:
-            return llmemory.cast_adr_to_int(obj)
 
 # ____________________________________________________________
 #
