@@ -737,9 +737,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while n < self.pagelists_length:
             self._collect_sweep_pages(n)
             n += 1
-        # do this *after* the other one, so that objects are not free'd
-        # before we get a chance to inspect if they contain objects that
-        # are still alive (needed for weakrefs)
+        # do this *after* the other one, so that the blocks are not free'd
+        # before we get a chance to inspect them, to see if they contain
+        # an object that is still alive (needed for weakrefs)
         self._collect_sweep_large_objects()
 
     def _collect_sweep_large_objects(self):
@@ -826,8 +826,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                             pt_hdr = llmemory.cast_adr_to_ptr(pt_adr,
                                                               self.HDRPTR)
                             if (pt_hdr.tid & 0xFF) == nonmarked:
-                                # this weakref points to an object that is still
-                                # not marked, so clear it
+                                # this weakref points to an object that is
+                                # still not marked, so clear it
                                 (obj + wroffset).address[0] = llmemory.NULL
                 #
                 i -= object_size
