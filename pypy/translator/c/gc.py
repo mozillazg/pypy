@@ -378,18 +378,23 @@ class FrameworkGcPolicy(BasicGcPolicy):
         [v_obj, c_grpptr, c_skipoffset, c_vtableinfo] = op.args
         typename = funcgen.db.gettype(op.result.concretetype)
         tid_field = c_vtableinfo.value[2]
+        tid_offset = 0
+        if isinstance(tid_field, tuple):
+            tid_field, tid_offset = tid_field
         # Fish out the C name of the tid field.
         HDR = self.db.gctransformer.HDR
         hdr_node = self.db.gettypedefnode(HDR)
         fieldname = hdr_node.c_struct_field_name(tid_field)
+        #
+        tid = '%s->_gcheader.%s' % (funcgen.expr(v_obj), fieldname)
+        if tid_offset:
+            tid = '(%s >> %d)' % (tid, tid_offset)
         return (
-        '%s = (%s)_OP_GET_NEXT_GROUP_MEMBER(%s, (pypy_halfword_t)%s->'
-            '_gcheader.%s, %s);'
+        '%s = (%s)_OP_GET_NEXT_GROUP_MEMBER(%s, (pypy_halfword_t)%s, %s);'
             % (funcgen.expr(op.result),
                cdecl(typename, ''),
                funcgen.expr(c_grpptr),
-               funcgen.expr(v_obj),
-               fieldname,
+               tid,
                funcgen.expr(c_skipoffset)))
 
     def OP_GC_ASSUME_YOUNG_POINTERS(self, funcgen, op):

@@ -1286,6 +1286,7 @@ class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
         fptr = rtti._obj.custom_trace_funcptr
         if not hasattr(fptr._obj, 'graph'):
             ll_func = fptr._obj._callable
+            ll_func._should_never_raise_ = True
             fptr = self.transformer.annotate_finalizer(ll_func,
                     [llmemory.Address, llmemory.Address], llmemory.Address)
         return fptr

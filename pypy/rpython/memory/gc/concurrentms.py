@@ -439,7 +439,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return True
 
     def assume_young_pointers(self, addr_struct):
-        XXX
+        pass # XXX
 
     def _init_writebarrier_logic(self):
         #

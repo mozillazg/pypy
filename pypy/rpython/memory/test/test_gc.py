@@ -276,6 +276,7 @@ class GCTest(object):
             else:
                 py.test.raises((RuntimeError, ArenaError),
                                self.interpret, f, [])
+                print "NOTE: The previous ArenaError, if any, is expected"
 
     def test_weakref(self):
         import weakref, gc

@@ -462,14 +462,11 @@ class FunctionCodeGenerator(object):
         return self.generic_call(fn.concretetype, self.expr(fn),
                                  op.args[1:-1], op.result, op.args[-1].value)
 
-    def OP_ADR_CALL(self, op):
-        ARGTYPES = [v.concretetype for v in op.args[1:]]
-        RESTYPE = op.result.concretetype
-        FUNC = Ptr(FuncType(ARGTYPES, RESTYPE))
-        typename = self.db.gettype(FUNC)
-        fnaddr = op.args[0]
-        fnexpr = '((%s)%s)' % (cdecl(typename, ''), self.expr(fnaddr))
-        return self.generic_call(FUNC, fnexpr, op.args[1:], op.result)
+    def OP_LLCALL_CANNOT_RAISE(self, op):
+        fn = op.args[0]
+        res = self.generic_call(fn.concretetype, self.expr(fn),
+                                op.args[1:], op.result)
+        return res + ' /* llcall_cannot_raise */'
 
     # low-level operations
     def generic_get(self, op, sourceexpr):

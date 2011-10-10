@@ -1,4 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, llarena
+from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rlib.debug import ll_assert
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rpython.memory.support import DEFAULT_CHUNK_SIZE
@@ -231,11 +232,12 @@ class GCBase(object):
                     j += 1
                 item += itemlength
                 length -= 1
-        if self.has_custom_trace(typeid) and 0: # XXX XXX temporarily disabled
+        if self.has_custom_trace(typeid):
             generator = self.get_custom_trace(typeid)
             item = llmemory.NULL
             while True:
-                item = generator(obj, item)
+                item = llop.llcall_cannot_raise(llmemory.Address,
+                                                generator, obj, item)
                 if not item:
                     break
                 if self.points_to_valid_gc_object(item):

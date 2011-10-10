@@ -186,6 +186,7 @@ LL_OPERATIONS = {
 
     'direct_call':          LLOp(canraise=(Exception,)),
     'indirect_call':        LLOp(canraise=(Exception,)),
+    'llcall_cannot_raise':  LLOp(canrun=True),    # dangerous, use carefully!
 
     # __________ numeric operations __________
 

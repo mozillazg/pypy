@@ -675,6 +675,12 @@ class LLFrame(object):
             #log.warn("op_indirect_call with graphs=None:", f)
         return self.op_direct_call(f, *args)
 
+    def op_llcall_cannot_raise(self, llf, *args):
+        try:
+            return self.op_direct_call(llf, *args)
+        except LLException, e:
+            raise AssertionError("llcall_cannot_raise: raised %s" % e)
+
     def op_malloc(self, obj, flags):
         flavor = flags['flavor']
         zero = flags.get('zero', False)

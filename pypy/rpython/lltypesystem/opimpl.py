@@ -624,6 +624,13 @@ def op_ll_read_timestamp():
     from pypy.rlib.rtimer import read_timestamp
     return read_timestamp()
 
+def op_llcall_cannot_raise(llf, *args):
+    try:
+        return llf(*args)
+    except Exception, e:
+        raise AssertionError("llcall_cannot_raise: raised %s: %s" % (
+            e.__class__.__name__, e))
+
 # ____________________________________________________________
 
 def get_op_impl(opname):
