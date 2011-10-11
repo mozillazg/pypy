@@ -411,14 +411,21 @@ class fakeaddress(object):
         self.ptr = ptr
 
     def __repr__(self):
+        x = ''
         if self.ptr is None:
             s = 'NULL'
         else:
+            from pypy.rpython.lltypesystem import llarena
+            try:
+                addr = llarena.getfakearenaaddress(self)
+                x = '(%s + %d) ' % (addr.arena, addr.offset)
+            except Exception:
+                pass
             #try:
             #    s = hex(self.ptr._cast_to_int())
             #except:
             s = str(self.ptr)
-        return '<fakeaddr %s>' % (s,)
+        return '<fakeaddr %s%s>' % (x, s)
 
     def __add__(self, other):
         if isinstance(other, AddressOffset):

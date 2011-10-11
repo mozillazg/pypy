@@ -230,6 +230,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 obj = self.grow_reservation(result, totalsize)
                 hdr = self.header(obj)
                 hdr.tid = self.combine(typeid, self.current_mark, 0)
+                #debug_print("malloc_fixedsize_clear", obj)
                 return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
                 #
         return self._malloc_slowpath(typeid, size)
@@ -269,6 +270,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 hdr = self.header(obj)
                 hdr.tid = self.combine(typeid, self.current_mark, 0)
                 (obj + offset_to_length).signed[0] = length
+                #debug_print("malloc_varsize_clear", obj)
                 return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
         #
         # If the total size of the object would be larger than
@@ -360,6 +362,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         hdr.tid = self.combine(typeid, self.current_mark, 0)
         #
         obj = result + size_gc_header
+        #debug_print("malloc_slowpath", obj)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
         #
     _malloc_slowpath._dont_inline_ = True
@@ -472,6 +475,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         mark = self.header(addr_struct).tid & 0xFF
         if mark != self.current_mark:
             self.force_scan(addr_struct)
+        #else:
+        #    debug_print("deletion_barrier (off)", addr_struct)
 
     def assume_young_pointers(self, addr_struct):
         pass # XXX
@@ -479,7 +484,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _init_writebarrier_logic(self):
         #
         def force_scan(obj):
+            #debug_print("deletion_barrier  ON  ", obj)
             self.acquire(self.mutex_lock)
+            #debug_print("...main thread has mutex_lock")
             mark = self.header(obj).tid & 0xFF
             if mark != self.current_mark:
                 #
@@ -504,6 +511,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     self.trace(obj, self._barrier_add_extra, None)
                 #
             self.release(self.mutex_lock)
+            #debug_print("deletion_barrier done ", obj)
         #
         force_scan._dont_inline_ = True
         self.force_scan = force_scan
@@ -520,7 +528,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             self.acquire(self.finished_lock)
             self.collection_running = 0
-            debug_print("collection_running = 0")
+            #debug_print("collection_running = 0")
             #
             # Check invariants
             ll_assert(not self.extra_objects_to_mark.non_empty(),
@@ -624,7 +632,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while p != self.NULL:
             x = llmemory.cast_ptr_to_adr(p)
             x = llarena.getfakearenaaddress(x) + 8
-            self.gray_objects.append(x + self.gcheaderbuilder.size_gc_header)
+            obj = x + self.gcheaderbuilder.size_gc_header
+            #debug_print("_objects_with_finalizers_to_run", obj)
+            self.gray_objects.append(obj)
             p = list_next(p)
         #
         # Invert this global variable, which has the effect that on all
@@ -649,16 +659,18 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         # Start the collector thread
         self.collection_running = 1
-        debug_print("collection_running = 1")
+        #debug_print("collection_running = 1")
         self.release(self.ready_to_start_lock)
         #
         debug_stop("gc-start")
 
     def _add_stack_root(self, root):
         obj = root.address[0]
+        #debug_print("_add_stack_root", obj)
         self.gray_objects.append(obj)
 
     def _add_prebuilt_root(self, obj, ignored):
+        #debug_print("_add_prebuilt_root", obj)
         self.gray_objects.append(obj)
 
     def debug_check_lists(self):
@@ -743,7 +755,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Mark
             self.collector_mark()
             self.collection_running = 2
-            debug_print("collection_running = 2")
+            #debug_print("collection_running = 2")
             #
             self.deal_with_objects_with_finalizers()
             #
@@ -752,7 +764,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             # Done!
             self.collection_running = -1
-            debug_print("collection_running = -1")
+            #debug_print("collection_running = -1")
             self.release(self.finished_lock)
 
 
@@ -783,6 +795,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # There are typically only a few objects to move here,
             # unless XXX we've hit the write barrier of a large array
             self.acquire(self.mutex_lock)
+            #debug_print("...collector thread has mutex_lock")
             while self.extra_objects_to_mark.non_empty():
                 obj = self.extra_objects_to_mark.pop()
                 self.gray_objects.append(obj)
@@ -858,6 +871,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _collect_sweep_pages(self, n):
         # sweep all pages from the linked list starting at 'page',
         # containing objects of fixed size 'object_size'.
+        size_gc_header = self.gcheaderbuilder.size_gc_header
         page = self.collect_pages[n]
         object_size = n << WORD_POWER_2
         linked_list = self.NULL
@@ -879,6 +893,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     # part of a linked list of free locations), and moreover
                     # the object is still not marked.  Free it by inserting
                     # it into the linked list.
+                    #debug_print("sweeps", adr + size_gc_header)
                     llarena.arena_reset(adr, object_size, 0)
                     llarena.arena_reserve(adr, self.HDRSIZE)
                     hdr = llmemory.cast_adr_to_ptr(adr, self.HDRPTR)
@@ -903,7 +918,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     type_id = llop.extract_high_ushort(llgroup.HALFWORD, tid)
                     wroffset = self.weakpointer_offset(type_id)
                     if wroffset >= 0:
-                        size_gc_header = self.gcheaderbuilder.size_gc_header
                         obj = adr + size_gc_header
                         pointing_to = (obj + wroffset).address[0]
                         if pointing_to != llmemory.NULL:
