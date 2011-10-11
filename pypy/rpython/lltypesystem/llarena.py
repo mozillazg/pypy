@@ -97,11 +97,10 @@ class Arena(object):
                 zero = False
             else:
                 raise ArenaError("new object overlaps a previous object")
-        assert offset not in self.objectptrs
         addr2 = size._raw_malloc([], zero=zero)
         pattern = letter.upper() + letter*(bytes-1)
         self.usagemap[offset:offset+bytes] = array.array('c', pattern)
-        self.setobject(addr2, offset, bytes)
+        self.setobject(addr2, offset, bytes, hdrbytes > 0)
         # in the common case where 'size' starts with a GCHeaderOffset,
         # we also remember that the real object starts after the header.
         if hdrbytes > 0:
@@ -110,10 +109,10 @@ class Arena(object):
             self.setobject(objaddr, objoffset, bytes - hdrbytes)
         return addr2
 
-    def setobject(self, objaddr, offset, bytes):
+    def setobject(self, objaddr, offset, bytes, can_overwrite=False):
         assert bytes > 0, ("llarena does not support GcStructs with no field"
                            " or empty arrays")
-        assert offset not in self.objectptrs
+        assert (offset not in self.objectptrs) or can_overwrite
         self.objectptrs[offset] = objaddr.ptr
         self.objectsizes[offset] = bytes
         container = objaddr.ptr._obj
@@ -165,7 +164,8 @@ class fakearenaaddress(llmemory.fakeaddress):
         except KeyError:
             self.arena.check()
             raise ArenaError("don't know yet what type of object "
-                             "is at offset %d" % (self.offset,))
+                             "is in %s at offset %d" % (self.arena,
+                                                        self.offset))
     ptr = property(_getptr)
 
     def __repr__(self):
@@ -322,6 +322,9 @@ class RoundedUpForAllocation(llmemory.AddressOffset):
 
     def raw_memcopy(self, srcadr, dstadr):
         self.basesize.raw_memcopy(srcadr, dstadr)
+
+    def __sub__(self, other):
+        return RoundedUpForAllocation(self.basesize - other, self.minsize)
 
 # ____________________________________________________________
 #

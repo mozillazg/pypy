@@ -466,7 +466,6 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # address of the full object.
         adr = llmemory.cast_ptr_to_adr(hdr)
         adr = llarena.getfakearenaaddress(adr)
-        llarena.arena_reset(adr, self.HDRSIZE, 0)
         llarena.arena_reserve(adr, totalsize)
         return adr + self.gcheaderbuilder.size_gc_header
     grow_reservation._always_inline_ = True
@@ -732,6 +731,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 llinterp.eval_graph(graph)
         except Exception, e:
             print 'Crash!', e.__class__.__name__, e
+            #import pdb; pdb.post_mortem(sys.exc_info()[2])
             self._exc_info = sys.exc_info()
 
     def collector_run(self):

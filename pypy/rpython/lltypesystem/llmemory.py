@@ -238,6 +238,10 @@ class CompositeOffset(AddressOffset):
         ofs.reverse()
         return CompositeOffset(*ofs)
 
+    def __sub__(self, other):
+        assert other == self.offsets[0]
+        return CompositeOffset(*self.offsets[1:])
+
     def known_nonneg(self):
         for item in self.offsets:
             if not item.known_nonneg():

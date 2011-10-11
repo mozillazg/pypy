@@ -599,15 +599,22 @@ def op_gc_gettypeptr_group(TYPE, obj, grpptr, skipoffset, vtableinfo):
     objaddr = llmemory.cast_ptr_to_adr(obj)
     hdraddr = objaddr - size_gc_header
     hdr = llmemory.cast_adr_to_ptr(hdraddr, lltype.Ptr(HDR))
-    typeid = getattr(hdr, fieldname)
-    if lltype.typeOf(typeid) == lltype.Signed:
+    if isinstance(fieldname, tuple):
         from pypy.rpython.lltypesystem import llgroup
-        if isinstance(typeid, llgroup.CombinedSymbolic):
-            typeid = op_extract_ushort(typeid)
-        elif isinstance(typeid, llgroup.HighCombinedSymbolic):
-            typeid = op_extract_high_ushort(typeid)
-        else:
-            raise TypeError(typeid)
+        assert fieldname[1] == llgroup.HALFSHIFT     # xxx for now
+        typeid = getattr(hdr, fieldname[0])
+        assert isinstance(typeid, llgroup.HighCombinedSymbolic)
+        typeid = op_extract_high_ushort(typeid)
+    else:
+        typeid = getattr(hdr, fieldname)
+        if lltype.typeOf(typeid) == lltype.Signed:
+            from pypy.rpython.lltypesystem import llgroup
+            if isinstance(typeid, llgroup.CombinedSymbolic):
+                typeid = op_extract_ushort(typeid)
+            elif isinstance(typeid, llgroup.HighCombinedSymbolic):
+                typeid = op_extract_high_ushort(typeid)
+            else:
+                raise TypeError(typeid)
     return op_get_next_group_member(TYPE, grpptr, typeid, skipoffset)
 op_gc_gettypeptr_group.need_result_type = True
 
