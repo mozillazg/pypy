@@ -462,7 +462,9 @@ class CStandaloneBuilder(CBuilder):
         s_result = annmodel.SomeInteger()
         graph = mix.getgraph(entrypoint_wrapper, args_s, s_result)
         mix.finish()
-        return getfunctionptr(graph)
+        fn = getfunctionptr(graph)
+        self._entrypoint_wrapper = fn
+        return fn
 
     def cmdexec(self, args='', env=None, err=False, expect_crash=False):
         assert self._compiled
