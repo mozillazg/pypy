@@ -90,6 +90,9 @@ class BaseDirectGCTest(object):
             newaddr = llmemory.cast_ptr_to_adr(newvalue)
             addr_struct = llmemory.cast_ptr_to_adr(p)
             self.gc.write_barrier(newaddr, addr_struct)
+        elif self.gc.needs_deletion_barrier:
+            addr_struct = llmemory.cast_ptr_to_adr(p)
+            self.gc.deletion_barrier(addr_struct)
         setattr(p, fieldname, newvalue)
 
     def writearray(self, p, index, newvalue):
@@ -100,6 +103,9 @@ class BaseDirectGCTest(object):
                 self.gc.write_barrier_from_array(newaddr, addr_struct, index)
             else:
                 self.gc.write_barrier(newaddr, addr_struct)
+        elif self.gc.needs_deletion_barrier:
+            addr_struct = llmemory.cast_ptr_to_adr(p)
+            self.gc.deletion_barrier(addr_struct)
         p[index] = newvalue
 
     def malloc(self, TYPE, n=None):

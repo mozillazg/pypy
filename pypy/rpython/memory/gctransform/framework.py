@@ -440,6 +440,7 @@ class FrameworkGCTransformer(GCTransformer):
 
         self.write_barrier_ptr = None
         self.write_barrier_from_array_ptr = None
+        self.deletion_barrier_ptr = None
         if GCClass.needs_write_barrier:
             self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
                                            [s_gc,
@@ -475,6 +476,12 @@ class FrameworkGCTransformer(GCTransformer):
                                                     annmodel.SomeInteger(),
                                                     annmodel.SomeAddress()],
                                                    annmodel.s_None)
+        elif GCClass.needs_deletion_barrier:
+            self.deletion_barrier_ptr = getfn(GCClass.deletion_barrier.im_func,
+                                              [s_gc, annmodel.SomeAddress()],
+                                              annmodel.s_None,
+                                              inline=True)
+
         self.statistics_ptr = getfn(GCClass.statistics.im_func,
                                     [s_gc, annmodel.SomeInteger()],
                                     annmodel.SomeInteger())
@@ -551,7 +558,7 @@ class FrameworkGCTransformer(GCTransformer):
         log.info("assigned %s typeids" % (len(group.members), ))
         log.info("added %s push/pop stack root instructions" % (
                      self.num_pushs, ))
-        if self.write_barrier_ptr:
+        if self.write_barrier_ptr or self.deletion_barrier_ptr:
             log.info("inserted %s write barrier calls" % (
                          self.write_barrier_calls, ))
         if self.write_barrier_from_array_ptr:
@@ -1136,6 +1143,18 @@ class FrameworkGCTransformer(GCTransformer):
                                           self.c_const_gc,
                                           v_newvalue,
                                           v_structaddr])
+        elif (self.deletion_barrier_ptr
+              and v_struct.concretetype.TO._gckind == "gc"):
+            # The MostlyConcurrentMarkSweepGC is a case where the
+            # write barrier is best called a "deletion barrier" instead.
+            # It needs different logic here (and at a few other places).
+            # XXX try harder to omit some calls!
+            v_structaddr = hop.genop("cast_ptr_to_adr", [v_struct],
+                                     resulttype = llmemory.Address)
+            self.write_barrier_calls += 1
+            hop.genop("direct_call", [self.deletion_barrier_ptr,
+                                      self.c_const_gc,
+                                      v_structaddr])
         hop.rename('bare_' + opname)
 
     def transform_getfield_typeptr(self, hop):

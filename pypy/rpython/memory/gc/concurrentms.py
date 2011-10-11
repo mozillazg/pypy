@@ -46,7 +46,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
-    needs_write_barrier = True
+    needs_deletion_barrier = True
     prebuilt_gc_objects_are_static_roots = False
     malloc_zero_filled = True
     gcflag_extra = FL_EXTRA
@@ -468,17 +468,10 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return adr + self.gcheaderbuilder.size_gc_header
     grow_reservation._always_inline_ = True
 
-    def write_barrier(self, newvalue, addr_struct):
+    def deletion_barrier(self, addr_struct):
         mark = self.header(addr_struct).tid & 0xFF
         if mark != self.current_mark:
             self.force_scan(addr_struct)
-
-    def writebarrier_before_copy(self, source_addr, dest_addr,
-                                 source_start, dest_start, length):
-        mark = self.header(dest_addr).tid & 0xFF
-        if mark != self.current_mark:
-            self.force_scan(dest_addr)
-        return True
 
     def assume_young_pointers(self, addr_struct):
         pass # XXX
@@ -527,6 +520,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             self.acquire(self.finished_lock)
             self.collection_running = 0
+            debug_print("collection_running = 0")
             #
             # Check invariants
             ll_assert(not self.extra_objects_to_mark.non_empty(),
@@ -655,6 +649,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         # Start the collector thread
         self.collection_running = 1
+        debug_print("collection_running = 1")
         self.release(self.ready_to_start_lock)
         #
         debug_stop("gc-start")
@@ -748,6 +743,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Mark
             self.collector_mark()
             self.collection_running = 2
+            debug_print("collection_running = 2")
             #
             self.deal_with_objects_with_finalizers()
             #
@@ -756,6 +752,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             # Done!
             self.collection_running = -1
+            debug_print("collection_running = -1")
             self.release(self.finished_lock)
 
 

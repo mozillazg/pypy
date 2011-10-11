@@ -144,6 +144,10 @@ class GCManagedHeap(object):
             return self.gc.writebarrier_before_copy(source_addr, dest_addr,
                                                     source_start, dest_start,
                                                     length)
+        elif self.gc.needs_deletion_barrier:
+            dest_addr = llmemory.cast_ptr_to_adr(dest)
+            self.gc.deletion_barrier(dest_addr)
+            return True
         else:
             return True
 
