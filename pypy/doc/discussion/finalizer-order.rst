@@ -96,7 +96,7 @@ component and there is a reference path from x1 to x2.  Then:
   we just skip it ("continue" line) and so it doesn't get marked.
 
 * if x2 is enumerated before x1, then when we process x2 we mark it and
-  set its state to >= 2 (before x2 is in closure(x2)), and then when we
+  set its state to >= 2 (because x2 is in closure(x2)), and then when we
   process x1 we set state[x2] == 3.  So in the final loop x2 gets
   removed from the "marked" list.
 

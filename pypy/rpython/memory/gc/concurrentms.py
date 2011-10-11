@@ -37,8 +37,8 @@ MARK_VALUE_1      = 0x4D    # 'M', 77
 MARK_VALUE_2      = 0x6B    # 'k', 107
 MARK_VALUE_STATIC = 0x53    # 'S', 83
 # Next lower byte: a combination of flags.
-FL_WITHHASH              = 0x0100
-FL_EXTRA                 = 0x0200
+FL_WITHHASH       = 0x0100
+FL_EXTRA          = 0x0200
 # And the high half of the word contains the numeric typeid.
 
 
@@ -117,11 +117,11 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _clear_list(self, array):
         i = 0
         while i < self.pagelists_length:
-            array[i] = lltype.nullptr(self.HDR)
+            array[i] = self.NULL
             i += 1
 
     def _initialize(self):
-        self.free_pages = lltype.nullptr(self.HDR)
+        self.free_pages = self.NULL
         #
         # Clear the lists
         self._clear_list(self.nonfree_pages)
@@ -129,6 +129,13 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self._clear_list(self.free_lists)
         self._clear_list(self.collect_heads)
         self._clear_list(self.collect_tails)
+        #
+        self.finalizer_pages = self.NULL
+        self.collect_finalizer_pages = self.NULL
+        self.collect_finalizer_tails = self.NULL
+        self.collect_run_finalizers_head = self.NULL
+        self.collect_run_finalizers_tail = self.NULL
+        self.run_finalizers = self.NULL
         #
         # The following character is either MARK_VALUE_1 or MARK_VALUE_2,
         # and represents the character that must be in the 'mark' field
@@ -158,7 +165,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def setup(self):
         "Start the concurrent collector thread."
-        GCBase.setup(self)
+        # don't call GCBase.setup(self), because we don't need
+        # 'run_finalizers' as a deque
+        self.finalizer_lock_count = 0
         #
         self.main_thread_ident = ll_thread.get_ident()
         self.ready_to_start_lock = ll_thread.allocate_ll_lock()
@@ -198,8 +207,15 @@ class MostlyConcurrentMarkSweepGC(GCBase):
 
     def malloc_fixedsize_clear(self, typeid, size,
                                needs_finalizer=False, contains_weakptr=False):
-        assert not needs_finalizer  # XXX
         # contains_weakptr: detected during collection
+        #
+        # Case of finalizers (test constant-folded)
+        if needs_finalizer:
+            ll_assert(not contains_weakptr,
+                     "'needs_finalizer' and 'contains_weakptr' both specified")
+            return self._malloc_with_finalizer(typeid, size)
+        #
+        # Regular case
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
@@ -377,6 +393,32 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return result
     _malloc_varsize_slowpath._dont_inline_ = True
 
+    def _malloc_with_finalizer(self, typeid, size):
+        # XXX a lot of copy and paste from _malloc_slowpath()
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        totalsize = size_gc_header + size
+        rawtotalsize = raw_malloc_usage(totalsize)
+        ll_assert(rawtotalsize & (WORD - 1) == 0,
+                  "malloc_with_finalizer: non-rounded size")
+        rawtotalsize += 8
+        block = llarena.arena_malloc(rawtotalsize, 2)
+        if not block:
+            raise MemoryError
+        llarena.arena_reserve(block, self.HDRSIZE)
+        blockhdr = llmemory.cast_adr_to_ptr(block, self.HDRPTR)
+        # the changes are only in the following two lines: we add the block
+        # to a different linked list
+        blockhdr.tid = self.cast_hdrptr_to_int(self.finalizer_pages)
+        self.finalizer_pages = blockhdr
+        result = block + 8
+        #
+        llarena.arena_reserve(result, totalsize)
+        hdr = llmemory.cast_adr_to_ptr(result, self.HDRPTR)
+        hdr.tid = self.combine(typeid, self.current_mark, 0)
+        #
+        obj = result + size_gc_header
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+
     # ----------
     # Other functions in the GC API
 
@@ -509,10 +551,50 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     self.nonfree_pages[0])
                 self.nonfree_pages[0] = self.collect_heads[0]
             #
+            # Do the same with 'collect_finalizer_pages/tails'
+            if self.collect_finalizer_tails != self.NULL:
+                self.collect_finalizer_tails.tid = self.cast_hdrptr_to_int(
+                    self.finalizer_pages)
+                self.finalizer_pages = self.collect_finalizer_pages
+            #
+            # Do the same with 'collect_run_finalizers_head/tail'
+            if self.collect_run_finalizers_tail != self.NULL:
+                self.collect_run_finalizers_tail.tid = self.cast_hdrptr_to_int(
+                    self.run_finalizers)
+                self.run_finalizers = self.collect_run_finalizers_head
+            #
             if self.DEBUG:
                 self.debug_check_lists()
             #
             debug_stop("gc-stop")
+            #
+            self.execute_finalizers_ll()
+
+
+    def execute_finalizers_ll(self):
+        self.finalizer_lock_count += 1
+        try:
+##            print 'execute_finalizers_ll: %d' % self.finalizer_lock_count
+##            p = self.run_finalizers
+##            while p != self.NULL:
+##                print p
+##                p = self.cast_int_to_hdrptr(p.tid)
+            
+            while self.run_finalizers != self.NULL:
+                if self.finalizer_lock_count > 1:
+                    # the outer invocation of execute_finalizers() will do it
+                    break
+                #
+                x = llmemory.cast_ptr_to_adr(self.run_finalizers)
+                x = llarena.getfakearenaaddress(x) + 8
+                obj = x + self.gcheaderbuilder.size_gc_header
+                self.run_finalizers = self.cast_int_to_hdrptr(
+                    self.run_finalizers.tid)
+                #
+                finalizer = self.getfinalizer(self.get_type_id(obj))
+                finalizer(obj, llmemory.NULL)
+        finally:
+            self.finalizer_lock_count -= 1
 
 
     def collect(self, gen=2):
@@ -550,6 +632,14 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # Add the prebuilt root objects that have been written to
         self.prebuilt_root_objects.foreach(self._add_prebuilt_root, None)
         #
+        # Add the objects still waiting in 'run_finalizers'
+        p = self.run_finalizers
+        while p != self.NULL:
+            x = llmemory.cast_ptr_to_adr(p)
+            x = llarena.getfakearenaaddress(x) + 8
+            self.gray_objects.append(x + self.gcheaderbuilder.size_gc_header)
+            p = self.cast_int_to_hdrptr(p.tid)
+        #
         # Invert this global variable, which has the effect that on all
         # objects' state go instantly from "marked" to "non marked"
         self.current_mark = self.other_mark(self.current_mark)
@@ -562,7 +652,13 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while n < self.pagelists_length:
             self.collect_pages[n] = self.nonfree_pages[n]
             n += 1
+        self.collect_finalizer_pages = self.finalizer_pages
+        #
+        # Clear the following lists.  When the collector thread finishes,
+        # it will give back (in collect_{pages,tails}[0] and
+        # collect_finalizer_{pages,tails}) all the original items that survive.
         self.nonfree_pages[0] = self.NULL
+        self.finalizer_pages = self.NULL
         #
         # Start the collector thread
         self.collection_running = 1
@@ -584,15 +680,20 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while n < self.pagelists_length:
             self.debug_check_list(self.free_lists[n])
             n += 1
+        self.debug_check_list(self.finalizer_pages)
+        self.debug_check_list(self.run_finalizers)
 
     def debug_check_list(self, page):
         try:
             previous_page = self.NULL
+            count = 0
             while page != self.NULL:
                 # prevent constant-folding, and detects loops of length 1
                 ll_assert(page != previous_page, "loop!")
                 previous_page = page
                 page = self.cast_int_to_hdrptr(page.tid)
+                count += 1
+            return count
         except KeyboardInterrupt:
             ll_assert(False, "interrupted")
             raise
@@ -662,6 +763,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # Mark
             self.collector_mark()
             self.collection_running = 2
+            #
+            self.deal_with_objects_with_finalizers()
             #
             # Sweep
             self.collector_sweep()
@@ -836,6 +939,51 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         #
         self.collect_heads[n] = linked_list
         self.collect_tails[n] = first_loc_in_linked_list
+
+    # ----------
+    # Finalizers
+
+    def deal_with_objects_with_finalizers(self):
+        # XXX needs to be done correctly; for now we'll call finalizers
+        # in random order
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        marked = self.current_mark
+        finalizer_page = self.collect_finalizer_pages
+        self.collect_run_finalizers_head = self.NULL
+        self.collect_run_finalizers_tail = self.NULL
+        self.collect_finalizer_pages = self.NULL
+        self.collect_finalizer_tails = self.NULL
+        while finalizer_page != self.NULL:
+            next_page = self.cast_int_to_hdrptr(finalizer_page.tid)
+            #
+            x = llmemory.cast_ptr_to_adr(finalizer_page)
+            x = llarena.getfakearenaaddress(x) + 8
+            hdr = llmemory.cast_adr_to_ptr(x, self.HDRPTR)
+            if (hdr.tid & 0xFF) != marked:
+                # non-marked: add to collect_run_finalizers,
+                # and mark the object and its dependencies
+                finalizer_page.tid = self.cast_hdrptr_to_int(
+                    self.collect_run_finalizers_head)
+                self.collect_run_finalizers_head = finalizer_page
+                if self.collect_run_finalizers_tail == self.NULL:
+                    self.collect_run_finalizers_tail = finalizer_page
+                obj = x + size_gc_header
+                self.gray_objects.append(obj)
+            else:
+                # marked: relink into the collect_finalizer_pages list
+                finalizer_page.tid = self.cast_hdrptr_to_int(
+                    self.collect_finalizer_pages)
+                self.collect_finalizer_pages = finalizer_page
+                if self.collect_finalizer_tails != self.NULL:
+                    self.collect_finalizer_tails = finalizer_page
+            #
+            finalizer_page = next_page
+        #
+        self._collect_mark()
+        #
+        ll_assert(not self.extra_objects_to_mark.non_empty(),
+                  "should not see objects only reachable from finalizers "
+                  "before we run them")
 
 
 # ____________________________________________________________

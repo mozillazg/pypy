@@ -931,3 +931,6 @@ class TestMiniMarkGCCardMarking(TestMiniMarkGC):
 class TestMostlyConcurrentMarkSweepGC(GCTest):
     from pypy.rpython.memory.gc.concurrentms \
             import MostlyConcurrentMarkSweepGC as GCClass
+
+    def test_finalizer_calls_malloc_during_minor_collect(self):
+        py.test.skip("check if this test is valid here")

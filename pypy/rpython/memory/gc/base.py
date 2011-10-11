@@ -31,6 +31,7 @@ class GCBase(object):
         self.config = config
         assert isinstance(translated_to_c, bool)
         self.translated_to_c = translated_to_c
+        self.run_finalizers = None
 
     def setup(self):
         # all runtime mutable values' setup should happen here
@@ -297,7 +298,8 @@ class GCBase(object):
         callback2, attrname = _convert_callback_formats(callback)    # :-/
         setattr(self, attrname, arg)
         self.root_walker.walk_roots(callback2, callback2, callback2)
-        self.run_finalizers.foreach(callback, arg)
+        if self.run_finalizers is not None:
+            self.run_finalizers.foreach(callback, arg)
     enumerate_all_roots._annspecialcase_ = 'specialize:arg(1)'
 
     def debug_check_consistency(self):
