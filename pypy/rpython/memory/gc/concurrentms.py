@@ -567,7 +567,10 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #
             debug_stop("gc-stop")
             #
-            self.execute_finalizers_ll()
+            # We must *not* run execute_finalizers_ll() here, because it
+            # can start the next collection, and then this function returns
+            # with a collection in progress, which it should not.  Be careful
+            # to call execute_finalizers_ll() in the caller somewhere.
 
 
     def execute_finalizers_ll(self):
@@ -608,6 +611,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             self.trigger_next_collection()
             if gen >= 2:
                 self.wait_for_the_end_of_collection()
+        self.execute_finalizers_ll()
 
     def trigger_next_collection(self):
         """In the mutator thread: triggers the next collection."""
@@ -662,6 +666,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.release(self.ready_to_start_lock)
         #
         debug_stop("gc-start")
+        #
+        self.execute_finalizers_ll()
 
     def _add_stack_root(self, root):
         obj = root.address[0]
