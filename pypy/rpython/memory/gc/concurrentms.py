@@ -432,7 +432,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     #    XXX
 
     #def shrink_array(self, obj, smallerlength):
-    #    return False
+    #    no real point in supporting this, but if you think it's a good
+    #    idea, remember that changing the array length at run-time needs
+    #    extra care for the collector thread
 
     def enumerate_all_roots(self, callback, arg):
         self.prebuilt_root_objects.foreach(callback, arg)
@@ -471,6 +473,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     grow_reservation._always_inline_ = True
 
     def deletion_barrier(self, addr_struct):
+        # XXX check the assembler
         mark = self.header(addr_struct).tid & 0xFF
         if mark != self.current_mark:
             self.force_scan(addr_struct)
@@ -506,8 +509,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     ll_assert(self.collection_running == 1,
                               "write barrier: wrong call?")
                     #
+                    # It's fine to set the mark before tracing, because
+                    # we are anyway in a 'mutex_lock' critical section.
+                    # The collector thread will not exist the phase
+                    # 'collection_running == 1' here.
                     self.set_mark(obj, self.current_mark)
                     self.trace(obj, self._barrier_add_extra, None)
+                    #
+                    # Still at 1:
+                    ll_assert(self.collection_running == 1,
+                              "write barrier: oups!?")
                 #
             self.release(self.mutex_lock)
             #debug_print("deletion_barrier done ", obj)
@@ -516,7 +527,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.force_scan = force_scan
 
     def _barrier_add_extra(self, root, ignored):
-        self.extra_objects_to_mark.append(root.address[0])
+        obj = root.address[0]
+        self.get_mark(obj)
+        self.extra_objects_to_mark.append(obj)
 
 
     def wait_for_the_end_of_collection(self):
@@ -571,6 +584,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             # can start the next collection, and then this function returns
             # with a collection in progress, which it should not.  Be careful
             # to call execute_finalizers_ll() in the caller somewhere.
+            ll_assert(self.collection_running == 0,
+                      "collector thread not paused?")
 
 
     def execute_finalizers_ll(self):
@@ -637,6 +652,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             x = llarena.getfakearenaaddress(x) + 8
             obj = x + self.gcheaderbuilder.size_gc_header
             #debug_print("_objects_with_finalizers_to_run", obj)
+            self.get_mark(obj)
             self.gray_objects.append(obj)
             p = list_next(p)
         #
@@ -672,10 +688,12 @@ class MostlyConcurrentMarkSweepGC(GCBase):
     def _add_stack_root(self, root):
         obj = root.address[0]
         #debug_print("_add_stack_root", obj)
+        self.get_mark(obj)
         self.gray_objects.append(obj)
 
     def _add_prebuilt_root(self, obj, ignored):
         #debug_print("_add_prebuilt_root", obj)
+        self.get_mark(obj)
         self.gray_objects.append(obj)
 
     def debug_check_lists(self):
@@ -780,13 +798,16 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         return mark ^ (MARK_VALUE_1 ^ MARK_VALUE_2)
 
     def is_marked(self, obj, current_mark):
-        mark = self.header(obj).tid & 0xFF
-        ll_assert(mark in (MARK_VALUE_1, MARK_VALUE_2, MARK_VALUE_STATIC),
-                  "bad mark byte in object")
-        return mark == current_mark
+        return self.get_mark(obj) == current_mark
 
     def set_mark(self, obj, newmark):
         _set_mark(self.header(obj), newmark)
+
+    def get_mark(self, obj):
+        mark = self.header(obj).tid & 0xFF
+        ll_assert(mark == MARK_VALUE_1 or mark == MARK_VALUE_2 or
+                  mark == MARK_VALUE_STATIC, "bad mark byte in object")
+        return mark
 
     def collector_mark(self):
         while True:
@@ -804,6 +825,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             #debug_print("...collector thread has mutex_lock")
             while self.extra_objects_to_mark.non_empty():
                 obj = self.extra_objects_to_mark.pop()
+                self.get_mark(obj)
                 self.gray_objects.append(obj)
             self.release(self.mutex_lock)
             #
@@ -821,8 +843,30 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         while self.gray_objects.non_empty():
             obj = self.gray_objects.pop()
             if not self.is_marked(obj, current_mark):
-                self.set_mark(obj, current_mark)
+                #
+                # Scan the content of 'obj'.  We use a snapshot-at-the-
+                # beginning order, meaning that we want to scan the state
+                # of the object as it was at the beginning of the current
+                # collection --- and not the current state, which might have
+                # been modified.  That's why we have a deletion barrier:
+                # when the mutator thread is about to change an object that
+                # is not yet marked, it will itself do the scanning of just
+                # this object, and mark the object.  But this function is not
+                # synchronized, which means that in some rare cases it's
+                # possible that the object is scanned a second time here
+                # (harmlessly).
+                #
+                # The order of the next two lines is essential!  *First*
+                # scan the object, adding all objects found to gray_objects;
+                # and *only then* set the mark.  This is essential, because
+                # otherwise, we might set the mark, then the main thread
+                # thinks a force_scan() is not necessary and modifies the
+                # content of 'obj', and then here in the collector thread
+                # we scan a modified content --- and the original content
+                # is never scanned.
+                #
                 self.trace(obj, self._collect_add_pending, None)
+                self.set_mark(obj, current_mark)
                 #
                 # Interrupt early if the mutator's write barrier adds stuff
                 # to that list.  Note that the check is imprecise because
@@ -834,7 +878,9 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     return
 
     def _collect_add_pending(self, root, ignored):
-        self.gray_objects.append(root.address[0])
+        obj = root.address[0]
+        self.get_mark(obj)
+        self.gray_objects.append(obj)
 
     def collector_sweep(self):
         n = 1
@@ -969,6 +1015,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                 if self.collect_run_finalizers_tail == self.NULL:
                     self.collect_run_finalizers_tail = finalizer_page
                 obj = x + size_gc_header
+                self.get_mark(obj)
                 self.gray_objects.append(obj)
             else:
                 # marked: relink into the collect_finalizer_pages list

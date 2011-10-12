@@ -597,7 +597,8 @@ class TestUsingFramework(object):
             p = lltype.malloc(B)
             llop.gc__collect(lltype.Void)
             p.a = lltype.malloc(A)
-            return p.a.x
+            n = p.a.x
+            return n + (~n)    # always -1
         return f
 
     def test_framework_late_filling_pointers(self):
@@ -1300,7 +1301,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         return f
 
     def test_gc_heap_stats(self):
-        res = self.run("gc_heap_stats")
+        res = self.run("gc_heap_stats", repetitions=1)
         assert res == 3011 or res == 3021
 
     def definestr_string_builder(cls):
@@ -1539,4 +1540,4 @@ class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
 
 class TestMostlyConcurrentMarkSweepGC(TestUsingFramework):
     gcpolicy = "concurrentms"
-    repetitions = 10
+    repetitions = 100
