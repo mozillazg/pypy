@@ -966,6 +966,10 @@ class MostlyConcurrentMarkSweepGC(GCBase):
                     # the location contains really an object, which is marked.
                     # check the typeid to see if it's a weakref.  XXX could
                     # be faster
+                    # XXX actually it's very wrong: if we read a weakref out
+                    # of an object during collection_running==1, or during
+                    # collection_running==2 but before we reach that point,
+                    # the target object will never be marked
                     tid = hdr.tid
                     type_id = llop.extract_high_ushort(llgroup.HALFWORD, tid)
                     wroffset = self.weakpointer_offset(type_id)
