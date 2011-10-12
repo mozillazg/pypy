@@ -183,7 +183,7 @@ class MiniMarkGC(MovingGCBase):
         # that are larger are just allocated with raw_malloc().  Note that
         # the size limit for being first allocated in the nursery is much
         # larger; see below.
-        "small_request_threshold": 35*WORD,
+        "small_request_threshold": 43*WORD,
 
         # Full collection threshold: after a major collection, we record
         # the total size consumed; and after every minor collection, if the

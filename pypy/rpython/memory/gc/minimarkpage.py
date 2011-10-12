@@ -21,20 +21,36 @@ from pypy.rlib.debug import ll_assert
 #        already marked.
 #
 #    reset_stop()
-#        Leaves the "resetting" state.  All objects on which still_in_use()
-#        was not called are considered as free.
+#        Leaves the "resetting" state.  All objects on which
+#        mark_still_in_use() was not called are considered as free.
 #
 #    total_memory_used
 #        A r_uint.  Not valid in the resetting state.
 #
-# This is done by keeping one bit per object, in off-object bitfields
-# (to speed up looking for a free bit and to be more fork()-friendly).
-# Initially OFF=0 and ON=1.  malloc() finds an old location which is
-# OFF, and mark it as ON.  reset_start() finds all locations still at
-# OFF and returns to the OS completely OFF arenas, and mark all
-# remaining bits as ON.  Then it switches the meaning of ON and OFF, so
-# that all bits are instantly OFF.  mark_still_in_use() marks the bit as
-# ON again.
+# This is done by keeping one bit per object in off-object bitfields (to
+# speed up looking for a free bit and to be more fork()-friendly).
+# mark_still_in_use() marks the bit as ON ("mark" phase).  Then later
+# malloc() lazily "sweeps" the bits: any location about which the bit is
+# ON is reset to OFF, and the first location about which the bit is
+# already OFF is returned as the result of malloc().  The lazy sweep is
+# completed in reset_start(), which if necessary finishes the sweep to
+# reset ON bits to OFF and to return to the OS arenas that were already
+# completely OFF.
+#
+# A "page" is 1024 WORDs, and an "arena" is 131072 WORDs, i.e. 128
+# pages.  Each page is either free or contains objects all of the same
+# size.  The sizes handled by the ArenaCollection are between WORD and
+# 42*WORD.  The mapping from an object position to a bit is done at a
+# granularity of 2*WORD bytes, so that we need 1024/2 = 512 bits = 64
+# bytes per page or 8192 bytes per arena.  We reserve the first 1 or 2
+# pages of the arena for the bits, leaving 64 or 128 bytes free at the
+# start of the arena for random fields.
+#
+# The granularity of two WORDs is ok because a single-WORD object cannot
+# possibly contain further pointers.  We choose this fixed granularity
+# instead of, more naturally, one bit per object, because computing this
+# would involve dividing the offset by the size.
+#
 # ____________________________________________________________
 #
 
@@ -50,25 +66,20 @@ assert 1 << WORD_POWER_2 == WORD
 # The actual allocation occurs in whole arenas, which are then subdivided
 # into pages.  For each arena we allocate one of the following structures:
 
-def get_arena_type(num_words):
-    ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
-    ARENA = lltype.Struct('ArenaReference',
-        # --- One bit per "basic unit" of size in the whole arena, set if
-        # --- this basic unit contains the start of a live object.  "Basic
-        # --- unit" is 2 WORDs by default.
-        ('usage_bits', lltype.FixedSizeArray(lltype.Unsigned, num_words)),
-        # -- The address of the arena, as returned by malloc()
-        ('base', llmemory.Address),
-        # -- The number of free and the total number of pages in the arena
-        ('nfreepages', lltype.Signed),
-        ('totalpages', lltype.Signed),
-        # -- A chained list of free pages in the arena.  Ends with NULL.
-        ('freepages', llmemory.Address),
-        # -- A linked list of arenas.  See below.
-        ('nextarena', ARENA_PTR),
-        )
-    ARENA_PTR.TO.become(ARENA)
-    return ARENA
+ARENA_PTR = lltype.Ptr(lltype.ForwardReference())
+ARENA = lltype.Struct('ArenaReference',
+    # -- The address of the arena, as returned by malloc()
+    ('base', llmemory.Address),
+    # -- The number of free and the total number of pages in the arena
+    ('nfreepages', lltype.Signed),
+    ('totalpages', lltype.Signed),
+    # -- A chained list of free pages in the arena.  Ends with NULL.
+    ('freepages', llmemory.Address),
+    # -- A linked list of arenas.  See below.
+    ('nextarena', ARENA_PTR),
+    )
+ARENA_PTR.TO.become(ARENA)
+ARENA_NULL = lltype.nullptr(ARENA)
 
 # The idea is that when we need a free page, we take it from the arena
 # which currently has the *lowest* number of free pages.  This allows
