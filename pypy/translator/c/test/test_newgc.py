@@ -24,18 +24,34 @@ class TestUsingFramework(object):
 
     _isolated_func = None
     c_allfuncs = None
+    repetitions = 3
 
     @classmethod
     def _makefunc_str_int(cls, f):
+        repetitions = cls.repetitions
         def main(argv):
             arg0 = argv[1]
-            arg1 = int(argv[2])
+            if len(argv) > 2:
+                arg1 = int(argv[2])
+            else:
+                arg1 = -1
             try:
                 res = f(arg0, arg1)
             except MemoryError:
                 print "MEMORY-ERROR"
             else:
                 print res
+                if len(argv) > 3:
+                    i = int(argv[3])
+                else:
+                    i = repetitions
+                while i > 1:
+                    res2 = f(arg0, arg1)
+                    if res != res2:
+                        print 'GOT A DIFFERENT RESULT:'
+                        print '\told result: "%s"' % res
+                        print '\tnew result: "%s"' % res2
+                    i -= 1
             return 0
         
         t = Translation(main, standalone=True, gc=cls.gcpolicy,
@@ -49,8 +65,9 @@ class TestUsingFramework(object):
             t.viewcg()
         exename = t.compile()
 
-        def run(s, i):
-            data = py.process.cmdexec("%s %s %d" % (exename, s, i))
+        def run(s, i, repetitions=None):
+            data = py.process.cmdexec("%s %s %d %s" % (exename, s, i,
+                                                       repetitions or ""))
             data = data.strip()
             if data == 'MEMORY-ERROR':
                 raise MemoryError
@@ -114,11 +131,11 @@ class TestUsingFramework(object):
             cls.c_allfuncs.close_isolate()
             cls.c_allfuncs = None
 
-    def run(self, name, *args):
+    def run(self, name, *args, **kwds):
         if not args:
             args = (-1, )
         print 'Running %r)' % name
-        res = self.c_allfuncs(name, *args)
+        res = self.c_allfuncs(name, *args, **kwds)
         num = self.name_to_func[name]
         if self.funcsstr[num]:
             return res
@@ -375,7 +392,6 @@ class TestUsingFramework(object):
             pass
         b = B()
         b.nextid = 0
-        b.num_deleted = 0
         class A(object):
             def __init__(self):
                 self.id = b.nextid
@@ -383,6 +399,7 @@ class TestUsingFramework(object):
             def __del__(self):
                 b.num_deleted += 1
         def f():
+            b.num_deleted = 0
             a = A()
             i = 0
             while i < 5:
@@ -609,6 +626,8 @@ class TestUsingFramework(object):
         # all objects returned by the GC should be properly aligned.
         from pypy.rpython.lltypesystem import rffi
         mylist = ['a', 'bc', '84139871', 'ajkdh', '876']
+        from pypy.rpython.tool import rffi_platform
+        expected_alignment = rffi_platform.memory_alignment()
         def f():
             result = 0
             buffer = ""
@@ -617,15 +636,13 @@ class TestUsingFramework(object):
                     buffer += s
                     addr = rffi.cast(lltype.Signed, buffer)
                     result |= addr
-            return result
+            return result & (expected_alignment-1)
 
         return f
 
     def test_object_alignment(self):
         res = self.run('object_alignment')
-        from pypy.rpython.tool import rffi_platform
-        expected_alignment = rffi_platform.memory_alignment()
-        assert (res & (expected_alignment-1)) == 0
+        assert res == 0
 
     def define_void_list(cls):
         class E:
@@ -883,13 +900,14 @@ class TestUsingFramework(object):
         s = lltype.malloc(S, 3, zero=True)
         h_s = lltype.identityhash(s)
         def f():
-            return lltype.identityhash(s) - h_s    # != 0 (so far),
+            got = lltype.identityhash(s) - h_s    # != 0 (so far),
                                 # because S is a varsized structure.
+            return (got != 0)
         return f
 
     def test_hash_varsized(self):
         res = self.run('hash_varsized')
-        assert res != 0
+        assert res == 1
 
 
     def define_arraycopy_writebarrier_int(cls):
@@ -1247,7 +1265,7 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
         return fn
 
     def test_gc_set_max_heap_size(self):
-        res = self.run('gc_set_max_heap_size')
+        res = self.run('gc_set_max_heap_size', repetitions=1)
         assert res == 2
 
     def define_gc_heap_stats(cls):
@@ -1334,12 +1352,15 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
             for i in range(len(objects)):
                 assert compute_identity_hash(objects[i]) == hashes[i]
                 unique[hashes[i]] = None
-            return len(unique)
+            if len(unique) >= 195:
+                return 9999       # ok
+            else:
+                return len(unique)
         return fn
 
     def test_nursery_hash_base(self):
         res = self.run('nursery_hash_base')
-        assert res >= 195
+        assert res == 9999
 
 
 class TestGenerationalGC(TestSemiSpaceGC):
@@ -1518,3 +1539,4 @@ class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
 
 class TestMostlyConcurrentMarkSweepGC(TestUsingFramework):
     gcpolicy = "concurrentms"
+    repetitions = 10
