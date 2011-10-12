@@ -477,13 +477,13 @@ class FunctionCodeGenerator(object):
             result = '/* %s */' % result
         return result
 
-    def generic_set(self, op, targetexpr, gckind):
+    def generic_set(self, op, targetexpr):
         newvalue = self.expr(op.args[-1], special_case_void=False)
         result = '%s = %s;' % (targetexpr, newvalue)
         T = self.lltypemap(op.args[-1])
         if T is Void:
             result = '/* %s */' % result
-        elif gckind == 'gc':
+        else:
             mark = FunctionCodeGenerator._TRACE_MARK + 1
             FunctionCodeGenerator._TRACE_MARK = mark
             result = '%s RPyTraceSet(%s, %d);' % (result, targetexpr, mark)
@@ -508,7 +508,7 @@ class FunctionCodeGenerator(object):
         expr = structdef.ptr_access_expr(self.expr(op.args[0]),
                                          op.args[1].value,
                                          baseexpr_is_const)
-        return self.generic_set(op, expr, STRUCT._gckind)
+        return self.generic_set(op, expr)
 
     def OP_GETSUBSTRUCT(self, op):
         RESULT = self.lltypemap(op.result).TO
@@ -538,8 +538,7 @@ class FunctionCodeGenerator(object):
         ptr = self.expr(op.args[0])
         index = self.expr(op.args[1])
         arraydef = self.db.gettypedefnode(ARRAY)
-        return self.generic_set(op, arraydef.itemindex_access_expr(ptr, index),
-                                ARRAY._gckind)
+        return self.generic_set(op, arraydef.itemindex_access_expr(ptr, index))
     OP_BARE_SETARRAYITEM = OP_SETARRAYITEM
 
     def OP_GETARRAYSUBSTRUCT(self, op):
@@ -582,8 +581,7 @@ class FunctionCodeGenerator(object):
 
     def OP_BARE_SETINTERIORFIELD(self, op):
         STRUCT = self.lltypemap(op.args[0]).TO
-        return self.generic_set(op, self.interior_expr(op.args[:-1]),
-                                STRUCT._gckind)
+        return self.generic_set(op, self.interior_expr(op.args[:-1]))
 
     def OP_GETINTERIORARRAYSIZE(self, op):
         expr, ARRAY = self.interior_expr(op.args, True)
