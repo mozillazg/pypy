@@ -18,6 +18,7 @@ UNSIGNEDLTR = "u"
 SIGNEDLTR = "i"
 BOOLLTR = "b"
 FLOATINGLTR = "f"
+COMPLEXLTR = "c"
 
 class W_Dtype(Wrappable):
     def __init__(self, space):
@@ -118,9 +119,19 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
     W_LowLevelDtype.name = name
     W_LowLevelDtype.aliases = aliases
     W_LowLevelDtype.applevel_types = applevel_types
-    W_LowLevelDtype.num_bytes = rffi.sizeof(T)
-    if expected_size is not None:
-        assert W_LowLevelDtype.num_bytes == expected_size
+
+    if hasattr(T, "_arrayfld"):
+        # Hack for structs (read: complex), rffi.sizeof(Struct) returns a
+        # symbolic, which can't be compared
+        assert T._arrayfld is None
+        primitive_size = sum(rffi.sizeof(VT) for VT in T._flds.itervalues())
+    else:
+        primitive_size = rffi.sizeof(T)
+    if expected_size is None:
+        expected_size = primitive_size
+    assert expected_size == primitive_size
+    W_LowLevelDtype.num_bytes = expected_size
+
     return W_LowLevelDtype
 
 
@@ -465,12 +476,55 @@ W_Float64Dtype = create_low_level_dtype(
 class W_Float64Dtype(FloatArithmeticDtype, W_Float64Dtype):
     pass
 
+ComplexDouble = lltype.Struct("Complex Double",
+    ("real", lltype.Float),
+    ("imag", lltype.Float),
+)
+W_Complex128Dtype = create_low_level_dtype(
+    num = 15, kind = COMPLEXLTR, name = "complex128",
+    aliases = [],
+    applevel_types = ["complex"],
+    T = ComplexDouble,
+    valtype = ComplexDouble,
+    expected_size = 16,
+)
+class W_Complex128Dtype(W_Complex128Dtype):
+    def _create_complex_struct(self, real, imag):
+        # Really we want to stack alloc it, doesn't seem possible though.
+        # Unforutnately a raw alloc means we'll leak memory (no gc) and it
+        # can't be a GcStruct because the array storage isn't a GcArray.
+        # So basically we need stack allocs.
+        c = lltype.malloc(ComplexDouble, flavor="raw")
+        c.real = real
+        c.imag = imag
+        return c
+
+    @specialize.argtype(1)
+    def adapt_val(self, val):
+        if hasattr(val, "_T"):
+            assert val._T is ComplexDouble
+        else:
+            val = self._create_complex_struct(rffi.cast(lltype.Float, val), 0.0)
+        return self.box(val)
+
+    def unwrap(self, space, w_item):
+        real, imag = space.unpackcomplex(w_item)
+        return self.adapt_val(self._create_complex_struct(real, imag))
+
+    def setitem(self, storage, i, item):
+        val = self.unbox(item)
+        # You can't set a full struct, gotta do it one field at a time.
+        self.unerase(storage)[i].real = val.real
+        self.unerase(storage)[i].imag = val.imag
+
+
 ALL_DTYPES = [
     W_BoolDtype,
     W_Int8Dtype, W_UInt8Dtype, W_Int16Dtype, W_UInt16Dtype,
     W_Int32Dtype, W_UInt32Dtype, W_LongDtype, W_ULongDtype,
     W_Int64Dtype, W_UInt64Dtype,
     W_Float32Dtype, W_Float64Dtype,
+    W_Complex128Dtype,
 ]
 
 dtypes_by_alias = unrolling_iterable([
@@ -496,6 +550,7 @@ W_Dtype.typedef = TypeDef("dtype",
     __str__ = interp2app(W_Dtype.descr_str),
 
     num = interp_attrproperty("num", cls=W_Dtype),
+    name = interp_attrproperty("name", cls=W_Dtype),
     kind = interp_attrproperty("kind", cls=W_Dtype),
     itemsize = interp_attrproperty("num_bytes", cls=W_Dtype),
     shape = GetSetProperty(W_Dtype.descr_get_shape),

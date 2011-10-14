@@ -558,6 +558,8 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert array([1.2, True]).dtype is dtype(float)
         assert array([1.2, 5]).dtype is dtype(float)
         assert array([]).dtype is dtype(float)
+        assert array([1 + 2j]).dtype is dtype(complex)
+        assert array([1.0, 1 + 2j]).dtype is dtype(complex)
 
     def test_comparison(self):
         import operator

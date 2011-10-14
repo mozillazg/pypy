@@ -38,8 +38,6 @@ class BaseArray(Wrappable):
             w_dtype = None
             for w_item in l:
                 w_dtype = interp_ufuncs.find_dtype_for_scalar(space, w_item, w_dtype)
-                if w_dtype is space.fromcache(interp_dtype.W_Float64Dtype):
-                    break
             if w_dtype is None:
                 w_dtype = space.w_None
 
