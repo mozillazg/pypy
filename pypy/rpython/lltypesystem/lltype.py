@@ -1960,6 +1960,8 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False,
         initialization = 'example'
     elif flavor == 'raw':
         initialization = 'raw'
+    elif flavor == 'value':
+        initialization = 'value'
     else:
         initialization = 'malloc'
     if isinstance(T, Struct):
@@ -1973,6 +1975,8 @@ def malloc(T, n=None, flavor='gc', immortal=False, zero=False,
         raise TypeError, "malloc for Structs and Arrays only"
     if T._gckind != 'gc' and not immortal and flavor.startswith('gc'):
         raise TypeError, "gc flavor malloc of a non-GC non-immortal structure"
+    if T._gckind == 'gc' and flavor == 'value':
+        raise TypeError("Can't malloc with flavor value on a gc struct/array")
     if flavor == "raw" and not immortal and track_allocation:
         leakfinder.remember_malloc(o, framedepth=2)
     solid = immortal or not flavor.startswith('gc') # immortal or non-gc case
