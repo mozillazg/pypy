@@ -246,12 +246,19 @@ class FrameworkGCTransformer(GCTransformer):
         else:
             self.incr_stack_ptr = None
             self.decr_stack_ptr = None
-        self.weakref_deref_ptr = self.inittime_helper(
-            ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
-        
+
         classdef = bk.getuniqueclassdef(GCClass)
         s_gc = annmodel.SomeInstance(classdef)
         s_gcref = annmodel.SomePtr(llmemory.GCREF)
+
+        if GCClass.needs_weakref_read_barrier:
+            self.gc_weakref_deref_ptr = getfn(
+                GCClass.weakref_deref.im_func,
+                [s_gc, annmodel.SomePtr(llmemory.WeakRefPtr)],
+                annmodel.SomeAddress())
+        else:
+            self.weakref_deref_ptr = self.inittime_helper(
+                ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
 
         malloc_fixedsize_clear_meth = GCClass.malloc_fixedsize_clear.im_func
         self.malloc_fixedsize_clear_ptr = getfn(
@@ -947,9 +954,15 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_weakref_deref(self, hop):
         v_wref, = hop.spaceop.args
-        v_addr = hop.genop("direct_call",
-                           [self.weakref_deref_ptr, v_wref],
-                           resulttype=llmemory.Address)
+        if hasattr(self, 'gc_weakref_deref_ptr'):
+            v_addr = hop.genop("direct_call",
+                               [self.gc_weakref_deref_ptr,
+                                self.c_const_gc, v_wref],
+                               resulttype=llmemory.Address)
+        else:
+            v_addr = hop.genop("direct_call",
+                               [self.weakref_deref_ptr, v_wref],
+                               resulttype=llmemory.Address)
         hop.cast_result(v_addr)
 
     def gct_gc_identityhash(self, hop):

@@ -17,6 +17,7 @@ class GCBase(object):
     moving_gc = False
     needs_write_barrier = False
     needs_deletion_barrier = False
+    needs_weakref_read_barrier = False
     malloc_zero_filled = False
     prebuilt_gc_objects_are_static_roots = True
     object_minimal_size = 0

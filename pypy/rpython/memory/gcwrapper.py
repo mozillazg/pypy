@@ -129,8 +129,12 @@ class GCManagedHeap(object):
         return llmemory.cast_ptr_to_weakrefptr(result)
     
     def weakref_deref(self, PTRTYPE, obj):
-        addr = gctypelayout.ll_weakref_deref(obj)
-        return llmemory.cast_adr_to_ptr(addr, PTRTYPE)
+        if self.gc.needs_weakref_read_barrier:
+            addr = self.gc.weakref_deref(obj)
+            return llmemory.cast_adr_to_ptr(addr, PTRTYPE)
+        else:
+            addr = gctypelayout.ll_weakref_deref(obj)
+            return llmemory.cast_adr_to_ptr(addr, PTRTYPE)
 
     def gc_id(self, ptr):
         ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)

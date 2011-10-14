@@ -934,3 +934,6 @@ class TestMostlyConcurrentMarkSweepGC(GCTest):
 
     def test_finalizer_calls_malloc_during_minor_collect(self):
         py.test.skip("check if this test is valid here")
+
+    def test_weakref_to_object_with_finalizer_ordering(self):
+        py.test.skip("frees weakrefs before calling finalizers")
