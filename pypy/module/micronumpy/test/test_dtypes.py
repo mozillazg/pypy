@@ -161,3 +161,12 @@ class AppTestDtypes(BaseNumpyAppTest):
 
         # You can't subclass dtype
         raises(TypeError, type, "Foo", (dtype,), {})
+
+    def test_complex_dtype(self):
+        from numpy import dtype
+
+        d = dtype(complex)
+        assert d.kind == "c"
+        assert d.name == "complex128"
+        assert d.num == 15
+        assert d.itemsize == 16
