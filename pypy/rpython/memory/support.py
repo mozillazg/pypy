@@ -16,9 +16,9 @@ def mangle_hash(i):
 DEFAULT_CHUNK_SIZE = 1019
 
 
-def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
+def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
     try:
-        return cache[chunk_size]
+        return cache[chunk_size, lock]
     except KeyError:
         pass
 
@@ -36,7 +36,9 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
             self.free_list = null_chunk
 
         def get(self):
+            self._lock()
             if not self.free_list:
+                self._unlock()
                 # we zero-initialize the chunks to make the translation
                 # backends happy, but we don't need to do it at run-time.
                 if we_are_translated():
@@ -52,9 +54,11 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
 
             result = self.free_list
             self.free_list = result.next
+            self._unlock()
             return result
 
         def put(self, chunk):
+            self._lock()
             if we_are_translated():
                 chunk.next = self.free_list
                 self.free_list = chunk
@@ -63,19 +67,27 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 # Helps debugging, and avoids that old chunks full of
                 # addresses left behind by a test end up in genc...
                 lltype.free(chunk, flavor="raw", track_allocation=False)
+            self._unlock()
+
+        if lock is not None:
+            def _lock(self):   lock.acquire()
+            def _unlock(self): lock.release()
+        else:
+            def _lock(self):   pass
+            def _unlock(self): pass
 
     unused_chunks = FreeList()
-    cache[chunk_size] = unused_chunks, null_chunk
+    cache[chunk_size, lock] = unused_chunks, null_chunk
     return unused_chunks, null_chunk
 
 
-def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
+def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
     try:
-        return cache[chunk_size]
+        return cache[chunk_size, lock]
     except KeyError:
         pass
 
-    unused_chunks, null_chunk = get_chunk_manager(chunk_size)
+    unused_chunks, null_chunk = get_chunk_manager(chunk_size, lock=lock)
 
     class AddressStack(object):
         _alloc_flavor_ = "raw"
@@ -187,20 +199,20 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 chunk.items[count] = got
                 got = next
 
-    cache[chunk_size] = AddressStack
+    cache[chunk_size, lock] = AddressStack
     return AddressStack
 
 def _add_in_dict(item, d):
     d.add(item)
 
 
-def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
+def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
     try:
-        return cache[chunk_size]
+        return cache[chunk_size, lock]
     except KeyError:
         pass
 
-    unused_chunks, null_chunk = get_chunk_manager(chunk_size)
+    unused_chunks, null_chunk = get_chunk_manager(chunk_size, lock=lock)
 
     class AddressDeque(object):
         _alloc_flavor_ = "raw"
@@ -275,7 +287,7 @@ def get_address_deque(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 cur = next
             free_non_gc_object(self)
 
-    cache[chunk_size] = AddressDeque
+    cache[chunk_size, lock] = AddressDeque
     return AddressDeque
 
 # ____________________________________________________________

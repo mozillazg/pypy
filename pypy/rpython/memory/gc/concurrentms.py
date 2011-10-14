@@ -71,6 +71,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         # 'small_request_threshold' is the largest size that we will
         # satisfy using our own pages mecanism.  Larger requests just
         # go to the system malloc().
+        self.addressstack_lock_object = SyncLock()
+        kwds['lock'] = self.addressstack_lock_object
         GCBase.__init__(self, config, **kwds)
         assert small_request_threshold % WORD == 0
         self.small_request_threshold = small_request_threshold
@@ -188,6 +190,7 @@ class MostlyConcurrentMarkSweepGC(GCBase):
         self.ready_to_start_lock = ll_thread.allocate_ll_lock()
         self.finished_lock = ll_thread.allocate_ll_lock()
         self.mutex_lock = ll_thread.allocate_ll_lock()
+        self.addressstack_lock_object.setup()
         #
         self.acquire(self.finished_lock)
         self.acquire(self.ready_to_start_lock)
@@ -1065,8 +1068,8 @@ class MostlyConcurrentMarkSweepGC(GCBase):
             ll_assert(offset >= 0, "bad weakref")
             obj = x + size_gc_header
             pointing_to = (obj + offset).address[0]
-            if (pointing_to == llmemory.NULL or
-                not self.is_marked_or_static(pointing_to, current_mark)):
+            ll_assert(pointing_to != llmemory.NULL, "null weakref?")
+            if not self.is_marked_or_static(pointing_to, current_mark):
                 # 'pointing_to' dies: relink to self.collect_pages[0]
                 (obj + offset).address[0] = llmemory.NULL
                 set_next(weakref_page, self.collect_pages[0])
@@ -1192,3 +1195,19 @@ _set_flags = rffi.llexternal("pypy_concurrentms_set_flags",
                            [MostlyConcurrentMarkSweepGC.HDRPTR, lltype.Signed],
                            lltype.Void, compilation_info=eci, _nowrapper=True,
                            _callable=emulate_set_flags)
+
+# ____________________________________________________________
+#
+# A lock to synchronize access to AddressStack's free pages
+
+class SyncLock:
+    _alloc_flavor_ = "raw"
+    _lock = lltype.nullptr(ll_thread.TLOCKP.TO)
+    def setup(self):
+        self._lock = ll_thread.allocate_ll_lock()
+    def acquire(self):
+        if self._lock:
+            ll_thread.c_thread_acquirelock(self._lock, 1)
+    def release(self):
+        if self._lock:
+            ll_thread.c_thread_releaselock(self._lock)
