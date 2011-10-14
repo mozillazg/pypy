@@ -83,8 +83,8 @@ class __extend__(pyframe.PyFrame):
         try:
             while True:
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
-        except ExitFrame:
-            return self.popvalue()
+        except ExitFrame, e:
+            return e.w_value
 
     def handle_bytecode(self, co_code, next_instr, ec):
         try:
@@ -205,8 +205,7 @@ class __extend__(pyframe.PyFrame):
                 w_returnvalue = self.popvalue()
                 block = self.unrollstack(SReturnValue.kind)
                 if block is None:
-                    self.pushvalue(w_returnvalue)   # XXX ping pong
-                    raise Return
+                    raise Return(w_returnvalue)
                 else:
                     unroller = SReturnValue(w_returnvalue)
                     next_instr = block.handle(self, unroller)
@@ -219,8 +218,7 @@ class __extend__(pyframe.PyFrame):
                     block = self.unrollstack(unroller.kind)
                     if block is None:
                         w_result = unroller.nomoreblocks()
-                        self.pushvalue(w_result)
-                        raise Return
+                        raise Return(w_result)
                     else:
                         next_instr = block.handle(self, unroller)
                 return next_instr
@@ -834,7 +832,7 @@ class __extend__(pyframe.PyFrame):
         self.pushvalue(w_obj)
 
     def YIELD_VALUE(self, oparg, next_instr):
-        raise Yield
+        raise Yield(self.popvalue())
 
     def jump_absolute(self, jumpto, next_instr, ec):
         return jumpto
@@ -1137,7 +1135,8 @@ class __extend__(pyframe.CPythonFrame):
 ### ____________________________________________________________ ###
 
 class ExitFrame(Exception):
-    pass
+    def __init__(self, w_value):
+        self.w_value = w_value
 
 class Return(ExitFrame):
     """Raised when exiting a frame via a 'return' statement."""
