@@ -312,14 +312,14 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rpython.lltypesystem import rffi, llmemory, lltype
         P = lltype.Ptr(lltype.FixedSizeArray(lltype.Char, 1))
-        
+
         def f():
             a = llstr("xyz")
             b = (llmemory.cast_ptr_to_adr(a) + llmemory.offsetof(STR, 'chars')
                  + llmemory.itemoffsetof(STR.chars, 0))
             buf = rffi.cast(rffi.VOIDP, b)
             return buf[2]
-        
+
         fn = self.getcompiled(f, [])
         res = fn()
         assert res == 'z'
@@ -435,6 +435,24 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         fn = self.getcompiled(f, [int])
         res = fn(100)
         assert res == 42
+
+    def test_malloc_value(self):
+        T = Struct('complex', ('real', Float), ('imag', Float))
+        def f(n):
+            x = malloc(T, flavor="value")
+            x.real = 0.0
+            x.imag = 0.0
+            for i in range(n):
+                z = malloc(T, flavor="value")
+                z.real = x.real
+                z.imag = x.imag
+                x = z
+            return x.real + x.real
+
+        fn = self.getcompiled(f, [int])
+        res = fn(100)
+        assert res == 200
+
 
     def test_arithmetic_cornercases(self):
         import operator, sys

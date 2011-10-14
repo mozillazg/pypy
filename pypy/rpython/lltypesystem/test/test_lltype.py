@@ -820,6 +820,9 @@ def test_malloc_value():
     assert c.real == 4.0
     assert c.imag == 5.0
 
+    S = GcStruct("S", ("x", Signed))
+    py.test.raises(TypeError, malloc, S, flavor="value")
+
 
 class TestTrackAllocation:
     def test_automatic_tracking(self):
