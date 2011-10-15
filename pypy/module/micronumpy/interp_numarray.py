@@ -225,7 +225,7 @@ class BaseArray(Wrappable):
         return space.wrap(self.find_dtype())
 
     def descr_get_shape(self, space):
-        return space.newtuple([self.descr_len(space)])
+        return space.newtuple([self.descr_shape(space)])
 
     def descr_len(self, space):
         return self.get_concrete().descr_len(space)
@@ -550,6 +550,9 @@ class ViewArray(BaseArray):
     def descr_len(self, space):
         return space.wrap(self.find_size())
 
+    def descr_shape(self,space):
+        return space.wrap(self.find_shape())
+
     def calc_index(self, item):
         raise NotImplementedError
 
@@ -578,6 +581,9 @@ class SingleDimSlice(ViewArray):
 
     def find_size(self):
         return self.size
+
+    def find_shape(self):
+        return self.shape
 
     def setslice(self, start, stop, step, slice_length, arr):
         start = self.calc_index(start)
@@ -626,6 +632,9 @@ def make_class(_dtype):
 
         def descr_len(self, space):
             return space.wrap(self.size)
+
+        def descr_shape(self, space):
+            return space.wrap(self.shape)
 
         def get_root_storage(self):
             return self.storage
@@ -700,15 +709,160 @@ def make_class(_dtype):
     TypedSingleDimArray.__name__ = 'SingleDimArray_' + _dtype.name
     return TypedSingleDimArray
 
+def make_ndclass(_dtype):
+    class TypedNDimArray(BaseArray):
+        signature = Signature()
+        dtype = _dtype
+        def __init__(self, shape):
+            BaseArray.__init__(self)
+            self.shape = shape
+            self.size = 1
+            for v in shape:
+                self.size *= v
+            self.storage = lltype.malloc(_dtype.TP, self.size, zero=True,
+                                     flavor='raw', track_allocation=False,
+                                     add_memory_pressure=True)
+            # XXX find out why test_zjit explodes with trackign of allocations
+
+        def get_concrete(self):
+            return self
+
+        def find_size(self):
+            return self.size
+
+        def descr_len(self, space):
+            return space.wrap(self.size)
+
+        def descr_shape(self, space):
+            return space.wrap(self.shape)
+
+        def get_root_storage(self):
+            return self.storage
+
+        def eval(self, i):
+            return self.storage[i]
+
+        if _dtype.kind == 'b':
+            def getitem(self, space, i):
+                return space.wrap(bool(self.storage[i]))
+        elif _dtype.kind == 'f':
+            def getitem(self, space, i):
+                return space.wrap(float(self.storage[i]))
+        elif _dtype.num < 8 or (LONG_BIT == 64 and _dtype.num == 9):
+            def getitem(self, space, i):
+                return space.wrap(rffi.cast(lltype.Signed, self.storage[i]))
+        elif LONG_BIT == 64 or _dtype.num == 8:
+            def getitem(self, space, i):
+                return space.wrap(self.storage[i])
+        else: # unsigned longlong and signed longlong for 32-bit
+            def getitem(self, space, i):
+                return newlong(space, fromlong(self.storage[i]))
+
+        def setitem(self, item, value):
+            assert isinstance(value, _dtype.valtype)
+            if issequence(item):
+                assert len(item) == len(self.shape)
+                pp = [0]+self.shape
+                indx = 0
+                for v,p in zip(item,pp):
+                    index += indx*p+v
+                self.storage[indx]=value
+            else:    
+                self.storage[item] = value
+
+        #def setitem_cast(self, item, value):
+        #    self.storage[item] = rffi.cast(_dtype.TP.OF, value)
+
+        def _sliceloop1(self, start, stop, step, source):
+            i = start
+            j = 0
+            conv = _dtype.convval
+            while i < stop:
+                #slice_driver1.jit_merge_point(signature=source.signature,
+                        #dtype=_dtype,
+                        #step=step, stop=stop, i=i, j=j, source=source,
+                        #self=self)
+                self.storage[i] = _dtype.convval(source.eval(j))
+                j += 1
+                i += step
+
+        def _sliceloop2(self, start, stop, step, source):
+            i = start
+            j = 0
+            conv = _dtype.convval
+            while i > stop:
+                #slice_driver2.jit_merge_point(signature=source.signature,
+                #        dtype=_dtype,
+                #        step=step, stop=stop, i=i, j=j, source=source,
+                #        self=self)
+                self.storage[i] = _dtype.convval(source.eval(j))
+                j += 1
+                i += step
+
+        def setslice(self, start, stop, step, slice_length, arr):
+            if step > 0:
+                self._sliceloop1(start, stop, step, arr)
+            else:
+                self._sliceloop2(start, stop, step, arr)
+
+        def setitem_w(self, space, item, value):
+            if space.issequence_w(item):
+                assert len(item) == len(self.shape)
+                pp = [0]+self.shape
+                indx = 0
+                for v,p in zip(item,pp):
+                    index += indx*p+v
+                self.storage[indx] = rffi.cast(_dtype.TP.OF, _dtype.unwrap(space, value))
+            else:    
+                self.storage[item] = rffi.cast(_dtype.TP.OF, _dtype.unwrap(space, value))
+
+        def find_dtype(self):
+            return self.dtype
+
+        def __del__(self):
+            lltype.free(self.storage, flavor='raw', track_allocation=False)
+
+    TypedNDimArray.__name__ = 'NDimArray_' + _dtype.name
+    return TypedNDimArray
+
 _array_classes = [make_class(d) for d in _dtype_list]
+_ndarray_classes = [make_ndclass(d) for d in _dtype_list]
 
 def create_sdarray(L, dtype):
     arr_type = _array_classes[dtype.num]
     return arr_type(L)
+def create_ndarray(L, dtype):
+    arr_type = _ndarray_classes[dtype.num]
+    return arr_type(L)
 
 def new_numarray(space, iterable, dtype):
+    #shape = []
+    #while True:
+    #   try:
+    #       # Try to get the length, a good proxy for iterability.
+    #       length = space.len_w(w_input)
+    #   except OperationError, e:
+           # If it raised a TypeError it's not an iteratble, however if it raises
+           # some other error we propogate it, that means __len__ raised something.
+    #      if not e.matches(space, space.w_TypeError):
+    #        raise
+    #    break
+    #else:
+    #    shape.append(length)
+    #    w_input = space.getitem(w_input, space.wrap(0)
     l = space.listview(iterable)
     dtype = get_dtype(space, dtype)
+    w_elem = space.getitem(iterable, space.wrap(0))
+    if space.issequence_w(w_elem):
+        #Determine the size
+        shape =[len(l)]
+        while space.issequence_w(w_elem):
+            shape.append(space.len_w(w_elem))
+            w_elem = space.getitem(w_elem, space.wrap(0))
+        arr = create_ndarray(shape,dtype)
+        depth = 0
+        #arr.setitem_w(space,shape,l)
+        return arr
     arr = create_sdarray(len(l), dtype)
     i = 0
     for w_elem in l:
