@@ -485,37 +485,25 @@ W_Complex128Dtype = create_low_level_dtype(
     aliases = [],
     applevel_types = ["complex"],
     T = ComplexDouble,
-    valtype = ComplexDouble,
+    valtype = (float, float),
     expected_size = 16,
 )
 class W_Complex128Dtype(W_Complex128Dtype):
-    def _create_complex_struct(self, real, imag):
-        # Really we want to stack alloc it, doesn't seem possible though.
-        # Unforutnately a raw alloc means we'll leak memory (no gc) and it
-        # can't be a GcStruct because the array storage isn't a GcArray.
-        # So basically we need stack allocs.
-        c = lltype.malloc(ComplexDouble, flavor="raw")
-        c.real = real
-        c.imag = imag
-        return c
-
     @specialize.argtype(1)
     def adapt_val(self, val):
-        if hasattr(val, "_T"):
-            assert val._T is ComplexDouble
-        else:
-            val = self._create_complex_struct(rffi.cast(lltype.Float, val), 0.0)
+        if not isinstance(val, tuple):
+            val = (rffi.cast(lltype.Float, val), 0.0)
         return self.box(val)
 
     def unwrap(self, space, w_item):
         real, imag = space.unpackcomplex(w_item)
-        return self.adapt_val(self._create_complex_struct(real, imag))
+        return self.adapt_val((real, imag))
 
     def setitem(self, storage, i, item):
         val = self.unbox(item)
         # You can't set a full struct, gotta do it one field at a time.
-        self.unerase(storage)[i].real = val.real
-        self.unerase(storage)[i].imag = val.imag
+        self.unerase(storage)[i].real = val[0]
+        self.unerase(storage)[i].imag = val[1]
 
 
 ALL_DTYPES = [
