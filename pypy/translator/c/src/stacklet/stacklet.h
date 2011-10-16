@@ -67,7 +67,9 @@ typedef struct stacklet_id_s *stacklet_id;
 #define _stacklet_id_of_stacklet(stacklet) (*(stacklet_id*)(stacklet))
 #define _stacklet_id_current(thrd) (*(stacklet_id*)(thrd))
 /* Returns the current stacklet with the given id.
-   If 'id' == NULL, returns the main stacklet in the thread. */
+   If 'id' == NULL, returns the main stacklet in the thread.
+   In both cases the return value is NULL if the id specifies the currently
+   running "stacklet". */
 stacklet_handle _stacklet_with_id(stacklet_thread_handle thrd, stacklet_id id);
 
 #endif /* _STACKLET_H_ */

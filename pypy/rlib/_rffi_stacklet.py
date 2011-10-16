@@ -25,6 +25,7 @@ handle = rffi.COpaquePtr(typedef='stacklet_handle', compilation_info=eci)
 thread_handle = rffi.COpaquePtr(typedef='stacklet_thread_handle',
                                 compilation_info=eci)
 run_fn = lltype.Ptr(lltype.FuncType([handle, llmemory.Address], handle))
+id = rffi.COpaquePtr(typedef='stacklet_id', compilation_info=eci)
 
 # ----- constants -----
 
@@ -47,3 +48,5 @@ destroy = llexternal('stacklet_destroy', [thread_handle, handle], lltype.Void)
 _translate_pointer = llexternal("_stacklet_translate_pointer",
                                 [llmemory.Address, llmemory.Address],
                                 llmemory.Address)
+_stacklet_with_id = llexternal("_stacklet_with_id", [thread_handle, id],
+                               handle)
