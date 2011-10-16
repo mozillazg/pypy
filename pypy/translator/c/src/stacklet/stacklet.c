@@ -268,7 +268,6 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
            Call run(). */
         sid->stacklet = NULL;
         thrd->g_current_id = sid;
-        fprintf(stderr, "new sid: %p\n", sid);
         thrd->g_current_stack_stop = thrd->g_current_stack_marker;
         result = run(thrd->g_source, run_arg);
 
@@ -282,7 +281,6 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
     }
     /* The second time it returns. */
     assert(thrd->g_current_id == sid1);
-    fprintf(stderr, "continue with sid: %p\n", sid1);
 }
 
 /************************************************************/
