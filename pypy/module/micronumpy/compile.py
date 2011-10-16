@@ -39,6 +39,9 @@ class FakeSpace(object):
             return IntObject(obj)
         raise Exception
 
+    def newcomplex(self, realval, imagval):
+        return ComplexObject(realval, imagval)
+
     def float(self, w_obj):
         assert isinstance(w_obj, FloatObject)
         return w_obj
@@ -58,6 +61,11 @@ class BoolObject(W_Root):
 class IntObject(W_Root):
     def __init__(self, intval):
         self.intval = intval
+
+class ComplexObject(W_Root):
+    def __init__(self, realval, imagval):
+        self.realval = realval
+        self.imagval = imagval
 
 
 space = FakeSpace()
