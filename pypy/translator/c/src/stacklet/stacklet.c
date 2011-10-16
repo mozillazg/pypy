@@ -61,6 +61,10 @@ void *(*_stacklet_switchstack)(void*(*)(void*, void*),
 void (*_stacklet_initialstub)(struct stacklet_thread_s *,
                               stacklet_run_fn, void *) = NULL;
 
+struct stacklet_id_s {
+    stacklet_handle stacklet;
+};
+
 struct stacklet_thread_s {
     stacklet_id g_current_id;             /* first field */
     struct stacklet_s *g_stack_chain_head;  /* NULL <=> running main */
@@ -68,10 +72,7 @@ struct stacklet_thread_s {
     char *g_current_stack_marker;
     struct stacklet_s *g_source;
     struct stacklet_s *g_target;
-};
-
-struct stacklet_id_s {
-    stacklet_handle stacklet;
+    struct stacklet_id_s g_main_id;
 };
 
 /***************************************************************/
@@ -136,8 +137,7 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
 
     stacklet = thrd->g_source;
     stacklet->id = thrd->g_current_id;
-    if (stacklet->id != NULL)
-        stacklet->id->stacklet = stacklet;
+    stacklet->id->stacklet = stacklet;
     stacklet->stack_start = old_stack_pointer;
     stacklet->stack_stop  = thrd->g_current_stack_stop;
     stacklet->stack_saved = 0;
@@ -238,8 +238,7 @@ static void *g_restore_state(void *new_stack_pointer, void *rawthrd)
 #endif
     thrd->g_current_stack_stop = g->stack_stop;
     thrd->g_current_id = g->id;
-    if (thrd->g_current_id != NULL)
-        thrd->g_current_id->stacklet = NULL;
+    thrd->g_current_id->stacklet = NULL;
     free(g);
     return EMPTY_STACKLET_HANDLE;
 }
@@ -300,8 +299,10 @@ stacklet_thread_handle stacklet_newthread(void)
     }
 
     thrd = malloc(sizeof(struct stacklet_thread_s));
-    if (thrd != NULL)
+    if (thrd != NULL) {
         memset(thrd, 0, sizeof(struct stacklet_thread_s));
+        thrd->g_current_id = &thrd->g_main_id;
+    }
     return thrd;
 }
 
@@ -368,4 +369,11 @@ char **_stacklet_translate_pointer(stacklet_handle context, char **ptr)
       assert(((long)context->stack_stop) & 1);
   }
   return ptr;
+}
+
+stacklet_handle _stacklet_with_id(stacklet_thread_handle thrd, stacklet_id id)
+{
+    if (id == NULL)
+        id = &thrd->g_main_id;
+    return id->stacklet;
 }
