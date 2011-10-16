@@ -48,6 +48,12 @@ class AppTestNumArray(BaseNumpyAppTest):
         a = array(range(5))
         assert a[3] == 3
 
+    def test_iterator_init(self):
+        from numpy import array
+        a = array((range(5),range(5))
+        assert a[3] == 3
+        assert a[8] == 3
+
     def test_repr(self):
         from numpy import array, zeros
         a = array(range(5), float)
