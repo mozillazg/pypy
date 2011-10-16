@@ -59,14 +59,15 @@ void stacklet_destroy(stacklet_thread_handle thrd, stacklet_handle target);
  */
 char **_stacklet_translate_pointer(stacklet_handle context, char **ptr);
 
-/* The "stacklet id" is NULL for main stacklets; for other stacklets it is a
- * value that remain valid and unchanged if the stacklet is suspended and
- * resumed.  WARNING: DON'T USE unless you have no other choice, because
- * it is not "composable" at all.
+/* The "stacklet id" is a value that remain valid and unchanged if the
+ * stacklet is suspended and resumed.  WARNING: DON'T USE unless you have
+ * no other choice, because it is not "composable" at all.
  */
 typedef struct stacklet_id_s *stacklet_id;
 #define _stacklet_id_of_stacklet(stacklet) (*(stacklet_id*)(stacklet))
 #define _stacklet_id_current(thrd) (*(stacklet_id*)(thrd))
+/* Returns the current stacklet with the given id.
+   If 'id' == NULL, returns the main stacklet in the thread. */
 stacklet_handle _stacklet_with_id(stacklet_thread_handle thrd, stacklet_id id);
 
 #endif /* _STACKLET_H_ */

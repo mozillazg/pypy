@@ -628,17 +628,27 @@ void test_two_mains(void)
 /************************************************************/
 
 struct test_id_s {
+    stacklet_id idmain;
     stacklet_id id1;
     stacklet_id id2;
+    stacklet_handle hmain;
+    stacklet_handle h1;
+    stacklet_handle h2;
 } tid;
 
 stacklet_handle stacklet_id_callback_1(stacklet_handle h, void *arg)
 {
     stacklet_id myid = _stacklet_id_current(thrd);
+    assert(_stacklet_with_id(thrd, myid) == NULL);
+    tid.hmain = h;
+    tid.h1 = NULL;
+
     h = stacklet_switch(thrd, h);
-    
+    tid.hmain = h;
+    tid.h1 = NULL;
+
     tid.id1 = _stacklet_id_current(thrd);
-    assert(tid.id1 != NULL);
+    assert(tid.id1 != tid.idmain);
     assert(tid.id1 == myid);
     assert(status == 0);
     status = 1;
@@ -649,11 +659,22 @@ stacklet_handle stacklet_id_callback_1(stacklet_handle h, void *arg)
 stacklet_handle stacklet_id_callback_2(stacklet_handle h, void *arg)
 {
     stacklet_id myid = _stacklet_id_current(thrd);
+    assert(_stacklet_with_id(thrd, myid) == NULL);
+    tid.hmain = h;
+    tid.h2 = NULL;
+
     h = stacklet_switch(thrd, h);
+    tid.hmain = h;
+    tid.h2 = NULL;
 
     tid.id2 = _stacklet_id_current(thrd);
-    assert(tid.id2 != NULL);
+    assert(tid.id2 != tid.idmain);
+    assert(tid.id2 != tid.id1);
     assert(tid.id2 == myid);
+    assert(_stacklet_with_id(thrd, tid.idmain) == tid.hmain);
+    assert(_stacklet_with_id(thrd, tid.id1) == tid.h1);
+    assert(_stacklet_with_id(thrd, tid.id2) == tid.h2);
+
     assert(status == 1);
     status = 2;
 
@@ -665,19 +686,30 @@ void test_stacklet_id(void)
     status = 0;
     stacklet_handle h1 = stacklet_new(thrd, stacklet_id_callback_1, NULL);
     stacklet_handle h2 = stacklet_new(thrd, stacklet_id_callback_2, NULL);
+    tid.hmain = NULL;
+    tid.h1 = h1;
+    tid.h2 = h2;
 
-    assert(_stacklet_id_current(thrd) == NULL);
+    tid.idmain = _stacklet_id_current(thrd);
+    assert(_stacklet_with_id(thrd, tid.idmain) == NULL);
 
     assert(status == 0);
     h1 = stacklet_switch(thrd, h1);
+    tid.hmain = NULL;
+    tid.h1 = h1;
 
     assert(status == 1);
     h2 = stacklet_switch(thrd, h2);
+    tid.hmain = NULL;
+    tid.h2 = h2;
 
     assert(status == 2);
     assert(_stacklet_id_of_stacklet(h1) == tid.id1);
     assert(_stacklet_id_of_stacklet(h2) == tid.id2);
-    assert(_stacklet_id_current(thrd) == NULL);
+    assert(_stacklet_id_current(thrd) == tid.idmain);
+    assert(_stacklet_with_id(thrd, tid.idmain) == NULL);
+    assert(_stacklet_with_id(thrd, tid.id1) == tid.h1);
+    assert(_stacklet_with_id(thrd, tid.id2) == tid.h2);
 
     h1 = stacklet_switch(thrd, h1);
     assert(h1 == EMPTY_STACKLET_HANDLE);
