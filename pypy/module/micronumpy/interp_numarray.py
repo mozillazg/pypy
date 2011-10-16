@@ -72,7 +72,7 @@ class BaseArray(Wrappable):
             try:
                 i = 0
                 for w_elem in l:
-                    arr.setitem_recurse_w(space,i,0,w_elem)
+                    arr.setitem_recurse_w(space,i,1,w_elem)
                     i += 1
             except:
                 print_exc()
@@ -670,9 +670,10 @@ class NDimArray(BaseArray):
                     if not e.match(space, space.w_StopIteration):
                         raise
                     return 
-                self.setitem_recurse_w(space,i+index*self.shape[depth], depth+1, w_item)
+                self.setitem_recurse_w(space,i+index*self.shape[-depth], depth+1, w_item)
                 i+=1
         else:
+            print 'setting',index,'to',w_value
             self.setitem_w(space,index,w_value) 
     def setitem(self, item, value):
         self.invalidated()
