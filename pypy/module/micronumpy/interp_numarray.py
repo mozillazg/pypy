@@ -6,6 +6,7 @@ from pypy.module.micronumpy import interp_ufuncs, interp_dtype, signature
 from pypy.rlib import jit
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.sourcetools import func_with_new_name
+from traceback import print_exc
 
 
 numpy_driver = jit.JitDriver(greens = ['signature'],
@@ -68,13 +69,13 @@ class BaseArray(Wrappable):
             )
             arr = NDimArray(shape, dtype=dtype)
             #Assign all the values
-            assigner = []
-            for s in shape[1:]:
-                assigner.append(':')
-            i = 0
-            for w_elem in l:
-                dtype.setitem_w(space, arr.storage, [i]+assigner, w_elem)
-                i += 1
+            try:
+                i = 0
+                for w_elem in l:
+                    arr.setitem_recurse_w(space,i,0,w_elem)
+                    i += 1
+            except:
+                print_exc()
             return arr
         if space.is_w(w_dtype, space.w_None):
             w_dtype = None
@@ -251,15 +252,16 @@ class BaseArray(Wrappable):
         return self.get_concrete().descr_len(space)
 
     def descr_repr(self, space):
+        return self.get_concrete().descr_repr(space)
         # Simple implementation so that we can see the array. Needs work.
-        concrete = self.get_concrete()
-        res = "array([" + ", ".join(concrete._getnums(False)) + "]"
-        dtype = concrete.find_dtype()
-        if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
-            dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
-            res += ", dtype=" + dtype.name
-        res += ")"
-        return space.wrap(res)
+        #concrete = self.get_concrete()
+        #res = "array([" + ", ".join(concrete._getnums(False)) + "]"
+        #dtype = concrete.find_dtype()
+        #if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
+        #    dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
+        #    res += ", dtype=" + dtype.name
+        #res += ")"
+        #return space.wrap(res)
 
     def descr_str(self, space):
         # Simple implementation so that we can see the array. Needs work.
@@ -555,6 +557,16 @@ class SingleDimSlice(ViewArray):
     def calc_index(self, item):
         return (self.start + item * self.step)
 
+    def descr_repr(self, space):
+        # Simple implementation so that we can see the array. Needs work.
+        concrete = self.get_concrete()
+        res = "array([" + ", ".join(concrete._getnums(False)) + "]"
+        dtype = concrete.find_dtype()
+        if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
+            dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
+            res += ", dtype=" + dtype.name
+        res += ")"
+        return space.wrap(res)
 
 class SingleDimArray(BaseArray):
     def __init__(self, size, dtype):
@@ -596,6 +608,17 @@ class SingleDimArray(BaseArray):
     def setslice(self, space, start, stop, step, slice_length, arr):
         self._sliceloop(start, stop, step, arr, self)
 
+    def descr_repr(self, space):
+        # Simple implementation so that we can see the array. Needs work.
+        concrete = self.get_concrete()
+        res = "array([" + ", ".join(concrete._getnums(False)) + "]"
+        dtype = concrete.find_dtype()
+        if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
+            dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
+            res += ", dtype=" + dtype.name
+        res += ")"
+        return space.wrap(res)
+
     def __del__(self):
         lltype.free(self.storage, flavor='raw', track_allocation=False)
 
@@ -626,7 +649,7 @@ class NDimArray(BaseArray):
         return self.dtype.getitem(self.storage, i)
 
     def descr_shape(self, space):
-        return space.newtuple(space.wrap(self.shape))
+        return self.shape
 
     def descr_len(self, space):
         return space.wrap(self.size)
@@ -635,12 +658,39 @@ class NDimArray(BaseArray):
         self.invalidated()
         self.dtype.setitem_w(space, self.storage, item, w_value)
 
+    def setitem_recurse_w(self,space,index,depth,w_value):
+        self.invalidated()
+        if space.issequence_w(w_value):
+            i=0
+            w_iterator = space.iter(w_value)
+            while True:
+                try:
+                    w_item = space.next(w_iterator)
+                except OperationError, e:
+                    if not e.match(space, space.w_StopIteration):
+                        raise
+                    return 
+                self.setitem_recurse_w(space,i+index*self.shape[depth], depth+1, w_item)
+                i+=1
+        else:
+            self.setitem_w(space,index,w_value) 
     def setitem(self, item, value):
         self.invalidated()
         self.dtype.setitem(self.storage, item, value)
 
     def setslice(self, space, start, stop, step, slice_length, arr):
         self._sliceloop(start, stop, step, arr, self)
+
+    def descr_repr(self, space):
+        # Simple implementation so that we can see the array. Needs work.
+        concrete = self.get_concrete()
+        res = "ndarray([" + ", ".join(concrete._getnums(False)) + "]"
+        dtype = concrete.find_dtype()
+        if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
+            dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
+            res += ", dtype=" + dtype.name
+        res += ")"
+        return space.wrap(res)
 
     def __del__(self):
         lltype.free(self.storage, flavor='raw', track_allocation=False)
