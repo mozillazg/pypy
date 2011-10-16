@@ -50,13 +50,16 @@ class W_Dtype(Wrappable):
         return space.newtuple([])
 
 
+class UnsupportedOperation(Exception):
+    pass
+
 class BaseBox(object):
     pass
 
 VOID_TP = lltype.Ptr(lltype.Array(lltype.Void, hints={'nolength': True, "uncast_on_llgraph": True}))
 
-def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
-    expected_size=None):
+def create_low_level_dtype(num, kind, name, aliases, applevel_types, T,
+    valtype, expected_size=None, exclude_methods=[]):
 
     class Box(BaseBox):
         def __init__(self, val):
@@ -103,8 +106,9 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
                 track_allocation=False, add_memory_pressure=True
             ))
 
-        def getitem(self, storage, i):
-            return self.box(self.unerase(storage)[i])
+        if "getitem" not in exclude_methods:
+            def getitem(self, storage, i):
+                return self.box(self.unerase(storage)[i])
 
         def setitem(self, storage, i, item):
             self.unerase(storage)[i] = self.unbox(item)
@@ -112,9 +116,12 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
         def setitem_w(self, space, storage, i, w_item):
             self.setitem(storage, i, self.unwrap(space, w_item))
 
-        @specialize.argtype(1)
-        def adapt_val(self, val):
-            return self.box(rffi.cast(TP.TO.OF, val))
+        if "adapt_val" not in exclude_methods:
+            @specialize.argtype(1)
+            def adapt_val(self, val):
+                if isinstance(val, tuple):
+                    raise UnsupportedOperation("Can't convert a complex to a %s" % self.name)
+                return self.box(rffi.cast(TP.TO.OF, val))
 
     W_LowLevelDtype.__name__ = "W_%sDtype" % name.capitalize()
     W_LowLevelDtype.num = num
@@ -490,6 +497,7 @@ W_Complex128Dtype = create_low_level_dtype(
     T = ComplexDouble,
     valtype = (float, float),
     expected_size = 16,
+    exclude_methods = ["adapt_val", "getitem"],
 )
 class W_Complex128Dtype(W_Complex128Dtype):
     @specialize.argtype(1)
@@ -509,10 +517,10 @@ class W_Complex128Dtype(W_Complex128Dtype):
         self.unerase(storage)[i].imag = val[1]
 
     def getitem(self, storage, i):
-        return (
+        return self.box((
             self.unerase(storage)[i].real,
             self.unerase(storage)[i].imag,
-        )
+        ))
 
 
 ALL_DTYPES = [
