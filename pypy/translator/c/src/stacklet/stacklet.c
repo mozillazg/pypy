@@ -344,7 +344,8 @@ void stacklet_destroy(stacklet_thread_handle thrd, stacklet_handle target)
             break;
         }
     assert(target->id->stacklet == target);
-    free(target->id);
+    if (target->id != &thrd->g_main_id)
+        free(target->id);
     free(target);
 }
 
@@ -369,11 +370,4 @@ char **_stacklet_translate_pointer(stacklet_handle context, char **ptr)
       assert(((long)context->stack_stop) & 1);
   }
   return ptr;
-}
-
-stacklet_handle _stacklet_with_id(stacklet_thread_handle thrd, stacklet_id id)
-{
-    if (id == NULL)
-        id = &thrd->g_main_id;
-    return id->stacklet;
 }

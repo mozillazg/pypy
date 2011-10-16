@@ -10,6 +10,7 @@ class StackletThread(object):
 
     @jit.dont_look_inside
     def __init__(self, config):
+        stacklet_thread_global.enable()
         self._gcrootfinder = _getgcrootfinder(config, we_are_translated())
         self._thrd = _c.newthread()
         if not self._thrd:
@@ -65,6 +66,19 @@ class StackletThreadDeleter(object):
         if thrd:
             self._thrd = lltype.nullptr(_c.thread_handle.TO)
             _c.deletethread(thrd)
+
+class StackletThreadGlobal(object):
+    _immutable_fields_ = ['enabled?']
+
+    def _freeze_(self):
+        self.enabled = False
+
+    def enable(self):
+        if not self.enabled:
+            self.enabled = True    # change the quasi-immutable field
+
+stacklet_thread_global = StackletThreadGlobal()
+stacklet_thread_global._freeze_()
 
 # ____________________________________________________________
 
