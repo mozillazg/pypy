@@ -627,6 +627,66 @@ void test_two_mains(void)
 #endif
 /************************************************************/
 
+struct test_id_s {
+    stacklet_id id1;
+    stacklet_id id2;
+} tid;
+
+stacklet_handle stacklet_id_callback_1(stacklet_handle h, void *arg)
+{
+    stacklet_id myid = _stacklet_id_current(thrd);
+    h = stacklet_switch(thrd, h);
+    
+    tid.id1 = _stacklet_id_current(thrd);
+    assert(tid.id1 != NULL);
+    assert(tid.id1 == myid);
+    assert(status == 0);
+    status = 1;
+
+    return stacklet_switch(thrd, h);
+}
+
+stacklet_handle stacklet_id_callback_2(stacklet_handle h, void *arg)
+{
+    stacklet_id myid = _stacklet_id_current(thrd);
+    h = stacklet_switch(thrd, h);
+
+    tid.id2 = _stacklet_id_current(thrd);
+    assert(tid.id2 != NULL);
+    assert(tid.id2 == myid);
+    assert(status == 1);
+    status = 2;
+
+    return stacklet_switch(thrd, h);
+}
+
+void test_stacklet_id(void)
+{
+    status = 0;
+    stacklet_handle h1 = stacklet_new(thrd, stacklet_id_callback_1, NULL);
+    stacklet_handle h2 = stacklet_new(thrd, stacklet_id_callback_2, NULL);
+
+    assert(_stacklet_id_current(thrd) == NULL);
+
+    assert(status == 0);
+    h1 = stacklet_switch(thrd, h1);
+
+    assert(status == 1);
+    h2 = stacklet_switch(thrd, h2);
+
+    assert(status == 2);
+    assert(_stacklet_id_of_stacklet(h1) == tid.id1);
+    assert(_stacklet_id_of_stacklet(h2) == tid.id2);
+    assert(_stacklet_id_current(thrd) == NULL);
+
+    h1 = stacklet_switch(thrd, h1);
+    assert(h1 == EMPTY_STACKLET_HANDLE);
+    h2 = stacklet_switch(thrd, h2);
+    assert(h2 == EMPTY_STACKLET_HANDLE);
+}
+
+/************************************************************/
+
 #define TEST(name)   { name, #name }
 
 typedef struct {
@@ -649,6 +709,7 @@ static test_t test_list[] = {
   TEST(test_double),
   TEST(test_random),
 #endif
+  TEST(test_stacklet_id),
   { NULL, NULL }
 };
 
