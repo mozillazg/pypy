@@ -343,6 +343,8 @@ void stacklet_destroy(stacklet_thread_handle thrd, stacklet_handle target)
             *pp = target->stack_prev;
             break;
         }
+    assert(target->id->stacklet == target);
+    free(target->id);
     free(target);
 }
 
