@@ -34,6 +34,8 @@
 /************************************************************/
 
 struct stacklet_s {
+    stacklet_id id;    /* first field */
+
     /* The portion of the real stack claimed by this paused tealet. */
     char *stack_start;                /* the "near" end of the stack */
     char *stack_stop;                 /* the "far" end of the stack */
@@ -60,11 +62,16 @@ void (*_stacklet_initialstub)(struct stacklet_thread_s *,
                               stacklet_run_fn, void *) = NULL;
 
 struct stacklet_thread_s {
+    stacklet_id g_current_id;             /* first field */
     struct stacklet_s *g_stack_chain_head;  /* NULL <=> running main */
     char *g_current_stack_stop;
     char *g_current_stack_marker;
     struct stacklet_s *g_source;
     struct stacklet_s *g_target;
+};
+
+struct stacklet_id_s {
+    stacklet_handle stacklet;
 };
 
 /***************************************************************/
@@ -128,6 +135,9 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
         return -1;
 
     stacklet = thrd->g_source;
+    stacklet->id = thrd->g_current_id;
+    if (stacklet->id != NULL)
+        stacklet->id->stacklet = stacklet;
     stacklet->stack_start = old_stack_pointer;
     stacklet->stack_stop  = thrd->g_current_stack_stop;
     stacklet->stack_saved = 0;
@@ -227,6 +237,9 @@ static void *g_restore_state(void *new_stack_pointer, void *rawthrd)
     memcpy(g->stack_start - stack_saved, g+1, stack_saved);
 #endif
     thrd->g_current_stack_stop = g->stack_stop;
+    thrd->g_current_id = g->id;
+    if (thrd->g_current_id != NULL)
+        thrd->g_current_id->stacklet = NULL;
     free(g);
     return EMPTY_STACKLET_HANDLE;
 }
@@ -235,18 +248,33 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
                           stacklet_run_fn run, void *run_arg)
 {
     struct stacklet_s *result;
+    stacklet_id sid1 = thrd->g_current_id;
+    stacklet_id sid = malloc(sizeof(struct stacklet_id_s));
+    if (sid == NULL) {
+        thrd->g_source = NULL;
+        return;
+    }
 
     /* The following call returns twice! */
     result = (struct stacklet_s *) _stacklet_switchstack(g_initial_save_state,
                                                          g_restore_state,
                                                          thrd);
-    if (result == NULL && thrd->g_source != NULL) {
-        /* First time it returns.  Only g_initial_save_state() has run
-           and has created 'g_source'.  Call run(). */
+    if (result == NULL) {
+        /* First time it returns. */
+        if (thrd->g_source == NULL) {     /* out of memory */
+            free(sid);
+            return;
+        }
+        /* Only g_initial_save_state() has run and has created 'g_source'.
+           Call run(). */
+        sid->stacklet = NULL;
+        thrd->g_current_id = sid;
+        fprintf(stderr, "new sid: %p\n", sid);
         thrd->g_current_stack_stop = thrd->g_current_stack_marker;
         result = run(thrd->g_source, run_arg);
 
         /* Then switch to 'result'. */
+        free(sid);
         thrd->g_target = result;
         _stacklet_switchstack(g_destroy_state, g_restore_state, thrd);
 
@@ -254,6 +282,8 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
         abort();
     }
     /* The second time it returns. */
+    assert(thrd->g_current_id == sid1);
+    fprintf(stderr, "continue with sid: %p\n", sid1);
 }
 
 /************************************************************/
