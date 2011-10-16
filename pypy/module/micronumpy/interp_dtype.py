@@ -64,6 +64,9 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
 
         def wrap(self, space):
             val = self.val
+
+            if valtype == (float, float):
+                return space.newcomplex(val[0], val[1])
             if valtype is rarithmetic.r_singlefloat:
                 val = float(val)
             return space.wrap(val)
@@ -101,7 +104,7 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T, valtype,
             ))
 
         def getitem(self, storage, i):
-            return Box(self.unerase(storage)[i])
+            return self.box(self.unerase(storage)[i])
 
         def setitem(self, storage, i, item):
             self.unerase(storage)[i] = self.unbox(item)
@@ -504,6 +507,12 @@ class W_Complex128Dtype(W_Complex128Dtype):
         # You can't set a full struct, gotta do it one field at a time.
         self.unerase(storage)[i].real = val[0]
         self.unerase(storage)[i].imag = val[1]
+
+    def getitem(self, storage, i):
+        return (
+            self.unerase(storage)[i].real,
+            self.unerase(storage)[i].imag,
+        )
 
 
 ALL_DTYPES = [
