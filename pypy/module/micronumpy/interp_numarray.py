@@ -32,8 +32,50 @@ class BaseArray(Wrappable):
     def add_invalidates(self, other):
         self.invalidates.append(other)
 
+    def find_dtype(space,w_iterable_or_scalar, w_dtype):
+        if w_dtype is space.fromcache(interp_dtype.W_Float64Dtype):
+            return w_dtype
+        if space.issequence_w(w_iterable_or_scalar):
+            w_iterator = space.iter(w_iterable_or_scalar)
+            while True:
+                try:
+                    w_item = space.next(w_iterator)
+                except OperationError, e:
+                    if not e.match(space, space.w_StopIteration):
+                        raise
+                    return w_dtype
+                w_dtype = BaseArray.find_dtype.im_func(space,w_item, w_dtype)
+        else:
+            w_dtype = interp_ufuncs.find_dtype_for_scalar(space,w_iterable_or_scalar, w_dtype)
+        return w_dtype
+                  
     def descr__new__(space, w_subtype, w_size_or_iterable, w_dtype=None):
         l = space.listview(w_size_or_iterable)
+        w_elem = space.getitem(w_size_or_iterable, space.wrap(0))
+        if space.issequence_w(w_elem):
+            shape = [len(l)]
+            while space.issequence_w(w_elem):
+                shape.append(space.len_w(w_elem))
+                w_elem = space.getitem(w_elem, space.wrap(0))
+            if space.is_w(w_dtype, space.w_None):
+                w_dtype = None
+                w_dtype = BaseArray.find_dtype.im_func(space, w_size_or_iterable, w_dtype)
+                if w_dtype is None:
+                    w_dtype = space.w_None
+
+            dtype = space.interp_w(interp_dtype.W_Dtype,
+                space.call_function(space.gettypefor(interp_dtype.W_Dtype), w_dtype)
+            )
+            arr = NDimArray(shape, dtype=dtype)
+            #Assign all the values
+            assigner = []
+            for s in shape[1:]:
+                assigner.append(':')
+            i = 0
+            for w_elem in l:
+                dtype.setitem_w(space, arr.storage, [i]+assigner, w_elem)
+                i += 1
+            return arr
         if space.is_w(w_dtype, space.w_None):
             w_dtype = None
             for w_item in l:
@@ -199,7 +241,8 @@ class BaseArray(Wrappable):
         return space.wrap(self.find_dtype())
 
     def descr_get_shape(self, space):
-        return space.newtuple([self.descr_len(space)])
+        #return space.newtuple([self.descr_len(space)])
+        return self.get_concrete().descr_shape(space)
 
     def descr_copy(self, space):
         return space.call_function(space.gettypefor(BaseArray), self, self.find_dtype())
@@ -499,6 +542,9 @@ class SingleDimSlice(ViewArray):
     def find_dtype(self):
         return self.parent.find_dtype()
 
+    def descr_shape(self,space):
+        return space.newtuple([space.wrap(self.size)])
+
     def setslice(self, space, start, stop, step, slice_length, arr):
         start = self.calc_index(start)
         if stop != -1:
@@ -532,6 +578,55 @@ class SingleDimArray(BaseArray):
 
     def eval(self, i):
         return self.dtype.getitem(self.storage, i)
+
+    def descr_shape(self, space):
+        return space.newtuple([space.wrap(self.size)])
+
+    def descr_len(self, space):
+        return space.wrap(self.size)
+
+    def setitem_w(self, space, item, w_value):
+        self.invalidated()
+        self.dtype.setitem_w(space, self.storage, item, w_value)
+
+    def setitem(self, item, value):
+        self.invalidated()
+        self.dtype.setitem(self.storage, item, value)
+
+    def setslice(self, space, start, stop, step, slice_length, arr):
+        self._sliceloop(start, stop, step, arr, self)
+
+    def __del__(self):
+        lltype.free(self.storage, flavor='raw', track_allocation=False)
+
+class NDimArray(BaseArray):
+    def __init__(self, shape, dtype):
+        BaseArray.__init__(self)
+        self.size = 1
+        for s in shape:
+            self.size *= s
+        self.shape = shape
+        self.dtype = dtype
+        self.storage = dtype.malloc(self.size)
+        self.signature = dtype.signature
+
+    def get_concrete(self):
+        return self
+
+    def get_root_storage(self):
+        return self.storage
+
+    def find_size(self):
+        return self.size
+
+    def find_dtype(self):
+        return self.dtype
+
+    def eval(self, i):
+        return self.dtype.getitem(self.storage, i)
+
+    def descr_shape(self, space):
+        return space.newtuple(space.wrap(self.shape))
 
     def descr_len(self, space):
         return space.wrap(self.size)

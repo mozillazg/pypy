@@ -163,8 +163,10 @@ class ArithmeticTypeMixin(object):
         return v1 * v2
     @binop
     def div(self, v1, v2):
-        return v1 / v2
-
+        try:
+            return v1 / v2
+        except ZeroDivisionError:
+            return (1 if v1>=0 else -1) *(1 if v2>=0 else -1)*float('inf')
     @unaryop
     def pos(self, v):
         return +v
