@@ -39,7 +39,7 @@ class CachedField(object):
         cached_fieldvalue = self._cached_fields.get(structvalue, None)
 
         # Hack to ensure constants are imported from the preamble
-        if cached_fieldvalue and fieldvalue.is_constant(): 
+        if cached_fieldvalue and fieldvalue.is_constant():
             optheap.optimizer.ensure_imported(cached_fieldvalue)
             cached_fieldvalue = self._cached_fields.get(structvalue, None)
 
@@ -50,7 +50,7 @@ class CachedField(object):
             if not self._lazy_setfield_registered:
                 optheap._lazy_setfields_and_arrayitems.append(self)
                 self._lazy_setfield_registered = True
-            
+
         else:
             # this is the case where the pending setfield ends up
             # storing precisely the value that is already there,
@@ -336,7 +336,7 @@ class OptHeap(Optimization):
             value = self.getvalue(op.getarg(0))
             assert not value.is_virtual()      # it must be a non-virtual
             fieldvalue = self.getvalue(op.getarglist()[-1])
-            if fieldvalue.is_virtual():
+            if True: #fieldvalue.is_virtual():
                 # this is the case that we leave to resume.py
                 opnum = op.getopnum()
                 if opnum == rop.SETFIELD_GC:
@@ -388,7 +388,7 @@ class OptHeap(Optimization):
         #
         cf = self.field_cache(op.getdescr())
         cf.do_setfield(self, op)
-        
+
 
     def optimize_GETARRAYITEM_GC(self, op):
         arrayvalue = self.getvalue(op.getarg(0))
