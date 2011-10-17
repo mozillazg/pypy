@@ -800,8 +800,7 @@ class Transformer(object):
 
     def rewrite_op_cast_ptr_to_int(self, op):
         if self._is_gc(op.args[0]):
-            #return op
-            raise NotImplementedError("cast_ptr_to_int")
+            return op
 
     def rewrite_op_force_cast(self, op):
         v_arg = op.args[0]
@@ -1542,6 +1541,10 @@ class Transformer(object):
 
     def rewrite_op_jit_force_virtual(self, op):
         return self._do_builtin_call(op)
+
+    def rewrite_op_jit_is_virtual(self, op):
+        raise Exception, (
+            "'vref.virtual' should not be used from jit-visible code")
 
     def rewrite_op_jit_force_virtualizable(self, op):
         # this one is for virtualizables

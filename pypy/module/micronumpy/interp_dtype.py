@@ -161,12 +161,7 @@ class ArithmeticTypeMixin(object):
     @binop
     def mul(self, v1, v2):
         return v1 * v2
-    @binop
-    def div(self, v1, v2):
-        try:
-            return v1 / v2
-        except ZeroDivisionError:
-            return (1 if v1>=0 else -1) *(1 if v2>=0 else -1)*float('inf')
+
     @unaryop
     def pos(self, v):
         return +v
@@ -218,6 +213,14 @@ class FloatArithmeticDtype(ArithmeticTypeMixin):
     def str_format(self, item):
         return float2string(self.for_computation(self.unbox(item)), 'g', rfloat.DTSF_STR_PRECISION)
 
+    @binop
+    def div(self, v1, v2):
+        try:
+            return v1 / v2
+        except ZeroDivisionError:
+            if v1 == v2 == 0.0:
+                return rfloat.NAN
+            return rfloat.copysign(rfloat.INFINITY, v1 * v2)
     @binop
     def mod(self, v1, v2):
         return math.fmod(v1, v2)
@@ -296,6 +299,11 @@ class IntegerArithmeticDtype(ArithmeticTypeMixin):
     def str_format(self, item):
         return str(widen(self.unbox(item)))
 
+    @binop
+    def div(self, v1, v2):
+        if v2 == 0:
+            return 0
+        return v1 / v2
     @binop
     def mod(self, v1, v2):
         return v1 % v2
