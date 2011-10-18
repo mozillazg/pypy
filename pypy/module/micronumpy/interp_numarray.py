@@ -107,6 +107,12 @@ class BaseArray(Wrappable):
 
     def _binop_impl(ufunc_name):
         def impl(self, space, w_other):
+            if not space.eq_w(self.descr_shape(space),w_other.descr_shape(space)):
+                raise OperationError(space.w_ValueError,
+                    space.wrap("shape mismatch: objects cannot be broadcast to a single shape %s <> %s" \
+                            % (self.descr_shape(space).unwrap(space), 
+                              w_other.descr_shape(space).unwrap(space),
+                            )))
             return getattr(interp_ufuncs.get(space), ufunc_name).call(space, [self, w_other])
         return func_with_new_name(impl, "binop_%s_impl" % ufunc_name)
 
@@ -297,7 +303,7 @@ class BaseArray(Wrappable):
             length = space.len_w(w_idx)
             if length > 1: # only one dimension for now.
                 raise OperationError(space.w_IndexError,
-                                     space.wrap("invalid index"))
+                                     space.wrap("invalid index: cannot handle tuple indices yet"))
             if length == 0:
                 w_idx = space.newslice(space.wrap(0),
                                       space.wrap(self.find_size()),
@@ -392,8 +398,12 @@ class VirtualArray(BaseArray):
     def compute(self):
         i = 0
         signature = self.signature
+        result_shape = self.find_shape()
         result_size = self.find_size()
-        result = SingleDimArray(result_size, self.find_dtype())
+        if len(result_shape)>1:
+            result = NDimArray(result_shape, self.find_dtype())
+        else:
+            result = SingleDimArray(result_size, self.find_dtype())
         while i < result_size:
             numpy_driver.jit_merge_point(signature=signature,
                                          result_size=result_size, i=i,
@@ -418,6 +428,12 @@ class VirtualArray(BaseArray):
 
     def setitem(self, item, value):
         return self.get_concrete().setitem(item, value)
+
+    def find_shape(self):
+        if self.forced_result is not None:
+            # The result has been computed and sources may be unavailable
+            return self.forced_result.find_shape()
+        return self._find_shape()
 
     def find_size(self):
         if self.forced_result is not None:
@@ -465,6 +481,13 @@ class Call2(VirtualArray):
     def _del_sources(self):
         self.left = None
         self.right = None
+
+    def _find_shape(self):
+        try:
+            return self.left.find_shape()
+        except ValueError:
+            pass
+        return self.right.find_shape()
 
     def _find_size(self):
         try:
@@ -538,6 +561,9 @@ class SingleDimSlice(ViewArray):
     def get_root_storage(self):
         return self.parent.get_concrete().get_root_storage()
 
+    def find_shape(self):
+        return (self.size,)
+
     def find_size(self):
         return self.size
 
@@ -581,6 +607,9 @@ class SingleDimArray(BaseArray):
 
     def get_root_storage(self):
         return self.storage
+
+    def find_shape(self):
+        return (self.size,)
 
     def find_size(self):
         return self.size
@@ -639,6 +668,9 @@ class NDimArray(BaseArray):
     def get_root_storage(self):
         return self.storage
 
+    def find_shape(self):
+        return self.shape
+
     def find_size(self):
         return self.size
 
@@ -649,7 +681,7 @@ class NDimArray(BaseArray):
         return self.dtype.getitem(self.storage, i)
 
     def descr_shape(self, space):
-        return self.shape
+        return space.wrap(self.shape)
 
     def descr_len(self, space):
         return space.wrap(self.size)
@@ -673,7 +705,6 @@ class NDimArray(BaseArray):
                 self.setitem_recurse_w(space,i+index*self.shape[-depth], depth+1, w_item)
                 i+=1
         else:
-            print 'setting',index,'to',w_value
             self.setitem_w(space,index,w_value) 
     def setitem(self, item, value):
         self.invalidated()
