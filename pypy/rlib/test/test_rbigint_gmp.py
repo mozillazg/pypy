@@ -2,9 +2,8 @@ from __future__ import division
 import py
 import operator, sys
 from random import random, randint, sample
-from pypy.rlib._rbigint_native import rbigint, SHIFT, MASK, KARATSUBA_CUTOFF
-from pypy.rlib._rbigint_native import _store_digit, parse_digit_string
-from pypy.rlib import _rbigint_native as lobj
+from pypy.rlib._rbigint_gmp import RBIGINT as rbigint
+from pypy.rlib import _rbigint_gmp as lobj
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong, intmask
 from pypy.rpython.test.test_llinterp import interpret
 
@@ -118,6 +117,7 @@ def gen_signs(l):
             yield -s
 
 def bigint(lst, sign):
+    XXX
     for digit in lst:
         assert digit & MASK == digit    # wrongly written test!
     return rbigint(map(_store_digit, lst), sign)
