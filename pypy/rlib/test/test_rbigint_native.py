@@ -2,9 +2,9 @@ from __future__ import division
 import py
 import operator, sys
 from random import random, randint, sample
-from pypy.rlib.rbigint import rbigint, SHIFT, MASK, KARATSUBA_CUTOFF
-from pypy.rlib.rbigint import _store_digit
-from pypy.rlib import rbigint as lobj
+from pypy.rlib._rbigint_native import rbigint, SHIFT, MASK, KARATSUBA_CUTOFF
+from pypy.rlib._rbigint_native import _store_digit, parse_digit_string
+from pypy.rlib import _rbigint_native as lobj
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong, intmask
 from pypy.rpython.test.test_llinterp import interpret
 
@@ -599,7 +599,6 @@ class TestInternalFunctions(object):
                 r_ulonglong(-9**50))
 
     def test_parse_digit_string(self):
-        from pypy.rlib.rbigint import parse_digit_string
         class Parser:
             def __init__(self, base, sign, digits):
                 self.base = base
