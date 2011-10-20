@@ -36,9 +36,15 @@ _free           = external("free", [rffi.CCHARP])
 # ____________________________________________________________
 
 
+@specialize.argtype(0)
 def _fromint(value):
     r = lltype.malloc(RBIGINT)
-    mpz_init_set_si(r.mpz, value)
+    #
+    T = type(value)
+    if T is int or T is r_int:
+        mpz_init_set_si(r.mpz, value)
+    elif ...
+    
     return r
 
 def _str_base_10(r):
@@ -58,6 +64,11 @@ class _adtmeths:
     @typeMethod
     def frombool(RBIGINT, b):
         return _fromint(int(b))    # maybe do some caching?
+
+    @typeMethod
+    @specialize.argtype(1)
+    def fromrarith_int(RBIGINT, i):
+        return _fromint(widen(i))
 
     @typeMethod
     def fromlong(RBIGINT, l):
