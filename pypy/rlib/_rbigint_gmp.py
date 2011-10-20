@@ -72,6 +72,15 @@ class _adtmeths:
         "NOT_RPYTHON"
         return int(_str_base_10(r))
 
+    def touint(r):
+        if mpz_fits_ulong_p(r.mpz):
+            return mpz_get_ui(r.mpz)
+        elif XXX + mpz_sgn(r.mpz) < 0:
+            raise ValueError("cannot convert negative integer to unsigned int")
+        else:
+            raise OverflowError(
+                "long int too large to convert to unsigned int")
+
     def _binary(opname):
         mpz_op = globals()['mpz_' + opname]
         def operation(r1, r2):
