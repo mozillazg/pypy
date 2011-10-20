@@ -23,9 +23,12 @@ mpz_get_str     = external("mpz_get_str", [rffi.CCHARP, rffi.INT, mpz_ptr],
 mpz_add         = external("mpz_add", [mpz_ptr, mpz_ptr, mpz_ptr])
 mpz_sub         = external("mpz_sub", [mpz_ptr, mpz_ptr, mpz_ptr])
 mpz_mul         = external("mpz_mul", [mpz_ptr, mpz_ptr, mpz_ptr])
+mpz_fdiv_q      = external("mpz_fdiv_q", [mpz_ptr, mpz_ptr, mpz_ptr])
+mpz_fdiv_r      = external("mpz_fdiv_r", [mpz_ptr, mpz_ptr, mpz_ptr])
 _free           = external("free", [rffi.CCHARP])
 
 # ____________________________________________________________
+
 
 def _fromint(value):
     r = lltype.malloc(RBIGINT)
@@ -51,32 +54,34 @@ class _adtmeths:
         mpz_init_set_str(r.mpz, str(l), 10)
         return r
 
-    def tolong(r):
-        return mpz_get_si(r.mpz)
-
-    def add(r1, r2):
-        r = lltype.malloc(RBIGINT)
-        mpz_init(r.mpz)
-        mpz_add(r.mpz, r1.mpz, r2.mpz)
-        return r
-
-    def sub(r1, r2):
-        r = lltype.malloc(RBIGINT)
-        mpz_init(r.mpz)
-        mpz_sub(r.mpz, r1.mpz, r2.mpz)
-        return r
-
-    def mul(r1, r2):
-        r = lltype.malloc(RBIGINT)
-        mpz_init(r.mpz)
-        mpz_mul(r.mpz, r1.mpz, r2.mpz)
-        return r
-
     def str(r):
         p = mpz_get_str(lltype.nullptr(rffi.CCHARP.TO), 10, r.mpz)
         result = rffi.charp2str(p)
         _free(p)
         return result
+
+    def tolong(r):
+        return mpz_get_si(r.mpz)
+
+    def _binary(opname):
+        mpz_op = globals()['mpz_' + opname]
+        def operation(r1, r2):
+            r = lltype.malloc(RBIGINT)
+            mpz_init(r.mpz)
+            mpz_op(r.mpz, r1.mpz, r2.mpz)
+            return r
+        operation.__name__ = opname
+        return operation
+
+    add = _binary('add')
+    sub = _binary('sub')
+    mul = _binary('mul')
+    div = _binary('fdiv_q')
+    floordiv = div
+    mod = _binary('fdiv_r')
+
+    def truediv(r1, r2):
+        import py; py.test.skip("XXX")
 
 _adtmeths = dict([(key, value) for (key, value) in _adtmeths.__dict__.items()
                                if not key.startswith('_')])
