@@ -14,9 +14,11 @@ from pypy.module.thread import ll_thread
 #
 # A "3/4th concurrent" generational mark&sweep GC.
 #
-# This uses a separate thread to run the minor collections in parallel,
-# as well as half of the major collections (the sweep phase).  The mark
-# phase is not parallelized.  See concurrentgen.txt for some details.
+# This uses a separate thread to run the minor collections in parallel.
+# See concurrentgen.txt for some details.
+#
+# Major collections are serialized for the mark phase, but the sweep
+# phase can be parallelized again.  XXX not done so far
 #
 # Based on observations that the timing of collections with "minimark"
 # (on translate.py) is: about 15% of the time in minor collections
@@ -85,22 +87,30 @@ class ConcurrentGenGC(GCBase):
         #
         # The following are arrays of 36 linked lists: the linked lists
         # at indices 1 to 35 correspond to pages that store objects of
-        # size  1 * WORD  to  35 * WORD,  and the linked list at index 0
-        # is a list of all larger objects.
+        # size  1 * WORD  to  35 * WORD.  The linked list at index 0
+        # contains the pages of objects that are larger than this limit
+        # (variable-sized pages, with exactly one object per page).
+        #
         def list_of_addresses_per_small_size():
             return lltype.malloc(rffi.CArray(self.HDRPTR),
                                  self.pagelists_length, flavor='raw',
                                  immortal=True)
-        # 1-35: a linked list of all pages; 0: a linked list of all larger objs
-        self.nonfree_pages = list_of_addresses_per_small_size()
-        # a snapshot of 'nonfree_pages' done when the collection starts
-        self.collect_pages = list_of_addresses_per_small_size()
-        # 1-35: free list of non-allocated locations; 0: unused
-        self.free_lists    = list_of_addresses_per_small_size()
-        # 1-35: head and tail of the free list built by the collector thread
-        # 0: head and tail of the linked list of surviving large objects
-        self.collect_heads = list_of_addresses_per_small_size()
-        self.collect_tails = list_of_addresses_per_small_size()
+        #
+        # pages that contain at least one new young object
+        self.new_young_objects_pages = list_of_addresses_per_small_size()
+        #
+        # when the collection starts and we make all young objects aging,
+        # we move the linked lists above into 'aging_objects_pages'
+        self.aging_objects_pages = list_of_addresses_per_small_size()
+        #
+        # free list of non-allocated locations within pages
+        # (at index 0: always empty)
+        self.location_free_lists = list_of_addresses_per_small_size()
+        #
+        # head and tail of the free list of locations built by the
+        # collector thread
+        self.collect_loc_heads = list_of_addresses_per_small_size()
+        self.collect_loc_tails = list_of_addresses_per_small_size()
         #
         def collector_start():
             if we_are_translated():
@@ -672,17 +682,20 @@ class ConcurrentGenGC(GCBase):
         finish.  Guarantees that young objects not reachable when
         collect() is called will be freed by the time collect() returns.
 
-        gen>=3: Do a (synchronous) major collection.
+        gen>=3: Major collection.
+
+        XXX later:
+           gen=3: Do a major collection, but don't wait for sweeping to finish.
+           The most useful default.
+           gen>=4: Do a full synchronous major collection.
         """
         if gen >= 1 or self.collection_running <= 0:
-            self.trigger_next_collection()
+            self.trigger_next_collection(gen >= 3)
             if gen >= 2:
                 self.wait_for_the_end_of_collection()
-                if gen >= 3:
-                    self.major_collection()
         self.execute_finalizers_ll()
 
-    def trigger_next_collection(self):
+    def trigger_next_collection(self, force_major_collection=False):
         """In the mutator thread: triggers the next minor collection."""
         #
         # In case the previous collection is not over yet, wait for it
@@ -694,10 +707,7 @@ class ConcurrentGenGC(GCBase):
         self.root_walker.walk_roots(
             ConcurrentGenGC._add_stack_root,  # stack roots
             ConcurrentGenGC._add_stack_root,  # in prebuilt non-gc
-            None)                         # static in prebuilt gc
-        #
-        # Add the prebuilt root objects that have been written to
-        self.flagged_objects.foreach(self._add_prebuilt_root, None)
+            None)                             # static in prebuilt gc
         #
         # Add the objects still waiting in 'objects_with_finalizers_to_run'
         p = self.objects_with_finalizers_to_run
@@ -710,13 +720,20 @@ class ConcurrentGenGC(GCBase):
             self.gray_objects.append(obj)
             p = list_next(p)
         #
+        # Add all old objects that have been written to since the last
+        # time trigger_next_collection was called
+        self.flagged_objects.foreach(self._add_prebuilt_root, None)
+        #
+        # Clear this list
+        self.flagged_objects.clear()
+        #
         # Exchange the meanings of 'cym' and 'cam'
         other = self.current_young_marker
         self.current_young_marker = self.current_aging_marker
         self.current_aging_marker = other
         #
-        # Copy a few 'mutator' fields to 'collector' fields:
-        # 'collect_pages' make linked lists of all nonfree pages at the
+        # Copy a few 'mutator' fields to 'collector' fields:  the
+        # 'collect_pages[n]' make linked lists of all nonfree pages at the
         # start of the collection (unlike the 'nonfree_pages' lists, which
         # the mutator will continue to grow).
         n = 0
@@ -1022,13 +1039,6 @@ class ConcurrentGenGC(GCBase):
         #
         self.collect_heads[n] = linked_list
         self.collect_tails[n] = first_loc_in_linked_list
-
-
-    # ----------
-    # Major collections
-
-    def major_collection(self):
-        pass #XXX
 
 
     # ----------
