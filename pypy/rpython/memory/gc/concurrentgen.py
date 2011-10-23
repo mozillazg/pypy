@@ -8,6 +8,7 @@ from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
 from pypy.rpython.memory.gc.base import GCBase
+from pypy.rpython.memory.gc import env
 from pypy.rpython.memory import gctypelayout
 from pypy.rpython.memory.support import get_address_stack
 from pypy.module.thread import ll_thread
@@ -72,11 +73,25 @@ class ConcurrentGenGC(GCBase):
     # ^^^ prebuilt objects may have the flag FL_WITHHASH;
     #     then they are one word longer, the extra word storing the hash.
 
-    TRANSLATION_PARAMS = {}
+    TRANSLATION_PARAMS = {
+        # Automatically adjust the remaining parameters from the environment.
+        "read_from_env": True,
 
-    def __init__(self, config, **kwds):
+        # The default size of the nursery: use 6 MB by default.
+        # Environment variable: PYPY_GC_NURSERY
+        "nursery_size": 6*1024*1024,
+        }
+
+
+    def __init__(self, config,
+                 read_from_env=False,
+                 nursery_size=16*WORD,
+                 **kwds):
         GCBase.__init__(self, config, **kwds)
-        self.main_thread_ident = ll_thread.get_ident()
+        self.read_from_env = read_from_env
+        self.nursery_size = nursery_size
+        #
+        self.main_thread_ident = ll_thread.get_ident() # non-transl. debug only
         #
         self.extra_objects_to_mark = self.AddressStack()
         self.flagged_objects = self.AddressStack()
@@ -91,6 +106,13 @@ class ConcurrentGenGC(GCBase):
         # is a collection running and the mutator tries to change an object
         # that was not scanned yet.
         self._init_writebarrier_logic()
+        #
+        def trigger_collection_now():
+            # a hack to reduce the code size in _account_for_nursery():
+            # avoids both 'self' and the default argument value to be passed
+            self.trigger_next_collection()
+        trigger_collection_now._dont_inline_ = True
+        self.trigger_collection_now = trigger_collection_now
 
     def _initialize(self):
         # Initialize the GC.  In normal translated program, this function
@@ -134,6 +156,14 @@ class ConcurrentGenGC(GCBase):
         self.acquire(self.ready_to_start_lock)
         #
         self.collector.setup()
+        #
+        self.nursery_size_still_available = r_uint(self.nursery_size)
+        #
+        if self.read_from_env:
+            newsize = env.read_from_env('PYPY_GC_NURSERY')
+            if newsize > 0:
+                self.nursery_size = newsize
+                self.nursery_size_still_available = r_uint(newsize)
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
@@ -162,11 +192,6 @@ class ConcurrentGenGC(GCBase):
     def malloc_fixedsize_clear(self, typeid, size,
                                needs_finalizer=False, contains_weakptr=False):
         #
-        # For now, we always start the next collection as soon as the
-        # previous one is finished
-        if self.collector.running <= 0:
-            self.trigger_next_collection()
-        #
         # Case of finalizers (test constant-folded)
         if needs_finalizer:
             raise NotImplementedError
@@ -182,7 +207,9 @@ class ConcurrentGenGC(GCBase):
         # Regular case
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
-        adr = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize), 2)
+        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        self._account_for_nursery(rawtotalsize)
+        adr = llarena.arena_malloc(rawtotalsize, 2)
         if adr == llmemory.NULL:
             raise MemoryError
         llarena.arena_reserve(adr, totalsize)
@@ -195,12 +222,6 @@ class ConcurrentGenGC(GCBase):
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length):
-        #
-        # For now, we always start the next collection as soon as the
-        # previous one is finished
-        if self.collector.running <= 0:
-            self.trigger_next_collection()
-        #
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
         #
@@ -211,7 +232,9 @@ class ConcurrentGenGC(GCBase):
         except OverflowError:
             raise MemoryError
         #
-        adr = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize), 2)
+        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        self._account_for_nursery(rawtotalsize)
+        adr = llarena.arena_malloc(rawtotalsize, 2)
         if adr == llmemory.NULL:
             raise MemoryError
         llarena.arena_reserve(adr, totalsize)
@@ -222,6 +245,13 @@ class ConcurrentGenGC(GCBase):
         hdr.next = self.new_young_objects
         self.new_young_objects = hdr
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+
+    def _account_for_nursery(self, additional_size):
+        if r_uint(additional_size) > self.nursery_size_still_available:
+            self.trigger_collection_now()
+        else:
+            self.nursery_size_still_available -= additional_size
+    _account_for_nursery._always_inline_ = True
 
     # ----------
     # Other functions in the GC API
@@ -469,6 +499,8 @@ class ConcurrentGenGC(GCBase):
         self.collector.running = 1
         #debug_print("collector.running = 1")
         self.release(self.ready_to_start_lock)
+        #
+        self.nursery_size_still_available = r_uint(self.nursery_size)
         #
         debug_stop("gc-start")
         #
