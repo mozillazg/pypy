@@ -175,6 +175,8 @@ class ConcurrentGenGC(GCBase):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         adr = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize), 2)
+        if adr == llmemory.NULL:
+            raise MemoryError
         llarena.arena_reserve(adr, totalsize)
         obj = adr + size_gc_header
         hdr = self.header(obj)
@@ -185,47 +187,33 @@ class ConcurrentGenGC(GCBase):
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length):
+        #
+        # For now, we always start the next collection as soon as the
+        # previous one is finished
+        if self.collector.running <= 0:
+            self.trigger_next_collection()
+        #
         size_gc_header = self.gcheaderbuilder.size_gc_header
         nonvarsize = size_gc_header + size
         #
-        # Compute the maximal length that makes the object still below
-        # 'small_request_threshold'.  All the following logic is usually
-        # constant-folded because size and itemsize are constants (due
-        # to inlining).
-        maxsize = self.small_request_threshold - raw_malloc_usage(nonvarsize)
-        if maxsize < 0:
-            toobig = r_uint(0)    # the nonvarsize alone is too big
-        elif raw_malloc_usage(itemsize):
-            toobig = r_uint(maxsize // raw_malloc_usage(itemsize)) + 1
-        else:
-            toobig = r_uint(sys.maxint) + 1
-
-        if r_uint(length) < r_uint(toobig):
-            # With the above checks we know now that totalsize cannot be more
-            # than 'small_request_threshold'; in particular, the + and *
-            # cannot overflow.
-            totalsize = nonvarsize + itemsize * length
-            totalsize = llarena.round_up_for_allocation(totalsize)
-            rawtotalsize = raw_malloc_usage(totalsize)
-            ll_assert(rawtotalsize & (WORD - 1) == 0,
-                      "round_up_for_allocation failed")
-            #
-            n = rawtotalsize >> WORD_POWER_2
-            result = self.location_free_lists[n]
-            if result != self.NULL:
-                self.location_free_lists[n] = list_next(result)
-                obj = self.grow_reservation(result, totalsize)
-                hdr = self.header(obj)
-                hdr.tid = self.combine(typeid, self.current_young_marker, 0)
-                (obj + offset_to_length).signed[0] = length
-                #debug_print("malloc_varsize_clear", obj)
-                return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+        if length < 0:
+            raise MemoryError
+        try:
+            totalsize = ovfcheck(nonvarsize + ovfcheck(itemsize * length))
+        except OverflowError:
+            raise MemoryError
         #
-        # If the total size of the object would be larger than
-        # 'small_request_threshold', or if the free_list is empty,
-        # then allocate it externally.  We also go there if 'length'
-        # is actually negative.
-        return self._malloc_varsize_slowpath(typeid, length)
+        adr = llarena.arena_malloc(llmemory.raw_malloc_usage(totalsize), 2)
+        if adr == llmemory.NULL:
+            raise MemoryError
+        llarena.arena_reserve(adr, totalsize)
+        obj = adr + size_gc_header
+        (obj + offset_to_length).signed[0] = length
+        hdr = self.header(obj)
+        hdr.tid = self.combine(typeid, self.current_young_marker, 0)
+        hdr.next = self.young_objects
+        self.young_objects = hdr
+        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     # ----------
     # Other functions in the GC API
@@ -814,12 +802,13 @@ class CollectorThread(object):
             if mark == cam:
                 # the object is still not marked.  Free it.
                 blockadr = llmemory.cast_ptr_to_adr(hdr)
+                blockadr = llarena.getfakearenaaddress(blockadr)
                 llarena.arena_free(blockadr)
                 #
             else:
                 # the object was marked: relink it
-                ll_assert(mark == MARK_BYTE_OLD,
-                          "bad mark in large object")
+                ll_assert(mark == self.gc.current_young_marker or
+                          mark == MARK_BYTE_OLD, "sweep: bad mark")
                 hdr.next = linked_list
                 linked_list = hdr
                 #
