@@ -259,7 +259,11 @@ class ConcurrentGenGC(GCBase):
             self.force_scan(addr_struct)
 
     def assume_young_pointers(self, addr_struct):
-        pass # XXX
+        raise NotImplementedError
+
+    def writebarrier_before_copy(self, source_addr, dest_addr,
+                                 source_start, dest_start, length):
+        return False  # XXX implement
 
     def _init_writebarrier_logic(self):
         #
@@ -319,6 +323,7 @@ class ConcurrentGenGC(GCBase):
             self.flagged_objects.append(obj)
         #
         force_scan._dont_inline_ = True
+        force_scan._should_never_raise_ = True
         self.force_scan = force_scan
 
     def _barrier_add_extra(self, root, ignored):
@@ -443,7 +448,7 @@ class ConcurrentGenGC(GCBase):
         #
         # Add all old objects that have been written to since the last
         # time trigger_next_collection was called
-        self.flagged_objects.foreach(self._add_prebuilt_root, None)
+        self.flagged_objects.foreach(self._add_flagged_root, None)
         #
         # Clear this list
         self.flagged_objects.clear()
@@ -470,16 +475,26 @@ class ConcurrentGenGC(GCBase):
         self.execute_finalizers_ll()
 
     def _add_stack_root(self, root):
+        # NB. it's ok to edit 'gray_objects' from the mutator thread here,
+        # because the collector thread is not running yet
         obj = root.address[0]
         #debug_print("_add_stack_root", obj)
         self.get_mark(obj)
         self.collector.gray_objects.append(obj)
 
-    def _add_prebuilt_root(self, obj, ignored):
-        # NB. it's ok to edit 'gray_objects' from the mutator thread here,
-        # because the collector thread is not running yet
-        #debug_print("_add_prebuilt_root", obj)
-        self.get_mark(obj)
+    def _add_flagged_root(self, obj, ignored):
+        #debug_print("_add_flagged_root", obj)
+        #
+        # Important: the mark on 'obj' must be 'cym', otherwise it will not
+        # be scanned at all.  It should generally be, except in rare cases
+        # where it was reset to '#' by the collector thread.
+        mark = self.get_mark(obj)
+        if mark == MARK_BYTE_OLD:
+            self.set_mark(obj, self.current_young_marker)
+        else:
+            ll_assert(mark == self.current_young_marker,
+                      "add_flagged: bad mark")
+        #
         self.collector.gray_objects.append(obj)
 
     def debug_check_lists(self):

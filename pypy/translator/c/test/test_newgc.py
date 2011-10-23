@@ -1541,3 +1541,7 @@ class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
 class TestMostlyConcurrentMarkSweepGC(TestUsingFramework):
     gcpolicy = "concurrentms"
     repetitions = 100
+
+class TestConcurrentGenGC(TestUsingFramework):
+    gcpolicy = "concurrentgen"
+    repetitions = 100

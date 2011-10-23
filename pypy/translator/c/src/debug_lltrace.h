@@ -12,6 +12,13 @@ void _RPyTraceSet(void *addr, long newvalue, long mark) { }
 #  endif
 
 
+/* enable this for sending it out to stderr
+#undef RPyTraceSet
+#define RPyTraceSet(field, n)  {fprintf(stderr,"s %p->%p\n",\
+                                &(field),(void*)(long)field);}
+*/
+
+
 #else /*******************************************************/
 
 #  include "src/atomic_ops.h"

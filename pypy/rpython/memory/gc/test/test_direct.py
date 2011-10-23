@@ -613,3 +613,37 @@ class TestMostlyConcurrentMarkSweepGC(DirectGCTest):
 class TestConcurrentGenGC(DirectGCTest):
     from pypy.rpython.memory.gc.concurrentgen \
             import ConcurrentGenGC as GCClass
+
+    def test_prebuilt_object_must_not_be_freed(self):
+        k = lltype.malloc(S, immortal=True)
+        k.x = 42
+        k.next = k2 = lltype.malloc(S, immortal=True)
+        k.next.x = 43
+        self.consider_constant(k)
+        self.consider_constant(k2)
+        all_s = []
+        all_s2 = []
+        #
+        for i in range(10):
+            s = self.malloc(S); s.x = 31
+            self.stackroots.append(s)
+            s2 = self.malloc(S); s2.x = 32
+            self.stackroots.append(s2)
+            #
+            all_s.append(s)
+            all_s2.append(s)
+            self.gc.collect(2)
+            #
+            self.write(k2, 'next', s)
+            self.write(k, 'next', s2)
+            self.gc.collect()
+            self.gc.collect()
+            assert k.x == 42
+            assert k.next.x == 32
+            assert k2.x == 43
+            assert k2.next.x == 31
+            #
+            for s in all_s:       # still all alive
+                assert s.x == 31
+            for s2 in all_s2:
+                assert s2.x == 31
