@@ -107,9 +107,13 @@ class GCManagedHeap(object):
                         break
             #
             if wb:
-                self.gc.write_barrier(
-                    llmemory.cast_ptr_to_adr(newvalue),
-                    llmemory.cast_ptr_to_adr(toplevelcontainer))
+                if self.gc.needs_write_barrier:
+                    self.gc.write_barrier(
+                        llmemory.cast_ptr_to_adr(newvalue),
+                        llmemory.cast_ptr_to_adr(toplevelcontainer))
+                elif self.gc.needs_deletion_barrier:
+                    self.gc.deletion_barrier(
+                        llmemory.cast_ptr_to_adr(toplevelcontainer))
         llheap.setinterior(toplevelcontainer, inneraddr, INNERTYPE, newvalue)
 
     def collect(self, *gen):

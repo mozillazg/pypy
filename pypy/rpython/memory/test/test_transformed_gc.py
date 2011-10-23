@@ -1437,3 +1437,12 @@ class TestMostlyConcurrentMarkSweepGC(GenericGCTests):
             GC_PARAMS = {'page_size': 128*WORD,
                          'translated_to_c': False}
             root_stack_depth = 200
+
+class TestConcurrentGenGC(GCTest):
+    gcname = "concurrentgen"
+    class gcpolicy(gc.FrameworkGcPolicy):
+        class transformerclass(framework.FrameworkGCTransformer):
+            from pypy.rpython.memory.gc.concurrentgen \
+                    import ConcurrentGenGC as GCClass
+            GC_PARAMS = {'translated_to_c': False}
+            root_stack_depth = 200

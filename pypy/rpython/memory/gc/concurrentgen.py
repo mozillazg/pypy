@@ -98,15 +98,17 @@ class ConcurrentGenGC(GCBase):
         self.flagged_objects = self.AddressStack()
         self.prebuilt_root_objects = self.AddressStack()
         #
-        # the linked list of new young objects, and the linked list of
-        # all old objects.  note that the aging objects are not here
-        # but on 'collector.aging_objects'.
-        self.young_objects = self.NULL
+        # The linked list of new young objects, and the linked list of
+        # all old objects.  Note that the aging objects are not here
+        # but on 'collector.aging_objects'.  Note also that 'old_objects'
+        # contains the objects that the write barrier re-marked as young
+        # (so they are "old young objects").
+        self.new_young_objects = self.NULL
         self.old_objects = self.NULL
         #
         # See concurrentgen.txt for more information about these fields.
         self.current_young_marker = MARK_BYTE_1
-        self.current_aging_marker = MARK_BYTE_2
+        self.collector.current_aging_marker = MARK_BYTE_2
         #
         #self.ready_to_start_lock = ...built in setup()
         #self.finished_lock = ...built in setup()
@@ -181,8 +183,8 @@ class ConcurrentGenGC(GCBase):
         obj = adr + size_gc_header
         hdr = self.header(obj)
         hdr.tid = self.combine(typeid, self.current_young_marker, 0)
-        hdr.next = self.young_objects
-        self.young_objects = hdr
+        hdr.next = self.new_young_objects
+        self.new_young_objects = hdr
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
@@ -211,8 +213,8 @@ class ConcurrentGenGC(GCBase):
         (obj + offset_to_length).signed[0] = length
         hdr = self.header(obj)
         hdr.tid = self.combine(typeid, self.current_young_marker, 0)
-        hdr.next = self.young_objects
-        self.young_objects = hdr
+        hdr.next = self.new_young_objects
+        self.new_young_objects = hdr
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     # ----------
@@ -270,8 +272,6 @@ class ConcurrentGenGC(GCBase):
         mark = self.header(addr_struct).tid & 0xFF
         if mark != self.current_young_marker:
             self.force_scan(addr_struct)
-        #else:
-        #    debug_print("deletion_barrier (off)", addr_struct)
 
     def assume_young_pointers(self, addr_struct):
         pass # XXX
@@ -279,9 +279,9 @@ class ConcurrentGenGC(GCBase):
     def _init_writebarrier_logic(self):
         #
         def force_scan(obj):
-            #debug_print("deletion_barrier  ON  ", obj)
             cym = self.current_young_marker
             mark = self.get_mark(obj)
+            #debug_print("deletion_barrier:", mark, obj)
             #
             if mark == MARK_BYTE_OLD:
                 #
@@ -303,7 +303,7 @@ class ConcurrentGenGC(GCBase):
                 mark = self.get_mark(obj)
                 self.set_mark(obj, cym)
                 #
-                if mark == self.current_aging_marker:
+                if mark == self.collector.current_aging_marker:
                     #
                     # it is only possible to reach this point if there is
                     # a collection running in collector_mark(), before it
@@ -422,11 +422,14 @@ class ConcurrentGenGC(GCBase):
            The most useful default.
            gen>=4: Do a full synchronous major collection.
         """
+        debug_start("gc-forced-collect")
+        debug_print("collect, gen =", gen)
         if gen >= 1 or self.collector.running <= 0:
             self.trigger_next_collection(gen >= 3)
             if gen >= 2:
                 self.wait_for_the_end_of_collection()
         self.execute_finalizers_ll()
+        debug_stop("gc-forced-collect")
 
     def trigger_next_collection(self, force_major_collection=False):
         """In the mutator thread: triggers the next minor collection."""
@@ -462,13 +465,13 @@ class ConcurrentGenGC(GCBase):
         #
         # Exchange the meanings of 'cym' and 'cam'
         other = self.current_young_marker
-        self.current_young_marker = self.current_aging_marker
-        self.current_aging_marker = other
+        self.current_young_marker = self.collector.current_aging_marker
+        self.collector.current_aging_marker = other
         #
         # Copy a few 'mutator' fields to 'collector' fields
         collector = self.collector
-        collector.aging_objects = self.young_objects
-        self.young_objects = self.NULL
+        collector.aging_objects = self.new_young_objects
+        self.new_young_objects = self.NULL
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
         #
@@ -496,7 +499,7 @@ class ConcurrentGenGC(GCBase):
 
     def debug_check_lists(self):
         # just check that they are correct, non-infinite linked lists
-        self.debug_check_list(self.young_objects)
+        self.debug_check_list(self.new_young_objects)
         self.debug_check_list(self.old_objects)
 
     def debug_check_list(self, list):
@@ -601,6 +604,22 @@ class CollectorThread(object):
     def __init__(self, gc):
         self.gc = gc
         #
+        # a different AddressStack class, which uses a different pool
+        # of free pages than the regular one, so can run concurrently
+        self.CollectorAddressStack = get_address_stack(lock="collector")
+        #
+        # The start function for the thread, as a function and not a method
+        def collector_start():
+            if we_are_translated():
+                self.collector_run()
+            else:
+                self.collector_run_nontranslated()
+        collector_start._should_never_raise_ = True
+        self.collector_start = collector_start
+
+    def _initialize(self):
+        self.gray_objects = self.CollectorAddressStack()
+        #
         # When the mutator thread wants to trigger the next collection,
         # it scans its own stack roots and prepares everything, then
         # sets 'collector.running' to 1, and releases
@@ -619,25 +638,9 @@ class CollectorThread(object):
         # The mutex_lock is acquired to go from 1 to 2, and from 2 to 3.
         self.running = 0
         #
-        # a different AddressStack class, which uses a different pool
-        # of free pages than the regular one, so can run concurrently
-        self.CollectorAddressStack = get_address_stack(lock="collector")
-        #
         # when the collection starts, we make all young objects aging and
-        # move 'young_objects' into 'aging_objects'
+        # move 'new_young_objects' into 'aging_objects'
         self.aging_objects = self.NULL
-        #
-        # The start function for the thread, as a function and not a method
-        def collector_start():
-            if we_are_translated():
-                self.collector_run()
-            else:
-                self.collector_run_nontranslated()
-        collector_start._should_never_raise_ = True
-        self.collector_start = collector_start
-
-    def _initialize(self):
-        self.gray_objects = self.CollectorAddressStack()
 
     def setup(self):
         self.ready_to_start_lock = self.gc.ready_to_start_lock
@@ -746,7 +749,7 @@ class CollectorThread(object):
 
     def _collect_mark(self):
         extra_objects_to_mark = self.gc.extra_objects_to_mark
-        cam = self.gc.current_aging_marker
+        cam = self.current_aging_marker
         while self.gray_objects.non_empty():
             obj = self.gray_objects.pop()
             if self.get_mark(obj) != cam:
@@ -793,7 +796,7 @@ class CollectorThread(object):
         self.gray_objects.append(obj)
 
     def collector_sweep(self):
-        cam = self.gc.current_aging_marker
+        cam = self.current_aging_marker
         hdr = self.aging_objects
         linked_list = self.gc.old_objects
         while hdr != self.NULL:

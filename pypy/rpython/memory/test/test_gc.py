@@ -937,3 +937,6 @@ class TestMostlyConcurrentMarkSweepGC(GCTest):
 
     def test_weakref_to_object_with_finalizer_ordering(self):
         py.test.skip("frees weakrefs before calling finalizers")
+
+class TestConcurrentGenGC(GCTest):
+    from pypy.rpython.memory.gc.concurrentgen import ConcurrentGenGC as GCClass

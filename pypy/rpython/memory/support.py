@@ -46,6 +46,8 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
                 else:
                     zero = 2
                 size = llmemory.raw_malloc_usage(llmemory.sizeof(CHUNK))
+                # use arena_malloc to directly call the system 'malloc',
+                # so no locking issue in case of concurrent usage
                 addr = llarena.arena_malloc(size, zero)
                 if not addr:
                     fatalerror("out of memory in GC support code")
