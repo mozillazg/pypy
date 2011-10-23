@@ -69,7 +69,7 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
                 lltype.free(chunk, flavor="raw", track_allocation=False)
             self._unlock()
 
-        if lock is not None:
+        if lock is not None and not isinstance(lock, str):
             def _lock(self):   lock.acquire()
             def _unlock(self): lock.release()
         else:

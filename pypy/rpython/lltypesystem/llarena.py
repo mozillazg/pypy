@@ -551,6 +551,8 @@ else:
     has_protect = False
 
 
+# note: the concurrent GCs do mallocs in one thread and frees in another,
+# so make sure these point to a thread-safe implementation
 llimpl_malloc = rffi.llexternal('malloc', [lltype.Signed], llmemory.Address,
                                 sandboxsafe=True, _nowrapper=True)
 llimpl_free = rffi.llexternal('free', [llmemory.Address], lltype.Void,
