@@ -439,6 +439,7 @@ def choose_gc_from_config(config):
                "markcompact" : "markcompact.MarkCompactGC",
                "minimark" : "minimark.MiniMarkGC",
                "concurrentms": "concurrentms.MostlyConcurrentMarkSweepGC",
+               "concurrentgen": "concurrentgen.ConcurrentGenGC",
                }
     try:
         modulename, classname = classes[config.translation.gc].split('.')

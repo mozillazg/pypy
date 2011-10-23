@@ -78,6 +78,10 @@ class ConcurrentGenGC(GCBase):
         GCBase.__init__(self, config, **kwds)
         self.main_thread_ident = ll_thread.get_ident()
         #
+        self.extra_objects_to_mark = self.AddressStack()
+        self.flagged_objects = self.AddressStack()
+        self.prebuilt_root_objects = self.AddressStack()
+        #
         # Create the CollectorThread object
         self.collector = CollectorThread(self)
         #
@@ -94,9 +98,9 @@ class ConcurrentGenGC(GCBase):
         # During test_transformed_gc, it is translated, so that we can
         # quickly reset the GC between tests.
         #
-        self.extra_objects_to_mark = self.AddressStack()
-        self.flagged_objects = self.AddressStack()
-        self.prebuilt_root_objects = self.AddressStack()
+        self.extra_objects_to_mark.clear()
+        self.flagged_objects.clear()
+        self.prebuilt_root_objects.clear()
         #
         # The linked list of new young objects, and the linked list of
         # all old objects.  Note that the aging objects are not here
@@ -165,12 +169,14 @@ class ConcurrentGenGC(GCBase):
         #
         # Case of finalizers (test constant-folded)
         if needs_finalizer:
+            raise NotImplementedError
             ll_assert(not contains_weakptr,
                      "'needs_finalizer' and 'contains_weakptr' both specified")
             return self._malloc_with_finalizer(typeid, size)
         #
         # Case of weakreferences (test constant-folded)
         if contains_weakptr:
+            raise NotImplementedError
             return self._malloc_weakref(typeid, size)
         #
         # Regular case
@@ -245,27 +251,6 @@ class ConcurrentGenGC(GCBase):
             return llmemory.cast_adr_to_int(obj)
 
     # ----------
-
-    def allocate_next_arena(self):
-        # xxx for now, allocate one page at a time with the system malloc()
-        page = llarena.arena_malloc(self.page_size, 2)     # zero-filled
-        if not page:
-            raise MemoryError
-        llarena.arena_reserve(page, self.HDRSIZE)
-        page = llmemory.cast_adr_to_ptr(page, self.HDRPTR)
-        page.tid = 0
-        self.free_pages = page
-
-    def grow_reservation(self, hdr, totalsize):
-        # Transform 'hdr', which used to point to just a HDR,
-        # into a pointer to a full object of size 'totalsize'.
-        # This is a no-op after translation.  Returns the
-        # address of the full object.
-        adr = llmemory.cast_ptr_to_adr(hdr)
-        adr = llarena.getfakearenaaddress(adr)
-        llarena.arena_reserve(adr, totalsize)
-        return adr + self.gcheaderbuilder.size_gc_header
-    grow_reservation._always_inline_ = True
 
     def deletion_barrier(self, addr_struct):
         # XXX check the assembler
@@ -551,6 +536,7 @@ class ConcurrentGenGC(GCBase):
     # Weakrefs
 
     def weakref_deref(self, wrobj):
+        raise NotImplementedError
         # Weakrefs need some care.  This code acts as a read barrier.
         # The only way I found is to acquire the mutex_lock to prevent
         # the collection thread from going from collector.running==1
@@ -607,6 +593,7 @@ class CollectorThread(object):
         # a different AddressStack class, which uses a different pool
         # of free pages than the regular one, so can run concurrently
         self.CollectorAddressStack = get_address_stack(lock="collector")
+        self.gray_objects = self.CollectorAddressStack()
         #
         # The start function for the thread, as a function and not a method
         def collector_start():
@@ -618,7 +605,7 @@ class CollectorThread(object):
         self.collector_start = collector_start
 
     def _initialize(self):
-        self.gray_objects = self.CollectorAddressStack()
+        self.gray_objects.clear()
         #
         # When the mutator thread wants to trigger the next collection,
         # it scans its own stack roots and prepares everything, then
@@ -666,13 +653,13 @@ class CollectorThread(object):
 
     def collector_run_nontranslated(self):
         try:
-            if not hasattr(self, 'currently_running_in_rtyper'):
+            if not hasattr(self.gc, 'currently_running_in_rtyper'):
                 self.collector_run()     # normal tests
             else:
                 # this case is for test_transformed_gc: we need to spawn
                 # another LLInterpreter for this new thread.
                 from pypy.rpython.llinterp import LLInterpreter
-                llinterp = LLInterpreter(self.currently_running_in_rtyper)
+                llinterp = LLInterpreter(self.gc.currently_running_in_rtyper)
                 # XXX FISH HORRIBLY for the graph...
                 graph = sys._getframe(2).f_locals['self']._obj.graph
                 llinterp.eval_graph(graph)

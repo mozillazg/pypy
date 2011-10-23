@@ -1438,7 +1438,7 @@ class TestMostlyConcurrentMarkSweepGC(GenericGCTests):
                          'translated_to_c': False}
             root_stack_depth = 200
 
-class TestConcurrentGenGC(GCTest):
+class TestConcurrentGenGC(GenericGCTests):
     gcname = "concurrentgen"
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):

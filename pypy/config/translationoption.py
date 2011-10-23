@@ -59,7 +59,7 @@ translation_optiondescription = OptionDescription(
     ChoiceOption("gc", "Garbage Collection Strategy",
                  ["boehm", "ref", "marksweep", "semispace", "statistics",
                   "generation", "hybrid", "markcompact", "minimark",
-                  "concurrentms", "none"],
+                  "concurrentms", "concurrentgen", "none"],
                   "ref", requires={
                      "ref": [("translation.rweakref", False), # XXX
                              ("translation.gctransformer", "ref")],
@@ -75,6 +75,7 @@ translation_optiondescription = OptionDescription(
                      "markcompact": [("translation.gctransformer", "framework")],
                      "minimark": [("translation.gctransformer", "framework")],
                      "concurrentms": [("translation.gctransformer", "framework")],
+                     "concurrentgen": [("translation.gctransformer", "framework")],
                      },
                   cmdline="--gc"),
     ChoiceOption("gctransformer", "GC transformer that is used - internal",

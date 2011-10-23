@@ -68,7 +68,7 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
                 # Don't cache the old chunks but free them immediately.
                 # Helps debugging, and avoids that old chunks full of
                 # addresses left behind by a test end up in genc...
-                lltype.free(chunk, flavor="raw", track_allocation=False)
+                llarena.arena_free(chunk)
             self._unlock()
 
         if lock is not None and not isinstance(lock, str):
