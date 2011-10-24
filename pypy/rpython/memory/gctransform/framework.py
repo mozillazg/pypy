@@ -1222,9 +1222,8 @@ class FrameworkGCTransformer(GCTransformer):
         pass
 
     def get_livevars_for_roots(self, hop, keep_current_args=False):
-        if self.gcdata.gc.moving_gc and not keep_current_args:
-            # moving GCs don't borrow, so the caller does not need to keep
-            # the arguments alive
+        if not keep_current_args:
+            # the caller does not need to keep the arguments alive
             livevars = [var for var in hop.livevars_after_op()
                             if not var_ispyobj(var)]
         else:
@@ -1267,10 +1266,9 @@ class FrameworkGCTransformer(GCTransformer):
                 hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
 
     def compute_borrowed_vars(self, graph):
-        # XXX temporary workaround, should be done more correctly
-        if self.gcdata.gc.moving_gc:
-            return lambda v: False
-        return super(FrameworkGCTransformer, self).compute_borrowed_vars(graph)
+        # we don't use borrowed vars with our own GCs, because it seems
+        # to be always more efficient not to.
+        return lambda v: False
 
 
 class TransformerLayoutBuilder(gctypelayout.TypeLayoutBuilder):
