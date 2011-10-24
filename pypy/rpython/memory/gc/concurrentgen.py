@@ -156,6 +156,7 @@ class ConcurrentGenGC(GCBase):
         "Start the concurrent collector thread."
         # don't call GCBase.setup(self), because we don't need
         # 'run_finalizers' as a deque
+        debug_start("gc-startup")
         self.finalizer_lock_count = 0
         #
         self.ready_to_start_lock = ll_thread.allocate_ll_lock()
@@ -177,6 +178,10 @@ class ConcurrentGenGC(GCBase):
             fillfact = env.read_float_from_env('PYPY_GC_MAJOR_COLLECT')
             if fillfact > 1.0:
                 self.fill_factor = fillfact
+        #
+        debug_print("nursery size:", self.nursery_size)
+        debug_print("fill factor: ", self.fill_factor)
+        debug_stop("gc-startup")
 
     def set_nursery_size(self, newsize):
         self.nursery_size = newsize
@@ -605,19 +610,16 @@ class ConcurrentGenGC(GCBase):
         self.debug_check_list(self.old_objects)
 
     def debug_check_list(self, list):
-        try:
-            previous = self.NULL
-            count = 0
-            while list != self.NULL:
-                # prevent constant-folding, and detects loops of length 1
-                ll_assert(list != previous, "loop!")
-                previous = list
-                list = list.next
-                count += 1
-            return count
-        except KeyboardInterrupt:
-            ll_assert(False, "interrupted")
-            raise
+        previous = self.NULL
+        count = 0
+        while list != self.NULL:
+            # prevent constant-folding, and detects loops
+            ll_assert(list != previous, "loop!")
+            count += 1
+            if count & (count-1) == 0:    # only on powers of two, to
+                previous = list           # detect loops of any size
+            list = list.next
+        return count
 
     def acquire(self, lock):
         if we_are_translated():
@@ -875,6 +877,7 @@ class CollectorThread(object):
             sz -= intmask(surviving_size)
         #
         self.gc.size_still_available_before_major = sz
+        debug_print("size_still_available_before_major =", sz)
         #
         self.running = 2
         #debug_print("collection_running = 2")
