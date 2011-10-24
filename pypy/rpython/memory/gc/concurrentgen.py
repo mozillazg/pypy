@@ -48,7 +48,6 @@ MARK_BYTE_OLD_1   = 0x23    # '#', 35
 MARK_BYTE_OLD_2   = 0x2F    # '/', 47
 MARK_BYTE_STATIC  = 0x35    # '5', 53
 mark_byte_is_old  = lambda n: n <= MARK_BYTE_OLD_2
-mark_byte_is_old_or_static = lambda n: n <= MARK_BYTE_STATIC
 # Next lower byte: a combination of flags.
 FL_WITHHASH       = 0x0100
 FL_EXTRA          = 0x0200
@@ -320,14 +319,15 @@ class ConcurrentGenGC(GCBase):
             mark = self.get_mark(obj)
             #debug_print("deletion_barrier:", mark, obj)
             #
-            if mark_byte_is_old_or_static(mark):
+            if mark_byte_is_old(mark):     # most common case, make it fast
                 #
                 self.set_mark(obj, cym)
                 #
-                if mark == MARK_BYTE_STATIC:
-                    # This is the first write into a prebuilt GC object.
-                    # Record it in 'prebuilt_root_objects'.
-                    self.prebuilt_root_objects.append(obj)
+            elif mark == MARK_BYTE_STATIC:
+                # This is the first write into a prebuilt GC object.
+                # Record it in 'prebuilt_root_objects'.
+                self.set_mark(obj, cym)
+                self.prebuilt_root_objects.append(obj)
                 #
             else:
                 #
