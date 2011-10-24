@@ -6,7 +6,7 @@ from pypy.rpython.annlowlevel import llhelper
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated, running_on_llinterp
 from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
-from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint
+from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, r_uint, intmask
 from pypy.rpython.memory.gc.base import GCBase
 from pypy.rpython.memory.gc import env
 from pypy.rpython.memory import gctypelayout
@@ -23,8 +23,8 @@ from pypy.module.thread import ll_thread
 # phase can be parallelized again.  XXX not done so far, YYY investigate
 # also completely parallelizing them too
 #
-# Based on observations that the timing of collections with "minimark"
-# (on translate.py) is: about 15% of the time in minor collections
+# Based on observations of the timing of collections with "minimark"
+# (on translate.py): about 15% of the time in minor collections
 # (including 2% in walk_roots), and about 7% in major collections (with
 # probably 3-4% in the marking phase).  So out of a total of 22% this
 # should parallelize 16-17%, i.e. 3/4th.
@@ -36,7 +36,7 @@ from pypy.module.thread import ll_thread
 WORD = LONG_BIT // 8
 WORD_POWER_2 = {32: 2, 64: 3}[LONG_BIT]
 assert 1 << WORD_POWER_2 == WORD
-MAXIMUM_SIZE = sys.maxint - (3*WORD-1)
+FLOAT_ALMOST_MAXINT = float(sys.maxint) * 0.9999
 
 
 # Objects start with an integer 'tid', which is decomposed as follows.
@@ -44,8 +44,11 @@ MAXIMUM_SIZE = sys.maxint - (3*WORD-1)
 # let us know if the 'tid' is valid or is just a word-aligned address):
 MARK_BYTE_1       = 0x6D    # 'm', 109
 MARK_BYTE_2       = 0x4B    # 'K', 75
-MARK_BYTE_OLD     = 0x23    # '#', 35
-MARK_BYTE_STATIC  = 0x53    # 'S', 83
+MARK_BYTE_OLD_1   = 0x23    # '#', 35
+MARK_BYTE_OLD_2   = 0x2F    # '/', 47
+MARK_BYTE_STATIC  = 0x35    # '5', 53
+mark_byte_is_old  = lambda n: n <= MARK_BYTE_OLD_2
+mark_byte_is_old_or_static = lambda n: n <= MARK_BYTE_STATIC
 # Next lower byte: a combination of flags.
 FL_WITHHASH       = 0x0100
 FL_EXTRA          = 0x0200
@@ -80,16 +83,24 @@ class ConcurrentGenGC(GCBase):
         # The default size of the nursery: use 6 MB by default.
         # Environment variable: PYPY_GC_NURSERY
         "nursery_size": 6*1024*1024,
+
+        # Trigger another major collection when 'N+(F-1)*P' bytes survived
+        # minor collections, where N = nursery_size, P = bytes surviving
+        # the previous major collection, and F is the fill_factor here.
+        # Environment variable: PYPY_GC_MAJOR_COLLECT
+        "fill_factor": 1.75,
         }
 
 
     def __init__(self, config,
                  read_from_env=False,
-                 nursery_size=16*WORD,
+                 nursery_size=32*WORD,
+                 fill_factor=2.0,
                  **kwds):
         GCBase.__init__(self, config, **kwds)
         self.read_from_env = read_from_env
         self.nursery_size = nursery_size
+        self.fill_factor = fill_factor
         #
         self.main_thread_ident = ll_thread.get_ident() # non-transl. debug only
         #
@@ -157,13 +168,21 @@ class ConcurrentGenGC(GCBase):
         #
         self.collector.setup()
         #
-        self.nursery_size_still_available = r_uint(self.nursery_size)
-        #
+        self.set_nursery_size(self.nursery_size)
         if self.read_from_env:
+            #
             newsize = env.read_from_env('PYPY_GC_NURSERY')
             if newsize > 0:
-                self.nursery_size = newsize
-                self.nursery_size_still_available = r_uint(newsize)
+                self.set_nursery_size(newsize)
+            #
+            fillfact = env.read_float_from_env('PYPY_GC_MAJOR_COLLECT')
+            if fillfact > 1.0:
+                self.fill_factor = fillfact
+
+    def set_nursery_size(self, newsize):
+        self.nursery_size = newsize
+        self.nursery_size_still_available = newsize
+        self.size_still_available_before_major = newsize
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
@@ -207,7 +226,7 @@ class ConcurrentGenGC(GCBase):
         # Regular case
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
-        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        rawtotalsize = raw_malloc_usage(totalsize)
         self._account_for_nursery(rawtotalsize)
         adr = llarena.arena_malloc(rawtotalsize, 2)
         if adr == llmemory.NULL:
@@ -232,7 +251,7 @@ class ConcurrentGenGC(GCBase):
         except OverflowError:
             raise MemoryError
         #
-        rawtotalsize = llmemory.raw_malloc_usage(totalsize)
+        rawtotalsize = raw_malloc_usage(totalsize)
         self._account_for_nursery(rawtotalsize)
         adr = llarena.arena_malloc(rawtotalsize, 2)
         if adr == llmemory.NULL:
@@ -247,10 +266,9 @@ class ConcurrentGenGC(GCBase):
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def _account_for_nursery(self, additional_size):
-        if r_uint(additional_size) > self.nursery_size_still_available:
+        self.nursery_size_still_available -= additional_size
+        if self.nursery_size_still_available < 0:
             self.trigger_collection_now()
-        else:
-            self.nursery_size_still_available -= additional_size
     _account_for_nursery._always_inline_ = True
 
     # ----------
@@ -302,15 +320,14 @@ class ConcurrentGenGC(GCBase):
             mark = self.get_mark(obj)
             #debug_print("deletion_barrier:", mark, obj)
             #
-            if mark == MARK_BYTE_OLD:
+            if mark_byte_is_old_or_static(mark):
                 #
                 self.set_mark(obj, cym)
                 #
-            elif mark == MARK_BYTE_STATIC:
-                # This is the first write into a prebuilt GC object.
-                # Record it in 'prebuilt_root_objects'.
-                self.set_mark(obj, cym)
-                self.prebuilt_root_objects.append(obj)
+                if mark == MARK_BYTE_STATIC:
+                    # This is the first write into a prebuilt GC object.
+                    # Record it in 'prebuilt_root_objects'.
+                    self.prebuilt_root_objects.append(obj)
                 #
             else:
                 #
@@ -341,10 +358,10 @@ class ConcurrentGenGC(GCBase):
                               "write barrier: oups!?")
                     #
                 else:
-                    # MARK_BYTE_OLD is possible here: the collector thread
+                    # MARK_BYTE_OLD_* is possible here: the collector thread
                     # sets it in parallel to objects.  In that case it has
                     # been handled already.
-                    ll_assert(mark == MARK_BYTE_OLD,
+                    ll_assert(mark_byte_is_old(mark),
                               "write barrier: bogus object mark")
                 #
                 self.release(self.mutex_lock)
@@ -367,20 +384,7 @@ class ConcurrentGenGC(GCBase):
         running (if any) to finish."""
         if self.collector.running != 0:
             debug_start("gc-stop")
-            #
-            self.acquire(self.finished_lock)
-            self.collector.running = 0
-            #debug_print("collector.running = 0")
-            #
-            # Check invariants
-            ll_assert(not self.extra_objects_to_mark.non_empty(),
-                      "objs left behind in extra_objects_to_mark")
-            ll_assert(not self.collector.gray_objects.non_empty(),
-                      "objs left behind in gray_objects")
-            #
-            if self.DEBUG:
-                self.debug_check_lists()
-            #
+            self._stop_collection()
             debug_stop("gc-stop")
             #
             # We must *not* run execute_finalizers_ll() here, because it
@@ -390,14 +394,19 @@ class ConcurrentGenGC(GCBase):
             ll_assert(self.collector.running == 0,
                       "collector thread not paused?")
 
-    def join_lists(self, list1, list2head, list2tail):
-        if list2tail == self.NULL:
-            ll_assert(list2head == self.NULL, "join_lists/1")
-            return list1
-        else:
-            ll_assert(list2head != self.NULL, "join_lists/2")
-            set_next(list2tail, list1)
-            return list2head
+    def _stop_collection(self):
+        self.acquire(self.finished_lock)
+        self.collector.running = 0
+        #debug_print("collector.running = 0")
+        #
+        # Check invariants
+        ll_assert(not self.extra_objects_to_mark.non_empty(),
+                  "objs left behind in extra_objects_to_mark")
+        ll_assert(not self.collector.gray_objects.non_empty(),
+                  "objs left behind in gray_objects")
+        #
+        if self.DEBUG:
+            self.debug_check_lists()
 
 
     def execute_finalizers_ll(self):
@@ -457,6 +466,18 @@ class ConcurrentGenGC(GCBase):
         # In case the previous collection is not over yet, wait for it
         self.wait_for_the_end_of_collection()
         #
+        # Choose between a minor and a major collection
+        if (force_major_collection or
+                self.size_still_available_before_major < 0):
+            self._start_major_collection()
+        else:
+            self._start_minor_collection()
+        #
+        self.execute_finalizers_ll()
+
+
+    def _start_minor_collection(self):
+        #
         debug_start("gc-start")
         #
         # Scan the stack roots and the refs in non-GC objects
@@ -496,15 +517,54 @@ class ConcurrentGenGC(GCBase):
         #self.collect_finalizer_pages = self.finalizer_pages
         #
         # Start the collector thread
+        self._start_collection_common(False)
+        #
+        debug_stop("gc-start")
+
+    def _start_major_collection(self):
+        #
+        debug_start("gc-major-collection")
+        #
+        # Clear this list, which is not relevant for major collections
+        self.flagged_objects.clear()
+        #
+        # Scan the stack roots and the refs in non-GC objects
+        self.root_walker.walk_roots(
+            ConcurrentGenGC._add_stack_root,  # stack roots
+            ConcurrentGenGC._add_stack_root,  # in prebuilt non-gc
+            None)                             # static in prebuilt gc
+        #
+        # Add the objects still waiting in 'objects_with_finalizers_to_run'
+        #xxx
+        #
+        # Add all prebuilt objects that have ever been mutated
+        self.prebuilt_root_objects.foreach(self._add_prebuilt_root, None)
+        #
+        # Copy a few 'mutator' fields to 'collector' fields
+        collector = self.collector
+        collector.aging_objects = self.new_young_objects
+        self.new_young_objects = self.NULL
+
+        collector.collect_old_objects = self.old_objects
+        self.old_objects = self.NULL
+
+        #self.collect_weakref_pages = self.weakref_pages
+        #self.collect_finalizer_pages = self.finalizer_pages
+        #
+        # Start the collector thread
+        self._start_collection_common(True)
+        #
+        # Pause the mutator thread while a major collection is running
+        self._stop_collection()
+        #
+        debug_stop("gc-major-collection")
+
+    def _start_collection_common(self, is_major):
+        self.collector.is_major_collection = is_major
         self.collector.running = 1
         #debug_print("collector.running = 1")
         self.release(self.ready_to_start_lock)
-        #
-        self.nursery_size_still_available = r_uint(self.nursery_size)
-        #
-        debug_stop("gc-start")
-        #
-        self.execute_finalizers_ll()
+        self.nursery_size_still_available = self.nursery_size
 
     def _add_stack_root(self, root):
         # NB. it's ok to edit 'gray_objects' from the mutator thread here,
@@ -519,14 +579,18 @@ class ConcurrentGenGC(GCBase):
         #
         # Important: the mark on 'obj' must be 'cym', otherwise it will not
         # be scanned at all.  It should generally be, except in rare cases
-        # where it was reset to '#' by the collector thread.
+        # where it was reset to MARK_BYTE_OLD_* by the collector thread.
         mark = self.get_mark(obj)
-        if mark == MARK_BYTE_OLD:
+        if mark_byte_is_old(mark):
             self.set_mark(obj, self.current_young_marker)
         else:
             ll_assert(mark == self.current_young_marker,
                       "add_flagged: bad mark")
         #
+        self.collector.gray_objects.append(obj)
+
+    def _add_prebuilt_root(self, obj, ignored):
+        self.get_mark(obj)
         self.collector.gray_objects.append(obj)
 
     def debug_check_lists(self):
@@ -575,7 +639,8 @@ class ConcurrentGenGC(GCBase):
         mark = self.header(obj).tid & 0xFF
         ll_assert(mark == MARK_BYTE_1 or
                   mark == MARK_BYTE_2 or
-                  mark == MARK_BYTE_OLD or
+                  mark == MARK_BYTE_OLD_1 or
+                  mark == MARK_BYTE_OLD_2 or
                   mark == MARK_BYTE_STATIC, "bad mark byte in object")
         return mark
 
@@ -675,6 +740,9 @@ class CollectorThread(object):
         # when the collection starts, we make all young objects aging and
         # move 'new_young_objects' into 'aging_objects'
         self.aging_objects = self.NULL
+        self.collect_old_objects = self.NULL
+        self.current_old_marker = MARK_BYTE_OLD_1
+        self.num_major_collects = 0
 
     def setup(self):
         self.ready_to_start_lock = self.gc.ready_to_start_lock
@@ -746,12 +814,18 @@ class CollectorThread(object):
 
 
     def collector_mark(self):
+        if self.is_major_collection:
+            self.collector_mark_major()
+            return
+        #
+        surviving_size = r_uint(0)
+        #
         while True:
             #
             # Do marking.  The following function call is interrupted
             # if the mutator's write barrier adds new objects to
             # 'extra_objects_to_mark'.
-            self._collect_mark()
+            surviving_size += self._collect_mark()
             #
             # Move the objects from 'extra_objects_to_mark' to
             # 'gray_objects'.  This requires the mutex lock.
@@ -777,17 +851,41 @@ class CollectorThread(object):
             # Else release mutex_lock and try again.
             self.release(self.mutex_lock)
         #
+        # When we sweep during minor collections, we subtract the size of
+        # the surviving now-old objects to the following field.  Note
+        # that the write barrier may make objects young again, without
+        # decreasing the value here.  During the following minor
+        # collection this variable will be decreased *again*.  When the
+        # write barrier triggers on an aging object, it is random whether
+        # its size ends up being accounted here or not --- but it will
+        # be at the following minor collection, because the object is
+        # young again.  So, careful about underflows.
+        sz = self.gc.size_still_available_before_major
+        if sz < 0 or r_uint(sz) < surviving_size:
+            sz = -1    # trigger major collect the next time
+        else:
+            # do the difference, which results in a non-negative number
+            # (in particular, surviving_size <= sys.maxint here)
+            sz -= intmask(surviving_size)
+        #
+        self.gc.size_still_available_before_major = sz
+        #
         self.running = 2
         #debug_print("collection_running = 2")
         self.release(self.mutex_lock)
 
     def _collect_mark(self):
+        surviving_size = r_uint(0)
         extra_objects_to_mark = self.gc.extra_objects_to_mark
         cam = self.current_aging_marker
+        com = self.current_old_marker
         while self.gray_objects.non_empty():
             obj = self.gray_objects.pop()
             if self.get_mark(obj) != cam:
                 continue
+            #
+            # Record the object's size
+            surviving_size += raw_malloc_usage(self.gc.get_size(obj))
             #
             # Scan the content of 'obj'.  We use a snapshot-at-the-
             # beginning order, meaning that we want to scan the state
@@ -811,7 +909,7 @@ class CollectorThread(object):
             # is never scanned.
             #
             self.gc.trace(obj, self._collect_add_pending, None)
-            self.set_mark(obj, MARK_BYTE_OLD)
+            self.set_mark(obj, com)
             #
             # Interrupt early if the mutator's write barrier adds stuff
             # to that list.  Note that the check is imprecise because
@@ -820,7 +918,9 @@ class CollectorThread(object):
             # the write barrier, because they are more likely to
             # reference further objects that will soon be accessed too.
             if extra_objects_to_mark.non_empty():
-                return
+                break
+        #
+        return surviving_size
 
     def _collect_add_pending(self, root, ignored):
         obj = root.address[0]
@@ -829,14 +929,82 @@ class CollectorThread(object):
         self.get_mark(obj)
         self.gray_objects.append(obj)
 
+    def collector_mark_major(self):
+        # Marking for a major collection.  Differs from marking for
+        # a minor collection, because we have to follow references
+        # to objects whose mark is 'cym' or 'oom', and replace them
+        # with 'nom'.  We must stop if objects have already 'nom',
+        # or if they have MARK_BYTE_STATIC.  For now they cannot
+        # have 'cam'.
+        #
+        # Get 'oom' and 'nom' from current_old_marker, and switch
+        # the value in that field:
+        oom = self.current_old_marker
+        nom = oom ^ (MARK_BYTE_OLD_1 ^ MARK_BYTE_OLD_2)
+        self.current_old_marker = nom
+        #
+        debug_print()
+        debug_print(".----------- Full collection ------------------")
+        #
+        self.num_major_collects += 1
+        debug_print("| number of major collects:   ", self.num_major_collects)
+        #
+        surviving_size = r_uint(0)
+        #
+        while self.gray_objects.non_empty():
+            obj = self.gray_objects.pop()
+            mark = self.get_mark(obj)
+            if mark == nom or mark == MARK_BYTE_STATIC:
+                continue
+            #
+            # Record the object's size
+            surviving_size += raw_malloc_usage(self.gc.get_size(obj))
+            #
+            # Scan the content of 'obj'.
+            self.gc.trace(obj, self._collect_add_pending, None)
+            self.set_mark(obj, nom)
+        #
+        next_major_collection_limit = (      # as a float
+            self.gc.nursery_size +
+            (self.gc.fill_factor - 1.0) * float(surviving_size))
+        if next_major_collection_limit > FLOAT_ALMOST_MAXINT:
+            next_major_collection_limit = FLOAT_ALMOST_MAXINT
+        #
+        self.gc.size_still_available_before_major = int(
+            next_major_collection_limit)
+        #
+        debug_print("| surviving size:             ", surviving_size)
+        debug_print("| next major collection after:",
+                    self.gc.size_still_available_before_major)
+
+
     def collector_sweep(self):
-        cam = self.current_aging_marker
-        hdr = self.aging_objects
+        if self.is_major_collection:
+            #
+            cym = self.gc.current_young_marker
+            nom = self.current_old_marker
+            oom = nom ^ (MARK_BYTE_OLD_1 ^ MARK_BYTE_OLD_2)
+            self._collect_do_sweep(self.aging_objects, cym, False)
+            self._collect_do_sweep(self.collect_old_objects, oom, False)
+            #
+            debug_print("`----------------------------------------------")
+            #
+        else:
+            #
+            cam = self.current_aging_marker
+            self._collect_do_sweep(self.aging_objects, cam, True)
+            #
+        #
+        self.running = -1
+        #debug_print("collection_running = -1")
+
+    def _collect_do_sweep(self, hdr, still_not_marked, write_barrier_active):
         linked_list = self.gc.old_objects
+        #
         while hdr != self.NULL:
             nexthdr = hdr.next
             mark = hdr.tid & 0xFF
-            if mark == cam:
+            if mark == still_not_marked:
                 # the object is still not marked.  Free it.
                 blockadr = llmemory.cast_ptr_to_adr(hdr)
                 blockadr = llarena.getfakearenaaddress(blockadr)
@@ -844,17 +1012,17 @@ class CollectorThread(object):
                 #
             else:
                 # the object was marked: relink it
-                ll_assert(mark == self.gc.current_young_marker or
-                          mark == MARK_BYTE_OLD, "sweep: bad mark")
+                ll_assert(mark == self.current_old_marker or
+                          (write_barrier_active and
+                              mark == self.gc.current_young_marker),
+                          "sweep: bad mark")
                 hdr.next = linked_list
                 linked_list = hdr
                 #
             hdr = nexthdr
         #
         self.gc.old_objects = linked_list
-        #
-        self.running = -1
-        #debug_print("collection_running = -1")
+
 
     # -------------------------
     # CollectorThread: Weakrefs
@@ -960,7 +1128,8 @@ concurrent_setter_lock = ll_thread.allocate_lock()
 
 def emulate_set_mark(p, v):
     "NOT_RPYTHON"
-    assert v in (MARK_BYTE_1, MARK_BYTE_2, MARK_BYTE_OLD, MARK_BYTE_STATIC)
+    assert v in (MARK_BYTE_1, MARK_BYTE_2,
+                 MARK_BYTE_OLD_1, MARK_BYTE_OLD_2, MARK_BYTE_STATIC)
     concurrent_setter_lock.acquire(True)
     p.tid = (p.tid &~ 0xFF) | v
     concurrent_setter_lock.release()
