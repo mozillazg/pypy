@@ -525,7 +525,10 @@ class ConcurrentGenGC(GCBase):
         #
         debug_start("gc-major-collection")
         #
-        # Clear this list, which is not relevant for major collections
+        # Clear this list, which is not relevant for major collections.
+        # For simplicity we first reset the markers on the objects it
+        # contains, which are all originally old objects.
+        self.flagged_objects.foreach(self._reset_flagged_root, None)
         self.flagged_objects.clear()
         #
         # Scan the stack roots and the refs in non-GC objects
@@ -588,6 +591,9 @@ class ConcurrentGenGC(GCBase):
                       "add_flagged: bad mark")
         #
         self.collector.gray_objects.append(obj)
+
+    def _reset_flagged_root(self, obj, ignored):
+        self.set_mark(obj, self.collector.current_old_marker)
 
     def _add_prebuilt_root(self, obj, ignored):
         self.get_mark(obj)

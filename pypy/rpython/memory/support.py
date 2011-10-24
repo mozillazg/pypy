@@ -68,6 +68,8 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}, lock=None):
                 # Don't cache the old chunks but free them immediately.
                 # Helps debugging, and avoids that old chunks full of
                 # addresses left behind by a test end up in genc...
+                chunk = llmemory.cast_ptr_to_adr(chunk)
+                chunk = llarena.getfakearenaaddress(chunk)
                 llarena.arena_free(chunk)
             self._unlock()
 
