@@ -9,7 +9,8 @@ from pypy.tool.sourcetools import func_with_new_name
 
 
 numpy_driver = jit.JitDriver(greens = ['signature'],
-                             reds = ['result_size', 'i', 'self', 'result'])
+                             reds = ['result_size', 'i', 'counter', 'c',
+                                     'finish', 'self', 'result'])
 all_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self', 'dtype'])
 any_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self', 'dtype'])
 slice_driver = jit.JitDriver(greens=['signature'], reds=['i', 'j', 'step', 'stop', 'source', 'dest'])
@@ -349,12 +350,28 @@ class VirtualArray(BaseArray):
         signature = self.signature
         result_size = self.find_size()
         result = SingleDimArray(result_size, self.find_dtype())
-        while i < result_size:
+        finish = result_size // 4
+        counter = 0
+        c = 0
+        while counter < finish:
             numpy_driver.jit_merge_point(signature=signature,
                                          result_size=result_size, i=i,
-                                         self=self, result=result)
+                                         self=self, result=result,
+                                         counter=counter, finish=finish, c=c)
             result.dtype.setitem(result.storage, i, self.eval(i))
             i += 1
+            c += 1
+            if c == 4:
+                counter += 1
+                c = 0
+                numpy_driver.can_enter_jit(signature=signature,
+                                           result_size=result_size, i=i,
+                                           self=self, result=result,
+                                           counter=counter, finish=finish, c=c)
+        # tail
+        while i < result_size:
+            result.dtype.setitem(result.storage, i, self.eval(i))
+            i += 1            
         return result
 
     def force_if_needed(self):

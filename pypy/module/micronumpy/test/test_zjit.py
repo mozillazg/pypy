@@ -26,11 +26,11 @@ class TestNumpyJIt(LLJitMixin):
             v = interp_ufuncs.get(self.space).add.call(self.space, [ar, ar])
             return v.get_concrete().eval(3).val
 
-        result = self.meta_interp(f, [5], listops=True, backendopt=True)
+        result = self.meta_interp(f, [20], listops=True, backendopt=True)
         self.check_loops({'getarrayitem_raw': 2, 'float_add': 1,
                           'setarrayitem_raw': 1, 'int_add': 1,
                           'int_lt': 1, 'guard_true': 1, 'jump': 1})
-        assert result == f(5)
+        assert result == f(20)
 
     def test_floatadd(self):
         def f(i):
