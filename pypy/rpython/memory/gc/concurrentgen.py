@@ -390,6 +390,8 @@ class ConcurrentGenGC(GCBase):
         if self.collector.running != 0:
             debug_start("gc-stop")
             self._stop_collection()
+            debug_print("size_still_available_before_major =",
+                        self.size_still_available_before_major)
             debug_stop("gc-stop")
             #
             # We must *not* run execute_finalizers_ll() here, because it
@@ -877,7 +879,6 @@ class CollectorThread(object):
             sz -= intmask(surviving_size)
         #
         self.gc.size_still_available_before_major = sz
-        debug_print("size_still_available_before_major =", sz)
         #
         self.running = 2
         #debug_print("collection_running = 2")
