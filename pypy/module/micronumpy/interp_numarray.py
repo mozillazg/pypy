@@ -270,25 +270,31 @@ class BaseArray(Wrappable):
 
     def descr_getitem(self, space, w_idx):
         # TODO: indexing by arrays and lists
+        start_stop_step_length = []
         if space.isinstance_w(w_idx, space.w_tuple):
             length = space.len_w(w_idx)
             if length == 0:
                 return space.wrap(self)
-            if length > 1: # only one dimension for now.
-                raise OperationError(space.w_IndexError,
-                                     space.wrap("invalid index"))
-            w_idx = space.getitem(w_idx, space.wrap(0))
-        start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
-        if step == 0:
-            # Single index
-            return self.get_concrete().eval(start).wrap(space)
+            #if length > 1: # only one dimension for now.
+            #    raise OperationError(space.w_IndexError,
+            #                         space.wrap("invalid index"))
+            for i in range(length):
+                w_idx = space.getitem(w_idx, space.wrap(0))
+                start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
+                start_stop_step_length.append((start,stop,step,slice_length)) 
         else:
-            # Slice
-            new_sig = signature.Signature.find_sig([
-                SingleDimSlice.signature, self.signature
-            ])
-            res = SingleDimSlice(start, stop, step, slice_length, self, new_sig)
-            return space.wrap(res)
+            start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
+            if step == 0:
+                # Single index
+                return self.get_concrete().eval(start).wrap(space)
+            start_stop_step_length.append((start,stop,step,slice_length)) 
+        # Slice
+        slc = self.slice_type
+        new_sig = signature.Signature.find_sig([
+            slc.signature, self.signature
+        ])
+        res = slc(start_stop_step_length, self, new_sig)
+        return space.wrap(res)
 
     def descr_setitem(self, space, w_idx, w_value):
         # TODO: indexing by arrays and lists
@@ -521,8 +527,9 @@ class ViewArray(BaseArray):
 class SingleDimSlice(ViewArray):
     signature = signature.BaseSignature()
 
-    def __init__(self, start, stop, step, slice_length, parent, signature):
+    def __init__(self, start_stop_step_length , parent, signature):
         ViewArray.__init__(self, parent, signature)
+        start, stop, step, slice_length = start_stop_step_length[0]
         if isinstance(parent, SingleDimSlice):
             self.start = parent.calc_index(start)
             self.stop = parent.calc_index(stop)
@@ -568,7 +575,59 @@ class SingleDimSlice(ViewArray):
         res += ")"
         return space.wrap(res)
 
+class NDimSlice(ViewArray):
+    signature = signature.BaseSignature()
+    #start, stop,step,slice_length are lists
+    def __init__(self, start_stop_step_length, parent, signature):
+        ViewArray.__init__(self, parent, signature)
+        
+        if isinstance(parent, NDimSlice):
+            self.start = parent.calc_index(start)
+            self.stop = parent.calc_index(stop)
+            self.step = parent.step * step
+            self.parent = parent.parent
+        else:
+            self.start = start
+            self.stop = stop
+            self.step = step
+            self.parent = parent
+        self.size = slice_length
+
+    def get_root_storage(self):
+        return self.parent.get_concrete().get_root_storage()
+
+    def find_size(self):
+        return self.size
+
+    def find_dtype(self):
+        return self.parent.find_dtype()
+
+    def descr_shape(self,space):
+        return space.newtuple([space.wrap(self.size)])
+
+    def setslice(self, space, start, stop, step, slice_length, arr):
+        start = self.calc_index(start)
+        if stop != -1:
+            stop = self.calc_index(stop)
+        step = self.step * step
+        self._sliceloop(start, stop, step, arr, self.parent)
+
+    def calc_index(self, item):
+        return (self.start + item * self.step)
+
+    def descr_repr(self, space):
+        # Simple implementation so that we can see the array. Needs work.
+        concrete = self.get_concrete()
+        res = "array([" + ", ".join(concrete._getnums(False)) + "]"
+        dtype = concrete.find_dtype()
+        if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
+            dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
+            res += ", dtype=" + dtype.name
+        res += ")"
+        return space.wrap(res)
+
 class SingleDimArray(BaseArray):
+    slice_type = SingleDimSlice
     def __init__(self, size, dtype):
         BaseArray.__init__(self)
         self.size = size
@@ -623,6 +682,7 @@ class SingleDimArray(BaseArray):
         lltype.free(self.storage, flavor='raw', track_allocation=False)
 
 class NDimArray(BaseArray):
+    slice_type = NDimSlice
     def __init__(self, shape, dtype):
         BaseArray.__init__(self)
         self.size = 1
@@ -649,7 +709,7 @@ class NDimArray(BaseArray):
         return self.dtype.getitem(self.storage, i)
 
     def descr_shape(self, space):
-        return self.shape
+        return space.wrap(self.shape)
 
     def descr_len(self, space):
         return space.wrap(self.size)
