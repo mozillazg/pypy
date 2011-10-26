@@ -234,6 +234,30 @@ class OptimizeOptTest(BaseTestWithUnroll):
             """ % expected_value
             self.optimize_loop(ops, expected)
 
+    def test_reverse_of_cast(self):
+        ops = """
+        [i0]
+        p0 = cast_int_to_ptr(i0)
+        i1 = cast_ptr_to_int(p0)
+        jump(i1)
+        """
+        expected = """
+        [i0]
+        jump(i0)
+        """
+        self.optimize_loop(ops, expected)
+        ops = """
+        [p0]
+        i1 = cast_ptr_to_int(p0)
+        p1 = cast_int_to_ptr(i1)
+        jump(p1)
+        """
+        expected = """
+        [p0]
+        jump(p0)
+        """
+        self.optimize_loop(ops, expected)
+
     # ----------
 
     def test_remove_guard_class_1(self):
@@ -2659,7 +2683,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         ops = """
         [p1]
         guard_class(p1, ConstClass(node_vtable2)) []
-        i = ptr_ne(ConstPtr(myptr), p1)
+        i = instance_ptr_ne(ConstPtr(myptr), p1)
         guard_true(i) []
         jump(p1)
         """
@@ -3307,7 +3331,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         jump(p1, i1, i2, i6)
         '''
         self.optimize_loop(ops, expected, preamble)
-        
+
 
     # ----------
 
@@ -7256,7 +7280,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         ops = """
         [p1, p2]
         setarrayitem_gc(p1, 2, 10, descr=arraydescr)
-        setarrayitem_gc(p2, 3, 13, descr=arraydescr)        
+        setarrayitem_gc(p2, 3, 13, descr=arraydescr)
         call(0, p1, p2, 0, 0, 10, descr=arraycopydescr)
         jump(p1, p2)
         """
