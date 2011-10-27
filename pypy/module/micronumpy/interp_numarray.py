@@ -15,6 +15,12 @@ all_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self', 'dty
 any_driver = jit.JitDriver(greens=['signature'], reds=['i', 'size', 'self', 'dtype'])
 slice_driver = jit.JitDriver(greens=['signature'], reds=['i', 'j', 'step', 'stop', 'source', 'dest'])
 
+def prod(item):
+    res=1
+    for i in item:
+        res *= i
+    return res
+
 class BaseArray(Wrappable):
     _attrs_ = ["invalidates", "signature"]
 
@@ -279,8 +285,12 @@ class BaseArray(Wrappable):
             #    raise OperationError(space.w_IndexError,
             #                         space.wrap("invalid index"))
             for i in range(length):
-                w_idx = space.getitem(w_idx, space.wrap(0))
-                start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
+                w_idx1 = space.getitem(w_idx, space.wrap(i))
+                start, stop, step, slice_length = space.decode_index4(w_idx1, self.find_size())
+                if step==0:
+                    step = 1
+                    stop = self.shape[i]
+                    #print 'got step==0, start=',start,'stop=',stop,'w_idx',w_idx,'shape',self.shape
                 start_stop_step_length.append((start,stop,step,slice_length)) 
         else:
             start, stop, step, slice_length = space.decode_index4(w_idx, self.find_size())
@@ -580,18 +590,41 @@ class NDimSlice(ViewArray):
     #start, stop,step,slice_length are lists
     def __init__(self, start_stop_step_length, parent, signature):
         ViewArray.__init__(self, parent, signature)
-        
+        self.start = []
+        self.stop  = []
+        self.step  = [] 
+        self.shape = []
+        self.realdims=[]
+        i=0
         if isinstance(parent, NDimSlice):
-            self.start = parent.calc_index(start)
-            self.stop = parent.calc_index(stop)
-            self.step = parent.step * step
             self.parent = parent.parent
+            for sssl in start_stop_step_length:
+                start,stop,step,slice_length = sssl
+                self.start.append(parent.start[i]+start*parent.step[i])
+                self.stop.append(min(self.shape[i],parent.stop[i]+stop*parent.step[i]))
+                self.step.append(step*parent.step[i])
+                self.shape.append(slice_length)
+                if slice_length>1:
+                    self.realdims.append(i)
+                i+=1
         else:
-            self.start = start
-            self.stop = stop
-            self.step = step
             self.parent = parent
-        self.size = slice_length
+            for sssl in start_stop_step_length:
+                start,stop,step,slice_length = sssl
+                self.start.append(start)
+                self.stop.append(stop)
+                self.step.append(step)
+                self.shape.append(slice_length)
+                i+=1
+        for ii in range(i,len(parent.shape)):
+            self.start.append(0)
+            self.stop.append(parent.shape[ii])
+            self.step.append(1)
+            self.shape.append(parent.shape[ii])
+            if parent.shape[ii]>1:
+                self.realdims.append(ii)
+        self.size = prod(self.shape)
+        self.signature = signature
 
     def get_root_storage(self):
         return self.parent.get_concrete().get_root_storage()
@@ -613,12 +646,58 @@ class NDimSlice(ViewArray):
         self._sliceloop(start, stop, step, arr, self.parent)
 
     def calc_index(self, item):
-        return (self.start + item * self.step)
-
+        indx=0
+        assert len(item)==len(self.realdims)
+        for i in range(len(self.shape)):
+            if i in self.realdims:
+                indx = self.start[i] + item[i]*self.step[i]
+            else:
+                indx = self.start[i]
+            if i+1<len(self.shape):
+                indx *= self.shape[i+1]
+        return indx
+    def tostr(self):
+        print 'NDimSlice::tostr, self.shape=',self.shape,'ndims=',self.realdims
+        res=''
+        if len(self.realdims)>2:
+            #Find first real dimension
+            start_stop_step_length=[]
+            for d,n in enumerate(self.shape):
+                start_stop_step_length.append((0,1,1,1))
+                if n>1:
+                    break
+            res += '['
+            for i in range(n):
+                res += NDimSlice(start_stop_step_length+[i,i+1,1,1],self,self.signature).tostr()
+            res += ']'
+        elif len(self.realdims)==2:
+            dtype = self.find_dtype()
+            res += '['
+            for i in range(self.start[self.realdims[0]],
+                           self.stop[self.realdims[0]],
+                           self.step[self.realdims[0]]):
+                res +='['
+                for j in range(self.start[self.realdims[1]],
+                               self.stop[self.realdims[1]],
+                               self.step[self.realdims[1]]):
+                    res += ' ' + dtype.str_format(self.parent.eval(self.calc_index((i,j))))
+                res+= ']\n'
+            res = res[:-1] + ']'
+        elif len(self.realdims)==1:
+            dtype = self.find_dtype()
+            res += '['
+            for i in range(self.start[self.realdims[0]],
+                           self.stop[self.realdims[0]],
+                           self.step[self.realdims[0]]):
+                res += ' ' + dtype.str_format(self.eval(self.calc_index((i))))
+            res += ']'
+        else:
+            res='[tbd]'
+        return res    
     def descr_repr(self, space):
         # Simple implementation so that we can see the array. Needs work.
         concrete = self.get_concrete()
-        res = "array([" + ", ".join(concrete._getnums(False)) + "]"
+        res = "ndarray(" + self.tostr() + ')'
         dtype = concrete.find_dtype()
         if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
             dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
@@ -634,6 +713,7 @@ class SingleDimArray(BaseArray):
         self.dtype = dtype
         self.storage = dtype.malloc(size)
         self.signature = dtype.signature
+        self.shape = (size,)
 
     def get_concrete(self):
         return self
@@ -706,7 +786,11 @@ class NDimArray(BaseArray):
         return self.dtype
 
     def eval(self, i):
-        return self.dtype.getitem(self.storage, i)
+        try:
+            return self.dtype.getitem(self.storage, i)
+        except:
+            print 'NDimArray::eval(',i,')'
+            return self.dtype.getitem(self.storage, i)
 
     def descr_shape(self, space):
         return space.wrap(self.shape)
@@ -745,7 +829,10 @@ class NDimArray(BaseArray):
     def descr_repr(self, space):
         # Simple implementation so that we can see the array. Needs work.
         concrete = self.get_concrete()
-        res = "ndarray([" + ", ".join(concrete._getnums(False)) + "]"
+        new_sig = signature.Signature.find_sig([ NDimSlice.signature, self.signature ])
+        res = "ndarray(" + \
+        NDimSlice((), self, new_sig).tostr() \
+        + ',' 
         dtype = concrete.find_dtype()
         if (dtype is not space.fromcache(interp_dtype.W_Float64Dtype) and
             dtype is not space.fromcache(interp_dtype.W_Int64Dtype)) or not self.find_size():
