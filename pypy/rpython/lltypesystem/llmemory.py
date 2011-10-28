@@ -532,6 +532,8 @@ class AddressAsInt(Symbolic):
         return self.adr == cast_int_to_adr(other)
     def __ne__(self, other):
         return self.adr != cast_int_to_adr(other)
+    def __add__(self, other):
+        return AddressAsInt(self.adr + other)
     def __nonzero__(self):
         return bool(self.adr)
     def __repr__(self):
@@ -879,7 +881,7 @@ class RawMemmoveEntry(ExtRegistryEntry):
         assert isinstance(s_from, SomeAddress)
         assert isinstance(s_to, SomeAddress)
         assert isinstance(s_size, SomeInteger)
-    
+
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         v_list = hop.inputargs(Address, Address, lltype.Signed)
