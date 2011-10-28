@@ -116,6 +116,12 @@ def create_low_level_dtype(num, kind, name, aliases, applevel_types, T,
         def setitem_w(self, space, storage, i, w_item):
             self.setitem(storage, i, self.unwrap(space, w_item))
 
+        def fill(self, storage, item, start, stop):
+            storage = self.unerase(storage)
+            item = self.unbox(item)
+            for i in xrange(start, stop):
+                storage[i] = item
+
         if "adapt_val" not in exclude_methods:
             @specialize.argtype(1)
             def adapt_val(self, val):
@@ -182,9 +188,6 @@ class ArithmeticTypeMixin(object):
     @binop
     def mul(self, v1, v2):
         return v1 * v2
-    @binop
-    def div(self, v1, v2):
-        return v1 / v2
 
     @unaryop
     def pos(self, v):
@@ -237,6 +240,14 @@ class FloatArithmeticDtype(ArithmeticTypeMixin):
     def str_format(self, item):
         return float2string(self.for_computation(self.unbox(item)), 'g', rfloat.DTSF_STR_PRECISION)
 
+    @binop
+    def div(self, v1, v2):
+        try:
+            return v1 / v2
+        except ZeroDivisionError:
+            if v1 == v2 == 0.0:
+                return rfloat.NAN
+            return rfloat.copysign(rfloat.INFINITY, v1 * v2)
     @binop
     def mod(self, v1, v2):
         return math.fmod(v1, v2)
@@ -315,6 +326,11 @@ class IntegerArithmeticDtype(ArithmeticTypeMixin):
     def str_format(self, item):
         return str(widen(self.unbox(item)))
 
+    @binop
+    def div(self, v1, v2):
+        if v2 == 0:
+            return 0
+        return v1 / v2
     @binop
     def mod(self, v1, v2):
         return v1 % v2
