@@ -3559,6 +3559,29 @@ class BaseLLtypeTests(BasicTests):
         assert res == 0
         self.check_loops({"int_sub": 1, "int_gt": 1, "guard_true": 1, "jump": 1})
 
+    def test_raw_array_of_structs(self):
+        POINT = lltype.Struct("POINT",
+            ("x", lltype.Signed),
+            ("y", lltype.Signed),
+        )
+        ARRAY = lltype.Array(POINT)
+        myjitdriver = JitDriver(greens = [], reds=["vals", "i", "n", "result"])
+        def f(n):
+            vals = lltype.malloc(ARRAY, n, flavor="raw")
+            for i in xrange(n):
+                vals[i].x = n
+                vals[i].y = 2
+            result = 0.0
+            i = 0
+            while i < n:
+                myjitdriver.jit_merge_point(vals=vals, i=i, n=n, result=result)
+                result += vals[i].x * vals[i].y
+                i += 1
+            lltype.free(vals, flavor="raw")
+            return result
+        res = self.meta_interp(f, [10])
+        assert res == f(10)
+        self.check_loops({})
 
 
 class TestLLtype(BaseLLtypeTests, LLJitMixin):

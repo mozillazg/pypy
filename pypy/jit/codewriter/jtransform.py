@@ -788,6 +788,16 @@ class Transformer(object):
             return SpaceOperation('setinteriorfield_gc_%s' % kind, args,
                                   op.result)
 
+    def rewrite_op_getarraysubstruct(self, op):
+        array = op.args[0]
+        assert not self._is_gc(array)
+        tmp = varoftype(lltype.Signed)
+        element_size = llmemory.sizeof(array.concretetype.TO.OF)
+        return [
+            SpaceOperation("int_mul", [op.args[1], Constant(element_size, lltype.Signed)], tmp),
+            SpaceOperation("int_add", [op.args[0], tmp], op.result),
+        ]
+
     def _rewrite_equality(self, op, opname):
         arg0, arg1 = op.args
         if isinstance(arg0, Constant) and not arg0.value:

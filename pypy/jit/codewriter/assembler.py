@@ -79,6 +79,7 @@ class Assembler(object):
             if TYPE is lltype.SingleFloat:
                 value = longlong.singlefloat2int(value)
             if not isinstance(value, (llmemory.AddressAsInt,
+                                      llmemory.ItemOffset,
                                       ComputedIntSymbolic)):
                 value = lltype.cast_primitive(lltype.Signed, value)
                 if allow_short and -128 <= value <= 127:

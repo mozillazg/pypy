@@ -1141,3 +1141,23 @@ def test_cast_opaque_ptr():
     assert op1.args == [v1]
     assert op1.result is None
     assert op2 is None
+
+def test_getarraysubstruct():
+    S = lltype.Struct("S", ("x", lltype.Float), ("y", lltype.Float))
+    v1 = varoftype(lltype.Ptr(lltype.Array(S)))
+    v2 = varoftype(lltype.Signed)
+    v3 = varoftype(lltype.Ptr(S))
+
+    op = SpaceOperation('getarraysubstruct', [v1, v2], v3)
+    [op1, op2] = Transformer().rewrite_operation(op)
+
+    assert op1.opname == "int_mul"
+    assert len(op1.args) == 2
+    assert op1.args[0] == v2
+    assert op1.args[1].value.TYPE == S
+    assert op1.args[1].value.repeat == 1
+    assert op1.result is not None
+
+    assert op2.opname == "int_add"
+    assert op2.args == [v1, op1.result]
+    assert op2.result == v3
