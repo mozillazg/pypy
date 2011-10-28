@@ -3564,7 +3564,7 @@ class BaseLLtypeTests(BasicTests):
             ("x", lltype.Signed),
             ("y", lltype.Signed),
         )
-        ARRAY = lltype.Array(POINT)
+        ARRAY = lltype.Array(POINT, hints={"nolength": True})
         myjitdriver = JitDriver(greens = [], reds=["vals", "i", "n", "result"])
         def f(n):
             vals = lltype.malloc(ARRAY, n, flavor="raw")
