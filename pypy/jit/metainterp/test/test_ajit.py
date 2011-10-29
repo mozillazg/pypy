@@ -3566,19 +3566,20 @@ class BaseLLtypeTests(BasicTests):
         )
         ARRAY = lltype.Array(POINT, hints={"nolength": True})
         myjitdriver = JitDriver(greens = [], reds=["vals", "i", "n", "result"])
-        def f(n):
-            vals = lltype.malloc(ARRAY, n, flavor="raw")
-            for i in xrange(n):
-                vals[i].x = n
-                vals[i].y = 2
+        def g(vals, n):
             result = 0.0
             i = 0
             while i < n:
                 myjitdriver.jit_merge_point(vals=vals, i=i, n=n, result=result)
                 result += vals[i].x * vals[i].y
                 i += 1
-            lltype.free(vals, flavor="raw")
             return result
+        def f(n):
+            with lltype.scoped_alloc(ARRAY, n) as vals:
+                for i in xrange(n):
+                    vals[i].x = n
+                    vals[i].y = 2
+                return g(vals, n)
         res = self.meta_interp(f, [10])
         assert res == f(10)
         self.check_loops({})

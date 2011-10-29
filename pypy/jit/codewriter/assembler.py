@@ -7,6 +7,7 @@ from pypy.jit.codewriter import heaptracker, longlong
 from pypy.rlib.objectmodel import ComputedIntSymbolic
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rffi
+from pypy.rpython.memory.lltypelayout import convert_offset_to_int
 
 
 class AssemblerError(Exception):
@@ -79,7 +80,7 @@ class Assembler(object):
             if TYPE is lltype.SingleFloat:
                 value = longlong.singlefloat2int(value)
             if not isinstance(value, (llmemory.AddressAsInt,
-                                      llmemory.ItemOffset,
+                                      llmemory.AddressOffset,
                                       ComputedIntSymbolic)):
                 value = lltype.cast_primitive(lltype.Signed, value)
                 if allow_short and -128 <= value <= 127:
