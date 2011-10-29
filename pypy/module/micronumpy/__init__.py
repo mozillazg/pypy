@@ -10,6 +10,7 @@ class Module(MixedModule):
         'ufunc': 'interp_ufuncs.W_Ufunc',
 
         'zeros': 'interp_numarray.zeros',
+        'ndzeros': 'interp_numarray.ndzeros',
         'empty': 'interp_numarray.zeros',
         'ones': 'interp_numarray.ones',
         'fromstring': 'interp_support.fromstring',
