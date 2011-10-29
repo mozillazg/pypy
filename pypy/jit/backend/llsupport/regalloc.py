@@ -178,6 +178,8 @@ class RegisterManager(object):
         cur_max_age = -1
         candidate = None
         for next in self.reg_bindings:
+            if isinstance(next, TempBox):
+                continue
             reg = self.reg_bindings[next]
             if next in forbidden_vars:
                 continue
@@ -287,7 +289,6 @@ class RegisterManager(object):
         self.reg_bindings[to_v] = reg
 
     def _move_variable_away(self, v, prev_loc):
-        reg = None
         if self.free_regs:
             loc = self.free_regs.pop()
             self.reg_bindings[v] = loc
