@@ -1477,7 +1477,7 @@ def new_setinteriorfield_gc(cast_func):
     return do_setinteriorfield_gc
 do_setinteriorfield_gc_int = new_setinteriorfield_gc(cast_from_int)
 do_setinteriorfield_gc_float = new_setinteriorfield_gc(cast_from_floatstorage)
-do_setinteriorfield_gc_ptr = new_setinteriorfield_gc(cast_from_ptr)        
+do_setinteriorfield_gc_ptr = new_setinteriorfield_gc(cast_from_ptr)
 
 def do_setfield_raw_int(struct, fieldnum, newvalue):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
