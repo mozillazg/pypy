@@ -45,7 +45,7 @@ FIVEARY_CUTOFF = 8
 
 def _mask_digit(x):
     if not we_are_translated():
-        assert type(x) is not long, "overflow occurred!"
+        assert abs(x) , "overflow occurred!"
     return intmask(x & MASK)
 _mask_digit._annspecialcase_ = 'specialize:argtype(0)'
 
