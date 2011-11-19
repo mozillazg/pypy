@@ -365,3 +365,49 @@ class Float32(BaseType, Float):
 class Float64(BaseType, Float):
     T = rffi.DOUBLE
     BoxType = interp_boxes.W_Float64Box
+
+
+class BaseCompositeType(BaseType):
+    def __init__(self, itemtypes):
+        self.itemtypes = itemtypes
+
+    def get_element_size(self):
+        s = 0
+        for itemtype in self.itemtypes:
+            s += itemtype.get_element_size()
+        return s
+
+    def box(self, value):
+        return self.BoxType(value)
+
+    def unbox(self, box):
+        assert isinstance(box, self.BoxType)
+        return box.subboxes
+
+    def store(self, storage, width, i, offset, box):
+        subboxes = self.unbox(box)
+        i = 0
+        for box in subboxes:
+            self.itemtypes[i].store(storage, width, i, offset, box)
+            offset += self.itemtypes[i].get_element_size()
+            i += 1
+
+    def read(self, storage, width, i, offset):
+        boxes = []
+        for itemtype in self.itemtypes:
+            boxes.append(itemtype.read(storage, width, i, offset))
+            offset += itemtype.get_element_size()
+        return self.box(boxes)
+
+class Complex(BaseCompositeType):
+    BoxType = interp_boxes.W_Complex128Box
+
+    def __init__(self, itemtypes):
+        BaseCompositeType.__init__(self, itemtypes)
+        [self.real, self.imag] = self.itemtypes
+
+    def coerce(self, space, w_item):
+        if isinstance(w_item, self.BoxType):
+            return w_item
+        real, imag = space.unpackcomplex(w_item)
+        return self.box([self.real.box(real), self.imag.box(imag)])

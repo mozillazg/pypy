@@ -2,6 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef
+from pypy.objspace.std.complextype import complex_typedef
 from pypy.objspace.std.floattype import float_typedef
 from pypy.objspace.std.inttype import int_typedef
 from pypy.objspace.std.typeobject import W_TypeObject
@@ -28,6 +29,12 @@ class PrimitiveBox(object):
 
     def convert_to(self, dtype):
         return dtype.box(self.value)
+
+class CompositeBox(object):
+    _mixin_ = True
+
+    def __init__(self, subboxes):
+        self.subboxes = subboxes
 
 class W_GenericBox(Wrappable):
     _attrs_ = ()
@@ -150,7 +157,11 @@ class W_Float32Box(W_FloatingBox, PrimitiveBox):
 class W_Float64Box(W_FloatingBox, PrimitiveBox):
     descr__new__, get_dtype = new_dtype_getter("float64")
 
+class W_ComplexFloatingBox(W_InexactBox):
+    pass
 
+class W_Complex128Box(W_ComplexFloatingBox, CompositeBox):
+    descr__new__, get_dtype = new_dtype_getter("complex128")
 
 W_GenericBox.typedef = TypeDef("generic",
     __module__ = "numpy",
@@ -259,4 +270,12 @@ W_Float64Box.typedef = TypeDef("float64", (W_FloatingBox.typedef, float_typedef)
     __module__ = "numpy",
 
     __new__ = interp2app(W_Float64Box.descr__new__.im_func),
+)
+
+W_ComplexFloatingBox.typedef = TypeDef("complexfloating", W_InexactBox.typedef,
+    __module__ = "numpy",
+)
+
+W_Complex128Box.typedef = TypeDef("complex128", (W_ComplexFloatingBox.typedef, complex_typedef),
+    __module__ = "numpy",
 )

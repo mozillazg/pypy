@@ -591,6 +591,8 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert array([int8(3)]).dtype is dtype("int8")
         assert array([bool_(True)]).dtype is dtype(bool)
         assert array([bool_(True), 3.0]).dtype is dtype(float)
+        assert array([1 + 2j]).dtype is dtype(complex)
+        assert array([1, 1 + 2j]).dtype is dtype(complex)
 
     def test_comparison(self):
         import operator
@@ -612,6 +614,15 @@ class AppTestNumArray(BaseNumpyAppTest):
             for i in xrange(5):
                 assert c[i] == func(b[i], 3)
 
+    def test_complex_basic(self):
+        from numpypy import array
+
+        x = array([1, 2, 3], complex)
+        assert x[0] == complex(1, 0)
+        x[0] = 1 + 3j
+        assert x[0] == 1 + 3j
+        assert x[2].real == 3
+        assert x[2].imag == 0
 
 class AppTestSupport(BaseNumpyAppTest):
     def setup_class(cls):

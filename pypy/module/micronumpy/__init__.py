@@ -27,6 +27,8 @@ class Module(MixedModule):
         'inexact': 'interp_boxes.W_InexactBox',
         'floating': 'interp_boxes.W_FloatingBox',
         'float64': 'interp_boxes.W_Float64Box',
+        'complexfloating': 'interp_boxes.W_ComplexFloatingBox',
+        'complex128': 'interp_boxes.W_Complex128Box',
     }
 
     # ufuncs
