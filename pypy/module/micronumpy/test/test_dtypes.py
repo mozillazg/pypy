@@ -166,6 +166,17 @@ class AppTestDtypes(BaseNumpyAppTest):
         # You can't subclass dtype
         raises(TypeError, type, "Foo", (dtype,), {})
 
+    def test_complex128(self):
+        import numpypy as numpy
+
+        dtype = numpy.dtype(complex)
+        assert dtype.name == "complex128"
+        assert dtype.char == "D"
+        assert dtype.itemsize == 16
+        assert dtype.kind == "c"
+        assert dtype.num == 15
+        assert dtype.type is numpy.complex128
+
 class AppTestTypes(BaseNumpyAppTest):
     def test_abstract_types(self):
         import numpypy as numpy
@@ -223,6 +234,11 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.dtype(float).type is numpy.float64
 
         assert numpy.float64(2.0) == 2.0
+
+    def test_complex128(self):
+        import numpypy as numpy
+
+        assert numpy.complex128.mro() == [numpy.complex128, numpy.complexfloating, numpy.inexact, numpy.number, numpy.generic, complex, object]
 
     def test_subclass_type(self):
         import numpypy as numpy
