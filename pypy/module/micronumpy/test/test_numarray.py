@@ -315,6 +315,19 @@ class AppTestNumArray(BaseNumpyAppTest):
         c = a[:3]
         assert c.shape == (3,)
 
+    def test_set_shape(self):
+        from numpypy import arange
+        py.test.skip("shape is immutable for now")
+        a = arange(12)
+        a.shape = (3,4)
+        assert a == [range(4), range(4,8), range(8,12)]
+        a.shape = (3,2,2)
+        assert a[1,1,1] == 7
+        a.shape = (2,-1)
+        assert a == [range(6), range(6,12)]
+        a.shape = 12
+        assert a.shape == (12,)
+
     def test_add(self):
         from numpypy import array
         a = array(range(5))
@@ -900,6 +913,18 @@ class AppTestMultiDim(BaseNumpyAppTest):
         b = ones((4, 3, 5))
         b[:] = (a + a)
         assert (b == zeros((4, 3, 5))).all()
+
+    def test_transpose(self):
+        from numpypy import array
+        a = array(((range(3), range(3,6)), (range(6, 9), range(9, 12)), (range(12, 15), range(15, 18)), (range(18, 21), range(21,24))))
+        assert a.shape == (4 ,2 ,3)
+        b = a.T
+        assert b.shape == (3, 2, 4)
+        assert(b[0, :, 0] == [0, 3]).all()
+        b[:,0,0]=1000
+        assert(a[0,0,:]==[1000,1000,1000]).all()
+        
+        
 
 class AppTestSupport(object):
     def setup_class(cls):
