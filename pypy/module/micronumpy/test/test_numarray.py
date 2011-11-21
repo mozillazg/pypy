@@ -1003,7 +1003,7 @@ class AppTestRepr(BaseNumpyAppTest):
 
 class AppTestRanges(BaseNumpyAppTest):
     def test_arange(self):
-        from numpypy import arange, array
+        from numpypy import arange, array, dtype
         a = arange(3)
         assert (a == [0, 1, 2]).all()
         assert a.dtype is dtype(int)

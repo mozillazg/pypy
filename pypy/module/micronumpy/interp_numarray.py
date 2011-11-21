@@ -177,10 +177,10 @@ class ViewIterator(BaseIterator):
     def get_offset(self):
         return self.offset
 
-class BroadcastIterator(BaseIterator):
+class BroadcastIterator(ViewIterator):
     '''Like a view iterator, but will repeatedly access values
        for all iterations across a res_shape, folding the offset
-       using mod() arithmetic
+       by setting shards, backshards to 0
     '''
     def __init__(self, arr, res_shape):
         self.indices = [0] * len(res_shape)
