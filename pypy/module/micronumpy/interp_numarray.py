@@ -680,6 +680,20 @@ class BaseArray(Wrappable):
         return NDimSlice(self, new_sig, start, shards[:], backshards[:],
                          shape[:])
 
+    def descr_get_transpose(self, space):
+        new_sig = signature.Signature.find_sig([
+            NDimSlice.signature, self.signature
+        ])
+        shards = []
+        backshards = []
+        shape = []
+        for i in range(len(self.shape) - 1, -1, -1):
+            shards.append(self.shards[i])
+            backshards.append(self.backshards[i])
+            shape.append(self.shape[i])
+        return space.wrap(NDimSlice(self, new_sig, self.start, shards[:], 
+                           backshards[:], shape[:]))
+
     def descr_mean(self, space):
         return space.wrap(space.float_w(self.descr_sum(space)) / self.find_size())
 
@@ -1110,6 +1124,8 @@ BaseArray.typedef = TypeDef(
     dtype = GetSetProperty(BaseArray.descr_get_dtype),
     shape = GetSetProperty(BaseArray.descr_get_shape),
     size = GetSetProperty(BaseArray.descr_get_size),
+
+    T = GetSetProperty(BaseArray.descr_get_transpose),
 
     mean = interp2app(BaseArray.descr_mean),
     sum = interp2app(BaseArray.descr_sum),
