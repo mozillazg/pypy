@@ -50,7 +50,7 @@ class TestNumpyJIt(LLJitMixin):
             interp.run(space)
             res = interp.results[-1]
             assert isinstance(res, BaseArray)
-            w_res = res.eval(res.start_iter()).wrap(interp.space)
+            w_res = res.eval(res.start_iter([])).wrap(interp.space)
             if isinstance(w_res, BoolObject):
                 return float(w_res.boolval)
             elif isinstance(w_res, FloatObject):

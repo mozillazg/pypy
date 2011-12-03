@@ -64,7 +64,7 @@ class W_Ufunc(Wrappable):
             space, obj.find_dtype(),
             promote_to_largest=True
         )
-        start = obj.start_iter(obj.shape)
+        start = obj.start_iter([])
         shapelen = len(obj.shape)
         if shapelen > 1 and not multidim:
             raise OperationError(space.w_NotImplementedError,
