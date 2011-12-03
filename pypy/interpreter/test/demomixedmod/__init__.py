@@ -1,6 +1,8 @@
 from pypy.interpreter.mixedmodule import MixedModule 
 
-class Module(MixedModule): 
+class Module(MixedModule):
+    applevel_name = 'demomixedmod'
+
     interpleveldefs = {
         '__name__' : '(space.wrap("mixedmodule"))',
         '__doc__'  : '(space.wrap("mixedmodule doc"))',

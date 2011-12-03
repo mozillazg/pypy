@@ -5,6 +5,7 @@ import py.test
 class TestMixedModule(object):
     def test_install(self):
         class Module(MixedModule):
+            applevel_name = 'test_module'
             interpleveldefs = {}
             appleveldefs = {}
 
@@ -15,10 +16,12 @@ class TestMixedModule(object):
 
     def test_submodule(self):
         class SubModule(MixedModule):
+            applevel_name = 'test_module.sub'
             interpleveldefs = {}
             appleveldefs = {}
 
         class Module(MixedModule):
+            applevel_name = 'test_module'
             interpleveldefs = {}
             appleveldefs = {}
             submodules = {
@@ -38,12 +41,14 @@ class AppTestMixedModule(object):
         space = cls.space
 
         class SubModule(MixedModule):
+            applevel_name = 'test_module.sub'
             interpleveldefs = {
                 "value": "space.wrap(14)"
             }
             appleveldefs = {}
 
         class Module(MixedModule):
+            applevel_name = 'test_module'
             interpleveldefs = {}
             appleveldefs = {}
             submodules = {

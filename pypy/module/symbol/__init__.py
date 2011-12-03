@@ -10,6 +10,7 @@ from pypy.interpreter.pyparser import pygram
 
 class Module(MixedModule):
     """Non-terminal symbols of Python grammar."""
+    applevel_name = '__builtin_symbol'
     appleveldefs = {}
     interpleveldefs = {}     # see below
 

@@ -3,6 +3,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 class Module(MixedModule):
     """Implementation module for SSL socket operations.
     See the socket module for documentation."""
+    applevel_name = '__builtin__ssl'
 
     interpleveldefs = {
         'sslwrap': 'interp_ssl.sslwrap',

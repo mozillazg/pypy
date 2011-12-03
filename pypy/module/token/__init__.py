@@ -4,6 +4,7 @@ from pypy.interpreter.pyparser import pytoken, pygram
 
 
 class Module(MixedModule):
+    applevel_name = '__builtin_token'
 
     appleveldefs = {}
     interpleveldefs = {

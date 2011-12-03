@@ -62,11 +62,14 @@ class MixedModule(Module):
 
     def get_applevel_name(cls):
         """ NOT_RPYTHON """
-        if cls.applevel_name is not None:
-            return cls.applevel_name
-        else:
-            pkgroot = cls.__module__
-            return pkgroot.split('.')[-1]
+        assert cls.applevel_name is not None, (
+            "%r: please add an explicit applevel_name to this built-in "
+            "module.  Note that built-in modules shadow all normal app-level "
+            "imports, so consider naming the built-in module "
+            "'__builtin_%s' and adding a regular '%s.py' file in "
+            "lib_pypy that imports * from __builtin_%s." %
+            ((cls,) + (cls.__module__.split('.')[-1],) * 3))
+        return cls.applevel_name
     get_applevel_name = classmethod(get_applevel_name)
 
     def get(self, name):

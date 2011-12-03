@@ -38,6 +38,8 @@ Written by Marc-Andre Lemburg (mal@lemburg.com).
 Copyright (c) Corporation for National Research Initiatives.
 """
 
+    applevel_name = '_codecs'
+
     appleveldefs = {}
 
     interpleveldefs = {

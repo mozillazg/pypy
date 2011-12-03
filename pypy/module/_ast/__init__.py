@@ -3,12 +3,15 @@ from pypy.interpreter.astcompiler import ast, consts
 
 
 class Module(MixedModule):
+    applevel_name = '_ast'
+
+    appleveldefs = {
+        }
 
     interpleveldefs = {
         "PyCF_ONLY_AST" : "space.wrap(%s)" % consts.PyCF_ONLY_AST,
         "__version__"   : "space.wrap('82160')",  # from CPython's svn.
         }
-    appleveldefs = {}
 
 
 def _setup():

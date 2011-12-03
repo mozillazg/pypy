@@ -86,7 +86,7 @@ class Module(Wrappable):
         if space.finditem(w_modules, w_name) is None:
             #not imported case
             from pypy.interpreter.mixedmodule import MixedModule
-            w_mod    = space.getbuiltinmodule('_pickle_support')
+            w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
             mod      = space.interp_w(MixedModule, w_mod)
             new_inst = mod.get('module_new')
             return space.newtuple([new_inst,

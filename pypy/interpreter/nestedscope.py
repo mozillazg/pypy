@@ -46,7 +46,7 @@ class Cell(Wrappable):
         return space.cmp(self.w_value, other.w_value)
 
     def descr__reduce__(self, space):
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('cell_new')
         if self.w_value is None:    #when would this happen?

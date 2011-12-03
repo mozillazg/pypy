@@ -6,8 +6,8 @@ from pypy.conftest import gettestobjspace, option
 def getfile(space):
     return space.appexec([], """():
         try:
-            import _file
-            return _file.file
+            import __builtin__file
+            return __builtin__file.file
         except ImportError:     # when running with py.test -A
             return file
     """)
@@ -208,7 +208,7 @@ Delivered-To: gkj@sundance.gregorykjohnson.com'''
         assert exc.value.filename == os.curdir
 
     def test_encoding_errors(self):
-        import _file
+        import __builtin__file as _file
 
         with self.file(self.temppath, "w") as f:
             _file.set_file_encoding(f, "utf-8")

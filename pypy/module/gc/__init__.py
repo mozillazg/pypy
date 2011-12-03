@@ -1,6 +1,8 @@
 from pypy.interpreter.mixedmodule import MixedModule
     
 class Module(MixedModule):
+    applevel_name = 'gc'
+
     appleveldefs = {
         'enable': 'app_gc.enable',
         'disable': 'app_gc.disable',

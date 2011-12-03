@@ -16,6 +16,7 @@ class Module(MixedModule):
     To map error codes to error messages, use the function os.strerror(),
     e.g. os.strerror(2) could return 'No such file or directory'."""
 
+    applevel_name = 'errno'
     appleveldefs = {}
     interpleveldefs = {"errorcode": "interp_errno.get_errorcode(space)"}
     

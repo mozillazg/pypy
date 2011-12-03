@@ -7,6 +7,7 @@ for mytype in types.values():
 
 
 class Module(MixedModule):
+    applevel_name = '__builtin_array'
 
     interpleveldefs = {
         'array': 'interp_array.W_ArrayBase',

@@ -11,6 +11,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 import time
 
 class Module(MixedModule):
+    applevel_name = 'extmod'
 
     appleveldefs = {}
 

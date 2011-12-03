@@ -2,6 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
     """Built-in functions, exceptions, and other objects."""
+    applevel_name = '__builtin__pickle_support'
 
     appleveldefs = {
     }

@@ -9,6 +9,8 @@ from pypy.interpreter.mixedmodule import MixedModule
 class Module(MixedModule):
     """PyPy own testing"""
 
+    applevel_name = '__builtin__testing'
+
     interpleveldefs = {
         }
 
