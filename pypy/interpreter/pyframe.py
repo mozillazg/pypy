@@ -303,7 +303,7 @@ class PyFrame(eval.Frame):
     def descr__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
         from pypy.module._pickle_support import maker # helper fns
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('frame_new')
         w        = space.wrap

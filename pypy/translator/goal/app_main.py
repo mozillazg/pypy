@@ -258,7 +258,7 @@ def setup_initial_paths(ignore_environment=False, **extra):
 
 def set_io_encoding(io_encoding):
     try:
-        import _file
+        import __builtin__file
     except ImportError:
         if sys.version_info < (2, 7):
             return
@@ -266,7 +266,7 @@ def set_io_encoding(io_encoding):
         set_file_encoding = ctypes.pythonapi.PyFile_SetEncodingAndErrors
         set_file_encoding.argtypes = [ctypes.py_object, ctypes.c_char_p, ctypes.c_char_p]
     else:
-        set_file_encoding = _file.set_file_encoding
+        set_file_encoding = __builtin__file.set_file_encoding
     if ":" in io_encoding:
         encoding, errors = io_encoding.split(":", 1)
     else:

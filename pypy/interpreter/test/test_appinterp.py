@@ -143,6 +143,7 @@ class TestMixedModule:
         from pypy.conftest import maketestobjspace
 
         class MyModule(MixedModule):
+            applevel_name = 'mymod'
             interpleveldefs = {}
             appleveldefs = {}
             def __init__(self, space, w_name):
@@ -172,8 +173,8 @@ class TestMixedModule:
         from pypy.conftest import gettestobjspace
         space = gettestobjspace(usemodules=('_ssl', '_socket'))
 
-        w_socket = space.builtin_modules['_socket']
-        w_ssl = space.builtin_modules['_ssl']
+        w_socket = space.builtin_modules['__builtin__socket']
+        w_ssl = space.builtin_modules['__builtin__ssl']
 
         # Uncomment this line for a workaround
         # space.getattr(w_ssl, space.wrap('SSLError'))

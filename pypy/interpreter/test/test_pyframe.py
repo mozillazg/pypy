@@ -240,7 +240,7 @@ class AppTestPyFrame:
 
     def test_trace_ignore_hidden(self):
         import sys
-        import _testing
+        import __builtin__testing as _testing
             
         l = []
         def trace(a,b,c):

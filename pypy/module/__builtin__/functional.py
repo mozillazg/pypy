@@ -227,7 +227,7 @@ class W_Enumerate(Wrappable):
 
     def descr___reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         w_new_inst = mod.get('enumerate_new')
         w_info = space.newtuple([self.w_iter, self.w_index])
@@ -288,7 +288,7 @@ class W_ReversedIterator(Wrappable):
 
     def descr___reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         w_new_inst = mod.get('reversed_new')
         info_w = [self.w_sequence, space.wrap(self.remaining)]
@@ -412,7 +412,7 @@ class W_XRangeIterator(Wrappable):
     def descr_reduce(self):
         from pypy.interpreter.mixedmodule import MixedModule
         space    = self.space
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('xrangeiter_new')
         w        = space.wrap

@@ -9,6 +9,8 @@ class Module(MixedModule):
     """Sys Builtin Module. """
     _immutable_fields_ = ["defaultencoding?"]
 
+    applevel_name = 'sys'
+
     def __init__(self, space, w_name):
         """NOT_RPYTHON""" # because parent __init__ isn't
         if space.config.translating:

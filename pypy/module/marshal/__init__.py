@@ -5,6 +5,7 @@ class Module(MixedModule):
     """
     This module implements marshal at interpreter level.
     """
+    applevel_name = 'marshal'
 
     appleveldefs = {
     }

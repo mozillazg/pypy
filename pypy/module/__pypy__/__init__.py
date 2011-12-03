@@ -5,6 +5,8 @@ from pypy.module.imp.importing import get_pyc_magic
 
 
 class BuildersModule(MixedModule):
+    applevel_name = '__pypy__.builders'
+
     appleveldefs = {}
 
     interpleveldefs = {
@@ -13,6 +15,8 @@ class BuildersModule(MixedModule):
     }
 
 class Module(MixedModule):
+    applevel_name = '__pypy__'
+
     appleveldefs = {
     }
 

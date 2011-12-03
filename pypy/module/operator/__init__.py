@@ -4,6 +4,8 @@ from pypy.interpreter.error import OperationError
 class Module(MixedModule):
     """Operator Builtin Module. """
 
+    applevel_name = '__builtin_operator'
+
     # HACK! override loaders to be able to access different operations
     # under same name. I.e., operator.eq == operator.__eq__
 

@@ -7,6 +7,7 @@ class Module(MixedModule):
 - deque:        ordered collection accessible from endpoints only
 - defaultdict:  dict subclass with a default value factory
 """
+    applevel_name = '__builtin__collections'
 
     appleveldefs = {
         'defaultdict': 'app_defaultdict.defaultdict',

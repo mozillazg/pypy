@@ -33,6 +33,8 @@ names_and_docstrings = {
 
 
 class Module(MixedModule):
+    applevel_name = '__builtin_cmath'
+
     appleveldefs = {
     }
 

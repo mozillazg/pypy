@@ -28,6 +28,7 @@ that idea only works in C, not in Python, notably because of exceptions.
 The most primitive API is actually 'permute()', which just permutes the
 one-shot continuation stored in two (or more) continulets.
 """
+    applevel_name = '__builtin__continuation'
 
     appleveldefs = {
         'error': 'app_continuation.error',

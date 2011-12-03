@@ -9,6 +9,8 @@ class Module(MixedModule):
     """Built-in functions, exceptions, and other objects."""
     expose__file__attribute = False
 
+    applevel_name = '__builtin__'
+
     appleveldefs = {
         'execfile'      : 'app_io.execfile',
         'raw_input'     : 'app_io.raw_input',

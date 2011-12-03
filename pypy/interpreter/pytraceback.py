@@ -26,7 +26,7 @@ class PyTraceback(baseobjspace.Wrappable):
 
     def descr__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('traceback_new')
         w        = space.wrap

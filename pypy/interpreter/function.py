@@ -259,7 +259,7 @@ class Function(Wrappable):
     def descr_function__reduce__(self, space):
         from pypy.interpreter.gateway import BuiltinCode
         from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         code = self.code
         if isinstance(code, BuiltinCode):
@@ -559,7 +559,7 @@ class Method(Wrappable):
     def descr_method__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
         from pypy.interpreter.gateway import BuiltinCode
-        w_mod    = space.getbuiltinmodule('_pickle_support')
+        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         new_inst = mod.get('method_new')
         w        = space.wrap
