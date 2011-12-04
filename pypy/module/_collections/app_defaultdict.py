@@ -7,7 +7,7 @@
 # 'dict'.  But what we can do is write individual methods at
 # interp-level.
 
-import _collections
+import __builtin__collections as _collections
 
 
 class defaultdict(dict):
