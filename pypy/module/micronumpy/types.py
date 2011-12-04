@@ -408,11 +408,11 @@ class BaseCompositeType(BaseType):
 
     def store(self, storage, width, i, offset, box):
         subboxes = self.unbox(box)
-        i = 0
+        item_idx = 0
         for box in subboxes:
-            self.itemtypes[i].store(storage, width, i, offset, box)
-            offset += self.itemtypes[i].get_element_size()
-            i += 1
+            self.itemtypes[item_idx].store(storage, width, i, offset, box)
+            offset += self.itemtypes[item_idx].get_element_size()
+            item_idx += 1
 
     def read(self, storage, width, i, offset):
         boxes = []
