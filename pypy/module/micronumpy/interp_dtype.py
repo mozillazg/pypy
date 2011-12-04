@@ -15,7 +15,12 @@ BOOLLTR = "b"
 FLOATINGLTR = "f"
 COMPLEXLTR = "c"
 
+
+VOID_STORAGE = lltype.Array(lltype.Char, hints={'nolength': True, 'render_as_void': True})
+
 class W_Dtype(Wrappable):
+    _immuable_fields_ = ["itemtype", "num", "kind"]
+
     def __init__(self, itemtype, num, kind, name, char, w_box_type, alternate_constructors=[]):
         self.signature = signature.BaseSignature()
         self.itemtype = itemtype
@@ -28,7 +33,7 @@ class W_Dtype(Wrappable):
 
     def malloc(self, length):
         # XXX find out why test_zjit explodes with tracking of allocations
-        return lltype.malloc(rffi.CArray(lltype.Char), self.itemtype.get_element_size() * length,
+        return lltype.malloc(VOID_STORAGE, self.itemtype.get_element_size() * length,
             zero=True, flavor="raw",
             track_allocation=False, add_memory_pressure=True
         )
@@ -82,7 +87,7 @@ class W_Dtype(Wrappable):
         return space.newtuple([])
 
 W_Dtype.typedef = TypeDef("dtype",
-    __module__ = "numpy",
+    __module__ = "numpypy",
     __new__ = interp2app(W_Dtype.descr__new__.im_func),
 
     __str__= interp2app(W_Dtype.descr_str),

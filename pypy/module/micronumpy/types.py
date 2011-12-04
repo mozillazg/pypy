@@ -10,6 +10,7 @@ from pypy.rpython.lltypesystem import lltype, rffi
 
 
 def simple_unary_op(func):
+    specialize.argtype(1)(func)
     @functools.wraps(func)
     def dispatcher(self, v):
         return self.box(
@@ -21,6 +22,7 @@ def simple_unary_op(func):
     return dispatcher
 
 def simple_binary_op(func):
+    specialize.argtype(1, 2)(func)
     @functools.wraps(func)
     def dispatcher(self, v1, v2):
         return self.box(
@@ -33,6 +35,7 @@ def simple_binary_op(func):
     return dispatcher
 
 def raw_binary_op(func):
+    specialize.argtype(1, 2)(func)
     @functools.wraps(func)
     def dispatcher(self, v1, v2):
         return func(self,
@@ -206,6 +209,18 @@ class Integer(Primitive):
     def mod(self, v1, v2):
         return v1 % v2
 
+    @simple_binary_op
+    def pow(self, v1, v2):
+        res = 1
+        while v2 > 0:
+            if v2 & 1:
+                res *= v1
+            v2 >>= 1
+            if v2 == 0:
+                break
+            v1 *= v1
+        return res
+
     @simple_unary_op
     def sign(self, v):
         if v > 0:
@@ -356,6 +371,13 @@ class Float(Primitive):
         if not -1.0 < v < 1.0:
             return rfloat.NAN
         return math.atanh(v)
+
+    @simple_unary_op
+    def sqrt(self, v):
+        try:
+            return math.sqrt(v)
+        except ValueError:
+            return rfloat.NAN
 
 
 class Float32(BaseType, Float):
