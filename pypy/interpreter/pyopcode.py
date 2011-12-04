@@ -1488,6 +1488,12 @@ app = gateway.applevel(r'''
             skip_leading_underscores = True
         else:
             skip_leading_underscores = False
+            # pypy extension, for __builtin_* modules
+            if all is Ellipsis:
+                all = set(module.__dict__)
+                all.discard('__name__')
+                all.discard('__file__')
+                all.discard('__all__')
         for name in all:
             if skip_leading_underscores and name[0]=='_':
                 continue

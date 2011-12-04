@@ -56,22 +56,8 @@ class MixedModule(Module):
 
         if self.w_initialdict is None:
             Module.init(self, space)
-            if not self.lazy:
-                self._initial_nonlazy_init(space)
-
-    def _initial_nonlazy_init(self, space):
-        # for modules called '__builtin_*', build a default '__all__'
-        # that has all keys, including the ones starting with '_'.
-        if space.str_w(self.w_name).startswith('__builtin_'):
-            w_all = space.call_method(self.w_dict, 'keys')
-            try:
-                space.call_method(w_all, 'remove', space.wrap('__file__'))
-            except OperationError:
-                pass
-            space.setitem(self.w_dict, space.wrap('__all__'), w_all)
-        #
-        if self.w_initialdict is None:
-            self.w_initialdict = space.call_method(self.w_dict, 'items')
+            if not self.lazy and self.w_initialdict is None:
+                self.w_initialdict = space.call_method(self.w_dict, 'items')
 
 
     def get_applevel_name(cls):
@@ -138,7 +124,7 @@ class MixedModule(Module):
                 w_value = self.get(name)
                 space.setitem(self.w_dict, space.new_interned_str(name), w_value)
             self.lazy = False
-            self._initial_nonlazy_init(space)
+            self.w_initialdict = space.call_method(self.w_dict, 'items')
         return self.w_dict
 
     def _freeze_(self):
@@ -167,6 +153,10 @@ class MixedModule(Module):
                 loaders['__file__'] = cls.get__file__
             if '__doc__' not in loaders:
                 loaders['__doc__'] = cls.get__doc__
+            if '__all__' not in loaders:
+                if ((cls.applevel_name or '').startswith('__builtin_') and
+                        cls.applevel_name != '__builtin__'):
+                    loaders['__all__'] = cls.get__all__Ellipsis
 
     buildloaders = classmethod(buildloaders)
 
@@ -203,6 +193,10 @@ class MixedModule(Module):
     def get__doc__(cls, space):
         return space.wrap(cls.__doc__)
     get__doc__ = classmethod(get__doc__)
+
+    def get__all__Ellipsis(cls, space):
+        return space.w_Ellipsis
+    get__all__Ellipsis = classmethod(get__all__Ellipsis)
 
 
 def getinterpevalloader(pkgroot, spec):
