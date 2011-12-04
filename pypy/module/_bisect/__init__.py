@@ -16,9 +16,6 @@ common approach."""
     applevel_name = '__builtin__bisect'
 
     appleveldefs = {
-        'insort':        'app_bisect.insort_right',
-        'insort_left':   'app_bisect.insort_left',
-        'insort_right':  'app_bisect.insort_right',
         }
 
     interpleveldefs = {
