@@ -3,7 +3,7 @@ class error(Exception):
     "Usage error of the _continuation module."
 
 
-import _continuation
+import __builtin__continuation as _continuation
 
 
 class generator(object):

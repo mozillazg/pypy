@@ -17,7 +17,7 @@ def descr_seqiter__reduce__(w_self, space):
     from pypy.objspace.std.iterobject import W_AbstractSeqIterObject
     assert isinstance(w_self, W_AbstractSeqIterObject)
     from pypy.interpreter.mixedmodule import MixedModule
-    w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
+    w_mod    = space.getbuiltinmodule('_pickle_support')
     mod      = space.interp_w(MixedModule, w_mod)
     new_inst = mod.get('seqiter_new')
     tup      = [w_self.w_seq, space.wrap(w_self.index)]
@@ -33,7 +33,7 @@ def descr_reverseseqiter__reduce__(w_self, space):
     from pypy.objspace.std.iterobject import W_ReverseSeqIterObject
     assert isinstance(w_self, W_ReverseSeqIterObject)
     from pypy.interpreter.mixedmodule import MixedModule
-    w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
+    w_mod    = space.getbuiltinmodule('_pickle_support')
     mod      = space.interp_w(MixedModule, w_mod)
     new_inst = mod.get('reverseseqiter_new')
     tup      = [w_self.w_seq, space.wrap(w_self.index)]

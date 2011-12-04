@@ -2,6 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
     """A demo built-in module based on ctypes."""
+    applevel_name = '_demo'      # not included in default pypy builds
 
     interpleveldefs = {
         'measuretime'      : 'demo.measuretime',

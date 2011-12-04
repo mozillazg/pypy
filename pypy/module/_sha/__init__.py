@@ -17,6 +17,7 @@ create an sha object, then feed this object with arbitrary strings using
 the update() method, and at any point you can ask it for the digest of
 the concatenation of the strings fed to it so far. SHA-1 digests are 160
 bits instead of MD5's 128 bits."""
+    applevel_name = '__builtin__sha'
 
     interpleveldefs = {
         'new': 'interp_sha.W_SHA',

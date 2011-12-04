@@ -13,6 +13,8 @@ class Module(MixedModule):
     argument. This can be an integer file descriptor, such as returned by\n\
     sys.stdin.fileno(), or a file object, such as sys.stdin itself."
 
+    applevel_name = '__builtin_termios'
+
     appleveldefs = {
     }
     

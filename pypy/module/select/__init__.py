@@ -6,6 +6,8 @@ import sys
 
 
 class Module(MixedModule):
+    applevel_name = '__builtin_select'
+
     appleveldefs = {
     }
 

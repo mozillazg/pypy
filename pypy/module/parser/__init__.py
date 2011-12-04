@@ -4,15 +4,12 @@ from pypy.interpreter.mixedmodule import MixedModule
 class Module(MixedModule):
      """The builtin parser module."""
 
-     applevel_name = 'parser'
+     applevel_name = '__builtin_parser'
 
      appleveldefs = {
          }
 
      interpleveldefs = {
-         '__name__'     : '(space.wrap("parser"))',
-         '__doc__'      : '(space.wrap("parser module"))',
-
          'suite'        : 'pyparser.suite',
          'expr'         : 'pyparser.expr',
          'issuite'      : 'pyparser.issuite',

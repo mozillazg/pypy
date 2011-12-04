@@ -18,6 +18,8 @@ point you can ask it for the digest (a strong kind of 128-bit checksum,
 a.k.a. ``fingerprint'') of the concatenation of the strings fed to it so
 far using the digest() method."""
 
+    applevel_name = '__builtin__md5'
+
     interpleveldefs = {
         'new': 'interp_md5.W_MD5',
         'MD5Type': 'interp_md5.W_MD5',

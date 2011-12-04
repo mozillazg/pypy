@@ -2,6 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.module._ffi import interp_ffi
 
 class Module(MixedModule):
+    applevel_name = '__builtin__ffi'
 
     interpleveldefs = {
         'CDLL':    'interp_ffi.W_CDLL',

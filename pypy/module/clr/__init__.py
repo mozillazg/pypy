@@ -6,6 +6,8 @@ import boxing_rules # with side effects
 class Module(MixedModule):
     """CLR module"""
 
+    applevel_name = 'clr'
+
     appleveldefs = {
         'dotnetimporter': 'app_importer.importer'
         }

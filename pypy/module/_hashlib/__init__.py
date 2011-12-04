@@ -3,6 +3,8 @@ from pypy.module._hashlib.interp_hashlib import algorithms
 
 
 class Module(MixedModule):
+    applevel_name = '__builtin__hashlib'
+
     interpleveldefs = {
         'new' : 'interp_hashlib.new',
         }

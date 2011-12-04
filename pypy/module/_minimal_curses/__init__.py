@@ -17,6 +17,7 @@ class Module(MixedModule):
     """ Low-level interface for curses module,
     not meant to be used directly
     """
+    applevel_name = '__builtin__minimal_curses'
 
     appleveldefs = {
         'error'          : 'app_curses.error',

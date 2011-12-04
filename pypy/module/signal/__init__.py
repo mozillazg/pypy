@@ -4,6 +4,8 @@ import os
 import signal as cpy_signal
 
 class Module(MixedModule):
+    applevel_name = 'signal'
+
     interpleveldefs = {
         'signal':              'interp_signal.signal',
         'getsignal':           'interp_signal.getsignal',

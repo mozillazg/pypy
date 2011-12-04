@@ -2,6 +2,8 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib.rarithmetic import intmask
 
 class Module(MixedModule):
+    applevel_name = '__builtin_fcntl'
+
     interpleveldefs = {
         'fcntl': 'interp_fcntl.fcntl',
         'flock': 'interp_fcntl.flock',

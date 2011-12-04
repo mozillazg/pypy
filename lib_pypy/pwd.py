@@ -9,6 +9,9 @@ pw_name, pw_passwd, pw_uid, pw_gid, pw_gecos, pw_dir, pw_shell.
 The uid and gid items are integers, all others are strings. An
 exception is raised if the entry asked for cannot be found.
 """
+# Note that if the built-in module 'pwd' is compiled in, it hides
+# this pwd.py.  Unsure why, but it is also a built-in module in
+# CPython 2.7, instead of an extension module.
 
 import sys
 if sys.platform == 'win32':

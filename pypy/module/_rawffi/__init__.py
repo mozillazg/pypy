@@ -9,6 +9,7 @@ from pypy.module._rawffi.tracker import Tracker
 import sys
 
 class Module(MixedModule):
+    applevel_name = '__builtin__rawffi'
 
     interpleveldefs = {
         'CDLL'               : 'interp_rawffi.W_CDLL',

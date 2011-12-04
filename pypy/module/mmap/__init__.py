@@ -2,6 +2,8 @@ from pypy.interpreter.mixedmodule import MixedModule
 from pypy.rlib import rmmap
 
 class Module(MixedModule):
+    applevel_name = '__builtin_mmap'
+
     interpleveldefs = {
         'PAGESIZE': 'space.wrap(interp_mmap.PAGESIZE)',
         'ALLOCATIONGRANULARITY': 'space.wrap(interp_mmap.ALLOCATIONGRANULARITY)',

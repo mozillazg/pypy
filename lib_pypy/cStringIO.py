@@ -1,16 +1,19 @@
-#
-# StringIO-based cStringIO implementation.
-#
+# indirection needed; otherwise the built-in module "cStringIO" shadows
+# any file cStringIO.py that would be found in the user dirs
 
-# Note that PyPy contains also a built-in module 'cStringIO' which will hide
-# this one if compiled in.
+try:
+    from __builtin_cStringIO import *
 
-from StringIO import *
-from StringIO import __doc__
+except ImportError:
+    #
+    # StringIO-based cStringIO implementation.
+    #
+    from StringIO import *
+    from StringIO import __doc__
 
-class StringIO(StringIO):
-    def reset(self):
-        """
-        reset() -- Reset the file position to the beginning
-        """
-        self.seek(0, 0)
+    class StringIO(StringIO):
+        def reset(self):
+            """
+            reset() -- Reset the file position to the beginning
+            """
+            self.seek(0, 0)

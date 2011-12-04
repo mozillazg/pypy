@@ -5,6 +5,7 @@ import time
 
 class Module(MixedModule):
     """time module"""
+    applevel_name = '__builtin_time'
 
     appleveldefs = {
     }

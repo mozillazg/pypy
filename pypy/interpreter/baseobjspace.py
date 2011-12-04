@@ -414,38 +414,38 @@ class ObjSpace(object):
         return name
 
     def getbuiltinmodule(self, name, force_init=False):
-        w_name = self.wrap(name)
-        w_modules = self.sys.get('modules')
-        try:
-            w_mod = self.getitem(w_modules, w_name)
-        except OperationError, e:
-            if not e.match(self, self.w_KeyError):
-                raise
-        else:
-            if not force_init:
-                return w_mod
-
-        # If the module is a builtin but not yet imported,
-        # retrieve it and initialize it
         try:
             w_mod = self.builtin_modules[name]
         except KeyError:
-            raise operationerrfmt(
-                self.w_SystemError,
-                "getbuiltinmodule() called "
-                "with non-builtin module %s", name)
-        else:
-            # Add the module to sys.modules
-            self.setitem(w_modules, w_name, w_mod)
+            tryname = '__builtin_' + name     # hack, but a useful one
+            try:
+                w_mod = self.builtin_modules[tryname]
+                name = tryname
+            except KeyError:
+                raise operationerrfmt(
+                    self.w_SystemError,
+                    "getbuiltinmodule() called "
+                    "with non-builtin module %s", name)
 
-            # And initialize it
-            from pypy.interpreter.module import Module
-            mod = self.interpclass_w(w_mod)
-            if isinstance(mod, Module):
-                self.timer.start("startup " + name)
-                mod.init(self)
-                self.timer.stop("startup " + name)
+        w_name = self.wrap(name)
+        w_modules = self.sys.get('modules')
+        if not force_init and self.is_true(self.contains(w_modules, w_name)):
             return w_mod
+
+        # If the module is a builtin but not yet imported,
+        # retrieve it and initialize it now
+
+        # Add the module to sys.modules
+        self.setitem(w_modules, w_name, w_mod)
+
+        # And initialize it
+        from pypy.interpreter.module import Module
+        mod = self.interpclass_w(w_mod)
+        if isinstance(mod, Module):
+            self.timer.start("startup " + name)
+            mod.init(self)
+            self.timer.stop("startup " + name)
+        return w_mod
 
     def get_builtinmodule_to_install(self):
         """NOT_RPYTHON"""
