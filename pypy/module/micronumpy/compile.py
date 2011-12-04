@@ -43,6 +43,7 @@ class FakeSpace(object):
     w_bool = "bool"
     w_int = "int"
     w_float = "float"
+    w_complex = "complex"
     w_list = "list"
     w_long = "long"
     w_tuple = 'tuple'
