@@ -71,6 +71,8 @@ class MsvcPlatform(Platform):
     so_ext = 'dll'
     exe_ext = 'exe'
 
+    relevant_environ = ('PATH', 'INCLUDE', 'LIB')
+
     cc = 'cl.exe'
     link = 'link.exe'
 
@@ -172,6 +174,12 @@ class MsvcPlatform(Platform):
 
     def _compile_c_file(self, cc, cfile, compile_args):
         oname = cfile.new(ext='obj')
+        # notabene: (tismer)
+        # This function may be called for .c but also .asm files.
+        # The c compiler accepts any order of arguments, while
+        # the assembler still has the old behavior that all options
+        # must come first, and after the file name all options are ignored.
+        # So please be careful with the order of parameters! ;-)
         args = ['/nologo', '/c'] + compile_args + ['/Fo%s' % (oname,), str(cfile)]
         self._execute_c_compiler(cc, args, oname)
         return oname
@@ -257,7 +265,7 @@ class MsvcPlatform(Platform):
                 return fpath
 
         rel_cfiles = [m.pathrel(cfile) for cfile in cfiles]
-        rel_ofiles = [rel_cfile[:-2]+'.obj' for rel_cfile in rel_cfiles]
+        rel_ofiles = [rel_cfile[:rel_cfile.rfind('.')]+'.obj' for rel_cfile in rel_cfiles]
         m.cfiles = rel_cfiles
 
         rel_includedirs = [pypyrel(incldir) for incldir in eci.include_dirs]
@@ -288,6 +296,7 @@ class MsvcPlatform(Platform):
         rules = [
             ('all', '$(DEFAULT_TARGET)', []),
             ('.c.obj', '', '$(CC) /nologo $(CFLAGS) $(CFLAGSEXTRA) /Fo$@ /c $< $(INCLUDEDIRS)'),
+            ('.asm.obj', '', '$(MASM) /nologo /Fo$@ /c $< $(INCLUDEDIRS)'),
             ]
 
         for rule in rules:
