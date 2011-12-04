@@ -50,6 +50,7 @@ def create_builder(name, strtype, builder_cls):
 
     W_Builder.__name__ = "W_%s" % name
     W_Builder.typedef = TypeDef(name,
+        __module__ = 'builders',
         __new__ = interp2app(func_with_new_name(
                                     W_Builder.descr__new__.im_func,
                                     '%s_new' % (name,))),

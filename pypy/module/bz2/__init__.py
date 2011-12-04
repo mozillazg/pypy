@@ -6,6 +6,7 @@ class Module(MixedModule):
 the bz2 compression library. It implements a complete file
 interface, one shot (de)compression functions, and types for
 sequential (de)compression."""
+    applevel_name = '__builtin_bz2'
 
     interpleveldefs = {
         'BZ2Compressor': 'interp_bz2.W_BZ2Compressor',

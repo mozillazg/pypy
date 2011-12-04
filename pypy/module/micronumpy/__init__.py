@@ -2,7 +2,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 
 class Module(MixedModule):
-    applevel_name = 'numpypy'
+    applevel_name = '__builtin_numpypy'
 
     interpleveldefs = {
         'ndarray': 'interp_numarray.W_NDimArray',

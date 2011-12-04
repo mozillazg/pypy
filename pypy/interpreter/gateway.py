@@ -584,7 +584,7 @@ class BuiltinCode(eval.Code):
 
     def descr__reduce__(self, space):
         from pypy.interpreter.mixedmodule import MixedModule
-        w_mod    = space.getbuiltinmodule('__builtin__pickle_support')
+        w_mod    = space.getbuiltinmodule('_pickle_support')
         mod      = space.interp_w(MixedModule, w_mod)
         builtin_code = mod.get('builtin_code')
         return space.newtuple([builtin_code,

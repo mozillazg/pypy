@@ -5,6 +5,7 @@
 from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
+    applevel_name = 'zipimport'
 
     interpleveldefs = {
         'zipimporter':'interp_zipimport.W_ZipImporter',

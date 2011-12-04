@@ -3,6 +3,8 @@
 from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
+    applevel_name = '__builtin_cStringIO'
+
     appleveldefs = {
     }
 

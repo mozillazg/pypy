@@ -4,6 +4,7 @@ import sys
 
 class Module(MixedModule):
     """Support for POSIX locales."""
+    applevel_name = '__builtin__locale'
 
     interpleveldefs  = {
         'setlocale':  'interp_locale.setlocale',

@@ -4,6 +4,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 class ErrorsModule(MixedModule):
     "Definition of pyexpat.errors module."
+    applevel_name = 'errors'
     appleveldefs = {}
     interpleveldefs = {}
 
@@ -16,6 +17,7 @@ class ErrorsModule(MixedModule):
 
 class ModelModule(MixedModule):
     "Definition of pyexpat.model module."
+    applevel_name = 'model'
     appleveldefs = {}
     interpleveldefs = {}
 
@@ -28,6 +30,7 @@ class ModelModule(MixedModule):
 
 class Module(MixedModule):
     "Python wrapper for Expat parser."
+    applevel_name = '__builtin_pyexpat'
 
     appleveldefs = {
         }

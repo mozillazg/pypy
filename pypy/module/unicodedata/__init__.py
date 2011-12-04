@@ -8,6 +8,7 @@ from pypy.module.unicodedata import unicodedb_5_2_0 as unicodedb
 # http://www.fileformat.info/info/unicode/char/search.htm
 
 class Module(MixedModule):
+    applevel_name = '__builtin_unicodedata'
     appleveldefs = {
     }
     interpleveldefs = {

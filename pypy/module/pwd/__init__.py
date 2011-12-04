@@ -11,6 +11,8 @@ class Module(MixedModule):
     The uid and gid items are integers, all others are strings. An
     exception is raised if the entry asked for cannot be found.
     """
+    applevel_name = 'pwd'   # this is a built-in module on CPython too,
+                            # instead of an extension module.  Unsure why
 
     interpleveldefs = {
         'getpwuid': 'interp_pwd.getpwuid',

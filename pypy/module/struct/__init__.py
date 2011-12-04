@@ -45,6 +45,8 @@ Whitespace between formats is ignored.
 
 The variable struct.error is an exception raised on errors."""
 
+    applevel_name = '__builtin_struct'
+
     interpleveldefs = {
         'calcsize': 'interp_struct.calcsize',
         'pack': 'interp_struct.pack',

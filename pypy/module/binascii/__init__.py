@@ -10,6 +10,7 @@ from pypy.interpreter.mixedmodule import MixedModule
 
 class Module(MixedModule):
     """binascii - Conversion between binary data and ASCII"""
+    applevel_name = '__builtin_binascii'
 
     appleveldefs = {
         }

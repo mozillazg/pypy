@@ -5,6 +5,8 @@ from pypy.module.cpyext import api
 from pypy.rpython.lltypesystem import rffi, lltype
 
 class Module(MixedModule):
+    applevel_name = '__builtin_cpyext'
+
     interpleveldefs = {
         'load_module': 'api.load_extension_module',
     }

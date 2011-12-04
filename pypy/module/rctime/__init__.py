@@ -5,7 +5,7 @@ import os
 _WIN = os.name == "nt"
 
 class Module(MixedModule):
-    applevel_name = 'time'
+    applevel_name = '__builtin_time'
 
     interpleveldefs = {
         'time': 'interp_time.time',

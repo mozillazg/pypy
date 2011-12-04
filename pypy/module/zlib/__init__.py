@@ -23,6 +23,8 @@ decompressobj([wbits]) -- Return a decompressor object.
 Compressor objects support compress() and flush() methods; decompressor
 objects support decompress() and flush()."""
 
+    applevel_name = '__builtin_zlib'
+
     interpleveldefs = {
         'crc32': 'interp_zlib.crc32',
         'adler32': 'interp_zlib.adler32',
