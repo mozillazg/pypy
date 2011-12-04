@@ -2,8 +2,8 @@
 #
 # The interface here may be a little bit on the lightweight side.
 
-from _multibytecodec import MultibyteIncrementalDecoder
-from _multibytecodec import MultibyteIncrementalEncoder
+from __builtin__multibytecodec import MultibyteIncrementalDecoder
+from __builtin__multibytecodec import MultibyteIncrementalEncoder
 
 
 class MultibyteStreamReader(MultibyteIncrementalDecoder):
