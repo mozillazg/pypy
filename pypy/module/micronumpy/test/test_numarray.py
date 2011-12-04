@@ -1039,7 +1039,6 @@ class AppTestMultiDim(BaseNumpyAppTest):
         a = zeros((10, 10))
         b = a[0].copy()
         assert (b == zeros(10)).all()
->>>>>>> other
 
 class AppTestSupport(BaseNumpyAppTest):
     def setup_class(cls):
