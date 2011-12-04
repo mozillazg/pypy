@@ -56,8 +56,22 @@ class MixedModule(Module):
 
         if self.w_initialdict is None:
             Module.init(self, space)
-            if not self.lazy and self.w_initialdict is None:
-                self.w_initialdict = space.call_method(self.w_dict, 'items')
+            if not self.lazy:
+                self._initial_nonlazy_init(space)
+
+    def _initial_nonlazy_init(self, space):
+        # for modules called '__builtin_*', build a default '__all__'
+        # that has all keys, including the ones starting with '_'.
+        if space.str_w(self.w_name).startswith('__builtin_'):
+            w_all = space.call_method(self.w_dict, 'keys')
+            try:
+                space.call_method(w_all, 'remove', space.wrap('__file__'))
+            except OperationError:
+                pass
+            space.setitem(self.w_dict, space.wrap('__all__'), w_all)
+        #
+        if self.w_initialdict is None:
+            self.w_initialdict = space.call_method(self.w_dict, 'items')
 
 
     def get_applevel_name(cls):
@@ -124,7 +138,7 @@ class MixedModule(Module):
                 w_value = self.get(name)
                 space.setitem(self.w_dict, space.new_interned_str(name), w_value)
             self.lazy = False
-            self.w_initialdict = space.call_method(self.w_dict, 'items')
+            self._initial_nonlazy_init(space)
         return self.w_dict
 
     def _freeze_(self):

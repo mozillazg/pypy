@@ -28,7 +28,7 @@ class Module(MixedModule):
         'IncrementalNewlineDecoder': 'interp_textio.W_IncrementalNewlineDecoder',
         }
 
-    def init(self, space):
+    def startup(self, space):
         w_UnsupportedOperation = space.call_function(
             space.w_type,
             space.wrap('UnsupportedOperation'),
