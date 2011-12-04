@@ -16,7 +16,9 @@ class AppTest(object):
     def test__isfake_currently_true(self):
         from __pypy__ import isfake
         import select
-        assert isfake(select)
+        assert not isfake(select)   # that's lib_pypy/select.py
+        import __builtin_select
+        assert isfake(__builtin_select)
 
     def test_cpumodel(self):
         import __pypy__

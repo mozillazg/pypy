@@ -476,6 +476,8 @@ class ObjSpace(object):
             for modname in self.ALL_BUILTIN_MODULES:
                 if not LIB_PYPY.join(modname+'.py').check(file=True):
                     modules.append('faked+'+modname)
+                else:
+                    modules.append('faked+__builtin_'+modname)
 
         self._builtinmodule_list = modules
         return self._builtinmodule_list
@@ -586,11 +588,15 @@ class ObjSpace(object):
         try:
             module = self.load_cpython_module(modname)
         except ImportError:
-            return
-        else:
-            w_modules = self.sys.get('modules')
-            self.setitem(w_modules, self.wrap(modname), self.wrap(module))
-            installed_builtin_modules.append(modname)
+            if not modname.startswith('__builtin_'):
+                return
+            try:
+                module = self.load_cpython_module(modname[10:])
+            except ImportError:
+                return
+        w_modules = self.sys.get('modules')
+        self.setitem(w_modules, self.wrap(modname), self.wrap(module))
+        installed_builtin_modules.append(modname)
 
     def setup_builtin_modules(self):
         "NOT_RPYTHON: only for initializing the space."
