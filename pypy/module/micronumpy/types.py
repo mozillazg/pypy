@@ -52,6 +52,9 @@ class BaseType(object):
     #     exp = sin = cos = tan = arcsin = arccos = arctan = arcsinh = \
     #     arctanh = _unimplemented_ufunc
 
+    def is_correct_box(self, box):
+        return isinstance(box, self.BoxType)
+
 class Primitive(object):
     _mixin_ = True
     def get_element_size(self):
@@ -433,3 +436,13 @@ class Complex(BaseCompositeType):
             return w_item
         real, imag = space.unpackcomplex(w_item)
         return self.box([self.real.box(real), self.imag.box(imag)])
+    
+    def for_computation(self, (real, imag)):
+        return [
+            self.real.for_computation(self.real.unbox(real)),
+            self.imag.for_computation(self.imag.unbox(imag)),
+        ]
+
+    @raw_binary_op
+    def eq(self, (real1, imag1), (real2, imag2)):
+        return real1 == real2 and imag1 == imag2

@@ -164,6 +164,11 @@ class W_ComplexFloatingBox(W_InexactBox):
 class W_Complex128Box(W_ComplexFloatingBox, CompositeBox):
     descr__new__, get_dtype = new_dtype_getter("complex128")
 
+    def convert_to(self, dtype):
+        if dtype.itemtype.is_correct_box(self):
+            return self
+        raise NotImplementedError
+
 W_GenericBox.typedef = TypeDef("generic",
     __module__ = "numpypy",
 
