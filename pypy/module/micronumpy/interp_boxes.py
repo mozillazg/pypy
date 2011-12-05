@@ -294,9 +294,9 @@ W_Float64Box.typedef = TypeDef("float64", (W_FloatingBox.typedef, float_typedef)
 )
 
 W_ComplexFloatingBox.typedef = TypeDef("complexfloating", W_InexactBox.typedef,
-    __module__ = "numpy",
+    __module__ = "numpypy",
 )
 
 W_Complex128Box.typedef = TypeDef("complex128", (W_ComplexFloatingBox.typedef, complex_typedef),
-    __module__ = "numpy",
+    __module__ = "numpypy",
 )
