@@ -1,7 +1,7 @@
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import operationerrfmt
 from pypy.interpreter.gateway import interp2app
-from pypy.interpreter.typedef import TypeDef
+from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.objspace.std.complextype import complex_typedef
 from pypy.objspace.std.floattype import float_typedef
 from pypy.objspace.std.inttype import int_typedef
@@ -64,6 +64,14 @@ class W_GenericBox(Wrappable):
     def descr_nonzero(self, space):
         dtype = self.get_dtype(space)
         return space.wrap(dtype.itemtype.bool(self))
+
+    def descr_get_real(self, space):
+        dtype = self.get_dtype(space)
+        return dtype.itemtype.real(self)
+
+    def descr_get_imag(self, space):
+        dtype = self.get_dtype(space)
+        return dtype.itemtype.imag(self)
 
     def _binop_impl(ufunc_name):
         def impl(self, space, w_other):
@@ -197,6 +205,9 @@ W_GenericBox.typedef = TypeDef("generic",
 
     __neg__ = interp2app(W_GenericBox.descr_neg),
     __abs__ = interp2app(W_GenericBox.descr_abs),
+
+    real = GetSetProperty(W_GenericBox.descr_get_real),
+    imag = GetSetProperty(W_GenericBox.descr_get_imag),
 )
 
 W_BoolBox.typedef = TypeDef("bool_", W_GenericBox.typedef,

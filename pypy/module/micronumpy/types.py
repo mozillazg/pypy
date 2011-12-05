@@ -34,6 +34,15 @@ def simple_binary_op(func):
         )
     return dispatcher
 
+def raw_unary_op(func):
+    specialize.argtype(1)
+    @functools.wraps(func)
+    def dispatcher(self, v):
+        return func(self,
+            self.for_computation(self.unbox(v))
+        )
+    return dispatcher
+
 def raw_binary_op(func):
     specialize.argtype(1, 2)(func)
     @functools.wraps(func)
@@ -429,20 +438,28 @@ class Complex(BaseCompositeType):
 
     def __init__(self, itemtypes):
         BaseCompositeType.__init__(self, itemtypes)
-        [self.real, self.imag] = self.itemtypes
+        [self.real_type, self.imag_type] = self.itemtypes
 
     def coerce(self, space, w_item):
         if isinstance(w_item, self.BoxType):
             return w_item
         real, imag = space.unpackcomplex(w_item)
-        return self.box([self.real.box(real), self.imag.box(imag)])
-    
+        return self.box([self.real_type.box(real), self.imag_type.box(imag)])
+
     def for_computation(self, (real, imag)):
         return [
-            self.real.for_computation(self.real.unbox(real)),
-            self.imag.for_computation(self.imag.unbox(imag)),
+            self.real_type.for_computation(self.real_type.unbox(real)),
+            self.imag_type.for_computation(self.imag_type.unbox(imag)),
         ]
 
     @raw_binary_op
     def eq(self, (real1, imag1), (real2, imag2)):
         return real1 == real2 and imag1 == imag2
+
+    @raw_unary_op
+    def real(self, (real, imag)):
+        return self.real_type.box(real)
+
+    @raw_unary_op
+    def imag(self, (real, imag)):
+        return self.imag_type.box(imag)
