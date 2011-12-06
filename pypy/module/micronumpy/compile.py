@@ -120,6 +120,9 @@ class FakeSpace(object):
         assert isinstance(w_obj, interp_boxes.W_GenericBox)
         return self.int(w_obj.descr_int(self))
 
+    def unpackcomplex(self, w_obj):
+        raise NotImplementedError
+
     def is_true(self, w_obj):
         assert isinstance(w_obj, BoolObject)
         return w_obj.boolval
