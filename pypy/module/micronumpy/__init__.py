@@ -32,6 +32,7 @@ class Module(MixedModule):
         'int_': 'interp_boxes.W_LongBox',
         'inexact': 'interp_boxes.W_InexactBox',
         'floating': 'interp_boxes.W_FloatingBox',
+        'float32': 'interp_boxes.W_Float32Box',
         'float64': 'interp_boxes.W_Float64Box',
         'complexfloating': 'interp_boxes.W_ComplexFloatingBox',
         'complex128': 'interp_boxes.W_Complex128Box',
@@ -78,4 +79,5 @@ class Module(MixedModule):
         'inf': 'app_numpy.inf',
         'e': 'app_numpy.e',
         'arange': 'app_numpy.arange',
+        'reshape': 'app_numpy.reshape',
     }
