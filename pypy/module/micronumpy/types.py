@@ -61,9 +61,6 @@ class BaseType(object):
     #     exp = sin = cos = tan = arcsin = arccos = arctan = arcsinh = \
     #     arctanh = _unimplemented_ufunc
 
-    def is_correct_box(self, box):
-        return isinstance(box, self.BoxType)
-
 class Primitive(object):
     _mixin_ = True
     def get_element_size(self):
@@ -411,7 +408,9 @@ class BaseCompositeType(BaseType):
             s += itemtype.get_element_size()
         return s
 
+    @specialize.argtype(1)
     def box(self, value):
+        assert isinstance(value, list)
         return self.BoxType(value)
 
     def unbox(self, box):
@@ -432,6 +431,9 @@ class BaseCompositeType(BaseType):
             boxes.append(itemtype.read(storage, width, i, offset))
             offset += itemtype.get_element_size()
         return self.box(boxes)
+
+    def is_correct_box(self, box):
+        return isinstance(box, self.BoxType)
 
 class Complex(BaseCompositeType):
     BoxType = interp_boxes.W_Complex128Box
