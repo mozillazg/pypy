@@ -155,6 +155,27 @@ def calc_steps(shape, strides):
             last_step *= shape[i]
     return steps
 
+def is_contiguous(arr):
+    #Only views can be non-contiguous
+    if isinstance(arr, ViewArray):
+        steps = calc_steps(arr.shape, arr.strides)
+        for i in range(1, len(steps)):
+            if steps[i] != steps[0]:
+                return False
+    return True
+
+def is_contiguous_lr(arr):
+    if arr.strides[-1] < arr.strides[0]:
+        #rl, not lr
+        return False
+    return is_contiguous(arr)
+
+def is_contiguous_rl(self):
+    if arr.strides[-1] > arr.strides[0]:
+        #lr, not rl
+        return False
+    return is_contiguous(arr)
+
 #Recalculating strides. Find the steps that the iteration does for each
 #dimension, given the stride and shape. Then try to create a new stride that
 #fits the new shape, using those steps. If there is a shape/step mismatch
@@ -192,7 +213,8 @@ def calc_new_strides(new_shape, old_shape, old_strides):
         n_new_elems_used = 1
         oldI = -1
         n_old_elems_to_use = old_shape[-1]
-        for s in new_shape[::-1]:
+        for i in range(len(new_shape) - 1, -1, -1):
+            s = new_shape[i]
             new_strides.insert(0, cur_step * n_new_elems_used)
             n_new_elems_used *= s
             while n_new_elems_used > n_old_elems_to_use:
