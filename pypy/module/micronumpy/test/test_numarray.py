@@ -166,6 +166,23 @@ class TestNumArrayDirect(object):
         assert calc_new_strides([24], [2, 4, 3], [48, 6, 1]) is None
         assert calc_new_strides([24], [2, 4, 3], [24, 6, 2]) == [2]
 
+    def test_contiguousC(self):
+        from pypy.module.micronumpy.interp_numarray import is_contiguous,
+            is_contiguous_rl, is_contiguous_lr
+        a = W_NDimArray(10 * 5 * 3, [10, 5, 3], MockDtype(), 'C')
+        assert is_contiguous(a) == True
+        assert is_contiguous_lr(a) == False
+        assert is_contiguous_rl(a) == True
+        b = a.descr_get_transpose(self.space)
+        assert is_contiguous(b) == True
+        assert is_contiguous_lr(b) == True
+        assert is_contiguous_rl(b) == False
+        b = a.create_slice(self.space, [(0, 10, 2, 5)])
+        assert is_contiguous(b) == False
+        assert is_contiguous_lr(b) == False
+        assert is_contiguous_rl(b) == False
+        
+
 class AppTestNumArray(BaseNumpyAppTest):
     def test_ndarray(self):
         from numpypy import ndarray, array, dtype
