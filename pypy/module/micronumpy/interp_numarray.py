@@ -140,6 +140,21 @@ def get_shape_from_iterable(space, old_size, w_iterable):
                 space.wrap("total size of new array must be unchanged"))
     return new_shape
 
+def calc_steps(shape, strides):
+    steps = []
+    last_step = 1
+    #Irregardless of order, the strides can itterate faster left to right
+    # or right to left. Take each case seperately.
+    if strides[0] < strides[-1]:
+        for i in range(len(shape)):
+            steps.append(strides[i] / last_step)
+            last_step *= shape[i]
+    else:
+        for i in range(len(shape) - 1, -1, -1):
+            steps.insert(0, strides[i] / last_step)
+            last_step *= shape[i]
+    return steps
+
 #Recalculating strides. Find the steps that the iteration does for each
 #dimension, given the stride and shape. Then try to create a new stride that
 #fits the new shape, using those steps. If there is a shape/step mismatch
@@ -151,14 +166,10 @@ def calc_new_strides(new_shape, old_shape, old_strides):
 
     #Assumes that prod(old_shape) ==prod(new_shape), len(old_shape) > 1 and
     # len(new_shape) > 0
-    steps = []
-    last_step = 1
+    steps = calc_steps(old_shape, old_strides)
     oldI = 0
     new_strides = []
     if old_strides[0] < old_strides[-1]:
-        for i in range(len(old_shape)):
-            steps.append(old_strides[i] / last_step)
-            last_step *= old_shape[i]
         cur_step = steps[0]
         n_new_elems_used = 1
         n_old_elems_to_use = old_shape[0]
@@ -177,9 +188,6 @@ def calc_new_strides(new_shape, old_shape, old_strides):
                 cur_step = steps[oldI]
                 n_old_elems_to_use *= old_shape[oldI]
     else:
-        for i in range(len(old_shape) - 1, -1, -1):
-            steps.insert(0, old_strides[i] / last_step)
-            last_step *= old_shape[i]
         cur_step = steps[-1]
         n_new_elems_used = 1
         oldI = -1
