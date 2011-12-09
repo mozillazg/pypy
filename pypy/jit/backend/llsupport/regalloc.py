@@ -23,12 +23,9 @@ class FrameManager(object):
         return self.frame_bindings.get(box, None)
 
     def loc(self, box):
-        try:
-            return self.frame_bindings[box]
-        except KeyError:
-            return self.get_new_loc(box)
-
-    def get_new_loc(self, box):
+        res = self.get(box)
+        if res is not None:
+            return res
         size = self.frame_size(box.type)
         self.frame_depth += ((-self.frame_depth) & (size-1))
         # ^^^ frame_depth is rounded up to a multiple of 'size', assuming
@@ -70,17 +67,8 @@ class RegisterManager(object):
         self.position = -1
         self.frame_manager = frame_manager
         self.assembler = assembler
-        self.hint_frame_locations = {}     # {Box: StackLoc}
-        self.freed_frame_locations = {}    # {StackLoc: None}
-
-    def is_still_alive(self, v):
-        # Check if 'v' is alive at the current position.
-        # Return False if the last usage is strictly before.
-        return self.longevity[v][1] >= self.position
 
     def stays_alive(self, v):
-        # Check if 'v' stays alive after the current position.
-        # Return False if the last usage is before or at position.
         return self.longevity[v][1] > self.position
 
     def next_instruction(self, incr=1):
@@ -96,16 +84,11 @@ class RegisterManager(object):
             point for all variables that might be in registers.
         """
         self._check_type(v)
-        if isinstance(v, Const):
+        if isinstance(v, Const) or v not in self.reg_bindings:
             return
         if v not in self.longevity or self.longevity[v][1] <= self.position:
-            if v in self.reg_bindings:
-                self.free_regs.append(self.reg_bindings[v])
-                del self.reg_bindings[v]
-            if self.frame_manager is not None:
-                if v in self.frame_manager.frame_bindings:
-                    loc = self.frame_manager.frame_bindings[v]
-                    self.freed_frame_locations[loc] = None
+            self.free_regs.append(self.reg_bindings[v])
+            del self.reg_bindings[v]
 
     def possibly_free_vars(self, vars):
         """ Same as 'possibly_free_var', but for all v in vars.
@@ -177,23 +160,6 @@ class RegisterManager(object):
                 self.reg_bindings[v] = loc
                 return loc
 
-    def _frame_loc(self, v):
-        # first check if it's already in the frame_manager
-        try:
-            return self.frame_manager.frame_bindings[v]
-        except KeyError:
-            pass
-        # check if we have a hint for this box
-        if v in self.hint_frame_locations:
-            # if we do, check that the hinted location is known to be free
-            loc = self.hint_frame_locations[v]
-            if loc in self.freed_frame_locations:
-                del self.freed_frame_locations[loc]
-                self.frame_manager.frame_bindings[v] = loc
-                return loc
-        # no valid hint.  make up a new free location
-        return self.frame_manager.get_new_loc(v)
-
     def _spill_var(self, v, forbidden_vars, selected_reg,
                    need_lower_byte=False):
         v_to_spill = self._pick_variable_to_spill(v, forbidden_vars,
@@ -201,7 +167,7 @@ class RegisterManager(object):
         loc = self.reg_bindings[v_to_spill]
         del self.reg_bindings[v_to_spill]
         if self.frame_manager.get(v_to_spill) is None:
-            newloc = self._frame_loc(v_to_spill)
+            newloc = self.frame_manager.loc(v_to_spill)
             self.assembler.regalloc_mov(loc, newloc)
         return loc
 
@@ -278,7 +244,7 @@ class RegisterManager(object):
         except KeyError:
             if box in self.bindings_to_frame_reg:
                 return self.frame_reg
-            return self._frame_loc(box)
+            return self.frame_manager.loc(box)
 
     def return_constant(self, v, forbidden_vars=[], selected_reg=None):
         """ Return the location of the constant v.  If 'selected_reg' is
@@ -326,7 +292,7 @@ class RegisterManager(object):
             self.reg_bindings[v] = loc
             self.assembler.regalloc_mov(prev_loc, loc)
         else:
-            loc = self._frame_loc(v)
+            loc = self.frame_manager.loc(v)
             self.assembler.regalloc_mov(prev_loc, loc)
 
     def force_result_in_reg(self, result_v, v, forbidden_vars=[]):
@@ -345,7 +311,7 @@ class RegisterManager(object):
             self.reg_bindings[result_v] = loc
             return loc
         if v not in self.reg_bindings:
-            prev_loc = self._frame_loc(v)
+            prev_loc = self.frame_manager.loc(v)
             loc = self.force_allocate_reg(v, forbidden_vars)
             self.assembler.regalloc_mov(prev_loc, loc)
         assert v in self.reg_bindings
@@ -365,7 +331,7 @@ class RegisterManager(object):
     def _sync_var(self, v):
         if not self.frame_manager.get(v):
             reg = self.reg_bindings[v]
-            to = self._frame_loc(v)
+            to = self.frame_manager.loc(v)
             self.assembler.regalloc_mov(reg, to)
         # otherwise it's clean
 
