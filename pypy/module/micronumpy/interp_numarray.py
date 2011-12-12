@@ -1549,3 +1549,42 @@ W_FlatIterator.typedef = TypeDef(
     __iter__ = interp2app(W_FlatIterator.descr_iter),
 )
 W_FlatIterator.acceptable_as_base_class = False
+
+
+class W_FromPyFunc(Wrappable):
+    def __init__(self, space, w_func, w_nIn, w_nOut):
+        self.w_func = w_func
+        if space.int_w(w_nIn) != 1 or space.int_w(w_nOut) != 1:
+            raise OperationError(space.w_NotImplementedError, space.wrap(''))
+        self.nIn = space.int_w(w_nIn)
+        self.nOut = space.int_w(w_nOut)
+
+    def descr__new__(space, w_subtype, w_func, w_nIn, w_nOut):
+        return space.wrap(W_FromPyFunc(space, w_func, w_nIn, w_nOut))
+
+    def descr_call(self, space, w_arrlike):
+        arr = convert_to_array(space, w_arrlike)
+        result = W_NDimArray(arr.find_size(), arr.shape[:], dtype=arr.find_dtype(),
+                                order=arr.order)
+        i = arr.start_iter()
+        ri = result.start_iter()
+        shapelen = len(arr.shape)
+        result_size = arr.find_size()
+        while not ri.done():
+            #numpy_driver.jit_merge_point(signature=signature,
+            #                             shapelen=shapelen,
+            #                             result_size=result_size, i=i, ri=ri,
+            #                             self=self, result=result)
+            result.dtype.setitem(result.storage, ri.offset,
+                                space.call_function(self.w_func, arr.eval(i)))
+            i = i.next(shapelen)
+            ri = ri.next(shapelen)
+        return space.wrap(result)
+
+
+W_FromPyFunc.typedef = TypeDef(
+    'frompyfunc',
+    __module__ = "numpypy",
+    __new__=interp2app(W_FromPyFunc.descr__new__.im_func),
+    __call__=interp2app(W_FromPyFunc.descr_call),
+)
