@@ -371,3 +371,17 @@ class AppTestUfuncs(BaseNumpyAppTest):
                 (3, 3.5),
             ]:
                 assert ufunc(a, b) == func(a, b)
+
+
+class AppTestFromPyFunc(BaseNumpyAppTest):
+    def test_frompyfunc_abs(self):
+        from numpypy import frompyfunc
+        ufunc = frompyfunc(abs, 1, 1)
+        assert (ufunc([-1, 0, 3, 15]) == [1, 0, 3, 15]).all()
+
+    def test_frompyfunc_foo(self):
+        def foo(x):
+            return x * x + 1
+        from numpypy import frompyfunc, array
+        ufunc = frompyfunc(foo, 1, 1)
+        assert (ufunc(range(10)) == array(range(10)) * range(10) + 1).all()
