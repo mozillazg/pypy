@@ -380,8 +380,31 @@ class AppTestFromPyFunc(BaseNumpyAppTest):
         assert (ufunc([-1, 0, 3, 15]) == [1, 0, 3, 15]).all()
 
     def test_frompyfunc_foo(self):
+        from numpypy import frompyfunc, array
         def foo(x):
             return x * x + 1
+        def bar(x):
+            return x + 1
+        ufunc = frompyfunc(foo, 1, 1)
+        assert (ufunc(range(10)) == array(range(10)) * range(10) + 1).all()
+        #Make sure the user-visible function does not modify the ufunc
+        foo = bar
+        assert (ufunc(range(10)) == array(range(10)) * range(10) + 1).all()
+        #but messing with the func_code WILL change it: numpy is sensitive
+        #to this in the same way
+        def foo(x):
+            return x * x + 1
+        def bar(x):
+            return x + 1
         from numpypy import frompyfunc, array
         ufunc = frompyfunc(foo, 1, 1)
         assert (ufunc(range(10)) == array(range(10)) * range(10) + 1).all()
+        foo.func_code = bar.func_code
+        assert not (ufunc(range(10)) == array(range(10)) * range(10) + 1).all()
+    def test_frompyfunc_broadcast(self):
+        from numpypy import frompyfunc, array
+        def foo(x, y):
+            return x * y + 1
+        ufunc = frompyfunc(foo, 2, 1)
+        assert (ufunc(range(10),range(10)) == array(range(10)) * range(10) + 1).all()
+       

@@ -26,6 +26,10 @@ slice_driver = jit.JitDriver(
     greens=['shapelen', 'signature'],
     reds=['self', 'source', 'source_iter', 'res_iter']
 )
+ufunc_driver = jit.JitDriver(
+    greens=['shapelen', 'signature'],
+    reds=['result_size', 'i', 'ri', 'arr', 'result']
+)
 
 def _find_shape_and_elems(space, w_iterable):
     shape = [space.len_w(w_iterable)]
@@ -1571,10 +1575,10 @@ class W_FromPyFunc(Wrappable):
         shapelen = len(arr.shape)
         result_size = arr.find_size()
         while not ri.done():
-            #numpy_driver.jit_merge_point(signature=signature,
-            #                             shapelen=shapelen,
-            #                             result_size=result_size, i=i, ri=ri,
-            #                             self=self, result=result)
+            ufunc_driver.jit_merge_point(signature=signature,
+                                         shapelen=shapelen,
+                                         result_size=result_size, i=i, ri=ri,
+                                         arr=arr, result=result)
             result.dtype.setitem(result.storage, ri.offset,
                                 space.call_function(self.w_func, arr.eval(i)))
             i = i.next(shapelen)
