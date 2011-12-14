@@ -26,10 +26,6 @@ slice_driver = jit.JitDriver(
     greens=['shapelen', 'signature'],
     reds=['self', 'source', 'source_iter', 'res_iter']
 )
-ufunc_driver = jit.JitDriver(
-    greens=['shapelen', 'signature'],
-    reds=['result_size', 'i', 'ri', 'arr', 'result']
-)
 
 def _find_shape_and_elems(space, w_iterable):
     shape = [space.len_w(w_iterable)]
@@ -1557,31 +1553,43 @@ W_FlatIterator.acceptable_as_base_class = False
 
 class W_FromPyFunc(Wrappable):
     def __init__(self, space, w_func, w_nIn, w_nOut):
-        self.w_func = w_func
-        if space.int_w(w_nIn) != 1 or space.int_w(w_nOut) != 1:
-            raise OperationError(space.w_NotImplementedError, space.wrap(''))
         self.nIn = space.int_w(w_nIn)
         self.nOut = space.int_w(w_nOut)
+        if self.nOut != 1:
+            raise OperationError(space.w_NotImplementedError, space.wrap(''))
+        self.signature = signature.CallPyFunc(w_func)
+        # should check that the nIn and nOut match the function signature,
+        # but how?
+        self.w_func = w_func
 
     def descr__new__(space, w_subtype, w_func, w_nIn, w_nOut):
         return space.wrap(W_FromPyFunc(space, w_func, w_nIn, w_nOut))
 
-    def descr_call(self, space, w_arrlike):
-        arr = convert_to_array(space, w_arrlike)
-        result = W_NDimArray(arr.find_size(), arr.shape[:], dtype=arr.find_dtype(),
-                                order=arr.order)
-        i = arr.start_iter()
+    def descr_call(self, space, args_w):
+        if len(args_w) != self.nIn:
+            raise OperationError(space.w_ValueError, space.wrap(
+                'invalid number of arguments'))
+        if self.nIn == 0:
+            return space.wrap(space.call_function(self.w_func))
+        arr_s = [convert_to_array(space, a) for a in args_w]
+        result = W_NDimArray(arr_s[0].find_size(), arr_s[0].shape[:], 
+                dtype=arr_s[0].find_dtype(), order=arr_s[0].order)
+        i_s = [a.start_iter() for a in arr_s]
         ri = result.start_iter()
-        shapelen = len(arr.shape)
-        result_size = arr.find_size()
+        shapelen = len(result.shape)
+        result_size = result.find_size()
+        signature = self.signature
+        # TODO: use the signature to return a VirtualArray (lazy eval)
+        # TODO: what about shape mismatch and broadcasting if nIn > 1?
         while not ri.done():
-            ufunc_driver.jit_merge_point(signature=signature,
-                                         shapelen=shapelen,
-                                         result_size=result_size, i=i, ri=ri,
-                                         arr=arr, result=result)
-            result.dtype.setitem(result.storage, ri.offset,
-                                space.call_function(self.w_func, arr.eval(i)))
-            i = i.next(shapelen)
+            if len(arr_s) == 1:
+                result.dtype.setitem(result.storage, ri.offset,
+                      space.call_function(self.w_func, arr_s[0].eval(i_s[0])))
+            else:
+                result.dtype.setitem(result.storage, ri.offset, 
+                    space.call_function(self.w_func, 
+                                        *[a.eval(i) for a,i in zip(arr_s, i_s)]))
+            i_s = [i.next(shapelen) for i in i_s]
             ri = ri.next(shapelen)
         return space.wrap(result)
 

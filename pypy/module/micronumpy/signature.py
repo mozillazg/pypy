@@ -52,3 +52,10 @@ class Call2(BaseSignature):
     def __init__(self, func):
         self.func = func
         self.name = func.func_name
+
+class CallPyFunc(BaseSignature):
+    _immutable_fields_ = ["func", "name"]
+
+    def __init__(self, func):
+        self.func = func
+        self.name = func.name
