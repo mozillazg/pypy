@@ -31,7 +31,7 @@ if sys.platform == 'win32':
     #Since there is no GetErrorMode, do a double Set
     old_mode = winapi.SetErrorMode(flags)
     winapi.SetErrorMode(old_mode | flags)
-                                                   
+
     SIGKILL = SIGTERM = 0
     READ_MODE = 'rU'
     WRITE_MODE = 'wb'
