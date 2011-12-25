@@ -1,14 +1,41 @@
+============================================================
+          Overview of the "concurrentgen" collector
+============================================================
+
+Goal: reduce the total real time by moving a part of the GC to its own
+thread that can run in parallel with the main execution thread.
+
+On current modern hardware with at least two cores, the two cores can
+read the same area of memory concurrently.  If one of the cores writes
+to this area, then I believe that the core doing the writing works at
+full speed, whereas the core doing the reading suffers from waiting for
+the data to move to it; but it's still ok because the data usually moves
+in a cache-to-cache bus, not via the main memory.  Also, if an area of
+memory is written to by one core, and then read and written to by the
+other core only, then performance is fine.  The bad case is the one in
+which both cores continously read and write the same area of memory.
+
+So, assuming that the main thread reads and writes to random objects all
+the time, it means that the GC thread should *only read* from the
+objects.  Conversely, the data structures built by the GC thread should
+only be *read* from the main thread.  In particular: when the GC thread
+does marking, it should use off-objects bits; and sweeping should be
+done by adding free objects to lists that are not chained lists.  In
+this way the GC thread never writes to the object's memory.  Similarly,
+for the same reason, the GC thread should not reset areas of memory to
+zero in the background.
+
+
 ************************************************************
   Minor collection cycles of the "concurrentgen" collector
 ************************************************************
-
 
 Objects mark byte:
 
     cym in 'mK': young objs (and all flagged objs)
     cam in 'Km': aging objs
-    '#'        : old objs
-    'S'        : static prebuilt objs with no heap pointer
+    '#' '/'    : old objs
+    '5'        : static prebuilt objs with no heap pointer
 
 cym = current_young_marker
 cam = current_aging_marker
@@ -29,7 +56,7 @@ Step 1.  Only the mutator runs.
 
 Write barrier: change "old obj" to "flagged obj"
     (if mark != cym:
-         mark = cym (used to be '#' or 'S')
+         mark = cym (used to be '#' or '5')
          record the object in the "flagged" list)
     - note that we consider that flagged old objs are again young objects
 
@@ -72,7 +99,7 @@ Write barrier:
                   trace and add to gray objs)
    - also flag old-or-aging objs that point to new young objs
         (if mark != cym:
-             mark = cym (used to be '#' or 'S')
+             mark = cym (used to be '#' or '5')
              record the object in the "flagged" list)
 
 Threading issues:
@@ -99,7 +126,7 @@ Step 4.  Parallel execution of the collector, sweep phase
         if obj is "black":     (i.e. if mark != cam)
             make the obj old   (         nothing to do here, mark already ok)
         else:
-            clear the object space and return it to the available list
+            return the object to the available list
     after this there are no more aging objects
 
 Write barrier:
@@ -107,4 +134,10 @@ Write barrier:
    - flag old objs that point to new young objs
         (should not see any 'cam' object any more here)
 
-------------------------------------------------------------
+
+
+************************************************************
+  MAJOR collection cycles of the "concurrentgen" collector
+************************************************************
+
+NotImplementedError
