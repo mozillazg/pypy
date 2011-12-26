@@ -499,9 +499,12 @@ class BlackholeInterpreter(object):
     @arguments("r", returns="i")
     def bhimpl_ptr_nonzero(a):
         return bool(a)
-    @arguments("r", returns="r")
-    def bhimpl_cast_opaque_ptr(a):
-        return a
+    @arguments("r", "r", returns="i")
+    def bhimpl_instance_ptr_eq(a, b):
+        return a == b
+    @arguments("r", "r", returns="i")
+    def bhimpl_instance_ptr_ne(a, b):
+        return a != b
     @arguments("r", returns="i")
     def bhimpl_cast_ptr_to_int(a):
         i = lltype.cast_ptr_to_int(a)
@@ -511,6 +514,13 @@ class BlackholeInterpreter(object):
     def bhimpl_cast_int_to_ptr(i):
         ll_assert((i & 1) == 1, "bhimpl_cast_int_to_ptr: not an odd int")
         return lltype.cast_int_to_ptr(llmemory.GCREF, i)
+
+    @arguments("r")
+    def bhimpl_mark_opaque_ptr(a):
+        pass
+    @arguments("r", "i")
+    def bhimpl_record_known_class(a, b):
+        pass
 
     @arguments("i", returns="i")
     def bhimpl_int_copy(a):
@@ -1494,7 +1504,6 @@ def resume_in_blackhole(metainterp_sd, jitdriver_sd, resumedescr,
                         all_virtuals=None):
     from pypy.jit.metainterp.resume import blackhole_from_resumedata
     #debug_start('jit-blackhole')
-    metainterp_sd.profiler.start_blackhole()
     blackholeinterp = blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
         jitdriver_sd,
@@ -1508,10 +1517,9 @@ def resume_in_blackhole(metainterp_sd, jitdriver_sd, resumedescr,
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum, dont_change_position)
 
-    try:
-        _run_forever(blackholeinterp, current_exc)
-    finally:
-        metainterp_sd.profiler.end_blackhole()
+    #try:
+    _run_forever(blackholeinterp, current_exc)
+    #finally:
         #debug_stop('jit-blackhole')
 
 def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
@@ -1519,7 +1527,6 @@ def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
     # 'metainterp.framestack'.
     #debug_start('jit-blackhole')
     metainterp_sd = metainterp.staticdata
-    metainterp_sd.profiler.start_blackhole()
     nextbh = None
     for frame in metainterp.framestack:
         curbh = metainterp_sd.blackholeinterpbuilder.acquire_interp()
@@ -1536,8 +1543,7 @@ def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
         firstbh.exception_last_value = current_exc
         current_exc = lltype.nullptr(rclass.OBJECTPTR.TO)
     #
-    try:
-        _run_forever(firstbh, current_exc)
-    finally:
-        metainterp_sd.profiler.end_blackhole()
+    #try:
+    _run_forever(firstbh, current_exc)
+    #finally:
         #debug_stop('jit-blackhole')

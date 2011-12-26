@@ -471,6 +471,17 @@ class AppTestPosix:
                             ['python', '-c', 'raise(SystemExit(42))'])
             assert ret == 42
 
+    if hasattr(__import__(os.name), "spawnve"):
+        def test_spawnve(self):
+            os = self.posix
+            import sys
+            print self.python
+            ret = os.spawnve(os.P_WAIT, self.python,
+                             ['python', '-c',
+                              "raise(SystemExit(int(__import__('os').environ['FOOBAR'])))"],
+                             {'FOOBAR': '42'})
+            assert ret == 42
+
     def test_popen(self):
         os = self.posix
         for i in range(5):
@@ -645,7 +656,11 @@ class AppTestPosix:
                 os.fsync(f)     # <- should also work with a file, or anything
             finally:            #    with a fileno() method
                 f.close()
-            raises(OSError, os.fsync, fd)
+            try:
+                # May not raise anything with a buggy libc (or eatmydata)
+                os.fsync(fd)
+            except OSError:
+                pass
             raises(ValueError, os.fsync, -1)
 
     if hasattr(os, 'fdatasync'):
@@ -657,7 +672,11 @@ class AppTestPosix:
                 os.fdatasync(fd)
             finally:
                 f.close()
-            raises(OSError, os.fdatasync, fd)
+            try:
+                # May not raise anything with a buggy libc (or eatmydata)
+                os.fdatasync(fd)
+            except OSError:
+                pass
             raises(ValueError, os.fdatasync, -1)
 
     if hasattr(os, 'fchdir'):

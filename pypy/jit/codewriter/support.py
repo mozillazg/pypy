@@ -37,9 +37,11 @@ def _annotation(a, x):
     return a.typeannotation(t)
 
 def annotate(func, values, inline=None, backendoptimize=True,
-             type_system="lltype"):
+             type_system="lltype", translationoptions={}):
     # build the normal ll graphs for ll_function
     t = TranslationContext()
+    for key, value in translationoptions.items():
+        setattr(t.config.translation, key, value)
     annpolicy = AnnotatorPolicy()
     annpolicy.allow_someobjects = False
     a = t.buildannotator(policy=annpolicy)
@@ -229,6 +231,17 @@ def _ll_1_int_abs(x):
     else:
         return x
 
+def _ll_1_cast_uint_to_float(x):
+    # XXX on 32-bit platforms, this should be done using cast_longlong_to_float
+    # (which is a residual call right now in the x86 backend)
+    return llop.cast_uint_to_float(lltype.Float, x)
+
+def _ll_1_cast_float_to_uint(x):
+    # XXX on 32-bit platforms, this should be done using cast_float_to_longlong
+    # (which is a residual call right now in the x86 backend)
+    return llop.cast_float_to_uint(lltype.Unsigned, x)
+
+
 # math support
 # ------------
 
@@ -244,6 +257,9 @@ def u_to_longlong(x):
 def _ll_1_llong_invert(xll):
     y = ~r_ulonglong(xll)
     return u_to_longlong(y)
+
+def _ll_1_ullong_invert(xull):
+    return ~xull
 
 def _ll_2_llong_lt(xll, yll):
     return xll < yll
@@ -263,16 +279,22 @@ def _ll_2_llong_gt(xll, yll):
 def _ll_2_llong_ge(xll, yll):
     return xll >= yll
 
-def _ll_2_llong_ult(xull, yull):
+def _ll_2_ullong_eq(xull, yull):
+    return xull == yull
+
+def _ll_2_ullong_ne(xull, yull):
+    return xull != yull
+
+def _ll_2_ullong_ult(xull, yull):
     return xull < yull
 
-def _ll_2_llong_ule(xull, yull):
+def _ll_2_ullong_ule(xull, yull):
     return xull <= yull
 
-def _ll_2_llong_ugt(xull, yull):
+def _ll_2_ullong_ugt(xull, yull):
     return xull > yull
 
-def _ll_2_llong_uge(xull, yull):
+def _ll_2_ullong_uge(xull, yull):
     return xull >= yull
 
 def _ll_2_llong_add(xll, yll):
@@ -299,14 +321,41 @@ def _ll_2_llong_xor(xll, yll):
     z = r_ulonglong(xll) ^ r_ulonglong(yll)
     return u_to_longlong(z)
 
+def _ll_2_ullong_add(xull, yull):
+    z = (xull) + (yull)
+    return (z)
+
+def _ll_2_ullong_sub(xull, yull):
+    z = (xull) - (yull)
+    return (z)
+
+def _ll_2_ullong_mul(xull, yull):
+    z = (xull) * (yull)
+    return (z)
+
+def _ll_2_ullong_and(xull, yull):
+    z = (xull) & (yull)
+    return (z)
+
+def _ll_2_ullong_or(xull, yull):
+    z = (xull) | (yull)
+    return (z)
+
+def _ll_2_ullong_xor(xull, yull):
+    z = (xull) ^ (yull)
+    return (z)
+
 def _ll_2_llong_lshift(xll, y):
     z = r_ulonglong(xll) << y
     return u_to_longlong(z)
 
+def _ll_2_ullong_lshift(xull, y):
+    return xull << y
+
 def _ll_2_llong_rshift(xll, y):
     return xll >> y
 
-def _ll_2_llong_urshift(xull, y):
+def _ll_2_ullong_urshift(xull, y):
     return xull >> y
 
 def _ll_1_llong_from_int(x):
@@ -550,15 +599,75 @@ class LLtypeHelpers:
             return p
         return _ll_0_alloc_with_del
 
-    def build_ll_1_raw_malloc(ARRAY):
-        def _ll_1_raw_malloc(n):
-            return lltype.malloc(ARRAY, n, flavor='raw')
-        return _ll_1_raw_malloc
+    def build_raw_malloc_varsize_builder(zero=False,
+                                         add_memory_pressure=False,
+                                         track_allocation=True):
+        def build_ll_1_raw_malloc_varsize(ARRAY):
+            def _ll_1_raw_malloc_varsize(n):
+                return lltype.malloc(ARRAY, n, flavor='raw', zero=zero,
+                                     add_memory_pressure=add_memory_pressure,
+                                     track_allocation=track_allocation)
+            return _ll_1_raw_malloc_varsize
+        return build_ll_1_raw_malloc_varsize
 
-    def build_ll_1_raw_free(ARRAY):
-        def _ll_1_raw_free(p):
-            lltype.free(p, flavor='raw')
-        return _ll_1_raw_free
+    build_ll_1_raw_malloc_varsize = (
+        build_raw_malloc_varsize_builder())
+    build_ll_1_raw_malloc_varsize_zero = (
+        build_raw_malloc_varsize_builder(zero=True))
+    build_ll_1_raw_malloc_varsize_zero_add_memory_pressure = (
+        build_raw_malloc_varsize_builder(zero=True, add_memory_pressure=True))
+    build_ll_1_raw_malloc_varsize_add_memory_pressure = (
+        build_raw_malloc_varsize_builder(add_memory_pressure=True))
+    build_ll_1_raw_malloc_varsize_no_track_allocation = (
+        build_raw_malloc_varsize_builder(track_allocation=False))
+    build_ll_1_raw_malloc_varsize_zero_no_track_allocation = (
+        build_raw_malloc_varsize_builder(zero=True, track_allocation=False))
+    build_ll_1_raw_malloc_varsize_zero_add_memory_pressure_no_track_allocation = (
+        build_raw_malloc_varsize_builder(zero=True, add_memory_pressure=True, track_allocation=False))
+    build_ll_1_raw_malloc_varsize_add_memory_pressure_no_track_allocation = (
+        build_raw_malloc_varsize_builder(add_memory_pressure=True, track_allocation=False))
+
+    def build_raw_malloc_fixedsize_builder(zero=False,
+                                           add_memory_pressure=False,
+                                           track_allocation=True):
+        def build_ll_0_raw_malloc_fixedsize(STRUCT):
+            def _ll_0_raw_malloc_fixedsize():
+                return lltype.malloc(STRUCT, flavor='raw', zero=zero,
+                                     add_memory_pressure=add_memory_pressure,
+                                     track_allocation=track_allocation)
+            return _ll_0_raw_malloc_fixedsize
+        return build_ll_0_raw_malloc_fixedsize
+
+    build_ll_0_raw_malloc_fixedsize = (
+        build_raw_malloc_fixedsize_builder())
+    build_ll_0_raw_malloc_fixedsize_zero = (
+        build_raw_malloc_fixedsize_builder(zero=True))
+    build_ll_0_raw_malloc_fixedsize_zero_add_memory_pressure = (
+        build_raw_malloc_fixedsize_builder(zero=True, add_memory_pressure=True))
+    build_ll_0_raw_malloc_fixedsize_add_memory_pressure = (
+        build_raw_malloc_fixedsize_builder(add_memory_pressure=True))
+    build_ll_0_raw_malloc_fixedsize_no_track_allocation = (
+        build_raw_malloc_fixedsize_builder(track_allocation=False))
+    build_ll_0_raw_malloc_fixedsize_zero_no_track_allocation = (
+        build_raw_malloc_fixedsize_builder(zero=True, track_allocation=False))
+    build_ll_0_raw_malloc_fixedsize_zero_add_memory_pressure_no_track_allocation = (
+        build_raw_malloc_fixedsize_builder(zero=True, add_memory_pressure=True, track_allocation=False))
+    build_ll_0_raw_malloc_fixedsize_add_memory_pressure_no_track_allocation = (
+        build_raw_malloc_fixedsize_builder(add_memory_pressure=True, track_allocation=False))
+
+    def build_raw_free_builder(track_allocation=True):
+        def build_ll_1_raw_free(ARRAY):
+            def _ll_1_raw_free(p):
+                lltype.free(p, flavor='raw',
+                            track_allocation=track_allocation)
+            return _ll_1_raw_free
+        return build_ll_1_raw_free
+
+    build_ll_1_raw_free = (
+        build_raw_free_builder())
+    build_ll_1_raw_free_no_track_allocation = (
+        build_raw_free_builder(track_allocation=False))
+
 
 class OOtypeHelpers:
 
