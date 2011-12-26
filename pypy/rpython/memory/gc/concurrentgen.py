@@ -14,20 +14,15 @@ from pypy.rpython.memory.support import get_address_stack
 from pypy.module.thread import ll_thread
 
 #
-# A "3/4th concurrent" generational mark&sweep GC.
+# A concurrent generational mark&sweep GC.
 #
 # This uses a separate thread to run the minor collections in parallel.
 # See concurrentgen.txt for some details.
 #
-# Major collections are serialized for the mark phase, but the sweep
-# phase can be parallelized again.  XXX not done so far, YYY investigate
-# also completely parallelizing them too
-#
 # Based on observations of the timing of collections with "minimark"
 # (on translate.py): about 15% of the time in minor collections
-# (including 2% in walk_roots), and about 7% in major collections (with
-# probably 3-4% in the marking phase).  So out of a total of 22% this
-# should parallelize 16-17%, i.e. 3/4th.
+# (including 2% in walk_roots), and about 7% in major collections.
+# So out of a total of 22% this should parallelize 20%.
 #
 # This is an entirely non-moving collector, with a generational write
 # barrier adapted to the concurrent marking done by the collector thread.
@@ -44,10 +39,8 @@ FLOAT_ALMOST_MAXINT = float(sys.maxint) * 0.9999
 # let us know if the 'tid' is valid or is just a word-aligned address):
 MARK_BYTE_1       = 0x6D    # 'm', 109
 MARK_BYTE_2       = 0x4B    # 'K', 75
-MARK_BYTE_OLD_1   = 0x23    # '#', 35
-MARK_BYTE_OLD_2   = 0x2F    # '/', 47
-MARK_BYTE_STATIC  = 0x35    # '5', 53
-mark_byte_is_old  = lambda n: n <= MARK_BYTE_OLD_2
+MARK_BYTE_3       = 0x23    # '#', 35
+MARK_BYTE_STATIC  = 0x53    # 'S', 83
 # Next lower byte: a combination of flags.
 FL_WITHHASH       = 0x0100
 FL_EXTRA          = 0x0200
@@ -144,8 +137,10 @@ class ConcurrentGenGC(GCBase):
         #
         # See concurrentgen.txt for more information about these fields.
         self.current_young_marker = MARK_BYTE_1
-        self.collector.current_aging_marker = MARK_BYTE_2
+        self.current_aging_marker = MARK_BYTE_2
+        self.current_old_marker   = MARK_BYTE_3
         #
+        self.num_major_collects = 0
         #self.ready_to_start_lock = ...built in setup()
         #self.finished_lock = ...built in setup()
         #self.mutex_lock = ...built in setup()
@@ -321,10 +316,11 @@ class ConcurrentGenGC(GCBase):
         #
         def force_scan(obj):
             cym = self.current_young_marker
+            com = self.current_old_marker
             mark = self.get_mark(obj)
             #debug_print("deletion_barrier:", mark, obj)
             #
-            if mark_byte_is_old(mark):     # most common case, make it fast
+            if mark == com:     # most common case, make it fast
                 #
                 self.set_mark(obj, cym)
                 #
@@ -344,7 +340,7 @@ class ConcurrentGenGC(GCBase):
                 mark = self.get_mark(obj)
                 self.set_mark(obj, cym)
                 #
-                if mark == self.collector.current_aging_marker:
+                if mark == self.current_aging_marker:
                     #
                     # it is only possible to reach this point if there is
                     # a collection running in collector_mark(), before it
@@ -363,10 +359,10 @@ class ConcurrentGenGC(GCBase):
                               "write barrier: oups!?")
                     #
                 else:
-                    # MARK_BYTE_OLD_* is possible here: the collector thread
+                    # a 'com' mark is possible here: the collector thread
                     # sets it in parallel to objects.  In that case it has
                     # been handled already.
-                    ll_assert(mark_byte_is_old(mark),
+                    ll_assert(mark == self.current_old_marker,
                               "write barrier: bogus object mark")
                 #
                 self.release(self.mutex_lock)
@@ -438,9 +434,10 @@ class ConcurrentGenGC(GCBase):
             self.finalizer_lock_count -= 1
 
 
-    def collect(self, gen=3):
+    def collect(self, gen=4):
         """
-        gen=0: Trigger a minor collection if none is running.  Never blocks.
+        gen=0: Trigger a minor collection if none is running.  Never blocks,
+        except if it happens to start a major collection.
         
         gen=1: The same, but if a minor collection is running, wait for
         it to finish before triggering the next one.  Guarantees that
@@ -451,18 +448,17 @@ class ConcurrentGenGC(GCBase):
         finish.  Guarantees that young objects not reachable when
         collect() is called will be freed by the time collect() returns.
 
-        gen>=3: Major collection.
+        gen=3: Trigger a major collection, waiting for it to start.
+        Guarantees that any object not reachable when collect() is called
+        will soon be freed.
 
-        XXX later:
-           gen=3: Do a major collection, but don't wait for sweeping to finish.
-           The most useful default.
-           gen>=4: Do a full synchronous major collection.
+        gen>=4: Do a full synchronous major collection.
         """
         debug_start("gc-forced-collect")
         debug_print("collect, gen =", gen)
         if gen >= 1 or self.collector.running <= 0:
             self.trigger_next_collection(gen >= 3)
-            if gen >= 2:
+            if gen == 2 or gen >= 4:
                 self.wait_for_the_end_of_collection()
         self.execute_finalizers_ll()
         debug_stop("gc-forced-collect")
@@ -483,7 +479,7 @@ class ConcurrentGenGC(GCBase):
         self.execute_finalizers_ll()
 
 
-    def _start_minor_collection(self):
+    def _start_minor_collection(self, major_collection_phase=0):
         #
         debug_start("gc-start")
         #
@@ -513,18 +509,17 @@ class ConcurrentGenGC(GCBase):
         #
         # Exchange the meanings of 'cym' and 'cam'
         other = self.current_young_marker
-        self.current_young_marker = self.collector.current_aging_marker
-        self.collector.current_aging_marker = other
+        self.current_young_marker = self.current_aging_marker
+        self.current_aging_marker = other
         #
         # Copy a few 'mutator' fields to 'collector' fields
-        collector = self.collector
-        collector.aging_objects = self.new_young_objects
+        self.collector.aging_objects = self.new_young_objects
         self.new_young_objects = self.NULL
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
         #
         # Start the collector thread
-        self._start_collection_common(False)
+        self._start_collection_common(major_collection_phase)
         #
         debug_stop("gc-start")
 
@@ -532,13 +527,20 @@ class ConcurrentGenGC(GCBase):
         #
         debug_start("gc-major-collection")
         #
-        # Clear this list, which is not relevant for major collections.
-        # For simplicity we first reset the markers on the objects it
-        # contains, which are all originally old objects.
-        self.flagged_objects.foreach(self._reset_flagged_root, None)
-        self.flagged_objects.clear()
+        # Force a minor collection's marking step to occur now
+        self._start_minor_collection(major_collection_phase=1)
         #
-        # Scan the stack roots and the refs in non-GC objects
+        # Wait for it to finish
+        self._stop_collection()
+        #
+        # Assert that this list is still empty (cleared by the call to
+        # _start_minor_collection)
+        ll_assert(not self.flagged_objects.non_empty(),
+                  "flagged_objects should be empty here")
+        ll_assert(self.new_young_objects == self.NULL,
+                  "new_young_obejcts should be empty here")
+        #
+        # Scan again the stack roots and the refs in non-GC objects
         self.root_walker.walk_roots(
             ConcurrentGenGC._add_stack_root,  # stack roots
             ConcurrentGenGC._add_stack_root,  # in prebuilt non-gc
@@ -550,27 +552,31 @@ class ConcurrentGenGC(GCBase):
         # Add all prebuilt objects that have ever been mutated
         self.prebuilt_root_objects.foreach(self._add_prebuilt_root, None)
         #
+        # Exchange the meanings of 'com' and 'cam'
+        other = self.current_old_marker
+        self.current_old_marker = self.current_aging_marker
+        self.current_aging_marker = other
+        #
         # Copy a few 'mutator' fields to 'collector' fields
-        collector = self.collector
-        collector.aging_objects = self.new_young_objects
-        self.new_young_objects = self.NULL
-
-        collector.collect_old_objects = self.old_objects
+        self.collector.delayed_aging_objects = self.collector.aging_objects
+        self.collector.aging_objects = self.old_objects
         self.old_objects = self.NULL
 
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
         #
-        # Start the collector thread
-        self._start_collection_common(True)
+        # Start again the collector thread
+        self._start_collection_common(major_collection_phase=2)
         #
-        # Pause the mutator thread while a major collection is running
-        self._stop_collection()
-        #
+        self.num_major_collects += 1
+        debug_print("major collection", self.num_major_collects, "started")
         debug_stop("gc-major-collection")
 
-    def _start_collection_common(self, is_major):
-        self.collector.is_major_collection = is_major
+    def _start_collection_common(self, major_collection_phase):
+        self.collector.current_young_marker = self.current_young_marker
+        self.collector.current_aging_marker = self.current_aging_marker
+        self.collector.current_old_marker   = self.current_old_marker
+        self.collector.major_collection_phase = major_collection_phase
         self.collector.running = 1
         #debug_print("collector.running = 1")
         self.release(self.ready_to_start_lock)
@@ -589,18 +595,15 @@ class ConcurrentGenGC(GCBase):
         #
         # Important: the mark on 'obj' must be 'cym', otherwise it will not
         # be scanned at all.  It should generally be, except in rare cases
-        # where it was reset to MARK_BYTE_OLD_* by the collector thread.
+        # where it was reset to 'com' by the collector thread.
         mark = self.get_mark(obj)
-        if mark_byte_is_old(mark):
+        if mark == self.current_old_marker:
             self.set_mark(obj, self.current_young_marker)
         else:
             ll_assert(mark == self.current_young_marker,
                       "add_flagged: bad mark")
         #
         self.collector.gray_objects.append(obj)
-
-    def _reset_flagged_root(self, obj, ignored):
-        self.set_mark(obj, self.collector.current_old_marker)
 
     def _add_prebuilt_root(self, obj, ignored):
         self.get_mark(obj)
@@ -649,8 +652,7 @@ class ConcurrentGenGC(GCBase):
         mark = self.header(obj).tid & 0xFF
         ll_assert(mark == MARK_BYTE_1 or
                   mark == MARK_BYTE_2 or
-                  mark == MARK_BYTE_OLD_1 or
-                  mark == MARK_BYTE_OLD_2 or
+                  mark == MARK_BYTE_3 or
                   mark == MARK_BYTE_STATIC, "bad mark byte in object")
         return mark
 
@@ -750,9 +752,7 @@ class CollectorThread(object):
         # when the collection starts, we make all young objects aging and
         # move 'new_young_objects' into 'aging_objects'
         self.aging_objects = self.NULL
-        self.collect_old_objects = self.NULL
-        self.current_old_marker = MARK_BYTE_OLD_1
-        self.num_major_collects = 0
+        self.delayed_aging_objects = self.NULL
 
     def setup(self):
         self.ready_to_start_lock = self.gc.ready_to_start_lock
@@ -811,6 +811,7 @@ class CollectorThread(object):
                 self.release(self.finished_lock)
                 break
             #
+            self.collector_presweep()
             # Mark                                # collection_running == 1
             self.collector_mark()
             #                                     # collection_running == 2
@@ -824,10 +825,6 @@ class CollectorThread(object):
 
 
     def collector_mark(self):
-        if self.is_major_collection:
-            self.collector_mark_major()
-            return
-        #
         surviving_size = r_uint(0)
         #
         while True:
@@ -939,77 +936,29 @@ class CollectorThread(object):
         self.get_mark(obj)
         self.gray_objects.append(obj)
 
-    def collector_mark_major(self):
-        # Marking for a major collection.  Differs from marking for
-        # a minor collection, because we have to follow references
-        # to objects whose mark is 'cym' or 'oom', and replace them
-        # with 'nom'.  We must stop if objects have already 'nom',
-        # or if they have MARK_BYTE_STATIC.  For now they cannot
-        # have 'cam'.
-        #
-        # Get 'oom' and 'nom' from current_old_marker, and switch
-        # the value in that field:
-        oom = self.current_old_marker
-        nom = oom ^ (MARK_BYTE_OLD_1 ^ MARK_BYTE_OLD_2)
-        self.current_old_marker = nom
-        #
-        debug_print()
-        debug_print(".----------- Full collection ------------------")
-        #
-        self.num_major_collects += 1
-        debug_print("| number of major collects:   ", self.num_major_collects)
-        #
-        surviving_size = r_uint(0)
-        #
-        while self.gray_objects.non_empty():
-            obj = self.gray_objects.pop()
-            mark = self.get_mark(obj)
-            if mark == nom or mark == MARK_BYTE_STATIC:
-                continue
-            #
-            # Record the object's size
-            surviving_size += raw_malloc_usage(self.gc.get_size(obj))
-            #
-            # Scan the content of 'obj'.
-            self.gc.trace(obj, self._collect_add_pending, None)
-            self.set_mark(obj, nom)
-        #
-        next_major_collection_limit = (      # as a float
-            self.gc.nursery_size +
-            (self.gc.fill_factor - 1.0) * float(surviving_size))
-        if next_major_collection_limit > FLOAT_ALMOST_MAXINT:
-            next_major_collection_limit = FLOAT_ALMOST_MAXINT
-        #
-        self.gc.size_still_available_before_major = int(
-            next_major_collection_limit)
-        #
-        debug_print("| surviving size:             ", surviving_size)
-        debug_print("| next major collection after:",
-                    self.gc.size_still_available_before_major)
-
 
     def collector_sweep(self):
-        if self.is_major_collection:
-            #
-            cym = self.gc.current_young_marker
-            nom = self.current_old_marker
-            oom = nom ^ (MARK_BYTE_OLD_1 ^ MARK_BYTE_OLD_2)
-            self._collect_do_sweep(self.aging_objects, cym, False)
-            self._collect_do_sweep(self.collect_old_objects, oom, False)
-            #
-            debug_print("`----------------------------------------------")
-            #
-        else:
-            #
-            cam = self.current_aging_marker
-            self._collect_do_sweep(self.aging_objects, cam, True)
-            #
+        if self.major_collection_phase != 1:  # no sweeping during phase 1
+            lst = self._collect_do_sweep(self.aging_objects,
+                                         self.current_aging_marker,
+                                         self.gc.old_objects)
+            self.gc.old_objects = lst
         #
         self.running = -1
         #debug_print("collection_running = -1")
 
-    def _collect_do_sweep(self, hdr, still_not_marked, write_barrier_active):
-        linked_list = self.gc.old_objects
+    def collector_presweep(self):
+        if self.major_collection_phase == 2:  # only in this phase
+            # Finish the delayed sweep from the previous minor collection.
+            # The objects left unmarked were left with 'cam', which is
+            # now 'com' because we switched their values.
+            lst = self._collect_do_sweep(self.delayed_aging_objects,
+                                         self.current_old_marker,
+                                         self.aging_objects)
+            self.aging_objects = lst
+            self.delayed_aging_objects = self.NULL
+
+    def _collect_do_sweep(self, hdr, still_not_marked, linked_list):
         #
         while hdr != self.NULL:
             nexthdr = hdr.next
@@ -1023,15 +972,15 @@ class CollectorThread(object):
             else:
                 # the object was marked: relink it
                 ll_assert(mark == self.current_old_marker or
-                          (write_barrier_active and
-                              mark == self.gc.current_young_marker),
+                          mark == self.current_aging_marker or
+                          mark == self.current_young_marker,
                           "sweep: bad mark")
                 hdr.next = linked_list
                 linked_list = hdr
                 #
             hdr = nexthdr
         #
-        self.gc.old_objects = linked_list
+        return linked_list
 
 
     # -------------------------
@@ -1138,8 +1087,7 @@ concurrent_setter_lock = ll_thread.allocate_lock()
 
 def emulate_set_mark(p, v):
     "NOT_RPYTHON"
-    assert v in (MARK_BYTE_1, MARK_BYTE_2,
-                 MARK_BYTE_OLD_1, MARK_BYTE_OLD_2, MARK_BYTE_STATIC)
+    assert v in (MARK_BYTE_1, MARK_BYTE_2, MARK_BYTE_3, MARK_BYTE_STATIC)
     concurrent_setter_lock.acquire(True)
     p.tid = (p.tid &~ 0xFF) | v
     concurrent_setter_lock.release()

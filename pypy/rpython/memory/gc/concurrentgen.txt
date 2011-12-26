@@ -25,6 +25,9 @@ this way the GC thread never writes to the object's memory.  Similarly,
 for the same reason, the GC thread should not reset areas of memory to
 zero in the background.
 
+This goal is not reached so far: both threads read and write the object
+mark byte; there are no off-objects bits.
+
 
 ************************************************************
   Minor collection cycles of the "concurrentgen" collector
@@ -32,13 +35,14 @@ zero in the background.
 
 Objects mark byte:
 
-    cym in 'mK': young objs (and all flagged objs)
-    cam in 'Km': aging objs
-    '#' '/'    : old objs
-    '5'        : static prebuilt objs with no heap pointer
+    cym: young objs (and all flagged objs)
+    cam: aging objs
+    com: old objs
+    'S': static prebuilt objs with no heap pointer
 
 cym = current_young_marker
 cam = current_aging_marker
+com = current_old_marker
 
 The write barrier activates when writing into an object whose
 mark byte is different from 'cym'.
@@ -56,13 +60,13 @@ Step 1.  Only the mutator runs.
 
 Write barrier: change "old obj" to "flagged obj"
     (if mark != cym:
-         mark = cym (used to be '#' or '5')
+         mark = cym (used to be com or 'S')
          record the object in the "flagged" list)
     - note that we consider that flagged old objs are again young objects
 
 ------------------------------------------------------------
 
-Step 2.  Preparation of running the collector.  (Still single-threaded.)
+Step 2.  Preparation for running the collector.  (Still single-threaded.)
 
    - young objs -> aging objs
          (exchange the values of 'cam' and 'cym'.
@@ -89,28 +93,28 @@ Collector thread:
         skip obj if not an aging obj    (i.e. if mark != cam: continue)
         for each obj found by tracing:
             add to gray objs      (if not an aging obj, will be skipped later)
-        gray obj -> black obj     (i.e. mark = '#')
+        gray obj -> black obj     (i.e. mark = com)
 
 Write barrier:
 
    - perform as a "deletion barrier", detecting changes done to aging objs
         (i.e. if mark == cam,
-                  mark = '#'
+                  mark = com
                   trace and add to gray objs)
    - also flag old-or-aging objs that point to new young objs
         (if mark != cym:
-             mark = cym (used to be '#' or '5')
+             mark = cym (used to be com or 'S')
              record the object in the "flagged" list)
 
 Threading issues:
 
    - it's possible that both threads will trace the same object, if we're
      unlucky, but it does not have buggy effects
-   - the "mark = '#'" in the collector thread can conflict with the
+   - the "mark = com" in the collector thread can conflict with the
      "mark = cym" in the mutator write barrier, but again, it should not
      have buggy effects beyond occasionally triggering the write barrier
      twice on the same object, adding it twice in "flagged" (and never more)
-   - it is essential to have "mark = '#'" _after_ tracing in the collector
+   - it is essential to have "mark = com" _after_ tracing in the collector
      thread; otherwise, the write barrier in the mutator thread would be
      ignored in case it occurs between the two, and then the tracing done
      by the collector thread doesn't see the original values any more.
@@ -140,4 +144,30 @@ Write barrier:
   MAJOR collection cycles of the "concurrentgen" collector
 ************************************************************
 
-NotImplementedError
+Works mostly like a minor collection cycle.  The only difference
+is in step 2, which is replaced with:
+
+
+Step 2+.  Preparation for running a major collection.  (Still single-threaded.)
+
+   - force a minor collection's marking step to occur sequentially
+     (steps 2 and 3), to get rid of 'cym' objects.  Objects are left
+     either 'cam' (non-marked) or 'com' (marked).
+
+   - empty the "flagged" list
+
+   - collect roots; add roots to the "gray objs" list
+
+   - com <-> cam
+         (exchange the values of 'com' and 'cam'.
+          there are no 'cym' object right now.
+          the newly 'com' objects are the ones marked unreachable above.)
+
+
+Major collections only worry about old objects.  To avoid serializing
+the complete major collection, we serialize the minor collection's
+marking step that occurs first; the goal is to be sure that all objects
+are in the 'com' state.  We can minimize the non-parallelized delay
+introduced by this step by doing the major collection just after the
+previous minor collection finished, when the quantity of new young
+objects should still be small.
