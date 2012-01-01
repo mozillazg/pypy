@@ -171,3 +171,130 @@ are in the 'com' state.  We can minimize the non-parallelized delay
 introduced by this step by doing the major collection just after the
 previous minor collection finished, when the quantity of new young
 objects should still be small.
+
+
+
+************************************************************
+  Global overview
+************************************************************
+
+The objects are never physically moving with this GC; in the pictures
+below, they "move" only in the sense that their age changes.
+
+Allocate new objects until 25% of the total RAM is reached:
+
+            25%       25%                50%
+        +-----------+-----------+-----------------------+
+        |           |           |                       |
+        |->new...   |  free     |     old objects       |
+        +-----------+-----------+-----------------------+
+
+When the 25% is full, the new objects become aging, and we do a minor
+collection on them.  In parallel we continue to allocate more new
+objects.
+
+            25%       25%                50%
+        +-----------+-----------+-----------------------+
+        |           |  aging    |                       |
+        |->new...   |collecting |     old objects       |
+        +-----------+-----------+-----------------------+
+
+When the minor collection finishes, the surviving objects (let's say 5%)
+have become old, and the non-surviving ones (let's say 20%) become free
+space again.
+
+            25%       20%                55%
+        +-----------+---------+-------------------------+
+        |           |         |<                        |
+        |->new...   |  free   |<      old objects       |
+        +-----------+---------+-------------------------+
+
+The limit on new objects is still fixed to 25% of the RAM.  When it is
+full, we start the next minor collection with the aging objects using
+25% of the RAM, and we only have 20% of space for further new objects:
+
+            20%       25%                55%
+        +---------+-----------+-------------------------+
+        |         |<          |                         |
+        |->new... |< aging    |       old objects       |
+        +---------+-----------+-------------------------+
+
+It is still likely that we finish the minor collection before the 20%
+run out.  If we do, then we expand the limit from 20% back to the
+original 25%, and continue running like above.
+
+            25%       15%                60%
+        +-----------+-------+---------------------------+
+        |          >|       |<                          |
+        |->new...  >| free  |<        old objects       |
+        +-----------+-------+---------------------------+
+
+We continue until the free fraction becomes so small (let's say 5%)
+that during a minor collection we run out of these 5% for new objects
+before the minor collection manages to finish:
+
+         5%      25%                70%
+        +--+-----------+--------------------------------+
+        |  |<          |                                |
+        |->|< aging    |         old objects            |
+        +--+-----------+--------------------------------+
+
+At this point we want a full collection to occur.  In order to do that,
+we have to first wait for the minor collection to finish:
+
+         5%      20%                75%
+        +--+---------+----------------------------------+
+        |wa|         |<                                 |
+        |it|  free   |<          old objects            |
+        +--+---------+----------------------------------+
+
+Then we do "Step 2+" above, forcing another synchronous minor
+collection.  (This is the only time during which the main thread has to
+wait for the collector to finish; hopefully it is a very minor issue,
+because it occurs only at the start of a major collection, and we wait
+for: (1) the end of the previous minor collection, which should ideally
+be almost done already; and (2) an extra complete minor collection, but
+that occurs on less objects than usual -- above, 5% instead of 25%.)
+
+            24%                     76%
+        +-----------+-----------------------------------+
+        |           |<                                  |
+        |   free    |<           old objects            |
+        +-----------+-----------------------------------+
+
+The old objects are transformed into aging objects, and we start the
+collection on them, while resuming the main thread:
+
+            24%                     76%
+        +-----------+-----------------------------------+
+        |           |                                   |
+        |->new..    |          aging objects            |
+        +-----------+-----------------------------------+
+
+Here, the limiting factor is that we would like the main thread to not
+run out of its 24% while the major collection is in progress.  If it
+does, then it has to be suspended and wait for the collector thread.
+But hopefully, possibly with measures and tweaks to the numbers, the
+major collection finishes first.  It finds a proportion of old objects
+to be still alive.  A value above 50% means that the memory usage of the
+actual program has grown; a value below 50% means that it has shrunk.
+In any case we need to re-adjust the sizes of the other portions to keep
+the ratio 25/25/50 of the very first picture above, changing the total
+amount of RAM used by the process.  Say with 60% of the old RAM size:
+
+            30%           30%                     60%
+        +-------------+-------------+---------------------------+
+        |            >|            >|          surviving        |
+        |->new...    >|  free      >|         old objects       |
+        +-------------+-------------+---------------------------+
+
+And we continue as per the first picture above.
+
+If the size of the surviving old objects shrinks instead of growing, we
+might need to give less than a quarter to the free area, because the new
+objects (24% above) might take more than a quarter of the new total RAM
+size.  To avoid too many issues, we constrain the total RAM size to not
+shrink too much at each major collection (something like: at most -30%).
+Additionally we fix an absolute minimum (at least 6 MB), to avoid doing
+a large number of tiny minor collections, ending up spending all of our
+time in Step 2 scanning the stack of the process.
