@@ -87,7 +87,7 @@ we have to first wait for the minor collection to finish:
         |it|  free   |<          old objects            |
         +--+---------+----------------------------------+
 
-Then we do "Step 2+" above, forcing another synchronous minor
+Then we do "Step 2+" below, forcing another synchronous minor
 collection.  (This is the only time during which the main thread has to
 wait for the collector to finish; hopefully it is a very minor issue,
 because it occurs only at the start of a major collection, and we wait
