@@ -433,9 +433,7 @@ class ConcurrentGenGC(GCBase):
             debug_start("gc-major")
             #
             # We have to first wait for the previous minor collection to finish:
-            debug_start("gc-major-wait")
             self.stop_collection(wait=True)
-            debug_stop("gc-major-wait")
             #
             # Start the major collection.
             self._start_major_collection()
@@ -443,13 +441,11 @@ class ConcurrentGenGC(GCBase):
             debug_stop("gc-major")
 
 
-    def sync_end_of_collection(self):
+    def wait_for_the_end_of_collection(self):
         """In the mutator thread: wait for the minor collection currently
         running (if any) to finish, and synchronize the two threads."""
         if self.collector.running != 0:
-            debug_start("gc-stop")
-            self._stop_collection()
-            debug_stop("gc-stop")
+            self.stop_collection(wait=True)
             #
             # We must *not* run execute_finalizers_ll() here, because it
             # can start the next collection, and then this function returns
@@ -461,7 +457,9 @@ class ConcurrentGenGC(GCBase):
 
     def stop_collection(self, wait):
         if wait:
+            debug_start("gc-stop")
             self.acquire(self.finished_lock)
+            debug_stop("gc-stop")
         else:
             if not self.try_acquire(self.finished_lock):
                 return False
@@ -503,7 +501,13 @@ class ConcurrentGenGC(GCBase):
 
 
     def collect(self, gen=4):
+        debug_start("gc-forced-collect")
+        self.trigger_next_collection(force_major_collection=True)
+        self.wait_for_the_end_of_collection()
+        self.execute_finalizers_ll()
+        debug_stop("gc-forced-collect")
         return
+        # XXX reimplement this:
         """
         gen=0: Trigger a minor collection if none is running.  Never blocks,
         except if it happens to start a major collection.
@@ -532,15 +536,14 @@ class ConcurrentGenGC(GCBase):
         self.execute_finalizers_ll()
         debug_stop("gc-forced-collect")
 
-    def trigger_next_collection(self, force_major_collection=False):
-        """In the mutator thread: triggers the next minor collection."""
+    def trigger_next_collection(self, force_major_collection):
+        """In the mutator thread: triggers the next minor or major collection."""
         #
         # In case the previous collection is not over yet, wait for it
         self.wait_for_the_end_of_collection()
         #
         # Choose between a minor and a major collection
-        if (force_major_collection or
-                self.size_still_available_before_major < 0):
+        if force_major_collection:
             self._start_major_collection()
         else:
             self._start_minor_collection()
