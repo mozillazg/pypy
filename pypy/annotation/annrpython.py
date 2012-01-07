@@ -258,7 +258,7 @@ class RPythonAnnotator(object):
                 import os
                 f = open('/tmp/annotator%d' % os.getpid(), 'w')
                 for k, v in self.counter.iteritems():
-                    f.write('%s: %d' % (k, v))
+                    f.write('%s: %f\n' % (k, v))
                 f.close()
                 break   # finished
         # make sure that the return variables of all graphs is annotated
