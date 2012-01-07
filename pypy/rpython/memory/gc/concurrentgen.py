@@ -269,6 +269,8 @@ class ConcurrentGenGC(GCBase):
         hdr = self.header(obj)
         hdr.tid = self.combine(typeid, self.current_young_marker, 0)
         hdr.next = self.new_young_objects
+        totalsize = llarena.round_up_for_allocation(totalsize)
+        rawtotalsize = raw_malloc_usage(totalsize)
         debug_print("malloc:", rawtotalsize, obj)
         self.new_young_objects = hdr
         self.new_young_objects_size += r_uint(rawtotalsize)
