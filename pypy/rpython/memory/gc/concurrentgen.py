@@ -16,22 +16,13 @@ from pypy.module.thread import ll_thread
 #
 # A concurrent generational mark&sweep GC.
 #
-# This uses a separate thread to run the minor collections in parallel.
-# See concurrentgen.txt for some details.
-#
-# Based on observations of the timing of collections with "minimark"
-# (on translate.py): about 15% of the time in minor collections
-# (including 2% in walk_roots), and about 7% in major collections.
-# So out of a total of 22% this should parallelize 20%.
-#
+# This uses a separate thread to run the collections in parallel.
 # This is an entirely non-moving collector, with a generational write
 # barrier adapted to the concurrent marking done by the collector thread.
+# See concurrentgen.txt for some details.
 #
 
 WORD = LONG_BIT // 8
-WORD_POWER_2 = {32: 2, 64: 3}[LONG_BIT]
-assert 1 << WORD_POWER_2 == WORD
-FLOAT_ALMOST_MAXINT = float(sys.maxint) * 0.9999
 
 
 # Objects start with an integer 'tid', which is decomposed as follows.
@@ -49,8 +40,8 @@ FL_EXTRA          = 0x0200
 
 class ConcurrentGenGC(GCBase):
     _alloc_flavor_ = "raw"
-    inline_simple_malloc = True
-    inline_simple_malloc_varsize = True
+    #inline_simple_malloc = True
+    #inline_simple_malloc_varsize = True
     needs_deletion_barrier = True
     needs_weakref_read_barrier = True
     prebuilt_gc_objects_are_static_roots = False
@@ -59,7 +50,7 @@ class ConcurrentGenGC(GCBase):
 
     HDRPTR = lltype.Ptr(lltype.ForwardReference())
     HDR = lltype.Struct('header', ('tid', lltype.Signed),
-                                  ('next', HDRPTR))   # <-- kill me later
+                                  ('next', HDRPTR))   # <-- kill me later XXX
     HDRPTR.TO.become(HDR)
     HDRSIZE = llmemory.sizeof(HDR)
     NULL = lltype.nullptr(HDR)
@@ -85,7 +76,7 @@ class ConcurrentGenGC(GCBase):
                  **kwds):
         GCBase.__init__(self, config, **kwds)
         self.read_from_env = read_from_env
-        self.nursery_size = nursery_size
+        self.minimal_nursery_size = nursery_size
         #
         self.main_thread_ident = ll_thread.get_ident() # non-transl. debug only
         #
@@ -106,6 +97,7 @@ class ConcurrentGenGC(GCBase):
         def _nursery_full(additional_size):
             # a hack to reduce the code size in _account_for_nursery():
             # avoids the 'self' argument.
+            assert self.nursery_size_still_available < 0
             self.nursery_full(additional_size)
         _nursery_full._dont_inline_ = True
         self._nursery_full = _nursery_full
@@ -156,7 +148,7 @@ class ConcurrentGenGC(GCBase):
         #
         self.collector.setup()
         #
-        self.set_minimal_nursery_size(self.nursery_size)
+        self.set_minimal_nursery_size(self.minimal_nursery_size)
         if self.read_from_env:
             #
             newsize = env.read_from_env('PYPY_GC_NURSERY')
@@ -175,6 +167,21 @@ class ConcurrentGenGC(GCBase):
         self.nursery_size = r_uint(newsize)           # size of the '->new...' box
         self.old_objects_size = r_uint(0)             # approx size of 'old objs' box
         self.nursery_size_still_available = intmask(self.nursery_size)
+
+    def update_total_memory_size(self):
+        # compute the new value for 'total_memory_size': it should be
+        # twice old_objects_size, but never less than 2/3rd of the old value,
+        # and at least 4 * minimal_nursery_size.
+        absolute_maximum = r_uint(-1)
+        if self.old_objects_size < absolute_maximum // 2:
+            tms = self.old_objects_size * 2
+        else:
+            tms = absolute_maximum
+        tms = max(tms, self.total_memory_size // 3 * 2)
+        tms = max(tms, 4 * self.minimal_nursery_size)
+        self.total_memory_size = tms
+        debug_print("total memory size:", tms)
+
 
     def _teardown(self):
         "Stop the collector thread after tests have run."
@@ -261,6 +268,8 @@ class ConcurrentGenGC(GCBase):
 
     def _account_for_nursery(self, additional_size):
         self.nursery_size_still_available -= additional_size
+        debug_print("malloc:", additional_size,
+                    "still_available:", self.nursery_size_still_available)
         if self.nursery_size_still_available < 0:
             self._nursery_full(additional_size)
     _account_for_nursery._always_inline_ = True
@@ -379,19 +388,14 @@ class ConcurrentGenGC(GCBase):
     def nursery_full(self, additional_size):
         # See concurrentgen.txt.
         #
-        assert self.nursery_size_still_available < 0
-        #
         # Handle big allocations specially
         if additional_size > intmask(self.total_memory_size >> 4):
             xxxxxxxxxxxx
             self.handle_big_allocation(additional_size)
             return
         #
-        waiting_for_major_collection = self.collector.major_collection_phase != 0
-        #
-        if (self.collector.running == 0 or
-            self.stop_collection(wait=waiting_for_major_collection)):
-            # The previous collection finished.
+        if self.collector.running == 0 or self.stop_collection():
+            # The previous collection finished; no collection is running now.
             #
             # Expand the nursery if we can, up to 25% of total_memory_size.
             # In some cases, the limiting factor is that the nursery size
@@ -400,15 +404,17 @@ class ConcurrentGenGC(GCBase):
             expand_to = self.total_memory_size >> 2
             expand_to = min(expand_to, self.total_memory_size -
                                        self.old_objects_size)
-            self.nursery_size_still_available += intmask(expand_to -
-                                                         self.nursery_size)
-            self.nursery_size = expand_to
-            #
-            # If 'nursery_size_still_available' has been increased to a
-            # nonnegative number, then we are done: we can just continue
-            # filling the nursery.
-            if self.nursery_size_still_available >= 0:
-                return
+            if expand_to > self.nursery_size:
+                debug_print("expanded nursery size:", expand_to)
+                self.nursery_size_still_available += intmask(expand_to -
+                                                             self.nursery_size)
+                self.nursery_size = expand_to
+                #
+                # If 'nursery_size_still_available' has been increased to a
+                # nonnegative number, then we are done: we can just continue
+                # filling the nursery.
+                if self.nursery_size_still_available >= 0:
+                    return
             #
             # Else, we trigger the next minor collection now.
             self._start_minor_collection()
@@ -423,46 +429,45 @@ class ConcurrentGenGC(GCBase):
                 newsize = min(newsize, self.total_memory_size >> 2)
                 self.nursery_size = newsize
                 self.nursery_size_still_available = intmask(newsize)
+                debug_print("nursery size:", self.nursery_size)
+                debug_print("total memory size:", self.total_memory_size)
                 return
 
-            yyy
-
-        else:
-            # The previous collection is not finished yet.
-            # At this point we want a full collection to occur.
-            debug_start("gc-major")
-            #
-            # We have to first wait for the previous minor collection to finish:
-            self.stop_collection(wait=True)
-            #
-            # Start the major collection.
-            self._start_major_collection()
-            #
-            debug_stop("gc-major")
+        # The previous collection is likely not finished yet.
+        # At this point we want a full collection to occur.
+        debug_start("gc-major")
+        #
+        # We have to first wait for the previous minor collection to finish:
+        self.wait_for_the_end_of_collection()
+        #
+        # Start the major collection.
+        self._start_major_collection()
+        #
+        debug_stop("gc-major")
 
 
     def wait_for_the_end_of_collection(self):
-        """In the mutator thread: wait for the minor collection currently
-        running (if any) to finish, and synchronize the two threads."""
         if self.collector.running != 0:
             self.stop_collection(wait=True)
-            #
-            # We must *not* run execute_finalizers_ll() here, because it
-            # can start the next collection, and then this function returns
-            # with a collection in progress, which it should not.  Be careful
-            # to call execute_finalizers_ll() in the caller somewhere.
-            ll_assert(self.collector.running == 0,
-                      "collector thread not paused?")
 
 
-    def stop_collection(self, wait):
-        if wait:
-            debug_start("gc-stop")
-            self.acquire(self.finished_lock)
+    def stop_collection(self, wait=False):
+        ll_assert(self.collector.running != 0, "stop_collection: running == 0")
+        #
+        major_collection = (self.collector.major_collection_phase == 2)
+        debug_start("gc-stop")
+        try:
+            debug_print("wait:", int(wait))
+            if major_collection:
+                debug_print("ending a major collection")
+            if wait or major_collection:
+                self.acquire(self.finished_lock)
+            else:
+                if not self.try_acquire(self.finished_lock):
+                    return False
+        finally:
+            debug_print("old objects size:", self.old_objects_size)
             debug_stop("gc-stop")
-        else:
-            if not self.try_acquire(self.finished_lock):
-                return False
         self.collector.running = 0
         #debug_print("collector.running = 0")
         #
@@ -474,6 +479,11 @@ class ConcurrentGenGC(GCBase):
         #
         if self.DEBUG:
             self.debug_check_lists()
+        #
+        if major_collection:
+            self.collector.major_collection_phase = 0
+            # Update the total memory usage to 2 times the old objects' size
+            self.update_total_memory_size()
         #
         return True
 
@@ -502,8 +512,9 @@ class ConcurrentGenGC(GCBase):
 
     def collect(self, gen=4):
         debug_start("gc-forced-collect")
-        self.trigger_next_collection(force_major_collection=True)
         self.wait_for_the_end_of_collection()
+        self._start_major_collection()
+        self.nursery_full(0)
         self.execute_finalizers_ll()
         debug_stop("gc-forced-collect")
         return
@@ -527,29 +538,6 @@ class ConcurrentGenGC(GCBase):
 
         gen>=4: Do a full synchronous major collection.
         """
-        debug_start("gc-forced-collect")
-        debug_print("collect, gen =", gen)
-        if gen >= 1 or self.collector.running <= 0:
-            self.trigger_next_collection(gen >= 3)
-            if gen == 2 or gen >= 4:
-                self.wait_for_the_end_of_collection()
-        self.execute_finalizers_ll()
-        debug_stop("gc-forced-collect")
-
-    def trigger_next_collection(self, force_major_collection):
-        """In the mutator thread: triggers the next minor or major collection."""
-        #
-        # In case the previous collection is not over yet, wait for it
-        self.wait_for_the_end_of_collection()
-        #
-        # Choose between a minor and a major collection
-        if force_major_collection:
-            self._start_major_collection()
-        else:
-            self._start_minor_collection()
-        #
-        self.execute_finalizers_ll()
-
 
     def _start_minor_collection(self, major_collection_phase=0):
         #
@@ -633,9 +621,11 @@ class ConcurrentGenGC(GCBase):
         self.collector.delayed_aging_objects = self.collector.aging_objects
         self.collector.aging_objects = self.old_objects
         self.old_objects = self.NULL
-
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
+        #
+        # Now there are no more old objects
+        self.old_objects_size = r_uint(0)
         #
         # Start again the collector thread
         self._start_collection_common(major_collection_phase=2)
@@ -652,7 +642,6 @@ class ConcurrentGenGC(GCBase):
         self.collector.running = 1
         #debug_print("collector.running = 1")
         self.release(self.ready_to_start_lock)
-        self.nursery_size_still_available = self.nursery_size
 
     def _add_stack_root(self, root):
         # NB. it's ok to edit 'gray_objects' from the mutator thread here,
@@ -943,8 +932,10 @@ class CollectorThread(object):
         # its size ends up being accounted here or not --- but it will
         # be at the following minor collection, because the object is
         # young again.  So, careful about overflows.
-        ll_assert(surviving_size <= self.gc.total_memory_size,
-                  "surviving_size too large")
+        if surviving_size > self.gc.total_memory_size:
+            debug_print("surviving_size too large!",
+                        surviving_size, self.gc.total_memory_size)
+            ll_assert(False, "surviving_size too large")
         limit = self.gc.total_memory_size - surviving_size
         if self.gc.old_objects_size <= limit:
             self.gc.old_objects_size += surviving_size
