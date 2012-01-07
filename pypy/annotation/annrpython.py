@@ -1,5 +1,6 @@
 import sys
 import types
+import time
 from pypy.tool.ansi_print import ansi_log, raise_nicer_exception
 from pypy.tool.pairtype import pair
 from pypy.tool.error import (format_blocked_annotation_error,
@@ -25,6 +26,7 @@ class RPythonAnnotator(object):
         import pypy.rpython.extfuncregistry # has side effects
         import pypy.rlib.nonconst # has side effects
 
+        self.counter = {}
         if translator is None:
             # interface for tests
             from pypy.translator.translator import TranslationContext
@@ -247,9 +249,17 @@ class RPythonAnnotator(object):
                 block, graph = self.pendingblocks.popitem()
                 if annmodel.DEBUG:
                     self.flowin_block = block # we need to keep track of block
+                t0 = time.time()
                 self.processblock(graph, block)
+                tk = time.time()
+                self.counter[graph] = self.counter.get(graph, 0) + tk - t0
             self.policy.no_more_blocks_to_annotate(self)
             if not self.pendingblocks:
+                import os
+                f = open('/tmp/annotator%d' % os.getpid(), 'w')
+                for k, v in self.counter.iteritems():
+                    f.write('%s: %d' % (k, v))
+                f.close()
                 break   # finished
         # make sure that the return variables of all graphs is annotated
         if self.added_blocks is not None:
