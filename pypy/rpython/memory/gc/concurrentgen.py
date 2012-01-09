@@ -240,7 +240,7 @@ class ConcurrentGenGC(GCBase):
         hdr = self.header(obj)
         hdr.tid = self.combine(typeid, self.current_young_marker, 0)
         hdr.next = self.new_young_objects
-        debug_print("malloc:", rawtotalsize, obj)
+        #debug_print("malloc:", rawtotalsize, obj)
         self.new_young_objects = hdr
         self.new_young_objects_size += r_uint(rawtotalsize)
         if self.new_young_objects_size > self.nursery_limit:
@@ -271,7 +271,7 @@ class ConcurrentGenGC(GCBase):
         hdr.next = self.new_young_objects
         totalsize = llarena.round_up_for_allocation(totalsize)
         rawtotalsize = raw_malloc_usage(totalsize)
-        debug_print("malloc:", rawtotalsize, obj)
+        #debug_print("malloc:", rawtotalsize, obj)
         self.new_young_objects = hdr
         self.new_young_objects_size += r_uint(rawtotalsize)
         if self.new_young_objects_size > self.nursery_limit:
@@ -326,7 +326,7 @@ class ConcurrentGenGC(GCBase):
             cym = self.current_young_marker
             com = self.current_old_marker
             mark = self.get_mark(obj)
-            debug_print("deletion_barrier:", mark, obj)
+            #debug_print("deletion_barrier:", mark, obj)
             #
             if mark == com:     # most common case, make it fast
                 #
@@ -661,8 +661,8 @@ class ConcurrentGenGC(GCBase):
         # NB. it's ok to edit 'gray_objects' from the mutator thread here,
         # because the collector thread is not running yet
         obj = root.address[0]
-        debug_print("_add_stack_root", obj)
-        assert 'DEAD' not in repr(obj)
+        #debug_print("_add_stack_root", obj)
+        #assert 'DEAD' not in repr(obj)
         self.get_mark(obj)
         self.collector.gray_objects.append(obj)
 
@@ -699,7 +699,7 @@ class ConcurrentGenGC(GCBase):
         while list != self.NULL:
             obj = llmemory.cast_ptr_to_adr(list) + size_gc_header
             size1 = size_gc_header + self.get_size(obj)
-            print "debug:", llmemory.raw_malloc_usage(size1)
+            #print "debug:", llmemory.raw_malloc_usage(size1)
             size += llmemory.raw_malloc_usage(size1)
             # detect loops
             ll_assert(list != previous, "loop!")
@@ -707,7 +707,7 @@ class ConcurrentGenGC(GCBase):
             if count & (count-1) == 0:    # only on powers of two, to
                 previous = list           # detect loops of any size
             list = list.next
-        print "\tTOTAL:", size
+        #print "\tTOTAL:", size
         ll_assert(size == totalsize, "bogus total size in linked list")
         return count
 
@@ -979,7 +979,7 @@ class CollectorThread(object):
             # we scan a modified content --- and the original content
             # is never scanned.
             #
-            debug_print("mark:", obj)
+            #debug_print("mark:", obj)
             self.gc.trace(obj, self._collect_add_pending, None)
             self.set_mark(obj, com)
             #
@@ -1033,7 +1033,7 @@ class CollectorThread(object):
             if mark == still_not_marked:
                 # the object is still not marked.  Free it.
                 blockadr = llmemory.cast_ptr_to_adr(hdr)
-                debug_print("free:", blockadr + size_gc_header)
+                #debug_print("free:", blockadr + size_gc_header)
                 blockadr = llarena.getfakearenaaddress(blockadr)
                 llarena.arena_free(blockadr)
                 #
