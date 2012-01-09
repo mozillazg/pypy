@@ -65,7 +65,7 @@ class ConcurrentGenGC(GCBase):
 
         # The minimal RAM usage: use 24 MB by default.
         # Environment variable: PYPY_GC_MIN
-        "min_heap_size": 6*1024*1024,
+        "min_heap_size": 24*1024*1024,
         }
 
 
