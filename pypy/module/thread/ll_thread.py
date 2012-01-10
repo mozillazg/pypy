@@ -156,6 +156,7 @@ thread_after_fork = llexternal('RPyThreadAfterFork', [], lltype.Void)
 
 null_ll_lock = lltype.nullptr(TLOCKP.TO)
 
+@jit.dont_look_inside
 def allocate_ll_lock():
     # track_allocation=False here; be careful to lltype.free() it.  The
     # reason it is set to False is that we get it from all app-level
