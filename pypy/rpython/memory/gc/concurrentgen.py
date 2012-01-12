@@ -40,7 +40,7 @@ FL_EXTRA          = 0x0200
 
 class ConcurrentGenGC(GCBase):
     _alloc_flavor_ = "raw"
-    #inline_simple_malloc = True
+    inline_simple_malloc = True
     #inline_simple_malloc_varsize = True
     needs_deletion_barrier = True
     needs_weakref_read_barrier = True
@@ -109,8 +109,10 @@ class ConcurrentGenGC(GCBase):
         # contains the objects that the write barrier re-marked as young
         # (so they are "old young objects").
         self.new_young_objects = self.NULL
+        self.new_young_objects_wr = self.NULL      # weakrefs
         self.new_young_objects_size = r_uint(0)
         self.old_objects = self.NULL
+        self.old_objects_wr = self.NULL
         self.old_objects_size = r_uint(0)    # total size of self.old_objects
         #
         # See concurrentgen.txt for more information about these fields.
@@ -215,6 +217,7 @@ class ConcurrentGenGC(GCBase):
                                needs_finalizer=False,
                                finalizer_is_light=False,
                                contains_weakptr=False):
+        # Generic function to allocate any fixed-size object.
         #
         # Case of finalizers (test constant-folded)
         if needs_finalizer:
@@ -225,32 +228,16 @@ class ConcurrentGenGC(GCBase):
         #
         # Case of weakreferences (test constant-folded)
         if contains_weakptr:
-            raise NotImplementedError
             return self._malloc_weakref(typeid, size)
         #
         # Regular case
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        totalsize = size_gc_header + size
-        rawtotalsize = raw_malloc_usage(totalsize)
-        adr = llarena.arena_malloc(rawtotalsize, 2)
-        if adr == llmemory.NULL:
-            raise MemoryError
-        llarena.arena_reserve(adr, totalsize)
-        obj = adr + size_gc_header
-        hdr = self.header(obj)
-        hdr.tid = self.combine(typeid, self.current_young_marker, 0)
-        hdr.next = self.new_young_objects
-        #debug_print("malloc:", rawtotalsize, obj)
-        self.new_young_objects = hdr
-        self.new_young_objects_size += r_uint(rawtotalsize)
-        if self.new_young_objects_size > self.nursery_limit:
-            self.nursery_overflowed(obj)
-        return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+        return self._malloc_regular(typeid, size)
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
                              offset_to_length):
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        nonvarsize = size_gc_header + size
+        # Generic function to allocate any variable-size object.
+        #
+        nonvarsize = self.gcheaderbuilder.size_gc_header + size
         #
         if length < 0:
             raise MemoryError
@@ -259,24 +246,49 @@ class ConcurrentGenGC(GCBase):
         except OverflowError:
             raise MemoryError
         #
+        return self._do_malloc(typeid, totalsize, offset_to_length, length, 0)
+
+
+    def _malloc_regular(self, typeid, size):
+        totalsize = self.gcheaderbuilder.size_gc_header + size
+        return self._do_malloc(typeid, totalsize, -1, -1, 0)
+    _malloc_regular._dont_inline_ = True
+
+    def _malloc_weakref(self, typeid, size):
+        totalsize = self.gcheaderbuilder.size_gc_header + size
+        return self._do_malloc(typeid, totalsize, -1, -1, 1)
+    _malloc_weakref._dont_inline_ = True
+
+
+    def _do_malloc(self, typeid, totalsize, offset_to_length, length,
+                   linked_list_number):
+        # Generic function to perform allocation.  Inlined in its few callers,
+        # so that some checks like 'offset_to_length >= 0' are removed.
         rawtotalsize = raw_malloc_usage(totalsize)
         adr = llarena.arena_malloc(rawtotalsize, 2)
         if adr == llmemory.NULL:
             raise MemoryError
         llarena.arena_reserve(adr, totalsize)
-        obj = adr + size_gc_header
-        (obj + offset_to_length).signed[0] = length
+        obj = adr + self.gcheaderbuilder.size_gc_header
+        if offset_to_length >= 0:
+            (obj + offset_to_length).signed[0] = length
+            totalsize = llarena.round_up_for_allocation(totalsize)
+            rawtotalsize = raw_malloc_usage(totalsize)
         hdr = self.header(obj)
         hdr.tid = self.combine(typeid, self.current_young_marker, 0)
-        hdr.next = self.new_young_objects
-        totalsize = llarena.round_up_for_allocation(totalsize)
-        rawtotalsize = raw_malloc_usage(totalsize)
-        #debug_print("malloc:", rawtotalsize, obj)
-        self.new_young_objects = hdr
+        if linked_list_number == 0:
+            hdr.next = self.new_young_objects
+            self.new_young_objects = hdr
+        elif linked_list_number == 1:
+            hdr.next = self.new_young_objects_wr
+            self.new_young_objects_wr = hdr
+        else:
+            raise AssertionError(linked_list_number)
         self.new_young_objects_size += r_uint(rawtotalsize)
         if self.new_young_objects_size > self.nursery_limit:
             self.nursery_overflowed(obj)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+    _do_malloc._always_inline_ = True
 
     # ----------
     # Other functions in the GC API
@@ -582,8 +594,10 @@ class ConcurrentGenGC(GCBase):
         self.current_aging_marker = other
         #
         # Copy a few 'mutator' fields to 'collector' fields
-        self.collector.aging_objects = self.new_young_objects
+        self.collector.aging_objects    = self.new_young_objects
+        self.collector.aging_objects_wr = self.new_young_objects_wr
         self.new_young_objects = self.NULL
+        self.new_young_objects_wr = self.NULL
         self.new_young_objects_size = r_uint(0)
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
@@ -611,6 +625,8 @@ class ConcurrentGenGC(GCBase):
                   "flagged_objects should be empty here")
         ll_assert(self.new_young_objects == self.NULL,
                   "new_young_obejcts should be empty here")
+        ll_assert(self.new_young_objects_wr == self.NULL,
+                  "new_young_obejcts_wr should be empty here")
         #
         # Keep this newest_obj alive
         if newest_obj:
@@ -635,8 +651,11 @@ class ConcurrentGenGC(GCBase):
         #
         # Copy a few 'mutator' fields to 'collector' fields
         self.collector.delayed_aging_objects = self.collector.aging_objects
+        self.collector.delayed_aging_objects_wr=self.collector.aging_objects_wr
         self.collector.aging_objects = self.old_objects
+        self.collector.aging_objects_wr = self.old_objects_wr
         self.old_objects = self.NULL
+        self.old_objects_wr = self.NULL
         self.old_objects_size = r_uint(0)
         #self.collect_weakref_pages = self.weakref_pages
         #self.collect_finalizer_pages = self.finalizer_pages
@@ -686,12 +705,20 @@ class ConcurrentGenGC(GCBase):
         self.collector.gray_objects.append(obj)
 
     def debug_check_lists(self):
-        # just check that they are correct, non-infinite linked lists
-        self.debug_check_list(self.new_young_objects,
-                              self.new_young_objects_size)
-        self.debug_check_list(self.old_objects, self.old_objects_size)
+        # check that they are correct, non-infinite linked lists,
+        # and check that the total size of objects in the lists corresponds
+        # precisely to the value recorded
+        size = self.debug_check_list(self.new_young_objects)
+        size += self.debug_check_list(self.new_young_objects_wr)
+        ll_assert(size == self.new_young_objects_size,
+                  "bogus total size in new_young_objects")
+        #
+        size = self.debug_check_list(self.old_objects)
+        size += self.debug_check_list(self.old_objects_wr)
+        ll_assert(size == self.old_objects_size,
+                  "bogus total size in old_objects")
 
-    def debug_check_list(self, list, totalsize):
+    def debug_check_list(self, list):
         previous = self.NULL
         count = 0
         size = r_uint(0)
@@ -708,8 +735,7 @@ class ConcurrentGenGC(GCBase):
                 previous = list           # detect loops of any size
             list = list.next
         #print "\tTOTAL:", size
-        ll_assert(size == totalsize, "bogus total size in linked list")
-        return count
+        return size
 
     def acquire(self, lock):
         if we_are_translated():
@@ -748,7 +774,6 @@ class ConcurrentGenGC(GCBase):
     # Weakrefs
 
     def weakref_deref(self, wrobj):
-        raise NotImplementedError
         # Weakrefs need some care.  This code acts as a read barrier.
         # The only way I found is to acquire the mutex_lock to prevent
         # the collection thread from going from collector.running==1
@@ -775,7 +800,7 @@ class ConcurrentGenGC(GCBase):
                 # collector phase was already finished (deal_with_weakrefs).
                 # Otherwise we would be returning an object that is about to
                 # be swept away.
-                if not self.is_marked_or_static(targetobj, self.current_mark):
+                if not self.collector.is_marked_or_static(targetobj):
                     targetobj = llmemory.NULL
                 #
             else:
@@ -841,7 +866,9 @@ class CollectorThread(object):
         # when the collection starts, we make all young objects aging and
         # move 'new_young_objects' into 'aging_objects'
         self.aging_objects = self.NULL
+        self.aging_objects_wr = self.NULL
         self.delayed_aging_objects = self.NULL
+        self.delayed_aging_objects_wr = self.NULL
 
     def setup(self):
         self.ready_to_start_lock = self.gc.ready_to_start_lock
@@ -994,7 +1021,7 @@ class CollectorThread(object):
 
     def _collect_add_pending(self, root, ignored):
         obj = root.address[0]
-        # these 'get_mark(obj) are here for debugging invalid marks.
+        # these 'get_mark(obj)' are here for debugging invalid marks.
         # XXX check that the C compiler removes them if lldebug is off
         self.get_mark(obj)
         self.gray_objects.append(obj)
@@ -1003,10 +1030,17 @@ class CollectorThread(object):
     def collector_sweep(self):
         if self.major_collection_phase != 1:  # no sweeping during phase 1
             self.update_size = self.gc.old_objects_size
+            #
             lst = self._collect_do_sweep(self.aging_objects,
                                          self.current_aging_marker,
                                          self.gc.old_objects)
             self.gc.old_objects = lst
+            #
+            lst = self._collect_do_sweep(self.aging_objects_wr,
+                                         self.current_aging_marker,
+                                         self.gc.old_objects_wr)
+            self.gc.old_objects_wr = lst
+            #
             self.gc.old_objects_size = self.update_size
         #
         self.running = -1
@@ -1023,6 +1057,12 @@ class CollectorThread(object):
                                          self.aging_objects)
             self.aging_objects = lst
             self.delayed_aging_objects = self.NULL
+            #
+            lst = self._collect_do_sweep(self.delayed_aging_objects_wr,
+                                         self.current_old_marker,
+                                         self.aging_objects_wr)
+            self.aging_objects_wr = lst
+            self.delayed_aging_objects_wr = self.NULL
 
     def _collect_do_sweep(self, hdr, still_not_marked, linked_list):
         size_gc_header = self.gc.gcheaderbuilder.size_gc_header
@@ -1059,43 +1099,59 @@ class CollectorThread(object):
     # -------------------------
     # CollectorThread: Weakrefs
 
+    def is_marked_or_static(self, obj):
+        return self.get_mark(obj) != self.current_aging_marker
+
     def deal_with_weakrefs(self):
-        self.running = 3; return
-        # ^XXX^
-        size_gc_header = self.gcheaderbuilder.size_gc_header
-        current_mark = self.current_mark
-        weakref_page = self.collect_weakref_pages
-        self.collect_weakref_pages = self.NULL
-        self.collect_weakref_tails = self.NULL
-        while weakref_page != self.NULL:
-            next_page = list_next(weakref_page)
+        # For simplicity, we do the minimal amount of work here: if a weakref
+        # dies or points to a dying object, we clear it and move it from
+        # 'aging_objects_wr' to 'aging_objects'.  Otherwise, we keep it in
+        # 'aging_objects_wr'.
+        size_gc_header = self.gc.gcheaderbuilder.size_gc_header
+        linked_list    = self.aging_objects
+        linked_list_wr = self.NULL
+        #
+        hdr = self.aging_objects_wr
+        while hdr != self.NULL:
+            nexthdr = hdr.next
             #
-            # If the weakref points to a dead object, make it point to NULL.
-            x = llmemory.cast_ptr_to_adr(weakref_page)
-            x = llarena.getfakearenaaddress(x) + 8
-            hdr = llmemory.cast_adr_to_ptr(x, self.HDRPTR)
-            type_id = llop.extract_high_ushort(llgroup.HALFWORD, hdr.tid)
-            offset = self.weakpointer_offset(type_id)
-            ll_assert(offset >= 0, "bad weakref")
-            obj = x + size_gc_header
-            pointing_to = (obj + offset).address[0]
-            ll_assert(pointing_to != llmemory.NULL, "null weakref?")
-            if not self.is_marked_or_static(pointing_to, current_mark):
-                # 'pointing_to' dies: relink to self.collect_pages[0]
-                (obj + offset).address[0] = llmemory.NULL
-                set_next(weakref_page, self.collect_pages[0])
-                self.collect_pages[0] = weakref_page
+            mark = hdr.tid & 0xFF
+            if mark == self.current_aging_marker:
+                # the weakref object itself is not referenced any more
+                valid = False
+                #
             else:
-                # the weakref stays alive
-                set_next(weakref_page, self.collect_weakref_pages)
-                self.collect_weakref_pages = weakref_page
-                if self.collect_weakref_tails == self.NULL:
-                    self.collect_weakref_tails = weakref_page
+                #
+                type_id = llop.extract_high_ushort(llgroup.HALFWORD, hdr.tid)
+                offset = self.gc.weakpointer_offset(type_id)
+                ll_assert(offset >= 0, "bad weakref")
+                obj = llmemory.cast_ptr_to_adr(hdr) + size_gc_header
+                pointing_to = (obj + offset).address[0]
+                if pointing_to == llmemory.NULL:
+                    # special case only for fresh new weakrefs not yet filled
+                    valid = True
+                    #
+                elif not self.is_marked_or_static(pointing_to):
+                    # 'pointing_to' dies
+                    (obj + offset).address[0] = llmemory.NULL
+                    valid = False
+                else:
+                    valid = True
             #
-            weakref_page = next_page
+            if valid:
+                hdr.next = linked_list_wr
+                linked_list = linked_list_wr
+            else:
+                hdr.next = linked_list
+                linked_list = hdr.next
+            #
+            hdr = nexthdr
+        #
+        self.aging_objects = linked_list
+        self.aging_objects_wr = linked_list_wr
         #
         self.acquire(self.mutex_lock)
-        self.collector.running = 3
+        self.running = 3
         #debug_print("collector.running = 3")
         self.release(self.mutex_lock)
 
