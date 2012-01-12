@@ -122,9 +122,9 @@ class Lock(object):
 
     def release(self):
         # Sanity check: the lock must be locked
-        error = self.acquire(False)
+        err = self.acquire(False)
         c_thread_releaselock(self._lock)
-        if error:
+        if err:
             raise error("bad lock")
 
     def __del__(self):
