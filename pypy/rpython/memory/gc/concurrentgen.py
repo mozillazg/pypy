@@ -739,7 +739,7 @@ class ConcurrentGenGC(GCBase):
 
     def acquire(self, lock):
         if we_are_translated():
-            ll_thread.c_thread_acquirelock(lock, 1)
+            ll_thread.c_thread_acquirelock_NOAUTO(lock, 1)
         else:
             assert ll_thread.get_ident() == self.main_thread_ident
             while not self.try_acquire(lock):
@@ -749,11 +749,11 @@ class ConcurrentGenGC(GCBase):
                     self._reraise_from_collector_thread()
 
     def try_acquire(self, lock):
-        res = ll_thread.c_thread_acquirelock(lock, 0)
+        res = ll_thread.c_thread_acquirelock_NOAUTO(lock, 0)
         return rffi.cast(lltype.Signed, res) != 0
 
     def release(self, lock):
-        ll_thread.c_thread_releaselock(lock)
+        ll_thread.c_thread_releaselock_NOAUTO(lock)
 
     def _reraise_from_collector_thread(self):
         exc, val, tb = self.collector._exc_info
@@ -881,10 +881,10 @@ class CollectorThread(object):
         assert self.collector_ident != -1
 
     def acquire(self, lock):
-        ll_thread.c_thread_acquirelock(lock, 1)
+        ll_thread.c_thread_acquirelock_NOAUTO(lock, 1)
 
     def release(self, lock):
-        ll_thread.c_thread_releaselock(lock)
+        ll_thread.c_thread_releaselock_NOAUTO(lock)
 
     def get_mark(self, obj):
         return self.gc.get_mark(obj)
