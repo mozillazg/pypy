@@ -195,11 +195,6 @@ class ScalarSignature(ConcreteSignature):
             iter = ConstantIterator()
             iterlist.append(iter)
 
-    def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Scalar
-        assert isinstance(arr, Scalar)
-        return arr.value
-
 class ViewSignature(ArraySignature):
     def debug_repr(self):
         return 'Slice'
@@ -331,7 +326,7 @@ class Call2(Signature):
         assert isinstance(arr, Call2)
         lhs = self.left.eval(frame, arr.left).convert_to(self.calc_dtype)
         rhs = self.right.eval(frame, arr.right).convert_to(self.calc_dtype)
-        
+
         return self.binfunc(self.calc_dtype, lhs, rhs)
 
     def debug_repr(self):
@@ -342,7 +337,7 @@ class BroadcastLeft(Call2):
     def _invent_numbering(self, cache, allnumbers):
         self.left._invent_numbering(new_cache(), allnumbers)
         self.right._invent_numbering(cache, allnumbers)
-    
+
     def _create_iter(self, iterlist, arraylist, arr, transforms):
         from pypy.module.micronumpy.interp_numarray import Call2
 
@@ -397,12 +392,12 @@ class ReduceSignature(Call2):
 class SliceloopSignature(Call2):
     def eval(self, frame, arr):
         from pypy.module.micronumpy.interp_numarray import Call2
-        
+
         assert isinstance(arr, Call2)
         ofs = frame.iterators[0].offset
         arr.left.setitem(ofs, self.right.eval(frame, arr.right).convert_to(
             self.calc_dtype))
-    
+
     def debug_repr(self):
         return 'SliceLoop(%s, %s, %s)' % (self.name, self.left.debug_repr(),
                                           self.right.debug_repr())
@@ -447,6 +442,6 @@ class AxisReduceSignature(Call2):
 
         assert isinstance(arr, AxisReduce)
         return self.right.eval(frame, arr.right).convert_to(self.calc_dtype)
-    
+
     def debug_repr(self):
         return 'AxisReduceSig(%s, %s)' % (self.name, self.right.debug_repr())

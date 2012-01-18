@@ -6,11 +6,10 @@ It should not be imported by the module itself
 import re
 
 from pypy.interpreter.baseobjspace import InternalSpaceCache, W_Root
-from pypy.module.micronumpy import interp_boxes
+from pypy.module.micronumpy import interp_boxes, interp_ufuncs
 from pypy.module.micronumpy.interp_dtype import get_dtype_cache
-from pypy.module.micronumpy.interp_numarray import (Scalar, BaseArray,
-     scalar_w, W_NDimArray, array)
-from pypy.module.micronumpy import interp_ufuncs
+from pypy.module.micronumpy.interp_numarray import (BaseArray, W_NDimArray,
+    convert_to_array, array)
 from pypy.rlib.objectmodel import specialize, instantiate
 
 
@@ -54,10 +53,10 @@ class FakeSpace(object):
         self.fromcache = InternalSpaceCache(self).getorbuild
 
     def issequence_w(self, w_obj):
-        return isinstance(w_obj, ListObject) or isinstance(w_obj, W_NDimArray)
+        return isinstance(w_obj, ListObject) or isinstance(w_obj, BaseArray)
 
     def isinstance_w(self, w_obj, w_tp):
-        return w_obj.tp == w_tp
+        return not isinstance(w_obj, BaseArray) and w_obj.tp == w_tp
 
     def decode_index4(self, w_idx, size):
         if isinstance(w_idx, IntObject):
@@ -260,8 +259,7 @@ class Operator(Node):
             w_rhs = self.rhs.execute(interp)
         if not isinstance(w_lhs, BaseArray):
             # scalar
-            dtype = get_dtype_cache(interp.space).w_float64dtype
-            w_lhs = scalar_w(interp.space, dtype, w_lhs)
+            w_lhs = convert_to_array(interp.space, w_lhs)
         assert isinstance(w_lhs, BaseArray)
         if self.name == '+':
             w_res = w_lhs.descr_add(interp.space, w_rhs)
@@ -270,7 +268,6 @@ class Operator(Node):
         elif self.name == '-':
             w_res = w_lhs.descr_sub(interp.space, w_rhs)
         elif self.name == '->':
-            assert not isinstance(w_rhs, Scalar)
             if isinstance(w_rhs, FloatObject):
                 w_rhs = IntObject(int(w_rhs.floatval))
             assert isinstance(w_lhs, BaseArray)
@@ -280,7 +277,7 @@ class Operator(Node):
         if (not isinstance(w_res, BaseArray) and
             not isinstance(w_res, interp_boxes.W_GenericBox)):
             dtype = get_dtype_cache(interp.space).w_float64dtype
-            w_res = scalar_w(interp.space, dtype, w_res)
+            w_res = convert_to_array(interp.space, w_res, dtype=dtype)
         return w_res
 
     def __repr__(self):
@@ -398,17 +395,7 @@ class FunctionCall(Node):
                 w_res = neg.call(interp.space, [arr])
             else:
                 assert False # unreachable code
-            if isinstance(w_res, BaseArray):
-                return w_res
-            if isinstance(w_res, FloatObject):
-                dtype = get_dtype_cache(interp.space).w_float64dtype
-            elif isinstance(w_res, BoolObject):
-                dtype = get_dtype_cache(interp.space).w_booldtype
-            elif isinstance(w_res, interp_boxes.W_GenericBox):
-                dtype = w_res.get_dtype(interp.space)
-            else:
-                dtype = None
-            return scalar_w(interp.space, dtype, w_res)
+            return w_res
         else:
             raise WrongFunctionName
 

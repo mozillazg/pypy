@@ -3,11 +3,12 @@ from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
 from pypy.module.micronumpy import interp_boxes, interp_dtype
-from pypy.module.micronumpy.signature import ReduceSignature,\
-     find_sig, new_printable_location, AxisReduceSignature, ScalarSignature
+from pypy.module.micronumpy.signature import (ReduceSignature,
+    AxisReduceSignature, ScalarSignature, new_printable_location, find_sig)
 from pypy.rlib import jit
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.tool.sourcetools import func_with_new_name
+
 
 reduce_driver = jit.JitDriver(
     greens=['shapelen', "sig"],
@@ -114,8 +115,8 @@ class W_Ufunc(Wrappable):
         return self.reduce(space, w_obj, False, False, w_dim)
 
     def reduce(self, space, w_obj, multidim, promote_to_largest, w_dim):
-        from pypy.module.micronumpy.interp_numarray import convert_to_array, \
-                                                           Scalar
+        from pypy.module.micronumpy.interp_numarray import convert_to_array
+
         if self.argcount != 2:
             raise OperationError(space.w_ValueError, space.wrap("reduce only "
                 "supported for binary functions"))
@@ -124,7 +125,7 @@ class W_Ufunc(Wrappable):
         obj = convert_to_array(space, w_obj)
         if dim >= len(obj.shape):
             raise OperationError(space.w_ValueError, space.wrap("axis(=%d) out of bounds" % dim))
-        if isinstance(obj, Scalar):
+        if not obj.shape:
             raise OperationError(space.w_TypeError, space.wrap("cannot reduce "
                 "on a scalar"))
 
@@ -155,9 +156,9 @@ class W_Ufunc(Wrappable):
         return self.reduce_loop(shapelen, sig, frame, value, obj, dtype)
 
     def do_axis_reduce(self, obj, dtype, dim):
-        from pypy.module.micronumpy.interp_numarray import AxisReduce,\
-             W_NDimArray
-        
+        from pypy.module.micronumpy.interp_numarray import (AxisReduce,
+             W_NDimArray)
+
         shape = obj.shape[0:dim] + obj.shape[dim + 1:len(obj.shape)]
         size = 1
         for s in shape:
@@ -231,17 +232,22 @@ class W_Ufunc1(W_Ufunc):
 
     def call(self, space, args_w):
         from pypy.module.micronumpy.interp_numarray import (Call1,
-            convert_to_array, Scalar)
+            convert_to_array, is_scalar)
 
         [w_obj] = args_w
-        w_obj = convert_to_array(space, w_obj)
+        scalar = is_scalar(space, w_obj)
+        if scalar:
+            w_obj_dtype = find_dtype_for_scalar(space, w_obj)
+        else:
+            w_obj = convert_to_array(space, w_obj)
+            w_obj_dtype = w_obj.find_dtype()
         res_dtype = find_unaryop_result_dtype(space,
-            w_obj.find_dtype(),
+            w_obj_dtype,
             promote_to_float=self.promote_to_float,
             promote_bools=self.promote_bools,
         )
-        if isinstance(w_obj, Scalar):
-            return self.func(res_dtype, w_obj.value.convert_to(res_dtype))
+        if scalar:
+            return self.func(res_dtype, res_dtype.coerce(space, w_obj))
 
         w_res = Call1(self.func, self.name, w_obj.shape, res_dtype, w_obj)
         w_obj.add_invalidates(w_res)
@@ -260,14 +266,22 @@ class W_Ufunc2(W_Ufunc):
         self.comparison_func = comparison_func
 
     def call(self, space, args_w):
-        from pypy.module.micronumpy.interp_numarray import (Call2,
-            convert_to_array, Scalar, shape_agreement)
+        from pypy.module.micronumpy.interp_numarray import (BaseArray, Call2,
+            convert_to_array, is_scalar, shape_agreement)
 
         [w_lhs, w_rhs] = args_w
-        w_lhs = convert_to_array(space, w_lhs)
-        w_rhs = convert_to_array(space, w_rhs)
+        scalar = is_scalar(space, w_lhs) and is_scalar(space, w_rhs)
+        if scalar:
+            w_lhs_dtype = find_dtype_for_scalar(space, w_lhs)
+            w_rhs_dtype = find_dtype_for_scalar(space, w_rhs)
+        else:
+            w_lhs = convert_to_array(space, w_lhs)
+            w_rhs = convert_to_array(space, w_rhs)
+            w_lhs_dtype = w_lhs.find_dtype()
+            w_rhs_dtype = w_rhs.find_dtype()
+
         calc_dtype = find_binop_result_dtype(space,
-            w_lhs.find_dtype(), w_rhs.find_dtype(),
+            w_lhs_dtype, w_rhs_dtype,
             promote_to_float=self.promote_to_float,
             promote_bools=self.promote_bools,
         )
@@ -275,12 +289,14 @@ class W_Ufunc2(W_Ufunc):
             res_dtype = interp_dtype.get_dtype_cache(space).w_booldtype
         else:
             res_dtype = calc_dtype
-        if isinstance(w_lhs, Scalar) and isinstance(w_rhs, Scalar):
+        if scalar:
             return self.func(calc_dtype,
-                w_lhs.value.convert_to(calc_dtype),
-                w_rhs.value.convert_to(calc_dtype)
+                calc_dtype.coerce(space, w_lhs),
+                calc_dtype.coerce(space, w_rhs),
             )
 
+        assert isinstance(w_lhs, BaseArray)
+        assert isinstance(w_rhs, BaseArray)
         new_shape = shape_agreement(space, w_lhs.shape, w_rhs.shape)
         w_res = Call2(self.func, self.name,
                       new_shape, calc_dtype,
