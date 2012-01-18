@@ -1,15 +1,16 @@
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
-from pypy.interpreter.gateway import interp2app, NoneNotWrapped
+from pypy.interpreter.gateway import interp2app, NoneNotWrapped, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.module.micronumpy import interp_ufuncs, interp_dtype, signature
+from pypy.module.micronumpy.interp_iter import (ArrayIterator, OneDimIterator,
+     SkipLastAxisIterator)
 from pypy.module.micronumpy.strides import calculate_slice_strides
 from pypy.rlib import jit
+from pypy.rlib.rstring import StringBuilder
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rlib.rstring import StringBuilder
-from pypy.module.micronumpy.interp_iter import ArrayIterator, OneDimIterator,\
-     SkipLastAxisIterator
+
 
 numpy_driver = jit.JitDriver(
     greens=['shapelen', 'sig'],
@@ -272,10 +273,7 @@ class BaseArray(Wrappable):
 
     def _binop_right_impl(ufunc_name):
         def impl(self, space, w_other):
-            w_other = scalar_w(space,
-                interp_ufuncs.find_dtype_for_scalar(space, w_other, self.find_dtype()),
-                w_other
-            )
+            w_other = convert_to_array(space, w_other, dtype=self.find_dtype())
             return getattr(interp_ufuncs.get(space), ufunc_name).call(space, [w_other, self])
         return func_with_new_name(impl, "binop_right_%s_impl" % ufunc_name)
 
@@ -375,8 +373,7 @@ class BaseArray(Wrappable):
     descr_argmin = _reduce_argmax_argmin_impl("min")
 
     def descr_dot(self, space, w_other):
-        w_other = convert_to_array(space, w_other)
-        if isinstance(w_other, Scalar):
+        if is_scalar(space, w_other):
             return self.descr_mul(space, w_other)
         else:
             w_res = self.descr_mul(space, w_other)
@@ -399,8 +396,6 @@ class BaseArray(Wrappable):
     def descr_set_shape(self, space, w_iterable):
         new_shape = get_shape_from_iterable(space,
                             self.size, w_iterable)
-        if isinstance(self, Scalar):
-            return
         self.get_concrete().setshape(space, new_shape)
 
     def descr_get_size(self, space):
@@ -560,8 +555,7 @@ class BaseArray(Wrappable):
 
     def descr_tolist(self, space):
         if len(self.shape) == 0:
-            assert isinstance(self, Scalar)
-            return self.value.descr_tolist(space)
+            return self.getitem(0).descr_tolist(space)
         w_result = space.newlist([])
         for i in range(self.shape[0]):
             space.call_method(w_result, "append",
@@ -650,50 +644,23 @@ class BaseArray(Wrappable):
     def supports_fast_slicing(self):
         return False
 
-def convert_to_array(space, w_obj):
+def convert_to_array(space, w_obj, dtype=None):
     if isinstance(w_obj, BaseArray):
+        assert dtype is None
         return w_obj
     elif space.issequence_w(w_obj):
         # Convert to array.
-        return array(space, w_obj, w_order=None)
+        return array(space, w_obj, w_order=None, w_dtype=dtype)
     else:
         # If it's a scalar
-        dtype = interp_ufuncs.find_dtype_for_scalar(space, w_obj)
-        return scalar_w(space, dtype, w_obj)
+        if dtype is None:
+            dtype = interp_ufuncs.find_dtype_for_scalar(space, w_obj)
+        arr = W_NDimArray(1, [], dtype)
+        arr.setitem(0, dtype.coerce(space, w_obj))
+        return arr
 
-def scalar_w(space, dtype, w_obj):
-    return Scalar(dtype, dtype.coerce(space, w_obj))
-
-class Scalar(BaseArray):
-    """
-    Intermediate class representing a literal.
-    """
-    size = 1
-    _attrs_ = ["dtype", "value", "shape"]
-
-    def __init__(self, dtype, value):
-        self.shape = []
-        BaseArray.__init__(self, [])
-        self.dtype = dtype
-        self.value = value
-
-    def find_dtype(self):
-        return self.dtype
-
-    def to_str(self, space, comma, builder, indent=' ', use_ellipsis=False):
-        builder.append(self.dtype.itemtype.str_format(self.value))
-
-    def copy(self, space):
-        return Scalar(self.dtype, self.value)
-
-    def fill(self, space, w_value):
-        self.value = self.dtype.coerce(space, w_value)
-
-    def create_sig(self):
-        return signature.ScalarSignature(self.dtype)
-
-    def get_concrete_or_scalar(self):
-        return self
+def is_scalar(space, w_obj):
+    return not isinstance(w_obj, BaseArray) and not space.issequence_w(w_obj)
 
 
 class VirtualArray(BaseArray):
@@ -884,7 +851,7 @@ class ConcreteArray(BaseArray):
         return self
 
     def supports_fast_slicing(self):
-        return self.order == 'C' and self.strides[-1] == 1
+        return self.order == 'C' and bool(self.strides) and self.strides[-1] == 1
 
     def find_dtype(self):
         return self.dtype
@@ -1069,7 +1036,7 @@ class ConcreteArray(BaseArray):
         return array
 
     def fill(self, space, w_value):
-        self.setslice(space, scalar_w(space, self.dtype, w_value))
+        self.setslice(space, convert_to_array(space, w_value))
 
 
 class ViewArray(ConcreteArray):
@@ -1129,9 +1096,9 @@ class W_NDimArray(ConcreteArray):
     """ A class representing contiguous array. We know that each iteration
     by say ufunc will increase the data index by one
     """
-    def setitem(self, item, value):
+    def setitem(self, idx, value):
         self.invalidated()
-        self.dtype.setitem(self.storage, item, value)
+        self.dtype.setitem(self.storage, idx, value)
 
     def setshape(self, space, new_shape):
         self.shape = new_shape
@@ -1165,7 +1132,7 @@ def array(space, w_item_or_iterable, w_dtype=None, w_order=NoneNotWrapped):
         dtype = space.interp_w(interp_dtype.W_Dtype,
             space.call_function(space.gettypefor(interp_dtype.W_Dtype), w_dtype)
         )
-        return scalar_w(space, dtype, w_item_or_iterable)
+        return convert_to_array(space, w_item_or_iterable, dtype=dtype)
     if w_order is None:
         order = 'C'
     else:
@@ -1217,9 +1184,9 @@ def ones(space, w_size, w_dtype=None):
     return space.wrap(arr)
 
 def dot(space, w_obj, w_obj2):
+    if is_scalar(space, w_obj):
+        return convert_to_array(space, w_obj2).descr_dot(space, w_obj)
     w_arr = convert_to_array(space, w_obj)
-    if isinstance(w_arr, Scalar):
-        return convert_to_array(space, w_obj2).descr_dot(space, w_arr)
     return w_arr.descr_dot(space, w_obj2)
 
 BaseArray.typedef = TypeDef(
@@ -1307,6 +1274,9 @@ class W_FlatIterator(ViewArray):
         self.iter = OneDimIterator(arr.start, self.strides[0],
                                    self.shape[0])
 
+    def descr_iter(self):
+        return self
+
     def descr_next(self, space):
         if self.iter.done():
             raise OperationError(space.w_StopIteration, space.w_None)
@@ -1314,12 +1284,10 @@ class W_FlatIterator(ViewArray):
         self.iter = self.iter.next(self.shapelen)
         return result
 
-    def descr_iter(self):
-        return self
 
 W_FlatIterator.typedef = TypeDef(
     'flatiter',
-    next = interp2app(W_FlatIterator.descr_next),
     __iter__ = interp2app(W_FlatIterator.descr_iter),
+    next = interp2app(W_FlatIterator.descr_next),
 )
 W_FlatIterator.acceptable_as_base_class = False

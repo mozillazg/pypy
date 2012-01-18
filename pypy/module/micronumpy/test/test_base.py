@@ -1,6 +1,6 @@
 from pypy.conftest import gettestobjspace
 from pypy.module.micronumpy.interp_dtype import get_dtype_cache
-from pypy.module.micronumpy.interp_numarray import W_NDimArray, Scalar
+from pypy.module.micronumpy.interp_numarray import W_NDimArray
 from pypy.module.micronumpy.interp_ufuncs import (find_binop_result_dtype,
         find_unaryop_result_dtype)
 
@@ -16,7 +16,7 @@ class TestSignature(object):
         ar = W_NDimArray(10, [10], dtype=float64_dtype)
         ar2 = W_NDimArray(10, [10], dtype=float64_dtype)
         v1 = ar.descr_add(space, ar)
-        v2 = ar.descr_add(space, Scalar(float64_dtype, 2.0))
+        v2 = ar.descr_add(space, space.wrap(2.0))
         sig1 = v1.find_sig()
         sig2 = v2.find_sig()
         assert v1 is not v2
@@ -26,7 +26,7 @@ class TestSignature(object):
         sig1b = ar2.descr_add(space, ar).find_sig()
         assert sig1b.left.array_no != sig1b.right.array_no
         assert sig1b is not sig1
-        v3 = ar.descr_add(space, Scalar(float64_dtype, 1.0))
+        v3 = ar.descr_add(space, space.wrap(1.0))
         sig3 = v3.find_sig()
         assert sig2 is sig3
         v4 = ar.descr_add(space, ar)
