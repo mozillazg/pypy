@@ -396,6 +396,11 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert (a == [1000, 1, 2, 3, 1000, 5, 6, 7, 1000, 9, 10, 11]).all()
         a = zeros((4, 2, 3))
         a.shape = (12, 2)
+        assert array(1).reshape((1, 1, 1, 1)).shape == (1, 1, 1, 1)
+        assert array([2, 2, 2]).reshape((1, 1, 1, -1)).shape == (1, 1, 1, 3)
+        a=numpypy.array(1)
+        a.shape = (1, 1, 1)
+        assert a.shape == (1, 1, 1)
 
     def test_slice_reshape(self):
         from _numpypy import zeros, arange
