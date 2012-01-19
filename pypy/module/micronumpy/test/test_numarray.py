@@ -1301,16 +1301,13 @@ class AppTestMultiDim(BaseNumpyAppTest):
         raises(TypeError, getattr, array(3), '__array_interface__')
 
     def test_array_indexing_one_elem(self):
-        skip("not yet")
         from _numpypy import array, arange
         raises(IndexError, 'arange(3)[array([3.5])]')
         a = arange(3)[array([1])]
-        assert a == 1
-        assert a[0] == 1
+        assert a == [1]
         raises(IndexError,'arange(3)[array([15])]')
         assert arange(3)[array([-3])] == 0
         raises(IndexError,'arange(3)[array([-15])]')
-        assert arange(3)[array(1)] == 1
 
     def test_array_indexing_bool(self):
         from _numpypy import arange

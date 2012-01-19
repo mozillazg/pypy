@@ -24,6 +24,9 @@ class IntArrayChunk(BaseChunk):
     def __init__(self, arr):
         self.arr = arr.get_concrete()
 
+    def extend_shape(self, shape):
+        shape.extend(self.arr.shape)
+
 class BoolArrayChunk(BaseChunk):
     def __init__(self, arr):
         self.arr = arr.get_concrete()
