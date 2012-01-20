@@ -319,11 +319,11 @@ class BaseArray(Wrappable):
     descr_rmod = _binop_right_impl("mod")
 
     def _reduce_ufunc_impl(ufunc_name, promote_to_largest=False):
-        def impl(self, space, w_dim=None):
-            if space.is_w(w_dim, space.w_None):
-                w_dim = space.wrap(-1)
+        def impl(self, space, w_axis=None):
+            if space.is_w(w_axis, space.w_None):
+                w_axis = space.wrap(-1)
             return getattr(interp_ufuncs.get(space), ufunc_name).reduce(space,
-                                        self, True, promote_to_largest, w_dim)
+                                        self, True, promote_to_largest, w_axis)
         return func_with_new_name(impl, "reduce_%s_impl" % ufunc_name)
 
     descr_sum = _reduce_ufunc_impl("add")
@@ -677,19 +677,19 @@ class BaseArray(Wrappable):
             )
         return w_result
 
-    def descr_mean(self, space, w_dim=None):
-        if space.is_w(w_dim, space.w_None):
-            w_dim = space.wrap(-1)
+    def descr_mean(self, space, w_axis=None):
+        if space.is_w(w_axis, space.w_None):
+            w_axis = space.wrap(-1)
             w_denom = space.wrap(self.size)
         else:
-            dim = space.int_w(w_dim)
+            dim = space.int_w(w_axis)
             w_denom = space.wrap(self.shape[dim])
-        return space.div(self.descr_sum_promote(space, w_dim), w_denom)
+        return space.div(self.descr_sum_promote(space, w_axis), w_denom)
 
     def descr_var(self, space):
         # var = mean((values - mean(values)) ** 2)
         w_res = self.descr_sub(space, self.descr_mean(space, space.w_None))
-        assert isinstance(w_res, BaseArray) 
+        assert isinstance(w_res, BaseArray)
         w_res = w_res.descr_pow(space, space.wrap(2))
         assert isinstance(w_res, BaseArray)
         return w_res.descr_mean(space, space.w_None)
@@ -697,6 +697,10 @@ class BaseArray(Wrappable):
     def descr_std(self, space):
         # std(v) = sqrt(var(v))
         return interp_ufuncs.get(space).sqrt.call(space, [self.descr_var(space)])
+
+    def descr_fill(self, space, w_value):
+        concr = self.get_concrete_or_scalar()
+        concr.fill(space, w_value)
 
     def descr_nonzero(self, space):
         if self.size > 1:
@@ -789,6 +793,9 @@ class Scalar(BaseArray):
 
     def copy(self, space):
         return Scalar(self.dtype, self.value)
+
+    def fill(self, space, w_value):
+        self.value = self.dtype.coerce(space, w_value)
 
     def create_sig(self):
         return signature.ScalarSignature(self.dtype)
@@ -895,7 +902,7 @@ class Call2(VirtualArray):
     Intermediate class for performing binary operations.
     """
     _immutable_fields_ = ['left', 'right']
-    
+
     def __init__(self, ufunc, name, shape, calc_dtype, res_dtype, left, right):
         VirtualArray.__init__(self, name, shape, res_dtype)
         self.ufunc = ufunc
@@ -935,7 +942,7 @@ class SliceArray(Call2):
     def __init__(self, shape, dtype, left, right):
         Call2.__init__(self, None, 'sliceloop', shape, dtype, dtype, left,
                        right)
-    
+
     def create_sig(self):
         lsig = self.left.create_sig()
         rsig = self.right.create_sig()
@@ -954,7 +961,7 @@ class AxisReduce(Call2):
     when we'll make AxisReduce lazy
     """
     _immutable_fields_ = ['left', 'right']
-    
+
     def __init__(self, ufunc, name, shape, dtype, left, right, dim):
         Call2.__init__(self, ufunc, name, shape, dtype, dtype,
                        left, right)
@@ -1026,14 +1033,14 @@ class ConcreteArray(BaseArray):
         if size < 1:
             builder.append('[]')
             return
-        elif size == 1:
-            builder.append(dtype.itemtype.str_format(self.getitem(0)))
-            return
         if size > 1000:
             # Once this goes True it does not go back to False for recursive
             # calls
             use_ellipsis = True
         ndims = len(self.shape)
+        if ndims == 0:
+            builder.append(dtype.itemtype.str_format(self.getitem(0)))
+            return
         i = 0
         builder.append('[')
         if ndims > 1:
@@ -1167,6 +1174,9 @@ class ConcreteArray(BaseArray):
         array = W_NDimArray(self.size, self.shape[:], self.dtype, self.order)
         array.setslice(space, self)
         return array
+
+    def fill(self, space, w_value):
+        self.setslice(space, scalar_w(space, self.dtype, w_value))
 
 
 class ViewArray(ConcreteArray):
@@ -1390,6 +1400,8 @@ BaseArray.typedef = TypeDef(
     dot = interp2app(BaseArray.descr_dot),
     var = interp2app(BaseArray.descr_var),
     std = interp2app(BaseArray.descr_std),
+
+    fill = interp2app(BaseArray.descr_fill),
 
     copy = interp2app(BaseArray.descr_copy),
     reshape = interp2app(BaseArray.descr_reshape),
