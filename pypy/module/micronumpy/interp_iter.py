@@ -20,6 +20,9 @@ class Chunk(BaseChunk):
         if self.step != 0:
             shape.append(self.lgt)
 
+    def get_iter(self):
+        xxx
+
 class IntArrayChunk(BaseChunk):
     def __init__(self, arr):
         self.arr = arr.get_concrete()
@@ -27,9 +30,21 @@ class IntArrayChunk(BaseChunk):
     def extend_shape(self, shape):
         shape.extend(self.arr.shape)
 
+    def get_iter(self):
+        return self.arr.create_iter()
+
+    def get_index(self, iter):
+        return self.arr.getitem(iter.offset).convert_to_int()
+
 class BoolArrayChunk(BaseChunk):
     def __init__(self, arr):
         self.arr = arr.get_concrete()
+
+    def extend_shape(self, shape):
+        xxx
+
+    def get_iter(self):
+        xxx
 
 class BaseTransform(object):
     pass
@@ -212,6 +227,30 @@ class AxisIterator(BaseIterator):
         return self._done
 
 # ------ other iterators that are not part of the computation frame ----------
+
+class ChunkIterator(object):
+    def __init__(self, shape, chunks):
+        self.chunks = chunks
+        self.indices = [0] * len(shape)
+        self.shape = shape
+        self.chunk_iters = [chunk.get_iter() for chunk in self.chunks]
+
+    def next(self, shapelen):
+        for i in range(shapelen - 1, -1, -1):
+            if self.indices[i] < self.shape[i] - 1:
+                self.indices[i] += 1
+                self.chunk_iters[i] = self.chunk_iters[i].next()
+                break
+            else:
+                self.indices[i] = 0
+                # XXX reset one dim iter probably
+        return self
+
+    def get_index(self, shapelen):
+        l = []
+        for i in range(shapelen):
+            l.append(self.chunks[i].get_index(self.chunk_iters[i]))
+        return l
     
 class SkipLastAxisIterator(object):
     def __init__(self, arr):

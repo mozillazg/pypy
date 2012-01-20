@@ -104,7 +104,10 @@ class W_NumberBox(W_GenericBox):
     _attrs_ = ()
 
 class W_IntegerBox(W_NumberBox):
-    pass
+    def convert_to_int(self):
+        from pypy.rpython.lltypesystem import rffi, lltype
+        
+        return rffi.cast(lltype.Signed, self.value)
 
 class W_SignedIntegerBox(W_IntegerBox):
     pass

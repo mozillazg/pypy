@@ -10,7 +10,8 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.rlib.rstring import StringBuilder
 from pypy.module.micronumpy.interp_iter import ArrayIterator, OneDimIterator,\
-     SkipLastAxisIterator, Chunk, ViewIterator, BoolArrayChunk, IntArrayChunk
+     SkipLastAxisIterator, Chunk, ViewIterator, BoolArrayChunk, IntArrayChunk,\
+     ChunkIterator
 
 numpy_driver = jit.JitDriver(
     greens=['shapelen', 'sig'],
@@ -583,6 +584,9 @@ class BaseArray(Wrappable):
             item = concrete._index_of_single_item(space, w_idx)
             return concrete.getitem(item)
         chunks = self._prepare_slice_args(space, w_idx)
+        for chunk in chunks:
+            if not isinstance(chunk, Chunk):
+                return self.get_concrete().force_slice_getitem(space, chunks)
         return space.wrap(self.create_slice(chunks))
 
     def descr_setitem(self, space, w_idx, w_value):
@@ -604,13 +608,6 @@ class BaseArray(Wrappable):
         view = self.create_slice(chunks).get_concrete()
         view.setslice(space, w_value)
 
-    def force_slice(self, shape, chunks):
-        size = 1
-        for elem in shape:
-            size *= elem
-        res = W_NDimArray(size, shape, self.find_dtype())
-        xxx
-
     @jit.unroll_safe
     def create_slice(self, chunks):
         shape = []
@@ -620,9 +617,6 @@ class BaseArray(Wrappable):
         s = i + 1
         assert s >= 0
         shape += self.shape[s:]
-        for chunk in chunks:
-            if not isinstance(chunk, Chunk):
-                return self.force_slice(shape, chunks)
         if not isinstance(self, ConcreteArray):
             return VirtualSlice(self, chunks, shape)
         r = calculate_slice_strides(self.shape, self.start, self.strides,
@@ -1104,17 +1098,7 @@ class ConcreteArray(BaseArray):
         builder.append(']')
 
     @jit.unroll_safe
-    def _index_of_single_item(self, space, w_idx):
-        if space.isinstance_w(w_idx, space.w_int):
-            idx = space.int_w(w_idx)
-            if idx < 0:
-                idx = self.shape[0] + idx
-            if idx < 0 or idx >= self.shape[0]:
-                raise OperationError(space.w_IndexError,
-                                     space.wrap("index out of range"))
-            return self.start + idx * self.strides[0]
-        index = [space.int_w(w_item)
-                 for w_item in space.fixedview(w_idx)]
+    def _index_of_single_item_int(self, space, index):
         item = self.start
         for i in range(len(index)):
             v = index[i]
@@ -1126,6 +1110,20 @@ class ConcreteArray(BaseArray):
                 )
             item += v * self.strides[i]
         return item
+
+    @jit.unroll_safe
+    def _index_of_single_item(self, space, w_idx):
+        if space.isinstance_w(w_idx, space.w_int):
+            idx = space.int_w(w_idx)
+            if idx < 0:
+                idx = self.shape[0] + idx
+            if idx < 0 or idx >= self.shape[0]:
+                raise OperationError(space.w_IndexError,
+                                     space.wrap("index out of range"))
+            return self.start + idx * self.strides[0]
+        index = [space.int_w(w_item)
+                 for w_item in space.fixedview(w_idx)]
+        return self._index_of_single_item_int(space, index)
 
     def setslice(self, space, w_value):
         res_shape = shape_agreement(space, self.shape, w_value.shape)
@@ -1178,6 +1176,28 @@ class ConcreteArray(BaseArray):
     def fill(self, space, w_value):
         self.setslice(space, scalar_w(space, self.dtype, w_value))
 
+    def force_slice_getitem(self, space, chunks):
+        shape = []
+        i = -1
+        for i, chunk in enumerate(chunks):
+            chunk.extend_shape(shape)
+        s = i + 1
+        assert s >= 0
+        shape += self.shape[s:]
+        size = 1
+        for elem in shape:
+            size *= elem
+        res = W_NDimArray(size, shape, self.find_dtype())
+        ri = res.create_iter()
+        ci = ChunkIterator(shape, chunks)
+        shapelen = len(shape)
+        while not ri.done():
+            index = ci.get_index(shapelen)
+            v = self.getitem(self._index_of_single_item_int(space, index))
+            res.setitem(ri.offset, v)
+            ri = ri.next(shapelen)
+            ci = ci.next(shapelen)
+        return res
 
 class ViewArray(ConcreteArray):
     def create_sig(self):
