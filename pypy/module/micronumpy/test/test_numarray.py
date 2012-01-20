@@ -1312,6 +1312,10 @@ class AppTestMultiDim(BaseNumpyAppTest):
         raises(IndexError,'arange(3)[array([15])]')
         assert arange(3)[array([-3])] == 0
         raises(IndexError,'arange(3)[array([-15])]')
+        a = arange(10)
+        assert (a[array([3, 2, 1])] == [3, 2, 1]).all()
+        raises(IndexError, 'a[array([3, 2, 1, 15])]')
+        assert (a[array([3, 2, 5, 3])] == [3, 2, 5, 3]).all()
 
     def test_fill(self):
         from _numpypy import array

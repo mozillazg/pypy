@@ -239,7 +239,7 @@ class ChunkIterator(object):
         for i in range(shapelen - 1, -1, -1):
             if self.indices[i] < self.shape[i] - 1:
                 self.indices[i] += 1
-                self.chunk_iters[i] = self.chunk_iters[i].next()
+                self.chunk_iters[i] = self.chunk_iters[i].next(shapelen)
                 break
             else:
                 self.indices[i] = 0
