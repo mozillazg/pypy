@@ -544,19 +544,6 @@ class StdObjSpace(ObjSpace, DescrOperation):
         else:
             self.setitem(w_obj, self.wrap(key), w_value)
 
-    def getindex_w(self, w_obj, w_exception, objdescr=None):
-        # Performance shortcut for the common case of w_obj being an int.
-        # If withsmallint is disabled, we check for W_IntObject.
-        # If withsmallint is enabled, we only check for W_SmallIntObject - it's
-        # probably not useful to have a shortcut for W_IntObject at all then.
-        if self.config.objspace.std.withsmallint:
-            if type(w_obj) is W_SmallIntObject:
-                return w_obj.intval
-        else:
-            if type(w_obj) is W_IntObject:
-                return w_obj.intval
-        return ObjSpace.getindex_w(self, w_obj, w_exception, objdescr)
-
     def call_method(self, w_obj, methname, *arg_w):
         if self.config.objspace.opcodes.CALL_METHOD:
             return callmethod.call_method_opt(self, w_obj, methname, *arg_w)
