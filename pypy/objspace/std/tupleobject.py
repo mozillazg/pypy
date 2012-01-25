@@ -54,11 +54,12 @@ def len__Tuple(space, w_tuple):
 def getitem__Tuple_ANY(space, w_tuple, w_index):
     # getindex_w should get a second argument space.w_IndexError,
     # but that doesn't exist the first time this is called.
-    try:
-        w_IndexError = space.w_IndexError
-    except AttributeError:
-        w_IndexError = None
-    index = space.getindex_w(w_index, w_IndexError, "tuple index")
+    #try:
+    #    w_IndexError = space.w_IndexError
+    #except AttributeError:
+    #    w_IndexError = None
+    #index = space.getindex_w(w_index, w_IndexError, "tuple index")
+    index = space.int_w(w_index)
     try:
         return w_tuple.wrappeditems[index]
     except IndexError:
