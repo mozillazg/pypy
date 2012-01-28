@@ -351,7 +351,7 @@ def get_root_iterator(gctransformer):
                     # cannot contain young pointers.
                     if value == MARKER_TRACED:
                         if is_minor:
-                            break
+                            return llmemory.NULL
                         continue     # ignore the marker and continue
                     #
                     # If 'addr' contains MARKER_NOT_TRACED, replace it by

@@ -18,7 +18,7 @@ from pypy.jit.backend.llsupport.descr import GcCache, get_field_descr
 from pypy.jit.backend.llsupport.descr import get_array_descr
 from pypy.jit.backend.llsupport.descr import get_call_descr
 from pypy.jit.backend.llsupport.rewrite import GcRewriterAssembler
-from pypy.rpython.memory.gctransform import asmgcroot
+from pypy.rpython.memory.gctransform import asmgcroot, shadowstack
 
 # ____________________________________________________________
 
@@ -436,7 +436,7 @@ class GcRootMap_shadowstack(object):
             def setcontext(iself, context):
                 iself.context = context
 
-            def nextleft(iself, gc, range_lowest, prev):
+            def nextleft(iself, gc, range_lowest, prev, is_minor):
                 # Return the next valid GC object's address, in right-to-left
                 # order from the shadowstack array.  This usually means just
                 # returning "prev - sizeofaddr", until we reach "range_lowest",
@@ -453,7 +453,18 @@ class GcRootMap_shadowstack(object):
                         # contains a valid pointer
                         while prev != range_lowest:
                             prev -= llmemory.sizeof(llmemory.Address)
-                            if prev.signed[0] == self.MARKER_FRAME:
+                            value = llmemory.cast_adr_to_int(prev.address[0])
+                            # this logic is directly copied from RootIterator
+                            # in shadowstack.py, consult comments there
+                            if value == shadowstack.MARKER_TRACED:
+                                if is_minor:
+                                    return llmemory.NULL
+                                continue
+                            if value == shadowstack.MARKER_NOT_TRACED:
+                                prev.address[0] = rffi.cast(llmemory.Address,
+                                                    shadowstack.MARKER_TRACED)
+                                continue
+                            if value == self.MARKER_FRAME:
                                 break
                             if gc.points_to_valid_gc_object(prev):
                                 return prev
