@@ -350,7 +350,8 @@ class SemiSpaceGC(MovingGCBase):
         self.root_walker.walk_roots(
             SemiSpaceGC._collect_root,  # stack roots
             SemiSpaceGC._collect_root,  # static in prebuilt non-gc structures
-            SemiSpaceGC._collect_root)  # static in prebuilt gc objects
+            SemiSpaceGC._collect_root,  # static in prebuilt gc objects
+            is_minor=False)
 
     def _collect_root(self, root):
         root.address[0] = self.copy(root.address[0])

@@ -299,7 +299,8 @@ class GCBase(object):
         # list of last generation roots
         callback2, attrname = _convert_callback_formats(callback)    # :-/
         setattr(self, attrname, arg)
-        self.root_walker.walk_roots(callback2, callback2, callback2)
+        self.root_walker.walk_roots(callback2, callback2, callback2,
+                                    is_minor=False)
         self.run_finalizers.foreach(callback, arg)
     enumerate_all_roots._annspecialcase_ = 'specialize:arg(1)'
 

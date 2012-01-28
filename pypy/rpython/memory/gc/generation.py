@@ -318,7 +318,8 @@ class GenerationGC(SemiSpaceGC):
         self.root_walker.walk_roots(
             SemiSpaceGC._collect_root,  # stack roots
             SemiSpaceGC._collect_root,  # static in prebuilt non-gc structures
-            None)   # we don't need the static in prebuilt gc objects
+            None,   # we don't need the static in prebuilt gc objects
+            is_minor=False)
 
     def collect_last_generation_roots(self):
         stack = self.last_generation_root_objects
@@ -414,7 +415,8 @@ class GenerationGC(SemiSpaceGC):
         self.root_walker.walk_roots(
             GenerationGC._collect_root_in_nursery,  # stack roots
             GenerationGC._collect_root_in_nursery,  # static in prebuilt non-gc
-            None)                                   # static in prebuilt gc
+            None,                                   # static in prebuilt gc
+            is_minor=True)
 
     def _collect_root_in_nursery(self, root):
         obj = root.address[0]

@@ -1303,7 +1303,8 @@ class MiniMarkGC(MovingGCBase):
         self.root_walker.walk_roots(
             MiniMarkGC._trace_drag_out1,  # stack roots
             MiniMarkGC._trace_drag_out1,  # static in prebuilt non-gc
-            None)                         # static in prebuilt gc
+            None,                         # static in prebuilt gc
+            is_minor=True)
         debug_stop("gc-minor-walkroots")
 
     def collect_cardrefs_to_nursery(self):
@@ -1711,7 +1712,8 @@ class MiniMarkGC(MovingGCBase):
         self.root_walker.walk_roots(
             MiniMarkGC._collect_ref_stk, # stack roots
             MiniMarkGC._collect_ref_stk, # static in prebuilt non-gc structures
-            None)   # we don't need the static in all prebuilt gc objects
+            None,   # we don't need the static in all prebuilt gc objects
+            is_minor=False)
         #
         # If we are in an inner collection caused by a call to a finalizer,
         # the 'run_finalizers' objects also need to be kept alive.

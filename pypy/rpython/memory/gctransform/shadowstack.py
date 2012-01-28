@@ -94,10 +94,11 @@ class ShadowStackRootWalker(BaseRootWalker):
         self.shadow_stack_pool.initial_setup()
         BaseRootWalker.setup_root_walker(self)
 
-    def walk_stack_roots(self, collect_stack_root):
+    def walk_stack_roots(self, collect_stack_root, is_minor):
         gcdata = self.gcdata
         self.rootstackhook(collect_stack_root,
-                           gcdata.root_stack_base, gcdata.root_stack_top)
+                           gcdata.root_stack_base, gcdata.root_stack_top,
+                           is_minor=is_minor)
 
     def need_thread_support(self, gctransformer, getfn):
         from pypy.module.thread import ll_thread    # xxx fish

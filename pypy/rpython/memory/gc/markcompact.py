@@ -367,7 +367,8 @@ class MarkCompactGC(MovingGCBase):
         self.root_walker.walk_roots(
             MarkCompactGC._mark_root,  # stack roots
             MarkCompactGC._mark_root,  # static in prebuilt non-gc structures
-            MarkCompactGC._mark_root)  # static in prebuilt gc objects
+            MarkCompactGC._mark_root,  # static in prebuilt gc objects
+            is_minor=False)
         if (self.objects_with_finalizers.non_empty() or
             self.run_finalizers.non_empty()):
             self.trace_from_objects_with_finalizers()
@@ -461,7 +462,8 @@ class MarkCompactGC(MovingGCBase):
         self.root_walker.walk_roots(
             MarkCompactGC._update_ref,  # stack roots
             MarkCompactGC._update_ref,  # static in prebuilt non-gc structures
-            MarkCompactGC._update_ref)  # static in prebuilt gc objects
+            MarkCompactGC._update_ref,  # static in prebuilt gc objects
+            is_minor=False)
         self.walk_marked_objects(MarkCompactGC.trace_and_update_ref)
 
     def walk_marked_objects(self, callback):

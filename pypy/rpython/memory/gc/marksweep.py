@@ -253,7 +253,8 @@ class MarkSweepGC(GCBase):
         self.root_walker.walk_roots(
             MarkSweepGC._mark_root,  # stack roots
             MarkSweepGC._mark_root,  # static in prebuilt non-gc structures
-            MarkSweepGC._mark_root)  # static in prebuilt gc objects
+            MarkSweepGC._mark_root,  # static in prebuilt gc objects
+            is_minor=False)
 
         # from this point onwards, no more mallocs should be possible
         old_malloced = self.bytes_malloced

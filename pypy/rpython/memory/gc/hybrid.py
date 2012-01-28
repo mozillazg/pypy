@@ -305,7 +305,8 @@ class HybridGC(GenerationGC):
             self.root_walker.walk_roots(
                 SemiSpaceGC._collect_root,  # stack roots
                 SemiSpaceGC._collect_root,  # static in prebuilt non-gc structs
-                SemiSpaceGC._collect_root)  # static in prebuilt gc objects
+                SemiSpaceGC._collect_root,  # static in prebuilt gc objects
+                is_minor=False)
 
     def surviving(self, obj):
         # To use during a collection.  The objects that survive are the
