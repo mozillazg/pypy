@@ -2,7 +2,7 @@ import os
 from pypy.rlib import rgc
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import fatalerror
-from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import ovfcheck, r_uint
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem import llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
@@ -396,6 +396,7 @@ class GcRootMap_shadowstack(object):
     is_shadow_stack = True
     MARKER_FRAME        = 8     # this marker now *follows* the frame addr
     MARKER_FRAME_TRACED = 32
+    MARKER_MAX          = 32
 
     # The "shadowstack" is a portable way in which the GC finds the
     # roots that live in the stack.  Normally it is just a list of
@@ -460,20 +461,25 @@ class GcRootMap_shadowstack(object):
                             value = llmemory.cast_adr_to_int(prev.address[0])
                             # this logic is directly copied from RootIterator
                             # in shadowstack.py, consult comments there
-                            if value == shadowstack.MARKER_TRACED:
-                                if is_minor:
-                                    return llmemory.NULL
-                                continue
-                            if value == shadowstack.MARKER_NOT_TRACED:
-                                prev.address[0] = rffi.cast(llmemory.Address,
-                                                    shadowstack.MARKER_TRACED)
-                                continue
-                            if value == self.MARKER_FRAME_TRACED:
-                                break
-                            if value == self.MARKER_FRAME:
-                                prev.address[0] = rffi.cast(llmemory.Address,
-                                                    self.MARKER_FRAME_TRACED)
-                                break
+                            if r_uint(value) <= r_uint(self.MARKER_MAX):
+                                if value == 0: #performance only: shortcut NULLs
+                                    continue
+                                if value == shadowstack.MARKER_TRACED:
+                                    if is_minor:
+                                        return llmemory.NULL
+                                    continue
+                                if value == shadowstack.MARKER_NOT_TRACED:
+                                    prev.address[0] = rffi.cast(
+                                        llmemory.Address,
+                                        shadowstack.MARKER_TRACED)
+                                    continue
+                                if value == self.MARKER_FRAME_TRACED:
+                                    break
+                                if value == self.MARKER_FRAME:
+                                    prev.address[0] = rffi.cast(
+                                        llmemory.Address,
+                                        self.MARKER_FRAME_TRACED)
+                                    break
                             if gc.points_to_valid_gc_object(prev):
                                 return prev
                         else:
