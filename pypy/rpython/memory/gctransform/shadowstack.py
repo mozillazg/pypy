@@ -32,50 +32,17 @@ class ShadowStackRootWalker(BaseRootWalker):
             return top
         self.decr_stack = decr_stack
 
-        translator = gctransformer.translator
-        if (hasattr(translator, '_jit2gc') and
-                'root_iterator' in translator._jit2gc):
-            root_iterator = translator._jit2gc['root_iterator']
-            def jit_walk_stack_root(callback, addr, end):
-                root_iterator.context = NonConstant(llmemory.NULL)
-                gc = self.gc
-                while True:
-                    addr = root_iterator.next(gc, addr, end)
-                    if addr == llmemory.NULL:
-                        return
-                    callback(gc, addr)
-                    addr += sizeofaddr
-            self.rootstackhook = jit_walk_stack_root
-        else:
-            def default_walk_stack_root(callback, start, end, is_minor):
-                gc = self.gc
-                addr = end
-                while addr != start:
-                    addr -= sizeofaddr
-                    value = llmemory.cast_adr_to_int(addr.address[0])
-                    #
-                    # If myaddr contains MARKER_TRACED, and if we are doing
-                    # a minor collection, then stop here.  The previous items
-                    # have all been traced at least once already, so they
-                    # cannot contain young pointers.
-                    if value == self.MARKER_TRACED:
-                        if is_minor:
-                            break
-                        continue     # ignore the marker and continue
-                    #
-                    # If myaddr contains MARKER_NOT_TRACED, replace it by
-                    # MARKER_TRACED.
-                    if value == self.MARKER_NOT_TRACED:
-                        addr.address[0] = rffi.cast(llmemory.Address,
-                                                    self.MARKER_TRACED)
-                        continue
-                    #
-                    # Regular part follows: invoke 'callback' if myaddr really
-                    # points to an object
-                    if gc.points_to_valid_gc_object(addr):
-                        callback(gc, addr)
-                #
-            self.rootstackhook = default_walk_stack_root
+        root_iterator = get_root_iterator(gctransformer)
+        def walk_stack_root(callback, addr, end):
+            root_iterator.setcontext(NonConstant(llmemory.NULL))
+            gc = self.gc
+            while True:
+                addr = root_iterator.next(gc, addr, end)
+                if addr == llmemory.NULL:
+                    return
+                callback(gc, addr)
+                addr += sizeofaddr
+        self.rootstackhook = walk_stack_root
 
         self.shadow_stack_pool = ShadowStackPool(gcdata)
         rsd = gctransformer.root_stack_depth
@@ -359,6 +326,30 @@ class ShadowStackPool(object):
                 raise MemoryError
 
 
+def get_root_iterator(gctransformer):
+    if hasattr(gctransformer, '_root_iterator'):
+        return gctransformer._root_iterator     # if already built
+    translator = gctransformer.translator
+    if (hasattr(translator, '_jit2gc') and
+            'root_iterator' in translator._jit2gc):
+        result = translator._jit2gc['root_iterator']
+    else:
+        class RootIterator(object):
+            def _freeze_(self):
+                return True
+            def setcontext(self, context):
+                pass
+            def next(self, gc, addr, end):
+                while addr != end:
+                    if gc.points_to_valid_gc_object(addr):
+                        return addr
+                    addr += sizeofaddr
+                return llmemory.NULL
+        result = RootIterator()
+    gctransformer._root_iterator = result
+    return result
+
+
 def get_shadowstackref(gctransformer):
     if hasattr(gctransformer, '_SHADOWSTACKREF'):
         return gctransformer._SHADOWSTACKREF
@@ -372,28 +363,17 @@ def get_shadowstackref(gctransformer):
                                      rtti=True)
     SHADOWSTACKREFPTR.TO.become(SHADOWSTACKREF)
 
-    translator = gctransformer.translator
-    if hasattr(translator, '_jit2gc'):
-        gc = gctransformer.gcdata.gc
-        root_iterator = translator._jit2gc['root_iterator']
-        def customtrace(obj, prev):
-            obj = llmemory.cast_adr_to_ptr(obj, SHADOWSTACKREFPTR)
-            if not prev:
-                root_iterator.context = obj.context
-                next = obj.base
-            else:
-                next = prev + sizeofaddr
-            return root_iterator.next(gc, next, obj.top)
-    else:
-        def customtrace(obj, prev):
-            # a simple but not JIT-ready version
-            if not prev:
-                next = llmemory.cast_adr_to_ptr(obj, SHADOWSTACKREFPTR).base
-            else:
-                next = prev + sizeofaddr
-            if next == llmemory.cast_adr_to_ptr(obj, SHADOWSTACKREFPTR).top:
-                next = llmemory.NULL
-            return next
+    gc = gctransformer.gcdata.gc
+    root_iterator = get_root_iterator(gctransformer)
+
+    def customtrace(obj, prev):
+        obj = llmemory.cast_adr_to_ptr(obj, SHADOWSTACKREFPTR)
+        if not prev:
+            root_iterator.setcontext(obj.context)
+            next = obj.base
+        else:
+            next = prev + sizeofaddr
+        return root_iterator.next(gc, next, obj.top)
 
     CUSTOMTRACEFUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
                                       llmemory.Address)
