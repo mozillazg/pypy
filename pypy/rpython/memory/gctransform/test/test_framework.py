@@ -7,7 +7,7 @@ from pypy.rpython.memory.gctransform.test.test_transform import rtype, \
 from pypy.rpython.memory.gctransform.transform import GcHighLevelOp
 from pypy.rpython.memory.gctransform.framework import FrameworkGCTransformer, \
     CollectAnalyzer, find_initializing_stores, find_clean_setarrayitems
-from pypy.rpython.lltypesystem import lltype, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.translator.c.gc import FrameworkGcPolicy
 from pypy.translator.translator import TranslationContext, graphof
@@ -336,6 +336,7 @@ def test_list_operations():
 def test_contains_stack_check():
     from pypy.translator.transform import insert_ll_stackcheck
     from pypy.translator.c.genc import CStandaloneBuilder
+    from pypy.rpython.memory.gctransform.shadowstack import sizeofaddr
     #
     class A:
         pass
@@ -343,22 +344,40 @@ def test_contains_stack_check():
         A()
     def f_recursive(n):
         A()
-        if n > 5:
+        if n > 2:
             f_recursive(n-1)
-    def f(n):
-        a = A()
-        f_non_recursive(n)
-        f_recursive(n)
-        return a
+    for f1 in [f_non_recursive, f_recursive]:
 
-    t = rtype(f, [int])
-    insert_ll_stackcheck(t)
-    g_non_recursive = t._graphof(f_non_recursive)
-    assert not hasattr(g_non_recursive, 'contains_stack_check')
-    g_recursive = t._graphof(f_recursive)
-    assert g_recursive.contains_stack_check is True
-    #
-    cbuild = CStandaloneBuilder(t, f, t.config,
-                                gcpolicy=FrameworkGcPolicy2)
-    db = cbuild.generate_graphs_for_llinterp()
-    import pdb; pdb.set_trace()
+        def f(n):
+            a = A()
+            f1(n)
+            return a
+
+        t = rtype(f, [int])
+        insert_ll_stackcheck(t)
+        g1 = t._graphof(f1)
+        if f1 is f_non_recursive:
+            assert not hasattr(g1, 'contains_stack_check')
+        else:
+            assert g1.contains_stack_check is True
+        #
+        cbuild = CStandaloneBuilder(t, f, t.config,
+                                    gcpolicy=FrameworkGcPolicy2)
+        db = cbuild.generate_graphs_for_llinterp()
+        #
+        # check that in the non-recursive case, around the call
+        # to f1 we save one gcptr 'a'; and in the recursive case,
+        # we save two, because there are 'a' and a marker for
+        # shadowstack.
+        if f1 is f_non_recursive:
+            expected = 1
+        else:
+            expected = 2
+        adr_adds = []
+        for block in t._graphof(f).iterblocks():
+            for op in block.operations:
+                if op.opname == 'adr_add':
+                    adr_adds.append(op)
+        assert len(adr_adds) == 1
+        got = adr_adds[0].args[1].value
+        assert got.repeat == expected
