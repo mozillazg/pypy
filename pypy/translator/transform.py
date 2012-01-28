@@ -214,6 +214,8 @@ def insert_ll_stackcheck(translator):
         # not consume any stack, so would turn into potentially infinite loops
         graph = block2graph[block]
         graph.inhibit_tail_call = True
+        # this other attribute is used by shadowstack.py
+        graph.contains_stack_check = True
     return len(insert_in)
 
 

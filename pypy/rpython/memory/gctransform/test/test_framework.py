@@ -332,3 +332,33 @@ def test_list_operations():
     clean_setarrayitems = find_clean_setarrayitems(collect_analyzer,
                                                    t.graphs[0])
     assert len(clean_setarrayitems) == 1
+
+def test_contains_stack_check():
+    from pypy.translator.transform import insert_ll_stackcheck
+    from pypy.translator.c.genc import CStandaloneBuilder
+    #
+    class A:
+        pass
+    def f_non_recursive(n):
+        A()
+    def f_recursive(n):
+        A()
+        if n > 5:
+            f_recursive(n-1)
+    def f(n):
+        a = A()
+        f_non_recursive(n)
+        f_recursive(n)
+        return a
+
+    t = rtype(f, [int])
+    insert_ll_stackcheck(t)
+    g_non_recursive = t._graphof(f_non_recursive)
+    assert not hasattr(g_non_recursive, 'contains_stack_check')
+    g_recursive = t._graphof(f_recursive)
+    assert g_recursive.contains_stack_check is True
+    #
+    cbuild = CStandaloneBuilder(t, f, t.config,
+                                gcpolicy=FrameworkGcPolicy2)
+    db = cbuild.generate_graphs_for_llinterp()
+    import pdb; pdb.set_trace()
