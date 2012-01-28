@@ -394,7 +394,8 @@ class GcRootMap_shadowstack(object):
     This is the class supporting --gcrootfinder=shadowstack.
     """
     is_shadow_stack = True
-    MARKER_FRAME = 8       # this marker now *follows* the frame addr
+    MARKER_FRAME        = 8     # this marker now *follows* the frame addr
+    MARKER_FRAME_TRACED = 32
 
     # The "shadowstack" is a portable way in which the GC finds the
     # roots that live in the stack.  Normally it is just a list of
@@ -406,6 +407,9 @@ class GcRootMap_shadowstack(object):
     # stack frame to identify the call: we can go from the force_index
     # to a list of where the GC pointers are in the frame (this is the
     # purpose of the present class).
+    #
+    # MARKER_FRAME is replaced with MARKER_FRAME_TRACED after the first
+    # time the GC traces the shadowstack.
     #
     # Note that across CALL_MAY_FORCE or CALL_ASSEMBLER, we can also go
     # from the force_index to a ResumeGuardForcedDescr instance, which
@@ -464,7 +468,11 @@ class GcRootMap_shadowstack(object):
                                 prev.address[0] = rffi.cast(llmemory.Address,
                                                     shadowstack.MARKER_TRACED)
                                 continue
+                            if value == self.MARKER_FRAME_TRACED:
+                                break
                             if value == self.MARKER_FRAME:
+                                prev.address[0] = rffi.cast(llmemory.Address,
+                                                    self.MARKER_FRAME_TRACED)
                                 break
                             if gc.points_to_valid_gc_object(prev):
                                 return prev
@@ -475,7 +483,13 @@ class GcRootMap_shadowstack(object):
                         # go into JIT-frame-exploring mode.
                         prev -= llmemory.sizeof(llmemory.Address)
                         frame_addr = prev.signed[0]
-                        iself.saved_prev = prev
+                        if value == self.MARKER_FRAME or not is_minor:
+                            iself.saved_prev = prev    # normal case
+                        else:
+                            # MARKER_FRAME_TRACED in a minor collection:
+                            # <hack> this value in saved_prev will cause this
+                            # function to stop after the current jit frame
+                            iself.saved_prev = range_lowest
                         iself.frame_addr = frame_addr
                         addr = llmemory.cast_int_to_adr(frame_addr +
                                                         self.force_index_ofs)
