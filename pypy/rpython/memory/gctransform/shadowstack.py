@@ -1,7 +1,7 @@
 from pypy.rpython.memory.gctransform.framework import BaseRootWalker
 from pypy.rpython.memory.gctransform.framework import sizeofaddr
 from pypy.rpython.annlowlevel import llhelper
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.nonconst import NonConstant
 from pypy.annotation import model as annmodel
@@ -9,6 +9,11 @@ from pypy.annotation import model as annmodel
 
 class ShadowStackRootWalker(BaseRootWalker):
     need_root_stack = True
+
+    # special values in the shadowstack (different values than
+    # the jit's MARKER, which is 8):
+    MARKER_NOT_TRACED = 16
+    MARKER_TRACED     = 24
 
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
@@ -42,12 +47,34 @@ class ShadowStackRootWalker(BaseRootWalker):
                     addr += sizeofaddr
             self.rootstackhook = jit_walk_stack_root
         else:
-            def default_walk_stack_root(callback, addr, end):
+            def default_walk_stack_root(callback, start, end, is_minor):
                 gc = self.gc
-                while addr != end:
+                addr = end
+                while addr != start:
+                    addr -= sizeofaddr
+                    value = llmemory.cast_adr_to_int(addr.address[0])
+                    #
+                    # If myaddr contains MARKER_TRACED, and if we are doing
+                    # a minor collection, then stop here.  The previous items
+                    # have all been traced at least once already, so they
+                    # cannot contain young pointers.
+                    if value == self.MARKER_TRACED:
+                        if is_minor:
+                            break
+                        continue     # ignore the marker and continue
+                    #
+                    # If myaddr contains MARKER_NOT_TRACED, replace it by
+                    # MARKER_TRACED.
+                    if value == self.MARKER_NOT_TRACED:
+                        addr.address[0] = rffi.cast(llmemory.Address,
+                                                    self.MARKER_TRACED)
+                        continue
+                    #
+                    # Regular part follows: invoke 'callback' if myaddr really
+                    # points to an object
                     if gc.points_to_valid_gc_object(addr):
                         callback(gc, addr)
-                    addr += sizeofaddr
+                #
             self.rootstackhook = default_walk_stack_root
 
         self.shadow_stack_pool = ShadowStackPool(gcdata)

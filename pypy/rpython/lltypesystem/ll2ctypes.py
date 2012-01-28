@@ -1266,6 +1266,9 @@ class _lladdress(long):
     def _cast_to_ptr(self, TP):
         return force_cast(TP, self.intval)
 
+    def _cast_to_int(self, symbolic="ignored"):
+        return long(self)    # 'self' is already a subclass of long...
+
     def __repr__(self):
         return '<_lladdress %s>' % (self.void_p,)
 
