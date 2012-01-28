@@ -403,6 +403,17 @@ class RttiStruct(Struct):
 class GcStruct(RttiStruct):
     _gckind = 'gc'
 
+    def __init__(self, *args, **kwds):
+        RttiStruct.__init__(self, *args, **kwds)
+        # for --gcrootfinder=scan: we need a way to ensure that most gcrefs
+        # in a program cannot point to varsized stuff.  The easiest is to
+        # make sure that GcStructs with no _arrayfld cannot be extended into
+        # GcStructs with an _arrayfld.  If this property is needed later,
+        # think harder about pypy.rpython.memory.gctransform.scan.
+        if self._arrayfld is not None and self._first_struct() != (None, None):
+            raise TypeError("GcStruct has both an inlined first struct and "
+                            "an Array at the end")
+
 STRUCT_BY_FLAVOR = {'raw': Struct,
                     'gc':  GcStruct}
 

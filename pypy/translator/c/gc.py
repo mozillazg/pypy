@@ -6,7 +6,7 @@ from pypy.rpython.lltypesystem.lltype import \
      typeOf, Ptr, ContainerType, RttiStruct, \
      RuntimeTypeInfo, getRuntimeTypeInfo, top_container
 from pypy.rpython.memory.gctransform import \
-     refcounting, boehm, framework, asmgcroot
+     refcounting, boehm, framework, asmgcroot, scan
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
@@ -406,6 +406,15 @@ class AsmGcRootFrameworkGcPolicy(FrameworkGcPolicy):
     def OP_GC_STACK_BOTTOM(self, funcgen, op):
         return 'pypy_asm_stack_bottom();'
 
+class ScanFrameworkGcPolicy(FrameworkGcPolicy):
+    transformerclass = scan.ScanFrameworkGCTransformer
+
+    def GC_KEEPALIVE(self, funcgen, v):
+        return 'pypy_asm_keepalive(%s);' % funcgen.expr(v)
+
+    def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
+        raise Exception("should not be produced with --gcrootfinder=scan")
+
 
 name_to_gcpolicy = {
     'boehm': BoehmGcPolicy,
@@ -413,6 +422,5 @@ name_to_gcpolicy = {
     'none': NoneGcPolicy,
     'framework': FrameworkGcPolicy,
     'framework+asmgcroot': AsmGcRootFrameworkGcPolicy,
+    'framework+scan': ScanFrameworkGcPolicy,
 }
-
-

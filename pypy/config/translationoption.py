@@ -90,13 +90,14 @@ translation_optiondescription = OptionDescription(
                default=IS_64_BITS, cmdline="--gcremovetypeptr"),
     ChoiceOption("gcrootfinder",
                  "Strategy for finding GC Roots (framework GCs only)",
-                 ["n/a", "shadowstack", "asmgcc"],
+                 ["n/a", "shadowstack", "asmgcc", "scan"],
                  "shadowstack",
                  cmdline="--gcrootfinder",
                  requires={
                      "shadowstack": [("translation.gctransformer", "framework")],
                      "asmgcc": [("translation.gctransformer", "framework"),
                                 ("translation.backend", "c")],
+                     "scan": [("translation.gctransformer", "framework")],
                     }),
 
     # other noticeable options
