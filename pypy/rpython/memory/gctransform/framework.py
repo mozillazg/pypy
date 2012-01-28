@@ -1233,7 +1233,7 @@ class FrameworkGCTransformer(GCTransformer):
         self.num_pushs += len(livevars)
         if insert_rec_marker:
             from pypy.rpython.memory.gctransform import shadowstack
-            MARKER = shadowstack.ShadowStackRootWalker.MARKER_NOT_TRACED
+            MARKER = shadowstack.MARKER_NOT_TRACED
             c_marker = rmodel.inputconst(lltype.Signed, MARKER)
             livevars.append(c_marker)
         if not livevars:

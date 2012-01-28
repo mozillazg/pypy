@@ -7,13 +7,14 @@ from pypy.rlib.nonconst import NonConstant
 from pypy.annotation import model as annmodel
 
 
+# special values in the shadowstack (different values than
+# the jit's MARKER_FRAME, which is 8):
+MARKER_NOT_TRACED = 16
+MARKER_TRACED     = 24
+
+
 class ShadowStackRootWalker(BaseRootWalker):
     need_root_stack = True
-
-    # special values in the shadowstack (different values than
-    # the jit's MARKER, which is 8):
-    MARKER_NOT_TRACED = 16
-    MARKER_TRACED     = 24
 
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
@@ -33,12 +34,12 @@ class ShadowStackRootWalker(BaseRootWalker):
         self.decr_stack = decr_stack
 
         root_iterator = get_root_iterator(gctransformer)
-        def walk_stack_root(callback, start, end):
+        def walk_stack_root(callback, start, end, is_minor):
             root_iterator.setcontext(NonConstant(llmemory.NULL))
             gc = self.gc
             addr = end
             while True:
-                addr = root_iterator.nextleft(gc, start, addr)
+                addr = root_iterator.nextleft(gc, start, addr, is_minor)
                 if addr == llmemory.NULL:
                     return
                 callback(gc, addr)
@@ -339,9 +340,29 @@ def get_root_iterator(gctransformer):
                 return True
             def setcontext(self, context):
                 pass
-            def nextleft(self, gc, start, addr):
+            def nextleft(self, gc, start, addr, is_minor):
                 while addr != start:
                     addr -= sizeofaddr
+                    value = llmemory.cast_adr_to_int(addr.address[0])
+                    #
+                    # If 'addr' contains MARKER_TRACED, and if we are doing
+                    # a minor collection, then stop here.  The previous items
+                    # have all been traced at least once already, so they
+                    # cannot contain young pointers.
+                    if value == MARKER_TRACED:
+                        if is_minor:
+                            break
+                        continue     # ignore the marker and continue
+                    #
+                    # If 'addr' contains MARKER_NOT_TRACED, replace it by
+                    # MARKER_TRACED.
+                    if value == MARKER_NOT_TRACED:
+                        addr.address[0] = rffi.cast(llmemory.Address,
+                                                    MARKER_TRACED)
+                        continue
+                    #
+                    # Regular part follows: invoke 'callback' if myaddr really
+                    # points to an object
                     if gc.points_to_valid_gc_object(addr):
                         return addr
                 return llmemory.NULL
