@@ -392,7 +392,11 @@ def get_shadowstackref(gctransformer):
         if not prev:
             root_iterator.setcontext(obj.context)
             prev = obj.top
-        return root_iterator.nextleft(gc, obj.base, prev)
+        return root_iterator.nextleft(gc, obj.base, prev,
+                                      is_minor=False)
+        # note: it's probably good enough to pass is_minor=False,
+        # because if the 'obj' stays around for longer, it becomes
+        # itself an old object and is not traced any more at all
 
     CUSTOMTRACEFUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
                                       llmemory.Address)
