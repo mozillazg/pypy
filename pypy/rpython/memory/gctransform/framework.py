@@ -14,6 +14,7 @@ from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
 from pypy.translator.backendopt.finalizer import FinalizerAnalyzer
 from pypy.annotation import model as annmodel
+from pypy.objspace.flow.model import Constant
 from pypy.rpython import annlowlevel
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF
@@ -651,9 +652,17 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_direct_call(self, hop):
         if self.collect_analyzer.analyze(hop.spaceop):
-            livevars = self.push_roots(hop)
+            #
+            v_func = hop.spaceop.args[0]
+            if isinstance(v_func, Constant):
+                graph = getattr(v_func.value._obj, 'graph', None)
+                rec = getattr(graph, 'contains_stack_check', False)
+            else:
+                rec = False    # good enough
+            #
+            livevars = self.push_roots(hop, insert_rec_marker=rec)
             self.default(hop)
-            self.pop_roots(hop, livevars)
+            self.pop_roots(hop, livevars, insert_rec_marker=rec)
         else:
             self.default(hop)
             if hop.spaceop.opname == "direct_call":
@@ -1121,7 +1130,6 @@ class FrameworkGCTransformer(GCTransformer):
         return None
 
     def transform_generic_set(self, hop):
-        from pypy.objspace.flow.model import Constant
         opname = hop.spaceop.opname
         v_struct = hop.spaceop.args[0]
         v_newvalue = hop.spaceop.args[-1]
@@ -1217,11 +1225,17 @@ class FrameworkGCTransformer(GCTransformer):
             livevars = [var for var in livevars if not var_ispyobj(var)]
         return livevars
 
-    def push_roots(self, hop, keep_current_args=False):
+    def push_roots(self, hop, keep_current_args=False,
+                              insert_rec_marker=False):
         if self.incr_stack_ptr is None:
             return
         livevars = self.get_livevars_for_roots(hop, keep_current_args)
         self.num_pushs += len(livevars)
+        if insert_rec_marker:
+            from pypy.rpython.memory.gctransform import shadowstack
+            MARKER = shadowstack.ShadowStackRootWalker.MARKER_NOT_TRACED
+            c_marker = rmodel.inputconst(lltype.Signed, MARKER)
+            livevars.append(c_marker)
         if not livevars:
             return []
         c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
@@ -1234,12 +1248,15 @@ class FrameworkGCTransformer(GCTransformer):
             hop.genop("raw_store", [base_addr, c_type, c_k, v_adr])
         return livevars
 
-    def pop_roots(self, hop, livevars):
+    def pop_roots(self, hop, livevars, insert_rec_marker=False):
         if self.decr_stack_ptr is None:
             return
-        if not livevars:
+        length = len(livevars)
+        if insert_rec_marker:
+            length += 1
+        if length == 0:
             return
-        c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
+        c_len = rmodel.inputconst(lltype.Signed, length)
         base_addr = hop.genop("direct_call", [self.decr_stack_ptr, c_len ],
                               resulttype=llmemory.Address)
         if self.gcdata.gc.moving_gc:
