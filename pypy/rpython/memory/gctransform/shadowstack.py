@@ -8,7 +8,7 @@ from pypy.annotation import model as annmodel
 
 
 # special values in the shadowstack (different values than
-# the jit's MARKER_FRAME, which is 8):
+# the jit's MARKER_FRAME(_TRACED), which are 8 and 32):
 MARKER_NOT_TRACED = 16
 MARKER_TRACED     = 24
 
