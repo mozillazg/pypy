@@ -1193,7 +1193,8 @@ class TestUsingFramework(object):
             else:
                 return f_rec(n-1) + f_rec(n-2)
         def fn():
-            print f_rec(10)
+            n = f_rec(10)
+            assert n == 89
             return 0
         return fn
 

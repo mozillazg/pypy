@@ -662,7 +662,7 @@ class FrameworkGCTransformer(GCTransformer):
             #
             livevars = self.push_roots(hop, insert_rec_marker=rec)
             self.default(hop)
-            self.pop_roots(hop, livevars, insert_rec_marker=rec)
+            self.pop_roots(hop, livevars)
         else:
             self.default(hop)
             if hop.spaceop.opname == "direct_call":
@@ -1248,21 +1248,20 @@ class FrameworkGCTransformer(GCTransformer):
             hop.genop("raw_store", [base_addr, c_type, c_k, v_adr])
         return livevars
 
-    def pop_roots(self, hop, livevars, insert_rec_marker=False):
+    def pop_roots(self, hop, livevars):
         if self.decr_stack_ptr is None:
             return
-        length = len(livevars)
-        if insert_rec_marker:
-            length += 1
-        if length == 0:
+        if not livevars:
             return
-        c_len = rmodel.inputconst(lltype.Signed, length)
+        c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
         base_addr = hop.genop("direct_call", [self.decr_stack_ptr, c_len ],
                               resulttype=llmemory.Address)
         if self.gcdata.gc.moving_gc:
             # for moving collectors, reload the roots into the local variables
             c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
             for k,var in enumerate(livevars):
+                if isinstance(var, Constant):   # "c_marker" only
+                    continue
                 c_k = rmodel.inputconst(lltype.Signed, k)
                 v_newaddr = hop.genop("raw_load", [base_addr, c_type, c_k],
                                       resulttype=llmemory.Address)
