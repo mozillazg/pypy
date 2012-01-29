@@ -1185,6 +1185,22 @@ class TestUsingFramework(object):
         assert data.startswith('member0')
         assert 'GcArray of * GcStruct S {' in data
 
+    def define_recursive_function(self):
+        def f_rec(n):
+            if n < 2:
+                rgc.collect()
+                return 1
+            else:
+                return f_rec(n-1) + f_rec(n-2)
+        def fn():
+            print f_rec(10)
+            return 0
+        return fn
+
+    def test_recursive_function(self):
+        self.run("recursive_function")
+
+
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
