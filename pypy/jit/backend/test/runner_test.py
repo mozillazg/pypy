@@ -3140,6 +3140,11 @@ class LLtypeBackendTest(BaseBackendTest):
         fail = self.cpu.execute_token(looptoken2, -9)
         assert fail.identifier == 42
 
+    def test_vector_ops(self):
+        ops = """
+        [p0]
+        guard_array_aligned(p0) []
+        """
 
 class OOtypeBackendTest(BaseBackendTest):
 

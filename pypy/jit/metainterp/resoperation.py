@@ -393,6 +393,7 @@ _oplist = [
     'GUARD_OVERFLOW/0d',
     'GUARD_NOT_FORCED/0d',      # may be called with an exception currently set
     'GUARD_NOT_INVALIDATED/0d',
+    'GUARD_ARRAY_ALIGNED/1d',
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
@@ -415,6 +416,7 @@ _oplist = [
     'FLOAT_TRUEDIV/2',
     'FLOAT_NEG/1',
     'FLOAT_ABS/1',
+    'FLOAT_VECTOR_ADD/2',
     'CAST_FLOAT_TO_INT/1',          # don't use for unsigned ints; we would
     'CAST_INT_TO_FLOAT/1',          # need some messy code in the backend
     'CAST_FLOAT_TO_SINGLEFLOAT/1',
@@ -467,6 +469,7 @@ _oplist = [
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
 
     'GETARRAYITEM_GC/2d',
+    'GETARRAYITEM_VECTOR_RAW/2d',
     'GETARRAYITEM_RAW/2d',
     'GETINTERIORFIELD_GC/2d',
     'GETINTERIORFIELD_RAW/2d',
@@ -487,6 +490,7 @@ _oplist = [
 
     'SETARRAYITEM_GC/3d',
     'SETARRAYITEM_RAW/3d',
+    'SETARRAYITEM_VECTOR_RAW/2d',
     'SETINTERIORFIELD_GC/3d',
     'SETINTERIORFIELD_RAW/3d',
     'SETFIELD_GC/2d',
