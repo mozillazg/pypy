@@ -88,14 +88,14 @@ def split(lst):
                 l[i].append(lst[k * lgt + i])
     return l
 
-SPECIAL_NAMES = ["ndarray", "dtype", "generic"]
+SPECIAL_NAMES = ["ndarray", "dtype", "generic", "flatiter"]
 
 def main(argv):
     cpy_items = find_numpy_items("/usr/bin/python")
     pypy_items = find_numpy_items(argv[1], "numpypy")
     all_items = []
 
-    msg = "{:d}/{:d} names".format(len(pypy_items), len(cpy_items))
+    msg = "{:d}/{:d} names".format(len(pypy_items), len(cpy_items)) + " "
     msg += ", ".join(
         "{:d}/{:d} {} attributes".format(
             len(pypy_items[name].subitems), len(cpy_items[name].subitems), name
