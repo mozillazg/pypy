@@ -3141,10 +3141,29 @@ class LLtypeBackendTest(BaseBackendTest):
         assert fail.identifier == 42
 
     def test_vector_ops(self):
-        ops = """
-        [p0]
-        guard_array_aligned(p0) []
-        """
+        if not self.cpu.supports_vector_ops:
+            py.test.skip("unsupported vector ops")
+        
+        A = lltype.Array(lltype.Float, hints={'nolength': True,
+                                               'memory_position_alignment': 16})
+        descr0 = self.cpu.arraydescrof(A)
+        looptoken = JitCellToken()
+        ops = parse("""
+        [p0, p1]
+        vec0 = getarrayitem_vector_raw(p0, 0, descr=descr0)
+        vec1 = getarrayitem_vector_raw(p1, 0, descr=descr0)
+        vec2 = float_vector_add(vec0, vec1)
+        setarrayitem_vector_raw(p0, 0, vec2, descr=descr0)
+        finish()
+        """, namespace=locals())
+        self.cpu.compile_loop(ops.inputargs, ops.operations, looptoken)
+        a = lltype.malloc(A, 10, flavor='raw')
+        a[0] = 13.0
+        a[1] = 15.0
+        self.cpu.execute_token(looptoken, a, a)
+        assert a[0] == 26
+        assert a[1] == 30
+        lltype.free(a, flavor='raw')
 
 class OOtypeBackendTest(BaseBackendTest):
 

@@ -10,6 +10,8 @@ class AbstractCPU(object):
     # longlongs are supported by the JIT, but stored as doubles.
     # Boxes and Consts are BoxFloats and ConstFloats.
     supports_singlefloats = False
+    supports_vector_ops = False
+    # SSE and similar
 
     done_with_this_frame_void_v = -1
     done_with_this_frame_int_v = -1

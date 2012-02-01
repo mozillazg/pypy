@@ -45,6 +45,7 @@ from pypy.rlib.objectmodel import compute_unique_id
 # darwin requires the stack to be 16 bytes aligned on calls. Same for gcc 4.5.0,
 # better safe than sorry
 CALL_ALIGN = 16 // WORD
+FLOAT_VECTOR_SIZE = 1 # multiply by 2
 
 def align_stack_words(words):
     return (words + CALL_ALIGN - 1) & ~(CALL_ALIGN-1)
@@ -1164,6 +1165,7 @@ class Assembler386(object):
     genop_int_rshift = _binaryop("SAR")
     genop_uint_rshift = _binaryop("SHR")
     genop_float_add = _binaryop("ADDSD", True)
+    genop_float_vector_add = _binaryop("ADDPD", True)
     genop_float_sub = _binaryop('SUBSD')
     genop_float_mul = _binaryop('MULSD', True)
     genop_float_truediv = _binaryop('DIVSD')
@@ -1458,6 +1460,13 @@ class Assembler386(object):
     genop_getarrayitem_gc_pure = genop_getarrayitem_gc
     genop_getarrayitem_raw = genop_getarrayitem_gc
 
+    def genop_getarrayitem_vector_raw(self, op, arglocs, resloc):
+        base_loc, ofs_loc, size_loc, _, sign_loc = arglocs
+        assert isinstance(size_loc, ImmedLoc)
+        scale = _get_scale(size_loc.value)
+        src_addr = addr_add(base_loc, ofs_loc, 0, scale)
+        self.mc.MOVDQA(resloc, src_addr)
+
     def _get_interiorfield_addr(self, temp_loc, index_loc, itemsize_loc,
                                 base_loc, ofs_loc):
         assert isinstance(itemsize_loc, ImmedLoc)
@@ -1509,6 +1518,13 @@ class Assembler386(object):
         scale = _get_scale(size_loc.value)
         dest_addr = AddressLoc(base_loc, ofs_loc, scale, baseofs.value)
         self.save_into_mem(dest_addr, value_loc, size_loc)
+
+    def genop_discard_setarrayitem_vector_raw(self, op, arglocs):
+        base_loc, ofs_loc, value_loc, size_loc, _ = arglocs
+        assert isinstance(size_loc, ImmedLoc)
+        scale = _get_scale(size_loc.value)
+        dest_addr = AddressLoc(base_loc, ofs_loc, scale, 0)
+        self.mc.MOVDQA(dest_addr, value_loc)
 
     def genop_discard_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs

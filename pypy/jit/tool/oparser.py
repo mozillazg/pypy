@@ -114,6 +114,9 @@ class OpParser(object):
         elif elem.startswith('f'):
             box = self.model.BoxFloat()
             _box_counter_more_than(self.model, elem[1:])
+        elif elem.startswith('vec'):
+            box = self.model.BoxVector()
+            _box_counter_more_than(self.model, elem[3:])
         elif elem.startswith('p'):
             # pointer
             ts = getattr(self.cpu, 'ts', self.model.llhelper)

@@ -556,6 +556,7 @@ class LocationCodeBuilder(object):
 
     MOVSD = _binaryop('MOVSD')
     MOVAPD = _binaryop('MOVAPD')
+    MOVDQA = _binaryop('MOVDQA')
     ADDSD = _binaryop('ADDSD')
     ADDPD = _binaryop('ADDPD')
     SUBSD = _binaryop('SUBSD')

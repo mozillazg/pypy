@@ -482,17 +482,14 @@ class BoxInt(Box):
     def repr_rpython(self):
         return repr_rpython(self, 'bi')
 
-class BoxFloatVector(Box):
+class BoxVector(Box):
     type = VECTOR
 
-    def __init__(self, floats):
-        self.floats = floats
+    def __init__(self):
+        pass
 
-class BoxIntVector(Box):
-    type = VECTOR
-
-    def __init__(self, ints):
-        self.ints = ints
+    def _getrepr_(self):
+        return ''
 
 class BoxFloat(Box):
     type = FLOAT

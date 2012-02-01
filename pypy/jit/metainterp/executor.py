@@ -273,6 +273,9 @@ def do_read_timestamp(cpu, _):
 # ____________________________________________________________
 
 
+IGNORED = ['FLOAT_VECTOR_ADD', 'GETARRAYITEM_VECTOR_RAW',
+           'SETARRAYITEM_VECTOR_RAW']
+
 def _make_execute_list():
     if 0:     # enable this to trace calls to do_xxx
         def wrap(fn):
@@ -349,7 +352,8 @@ def _make_execute_list():
                          rop.LABEL,
                          ):      # list of opcodes never executed by pyjitpl
                 continue
-            raise AssertionError("missing %r" % (key,))
+            if not key in IGNORED:
+                raise AssertionError("missing %r" % (key,))
     return execute_by_num_args
 
 def make_execute_function_with_boxes(name, func):
