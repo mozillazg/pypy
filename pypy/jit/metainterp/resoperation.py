@@ -393,7 +393,6 @@ _oplist = [
     'GUARD_OVERFLOW/0d',
     'GUARD_NOT_FORCED/0d',      # may be called with an exception currently set
     'GUARD_NOT_INVALIDATED/0d',
-    'GUARD_ARRAY_ALIGNED/1d',
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
