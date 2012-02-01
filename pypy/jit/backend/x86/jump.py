@@ -76,9 +76,9 @@ def _move(assembler, src, dst, tmpreg):
             assembler.regalloc_push(src)
             assembler.regalloc_pop(dst)
             return
-        assembler.regalloc_mov(src, tmpreg)
+        assembler.regalloc_mov(None, src, tmpreg)
         src = tmpreg
-    assembler.regalloc_mov(src, dst)
+    assembler.regalloc_mov(None, src, dst)
 
 def remap_frame_layout_mixed(assembler,
                              src_locations1, dst_locations1, tmpreg1,
