@@ -54,7 +54,7 @@ class MockAssembler(object):
     def dump(self, *args):
         pass
 
-    def regalloc_mov(self, from_loc, to_loc):
+    def regalloc_mov(self, box, from_loc, to_loc):
         self.movs.append((from_loc, to_loc))
 
     def regalloc_perform(self, op, arglocs, resloc):
