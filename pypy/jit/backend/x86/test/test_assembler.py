@@ -33,12 +33,12 @@ def test_write_failure_recovery_description():
     failargs = [BoxInt(), BoxPtr(), BoxFloat()] * 3
     failargs.insert(6, None)
     failargs.insert(7, None)
-    locs = [X86FrameManager.frame_pos(0, INT),
-            X86FrameManager.frame_pos(1, REF),
-            X86FrameManager.frame_pos(10, FLOAT),
-            X86FrameManager.frame_pos(100, INT),
-            X86FrameManager.frame_pos(101, REF),
-            X86FrameManager.frame_pos(110, FLOAT),
+    locs = [X86FrameManager.frame_pos(0, BoxInt()),
+            X86FrameManager.frame_pos(1, BoxPtr()),
+            X86FrameManager.frame_pos(10, BoxFloat()),
+            X86FrameManager.frame_pos(100, BoxInt()),
+            X86FrameManager.frame_pos(101, BoxPtr()),
+            X86FrameManager.frame_pos(110, BoxFloat()),
             None,
             None,
             ebx,
@@ -272,7 +272,7 @@ class TestRegallocPushPop(object):
 
     def test_simple(self):
         def callback(asm):
-            asm.mov(imm(42), edx)
+            asm.mov(BoxInt(), imm(42), edx)
             asm.regalloc_push(edx)
             asm.regalloc_pop(eax)
         res = self.do_test(callback)
@@ -280,9 +280,9 @@ class TestRegallocPushPop(object):
 
     def test_push_stack(self):
         def callback(asm):
-            loc = self.fm.frame_pos(5, INT)
+            loc = self.fm.frame_pos(5, BoxInt())
             asm.mc.SUB_ri(esp.value, 64)
-            asm.mov(imm(42), loc)
+            asm.mov(BoxInt(), imm(42), loc)
             asm.regalloc_push(loc)
             asm.regalloc_pop(eax)
             asm.mc.ADD_ri(esp.value, 64)
@@ -291,12 +291,12 @@ class TestRegallocPushPop(object):
 
     def test_pop_stack(self):
         def callback(asm):
-            loc = self.fm.frame_pos(5, INT)
+            loc = self.fm.frame_pos(5, BoxInt())
             asm.mc.SUB_ri(esp.value, 64)
-            asm.mov(imm(42), edx)
+            asm.mov(BoxInt(), imm(42), edx)
             asm.regalloc_push(edx)
             asm.regalloc_pop(loc)
-            asm.mov(loc, eax)
+            asm.mov(BoxInt(), loc, eax)
             asm.mc.ADD_ri(esp.value, 64)
         res = self.do_test(callback)
         assert res == 42
@@ -305,7 +305,7 @@ class TestRegallocPushPop(object):
         def callback(asm):
             c = ConstFloat(longlong.getfloatstorage(-42.5))
             loc = self.xrm.convert_to_imm(c)
-            asm.mov(loc, xmm5)
+            asm.mov(BoxInt(), loc, xmm5)
             asm.regalloc_push(xmm5)
             asm.regalloc_pop(xmm0)
             asm.mc.CVTTSD2SI(eax, xmm0)
@@ -316,10 +316,10 @@ class TestRegallocPushPop(object):
         def callback(asm):
             c = ConstFloat(longlong.getfloatstorage(-42.5))
             loc = self.xrm.convert_to_imm(c)
-            loc2 = self.fm.frame_pos(4, FLOAT)
+            loc2 = self.fm.frame_pos(4, BoxFloat())
             asm.mc.SUB_ri(esp.value, 64)
-            asm.mov(loc, xmm5)
-            asm.mov(xmm5, loc2)
+            asm.mov(BoxInt(), loc, xmm5)
+            asm.mov(BoxInt(), xmm5, loc2)
             asm.regalloc_push(loc2)
             asm.regalloc_pop(xmm0)
             asm.mc.ADD_ri(esp.value, 64)
@@ -331,12 +331,12 @@ class TestRegallocPushPop(object):
         def callback(asm):
             c = ConstFloat(longlong.getfloatstorage(-42.5))
             loc = self.xrm.convert_to_imm(c)
-            loc2 = self.fm.frame_pos(4, FLOAT)
+            loc2 = self.fm.frame_pos(4, BoxFloat())
             asm.mc.SUB_ri(esp.value, 64)
-            asm.mov(loc, xmm5)
+            asm.mov(BoxInt(), loc, xmm5)
             asm.regalloc_push(xmm5)
             asm.regalloc_pop(loc2)
-            asm.mov(loc2, xmm0)
+            asm.mov(BoxInt(), loc2, xmm0)
             asm.mc.ADD_ri(esp.value, 64)
             asm.mc.CVTTSD2SI(eax, xmm0)
         res = self.do_test(callback)

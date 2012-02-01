@@ -3,7 +3,7 @@ from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
 from pypy.jit.metainterp.history import Const, Box, BoxInt, ConstInt, BoxVector
 from pypy.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT
-from pypy.jit.metainterp.history import JitCellToken
+from pypy.jit.metainterp.history import JitCellToken, BoxPtr, BoxFloat
 from pypy.rpython.lltypesystem import lltype, rffi, rstr, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
@@ -1802,7 +1802,7 @@ class Assembler386(object):
 
     def rebuild_faillocs_from_descr(self, bytecode):
         from pypy.jit.backend.x86.regalloc import X86FrameManager
-        descr_to_box_type = [REF, INT, FLOAT]
+        descr_to_box_type = [BoxPtr(), BoxInt(), BoxFloat()]
         bytecode = rffi.cast(rffi.UCHARP, bytecode)
         arglocs = []
         code_inputarg = False
