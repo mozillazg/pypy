@@ -183,7 +183,11 @@ def build_ctypes_array(A, delayed_builders, max_n=0):
                         ('items',  max_n * ctypes_item)]
         else:
             _fields_ = [('items',  max_n * ctypes_item)]
-
+            if A._hints.get('memory_position_alignment'):
+                # This pack means the same as #pragma pack in MSVC and *not*
+                # in gcc
+                _pack_ = A._hints.get('memory_position_alignment')
+            
         @classmethod
         def _malloc(cls, n=None):
             if not isinstance(n, int):

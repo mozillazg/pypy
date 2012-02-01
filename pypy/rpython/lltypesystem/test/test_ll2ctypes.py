@@ -1356,6 +1356,19 @@ class TestLL2Ctypes(object):
         a2 = ctypes2lltype(lltype.Ptr(A), lltype2ctypes(a))
         assert a2._obj.getitem(0)._obj._parentstructure() is a2._obj
 
+    def test_aligned_alloc(Self):
+        A = lltype.Array(lltype.Signed,
+                         hints={'memory_position_alignment': 16,
+                                'nolength': True})
+        l = []
+        for i in range(10):
+            a = lltype.malloc(A, 5, flavor='raw')
+            ca = lltype2ctypes(a)
+            assert ctypes.cast(ca, ctypes.c_void_p).value % 16 == 0
+            l.append(a)
+        for i in range(10):
+            lltype.free(l[i], 'raw')
+
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
         from pypy.translator.platform import platform

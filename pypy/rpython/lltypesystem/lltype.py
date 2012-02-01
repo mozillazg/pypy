@@ -179,6 +179,8 @@ class ContainerType(LowLevelType):
         raise TypeError, "%r cannot be inlined in structure" % self
 
     def _install_extras(self, adtmeths={}, hints={}):
+        if not isinstance(self, Array):
+            assert not 'memory_position_alignment' in hints
         self._adtmeths = frozendict(adtmeths)
         self._hints = frozendict(hints)
 
@@ -422,6 +424,10 @@ class Array(ContainerType):
                             % (self.OF._gckind,))
         self.OF._inline_is_varsize(False)
 
+        if 'memory_position_alignment' in kwds.get('_hints', {}):
+            assert kwds['_hints']['nolength'], 'alignment only for raw non-lenght arrays'
+            assert self._gckind == 'raw', 'alignment only for raw non-lenght arrays'
+            assert kwds['_hints']['memory_position_alignment'] in (1, 2, 4, 8, 16)
         self._install_extras(**kwds)
 
     def _inline_is_varsize(self, last):
