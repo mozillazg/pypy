@@ -9,6 +9,7 @@ from pypy.jit.metainterp.optimizeopt.fficall import OptFfiCall
 from pypy.jit.metainterp.optimizeopt.simplify import OptSimplify
 from pypy.jit.metainterp.optimizeopt.pure import OptPure
 from pypy.jit.metainterp.optimizeopt.earlyforce import OptEarlyForce
+from pypy.jit.metainterp.optimizeopt.vectorize import OptVectorize
 from pypy.rlib.jit import PARAMETERS
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -21,6 +22,7 @@ ALL_OPTS = [('intbounds', OptIntBounds),
             ('earlyforce', OptEarlyForce),
             ('pure', OptPure),
             ('heap', OptHeap),
+            ('vectorize', OptVectorize), # XXX check if CPU supports that maybe
             ('ffi', None),
             ('unroll', None)]
 # no direct instantiation of unroll

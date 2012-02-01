@@ -1259,7 +1259,7 @@ class RegAlloc(object):
             scale = self._get_unicode_item_scale()
             if not (isinstance(length_loc, ImmedLoc) or
                     isinstance(length_loc, RegLoc)):
-                self.assembler.mov(args[4], ength_loc, bytes_loc)
+                self.assembler.mov(args[4], length_loc, bytes_loc)
                 length_loc = bytes_loc
             self.assembler.load_effective_addr(length_loc, 0, scale, bytes_loc)
             length_box = bytes_box
