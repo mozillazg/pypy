@@ -17,7 +17,6 @@ import weakref
 INT   = 'i'
 REF   = 'r'
 FLOAT = 'f'
-VECTOR = 'e'
 STRUCT = 's'
 HOLE  = '_'
 VOID  = 'v'
@@ -482,15 +481,6 @@ class BoxInt(Box):
     def repr_rpython(self):
         return repr_rpython(self, 'bi')
 
-class BoxVector(Box):
-    type = VECTOR
-
-    def __init__(self):
-        pass
-
-    def _getrepr_(self):
-        return ''
-
 class BoxFloat(Box):
     type = FLOAT
     _attrs_ = ('value',)
@@ -522,6 +512,12 @@ class BoxFloat(Box):
 
     def repr_rpython(self):
         return repr_rpython(self, 'bf')
+
+class BoxVector(BoxFloat):
+    value = float('nan')
+    
+    def _getrepr_(self):
+        return ''
 
 class BoxPtr(Box):
     type = REF

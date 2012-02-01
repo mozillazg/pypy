@@ -5,7 +5,7 @@
 import os
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
                                          ResOperation, BoxPtr, ConstFloat,
-                                         BoxFloat, INT, REF, FLOAT, VECTOR,
+                                         BoxFloat, INT, REF, FLOAT,
                                          TargetToken, JitCellToken)
 from pypy.jit.backend.x86.regloc import *
 from pypy.rpython.lltypesystem import lltype, rffi, rstr
@@ -87,7 +87,7 @@ class X86_64_RegisterManager(X86RegisterManager):
 
 class X86XMMRegisterManager(RegisterManager):
 
-    box_types = [FLOAT, VECTOR]
+    box_types = [FLOAT]
     all_regs = [xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7]
     # we never need lower byte I hope
     save_around_call_regs = all_regs
@@ -256,7 +256,7 @@ class RegAlloc(object):
         return pass_on_stack
 
     def possibly_free_var(self, var):
-        if var.type in self.xrm.box_types:
+        if var.type == FLOAT:
             self.xrm.possibly_free_var(var)
         else:
             self.rm.possibly_free_var(var)
@@ -274,7 +274,7 @@ class RegAlloc(object):
 
     def make_sure_var_in_reg(self, var, forbidden_vars=[],
                              selected_reg=None, need_lower_byte=False):
-        if var.type in self.xrm.box_types:
+        if var.type == FLOAT:
             if isinstance(var, ConstFloat):
                 return FloatImmedLoc(var.getfloatstorage())
             return self.xrm.make_sure_var_in_reg(var, forbidden_vars,
@@ -285,7 +285,7 @@ class RegAlloc(object):
 
     def force_allocate_reg(self, var, forbidden_vars=[], selected_reg=None,
                            need_lower_byte=False):
-        if var.type in self.xrm.box_types:
+        if var.type == FLOAT:
             return self.xrm.force_allocate_reg(var, forbidden_vars,
                                                selected_reg, need_lower_byte)
         else:
@@ -293,7 +293,7 @@ class RegAlloc(object):
                                               selected_reg, need_lower_byte)
 
     def force_spill_var(self, var):
-        if var.type in self.xrm.box_types:
+        if var.type == FLOAT:
             return self.xrm.force_spill_var(var)
         else:
             return self.rm.force_spill_var(var)
@@ -530,7 +530,7 @@ class RegAlloc(object):
     def loc(self, v):
         if v is None: # xxx kludgy
             return None
-        if v.type in self.xrm.box_types:
+        if v.type == FLOAT:
             return self.xrm.loc(v)
         return self.rm.loc(v)
 
