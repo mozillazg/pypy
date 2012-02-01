@@ -3,15 +3,20 @@ from pypy.jit.backend.x86.regloc import *
 from pypy.jit.backend.x86.regalloc import X86FrameManager
 from pypy.jit.backend.x86.jump import remap_frame_layout
 from pypy.jit.backend.x86.jump import remap_frame_layout_mixed
-from pypy.jit.metainterp.history import INT
+from pypy.jit.metainterp.history import INT, BoxInt, BoxFloat
 
-frame_pos = X86FrameManager.frame_pos
+def frame_pos(pos, tp):
+    if tp == INT:
+        box = BoxInt()
+    else:
+        box = BoxFloat()
+    return X86FrameManager.frame_pos(pos, box)
 
 class MockAssembler:
     def __init__(self):
         self.ops = []
 
-    def regalloc_mov(self, from_loc, to_loc):
+    def regalloc_mov(self, v, from_loc, to_loc):
         self.ops.append(('mov', from_loc, to_loc))
 
     def regalloc_push(self, loc):
@@ -396,7 +401,7 @@ def test_overflow_bug():
         (-488, -488),   # - one self-application of -488
         ]
     class FakeAssembler:
-        def regalloc_mov(self, src, dst):
+        def regalloc_mov(self, v, src, dst):
             print "mov", src, dst
         def regalloc_push(self, x):
             print "push", x
