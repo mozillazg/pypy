@@ -233,7 +233,7 @@ class RegAlloc(object):
                 cur_frame_pos -= 2
             else:
                 cur_frame_pos -= 1
-            loc = self.fm.frame_pos(cur_frame_pos, box.type)
+            loc = self.fm.frame_pos(cur_frame_pos, box)
             self.fm.set_binding(box, loc)
 
     def _set_initial_bindings_regs_64(self, inputargs):
