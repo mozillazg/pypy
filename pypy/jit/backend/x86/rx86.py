@@ -726,6 +726,10 @@ define_modrm_modes('MOVDQA_x*', ['\x66', rex_nw, '\x0F\x6F', register(1, 8)],
                    regtype='XMM')
 define_modrm_modes('MOVDQA_*x', ['\x66', rex_nw, '\x0F\x7F', register(2, 8)],
                    regtype='XMM')
+define_modrm_modes('MOVDQU_x*', ['\xF3', rex_nw, '\x0F\x6F', register(1, 8)],
+                   regtype='XMM')
+define_modrm_modes('MOVDQU_*x', ['\xF3', rex_nw, '\x0F\x7F', register(2, 8)],
+                   regtype='XMM')
 
 define_modrm_modes('SQRTSD_x*', ['\xF2', rex_nw, '\x0F\x51', register(1,8)], regtype='XMM')
 

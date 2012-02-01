@@ -3164,6 +3164,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert a[0] == 26
         assert a[1] == 30
         lltype.free(a, flavor='raw')
+        
 
 class OOtypeBackendTest(BaseBackendTest):
 

@@ -518,6 +518,58 @@ class TestX86(LLtypeBackendTest):
             assert self.cpu.get_latest_value_int(3) == 42
 
 
+    def test_vector_spill(self):
+        A = lltype.Array(lltype.Float, hints={'nolength': True,
+                                               'memory_position_alignment': 16})
+        descr0 = self.cpu.arraydescrof(A)
+        looptoken = JitCellToken()
+        ops = parse("""
+        [p0, p1]
+        vec0 = getarrayitem_vector_raw(p0, 0, descr=descr0)
+        vec1 = getarrayitem_vector_raw(p1, 2, descr=descr0)
+        vec2 = getarrayitem_vector_raw(p1, 4, descr=descr0)
+        vec3 = getarrayitem_vector_raw(p1, 6, descr=descr0)
+        vec4 = getarrayitem_vector_raw(p1, 8, descr=descr0)
+        vec5 = getarrayitem_vector_raw(p1, 10, descr=descr0)
+        vec6 = getarrayitem_vector_raw(p1, 12, descr=descr0)
+        vec7 = getarrayitem_vector_raw(p1, 14, descr=descr0)
+        vec8 = getarrayitem_vector_raw(p1, 16, descr=descr0)
+        vec9 = getarrayitem_vector_raw(p1, 18, descr=descr0)
+        vec10 = getarrayitem_vector_raw(p1, 20, descr=descr0)
+        vec11 = getarrayitem_vector_raw(p1, 22, descr=descr0)
+        vec12 = getarrayitem_vector_raw(p1, 24, descr=descr0)
+        vec13 = getarrayitem_vector_raw(p1, 26, descr=descr0)
+        vec14 = getarrayitem_vector_raw(p1, 28, descr=descr0)
+        vec15 = getarrayitem_vector_raw(p1, 30, descr=descr0)
+        vec16 = float_vector_add(vec0, vec1)
+        vec17 = float_vector_add(vec16, vec2)
+        vec18 = float_vector_add(vec17, vec3)
+        vec19 = float_vector_add(vec18, vec4)
+        vec20 = float_vector_add(vec19, vec5)
+        vec21 = float_vector_add(vec20, vec6)
+        vec22 = float_vector_add(vec21, vec7)
+        vec23 = float_vector_add(vec22, vec8)
+        vec24 = float_vector_add(vec23, vec9)
+        vec25 = float_vector_add(vec24, vec10)
+        vec26 = float_vector_add(vec25, vec11)
+        vec27 = float_vector_add(vec26, vec12)
+        vec28 = float_vector_add(vec27, vec13)
+        vec29 = float_vector_add(vec28, vec14)
+        vec30 = float_vector_add(vec29, vec15)
+        setarrayitem_vector_raw(p0, 0, vec30, descr=descr0)
+        finish()
+        """, namespace=locals())
+        self.cpu.compile_loop(ops.inputargs, ops.operations, looptoken)
+        a = lltype.malloc(A, 32, flavor='raw')
+        assert rffi.cast(lltype.Signed, a) % 16 == 0
+        for i in range(32):
+            a[i] = float(i)
+        self.cpu.execute_token(looptoken, a, a)
+        assert a[0] == 16 * 15
+        assert a[1] == 16 * 16
+        lltype.free(a, flavor='raw')
+
+
 class TestDebuggingAssembler(object):
     def setup_method(self, meth):
         self.cpu = CPU(rtyper=None, stats=FakeStats())

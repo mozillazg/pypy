@@ -5,7 +5,7 @@
 import os
 from pypy.jit.metainterp.history import (Box, Const, ConstInt, ConstPtr,
                                          ResOperation, BoxPtr, ConstFloat,
-                                         BoxFloat, INT, REF, FLOAT,
+                                         BoxFloat, INT, REF, FLOAT, BoxVector,
                                          TargetToken, JitCellToken)
 from pypy.jit.backend.x86.regloc import *
 from pypy.rpython.lltypesystem import lltype, rffi, rstr
@@ -128,17 +128,25 @@ class X86_64_XMMRegisterManager(X86XMMRegisterManager):
 
 class X86FrameManager(FrameManager):
     @staticmethod
-    def frame_pos(i, box_type):
-        if IS_X86_32 and box_type == FLOAT:
-            return StackLoc(i, get_ebp_ofs(i+1), box_type)
-        else:
-            return StackLoc(i, get_ebp_ofs(i), box_type)
+    def frame_pos(i, box):
+        assert isinstance(box, Box)
+        if isinstance(box, BoxVector):
+            if IS_X86_32:
+                return StackLoc(i, get_ebp_ofs(i + 3), box.type)
+            return StackLoc(i, get_ebp_ofs(i + 1), box.type)            
+        if IS_X86_32 and box.type == FLOAT:
+            return StackLoc(i, get_ebp_ofs(i+1), box.type)
+        return StackLoc(i, get_ebp_ofs(i), box.type)
     @staticmethod
-    def frame_size(box_type):
-        if IS_X86_32 and box_type == FLOAT:
+    def frame_size(box):
+        assert isinstance(box, Box)
+        if isinstance(box, BoxVector):
+            if IS_X86_32:
+                return 4
             return 2
-        else:
-            return 1
+        if IS_X86_32 and box.type == FLOAT:
+            return 2
+        return 1
     @staticmethod
     def get_loc_index(loc):
         assert isinstance(loc, StackLoc)
@@ -370,7 +378,10 @@ class RegAlloc(object):
         self.assembler.regalloc_perform_math(op, arglocs, result_loc)
 
     def locs_for_fail(self, guard_op):
-        return [self.loc(v) for v in guard_op.getfailargs()]
+        failargs = guard_op.getfailargs()
+        for arg in failargs:
+            assert not isinstance(arg, BoxVector)
+        return [self.loc(v) for v in failargs]
 
     def get_current_depth(self):
         # return (self.fm.frame_depth, self.param_depth), but trying to share
@@ -701,10 +712,18 @@ class RegAlloc(object):
         self.xrm.possibly_free_vars_for_op(op)
 
     consider_float_add = _consider_float_op
-    consider_float_vector_add = _consider_float_op
     consider_float_sub = _consider_float_op
     consider_float_mul = _consider_float_op
     consider_float_truediv = _consider_float_op
+
+    def _consider_float_vector_op(self, op):
+        loc1 = self.xrm.make_sure_var_in_reg(op.getarg(1))
+        args = op.getarglist()
+        loc0 = self.xrm.force_result_in_reg(op.result, op.getarg(0), args)
+        self.Perform(op, [loc0, loc1], loc0)
+        self.xrm.possibly_free_vars_for_op(op)
+
+    consider_float_vector_add = _consider_float_vector_op
 
     def _consider_float_cmp(self, op, guard_op):
         vx = op.getarg(0)
@@ -1240,7 +1259,7 @@ class RegAlloc(object):
             scale = self._get_unicode_item_scale()
             if not (isinstance(length_loc, ImmedLoc) or
                     isinstance(length_loc, RegLoc)):
-                self.assembler.mov(length_loc, bytes_loc)
+                self.assembler.mov(args[4], ength_loc, bytes_loc)
                 length_loc = bytes_loc
             self.assembler.load_effective_addr(length_loc, 0, scale, bytes_loc)
             length_box = bytes_box
@@ -1347,6 +1366,7 @@ class RegAlloc(object):
         # Build the four lists
         for i in range(op.numargs()):
             box = op.getarg(i)
+            assert not isinstance(box, BoxVector)
             src_loc = self.loc(box)
             dst_loc = arglocs[i]
             if box.type != FLOAT:

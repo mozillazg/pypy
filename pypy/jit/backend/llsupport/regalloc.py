@@ -20,8 +20,6 @@ class FrameManager(object):
         self.used = []      # list of bools
         self.hint_frame_locations = {}
 
-    frame_depth = property(lambda:xxx, lambda:xxx)   # XXX kill me
-
     def get_frame_depth(self):
         return len(self.used)
 
@@ -45,7 +43,7 @@ class FrameManager(object):
         return self.get_new_loc(box)
 
     def get_new_loc(self, box):
-        size = self.frame_size(box.type)
+        size = self.frame_size(box)
         # frame_depth is rounded up to a multiple of 'size', assuming
         # that 'size' is a power of two.  The reason for doing so is to
         # avoid obscure issues in jump.py with stack locations that try
@@ -54,7 +52,7 @@ class FrameManager(object):
             self.used.append(False)
         #
         index = self.get_frame_depth()
-        newloc = self.frame_pos(index, box.type)
+        newloc = self.frame_pos(index, box)
         for i in range(size):
             self.used.append(True)
         #
@@ -71,7 +69,7 @@ class FrameManager(object):
         index = self.get_loc_index(loc)
         if index < 0:
             return
-        endindex = index + self.frame_size(box.type)
+        endindex = index + self.frame_size(box)
         while len(self.used) < endindex:
             self.used.append(False)
         while index < endindex:
@@ -91,7 +89,7 @@ class FrameManager(object):
             return    # already gone
         del self.bindings[box]
         #
-        size = self.frame_size(box.type)
+        size = self.frame_size(box)
         baseindex = self.get_loc_index(loc)
         if baseindex < 0:
             return
@@ -104,7 +102,7 @@ class FrameManager(object):
         index = self.get_loc_index(loc)
         if index < 0:
             return False
-        size = self.frame_size(box.type)
+        size = self.frame_size(box)
         for i in range(size):
             while (index + i) >= len(self.used):
                 self.used.append(False)
@@ -118,10 +116,10 @@ class FrameManager(object):
 
     # abstract methods that need to be overwritten for specific assemblers
     @staticmethod
-    def frame_pos(loc, type):
+    def frame_pos(loc, box):
         raise NotImplementedError("Purely abstract")
     @staticmethod
-    def frame_size(type):
+    def frame_size(box):
         return 1
     @staticmethod
     def get_loc_index(loc):
@@ -256,7 +254,7 @@ class RegisterManager(object):
         del self.reg_bindings[v_to_spill]
         if self.frame_manager.get(v_to_spill) is None:
             newloc = self.frame_manager.loc(v_to_spill)
-            self.assembler.regalloc_mov(loc, newloc)
+            self.assembler.regalloc_mov(v_to_spill, loc, newloc)
         return loc
 
     def _pick_variable_to_spill(self, v, forbidden_vars, selected_reg=None,
@@ -343,11 +341,11 @@ class RegisterManager(object):
         immloc = self.convert_to_imm(v)
         if selected_reg:
             if selected_reg in self.free_regs:
-                self.assembler.regalloc_mov(immloc, selected_reg)
+                self.assembler.regalloc_mov(v, immloc, selected_reg)
                 return selected_reg
             loc = self._spill_var(v, forbidden_vars, selected_reg)
             self.free_regs.append(loc)
-            self.assembler.regalloc_mov(immloc, loc)
+            self.assembler.regalloc_mov(v, immloc, loc)
             return loc
         return immloc
 
@@ -366,7 +364,7 @@ class RegisterManager(object):
         loc = self.force_allocate_reg(v, forbidden_vars, selected_reg,
                                       need_lower_byte=need_lower_byte)
         if prev_loc is not loc:
-            self.assembler.regalloc_mov(prev_loc, loc)
+            self.assembler.regalloc_mov(v, prev_loc, loc)
         return loc
 
     def _reallocate_from_to(self, from_v, to_v):
@@ -378,10 +376,10 @@ class RegisterManager(object):
         if self.free_regs:
             loc = self.free_regs.pop()
             self.reg_bindings[v] = loc
-            self.assembler.regalloc_mov(prev_loc, loc)
+            self.assembler.regalloc_mov(v, prev_loc, loc)
         else:
             loc = self.frame_manager.loc(v)
-            self.assembler.regalloc_mov(prev_loc, loc)
+            self.assembler.regalloc_mov(v, prev_loc, loc)
 
     def force_result_in_reg(self, result_v, v, forbidden_vars=[]):
         """ Make sure that result is in the same register as v.
@@ -395,13 +393,13 @@ class RegisterManager(object):
                 loc = self.free_regs.pop()
             else:
                 loc = self._spill_var(v, forbidden_vars, None)
-            self.assembler.regalloc_mov(self.convert_to_imm(v), loc)
+            self.assembler.regalloc_mov(v, self.convert_to_imm(v), loc)
             self.reg_bindings[result_v] = loc
             return loc
         if v not in self.reg_bindings:
             prev_loc = self.frame_manager.loc(v)
             loc = self.force_allocate_reg(v, forbidden_vars)
-            self.assembler.regalloc_mov(prev_loc, loc)
+            self.assembler.regalloc_mov(v, prev_loc, loc)
         assert v in self.reg_bindings
         if self.longevity[v][1] > self.position:
             # we need to find a new place for variable v and
@@ -420,7 +418,7 @@ class RegisterManager(object):
         if not self.frame_manager.get(v):
             reg = self.reg_bindings[v]
             to = self.frame_manager.loc(v)
-            self.assembler.regalloc_mov(reg, to)
+            self.assembler.regalloc_mov(v, reg, to)
         # otherwise it's clean
 
     def before_call(self, force_store=[], save_all_regs=0):

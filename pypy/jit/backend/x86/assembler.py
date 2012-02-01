@@ -1,7 +1,7 @@
 import sys, os
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.asmmemmgr import MachineDataBlockWrapper
-from pypy.jit.metainterp.history import Const, Box, BoxInt, ConstInt
+from pypy.jit.metainterp.history import Const, Box, BoxInt, ConstInt, BoxVector
 from pypy.jit.metainterp.history import AbstractFailDescr, INT, REF, FLOAT
 from pypy.jit.metainterp.history import JitCellToken
 from pypy.rpython.lltypesystem import lltype, rffi, rstr, llmemory
@@ -833,8 +833,10 @@ class Assembler386(object):
 
     # ------------------------------------------------------------
 
-    def mov(self, from_loc, to_loc):
-        if (isinstance(from_loc, RegLoc) and from_loc.is_xmm) or (isinstance(to_loc, RegLoc) and to_loc.is_xmm):
+    def mov(self, box, from_loc, to_loc):
+        if isinstance(box, BoxVector):
+            self.mc.MOVDQU(to_loc, from_loc)
+        elif (isinstance(from_loc, RegLoc) and from_loc.is_xmm) or (isinstance(to_loc, RegLoc) and to_loc.is_xmm):
             self.mc.MOVSD(to_loc, from_loc)
         else:
             assert to_loc is not ebp
@@ -1285,7 +1287,7 @@ class Assembler386(object):
         self.mc.MOVZX8(resloc, rl)
 
     def genop_same_as(self, op, arglocs, resloc):
-        self.mov(arglocs[0], resloc)
+        self.mov(op.getarg(0), arglocs[0], resloc)
     genop_cast_ptr_to_int = genop_same_as
     genop_cast_int_to_ptr = genop_same_as
 
