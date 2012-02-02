@@ -5,7 +5,8 @@ from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.history import BoxVector
 
 VECTOR_SIZE = 2
-VEC_MAP = {rop.FLOAT_ADD: rop.FLOAT_VECTOR_ADD}
+VEC_MAP = {rop.FLOAT_ADD: rop.FLOAT_VECTOR_ADD,
+           rop.FLOAT_SUB: rop.FLOAT_VECTOR_SUB}
 
 class BaseTrack(object):
     pass
@@ -125,7 +126,7 @@ class OptVectorize(Optimization):
             return
         self.tracked_indexes[self.getvalue(op.result)] = self.tracked_indexes[index].advance()
 
-    def optimize_FLOAT_ADD(self, op):
+    def _optimize_binop(self, op):
         left = self.getvalue(op.getarg(0))
         right = self.getvalue(op.getarg(1))
         if left not in self.track or right not in self.track:
@@ -135,6 +136,9 @@ class OptVectorize(Optimization):
             lt = self.track[left]
             rt = self.track[right]
             self.track[self.getvalue(op.result)] = BinOp(lt, rt, op)
+
+    optimize_FLOAT_ADD = _optimize_binop
+    optimize_FLOAT_SUB = _optimize_binop
 
     def optimize_SETARRAYITEM_RAW(self, op):
         index = self.getvalue(op.getarg(1))
@@ -175,6 +179,10 @@ class OptVectorize(Optimization):
             self.emit_vector_ops(op.getarglist())
         elif op.is_guard():
             xxx
+        elif op.is_always_pure():
+            # in theory no side effect ops, but stuff like malloc
+            # can go in the way
+            pass
         else:
             self.reset()
         self.emit_operation(op)

@@ -417,6 +417,7 @@ _oplist = [
     'FLOAT_NEG/1',
     'FLOAT_ABS/1',
     'FLOAT_VECTOR_ADD/2',
+    'FLOAT_VECTOR_SUB/2',
     'CAST_FLOAT_TO_INT/1',          # don't use for unsigned ints; we would
     'CAST_INT_TO_FLOAT/1',          # need some messy code in the backend
     'CAST_FLOAT_TO_SINGLEFLOAT/1',

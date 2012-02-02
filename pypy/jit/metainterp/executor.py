@@ -273,7 +273,8 @@ def do_read_timestamp(cpu, _):
 # ____________________________________________________________
 
 
-IGNORED = ['FLOAT_VECTOR_ADD', 'GETARRAYITEM_VECTOR_RAW',
+IGNORED = ['FLOAT_VECTOR_ADD', 'FLOAT_VECTOR_SUB',
+           'GETARRAYITEM_VECTOR_RAW',
            'SETARRAYITEM_VECTOR_RAW', 'ASSERT_ALIGNED']
 
 def _make_execute_list():
