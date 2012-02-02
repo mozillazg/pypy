@@ -16,10 +16,10 @@ class Read(BaseTrack):
         self.op = op
         self.index = index
 
-    def match(self, other):
+    def match(self, other, i):
         if not isinstance(other, Read):
             return False
-        return self.arr == other.arr
+        return self.arr == other.arr and other.index.index == i
 
     def emit(self, optimizer):
         box = BoxVector()
@@ -36,10 +36,10 @@ class Write(BaseTrack):
         self.v = v
         self.op = op
 
-    def match(self, other):
+    def match(self, other, i):
         if not isinstance(other, Write):
             return False
-        return self.v.match(other.v)
+        return self.v.match(other.v, i)
 
     def emit(self, optimizer):
         arg = self.v.emit(optimizer)
@@ -54,12 +54,13 @@ class BinOp(BaseTrack):
         self.left = left
         self.right = right
 
-    def match(self, other):
+    def match(self, other, i):
         if not isinstance(other, BinOp):
             return False
         if self.op.getopnum() != other.op.getopnum():
             return False
-        return self.left.match(other.left) and self.right.match(other.right)
+        return (self.left.match(other.left, i) and
+                self.right.match(other.right, i))
 
     def emit(self, optimizer):
         left_box = self.left.emit(optimizer)
@@ -141,6 +142,7 @@ class OptVectorize(Optimization):
         if index not in self.tracked_indexes or val not in self.track:
             self.emit_operation(op)
             return
+        self.ops_so_far.append(op)
         v = self.track[val]
         arr = self.getvalue(op.getarg(0))
         ti = self.tracked_indexes[index]
@@ -155,8 +157,9 @@ class OptVectorize(Optimization):
                 return
         if self.full:
             for arr, items in self.full.iteritems():
-                for item in items[1:]:
-                    if item is None or not items[0].match(item):
+                for i in range(1, len(items)):
+                    item = items[i]
+                    if item is None or not items[0].match(item, i):
                         self.reset()
                         return
                 # XXX Right now we blow up on any of the vectorizers not
