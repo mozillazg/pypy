@@ -376,6 +376,7 @@ _oplist = [
     '_FINAL_LAST',
 
     'LABEL/*d',
+    'ASSERT_ALIGNED/2',
 
     '_GUARD_FIRST',
     '_GUARD_FOLDABLE_FIRST',

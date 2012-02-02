@@ -274,7 +274,7 @@ def do_read_timestamp(cpu, _):
 
 
 IGNORED = ['FLOAT_VECTOR_ADD', 'GETARRAYITEM_VECTOR_RAW',
-           'SETARRAYITEM_VECTOR_RAW']
+           'SETARRAYITEM_VECTOR_RAW', 'ASSERT_ALIGNED']
 
 def _make_execute_list():
     if 0:     # enable this to trace calls to do_xxx
