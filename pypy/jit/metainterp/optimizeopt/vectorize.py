@@ -172,13 +172,14 @@ class OptVectorize(Optimization):
             for arr, items in self.full.iteritems():
                 items[0].emit(self)
             self.ops_so_far = []
-
+            self.reset()
+            
     def optimize_default(self, op):
         # list operations that are fine, not that many
         if op.opnum in [rop.JUMP, rop.FINISH, rop.LABEL]:
             self.emit_vector_ops(op.getarglist())
         elif op.is_guard():
-            xxx
+            self.emit_vector_ops(op.getarglist() + op.getfailargs())
         elif op.is_always_pure():
             # in theory no side effect ops, but stuff like malloc
             # can go in the way
