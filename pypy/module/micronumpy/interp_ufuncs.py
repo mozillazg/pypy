@@ -334,6 +334,7 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
     bool_dtype = interp_dtype.get_dtype_cache(space).w_booldtype
     long_dtype = interp_dtype.get_dtype_cache(space).w_longdtype
     int64_dtype = interp_dtype.get_dtype_cache(space).w_int64dtype
+    complex128_dtype = interp_dtype.get_dtype_cache(space).w_complex128dtype
 
     if isinstance(w_obj, interp_boxes.W_GenericBox):
         dtype = w_obj.get_dtype(space)
@@ -355,6 +356,8 @@ def find_dtype_for_scalar(space, w_obj, current_guess=None):
             current_guess is long_dtype or current_guess is int64_dtype):
             return int64_dtype
         return current_guess
+    elif space.isinstance_w(w_obj, space.w_complex):
+        return complex128_dtype
     return interp_dtype.get_dtype_cache(space).w_float64dtype
 
 
