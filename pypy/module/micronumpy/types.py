@@ -57,12 +57,11 @@ def raw_binary_op(func):
     return dispatcher
 
 class BaseType(object):
-    def _unimplemented_ufunc(self, *args):
-        raise NotImplementedError
-    # add = sub = mul = div = mod = pow = eq = ne = lt = le = gt = ge = max = \
-    #     min = copysign = pos = neg = abs = sign = reciprocal = fabs = floor = \
-    #     exp = sin = cos = tan = arcsin = arccos = arctan = arcsinh = \
-    #     arctanh = _unimplemented_ufunc
+    def coerce(self, space, w_item):
+        if isinstance(w_item, self.BoxType):
+            return w_item
+        return self.coerce_subtype(space, space.gettypefor(self.BoxType), w_item)
+
 
 class Primitive(object):
     _mixin_ = True
@@ -77,11 +76,6 @@ class Primitive(object):
     def unbox(self, box):
         assert isinstance(box, self.BoxType)
         return box.value
-
-    def coerce(self, space, w_item):
-        if isinstance(w_item, self.BoxType):
-            return w_item
-        return self.coerce_subtype(space, space.gettypefor(self.BoxType), w_item)
 
     def coerce_subtype(self, space, w_subtype, w_item):
         # XXX: ugly
@@ -513,3 +507,58 @@ class Float64(BaseType, Float):
     T = rffi.DOUBLE
     BoxType = interp_boxes.W_Float64Box
     format_code = "d"
+
+
+class CompositeType(BaseType):
+    def __init__(self, fields):
+        BaseType.__init__(self)
+        self.fields = fields
+
+    def get_element_size(self):
+        s = 0
+        for field in self.fields:
+            s += field.get_element_size()
+        return s
+
+    def read(self, storage, width, i, offset):
+        subboxes = []
+        for field in self.fields:
+            subboxes.append(field.read(storage, width, i, offset))
+            offset += field.get_element_size()
+        return self.box(subboxes)
+
+    def store(self, storage, width, i, offset, box):
+        subboxes = self.get_subboxes(box)
+        assert len(subboxes) == len(self.fields)
+        for field, subbox in zip(self.fields, subboxes):
+            field.store(storage, width, i, offset, subbox)
+            offset += field.get_element_size()
+
+class Complex128(CompositeType):
+    BoxType = interp_boxes.W_Complex128Box
+    COMPLEX_TYPE = Float64
+
+    def __init__(self):
+        self.type = self.COMPLEX_TYPE()
+        CompositeType.__init__(self, [self.type, self.type])
+
+    def box(self, subboxes):
+        [real, imag] = subboxes
+        return self.BoxType(self.type.unbox(real), self.type.unbox(imag))
+
+    def get_subboxes(self, box):
+        return [self.type.box(box.real), self.type.box(box.imag)]
+
+    def coerce_subtype(self, space, w_subtype, w_item):
+        real, imag = space.unpackcomplex(w_item)
+        w_obj = space.allocate_instance(self.BoxType, w_subtype)
+        assert isinstance(w_obj, self.BoxType)
+        w_obj.__init__(real, imag)
+        return w_obj
+
+    def for_computation(self, v):
+        pass
+
+    @raw_binary_op
+    def eq(self, v1, v2):
+        return v1.real == v2.real and v1.imag == v2.imag

@@ -164,6 +164,16 @@ class AppTestDtypes(BaseNumpyAppTest):
         for i in range(5):
             assert b[i] == i * 2
 
+    def test_complex128(self):
+        from _numpypy import dtype, complex128
+
+        d = dtype("complex128")
+        assert d.num == 15
+        assert d.kind== "c"
+        assert d.type is complex128
+        assert d.name == "complex128"
+        assert d.itemsize == 16
+
     def test_shape(self):
         from _numpypy import dtype
 
@@ -374,6 +384,19 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.float64(2.0) == 2.0
         assert numpy.float64('23.4') == numpy.float64(23.4)
         raises(ValueError, numpy.float64, '23.2df')
+
+    def test_complex128(self):
+        import _numpypy as numpy
+
+        assert numpy.complex128.mro() == [numpy.complex128, numpy.complexfloating, numpy.inexact, numpy.number, numpy.generic, complex, object]
+        a = numpy.array([1j], numpy.complex128)
+        assert type(a[0]) is numpy.complex128
+        assert numpy.dtype(complex).type is numpy.complex128
+        assert a[0] == 1j
+
+        assert numpy.complex128(2) == 2
+        assert numpy.complex128(2.0 + 3j) == 2.0 + 3j
+        raises(TypeError, numpy.complex128, "23")
 
     def test_subclass_type(self):
         import _numpypy as numpy

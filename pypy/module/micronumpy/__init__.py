@@ -31,7 +31,7 @@ class Module(MixedModule):
         'concatenate': 'interp_numarray.concatenate',
 
         'set_string_function': 'appbridge.set_string_function',
-        
+
         'count_reduce_items': 'interp_numarray.count_reduce_items',
 
         'True_': 'types.Bool.True',
@@ -57,6 +57,8 @@ class Module(MixedModule):
         'float_': 'interp_boxes.W_Float64Box',
         'float32': 'interp_boxes.W_Float32Box',
         'float64': 'interp_boxes.W_Float64Box',
+        'complexfloating': 'interp_boxes.W_ComplexFloatingBox',
+        'complex128': 'interp_boxes.W_Complex128Box',
     }
 
     # ufuncs

@@ -13,6 +13,7 @@ UNSIGNEDLTR = "u"
 SIGNEDLTR = "i"
 BOOLLTR = "b"
 FLOATINGLTR = "f"
+COMPLEXLTR = "c"
 
 
 VOID_STORAGE = lltype.Array(lltype.Char, hints={'nolength': True, 'render_as_void': True})
@@ -235,9 +236,18 @@ class DtypeCache(object):
             kind=FLOATINGLTR,
             name="float64",
             char="d",
-            w_box_type = space.gettypefor(interp_boxes.W_Float64Box),
+            w_box_type=space.gettypefor(interp_boxes.W_Float64Box),
             alternate_constructors=[space.w_float],
             aliases=["float"],
+        )
+        self.w_complex128dtype = W_Dtype(
+            types.Complex128(),
+            num=15,
+            kind=COMPLEXLTR,
+            name="complex128",
+            char="c",
+            w_box_type=space.gettypefor(interp_boxes.W_Complex128Box),
+            alternate_constructors=[space.w_complex],
         )
 
         self.builtin_dtypes = [
@@ -245,7 +255,7 @@ class DtypeCache(object):
             self.w_int16dtype, self.w_uint16dtype, self.w_int32dtype,
             self.w_uint32dtype, self.w_longdtype, self.w_ulongdtype,
             self.w_int64dtype, self.w_uint64dtype, self.w_float32dtype,
-            self.w_float64dtype
+            self.w_float64dtype, self.w_complex128dtype
         ]
         self.dtypes_by_num_bytes = sorted(
             (dtype.itemtype.get_element_size(), dtype)
