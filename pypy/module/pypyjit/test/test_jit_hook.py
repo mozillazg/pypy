@@ -92,6 +92,7 @@ class AppTestJitHook(object):
         cls.w_on_compile_bridge = space.wrap(interp2app(interp_on_compile_bridge))
         cls.w_on_abort = space.wrap(interp2app(interp_on_abort))
         cls.w_int_add_num = space.wrap(rop.INT_ADD)
+        cls.w_dmp_num = space.wrap(rop.DEBUG_MERGE_POINT)
         cls.w_on_optimize = space.wrap(interp2app(interp_on_optimize))
         cls.orig_oplist = oplist
 
@@ -117,7 +118,12 @@ class AppTestJitHook(object):
         assert elem[2][2] == False
         assert len(elem[3]) == 4
         int_add = elem[3][0]
-        #assert int_add.name == 'int_add'
+        dmp = elem[3][1]
+        assert isinstance(dmp, pypyjit.DebugMergePoint)
+        assert dmp.pycode is self.f.func_code
+        assert dmp.greenkey == (self.f.func_code, 0, False)
+        assert dmp.call_depth == 0
+        assert int_add.name == 'int_add'
         assert int_add.num == self.int_add_num
         self.on_compile_bridge()
         assert len(all) == 2
@@ -211,3 +217,20 @@ class AppTestJitHook(object):
         assert op.getarg(0).getint() == 4
         op.result = box
         assert op.result.getint() == 1
+
+    def test_creation_dmp(self):
+        from pypyjit import DebugMergePoint, Box
+
+        def f():
+            pass
+
+        op = DebugMergePoint([Box(0)], 'repr', 'pypyjit', 2, (f.func_code, 0, 0))
+        assert op.bytecode_no == 0
+        assert op.pycode is f.func_code
+        assert repr(op) == 'repr'
+        assert op.jitdriver_name == 'pypyjit'
+        assert op.num == self.dmp_num
+        assert op.call_depth == 2
+        op = DebugMergePoint([Box(0)], 'repr', 'notmain', 5, ('str',))
+        raises(AttributeError, 'op.pycode')
+        assert op.call_depth == 5
