@@ -933,6 +933,7 @@ class GenericMovingGCTests(GenericGCTests):
 class TestMarkSweepGC(GenericGCTests):
     gcname = "marksweep"
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 1024*WORD,
                          'translated_to_c': False}
@@ -943,6 +944,7 @@ class TestPrintingGC(GenericGCTests):
     gcname = "statistics"
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.marksweep import PrintingMarkSweepGC as GCClass
             GC_PARAMS = {'start_heap_size': 1024*WORD,
@@ -954,6 +956,7 @@ class TestSemiSpaceGC(GenericMovingGCTests):
     GC_CAN_SHRINK_ARRAY = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.semispace import SemiSpaceGC as GCClass
             GC_PARAMS = {'space_size': 512*WORD,
@@ -964,6 +967,7 @@ class TestMarkCompactGC(GenericMovingGCTests):
     gcname = 'markcompact'
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
             GC_PARAMS = {'space_size': 4096*WORD,
@@ -975,6 +979,7 @@ class TestGenerationGC(GenericMovingGCTests):
     GC_CAN_SHRINK_ARRAY = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.generation import GenerationGC as \
                                                           GCClass
@@ -1161,6 +1166,7 @@ class TestGenerationalNoFullCollectGC(GCTest):
     gcname = "generation"
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.generation import GenerationGC
             class GCClass(GenerationGC):
@@ -1206,6 +1212,7 @@ class TestHybridGC(TestGenerationGC):
     GC_CAN_MALLOC_NONMOVABLE = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.hybrid import HybridGC as GCClass
             GC_PARAMS = {'space_size': 512*WORD,
@@ -1275,6 +1282,7 @@ class TestMiniMarkGC(TestHybridGC):
     GC_CAN_TEST_ID = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
             GC_PARAMS = {'nursery_size': 32*WORD,
@@ -1391,6 +1399,7 @@ class UnboxedObject(TaggedBase, UnboxedValue):
 class TestMarkSweepTaggedPointerGC(TaggedPointerGCTests):
     gcname = "marksweep"
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             GC_PARAMS = {'start_heap_size': 1024*WORD,
                          'translated_to_c': False}
@@ -1400,6 +1409,7 @@ class TestHybridTaggedPointerGC(TaggedPointerGCTests):
     gcname = "hybrid"
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.generation import GenerationGC as \
                                                           GCClass
@@ -1412,6 +1422,7 @@ class TestMarkCompactTaggedpointerGC(TaggedPointerGCTests):
     gcname = 'markcompact'
 
     class gcpolicy(gc.FrameworkGcPolicy):
+        get_transformer_class = lambda self: self.transformerclass
         class transformerclass(framework.FrameworkGCTransformer):
             from pypy.rpython.memory.gc.markcompact import MarkCompactGC as GCClass
             GC_PARAMS = {'space_size': 4096*WORD,

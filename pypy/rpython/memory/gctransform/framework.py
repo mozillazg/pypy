@@ -313,14 +313,6 @@ class FrameworkGCTransformer(GCTransformer):
                 [s_gc, annmodel.SomeInteger(knowntype=llgroup.r_halfword)],
                 annmodel.SomeInteger())
 
-        if hasattr(GCClass, 'writebarrier_before_copy'):
-            self.wb_before_copy_ptr = \
-                    getfn(GCClass.writebarrier_before_copy.im_func,
-                    [s_gc] + [annmodel.SomeAddress()] * 2 +
-                    [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
-        elif GCClass.needs_write_barrier:
-            raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
-
         # in some GCs we can inline the common case of
         # malloc_fixedsize(typeid, size, False, False, False)
         if getattr(GCClass, 'inline_simple_malloc', False):
@@ -447,43 +439,8 @@ class FrameworkGCTransformer(GCTransformer):
                                             annmodel.SomeInteger(nonneg=True)],
                                            annmodel.s_None)
 
-        self.write_barrier_ptr = None
-        self.write_barrier_from_array_ptr = None
-        if GCClass.needs_write_barrier:
-            self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
-                                           [s_gc,
-                                            annmodel.SomeAddress(),
-                                            annmodel.SomeAddress()],
-                                           annmodel.s_None,
-                                           inline=True)
-            func = getattr(gcdata.gc, 'remember_young_pointer', None)
-            if func is not None:
-                # func should not be a bound method, but a real function
-                assert isinstance(func, types.FunctionType)
-                self.write_barrier_failing_case_ptr = getfn(func,
-                                               [annmodel.SomeAddress(),
-                                                annmodel.SomeAddress()],
-                                               annmodel.s_None)
-            func = getattr(GCClass, 'write_barrier_from_array', None)
-            if func is not None:
-                self.write_barrier_from_array_ptr = getfn(func.im_func,
-                                           [s_gc,
-                                            annmodel.SomeAddress(),
-                                            annmodel.SomeAddress(),
-                                            annmodel.SomeInteger()],
-                                           annmodel.s_None,
-                                           inline=True)
-                func = getattr(gcdata.gc, 'remember_young_pointer_from_array3',
-                               None)
-                if func is not None:
-                    # func should not be a bound method, but a real function
-                    assert isinstance(func, types.FunctionType)
-                    self.write_barrier_from_array_failing_case_ptr = \
-                                             getfn(func,
-                                                   [annmodel.SomeAddress(),
-                                                    annmodel.SomeInteger(),
-                                                    annmodel.SomeAddress()],
-                                                   annmodel.s_None)
+        self.setup_write_barriers(GCClass, s_gc)
+
         self.statistics_ptr = getfn(GCClass.statistics.im_func,
                                     [s_gc, annmodel.SomeInteger()],
                                     annmodel.SomeInteger())
@@ -524,6 +481,53 @@ class FrameworkGCTransformer(GCTransformer):
     def build_root_walker(self):
         from pypy.rpython.memory.gctransform import shadowstack
         return shadowstack.ShadowStackRootWalker(self)
+
+    def setup_write_barriers(self, GCClass, s_gc):
+        self.write_barrier_ptr = None
+        self.write_barrier_from_array_ptr = None
+        if GCClass.needs_write_barrier:
+            self.write_barrier_ptr = getfn(GCClass.write_barrier.im_func,
+                                           [s_gc,
+                                            annmodel.SomeAddress(),
+                                            annmodel.SomeAddress()],
+                                           annmodel.s_None,
+                                           inline=True)
+            func = getattr(gcdata.gc, 'remember_young_pointer', None)
+            if func is not None:
+                # func should not be a bound method, but a real function
+                assert isinstance(func, types.FunctionType)
+                self.write_barrier_failing_case_ptr = getfn(func,
+                                               [annmodel.SomeAddress(),
+                                                annmodel.SomeAddress()],
+                                               annmodel.s_None)
+            func = getattr(GCClass, 'write_barrier_from_array', None)
+            if func is not None:
+                self.write_barrier_from_array_ptr = getfn(func.im_func,
+                                           [s_gc,
+                                            annmodel.SomeAddress(),
+                                            annmodel.SomeAddress(),
+                                            annmodel.SomeInteger()],
+                                           annmodel.s_None,
+                                           inline=True)
+                func = getattr(gcdata.gc, 'remember_young_pointer_from_array3',
+                               None)
+                if func is not None:
+                    # func should not be a bound method, but a real function
+                    assert isinstance(func, types.FunctionType)
+                    self.write_barrier_from_array_failing_case_ptr = \
+                                             getfn(func,
+                                                   [annmodel.SomeAddress(),
+                                                    annmodel.SomeInteger(),
+                                                    annmodel.SomeAddress()],
+                                                   annmodel.s_None)
+        if hasattr(GCClass, 'writebarrier_before_copy'):
+            self.wb_before_copy_ptr = \
+                    getfn(GCClass.writebarrier_before_copy.im_func,
+                    [s_gc] + [annmodel.SomeAddress()] * 2 +
+                    [annmodel.SomeInteger()] * 3, annmodel.SomeBool())
+        elif GCClass.needs_write_barrier:
+            raise NotImplementedError("GC needs write barrier, but does not provide writebarrier_before_copy functionality")
+
 
     def consider_constant(self, TYPE, value):
         self.layoutbuilder.consider_constant(TYPE, value, self.gcdata.gc)
