@@ -1,4 +1,4 @@
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena, llgroup, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.lltypesystem.llmemory import raw_malloc_usage
 from pypy.rpython.memory.gc.base import GCBase
@@ -34,6 +34,7 @@ class StmGC(GCBase):
     _alloc_flavor_ = "raw"
     inline_simple_malloc = True
     inline_simple_malloc_varsize = True
+    needs_custom_readers = "stm"
     needs_write_barrier = "stm"
     prebuilt_gc_objects_are_static_roots = False
     malloc_zero_filled = True    # xxx?
@@ -80,12 +81,13 @@ class StmGC(GCBase):
             self.declare_reader(size, TYPE)
         self.declare_write_barrier()
 
+    GETSIZE = lltype.Ptr(lltype.FuncType([llmemory.Address],lltype.Signed))
+
     def setup(self):
         """Called at run-time to initialize the GC."""
         GCBase.setup(self)
-        GETSIZE = lltype.Ptr(lltype.FuncType([llmemory.Address],lltype.Signed))
         self.stm_operations.setup_size_getter(
-                llhelper(GETSIZE, self._getsize_fn))
+                llhelper(self.GETSIZE, self._getsize_fn))
         self.main_thread_tls = self.setup_thread(True)
         self.mutex_lock = ll_thread.allocate_ll_lock()
 
@@ -201,6 +203,11 @@ class StmGC(GCBase):
 
 
     @always_inline
+    def get_type_id(self, obj):
+        tid = self.header(obj).tid
+        return llop.extract_ushort(llgroup.HALFWORD, tid)
+
+    @always_inline
     def combine(self, typeid16, flags):
         return llop.combine_ushort(lltype.Signed, typeid16, flags)
 
@@ -311,6 +318,11 @@ class StmGC(GCBase):
             stm_operations.tldict_add(obj, localobj)
             #
             return localobj
+
+    # ----------
+
+    def identityhash(self, gcref):
+        raise NotImplementedError("XXX")
 
     # ----------
 

@@ -18,9 +18,13 @@ from pypy import conftest
 
 import py
 
+class ForTestGCTransformer(FrameworkGCTransformer):
+    root_stack_depth = 100
+
 class FrameworkGcPolicy2(FrameworkGcPolicy):
-    class transformerclass(FrameworkGCTransformer):
-        root_stack_depth = 100
+    @staticmethod
+    def get_transformer_class():
+        return ForTestGCTransformer
 
 def test_framework_simple():
     def g(x):
