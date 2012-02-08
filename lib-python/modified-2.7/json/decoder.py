@@ -110,14 +110,14 @@ def scanstring(s, end, encoding=None, strict=True,
             raise ValueError(
                 errmsg("Unterminated string starting at", s, begin))
         end = chunk.end()
-        content, terminator = chunk.groups()
-        del chunk
+        content = s[chunk.start(1):chunk.end(1)]
+        terminator = s[chunk.start(2):chunk.end(2)]
+        #content, terminator = chunk.groups()
         # Content is contains zero or more unescaped string characters
         if content:
             if not isinstance(content, unicode):
                 content = unicode(content, encoding)
             chunks.append(content)
-        del content
         # Terminator is the end of string, a literal control character,
         # or a backslash denoting that an escape sequence follows
         if terminator == '"':
@@ -166,6 +166,8 @@ def scanstring(s, end, encoding=None, strict=True,
             char = unichr(uni)
             end = next_end
         # Append the unescaped character
+        del chunk
+        del content
         chunks.append(char)
     return u''.join(chunks), end
 
