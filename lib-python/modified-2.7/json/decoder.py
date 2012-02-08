@@ -5,46 +5,14 @@ import sys
 import struct
 
 from json import scanner
+try:
+    from _json import scanstring as c_scanstring
+except ImportError:
+    c_scanstring = None
 
 __all__ = ['JSONDecoder']
 
 FLAGS = re.VERBOSE | re.MULTILINE | re.DOTALL
-
-
-class KeyValueElement(object):
-    __slots__ = ['key', 'value']
-
-    def __init__(self, key, value):
-        self.key = key
-        self.value = value
-
-
-class KeyValueAbstractBuilder(object):
-    __slots__ = ['elements', 'base_type']
-
-    def __init__(self):
-        self.elements = self.base_type()
-
-    def append(self, key, value):
-        pass
-
-    def build(self):
-        return self.elements
-
-
-class KeyValueListBuilder(KeyValueAbstractBuilder):
-    base_type = list
-
-    def append(self, key, value):
-        self.elements.append((key, value))
-
-
-class KeyValueDictBuilder(KeyValueAbstractBuilder):
-    base_type = dict
-
-    def append(self, key, value):
-        self.elements[key] = value
-
 
 def _floatconstants():
     _BYTES = '7FF80000000000007FF0000000000000'.decode('hex')
@@ -94,7 +62,7 @@ BACKSLASH = {
 
 DEFAULT_ENCODING = "utf-8"
 
-def scanstring(s, end, encoding=None, strict=True,
+def py_scanstring(s, end, encoding=None, strict=True,
         _b=BACKSLASH, _m=STRINGCHUNK.match):
     """Scan the string s for a JSON string. End is the index of the
     character in s after the quote that started the JSON string.
@@ -107,6 +75,7 @@ def scanstring(s, end, encoding=None, strict=True,
     if encoding is None:
         encoding = DEFAULT_ENCODING
     chunks = []
+    _append = chunks.append
     begin = end - 1
     while 1:
         chunk = _m(s, end)
@@ -115,13 +84,11 @@ def scanstring(s, end, encoding=None, strict=True,
                 errmsg("Unterminated string starting at", s, begin))
         end = chunk.end()
         content, terminator = chunk.groups()
-        del chunk
         # Content is contains zero or more unescaped string characters
         if content:
             if not isinstance(content, unicode):
                 content = unicode(content, encoding)
-            chunks.append(content)
-        del content
+            _append(content)
         # Terminator is the end of string, a literal control character,
         # or a backslash denoting that an escape sequence follows
         if terminator == '"':
@@ -132,8 +99,7 @@ def scanstring(s, end, encoding=None, strict=True,
                 msg = "Invalid control character {0!r} at".format(terminator)
                 raise ValueError(errmsg(msg, s, end))
             else:
-                chunks.append(terminator)
-                del terminator
+                _append(terminator)
                 continue
         try:
             esc = s[end]
@@ -170,9 +136,12 @@ def scanstring(s, end, encoding=None, strict=True,
             char = unichr(uni)
             end = next_end
         # Append the unescaped character
-        chunks.append(char)
+        _append(char)
     return u''.join(chunks), end
 
+
+# Use speedup if available
+scanstring = c_scanstring or py_scanstring
 
 WHITESPACE = re.compile(r'[ \t\n\r]*', FLAGS)
 WHITESPACE_STR = ' \t\n\r'
@@ -180,6 +149,8 @@ WHITESPACE_STR = ' \t\n\r'
 def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
                object_pairs_hook, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
     s, end = s_and_end
+    pairs = []
+    pairs_append = pairs.append
     # Use a slice to prevent IndexError from being raised, the following
     # check will raise a more specific ValueError if the string is empty
     nextchar = s[end:end + 1]
@@ -191,7 +162,7 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
         # Trivial empty object
         if nextchar == '}':
             if object_pairs_hook is not None:
-                result = object_pairs_hook([])
+                result = object_pairs_hook(pairs)
                 return result, end
             pairs = {}
             if object_hook is not None:
@@ -200,13 +171,7 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
         elif nextchar != '"':
             raise ValueError(errmsg("Expecting property name", s, end))
     end += 1
-
-    if object_pairs_hook is not None:
-        pairs = KeyValueListBuilder()
-    else:
-        pairs = KeyValueDictBuilder()
-
-    while 1:
+    while True:
         key, end = scanstring(s, end, encoding, strict)
 
         # To skip some function call overhead we optimize the fast paths where
@@ -230,7 +195,7 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
             value, end = scan_once(s, end)
         except StopIteration:
             raise ValueError(errmsg("Expecting object", s, end))
-        pairs.append(key, value)
+        pairs_append((key, value))
 
         try:
             nextchar = s[end]
@@ -262,9 +227,9 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
             raise ValueError(errmsg("Expecting property name", s, end - 1))
 
     if object_pairs_hook is not None:
-        result = object_pairs_hook(pairs.build())  # to list
+        result = object_pairs_hook(pairs)
         return result, end
-    pairs = pairs.build()  # to dict
+    pairs = dict(pairs)
     if object_hook is not None:
         pairs = object_hook(pairs)
     return pairs, end
@@ -279,12 +244,13 @@ def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
     # Look-ahead for trivial empty array
     if nextchar == ']':
         return values, end + 1
-    while 1:
+    _append = values.append
+    while True:
         try:
             value, end = scan_once(s, end)
         except StopIteration:
             raise ValueError(errmsg("Expecting object", s, end))
-        values.append(value)
+        _append(value)
         nextchar = s[end:end + 1]
         if nextchar in _ws:
             end = _w(s, end + 1).end()
