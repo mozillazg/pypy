@@ -173,15 +173,18 @@ def scanstring(s, end, encoding=None, strict=True,
 WHITESPACE = re.compile(r'[ \t\n\r]*', FLAGS)
 WHITESPACE_STR = ' \t\n\r'
 
+def is_whitespace(c):
+    return c == ' ' or c == '\t' or c == '\n' or c == '\r'
+
 def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
-               object_pairs_hook, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
+               object_pairs_hook, _w=WHITESPACE.match):
     s, end = s_and_end
     # Use a slice to prevent IndexError from being raised, the following
     # check will raise a more specific ValueError if the string is empty
     nextchar = s[end:end + 1]
     # Normally we expect nextchar == '"'
     if nextchar != '"':
-        if nextchar in _ws:
+        if is_whitespace(nextchar):
             end = _w(s, end).end()
             nextchar = s[end:end + 1]
         # Trivial empty object
@@ -215,9 +218,9 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
         end += 1
 
         try:
-            if s[end] in _ws:
+            if is_whitespace(s[end]):
                 end += 1
-                if s[end] in _ws:
+                if is_whitespace(s[end]):
                     end = _w(s, end + 1).end()
         except IndexError:
             pass
@@ -230,7 +233,7 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
 
         try:
             nextchar = s[end]
-            if nextchar in _ws:
+            if is_whitespace(nextchar):
                 end = _w(s, end + 1).end()
                 nextchar = s[end]
         except IndexError:
@@ -244,10 +247,10 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
 
         try:
             nextchar = s[end]
-            if nextchar in _ws:
+            if is_whitespace(nextchar):
                 end += 1
                 nextchar = s[end]
-                if nextchar in _ws:
+                if is_whitespace(nextchar):
                     end = _w(s, end + 1).end()
                     nextchar = s[end]
         except IndexError:
@@ -265,11 +268,11 @@ def JSONObject(s_and_end, encoding, strict, scan_once, object_hook,
         pairs = object_hook(pairs)
     return pairs, end
 
-def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
+def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match):
     s, end = s_and_end
     values = []
     nextchar = s[end:end + 1]
-    if nextchar in _ws:
+    if is_whitespace(nextchar):
         end = _w(s, end + 1).end()
         nextchar = s[end:end + 1]
     # Look-ahead for trivial empty array
@@ -282,7 +285,7 @@ def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
             raise ValueError(errmsg("Expecting object", s, end))
         values.append(value)
         nextchar = s[end:end + 1]
-        if nextchar in _ws:
+        if is_whitespace(nextchar):
             end = _w(s, end + 1).end()
             nextchar = s[end:end + 1]
         end += 1
@@ -292,9 +295,9 @@ def JSONArray(s_and_end, scan_once, _w=WHITESPACE.match, _ws=WHITESPACE_STR):
             raise ValueError(errmsg("Expecting , delimiter", s, end))
 
         try:
-            if s[end] in _ws:
+            if is_whitespace(s[end]):
                 end += 1
-                if s[end] in _ws:
+                if is_whitespace(s[end]):
                     end = _w(s, end + 1).end()
         except IndexError:
             pass
