@@ -377,6 +377,8 @@ class Transformer(object):
             prepare = self._handle_jit_call
         elif oopspec_name.startswith('libffi_'):
             prepare = self._handle_libffi_call
+        elif oopspec_name.startswith('assert_aligned'):
+            prepare = self._handle_assert_aligned_call
         elif oopspec_name.startswith('math.sqrt'):
             prepare = self._handle_math_sqrt_call
         else:
@@ -1691,6 +1693,10 @@ class Transformer(object):
     def _handle_math_sqrt_call(self, op, oopspec_name, args):
         return self._handle_oopspec_call(op, args, EffectInfo.OS_MATH_SQRT,
                                          EffectInfo.EF_ELIDABLE_CANNOT_RAISE)
+
+    def _handle_assert_aligned_call(self, op, oopspec_name, args):
+        return self._handle_oopspec_call(op, args, EffectInfo.OS_ASSERT_ALIGNED,
+                                         EffectInfo.EF_CANNOT_RAISE)
 
     def rewrite_op_jit_force_quasi_immutable(self, op):
         v_inst, c_fieldname = op.args

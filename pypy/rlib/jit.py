@@ -871,3 +871,7 @@ class Entry(ExtRegistryEntry):
         v_cls = hop.inputarg(classrepr, arg=1)
         return hop.genop('jit_record_known_class', [v_inst, v_cls],
                          resulttype=lltype.Void)
+
+@oopspec('assert_aligned(arg)')
+def assert_aligned(arg):
+    pass
