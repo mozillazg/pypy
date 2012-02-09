@@ -4,6 +4,7 @@ from pypy.module.micronumpy.interp_iter import ConstantIterator, AxisIterator,\
      ViewTransform, BroadcastTransform
 from pypy.tool.pairtype import extendabletype
 from pypy.module.micronumpy.loop import ComputationDone
+from pypy.rlib import jit
 
 """ Signature specifies both the numpy expression that has been constructed
 and the assembler to be compiled. This is a very important observation -
@@ -150,7 +151,10 @@ class ArraySignature(ConcreteSignature):
 
     def eval(self, frame, arr):
         iter = frame.iterators[self.iter_no]
-        return self.dtype.getitem(frame.arrays[self.array_no], iter.offset)
+        offset = iter.offset
+        if frame.first_iteration:
+            jit.assert_aligned(offset)
+        return self.dtype.getitem(frame.arrays[self.array_no], offset)
 
 class ScalarSignature(ConcreteSignature):
     def debug_repr(self):

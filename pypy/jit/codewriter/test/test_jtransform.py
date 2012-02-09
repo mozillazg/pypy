@@ -139,12 +139,15 @@ class FakeBuiltinCallControl:
              EI.OS_UNIEQ_NONNULL_CHAR:   ([PUNICODE, UNICHAR], INT),
              EI.OS_UNIEQ_CHECKNULL_CHAR: ([PUNICODE, UNICHAR], INT),
              EI.OS_UNIEQ_LENGTHOK:       ([PUNICODE, PUNICODE], INT),
+             EI.OS_ASSERT_ALIGNED:       ([INT], lltype.Void),
             }
             argtypes = argtypes[oopspecindex]
             assert argtypes[0] == [v.concretetype for v in op.args[1:]]
             assert argtypes[1] == op.result.concretetype
             if oopspecindex == EI.OS_STR2UNICODE:
                 assert extraeffect == EI.EF_ELIDABLE_CAN_RAISE
+            elif oopspecindex == EI.OS_ASSERT_ALIGNED:
+                assert extraeffect == EI.EF_CANNOT_RAISE
             else:
                 assert extraeffect == EI.EF_ELIDABLE_CANNOT_RAISE
         return 'calldescr-%d' % oopspecindex
@@ -1078,6 +1081,18 @@ def test_str2unicode():
     assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_STR2UNICODE
     assert op1.args[2] == ListOfKind('ref', [v1])
     assert op1.result == v2
+
+def test_assert_aligned():
+    from pypy.rlib import jit
+    
+    v = varoftype(lltype.Signed) # does not matter
+    FUNC = lltype.FuncType([lltype.Signed], lltype.Void)
+    func = lltype.functionptr(FUNC, 'assert_aligned',
+                              _callable=jit.assert_aligned)
+    op = SpaceOperation('direct_call', [const(func), v], varoftype(lltype.Void))
+    tr = Transformer(FakeCPU(), FakeBuiltinCallControl())
+    op1 = tr.rewrite_operation(op)
+    assert op1.args[1] == 'calldescr-%d' % effectinfo.EffectInfo.OS_ASSERT_ALIGNED
 
 def test_unicode_eq_checknull_char():
     # test that the oopspec is present and correctly transformed

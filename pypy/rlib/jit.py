@@ -874,4 +874,4 @@ class Entry(ExtRegistryEntry):
 
 @oopspec('assert_aligned(arg)')
 def assert_aligned(arg):
-    pass
+    keepalive_until_here(arg)

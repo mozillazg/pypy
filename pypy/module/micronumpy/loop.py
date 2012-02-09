@@ -8,7 +8,7 @@ from pypy.module.micronumpy.interp_iter import ConstantIterator
 
 class NumpyEvalFrame(object):
     _virtualizable2_ = ['iterators[*]', 'final_iter', 'arraylist[*]',
-                        'value', 'identity', 'cur_value']
+                        'value', 'identity', 'cur_value', 'first_iteration']
 
     @unroll_safe
     def __init__(self, iterators, arrays):
@@ -24,6 +24,7 @@ class NumpyEvalFrame(object):
             self.final_iter = -1
         self.cur_value = None
         self.identity = None
+        self.first_iteration = False
 
     def done(self):
         final_iter = promote(self.final_iter)
@@ -76,6 +77,10 @@ def compute(arr):
             numpy_driver.jit_merge_point(sig=sig,
                                          shapelen=shapelen,
                                          frame=frame, arr=arr)
+            frame.first_iteration = True # vectorization hint
+            sig.eval(frame, arr)
+            frame.first_iteration = False
+            frame.next(shapelen)
             sig.eval(frame, arr)
             frame.next(shapelen)
         return frame.cur_value

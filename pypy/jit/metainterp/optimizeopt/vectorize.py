@@ -116,6 +116,8 @@ class OptVectorize(Optimization):
             self.ops_so_far.append(op)
             self.track[self.getvalue(op.result)] = Read(arr, track, op)
 
+    optimize_GETINTERIORFIELD_RAW = optimize_GETARRAYITEM_RAW
+
     def optimize_INT_ADD(self, op):
         # only for += 1
         one = self.getvalue(op.getarg(0))
@@ -159,6 +161,8 @@ class OptVectorize(Optimization):
             self.full[arr] = [None] * VECTOR_SIZE
         self.full[arr][ti.index] = Write(arr, index, v, op)
 
+    optimize_SETINTERIORFIELD_RAW = optimize_SETARRAYITEM_RAW
+
     def emit_vector_ops(self, forbidden_boxes):
         for arg in forbidden_boxes:
             if arg in self.track:
@@ -184,7 +188,10 @@ class OptVectorize(Optimization):
         if op.opnum in [rop.JUMP, rop.FINISH, rop.LABEL]:
             self.emit_vector_ops(op.getarglist())
         elif op.is_guard():
-            self.emit_vector_ops(op.getarglist() + op.getfailargs())
+            lst = op.getarglist()
+            if op.getfailargs() is not None:
+                lst = lst + op.getfailargs()
+            self.emit_vector_ops(lst)
         elif op.is_always_pure():
             # in theory no side effect ops, but stuff like malloc
             # can go in the way

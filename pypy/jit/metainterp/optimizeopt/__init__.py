@@ -22,9 +22,10 @@ ALL_OPTS = [('intbounds', OptIntBounds),
             ('earlyforce', OptEarlyForce),
             ('pure', OptPure),
             ('heap', OptHeap),
-            ('vectorize', OptVectorize), # XXX check if CPU supports that maybe
             ('ffi', None),
-            ('unroll', None)]
+            ('vectorize', OptVectorize), # XXX check if CPU supports that maybe
+            ('unroll', None),
+            ]
 # no direct instantiation of unroll
 unroll_all_opts = unrolling_iterable(ALL_OPTS)
 
