@@ -312,9 +312,9 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_arcsinh(self):
         import math
-        from _numpypy import arcsinh, inf
+        from _numpypy import arcsinh
 
-        for v in [inf, -inf, 1.0, math.e]:
+        for v in [float('inf'), float('-inf'), 1.0, math.e]:
             assert math.asinh(v) == arcsinh(v)
         assert math.isnan(arcsinh(float("nan")))
 
@@ -347,8 +347,9 @@ class AppTestUfuncs(BaseNumpyAppTest):
         raises((ValueError, TypeError), add.reduce, 1)
 
     def test_reduce_1d(self):
-        from _numpypy import add, maximum
+        from _numpypy import add, maximum, less
 
+        assert less.reduce([5, 4, 3, 2, 1])
         assert add.reduce([1, 2, 3]) == 6
         assert maximum.reduce([1]) == 1
         assert maximum.reduce([1, 2, 3]) == 3
@@ -366,7 +367,7 @@ class AppTestUfuncs(BaseNumpyAppTest):
         b = add.reduce(a, 0, keepdims=True)
         assert b.shape == (1, 4)
         assert (add.reduce(a, 0, keepdims=True) == [12, 15, 18, 21]).all()
-        
+
 
     def test_bitwise(self):
         from _numpypy import bitwise_and, bitwise_or, arange, array
@@ -415,7 +416,7 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert count_reduce_items(a) == 24
         assert count_reduce_items(a, 1) == 3
         assert count_reduce_items(a, (1, 2)) == 3 * 4
-        
+
     def test_true_divide(self):
         from _numpypy import arange, array, true_divide
         assert (true_divide(arange(3), array([2, 2, 2])) == array([0, 0.5, 1])).all()
@@ -433,3 +434,14 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert (isnan(array([0.2, float('inf'), float('nan')])) == [False, False, True]).all()
         assert (isinf(array([0.2, float('inf'), float('nan')])) == [False, True, False]).all()
         assert isinf(array([0.2])).dtype.kind == 'b'
+
+    def test_logical_ops(self):
+        from _numpypy import logical_and, logical_or, logical_xor, logical_not
+
+        assert (logical_and([True, False , True, True], [1, 1, 3, 0])
+                == [True, False, True, False]).all()
+        assert (logical_or([True, False, True, False], [1, 2, 0, 0])
+                == [True, True, True, False]).all()
+        assert (logical_xor([True, False, True, False], [1, 2, 0, 0])
+                == [False, True, True, False]).all()
+        assert (logical_not([True, False]) == [False, True]).all()
