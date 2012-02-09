@@ -1,15 +1,35 @@
 
 from pypy.jit.metainterp.optimizeopt.test.test_optimizebasic import BaseTestBasic, LLtypeMixin
+from pypy.rpython.lltypesystem import lltype
+from pypy.jit.codewriter.effectinfo import EffectInfo
 
 class TestVectorize(BaseTestBasic, LLtypeMixin):
     enable_opts = "intbounds:rewrite:virtualize:string:earlyforce:pure:heap:unroll:vectorize"
 
+    class namespace:
+        cpu = LLtypeMixin.cpu
+        FUNC = LLtypeMixin.FUNC
+        arraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Signed))
+
+        def calldescr(cpu, FUNC, oopspecindex, extraeffect=None):
+            if extraeffect == EffectInfo.EF_RANDOM_EFFECTS:
+                f = None   # means "can force all" really
+            else:
+                f = []
+            einfo = EffectInfo(f, f, f, f, oopspecindex=oopspecindex,
+                               extraeffect=extraeffect)
+            return cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, einfo)
+        #
+        assert_aligned =  calldescr(cpu, FUNC, EffectInfo.OS_ASSERT_ALIGNED)
+
+    namespace = namespace.__dict__
+
     def test_basic(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
@@ -39,9 +59,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_basic_sub(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_sub(f0, f1)
@@ -73,9 +93,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_unfit_trees(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
@@ -111,9 +131,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_unfit_trees_2(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
@@ -143,9 +163,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_unfit_trees_3(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
@@ -179,9 +199,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_guard_forces(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
@@ -213,9 +233,9 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
     def test_guard_prevents(self):
         ops = """
         [p0, p1, p2, i0, i1, i2]
-        assert_aligned(p0, i0)
-        assert_aligned(p1, i1)
-        assert_aligned(p1, i2)
+        call(p0, i0, descr=assert_aligned)
+        call(p1, i1, descr=assert_aligned)
+        call(p1, i2, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)

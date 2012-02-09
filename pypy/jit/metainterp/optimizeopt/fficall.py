@@ -110,7 +110,7 @@ class OptFfiCall(Optimization):
         Optimization.emit_operation(self, op)
 
     def optimize_CALL(self, op):
-        oopspec = self._get_oopspec(op)
+        oopspec = self.get_oopspec(op)
         ops = [op]
         if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
             ops = self.do_prepare_call(op)
@@ -249,10 +249,6 @@ class OptFfiCall(Optimization):
         if self.logops is not None:
             debug_print(self.logops.repr_of_resop(op))
         dispatch_opt(self, op)
-
-    def _get_oopspec(self, op):
-        effectinfo = op.getdescr().get_extra_info()
-        return effectinfo.oopspecindex
 
     def _get_funcval(self, op):
         return self.getvalue(op.getarg(1))

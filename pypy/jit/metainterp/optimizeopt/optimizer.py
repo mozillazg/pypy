@@ -330,6 +330,9 @@ class Optimization(object):
     def forget_numberings(self, box):
         self.optimizer.forget_numberings(box)
 
+    def get_oopspec(self, op):
+        effectinfo = op.getdescr().get_extra_info()
+        return effectinfo.oopspecindex
 
 class Optimizer(Optimization):
 

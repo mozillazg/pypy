@@ -3,6 +3,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.history import BoxVector
+from pypy.jit.codewriter.effectinfo import EffectInfo
 
 VECTOR_SIZE = 2
 VEC_MAP = {rop.FLOAT_ADD: rop.FLOAT_VECTOR_ADD,
@@ -97,9 +98,13 @@ class OptVectorize(Optimization):
     def new(self):
         return OptVectorize()
     
-    def optimize_ASSERT_ALIGNED(self, op):
-        index = self.getvalue(op.getarg(1))
-        self.tracked_indexes[index] = TrackIndex(index, 0)
+    def optimize_CALL(self, op):
+        oopspec = self.get_oopspec(op)
+        if oopspec == EffectInfo.OS_ASSERT_ALIGNED:
+            index = self.getvalue(op.getarg(1))
+            self.tracked_indexes[index] = TrackIndex(index, 0)
+        else:
+            self.optimize_default(op)
 
     def optimize_GETARRAYITEM_RAW(self, op):
         arr = self.getvalue(op.getarg(0))

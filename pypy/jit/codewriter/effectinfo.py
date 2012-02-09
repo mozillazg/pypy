@@ -79,6 +79,8 @@ class EffectInfo(object):
     OS_LLONG_U_TO_FLOAT         = 94
     #
     OS_MATH_SQRT                = 100
+    #
+    OS_ASSERT_ALIGNED           = 200
 
     # for debugging:
     _OS_CANRAISE = set([OS_NONE, OS_STR2UNICODE, OS_LIBFFI_CALL])
