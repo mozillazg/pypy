@@ -152,9 +152,10 @@ class ArraySignature(ConcreteSignature):
     def eval(self, frame, arr):
         iter = frame.iterators[self.iter_no]
         offset = iter.offset
+        arr = frame.arrays[self.array_no]
         if frame.first_iteration:
-            jit.assert_aligned(offset)
-        return self.dtype.getitem(frame.arrays[self.array_no], offset)
+            jit.assert_aligned(arr, offset)
+        return self.dtype.getitem(arr, offset)
 
 class ScalarSignature(ConcreteSignature):
     def debug_repr(self):

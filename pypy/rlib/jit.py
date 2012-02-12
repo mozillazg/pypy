@@ -872,6 +872,7 @@ class Entry(ExtRegistryEntry):
         return hop.genop('jit_record_known_class', [v_inst, v_cls],
                          resulttype=lltype.Void)
 
-@oopspec('assert_aligned(arg)')
-def assert_aligned(arg):
-    keepalive_until_here(arg)
+@oopspec('assert_aligned(arr, index)')
+def assert_aligned(arr, index):
+    keepalive_until_here(arr)
+    keepalive_until_here(index)

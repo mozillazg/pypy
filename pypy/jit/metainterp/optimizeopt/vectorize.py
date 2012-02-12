@@ -101,7 +101,7 @@ class OptVectorize(Optimization):
     def optimize_CALL(self, op):
         oopspec = self.get_oopspec(op)
         if oopspec == EffectInfo.OS_ASSERT_ALIGNED:
-            index = self.getvalue(op.getarg(1))
+            index = self.getvalue(op.getarg(2))
             self.tracked_indexes[index] = TrackIndex(index, 0)
         else:
             self.optimize_default(op)
@@ -165,7 +165,7 @@ class OptVectorize(Optimization):
 
     def emit_vector_ops(self, forbidden_boxes):
         for arg in forbidden_boxes:
-            if arg in self.track:
+            if self.getvalue(arg) in self.track:
                 self.reset()
                 return
         if self.full:
@@ -181,7 +181,7 @@ class OptVectorize(Optimization):
             for arr, items in self.full.iteritems():
                 items[0].emit(self)
             self.ops_so_far = []
-            self.reset()
+        self.reset()
             
     def optimize_default(self, op):
         # list operations that are fine, not that many
