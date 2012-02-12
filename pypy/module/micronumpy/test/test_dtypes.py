@@ -1,10 +1,11 @@
-from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
-from pypy.module.micronumpy.interp_dtype import nonnative_byteorder_prefix
 from pypy.interpreter.gateway import interp2app
+from pypy.module.micronumpy.interp_dtype import nonnative_byteorder_prefix
+from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
+
 
 class AppTestDtypes(BaseNumpyAppTest):
     def test_dtype(self):
-        from _numpypy import dtype
+        from numpypy import dtype
 
         d = dtype('?')
         assert d.num == 0
@@ -17,6 +18,9 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert dtype(int).names is None
         raises(TypeError, dtype, 1042)
         raises(KeyError, 'dtype(int)["asdasd"]')
+        assert dtype("i4").str == "<i4"
+        assert dtype("=i4").str == "<i4"
+        assert dtype(">i4").str == ">i4"
 
     def test_dtype_eq(self):
         from _numpypy import dtype
@@ -199,7 +203,7 @@ class AppTestTypes(BaseNumpyAppTest):
                 assert w_obj2.storage[1] == '\x01'
                 assert w_obj2.storage[0] == '\x00'
         cls.w_check_non_native = cls.space.wrap(interp2app(check_non_native))
-    
+
     def test_abstract_types(self):
         import _numpypy as numpy
         raises(TypeError, numpy.generic, 0)
@@ -424,7 +428,7 @@ class AppTestTypes(BaseNumpyAppTest):
     def test_various_types(self):
         import _numpypy as numpy
         import sys
-        
+
         assert numpy.int16 is numpy.short
         assert numpy.int8 is numpy.byte
         assert numpy.bool_ is numpy.bool8
@@ -435,7 +439,7 @@ class AppTestTypes(BaseNumpyAppTest):
 
     def test_mro(self):
         import _numpypy as numpy
-        
+
         assert numpy.int16.__mro__ == (numpy.int16, numpy.signedinteger,
                                        numpy.integer, numpy.number,
                                        numpy.generic, object)
@@ -467,7 +471,7 @@ class AppTestTypes(BaseNumpyAppTest):
 class AppTestStrUnicodeDtypes(BaseNumpyAppTest):
     def test_str_unicode(self):
         from _numpypy import str_, unicode_, character, flexible, generic
-        
+
         assert str_.mro() == [str_, str, basestring, character, flexible, generic, object]
         assert unicode_.mro() == [unicode_, unicode, basestring, character, flexible, generic, object]
 
@@ -518,4 +522,4 @@ class AppTestRecordDtypes(BaseNumpyAppTest):
         from _numpypy import dtype
         d = dtype({'names': ['a', 'b', 'c'],
                    })
-        
+

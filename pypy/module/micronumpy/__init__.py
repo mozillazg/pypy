@@ -31,7 +31,8 @@ class Module(MixedModule):
         'concatenate': 'interp_numarray.concatenate',
 
         'set_string_function': 'appbridge.set_string_function',
-        
+        'set_typeDict': 'interp_dtype.set_typeDict',
+
         'count_reduce_items': 'interp_numarray.count_reduce_items',
 
         'True_': 'types.Bool.True',
