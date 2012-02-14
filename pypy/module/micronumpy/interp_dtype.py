@@ -7,7 +7,7 @@ from pypy.module.micronumpy import types, signature, interp_boxes
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.rpython.lltypesystem import lltype, rffi
-
+from pypy.rlib import rgc
 
 UNSIGNEDLTR = "u"
 SIGNEDLTR = "i"
@@ -30,12 +30,12 @@ class W_Dtype(Wrappable):
         self.alternate_constructors = alternate_constructors
         self.aliases = aliases
 
-    def malloc(self, length):
+    def malloc(self, array, length):
         # XXX find out why test_zjit explodes with tracking of allocations
-        return lltype.malloc(VOID_STORAGE, self.itemtype.get_element_size() * length,
-            zero=True, flavor="raw",
-            track_allocation=False, add_memory_pressure=True
-        )
+        size = self.itemtype.get_element_size() * length
+        rgc.add_memory_pressure(array, size)
+        return lltype.malloc(VOID_STORAGE, size, zero=True, flavor="raw",
+                             track_allocation=False)
 
     @specialize.argtype(1)
     def box(self, value):

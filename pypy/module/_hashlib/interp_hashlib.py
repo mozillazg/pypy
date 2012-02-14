@@ -23,6 +23,7 @@ class W_Hash(Wrappable):
     ctx = lltype.nullptr(ropenssl.EVP_MD_CTX.TO)
 
     def __init__(self, space, name):
+        rgc.add_memory_pressure(self, HASH_MALLOC_SIZE + self.digest_size)
         self.name = name
         digest_type = self.digest_type_by_name(space)
         self.digest_size = rffi.getintfield(digest_type, 'c_md_size')
@@ -33,7 +34,6 @@ class W_Hash(Wrappable):
         self.lock = Lock(space)
 
         ctx = lltype.malloc(ropenssl.EVP_MD_CTX.TO, flavor='raw')
-        rgc.add_memory_pressure(HASH_MALLOC_SIZE + self.digest_size)
         try:
             ropenssl.EVP_DigestInit(ctx, digest_type)
             self.ctx = ctx

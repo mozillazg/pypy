@@ -4,7 +4,7 @@ from pypy.translator.tool.cbuild import ExternalCompilationInfo
 import py
 from pypy.rlib import jit, rgc
 from pypy.rlib.debug import ll_assert
-from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.rlib.objectmodel import we_are_translated, specialize, instantiate
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.tool import rffi_platform
 from pypy.tool import autopath
@@ -83,7 +83,10 @@ gil_acquire      = llexternal('RPyGilAcquire', [], lltype.Void,
                               _nowrapper=True)
 
 def allocate_lock():
-    return Lock(allocate_ll_lock())
+    lock = instantiate(Lock)
+    ll_lock = allocate_ll_lock(lock)
+    lock.__init__(lock, ll_lock)
+    return lock
 
 @specialize.arg(0)
 def ll_start_new_thread(func):

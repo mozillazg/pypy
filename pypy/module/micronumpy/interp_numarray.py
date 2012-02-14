@@ -903,7 +903,7 @@ class ConcreteArray(BaseArray):
         if parent is not None:
             self.storage = parent.storage
         else:
-            self.storage = dtype.malloc(size)
+            self.storage = dtype.malloc(self, size)
         self.order = order
         self.dtype = dtype
         if self.strides is None:

@@ -12,7 +12,7 @@ from pypy.objspace.std.register_all import register_all
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.lltypesystem import lltype, rffi
-
+from pypy.rlib import rgc
 
 @unwrap_spec(typecode=str)
 def w_array(space, w_cls, typecode, __args__):
@@ -226,8 +226,8 @@ def make_array(mytype):
                     some += size >> 3
                     self.allocated = size + some
                     new_buffer = lltype.malloc(mytype.arraytype,
-                                               self.allocated, flavor='raw',
-                                               add_memory_pressure=True)
+                                               self.allocated, flavor='raw')
+                    rgc.add_memory_pressure(self, self.allocated * rffi.sizeof(mytype.arraytype.OF))
                     for i in range(min(size, self.len)):
                         new_buffer[i] = self.buffer[i]
                 else:

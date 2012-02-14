@@ -407,6 +407,7 @@ class Cache:
 class W_XMLParserType(Wrappable):
 
     def __init__(self, space, parser, w_intern):
+        rgc.add_memory_pressure(XML_Parser_SIZE + 300)
         self.itself = parser
 
         self.w_intern = w_intern
@@ -824,7 +825,6 @@ Return a new XML parser object."""
     # Currently this is just the size of the pointer and some estimated bytes.
     # The struct isn't actually defined in expat.h - it is in xmlparse.c
     # XXX: find a good estimate of the XML_ParserStruct
-    rgc.add_memory_pressure(XML_Parser_SIZE + 300)
     if not xmlparser:
         raise OperationError(space.w_RuntimeError,
                              space.wrap('XML_ParserCreate failed'))
