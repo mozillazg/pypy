@@ -594,8 +594,15 @@ class TestMiniMarkGCSimple(DirectGCTest):
         assert ord(addr_byte.char[0]) == 0x01 | 0x04  # bits 0 and 2
 
     def test_memory_pressure(self):
-        
-        
+        obj = self.malloc(S)
+        nursery_size = self.gc.nursery_size
+        self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj),
+                                           nursery_size / 2)
+        obj2 = self.malloc(S)
+        self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj2),
+                                           nursery_size / 2)
+        # obj should be dead by now
+        assert self.gc.nursery_free == self.gc.nursery        
 
     test_writebarrier_before_copy_preserving_cards.GC_PARAMS = {
         "card_page_indices": 4}
