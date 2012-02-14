@@ -740,11 +740,16 @@ class MiniMarkGC(MovingGCBase):
 
     def raw_malloc_memory_pressure(self, obj, sizehint):
         size = self.get_size(obj)
+        obj = llarena.getfakearenaaddress(obj)
         if obj + size == self.nursery_free:
-            sizehint = llarena.round_up_for_allocation(sizehint, WORD)
+            sizehint = llarena.round_up_for_allocation(
+                sizehint, llmemory.sizeof(lltype.Signed))
+            sizehint = llmemory.raw_malloc_usage(sizehint)
             if (self.nursery_top - self.nursery_free) < sizehint:
                 self.nursery_free = self.nursery_top
             else:
+                llarena.arena_reserve(self.nursery_free,
+                                      llmemory.sizeof(lltype.Signed))
                 self.nursery_free.signed[0] = sizehint
                 self.header(obj).tid |= GCFLAG_OWNS_RAW_MEMORY
                 self.nursery_free += sizehint

@@ -596,11 +596,12 @@ class TestMiniMarkGCSimple(DirectGCTest):
     def test_memory_pressure(self):
         obj = self.malloc(S)
         nursery_size = self.gc.nursery_size
+        BYTE = llmemory.sizeof(lltype.Char)
         self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj),
-                                           nursery_size / 2)
+                                           BYTE * (nursery_size / 2))
         obj2 = self.malloc(S)
         self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj2),
-                                           nursery_size / 2)
+                                           BYTE * (nursery_size / 2))
         # obj should be dead by now
         assert self.gc.nursery_free == self.gc.nursery        
 
