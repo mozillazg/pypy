@@ -1466,8 +1466,8 @@ class MiniMarkGC(MovingGCBase):
         # Copy it.  Note that references to other objects in the
         # nursery are kept unchanged in this step.
         if self.header(obj).tid & GCFLAG_OWNS_RAW_MEMORY:
-            raw_memory_size = (obj + size).signed[0]
-            self.major_collection_threshold -= raw_memory_size
+            raw_memory_size = (llarena.getfakearenaaddress(obj) + size).signed[0]
+            self.next_major_collection_threshold -= raw_memory_size
             self.header(obj).tid &= ~GCFLAG_OWNS_RAW_MEMORY
         llmemory.raw_memcopy(obj - size_gc_header, newhdr, totalsize)
         #
