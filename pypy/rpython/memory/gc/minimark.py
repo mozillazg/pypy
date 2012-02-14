@@ -52,8 +52,6 @@ from pypy.rpython.memory.support import mangle_hash
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask, r_uint
 from pypy.rlib.rarithmetic import LONG_BIT_SHIFT
 from pypy.rlib.debug import ll_assert, debug_print, debug_start, debug_stop
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.tool.sourcetools import func_with_new_name
 
 #
 # Handles the objects in 2 generations:
@@ -113,8 +111,9 @@ GCFLAG_FINALIZATION_ORDERING = first_gcflag << 4
 # one bit per 'card_page_indices' indices.
 GCFLAG_HAS_CARDS    = first_gcflag << 5
 GCFLAG_CARDS_SET    = first_gcflag << 6     # <- at least one card bit is set
+GCFLAG_OWNS_RAW_MEMORY = first_gcflag << 7
 
-TID_MASK            = (first_gcflag << 7) - 1
+TID_MASK            = (first_gcflag << 8) - 1
 
 
 FORWARDSTUB = lltype.GcStruct('forwarding_stub',
@@ -740,6 +739,19 @@ class MiniMarkGC(MovingGCBase):
                 self.next_major_collection_threshold = self.max_heap_size
 
     def raw_malloc_memory_pressure(self, obj, sizehint):
+        size = self.get_size(obj)
+        if obj + size == self.nursery_free:
+            sizehint = llarena.round_up_for_allocation(sizehint, WORD)
+            if (self.nursery_top - self.nursery_free) < sizehint:
+                self.nursery_free = self.nursery_top
+            else:
+                self.nursery_free.signed[0] = sizehint
+                self.header(obj).tid |= GCFLAG_OWNS_RAW_MEMORY
+                self.nursery_free += sizehint
+                return
+        self._raw_malloc_memory_pressure_major(sizehint)
+
+    def _raw_malloc_memory_pressure_major(self, sizehint):
         self.next_major_collection_threshold -= sizehint
         if self.next_major_collection_threshold < 0:
             # cannot trigger a full collection now, but we can ensure
@@ -1448,6 +1460,10 @@ class MiniMarkGC(MovingGCBase):
         #
         # Copy it.  Note that references to other objects in the
         # nursery are kept unchanged in this step.
+        if self.header(obj).tid & GCFLAG_OWNS_RAW_MEMORY:
+            raw_memory_size = (obj + size).signed[0]
+            self.major_collection_threshold -= raw_memory_size
+            self.header(obj).tid &= ~GCFLAG_OWNS_RAW_MEMORY
         llmemory.raw_memcopy(obj - size_gc_header, newhdr, totalsize)
         #
         # Set the old object's tid to -42 (containing all flags) and
