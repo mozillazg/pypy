@@ -602,8 +602,25 @@ class TestMiniMarkGCSimple(DirectGCTest):
         obj2 = self.malloc(S)
         self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj2),
                                            BYTE * (nursery_size / 2))
-        # obj should be dead by now
-        assert self.gc.nursery_free == self.gc.nursery        
+        assert self.gc.nursery_free == self.gc.nursery_top
+
+    def test_memory_pressure_surviving(self):
+        obj = self.malloc(S)
+        self.stackroots.append(obj)
+        nursery_size = self.gc.nursery_size
+        BYTE = llmemory.sizeof(lltype.Char)
+        self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj),
+                                           BYTE * (nursery_size / 2))
+        obj2 = self.malloc(S)
+        self.gc.raw_malloc_memory_pressure(llmemory.cast_ptr_to_adr(obj2),
+                                           BYTE * (nursery_size / 2))
+        assert self.gc.nursery_free == self.gc.nursery_top
+        one = self.gc.next_major_collection_threshold
+        self.gc.minor_collection()
+        obj = self.stackroots[0]
+        assert not self.gc.is_in_nursery(llmemory.cast_ptr_to_adr(obj))
+        two = self.gc.next_major_collection_threshold
+        assert one - two >= nursery_size / 2
 
     test_writebarrier_before_copy_preserving_cards.GC_PARAMS = {
         "card_page_indices": 4}
