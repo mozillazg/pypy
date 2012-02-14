@@ -208,7 +208,7 @@ class CounterState:
 # don't forget to wrap them into OperationError
 
 if sys.platform == 'win32':
-    def create_semaphore(space, name, val, max):
+    def create_semaphore(space, self, name, val, max):
         rwin32.SetLastError(0)
         handle = _CreateSemaphore(rffi.NULL, val, max, rffi.NULL)
         # On Windows we should fail on ERROR_ALREADY_EXISTS
@@ -302,14 +302,14 @@ if sys.platform == 'win32':
         return semlock_getvalue(self, space) == 0
 
 else:
-    def create_semaphore(space, name, val, max):
+    def create_semaphore(space, w_semaphore, name, val, max):
         sem = sem_open(name, os.O_CREAT | os.O_EXCL, 0600, val)
         try:
             sem_unlink(name)
         except OSError:
             pass
         else:
-            rgc.add_memory_pressure(SEM_T_SIZE)
+            rgc.add_memory_pressure(w_semaphore, SEM_T_SIZE)
         return sem
 
     def delete_semaphore(handle):
@@ -517,12 +517,12 @@ def descr_new(space, w_subtype, kind, value, maxvalue):
     counter = space.fromcache(CounterState).getCount()
     name = "/mp%d-%d" % (os.getpid(), counter)
 
+    self = space.allocate_instance(W_SemLock, w_subtype)
     try:
-        handle = create_semaphore(space, name, value, maxvalue)
+        handle = create_semaphore(space, self, name, value, maxvalue)
     except OSError, e:
         raise wrap_oserror(space, e)
 
-    self = space.allocate_instance(W_SemLock, w_subtype)
     self.__init__(handle, kind, maxvalue)
 
     return space.wrap(self)

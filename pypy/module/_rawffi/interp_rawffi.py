@@ -7,6 +7,7 @@ from pypy.rlib.clibffi import *
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
 import pypy.rlib.rposix as rposix
+from pypy.rlib import rgc
 
 _MS_WINDOWS = os.name == "nt"
 
@@ -267,8 +268,9 @@ class W_DataInstance(Wrappable):
         if address:
             self.ll_buffer = rffi.cast(rffi.VOIDP, address)
         else:
+            rgc.add_memory_pressure(self, size)
             self.ll_buffer = lltype.malloc(rffi.VOIDP.TO, size, flavor='raw',
-                                           zero=True, add_memory_pressure=True)
+                                           zero=True)
             if tracker.DO_TRACING:
                 ll_buf = rffi.cast(lltype.Signed, self.ll_buffer)
                 tracker.trace_allocation(ll_buf, self)

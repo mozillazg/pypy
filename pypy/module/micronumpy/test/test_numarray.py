@@ -11,7 +11,7 @@ from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
 
 
 class MockDtype(object):
-    def malloc(self, size):
+    def malloc(self, array, size):
         return None
 
 
