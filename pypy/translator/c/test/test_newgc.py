@@ -1451,8 +1451,9 @@ class TestMiniMarkGC(TestSemiSpaceGC):
         ARRAY = rffi.CArray(rffi.INT)
         class A:
             def __init__(self, n):
-                self.buf = lltype.malloc(ARRAY, n, flavor='raw',
-                                         add_memory_pressure=True)
+                self.buf = lltype.malloc(ARRAY, n, flavor='raw')
+                rgc.add_memory_pressure(self, n * rffi.sizeof(ARRAY.OF))
+            
             def __del__(self):
                 lltype.free(self.buf, flavor='raw')
         A(6)
@@ -1486,7 +1487,7 @@ class TestMiniMarkGC(TestSemiSpaceGC):
                     flavor='raw')
                 digest = ropenssl.EVP_get_digestbyname('sha1')
                 ropenssl.EVP_DigestInit(self.ctx, digest)
-                rgc.add_memory_pressure(HASH_MALLOC_SIZE + 64)
+                rgc.add_memory_pressure(self, HASH_MALLOC_SIZE + 64)
 
             def __del__(self):
                 ropenssl.EVP_MD_CTX_cleanup(self.ctx)

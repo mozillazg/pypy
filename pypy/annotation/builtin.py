@@ -411,8 +411,7 @@ BUILTIN_ANALYZERS[__import__] = import_func
 from pypy.annotation.model import SomePtr
 from pypy.rpython.lltypesystem import lltype
 
-def malloc(s_T, s_n=None, s_flavor=None, s_zero=None, s_track_allocation=None,
-           s_add_memory_pressure=None):
+def malloc(s_T, s_n=None, s_flavor=None, s_zero=None, s_track_allocation=None):
     assert (s_n is None or s_n.knowntype == int
             or issubclass(s_n.knowntype, pypy.rlib.rarithmetic.base_int))
     assert s_T.is_constant()
@@ -428,8 +427,6 @@ def malloc(s_T, s_n=None, s_flavor=None, s_zero=None, s_track_allocation=None,
     else:
         assert s_flavor.is_constant()
         assert s_track_allocation is None or s_track_allocation.is_constant()
-        assert (s_add_memory_pressure is None or
-                s_add_memory_pressure.is_constant())
         # not sure how to call malloc() for the example 'p' in the
         # presence of s_extraargs
         r = SomePtr(lltype.Ptr(s_T.const))
