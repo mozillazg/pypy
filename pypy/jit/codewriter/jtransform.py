@@ -502,7 +502,6 @@ class Transformer(object):
     def _rewrite_raw_malloc(self, op, name, args):
         d = op.args[1].value.copy()
         d.pop('flavor')
-        add_memory_pressure = d.pop('add_memory_pressure', False)
         zero = d.pop('zero', False)
         track_allocation = d.pop('track_allocation', True)
         if d:
@@ -510,8 +509,6 @@ class Transformer(object):
         TYPE = op.args[0].value
         if zero:
             name += '_zero'
-        if add_memory_pressure:
-            name += '_add_memory_pressure'
         if not track_allocation:
             name += '_no_track_allocation'
         return self._do_builtin_call(op, name, args,

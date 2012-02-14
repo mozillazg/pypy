@@ -377,21 +377,12 @@ class FrameworkGCTransformer(GCTransformer):
             self.malloc_varsize_nonmovable_ptr = None
 
         if getattr(GCClass, 'raw_malloc_memory_pressure', False):
-            def raw_malloc_memory_pressure_varsize(length, itemsize):
-                totalmem = length * itemsize
-                if totalmem > 0:
-                    gcdata.gc.raw_malloc_memory_pressure(totalmem)
-                #else: probably an overflow -- the following rawmalloc
-                #      will fail then
-            def raw_malloc_memory_pressure(sizehint):
-                gcdata.gc.raw_malloc_memory_pressure(sizehint)
-            self.raw_malloc_memory_pressure_varsize_ptr = getfn(
-                raw_malloc_memory_pressure_varsize,
-                [annmodel.SomeInteger(), annmodel.SomeInteger()],
-                annmodel.s_None, minimal_transform = False)
+            malloc_memory_pressure = func_with_new_name(
+                GCClass.raw_malloc_memory_pressure.im_func,
+                'raw_malloc_memory_pressure')
             self.raw_malloc_memory_pressure_ptr = getfn(
-                raw_malloc_memory_pressure,
-                [annmodel.SomeInteger()],
+                malloc_memory_pressure,
+                [s_gc, annmodel.SomeAddress(), annmodel.SomeInteger(nonneg=True)],
                 annmodel.s_None, minimal_transform = False)
 
 

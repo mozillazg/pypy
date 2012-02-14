@@ -593,6 +593,10 @@ class TestMiniMarkGCSimple(DirectGCTest):
         addr_byte = self.gc.get_card(addr_dst, 0)
         assert ord(addr_byte.char[0]) == 0x01 | 0x04  # bits 0 and 2
 
+    def test_memory_pressure(self):
+        
+        
+
     test_writebarrier_before_copy_preserving_cards.GC_PARAMS = {
         "card_page_indices": 4}
 

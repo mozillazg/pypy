@@ -261,21 +261,24 @@ def _keep_object(x):
     except Exception:
         return False      # don't keep objects whose _freeze_() method explodes
 
-def add_memory_pressure(estimate):
-    """Add memory pressure for OpaquePtrs."""
+def add_memory_pressure(owner, estimate):
+    """Add memory pressure for OpaquePtrs. Owner is either None or typically
+    the object which owns the reference (the one that would free it on __del__)
+    """
     pass
 
 class AddMemoryPressureEntry(ExtRegistryEntry):
     _about_ = add_memory_pressure
 
-    def compute_result_annotation(self, s_nbytes):
+    def compute_result_annotation(self, s_owner, s_nbytes):
         from pypy.annotation import model as annmodel
         return annmodel.s_None
 
     def specialize_call(self, hop):
-        [v_size] = hop.inputargs(lltype.Signed)
+        [v_owner, v_size] = hop.inputargs(hop.args_r[0], lltype.Signed)
         hop.exception_cannot_occur()
-        return hop.genop('gc_add_memory_pressure', [v_size],
+        v_owner_addr = hop.genop('cast_ptr_to_adr', [v_owner], resulttype=llmemory.Address)
+        return hop.genop('gc_add_memory_pressure', [v_owner_addr, v_size],
                          resulttype=lltype.Void)
 
 
