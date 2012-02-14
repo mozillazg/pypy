@@ -83,9 +83,10 @@ gil_acquire      = llexternal('RPyGilAcquire', [], lltype.Void,
                               _nowrapper=True)
 
 def allocate_lock():
-    lock = instantiate(Lock)
-    ll_lock = allocate_ll_lock(lock)
-    lock.__init__(lock, ll_lock)
+    lock = Lock(allocate_ll_lock())
+    # Add some memory pressure for the size of the lock because it is an
+    # Opaque object
+    rgc.add_memory_pressure(lock, TLOCKP_SIZE)
     return lock
 
 @specialize.arg(0)
@@ -170,9 +171,6 @@ def allocate_ll_lock():
     if rffi.cast(lltype.Signed, res) <= 0:
         lltype.free(ll_lock, flavor='raw', track_allocation=False)
         raise error("out of resources")
-    # Add some memory pressure for the size of the lock because it is an
-    # Opaque object
-    rgc.add_memory_pressure(TLOCKP_SIZE)
     return ll_lock
 
 def free_ll_lock(ll_lock):
