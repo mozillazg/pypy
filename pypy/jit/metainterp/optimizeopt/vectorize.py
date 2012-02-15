@@ -109,7 +109,7 @@ class OptVectorize(Optimization):
     def optimize_GETARRAYITEM_RAW(self, op):
         arr = self.getvalue(op.getarg(0))
         index = self.getvalue(op.getarg(1))
-        track = self.tracked_indexes.get(index)
+        track = self.tracked_indexes.get(index, None)
         if track is None:
             self.emit_operation(op)
         else:
