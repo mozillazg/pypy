@@ -23,10 +23,10 @@ class W_Hash(Wrappable):
     ctx = lltype.nullptr(ropenssl.EVP_MD_CTX.TO)
 
     def __init__(self, space, name):
+        self.name = name
         digest_type = self.digest_type_by_name(space)
         self.digest_size = rffi.getintfield(digest_type, 'c_md_size')
         rgc.add_memory_pressure(self, HASH_MALLOC_SIZE + self.digest_size)
-        self.name = name
 
         # Allocate a lock for each HASH object.
         # An optimization would be to not release the GIL on small requests,
