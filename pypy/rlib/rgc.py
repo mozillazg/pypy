@@ -261,17 +261,23 @@ def _keep_object(x):
     except Exception:
         return False      # don't keep objects whose _freeze_() method explodes
 
+@jit.dont_look_inside
+@specialize.argtype(0)
 def add_memory_pressure(owner, estimate):
     """Add memory pressure for OpaquePtrs. Owner is either None or typically
     the object which owns the reference (the one that would free it on __del__)
     """
+    _add_memory_pressure(owner, estimate)
+
+def _add_memory_pressure(owner, estimate):
     pass
 
 class AddMemoryPressureEntry(ExtRegistryEntry):
-    _about_ = add_memory_pressure
+    _about_ = _add_memory_pressure
 
     def compute_result_annotation(self, s_owner, s_nbytes):
         from pypy.annotation import model as annmodel
+        assert isinstance(s_nbytes, annmodel.SomeInteger)
         return annmodel.s_None
 
     def specialize_call(self, hop):
