@@ -719,8 +719,8 @@ class LLFrame(object):
         track_allocation = flags.get('track_allocation', True)
         self.heap.free(obj, flavor='raw', track_allocation=track_allocation)
 
-    def op_gc_add_memory_pressure(self, size):
-        self.heap.add_memory_pressure(size)
+    def op_gc_add_memory_pressure(self, owner, size):
+        self.heap.add_memory_pressure(owner, size)
 
     def op_shrink_array(self, obj, smallersize):
         return self.heap.shrink_array(obj, smallersize)
