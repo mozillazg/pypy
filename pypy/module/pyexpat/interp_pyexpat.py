@@ -407,7 +407,7 @@ class Cache:
 class W_XMLParserType(Wrappable):
 
     def __init__(self, space, parser, w_intern):
-        rgc.add_memory_pressure(XML_Parser_SIZE + 300)
+        rgc.add_memory_pressure(self, XML_Parser_SIZE + 300)
         self.itself = parser
 
         self.w_intern = w_intern
