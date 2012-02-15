@@ -271,5 +271,19 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
         ops = """
         [p0, p1, p2, i0, i1, i2]
         call(0, p0, i0, descr=assert_aligned)
+        call(0, p1, i1, descr=assert_aligned)
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
-        xxx
+        f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
+        f2 = float_add(f0, f1)
+        i3 = cast_float_to_int(f2)
+        finish(p0, p1, p2, i0, i1, i3)
+        """
+        expected = """
+        [p0, p1, p2, i0, i1, i2]
+        f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
+        f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
+        f2 = float_add(f0, f1)
+        i3 = cast_float_to_int(f2)
+        finish(p0, p1, p2, i0, i1, i3)
+        """
+        self.optimize_loop(ops, expected)

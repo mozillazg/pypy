@@ -195,7 +195,11 @@ class OptVectorize(Optimization):
         elif op.is_always_pure():
             # in theory no side effect ops, but stuff like malloc
             # can go in the way
-            pass
+            # we also need to keep track of stuff that can go into those
+            for box in op.getarglist():
+                if self.getvalue(box) in self.track:
+                    self.reset()
+                    break
         else:
             self.reset()
         self.emit_operation(op)
