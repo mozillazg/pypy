@@ -483,6 +483,15 @@ def mallocHelpers():
         return result
     mh.ll_malloc_varsize_no_length_zero = _ll_malloc_varsize_no_length_zero
 
+    def _ll_malloc_varsize_zero_align(length, size, itemsize, align):
+        tot_size = _ll_compute_size(length, size, itemsize)
+        result = llop.raw_malloc_align(llmemory.Address, tot_size, align)
+        if not result:
+            raise MemoryError()
+        llmemory.raw_memclear(result, tot_size)
+        return result
+    mh.ll_malloc_varsize_zero_align = _ll_malloc_varsize_zero_align
+
     return mh
 
 class GCTransformer(BaseGCTransformer):
@@ -496,6 +505,7 @@ class GCTransformer(BaseGCTransformer):
         ll_raw_malloc_varsize_no_length = mh.ll_malloc_varsize_no_length
         ll_raw_malloc_varsize = mh.ll_malloc_varsize
         ll_raw_malloc_varsize_no_length_zero  = mh.ll_malloc_varsize_no_length_zero
+        ll_raw_malloc_varsize_zero_align = mh.ll_malloc_varsize_zero_align
 
         stack_mh = mallocHelpers()
         stack_mh.allocate = lambda size: llop.stack_malloc(llmemory.Address, size)
@@ -513,6 +523,9 @@ class GCTransformer(BaseGCTransformer):
 
             self.stack_malloc_fixedsize_ptr = self.inittime_helper(
                 ll_stack_malloc_fixedsize, [lltype.Signed], llmemory.Address)
+            self.raw_malloc_varsize_align_zero_ptr = self.inittime_helper(
+                ll_raw_malloc_varsize_zero_align, [lltype.Signed] * 4,
+                llmemory.Address)
 
     def gct_malloc(self, hop, add_flags=None):
         TYPE = hop.spaceop.result.concretetype.TO
@@ -601,16 +614,28 @@ class GCTransformer(BaseGCTransformer):
                           [self.raw_malloc_memory_pressure_varsize_ptr,
                            v_length, c_item_size])
         if c_offset_to_length is None:
-            if flags.get('zero'):
-                fnptr = self.raw_malloc_varsize_no_length_zero_ptr
+            mpa = flags.get('memory_position_alignment')
+            if mpa is not None:
+                assert flags.get('zero')
+                fnptr = self.raw_malloc_varsize_align_zero_ptr
+                c_align = rmodel.inputconst(lltype.Signed, mpa)
+                v_raw = hop.genop("direct_call", [fnptr, v_length, c_const_size,
+                                                  c_item_size, c_align],
+                                  resulttype=llmemory.Address)
             else:
-                fnptr = self.raw_malloc_varsize_no_length_ptr
-            v_raw = hop.genop("direct_call",
-                               [fnptr, v_length, c_const_size, c_item_size],
-                               resulttype=llmemory.Address)
+                if flags.get('zero'):
+                    fnptr = self.raw_malloc_varsize_no_length_zero_ptr
+                else:
+                    fnptr = self.raw_malloc_varsize_no_length_ptr
+                    v_raw = hop.genop("direct_call",
+                                      [fnptr, v_length, c_const_size,
+                                       c_item_size],
+                                      resulttype=llmemory.Address)
         else:
             if flags.get('zero'):
                 raise NotImplementedError("raw zero varsize malloc with length field")
+            if flags.get('memory_position_alignment'):
+                raise NotImplementedError('raw varsize alloc with length and alignment')
             v_raw = hop.genop("direct_call",
                                [self.raw_malloc_varsize_ptr, v_length,
                                 c_const_size, c_item_size, c_offset_to_length],

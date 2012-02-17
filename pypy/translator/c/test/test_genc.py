@@ -13,6 +13,7 @@ from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.interactive import Translation
 from pypy.rlib.entrypoint import entrypoint
 from pypy.tool.nullpath import NullPyPathLocal
+from pypy.rpython.lltypesystem import lltype
 
 def compile(fn, argtypes, view=False, gcpolicy="ref", backendopt=True,
             annotatorpolicy=None):
@@ -462,11 +463,22 @@ def test_exportstruct():
     assert ' BarStruct ' in t.driver.cbuilder.c_source_filename.read()
     free(foo, flavor="raw")
 
+def test_malloc_aligned():
+    T = lltype.Array(lltype.Signed, hints={'nolength': True,
+                                           'memory_position_alignment': 16})
+    
+    def f():
+        a = lltype.malloc(T, 16, flavor='raw', zero=True)
+        lltype.free(a, flavor='raw')
+
+    t = Translation(f, [], backend='c')
+    t.annotate()
+    t.compile_c()
+    assert 'OP_RAW_MALLOC_ALIGN' in t.driver.cbuilder.c_source_filename.read()
+
 def test_recursive_llhelper():
     from pypy.rpython.annlowlevel import llhelper
-    from pypy.rpython.lltypesystem import lltype
     from pypy.rlib.objectmodel import specialize
-    from pypy.rlib.nonconst import NonConstant
     FT = lltype.ForwardReference()
     FTPTR = lltype.Ptr(FT)
     STRUCT = lltype.Struct("foo", ("bar", FTPTR))
@@ -514,7 +526,6 @@ def test_recursive_llhelper():
     assert fn(True)
 
 def test_inhibit_tail_call():
-    from pypy.rpython.lltypesystem import lltype
     def foobar_fn(n):
         return 42
     foobar_fn._dont_inline_ = True

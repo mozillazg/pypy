@@ -362,6 +362,10 @@ def rtype_malloc(hop, i_flavor=None, i_zero=None, i_track_allocation=None,
         flags['track_allocation'] = v_track_allocation.value
     if i_add_memory_pressure is not None:
         flags['add_memory_pressure'] = v_add_memory_pressure.value
+    mpa = hop.r_result.lowleveltype.TO._hints.get('memory_position_alignment',
+                                                  None)
+    if mpa is not None:
+        flags['memory_position_alignment'] = mpa
     vlist.append(hop.inputconst(lltype.Void, flags))
 
     assert 1 <= hop.nb_args <= 2

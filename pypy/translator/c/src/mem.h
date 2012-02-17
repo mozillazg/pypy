@@ -110,6 +110,14 @@ static __declspec(noinline) void pypy_asm_stack_bottom() { }
 		} 							\
 	}
 
+#define OP_RAW_MALLOC_ALIGN(size, align, r)  { \
+    posix_memalign(&r, align, size); \
+		if (r != NULL) {					\
+			memset((void*)r, 0, size);			\
+			COUNT_MALLOC;					\
+		}							\
+	}
+
 #endif
 
 #define OP_RAW_FREE(p, r) PyObject_Free(p); COUNT_FREE;
