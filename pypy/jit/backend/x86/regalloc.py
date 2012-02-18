@@ -1006,7 +1006,7 @@ class RegAlloc(object):
         ofs = arraydescr.basesize
         size = arraydescr.itemsize
         sign = arraydescr.is_item_signed()
-        return size, ofs, sign
+        return imm(size), imm(ofs), sign
 
     def _unpack_fielddescr(self, fielddescr):
         assert isinstance(fielddescr, FieldDescr)
@@ -1088,7 +1088,7 @@ class RegAlloc(object):
         itemsize, ofs, _ = self._unpack_arraydescr(op.getdescr())
         args = op.getarglist()
         base_loc  = self.rm.make_sure_var_in_reg(op.getarg(0), args)
-        if itemsize == 1:
+        if itemsize.value == 1:
             need_lower_byte = True
         else:
             need_lower_byte = False
@@ -1097,7 +1097,7 @@ class RegAlloc(object):
         ofs_loc = self.rm.make_sure_var_in_reg(op.getarg(1), args)
         self.possibly_free_vars(args)
         self.PerformDiscard(op, [base_loc, ofs_loc, value_loc,
-                                 imm(itemsize), imm(ofs)])
+                                 itemsize, ofs])
 
     consider_setarrayitem_raw = consider_setarrayitem_gc
     consider_setarrayitem_vector_raw = consider_setarrayitem_gc
@@ -1129,7 +1129,7 @@ class RegAlloc(object):
             sign_loc = imm1
         else:
             sign_loc = imm0
-        self.Perform(op, [base_loc, ofs_loc, imm(itemsize), imm(ofs),
+        self.Perform(op, [base_loc, ofs_loc, itemsize, ofs,
                           sign_loc], result_loc)
 
     consider_getarrayitem_raw = consider_getarrayitem_gc

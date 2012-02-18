@@ -3164,7 +3164,34 @@ class LLtypeBackendTest(BaseBackendTest):
         assert a[0] == 26
         assert a[1] == 30
         lltype.free(a, flavor='raw')
+
+    def test_vector_ops_interiorfield(self):
+        if not self.cpu.supports_vector_ops:
+            py.test.skip("unsupported vector ops")
         
+        A = lltype.Array(lltype.Float, hints={'nolength': True,
+                                               'memory_position_alignment': 16})
+        fsize = rffi.sizeof(lltype.Float)
+        descr0 = self.cpu.interiorfielddescrof_dynamic(0, 1, fsize, False, True,
+                                                       False)
+        looptoken = JitCellToken()
+        ops = parse("""
+        [p0, p1]
+        vec0 = getarrayitem_vector_raw(p0, 0, descr=descr0)
+        vec1 = getarrayitem_vector_raw(p1, 0, descr=descr0)
+        vec2 = float_vector_add(vec0, vec1)
+        setarrayitem_vector_raw(p0, 0, vec2, descr=descr0)
+        finish()
+        """, namespace=locals())
+        self.cpu.compile_loop(ops.inputargs, ops.operations, looptoken)
+        a = lltype.malloc(A, 10, flavor='raw')
+        a[0] = 13.0
+        a[1] = 15.0
+        self.cpu.execute_token(looptoken, a, a)
+        assert a[0] == 26
+        assert a[1] == 30
+        lltype.free(a, flavor='raw')
+
 
 class OOtypeBackendTest(BaseBackendTest):
 
