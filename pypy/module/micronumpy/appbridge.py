@@ -1,6 +1,11 @@
 
 from pypy.rlib.objectmodel import specialize
 
+
+@specialize.memo()
+def get_module_attr(module):
+    return "w_" + module.replace(".", "_") + "_module"
+
 class AppBridgeCache(object):
     w_numpypy_core__methods_module = None
     w__var = None
@@ -22,7 +27,7 @@ class AppBridgeCache(object):
 
     @specialize.arg(2, 3)
     def call_method(self, space, module, name, *args):
-        module_attr = "w_" + module.replace(".", "_") + "_module"
+        module_attr = get_module_attr(module)
         meth_attr = "w_" + name
         w_meth = getattr(self, meth_attr)
         if w_meth is None:

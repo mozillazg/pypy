@@ -1710,10 +1710,9 @@ class AppTestMultiDim(BaseNumpyAppTest):
         raises(ValueError, "array(5).item(1)")
 
     def test_ctypes(self):
-        import gc
         from _numpypy import array
 
-        a = array([1, 2, 3, 4, 5])
+        a = array([1, 2, 3, 4, 5.0])
         assert a.ctypes._data == a.__array_interface__["data"][0]
         assert a is a.ctypes._arr
 
@@ -1724,6 +1723,15 @@ class AppTestMultiDim(BaseNumpyAppTest):
         strides = a.ctypes.get_strides()
         assert len(strides) == 1
         assert strides[0] == 1
+
+        b = a[2:]
+        assert b.ctypes._data == a.ctypes._data
+        b.ctypes.get_strides()
+        b.ctypes.get_shape()
+
+        c = b + b
+        c.ctypes.get_strides()
+        c.ctypes.get_shape()
 
         a = array(2)
         raises(TypeError, lambda: a.ctypes)

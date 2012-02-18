@@ -258,7 +258,8 @@ class BaseArray(Wrappable):
 
     @jit.unroll_safe
     def descr_get_strides(self, space):
-        return space.newtuple([space.wrap(i) for i in self.strides])
+        concrete = self.get_concrete()
+        return space.newtuple([space.wrap(i) for i in concrete.strides])
 
     def descr_get_size(self, space):
         return space.wrap(self.size)
