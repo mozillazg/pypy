@@ -256,8 +256,22 @@ class BaseArray(Wrappable):
             return
         self.get_concrete().setshape(space, new_shape)
 
+    @jit.unroll_safe
+    def descr_get_strides(self, space):
+        return space.newtuple([space.wrap(i) for i in self.strides])
+
     def descr_get_size(self, space):
         return space.wrap(self.size)
+
+    def descr_get_ctypes(self, space):
+        if not self.shape:
+            raise OperationError(space.w_TypeError, space.wrap("Can't get the ctypes of a scalar yet."))
+        concrete = self.get_concrete()
+        storage = concrete.storage
+        addr = rffi.cast(lltype.Signed, storage)
+        return get_appbridge_cache(space).call_method(space,
+            "numpypy.core._internal", "_ctypes", self, space.wrap(addr)
+        )
 
     def descr_copy(self, space):
         return self.copy(space)
@@ -513,12 +527,14 @@ class BaseArray(Wrappable):
         return space.div(self.descr_sum_promote(space, w_axis), w_denom)
 
     def descr_var(self, space, w_axis=None):
-        return get_appbridge_cache(space).call_method(space, '_var', self,
-                                                      w_axis)
+        return get_appbridge_cache(space).call_method(space,
+            'numpypy.core._methods', '_var', self, w_axis
+        )
 
     def descr_std(self, space, w_axis=None):
-        return get_appbridge_cache(space).call_method(space, '_std', self,
-                                                      w_axis)
+        return get_appbridge_cache(space).call_method(space,
+            'numpypy.core._methods', '_std', self, w_axis
+        )
 
     def descr_fill(self, space, w_value):
         concr = self.get_concrete_or_scalar()
@@ -1291,10 +1307,12 @@ BaseArray.typedef = TypeDef(
     dtype = GetSetProperty(BaseArray.descr_get_dtype),
     shape = GetSetProperty(BaseArray.descr_get_shape,
                            BaseArray.descr_set_shape),
+    strides = GetSetProperty(BaseArray.descr_get_strides),
     size = GetSetProperty(BaseArray.descr_get_size),
     ndim = GetSetProperty(BaseArray.descr_get_ndim),
     itemsize = GetSetProperty(BaseArray.descr_get_itemsize),
     nbytes = GetSetProperty(BaseArray.descr_get_nbytes),
+    ctypes = GetSetProperty(BaseArray.descr_get_ctypes),
 
     T = GetSetProperty(BaseArray.descr_get_transpose),
     transpose = interp2app(BaseArray.descr_get_transpose),

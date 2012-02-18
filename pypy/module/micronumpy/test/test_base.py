@@ -14,7 +14,7 @@ class BaseNumpyAppTest(object):
                 import numpy
                 sys.modules['numpypy'] = numpy
                 sys.modules['_numpypy'] = numpy
-        cls.space = gettestobjspace(usemodules=['micronumpy'])
+        cls.space = gettestobjspace(usemodules=['micronumpy', '_ffi', '_rawffi'])
 
 class TestSignature(object):
     def test_binop_signature(self, space):

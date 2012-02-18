@@ -121,11 +121,14 @@ W_Dtype.typedef = TypeDef("dtype",
     itemsize = GetSetProperty(W_Dtype.descr_get_itemsize),
     shape = GetSetProperty(W_Dtype.descr_get_shape),
     name = interp_attrproperty('name', cls=W_Dtype),
+    char = interp_attrproperty("char", cls=W_Dtype),
 )
 W_Dtype.typedef.acceptable_as_base_class = False
 
 class DtypeCache(object):
     def __init__(self, space):
+        ptr_size = rffi.sizeof(rffi.VOIDP)
+
         self.w_booldtype = W_Dtype(
             types.Bool(),
             num=0,
@@ -173,6 +176,7 @@ class DtypeCache(object):
             kind=SIGNEDLTR,
             name="int32",
             char="i",
+            aliases = ["p"] if ptr_size == 4 else [],
             w_box_type=space.gettypefor(interp_boxes.W_Int32Box),
        )
         self.w_uint32dtype = W_Dtype(
@@ -211,6 +215,7 @@ class DtypeCache(object):
             name="int64",
             char="q",
             w_box_type=space.gettypefor(interp_boxes.W_Int64Box),
+            aliases = ["p"] if ptr_size == 8 else [],
             alternate_constructors=[space.w_long],
         )
         self.w_uint64dtype = W_Dtype(

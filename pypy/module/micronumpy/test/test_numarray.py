@@ -1709,6 +1709,25 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert (a + a).item(1) == 4
         raises(ValueError, "array(5).item(1)")
 
+    def test_ctypes(self):
+        import gc
+        from _numpypy import array
+
+        a = array([1, 2, 3, 4, 5])
+        assert a.ctypes._data == a.__array_interface__["data"][0]
+        assert a is a.ctypes._arr
+
+        shape = a.ctypes.get_shape()
+        assert len(shape) == 1
+        assert shape[0] == 5
+
+        strides = a.ctypes.get_strides()
+        assert len(strides) == 1
+        assert strides[0] == 1
+
+        a = array(2)
+        raises(TypeError, lambda: a.ctypes)
+
 class AppTestSupport(BaseNumpyAppTest):
     def setup_class(cls):
         import struct
