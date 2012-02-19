@@ -23,7 +23,8 @@ class MiniStats:
 class Descr(history.AbstractDescr):
 
     def __init__(self, ofs, typeinfo, extrainfo=None, name=None,
-                 arg_types=None, count_fields_if_immut=-1, ffi_flags=0, width=-1):
+                 arg_types=None, count_fields_if_immut=-1, ffi_flags=0,
+                 width=-1, is_array=False, field_size=-1):
 
         self.ofs = ofs
         self.width = width
@@ -33,6 +34,11 @@ class Descr(history.AbstractDescr):
         self.arg_types = arg_types
         self.count_fields_if_immut = count_fields_if_immut
         self.ffi_flags = ffi_flags
+        self.is_array_descr = is_array
+        self.field_size = field_size
+
+    def get_field_size(self):
+        return self.field_size
 
     def get_arg_types(self):
         return self.arg_types
@@ -42,6 +48,9 @@ class Descr(history.AbstractDescr):
 
     def get_extra_info(self):
         return self.extrainfo
+
+    def get_width(self):
+        return self.width
 
     def sort_key(self):
         """Returns an integer that can be used as a key when sorting the
@@ -121,14 +130,16 @@ class BaseCPU(model.AbstractCPU):
         return False
 
     def getdescr(self, ofs, typeinfo='?', extrainfo=None, name=None,
-                 arg_types=None, count_fields_if_immut=-1, ffi_flags=0, width=-1):
+                 arg_types=None, count_fields_if_immut=-1, ffi_flags=0,
+                 width=-1, is_array=False, field_size=-1):
         key = (ofs, typeinfo, extrainfo, name, arg_types,
                count_fields_if_immut, ffi_flags, width)
         try:
             return self._descrs[key]
         except KeyError:
             descr = Descr(ofs, typeinfo, extrainfo, name, arg_types,
-                          count_fields_if_immut, ffi_flags, width)
+                          count_fields_if_immut, ffi_flags, width, is_array,
+                          field_size)
             self._descrs[key] = descr
             return descr
 
@@ -339,7 +350,8 @@ class LLtypeCPU(BaseCPU):
         width = symbolic.get_size(A)
         ofs, size = symbolic.get_field_token(S, fieldname)
         token = history.getkind(getattr(S, fieldname))
-        return self.getdescr(ofs, token[0], name=fieldname, width=width)
+        return self.getdescr(ofs, token[0], name=fieldname, width=width,
+                             field_size=size)
 
     def interiorfielddescrof_dynamic(self, offset, width, fieldsize,
         is_pointer, is_float, is_signed):
@@ -351,7 +363,7 @@ class LLtypeCPU(BaseCPU):
         else:
             typeinfo = INT
         # we abuse the arg_types field to distinguish dynamic and static descrs
-        return Descr(offset, typeinfo, arg_types='dynamic', name='<dynamic interior field>', width=width)
+        return Descr(offset, typeinfo, arg_types='dynamic', name='<dynamic interior field>', width=width, field_size=fieldsize)
 
     def calldescrof(self, FUNC, ARGS, RESULT, extrainfo):
         arg_types = []
@@ -397,7 +409,7 @@ class LLtypeCPU(BaseCPU):
             token = 's'
         else:
             token = '?'
-        return self.getdescr(size, token)
+        return self.getdescr(size, token, is_array=True)
 
     # ---------- the backend-dependent operations ----------
 

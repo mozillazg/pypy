@@ -138,6 +138,7 @@ class AbstractValue(object):
 
 class AbstractDescr(AbstractValue):
     __slots__ = ()
+    is_array_descr = False
 
     def repr_of_descr(self):
         return '%r' % (self,)

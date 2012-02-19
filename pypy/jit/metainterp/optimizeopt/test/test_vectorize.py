@@ -10,6 +10,8 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
         cpu = LLtypeMixin.cpu
         FUNC = LLtypeMixin.FUNC
         arraydescr = cpu.arraydescrof(lltype.GcArray(lltype.Signed))
+        interiordescr = cpu.interiorfielddescrof_dynamic(0, 1, 8, False, True,
+                                                         False)
 
         def calldescr(cpu, FUNC, oopspecindex, extraeffect=None):
             if extraeffect == EffectInfo.EF_RANDOM_EFFECTS:
@@ -297,7 +299,7 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
-        setarrayitem_raw(p2, i2, f2)
+        setarrayitem_raw(p2, i2, f2, descr=arraydescr)
         i3 = cast_float_to_int(f2)
         finish(p0, p1, p2, i0, i1, i3)
         """
@@ -306,8 +308,77 @@ class TestVectorize(BaseTestBasic, LLtypeMixin):
         f0 = getarrayitem_raw(p0, i0, descr=arraydescr)
         f1 = getarrayitem_raw(p1, i1, descr=arraydescr)
         f2 = float_add(f0, f1)
-        setarrayitem_raw(p2, i2, f2)
+        setarrayitem_raw(p2, i2, f2, descr=arraydescr)
         i3 = cast_float_to_int(f2)
         finish(p0, p1, p2, i0, i1, i3)
         """
         self.optimize_loop(ops, expected)
+
+    def test_getinteriorfield(self):
+        ops = """
+        [p0, p1, p2, i0, i1, i2]
+        call(0, p0, i0, descr=assert_aligned)
+        call(0, p1, i1, descr=assert_aligned)
+        call(0, p1, i2, descr=assert_aligned)
+        f0 = getinteriorfield_raw(p0, i0, descr=interiordescr)
+        f1 = getinteriorfield_raw(p1, i1, descr=interiordescr)
+        f2 = float_add(f0, f1)
+        setinteriorfield_raw(p2, i2, f2, descr=interiordescr)
+        i0_1 = int_add(i0, 8)
+        i1_1 = int_add(8, i1)
+        i2_1 = int_add(i2, 8)
+        f0_1 = getinteriorfield_raw(p0, i0_1, descr=interiordescr)
+        f1_1 = getinteriorfield_raw(p1, i1_1, descr=interiordescr)
+        f2_1 = float_add(f0_1, f1_1)
+        setinteriorfield_raw(p2, i2_1, f2_1, descr=interiordescr)
+        finish(p0, p1, p2, i0_1, i1_1, i2_1)
+        """
+        expected = """
+        [p0, p1, p2, i0, i1, i2]
+        i0_1 = int_add(i0, 8)
+        i1_1 = int_add(8, i1)
+        i2_1 = int_add(i2, 8)
+        vec0 = getinteriorfield_vector_raw(p0, i0, descr=interiordescr)
+        vec1 = getinteriorfield_vector_raw(p1, i1, descr=interiordescr)
+        vec2 = float_vector_add(vec0, vec1)
+        setinteriorfield_vector_raw(p2, i2, vec2, descr=interiordescr)
+        finish(p0, p1, p2, i0_1, i1_1, i2_1)        
+        """
+        self.optimize_loop(ops, expected)
+    
+    def test_getinteriorfield_wrong(self):
+        ops = """
+        [p0, p1, p2, i0, i1, i2]
+        call(0, p0, i0, descr=assert_aligned)
+        call(0, p1, i1, descr=assert_aligned)
+        call(0, p1, i2, descr=assert_aligned)
+        f0 = getinteriorfield_raw(p0, i0, descr=interiordescr)
+        f1 = getinteriorfield_raw(p1, i1, descr=interiordescr)
+        f2 = float_add(f0, f1)
+        setinteriorfield_raw(p2, i2, f2, descr=interiordescr)
+        i0_1 = int_add(i0, 1)
+        i1_1 = int_add(1, i1)
+        i2_1 = int_add(i2, 1)
+        f0_1 = getinteriorfield_raw(p0, i0_1, descr=interiordescr)
+        f1_1 = getinteriorfield_raw(p1, i1_1, descr=interiordescr)
+        f2_1 = float_add(f0_1, f1_1)
+        setinteriorfield_raw(p2, i2_1, f2_1, descr=interiordescr)
+        finish(p0, p1, p2, i0_1, i1_1, i2_1)
+        """
+        expected = """
+        [p0, p1, p2, i0, i1, i2]
+        i0_1 = int_add(i0, 1)
+        i1_1 = int_add(1, i1)
+        i2_1 = int_add(i2, 1)
+        f0 = getinteriorfield_raw(p0, i0, descr=interiordescr)
+        f1 = getinteriorfield_raw(p1, i1, descr=interiordescr)
+        f2 = float_add(f0, f1)
+        setinteriorfield_raw(p2, i2, f2, descr=interiordescr)
+        f0_1 = getinteriorfield_raw(p0, i0_1, descr=interiordescr)
+        f1_1 = getinteriorfield_raw(p1, i1_1, descr=interiordescr)
+        f2_1 = float_add(f0_1, f1_1)
+        setinteriorfield_raw(p2, i2_1, f2_1, descr=interiordescr)
+        finish(p0, p1, p2, i0_1, i1_1, i2_1)
+        """
+        self.optimize_loop(ops, expected)
+

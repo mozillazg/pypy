@@ -7,7 +7,13 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 
 VECTOR_SIZE = 2
 VEC_MAP = {rop.FLOAT_ADD: rop.FLOAT_VECTOR_ADD,
-           rop.FLOAT_SUB: rop.FLOAT_VECTOR_SUB}
+           rop.FLOAT_SUB: rop.FLOAT_VECTOR_SUB,
+           rop.GETINTERIORFIELD_RAW: rop.GETINTERIORFIELD_VECTOR_RAW,
+           rop.SETINTERIORFIELD_RAW: rop.SETINTERIORFIELD_VECTOR_RAW,
+           rop.GETARRAYITEM_RAW: rop.GETARRAYITEM_VECTOR_RAW,
+           rop.SETARRAYITEM_RAW: rop.SETARRAYITEM_VECTOR_RAW,
+           }
+
 
 class BaseTrack(object):
     pass
@@ -25,7 +31,7 @@ class Read(BaseTrack):
 
     def emit(self, optimizer):
         box = BoxVector()
-        op = ResOperation(rop.GETARRAYITEM_VECTOR_RAW, [self.arr.box,
+        op = ResOperation(VEC_MAP[self.op.getopnum()], [self.arr.box,
                                                         self.index.val.box],
                           box, descr=self.op.getdescr())
         optimizer.emit_operation(op)
@@ -41,11 +47,13 @@ class Write(BaseTrack):
     def match(self, other, i):
         if not isinstance(other, Write):
             return False
+        descr = self.op.getdescr()
+        i = i * descr.get_field_size() / descr.get_width()
         return self.v.match(other.v, i)
 
     def emit(self, optimizer):
         arg = self.v.emit(optimizer)
-        op = ResOperation(rop.SETARRAYITEM_VECTOR_RAW, [self.arr.box,
+        op = ResOperation(VEC_MAP[self.op.getopnum()], [self.arr.box,
                                                         self.index.box, arg],
                           None, descr=self.op.getdescr())
         optimizer.emit_operation(op)
@@ -78,8 +86,17 @@ class TrackIndex(object):
         self.val = val
         self.index = index
 
-    def advance(self):
-        return TrackIndex(self.val, self.index + 1)
+    def advance(self, v):
+        return TrackIndex(self.val, self.index + v)
+
+    def match_descr(self, descr):
+        if self.index == 0:
+            return True
+        if descr.is_array_descr:
+            return self.index == 1
+        if descr.get_width() != 1:
+            return False # XXX this can probably be supported
+        return self.index == descr.get_field_size()
 
 class OptVectorize(Optimization):
     def __init__(self):
@@ -112,6 +129,9 @@ class OptVectorize(Optimization):
         track = self.tracked_indexes.get(index, None)
         if track is None:
             self.emit_operation(op)
+        elif not track.match_descr(op.getdescr()):
+            self.reset()
+            self.emit_operation(op)
         else:
             self.ops_so_far.append(op)
             self.track[self.getvalue(op.result)] = Read(arr, track, op)
@@ -123,20 +143,22 @@ class OptVectorize(Optimization):
         one = self.getvalue(op.getarg(0))
         two = self.getvalue(op.getarg(1))
         self.emit_operation(op)
-        if (one.is_constant() and one.box.getint() == 1 and
-            two in self.tracked_indexes):
+        if (one.is_constant() and two in self.tracked_indexes):
             index = two
-        elif (two.is_constant() and two.box.getint() == 1 and
-              one in self.tracked_indexes):
+            v = one.box.getint()
+        elif (two.is_constant() and one in self.tracked_indexes):
             index = one
+            v = two.box.getint()
         else:
             return
-        self.tracked_indexes[self.getvalue(op.result)] = self.tracked_indexes[index].advance()
+        self.tracked_indexes[self.getvalue(op.result)] = self.tracked_indexes[index].advance(v)
 
     def _optimize_binop(self, op):
         left = self.getvalue(op.getarg(0))
         right = self.getvalue(op.getarg(1))
         if left not in self.track or right not in self.track:
+            if left in self.track or right in self.track:
+                self.reset()
             self.emit_operation(op)
         else:
             self.ops_so_far.append(op)
@@ -151,6 +173,9 @@ class OptVectorize(Optimization):
         index = self.getvalue(op.getarg(1))
         val = self.getvalue(op.getarg(2))
         if index not in self.tracked_indexes or val not in self.track:
+            # We could detect cases here, but we're playing on the safe
+            # side and just resetting everything
+            self.reset()
             self.emit_operation(op)
             return
         self.ops_so_far.append(op)
@@ -159,7 +184,9 @@ class OptVectorize(Optimization):
         ti = self.tracked_indexes[index]
         if arr not in self.full:
             self.full[arr] = [None] * VECTOR_SIZE
-        self.full[arr][ti.index] = Write(arr, index, v, op)
+        i = (ti.index * op.getdescr().get_width() //
+             op.getdescr().get_field_size())
+        self.full[arr][i] = Write(arr, index, v, op)
 
     optimize_SETINTERIORFIELD_RAW = optimize_SETARRAYITEM_RAW
 

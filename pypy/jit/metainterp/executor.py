@@ -277,7 +277,8 @@ def do_keepalive(cpu, _, x):
 
 
 IGNORED = ['FLOAT_VECTOR_ADD', 'FLOAT_VECTOR_SUB',
-           'GETARRAYITEM_VECTOR_RAW',
+           'GETARRAYITEM_VECTOR_RAW', 'GETINTERIORFIELD_VECTOR_RAW',
+           'SETINTERIORFIELD_VECTOR_RAW',
            'SETARRAYITEM_VECTOR_RAW', 'ASSERT_ALIGNED']
 
 def _make_execute_list():
