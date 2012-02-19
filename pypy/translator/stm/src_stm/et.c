@@ -36,6 +36,10 @@ typedef long owner_version_t;
 
 typedef volatile owner_version_t orec_t;
 
+/*#define USE_ASSOCIATIVE_CACHE*/
+
+#ifndef USE_ASSOCIATIVE_CACHE    /* simple version */
+
 /*** Specify the number of orecs in the global array. */
 #define NUM_STRIPES  1048576
 
@@ -52,6 +56,10 @@ inline static orec_t *get_orec(void* addr)
   char *p = orecs + (index & ((NUM_STRIPES-1) * sizeof(orec_t)));
   return (orec_t *)p;
 }
+
+#else  /* USE_ASSOCIATIVE_CACHE: follows more closely what hardware would do */
+#  include "src_stm/associative.c"
+#endif
 
 #include "src_stm/lists.c"
 
