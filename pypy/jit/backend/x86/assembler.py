@@ -1469,6 +1469,13 @@ class Assembler386(object):
         src_addr = addr_add(base_loc, ofs_loc, 0, scale)
         self.mc.MOVDQA(resloc, src_addr)
 
+    def genop_getinteriorfield_vector_raw(self, op, arglocs, resloc):
+        (base_loc, ofs_loc, itemsize_loc, fieldsize_loc,
+            index_loc, temp_loc, sign_loc) = arglocs
+        self.genop_getarrayitem_vector_raw(op, [base_loc, ofs_loc,
+                                                itemsize_loc, None, sign_loc],
+                                           resloc)
+
     def _get_interiorfield_addr(self, temp_loc, index_loc, itemsize_loc,
                                 base_loc, ofs_loc):
         assert isinstance(itemsize_loc, ImmedLoc)
@@ -1527,6 +1534,12 @@ class Assembler386(object):
         scale = _get_scale(size_loc.value)
         dest_addr = AddressLoc(base_loc, ofs_loc, scale, 0)
         self.mc.MOVDQA(dest_addr, value_loc)
+
+    def genop_discard_setinteriorfield_vector_raw(self, op, arglocs):
+        (base_loc, ofs_loc, itemsize_loc, fieldsize_loc,
+            index_loc, temp_loc, value_loc) = arglocs
+        self.genop_discard_setarrayitem_vector_raw(op, [base_loc, ofs_loc,
+             value_loc, itemsize_loc, None])
 
     def genop_discard_strsetitem(self, op, arglocs):
         base_loc, ofs_loc, val_loc = arglocs

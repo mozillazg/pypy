@@ -1072,6 +1072,7 @@ class RegAlloc(object):
                                  index_loc, temp_loc, value_loc])
 
     consider_setinteriorfield_raw = consider_setinteriorfield_gc
+    consider_setinteriorfield_vector_raw = consider_setinteriorfield_gc
 
     def consider_strsetitem(self, op):
         args = op.getarglist()
@@ -1167,6 +1168,7 @@ class RegAlloc(object):
                           index_loc, temp_loc, sign_loc], result_loc)
 
     consider_getinteriorfield_raw = consider_getinteriorfield_gc
+    consider_getinteriorfield_vector_raw = consider_getinteriorfield_gc
 
     def consider_int_is_true(self, op, guard_op):
         # doesn't need arg to be in a register

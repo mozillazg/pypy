@@ -23,7 +23,7 @@ ALL_OPTS = [('intbounds', OptIntBounds),
             ('pure', OptPure),
             ('heap', OptHeap),
             ('ffi', None),
-            ('vectorize', OptVectorize), # XXX check if CPU supports that maybe
+            ('vectorize', OptVectorize), # XXX check if CPU supports that
             ('unroll', None),
             ]
 # no direct instantiation of unroll

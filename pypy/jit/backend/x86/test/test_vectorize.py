@@ -39,19 +39,22 @@ class TestVectorize(Jit386Mixin):
             return r
 
         assert self.meta_interp(f, [20]) == f(20)
+        self.check_simple_loop(float_vector_add=1, getarrayitem_vector_raw=2,
+                               setarrayitem_vector_raw=1)
 
     def test_vector_ops_libffi(self):
-        TP = rffi.CArray(lltype.Float)
+        TP = lltype.Array(lltype.Float, hints={'nolength': True,
+                                               'memory_position_alignment': 16})
         elem_size = rffi.sizeof(lltype.Float)
         ftype = clibffi.cast_type_to_ffitype(lltype.Float)
 
         driver = jit.JitDriver(greens = [], reds = ['a', 'i', 'b', 'size'])
 
         def read_item(arr, item):
-            return libffi.array_getitem(ftype, elem_size, arr, item, 0)
+            return libffi.array_getitem(ftype, 1, arr, item, 0)
 
         def store_item(arr, item, v):
-            libffi.array_setitem(ftype, elem_size, arr, item, 0, v)
+            libffi.array_setitem(ftype, 1, arr, item, 0, v)
 
         def initialize(arr, size):
             for i in range(size):
@@ -69,19 +72,23 @@ class TestVectorize(Jit386Mixin):
             initialize(a, size)
             initialize(b, size)
             i = 0
-            while i < size:
+            while i < size * elem_size:
                 driver.jit_merge_point(a=a, i=i, size=size, b=b)
                 jit.assert_aligned(a, i)
                 jit.assert_aligned(b, i)
                 store_item(b, i, read_item(a, i) + read_item(a, i))
-                i += 1
+                i += elem_size
                 store_item(b, i, read_item(a, i) + read_item(a, i))
-                i += 1
+                i += elem_size
             r = sum(b, size)
             lltype.free(a, flavor='raw')
             lltype.free(b, flavor='raw')
             return r
 
         res = f(20)
-        assert self.meta_interp(f, [20]) == res
+        res2 = self.meta_interp(f, [20])
+        self.check_simple_loop(float_vector_add=1,
+                               getinteriorfield_vector_raw=2,
+                               setinteriorfield_vector_raw=1)
+        assert res2 == res
         

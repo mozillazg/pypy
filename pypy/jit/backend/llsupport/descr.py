@@ -179,9 +179,11 @@ class ArrayDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<Array%s %s>' % (self.flag, self.itemsize)
 
-    def get_item_size(self):
+    def get_field_size(self):
         return self.itemsize
 
+    def get_width(self):
+        return self.itemsize
 
 def get_array_descr(gccache, ARRAY_OR_STRUCT):
     cache = gccache._cache_array
@@ -230,7 +232,7 @@ class InteriorFieldDescr(AbstractDescr):
     def repr_of_descr(self):
         return '<InteriorFieldDescr %s>' % self.fielddescr.repr_of_descr()
 
-    def get_item_size(self):
+    def get_field_size(self):
         return self.fielddescr.field_size
 
     def get_width(self):
