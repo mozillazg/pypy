@@ -1,5 +1,6 @@
 from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
-
+from pypy.module.micronumpy.interp_dtype import nonnative_byteorder_prefix
+from pypy.interpreter.gateway import interp2app
 
 class AppTestDtypes(BaseNumpyAppTest):
     def test_dtype(self):
@@ -12,7 +13,10 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert dtype(d) is d
         assert dtype(None) is dtype(float)
         assert dtype('int8').name == 'int8'
+        assert dtype(int).fields is None
+        assert dtype(int).names is None
         raises(TypeError, dtype, 1042)
+        raises(KeyError, 'dtype(int)["asdasd"]')
 
     def test_dtype_eq(self):
         from _numpypy import dtype
@@ -53,13 +57,13 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert a[i] is True_
 
     def test_copy_array_with_dtype(self):
-        from _numpypy import array, False_, True_, int64
+        from _numpypy import array, False_, longlong
 
         a = array([0, 1, 2, 3], dtype=long)
         # int on 64-bit, long in 32-bit
-        assert isinstance(a[0], int64)
+        assert isinstance(a[0], longlong)
         b = a.copy()
-        assert isinstance(b[0], int64)
+        assert isinstance(b[0], longlong)
 
         a = array([0, 1, 2, 3], dtype=bool)
         assert a[0] is False_
@@ -81,17 +85,17 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert a[i] is True_
 
     def test_zeros_long(self):
-        from _numpypy import zeros, int64
+        from _numpypy import zeros, longlong
         a = zeros(10, dtype=long)
         for i in range(10):
-            assert isinstance(a[i], int64)
+            assert isinstance(a[i], longlong)
             assert a[1] == 0
 
     def test_ones_long(self):
-        from _numpypy import ones, int64
+        from _numpypy import ones, longlong
         a = ones(10, dtype=long)
         for i in range(10):
-            assert isinstance(a[i], int64)
+            assert isinstance(a[i], longlong)
             assert a[1] == 1
 
     def test_overflow(self):
@@ -182,16 +186,31 @@ class AppTestDtypes(BaseNumpyAppTest):
 
 
 class AppTestTypes(BaseNumpyAppTest):
+    def setup_class(cls):
+        BaseNumpyAppTest.setup_class.im_func(cls)
+        cls.w_non_native_prefix = cls.space.wrap(nonnative_byteorder_prefix)
+        def check_non_native(w_obj, w_obj2):
+            assert w_obj.storage[0] == w_obj2.storage[1]
+            assert w_obj.storage[1] == w_obj2.storage[0]
+            if w_obj.storage[0] == '\x00':
+                assert w_obj2.storage[1] == '\x00'
+                assert w_obj2.storage[0] == '\x01'
+            else:
+                assert w_obj2.storage[1] == '\x01'
+                assert w_obj2.storage[0] == '\x00'
+        cls.w_check_non_native = cls.space.wrap(interp2app(check_non_native))
+    
     def test_abstract_types(self):
         import _numpypy as numpy
         raises(TypeError, numpy.generic, 0)
         raises(TypeError, numpy.number, 0)
         raises(TypeError, numpy.integer, 0)
         exc = raises(TypeError, numpy.signedinteger, 0)
-        assert str(exc.value) == "cannot create 'signedinteger' instances"
+        assert 'cannot create' in str(exc.value)
+        assert 'signedinteger' in str(exc.value)
         exc = raises(TypeError, numpy.unsignedinteger, 0)
-        assert str(exc.value) == "cannot create 'unsignedinteger' instances"
-
+        assert 'cannot create' in str(exc.value)
+        assert 'unsignedinteger' in str(exc.value)
         raises(TypeError, numpy.floating, 0)
         raises(TypeError, numpy.inexact, 0)
 
@@ -402,10 +421,29 @@ class AppTestTypes(BaseNumpyAppTest):
             assert issubclass(int64, int)
             assert int_ is int64
 
+    def test_various_types(self):
+        import _numpypy as numpy
+        import sys
+        
+        assert numpy.int16 is numpy.short
+        assert numpy.int8 is numpy.byte
+        assert numpy.bool_ is numpy.bool8
+        if sys.maxint == (1 << 63) - 1:
+            assert numpy.intp is numpy.int64
+        else:
+            assert numpy.intp is numpy.int32
+
+    def test_mro(self):
+        import _numpypy as numpy
+        
+        assert numpy.int16.__mro__ == (numpy.int16, numpy.signedinteger,
+                                       numpy.integer, numpy.number,
+                                       numpy.generic, object)
+        assert numpy.bool_.__mro__ == (numpy.bool_, numpy.generic, object)
+
     def test_operators(self):
         from operator import truediv
         from _numpypy import float64, int_, True_, False_
-
         assert 5 / int_(2) == int_(2)
         assert truediv(int_(3), int_(2)) == float64(1.5)
         assert truediv(3, int_(2)) == float64(1.5)
@@ -425,9 +463,86 @@ class AppTestTypes(BaseNumpyAppTest):
         assert int_(3) ^ int_(5) == int_(6)
         assert True_ ^ False_ is True_
         assert 5 ^ int_(3) == int_(6)
-
         assert +int_(3) == int_(3)
         assert ~int_(3) == int_(-4)
-
         raises(TypeError, lambda: float64(3) & 1)
 
+    def test_alternate_constructs(self):
+        from _numpypy import dtype
+        assert dtype('i8') == dtype('<i8')# XXX should be equal == dtype(long)
+        assert dtype(self.non_native_prefix + 'i8') != dtype('i8')
+
+    def test_non_native(self):
+        from _numpypy import array
+        a = array([1, 2, 3], dtype=self.non_native_prefix + 'i2')
+        assert a[0] == 1
+        assert (a + a)[1] == 4
+        self.check_non_native(a, array([1, 2, 3], 'i2'))
+
+    def test_alignment(self):
+        from _numpypy import dtype
+        assert dtype('i4').alignment == 4
+
+    def test_typeinfo(self):
+        from _numpypy import typeinfo, void, number, int64, bool_
+        assert typeinfo['Number'] == number
+        assert typeinfo['LONGLONG'] == ('q', 9, 64, 8, 9223372036854775807L, -9223372036854775808L, int64)
+        assert typeinfo['VOID'] == ('V', 20, 0, 1, void)
+        assert typeinfo['BOOL'] == ('?', 0, 8, 1, 1, 0, bool_)
+
+class AppTestStrUnicodeDtypes(BaseNumpyAppTest):
+    def test_str_unicode(self):
+        from _numpypy import str_, unicode_, character, flexible, generic
+        
+        assert str_.mro() == [str_, str, basestring, character, flexible, generic, object]
+        assert unicode_.mro() == [unicode_, unicode, basestring, character, flexible, generic, object]
+
+    def test_str_dtype(self):
+        from _numpypy import dtype, str_
+
+        raises(TypeError, "dtype('Sx')")
+        d = dtype('S8')
+        assert d.itemsize == 8
+        assert dtype(str) == dtype('S')
+        assert d.kind == 'S'
+        assert d.type is str_
+        assert d.name == "string64"
+        assert d.num == 18
+
+    def test_unicode_dtype(self):
+        from _numpypy import dtype, unicode_
+
+        raises(TypeError, "dtype('Ux')")
+        d = dtype('U8')
+        assert d.itemsize == 8 * 4
+        assert dtype(unicode) == dtype('U')
+        assert d.kind == 'U'
+        assert d.type is unicode_
+        assert d.name == "unicode256"
+        assert d.num == 19
+
+class AppTestRecordDtypes(BaseNumpyAppTest):
+    def test_create(self):
+        from _numpypy import dtype, void
+
+        raises(ValueError, "dtype([('x', int), ('x', float)])")
+        d = dtype([("x", "int32"), ("y", "int32"), ("z", "int32"), ("value", float)])
+        assert d.fields['x'] == (dtype('int32'), 0)
+        assert d.fields['value'] == (dtype(float), 12)
+        assert d['x'] == dtype('int32')
+        assert d.name == "void160"
+        assert d.num == 20
+        assert d.itemsize == 20
+        assert d.kind == 'V'
+        assert d.type is void
+        assert d.char == 'V'
+        assert d.names == ("x", "y", "z", "value")
+        raises(KeyError, 'd["xyz"]')
+        raises(KeyError, 'd.fields["xyz"]')
+
+    def test_create_from_dict(self):
+        skip("not yet")
+        from _numpypy import dtype
+        d = dtype({'names': ['a', 'b', 'c'],
+                   })
+        

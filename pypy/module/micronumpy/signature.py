@@ -143,11 +143,10 @@ class ArraySignature(ConcreteSignature):
         from pypy.module.micronumpy.interp_numarray import ConcreteArray
         concr = arr.get_concrete()
         assert isinstance(concr, ConcreteArray)
-        storage = concr.storage
         if self.iter_no >= len(iterlist):
             iterlist.append(concr.create_iter(transforms))
         if self.array_no >= len(arraylist):
-            arraylist.append(storage)
+            arraylist.append(concr)
 
     def eval(self, frame, arr):
         iter = frame.iterators[self.iter_no]
@@ -321,7 +320,23 @@ class ResultSignature(Call2):
 
         assert isinstance(arr, ResultArray)
         offset = frame.get_final_iter().offset
-        arr.left.setitem(offset, self.right.eval(frame, arr.right))
+        res = arr.left
+        if frame.first_iteration:
+            jit.assert_aligned(res, offset)
+        res.setitem(offset, self.right.eval(frame, arr.right))
+
+class ToStringSignature(Call1):
+    def __init__(self, dtype, child):
+        Call1.__init__(self, None, 'tostring', dtype, child)
+
+    def eval(self, frame, arr):
+        from pypy.module.micronumpy.interp_numarray import ToStringArray
+
+        assert isinstance(arr, ToStringArray)
+        arr.res.setitem(0, self.child.eval(frame, arr.values).convert_to(
+            self.dtype))
+        for i in range(arr.itemsize):
+            arr.s.append(arr.res_casted[i])
 
 class BroadcastLeft(Call2):
     def _invent_numbering(self, cache, allnumbers):
@@ -389,7 +404,10 @@ class SliceloopSignature(Call2):
         
         assert isinstance(arr, Call2)
         ofs = frame.iterators[0].offset
-        arr.left.setitem(ofs, self.right.eval(frame, arr.right).convert_to(
+        res = arr.left
+        if frame.first_iteration:
+            jit.assert_aligned(res, ofs)
+        res.setitem(ofs, self.right.eval(frame, arr.right).convert_to(
             self.calc_dtype))
     
     def debug_repr(self):

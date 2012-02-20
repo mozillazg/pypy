@@ -1,24 +1,25 @@
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.interpreter.error import operationerrfmt
-from pypy.interpreter.gateway import interp2app
+from pypy.interpreter.error import operationerrfmt, OperationError
+from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
 from pypy.objspace.std.floattype import float_typedef
+from pypy.objspace.std.stringtype import str_typedef
+from pypy.objspace.std.unicodetype import unicode_typedef
 from pypy.objspace.std.inttype import int_typedef
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.tool.sourcetools import func_with_new_name
-
 
 MIXIN_32 = (int_typedef,) if LONG_BIT == 32 else ()
 MIXIN_64 = (int_typedef,) if LONG_BIT == 64 else ()
 
 def new_dtype_getter(name):
-    def get_dtype(space):
+    def _get_dtype(space):
         from pypy.module.micronumpy.interp_dtype import get_dtype_cache
         return getattr(get_dtype_cache(space), "w_%sdtype" % name)
     def new(space, w_subtype, w_value):
-        dtype = get_dtype(space)
+        dtype = _get_dtype(space)
         return dtype.itemtype.coerce_subtype(space, w_subtype, w_value)
-    return func_with_new_name(new, name + "_box_new"), staticmethod(get_dtype)
+    return func_with_new_name(new, name + "_box_new"), staticmethod(_get_dtype)
 
 class PrimitiveBox(object):
     _mixin_ = True
@@ -29,7 +30,6 @@ class PrimitiveBox(object):
     def convert_to(self, dtype):
         return dtype.box(self.value)
 
-
 class W_GenericBox(Wrappable):
     _attrs_ = ()
 
@@ -38,6 +38,9 @@ class W_GenericBox(Wrappable):
             w_subtype.getname(space, '?')
         )
 
+    def get_dtype(self, space):
+        return self._get_dtype(space)
+
     def descr_str(self, space):
         return self.descr_repr(space)
 
@@ -45,12 +48,12 @@ class W_GenericBox(Wrappable):
         return space.wrap(self.get_dtype(space).itemtype.str_format(self))
 
     def descr_int(self, space):
-        box = self.convert_to(W_LongBox.get_dtype(space))
+        box = self.convert_to(W_LongBox._get_dtype(space))
         assert isinstance(box, W_LongBox)
         return space.wrap(box.value)
 
     def descr_float(self, space):
-        box = self.convert_to(W_Float64Box.get_dtype(space))
+        box = self.convert_to(W_Float64Box._get_dtype(space))
         assert isinstance(box, W_Float64Box)
         return space.wrap(box.value)
 
@@ -129,7 +132,7 @@ class W_GenericBox(Wrappable):
 
 
 class W_BoolBox(W_GenericBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("bool")
+    descr__new__, _get_dtype = new_dtype_getter("bool")
 
 class W_NumberBox(W_GenericBox):
     _attrs_ = ()
@@ -145,34 +148,40 @@ class W_UnsignedIntegerBox(W_IntegerBox):
     pass
 
 class W_Int8Box(W_SignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("int8")
+    descr__new__, _get_dtype = new_dtype_getter("int8")
 
 class W_UInt8Box(W_UnsignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("uint8")
+    descr__new__, _get_dtype = new_dtype_getter("uint8")
 
 class W_Int16Box(W_SignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("int16")
+    descr__new__, _get_dtype = new_dtype_getter("int16")
 
 class W_UInt16Box(W_UnsignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("uint16")
+    descr__new__, _get_dtype = new_dtype_getter("uint16")
 
 class W_Int32Box(W_SignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("int32")
+    descr__new__, _get_dtype = new_dtype_getter("int32")
 
 class W_UInt32Box(W_UnsignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("uint32")
+    descr__new__, _get_dtype = new_dtype_getter("uint32")
 
 class W_LongBox(W_SignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("long")
+    descr__new__, _get_dtype = new_dtype_getter("long")
 
 class W_ULongBox(W_UnsignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("ulong")
+    descr__new__, _get_dtype = new_dtype_getter("ulong")
 
 class W_Int64Box(W_SignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("int64")
+    descr__new__, _get_dtype = new_dtype_getter("int64")
+
+class W_LongLongBox(W_SignedIntegerBox, PrimitiveBox):
+    descr__new__, _get_dtype = new_dtype_getter('longlong')
 
 class W_UInt64Box(W_UnsignedIntegerBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("uint64")
+    descr__new__, _get_dtype = new_dtype_getter("uint64")
+
+class W_ULongLongBox(W_SignedIntegerBox, PrimitiveBox):
+    descr__new__, _get_dtype = new_dtype_getter('ulonglong')
 
 class W_InexactBox(W_NumberBox):
     _attrs_ = ()
@@ -181,12 +190,50 @@ class W_FloatingBox(W_InexactBox):
     _attrs_ = ()
 
 class W_Float32Box(W_FloatingBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("float32")
+    descr__new__, _get_dtype = new_dtype_getter("float32")
 
 class W_Float64Box(W_FloatingBox, PrimitiveBox):
-    descr__new__, get_dtype = new_dtype_getter("float64")
+    descr__new__, _get_dtype = new_dtype_getter("float64")
 
 
+class W_FlexibleBox(W_GenericBox):
+    pass
+
+class W_VoidBox(W_FlexibleBox):
+    def __init__(self, arr, ofs):
+        self.arr = arr # we have to keep array alive
+        self.ofs = ofs
+
+    def get_dtype(self, space):
+        return self.arr.dtype
+
+    @unwrap_spec(item=str)
+    def descr_getitem(self, space, item):
+        try:
+            ofs, dtype = self.arr.dtype.fields[item]
+        except KeyError:
+            raise OperationError(space.w_IndexError,
+                                 space.wrap("Field %s does not exist" % item))
+        return dtype.itemtype.read(self.arr, 1, self.ofs, ofs)
+
+    @unwrap_spec(item=str)
+    def descr_setitem(self, space, item, w_value):
+        try:
+            ofs, dtype = self.arr.dtype.fields[item]
+        except KeyError:
+            raise OperationError(space.w_IndexError,
+                                 space.wrap("Field %s does not exist" % item))
+        dtype.itemtype.store(self.arr, 1, self.ofs, ofs,
+                             dtype.coerce(space, w_value))
+
+class W_CharacterBox(W_FlexibleBox):
+    pass
+
+class W_StringBox(W_CharacterBox):
+    pass
+
+class W_UnicodeBox(W_CharacterBox):
+    pass
 
 W_GenericBox.typedef = TypeDef("generic",
     __module__ = "numpypy",
@@ -330,3 +377,26 @@ W_Float64Box.typedef = TypeDef("float64", (W_FloatingBox.typedef, float_typedef)
     __new__ = interp2app(W_Float64Box.descr__new__.im_func),
 )
 
+
+W_FlexibleBox.typedef = TypeDef("flexible", W_GenericBox.typedef,
+    __module__ = "numpypy",
+)
+
+W_VoidBox.typedef = TypeDef("void", W_FlexibleBox.typedef,
+    __module__ = "numpypy",
+    __getitem__ = interp2app(W_VoidBox.descr_getitem),
+    __setitem__ = interp2app(W_VoidBox.descr_setitem),
+)
+
+W_CharacterBox.typedef = TypeDef("character", W_FlexibleBox.typedef,
+    __module__ = "numpypy",
+)
+
+W_StringBox.typedef = TypeDef("string_", (str_typedef, W_CharacterBox.typedef),
+    __module__ = "numpypy",
+)
+
+W_UnicodeBox.typedef = TypeDef("unicode_", (unicode_typedef, W_CharacterBox.typedef),
+    __module__ = "numpypy",
+)
+                                          

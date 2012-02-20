@@ -4,6 +4,7 @@ from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.history import BoxVector
 from pypy.jit.codewriter.effectinfo import EffectInfo
+from pypy.rlib.debug import debug_start, debug_print, debug_stop
 
 VECTOR_SIZE = 2
 VEC_MAP = {rop.FLOAT_ADD: rop.FLOAT_VECTOR_ADD,
@@ -99,12 +100,19 @@ class TrackIndex(object):
         return self.index == descr.get_field_size()
 
 class OptVectorize(Optimization):
+    track = None
+    full = None
+    
     def __init__(self):
         self.ops_so_far = []
         self.reset()
 
     def reset(self):
         # deal with reset
+        if self.track or self.full:
+            debug_start("jit-optimizeopt-vectorize")
+            debug_print("aborting vectorizing")
+            debug_stop("jit-optimizeopt-vectorize")
         for op in self.ops_so_far:
             self.emit_operation(op)
         self.ops_so_far = []
@@ -120,6 +128,7 @@ class OptVectorize(Optimization):
         if oopspec == EffectInfo.OS_ASSERT_ALIGNED:
             index = self.getvalue(op.getarg(2))
             self.tracked_indexes[index] = TrackIndex(index, 0)
+            self.emit_operation(op)
         else:
             self.optimize_default(op)
 
