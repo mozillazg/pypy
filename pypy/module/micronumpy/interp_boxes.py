@@ -388,15 +388,15 @@ W_VoidBox.typedef = TypeDef("void", W_FlexibleBox.typedef,
     __setitem__ = interp2app(W_VoidBox.descr_setitem),
 )
 
-W_CharacterBox.typedef = TypeDef("character", W_FlexibleBox.typedef,
-    __module__ = "numpypy",
-)
+#W_CharacterBox.typedef = TypeDef("character", W_FlexibleBox.typedef,
+#    __module__ = "numpypy",
+#)
 
-W_StringBox.typedef = TypeDef("string_", (str_typedef, W_CharacterBox.typedef),
-    __module__ = "numpypy",
-)
+#W_StringBox.typedef = TypeDef("string_", (str_typedef, W_CharacterBox.typedef),
+#    __module__ = "numpypy",
+#)
 
-W_UnicodeBox.typedef = TypeDef("unicode_", (unicode_typedef, W_CharacterBox.typedef),
-    __module__ = "numpypy",
-)
+#W_UnicodeBox.typedef = TypeDef("unicode_", (unicode_typedef, W_CharacterBox.typedef),
+#    __module__ = "numpypy",
+#)
                                           
