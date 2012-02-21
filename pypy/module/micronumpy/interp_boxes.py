@@ -226,14 +226,14 @@ class W_VoidBox(W_FlexibleBox):
         dtype.itemtype.store(self.arr, 1, self.ofs, ofs,
                              dtype.coerce(space, w_value))
 
-class W_CharacterBox(W_FlexibleBox):
-    pass
+#class W_CharacterBox(W_FlexibleBox):
+#    pass
 
-class W_StringBox(W_CharacterBox):
-    pass
+#class W_StringBox(W_CharacterBox):
+#    pass
 
-class W_UnicodeBox(W_CharacterBox):
-    pass
+#class W_UnicodeBox(W_CharacterBox):
+#    pass
 
 W_GenericBox.typedef = TypeDef("generic",
     __module__ = "numpypy",

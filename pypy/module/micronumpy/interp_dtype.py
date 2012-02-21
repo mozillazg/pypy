@@ -465,7 +465,7 @@ class DtypeCache(object):
         }
         typeinfo_partial = {
             'Generic': interp_boxes.W_GenericBox,
-            'Character': interp_boxes.W_CharacterBox,
+            #'Character': interp_boxes.W_CharacterBox,
             'Flexible': interp_boxes.W_FlexibleBox,
             'Inexact': interp_boxes.W_InexactBox,
             'Integer': interp_boxes.W_IntegerBox,
