@@ -128,7 +128,6 @@ class OptVectorize(Optimization):
         if oopspec == EffectInfo.OS_ASSERT_ALIGNED:
             index = self.getvalue(op.getarg(2))
             self.tracked_indexes[index] = TrackIndex(index, 0)
-            self.emit_operation(op)
         else:
             self.optimize_default(op)
 
