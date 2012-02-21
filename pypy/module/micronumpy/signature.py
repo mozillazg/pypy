@@ -335,7 +335,7 @@ class ToStringSignature(Call1):
         assert isinstance(arr, ToStringArray)
         arr.res.setitem(0, self.child.eval(frame, arr.values).convert_to(
             self.dtype))
-        for i in range(arr.itemsize):
+        for i in range(self.dtype.get_size()):
             arr.s.append(arr.res_casted[i])
 
 class BroadcastLeft(Call2):
