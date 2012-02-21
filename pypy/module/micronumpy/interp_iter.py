@@ -173,7 +173,7 @@ class OneDimIterator(BaseIterator):
         arr = instantiate(OneDimIterator)
         arr.size = self.size
         arr.step = self.step
-        arr.offset = self.offset + self.step
+        arr.offset = self.offset + jit.promote(self.step)
         return arr
 
     def done(self):
