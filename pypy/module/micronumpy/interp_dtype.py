@@ -164,6 +164,7 @@ def variable_dtype(space, name):
         except ValueError:
             raise OperationError(space.w_TypeError, space.wrap("data type not understood"))
     if char == 'S':
+        raise NotImplementedError
         itemtype = types.StringType(size)
         basename = 'string'
         num = 18
@@ -175,6 +176,7 @@ def variable_dtype(space, name):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "pure void dtype"))
     else:
+        raise NotImplementedError
         assert char == 'U'
         basename = 'unicode'
         itemtype = types.UnicodeType(size)
@@ -384,7 +386,7 @@ class DtypeCache(object):
             kind=STRINGLTR,
             name='string',
             char='S',
-            w_box_type = space.gettypefor(interp_boxes.W_StringBox),
+            w_box_type = None,#space.gettypefor(interp_boxes.W_StringBox),
             alternate_constructors=[space.w_str],
         )
         self.w_unicodedtype = W_Dtype(
@@ -393,7 +395,7 @@ class DtypeCache(object):
             kind=UNICODELTR,
             name='unicode',
             char='U',
-            w_box_type = space.gettypefor(interp_boxes.W_UnicodeBox),
+            w_box_type = None,#space.gettypefor(interp_boxes.W_UnicodeBox),
             alternate_constructors=[space.w_unicode],
         )
         self.w_voiddtype = W_Dtype(
