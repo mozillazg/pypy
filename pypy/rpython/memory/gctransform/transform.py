@@ -627,10 +627,10 @@ class GCTransformer(BaseGCTransformer):
                     fnptr = self.raw_malloc_varsize_no_length_zero_ptr
                 else:
                     fnptr = self.raw_malloc_varsize_no_length_ptr
-                    v_raw = hop.genop("direct_call",
-                                      [fnptr, v_length, c_const_size,
-                                       c_item_size],
-                                      resulttype=llmemory.Address)
+                v_raw = hop.genop("direct_call",
+                                  [fnptr, v_length, c_const_size,
+                                   c_item_size],
+                                  resulttype=llmemory.Address)
         else:
             if flags.get('zero'):
                 raise NotImplementedError("raw zero varsize malloc with length field")
