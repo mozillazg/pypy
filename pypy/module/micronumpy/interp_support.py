@@ -74,7 +74,7 @@ def _fromstring_bin(space, s, count, length, dtype):
         raise OperationError(space.w_ValueError, space.wrap(
             "string is smaller than requested size"))
         
-    a = W_NDimArray(count, [count], dtype=dtype)
+    a = W_NDimArray([count], dtype=dtype)
     fromstring_loop(a, count, dtype, itemsize, s)
     return space.wrap(a)
 
