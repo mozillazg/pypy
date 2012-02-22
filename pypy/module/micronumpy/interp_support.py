@@ -3,7 +3,7 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.module.micronumpy import interp_dtype
 from pypy.objspace.std.strutil import strip_spaces
-
+from pypy.rlib import jit
 
 FLOAT_SIZE = rffi.sizeof(lltype.Float)
 
@@ -74,16 +74,25 @@ def _fromstring_bin(space, s, count, length, dtype):
         raise OperationError(space.w_ValueError, space.wrap(
             "string is smaller than requested size"))
         
-    a = W_NDimArray([count], dtype=dtype)
+    a = W_NDimArray(count, [count], dtype=dtype)
+    fromstring_loop(a, count, dtype, itemsize, s)
+    return space.wrap(a)
+
+fromstring_driver = jit.JitDriver(greens=[], reds=['count', 'itemsize', 'dtype',
+                                                   'ai', 'a', 's'])
+
+def fromstring_loop(a, count, dtype, itemsize, s):
     ai = a.create_iter()
-    for i in range(count):
+    i = 0
+    while i < count:
+        fromstring_driver.jit_merge_point(a=a, count=count, dtype=dtype,
+                                          itemsize=itemsize, s=s, ai=ai)
         start = i*itemsize
         assert start >= 0
         val = dtype.itemtype.runpack_str(s[start:start + itemsize])
         a.dtype.setitem(a, ai.offset, val)
         ai = ai.next(1)
-        
-    return space.wrap(a)
+        i += 1
 
 @unwrap_spec(s=str, count=int, sep=str)
 def fromstring(space, s, w_dtype=None, count=-1, sep=''):
