@@ -9,7 +9,6 @@ from pypy.interpreter.typedef import (TypeDef, GetSetProperty,
 from pypy.module.micronumpy import types, interp_boxes
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import LONG_BIT, r_longlong, r_ulonglong
-from pypy.rpython.lltypesystem import lltype
 
 
 UNSIGNEDLTR = "u"
@@ -19,8 +18,6 @@ FLOATINGLTR = "f"
 VOIDLTR = 'V'
 STRINGLTR = 'S'
 UNICODELTR = 'U'
-
-VOID_STORAGE = lltype.Array(lltype.Char, hints={'nolength': True, 'render_as_void': True})
 
 class W_Dtype(Wrappable):
     _immutable_fields_ = ["itemtype", "num", "kind"]
@@ -38,32 +35,24 @@ class W_Dtype(Wrappable):
         self.fields = fields
         self.fieldnames = fieldnames
 
-    def malloc(self, length):
-        # XXX find out why test_zjit explodes with tracking of allocations
-        return lltype.malloc(VOID_STORAGE, self.itemtype.get_element_size() * length,
-            zero=True, flavor="raw",
-            track_allocation=False, add_memory_pressure=True
-        )
-
     @specialize.argtype(1)
     def box(self, value):
         return self.itemtype.box(value)
 
     def coerce(self, space, w_item):
-        return self.itemtype.coerce(space, w_item)
+        return self.itemtype.coerce(space, self, w_item)
 
-    def getitem(self, storage, i):
-        return self.itemtype.read(storage, self.itemtype.get_element_size(), i, 0)
+    def getitem(self, arr, i):
+        return self.itemtype.read(arr, 1, i, 0)
 
-    def getitem_bool(self, storage, i):
-        isize = self.itemtype.get_element_size()
-        return self.itemtype.read_bool(storage, isize, i, 0)
+    def getitem_bool(self, arr, i):
+        return self.itemtype.read_bool(arr, 1, i, 0)
 
-    def setitem(self, storage, i, box):
-        self.itemtype.store(storage, self.itemtype.get_element_size(), i, 0, box)
+    def setitem(self, arr, i, box):
+        self.itemtype.store(arr, 1, i, 0, box)
 
     def fill(self, storage, box, start, stop):
-        self.itemtype.fill(storage, self.itemtype.get_element_size(), box, start, stop, 0)
+        self.itemtype.fill(storage, self.get_size(), box, start, stop, 0)
 
     def descr_str(self, space):
         return space.wrap(self.name)
@@ -129,6 +118,17 @@ class W_Dtype(Wrappable):
     def is_bool_type(self):
         return self.kind == BOOLLTR
 
+    def is_record_type(self):
+        return self.fields is not None
+
+    def __repr__(self):
+        if self.fields is not None:
+            return '<DType %r>' % self.fields
+        return '<DType %r>' % self.itemtype
+
+    def get_size(self):
+        return self.itemtype.get_element_size()
+
 
 def invalid_dtype(space, w_obj):
     if space.isinstance_w(w_obj, space.w_str):
@@ -183,10 +183,11 @@ def dtype_from_object(space, w_obj):
                 return dtype
         raise invalid_dtype(space, w_obj)
 
-    if (space.isinstance_w(w_obj, space.w_str) or
+    elif (space.isinstance_w(w_obj, space.w_str) or
         space.isinstance_w(w_obj, space.w_unicode)):
 
         typestr = space.str_w(w_obj)
+        w_base_dtype = None
 
         if not typestr:
             raise invalid_dtype(space, w_obj)
@@ -199,13 +200,15 @@ def dtype_from_object(space, w_obj):
             if endian == "|":
                 endian = "="
             typestr = typestr[1:]
+        else:
+            endian = "="
 
         if not typestr:
             raise invalid_dtype(space, w_obj)
 
         if len(typestr) == 1:
             try:
-                return cache.dtypes_by_name[typestr]
+                w_base_dtype = cache.dtypes_by_name[typestr]
             except KeyError:
                 raise invalid_dtype(space, w_obj)
         else:
@@ -226,17 +229,37 @@ def dtype_from_object(space, w_obj):
                     for dtype in cache.builtin_dtypes:
                         if (dtype.kind == kind and
                             dtype.itemtype.get_element_size() == elsize):
-                            return dtype
-                    raise invalid_dtype(space, w_obj)
+                            w_base_dtype = dtype
+                            break
+                    else:
+                        raise invalid_dtype(space, w_obj)
 
-    if space.isinstance_w(w_obj, space.w_tuple):
+        if w_base_dtype is not None:
+            if elsize is not None:
+            if endian != "=" and endian != nonnative_byteorder_prefix:
+                endian = "="
+            if (endian != "=" and w_base_dtype.byteorder != "|" and
+                w_base_dtype.byteorder != endian):
+                return W_Dtype(
+                    cache.nonnative_dtypes[w_base_dtype], w_base_dtype.num,
+                    w_base_dtype.kind, w_base_dtype.name, w_base_dtype.char,
+                    w_base_dtype.w_box_type, byteorder=endian,
+                    builtin_type=w_base_dtype.builtin_type
+                )
+            else:
+                return w_base_dtype
+
+    elif space.isinstance_w(w_obj, space.w_tuple):
         return dtype_from_tuple(space, space.listview(w_obj))
 
-    if space.isinstance_w(w_obj, space.w_list):
+    elif space.isinstance_w(w_obj, space.w_list):
         return dtype_from_list(space, space.listview(w_obj))
 
-    if space.isinstance_w(w_obj, space.w_dict):
+    elif space.isinstance_w(w_obj, space.w_dict):
         return dtype_from_dict(space, w_obj)
+
+    else:
+        raise invalid_dtype(space, w_obj)
 
     w_type_dict = cache.w_type_dict
     w_result = None
@@ -248,12 +271,15 @@ def dtype_from_object(space, w_obj):
                 raise
             if space.isinstance_w(w_obj, space.w_str):
                 w_key = space.call_method(w_obj, "decode", space.wrap("ascii"))
-                w_result = space.getitem(w_type_dict, w_key)
+                try:
+                    w_result = space.getitem(w_type_dict, w_key)
+                except OperationError, e:
+                    if not e.match(space, space.w_KeyError):
+                        raise
         if w_result is not None:
             return dtype_from_object(space, w_result)
 
     raise invalid_dtype(space, w_obj)
-
 
 def descr__new__(space, w_subtype, w_dtype):
     w_dtype = dtype_from_object(space, w_dtype)
@@ -472,6 +498,12 @@ class DtypeCache(object):
         for dtype in self.builtin_dtypes:
             self.dtypes_by_name[dtype.char] = dtype
         self.dtypes_by_name["p"] = self.w_longdtype
+        self.nonnative_dtypes = {
+            self.w_booldtype: types.NonNativeBool(),
+            self.w_int16dtype: types.NonNativeInt16(),
+            self.w_int32dtype: types.NonNativeInt32(),
+            self.w_longdtype: types.NonNativeLong(),
+        }
 
         typeinfo_full = {
             'LONGLONG': self.w_int64dtype,

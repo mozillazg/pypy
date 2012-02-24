@@ -445,6 +445,32 @@ class AppTestTypes(BaseNumpyAppTest):
                                        numpy.generic, object)
         assert numpy.bool_.__mro__ == (numpy.bool_, numpy.generic, object)
 
+    def test_operators(self):
+        from operator import truediv
+        from _numpypy import float64, int_, True_, False_
+        assert 5 / int_(2) == int_(2)
+        assert truediv(int_(3), int_(2)) == float64(1.5)
+        assert truediv(3, int_(2)) == float64(1.5)
+        assert int_(8) % int_(3) == int_(2)
+        assert 8 % int_(3) == int_(2)
+        assert divmod(int_(8), int_(3)) == (int_(2), int_(2))
+        assert divmod(8, int_(3)) == (int_(2), int_(2))
+        assert 2 ** int_(3) == int_(8)
+        assert int_(3) << int_(2) == int_(12)
+        assert 3 << int_(2) == int_(12)
+        assert int_(8) >> int_(2) == int_(2)
+        assert 8 >> int_(2) == int_(2)
+        assert int_(3) & int_(1) == int_(1)
+        assert 2 & int_(3) == int_(2)
+        assert int_(2) | int_(1) == int_(3)
+        assert 2 | int_(1) == int_(3)
+        assert int_(3) ^ int_(5) == int_(6)
+        assert True_ ^ False_ is True_
+        assert 5 ^ int_(3) == int_(6)
+        assert +int_(3) == int_(3)
+        assert ~int_(3) == int_(-4)
+        raises(TypeError, lambda: float64(3) & 1)
+
     def test_alternate_constructs(self):
         from _numpypy import dtype
         assert dtype('i8') == dtype('<i8')# XXX should be equal == dtype(long)
@@ -519,6 +545,7 @@ class AppTestRecordDtypes(BaseNumpyAppTest):
         raises(KeyError, 'd.fields["xyz"]')
 
     def test_create_from_dict(self):
+        skip("not yet")
         from _numpypy import dtype
         d = dtype({'names': ['a', 'b', 'c'],
                    })

@@ -6,11 +6,15 @@ from pypy.interpreter.error import OperationError
 from pypy.module.micronumpy import interp_boxes
 from pypy.objspace.std.floatobject import float2string
 from pypy.rlib import rfloat, libffi, clibffi
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.rarithmetic import widen, byteswap
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rstruct.runpack import runpack
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib import jit
+
+VOID_STORAGE = lltype.Array(lltype.Char, hints={'nolength': True,
+                                                'render_as_void': True})
 
 def simple_unary_op(func):
     specialize.argtype(1)(func)
@@ -60,10 +64,15 @@ def raw_binary_op(func):
 class BaseType(object):
     def _unimplemented_ufunc(self, *args):
         raise NotImplementedError
-    # add = sub = mul = div = mod = pow = eq = ne = lt = le = gt = ge = max = \
-    #     min = copysign = pos = neg = abs = sign = reciprocal = fabs = floor = \
-    #     exp = sin = cos = tan = arcsin = arccos = arctan = arcsinh = \
-    #     arctanh = _unimplemented_ufunc
+
+    def malloc(self, size):
+        # XXX find out why test_zjit explodes with tracking of allocations
+        return lltype.malloc(VOID_STORAGE, size,
+                             zero=True, flavor="raw",
+                             track_allocation=False, add_memory_pressure=True)
+
+    def __repr__(self):
+        return self.__class__.__name__
 
 class Primitive(object):
     _mixin_ = True
@@ -79,7 +88,7 @@ class Primitive(object):
         assert isinstance(box, self.BoxType)
         return box.value
 
-    def coerce(self, space, w_item):
+    def coerce(self, space, dtype, w_item):
         if isinstance(w_item, self.BoxType):
             return w_item
         return self.coerce_subtype(space, space.gettypefor(self.BoxType), w_item)
@@ -101,27 +110,33 @@ class Primitive(object):
         raise NotImplementedError
 
     def _read(self, storage, width, i, offset):
-        return libffi.array_getitem(clibffi.cast_type_to_ffitype(self.T),
-                                    width, storage, i, offset)
+        if we_are_translated():
+            return libffi.array_getitem(clibffi.cast_type_to_ffitype(self.T),
+                                        width, storage, i, offset)
+        else:
+            return libffi.array_getitem_T(self.T, width, storage, i, offset)
 
-    def read(self, storage, width, i, offset):
-        return self.box(self._read(storage, width, i, offset))
+    def read(self, arr, width, i, offset):
+        return self.box(self._read(arr.storage, width, i, offset))
 
-    def read_bool(self, storage, width, i, offset):
-        return bool(self.for_computation(self._read(storage, width, i, offset)))
+    def read_bool(self, arr, width, i, offset):
+        return bool(self.for_computation(self._read(arr.storage, width, i, offset)))
 
     def _write(self, storage, width, i, offset, value):
-        libffi.array_setitem(clibffi.cast_type_to_ffitype(self.T),
-                             width, storage, i, offset, value)
+        if we_are_translated():
+            libffi.array_setitem(clibffi.cast_type_to_ffitype(self.T),
+                                 width, storage, i, offset, value)
+        else:
+            libffi.array_setitem_T(self.T, width, storage, i, offset, value)
         
 
-    def store(self, storage, width, i, offset, box):
-        self._write(storage, width, i, offset, self.unbox(box))
+    def store(self, arr, width, i, offset, box):
+        self._write(arr.storage, width, i, offset, self.unbox(box))
 
     def fill(self, storage, width, box, start, stop, offset):
         value = self.unbox(box)
-        for i in xrange(start, stop):
-            self._write(storage, width, i, offset, value)
+        for i in xrange(start, stop, width):
+            self._write(storage, 1, i, offset, value)
 
     def runpack_str(self, s):
         return self.box(runpack(self.format_code, s))
@@ -251,8 +266,7 @@ class Bool(BaseType, Primitive):
         return space.wrap(self.unbox(w_item))
 
     def str_format(self, box):
-        value = self.unbox(box)
-        return "True" if value else "False"
+        return "True" if self.unbox(box) else "False"
 
     def for_computation(self, v):
         return int(v)
@@ -267,6 +281,10 @@ class Bool(BaseType, Primitive):
     @simple_binary_op
     def bitwise_or(self, v1, v2):
         return v1 | v2
+
+    @simple_binary_op
+    def bitwise_xor(self, v1, v2):
+        return v1 ^ v2
 
     @simple_unary_op
     def invert(self, v):
@@ -283,8 +301,7 @@ class Integer(Primitive):
         return self._base_coerce(space, w_item)
 
     def str_format(self, box):
-        value = self.unbox(box)
-        return str(self.for_computation(value))
+        return str(self.for_computation(self.unbox(box)))
 
     def for_computation(self, v):
         return widen(v)
@@ -314,6 +331,14 @@ class Integer(Primitive):
             v1 *= v1
         return res
 
+    @simple_binary_op
+    def lshift(self, v1, v2):
+        return v1 << v2
+
+    @simple_binary_op
+    def rshift(self, v1, v2):
+        return v1 >> v2
+
     @simple_unary_op
     def sign(self, v):
         if v > 0:
@@ -331,6 +356,10 @@ class Integer(Primitive):
     @simple_binary_op
     def bitwise_or(self, v1, v2):
         return v1 | v2
+
+    @simple_binary_op
+    def bitwise_xor(self, v1, v2):
+        return v1 ^ v2
 
     @simple_unary_op
     def invert(self, v):
@@ -455,8 +484,8 @@ class Float(Primitive):
         return self.box(space.float_w(space.call_function(space.w_float, w_item)))
 
     def str_format(self, box):
-        value = self.unbox(box)
-        return float2string(self.for_computation(value), "g", rfloat.DTSF_STR_PRECISION)
+        return float2string(self.for_computation(self.unbox(box)), "g",
+                            rfloat.DTSF_STR_PRECISION)
 
     def for_computation(self, v):
         return float(v)
@@ -595,10 +624,9 @@ class NonNativeFloat64(BaseType, NonNativeFloat):
     format_code = "d"
 
 class CompositeType(BaseType):
-    def __init__(self, offsets_and_types):
-        self.offsets_and_types = offsets_and_types
-        last_item = offsets_and_types[-1]
-        self.size = last_item[0] + last_item[1].get_element_size()
+    def __init__(self, offsets_and_fields, size):
+        self.offsets_and_fields = offsets_and_fields
+        self.size = size
 
     def get_element_size(self):
         return self.size
@@ -614,7 +642,10 @@ class BaseStringType(object):
 
 class StringType(BaseType, BaseStringType):
     T = lltype.Char
-VoidType = StringType # why not?
+
+class VoidType(BaseType, BaseStringType):
+    T = lltype.Char
+
 NonNativeVoidType = VoidType
 NonNativeStringType = StringType
 
@@ -624,7 +655,56 @@ class UnicodeType(BaseType, BaseStringType):
 NonNativeUnicodeType = UnicodeType
 
 class RecordType(CompositeType):
-    pass
+    T = lltype.Char
+    
+    def read(self, arr, width, i, offset):
+        return interp_boxes.W_VoidBox(arr, i)
+
+    @jit.unroll_safe
+    def coerce(self, space, dtype, w_item): 
+        from pypy.module.micronumpy.interp_numarray import W_NDimArray
+
+        if isinstance(w_item, interp_boxes.W_VoidBox):
+            return w_item
+        # we treat every sequence as sequence, no special support
+        # for arrays
+        if not space.issequence_w(w_item):
+            raise OperationError(space.w_TypeError, space.wrap(
+                "expected sequence"))
+        if len(self.offsets_and_fields) != space.int_w(space.len(w_item)):
+            raise OperationError(space.w_ValueError, space.wrap(
+                "wrong length"))
+        items_w = space.fixedview(w_item)
+        # XXX optimize it out one day, but for now we just allocate an
+        #     array
+        arr = W_NDimArray([1], dtype)
+        for i in range(len(items_w)):
+            subdtype = dtype.fields[dtype.fieldnames[i]][1]
+            ofs, itemtype = self.offsets_and_fields[i]
+            w_item = items_w[i]
+            w_box = itemtype.coerce(space, subdtype, w_item)
+            itemtype.store(arr, 1, 0, ofs, w_box)
+        return interp_boxes.W_VoidBox(arr, 0)
+
+    @jit.unroll_safe
+    def store(self, arr, _, i, ofs, box):
+        assert isinstance(box, interp_boxes.W_VoidBox)
+        for k in range(self.get_element_size()):
+            arr.storage[k + i] = box.arr.storage[k + box.ofs]
+
+    @jit.unroll_safe
+    def str_format(self, box):
+        assert isinstance(box, interp_boxes.W_VoidBox)
+        pieces = ["("]
+        first = True
+        for ofs, tp in self.offsets_and_fields:
+            if first:
+                first = False
+            else:
+                pieces.append(", ")
+            pieces.append(tp.str_format(tp.read(box.arr, 1, box.ofs, ofs)))
+        pieces.append(")")
+        return "".join(pieces)
 
 for tp in [Int32, Int64]:
     if tp.T == lltype.Signed:
