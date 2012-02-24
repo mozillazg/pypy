@@ -138,6 +138,9 @@ def invalid_dtype(space, w_obj):
     else:
         raise OperationError(space.w_TypeError, space.wrap("data type not understood"))
 
+def dtype_from_list(space, items_w):
+    pass
+
 def is_byteorder(ch):
     return ch == ">" or ch == "<" or ch == "|" or ch == "="
 
@@ -188,6 +191,7 @@ def dtype_from_object(space, w_obj):
 
         typestr = space.str_w(w_obj)
         w_base_dtype = None
+        elsize = -1
 
         if not typestr:
             raise invalid_dtype(space, w_obj)
@@ -230,12 +234,21 @@ def dtype_from_object(space, w_obj):
                         if (dtype.kind == kind and
                             dtype.itemtype.get_element_size() == elsize):
                             w_base_dtype = dtype
+                            elsize = -1
                             break
                     else:
                         raise invalid_dtype(space, w_obj)
 
         if w_base_dtype is not None:
-            if elsize is not None:
+            if elsize != -1:
+                itemtype = w_base_dtype.itemtype.array(elsize)
+                w_base_dtype = W_Dtype(
+                    itemtype, w_base_dtype.num, w_base_dtype.kind,
+                    w_base_dtype.name + str(itemtype.get_element_size() * 8),
+                    w_base_dtype.char, w_base_dtype.w_box_type,
+                    byteorder=w_base_dtype.byteorder,
+                    builtin_type=w_base_dtype.builtin_type
+                )
             if endian != "=" and endian != nonnative_byteorder_prefix:
                 endian = "="
             if (endian != "=" and w_base_dtype.byteorder != "|" and

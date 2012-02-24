@@ -128,7 +128,7 @@ class Primitive(object):
                                  width, storage, i, offset, value)
         else:
             libffi.array_setitem_T(self.T, width, storage, i, offset, value)
-        
+
 
     def store(self, arr, width, i, offset, box):
         self._write(arr.storage, width, i, offset, self.unbox(box))
@@ -229,7 +229,7 @@ class Primitive(object):
 
 class NonNativePrimitive(Primitive):
     _mixin_ = True
-    
+
     def _read(self, storage, width, i, offset):
         return byteswap(Primitive._read(self, storage, width, i, offset))
 
@@ -448,7 +448,7 @@ class Int64(BaseType, Integer):
 class NonNativeInt64(BaseType, NonNativeInteger):
     T = rffi.LONGLONG
     BoxType = interp_boxes.W_Int64Box
-    format_code = "q"    
+    format_code = "q"
 
 def _uint64_coerce(self, space, w_item):
     try:
@@ -611,7 +611,7 @@ class Float32(BaseType, Float):
 class NonNativeFloat32(BaseType, NonNativeFloat):
     T = rffi.FLOAT
     BoxType = interp_boxes.W_Float32Box
-    format_code = "f"    
+    format_code = "f"
 
 class Float64(BaseType, Float):
     T = rffi.DOUBLE
@@ -633,12 +633,15 @@ class CompositeType(BaseType):
 
 class BaseStringType(object):
     _mixin_ = True
-    
+
     def __init__(self, size=0):
         self.size = size
 
     def get_element_size(self):
         return self.size * rffi.sizeof(self.T)
+
+    def array(self, size):
+        return type(self)(size)
 
 class StringType(BaseType, BaseStringType):
     T = lltype.Char
@@ -656,12 +659,12 @@ NonNativeUnicodeType = UnicodeType
 
 class RecordType(CompositeType):
     T = lltype.Char
-    
+
     def read(self, arr, width, i, offset):
         return interp_boxes.W_VoidBox(arr, i)
 
     @jit.unroll_safe
-    def coerce(self, space, dtype, w_item): 
+    def coerce(self, space, dtype, w_item):
         from pypy.module.micronumpy.interp_numarray import W_NDimArray
 
         if isinstance(w_item, interp_boxes.W_VoidBox):
