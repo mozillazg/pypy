@@ -1300,10 +1300,17 @@ class MiniMarkGC(MovingGCBase):
         # then the write_barrier must have ensured that the prebuilt
         # GcStruct is in the list self.old_objects_pointing_to_young.
         debug_start("gc-minor-walkroots")
+        if self.root_walker.conservative_stack_roots:
+            self.prepare_conservative_stack_roots_minor()
+            stack_roots = MiniMarkGC.conservative_stack_roots_minor
+        else:
+            stack_roots = MiniMarkGC._trace_drag_out1
         self.root_walker.walk_roots(
-            MiniMarkGC._trace_drag_out1,  # stack roots
+            stack_roots,                  # stack roots
             MiniMarkGC._trace_drag_out1,  # static in prebuilt non-gc
             None)                         # static in prebuilt gc
+        if self.root_walker.conservative_stack_roots:
+            self.finish_conservative_stack_roots_minor()
         debug_stop("gc-minor-walkroots")
 
     def collect_cardrefs_to_nursery(self):
@@ -1708,10 +1715,17 @@ class MiniMarkGC(MovingGCBase):
                                            self.objects_to_trace)
         #
         # Add the roots from the other sources.
+        if self.root_walker.conservative_stack_roots:
+            self.prepare_conservative_stack_roots_major()
+            stack_roots = MiniMarkGC.conservative_stack_roots_major
+        else:
+            stack_roots = MiniMarkGC._collect_ref_stk
         self.root_walker.walk_roots(
-            MiniMarkGC._collect_ref_stk, # stack roots
+            stack_roots,                 # stack roots
             MiniMarkGC._collect_ref_stk, # static in prebuilt non-gc structures
             None)   # we don't need the static in all prebuilt gc objects
+        if self.root_walker.conservative_stack_roots:
+            self.finish_conservative_stack_roots_major()
         #
         # If we are in an inner collection caused by a call to a finalizer,
         # the 'run_finalizers' objects also need to be kept alive.
@@ -2021,6 +2035,42 @@ class MiniMarkGC(MovingGCBase):
                 (obj + offset).address[0] = llmemory.NULL
         self.old_objects_with_weakrefs.delete()
         self.old_objects_with_weakrefs = new_with_weakref
+
+    # ----------
+    # Conservative stack scanning, for --gcrootfinder=scan
+
+    SMALL_VALUE_MAX = 4095
+
+    def prepare_conservative_stack_roots_minor(self):
+        ...
+
+    def conservative_stack_roots_minor(self, start, stop):
+        """Called during a minor collection.  Must conservatively find
+        addresses from the stack, between 'start' and 'stop', that
+        point to young objects.  These objects must be pinned down.
+        """
+        scan = start
+        while scan != stop:
+            addr = scan.address[0]       # maybe an address
+            addrint = llmemory.cast_adr_to_int(addr)
+            scan += llmemory.sizeof(llmemory.Address)
+            #
+            # A first quick check for NULLs or small positive integers
+            if r_uint(addrint) <= r_uint(self.SMALL_VALUE_MAX):
+                continue
+            #
+            # If it's not aligned to a WORD, no chance
+            if addrint & (WORD-1) != 0:
+                continue
+            #
+            # Is it in the nursery?
+            if self.is_in_nursery(addr):
+                #
+                # ././.
+            
+
+    def conservative_stack_roots_major(self, start, stop):
+        xxx
 
 
 # ____________________________________________________________

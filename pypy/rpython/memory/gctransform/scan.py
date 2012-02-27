@@ -35,6 +35,7 @@ class ScanFrameworkGCTransformer(FrameworkGCTransformer):
 
 
 class ScanStackRootWalker(BaseRootWalker):
+    conservative_stack_roots = True
 
     def __init__(self, gctransformer):
         BaseRootWalker.__init__(self, gctransformer)
@@ -44,24 +45,49 @@ class ScanStackRootWalker(BaseRootWalker):
         self._asm_callback = _asm_callback
 
     #def need_stacklet_support(self, gctransformer, getfn):
-    #   anything needed?
+    #   xxx
 
     #def need_thread_support(self, gctransformer, getfn):
     #   xxx
 
-    def walk_stack_roots(self, collect_stack_root):
+    def walk_stack_roots(self, collect_stack_root_range):
         gcdata = self.gcdata
-        gcdata._gc_collect_stack_root = collect_stack_root
+        gcdata._gc_collect_stack_root_range = collect_stack_root_range
         pypy_asm_close_for_scanning(
             llhelper(ASM_CALLBACK_PTR, self._asm_callback))
 
     def walk_stack_from(self):
-        raise NotImplementedError
+        bottom = pypy_get_asm_tmp_stack_bottom()    # highest address
+        top = pypy_get_asm_stackptr()               # lowest address
+        collect_stack_root_range = self.gcdata._gc_collect_stack_root_range
+        collect_stack_root_range(self.gc, top, bottom)
 
 
 eci = ExternalCompilationInfo(
-    post_include_bits = ["extern void pypy_asm_close_for_scanning(void*);\n"],
+    post_include_bits = ['''
+extern void pypy_asm_close_for_scanning(void*);
+extern void *pypy_asm_tmp_stack_bottom;
+#define pypy_get_asm_tmp_stack_bottom()  pypy_asm_tmp_stack_bottom
+
+#if defined(__amd64__)
+#  define _pypy_get_asm_stackptr(result)  asm("movq %%rsp, %0" : "=g"(result))
+#else
+#  define _pypy_get_asm_stackptr(result)  asm("movl %%esp, %0" : "=g"(result))
+#endif
+
+static void *pypy_get_asm_stackptr(void)
+{
+    /* might return a "esp" whose value is slightly smaller than necessary,
+       due to the extra function call. */
+    void *result;
+    _pypy_get_asm_stackptr(result);
+    return result;
+}
+
+'''],
     separate_module_sources = ['''
+
+void *pypy_asm_tmp_stack_bottom = 0;    /* temporary */
 
 void pypy_asm_close_for_scanning(void *fn)
 {
@@ -87,3 +113,13 @@ pypy_asm_close_for_scanning = rffi.llexternal('pypy_asm_close_for_scanning',
                                               _nowrapper=True,
                                               random_effects_on_gcobjs=True,
                                               compilation_info=eci)
+pypy_get_asm_tmp_stack_bottom =rffi.llexternal('pypy_get_asm_tmp_stack_bottom',
+                                               [], llmemory.Address,
+                                               sandboxsafe=True,
+                                               _nowrapper=True,
+                                               compilation_info=eci)
+pypy_get_asm_stackptr = rffi.llexternal('pypy_get_asm_stackptr',
+                                        [], llmemory.Address,
+                                        sandboxsafe=True,
+                                        _nowrapper=True,
+                                        compilation_info=eci)

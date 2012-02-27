@@ -1341,6 +1341,7 @@ sizeofaddr = llmemory.sizeof(llmemory.Address)
 class BaseRootWalker(object):
     need_root_stack = False
     thread_setup = None
+    conservative_stack_roots = False
 
     def __init__(self, gctransformer):
         self.gcdata = gctransformer.gcdata

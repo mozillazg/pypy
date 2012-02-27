@@ -412,6 +412,11 @@ class ScanFrameworkGcPolicy(FrameworkGcPolicy):
     def GC_KEEPALIVE(self, funcgen, v):
         return 'pypy_asm_keepalive(%s);' % funcgen.expr(v)
 
+    def OP_GC_STACK_BOTTOM(self, funcgen, op):
+        # XXX temporary
+        return ('assert(!pypy_asm_tmp_stack_bottom);   /* temporary */\n' +
+                '_pypy_get_asm_stackptr(pypy_asm_tmp_stack_bottom);' % asm)
+
     def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
         raise Exception("should not be produced with --gcrootfinder=scan")
 
