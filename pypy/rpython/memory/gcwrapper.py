@@ -177,6 +177,8 @@ class LLInterpRootWalker:
                 if self.gcheap.gc.points_to_valid_gc_object(addrofaddr):
                     collect_static_in_prebuilt_nongc(gc, addrofaddr)
         if collect_stack_root:
+            translator = gcheap.llinterp.typer.annotator.translator
+            assert translator.config.translation.gcrootfinder != 'scan'
             for addrofaddr in gcheap.llinterp.find_roots():
                 if self.gcheap.gc.points_to_valid_gc_object(addrofaddr):
                     collect_stack_root(gc, addrofaddr)

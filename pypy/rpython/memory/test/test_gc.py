@@ -24,6 +24,7 @@ def stdout_ignore_ll_functions(msg):
 
 class GCTest(object):
     GC_PARAMS = {}
+    CONFIG_OPTS = {}
     GC_CAN_MOVE = False
     GC_CAN_MALLOC_NONMOVABLE = True
     GC_CAN_SHRINK_ARRAY = False
@@ -40,6 +41,7 @@ class GCTest(object):
         py.log._setstate(cls._saved_logstate)
 
     def interpret(self, func, values, **kwds):
+        kwds.update(self.CONFIG_OPTS)
         interp, graph = get_interpreter(func, values, **kwds)
         gcwrapper.prepare_graphs_and_create_gc(interp, self.GCClass,
                                                self.GC_PARAMS)
@@ -921,3 +923,6 @@ class TestMiniMarkGC(TestSemiSpaceGC):
 
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
     GC_PARAMS = {'card_page_indices': 4}
+
+class TestMiniMarkGCScan(TestMiniMarkGC):
+    CONFIG_OPTS = {'gcrootfinder': 'scan'}

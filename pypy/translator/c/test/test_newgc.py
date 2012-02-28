@@ -15,6 +15,7 @@ from pypy import conftest
 
 class TestUsingFramework(object):
     gcpolicy = "marksweep"
+    gcrootfinder = "shadowstack"
     should_be_moving = False
     removetypeptr = False
     taggedpointers = False
@@ -41,7 +42,8 @@ class TestUsingFramework(object):
         t = Translation(main, standalone=True, gc=cls.gcpolicy,
                         policy=annpolicy.StrictAnnotatorPolicy(),
                         taggedpointers=cls.taggedpointers,
-                        gcremovetypeptr=cls.removetypeptr)
+                        gcremovetypeptr=cls.removetypeptr,
+                        gcrootfinder=cls.gcrootfinder)
         t.disable(['backendopt'])
         t.set_backend_extra_options(c_debug_defines=True)
         t.rtype()
@@ -1600,3 +1602,6 @@ class TestMarkCompactGCMostCompact(TaggedPointersTest, TestMarkCompactGC):
 
 class TestMiniMarkGCMostCompact(TaggedPointersTest, TestMiniMarkGC):
     removetypeptr = True
+
+class TestMiniMarkGCScan(TestMiniMarkGC):
+    gcrootfinder = "scan"

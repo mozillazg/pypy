@@ -193,6 +193,8 @@ class CBuilder(object):
             name = self.config.translation.gctransformer
             if self.config.translation.gcrootfinder == "asmgcc":
                 name = "%s+asmgcroot" % (name,)
+            if self.config.translation.gcrootfinder == "scan":
+                name = "%s+scan" % (name,)
             return gc.name_to_gcpolicy[name]
         return self.gcpolicy
 

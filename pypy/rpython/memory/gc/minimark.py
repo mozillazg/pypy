@@ -251,8 +251,11 @@ class MiniMarkGC(MovingGCBase):
         self.nursery          = NULL
         self.nursery_next     = NULL
         self.nursery_frag_end = NULL
+        self.nursery_top      = NULL
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
+        #
+        self.gcrootfinder_scan = (config.gcrootfinder == "scan")
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
@@ -396,7 +399,8 @@ class MiniMarkGC(MovingGCBase):
         # the current position in the nursery:
         self.nursery_next = self.nursery
         # the end of the nursery:
-        self.nursery_frag_end = self.nursery + self.nursery_size
+        self.nursery_top = self.nursery + self.nursery_size
+        self.nursery_frag_end = self.nursery_top
         # initialize the threshold
         self.min_heap_size = max(self.min_heap_size, self.nursery_size *
                                               self.major_collection_threshold)
@@ -559,10 +563,10 @@ class MiniMarkGC(MovingGCBase):
             #
             # Get the memory from the nursery.  If there is not enough space
             # there, do a collect first.
-            result = self.nursery_free
-            self.nursery_free = result + totalsize
-            if self.nursery_free > self.nursery_top:
-                result = self.collect_and_reserve(totalsize)
+            result = self.nursery_next
+            self.nursery_next = result + totalsize
+            if self.nursery_next > self.nursery_frag_end:
+                result = self.pick_next_fragment(totalsize)
             #
             # Build the object.
             llarena.arena_reserve(result, totalsize)
@@ -581,8 +585,17 @@ class MiniMarkGC(MovingGCBase):
         if gen > 0:
             self.major_collection()
 
+    def pick_next_fragment(self, totalsize):
+        """To call when nursery_next overflows nursery_frag_end.
+        Pick the next fragment of the nursery, or if there are none
+        big enough for 'totalsize', do a collection.
+        """
+        # XXX
+        return self.collect_and_reserve(totalsize)
+    pick_next_fragment._dont_inline_ = True
+
     def collect_and_reserve(self, totalsize):
-        """To call when nursery_free overflows nursery_top.
+        """To call when we have run out of nursery fragments.
         Do a minor collection, and possibly also a major collection,
         and finally reserve 'totalsize' bytes at the start of the
         now-empty nursery.
@@ -607,7 +620,6 @@ class MiniMarkGC(MovingGCBase):
                 self.nursery_free = self.nursery_top - self.debug_tiny_nursery
         #
         return result
-    collect_and_reserve._dont_inline_ = True
 
 
     def external_malloc(self, typeid, length, can_make_young=True):
@@ -753,6 +765,7 @@ class MiniMarkGC(MovingGCBase):
         if self.next_major_collection_threshold < 0:
             # cannot trigger a full collection now, but we can ensure
             # that one will occur very soon
+            xxx
             self.nursery_free = self.nursery_top
 
     def can_malloc_nonmovable(self):
@@ -822,7 +835,9 @@ class MiniMarkGC(MovingGCBase):
         # have been chosen to allow 'flags' to be zero in the common
         # case (hence the 'NO' in their name).
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = self.combine(typeid16, flags | GCFLAG_HIGH)
+        if self.gcrootfinder_scan:   # don't bother setting these high
+            flags |= GCFLAG_HIGH     # bits if not "scan"
+        hdr.tid = self.combine(typeid16, flags)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         # For prebuilt GC objects, the flags must contain
@@ -876,8 +891,13 @@ class MiniMarkGC(MovingGCBase):
         if result:
             ll_assert(tid == -42, "bogus header for young obj")
         else:
-            ll_assert(bool(tid), "bogus header (1)")
-            ll_assert(tid & ~TID_MASK == 0, "bogus header (2)")
+            htid = llop.extract_ushort(llgroup.HALFWORD, tid)
+            ll_assert(bool(htid), "bogus header (1)")
+            if self.gcrootfinder_scan:
+                expected = GCFLAG_HIGH
+            else:
+                expected = 0
+            ll_assert(tid & GCFLAG_HIGH_MASK == expected, "bogus header (2)")
         return result
 
     def get_forwarding_address(self, obj):
@@ -1294,6 +1314,7 @@ class MiniMarkGC(MovingGCBase):
         # the whole nursery with zero and reset the current nursery pointer.
         llarena.arena_reset(self.nursery, self.nursery_size, 2)
         self.debug_rotate_nursery()
+        xxx
         self.nursery_free = self.nursery
         #
         debug_print("minor collect, total memory used:",
