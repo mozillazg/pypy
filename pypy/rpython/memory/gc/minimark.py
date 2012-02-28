@@ -116,6 +116,10 @@ GCFLAG_CARDS_SET    = first_gcflag << 6     # <- at least one card bit is set
 
 TID_MASK            = (first_gcflag << 7) - 1
 
+# The remaining unused bits (GCFLAG_HIGH_MASK) are set to a known pattern
+# in all objects (GCFLAG_HIGH).  From a random address in the nursery, it
+# let us know if it points to a valid object: either "definitely not", or
+# "very likely".  We can't be sure, though, so be careful.
 GCFLAG_HIGH_MASK = intmask(~TID_MASK)
 assert GCFLAG_HIGH_MASK < 0 and not (GCFLAG_HIGH_MASK & GCFLAG_CARDS_SET)
 GCFLAG_HIGH = intmask(0x5555555555555555 & GCFLAG_HIGH_MASK)
