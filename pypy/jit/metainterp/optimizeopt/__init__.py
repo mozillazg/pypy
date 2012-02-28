@@ -9,6 +9,7 @@ from pypy.jit.metainterp.optimizeopt.fficall import OptFfiCall
 from pypy.jit.metainterp.optimizeopt.simplify import OptSimplify
 from pypy.jit.metainterp.optimizeopt.pure import OptPure
 from pypy.jit.metainterp.optimizeopt.earlyforce import OptEarlyForce
+from pypy.jit.metainterp.optimizeopt.deadops import remove_dead_ops
 from pypy.rlib.jit import PARAMETERS
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -65,6 +66,7 @@ def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True)
         else:
             optimizer = Optimizer(metainterp_sd, loop, optimizations)
             optimizer.propagate_all_forward()
+        remove_dead_ops(loop)
     finally:
         debug_stop("jit-optimize")
         
