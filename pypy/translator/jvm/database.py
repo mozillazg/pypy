@@ -74,7 +74,19 @@ class Database(OODatabase):
     # Miscellaneous
     
     def _uniq(self, nm):
-        return nm + "_" + str(self.unique())
+        """
+        Avoid creating two directories with names that differ only
+        by case (like node and Node). On case insensitive platforms
+        (like Mac OS X) this can result in files from one of these
+        directories missing from the generated JAR file. We append
+        consecutive numbers to all generated filenames anyway, so even
+        if we put all files from the Node directory in the node
+        directory, there won't be any name clashes.
+        """
+        parts = nm.split('.')
+        package_parts = [p.lower() for p in parts[:-1]]
+        class_name = parts[-1]
+        return '.'.join(package_parts + [class_name+ "_" + str(self.unique())])
 
     def _pkg(self, nm):
         return "%s.%s" % (getoption('package'), nm)
