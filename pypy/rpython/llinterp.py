@@ -1164,8 +1164,12 @@ class LLFrame(object):
 
     def op_oosend(self, message, inst, *args):
         checkinst(inst)
-        assert isinstance(message, str)
-        bm = getattr(inst, message)
+        assert isinstance(message, (str, ootype._overloaded_meth_desc))
+        if isinstance(message, ootype._overloaded_meth_desc):
+            # we will get back an _overloaded_bound_meth
+            bm = getattr(inst, message.name)._get_bound_meth(*args)
+        else:
+            bm = getattr(inst, message)
         inst = bm.inst
         m = bm.meth
         args = m._checkargs(args, check_callable=False)

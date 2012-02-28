@@ -117,10 +117,4 @@ class BaseTestRJVM(BaseRtypingTest):
 
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
-
-    def test_method_call_overload(self):
-        py.test.skip("Interpreting calls to overloaded methods is not supported yet.")
-
-    def test_constructor_args(self):
-        py.test.skip("Constructors are implemented using overloaded methods, which are "
-                     "not supported yet.")
+    pass
