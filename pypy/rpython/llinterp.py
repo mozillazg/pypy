@@ -174,7 +174,7 @@ def checkadr(addr):
     assert lltype.typeOf(addr) is llmemory.Address
 
 def is_inst(inst):
-    return isinstance(lltype.typeOf(inst), (ootype.Instance, ootype.BuiltinType, ootype.StaticMethod))
+    return isinstance(lltype.typeOf(inst), (ootype.Instance, ootype.BuiltinType, ootype.StaticMethod, ootype.NativeInstance))
 
 def checkinst(inst):
     assert is_inst(inst)
@@ -1123,9 +1123,9 @@ class LLFrame(object):
 
     #Operation of ootype
 
-    def op_new(self, INST):
-        assert isinstance(INST, (ootype.Instance, ootype.BuiltinType))
-        return ootype.new(INST)
+    def op_new(self, INST, *args):
+        assert isinstance(INST, (ootype.Instance, ootype.NativeInstance, ootype.BuiltinType))
+        return ootype.new(INST, *args)
         
     def op_oonewarray(self, ARRAY, length):
         assert isinstance(ARRAY, ootype.Array)

@@ -24,10 +24,7 @@ builtin.py describes the JVM types that are used to define the
 built-in OOTYPE types, such as lists or dictionaries.  The module
 node.py contains code for representing user-defined classes.  
 """
-from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
-from pypy.translator.jvm.option import getoption
-from pypy.translator.jvm.log import log
 
 # ___________________________________________________________________________
 # Type Descriptors
@@ -325,18 +322,20 @@ class JvmCallbackInterface(JvmInterfaceType):
             if expjarg == jObject: continue # hack: assume obj means any type
             if expjarg != actjarg: return False
         return jrettype == self.java_return_type
-    
+
+
 jPyPyHashCode = JvmCallbackInterface('pypy.HashCode', [jObject], jInt)
 jPyPyEquals = JvmCallbackInterface('pypy.Equals', [jObject, jObject], jBool)
 
+
 class JvmNativeClass(JvmClassType):
+    """
+    A JvmType that represents a built-in class.
+    """
     def __init__(self, db, OOTYPE):
         self.OOTYPE = OOTYPE
         self.db = db
-        # XXX fixed java.lang?
-        self.methods = {}
-        JvmClassType.__init__(self, "java.util." + OOTYPE._name)
-        self._add_methods()
+        JvmClassType.__init__(self, OOTYPE.class_name)
 
     def __eq__(self, other):
         return isinstance(other, JvmNativeClass) and other.OOTYPE == self.OOTYPE
@@ -345,18 +344,29 @@ class JvmNativeClass(JvmClassType):
         return hash(("JvmNativeClass", self.OOTYPE))
 
     def lookup_field(self):
-        XXX
+        raise NotImplementedError
 
-    def lookup_method(self, methname):
-        return self.methods[methname]
+    def lookup_method(self, spec):
+        assert isinstance(spec, (str, ootype._overloaded_meth_desc))
 
-    def _add_methods(self):
-        for methname, methspec in self.OOTYPE._class_._methods.items():
-            argtypes = [self.db.annotation_to_cts(arg._type) for arg in
-                        methspec.args]
-            restype = self.db.annotation_to_cts(methspec.retval._type)
-            self.methods[methname] = Method.v(self, methname,
-                                              argtypes, restype)
+        if isinstance(spec, ootype._overloaded_meth_desc):
+            name = spec.name
+        else:
+            name = spec
+
+        _, meth = self.OOTYPE._lookup(name)
+
+        if isinstance(meth, ootype._overloaded_meth):
+            meth = meth._resolver.resolve(spec.TYPE.ARGS)
+
+        return self._make_java_method(meth, name)
+
+    def _make_java_method(self, meth, name):
+        arg_types = [self.db.annotation_to_cts(arg) for arg in meth._TYPE.ARGS]
+        res_type = self.db.annotation_to_cts(meth._TYPE.RESULT)
+        method = Method.v(self, name, arg_types, res_type)
+        return method
+
 
 # ______________________________________________________________________
 # The bridge between RPython array and JVM arrays.  The main differences
@@ -779,7 +789,7 @@ class Method(BaseMethod):
         self.class_name = classnm  # String, ie. "java.lang.Math"
         self.method_name = methnm  # String "abs"
 
-        # Compute the method descriptior, which is a string like "()I":
+        # Compute the method descriptor, which is a string like "()I":
         argtypesdesc = [a.descriptor for a in argtypes]
         rettypedesc = rettype.descriptor
         self.descriptor = desc_for_method(argtypesdesc, rettypedesc)  

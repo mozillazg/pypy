@@ -646,7 +646,7 @@ def lltype_to_annotation(T):
             return lltype_to_annotation(T.OF)
         if isinstance(T, lltype.Number):
             return SomeInteger(knowntype=T._type)
-        if isinstance(T, (ootype.Instance, ootype.BuiltinType)):
+        if isinstance(T, (ootype.Instance, ootype.BuiltinType, ootype.NativeInstance)):
             return SomeOOInstance(T)
         elif isinstance(T, ootype.StaticMethod):
             return SomeOOStaticMeth(T)

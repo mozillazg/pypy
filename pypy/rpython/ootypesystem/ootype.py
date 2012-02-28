@@ -277,6 +277,13 @@ class Instance(OOType):
                 pass
         return False
 
+class NativeInstance(OOType):
+    """
+    Type for instances of built-in classes. We don't know their members
+    up-front and have to handle them differently.
+    """
+    def _make_interp_instance(self, args):
+        raise NotImplementedError
 
 class SpecializableType(OOType):
     def _specialize_type(self, TYPE, generic_types):
@@ -1257,7 +1264,7 @@ class _meth(_callable):
 
     def _bound(self, DEFINST, inst):
         TYPE = typeOf(inst)
-        assert isinstance(TYPE, (Instance, BuiltinType))
+        assert isinstance(TYPE, (Instance, BuiltinType, NativeInstance))
         return self._bound_class(DEFINST, inst, self)
 
 
@@ -1843,11 +1850,20 @@ class _null_record(_null_mixin(_record), _record):
         self.__dict__["_TYPE"] = RECORD 
 
 
-def new(TYPE):
+def new(TYPE, *args):
+    """
+    Make a new flowgraph-level instance of a given type. If you're
+    constructing a NativeInstance, you have pass in the constructor
+    arguments as *args.
+    """
     if isinstance(TYPE, Instance):
         return make_instance(TYPE)
     elif isinstance(TYPE, BuiltinType):
         return TYPE._get_interp_class()(TYPE)
+    elif isinstance(TYPE, NativeInstance):
+        return TYPE._make_interp_instance(args)
+    else:
+        raise AssertionError("You can only call new with one of the types mentioned above!")
 
 def oonewcustomdict(DICT, ll_eq, ll_hash):
     """NOT_RPYTHON"""
