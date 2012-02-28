@@ -408,7 +408,7 @@ class _New(MicroInstruction):
         except (KeyError, AttributeError):
             if op.args[0].value is ootype.Void:
                 return
-            generator.new(op.args[0].value)
+            generator.new(op.args[0].value, op.args[1:])
 
 
 class _OONewArray(MicroInstruction):

@@ -649,15 +649,19 @@ class JVMGenerator(Generator):
         if self.db.using_byte_array:
             self.emit(jvm.PYPYSTRING2BYTES)
         
-    def new(self, TYPE):
+    def new(self, TYPE, args=None):
         jtype = self.db.lltype_to_cts(TYPE)
-        self.new_with_jtype(jtype)
+        self.new_with_jtype(jtype, args)
 
-    def new_with_jtype(self, jtype, ctor=None):
-        if ctor is None:
+    def new_with_jtype(self, jtype, args=None):
+        if args is None:
             ctor = jvm.Method.c(jtype, ())
+        else:
+            ctor = jvm.Method.c(jtype, (self.db.lltype_to_cts(arg.concretetype) for arg in args))
         self.emit(jvm.NEW, jtype)
         self.emit(jvm.DUP)
+        for arg in args:
+            self.load(arg)
         self.emit(ctor)
         
     def oonewarray(self, TYPE, length):

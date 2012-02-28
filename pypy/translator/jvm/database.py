@@ -4,10 +4,12 @@ and the mapping between the OOTypeSystem and the Java type system.
 """
 
 from cStringIO import StringIO
+from pypy.rlib import rjvm
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.ootypesystem import ootype, rclass
 from pypy.rpython.ootypesystem.module import ll_os
 from pypy.translator.jvm import node, methods
+from pypy.translator.jvm.jvm_interop import NativeRJvmInstance
 from pypy.translator.jvm.option import getoption
 from pypy.translator.jvm.builtin import JvmBuiltInType
 from pypy.translator.oosupport.database import Database as OODatabase
@@ -455,13 +457,12 @@ class Database(OODatabase):
         }
 
     def lltype_to_cts(self, OOT):
-        import sys
-        res = self._lltype_to_cts(OOT)
-        return res
-
-    def _lltype_to_cts(self, OOT):
-        """ Returns an instance of JvmType corresponding to
-        the given OOType """
+        """
+        Returns an instance of JvmType corresponding to
+        the given OOType. CTS stands for Common Type System which
+        is a .NET/CLI thing. The name is shared with the CLI backend
+        so that we can write VM-agnostic code in oosupport.
+        """
 
         # Handle built-in types:
         if OOT in self.ootype_to_scalar:
@@ -478,6 +479,8 @@ class Database(OODatabase):
                 self, self.ootype_to_builtin[OOT.__class__], OOT)
 
         # Handle non-built-in-types:
+        if isinstance(OOT, NativeRJvmInstance):
+            return jvm.JvmNativeClass(self, OOT)
         if isinstance(OOT, ootype.Instance):
             return self._translate_instance(OOT)
         if isinstance(OOT, ootype.Record):
@@ -487,7 +490,7 @@ class Database(OODatabase):
         if OOT is ootype.Object:
             return jvm.jObject
 
-        assert False, "Untranslatable type %s!" % OOT
+        raise AssertionError("Untranslatable type %s!" % OOT)
 
     ooitemtype_to_array = {
         ootype.Signed   : jvm.jIntArray,

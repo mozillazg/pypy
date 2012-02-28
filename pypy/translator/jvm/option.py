@@ -10,7 +10,8 @@ _default_values = {
     'wd':False,
     'norun':False,
     'trace':False,
-    'byte-arrays':False
+    'byte-arrays':False,
+    'view': False,
     }
 
 def getoption(name):
