@@ -116,6 +116,10 @@ GCFLAG_CARDS_SET    = first_gcflag << 6     # <- at least one card bit is set
 
 TID_MASK            = (first_gcflag << 7) - 1
 
+GCFLAG_HIGH_MASK = intmask(~TID_MASK)
+assert GCFLAG_HIGH_MASK < 0 and not (GCFLAG_HIGH_MASK & GCFLAG_CARDS_SET)
+GCFLAG_HIGH = intmask(0x5555555555555555 & GCFLAG_HIGH_MASK)
+
 
 FORWARDSTUB = lltype.GcStruct('forwarding_stub',
                               ('forw', llmemory.Address))
@@ -240,9 +244,9 @@ class MiniMarkGC(MovingGCBase):
         # it gives a lower bound on the allowed size of the nursery.
         self.nonlarge_max = large_object - 1
         #
-        self.nursery      = NULL
-        self.nursery_free = NULL
-        self.nursery_top  = NULL
+        self.nursery          = NULL
+        self.nursery_next     = NULL
+        self.nursery_frag_end = NULL
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
         #
@@ -386,9 +390,9 @@ class MiniMarkGC(MovingGCBase):
         debug_print("nursery size:", self.nursery_size)
         self.nursery = self._alloc_nursery()
         # the current position in the nursery:
-        self.nursery_free = self.nursery
+        self.nursery_next = self.nursery
         # the end of the nursery:
-        self.nursery_top = self.nursery + self.nursery_size
+        self.nursery_frag_end = self.nursery + self.nursery_size
         # initialize the threshold
         self.min_heap_size = max(self.min_heap_size, self.nursery_size *
                                               self.major_collection_threshold)
@@ -490,11 +494,12 @@ class MiniMarkGC(MovingGCBase):
                 totalsize = rawtotalsize = min_size
             #
             # Get the memory from the nursery.  If there is not enough space
-            # there, do a collect first.
-            result = self.nursery_free
-            self.nursery_free = result + totalsize
-            if self.nursery_free > self.nursery_top:
-                result = self.collect_and_reserve(totalsize)
+            # there, we have run out of the current fragment; pick the next
+            # one or do a collection.
+            result = self.nursery_next
+            self.nursery_next = result + totalsize
+            if self.nursery_next > self.nursery_frag_end:
+                result = self.pick_next_fragment(totalsize)
             #
             # Build the object.
             llarena.arena_reserve(result, totalsize)
@@ -813,7 +818,7 @@ class MiniMarkGC(MovingGCBase):
         # have been chosen to allow 'flags' to be zero in the common
         # case (hence the 'NO' in their name).
         hdr = llmemory.cast_adr_to_ptr(addr, lltype.Ptr(self.HDR))
-        hdr.tid = self.combine(typeid16, flags)
+        hdr.tid = self.combine(typeid16, flags | GCFLAG_HIGH)
 
     def init_gc_object_immortal(self, addr, typeid16, flags=0):
         # For prebuilt GC objects, the flags must contain
