@@ -655,6 +655,7 @@ class JVMGenerator(Generator):
 
     def new_with_jtype(self, jtype, args=None):
         if args is None:
+            args = [] # later we iterate args
             ctor = jvm.Method.c(jtype, ())
         else:
             ctor = jvm.Method.c(jtype, (self.db.lltype_to_cts(arg.concretetype) for arg in args))
