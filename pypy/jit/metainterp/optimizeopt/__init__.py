@@ -55,7 +55,6 @@ def build_opt_chain(metainterp_sd, enable_opts):
 def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True):
     """Optimize loop.operations to remove internal overheadish operations.
     """
-
     debug_start("jit-optimize")
     try:
         loop.logops = metainterp_sd.logger_noopt.log_loop(loop.inputargs,

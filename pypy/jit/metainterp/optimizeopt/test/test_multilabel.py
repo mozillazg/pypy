@@ -398,6 +398,24 @@ class OptimizeoptTestMultiLabel(BaseTestMultiLabel):
         with raises(InvalidLoop):
             self.optimize_loop(ops, ops)
 
+    def test_dont_kill_exported_ops(self):
+        ops = """
+        [i0]
+        i1 = int_add(i0, 1)
+        label(i0)
+        i2 = int_add(i0, 1)
+        escape(i2)
+        jump(i0)
+        """
+        expected = """
+        [i0]
+        i1 = int_add(i0, 1)
+        label(i0, i1)
+        escape(i1)
+        jump(i0, i1)
+        """
+        self.optimize_loop(ops, expected)
+
 class OptRenameStrlen(Optimization):
     def propagate_forward(self, op):
         dispatch_opt(self, op)
@@ -458,7 +476,6 @@ class BaseTestOptimizerRenamingBoxes(BaseTestMultiLabel):
         """
         self.optimize_loop(ops, expected)
 
-        
 
 class TestLLtype(OptimizeoptTestMultiLabel, LLtypeMixin):
     pass
