@@ -1,5 +1,5 @@
 from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper, _is_static
-from pypy.translator.jvm.jvm_interop.utils import ReflectionNameChecker, jvm_method_to_pypy_method, JvmOverloadingResolver, call_method
+from pypy.translator.jvm.jvm_interop.utils import ReflectionNameChecker, jvm_method_to_pypy_method, JvmOverloadingResolver, call_method, unwrap
 from pypy.rpython.ootypesystem import ootype
 
 class NativeRJvmInstance(ootype.NativeInstance):
@@ -27,6 +27,15 @@ class NativeRJvmInstance(ootype.NativeInstance):
             meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
         return self, meth
 
+    def __eq__(self, other):
+        if isinstance(other, NativeRJvmInstance):
+            return self.class_name == other.class_name
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def _make_interp_instance(self, args):
         """
         This is called be ootype.new() to make the _native_rjvm_instance object.
@@ -35,6 +44,7 @@ class NativeRJvmInstance(ootype.NativeInstance):
         pkg_name, class_name = '.'.join(parts[:-1]), parts[-1]
         pkg = JvmPackageWrapper(pkg_name)
         clazz = getattr(pkg, class_name)
+        args = [unwrap(arg) for arg in args]
         instance = clazz(*args)
         return _native_rjvm_instance(self, instance)
 

@@ -132,29 +132,35 @@ def call_method(method):
     call the method and wrap the result. The returned function can be used as the
     _callable field of an ootype._bound_meth to actually call the method in question.
     """
-    def unwrap(value):
-        # TODO: what about other primitive types?
-        # Is there a general mechanism for this somewhere?
-        if isinstance(value, types._native_rjvm_instance):
-            return value._instance
-        elif isinstance(value, ootype._string):
-            return value._str
-        else:
-            raise AssertionError("Don't know how to unwrap %r" % value)
-
-    def wrap(value):
-        if isinstance(value, types.JvmInstanceWrapper):
-            return types._native_rjvm_instance(types.NativeRJvmInstance(value.__refclass__), value)
-        elif isinstance(value, (str, unicode)):
-            return ootype._string(ootype.String, str(value))
-        elif value is None:
-            return None
-        else:
-            raise AssertionError("Don't know how to wrap %r" % value)
-
     def callable(*args):
         args = [unwrap(arg) for arg in args[1:]]   # skip the first arg, method is already bound
         result = method(*args)
         return wrap(result)
 
     return callable
+
+
+def unwrap(value):
+    # TODO: what about other primitive types?
+    # Is there a general mechanism for this somewhere?
+    if isinstance(value, types._native_rjvm_instance):
+        return value._instance
+    elif isinstance(value, ootype._string):
+        return value._str
+    elif isinstance(value, (int, bool)):
+        return value
+    else:
+        raise AssertionError("Don't know how to unwrap %r" % value)
+
+
+def wrap(value):
+    if isinstance(value, types.JvmInstanceWrapper):
+        return types._native_rjvm_instance(types.NativeRJvmInstance(value.__refclass__), value)
+    elif isinstance(value, (str, unicode)):
+        return ootype._string(ootype.String, str(value))
+    elif value is None:
+        return None
+    elif isinstance(value, (int, bool)):
+        return value
+    else:
+        raise AssertionError("Don't know how to wrap %r" % value)

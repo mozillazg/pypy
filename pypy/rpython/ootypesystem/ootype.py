@@ -1284,7 +1284,9 @@ class _overloaded_bound_meth(_bound_meth):
         ARGS = tuple([typeOf(arg) for arg in args])
         meth = self.meth._resolver.resolve(ARGS)
         assert isinstance(meth, _meth)
-        return meth._bound(self.DEFINST, self.inst)
+        meth._callable = self.meth._callable
+        bound_meth = meth._bound(self.DEFINST, self.inst)
+        return bound_meth
 
     def __call__(self, *args):
         bound_meth = self._get_bound_meth(*args)
