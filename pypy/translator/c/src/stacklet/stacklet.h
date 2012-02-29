@@ -59,17 +59,22 @@ void stacklet_destroy(stacklet_thread_handle thrd, stacklet_handle target);
  */
 char **_stacklet_translate_pointer(stacklet_handle context, char **ptr);
 
-/* The "stacklet id" is a value that remain valid and unchanged if the
- * stacklet is suspended and resumed.  WARNING: DON'T USE unless you have
- * no other choice, because it is not "composable" at all.
+/* To use with the previous function: turn a 'char**' that points into
+ * the currently running stack into an opaque 'long'.  The 'long'
+ * remains valid as long as the original stack location is valid.  At
+ * any point in time we can ask '_stacklet_get_...()' to convert it back
+ * into a 'stacklet_handle, char**' pair.  The 'char**' will always be
+ * the same, but the 'stacklet_handle' might change over time.
+ * Together, they are valid arguments for _stacklet_translate_pointer().
+ *
+ * The returned 'long' is an odd value if currently running in a non-
+ * main stacklet, or directly '(long)stackptr' if currently running in
+ * the main stacklet.  This guarantees that it is possible to use
+ * '_stacklet_get_...()' on a regular address taken before starting
+ * to use stacklets.
  */
-typedef struct stacklet_id_s *stacklet_id;
-#define _stacklet_id_of_stacklet(stacklet) (*(stacklet_id*)(stacklet))
-#define _stacklet_id_current(thrd) (*(stacklet_id*)(thrd))
-/* Returns the current stacklet with the given id.
-   If 'id' == NULL, returns the main stacklet in the thread.
-   In both cases the return value is NULL if the id specifies the currently
-   running "stacklet". */
-stacklet_handle _stacklet_with_id(stacklet_thread_handle thrd, stacklet_id id);
+long _stacklet_capture_stack_pointer(char **stackptr);
+char **_stacklet_get_captured_pointer(long captured);
+stacklet_handle _stacklet_get_captured_context(long captured);
 
 #endif /* _STACKLET_H_ */
