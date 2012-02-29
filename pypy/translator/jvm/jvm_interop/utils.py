@@ -4,10 +4,10 @@ from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 
-class ReflectionNameChecker(object):
+class NativeRJvmInstanceExample(object):
     """
     Instances of this class can serve as "examples" of native classes. They only have attributes
-    that correspond to instance methods of the underlying java class. We have to return an
+    that correspond to instance methods and fields of the underlying java class. We have to return an
     instance of ootype._bound_meth to please the rest of the translation process, so we return
     a dummy one to keep things simple.
     """
@@ -17,12 +17,18 @@ class ReflectionNameChecker(object):
     def __init__(self, refclass):
         self.refclass = refclass
         self.method_names = {str(m.getName()) for m in refclass.getMethods() if not rjvm._is_static(m)}
+        self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass) if not rjvm._is_static(f)}
 
     def __getattr__(self, name):
         if name in self.method_names:
             return self.dummy_method
+        elif name in self.field_names:
+            field, = [f for f in rjvm._get_fields(self.refclass) if str(f.getName()) == name]
+            jtype = field.getType()
+            return jpype_type_to_ootype(jtype)._example()
         else:
-            raise TypeError("No method called %s found in %s" % (name, self.refclass.getName()))
+            raise TypeError(
+                "No method or field called %s found in %s." % (name, self.refclass.getName()))
 
 
 class JvmOverloadingResolver(ootype.OverloadingResolver):
@@ -160,7 +166,7 @@ def wrap(value):
         return ootype._string(ootype.String, str(value))
     elif value is None:
         return None
-    elif isinstance(value, (int, bool)):
+    elif isinstance(value, (int, float)):
         return value
     else:
         raise AssertionError("Don't know how to wrap %r" % value)

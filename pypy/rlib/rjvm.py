@@ -44,7 +44,23 @@ class JvmPackageWrapper(object):
         return '<JvmPackageWrapper %s>' % self.__javaname__
 
 
-class CallableWrapper(object):
+class Wrapper(object):
+    """
+    This is a mixin that provides methods to wrap JPype-level types in rjvm-level wrappers.
+    """
+    def _wrap_item(self, item):
+        if isinstance(item, jpype.java.lang.Object):
+            return JvmInstanceWrapper(item)
+        elif isinstance(item, jpype._jclass._JavaClass):
+            return JvmInstanceWrapper(item.__javaclass__)
+        elif isinstance(item, (tuple, list)):
+            return self._wrap_list(item)
+        return item
+
+    def _wrap_list(self, lst):
+        return [self._wrap_item(x) for x in lst]
+
+class CallableWrapper(Wrapper):
     """
     This is a mixin for objects that delegate the __call__ method to
     self.__wrapped__ (a JPype-level proxy) and wrap the result as an
@@ -54,19 +70,7 @@ class CallableWrapper(object):
     def __call__(self, *args):
         args = [arg.__wrapped__ if isinstance(arg, JvmInstanceWrapper) else arg for arg in args]
         result =  self.__wrapped__(*args)
-        return self.wrap_item(result)
-
-    def wrap_item(self, item):
-        if isinstance(item, jpype.java.lang.Object):
-            return JvmInstanceWrapper(item)
-        elif isinstance(item, jpype._jclass._JavaClass):
-            return JvmInstanceWrapper(item.__javaclass__)
-        elif isinstance(item, (tuple, list)):
-            return self.wrap_list(item)
-        return item
-
-    def wrap_list(self, lst):
-        return [self.wrap_item(x) for x in lst]
+        return self._wrap_item(result)
 
 
 class JvmClassWrapper(CallableWrapper):
@@ -96,7 +100,7 @@ class JvmClassWrapper(CallableWrapper):
         return '<JvmClassWrapper %s>' % self.__wrapped__.__name__
 
 
-class JvmInstanceWrapper(object):
+class JvmInstanceWrapper(Wrapper):
     """
     Proxy to a JPype-level object. Uses reflection to check attribute access.
     """
@@ -109,11 +113,15 @@ class JvmInstanceWrapper(object):
             refclass = obj.__javaclass__
         self.__class_name = refclass.getName()
         self.__method_names = {str(m.getName()) for m in refclass.getMethods() if not _is_static(m)}
+
+        self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
         self.__refclass__ = refclass
 
     def __getattr__(self, attr):
         if attr in self.__method_names:
-            return JvmMethodWrapper(getattr(self.__wrapped__, attr), )
+            return JvmMethodWrapper(getattr(self.__wrapped__, attr))
+        elif attr in self.__field_names:
+            return self._wrap_item(getattr(self.__wrapped__, attr))
         else:
             raise TypeError(
                 "No instance method called {method_name} found in class {class_name}".format(
@@ -134,12 +142,19 @@ class JvmStaticMethodWrapper(CallableWrapper):
         self.__wrapped__ = static_meth
 
 
-def _is_static(ref_meth):
+def _is_static(method_or_field):
     """
-    Check if the jpype proxy to a java.lang.reflect.Method object represents
-    a static method.
+    Check if the jpype proxy to a java.lang.reflect.Method (or Field) object
+    represents a static method (field).
     """
-    return jpype.java.lang.reflect.Modifier.isStatic(ref_meth.getModifiers())
+    return jpype.java.lang.reflect.Modifier.isStatic(method_or_field.getModifiers())
+
+def _get_fields(refclass):
+    """
+    Unfortunately JPype seems to crash when calling getFields() on a JavaClass :/
+    For now let's stick to getDeclaredFields() and hope to fix this later...
+    """
+    return refclass.getDeclaredFields()
 
 jpype.startJVM(jpype.getDefaultJVMPath(), "-ea")
 java = JvmPackageWrapper("java")
