@@ -435,12 +435,12 @@ class BaseTest(object):
         token = JitCellToken() 
         preamble.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(token))] + \
                               operations +  \
-                              [ResOperation(rop.LABEL, jump_args, None, descr=token)]
+                              [ResOperation(rop.LABEL, jump_args[:], None, descr=token)]
         self._do_optimize_loop(preamble, call_pure_results)
 
         assert preamble.operations[-1].getopnum() == rop.LABEL
 
-        inliner = Inliner(inputargs, jump_args)
+        inliner = Inliner(inputargs, jump_args[:])
         loop.resume_at_jump_descr = preamble.resume_at_jump_descr
         loop.operations = [preamble.operations[-1]] + \
                           [inliner.inline_op(op, clone=False) for op in cloned_operations] + \
@@ -450,14 +450,15 @@ class BaseTest(object):
         assert loop.operations[-1].getopnum() == rop.JUMP
         assert loop.operations[0].getopnum() == rop.LABEL
         loop.inputargs = loop.operations[0].getarglist()
-
         self._do_optimize_loop(loop, call_pure_results)
+
         extra_same_as = []
         while loop.operations[0].getopnum() != rop.LABEL:
             extra_same_as.append(loop.operations[0])
             del loop.operations[0]
 
         # Hack to prevent random order of same_as ops
+            
         extra_same_as.sort(key=lambda op: str(preamble.operations).find(str(op.getarg(0))))
 
         for op in extra_same_as:

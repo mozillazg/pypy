@@ -465,7 +465,6 @@ class OptRewrite(Optimization):
     def optimize_INT_FLOORDIV(self, op):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
-
         if v2.is_constant() and v2.box.getint() == 1:
             self.make_equal_to(op.result, v1)
             return

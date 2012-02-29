@@ -227,8 +227,9 @@ class OptimizeoptTestMultiLabel(BaseTestMultiLabel):
 
     def test_two_intermediate_labels_basic_1(self):
         ops = """
-        [p1, i1]
+        [p1, i1, i10]
         i2 = getfield_gc(p1, descr=valuedescr)
+        guard_true(i10) [p1, i1, i2]
         label(p1, i1)
         i3 = getfield_gc(p1, descr=valuedescr)
         i4 = int_add(i1, i3)
@@ -237,8 +238,9 @@ class OptimizeoptTestMultiLabel(BaseTestMultiLabel):
         jump(p1, i5)
         """
         expected = """
-        [p1, i1]
+        [p1, i1, i10]
         i2 = getfield_gc(p1, descr=valuedescr)
+        guard_true(i10) [p1, i1, i2]
         label(p1, i1, i2)
         i4 = int_add(i1, i2)
         label(p1, i4)
@@ -409,8 +411,8 @@ class OptimizeoptTestMultiLabel(BaseTestMultiLabel):
         """
         expected = """
         [i0]
+        label(i0)
         i1 = int_add(i0, 1)
-        label(i0, i1)
         escape(i1)
         jump(i0, i1)
         """

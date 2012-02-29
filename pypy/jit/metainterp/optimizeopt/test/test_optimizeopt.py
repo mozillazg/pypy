@@ -2795,7 +2795,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         preamble = """
         [p0]
-        p1 = getfield_gc(p0, descr=nextdescr)
         jump(p0)
         """
         expected = """
@@ -3441,7 +3440,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         expected = """
         [p1]
-        i0 = force_token()
         jump(p1)
         """
         self.optimize_loop(ops, expected, expected)
@@ -3796,16 +3794,16 @@ class OptimizeOptTest(BaseTestWithUnroll):
 
     def test_bound_lt_noguard(self):
         ops = """
-        [i0]
+        [i0, i3]
         i1 = int_lt(i0, 4)
         i2 = int_lt(i0, 5)
-        jump(i2)
+        jump(i2, i1)
         """
         expected = """
-        [i0]
+        [i0, i3]
         i1 = int_lt(i0, 4)
         i2 = int_lt(i0, 5)
-        jump(i2)
+        jump(i2, i1)
         """
         self.optimize_loop(ops, expected, expected)
 
@@ -3890,7 +3888,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         [i0]
         i1 = int_lt(i0, 4)
         guard_true(i1) []
-        i2 = int_add(i0, 10)
         jump(i0)
         """
         expected = """
@@ -3937,7 +3934,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         [i0]
         i1 = int_lt(i0, 4)
         guard_true(i1) []
-        i2 = int_add(i0, 10)
         jump(i0)
         """
         expected = """
@@ -4014,7 +4010,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         guard_true(i1) []
         i1p = int_gt(i0, -4)
         guard_true(i1p) []
-        i2 = int_sub(i0, 10)
         jump(i0)
         """
         expected = """
@@ -4194,7 +4189,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         expected = """
         [i0, p0]
         p1 = new_array(i0, descr=arraydescr)
-        i1 = arraylen_gc(p1)
         setarrayitem_gc(p0, 0, p1)
         jump(i0, p0)
         """
@@ -4210,7 +4204,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         preamble = """
         [p0]
-        i0 = strlen(p0)
         jump(p0)
         """
         expected = """
@@ -4336,7 +4329,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         expected = """
         [p0, i22]
-        i331 = force_token()
         jump(p0, i22)
         """
         self.optimize_loop(ops, expected)
@@ -4346,7 +4338,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         [p4, p7, i30]
         p16 = getfield_gc(p4, descr=valuedescr)
         p17 = getarrayitem_gc(p4, 1, descr=arraydescr)
-        guard_value(p16, ConstPtr(myptr), descr=<Guard3>) []
+        guard_value(p16, ConstPtr(myptr), descr=<Guard3>) [p17]
         i1 = getfield_raw(p7, descr=nextdescr)
         i2 = int_add(i1, i30)
         setfield_raw(p7, 7, descr=nextdescr)
@@ -4375,6 +4367,16 @@ class OptimizeOptTest(BaseTestWithUnroll):
         setarrayitem_raw(p7, 1, i2, descr=arraydescr)
         jump(p4, p7, i30)
         """
+        preamble = """
+        [p4, p7, i30]
+        p16 = getfield_gc(p4, descr=valuedescr)
+        guard_value(p16, ConstPtr(myptr), descr=<Guard3>) []
+        i1 = getarrayitem_raw(p7, 1, descr=arraydescr)
+        i2 = int_add(i1, i30)
+        setarrayitem_raw(p7, 1, 7, descr=arraydescr)
+        setarrayitem_raw(p7, 1, i2, descr=arraydescr)
+        jump(p4, p7, i30)
+        """
         expected = """
         [p4, p7, i30]
         i1 = getarrayitem_raw(p7, 1, descr=arraydescr)
@@ -4383,7 +4385,7 @@ class OptimizeOptTest(BaseTestWithUnroll):
         setarrayitem_raw(p7, 1, i2, descr=arraydescr)
         jump(p4, p7, i30)
         """
-        self.optimize_loop(ops, expected, ops)
+        self.optimize_loop(ops, expected, preamble)
 
     def test_pure(self):
         ops = """
@@ -4441,7 +4443,14 @@ class OptimizeOptTest(BaseTestWithUnroll):
         setfield_gc(p3, p1, descr=nextdescr)
         jump()
         """
-        self.optimize_loop(ops, ops)
+        expected = """
+        []
+        p1 = escape()
+        p3 = escape()
+        setfield_gc(p3, p1, descr=nextdescr)
+        jump()
+        """
+        self.optimize_loop(ops, expected)
 
     def test_getfield_guard_const(self):
         ops = """
@@ -4627,7 +4636,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         ix3 = int_xor(i1, i0)
         ix3t = int_ge(ix3, 0)
         guard_true(ix3t) []
-        ix4 = int_xor(i1, i2)
         jump(i0, i1, i2)
         """
         expected = """
@@ -4666,7 +4674,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         ix3 = int_floordiv(i1, i0)
         ix3t = int_ge(ix3, 0)
         guard_true(ix3t) []
-        ix4 = int_floordiv(i1, i2)
         jump(i0, i1, i2)
         """
         expected = """
@@ -4694,14 +4701,12 @@ class OptimizeOptTest(BaseTestWithUnroll):
         """
         preamble = """
         [i1, i2a, i2b, i2c]
-        i3 = int_is_zero(i1)
         i4 = int_gt(i2a, 7)
         guard_true(i4) []
         i6 = int_le(i2b, -7)
         guard_true(i6) []
         i8 = int_gt(i2c, -7)
         guard_true(i8) []
-        i9 = int_is_zero(i2c)
         jump(i1, i2a, i2b, i2c)
         """
         expected = """
@@ -4741,9 +4746,6 @@ class OptimizeOptTest(BaseTestWithUnroll):
         i17 = int_eq(i15, -1)
         guard_false(i17) []
         i18 = int_floordiv(i7, i6)
-        i19 = int_xor(i7, i6)
-        i22 = int_mod(i7, i6)
-        i23 = int_is_true(i22)
         jump(i7, i18, i8)
         """
         expected = """
@@ -4754,48 +4756,45 @@ class OptimizeOptTest(BaseTestWithUnroll):
         i17 = int_eq(i15, -1)
         guard_false(i17) []
         i18 = int_floordiv(i7, i6)
-        i19 = int_xor(i7, i6)
-        i22 = int_mod(i7, i6)
-        i23 = int_is_true(i22)
         jump(i7, i18, i8)
         """
         self.optimize_loop(ops, expected, preamble)
 
     def test_division_to_rshift(self):
         ops = """
-        [i1, i2]
+        [i1, i2, i3, i4, i5, i6, i7, i8, i9, i10, i11, i12, i13]
         it = int_gt(i1, 0)
         guard_true(it)[]
-        i3 = int_floordiv(i1, i2)
-        i4 = int_floordiv(2, i2)
-        i5 = int_floordiv(i1, 2)
-        i6 = int_floordiv(3, i2)
-        i7 = int_floordiv(i1, 3)
-        i8 = int_floordiv(4, i2)
-        i9 = int_floordiv(i1, 4)
-        i10 = int_floordiv(i1, 0)
-        i11 = int_floordiv(i1, 1)
-        i12 = int_floordiv(i2, 2)
-        i13 = int_floordiv(i2, 3)
-        i14 = int_floordiv(i2, 4)
-        jump(i5, i14)
+        i14 = int_floordiv(i1, i2)
+        i15 = int_floordiv(2, i3)
+        i16 = int_floordiv(i1, 2)
+        i17 = int_floordiv(3, i5)
+        i18 = int_floordiv(i6, 3)
+        i19 = int_floordiv(4, i7)
+        i20 = int_floordiv(i1, 4)
+        i21 = int_floordiv(i9, 0)
+        i22 = int_floordiv(i10, 1)
+        i23 = int_floordiv(i11, 2)
+        i24 = int_floordiv(i12, 3)
+        i25 = int_floordiv(i13, 4)
+        jump(i25, i14, i15, i16, i17, i18, i19, i20, i21, i22, i23, i24, i25)
         """
         expected = """
-        [i1, i2]
+        [i1, i2, i3, i4, i5, i6, i7, i8, i9, i11, i12, i13]
         it = int_gt(i1, 0)
         guard_true(it)[]
-        i3 = int_floordiv(i1, i2)
-        i4 = int_floordiv(2, i2)
-        i5 = int_rshift(i1, 1)
-        i6 = int_floordiv(3, i2)
-        i7 = int_floordiv(i1, 3)
-        i8 = int_floordiv(4, i2)
-        i9 = int_rshift(i1, 2)
-        i10 = int_floordiv(i1, 0)
-        i12 = int_floordiv(i2, 2)
-        i13 = int_floordiv(i2, 3)
-        i14 = int_floordiv(i2, 4)
-        jump(i5, i14)
+        i14 = int_floordiv(i1, i2)
+        i15 = int_floordiv(2, i3)
+        i16 = int_rshift(i1, 1)
+        i17 = int_floordiv(3, i5)
+        i18 = int_floordiv(i6, 3)
+        i19 = int_floordiv(4, i7)
+        i20 = int_rshift(i1, 2)
+        i21 = int_floordiv(i9, 0)
+        i23 = int_floordiv(i11, 2)
+        i24 = int_floordiv(i12, 3)
+        i25 = int_floordiv(i13, 4)
+        jump(i25, i14, i15, i16, i17, i18, i19, i20, i21, i23, i24)
         """
         self.optimize_loop(ops, expected)
 
