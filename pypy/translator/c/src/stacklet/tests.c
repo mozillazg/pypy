@@ -628,8 +628,9 @@ void test_two_mains(void)
 /************************************************************/
 
 struct test_captr_s {
-    long c, c1, c2;
+    long c, c0, c1, c2;
     char **fooref;
+    char **fooref0;
     char **fooref1;
     char **fooref2;
     stacklet_handle hmain;
@@ -637,7 +638,7 @@ struct test_captr_s {
     stacklet_handle h2;
 } tid;
 
-void cap_check_all(int depth);
+int cap_check_all(int depth);
 
 stacklet_handle stacklet_captr_callback_1(stacklet_handle h, void *arg)
 {
@@ -647,11 +648,11 @@ stacklet_handle stacklet_captr_callback_1(stacklet_handle h, void *arg)
     status = 1;
 
     assert(_stacklet_get_captured_pointer(tid.c) == tid.fooref);
-    assert(_stacklet_get_captured_context(tid.c) == tid.hmain);
+    assert(_stacklet_get_captured_context(tid.c) == NULL);
     assert(*_stacklet_translate_pointer(tid.hmain, tid.fooref) == (char*)-42);
 
     char *ref1 = (char*)1111;
-    tid.c1 = _stacklet_capture_stack_pointer(&ref1);
+    tid.c1 = _stacklet_capture_stack_pointer(thrd, &ref1);
     tid.fooref1 = &ref1;
     assert(_stacklet_get_captured_pointer(tid.c1) == &ref1);
     assert(_stacklet_get_captured_context(tid.c1) == NULL);
@@ -675,12 +676,10 @@ stacklet_handle stacklet_captr_callback_2(stacklet_handle h, void *arg)
     status = 2;
 
     char *ref2 = (char*)2222;
-    tid.c2 = _stacklet_capture_stack_pointer(&ref2);
+    tid.c2 = _stacklet_capture_stack_pointer(thrd, &ref2);
     tid.fooref2 = &ref2;
     assert(_stacklet_get_captured_pointer(tid.c2) == &ref2);
     assert(_stacklet_get_captured_context(tid.c2) == NULL);
-
-    cap_check_all(20);
 
     h = stacklet_switch(thrd, h);
     tid.hmain = h;
@@ -694,11 +693,17 @@ stacklet_handle stacklet_captr_callback_2(stacklet_handle h, void *arg)
     return stacklet_switch(thrd, h);
 }
 
-void cap_check_all(int depth)
+int cap_check_all(int depth)
 {
     assert(_stacklet_get_captured_pointer(tid.c) == tid.fooref);
-    assert(_stacklet_get_captured_context(tid.c) == tid.hmain);
+    /* we always get NULL because it's before the portion of the stack
+       that is copied away and restored: */
+    assert(_stacklet_get_captured_context(tid.c) == NULL);
     assert(*_stacklet_translate_pointer(tid.hmain, tid.fooref) == (char*)-42);
+
+    assert(_stacklet_get_captured_pointer(tid.c0) == tid.fooref0);
+    assert(_stacklet_get_captured_context(tid.c) == tid.hmain);
+    assert(*_stacklet_translate_pointer(tid.hmain, tid.fooref) == (char*)6363);
 
     assert(_stacklet_get_captured_pointer(tid.c1) == tid.fooref1);
     assert(_stacklet_get_captured_context(tid.c1) == tid.h1);
@@ -709,39 +714,26 @@ void cap_check_all(int depth)
     assert(*_stacklet_translate_pointer(tid.h2, tid.fooref2) == (char*)2222);
 
     if (depth > 0)
-        cap_check_all(depth - 1);
-
-    assert(_stacklet_get_captured_pointer(tid.c) == tid.fooref);
-    assert(_stacklet_get_captured_context(tid.c) == tid.hmain);
-    assert(*_stacklet_translate_pointer(tid.hmain, tid.fooref) == (char*)-42);
-
-    assert(_stacklet_get_captured_pointer(tid.c1) == tid.fooref1);
-    assert(_stacklet_get_captured_context(tid.c1) == tid.h1);
-    assert(*_stacklet_translate_pointer(tid.h1, tid.fooref1) == (char*)1111);
-
-    assert(_stacklet_get_captured_pointer(tid.c2) == tid.fooref2);
-    assert(_stacklet_get_captured_context(tid.c2) == tid.h2);
-    assert(*_stacklet_translate_pointer(tid.h2, tid.fooref2) == (char*)2222);
+        return cap_check_all(depth - 1) * depth;
+    return 1;
 }
 
-void test_stacklet_capture(void)
+int cap_with_extra_stack(int depth)
 {
-    char *foo = (char*)-42;
-    tid.c = _stacklet_capture_stack_pointer(&foo);
-    tid.fooref = &foo;
-    assert(tid.c == (long)tid.fooref);
-    assert(_stacklet_get_captured_pointer(tid.c) == &foo);
-    assert(_stacklet_get_captured_context(tid.c) == NULL);
+    stacklet_handle h1, h2;
+    char *foo0 = (char*)6363;
 
-    status = 0;
-    stacklet_handle h1 = stacklet_new(thrd, stacklet_captr_callback_1, NULL);
-    stacklet_handle h2 = stacklet_new(thrd, stacklet_captr_callback_2, NULL);
-    tid.hmain = NULL;
-    tid.h1 = h1;
-    tid.h2 = h2;
+    if (depth > 0)
+        return cap_with_extra_stack(depth - 1) * depth;
+
+    tid.c0 = _stacklet_capture_stack_pointer(thrd, &foo0);
+    tid.fooref0 = &foo0;
+    assert(tid.c0 == (long)tid.fooref0);
+    assert(_stacklet_get_captured_pointer(tid.c0) == &foo0);
+    assert(_stacklet_get_captured_context(tid.c0) == NULL);
 
     cap_check_all(20);
-    assert(_stacklet_capture_stack_pointer(tid.fooref) == tid.c);
+    assert(_stacklet_capture_stack_pointer(thrd, tid.fooref) == tid.c);
 
     assert(status == 2);
     status = 3;
@@ -758,11 +750,31 @@ void test_stacklet_capture(void)
     tid.h2 = h2;
 
     cap_check_all(20);
+    return 1;
+}
+
+void test_stacklet_capture(void)
+{
+    char *foo = (char*)-42;
+    tid.c = _stacklet_capture_stack_pointer(thrd, &foo);
+    tid.fooref = &foo;
+    assert(tid.c == (long)tid.fooref);
+    assert(_stacklet_get_captured_pointer(tid.c) == &foo);
+    assert(_stacklet_get_captured_context(tid.c) == NULL);
+
+    status = 0;
+    stacklet_handle h1 = stacklet_new(thrd, stacklet_captr_callback_1, NULL);
+    stacklet_handle h2 = stacklet_new(thrd, stacklet_captr_callback_2, NULL);
+    tid.hmain = NULL;
+    tid.h1 = h1;
+    tid.h2 = h2;
+
+    cap_with_extra_stack(20);
 
     assert(status == 6);
-    h1 = stacklet_switch(thrd, h1);
+    h1 = stacklet_switch(thrd, tid.h1);
     assert(h1 == EMPTY_STACKLET_HANDLE);
-    h2 = stacklet_switch(thrd, h2);
+    h2 = stacklet_switch(thrd, tid.h2);
     assert(h2 == EMPTY_STACKLET_HANDLE);
 }
 

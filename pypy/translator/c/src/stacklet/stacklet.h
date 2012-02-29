@@ -72,8 +72,14 @@ char **_stacklet_translate_pointer(stacklet_handle context, char **ptr);
  * the main stacklet.  This guarantees that it is possible to use
  * '_stacklet_get_...()' on a regular address taken before starting
  * to use stacklets.
+ *
+ * XXX assumes a single stacklet_thread_handle per thread
+ *
+ * XXX _stacklet_capture_stack_pointer() invalidates all 'long' values
+ * previously returned for the same stacklet that were for addresses
+ * later in the stack (i.e. lower).
  */
-long _stacklet_capture_stack_pointer(char **stackptr);
+long _stacklet_capture_stack_pointer(stacklet_thread_handle, char **stackptr);
 char **_stacklet_get_captured_pointer(long captured);
 stacklet_handle _stacklet_get_captured_context(long captured);
 

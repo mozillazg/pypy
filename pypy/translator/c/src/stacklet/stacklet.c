@@ -33,9 +33,13 @@
 
 /************************************************************/
 
-struct stacklet_s {
-    stacklet_id id;    /* first field */
+struct cap_loc_s {
+    char **cl_original_pointer;
+    struct stacklet_s **cl_contained_in_stacklet;
+    struct cap_loc_s *cl_next;
+}
 
+struct stacklet_s {
     /* The portion of the real stack claimed by this paused tealet. */
     char *stack_start;                /* the "near" end of the stack */
     char *stack_stop;                 /* the "far" end of the stack */
@@ -54,6 +58,9 @@ struct stacklet_s {
      * main stack.
      */
     struct stacklet_s *stack_prev;
+
+    /* the captured stack locations */
+    struct cap_loc_s *stack_cap_locs;
 };
 
 void *(*_stacklet_switchstack)(void*(*)(void*, void*),
@@ -61,19 +68,17 @@ void *(*_stacklet_switchstack)(void*(*)(void*, void*),
 void (*_stacklet_initialstub)(struct stacklet_thread_s *,
                               stacklet_run_fn, void *) = NULL;
 
-struct stacklet_id_s {
-    stacklet_handle stacklet;
-};
-
 struct stacklet_thread_s {
-    stacklet_id g_current_id;             /* first field */
     struct stacklet_s *g_stack_chain_head;  /* NULL <=> running main */
     char *g_current_stack_stop;
     char *g_current_stack_marker;
     struct stacklet_s *g_source;
     struct stacklet_s *g_target;
-    struct stacklet_id_s g_main_id;
+    struct stacklet_thread_s *g_prev_thread, *g_next_thread;
 };
+
+/* circular doubly-linked list */
+static struct stacklet_thread_s *g_all_threads = NULL;
 
 /***************************************************************/
 
@@ -136,8 +141,6 @@ static int g_allocate_source_stacklet(void *old_stack_pointer,
         return -1;
 
     stacklet = thrd->g_source;
-    stacklet->id = thrd->g_current_id;
-    stacklet->id->stacklet = stacklet;
     stacklet->stack_start = old_stack_pointer;
     stacklet->stack_stop  = thrd->g_current_stack_stop;
     stacklet->stack_saved = 0;
@@ -237,8 +240,6 @@ static void *g_restore_state(void *new_stack_pointer, void *rawthrd)
     memcpy(g->stack_start - stack_saved, g+1, stack_saved);
 #endif
     thrd->g_current_stack_stop = g->stack_stop;
-    thrd->g_current_id = g->id;
-    thrd->g_current_id->stacklet = NULL;
     free(g);
     return EMPTY_STACKLET_HANDLE;
 }
@@ -247,12 +248,12 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
                           stacklet_run_fn run, void *run_arg)
 {
     struct stacklet_s *result;
-    stacklet_id sid1 = thrd->g_current_id;
+    /*stacklet_id sid1 = thrd->g_current_id;
     stacklet_id sid = malloc(sizeof(struct stacklet_id_s));
     if (sid == NULL) {
         thrd->g_source = NULL;
         return;
-    }
+        }*/
 
     /* The following call returns twice! */
     result = (struct stacklet_s *) _stacklet_switchstack(g_initial_save_state,
@@ -261,18 +262,18 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
     if (result == NULL) {
         /* First time it returns. */
         if (thrd->g_source == NULL) {     /* out of memory */
-            free(sid);
+            /*free(sid);*/
             return;
         }
         /* Only g_initial_save_state() has run and has created 'g_source'.
            Call run(). */
-        sid->stacklet = NULL;
-        thrd->g_current_id = sid;
+        /*sid->stacklet = NULL;
+          thrd->g_current_id = sid;*/
         thrd->g_current_stack_stop = thrd->g_current_stack_marker;
         result = run(thrd->g_source, run_arg);
 
         /* Then switch to 'result'. */
-        free(sid);
+        /*free(sid);*/
         thrd->g_target = result;
         _stacklet_switchstack(g_destroy_state, g_restore_state, thrd);
 
@@ -280,7 +281,7 @@ static void g_initialstub(struct stacklet_thread_s *thrd,
         abort();
     }
     /* The second time it returns. */
-    assert(thrd->g_current_id == sid1);
+    /*assert(thrd->g_current_id == sid1);*/
 }
 
 /************************************************************/
@@ -299,13 +300,36 @@ stacklet_thread_handle stacklet_newthread(void)
     thrd = malloc(sizeof(struct stacklet_thread_s));
     if (thrd != NULL) {
         memset(thrd, 0, sizeof(struct stacklet_thread_s));
-        thrd->g_current_id = &thrd->g_main_id;
+        if (g_all_threads == NULL) {
+            g_all_threads = thrd;
+            thrd->g_prev_thread = thrd;
+            thrd->g_next_thread = thrd;
+        }
+        else {
+            struct stacklet_thread_s *next = g_all_threads->g_next_thread;
+            thrd->g_prev_thread = g_all_threads;
+            thrd->g_next_thread = next;
+            g_all_threads->g_next_thread = thrd;
+            next->g_prev_thread = thrd;
+        }
     }
     return thrd;
 }
 
 void stacklet_deletethread(stacklet_thread_handle thrd)
 {
+    /* remove 'thrd' from the circular doubly-linked list */
+    stacklet_thread_handle prev = thrd->g_prev_thread;
+    stacklet_thread_handle next = thrd->g_next_thread;
+    assert(next->g_prev_thread == thrd);
+    assert(prev->g_next_thread == thrd);
+    next->g_prev_thread = prev;
+    prev->g_next_thread = next;
+    assert(g_all_threads != NULL);
+    if (g_all_threads == thrd) {
+        g_all_threads = (next == thrd) ? NULL : next;
+    }
+    /* free it */
     free(thrd);
 }
 
@@ -343,9 +367,9 @@ void stacklet_destroy(stacklet_thread_handle thrd, stacklet_handle target)
             *pp = target->stack_prev;
             break;
         }
-    assert(target->id->stacklet == target);
+    /*assert(target->id->stacklet == target);
     if (target->id != &thrd->g_main_id)
-        free(target->id);
+    free(target->id);*/
     free(target);
 }
 
@@ -370,4 +394,65 @@ char **_stacklet_translate_pointer(stacklet_handle context, char **ptr)
       assert(((long)context->stack_stop) & 1);
   }
   return ptr;
+}
+
+long _stacklet_capture_stack_pointer(stacklet_thread_handle thrd,
+                                     char **stackptr)
+{
+    if (thrd->g_stack_chain_head == NULL) {
+        /* running in 'main' */
+        return (long)stackptr;
+    }
+    else {
+        fprintf(stderr, "1!\n");
+        abort();
+    }
+}
+
+char **_stacklet_get_captured_pointer(long captured)
+{
+    if ((captured & 1) == 0) {
+        return (char**)captured;
+    }
+    else {
+        fprintf(stderr, "2!\n");
+        abort();
+    }
+}
+
+stacklet_handle _stacklet_get_captured_context(long captured)
+{
+    if ((captured & 1) == 0) {
+        /* it is one of the 'main' stacklets.  If it was moved away,
+           we need to figure out which one it was. */
+        char *p = (char *)captured;
+        struct stacklet_thread_s *thrd = g_all_threads;
+        if (thrd == NULL)
+            return NULL;   /* no stacklet_thread at all */
+
+        while (1) {
+            struct stacklet_s *stacklet = thrd->g_stack_chain_head;
+            if (stacklet != NULL) {
+                /* not running 'main'.  Find the main stacklet */
+                while (stacklet->stack_prev)
+                    stacklet = stacklet->stack_prev;
+
+                /* is 'captured' among the moved-away data? */
+                if (stacklet->stack_start <= p && p < stacklet->stack_stop) {
+                    /* yes.  to optimize the next calls make g_all_threads
+                       point directly to thrd. */
+                    g_all_threads = thrd;
+                    return stacklet;
+                }
+            }
+            thrd = thrd->g_next_thread;
+            if (thrd == g_all_threads)
+                break;
+        }
+        return NULL;
+    }
+    else {
+        fprintf(stderr, "3!\n");
+        abort();
+    }
 }
