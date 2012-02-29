@@ -43,34 +43,32 @@ def fix_permissions(basedir):
 def package(basedir, name='pypy-nightly', rename_pypy_c='pypy',
             copy_to_dir = None, override_pypy_c = None):
     basedir = py.path.local(basedir)
+    if override_pypy_c is None:
+        basename = 'pypy-c'
+        if sys.platform == 'win32':
+            basename += '.exe'
+        pypy_c = basedir.join('pypy', 'translator', 'goal', basename)
+    else:
+        pypy_c = py.path.local(override_pypy_c)
+    if not pypy_c.check():
+        print pypy_c
+        raise PyPyCNotFound('Please compile pypy first, using translate.py')
+    if sys.platform == 'win32' and not rename_pypy_c.lower().endswith('.exe'):
+        rename_pypy_c += '.exe'
+    binaries = [(pypy_c, rename_pypy_c)]
+    #
     if sys.platform == 'win32':
-        # Can't rename a DLL
-        if override_pypy_c is not None:
-            rename_pypy_c = py.path.local(override_pypy_c).purebasename
-            pypy_c_dir = py.path.local(override_pypy_c).dirname
-        else:
-            pypy_c_dir = basedir.join('pypy', 'translator', 'goal')
-        pypy_c = pypy_c_dir.join(rename_pypy_c + '.exe')
-        libpypy_c = pypy_c_dir.join('lib' + rename_pypy_c + '.dll')
-        binaries = [(pypy_c, pypy_c.basename),
-                    (libpypy_c, libpypy_c.basename)]
-        for extra in ['libexpat.dll', 'sqlite3.dll', 'msvcr90.dll']:
-            p = pypy_c_dir.join(extra)
+        # Can't rename a DLL: it is always called 'libpypy-c.dll'
+        for extra in ['libpypy-c.dll',
+                      'libexpat.dll', 'sqlite3.dll', 'msvcr90.dll',
+                      'libeay32.dll', 'ssleay32.dll']:
+            p = pypy_c.dirpath().join(extra)
             if not p.check():
                 p = py.path.local.sysfind(extra)
                 assert p, "%s not found" % (extra,)
             print "Picking %s" % p
             binaries.append((p, p.basename))
-    else:
-        basename = 'pypy-c'
-        if override_pypy_c is None:
-            pypy_c = basedir.join('pypy', 'translator', 'goal', basename)
-        else:
-            pypy_c = py.path.local(override_pypy_c)
-        binaries = [(pypy_c, rename_pypy_c)]
-    if not pypy_c.check():
-        print pypy_c
-        raise PyPyCNotFound('Please compile pypy first, using translate.py')
+    #
     builddir = udir.ensure("build", dir=True)
     pypydir = builddir.ensure(name, dir=True)
     # Careful: to copy lib_pypy, copying just the svn-tracked files
@@ -84,6 +82,9 @@ def package(basedir, name='pypy-nightly', rename_pypy_c='pypy',
     for file in ['LICENSE', 'README']:
         shutil.copy(str(basedir.join(file)), str(pypydir))
     pypydir.ensure('include', dir=True)
+    if sys.platform == 'win32':
+        shutil.copyfile(str(pypy_c.dirpath().join("libpypy-c.lib")),
+                        str(pypydir.join('include/python27.lib')))
     # we want to put there all *.h and *.inl from trunk/include
     # and from pypy/_interfaces
     includedir = basedir.join('include')
@@ -128,7 +129,7 @@ def package(basedir, name='pypy-nightly', rename_pypy_c='pypy',
             zf.close()
         else:
             archive = str(builddir.join(name + '.tar.bz2'))
-            if sys.platform == 'darwin':
+            if sys.platform == 'darwin' or sys.platform.startswith('freebsd'):
                 e = os.system('tar --numeric-owner -cvjf ' + archive + " " + name)
             else:
                 e = os.system('tar --owner=root --group=root --numeric-owner -cvjf ' + archive + " " + name)

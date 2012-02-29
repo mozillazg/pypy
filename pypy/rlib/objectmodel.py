@@ -23,9 +23,11 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 
 class _Specialize(object):
     def memo(self):
-        """ Specialize functions based on argument values. All arguments has
-        to be constant at the compile time. The whole function call is replaced
-        by a call result then.
+        """ Specialize the function based on argument values.  All arguments
+        have to be either constants or PBCs (i.e. instances of classes with a
+        _freeze_ method returning True).  The function call is replaced by
+        just its result, or in case several PBCs are used, by some fast
+        look-up of the result.
         """
         def decorated_func(func):
             func._annspecialcase_ = 'specialize:memo'
@@ -33,8 +35,8 @@ class _Specialize(object):
         return decorated_func
 
     def arg(self, *args):
-        """ Specialize function based on values of given positions of arguments.
-        They must be compile-time constants in order to work.
+        """ Specialize the function based on the values of given positions
+        of arguments.  They must be compile-time constants in order to work.
 
         There will be a copy of provided function for each combination
         of given arguments on positions in args (that can lead to
@@ -82,8 +84,7 @@ class _Specialize(object):
         return decorated_func
 
     def ll_and_arg(self, *args):
-        """ This is like ll(), but instead of specializing on all arguments,
-        specializes on only the arguments at the given positions
+        """ This is like ll(), and additionally like arg(...).
         """
         def decorated_func(func):
             func._annspecialcase_ = 'specialize:ll_and_arg' + self._wrap(args)
@@ -91,9 +92,18 @@ class _Specialize(object):
 
         return decorated_func
 
+    def call_location(self):
+        """ Specializes the function for each call site.
+        """
+        def decorated_func(func):
+            func._annspecialcase_ = "specialize:call_location"
+            return func
+
+        return decorated_func
+
     def _wrap(self, args):
         return "("+','.join([repr(arg) for arg in args]) +")"
-        
+
 specialize = _Specialize()
 
 def enforceargs(*args):
@@ -121,18 +131,28 @@ class Symbolic(object):
         if self is other:
             return 0
         else:
-            raise TypeError("Symbolics can not be compared!")
+            raise TypeError("Symbolics cannot be compared! (%r, %r)"
+                            % (self, other))
 
     def __hash__(self):
-        raise TypeError("Symbolics are not hashable!")
-    
+        raise TypeError("Symbolics are not hashable! %r" % (self,))
+
     def __nonzero__(self):
-        raise TypeError("Symbolics are not comparable")
+        raise TypeError("Symbolics are not comparable! %r" % (self,))
 
 class ComputedIntSymbolic(Symbolic):
 
     def __init__(self, compute_fn):
         self.compute_fn = compute_fn
+
+    def __repr__(self):
+        # repr(self.compute_fn) can arrive back here in an
+        # infinite recursion
+        try:
+            name = self.compute_fn.__name__
+        except (AttributeError, TypeError):
+            name = hex(id(self.compute_fn))
+        return '%s(%r)' % (self.__class__.__name__, name)
 
     def annotation(self):
         from pypy.annotation import model
@@ -148,6 +168,9 @@ class CDefinedIntSymbolic(Symbolic):
         self.expr = expr
         self.default = default
 
+    def __repr__(self):
+        return '%s(%r)' % (self.__class__.__name__, self.expr)
+
     def annotation(self):
         from pypy.annotation import model
         return model.SomeInteger()
@@ -155,7 +178,7 @@ class CDefinedIntSymbolic(Symbolic):
     def lltype(self):
         from pypy.rpython.lltypesystem import lltype
         return lltype.Signed
-    
+
 malloc_zero_filled = CDefinedIntSymbolic('MALLOC_ZERO_FILLED', default=0)
 running_on_llinterp = CDefinedIntSymbolic('RUNNING_ON_LLINTERP', default=1)
 # running_on_llinterp is meant to have the value 0 in all backends
@@ -221,7 +244,7 @@ class Entry(ExtRegistryEntry):
 
     def compute_result_annotation(self, s_sizehint):
         from pypy.annotation.model import SomeInteger
-        
+
         assert isinstance(s_sizehint, SomeInteger)
         return self.bookkeeper.newlist()
 
@@ -411,7 +434,7 @@ class Entry(ExtRegistryEntry):
                   vobj.concretetype.TO._gckind == 'gc')
         else:
             from pypy.rpython.ootypesystem import ootype
-            ok = isinstance(vobj.concretetype, ootype.Instance)
+            ok = isinstance(vobj.concretetype, (ootype.Instance, ootype.BuiltinType))
         if not ok:
             from pypy.rpython.error import TyperError
             raise TyperError("compute_unique_id() cannot be applied to"

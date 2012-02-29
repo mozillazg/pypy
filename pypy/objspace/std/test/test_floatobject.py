@@ -63,6 +63,12 @@ class AppTestAppFloatTest:
     def setup_class(cls):
         cls.w_py26 = cls.space.wrap(sys.version_info >= (2, 6))
 
+    def test_isinteger(self):
+        assert (1.).is_integer()
+        assert not (1.1).is_integer()
+        assert not float("inf").is_integer()
+        assert not float("nan").is_integer()
+
     def test_conjugate(self):
         assert (1.).conjugate() == 1.
         assert (-1.).conjugate() == -1.
@@ -783,3 +789,26 @@ class AppTestFloatHex:
         raises(ZeroDivisionError, lambda: inf % 0)
         raises(ZeroDivisionError, lambda: inf // 0)
         raises(ZeroDivisionError, divmod, inf, 0)
+
+    def test_modulo_edgecases(self):
+        # Check behaviour of % operator for IEEE 754 special cases.
+        # In particular, check signs of zeros.
+        mod = float.__mod__
+        import math
+
+        def check(a, b):
+            assert (a, math.copysign(1.0, a)) == (b, math.copysign(1.0, b))
+            
+        check(mod(-1.0, 1.0), 0.0)
+        check(mod(-1e-100, 1.0), 1.0)
+        check(mod(-0.0, 1.0), 0.0)
+        check(mod(0.0, 1.0), 0.0)
+        check(mod(1e-100, 1.0), 1e-100)
+        check(mod(1.0, 1.0), 0.0)
+
+        check(mod(-1.0, -1.0), -0.0)
+        check(mod(-1e-100, -1.0), -1e-100)
+        check(mod(-0.0, -1.0), -0.0)
+        check(mod(0.0, -1.0), -0.0)
+        check(mod(1e-100, -1.0), -1.0)
+        check(mod(1.0, -1.0), -0.0)

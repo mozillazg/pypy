@@ -43,7 +43,7 @@ class CachedField(object):
             optheap.optimizer.ensure_imported(cached_fieldvalue)
             cached_fieldvalue = self._cached_fields.get(structvalue, None)
 
-        if cached_fieldvalue is not fieldvalue:
+        if not fieldvalue.same_value(cached_fieldvalue):
             # common case: store the 'op' as lazy_setfield, and register
             # myself in the optheap's _lazy_setfields_and_arrayitems list
             self._lazy_setfield = op
@@ -140,6 +140,15 @@ class CachedField(object):
                     getop = ResOperation(rop.GETFIELD_GC, [op.getarg(0)],
                                          result, op.getdescr())
                     shortboxes.add_potential(getop, synthetic=True)
+                if op.getopnum() == rop.SETARRAYITEM_GC:
+                    result = op.getarg(2)
+                    if isinstance(result, Const):
+                        newresult = result.clonebox()
+                        optimizer.make_constant(newresult, result)
+                        result = newresult
+                    getop = ResOperation(rop.GETARRAYITEM_GC, [op.getarg(0), op.getarg(1)],
+                                         result, op.getdescr())
+                    shortboxes.add_potential(getop, synthetic=True)
                 elif op.result is not None:
                     shortboxes.add_potential(op)
 
@@ -225,7 +234,7 @@ class OptHeap(Optimization):
             or op.is_ovf()):
             self.posponedop = op
         else:
-            self.next_optimization.propagate_forward(op)
+            Optimization.emit_operation(self, op)
 
     def emitting_operation(self, op):
         if op.has_no_side_effect():
@@ -237,15 +246,16 @@ class OptHeap(Optimization):
                 self.force_lazy_setfields_and_arrayitems_for_guard())
             return
         opnum = op.getopnum()
-        if (opnum == rop.SETFIELD_GC or        # handled specially
-            opnum == rop.SETFIELD_RAW or       # no effect on GC struct/array
-            opnum == rop.SETARRAYITEM_GC or    # handled specially
-            opnum == rop.SETARRAYITEM_RAW or   # no effect on GC struct
-            opnum == rop.STRSETITEM or         # no effect on GC struct/array
-            opnum == rop.UNICODESETITEM or     # no effect on GC struct/array
-            opnum == rop.DEBUG_MERGE_POINT or  # no effect whatsoever
-            opnum == rop.COPYSTRCONTENT or     # no effect on GC struct/array
-            opnum == rop.COPYUNICODECONTENT):  # no effect on GC struct/array
+        if (opnum == rop.SETFIELD_GC or          # handled specially
+            opnum == rop.SETFIELD_RAW or         # no effect on GC struct/array
+            opnum == rop.SETARRAYITEM_GC or      # handled specially
+            opnum == rop.SETARRAYITEM_RAW or     # no effect on GC struct
+            opnum == rop.SETINTERIORFIELD_RAW or # no effect on GC struct
+            opnum == rop.STRSETITEM or           # no effect on GC struct/array
+            opnum == rop.UNICODESETITEM or       # no effect on GC struct/array
+            opnum == rop.DEBUG_MERGE_POINT or    # no effect whatsoever
+            opnum == rop.COPYSTRCONTENT or       # no effect on GC struct/array
+            opnum == rop.COPYUNICODECONTENT):    # no effect on GC struct/array
             return
         assert opnum != rop.CALL_PURE
         if (opnum == rop.CALL or
