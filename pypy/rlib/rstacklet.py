@@ -72,6 +72,7 @@ class StackletThreadGlobal(object):
 
     def _freeze_(self):
         self.enabled = False
+        return False
 
     def enable(self):
         if not self.enabled:
