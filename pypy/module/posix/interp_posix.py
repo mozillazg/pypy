@@ -10,6 +10,7 @@ from pypy.rpython.module import ll_os_stat
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.module.sys.interp_encoding import getfilesystemencoding
 
 import os, sys
 _WIN = sys.platform == 'win32'
@@ -32,20 +33,22 @@ else:
             raise OperationError(space.w_OverflowError,
                                  space.wrap("integer out of range"))
 
+def fsencode_w(space, w_obj):
+    if space.isinstance_w(w_obj, space.w_unicode):
+        w_obj = space.call_method(w_obj, 'encode',
+                                  getfilesystemencoding(space))
+    return space.str0_w(w_obj)
+
 class FileEncoder(object):
     def __init__(self, space, w_obj):
         self.space = space
         self.w_obj = w_obj
 
     def as_bytes(self):
-        from pypy.module.sys.interp_encoding import getfilesystemencoding
-        space = self.space
-        w_bytes = space.call_method(self.w_obj, 'encode',
-                                    getfilesystemencoding(space))
-        return space.str_w(w_bytes)
+        return fsencode_w(self.space, self.w_obj)
 
     def as_unicode(self):
-        return self.space.unicode_w(self.w_obj)
+        return self.space.unicode0_w(self.w_obj)
 
 class FileDecoder(object):
     def __init__(self, space, w_obj):
@@ -53,14 +56,13 @@ class FileDecoder(object):
         self.w_obj = w_obj
 
     def as_bytes(self):
-        return self.space.str_w(self.w_obj)
+        return self.space.str0_w(self.w_obj)
 
     def as_unicode(self):
-        from pypy.module.sys.interp_encoding import getfilesystemencoding
         space = self.space
         w_unicode = space.call_method(self.w_obj, 'decode',
                                       getfilesystemencoding(space))
-        return space.unicode_w(w_unicode)
+        return space.unicode0_w(w_unicode)
 
 @specialize.memo()
 def dispatch_filename(func, tag=0):
@@ -69,7 +71,7 @@ def dispatch_filename(func, tag=0):
             fname = FileEncoder(space, w_fname)
             return func(fname, *args)
         else:
-            fname = space.str_w(w_fname)
+            fname = space.str0_w(w_fname)
             return func(fname, *args)
     return dispatch
 
@@ -367,7 +369,7 @@ def times(space):
                                space.wrap(times[3]),
                                space.wrap(times[4])])
 
-@unwrap_spec(cmd=str)
+@unwrap_spec(cmd='str0')
 def system(space, cmd):
     """Execute the command (a string) in a subshell."""
     try:
@@ -399,7 +401,7 @@ def _getfullpathname(space, w_path):
             fullpath = rposix._getfullpathname(path)
             w_fullpath = space.wrap(fullpath)
         else:
-            path = space.str_w(w_path)
+            path = space.str0_w(w_path)
             fullpath = rposix._getfullpathname(path)
             w_fullpath = space.wrap(fullpath)
     except OSError, e:
@@ -510,7 +512,7 @@ def _convertenviron(space, w_env):
     for key, value in os.environ.items():
         space.setitem(w_env, space.wrap(key), space.wrap(value))
 
-@unwrap_spec(name=str, value=str)
+@unwrap_spec(name='str0', value='str0')
 def putenv(space, name, value):
     """Change or add an environment variable."""
     try:
@@ -518,7 +520,7 @@ def putenv(space, name, value):
     except OSError, e:
         raise wrap_oserror(space, e)
 
-@unwrap_spec(name=str)
+@unwrap_spec(name='str0')
 def unsetenv(space, name):
     """Delete an environment variable."""
     try:
@@ -536,18 +538,23 @@ def listdir(space, w_dirname):
 
 The list is in arbitrary order.  It does not include the special
 entries '.' and '..' even if they are present in the directory."""
-    from pypy.module.sys.interp_encoding import getfilesystemencoding
     try:
         if space.isinstance_w(w_dirname, space.w_unicode):
             dirname = FileEncoder(space, w_dirname)
             result = rposix.listdir(dirname)
             w_fs_encoding = getfilesystemencoding(space)
-            result_w = [
-                space.call_method(space.wrap(s), "decode", w_fs_encoding)
-                for s in result
-            ]
+            len_result = len(result)
+            result_w = [None] * len_result
+            for i in range(len_result):
+                w_bytes = space.wrap(result[i])
+                try:
+                    result_w[i] = space.call_method(w_bytes,
+                                                    "decode", w_fs_encoding)
+                except OperationError, e:
+                    # fall back to the original byte string
+                    result_w[i] = w_bytes
         else:
-            dirname = space.str_w(w_dirname)
+            dirname = space.str0_w(w_dirname)
             result = rposix.listdir(dirname)
             result_w = [space.wrap(s) for s in result]
     except OSError, e:
@@ -634,7 +641,7 @@ in the hardest way possible on the hosting operating system."""
     import signal
     os.kill(os.getpid(), signal.SIGABRT)
 
-@unwrap_spec(src=str, dst=str)
+@unwrap_spec(src='str0', dst='str0')
 def link(space, src, dst):
     "Create a hard link to a file."
     try:
@@ -649,7 +656,7 @@ def symlink(space, w_src, w_dst):
     except OSError, e:
         raise wrap_oserror(space, e)
 
-@unwrap_spec(path=str)
+@unwrap_spec(path='str0')
 def readlink(space, path):
     "Return a string representing the path to which the symbolic link points."
     try:
@@ -734,8 +741,7 @@ def waitpid(space, pid, options):
 def _exit(space, status):
     os._exit(status)
 
-@unwrap_spec(command=str)
-def execv(space, command, w_args):
+def execv(space, w_command, w_args):
     """ execv(path, args)
 
 Execute an executable path with arguments, replacing current process.
@@ -743,12 +749,13 @@ Execute an executable path with arguments, replacing current process.
         path: path of executable file
         args: iterable of strings
     """
+    command = fsencode_w(space, w_command)
     try:
         args_w = space.unpackiterable(w_args)
         if len(args_w) < 1:
             w_msg = space.wrap("execv() must have at least one argument")
             raise OperationError(space.w_ValueError, w_msg)
-        args = [space.str_w(w_arg) for w_arg in args_w]
+        args = [fsencode_w(space, w_arg) for w_arg in args_w]
     except OperationError, e:
         if not e.match(space, space.w_TypeError):
             raise
@@ -759,8 +766,15 @@ Execute an executable path with arguments, replacing current process.
     except OSError, e:
         raise wrap_oserror(space, e)
 
-@unwrap_spec(command=str)
-def execve(space, command, w_args, w_env):
+def _env2interp(space, w_env):
+    env = {}
+    w_keys = space.call_method(w_env, 'keys')
+    for w_key in space.unpackiterable(w_keys):
+        w_value = space.getitem(w_env, w_key)
+        env[space.str0_w(w_key)] = space.str0_w(w_value)
+    return env
+
+def execve(space, w_command, w_args, w_env):
     """ execve(path, args, env)
 
 Execute a path with arguments and environment, replacing current process.
@@ -769,22 +783,29 @@ Execute a path with arguments and environment, replacing current process.
         args: iterable of arguments
         env: dictionary of strings mapping to strings
     """
-    args = [space.str_w(w_arg) for w_arg in space.unpackiterable(w_args)]
-    env = {}
-    w_keys = space.call_method(w_env, 'keys')
-    for w_key in space.unpackiterable(w_keys):
-        w_value = space.getitem(w_env, w_key)
-        env[space.str_w(w_key)] = space.str_w(w_value)
+    command = fsencode_w(space, w_command)
+    args = [fsencode_w(space, w_arg) for w_arg in space.unpackiterable(w_args)]
+    env = _env2interp(space, w_env)
     try:
         os.execve(command, args, env)
     except OSError, e:
         raise wrap_oserror(space, e)
 
-@unwrap_spec(mode=int, path=str)
+@unwrap_spec(mode=int, path='str0')
 def spawnv(space, mode, path, w_args):
-    args = [space.str_w(w_arg) for w_arg in space.unpackiterable(w_args)]
+    args = [space.str0_w(w_arg) for w_arg in space.unpackiterable(w_args)]
     try:
         ret = os.spawnv(mode, path, args)
+    except OSError, e:
+        raise wrap_oserror(space, e)
+    return space.wrap(ret)
+
+@unwrap_spec(mode=int, path='str0')
+def spawnve(space, mode, path, w_args, w_env):
+    args = [space.str0_w(w_arg) for w_arg in space.unpackiterable(w_args)]
+    env = _env2interp(space, w_env)
+    try:
+        ret = os.spawnve(mode, path, args, env)
     except OSError, e:
         raise wrap_oserror(space, e)
     return space.wrap(ret)
@@ -899,7 +920,7 @@ def setegid(space, arg):
         raise wrap_oserror(space, e)
     return space.w_None
 
-@unwrap_spec(path=str)
+@unwrap_spec(path='str0')
 def chroot(space, path):
     """ chroot(path)
 
@@ -1088,7 +1109,7 @@ def fpathconf(space, fd, w_name):
     except OSError, e:
         raise wrap_oserror(space, e)
 
-@unwrap_spec(path=str, uid=c_uid_t, gid=c_gid_t)
+@unwrap_spec(path='str0', uid=c_uid_t, gid=c_gid_t)
 def chown(space, path, uid, gid):
     check_uid_range(space, uid)
     check_uid_range(space, gid)
@@ -1098,7 +1119,7 @@ def chown(space, path, uid, gid):
         raise wrap_oserror(space, e, path)
     return space.w_None
 
-@unwrap_spec(path=str, uid=c_uid_t, gid=c_gid_t)
+@unwrap_spec(path='str0', uid=c_uid_t, gid=c_gid_t)
 def lchown(space, path, uid, gid):
     check_uid_range(space, uid)
     check_uid_range(space, gid)

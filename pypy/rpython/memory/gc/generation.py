@@ -41,8 +41,8 @@ class GenerationGC(SemiSpaceGC):
 
     # the following values override the default arguments of __init__ when
     # translating to a real backend.
-    TRANSLATION_PARAMS = {'space_size': 8*1024*1024, # XXX adjust
-                          'nursery_size': 896*1024,
+    TRANSLATION_PARAMS = {'space_size': 8*1024*1024,     # 8 MB
+                          'nursery_size': 3*1024*1024,   # 3 MB
                           'min_nursery_size': 48*1024,
                           'auto_nursery_size': True}
 
@@ -92,8 +92,9 @@ class GenerationGC(SemiSpaceGC):
         # the GC is fully setup now.  The rest can make use of it.
         if self.auto_nursery_size:
             newsize = nursery_size_from_env()
-            if newsize <= 0:
-                newsize = env.estimate_best_nursery_size()
+            #if newsize <= 0:
+            #    ---disabled--- just use the default value.
+            #    newsize = env.estimate_best_nursery_size()
             if newsize > 0:
                 self.set_nursery_size(newsize)
 
@@ -167,7 +168,9 @@ class GenerationGC(SemiSpaceGC):
         return self.nursery <= addr < self.nursery_top
 
     def malloc_fixedsize_clear(self, typeid, size,
-                               has_finalizer=False, contains_weakptr=False):
+                               has_finalizer=False,
+                               is_finalizer_light=False,
+                               contains_weakptr=False):
         if (has_finalizer or
             (raw_malloc_usage(size) > self.lb_young_fixedsize and
              raw_malloc_usage(size) > self.largest_young_fixedsize)):
@@ -179,6 +182,7 @@ class GenerationGC(SemiSpaceGC):
             # "non-simple" case or object too big: don't use the nursery
             return SemiSpaceGC.malloc_fixedsize_clear(self, typeid, size,
                                                       has_finalizer,
+                                                      is_finalizer_light,
                                                       contains_weakptr)
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size

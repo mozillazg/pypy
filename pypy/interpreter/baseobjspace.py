@@ -1,4 +1,3 @@
-import itertools
 import pypy
 from pypy.interpreter.executioncontext import ExecutionContext, ActionFlag
 from pypy.interpreter.executioncontext import UserDelAction, FrameTraceAction
@@ -188,6 +187,12 @@ class W_Root(object):
 
     # -------------------------------------------------------------------
 
+    def is_w(self, space, w_other):
+        return self is w_other
+
+    def immutable_unique_id(self, space):
+        return None
+
     def str_w(self, space):
         w_msg = typed_unwrap_error_msg(space, "string", self)
         raise OperationError(space.w_TypeError, w_msg)
@@ -323,7 +328,7 @@ class ObjSpace(object):
                 raise
             modname = self.str_w(w_modname)
             mod = self.interpclass_w(w_mod)
-            if isinstance(mod, Module):
+            if isinstance(mod, Module) and not mod.startup_called:
                 self.timer.start("startup " + modname)
                 mod.init(self)
                 self.timer.stop("startup " + modname)
@@ -482,6 +487,16 @@ class ObjSpace(object):
         'parser', 'fcntl', '_codecs', 'binascii'
     ]
 
+    # These modules are treated like CPython treats built-in modules,
+    # i.e. they always shadow any xx.py.  The other modules are treated
+    # like CPython treats extension modules, and are loaded in sys.path
+    # order by the fake entry '.../lib_pypy/__extensions__'.
+    MODULES_THAT_ALWAYS_SHADOW = dict.fromkeys([
+        '__builtin__', '__pypy__', '_ast', '_codecs', '_sre', '_warnings',
+        '_weakref', 'errno', 'exceptions', 'gc', 'imp', 'marshal',
+        'posix', 'nt', 'pwd', 'signal', 'sys', 'thread', 'zipimport',
+    ], None)
+
     def make_builtins(self):
         "NOT_RPYTHON: only for initializing the space."
 
@@ -513,8 +528,8 @@ class ObjSpace(object):
         exception_types_w = self.export_builtin_exceptions()
 
         # initialize with "bootstrap types" from objspace  (e.g. w_None)
-        types_w = itertools.chain(self.get_builtin_types().iteritems(),
-                                  exception_types_w.iteritems())
+        types_w = (self.get_builtin_types().items() +
+                   exception_types_w.items())
         for name, w_type in types_w:
             self.setitem(self.builtin.w_dict, self.wrap(name), w_type)
 
@@ -681,9 +696,20 @@ class ObjSpace(object):
         """shortcut for space.is_true(space.eq(w_obj1, w_obj2))"""
         return self.is_w(w_obj1, w_obj2) or self.is_true(self.eq(w_obj1, w_obj2))
 
-    def is_w(self, w_obj1, w_obj2):
-        """shortcut for space.is_true(space.is_(w_obj1, w_obj2))"""
-        return self.is_true(self.is_(w_obj1, w_obj2))
+    def is_(self, w_one, w_two):
+        return self.newbool(self.is_w(w_one, w_two))
+
+    def is_w(self, w_one, w_two):
+        # done by a method call on w_two (and not on w_one, because of the
+        # expected programming style where we say "if x is None" or
+        # "if x is object").
+        return w_two.is_w(self, w_one)
+
+    def id(self, w_obj):
+        w_result = w_obj.immutable_unique_id(self)
+        if w_result is None:
+            w_result = self.wrap(compute_unique_id(w_obj))
+        return w_result
 
     def hash_w(self, w_obj):
         """shortcut for space.int_w(space.hash(w_obj))"""
@@ -777,22 +803,63 @@ class ObjSpace(object):
         """Unpack an iterable object into a real (interpreter-level) list.
         Raise an OperationError(w_ValueError) if the length is wrong."""
         w_iterator = self.iter(w_iterable)
-        # If we know the expected length we can preallocate.
         if expected_length == -1:
-            try:
-                lgt_estimate = self.len_w(w_iterable)
-            except OperationError, o:
-                if (not o.match(self, self.w_AttributeError) and
-                    not o.match(self, self.w_TypeError)):
-                    raise
-                items = []
-            else:
-                try:
-                    items = newlist(lgt_estimate)
-                except MemoryError:
-                    items = [] # it might have lied
+            # xxx special hack for speed
+            from pypy.interpreter.generator import GeneratorIterator
+            if isinstance(w_iterator, GeneratorIterator):
+                lst_w = []
+                w_iterator.unpack_into(lst_w)
+                return lst_w
+            # /xxx
+            return self._unpackiterable_unknown_length(w_iterator, w_iterable)
         else:
-            items = [None] * expected_length
+            lst_w = self._unpackiterable_known_length(w_iterator,
+                                                      expected_length)
+            return lst_w[:]     # make the resulting list resizable
+
+    @jit.dont_look_inside
+    def _unpackiterable_unknown_length(self, w_iterator, w_iterable):
+        # Unpack a variable-size list of unknown length.
+        # The JIT does not look inside this function because it
+        # contains a loop (made explicit with the decorator above).
+        #
+        # If we can guess the expected length we can preallocate.
+        try:
+            lgt_estimate = self.len_w(w_iterable)
+        except OperationError, o:
+            if (not o.match(self, self.w_AttributeError) and
+                not o.match(self, self.w_TypeError)):
+                raise
+            items = []
+        else:
+            try:
+                items = newlist(lgt_estimate)
+            except MemoryError:
+                items = [] # it might have lied
+        #
+        while True:
+            try:
+                w_item = self.next(w_iterator)
+            except OperationError, e:
+                if not e.match(self, self.w_StopIteration):
+                    raise
+                break  # done
+            items.append(w_item)
+        #
+        return items
+
+    @jit.dont_look_inside
+    def _unpackiterable_known_length(self, w_iterator, expected_length):
+        # Unpack a known length list, without letting the JIT look inside.
+        # Implemented by just calling the @jit.unroll_safe version, but
+        # the JIT stopped looking inside already.
+        return self._unpackiterable_known_length_jitlook(w_iterator,
+                                                         expected_length)
+
+    @jit.unroll_safe
+    def _unpackiterable_known_length_jitlook(self, w_iterator,
+                                             expected_length):
+        items = [None] * expected_length
         idx = 0
         while True:
             try:
@@ -801,26 +868,29 @@ class ObjSpace(object):
                 if not e.match(self, self.w_StopIteration):
                     raise
                 break  # done
-            if expected_length != -1 and idx == expected_length:
+            if idx == expected_length:
                 raise OperationError(self.w_ValueError,
-                                     self.wrap("too many values to unpack"))
-            if expected_length == -1:
-                items.append(w_item)
-            else:
-                items[idx] = w_item
+                                    self.wrap("too many values to unpack"))
+            items[idx] = w_item
             idx += 1
-        if expected_length != -1 and idx < expected_length:
+        if idx < expected_length:
             if idx == 1:
                 plural = ""
             else:
                 plural = "s"
-            raise OperationError(self.w_ValueError,
-                      self.wrap("need more than %d value%s to unpack" %
-                                (idx, plural)))
+            raise operationerrfmt(self.w_ValueError,
+                                  "need more than %d value%s to unpack",
+                                  idx, plural)
         return items
 
-    unpackiterable_unroll = jit.unroll_safe(func_with_new_name(unpackiterable,
-                                            'unpackiterable_unroll'))
+    def unpackiterable_unroll(self, w_iterable, expected_length):
+        # Like unpackiterable(), but for the cases where we have
+        # an expected_length and want to unroll when JITted.
+        # Returns a fixed-size list.
+        w_iterator = self.iter(w_iterable)
+        assert expected_length != -1
+        return self._unpackiterable_known_length_jitlook(w_iterator,
+                                                         expected_length)
 
     def fixedview(self, w_iterable, expected_length=-1):
         """ A fixed list view of w_iterable. Don't modify the result
@@ -834,6 +904,16 @@ class ObjSpace(object):
         """ A non-fixed view of w_iterable. Don't modify the result
         """
         return self.unpackiterable(w_iterable, expected_length)
+
+    def listview_str(self, w_list):
+        """ Return a list of unwrapped strings out of a list of strings. If the
+        argument is not a list or does not contain only strings, return None.
+        May return None anyway.
+        """
+        return None
+
+    def newlist_str(self, list_s):
+        return self.newlist([self.wrap(s) for s in list_s])
 
     @jit.unroll_safe
     def exception_match(self, w_exc_type, w_check_class):
@@ -968,9 +1048,6 @@ class ObjSpace(object):
 
     def isinstance_w(self, w_obj, w_type):
         return self.is_true(self.isinstance(w_obj, w_type))
-
-    def id(self, w_obj):
-        return self.wrap(compute_unique_id(w_obj))
 
     # The code below only works
     # for the simple case (new-style instance).
@@ -1235,6 +1312,15 @@ class ObjSpace(object):
     def str_w(self, w_obj):
         return w_obj.str_w(self)
 
+    def str0_w(self, w_obj):
+        "Like str_w, but rejects strings with NUL bytes."
+        from pypy.rlib import rstring
+        result = w_obj.str_w(self)
+        if '\x00' in result:
+            raise OperationError(self.w_TypeError, self.wrap(
+                    'argument must be a string without NUL characters'))
+        return rstring.assert_str0(result)
+
     def int_w(self, w_obj):
         return w_obj.int_w(self)
 
@@ -1253,6 +1339,15 @@ class ObjSpace(object):
 
     def unicode_w(self, w_obj):
         return w_obj.unicode_w(self)
+
+    def unicode0_w(self, w_obj):
+        "Like unicode_w, but rejects strings with NUL bytes."
+        from pypy.rlib import rstring
+        result = w_obj.unicode_w(self)
+        if u'\x00' in result:
+            raise OperationError(self.w_TypeError, self.wrap(
+                    'argument must be a unicode string without NUL characters'))
+        return rstring.assert_str0(result)
 
     def realunicode_w(self, w_obj):
         # Like unicode_w, but only works if w_obj is really of type
@@ -1376,8 +1471,8 @@ class ObjSpace(object):
 
     def warn(self, msg, w_warningcls):
         self.appexec([self.wrap(msg), w_warningcls], """(msg, warningcls):
-            import warnings
-            warnings.warn(msg, warningcls, stacklevel=2)
+            import _warnings
+            _warnings.warn(msg, warningcls, stacklevel=2)
         """)
 
     def resolve_target(self, w_obj):
@@ -1514,12 +1609,15 @@ ObjSpace.ExceptionTable = [
     'ArithmeticError',
     'AssertionError',
     'AttributeError',
+    'BaseException',
+    'DeprecationWarning',
     'EOFError',
     'EnvironmentError',
     'Exception',
     'FloatingPointError',
     'IOError',
     'ImportError',
+    'ImportWarning',
     'IndentationError',
     'IndexError',
     'KeyError',
@@ -1540,10 +1638,18 @@ ObjSpace.ExceptionTable = [
     'TabError',
     'TypeError',
     'UnboundLocalError',
+    'UnicodeDecodeError',
     'UnicodeError',
+    'UnicodeEncodeError',
+    'UnicodeTranslateError',
     'ValueError',
     'ZeroDivisionError',
+    'UnicodeEncodeError',
+    'UnicodeDecodeError',
     ]
+    
+if sys.platform.startswith("win"):
+    ObjSpace.ExceptionTable += ['WindowsError']
 
 ## Irregular part of the interface:
 #

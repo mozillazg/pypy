@@ -13,7 +13,7 @@ all_modules = [p.basename for p in modulepath.listdir()
                and not p.basename.startswith('test')]
 
 essential_modules = dict.fromkeys(
-    ["exceptions", "_file", "sys", "__builtin__", "posix"]
+    ["exceptions", "_file", "sys", "__builtin__", "posix", "_warnings"]
 )
 
 default_modules = essential_modules.copy()
@@ -72,6 +72,7 @@ if sys.platform == "sunos5":
     del working_modules['fcntl']  # LOCK_NB not defined
     del working_modules["_minimal_curses"]
     del working_modules["termios"]
+    del working_modules["_multiprocessing"]   # depends on rctime
 
 
 
@@ -91,7 +92,7 @@ module_suggests = {
 
 module_import_dependencies = {
     # no _rawffi if importing pypy.rlib.clibffi raises ImportError
-    # or CompilationError
+    # or CompilationError or py.test.skip.Exception
     "_rawffi"   : ["pypy.rlib.clibffi"],
     "_ffi"      : ["pypy.rlib.clibffi"],
 
@@ -112,7 +113,7 @@ def get_module_validator(modname):
             try:
                 for name in modlist:
                     __import__(name)
-            except (ImportError, CompilationError), e:
+            except (ImportError, CompilationError, py.test.skip.Exception), e:
                 errcls = e.__class__.__name__
                 config.add_warning(
                     "The module %r is disabled\n" % (modname,) +
@@ -127,7 +128,7 @@ def get_module_validator(modname):
 
 pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
     ChoiceOption("name", "Object Space name",
-                 ["std", "flow", "thunk", "dump", "taint"],
+                 ["std", "flow", "thunk", "dump"],
                  "std",
                  cmdline='--objspace -o'),
 
@@ -251,6 +252,10 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "use small tuples",
                    default=False),
 
+        BoolOption("withspecialisedtuple",
+                   "use specialised tuples",
+                   default=False),
+
         BoolOption("withrope", "use ropes as the string implementation",
                    default=False,
                    requires=[("objspace.std.withstrslice", False),
@@ -280,6 +285,9 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    "actually create the full list until the resulting "
                    "list is mutated",
                    default=False),
+        BoolOption("withliststrategies",
+                   "enable optimized ways to store lists of primitives ",
+                   default=True),
 
         BoolOption("withtypeversion",
                    "version type objects when changing them",
@@ -332,7 +340,7 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    requires=[("objspace.std.builtinshortcut", True)]),
         BoolOption("withidentitydict",
                    "track types that override __hash__, __eq__ or __cmp__ and use a special dict strategy for those which do not",
-                   default=True),
+                   default=False),
      ]),
 ])
 
@@ -361,6 +369,8 @@ def set_pypy_opt_level(config, level):
         config.objspace.std.suggest(optimized_list_getitem=True)
         config.objspace.std.suggest(getattributeshortcut=True)
         config.objspace.std.suggest(newshortcut=True)
+        config.objspace.std.suggest(withspecialisedtuple=True)
+        config.objspace.std.suggest(withidentitydict=True)
         #if not IS_64_BITS:
         #    config.objspace.std.suggest(withsmalllong=True)
 
