@@ -30,3 +30,16 @@ else:
 #
 # Note that with asmgcc, the locations corresponding to callee-save registers
 # are never used.
+
+# In the offstack version (i.e. when using stacklets): the off-stack allocated
+# area starts with the FRAME_FIXED_SIZE words in the same order as they would
+# be on the real stack (which is top-to-bottom, so it's actually the opposite
+# order as the one in the comments above); but whereas the real stack would
+# have the spilled values stored in (ebp-20), (ebp-24), etc., the off-stack
+# has them stored in (ebp+8), (ebp+12), etc.
+#
+# In stacklet mode, the real frame contains always just OFFSTACK_REAL_FRAME
+# words reserved for temporary usage like call arguments.  To maintain
+# alignment on 32-bit, OFFSTACK_REAL_FRAME % 4 == 3, and it is at least 17
+# to handle all other cases.
+OFFSTACK_REAL_FRAME = 19
