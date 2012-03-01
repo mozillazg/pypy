@@ -207,8 +207,8 @@ class RegAlloc(object):
                                           at_least_position)
 
     def reserve_param(self, n):
-        xxx
-        self.param_depth = max(self.param_depth, n)
+        assert n <= OFFSTACK_REAL_FRAME
+        #self.param_depth = max(self.param_depth, n)
 
     def _set_initial_bindings(self, inputargs):
         if IS_X86_64:
@@ -216,14 +216,21 @@ class RegAlloc(object):
 
         cur_frame_ofs = WORD * (OFFSTACK_REAL_FRAME + 1)
         mc = self.assembler.mc
+        if IS_X86_32:
+            xmmtmp = xmm0
+        elif IS_X86_64:
+            xmmtmp = X86_64_XMM_SCRATCH_REG
         for box in inputargs:
             assert isinstance(box, Box)
-            if IS_X86_32 and box.type == FLOAT:
-                xxx
             loc = self.fm.loc(box)
-            mc.MOV_rs(eax.value, cur_frame_ofs)
-            mc.MOV_br(loc.value, eax.value)
-            cur_frame_ofs += 1
+            if box.type == FLOAT:
+                mc.MOVSD_xs(xmmtmp.value, cur_frame_ofs)
+                mc.MOVSD_bx(loc.value, xmmtmp.value)
+                cur_frame_ofs += 8
+            else:
+                mc.MOV_rs(eax.value, cur_frame_ofs)
+                mc.MOV_br(loc.value, eax.value)
+                cur_frame_ofs += WORD
         return
 
         #                   ...
