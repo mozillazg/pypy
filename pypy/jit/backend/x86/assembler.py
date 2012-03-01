@@ -514,8 +514,9 @@ class Assembler386(object):
                                              operations,
                                              self.current_clt.allgcrefs)
 
-        stackadjustpos = self._patchable_stackadjust()
-        frame_depth, param_depth = self._assemble(regalloc, operations)
+        #stackadjustpos = self._patchable_stackadjust()
+        (frame_depth #, param_depth
+              ) = self._assemble(regalloc, operations)
         codeendpos = self.mc.get_relative_pos()
         self.write_pending_failure_recoveries()
         fullsize = self.mc.get_relative_pos()
@@ -525,13 +526,13 @@ class Assembler386(object):
         debug_print("bridge out of Guard %d has address %x to %x" %
                     (descr_number, rawstart, rawstart + codeendpos))
         debug_stop("jit-backend-addr")
-        self._patch_stackadjust(rawstart + stackadjustpos,
-                                frame_depth + param_depth)
+        #self._patch_stackadjust(rawstart + stackadjustpos,
+        #                        frame_depth + param_depth)
         self.patch_pending_failure_recoveries(rawstart)
         if not we_are_translated():
             # for the benefit of tests
             faildescr._x86_bridge_frame_depth = frame_depth
-            faildescr._x86_bridge_param_depth = param_depth
+            #faildescr._x86_bridge_param_depth = param_depth
         # patch the jump from original guard
         self.patch_jump_for_descr(faildescr, rawstart)
         ops_offset = self.mc.ops_offset
