@@ -223,6 +223,7 @@ class RegAlloc(object):
             loc = self.fm.loc(box)
             mc.MOV_rs(eax.value, cur_frame_ofs)
             mc.MOV_br(loc.value, eax.value)
+            cur_frame_ofs += 1
         return
 
         #                   ...
