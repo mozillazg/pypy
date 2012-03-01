@@ -1129,6 +1129,12 @@ class Assembler386(object):
                 else:
                     pass_on_stack.append(loc)
 
+        extra_esp = 0
+        if len(pass_on_stack) > OFFSTACK_REAL_FRAME:
+            extra_esp = WORD * align_stack_words(len(pass_on_stack) -
+                                                 OFFSTACK_REAL_FRAME)
+            self.mc.SUB_ri(esp.value, extra_esp)
+
         # Emit instructions to pass the stack arguments
         # XXX: Would be nice to let remap_frame_layout take care of this, but
         # we'd need to create something like StackLoc, but relative to esp,
@@ -1165,9 +1171,12 @@ class Assembler386(object):
             x = r10
         remap_frame_layout(self, src_locs, dst_locs, X86_64_SCRATCH_REG)
 
-        self._regalloc.reserve_param(len(pass_on_stack))
+        #self._regalloc.reserve_param(len(pass_on_stack))
         self.mc.CALL(x)
         self.mark_gc_roots(force_index)
+
+        if extra_esp > 0:
+            self.mc.ADD_ri(esp.value, extra_esp)
 
     def call(self, addr, args, res):
         force_index = self.write_new_force_index()
