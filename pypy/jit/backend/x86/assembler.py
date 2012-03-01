@@ -514,7 +514,7 @@ class Assembler386(object):
                                              operations,
                                              self.current_clt.allgcrefs)
 
-        #stackadjustpos = self._patchable_stackadjust()
+        frame_size_pos = self._enter_bridge_code()
         (frame_depth #, param_depth
               ) = self._assemble(regalloc, operations)
         codeendpos = self.mc.get_relative_pos()
@@ -526,8 +526,8 @@ class Assembler386(object):
         debug_print("bridge out of Guard %d has address %x to %x" %
                     (descr_number, rawstart, rawstart + codeendpos))
         debug_stop("jit-backend-addr")
-        #self._patch_stackadjust(rawstart + stackadjustpos,
-        #                        frame_depth + param_depth)
+        self._patch_stackadjust(rawstart + frame_size_pos,
+                                frame_depth) # + param_depth)
         self.patch_pending_failure_recoveries(rawstart)
         if not we_are_translated():
             # for the benefit of tests
@@ -724,6 +724,55 @@ class Assembler386(object):
         # stack adjustment LEA
         self.mc.LEA32_rb(esp.value, 0)
         return self.mc.get_relative_pos() - 4
+
+    def _enter_bridge_code(self):
+        # XXX XXX far too heavy saving and restoring
+        j = 0
+        if self.cpu.supports_floats:
+            for reg in self._regalloc.xrm.save_around_call_regs:
+                self.mc.MOVSD_sx(j, reg.value)
+                j += 8
+        #
+        save_regs = self._regalloc.rm.save_around_call_regs
+        if IS_X86_32:
+            assert len(save_regs) == 3
+            self.mc.MOV_sr(j, save_regs[0].value)
+            self.mc.PUSH_r(save_regs[1].value)
+            self.mc.PUSH_r(save_regs[2].value)
+            # 4 PUSHes in total, stack remains aligned
+            self.mc.PUSH_i32(0x77777777)     # patched later
+            result = self.mc.get_relative_pos() - 4
+            self.mc.LEA_rb(eax.value, -WORD * (FRAME_FIXED_SIZE-1))
+            self.mc.PUSH_r(eax.value)
+        elif IS_X86_64:
+            # an even number of PUSHes, stack remains aligned
+            assert len(save_regs) & 1 == 0
+            for reg in save_regs:
+                self.mc.PUSH_r(reg.value)
+            self.mc.LEA_rb(edi.value, -WORD * (FRAME_FIXED_SIZE-1))
+            self.mc.MOV_riu32(esi.value, 0x77777777)   # patched later
+            result = self.mc.get_relative_pos() - 4
+        #
+        self.mc.CALL(imm(self.offstack_realloc_addr))
+        #
+        self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
+        #
+        if IS_X86_32:
+            self.mc.ADD_ri(esp.value, 2*WORD)
+            self.mc.POP_r(save_regs[2].value)
+            self.mc.POP_r(save_regs[1].value)
+            self.mc.MOV_rs(save_regs[0].value, j)
+        elif IS_X86_64:
+            for i in range(len(save_regs)-1, -1, -1):
+                self.mc.POP_r(save_regs[i].value)
+        #
+        if self.cpu.supports_floats:
+            j = 0
+            for reg in self._regalloc.xrm.save_around_call_regs:
+                self.mc.MOVSD_xs(reg.value, j)
+                j += 8
+        #
+        return result
 
     def _patch_stackadjust(self, adr_to_fix, allocated_depth):
         # patch the requested size in the call to malloc/realloc
