@@ -885,8 +885,8 @@ class Assembler386(object):
             self.mc.MOVSD_sx(0, loc.value)
         elif WORD == 4 and isinstance(loc, StackLoc) and loc.get_width() == 8:
             # XXX evil trick
-            self.mc.PUSH_b(get_ebp_ofs(loc.position))
-            self.mc.PUSH_b(get_ebp_ofs(loc.position + 1))
+            self.mc.PUSH_b(loc.value + 4)
+            self.mc.PUSH_b(loc.value)
         else:
             self.mc.PUSH(loc)
 
@@ -896,8 +896,8 @@ class Assembler386(object):
             self.mc.ADD_ri(esp.value, 8)   # = size of doubles
         elif WORD == 4 and isinstance(loc, StackLoc) and loc.get_width() == 8:
             # XXX evil trick
-            self.mc.POP_b(get_ebp_ofs(loc.position + 1))
-            self.mc.POP_b(get_ebp_ofs(loc.position))
+            self.mc.POP_b(loc.value)
+            self.mc.POP_b(loc.value + 4)
         else:
             self.mc.POP(loc)
 
@@ -1919,8 +1919,9 @@ class Assembler386(object):
                 stackloc = frame_addr + get_ebp_ofs(code)
                 value = rffi.cast(rffi.LONGP, stackloc)[0]
                 if kind == self.DESCR_FLOAT and WORD == 4:
-                    value_hi = value
-                    value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
+                    #value_hi = value
+                    #value = rffi.cast(rffi.LONGP, stackloc - 4)[0]
+                    value_hi = rffi.cast(rffi.LONGP, stackloc + 4)[0]
             else:
                 # 'code' identifies a register: load its value
                 kind = code & 3
@@ -2218,6 +2219,7 @@ class Assembler386(object):
                                      asmgcroot.FRAME_PTR) + 1)
                 pos = self._regalloc.fm.reserve_location_in_frame(use_words)
                 css = get_ebp_ofs(pos + use_words - 1)
+                xxxxxxxx # ^^^^
                 self._regalloc.close_stack_struct = css
             # The location where the future CALL will put its return address
             # will be [ESP-WORD].  But we can't use that as the next frame's
