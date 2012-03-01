@@ -1059,6 +1059,16 @@ class Assembler386(object):
         n = len(arglocs)
         for i in range(start, n):
             loc = arglocs[i]
+            p += loc.get_width()
+        extra_esp = p//WORD - OFFSTACK_REAL_FRAME
+        if extra_esp > 0:
+            extra_esp = align_stack_words(extra_esp) * WORD
+            self.mc.SUB_ri(esp.value, extra_esp)
+
+        p = 0
+        n = len(arglocs)
+        for i in range(start, n):
+            loc = arglocs[i]
             if isinstance(loc, RegLoc):
                 if loc.is_xmm:
                     self.mc.MOVSD_sx(p, loc.value)
@@ -1076,13 +1086,16 @@ class Assembler386(object):
                     self.mc.MOV(tmp, loc)
                     self.mc.MOV_sr(p, tmp.value)
             p += loc.get_width()
-        self._regalloc.reserve_param(p//WORD)
+        #self._regalloc.reserve_param(p//WORD)
         # x is a location
         self.mc.CALL(x)
         self.mark_gc_roots(force_index)
         #
         if callconv != FFI_DEFAULT_ABI:
             self._fix_stdcall(callconv, p)
+        #
+        if extra_esp > 0:
+            self.mc.ADD_ri(esp.value, extra_esp)
 
     def _fix_stdcall(self, callconv, p):
         from pypy.rlib.clibffi import FFI_STDCALL
