@@ -85,9 +85,9 @@ class Assembler386(object):
         self.malloc_slowpath1 = 0
         self.malloc_slowpath2 = 0
         self.memcpy_addr = 0
-        self.offstack_malloc = 0
-        self.offstack_realloc = 0
-        self.offstack_free = 0
+        self.offstack_malloc_addr = 0
+        self.offstack_realloc_addr = 0
+        self.offstack_free_addr = 0
         self.setup_failure_recovery()
         self._debug = False
         self.debug_counter_descr = cpu.fielddescrof(DEBUG_COUNTER, 'i')
@@ -746,18 +746,28 @@ class Assembler386(object):
             self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME-1))
             self.mc.PUSH_i32(4096)     # XXX XXX!
         elif IS_X86_64:
+            # XXX very heavily save and restore all possible argument registers
             save_regs = [r9, r8, ecx, edx, esi, edi]
-            assert OFFSTACK_REAL_FRAME >= len(save_regs)
-            self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME
-                                              - len(save_regs)))
-            for reg in save_regs:
-                self.mc.PUSH_r(reg.value)
+            save_xmm_regs = [xmm7, xmm6, xmm5, xmm4, xmm3, xmm2, xmm1, xmm0]
+            assert OFFSTACK_REAL_FRAME >= len(save_regs) + len(save_xmm_regs)
+            self.mc.SUB_ri(esp.value, WORD * OFFSTACK_REAL_FRAME)
+            for i in range(len(save_regs)):
+                self.mc.MOV_sr(WORD * i, save_regs[i].value)
+            base = len(save_regs)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_sx(WORD * (base + i), save_xmm_regs[i].value)
+            #
             self.mc.MOV_ri(edi.value, 4096)     # XXX XXX!
+        #
         self.mc.CALL(imm(self.offstack_malloc_addr))
+        #
         if IS_X86_64:
-            for i in range(len(save_regs)):      # XXX looks heavy
-                reg = save_regs[len(save_regs) - 1 - i]
-                self.mc.MOV_rs(reg.value, WORD * i)
+            for i in range(len(save_regs)):
+                self.mc.MOV_rs(save_regs[i].value, WORD * i)
+            base = len(save_regs)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_xs(save_xmm_regs[i].value, WORD * (base + i))
+        #
         self.mc.MOV_mr((eax.value, WORD * (FRAME_FIXED_SIZE-1)),
                        ebp.value)                      # (new ebp) <- ebp
         self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
