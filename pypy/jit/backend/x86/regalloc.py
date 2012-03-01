@@ -23,6 +23,7 @@ from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
      TempBox
 from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64, MY_COPY_OF_REGS
+from pypy.jit.backend.x86.arch import OFFSTACK_REAL_FRAME
 from pypy.rlib.rarithmetic import r_longlong
 
 class X86RegisterManager(RegisterManager):
@@ -129,9 +130,9 @@ class X86_64_XMMRegisterManager(X86XMMRegisterManager):
 class X86FrameManager(FrameManager):
     @staticmethod
     def frame_pos(i, box_type):
-        if IS_X86_32 and box_type == FLOAT:
-            return StackLoc(i, get_ebp_ofs(i+1), box_type)
-        else:
+        #if IS_X86_32 and box_type == FLOAT:
+        #    return StackLoc(i, get_ebp_ofs(i+1), box_type)
+        #else:
             return StackLoc(i, get_ebp_ofs(i), box_type)
     @staticmethod
     def frame_size(box_type):
@@ -168,7 +169,7 @@ class RegAlloc(object):
 
     def _prepare(self, inputargs, operations, allgcrefs):
         self.fm = X86FrameManager()
-        self.param_depth = 0
+        #self.param_depth = 0
         cpu = self.assembler.cpu
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
                                                        allgcrefs)
@@ -197,7 +198,7 @@ class RegAlloc(object):
                        allgcrefs):
         operations = self._prepare(inputargs, operations, allgcrefs)
         self._update_bindings(arglocs, inputargs)
-        self.param_depth = prev_depths[1]
+        #self.param_depth = prev_depths[1]
         self.min_bytes_before_label = 0
         return operations
 
@@ -206,11 +207,24 @@ class RegAlloc(object):
                                           at_least_position)
 
     def reserve_param(self, n):
+        xxx
         self.param_depth = max(self.param_depth, n)
 
     def _set_initial_bindings(self, inputargs):
         if IS_X86_64:
             inputargs = self._set_initial_bindings_regs_64(inputargs)
+
+        cur_frame_ofs = WORD * (OFFSTACK_REAL_FRAME + 1)
+        mc = self.assembler.mc
+        for box in inputargs:
+            assert isinstance(box, Box)
+            if IS_X86_32 and box.type == FLOAT:
+                xxx
+            loc = self.fm.loc(box)
+            mc.MOV_rs(eax.value, cur_frame_ofs)
+            mc.MOV_br(loc.value, eax.value)
+        return
+
         #                   ...
         # stack layout:     arg2
         #                   arg1
@@ -1518,11 +1532,15 @@ for name, value in RegAlloc.__dict__.iteritems():
         else:
             oplist[num] = value
 
+##def get_ebp_ofs(position):
+##    # Argument is a frame position (0, 1, 2...).
+##    # Returns (ebp-20), (ebp-24), (ebp-28)...
+##    # i.e. the n'th word beyond the fixed frame size.
+##    return -WORD * (FRAME_FIXED_SIZE + position)
 def get_ebp_ofs(position):
     # Argument is a frame position (0, 1, 2...).
-    # Returns (ebp-20), (ebp-24), (ebp-28)...
-    # i.e. the n'th word beyond the fixed frame size.
-    return -WORD * (FRAME_FIXED_SIZE + position)
+    # Returns (ebp+8), (ebp+12), (ebp+16)...
+    return WORD * (2 + position)
 
 def _valid_addressing_size(size):
     return size == 1 or size == 2 or size == 4 or size == 8

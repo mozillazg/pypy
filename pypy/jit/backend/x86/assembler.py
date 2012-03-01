@@ -13,7 +13,8 @@ from pypy.jit.backend.x86.regalloc import (RegAlloc, get_ebp_ofs, _get_scale,
     gpr_reg_mgr_cls, _valid_addressing_size)
 
 from pypy.jit.backend.x86.arch import (FRAME_FIXED_SIZE, FORCE_INDEX_OFS, WORD,
-                                       IS_X86_32, IS_X86_64)
+                                       IS_X86_32, IS_X86_64,
+                                       OFFSTACK_REAL_FRAME)
 
 from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          esp, ebp, esi, edi,
@@ -84,6 +85,9 @@ class Assembler386(object):
         self.malloc_slowpath1 = 0
         self.malloc_slowpath2 = 0
         self.memcpy_addr = 0
+        self.offstack_malloc = 0
+        self.offstack_realloc = 0
+        self.offstack_free = 0
         self.setup_failure_recovery()
         self._debug = False
         self.debug_counter_descr = cpu.fielddescrof(DEBUG_COUNTER, 'i')
@@ -107,7 +111,11 @@ class Assembler386(object):
         # the address of the function called by 'new'
         gc_ll_descr = self.cpu.gc_ll_descr
         gc_ll_descr.initialize()
-        self.memcpy_addr = self.cpu.cast_ptr_to_int(support.memcpy_fn)
+        cpi = self.cpu.cast_ptr_to_int
+        self.memcpy_addr           = cpi(support.memcpy_fn)
+        self.offstack_malloc_addr  = cpi(support.offstack_malloc_fn)
+        self.offstack_realloc_addr = cpi(support.offstack_realloc_fn)
+        self.offstack_free_addr    = cpi(support.offstack_free_fn)
         self._build_failure_recovery(False)
         self._build_failure_recovery(True)
         if self.cpu.supports_floats:
@@ -435,17 +443,17 @@ class Assembler386(object):
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         #
         self._call_header_with_stack_check()
-        stackadjustpos = self._patchable_stackadjust()
         clt._debug_nbargs = len(inputargs)
         operations = regalloc.prepare_loop(inputargs, operations,
                                            looptoken, clt.allgcrefs)
         looppos = self.mc.get_relative_pos()
         looptoken._x86_loop_code = looppos
         clt.frame_depth = -1     # temporarily
-        clt.param_depth = -1     # temporarily
-        frame_depth, param_depth = self._assemble(regalloc, operations)
+        #clt.param_depth = -1     # temporarily
+        (frame_depth#, param_depth
+                ) = self._assemble(regalloc, operations)
         clt.frame_depth = frame_depth
-        clt.param_depth = param_depth
+        #clt.param_depth = param_depth
         #
         size_excluding_failure_stuff = self.mc.get_relative_pos()
         self.write_pending_failure_recoveries()
@@ -459,8 +467,8 @@ class Assembler386(object):
             rawstart + size_excluding_failure_stuff,
             rawstart))
         debug_stop("jit-backend-addr")
-        self._patch_stackadjust(rawstart + stackadjustpos,
-                                frame_depth + param_depth)
+        #self._patch_stackadjust(rawstart + stackadjustpos,
+        #                        frame_depth )#+ param_depth)
         self.patch_pending_failure_recoveries(rawstart)
         #
         ops_offset = self.mc.ops_offset
@@ -529,7 +537,7 @@ class Assembler386(object):
         ops_offset = self.mc.ops_offset
         self.fixup_target_tokens(rawstart)
         self.current_clt.frame_depth = max(self.current_clt.frame_depth, frame_depth)
-        self.current_clt.param_depth = max(self.current_clt.param_depth, param_depth)
+        #self.current_clt.param_depth = max(self.current_clt.param_depth, param_depth)
         self.teardown()
         # oprofile support
         if self.cpu.profile_agent is not None:
@@ -701,14 +709,14 @@ class Assembler386(object):
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
         frame_depth = regalloc.fm.get_frame_depth()
-        param_depth = regalloc.param_depth
+        #param_depth = regalloc.param_depth
         jump_target_descr = regalloc.jump_target_descr
         if jump_target_descr is not None:
             target_frame_depth = jump_target_descr._x86_clt.frame_depth
-            target_param_depth = jump_target_descr._x86_clt.param_depth
+            #target_param_depth = jump_target_descr._x86_clt.param_depth
             frame_depth = max(frame_depth, target_frame_depth)
-            param_depth = max(param_depth, target_param_depth)
-        return frame_depth, param_depth
+            #param_depth = max(param_depth, target_param_depth)
+        return frame_depth#, param_depth
 
     def _patchable_stackadjust(self):
         # stack adjustment LEA
@@ -733,10 +741,28 @@ class Assembler386(object):
     def _call_header(self):
         # NB. the shape of the frame is hard-coded in get_basic_shape() too.
         # Also, make sure this is consistent with FRAME_FIXED_SIZE.
-        self.mc.PUSH_r(ebp.value)
-        self.mc.MOV_rr(ebp.value, esp.value)
-        for loc in self.cpu.CALLEE_SAVE_REGISTERS:
-            self.mc.PUSH_r(loc.value)
+        if IS_X86_32:
+            self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME-1))
+            self.mc.PUSH_i32(4096)     # XXX XXX!
+        elif IS_X86_64:
+            save_regs = [r9, r8, ecx, edx, esi, edi]
+            assert OFFSTACK_REAL_FRAME >= len(save_regs)
+            self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME
+                                              - len(save_regs)))
+            for reg in save_regs:
+                self.mc.PUSH_r(reg.value)
+            self.mc.MOV_ri(edi.value, 4096)     # XXX XXX!
+        self.mc.CALL(imm(self.offstack_malloc_addr))
+        if IS_X86_64:
+            for i in range(len(save_regs)):      # XXX looks heavy
+                reg = save_regs[len(save_regs) - 1 - i]
+                self.mc.MOV_rs(reg.value, WORD * i)
+        self.mc.MOV_mr((eax.value, WORD * (FRAME_FIXED_SIZE-1)),
+                       ebp.value)                      # (new ebp) <- ebp
+        self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
+        for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)):
+            loc = self.cpu.CALLEE_SAVE_REGISTERS[i]
+            self.mc.MOV_br(WORD*(-1-i), loc.value)     # (ebp-4-4*i) <- reg
 
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap and gcrootmap.is_shadow_stack:
@@ -761,16 +787,17 @@ class Assembler386(object):
         self._call_header()
 
     def _call_footer(self):
-        self.mc.LEA_rb(esp.value, -len(self.cpu.CALLEE_SAVE_REGISTERS) * WORD)
-
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap and gcrootmap.is_shadow_stack:
             self._call_footer_shadowstack(gcrootmap)
 
+        self.mc.ADD_ri(esp.value, WORD * OFFSTACK_REAL_FRAME)
         for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)-1, -1, -1):
-            self.mc.POP_r(self.cpu.CALLEE_SAVE_REGISTERS[i].value)
+            loc = self.cpu.CALLEE_SAVE_REGISTERS[i]
+            self.mc.MOV_rb(loc.value, WORD*(-1-i))     # (ebp-4-4*i) -> reg
+        self.mc.MOV_rb(ebp.value, 0)                   # (ebp) -> ebp
+        # XXX free!
 
-        self.mc.POP_r(ebp.value)
         self.mc.RET()
 
     def _call_header_shadowstack(self, gcrootmap):

@@ -33,6 +33,14 @@ def values_array(TP, size):
 memcpy_fn = rffi.llexternal('memcpy', [llmemory.Address, llmemory.Address,
                                        rffi.SIZE_T], lltype.Void,
                             sandboxsafe=True, _nowrapper=True)
+offstack_malloc_fn = rffi.llexternal('malloc', [rffi.SIZE_T],
+                                     llmemory.Address,
+                                     sandboxsafe=True, _nowrapper=True)
+offstack_realloc_fn = rffi.llexternal('realloc', [llmemory.Address,
+                                             rffi.SIZE_T], llmemory.Address,
+                                      sandboxsafe=True, _nowrapper=True)
+offstack_free_fn = rffi.llexternal('free', [llmemory.Address], lltype.Void,
+                                   sandboxsafe=True, _nowrapper=True)
 
 # ____________________________________________________________
 
