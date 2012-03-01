@@ -2015,7 +2015,7 @@ class Assembler386(object):
         # XXX
         if IS_X86_32:
             mc.PUSH_r(ebx.value)
-            extra_esp += 1
+            extra_esp += WORD
         elif IS_X86_64:
             mc.MOV_rr(edi.value, ebx.value)
         else:
