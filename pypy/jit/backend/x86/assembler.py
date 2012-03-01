@@ -801,14 +801,20 @@ class Assembler386(object):
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap and gcrootmap.is_shadow_stack:
             self._call_footer_shadowstack(gcrootmap)
-
+        #
+        # XXX temporary, possibly move somewhere else
+        self.mc.MOV_rr(ebx.value, eax.value)
+        self.mc.LEA_rb(edi.value, -WORD * (FRAME_FIXED_SIZE-1))
+        if IS_X86_32:
+            self.mc.MOV_sr(0, edi.value)
+        self.mc.CALL(imm(self.offstack_free_addr))
+        self.mc.MOV_rr(eax.value, ebx.value)
+        #
         self.mc.ADD_ri(esp.value, WORD * OFFSTACK_REAL_FRAME + extra_esp)
         for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)-1, -1, -1):
             loc = self.cpu.CALLEE_SAVE_REGISTERS[i]
             self.mc.MOV_rb(loc.value, WORD*(-1-i))     # (ebp-4-4*i) -> reg
         self.mc.MOV_rb(ebp.value, 0)                   # (ebp) -> ebp
-        # XXX free!
-
         self.mc.RET()
 
     def _call_header_shadowstack(self, gcrootmap):
