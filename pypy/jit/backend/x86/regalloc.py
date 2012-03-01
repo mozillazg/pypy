@@ -394,6 +394,8 @@ class RegAlloc(object):
         # return (self.fm.frame_depth, self.param_depth), but trying to share
         # the resulting tuple among several calls
         arg0 = self.fm.get_frame_depth()
+        return arg0
+        #
         arg1 = self.param_depth
         result = self.assembler._current_depths_cache
         if result[0] != arg0 or result[1] != arg1:
