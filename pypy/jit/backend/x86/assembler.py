@@ -442,7 +442,7 @@ class Assembler386(object):
 
         regalloc = RegAlloc(self, self.cpu.translate_support_code)
         #
-        self._call_header_with_stack_check()
+        frame_size_pos = self._call_header_with_stack_check()
         clt._debug_nbargs = len(inputargs)
         operations = regalloc.prepare_loop(inputargs, operations,
                                            looptoken, clt.allgcrefs)
@@ -467,8 +467,8 @@ class Assembler386(object):
             rawstart + size_excluding_failure_stuff,
             rawstart))
         debug_stop("jit-backend-addr")
-        #self._patch_stackadjust(rawstart + stackadjustpos,
-        #                        frame_depth )#+ param_depth)
+        self._patch_stackadjust(rawstart + frame_size_pos,
+                                frame_depth )#+ param_depth)
         self.patch_pending_failure_recoveries(rawstart)
         #
         ops_offset = self.mc.ops_offset
@@ -720,11 +720,19 @@ class Assembler386(object):
         return frame_depth#, param_depth
 
     def _patchable_stackadjust(self):
+        xxx
         # stack adjustment LEA
         self.mc.LEA32_rb(esp.value, 0)
         return self.mc.get_relative_pos() - 4
 
-    def _patch_stackadjust(self, adr_lea, allocated_depth):
+    def _patch_stackadjust(self, adr_to_fix, allocated_depth):
+        # patch the requested size in the call to malloc/realloc
+        mc = codebuf.MachineCodeBlockWrapper()
+        words = FRAME_FIXED_SIZE + 1 + allocated_depth
+        mc.writeimm32(words * WORD)
+        mc.copy_to_raw_memory(adr_to_fix)
+        return
+
         # patch stack adjustment LEA
         mc = codebuf.MachineCodeBlockWrapper()
         # Compute the correct offset for the instruction LEA ESP, [EBP-4*words]
@@ -744,7 +752,7 @@ class Assembler386(object):
         # Also, make sure this is consistent with FRAME_FIXED_SIZE.
         if IS_X86_32:
             self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME-1))
-            self.mc.PUSH_i32(4096)     # XXX XXX!
+            self.mc.PUSH_i32(0x77777777)     # temporary
         elif IS_X86_64:
             # XXX very heavily save and restore all possible argument registers
             save_regs = [r9, r8, ecx, edx, esi, edi]
@@ -757,7 +765,8 @@ class Assembler386(object):
             for i in range(len(save_xmm_regs)):
                 self.mc.MOVSD_sx(WORD * (base + i), save_xmm_regs[i].value)
             #
-            self.mc.MOV_ri(edi.value, 4096)     # XXX XXX!
+            self.mc.MOV_riu32(edi.value, 0x77777777)     # temporary
+        frame_size_pos = self.mc.get_relative_pos() - 4
         #
         self.mc.CALL(imm(self.offstack_malloc_addr))
         #
@@ -779,6 +788,8 @@ class Assembler386(object):
         if gcrootmap and gcrootmap.is_shadow_stack:
             self._call_header_shadowstack(gcrootmap)
 
+        return frame_size_pos
+
     def _call_header_with_stack_check(self):
         if self.stack_check_slowpath == 0:
             pass                # no stack check (e.g. not translated)
@@ -795,7 +806,7 @@ class Assembler386(object):
             assert 0 < offset <= 127
             self.mc.overwrite(jb_location-1, chr(offset))
             #
-        self._call_header()
+        return self._call_header()
 
     def _call_footer(self, extra_esp=0):
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
@@ -2046,9 +2057,7 @@ class Assembler386(object):
 
         # now we return from the complete frame, which starts from
         # _call_header_with_stack_check().  We have to compute how many
-        # extra PUSHes we just did.
-        # throws away most of the frame, including all the PUSHes that we
-        # did just above.
+        # extra PUSHes we just did, to throw them away in one go.
 
         self._call_footer(extra_esp)
         rawstart = mc.materialize(self.cpu.asmmemmgr, [])
