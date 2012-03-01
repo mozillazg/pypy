@@ -786,12 +786,12 @@ class Assembler386(object):
             #
         self._call_header()
 
-    def _call_footer(self):
+    def _call_footer(self, extra_esp=0):
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap and gcrootmap.is_shadow_stack:
             self._call_footer_shadowstack(gcrootmap)
 
-        self.mc.ADD_ri(esp.value, WORD * OFFSTACK_REAL_FRAME)
+        self.mc.ADD_ri(esp.value, WORD * OFFSTACK_REAL_FRAME + extra_esp)
         for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)-1, -1, -1):
             loc = self.cpu.CALLEE_SAVE_REGISTERS[i]
             self.mc.MOV_rb(loc.value, WORD*(-1-i))     # (ebp-4-4*i) -> reg
@@ -1958,9 +1958,12 @@ class Assembler386(object):
         mc = codebuf.MachineCodeBlockWrapper()
         self.mc = mc
 
+        extra_esp = WORD    # we reach this code with an extra CALL
+
         # Push all general purpose registers
         for gpr in range(self.cpu.NUM_REGS-1, -1, -1):
             mc.PUSH_r(gpr)
+        extra_esp += self.cpu.NUM_REGS * WORD
 
         # ebx/rbx is callee-save in both i386 and x86-64
         mc.MOV_rr(ebx.value, esp.value)
@@ -1970,6 +1973,7 @@ class Assembler386(object):
             mc.SUB_ri(esp.value, self.cpu.NUM_REGS*8)
             for i in range(self.cpu.NUM_REGS):
                 mc.MOVSD_sx(8*i, i)
+            extra_esp += self.cpu.NUM_REGS*8
 
         # we call a provided function that will
         # - call our on_leave_jitted_hook which will mark
@@ -1991,10 +1995,9 @@ class Assembler386(object):
         # XXX
         if IS_X86_32:
             mc.PUSH_r(ebx.value)
+            extra_esp += 1
         elif IS_X86_64:
             mc.MOV_rr(edi.value, ebx.value)
-            # XXX: Correct to only align the stack on 64-bit?
-            mc.AND_ri(esp.value, -16)
         else:
             raise AssertionError("Shouldn't happen")
 
@@ -2002,11 +2005,12 @@ class Assembler386(object):
         # returns in eax the fail_index
 
         # now we return from the complete frame, which starts from
-        # _call_header_with_stack_check().  The LEA in _call_footer below
+        # _call_header_with_stack_check().  We have to compute how many
+        # extra PUSHes we just did.
         # throws away most of the frame, including all the PUSHes that we
         # did just above.
 
-        self._call_footer()
+        self._call_footer(extra_esp)
         rawstart = mc.materialize(self.cpu.asmmemmgr, [])
         self.failure_recovery_code[exc + 2 * withfloats] = rawstart
         self.mc = None
