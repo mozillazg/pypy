@@ -24,6 +24,7 @@ from pypy.jit.backend.llsupport.regalloc import FrameManager, RegisterManager,\
 from pypy.jit.backend.x86.arch import WORD, FRAME_FIXED_SIZE
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64, MY_COPY_OF_REGS
 from pypy.jit.backend.x86.arch import OFFSTACK_REAL_FRAME
+from pypy.jit.backend.x86.arch import OFFSTACK_START_AT_WORD
 from pypy.rlib.rarithmetic import r_longlong
 
 class X86RegisterManager(RegisterManager):
@@ -1550,7 +1551,7 @@ for name, value in RegAlloc.__dict__.iteritems():
 def get_ebp_ofs(position):
     # Argument is a frame position (0, 1, 2...).
     # Returns (ebp+8), (ebp+12), (ebp+16)...
-    return WORD * (2 + position)
+    return WORD * (OFFSTACK_START_AT_WORD + position)
 
 def _valid_addressing_size(size):
     return size == 1 or size == 2 or size == 4 or size == 8
