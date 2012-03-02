@@ -37,6 +37,7 @@ else:
 # order as the one in the comments above); but whereas the real stack would
 # have the spilled values stored in (ebp-20), (ebp-24), etc., the off-stack
 # has them stored in (ebp+8), (ebp+12), etc.
+OFFSTACK_START_AT_WORD = 2
 #
 # In stacklet mode, the real frame contains always just OFFSTACK_REAL_FRAME
 # words reserved for temporary usage like call arguments.  To maintain
