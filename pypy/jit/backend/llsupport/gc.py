@@ -337,11 +337,18 @@ class GcRootMap_asmgcc(object):
             self._gcmap_deadentries += 1
             item += asmgcroot.arrayitemsize
 
-    def get_basic_shape(self):
+    def get_basic_shape(self, return_addr_words_from_esp=0):
         # XXX: Should this code even really know about stack frame layout of
         # the JIT?
+        if return_addr_words_from_esp == 0:
+            retaddr = chr(self.LOC_EBP_PLUS | 4)   # return addr: at WORD(%rbp)
+        else:
+            x = return_addr_words_from_esp * 4
+            assert 0 < x < 128
+            retaddr = chr(self.LOC_ESP_PLUS | x)
+        #
         if self.is_64_bit:
-            return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   8(%rbp)
+            return [retaddr,
                     chr(self.LOC_EBP_MINUS | 4),    # saved %rbx:  at  -8(%rbp)
                     chr(self.LOC_EBP_MINUS | 8),    # saved %r12:  at -16(%rbp)
                     chr(self.LOC_EBP_MINUS | 12),   # saved %r13:  at -24(%rbp)
@@ -350,7 +357,7 @@ class GcRootMap_asmgcc(object):
                     chr(self.LOC_EBP_PLUS  | 0),    # saved %rbp:  at    (%rbp)
                     chr(0)]
         else:
-            return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   4(%ebp)
+            return [retaddr,
                     chr(self.LOC_EBP_MINUS | 4),    # saved %ebx:  at  -4(%ebp)
                     chr(self.LOC_EBP_MINUS | 8),    # saved %esi:  at  -8(%ebp)
                     chr(self.LOC_EBP_MINUS | 12),   # saved %edi:  at -12(%ebp)
@@ -523,7 +530,7 @@ class GcRootMap_shadowstack(object):
     def initialize(self):
         pass
 
-    def get_basic_shape(self):
+    def get_basic_shape(self, return_addr_words_from_esp=0):
         return []
 
     def add_frame_offset(self, shape, offset):
