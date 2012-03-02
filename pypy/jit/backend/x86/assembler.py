@@ -758,6 +758,10 @@ class Assembler386(object):
         #
         self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
         #
+        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
+        if gcrootmap is not None and gcrootmap.is_shadow_stack:
+            self._fixup_shadowstack_location(gcrootmap)
+        #
         if IS_X86_32:
             self.mc.ADD_ri(esp.value, 2*WORD)
             self.mc.POP_r(save_regs[2].value)
@@ -897,6 +901,15 @@ class Assembler386(object):
             self.mc.MOV_jr(rst, ebx.value)            # MOV [rootstacktop], ebx
         else:
             self.mc.MOV_mr((r13.value, 0), ebx.value) # MOV [r13], ebx
+
+    def _fixup_shadowstack_location(self, gcrootmap):
+        rst = gcrootmap.get_root_stack_top_addr()
+        if rx86.fits_in_32bits(rst):
+            self.mc.MOV_rj(eax.value, rst)            # MOV eax, [rootstacktop]
+        else:
+            self.mc.MOV_ri(eax.value, rst)            # MOV eax, rootstacktop
+            self.mc.MOV_rm(eax.value, (eax.value, 0)) # MOV eax, [eax]
+        self.mc.MOV_mr((eax.value, -2*WORD), ebp.value)# MOV [eax-2*WORD], ebp
 
     def _call_footer_shadowstack(self, gcrootmap):
         rst = gcrootmap.get_root_stack_top_addr()
