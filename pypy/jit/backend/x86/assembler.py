@@ -14,7 +14,8 @@ from pypy.jit.backend.x86.regalloc import (RegAlloc, get_ebp_ofs, _get_scale,
 
 from pypy.jit.backend.x86.arch import (FRAME_FIXED_SIZE, FORCE_INDEX_OFS, WORD,
                                        IS_X86_32, IS_X86_64,
-                                       OFFSTACK_REAL_FRAME)
+                                       OFFSTACK_REAL_FRAME,
+                                       OFFSTACK_START_AT_WORD)
 
 from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          esp, ebp, esi, edi,
@@ -777,7 +778,7 @@ class Assembler386(object):
     def _patch_stackadjust(self, adr_to_fix, allocated_depth):
         # patch the requested size in the call to malloc/realloc
         mc = codebuf.MachineCodeBlockWrapper()
-        words = FRAME_FIXED_SIZE + 1 + allocated_depth
+        words = FRAME_FIXED_SIZE-1 + OFFSTACK_START_AT_WORD + allocated_depth
         mc.writeimm32(words * WORD)
         mc.copy_to_raw_memory(adr_to_fix)
         return
