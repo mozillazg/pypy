@@ -514,7 +514,7 @@ class Assembler386(object):
                                              operations,
                                              self.current_clt.allgcrefs)
 
-        frame_size_pos = self._enter_bridge_code()
+        frame_size_pos = self._enter_bridge_code(regalloc)
         (frame_depth #, param_depth
               ) = self._assemble(regalloc, operations)
         codeendpos = self.mc.get_relative_pos()
@@ -725,15 +725,15 @@ class Assembler386(object):
         self.mc.LEA32_rb(esp.value, 0)
         return self.mc.get_relative_pos() - 4
 
-    def _enter_bridge_code(self):
+    def _enter_bridge_code(self, regalloc):
         # XXX XXX far too heavy saving and restoring
         j = 0
         if self.cpu.supports_floats:
-            for reg in self._regalloc.xrm.save_around_call_regs:
+            for reg in regalloc.xrm.save_around_call_regs:
                 self.mc.MOVSD_sx(j, reg.value)
                 j += 8
         #
-        save_regs = self._regalloc.rm.save_around_call_regs
+        save_regs = regalloc.rm.save_around_call_regs
         if IS_X86_32:
             assert len(save_regs) == 3
             self.mc.MOV_sr(j, save_regs[0].value)
@@ -768,7 +768,7 @@ class Assembler386(object):
         #
         if self.cpu.supports_floats:
             j = 0
-            for reg in self._regalloc.xrm.save_around_call_regs:
+            for reg in regalloc.xrm.save_around_call_regs:
                 self.mc.MOVSD_xs(reg.value, j)
                 j += 8
         #
