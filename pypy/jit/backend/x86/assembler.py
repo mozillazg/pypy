@@ -2282,8 +2282,7 @@ class Assembler386(object):
                 use_words = (2 + max(asmgcroot.INDEX_OF_EBP,
                                      asmgcroot.FRAME_PTR) + 1)
                 pos = self._regalloc.fm.reserve_location_in_frame(use_words)
-                css = get_ebp_ofs(pos + use_words - 1)
-                xxxxxxxx # ^^^^
+                css = get_ebp_ofs(pos)
                 self._regalloc.close_stack_struct = css
             # The location where the future CALL will put its return address
             # will be [ESP-WORD].  But we can't use that as the next frame's
