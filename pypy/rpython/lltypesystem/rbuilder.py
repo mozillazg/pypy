@@ -1,5 +1,5 @@
 from pypy.rlib import rgc, jit
-from pypy.rlib.objectmodel import enforceargs
+from pypy.rlib.objectmodel import enforceargs, keepalive_until_here
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import llstr
 from pypy.rpython.rptr import PtrRepr
@@ -128,6 +128,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         chars_offset = llmemory.offsetof(BUF_T, 'chars') + llmemory.itemoffsetof(BUF_T.chars, 0)
         array = llmemory.cast_ptr_to_adr(ll_builder.buf) + chars_offset + llmemory.sizeof(BUF_T.chars.OF) * used
         rffi.cast(rffi.CArrayPtr(T), array)[0]
+        keepalive_until_here(ll_builder.buf)
         ll_builder.used += size
 
     @staticmethod
