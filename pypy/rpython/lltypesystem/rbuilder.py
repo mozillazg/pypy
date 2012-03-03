@@ -3,7 +3,7 @@ from pypy.rlib.objectmodel import enforceargs
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import llstr
 from pypy.rpython.rptr import PtrRepr
-from pypy.rpython.lltypesystem import lltype, rffi, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod, nullptr
 from pypy.rpython.lltypesystem.rstr import (STR, UNICODE, char_repr,
     string_repr, unichar_repr, unicode_repr)
@@ -117,13 +117,18 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 
     @staticmethod
     def ll_append_float(ll_builder, f):
-        used = ll_builder.used
         T = lltype.typeOf(f)
+        BUF_T = lltype.typeOf(ll_builder.buf).TO
+
+        used = ll_builder.used
         size = rffi.sizeof(T)
         if used + size > ll_builder.allocated:
             ll_builder.grow(ll_builder, size)
 
-        rffi.cast(rffi.CArrayPtr(T), rffi.ptradd(rffi.cast(rffi.VOIDP, ll_builder.buf.chars), used))[0] = f
+        chars_offset = llmemory.offsetof(BUF_T, 'chars') + llmemory.itemoffsetof(BUF_T.chars, 0)
+        array = llmemory.cast_ptr_to_adr(ll_builder.buf) + chars_offset
+        ptr = llmemory.cast_adr_to_int(array) + used
+        rffi.cast(rffi.CArrayPtr(T), ptr)[0]
         ll_builder.used += size
 
     @staticmethod
