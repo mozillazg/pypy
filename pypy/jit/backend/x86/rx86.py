@@ -531,6 +531,7 @@ class AbstractX86CodeBuilder(object):
 
     PUSH_r = insn(rex_nw, register(1), '\x50')
     PUSH_b = insn(rex_nw, '\xFF', orbyte(6<<3), stack_bp(1))
+    PUSH_m = insn(rex_nw, '\xFF', orbyte(6<<3), mem_reg_plus_const(1))
     PUSH_i32 = insn('\x68', immediate(1, 'i'))
 
     POP_r = insn(rex_nw, register(1), '\x58')
