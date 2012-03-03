@@ -1140,9 +1140,10 @@ class Assembler386(object):
         for i in range(start, n):
             loc = arglocs[i]
             p += loc.get_width()
-        extra_esp = p//WORD - OFFSTACK_REAL_FRAME
-        if extra_esp > 0:
-            extra_esp = align_stack_words(extra_esp) * WORD
+        extra_esp = 0
+        if p > OFFSTACK_REAL_FRAME * WORD:
+            extra_esp = WORD * align_stack_words(p // WORD -
+                                                 OFFSTACK_REAL_FRAME)
             self.mc.SUB_ri(esp.value, extra_esp)
 
         p = 0
@@ -1169,7 +1170,7 @@ class Assembler386(object):
         #self._regalloc.reserve_param(p//WORD)
         # x is a location
         self.mc.CALL(x)
-        self.mark_gc_roots(force_index)
+        self.mark_gc_roots(force_index, extra_esp=extra_esp)
         #
         if callconv != FFI_DEFAULT_ABI:
             self._fix_stdcall(callconv, p)
@@ -1266,7 +1267,7 @@ class Assembler386(object):
 
         #self._regalloc.reserve_param(len(pass_on_stack))
         self.mc.CALL(x)
-        self.mark_gc_roots(force_index)
+        self.mark_gc_roots(force_index, extra_esp=extra_esp)
 
         if extra_esp > 0:
             self.mc.ADD_ri(esp.value, extra_esp)
@@ -2586,12 +2587,13 @@ class Assembler386(object):
         not_implemented("not implemented operation (guard): %s" %
                         op.getopname())
 
-    def mark_gc_roots(self, force_index, use_copy_area=False):
+    def mark_gc_roots(self, force_index, use_copy_area=False, extra_esp=0):
         if force_index < 0:
             return     # not needed
         gcrootmap = self.cpu.gc_ll_descr.gcrootmap
         if gcrootmap:
-            mark = self._regalloc.get_mark_gc_roots(gcrootmap, use_copy_area)
+            mark = self._regalloc.get_mark_gc_roots(gcrootmap, use_copy_area,
+                                orf = OFFSTACK_REAL_FRAME * WORD + extra_esp)
             if gcrootmap.is_shadow_stack:
                 gcrootmap.write_callshape(mark, force_index)
             else:

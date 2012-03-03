@@ -207,7 +207,8 @@ class RegAlloc(object):
         self.min_bytes_before_label = max(self.min_bytes_before_label,
                                           at_least_position)
 
-    def reserve_param(self, n):
+    @staticmethod
+    def reserve_param(n):
         assert n <= OFFSTACK_REAL_FRAME
         #self.param_depth = max(self.param_depth, n)
 
@@ -1417,9 +1418,9 @@ class RegAlloc(object):
         # This operation is used only for testing
         self.force_spill_var(op.getarg(0))
 
-    def get_mark_gc_roots(self, gcrootmap, use_copy_area=False):
-        orf = OFFSTACK_REAL_FRAME
-        shape = gcrootmap.get_basic_shape(return_addr_words_from_esp=orf)
+    def get_mark_gc_roots(self, gcrootmap, use_copy_area=False,
+                          orf=OFFSTACK_REAL_FRAME*WORD):
+        shape = gcrootmap.get_basic_shape(return_addr_from_esp=orf)
         for v, val in self.fm.bindings.items():
             if (isinstance(v, BoxPtr) and self.rm.stays_alive(v)):
                 assert isinstance(val, StackLoc)
