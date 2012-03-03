@@ -125,7 +125,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         if used + size > ll_builder.allocated:
             ll_builder.grow(ll_builder, size)
 
-        rffi.cast(FLOAT_ARRAY, lltype.direct_ptradd(ll_builder.buf.chars, used))[0] = f
+        rffi.cast(FLOAT_ARRAY, rffi.ptradd(rffi.cast(rffi.VOIDP, ll_builder.buf.chars), used))[0] = f
         ll_builder.used += size
 
     @staticmethod
