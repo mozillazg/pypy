@@ -789,6 +789,49 @@ class CompileFrameworkTests(BaseFrameworkTests):
     def test_compile_framework_minimal_size_in_nursery(self):
         self.run('compile_framework_minimal_size_in_nursery')
 
+    def define_compile_framework_big_call(self):
+        class A:
+            pass
+        @dont_look_inside
+        def bigcall(a0, a1, a2, a3, a4, a5, a6, a7, a8, a9,
+                    b0, b1, b2, b3, b4, b5, b6, b7, b8, b9):
+            check(a0 == 100)
+            check(a1 == 110)
+            check(a2 == 120)
+            check(a3 == 130)
+            check(a4 == 140)
+            check(a5 == 150)
+            check(a6 == 160)
+            check(a7 == 170)
+            check(a8 == 180)
+            check(a9 == 190)
+            check(b0 == -60)
+            check(b1 == -61)
+            check(b2 == -62)
+            check(b3 == -63)
+            check(b4 == -64)
+            check(b5 == -65)
+            check(b6 == -66)
+            check(b7 == -67)
+            check(b8 == -68)
+            check(b9 == -69)
+            return [A(), A(), A()]
+        @unroll_safe
+        def f42(n, x, x0, x1, x2, x3, x4, x5, x6, x7, l, s):
+            lst = []
+            i = 0
+            while i < 42:
+                lst = bigcall(100, 110, 120, 130, 140, 150, 160, 170, 180, 190,
+                              -60, -61, -62, -63, -64, -65, -66, -67, -68, -69)
+                i += 1
+            check(len(lst) == 3)
+            n -= 1
+            return n, x, x0, x1, x2, x3, x4, x5, x6, x7, l, s
+        return None, f42, None
+
+    def test_compile_framework_big_call(self):
+        self.run('compile_framework_big_call')
+
 
 class TestShadowStack(CompileFrameworkTests):
     gcrootfinder = "shadowstack"

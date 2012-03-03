@@ -337,13 +337,15 @@ class GcRootMap_asmgcc(object):
             self._gcmap_deadentries += 1
             item += asmgcroot.arrayitemsize
 
-    def get_basic_shape(self, return_addr_words_from_esp=0):
+    def get_basic_shape(self, return_addr_from_esp=0):
         # XXX: Should this code even really know about stack frame layout of
         # the JIT?
-        if return_addr_words_from_esp == 0:
+        if return_addr_from_esp == 0:
             retaddr = chr(self.LOC_EBP_PLUS | 4)   # return addr: at WORD(%rbp)
         else:
-            x = return_addr_words_from_esp * 4
+            x = return_addr_from_esp
+            if self.is_64_bit:
+                x >>= 1
             assert 0 < x < 128
             retaddr = chr(self.LOC_ESP_PLUS | x)
         #
@@ -530,7 +532,7 @@ class GcRootMap_shadowstack(object):
     def initialize(self):
         pass
 
-    def get_basic_shape(self, return_addr_words_from_esp=0):
+    def get_basic_shape(self, return_addr_from_esp=0):
         return []
 
     def add_frame_offset(self, shape, offset):
