@@ -2,10 +2,12 @@
 """
 
 from pypy.annotation.model import (SomeObject, SomeString, s_None, SomeChar,
-    SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString, SomePtr, SomePBC)
+    SomeInteger, SomeUnicodeCodePoint, SomeUnicodeString, SomePtr, SomePBC,
+    SomeFloat)
 from pypy.rlib.rarithmetic import ovfcheck
-from pypy.tool.pairtype import pair, pairtype
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.rpython.lltypesystem import lltype
+from pypy.tool.pairtype import pair, pairtype
 
 
 # -------------- public API for string functions -----------------------
@@ -94,6 +96,24 @@ class AbstractStringBuilder(object):
 class StringBuilder(AbstractStringBuilder):
     tp = str
 
+    def append_float(self, f):
+        import struct
+        from pypy.rpython.lltypesystem import rffi
+
+        T = lltype.typeOf(f)
+        if T == lltype.Float:
+            fmt = "d"
+        elif T == lltype.SingleFloat:
+            fmt = "f"
+        else:
+            raise TypeError("this takes only float and r_singlefloat")
+
+        size = rffi.sizeof(T)
+        self._grow(size)
+
+        self.l.append(struct.pack(fmt, f))
+
+
 class UnicodeBuilder(AbstractStringBuilder):
     tp = unicode
 
@@ -123,6 +143,10 @@ class SomeStringBuilder(SomeObject):
     def method_append_charpsize(self, s_ptr, s_size):
         assert isinstance(s_ptr, SomePtr)
         assert isinstance(s_size, SomeInteger)
+        return s_None
+
+    def method_append_float(self, f):
+        assert isinstance(f, SomeFloat)
         return s_None
 
     def method_getlength(self):

@@ -90,7 +90,7 @@ class BaseTestStringBuilder(BaseRtypingTest):
             if s:
                 s.append("3")
             return bool(s)
-        
+
         def func(i):
             if i:
                 s = StringBuilder()
@@ -107,7 +107,7 @@ class BaseTestStringBuilder(BaseRtypingTest):
             if s:
                 s.append(u"3")
             return bool(s)
-        
+
         def func(i):
             if i:
                 s = UnicodeBuilder()
@@ -119,6 +119,19 @@ class BaseTestStringBuilder(BaseRtypingTest):
         res = self.interpret(func, [1])
         assert res
 
+    def test_append_float(self):
+        def func(d):
+            s = StringBuilder()
+            s.append("abc")
+            s.append_float(d)
+            s.append("abc")
+            return s.build()
+
+        res = self.ll_to_string(self.interpret(func, [3.0]))
+        assert res == "abc\x00\x00\x00\x00\x00\x00\x08@abc"
+
+        res = self.ll_to_string(self.interpret(func, [r_singlefloat(2.0)]))
+        assert res == "abc\x00\x00\x00@abc"
 
 class TestLLtype(BaseTestStringBuilder, LLRtypeMixin):
     pass

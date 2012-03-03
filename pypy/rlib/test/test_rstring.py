@@ -1,6 +1,8 @@
 import sys
 
+from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder, split, rsplit
+
 
 def test_split():
     assert split("", 'x') == ['']
@@ -33,6 +35,20 @@ def test_string_builder():
     s.append_multiple_char('d', 4)
     assert s.build() == "aabcabdddd"
 
+    s = StringBuilder()
+    s.append("a")
+    s.append_float(3.0)
+    s.append("a")
+    assert s.getlength() == 10
+    assert s.build() == "a\x00\x00\x00\x00\x00\x00\x08@a"
+
+    s = StringBuilder()
+    s.append("c")
+    s.append_float(r_singlefloat(2.0))
+    s.append("c")
+    assert s.getlength() == 6
+    assert s.build() == "c\x00\x00\x00@c"
+
 def test_unicode_builder():
     s = UnicodeBuilder()
     s.append(u'a')
@@ -42,4 +58,4 @@ def test_unicode_builder():
     s.append_multiple_char(u'd', 4)
     assert s.build() == 'aabcbdddd'
     assert isinstance(s.build(), unicode)
-        
+

@@ -3,7 +3,7 @@ from pypy.rlib.objectmodel import enforceargs
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rpython.annlowlevel import llstr
 from pypy.rpython.rptr import PtrRepr
-from pypy.rpython.lltypesystem import lltype, rstr
+from pypy.rpython.lltypesystem import lltype, rffi, rstr
 from pypy.rpython.lltypesystem.lltype import staticAdtMethod, nullptr
 from pypy.rpython.lltypesystem.rstr import (STR, UNICODE, char_repr,
     string_repr, unichar_repr, unicode_repr)
@@ -50,6 +50,8 @@ UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
                                  ('used', lltype.Signed),
                                  ('buf', lltype.Ptr(UNICODE)),
                               adtmeths={'grow':staticAdtMethod(unicodebuilder_grow)})
+
+FLOAT_ARRAY = lltype.Ptr(lltype.Array(lltype.Float))
 
 MAX = 16*1024*1024
 
@@ -114,6 +116,17 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
             ll_builder.buf.chars[used] = charp[i]
             used += 1
         ll_builder.used = used
+
+    @staticmethod
+    def ll_append_float(ll_builder, f):
+        used = ll_builder.used
+        T = lltype.typeOf(f)
+        size = rffi.sizeof(T)
+        if used + size > ll_builder.allocated:
+            ll_builder.grow(ll_builder, size)
+
+        rffi.cast(FLOAT_ARRAY, lltype.direct_ptradd(ll_builder.buf.chars, used))[0] = f
+        ll_builder.used += size
 
     @staticmethod
     def ll_getlength(ll_builder):
