@@ -15,7 +15,8 @@ from pypy.jit.backend.x86.regalloc import (RegAlloc, get_ebp_ofs, _get_scale,
 from pypy.jit.backend.x86.arch import (FRAME_FIXED_SIZE, FORCE_INDEX_OFS, WORD,
                                        IS_X86_32, IS_X86_64,
                                        OFFSTACK_REAL_FRAME,
-                                       OFFSTACK_START_AT_WORD)
+                                       OFFSTACK_START_AT_WORD,
+                                       OFFSTACK_SIZE_ALLOCATED)
 
 from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
                                          esp, ebp, esi, edi,
@@ -125,6 +126,7 @@ class Assembler386(object):
             support.ensure_sse2_floats()
             self._build_float_constants()
         self._build_propagate_exception_path()
+        self._build_realloc_bridge_slowpath()
         if gc_ll_descr.get_malloc_slowpath_addr is not None:
             self._build_malloc_slowpath()
         self._build_stack_check_slowpath()
@@ -279,6 +281,93 @@ class Assembler386(object):
         self._call_footer()
         rawstart = self.mc.materialize(self.cpu.asmmemmgr, [])
         self.propagate_exception_path = rawstart
+        self.mc = None
+
+    def _build_realloc_bridge_slowpath(self):
+        from pypy.jit.backend.x86.regalloc import gpr_reg_mgr_cls
+        # This defines a function called at the start of a bridge to
+        # increase the size of the off-stack frame.  It must preserve
+        # all registers.
+        #
+        # XXX optimize more: should also patch the original malloc()
+        # call to directly allocate enough
+        #
+        # see _enter_bridge_code() for the following constant: the
+        # new size is not passed explicitly, but needs to be fished
+        # from the code at (retaddr - WORD * realloc_bridge_ofs).
+        # This is commented as "fish fish fish" below.
+        if IS_X86_32:
+            self.realloc_bridge_ofs = 11
+        elif IS_X86_64:
+            self.realloc_bridge_ofs = 19
+        #
+        self.mc = codebuf.MachineCodeBlockWrapper()
+        #
+        # First, save all registers that this code might modify.
+        # Assume that the xmm registers are safe.  Note that this code
+        # will save some registers in the caller's frame, in the
+        # temporary OFFSTACK_REAL_FRAME words.
+        save_regs = gpr_reg_mgr_cls.save_around_call_regs
+        if IS_X86_32:
+            assert OFFSTACK_REAL_FRAME >= 2
+            assert len(save_regs) == 3
+            # there are 3 PUSHes in total here.  With the retaddr, the
+            # stack remains aligned.
+            self.mc.MOV_sr(1*WORD, save_regs[0].value)
+            self.mc.MOV_sr(2*WORD, save_regs[1].value)
+            self.mc.PUSH_r(save_regs[2].value)
+            #
+            # fish fish fish (see above)
+            self.mc.MOV_rs(eax.value, WORD)     # load the retaddr
+            self.mc.PUSH_m((eax.value, -self.realloc_bridge_ofs))
+            #
+            self.mc.LEA_rb(eax.value, -WORD * (FRAME_FIXED_SIZE-1))
+            self.mc.PUSH_r(eax.value)
+            #
+        elif IS_X86_64:
+            assert OFFSTACK_REAL_FRAME >= len(save_regs) - 1
+            # there is only 1 PUSH in total here.  With the retaddr, the
+            # stack remains aligned.
+            for j in range(len(save_regs)-1, 0, -1):
+                self.mc.MOV_sr(j*WORD, save_regs[j].value)
+            self.mc.PUSH_r(save_regs[0].value)
+            #
+            # fish fish fish (see above)
+            self.mc.MOV_rs(esi.value, WORD)     # load the retaddr
+            self.mc.MOV32_rm(esi.value, (esi.value,
+                                         -self.realloc_bridge_ofs))
+            #
+            self.mc.LEA_rb(edi.value, -WORD * (FRAME_FIXED_SIZE-1))
+        #
+        self.mc.CALL(imm(self.offstack_realloc_addr))
+        #
+        # load the updated ebp
+        self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
+        #
+        # fix the OFFSTACK_SIZE_ALLOCATED in the updated memory location
+        if IS_X86_32:
+            self.mc.ADD_ri(esp.value, 2*WORD)
+        self.mc.MOV_rs(eax.value, WORD)      # load the retaddr again
+        self.mc.MOV32_rm(eax.value, (eax.value, -self.realloc_bridge_ofs))
+        self.mc.MOV_br(WORD * OFFSTACK_SIZE_ALLOCATED, eax.value)
+        #
+        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
+        if gcrootmap is not None and gcrootmap.is_shadow_stack:
+            self._fixup_shadowstack_location(gcrootmap)
+        #
+        # restore all registers and return
+        if IS_X86_32:
+            self.mc.POP_r(save_regs[2].value)
+            self.mc.MOV_rs(save_regs[1].value, 2*WORD)
+            self.mc.MOV_rs(save_regs[0].value, 1*WORD)
+        elif IS_X86_64:
+            self.mc.POP_r(save_regs[0].value)
+            for j in range(len(save_regs)-1, 0, -1):
+                self.mc.MOV_rs(save_regs[j].value, j*WORD)
+        self.mc.RET()
+        #
+        rawstart = self.mc.materialize(self.cpu.asmmemmgr, [])
+        self.realloc_bridge_addr = rawstart
         self.mc = None
 
     def _build_stack_check_slowpath(self):
@@ -727,56 +816,20 @@ class Assembler386(object):
         return self.mc.get_relative_pos() - 4
 
     def _enter_bridge_code(self, regalloc):
-        # XXX XXX far too heavy saving and restoring
-        j = 0
-        if self.cpu.supports_floats:
-            for reg in regalloc.xrm.save_around_call_regs:
-                self.mc.MOVSD_sx(j, reg.value)
-                j += 8
-        #
-        save_regs = regalloc.rm.save_around_call_regs
-        if IS_X86_32:
-            assert len(save_regs) == 3
-            self.mc.MOV_sr(j, save_regs[0].value)
-            self.mc.PUSH_r(save_regs[1].value)
-            self.mc.PUSH_r(save_regs[2].value)
-            # 4 PUSHes in total, stack remains aligned
-            self.mc.PUSH_i32(0x77777777)     # patched later
-            result = self.mc.get_relative_pos() - 4
-            self.mc.LEA_rb(eax.value, -WORD * (FRAME_FIXED_SIZE-1))
-            self.mc.PUSH_r(eax.value)
-        elif IS_X86_64:
-            # an even number of PUSHes, stack remains aligned
-            assert len(save_regs) & 1 == 0
-            for reg in save_regs:
-                self.mc.PUSH_r(reg.value)
-            self.mc.LEA_rb(edi.value, -WORD * (FRAME_FIXED_SIZE-1))
-            self.mc.MOV_riu32(esi.value, 0x77777777)   # patched later
-            result = self.mc.get_relative_pos() - 4
-        #
-        self.mc.CALL(imm(self.offstack_realloc_addr))
-        #
-        self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
-        #
-        gcrootmap = self.cpu.gc_ll_descr.gcrootmap
-        if gcrootmap is not None and gcrootmap.is_shadow_stack:
-            self._fixup_shadowstack_location(gcrootmap)
-        #
-        if IS_X86_32:
-            self.mc.ADD_ri(esp.value, 2*WORD)
-            self.mc.POP_r(save_regs[2].value)
-            self.mc.POP_r(save_regs[1].value)
-            self.mc.MOV_rs(save_regs[0].value, j)
-        elif IS_X86_64:
-            for i in range(len(save_regs)-1, -1, -1):
-                self.mc.POP_r(save_regs[i].value)
-        #
-        if self.cpu.supports_floats:
-            j = 0
-            for reg in regalloc.xrm.save_around_call_regs:
-                self.mc.MOVSD_xs(reg.value, j)
-                j += 8
-        #
+        self.mc.CMP_bi(WORD * OFFSTACK_SIZE_ALLOCATED, 0x77777777)
+        result = self.mc.get_relative_pos() - 4
+        self.mc.J_il8(rx86.Conditions['NB'], 0)     # JNB .skip
+        jnb_location = self.mc.get_relative_pos()
+        if WORD == 4:
+            self.mc.CALL(imm(self.realloc_bridge_addr))
+        else:
+            # must always use the long, 13-bytes encoding here
+            self.mc.MOV_ri64(r11.value, self.realloc_bridge_addr)
+            self.mc.CALL_r(r11.value)
+        assert self.mc.get_relative_pos() - result == self.realloc_bridge_ofs
+        offset = self.mc.get_relative_pos() - jnb_location
+        assert 0 <= offset <= 127
+        self.mc.overwrite(jnb_location-1, chr(offset))
         return result
 
     def _patch_stackadjust(self, adr_to_fix, allocated_depth):
@@ -802,38 +855,49 @@ class Assembler386(object):
         return -WORD * aligned_words
 
     def _call_header(self):
-        # NB. the shape of the frame is hard-coded in get_basic_shape() too.
-        # Also, make sure this is consistent with FRAME_FIXED_SIZE.
+        # the frame has always a fixed size of OFFSTACK_REAL_FRAME words.
+        self.mc.SUB_ri(esp.value, WORD * OFFSTACK_REAL_FRAME)
+        #
         if IS_X86_32:
-            self.mc.SUB_ri(esp.value, WORD * (OFFSTACK_REAL_FRAME-1))
-            self.mc.PUSH_i32(0x77777777)     # temporary
+            # save (and later restore) the value of edi
+            self.mc.MOV_sr(WORD, edi.value)
+            self.mc.MOV_ri(edi.value, 0x77777777)     # temporary
         elif IS_X86_64:
-            # XXX very heavily save and restore all possible argument registers
+            # XXX need to save and restore all possible argument registers
             save_regs = [r9, r8, ecx, edx, esi, edi]
-            save_xmm_regs = [xmm7, xmm6, xmm5, xmm4, xmm3, xmm2, xmm1, xmm0]
-            assert OFFSTACK_REAL_FRAME >= len(save_regs) + len(save_xmm_regs)
-            self.mc.SUB_ri(esp.value, WORD * OFFSTACK_REAL_FRAME)
+            assert OFFSTACK_REAL_FRAME > len(save_regs)
             for i in range(len(save_regs)):
-                self.mc.MOV_sr(WORD * i, save_regs[i].value)
-            base = len(save_regs)
-            for i in range(len(save_xmm_regs)):
-                self.mc.MOVSD_sx(WORD * (base + i), save_xmm_regs[i].value)
-            #
+                self.mc.MOV_sr(WORD * (1 + i), save_regs[i].value)
+            # assume that the XMM registers are safe.
             self.mc.MOV_riu32(edi.value, 0x77777777)     # temporary
         frame_size_pos = self.mc.get_relative_pos() - 4
         #
+        self.mc.MOV_sr(0, edi.value)
         self.mc.CALL(imm(self.offstack_malloc_addr))
         #
-        if IS_X86_64:
-            for i in range(len(save_regs)):
-                self.mc.MOV_rs(save_regs[i].value, WORD * i)
-            base = len(save_regs)
-            for i in range(len(save_xmm_regs)):
-                self.mc.MOVSD_xs(save_xmm_regs[i].value, WORD * (base + i))
-        #
+        # save in the freshly malloc'ed block the original value of ebp
         self.mc.MOV_mr((eax.value, WORD * (FRAME_FIXED_SIZE-1)),
                        ebp.value)                      # (new ebp) <- ebp
         self.mc.LEA_rm(ebp.value, (eax.value, WORD * (FRAME_FIXED_SIZE-1)))
+        #
+        # save in OFFSTACK_SIZE_ALLOCATED the allocated size
+        if IS_X86_32:
+            # edi is preserved by the CALL above
+            self.mc.MOV_br(WORD * OFFSTACK_SIZE_ALLOCATED, edi.value)
+            # now restore to original value of edi
+            self.mc.MOV_rs(edi.value, WORD)
+            #
+        elif IS_X86_64:
+            # reload edi from the stack and save it in the freshly
+            # malloc'ed block
+            self.mc.MOV_rs(edi.value, 0)
+            self.mc.MOV_br(WORD * OFFSTACK_SIZE_ALLOCATED, edi.value)
+            # reload the original value of the save_regs (including edi)
+            for i in range(len(save_regs)):
+                self.mc.MOV_rs(save_regs[i].value, WORD * (1 + i))
+        #
+        # save in the freshly malloc'ed block the original value of
+        # all other callee-saved registers
         for i in range(len(self.cpu.CALLEE_SAVE_REGISTERS)):
             loc = self.cpu.CALLEE_SAVE_REGISTERS[i]
             self.mc.MOV_br(WORD*(-1-i), loc.value)     # (ebp-4-4*i) <- reg

@@ -39,6 +39,9 @@ else:
 # has them stored in (ebp+8), (ebp+12), etc.
 OFFSTACK_START_AT_WORD = 2
 #
+# (ebp+4) has the size allocated so far
+OFFSTACK_SIZE_ALLOCATED = 1
+#
 # In stacklet mode, the real frame contains always just OFFSTACK_REAL_FRAME
 # words reserved for temporary usage like call arguments.  To maintain
 # alignment on 32-bit, OFFSTACK_REAL_FRAME % 4 == 3, and it is at least 17
