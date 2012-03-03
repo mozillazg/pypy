@@ -127,8 +127,10 @@ class BaseTestStringBuilder(BaseRtypingTest):
             s.append("abc")
             return s.build()
 
+        expected = "abc\x00\x00\x00\x00\x00\x00\x08@abc"
+        assert func(3.0) == expected
         res = self.ll_to_string(self.interpret(func, [3.0]))
-        assert res == "abc\x00\x00\x00\x00\x00\x00\x08@abc"
+        assert res == expected
 
         res = self.ll_to_string(self.interpret(func, [r_singlefloat(2.0)]))
         assert res == "abc\x00\x00\x00@abc"
