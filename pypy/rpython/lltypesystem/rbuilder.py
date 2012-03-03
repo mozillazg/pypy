@@ -126,9 +126,8 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
             ll_builder.grow(ll_builder, size)
 
         chars_offset = llmemory.offsetof(BUF_T, 'chars') + llmemory.itemoffsetof(BUF_T.chars, 0)
-        array = llmemory.cast_ptr_to_adr(ll_builder.buf) + chars_offset
-        ptr = llmemory.cast_adr_to_int(array) + used
-        rffi.cast(rffi.CArrayPtr(T), ptr)[0]
+        array = llmemory.cast_ptr_to_adr(ll_builder.buf) + chars_offset + llmemory.sizeof(BUF_T.chars.OF) * used
+        rffi.cast(rffi.CArrayPtr(T), array)[0]
         ll_builder.used += size
 
     @staticmethod
