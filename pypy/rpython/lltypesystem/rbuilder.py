@@ -51,8 +51,6 @@ UNICODEBUILDER = lltype.GcStruct('unicodebuilder',
                                  ('buf', lltype.Ptr(UNICODE)),
                               adtmeths={'grow':staticAdtMethod(unicodebuilder_grow)})
 
-FLOAT_ARRAY = lltype.Ptr(lltype.Array(lltype.Float))
-
 MAX = 16*1024*1024
 
 class BaseStringBuilderRepr(AbstractStringBuilderRepr):
@@ -125,7 +123,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
         if used + size > ll_builder.allocated:
             ll_builder.grow(ll_builder, size)
 
-        rffi.cast(FLOAT_ARRAY, rffi.ptradd(rffi.cast(rffi.VOIDP, ll_builder.buf.chars), used))[0] = f
+        rffi.cast(rffi.CArrayPtr(T), rffi.ptradd(rffi.cast(rffi.VOIDP, ll_builder.buf.chars), used))[0] = f
         ll_builder.used += size
 
     @staticmethod
