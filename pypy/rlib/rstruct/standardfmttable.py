@@ -21,8 +21,7 @@ PACK_ACCEPTS_BROKEN_INPUT = True
 # ____________________________________________________________
 
 def pack_pad(fmtiter, count):
-    for i in range(count):
-        fmtiter.result.append('\x00')
+    fmtiter.result.append_multiple_char('\x00', count)
 
 def pack_char(fmtiter):
     string = fmtiter.accept_str_arg()
