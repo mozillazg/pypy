@@ -27,10 +27,7 @@ float_buf = lltype.malloc(rffi.FLOATP.TO, 1, flavor='raw', immortal=True)
 
 def pack_double(fmtiter):
     doubleval = fmtiter.accept_float_arg()
-    double_buf[0] = doubleval
-    p = rffi.cast(rffi.CCHARP, double_buf)
-    for i in range(sizeof_double):
-        fmtiter.result.append(p[i])
+    fmtiter.result.append_float(doubleval)
 
 @specialize.argtype(0)
 def unpack_double(fmtiter):
@@ -44,10 +41,7 @@ def unpack_double(fmtiter):
 def pack_float(fmtiter):
     doubleval = fmtiter.accept_float_arg()
     floatval = r_singlefloat(doubleval)
-    float_buf[0] = floatval
-    p = rffi.cast(rffi.CCHARP, float_buf)
-    for i in range(sizeof_float):
-        fmtiter.result.append(p[i])
+    fmtiter.result.append_float(floatval)
 
 @specialize.argtype(0)
 def unpack_float(fmtiter):
