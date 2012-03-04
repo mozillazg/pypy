@@ -817,7 +817,7 @@ class Assembler386(object):
         regalloc.walk_operations(operations)
         if we_are_translated() or self.cpu.dont_keepalive_stuff:
             self._regalloc = None   # else keep it around for debugging
-        frame_depth = regalloc.fm.get_frame_depth()
+        frame_depth = regalloc.get_final_frame_depth()
         jump_target_descr = regalloc.jump_target_descr
         if jump_target_descr is not None:
             target_frame_depth = jump_target_descr._x86_clt.frame_depth

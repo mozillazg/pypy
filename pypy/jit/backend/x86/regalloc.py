@@ -205,10 +205,18 @@ class RegAlloc(object):
         self.min_bytes_before_label = max(self.min_bytes_before_label,
                                           at_least_position)
 
-    @staticmethod
-    def reserve_param(n):
+    def needed_extra_stack_locations(self, n):
         assert n <= OFFSTACK_REAL_FRAME
-        #self.param_depth = max(self.param_depth, n)
+        self.min_frame_depth = self.fm.get_frame_depth()
+        return
+        # call *after* you needed extra stack locations: (%esp), (%esp+4)...
+        min_frame_depth = self.fm.get_frame_depth() + n
+        if min_frame_depth > self.min_frame_depth:
+            self.min_frame_depth = min_frame_depth
+
+    def get_final_frame_depth(self):
+        self.needed_extra_stack_locations(0)  # update min_frame_depth
+        return self.min_frame_depth
 
     def _set_initial_bindings(self, inputargs):
         if IS_X86_64:
