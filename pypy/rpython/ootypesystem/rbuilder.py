@@ -9,7 +9,7 @@ MAX = 16*1024*1024
 class BaseBuilderRepr(AbstractStringBuilderRepr):
     def empty(self):
         return ootype.null(self.lowleveltype)
-    
+
     @classmethod
     def ll_new(cls, init_size):
         if init_size < 0 or init_size > MAX:
@@ -38,6 +38,14 @@ class BaseBuilderRepr(AbstractStringBuilderRepr):
     def ll_append_multiple_char(builder, char, times):
         for i in range(times):
             builder.ll_append_char(char)
+
+    @staticmethod
+    def ll_append_float(builder, f):
+        builder.ll_append_float(f)
+
+    @staticmethod
+    def ll_append_single_float(builder, f):
+        builder.ll_append_single_float(f)
 
     @staticmethod
     def ll_build(builder):

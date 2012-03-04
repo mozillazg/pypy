@@ -1,6 +1,6 @@
 from pypy.rlib import rgc, jit
-from pypy.rlib.objectmodel import enforceargs, keepalive_until_here
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.objectmodel import enforceargs, keepalive_until_here, specialize
 from pypy.rpython.annlowlevel import llstr
 from pypy.rpython.rptr import PtrRepr
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rstr
@@ -9,6 +9,7 @@ from pypy.rpython.lltypesystem.rstr import (STR, UNICODE, char_repr,
     string_repr, unichar_repr, unicode_repr)
 from pypy.rpython.rbuilder import AbstractStringBuilderRepr
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 # Think about heuristics below, maybe we can come up with something
 # better or at least compare it with list heuristics
@@ -117,6 +118,15 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 
     @staticmethod
     def ll_append_float(ll_builder, f):
+        StringBuilderRepr._append_float(ll_builder, f, float2memory)
+
+    @staticmethod
+    def ll_append_single_float(ll_builder, f):
+        StringBuilderRepr._append_float(ll_builder, f, singlefloat2memory)
+
+    @staticmethod
+    @specialize.argtype(1)
+    def _append_float(ll_builder, f, memory_func):
         T = lltype.typeOf(f)
         BUF_T = lltype.typeOf(ll_builder.buf).TO
 
@@ -127,7 +137,7 @@ class BaseStringBuilderRepr(AbstractStringBuilderRepr):
 
         chars_offset = llmemory.offsetof(BUF_T, 'chars') + llmemory.itemoffsetof(BUF_T.chars, 0)
         array = llmemory.cast_ptr_to_adr(ll_builder.buf) + chars_offset + llmemory.sizeof(BUF_T.chars.OF) * used
-        rffi.cast(rffi.CArrayPtr(T), array)[0]
+        memory_func(f, rffi.cast(rffi.CCHARP, array))
         keepalive_until_here(ll_builder.buf)
         ll_builder.used += size
 
@@ -170,3 +180,39 @@ class UnicodeBuilderRepr(BaseStringBuilderRepr):
 
 unicodebuilder_repr = UnicodeBuilderRepr()
 stringbuilder_repr = StringBuilderRepr()
+
+
+eci = ExternalCompilationInfo(includes=['string.h'],
+                              post_include_bits=["""
+void pypy__float2memory(double x, char *p) {
+    memcpy(p, (char *)&x, sizeof(double));
+}
+void pypy__singlefloat2memory(float x, char *p) {
+    memcpy(p, (char *)&x, sizeof(float));
+}
+"""])
+
+def float2memory_emulator(f, c_ptr):
+    with lltype.scoped_alloc(rffi.CArray(lltype.Float), 1) as f_array:
+        f_array[0] = f
+        c_array = rffi.cast(rffi.CCHARP, f_array)
+        for i in range(rffi.sizeof(lltype.Float)):
+            c_ptr[i] = c_array[i]
+
+def singlefloat2memory_emulator(f, c_ptr):
+    with lltype.scoped_alloc(rffi.CArray(lltype.SingleFloat), 1) as f_array:
+        f_array[0] = f
+        c_array = rffi.cast(rffi.CCHARP, f_array)
+        for i in range(rffi.sizeof(lltype.SingleFloat)):
+            c_ptr[i] = c_array[i]
+
+float2memory = rffi.llexternal(
+    "pypy__float2memory", [lltype.Float, rffi.CCHARP], lltype.Void,
+    compilation_info=eci, _nowrapper=True, sandboxsafe=True,
+    _callable=float2memory_emulator
+)
+singlefloat2memory = rffi.llexternal(
+    "pypy__singlefloat2memory", [lltype.SingleFloat, rffi.CCHARP], lltype.Void,
+    compilation_info=eci, _nowrapper=True, sandboxsafe=True,
+    _callable=singlefloat2memory_emulator,
+)

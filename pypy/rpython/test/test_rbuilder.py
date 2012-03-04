@@ -1,6 +1,7 @@
 from __future__ import with_statement
 import py
 
+from pypy.rlib.rarithmetic import r_singlefloat
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
 from pypy.rpython.annlowlevel import llstr, hlstr
 from pypy.rpython.lltypesystem import rffi

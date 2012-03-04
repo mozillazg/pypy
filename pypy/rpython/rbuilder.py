@@ -1,5 +1,6 @@
 from pypy.annotation.model import SomeChar, SomeUnicodeCodePoint
 from pypy.rlib.rstring import INIT_SIZE
+from pypy.rpython.error import TyperError
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.rmodel import Repr
 
@@ -40,9 +41,14 @@ class AbstractStringBuilderRepr(Repr):
         return hop.gendirectcall(self.ll_append_charpsize, *vlist)
 
     def rtype_method_append_float(self, hop):
-        vlist = hop.inputargs(self, lltype.Float)
+        try:
+            vlist = hop.inputargs(self, lltype.Float)
+            target = self.ll_append_float
+        except TyperError:
+            vlist = hop.inputargs(self, lltype.SingleFloat)
+            target = self.ll_append_single_float
         hop.exception_cannot_occur()
-        return hop.gendirectcall(self.ll_append_float, *vlist)
+        return hop.gendirectcall(target, *vlist)
 
     def rtype_method_getlength(self, hop):
         vlist = hop.inputargs(self)
