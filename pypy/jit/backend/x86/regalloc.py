@@ -170,7 +170,7 @@ class RegAlloc(object):
 
     def _prepare(self, inputargs, operations, allgcrefs):
         self.fm = X86FrameManager()
-        #self.param_depth = 0
+        self.min_frame_depth = 0
         cpu = self.assembler.cpu
         operations = cpu.gc_ll_descr.rewrite_assembler(cpu, operations,
                                                        allgcrefs)
@@ -195,11 +195,9 @@ class RegAlloc(object):
             self.min_bytes_before_label = 13
         return operations
 
-    def prepare_bridge(self, prev_depths, inputargs, arglocs, operations,
-                       allgcrefs):
+    def prepare_bridge(self, inputargs, arglocs, operations, allgcrefs):
         operations = self._prepare(inputargs, operations, allgcrefs)
         self._update_bindings(arglocs, inputargs)
-        #self.param_depth = prev_depths[1]
         self.min_bytes_before_label = 0
         return operations
 
@@ -400,27 +398,12 @@ class RegAlloc(object):
     def locs_for_fail(self, guard_op):
         return [self.loc(v) for v in guard_op.getfailargs()]
 
-    def get_current_depth(self):
-        # return (self.fm.frame_depth, self.param_depth), but trying to share
-        # the resulting tuple among several calls
-        arg0 = self.fm.get_frame_depth()
-        return arg0
-        #
-        arg1 = self.param_depth
-        result = self.assembler._current_depths_cache
-        if result[0] != arg0 or result[1] != arg1:
-            result = (arg0, arg1)
-            self.assembler._current_depths_cache = result
-        return result
-
     def perform_with_guard(self, op, guard_op, arglocs, result_loc):
         faillocs = self.locs_for_fail(guard_op)
         self.rm.position += 1
         self.xrm.position += 1
-        current_depths = self.get_current_depth()
         self.assembler.regalloc_perform_with_guard(op, guard_op, faillocs,
-                                                   arglocs, result_loc,
-                                                   current_depths)
+                                                   arglocs, result_loc)
         if op.result is not None:
             self.possibly_free_var(op.result)
         self.possibly_free_vars(guard_op.getfailargs())
@@ -433,10 +416,8 @@ class RegAlloc(object):
                                                       arglocs))
             else:
                 self.assembler.dump('%s(%s)' % (guard_op, arglocs))
-        current_depths = self.get_current_depth()
         self.assembler.regalloc_perform_guard(guard_op, faillocs, arglocs,
-                                              result_loc,
-                                              current_depths)
+                                              result_loc)
         self.possibly_free_vars(guard_op.getfailargs())
 
     def PerformDiscard(self, op, arglocs):
