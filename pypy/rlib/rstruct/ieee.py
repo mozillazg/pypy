@@ -142,7 +142,7 @@ def pack_float(result, x, size, be):
         l.append(chr((unsigned >> (i * 8)) & 0xFF))
     if be:
         l.reverse()
-        result.extend(l)
+        result.append("".join(l))
 
 
 def unpack_float(s, be):
