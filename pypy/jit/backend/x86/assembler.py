@@ -67,6 +67,11 @@ DEBUG_COUNTER = lltype.Struct('DEBUG_COUNTER', ('i', lltype.Signed),
                                                      # 'e'ntry point
                               ('number', lltype.Signed))
 
+# It's probably fine to assume that malloc() and realloc() don't touch the
+# xmm registers, but the following constant can be used to change that.
+MALLOC_REALLOC_USE_XMM_REGISTERS = False
+
+
 class Assembler386(object):
     _regalloc = None
     _output_loop_log = None
@@ -284,6 +289,7 @@ class Assembler386(object):
 
     def _build_realloc_bridge_slowpath(self):
         from pypy.jit.backend.x86.regalloc import gpr_reg_mgr_cls
+        from pypy.jit.backend.x86.regalloc import xmm_reg_mgr_cls
         # This defines a function called at the start of a bridge to
         # increase the size of the off-stack frame.  It must preserve
         # all registers.
@@ -307,8 +313,17 @@ class Assembler386(object):
         # will save some registers in the caller's frame, in the
         # temporary OFFSTACK_REAL_FRAME words.
         save_regs = gpr_reg_mgr_cls.save_around_call_regs
+        if self.cpu.supports_floats and (
+                MALLOC_REALLOC_USE_XMM_REGISTERS or not we_are_translated()):
+            save_xmm_regs = xmm_reg_mgr_cls.save_around_call_regs
+        else:
+            save_xmm_regs = []
+        #
         if IS_X86_32:
-            assert OFFSTACK_REAL_FRAME >= 2
+            assert OFFSTACK_REAL_FRAME + 1 >= 3 + 2 * len(save_xmm_regs)
+            #      \_ size incl retaddr _/    \___ max ofs from esp ___/
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_sx((3+2*i) * WORD, save_xmm_regs[i].value)
             assert len(save_regs) == 3
             # there are 3 PUSHes in total here.  With the retaddr, the
             # stack remains aligned.
@@ -324,15 +339,21 @@ class Assembler386(object):
             self.mc.PUSH_r(eax.value)
             #
         elif IS_X86_64:
-            assert OFFSTACK_REAL_FRAME >= len(save_regs) - 1
-            # there is only 1 PUSH in total here.  With the retaddr, the
+            NUMPUSHES = 5    # an odd number
+            ofsbase = 1 + len(save_regs) - NUMPUSHES
+            assert OFFSTACK_REAL_FRAME + 1 >= ofsbase + len(save_xmm_regs)
+            #      \_ size incl retaddr _/    \____ max ofs from esp ____/
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_sx((ofsbase+i) * WORD, save_xmm_regs[i].value)
+            # there are NUMPUSHES PUSHes in total here.  With the retaddr, the
             # stack remains aligned.
-            for j in range(len(save_regs)-1, 0, -1):
-                self.mc.MOV_sr(j*WORD, save_regs[j].value)
-            self.mc.PUSH_r(save_regs[0].value)
+            for j in range(NUMPUSHES, len(save_regs)):
+                self.mc.MOV_sr((j-NUMPUSHES+1)*WORD, save_regs[j].value)
+            for j in range(NUMPUSHES):
+                self.mc.PUSH_r(save_regs[j].value)
             #
             # fish fish fish (see above)
-            self.mc.MOV_rs(esi.value, WORD)     # load the retaddr
+            self.mc.MOV_rs(esi.value, NUMPUSHES*WORD)     # load the retaddr
             self.mc.MOV32_rm(esi.value, (esi.value,
                                          -self.realloc_bridge_ofs))
             #
@@ -346,7 +367,9 @@ class Assembler386(object):
         # fix the OFFSTACK_SIZE_ALLOCATED in the updated memory location
         if IS_X86_32:
             self.mc.ADD_ri(esp.value, 2*WORD)
-        self.mc.MOV_rs(eax.value, WORD)      # load the retaddr again
+            self.mc.MOV_rs(eax.value, WORD)      # load the retaddr again
+        elif IS_X86_64:
+            self.mc.MOV_rs(eax.value, NUMPUSHES*WORD) # load the retaddr again
         self.mc.MOV32_rm(eax.value, (eax.value, -self.realloc_bridge_ofs))
         self.mc.MOV_br(WORD * OFFSTACK_SIZE_ALLOCATED, eax.value)
         #
@@ -359,10 +382,15 @@ class Assembler386(object):
             self.mc.POP_r(save_regs[2].value)
             self.mc.MOV_rs(save_regs[1].value, 2*WORD)
             self.mc.MOV_rs(save_regs[0].value, 1*WORD)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_xs(save_xmm_regs[i].value, (3+2*i) * WORD)
         elif IS_X86_64:
-            self.mc.POP_r(save_regs[0].value)
-            for j in range(len(save_regs)-1, 0, -1):
-                self.mc.MOV_rs(save_regs[j].value, j*WORD)
+            for j in range(NUMPUSHES-1, -1, -1):
+                self.mc.POP_r(save_regs[j].value)
+            for j in range(NUMPUSHES, len(save_regs)):
+                self.mc.MOV_rs(save_regs[j].value, (j-NUMPUSHES+1)*WORD)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_xs(save_xmm_regs[i].value, (ofsbase+i) * WORD)
         self.mc.RET()
         #
         rawstart = self.mc.materialize(self.cpu.asmmemmgr, [])
@@ -852,10 +880,16 @@ class Assembler386(object):
         elif IS_X86_64:
             # XXX need to save and restore all possible argument registers
             save_regs = [r9, r8, ecx, edx, esi, edi]
-            assert OFFSTACK_REAL_FRAME > len(save_regs)
+            if MALLOC_REALLOC_USE_XMM_REGISTERS or not we_are_translated():
+                save_xmm_regs = [xmm7,xmm6,xmm5,xmm4,xmm3,xmm2,xmm1,xmm0]
+            else:
+                save_xmm_regs = []
+            assert OFFSTACK_REAL_FRAME > len(save_regs) + len(save_xmm_regs)
             for i in range(len(save_regs)):
                 self.mc.MOV_sr(WORD * (1 + i), save_regs[i].value)
-            # assume that the XMM registers are safe.
+            base = 1 + len(save_regs)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_sx(WORD * (base + i), save_xmm_regs[i].value)
             self.mc.MOV_riu32(edi.value, 0x77777777)     # temporary
         frame_size_pos = self.mc.get_relative_pos() - 4
         #
@@ -882,6 +916,9 @@ class Assembler386(object):
             # reload the original value of the save_regs (including edi)
             for i in range(len(save_regs)):
                 self.mc.MOV_rs(save_regs[i].value, WORD * (1 + i))
+            base = 1 + len(save_regs)
+            for i in range(len(save_xmm_regs)):
+                self.mc.MOVSD_xs(save_xmm_regs[i].value, WORD * (base + i))
         #
         # save in the freshly malloc'ed block the original value of
         # all other callee-saved registers
