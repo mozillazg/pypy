@@ -1,7 +1,6 @@
 import utils
 from pypy.rlib import rjvm
-from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper, _is_static
-from pypy.translator.jvm.jvm_interop.utils import NativeRJvmInstanceExample, JvmOverloadingResolver
+from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper
 from pypy.rpython.ootypesystem import ootype
 
 class NativeRJvmInstance(ootype.NativeInstance):
@@ -13,23 +12,16 @@ class NativeRJvmInstance(ootype.NativeInstance):
         self.refclass = refclass
         self.class_name = refclass.getName()
         self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass)}
-        self.name_checker = NativeRJvmInstanceExample(refclass) # used in self._example()
+        self.example = utils.NativeRJvmInstanceExample(refclass) # used in self._example()
 
     def __repr__(self):
         return '<NativeJvmInstance %s>' % self.class_name
 
     def _example(self):
-        return self.name_checker
+        return self.example
 
     def _lookup(self, meth_name):
-        java_methods = [m for m in self.refclass.getMethods() if not _is_static(m) and m.getName() == meth_name]
-        if not java_methods:
-            return self, None
-        elif len(java_methods) == 1:
-            meth = utils.jvm_method_to_pypy_method(java_methods[0])
-        else:
-            overloads = [utils.jvm_method_to_pypy_method(m) for m in java_methods]
-            meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
+        meth = utils.pypy_method_from_name(self.refclass, meth_name)
         return self, meth
 
     def _check_field(self, field_name):

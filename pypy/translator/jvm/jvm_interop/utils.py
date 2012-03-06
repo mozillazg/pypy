@@ -87,18 +87,22 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
             return ootype.OverloadingResolver.lltype_to_annotation(TYPE)
 
 
-def jvm_method_to_pypy_method(method, result=None):
+def jvm_method_to_pypy_Meth(method, Meth_type=ootype.Meth, result=None):
     """
-    Convert a proxy to a java.lang.reflect.Method to an instance of ootype.meth.
-    Sometimes we want to treat constructors as methods to reuse the code that
-    handles overloading. In such a case we override the result with ootype.Void
-    or whatever (since java.lang.reflect.Constructor has no getReturnType method).
+    Convert a proxy to a java.lang.reflect.Method to an instance of
+    meth_type (defaults to ootype.meth). Sometimes we want to treat
+    constructors as methods to reuse the code that handles
+    overloading. In such a case we override the result with
+    ootype.Void or whatever (since java.lang.reflect.Constructor has
+    no getReturnType method).
     """
     args = tuple(jpype_type_to_ootype(t) for t in method.getParameterTypes())
     if result is None:
         result = jpype_type_to_ootype(method.getReturnType())
-    return ootype.meth(ootype.Meth(args, result))
+    return Meth_type(args, result)
 
+def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth, result=None):
+    return meth_type(jvm_method_to_pypy_Meth(method, Meth_type=Meth_type, result=result))
 
 def jpype_type_to_ootype(tpe):
     assert isinstance(tpe, jpype._jclass._JavaClass)
@@ -121,7 +125,7 @@ def has_matching_constructor(jvm_class_wrapper, s_args):
     resolves overloadings.
     """
     refclass = jvm_class_wrapper.__reflection_class__
-    overloads = [jvm_method_to_pypy_method(c, result=ootype.Void) for c in refclass.getConstructors()]
+    overloads = [jvm_method_to_pypy_meth(c, result=ootype.Void) for c in refclass.getConstructors()]
     overloaded_meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
     args = tuple(JvmOverloadingResolver.annotation_to_lltype(arg) for arg in s_args)
     try:
@@ -132,14 +136,15 @@ def has_matching_constructor(jvm_class_wrapper, s_args):
         return True
 
 
-def call_method(method):
+def call_method(method, static=False):
     """
     Return a function that when called will "unwrap" arguments (_str('foo') => 'foo'),
     call the method and wrap the result. The returned function can be used as the
     _callable field of an ootype._bound_meth to actually call the method in question.
     """
     def callable(*args):
-        args = [unwrap(arg) for arg in args[1:]]   # skip the first arg, method is already bound
+        start = 0 if static else 1
+        args = [unwrap(arg) for arg in args[start:]]   # skip the first arg, method is already bound
         result = method(*args)
         return wrap(result)
 
@@ -170,3 +175,22 @@ def wrap(value):
         return value
     else:
         raise AssertionError("Don't know how to wrap %r" % value)
+
+
+def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=ootype.Meth, static=False):
+    if static:
+        staticness = rjvm._is_static
+    else:
+        staticness = lambda m: not rjvm._is_static(m)
+
+    java_methods = [m for m in refclass.getMethods() if staticness(m) and m.getName() == meth_name]
+
+    if not java_methods:
+        raise TypeError
+    elif len(java_methods) == 1:
+        meth = jvm_method_to_pypy_meth(java_methods[0], meth_type, Meth_type)
+    else:
+        overloads = [jvm_method_to_pypy_meth(m, meth_type=meth_type, Meth_type=Meth_type) for m in java_methods]
+        meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
+
+    return meth
