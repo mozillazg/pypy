@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem.lltype import \
      typeOf, LowLevelType, Ptr, PyObject, isCompatibleType
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.error import TyperError, MissingRTypeOperation 
+from pypy.rpython.error import TyperError, MissingRTypeOperation
 
 # initialization states for Repr instances 
 
@@ -36,7 +36,7 @@ class Repr(object):
         return '%s %s' % (self.__class__.__name__.replace('Repr','R'), self.lowleveltype._short_name())
 
     def setup(self): 
-        """ call _setup_repr() and keep track of the initializiation
+        """ call _setup_repr() and keep track of the initialization
             status to e.g. detect recursive _setup_repr invocations.
             the '_initialized' attr has four states: 
         """
@@ -62,7 +62,7 @@ class Repr(object):
             self._initialized = setupstate.FINISHED 
 
     def _setup_repr(self):
-        "For recursive data structure, which must be initialized in two steps."
+        """For recursive data structure, which must be initialized in two steps."""
 
     def setup_final(self):
         """Same as setup(), called a bit later, for effects that are only
@@ -121,7 +121,7 @@ class Repr(object):
                              "or Constant: %r" % desc_or_const)
                             
     def convert_const(self, value):
-        "Convert the given constant value to the low-level repr of 'self'."
+        """Convert the given constant value to the low-level repr of 'self'."""
         if self.lowleveltype is not Void:
             try:
                 realtype = typeOf(value)

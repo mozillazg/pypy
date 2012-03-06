@@ -33,6 +33,14 @@ def test_class_instantiate():
     al.add("test")
     assert al.get(0) == "test"
 
+def test_class_repr():
+    al = java.util.ArrayList
+    assert 'java.util.ArrayList' in repr(al)
+
+def test_instance_repr():
+    al = java.util.ArrayList()
+    assert 'java.util.ArrayList' in repr(al)
+
 def test_invalid_method_name():
     al = java.util.ArrayList()
     al.add("test")
@@ -128,6 +136,20 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert res == 42
+
+    def test_static_fields(self):
+        py.test.skip()
+        def fn():
+            return java.lang.Integer.SIZE
+        res = self.interpret(fn, [])
+        assert res == 32
+
+    def test_static_method_no_overload(self):
+        def fn():
+            return java.lang.Integer.bitCount(5)
+        res = self.interpret(fn, [])
+        assert res == 2
+
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

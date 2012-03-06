@@ -85,10 +85,10 @@ class JvmClassWrapper(CallableWrapper):
         self.__name__ = cls.__name__
 
         refclass = self.__reflection_class__
-        self.__static_method_names = {str(m.getName()) for m in refclass.getMethods() if _is_static(m)}
+        self._static_method_names = {str(m.getName()) for m in refclass.getMethods() if _is_static(m)}
 
     def __getattr__(self, attr):
-        if attr in self.__static_method_names:
+        if attr in self._static_method_names:
             return JvmStaticMethodWrapper(getattr(self.__wrapped__, attr))
         else:
             raise TypeError(
@@ -97,7 +97,7 @@ class JvmClassWrapper(CallableWrapper):
                     method_name=attr, class_name=self.__name__))
 
     def __repr__(self):
-        return '<JvmClassWrapper %s>' % self.__wrapped__.__name__
+        return '<JvmClassWrapper %s>' % self.__name__
 
 
 class JvmInstanceWrapper(Wrapper):
