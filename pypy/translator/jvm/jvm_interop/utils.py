@@ -1,5 +1,5 @@
 import jpype
-import types
+import ootypemodel
 from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
@@ -77,7 +77,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
 
     @classmethod
     def lltype_to_annotation(cls, TYPE):
-        if isinstance(TYPE, types.NativeRJvmInstance):
+        if isinstance(TYPE, ootypemodel.NativeRJvmInstance):
             return SomeOOInstance(TYPE)
         elif TYPE is ootype.Char:
             return SomeChar()
@@ -109,7 +109,7 @@ def jpype_type_to_ootype(tpe):
     try:
         return jpype_primitives_to_ootype_mapping[tpe]
     except KeyError:
-        return types.NativeRJvmInstance(tpe.__javaclass__)
+        return ootypemodel.NativeRJvmInstance(tpe.__javaclass__)
 
 
 jpype_primitives_to_ootype_mapping = {
@@ -154,7 +154,7 @@ def call_method(method, static=False):
 def unwrap(value):
     # TODO: what about other primitive types?
     # Is there a general mechanism for this somewhere?
-    if isinstance(value, types._native_rjvm_instance):
+    if isinstance(value, ootypemodel._native_rjvm_instance):
         return value._instance
     elif isinstance(value, ootype._string):
         return value._str
@@ -165,8 +165,8 @@ def unwrap(value):
 
 
 def wrap(value):
-    if isinstance(value, types.JvmInstanceWrapper):
-        return types._native_rjvm_instance(types.NativeRJvmInstance(value.__refclass__), value)
+    if isinstance(value, ootypemodel.JvmInstanceWrapper):
+        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value.__refclass__), value)
     elif isinstance(value, (str, unicode)):
         return ootype._string(ootype.String, str(value))
     elif value is None:

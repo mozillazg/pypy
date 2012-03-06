@@ -1,3 +1,3 @@
-from annotator import * # register annotator entries
-from types import *
-from rtyper import *
+from annmodel import * # register annotator entries
+from ootypemodel import *
+from rtypemodel import *

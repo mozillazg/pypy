@@ -3,8 +3,8 @@ import utils
 from pypy.annotation.model import SomeOOInstance, SomeObject, s_ImpossibleValue, SomeOOStaticMeth
 from pypy.rlib.rjvm import JvmClassWrapper, JvmStaticMethodWrapper, _is_static
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.translator.jvm.jvm_interop.types import NativeRJvmInstance
-from pypy.translator.jvm.jvm_interop.rtyper import JvmClassWrapperRepr
+from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
+from pypy.translator.jvm.jvm_interop.rtypemodel import JvmClassWrapperRepr
 from pypy.translator.jvm.jvm_interop.utils import has_matching_constructor
 
 class SomeJvmClassWrapper(SomeObject):
