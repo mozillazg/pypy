@@ -185,4 +185,8 @@ class OOStaticMethRepr(Repr):
 class __extend__(pairtype(OOInstanceRepr, OOBoundMethRepr)):
 
     def convert_from_to(_, v, llops):
+        """
+        This conversion allows us to handle method calls the way we handle them
+        right now, which is to return OOInstanceRepr from OOInstanceRepr.rtype_getattr
+        """
         return v

@@ -99,7 +99,8 @@ def jvm_method_to_pypy_Meth(method, Meth_type=ootype.Meth, result=None):
     args = tuple(jpype_type_to_ootype(t) for t in method.getParameterTypes())
     if result is None:
         result = jpype_type_to_ootype(method.getReturnType())
-    return Meth_type(args, result)
+    result =  Meth_type(args, result)
+    return result
 
 def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth, result=None):
     return meth_type(jvm_method_to_pypy_Meth(method, Meth_type=Meth_type, result=result))

@@ -63,6 +63,7 @@ class _JvmCallMethod(MicroInstruction):
                             jmethod.return_type, op.result)
 JvmCallMethod = _JvmCallMethod()
 
+
 class _NewCustomDict(MicroInstruction):
     def _load_func(self, gen, fn, obj, method_name):
         db = gen.db

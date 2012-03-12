@@ -569,6 +569,18 @@ class JVMGenerator(Generator):
         mthd = self.db.pending_function(graph)
         mthd.invoke(self)
 
+    def call_native(self, meth):
+        assert isinstance(meth, ootype._static_meth)
+        meth_type = ootype.typeOf(meth)
+
+        class_name, method_name = meth._name.rsplit('.', 1)
+        java_class = jvm.JvmClassType(class_name)
+        argtypes = [self.db.lltype_to_cts(t) for t in meth_type.ARGS]
+        retttype = self.db.lltype_to_cts(meth_type.RESULT)
+        jmethod = jvm.Method.s(java_class, method_name, argtypes, retttype)
+        self.emit(jmethod)
+
+
     def call_method(self, OOCLASS, method_name):
         clsobj = self.db.pending_class(OOCLASS)
         mthd = clsobj.lookup_method(method_name)
