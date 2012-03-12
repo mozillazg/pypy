@@ -4,7 +4,7 @@ from pypy.annotation.model import SomeOOInstance, SomeObject, s_ImpossibleValue,
 from pypy.rlib.rjvm import JvmClassWrapper, JvmStaticMethodWrapper, _is_static
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
-from pypy.translator.jvm.jvm_interop.rtypemodel import JvmClassWrapperRepr
+from pypy.translator.jvm.jvm_interop.rtypemodel import JvmClassWrapperRepr, JvmNativeStaticMethRepr
 from pypy.translator.jvm.jvm_interop.utils import has_matching_constructor
 
 class SomeJvmClassWrapper(SomeObject):
@@ -31,13 +31,27 @@ class SomeJvmClassWrapper(SomeObject):
             if not java_methods:
                 raise TypeError
             elif len(java_methods) == 1:
-                return SomeOOStaticMeth(utils.jvm_method_to_pypy_Meth(java_methods[0], ootype.StaticMethod))
+                java_method, = java_methods
+                meth_type = utils.jvm_method_to_pypy_Meth(java_method, ootype.StaticMethod)
+                return SomeJvmNativeStaticMeth(meth_type, jvm_class_wrapper, attrname)
         else:
             raise AssertionError("Static fields are not yet supported!")
 
     def rtyper_makerepr(self, rtyper):
         return JvmClassWrapperRepr(self.const)
 
+
+class SomeJvmNativeStaticMeth(SomeOOStaticMeth):
+    def __init__(self, method_type, rjvm_class_wrapper, name):
+        SomeOOStaticMeth.__init__(self, method_type)
+        self.name = name
+        self.rjvm_class_wrapper = rjvm_class_wrapper
+
+    def rtyper_makerepr(self, rtyper):
+        return JvmNativeStaticMethRepr(self.method, self.name, self.rjvm_class_wrapper)
+
+    def rtyper_makekey(self):
+        return self.__class__, self.method
 
 class JvmClassWrapperEntry(ExtRegistryEntry):
     """
@@ -47,3 +61,4 @@ class JvmClassWrapperEntry(ExtRegistryEntry):
 
     def compute_annotation(self):
         return SomeJvmClassWrapper(self.instance)
+
