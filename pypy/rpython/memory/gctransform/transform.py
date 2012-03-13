@@ -377,6 +377,9 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
+    def gct_gc_writebarrier(self, hop):
+        pass
+
     def gct_gc_writebarrier_before_copy(self, hop):
         # We take the conservative default and return False here, meaning
         # that rgc.ll_arraycopy() will do the copy by hand (i.e. with a
@@ -520,11 +523,11 @@ class GCTransformer(BaseGCTransformer):
         flags = hop.spaceop.args[1].value
         flavor = flags['flavor']
         meth = getattr(self, 'gct_fv_%s_malloc' % flavor, None)
-        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc with flavor %r" % (self, flavor)
         c_size = rmodel.inputconst(lltype.Signed, llmemory.sizeof(TYPE))
         v_raw = meth(hop, flags, TYPE, c_size)
         hop.cast_result(v_raw)
- 
+
     def gct_fv_raw_malloc(self, hop, flags, TYPE, c_size):
         v_raw = hop.genop("direct_call", [self.raw_malloc_fixedsize_ptr, c_size],
                           resulttype=llmemory.Address)
@@ -548,7 +551,7 @@ class GCTransformer(BaseGCTransformer):
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
     def gct_malloc_nonmovable(self, *args, **kwds):
