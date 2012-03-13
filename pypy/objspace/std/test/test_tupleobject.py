@@ -49,6 +49,7 @@ class AppTestW_TupleObject:
         assert () * 10 == ()
         assert (5,) * 3 == (5,5,5)
         assert (5,2) * 2 == (5,2,5,2)
+        assert 2 * (5,) == (5, 5)
 
     def test_mul_identity(self):
         t = (1,2,3)
@@ -123,7 +124,10 @@ class AppTest_SpecializedTuple(object):
     def setup_class(cls):
         def w_get_specializion(space, w_tuple):
             return space.wrap(w_tuple.storage.getshape())
+        def w_same_specialization(space, w_tuple1, w_tuple2):
+            return space.wrap(w_tuple1.storage.getshape() is w_tuple2.storage.getshape())
         cls.w_get_specialization = cls.space.wrap(interp2app(w_get_specializion))
+        cls.w_same_specialization = cls.space.wrap(interp2app(w_same_specialization))
 
     def test_ints(self):
         t = (1, 2, 3)
@@ -177,6 +181,3 @@ class AppTest_SpecializedTuple(object):
         t *= 2
         assert self.same_specialization(s, t)
 
-        t = (1,) * 10
-        s = (1,) * 9
-        assert self.same_specialization(s, t)

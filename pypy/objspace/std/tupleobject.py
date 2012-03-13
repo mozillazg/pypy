@@ -98,7 +98,7 @@ def mul__Tuple_ANY(space, w_tuple, w_times):
     return space.newtuple(w_tuple.tolist(space) * times)
 
 def mul__ANY_Tuple(space, w_times, w_tuple):
-    pass
+    return mul__Tuple_ANY(space, w_tuple, w_times)
 
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
     if w_tuple1.storage.getshape() is not w_tuple2.storage.getshape():
