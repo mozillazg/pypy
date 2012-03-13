@@ -1,6 +1,7 @@
 import py
 
 from pypy.rlib import rerased_raw
+from pypy.rpython.annlowlevel import hlstr
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
 
 
@@ -29,9 +30,13 @@ def test_direct_instance():
 
     assert storage.getinstance(0, A).value == 4
 
-def test_direct_length():
+def test_direct_getlength():
     storage = rerased_raw.UntypedStorage("ooi")
     assert storage.getlength() == 3
+
+def test_direct_getshape():
+    storage = rerased_raw.UntypedStorage("ooi")
+    assert storage.getshape() == "ooi"
 
 
 class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
@@ -104,3 +109,11 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [])
         assert res == 3
+
+    def test_getshape(self):
+        def f():
+            storage = rerased_raw.UntypedStorage("ooi")
+            return storage.getshape()
+
+        llres = self.interpret(f, [])
+        assert hlstr(llres) == "ooi"
