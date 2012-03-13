@@ -6,11 +6,14 @@ making sure that the shape string is cached correctly.
 
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
-from pypy.rpython.annlowlevel import hlstr, llstr, llhelper
+from pypy.rpython.annlowlevel import (hlstr, llstr, llhelper,
+    cast_instance_to_base_ptr)
+from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import rffi, lltype, llmemory
 from pypy.rpython.lltypesystem.rstr import STR, string_repr
 from pypy.rpython.rmodel import Repr
+from pypy.tool.pairtype import pairtype
 
 
 INT = "i"
@@ -70,13 +73,18 @@ class UntypedStorageEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         return hop.r_result.rtyper_new(hop)
 
+class UntypedStoragePrebuiltEntry(ExtRegistryEntry):
+    _type_ = UntypedStorage
+
+    def compute_annotation(self):
+        return SomeUntypedStorage()
 
 class SomeUntypedStorage(annmodel.SomeObject):
     def _check_idx(self, s_idx):
         assert annmodel.SomeInteger().contains(s_idx)
 
     def rtyper_makerepr(self, rtyper):
-        return UntypedStorageRepr()
+        return UntypedStorageRepr(rtyper)
 
     def method_getlength(self):
         return annmodel.SomeInteger()
@@ -110,6 +118,12 @@ class SomeUntypedStorage(annmodel.SomeObject):
     def method_setinstance(self, s_idx, s_obj):
         self._check_idx(s_idx)
         assert isinstance(s_obj, annmodel.SomeInstance)
+
+class __extend__(pairtype(SomeUntypedStorage, SomeUntypedStorage)):
+    def union((self, other)):
+        return SomeUntypedStorage()
+
+
 
 UNTYPEDSTORAGE = lltype.GcStruct("untypedstorage",
     ("shape", lltype.Ptr(STR)),
@@ -157,6 +171,9 @@ class UntypedStorageRepr(Repr):
     lowleveltype = lltype.Ptr(UNTYPEDSTORAGE)
     lltype.attachRuntimeTypeInfo(lowleveltype.TO, customtraceptr=trace_untypedstorage_ptr)
 
+    def __init__(self, rtyper):
+        self.rtyper = rtyper
+
     def _read_index(self, hop):
         v_arr = hop.inputarg(self, arg=0)
         v_idx = hop.inputarg(lltype.Signed, arg=1)
@@ -171,6 +188,19 @@ class UntypedStorageRepr(Repr):
         hop.exception_cannot_occur()
         c_name = hop.inputconst(lltype.Void, "data")
         hop.genop("setinteriorfield", [v_arr, c_name, v_idx, v_value])
+
+    def convert_const(self, value):
+        storage = self.ll_new(llstr(value.shape))
+        for idx, (char, obj) in enumerate(zip(value.shape, value.storage)):
+            if char == INT:
+                storage.data[idx] = rffi.cast(llmemory.Address, obj)
+            elif char == INSTANCE:
+                bk = self.rtyper.annotator.bookkeeper
+                classdef = bk.getuniqueclassdef(type(obj))
+                instancerepr = getinstancerepr(self.rtyper, classdef)
+                ptr = instancerepr.convert_const(obj)
+                storage.data[idx] = llmemory.cast_ptr_to_adr(ptr)
+        return storage
 
     def rtyper_new(self, hop):
         [v_shape] = hop.inputargs(string_repr)
