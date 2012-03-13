@@ -1,5 +1,6 @@
 #from __future__ import nested_scopes
-from pypy.interpreter.error import OperationError
+from pypy.interpreter.gateway import interp2app
+
 
 class AppTestW_TupleObject:
 
@@ -119,49 +120,54 @@ class AppTestW_TupleObject:
 
 
 class AppTest_SpecializedTuple(object):
+    def setup_class(cls):
+        def w_get_specializion(space, w_tuple):
+            return space.wrap(w_tuple.storage.getshape())
+        cls.w_get_specialization = cls.space.wrap(interp2app(w_get_specializion))
+
     def test_ints(self):
         t = (1, 2, 3)
-        assert self.get_specialization(t) == (int, int, int)
+        assert self.get_specialization(t) == "iii"
 
     def test_floats(self):
         t = (1.1, 1.1, 2.2)
-        assert self.get_specialization(t) == (float, float, float)
+        assert self.get_specialization(t) == "fff"
 
     def test_bools(self):
         t = (True, False)
-        assert self.get_specialization(t) == (bool, bool)
+        assert self.get_specialization(t) == "bb"
 
     def test_strs(self):
         t = ("a", "b", "c")
-        assert self.get_specialization(t) == (str, str, str)
+        assert self.get_specialization(t) == "sss"
 
     def test_mixed(self):
         t = (1, True, "a")
-        assert self.get_specialization(t) == (int, bool, str)
+        assert self.get_specialization(t) == "ibs"
 
     def test_add(self):
         t = (1,)
-        assert self.get_specialization(t) == (int,)
+        assert self.get_specialization(t) == "i"
         t = t + t
-        assert self.get_specialization(t) == (int, int)
+        assert self.get_specialization(t) == "ii"
 
     def test_mul(self):
         t = (1,) * 3
-        assert self.get_specialization(t) == (int, int, int)
+        assert self.get_specialization(t) == "iii"
+        t = 3 * (1,)
+        assert self.get_specialization(t) == "iii"
 
-    def test_length(self):
-        t = (1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1)
-        assert self.get_specialization(t) is None
+        x = (1,)
+        x *= 3
+        assert self.get_specialization(x) == "iii"
 
-        t = (1,) * 10
-        assert self.get_specialization(t) is None
-
-        t = (1,) * 7 + (True,)
-        assert self.get_specialization(t) is None
+        x = 3
+        x *= (1,)
+        assert self.get_specialization(x) == "iii"
 
     def test_object(self):
         t = (1, True, object())
-        assert self.get_specialization(t) == (int, bool, object)
+        assert self.get_specialization(t) == "ibo"
 
     def test_specialization(self):
         t = (1,)

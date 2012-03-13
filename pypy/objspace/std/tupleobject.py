@@ -101,7 +101,7 @@ def mul__ANY_Tuple(space, w_times, w_tuple):
     pass
 
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
-    if w_tuple1.shape is not w_tuple2.shape:
+    if w_tuple1.storage.getshape() is not w_tuple2.storage.getshape():
         return space.w_False
     if w_tuple1.length() != w_tuple2.length():
         return space.w_False
