@@ -5,9 +5,11 @@ from pypy.objspace.std.inttype import wrapint
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.rlib.rarithmetic import intmask
 from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
+from pypy.objspace.std.slicetype import unwrap_start_stop
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway
 from pypy.rlib.debug import make_sure_not_resized
+
 
 class W_AbstractTupleObject(W_Object):
     __slots__ = ()
@@ -102,12 +104,19 @@ def getitem__Tuple_ANY(space, w_tuple, w_index):
 def getitem__Tuple_Slice(space, w_tuple, w_slice):
     length = w_tuple.length()
     start, stop, step, slicelength = w_slice.indices4(space, length)
+    return getslice(space, w_tuple, slicelength, start, stop, step)
+
+def getslice(space, w_tuple, slicelength, start, stop, step):
     assert slicelength >= 0
     subitems = [None] * slicelength
     for i in range(slicelength):
         subitems[i] = w_tuple.getitem(space, start)
         start += step
     return space.newtuple(subitems)
+
+def getslice__Tuple_ANY_ANY(space, w_tuple, w_start, w_stop):
+    start, stop = normalize_simple_slice(space, w_tuple.length(), w_start, w_stop)
+    return getslice(space, w_tuple, stop - start, start, stop, 1)
 
 def contains__Tuple_ANY(space, w_tuple, w_obj):
     for i in xrange(w_tuple.length()):
@@ -143,13 +152,36 @@ def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
     return space.w_True
 
 def lt__Tuple_Tuple(space, w_tuple1, w_tuple2):
-    pass
+    ncmp = min(w_tuple1.length(), w_tuple2.length())
+    # Search for the first index where items are different
+    for i in range(ncmp):
+        w_obj1 = w_tuple1.getitem(space, i)
+        w_obj2 = w_tuple2.getitem(space, i)
+        if not space.eq_w(w_obj1, w_obj2):
+            return space.lt(w_obj1, w_obj2)
+    # No more items to compare -- compare sizes
+    return space.newbool(w_tuple1.length() < w_tuple2.length())
 
 def gt__Tuple_Tuple(space, w_tuple1, w_tuple2):
-    pass
+    ncmp = min(w_tuple1.length(), w_tuple2.length())
+    # Search for the first index where items are different
+    for i in range(ncmp):
+        w_obj1 = w_tuple1.getitem(space, i)
+        w_obj2 = w_tuple2.getitem(space, i)
+        if not space.eq_w(w_obj1, w_obj2):
+            return space.gt(w_obj1, w_obj2)
+    # No more items to compare -- compare sizes
+    return space.newbool(w_tuple1.length() > w_tuple2.length())
 
 def repr__Tuple(space, w_tuple):
-    pass
+    repr = "("
+    if w_tuple.length() == 1:
+        repr += space.str_w(space.repr(w_tuple.getitem(space, 0)))
+        repr += ",)"
+        return space.wrap(repr)
+    repr += ", ".join([space.str_w(space.repr(w_tuple.getitem(space, i))) for i in xrange(w_tuple.length())])
+    repr += ")"
+    return space.wrap(repr)
 
 def hash_items(space, w_tuple):
     # this is the CPython 2.4 algorithm (changed from 2.3)
@@ -171,13 +203,25 @@ def hash_tuple(space, wrappeditems):
     pass
 
 def getnewargs__Tuple(space, w_tuple):
-    pass
+    return space.newtuple([space.newtuple(w_tuple.tolist(space))])
 
 def tuple_count__Tuple_ANY(space, w_tuple, w_obj):
-    pass
+    count = 0
+    for i in xrange(w_tuple.length()):
+        count += space.eq_w(w_tuple.getitem(space, i), w_obj)
+    return space.wrap(count)
 
 def tuple_index__Tuple_ANY_ANY_ANY(space, w_tuple, w_obj, w_start, w_stop):
-    pass
+    length = w_tuple.length()
+    start, stop = unwrap_start_stop(space, length, w_start, w_stop)
+
+    for i in xrange(start, min(stop, length)):
+        w_value = w_tuple.getitem(space, i)
+        if space.eq_w(w_value, w_obj):
+            return space.wrap(i)
+
+    raise OperationError(space.w_ValueError,
+                         space.wrap("tuple.index(x): x not in tuple"))
 
 from pypy.objspace.std import tupletype
 register_all(vars(), tupletype)

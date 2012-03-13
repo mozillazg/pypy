@@ -1,4 +1,5 @@
 import sys
+from pypy.rlib.rerased_raw import UntypedStorage, INT, INSTANCE
 from pypy.interpreter import gateway
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
@@ -13,22 +14,31 @@ def wraptuple(space, list_w):
     make_tuple(space, w_tuple, list_w)
     return w_tuple
 
+def get_char_from_obj(space, w_obj):
+    if space.is_w(space.type(w_obj), space.w_int):
+        return INT
+    else:
+        return INSTANCE
+
+def store_obj(space, storage, idx, w_obj):
+    if space.is_w(space.type(w_obj), space.w_int):
+        w_tuple.storage.setint(idx, space.int_w(w_obj))
+    else:
+        w_tuple.storage.setinstance(idx, w_obj)
+
 def make_tuple(space, w_tuple, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject, get_shape_cache
 
-    cache = get_shape_cache(space)
-    if len(list_w) > MAXIMUM_SPECIALIZED_SIZE:
-        W_TupleObject.__init__(w_tuple, cache.large_shape, list_w)
-    else:
-        types = []
-        items = []
-        for w_item in list_w:
-            types.append(cache.object_shapetype)
-            items.append(w_item)
+    shape_chars = ["\x00"] * len(list_w)
+    for i, w_item in enumerate(list_w):
+        shape_chars[i] = get_char_from_obj(space, w_item)
 
-        shape = cache.find_shape(types)
-        W_TupleObject.__init__(w_tuple, shape, items)
-        return W_TupleObject(shape, items)
+    shape = space.str_w(space.new_interned_str("".join(shape_chars)))
+    storage = UntypedStorage(shape)
+    for i, w_item in enumerate(list_w):
+        store_obj(space, storage, i, w_item)
+    W_TupleObject.__init__(w_tuple, storage)
+    return w_tuple
 
 tuple_count = SMM("count", 2,
                   doc="count(obj) -> number of times obj appears in the tuple")
