@@ -5,7 +5,7 @@
 # sizeof, offsetof
 
 import weakref
-from pypy.rlib.objectmodel import Symbolic
+from pypy.rlib.objectmodel import Symbolic, specialize
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.uid import uid
 
@@ -380,6 +380,7 @@ def _sizeof_int(TYPE, n):
     else:
         raise Exception("don't know how to take the size of a %r"%TYPE)
 
+@specialize.arg(0)
 def sizeof(TYPE, n=None):
     if n is None:
         return _sizeof_none(TYPE)
@@ -387,19 +388,23 @@ def sizeof(TYPE, n=None):
         return itemoffsetof(TYPE) + _sizeof_none(TYPE.OF) * n
     else:
         return _sizeof_int(TYPE, n)
-sizeof._annspecialcase_ = 'specialize:arg(0)'
 
+@specialize.memo()
 def offsetof(TYPE, fldname):
     assert fldname in TYPE._flds
     return FieldOffset(TYPE, fldname)
-offsetof._annspecialcase_ = 'specialize:memo'
 
+@specialize.memo()
 def itemoffsetof(TYPE, n=0):
     result = ArrayItemsOffset(TYPE)
     if n != 0:
         result += ItemOffset(TYPE.OF) * n
     return result
-itemoffsetof._annspecialcase_ = 'specialize:memo'
+
+@specialize.memo()
+def arraylengthoffset(TYPE):
+    return ArrayLengthOffset(TYPE)
+
 # -------------------------------------------------------------
 
 class fakeaddress(object):
@@ -880,7 +885,7 @@ class RawMemmoveEntry(ExtRegistryEntry):
         assert isinstance(s_from, SomeAddress)
         assert isinstance(s_to, SomeAddress)
         assert isinstance(s_size, SomeInteger)
-    
+
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         v_list = hop.inputargs(Address, Address, lltype.Signed)

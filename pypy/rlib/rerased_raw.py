@@ -6,9 +6,10 @@ making sure that the shape string is cached correctly.
 
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
-from pypy.rpython.annlowlevel import hlstr, llstr
+from pypy.rpython.annlowlevel import hlstr, llstr, llhelper
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rpython.lltypesystem import rffi, lltype, llmemory, rstr
+from pypy.rpython.lltypesystem import rffi, lltype, llmemory
+from pypy.rpython.lltypesystem.rstr import STR, string_repr
 from pypy.rpython.rmodel import Repr
 
 
@@ -78,11 +79,40 @@ class SomeUntypedStorage(annmodel.SomeObject):
         self._check_idx(s_idx)
         assert isinstance(s_obj, annmodel.SomeInstance)
 
+UNTYPEDSTORAGE = lltype.GcStruct("untypedstorage",
+    ("shape", lltype.Ptr(STR)),
+    ("data", lltype.Array(llmemory.Address)),
+    rtti=True,
+)
+
+
+CUSTOMTRACEFUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
+                                  llmemory.Address)
+def trace_untypedstorage(obj_addr, prev):
+    shape_addr = obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "shape")
+    if not prev:
+        return shape_addr
+    shape = shape_addr.address[0]
+    length_offset = (llmemory.offsetof(STR, "chars") +
+        llmemory.arraylengthoffset(STR.chars))
+    length = (shape + length_offset).signed[0]
+    if prev == shape_addr:
+        i = 0
+        while i < length:
+            char = (shape + llmemory.offsetof(STR, "chars") +
+                    llmemory.itemoffsetof(STR.chars, 0) +
+                    (llmemory.sizeof(STR.chars.OF) * i)).char[0]
+            if char == INSTANCE:
+                return (obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "data") +
+                        llmemory.itemoffsetof(UNTYPEDSTORAGE.data, 0) +
+                        llmemory.sizeof(UNTYPEDSTORAGE.data.OF) * i)
+            i += 1
+    return llmemory.NULL
+trace_untypedstorage_ptr = llhelper(lltype.Ptr(CUSTOMTRACEFUNC), trace_untypedstorage)
+
 class UntypedStorageRepr(Repr):
-    lowleveltype = lltype.Ptr(lltype.GcStruct("untypedstorage",
-        ("shape", lltype.Ptr(rstr.STR)),
-        ("data", lltype.Array(lltype.Signed, hints={"nolength": True})),
-    ))
+    lowleveltype = lltype.Ptr(UNTYPEDSTORAGE)
+    lltype.attachRuntimeTypeInfo(lowleveltype.TO, customtraceptr=trace_untypedstorage_ptr)
 
     def _read_index(self, hop):
         v_arr = hop.inputarg(self, arg=0)
@@ -90,7 +120,7 @@ class UntypedStorageRepr(Repr):
         c_name = hop.inputconst(lltype.Void, "data")
         hop.exception_cannot_occur()
         return hop.genop("getinteriorfield", [v_arr, c_name, v_idx],
-                         resulttype=lltype.Signed)
+                         resulttype=llmemory.Address)
 
     def _write_index(self, hop, v_value):
         v_arr = hop.inputarg(self, arg=0)
@@ -100,31 +130,31 @@ class UntypedStorageRepr(Repr):
         hop.genop("setinteriorfield", [v_arr, c_name, v_idx, v_value])
 
     def rtyper_new(self, hop):
-        [v_shape] = hop.inputargs(rstr.string_repr)
+        [v_shape] = hop.inputargs(string_repr)
         hop.exception_cannot_occur()
         return hop.gendirectcall(self.ll_new, v_shape)
 
     def rtype_method_getint(self, hop):
-        return self._read_index(hop)
+        v_addr = self._read_index(hop)
+        return hop.genop("force_cast", [v_addr], resulttype=lltype.Signed)
 
     def rtype_method_setint(self, hop):
         v_value = hop.inputarg(lltype.Signed, arg=2)
-        self._write_index(hop, v_value)
+        v_addr = hop.genop("force_cast", [v_value], resulttype=llmemory.Address)
+        self._write_index(hop, v_addr)
 
     def rtype_method_getinstance(self, hop):
-        v_result = self._read_index(hop)
-        v_addr = hop.genop("cast_int_to_adr", [v_result], resulttype=llmemory.Address)
+        v_addr = self._read_index(hop)
         return hop.genop("cast_adr_to_ptr", [v_addr], resulttype=hop.r_result.lowleveltype)
 
     def rtype_method_setinstance(self, hop):
+        v_arr = hop.inputarg(self, arg=0)
         v_instance = hop.inputarg(hop.args_r[2], arg=2)
+        hop.genop("gc_writebarrier", [v_instance, v_arr])
 
         v_addr = hop.genop("cast_ptr_to_adr", [v_instance],
                            resulttype=llmemory.Address)
-        v_value = hop.genop("cast_adr_to_int",
-                            [v_addr, hop.inputconst(lltype.Void, "symbolic")],
-                            resulttype=lltype.Signed)
-        self._write_index(hop, v_value)
+        self._write_index(hop, v_addr)
 
     @classmethod
     def ll_new(cls, shape):

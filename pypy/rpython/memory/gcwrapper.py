@@ -132,7 +132,7 @@ class GCManagedHeap(object):
         result = llmemory.cast_adr_to_ptr(addr, gctypelayout.WEAKREFPTR)
         result.weakptr = llmemory.cast_ptr_to_adr(objgetter())
         return llmemory.cast_ptr_to_weakrefptr(result)
-    
+
     def weakref_deref(self, PTRTYPE, obj):
         addr = gctypelayout.ll_weakref_deref(obj)
         return llmemory.cast_adr_to_ptr(addr, PTRTYPE)
@@ -140,6 +140,12 @@ class GCManagedHeap(object):
     def gc_id(self, ptr):
         ptr = lltype.cast_opaque_ptr(llmemory.GCREF, ptr)
         return self.gc.id(ptr)
+
+    def writebarrier(self, newvalue, struct):
+        if self.gc.needs_write_barrier:
+            newvalue_addr = llmemory.cast_ptr_to_adr(newvalue)
+            struct_addr = llmemory.cast_ptr_to_adr(struct)
+            self.gc.write_barrier(newvalue_addr, struct_addr)
 
     def writebarrier_before_copy(self, source, dest,
                                  source_start, dest_start, length):
