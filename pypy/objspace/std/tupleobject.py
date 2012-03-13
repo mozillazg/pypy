@@ -157,13 +157,10 @@ def repr__Tuple(space, w_tuple):
     repr += ")"
     return space.wrap(repr)
 
-def hash__Tuple(space, w_tuple):
-    return space.wrap(hash_tuple(space, w_tuple.wrappeditems))
-
 @jit.look_inside_iff(lambda space, w_tuple:
                      jit.isconstant(w_tuple.length()) and
                      w_tuple.length() < UNROLL_TUPLE_LIMIT)
-def hash_tuple(space, w_tuple):
+def hash__Tuple(space, w_tuple):
     # this is the CPython 2.4 algorithm (changed from 2.3)
     mult = 1000003
     x = 0x345678
@@ -174,7 +171,7 @@ def hash_tuple(space, w_tuple):
         z -= 1
         mult += 82520 + z + z
     x += 97531
-    return intmask(x)
+    return space.wrap(intmask(x))
 
 def getnewargs__Tuple(space, w_tuple):
     return space.newtuple([space.newtuple(w_tuple.tolist(space))])
