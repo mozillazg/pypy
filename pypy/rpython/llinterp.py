@@ -42,7 +42,7 @@ def type_name(etype):
         return ''.join(etype.name).rstrip('\x00')
     else:
         # ootype!
-        return etype._INSTANCE._name.split(".")[-1] 
+        return etype._INSTANCE._name.split(".")[-1]
 
 class LLInterpreter(object):
     """ low level interpreter working with concrete values. """
@@ -654,11 +654,11 @@ class LLFrame(object):
             return self.invoke_callable_with_pyexceptions(f, *args)
         args_v = graph.getargs()
         if len(ARGS) != len(args_v):
-            raise TypeError("graph with %d args called with wrong func ptr type: %r" %(len(args_v), ARGS)) 
+            raise TypeError("graph with %d args called with wrong func ptr type: %r" %(len(args_v), ARGS))
         for T, v in zip(ARGS, args_v):
             if not lltype.isCompatibleType(T, v.concretetype):
                 raise TypeError("graph with %r args called with wrong func ptr type: %r" %
-                                (tuple([v.concretetype for v in args_v]), ARGS)) 
+                                (tuple([v.concretetype for v in args_v]), ARGS))
         frame = self.newsubframe(graph, args)
         return frame.eval()
 
@@ -672,7 +672,7 @@ class LLFrame(object):
         if graphs is not None:
             obj = self.llinterpreter.typer.type_system.deref(f)
             if hasattr(obj, 'graph'):
-                assert obj.graph in graphs 
+                assert obj.graph in graphs
         else:
             pass
             #log.warn("op_indirect_call with graphs=None:", f)
@@ -727,6 +727,12 @@ class LLFrame(object):
 
     def op_zero_gc_pointers_inside(self, obj):
         raise NotImplementedError("zero_gc_pointers_inside")
+
+    def op_gc_writebarrier(self, newvalue, struct):
+        assert isinstance(lltype.typeOf(newvalue), lltype.Ptr)
+        assert isinstance(lltype.typeOf(struct), lltype.Ptr)
+        if hasattr(self.heap, "writebarrier"):
+            self.heap.writebarrier(newvalue, struct)
 
     def op_gc_writebarrier_before_copy(self, source, dest,
                                        source_start, dest_start, length):
@@ -982,7 +988,7 @@ class LLFrame(object):
         return llmemory.raw_malloc_usage(size)
 
     def op_raw_free(self, addr):
-        checkadr(addr) 
+        checkadr(addr)
         llmemory.raw_free(addr)
 
     def op_raw_memclear(self, addr, size):
@@ -1126,7 +1132,7 @@ class LLFrame(object):
     def op_new(self, INST):
         assert isinstance(INST, (ootype.Instance, ootype.BuiltinType))
         return ootype.new(INST)
-        
+
     def op_oonewarray(self, ARRAY, length):
         assert isinstance(ARRAY, ootype.Array)
         assert isinstance(length, int)
@@ -1140,7 +1146,7 @@ class LLFrame(object):
         eq_name, interp_eq = \
                  wrap_callable(self.llinterpreter, eq_func, eq_obj, eq_method_name)
         EQ_FUNC = ootype.StaticMethod([DICT._KEYTYPE, DICT._KEYTYPE], ootype.Bool)
-        sm_eq = ootype.static_meth(EQ_FUNC, eq_name, _callable=interp_eq)        
+        sm_eq = ootype.static_meth(EQ_FUNC, eq_name, _callable=interp_eq)
 
         hash_name, interp_hash = \
                    wrap_callable(self.llinterpreter, hash_func, hash_obj, hash_method_name)

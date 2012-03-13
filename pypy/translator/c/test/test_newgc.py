@@ -12,6 +12,7 @@ from pypy.tool.udir import udir
 from pypy.translator.interactive import Translation
 from pypy.annotation import policy as annpolicy
 from pypy import conftest
+from pypy.rlib.rerased_raw import UntypedStorage
 
 class TestUsingFramework(object):
     gcpolicy = "marksweep"
@@ -80,7 +81,7 @@ class TestUsingFramework(object):
                 funcsstr.append(func)
                 funcs0.append(None)
                 funcs1.append(None)
-            else:            
+            else:
                 numargs = len(inspect.getargspec(func)[0])
                 funcsstr.append(None)
                 if numargs == 0:
@@ -1184,6 +1185,24 @@ class TestUsingFramework(object):
         data = zlib.decompress(data_z)
         assert data.startswith('member0')
         assert 'GcArray of * GcStruct S {' in data
+
+    def define_untyped_storage(cls):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn():
+            s = UntypedStorage("io")
+            s.setint(0, 10)
+            s.setinstance(1, A(10))
+            rgc.collect()
+            return s.getint(0) + s.getinstance(1, A).v
+        return fn
+
+    def test_untyped_storage(self):
+        res = self.run("untyped_storage")
+        assert res == 20
+
 
 class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"

@@ -233,7 +233,7 @@ class FrameworkGCTransformer(GCTransformer):
         # for tests
         self.frameworkgc__teardown_ptr = getfn(frameworkgc__teardown, [],
                                                annmodel.s_None)
-        
+
         if root_walker.need_root_stack:
             self.incr_stack_ptr = getfn(root_walker.incr_stack,
                                        [annmodel.SomeInteger()],
@@ -248,7 +248,7 @@ class FrameworkGCTransformer(GCTransformer):
             self.decr_stack_ptr = None
         self.weakref_deref_ptr = self.inittime_helper(
             ll_weakref_deref, [llmemory.WeakRefPtr], llmemory.Address)
-        
+
         classdef = bk.getuniqueclassdef(GCClass)
         s_gc = annmodel.SomeInstance(classdef)
         s_gcref = annmodel.SomePtr(llmemory.GCREF)
@@ -312,6 +312,13 @@ class FrameworkGCTransformer(GCTransformer):
                 GCClass.get_member_index.im_func,
                 [s_gc, annmodel.SomeInteger(knowntype=llgroup.r_halfword)],
                 annmodel.SomeInteger())
+
+        if hasattr(GCClass, 'write_barrier'):
+            self.wb_ptr = getfn(GCClass.write_barrier.im_func,
+                                [s_gc] + [annmodel.SomeAddress()] * 2,
+                                annmodel.s_None)
+        elif GCClass.needs_write_barrier:
+            raise NotImplementedError("Add a write_barrier")
 
         if hasattr(GCClass, 'writebarrier_before_copy'):
             self.wb_before_copy_ptr = \
@@ -638,7 +645,7 @@ class FrameworkGCTransformer(GCTransformer):
             if self.collect_analyzer.analyze_direct_call(graph):
                 raise Exception("'no_collect' function can trigger collection:"
                                 " %s" % func)
-            
+
         if self.write_barrier_ptr:
             self.clean_sets = (
                 find_initializing_stores(self.collect_analyzer, graph))
@@ -904,6 +911,19 @@ class FrameworkGCTransformer(GCTransformer):
             v_ob = hop.spaceop.args[0]
             TYPE = v_ob.concretetype.TO
             gen_zero_gc_pointers(TYPE, v_ob, hop.llops)
+
+    def gct_gc_writebarrier(self, hop):
+        op = hop.spaceop
+        if not hasattr(self, "wb_ptr"):
+            return
+
+        newvalue_addr = hop.genop('cast_ptr_to_adr', [op.args[0]],
+                                  resulttype=llmemory.Address)
+        struct_addr = hop.genop('cast_ptr_to_adr', [op.args[1]],
+                                resulttype=llmemory.Address)
+        hop.genop('direct_call',
+                  [self.wb_ptr, self.c_const_gc, newvalue_addr, struct_addr])
+
 
     def gct_gc_writebarrier_before_copy(self, hop):
         op = hop.spaceop

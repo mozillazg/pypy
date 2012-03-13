@@ -13,6 +13,7 @@ from pypy.rlib import rgc
 from pypy import conftest
 from pypy.rlib.rstring import StringBuilder
 from pypy.rlib.rarithmetic import LONG_BIT
+from pypy.rlib.rerased_raw import UntypedStorage
 
 WORD = LONG_BIT // 8
 
@@ -834,7 +835,7 @@ class GenericMovingGCTests(GenericGCTests):
             from pypy.translator.translator import graphof
             from pypy.objspace.flow.model import Constant
             from pypy.rpython.lltypesystem import rffi
-            layoutbuilder = cls.ensure_layoutbuilder(translator)            
+            layoutbuilder = cls.ensure_layoutbuilder(translator)
             type_id = layoutbuilder.get_type_id(P)
             #
             # now fix the do_malloc_fixedsize_clear in the graph of g
@@ -927,6 +928,48 @@ class GenericMovingGCTests(GenericGCTests):
     def test_writebarrier_before_copy(self):
         run = self.runner("writebarrier_before_copy")
         run([])
+
+    def define_untyped_storage(cls):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn():
+            s = UntypedStorage("io")
+            s.setint(0, 10)
+            s.setinstance(1, A(10))
+            rgc.collect()
+            return s.getint(0) + s.getinstance(1, A).v
+        return fn
+
+    def test_untyped_storage(self):
+        run = self.runner("untyped_storage")
+        res = run([])
+        assert res == 20
+
+    def define_untyped_storage_multiple_objects(cls):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn():
+            s = UntypedStorage("oioio")
+            s.setinstance(0, A(1))
+            s.setint(1, 2)
+            s.setinstance(2, A(3))
+            s.setint(3, 4)
+            s.setinstance(4, A(5))
+            rgc.collect()
+            return (s.getinstance(0, A).v * 1 + s.getint(1) * 10 +
+                s.getinstance(2, A).v * 100 + s.getint(3) * 1000 +
+                s.getinstance(4, A).v * 10000)
+        return fn
+
+    def test_untyped_storage_multipled_objects(self):
+        run = self.runner("untyped_storage_multiple_objects")
+        res = run([])
+        assert res == 54321
+
 
 # ________________________________________________________________
 
@@ -1152,7 +1195,7 @@ class TestGenerationGC(GenericMovingGCTests):
 
     def test_adr_of_nursery(self):
         run = self.runner("adr_of_nursery")
-        res = run([])        
+        res = run([])
 
 class TestGenerationalNoFullCollectGC(GCTest):
     # test that nursery is doing its job and that no full collection

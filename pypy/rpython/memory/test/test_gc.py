@@ -6,9 +6,9 @@ from pypy.rpython.memory.test import snippet
 from pypy.rpython.test.test_llinterp import get_interpreter
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.objectmodel import compute_unique_id
+from pypy.rlib.objectmodel import we_are_translated, compute_unique_id
 from pypy.rlib import rgc
+from pypy.rlib.rerased_raw import UntypedStorage
 from pypy.rlib.rstring import StringBuilder
 from pypy.rlib.rarithmetic import LONG_BIT
 
@@ -86,7 +86,7 @@ class GCTest(object):
         for i in range(1, 15):
             res = self.interpret(append_to_list, [i, i - 1])
             assert res == i - 1 # crashes if constants are not considered roots
-            
+
     def test_string_concatenation(self):
         #curr = simulator.current_size
         def concat(j):
@@ -745,6 +745,43 @@ class GCTest(object):
             return ord(res)
         res = self.interpret(fn, [])
         assert res == ord('y')
+
+    def test_untypedstorage(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn(v):
+            s = UntypedStorage("io")
+            s.setint(0, v)
+            s.setinstance(1, A(v))
+            rgc.collect()
+            return s.getint(0) + s.getinstance(1, A).v
+
+        res = self.interpret(fn, [10])
+        assert res == 20
+
+    def test_untyped_storage_multipled_objects(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn():
+            s = UntypedStorage("oioio")
+            s.setinstance(0, A(1))
+            s.setint(1, 2)
+            s.setinstance(2, A(3))
+            s.setint(3, 4)
+            s.setinstance(4, A(5))
+            rgc.collect()
+            return (s.getinstance(0, A).v * 1 + s.getint(1) * 10 +
+                s.getinstance(2, A).v * 100 + s.getint(3) * 1000 +
+                s.getinstance(4, A).v * 10000)
+
+        res = self.interpret(fn, [])
+        assert res == 54321
+
+
 
 from pypy.rlib.objectmodel import UnboxedValue
 
