@@ -25,9 +25,8 @@ class W_AbstractTupleObject(W_Object):
 class W_TupleObject(W_AbstractTupleObject):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
 
-    def __init__(self, shape, items):
-        self.shape = shape
-        self.items = items
+    def __init__(self, storage):
+        self.storage = storage
 
     def tolist(self, space):
         items_w = [None] * self.length()
@@ -39,52 +38,10 @@ class W_TupleObject(W_AbstractTupleObject):
         return self.tolist(space)
 
     def length(self):
-        return self.shape.length(self.items)
+        return self.storage.length()
 
     def getitem(self, space, i):
         return self.shape.getitem(space, self.items, i)
-
-
-class BaseShapeType(object):
-    def wrap(self, space, items, i):
-        raise NotImplementedError
-
-class ObjectShapeType(BaseShapeType):
-    def getitem(self, space, items, i):
-        return items[i]
-
-class BaseShape(object):
-    pass
-
-class Shape(BaseShape):
-    def __init__(self, shapetypes):
-        self.shapetypes = shapetypes
-
-    def length(self, items):
-        return len(self.shapetypes)
-
-    def getitem(self, space, items, i):
-        return self.shapetypes[i].getitem(space, items, i)
-
-class LargeShape(BaseShape):
-    def length(self, items):
-        return len(items)
-
-    def getitem(self, space, items, i):
-        return items[i]
-
-class ShapeCache(object):
-    def __init__(self, space):
-        self._shapes = {}
-        self.large_shape = LargeShape()
-        self.object_shapetype = ObjectShapeType()
-
-    def find_shape(self, types):
-        return self._shapes.setdefault(tuple(types), Shape(types))
-
-def get_shape_cache(space):
-    return space.fromcache(ShapeCache)
-
 
 registerimplementation(W_TupleObject)
 

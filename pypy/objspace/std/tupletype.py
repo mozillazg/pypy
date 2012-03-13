@@ -22,12 +22,12 @@ def get_char_from_obj(space, w_obj):
 
 def store_obj(space, storage, idx, w_obj):
     if space.is_w(space.type(w_obj), space.w_int):
-        w_tuple.storage.setint(idx, space.int_w(w_obj))
+        storage.setint(idx, space.int_w(w_obj))
     else:
-        w_tuple.storage.setinstance(idx, w_obj)
+        storage.setinstance(idx, w_obj)
 
 def make_tuple(space, w_tuple, list_w):
-    from pypy.objspace.std.tupleobject import W_TupleObject, get_shape_cache
+    from pypy.objspace.std.tupleobject import W_TupleObject
 
     shape_chars = ["\x00"] * len(list_w)
     for i, w_item in enumerate(list_w):
