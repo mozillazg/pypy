@@ -6,9 +6,9 @@ from pypy.rpython.memory.test import snippet
 from pypy.rpython.test.test_llinterp import get_interpreter
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.objectmodel import compute_unique_id
+from pypy.rlib.objectmodel import we_are_translated, compute_unique_id
 from pypy.rlib import rgc
+from pypy.rlib.rerased_raw import UntypedStorage
 from pypy.rlib.rstring import StringBuilder
 from pypy.rlib.rarithmetic import LONG_BIT
 
@@ -86,7 +86,7 @@ class GCTest(object):
         for i in range(1, 15):
             res = self.interpret(append_to_list, [i, i - 1])
             assert res == i - 1 # crashes if constants are not considered roots
-            
+
     def test_string_concatenation(self):
         #curr = simulator.current_size
         def concat(j):
@@ -745,6 +745,22 @@ class GCTest(object):
             return ord(res)
         res = self.interpret(fn, [])
         assert res == ord('y')
+
+    def test_untypedstorage(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn(v):
+            s = UntypedStorage("io")
+            s.setint(0, v)
+            s.setinstance(1, A(v))
+            rgc.collect()
+            return s.getint(0) + s.getinstance(1, A).v
+
+        res = self.interpret(fn, [10])
+        assert res == 20
+
 
 from pypy.rlib.objectmodel import UnboxedValue
 
