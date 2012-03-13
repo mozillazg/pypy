@@ -8,7 +8,6 @@ from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std.slicetype import unwrap_start_stop
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway
-from pypy.rlib.debug import make_sure_not_resized
 
 
 class W_AbstractTupleObject(W_Object):
@@ -36,7 +35,7 @@ class W_TupleObject(W_AbstractTupleObject):
         items_w = [None] * self.length()
         for i in xrange(self.length()):
             items_w[i] = self.getitem(space, i)
-        return items_w
+        return items_w[:]
 
     def getitems_copy(self, space):
         return self.tolist(space)
