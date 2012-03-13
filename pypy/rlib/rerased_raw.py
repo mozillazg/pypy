@@ -79,25 +79,30 @@ class UntypedStorageRepr(Repr):
 
     def rtyper_new(self, hop):
         [v_arg] = hop.inputargs(lltype.Signed)
+        hop.exception_cannot_occur()
         return hop.gendirectcall(self.ll_new, v_arg)
 
     def rtype_method_getint(self, hop):
         [v_arr, v_idx] = hop.inputargs(self, lltype.Signed)
+        hop.exception_cannot_occur()
         return hop.genop("getarrayitem", [v_arr, v_idx], resulttype=lltype.Signed)
 
     def rtype_method_setint(self, hop):
         [v_arr, v_idx, v_value] = hop.inputargs(self, lltype.Signed, lltype.Signed)
+        hop.exception_cannot_occur()
         hop.genop("setarrayitem", [v_arr, v_idx, v_value])
 
     def rtype_method_getinstance(self, hop):
         v_arr = hop.inputarg(self, arg=0)
         v_idx = hop.inputarg(lltype.Signed, arg=1)
+        hop.exception_cannot_occur()
         v_result = hop.genop("getarrayitem", [v_arr, v_idx], resulttype=lltype.Signed)
         v_addr = hop.genop("cast_int_to_adr", [v_result], resulttype=llmemory.Address)
         return hop.genop("cast_adr_to_ptr", [v_addr], resulttype=hop.r_result.lowleveltype)
 
     def rtype_method_setinstance(self, hop):
         [v_arr, v_idx, v_instance] = hop.inputargs(self, lltype.Signed, hop.args_r[2])
+        hop.exception_cannot_occur()
         v_addr = hop.genop("cast_ptr_to_adr", [v_instance], resulttype=llmemory.Address)
         v_result = hop.genop("cast_adr_to_int", [v_addr, hop.inputconst(lltype.Void, "symbolic")], resulttype=lltype.Signed)
         hop.genop("setarrayitem", [v_arr, v_idx, v_result])

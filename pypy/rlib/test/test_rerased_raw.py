@@ -46,3 +46,22 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [27])
         assert res == 27
+
+    def test_exception_catching(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def f(x):
+            try:
+                storage = rerased_raw.UntypedStorage(2)
+                storage.setint(0, x)
+                value1 = storage.getint(0)
+                storage.setinstance(1, A(x))
+                value2 = storage.getinstance(1, A)
+                return value1 + value2.v
+            except Exception:
+                return 50000
+
+        res = self.interpret(f, [4])
+        assert res == 8
