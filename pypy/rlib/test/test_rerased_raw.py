@@ -21,7 +21,7 @@ def test_direct_instance():
     storage = rerased_raw.UntypedStorage(1)
     storage.setinstance(0, A(4))
 
-    assert storage.getinstance(A, 0).value == 4
+    assert storage.getinstance(0, A).value == 4
 
 
 class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
@@ -33,3 +33,16 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [4])
         assert res == 4
+
+    def test_instance(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def f(x):
+            storage = rerased_raw.UntypedStorage(1)
+            storage.setinstance(0, A(x))
+            return storage.getinstance(0, A).v
+
+        res = self.interpret(f, [27])
+        assert res == 27
