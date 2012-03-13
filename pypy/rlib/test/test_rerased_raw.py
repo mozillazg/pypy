@@ -29,6 +29,10 @@ def test_direct_instance():
 
     assert storage.getinstance(0, A).value == 4
 
+def test_direct_length():
+    storage = rerased_raw.UntypedStorage("ooi")
+    assert storage.getlength() == 3
+
 
 class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
     def test_int(self):
@@ -92,3 +96,11 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [True, 15])
         assert res == 15
+
+    def test_getlength(self):
+        def f():
+            storage = rerased_raw.UntypedStorage("ooi")
+            return storage.getlength()
+
+        res = self.interpret(f, [])
+        assert res == 3
