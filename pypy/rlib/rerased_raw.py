@@ -14,6 +14,7 @@ from pypy.rpython.rmodel import Repr
 
 
 INT = "i"
+FLOAT = "f"
 INSTANCE = "o"
 
 class UntypedStorage(object):
@@ -31,6 +32,17 @@ class UntypedStorage(object):
         assert self.shape[idx] == INT
         assert isinstance(v, int)
         self.storage[idx] = v
+
+    def getfloat(self, idx):
+        assert self.shape[idx] == FLOAT
+        v = self.storage[idx]
+        assert isinstance(v, float)
+        return v
+
+    def setfloat(self, idx, f):
+        assert self.shape[idx] == FLOAT
+        assert isinstance(f, float)
+        self.storage[idx] = f
 
     def getinstance(self, idx, cls):
         obj = self.storage[idx]
@@ -68,6 +80,14 @@ class SomeUntypedStorage(annmodel.SomeObject):
         self._check_idx(s_idx)
         assert annmodel.SomeInteger().contains(s_v)
 
+    def method_getfloat(self, s_idx):
+        self._check_idx(s_idx)
+        return annmodel.SomeFloat()
+
+    def method_setfloat(self, s_idx, s_f):
+        self._check_idx(s_idx)
+        assert annmodel.SomeFloat().contains(s_f)
+
     def method_getinstance(self, s_idx, s_cls):
         self._check_idx(s_idx)
         assert isinstance(s_cls, annmodel.SomePBC)
@@ -89,6 +109,8 @@ UNTYPEDSTORAGE = lltype.GcStruct("untypedstorage",
 CUSTOMTRACEFUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
                                   llmemory.Address)
 def trace_untypedstorage(obj_addr, prev):
+    # XXX: This has O(n**2) complexity because of the below loop, if we could
+    # do more arithmetic ops on addresses then it could be O(n).
     shape_addr = obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "shape")
     if not prev:
         return shape_addr
@@ -96,17 +118,26 @@ def trace_untypedstorage(obj_addr, prev):
     length_offset = (llmemory.offsetof(STR, "chars") +
         llmemory.arraylengthoffset(STR.chars))
     length = (shape + length_offset).signed[0]
-    if prev == shape_addr:
-        i = 0
-        while i < length:
-            char = (shape + llmemory.offsetof(STR, "chars") +
-                    llmemory.itemoffsetof(STR.chars, 0) +
-                    (llmemory.sizeof(STR.chars.OF) * i)).char[0]
-            if char == INSTANCE:
-                return (obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "data") +
-                        llmemory.itemoffsetof(UNTYPEDSTORAGE.data, 0) +
-                        llmemory.sizeof(UNTYPEDSTORAGE.data.OF) * i)
+
+    seen_prev = prev == shape_addr
+    i = 0
+    while i < length:
+        data_ptr = (obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "data") +
+            llmemory.itemoffsetof(UNTYPEDSTORAGE.data, 0) +
+            llmemory.sizeof(UNTYPEDSTORAGE.data.OF) * i)
+
+        if not seen_prev:
+            if data_ptr == prev:
+                seen_prev = True
             i += 1
+            continue
+
+        char = (shape + llmemory.offsetof(STR, "chars") +
+                llmemory.itemoffsetof(STR.chars, 0) +
+                (llmemory.sizeof(STR.chars.OF) * i)).char[0]
+        if char == INSTANCE:
+            return data_ptr
+        i += 1
     return llmemory.NULL
 trace_untypedstorage_ptr = llhelper(lltype.Ptr(CUSTOMTRACEFUNC), trace_untypedstorage)
 
@@ -141,6 +172,16 @@ class UntypedStorageRepr(Repr):
     def rtype_method_setint(self, hop):
         v_value = hop.inputarg(lltype.Signed, arg=2)
         v_addr = hop.genop("force_cast", [v_value], resulttype=llmemory.Address)
+        self._write_index(hop, v_addr)
+
+    def rtype_method_getfloat(self, hop):
+        v_value = self._read_index(hop)
+        return hop.genop("cast_adr_to_float", [v_value], resulttype=lltype.Float)
+
+    def rtype_method_setfloat(self, hop):
+        v_value = hop.inputarg(lltype.Float, arg=2)
+
+        v_addr = hop.genop("cast_float_to_adr", [v_value], resulttype=llmemory.Address)
         self._write_index(hop, v_addr)
 
     def rtype_method_getinstance(self, hop):

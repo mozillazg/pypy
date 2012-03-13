@@ -13,6 +13,12 @@ def test_direct_int():
     storage.setint(1, 5)
     assert storage.getint(1) == 5
 
+def test_direct_float():
+    storage = rerased_raw.UntypedStorage("f")
+    storage.setfloat(0, 5.5)
+
+    assert storage.getfloat(0) == 5.5
+
 def test_direct_instance():
     class A(object):
         def __init__(self, value):
@@ -46,6 +52,15 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [27])
         assert res == 27
+
+    # def test_float(self):
+    #     def f(x):
+    #         storage = rerased_raw.UntypedStorage("f")
+    #         storage.setfloat(0, x)
+    #         return storage.getfloat(0)
+
+    #     res = self.interpret(f, [12.3])
+    #     assert res == 12.3
 
     def test_exception_catching(self):
         class A(object):

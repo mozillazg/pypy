@@ -761,6 +761,27 @@ class GCTest(object):
         res = self.interpret(fn, [10])
         assert res == 20
 
+    def test_untyped_storage_multipled_objects(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+
+        def fn():
+            s = UntypedStorage("oioio")
+            s.setinstance(0, A(1))
+            s.setint(1, 2)
+            s.setinstance(2, A(3))
+            s.setint(3, 4)
+            s.setinstance(4, A(5))
+            rgc.collect()
+            return (s.getinstance(0, A).v * 1 + s.getint(1) * 10 +
+                s.getinstance(2, A).v * 100 + s.getint(3) * 1000 +
+                s.getinstance(4, A).v * 10000)
+
+        res = self.interpret(fn, [])
+        assert res == 54321
+
+
 
 from pypy.rlib.objectmodel import UnboxedValue
 
