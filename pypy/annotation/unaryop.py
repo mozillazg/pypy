@@ -844,8 +844,11 @@ class __extend__(SomeOOStaticMeth):
             raise Exception("keyword arguments to call to a low-level static method")
         info = 'argument to ll static method call'
         llargs = [annotation_to_lltype(s_arg, info)._defl() for s_arg in args_s]
-        v = m.method._example()(*llargs)
-        return ll_to_annotation(v)
+        if isinstance(m.method, ootype._overloaded_meth):
+            return m.method._resolver.annotate(args_s)
+        else:
+            v = m.method._example()(*llargs)
+            return ll_to_annotation(v)
 
 
 #_________________________________________

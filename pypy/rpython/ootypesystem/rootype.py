@@ -135,8 +135,7 @@ class OOBoundMethRepr(Repr):
         TYPE = hop.args_r[0].lowleveltype
         _, meth = TYPE._lookup(self.name)
         if isinstance(meth, ootype._overloaded_meth):
-            ARGS = tuple([repr.lowleveltype for repr in hop.args_r[1:]])
-            desc = meth._get_desc(self.name, ARGS)
+            desc = meth._get_desc(self.name, hop.args_r[1:])
             cname = hop.inputconst(Void, desc)
         else:
             cname = hop.inputconst(Void, self.name)

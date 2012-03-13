@@ -150,6 +150,12 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 2
 
+    def test_static_method_overload(self):
+        def fn():
+            return java.lang.Math.abs(-42)
+        res = self.interpret(fn, [])
+        assert res == 42
+
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

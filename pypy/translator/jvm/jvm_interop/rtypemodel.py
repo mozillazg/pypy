@@ -37,12 +37,17 @@ class JvmNativeStaticMethRepr(Repr):
         self.rjvm_class_wrapper = rjvm_class_wrapper
 
     def rtype_simple_call(self, hop):
+        if isinstance(self.method_type, ootype._overloaded_meth):
+            method_type = ootype.typeOf(self.method_type._resolver.resolve(hop.args_r[1:]))
+        else:
+            method_type = self.method_type
+
         full_name = self.rjvm_class_wrapper.__name__ + '.' + self.name
         rjvm_method_wrapper = getattr(self.rjvm_class_wrapper, self.name)
         call_rjvm_method = utils.call_method(rjvm_method_wrapper, static=True)
-        method = ootype.static_meth(self.method_type, full_name, _callable = call_rjvm_method)
+        method = ootype.static_meth(method_type, full_name, _callable = call_rjvm_method)
         method.is_native = True
-        method_const = hop.inputconst(self.method_type, method)
+        method_const = hop.inputconst(method_type, method)
 
         vlist = hop.inputargs(*hop.args_r)[1:]
-        return hop.genop('direct_call', [method_const] + vlist, resulttype = self.method_type.RESULT)
+        return hop.genop('direct_call', [method_const] + vlist, resulttype = method_type.RESULT)

@@ -1204,10 +1204,8 @@ class _callable(object):
 
 
 class _static_meth(_callable):
-   allowed_types = (StaticMethod,)
-
    def __init__(self, STATICMETHOD, **attrs):
-       assert isinstance(STATICMETHOD, self.allowed_types)
+       assert isinstance(STATICMETHOD, (StaticMethod, _overloaded_meth))
        _callable.__init__(self, STATICMETHOD, **attrs)
 
    def __call__(self, *args):
@@ -1308,8 +1306,7 @@ class OverloadingResolver(object):
             signatures.add(ARGS)
 
     def annotate(self, args_s):
-        ARGS = tuple([self.annotation_to_lltype(arg_s) for arg_s in args_s])
-        METH = self.resolve(ARGS)._TYPE
+        METH = self.resolve(args_s)._TYPE
         return self.lltype_to_annotation(METH.RESULT)
 
     def resolve(self, ARGS):
@@ -1319,6 +1316,7 @@ class OverloadingResolver(object):
         #    to meth.ARGS with one or more upcasts, return meth
         # 3) otherwise, fail
         matches = []
+        ARGS = tuple(self._to_lltype(arg) for arg in ARGS)
         for meth in self.overloadings:
             METH = meth._TYPE
             if METH.ARGS == ARGS:
@@ -1345,7 +1343,20 @@ class OverloadingResolver(object):
             return True
         else:
             return False
-    
+
+    def _to_lltype(self, arg):
+        from pypy.annotation.model import SomeObject
+        from pypy.rpython.rmodel import Repr
+
+        if isinstance(arg, Repr):
+            return arg.lowleveltype
+        elif isinstance(arg, SomeObject):
+            return self.annotation_to_lltype(arg)
+        elif isinstance(arg, LowLevelType):
+            return arg
+        else:
+            raise AssertionError("arg has to be an annotation, repr or a low level type!")
+
     def annotation_to_lltype(cls, ann):
         from pypy.annotation import model as annmodel
         return annmodel.annotation_to_lltype(ann)
