@@ -189,7 +189,10 @@ def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=
     if not java_methods:
         raise TypeError
     elif len(java_methods) == 1:
-        meth = jvm_method_to_pypy_meth(java_methods[0], meth_type, Meth_type)
+        if static: # return a StaticMethod
+            meth = jvm_method_to_pypy_Meth(java_methods[0], Meth_type=Meth_type)
+        else: # return an ootype.meth to be used in _lookup
+            meth = jvm_method_to_pypy_meth(java_methods[0], meth_type=meth_type, Meth_type=Meth_type)
     else:
         overloads = [jvm_method_to_pypy_meth(m, meth_type=meth_type, Meth_type=Meth_type) for m in java_methods]
         meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)

@@ -1,7 +1,7 @@
-from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.ootypesystem.ootype import _static_meth, StaticMethod
 import utils
 from pypy.annotation.model import SomeOOInstance, SomeObject, s_ImpossibleValue, SomeOOStaticMeth
-from pypy.rlib.rjvm import JvmClassWrapper, JvmStaticMethodWrapper, _is_static
+from pypy.rlib.rjvm import JvmClassWrapper, JvmStaticMethodWrapper
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
 from pypy.translator.jvm.jvm_interop.rtypemodel import JvmClassWrapperRepr, JvmNativeStaticMethRepr
@@ -21,19 +21,15 @@ class SomeJvmClassWrapper(SomeObject):
         attrname = s_attr.const
 
         if not hasattr(jvm_class_wrapper, attrname):
+            raise TypeError("Class %s has no member called %s" % (jvm_class_wrapper.__name__, attrname))
             return s_ImpossibleValue
 
         field_or_method = getattr(jvm_class_wrapper, attrname)
-
         if isinstance(field_or_method, JvmStaticMethodWrapper):
             refclass = jvm_class_wrapper.__reflection_class__
-            java_methods = [m for m in refclass.getMethods() if _is_static(m) and m.getName() == attrname]
-            if not java_methods:
-                raise TypeError
-            elif len(java_methods) == 1:
-                java_method, = java_methods
-                meth_type = utils.jvm_method_to_pypy_Meth(java_method, ootype.StaticMethod)
-                return SomeJvmNativeStaticMeth(meth_type, jvm_class_wrapper, attrname)
+            pypy_meth = utils.pypy_method_from_name(refclass, attrname,
+                static=True, meth_type=_static_meth, Meth_type=StaticMethod)
+            return SomeJvmNativeStaticMeth(pypy_meth, jvm_class_wrapper, attrname)
         else:
             raise AssertionError("Static fields are not yet supported!")
 
