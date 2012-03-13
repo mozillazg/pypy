@@ -87,7 +87,7 @@ class SomeUntypedStorage(annmodel.SomeObject):
         return UntypedStorageRepr(rtyper)
 
     def method_getlength(self):
-        return annmodel.SomeInteger()
+        return annmodel.SomeInteger(nonneg=True)
 
     def method_getshape(self):
         return annmodel.SomeString(can_be_None=False)
