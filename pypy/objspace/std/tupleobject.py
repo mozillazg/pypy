@@ -37,11 +37,8 @@ class W_TupleObject(W_AbstractTupleObject):
             items_w[i] = self.getitem(space, i)
         return items_w
 
-    def tolist_resized(self, space):
-        return self.tolist(space)[:]
-
     def getitems_copy(self, space):
-        return self.tolist(space)
+        return self.tolist(space)[:]
 
     def length(self):
         return self.tuplestorage.getlength()

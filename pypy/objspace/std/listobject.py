@@ -1046,7 +1046,7 @@ def init__List(space, w_list, __args__):
         if isinstance(w_iterable, W_ListObject):
             w_list.extend(w_iterable)
         elif isinstance(w_iterable, W_TupleObject):
-            w_list.extend(W_ListObject(space, w_iterable.tolist_resized(space)))
+            w_list.extend(W_ListObject(space, w_iterable.getitems_copy(space)))
         else:
             _init_from_iterable(space, w_list, w_iterable)
 
