@@ -1,8 +1,10 @@
 import sys
-from pypy.rlib.rerased_raw import UntypedStorage, INT, INSTANCE
+
 from pypy.interpreter import gateway
+from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
+from pypy.rlib.rerased_raw import UntypedStorage, INT, INSTANCE
 
 
 MAXIMUM_SPECIALIZED_SIZE = 8
@@ -25,6 +27,13 @@ def store_obj(space, storage, idx, w_obj):
         storage.setint(idx, space.int_w(w_obj))
     else:
         storage.setinstance(idx, w_obj)
+
+def read_obj(space, storage, idx):
+    char = storage.getshape()[idx]
+    if char == INT:
+        return space.wrap(storage.getint(idx))
+    else:
+        return storage.getinstance(idx, W_Root)
 
 def make_tuple(space, w_tuple, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject

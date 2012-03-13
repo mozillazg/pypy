@@ -38,10 +38,12 @@ class W_TupleObject(W_AbstractTupleObject):
         return self.tolist(space)
 
     def length(self):
-        return self.storage.length()
+        return self.storage.getlength()
 
     def getitem(self, space, i):
-        return self.shape.getitem(space, self.items, i)
+        from pypy.objspace.std.tupletype import read_obj
+
+        return read_obj(space, self.storage, i)
 
 registerimplementation(W_TupleObject)
 
