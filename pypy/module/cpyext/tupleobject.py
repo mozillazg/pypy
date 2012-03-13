@@ -11,24 +11,25 @@ PyTuple_Check, PyTuple_CheckExact = build_type_checkers("Tuple")
 
 @cpython_api([Py_ssize_t], PyObject)
 def PyTuple_New(space, size):
-    return W_TupleObject([space.w_None] * size)
+    return space.newtuple([space.w_None] * size)
 
 @cpython_api([PyObject, Py_ssize_t, PyObject], rffi.INT_real, error=-1)
 def PyTuple_SetItem(space, w_t, pos, w_obj):
     if not PyTuple_Check(space, w_t):
         # XXX this should also steal a reference, test it!!!
         PyErr_BadInternalCall(space)
-    _setitem_tuple(w_t, pos, w_obj)
+    _setitem_tuple(space, w_t, pos, w_obj)
     Py_DecRef(space, w_obj) # SetItem steals a reference!
     return 0
 
-def _setitem_tuple(w_t, pos, w_obj):
+def _setitem_tuple(space, w_t, pos, w_obj):
     # this function checks that w_t is really a W_TupleObject.  It
     # should only ever be called with a freshly built tuple from
     # PyTuple_New(), which always return a W_TupleObject, even if there
     # are also other implementations of tuples.
+    from pypy.objspace.std.tupletype import store_obj
     assert isinstance(w_t, W_TupleObject)
-    w_t.wrappeditems[pos] = w_obj
+    store_obj(space, w_t.tuplestorage, pos, w_obj)
 
 @cpython_api([PyObject, Py_ssize_t], PyObject)
 def PyTuple_GetItem(space, w_t, pos):
@@ -68,13 +69,13 @@ def _PyTuple_Resize(space, ref, newsize):
     if not PyTuple_Check(space, py_tuple):
         PyErr_BadInternalCall(space)
     py_newtuple = PyTuple_New(space, newsize)
-    
+
     to_cp = newsize
     oldsize = space.int_w(space.len(py_tuple))
     if oldsize < newsize:
         to_cp = oldsize
     for i in range(to_cp):
-        _setitem_tuple(py_newtuple, i, space.getitem(py_tuple, space.wrap(i)))
+        _setitem_tuple(space, py_newtuple, i, space.getitem(py_tuple, space.wrap(i)))
     Py_DecRef(space, ref[0])
     ref[0] = make_ref(space, py_newtuple)
     return 0
