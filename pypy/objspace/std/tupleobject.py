@@ -8,7 +8,10 @@ from pypy.objspace.std.sliceobject import W_SliceObject, normalize_simple_slice
 from pypy.objspace.std.slicetype import unwrap_start_stop
 from pypy.objspace.std import slicetype
 from pypy.interpreter import gateway
+from pypy.rlib import jit
 
+# Tuples of known length up to UNROLL_TUPLE_LIMIT have unrolled certain methods
+UNROLL_TUPLE_LIMIT = 10
 
 class W_AbstractTupleObject(W_Object):
     __slots__ = ()
@@ -103,6 +106,13 @@ def mul__Tuple_ANY(space, w_tuple, w_times):
 def mul__ANY_Tuple(space, w_times, w_tuple):
     return mul__Tuple_ANY(space, w_tuple, w_times)
 
+def tuple_unroll_condition(space, w_tuple1, w_tuple2):
+    lgt1 = w_tuple1.length()
+    lgt2 = w_tuple2.length()
+    return ((jit.isconstant(lgt1) and lgt1 <= UNROLL_TUPLE_LIMIT) or
+            (jit.isconstant(lgt2) and lgt2 <= UNROLL_TUPLE_LIMIT))
+
+@jit.look_inside_iff(tuple_unroll_condition)
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
     if w_tuple1.tuplestorage.getshape() is not w_tuple2.tuplestorage.getshape():
         return space.w_False
@@ -113,6 +123,7 @@ def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
             return space.w_False
     return space.w_True
 
+@jit.look_inside_iff(tuple_unroll_condition)
 def lt__Tuple_Tuple(space, w_tuple1, w_tuple2):
     ncmp = min(w_tuple1.length(), w_tuple2.length())
     # Search for the first index where items are different
@@ -124,6 +135,7 @@ def lt__Tuple_Tuple(space, w_tuple1, w_tuple2):
     # No more items to compare -- compare sizes
     return space.newbool(w_tuple1.length() < w_tuple2.length())
 
+@jit.look_inside_iff(tuple_unroll_condition)
 def gt__Tuple_Tuple(space, w_tuple1, w_tuple2):
     ncmp = min(w_tuple1.length(), w_tuple2.length())
     # Search for the first index where items are different
@@ -145,7 +157,13 @@ def repr__Tuple(space, w_tuple):
     repr += ")"
     return space.wrap(repr)
 
-def hash_items(space, w_tuple):
+def hash__Tuple(space, w_tuple):
+    return space.wrap(hash_tuple(space, w_tuple.wrappeditems))
+
+@jit.look_inside_iff(lambda space, w_tuple:
+                     jit.isconstant(w_tuple.length()) and
+                     w_tuple.length() < UNROLL_TUPLE_LIMIT)
+def hash_tuple(space, w_tuple):
     # this is the CPython 2.4 algorithm (changed from 2.3)
     mult = 1000003
     x = 0x345678
@@ -157,12 +175,6 @@ def hash_items(space, w_tuple):
         mult += 82520 + z + z
     x += 97531
     return intmask(x)
-
-def hash__Tuple(space, w_tuple):
-    return space.wrap(hash_items(space, w_tuple))
-
-def hash_tuple(space, wrappeditems):
-    pass
 
 def getnewargs__Tuple(space, w_tuple):
     return space.newtuple([space.newtuple(w_tuple.tolist(space))])
