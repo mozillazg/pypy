@@ -3,39 +3,32 @@ from pypy.interpreter import gateway
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 
+
+MAXIMUM_SPECIALIZED_SIZE = 8
+
 def wraptuple(space, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject
 
-    if space.config.objspace.std.withspecialisedtuple:
-        from specialisedtupleobject import makespecialisedtuple, NotSpecialised
-        try:
-            return makespecialisedtuple(space, list_w)
-        except NotSpecialised:
-            pass
+    w_tuple = space.allocate_instance(W_TupleObject, space.w_tuple)
+    make_tuple(space, w_tuple, list_w)
+    return w_tuple
 
-    if space.config.objspace.std.withsmalltuple:
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject2
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject3
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject4
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject5
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject6
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject7
-        from pypy.objspace.std.smalltupleobject import W_SmallTupleObject8
-        if len(list_w) == 2:
-            return W_SmallTupleObject2(list_w)
-        if len(list_w) == 3:
-            return W_SmallTupleObject3(list_w)
-        if len(list_w) == 4:
-            return W_SmallTupleObject4(list_w)
-        if len(list_w) == 5:
-            return W_SmallTupleObject5(list_w)
-        if len(list_w) == 6:
-            return W_SmallTupleObject6(list_w)
-        if len(list_w) == 7:
-            return W_SmallTupleObject7(list_w)
-        if len(list_w) == 8:
-            return W_SmallTupleObject8(list_w)
-    return W_TupleObject(list_w)
+def make_tuple(space, w_tuple, list_w):
+    from pypy.objspace.std.tupleobject import W_TupleObject, get_shape_cache
+
+    cache = get_shape_cache(space)
+    if len(list_w) > MAXIMUM_SPECIALIZED_SIZE:
+        W_TupleObject.__init__(w_tuple, cache.large_shape, list_w)
+    else:
+        types = []
+        items = []
+        for w_item in list_w:
+            types.append(cache.object_shapetype)
+            items.append(w_item)
+
+        shape = cache.find_shape(types)
+        W_TupleObject.__init__(w_tuple, shape, items)
+        return W_TupleObject(shape, items)
 
 tuple_count = SMM("count", 2,
                   doc="count(obj) -> number of times obj appears in the tuple")
@@ -47,6 +40,7 @@ tuple_index = SMM("index", 4, defaults=(0, sys.maxint),
 
 def descr__new__(space, w_tupletype, w_sequence=gateway.NoneNotWrapped):
     from pypy.objspace.std.tupleobject import W_TupleObject
+
     if w_sequence is None:
         tuple_w = []
     elif (space.is_w(w_tupletype, space.w_tuple) and
@@ -55,7 +49,7 @@ def descr__new__(space, w_tupletype, w_sequence=gateway.NoneNotWrapped):
     else:
         tuple_w = space.fixedview(w_sequence)
     w_obj = space.allocate_instance(W_TupleObject, w_tupletype)
-    W_TupleObject.__init__(w_obj, tuple_w)
+    make_tuple(space, w_obj, tuple_w)
     return w_obj
 
 # ____________________________________________________________

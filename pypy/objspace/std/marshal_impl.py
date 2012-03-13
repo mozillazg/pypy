@@ -291,7 +291,7 @@ def unmarshal_stringref(space, u, tc):
 register(TYPE_STRINGREF, unmarshal_stringref)
 
 def marshal_w__Tuple(space, w_tuple, m):
-    items = w_tuple.wrappeditems
+    items = space.fixedview(w_tuple)
     m.put_tuple_w(TYPE_TUPLE, items)
 
 def unmarshal_Tuple(space, u, tc):

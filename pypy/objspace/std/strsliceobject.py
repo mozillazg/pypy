@@ -18,7 +18,7 @@ class W_StringSliceObject(W_AbstractStringObject):
 
     def __init__(w_self, str, start, stop):
         assert start >= 0
-        assert stop >= 0 
+        assert stop >= 0
         w_self.str = str
         w_self.start = start
         w_self.stop = stop
@@ -109,7 +109,7 @@ def str_rpartition__StringSlice_String(space, w_self, w_sub):
                                       w_self)])
 
 
-def str_count__StringSlice_String_ANY_ANY(space, w_self, w_arg, w_start, w_end): 
+def str_count__StringSlice_String_ANY_ANY(space, w_self, w_arg, w_start, w_end):
     (s, arg, start, end) =  _convert_idx_params(
             space, w_self, w_arg, w_start, w_end)
     return wrapint(space, s.count(arg, start, end))
@@ -150,7 +150,7 @@ def str_endswith__StringSlice_Tuple_ANY_ANY(space, w_self, w_suffixes, w_start, 
     (u_self, _, start, end) = _convert_idx_params(space, w_self,
                                                   space.wrap(''), w_start, w_end)
     for w_suffix in space.fixedview(w_suffixes):
-        suffix = space.str_w(w_suffix) 
+        suffix = space.str_w(w_suffix)
         if stringendswith(u_self, suffix, start, end):
             return space.w_True
     return space.w_False
