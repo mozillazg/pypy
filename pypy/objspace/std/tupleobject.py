@@ -35,7 +35,10 @@ class W_TupleObject(W_AbstractTupleObject):
         items_w = [None] * self.length()
         for i in xrange(self.length()):
             items_w[i] = self.getitem(space, i)
-        return items_w[:]
+        return items_w
+
+    def tolist_resized(self, space):
+        return self.tolist(space)[:]
 
     def getitems_copy(self, space):
         return self.tolist(space)
