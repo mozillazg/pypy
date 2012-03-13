@@ -25,6 +25,9 @@ class UntypedStorage(object):
     def getlength(self):
         return len(self.shape)
 
+    def getshape(self):
+        return self.shape
+
     def getint(self, idx):
         assert self.shape[idx] == INT
         v = self.storage[idx]
@@ -77,6 +80,9 @@ class SomeUntypedStorage(annmodel.SomeObject):
 
     def method_getlength(self):
         return annmodel.SomeInteger()
+
+    def method_getshape(self):
+        return annmodel.SomeString(can_be_None=False)
 
     def method_getint(self, s_idx):
         self._check_idx(s_idx)
@@ -175,6 +181,12 @@ class UntypedStorageRepr(Repr):
         [v_arr] = hop.inputargs(self)
         hop.exception_cannot_occur()
         return hop.gendirectcall(self.ll_getlength, v_arr)
+
+    def rtype_method_getshape(self, hop):
+        [v_arr] = hop.inputargs(self)
+        hop.exception_cannot_occur()
+        c_name = hop.inputconst(lltype.Void, "shape")
+        return hop.genop("getfield", [v_arr, c_name], resulttype=string_repr)
 
     def rtype_method_getint(self, hop):
         v_addr = self._read_index(hop)
