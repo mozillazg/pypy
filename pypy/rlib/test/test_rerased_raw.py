@@ -117,3 +117,21 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         llres = self.interpret(f, [])
         assert hlstr(llres) == "ooi"
+
+    def test_const(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+        storage = rerased_raw.UntypedStorage("io")
+        storage.setint(0, 1)
+        storage.setinstance(1, A(20))
+        def f(i):
+            A(i)
+            if i:
+                local_storage = rerased_raw.UntypedStorage("ii")
+            else:
+                local_storage = storage
+            return local_storage.getint(0) + local_storage.getinstance(1, A).v
+
+        res = self.interpret(f, [0])
+        assert res == 21
