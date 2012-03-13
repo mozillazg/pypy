@@ -14,6 +14,10 @@ from pypy.rlib.debug import make_sure_not_resized
 class W_AbstractTupleObject(W_Object):
     __slots__ = ()
 
+    def unwrap(self, space):
+        items = [space.unwrap(w_item) for w_item in self.tolist(space)]
+        return tuple(items)
+
     def tolist(self, space):
         "Returns the items, as a fixed-size list."
         raise NotImplementedError
@@ -25,8 +29,8 @@ class W_AbstractTupleObject(W_Object):
 class W_TupleObject(W_AbstractTupleObject):
     from pypy.objspace.std.tupletype import tuple_typedef as typedef
 
-    def __init__(self, storage):
-        self.storage = storage
+    def __init__(self, tuplestorage):
+        self.tuplestorage = tuplestorage
 
     def tolist(self, space):
         items_w = [None] * self.length()
@@ -38,12 +42,12 @@ class W_TupleObject(W_AbstractTupleObject):
         return self.tolist(space)
 
     def length(self):
-        return self.storage.getlength()
+        return self.tuplestorage.getlength()
 
     def getitem(self, space, i):
         from pypy.objspace.std.tupletype import read_obj
 
-        return read_obj(space, self.storage, i)
+        return read_obj(space, self.tuplestorage, i)
 
 registerimplementation(W_TupleObject)
 
@@ -101,7 +105,7 @@ def mul__ANY_Tuple(space, w_times, w_tuple):
     return mul__Tuple_ANY(space, w_tuple, w_times)
 
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
-    if w_tuple1.storage.getshape() is not w_tuple2.storage.getshape():
+    if w_tuple1.tuplestorage.getshape() is not w_tuple2.tuplestorage.getshape():
         return space.w_False
     if w_tuple1.length() != w_tuple2.length():
         return space.w_False

@@ -1046,7 +1046,7 @@ def init__List(space, w_list, __args__):
         if isinstance(w_iterable, W_ListObject):
             w_list.extend(w_iterable)
         elif isinstance(w_iterable, W_TupleObject):
-            w_list.extend(W_ListObject(space, w_iterable.wrappeditems[:]))
+            w_list.extend(W_ListObject(space, w_iterable.tolist(space)))
         else:
             _init_from_iterable(space, w_list, w_iterable)
 

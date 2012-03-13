@@ -432,7 +432,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         if isinstance(w_obj, W_ListObject):
             t = w_obj.getitems()
         elif isinstance(w_obj, W_AbstractTupleObject):
-            t = w_obj.getitems_copy()
+            t = w_obj.getitems_copy(self)
         else:
             return ObjSpace.unpackiterable(self, w_obj, expected_length)
         if expected_length != -1 and len(t) != expected_length:

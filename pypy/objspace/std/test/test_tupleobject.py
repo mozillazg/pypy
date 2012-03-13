@@ -123,9 +123,9 @@ class AppTestW_TupleObject:
 class AppTest_SpecializedTuple(object):
     def setup_class(cls):
         def w_get_specializion(space, w_tuple):
-            return space.wrap(w_tuple.storage.getshape())
+            return space.wrap(w_tuple.tuplestorage.getshape())
         def w_same_specialization(space, w_tuple1, w_tuple2):
-            return space.wrap(w_tuple1.storage.getshape() is w_tuple2.storage.getshape())
+            return space.wrap(w_tuple1.tuplestorage.getshape() is w_tuple2.tuplestorage.getshape())
         cls.w_get_specialization = cls.space.wrap(interp2app(w_get_specializion))
         cls.w_same_specialization = cls.space.wrap(interp2app(w_same_specialization))
 
