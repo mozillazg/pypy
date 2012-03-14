@@ -1205,10 +1205,14 @@ def cast_from_int(TYPE, x):
         return lltype.cast_primitive(TYPE, x)
 
 def cast_to_ptr(x):
+    if lltype.typeOf(x) is llmemory.Address:
+        return llmemory.cast_adr_to_ptr(x, llmemory.GCREF)
     assert isinstance(lltype.typeOf(x), lltype.Ptr)
     return lltype.cast_opaque_ptr(llmemory.GCREF, x)
 
 def cast_from_ptr(TYPE, x):
+    if TYPE is llmemory.Address:
+        return llmemory.cast_ptr_to_adr(x)
     return lltype.cast_opaque_ptr(TYPE, x)
 
 def cast_to_floatstorage(x):
@@ -1458,21 +1462,21 @@ def do_getfield_gc_float(struct, fieldnum):
 def do_getfield_gc_ptr(struct, fieldnum):
     return cast_to_ptr(_getfield_gc(struct, fieldnum))
 
-def _getinteriorfield_gc(struct, fieldnum):
-    STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-    return getattr(struct, fieldname)
+def new_getinteriorfield_gc(cast_func):
+    def do_getinteriorfield_gc(array, index, fieldnum):
+        STRUCT, fieldname = symbolic.TokenToField[fieldnum]
+        if isinstance(lltype.typeOf(array._obj.container), lltype.GcStruct):
+            array = getattr(array._obj.container, fieldname)
+            value = array.getitem(index)
+        else:
+            struct = array._obj.container.getitem(index)
+            value = getattr(struct, fieldname)
+        return cast_func(value)
+    return do_getinteriorfield_gc
 
-def do_getinteriorfield_gc_int(array, index, fieldnum):
-    struct = array._obj.container.getitem(index)
-    return cast_to_int(_getinteriorfield_gc(struct, fieldnum))
-
-def do_getinteriorfield_gc_float(array, index, fieldnum):
-    struct = array._obj.container.getitem(index)
-    return cast_to_floatstorage(_getinteriorfield_gc(struct, fieldnum))
-
-def do_getinteriorfield_gc_ptr(array, index, fieldnum):
-    struct = array._obj.container.getitem(index)
-    return cast_to_ptr(_getinteriorfield_gc(struct, fieldnum))
+do_getinteriorfield_gc_int = new_getinteriorfield_gc(cast_to_int)
+do_getinteriorfield_gc_float = new_getinteriorfield_gc(cast_to_floatstorage)
+do_getinteriorfield_gc_ptr = new_getinteriorfield_gc(cast_to_ptr)
 
 def _getinteriorfield_raw(ffitype, array, index, width, ofs):
     addr = rffi.cast(rffi.VOIDP, array)
@@ -1556,9 +1560,14 @@ do_setfield_gc_ptr = new_setfield_gc(cast_from_ptr)
 def new_setinteriorfield_gc(cast_func):
     def do_setinteriorfield_gc(array, index, fieldnum, newvalue):
         STRUCT, fieldname = symbolic.TokenToField[fieldnum]
-        struct = array._obj.container.getitem(index)
-        FIELDTYPE = getattr(STRUCT, fieldname)
-        setattr(struct, fieldname, cast_func(FIELDTYPE, newvalue))
+        if isinstance(lltype.typeOf(array._obj.container), lltype.GcStruct):
+            array = getattr(array._obj.container, fieldname)
+            FIELDTYPE = lltype.typeOf(array).OF
+            array.setitem(index, cast_func(FIELDTYPE, newvalue))
+        else:
+            struct = array._obj.container.getitem(index)
+            FIELDTYPE = getattr(STRUCT, fieldname)
+            setattr(struct, fieldname, cast_func(FIELDTYPE, newvalue))
     return do_setinteriorfield_gc
 do_setinteriorfield_gc_int = new_setinteriorfield_gc(cast_from_int)
 do_setinteriorfield_gc_float = new_setinteriorfield_gc(cast_from_floatstorage)

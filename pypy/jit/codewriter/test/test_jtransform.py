@@ -1275,3 +1275,25 @@ def test_cast_adr_to_ptr():
     assert op1.opname == "getinteriorfield_gc_r"
     assert op1.args == [v0, const(0), ('interiorfielddescr', S, 'data')]
     assert op1.result == v2
+
+def test_cast_ptr_to_adr():
+    S = lltype.GcStruct("S",
+        ("data", lltype.Array(llmemory.Address)),
+    )
+
+    v0 = varoftype(lltype.Ptr(S))
+    v1 = varoftype(lltype.Ptr(S))
+    v2 = varoftype(llmemory.Address)
+
+    block = Block([v0, v1])
+    block.operations = [
+        SpaceOperation("cast_ptr_to_adr", [v1], v2),
+        SpaceOperation("setinteriorfield",
+            [v0, Constant("data", lltype.Void), const(0), v2], lltype.Void
+        )
+    ]
+
+    Transformer(FakeCPU()).optimize_block(block)
+    [op1] = block.operations
+    assert op1.opname == "setinteriorfield_gc_r"
+    assert op1.args == [v0, const(0), v1, ('interiorfielddescr', S, 'data')]

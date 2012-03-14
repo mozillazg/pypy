@@ -34,6 +34,7 @@ def integer_bounds(size, unsigned):
 
 class Transformer(object):
     vable_array_vars = None
+    _newoperations = None
 
     def __init__(self, cpu=None, callcontrol=None, portal_jd=None):
         self.cpu = cpu
@@ -243,7 +244,8 @@ class Transformer(object):
     def rewrite_op_cast_int_to_unichar(self, op): pass
     def rewrite_op_cast_int_to_uint(self, op): pass
     def rewrite_op_cast_uint_to_int(self, op): pass
-    def rewrite_op_cast_ptr_to_adr(self, op): pass
+    def rewrite_op_cast_ptr_to_adr(self, op):
+        return op
 
     def _rewrite_symmetric(self, op):
         """Rewrite 'c1+v2' into 'v2+c1' in an attempt to avoid generating
@@ -833,6 +835,15 @@ class Transformer(object):
             return SpaceOperation(opname, [op.args[0], op.args[2], op.args[3]],
                                   op.result)
         else:
+            kind = None
+            orig_value = None
+            orig_result = None
+            if self._newoperations and self._newoperations[-1].opname == "cast_ptr_to_adr":
+                prev_op = self._newoperations.pop()
+                kind = "r"
+                [orig_value] = prev_op.args
+                orig_result = prev_op.result
+
             v_inst = op.args[0]
             v_value = op.args[3]
             if v_value.concretetype is lltype.Void:
@@ -841,6 +852,11 @@ class Transformer(object):
                 v_inst, v_index, c_field, v_value = op.args
             else:
                 v_inst, c_field, v_index, v_value = op.args
+
+            assert orig_result is None or orig_result is v_value
+            if orig_value is not None:
+                v_value = orig_value
+
             descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
                                                   c_field.value)
             kind = getkind(v_value.concretetype)[0]
