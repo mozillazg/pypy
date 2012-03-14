@@ -63,6 +63,15 @@ class _JvmCallMethod(MicroInstruction):
                             jmethod.return_type, op.result)
 JvmCallMethod = _JvmCallMethod()
 
+class _GetStaticField(MicroInstruction):
+    def render(self, generator, op):
+        jvm_class_wrapper, field_name = [arg.value for arg in op.args]
+        class_name = jvm_class_wrapper.__name__
+        result_type = generator.db.lltype_to_cts(op.result.concretetype)
+        field = jvm.Field(class_name, field_name, result_type, static=True)
+        generator.emit(field)
+
+GetStaticField = _GetStaticField()
 
 class _NewCustomDict(MicroInstruction):
     def _load_func(self, gen, fn, obj, method_name):

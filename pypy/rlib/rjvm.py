@@ -86,15 +86,17 @@ class JvmClassWrapper(CallableWrapper):
 
         refclass = self.__reflection_class__
         self._static_method_names = {str(m.getName()) for m in refclass.getMethods() if _is_static(m)}
+        self._static_field_names = {str(f.getName()) for f in _get_fields(refclass, static=True)}
 
     def __getattr__(self, attr):
         if attr in self._static_method_names:
             return JvmStaticMethodWrapper(getattr(self.__wrapped__, attr))
+        elif attr in self._static_field_names:
+            return self._wrap_item(getattr(self.__wrapped__, attr))
         else:
             raise TypeError(
-                "There's no static method called {method_name} in class {class_name}"\
-                " and we don't support static fields yet.".format(
-                    method_name=attr, class_name=self.__name__))
+                "There's no static member called {member_name} in class {class_name}.".format(
+                    member_name=attr, class_name=self.__name__))
 
     def __repr__(self):
         return '<JvmClassWrapper %s>' % self.__name__
@@ -149,12 +151,17 @@ def _is_static(method_or_field):
     """
     return jpype.java.lang.reflect.Modifier.isStatic(method_or_field.getModifiers())
 
-def _get_fields(refclass):
+def _get_fields(refclass, static=False):
     """
-    Unfortunately JPype seems to crash when calling getFields() on a JavaClass :/
+    Unfortunately JPype seems to crash when calling getFields() one a JavaClass :/
     For now let's stick to getDeclaredFields() and hope to fix this later...
     """
-    return refclass.getDeclaredFields()
+    if static:
+        staticness = _is_static
+    else:
+        staticness = lambda f: not _is_static(f)
+
+    return [f for f in refclass.getDeclaredFields() if staticness(f)]
 
 jpype.startJVM(jpype.getDefaultJVMPath(), "-ea")
 java = JvmPackageWrapper("java")

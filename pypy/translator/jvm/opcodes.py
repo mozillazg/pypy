@@ -11,7 +11,7 @@ from pypy.translator.oosupport.metavm import \
      CastTo, PushPrimitive
 from pypy.translator.jvm.metavm import \
      IndirectCall, JvmCallMethod, NewCustomDict, \
-     CastPrimitive, PushPyPy, PushComparisonResult
+     CastPrimitive, PushPyPy, PushComparisonResult, GetStaticField
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.jvm.cmpopcodes import cmp_opname
 
@@ -74,6 +74,7 @@ opcodes = _proc_dict({
     'runtimenew':               [RuntimeNew, StoreResult],
     'oosetfield':               [SetField],
     'oogetfield':               [GetField, StoreResult],
+    'oogetstaticfield':         [GetStaticField, StoreResult],
     'oosend':                   [JvmCallMethod, StoreResult],
     'ooupcast':                 DoNothing,
     'oodowncast':               [DownCast, StoreResult],

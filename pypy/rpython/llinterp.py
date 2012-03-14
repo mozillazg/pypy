@@ -1162,6 +1162,10 @@ class LLFrame(object):
         assert isinstance(name, str)
         return getattr(inst, name)
 
+    def op_oogetstaticfield(self, cls, name):
+        assert isinstance(name, str)
+        return getattr(cls, name)
+
     def op_oosend(self, message, inst, *args):
         checkinst(inst)
         assert isinstance(message, (str, ootype._overloaded_meth_desc))

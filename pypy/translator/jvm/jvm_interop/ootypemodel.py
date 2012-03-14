@@ -3,16 +3,17 @@ from pypy.rlib import rjvm
 from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper
 from pypy.rpython.ootypesystem import ootype
 
+
 class NativeRJvmInstance(ootype.NativeInstance):
     """
-    An OOType for native java instances. Uses reflection on a remote JVM (using JPype)
-    to check attribute access.
+    An OOType for native java instances. Uses reflection on a remote JVM
+    (using JPype) to check attribute access.
     """
     def __init__(self, refclass):
         self.refclass = refclass
         self.class_name = refclass.getName()
         self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass)}
-        self.example = utils.NativeRJvmInstanceExample(refclass) # used in self._example()
+        self.example = utils.NativeRJvmInstanceExample(refclass)  # used in self._example()
 
     def __repr__(self):
         return '<NativeJvmInstance %s>' % self.class_name
