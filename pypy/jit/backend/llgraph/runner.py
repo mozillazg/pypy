@@ -408,6 +408,11 @@ class LLtypeCPU(BaseCPU):
                 token = '?'
         return self.getdescr(size, token)
 
+    def copy_and_change_descr_typeinfo_to_ptr(self, descr):
+        return self.getdescr(descr.ofs, "r", descr.extrainfo, descr.name,
+                             descr.arg_types, descr.count_fields_if_immut,
+                             descr.ffi_flags, descr.width)
+
     # ---------- the backend-dependent operations ----------
 
     def bh_strlen(self, string):

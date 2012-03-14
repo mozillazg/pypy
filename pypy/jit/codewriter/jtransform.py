@@ -237,8 +237,7 @@ class Transformer(object):
             raise Exception("Must cast_adr_to_ptr of directly read adr")
         prev_op.opname = 'getinteriorfield_gc_r'
         prev_op.result = op.result
-        descr = copy.copy(prev_op.args[2])
-        descr.typeinfo = "r"
+        descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(prev_op.args[2])
         prev_op.args = prev_op.args[:2] + [descr]
         return prev_op
 
@@ -841,9 +840,9 @@ class Transformer(object):
             return SpaceOperation(opname, [op.args[0], op.args[2], op.args[3]],
                                   op.result)
         else:
-            kind = None
             orig_value = None
             orig_result = None
+            prev_op = None
             if self._newoperations and self._newoperations[-1].opname == "cast_ptr_to_adr":
                 prev_op = self._newoperations.pop()
                 [orig_value] = prev_op.args
@@ -862,9 +861,11 @@ class Transformer(object):
             if orig_value is not None:
                 v_value = orig_value
 
-            kind = getkind(v_value.concretetype)[0]
             descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
-                                                  c_field.value, force_kind=kind)
+                                                  c_field.value)
+            if prev_op is not None:
+                descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(descr)
+            kind = getkind(v_value.concretetype)[0]
             args = [v_inst, v_index, v_value, descr]
             return SpaceOperation('setinteriorfield_gc_%s' % kind, args,
                                   op.result)

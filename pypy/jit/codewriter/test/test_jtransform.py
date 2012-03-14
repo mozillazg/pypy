@@ -38,12 +38,14 @@ class FakeCPU:
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
-    def interiorfielddescrof(self, ARRAY, name, force_kind=None):
+    def interiorfielddescrof(self, ARRAY, name):
         return ('interiorfielddescr', ARRAY, name)
     def arraydescrof(self, ARRAY):
         return FakeDescr(('arraydescr', ARRAY))
     def sizeof(self, STRUCT):
         return FakeDescr(('sizedescr', STRUCT))
+    def copy_and_change_descr_typeinfo_to_ptr(self, descr):
+        return (descr, "r")
 
 class FakeDescr(tuple):
     def as_vtable_size_descr(self):
@@ -1273,7 +1275,7 @@ def test_cast_adr_to_ptr():
     Transformer(FakeCPU()).optimize_block(block)
     [op1] = block.operations
     assert op1.opname == "getinteriorfield_gc_r"
-    assert op1.args == [v0, const(0), ('interiorfielddescr', S, 'data')]
+    assert op1.args == [v0, const(0), (('interiorfielddescr', S, 'data'), "r")]
     assert op1.result == v2
 
 def test_cast_ptr_to_adr():
@@ -1296,4 +1298,4 @@ def test_cast_ptr_to_adr():
     Transformer(FakeCPU()).optimize_block(block)
     [op1] = block.operations
     assert op1.opname == "setinteriorfield_gc_r"
-    assert op1.args == [v0, const(0), v1, ('interiorfielddescr', S, 'data')]
+    assert op1.args == [v0, const(0), v1, (('interiorfielddescr', S, 'data'), "r")]
