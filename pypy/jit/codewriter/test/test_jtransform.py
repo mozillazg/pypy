@@ -1240,3 +1240,22 @@ def test_interiorfield_struct():
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
     assert op1.opname == "getinteriorfield_gc_i"
     assert op1.args == [v, const(0), ('interiorfielddescr', S, "data")]
+
+def test_cast_adr_to_ptr():
+    S = lltype.GcStruct("S",
+        ("data", lltype.Array(llmemory.Address)),
+    )
+    v0 = varoftype(lltype.Ptr(S))
+    v1 = varoftype(llmemory.Address)
+    v2 = varoftype(lltype.Ptr(S))
+    ops = [
+        SpaceOperation("getinteriorfield",
+            [v0, Constant("data", lltype.Void), const(0)], v1
+        ),
+        SpaceOperation("cast_adr_to_ptr", [v1], v2)
+    ]
+
+    op1 = Transformer(FakeCPU()).rewrite_operation(ops)
+    assert op1.opname == "getinteriorfield_gc_r"
+    assert op1.args == [v, const(0), ('interiorfielddescr', S, 'data')]
+    assert op1.result == v2
