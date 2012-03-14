@@ -840,7 +840,6 @@ class Transformer(object):
             orig_result = None
             if self._newoperations and self._newoperations[-1].opname == "cast_ptr_to_adr":
                 prev_op = self._newoperations.pop()
-                kind = "r"
                 [orig_value] = prev_op.args
                 orig_result = prev_op.result
 
