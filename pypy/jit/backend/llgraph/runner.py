@@ -334,7 +334,7 @@ class LLtypeCPU(BaseCPU):
         token = history.getkind(getattr(S, fieldname))
         return self.getdescr(ofs, token[0], name=fieldname)
 
-    def interiorfielddescrof(self, A, fieldname):
+    def interiorfielddescrof(self, A, fieldname, force_kind=None):
         width = symbolic.get_size(A)
         if isinstance(A, lltype.GcArray):
             S = A.OF
@@ -343,6 +343,8 @@ class LLtypeCPU(BaseCPU):
         else:
             ofs, size = symbolic.get_field_token(A, fieldname)
             token = history.getkind(getattr(A, fieldname).OF)
+        if force_kind is not None:
+            token = force_kind
         return self.getdescr(ofs, token[0], name=fieldname, width=width)
 
     def interiorfielddescrof_dynamic(self, offset, width, fieldsize,

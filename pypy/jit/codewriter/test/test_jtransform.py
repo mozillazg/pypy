@@ -38,7 +38,7 @@ class FakeCPU:
         return ('calldescr', FUNC, ARGS, RESULT)
     def fielddescrof(self, STRUCT, name):
         return ('fielddescr', STRUCT, name)
-    def interiorfielddescrof(self, ARRAY, name):
+    def interiorfielddescrof(self, ARRAY, name, force_kind=None):
         return ('interiorfielddescr', ARRAY, name)
     def arraydescrof(self, ARRAY):
         return FakeDescr(('arraydescr', ARRAY))

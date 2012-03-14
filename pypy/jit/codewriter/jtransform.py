@@ -1,3 +1,5 @@
+import copy
+
 import py
 
 from pypy.jit.codewriter import support, heaptracker, longlong
@@ -5,9 +7,9 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.policy import log
 from pypy.jit.metainterp import quasiimmut
+from pypy.jit.metainterp.blackhole import BlackholeInterpreter
 from pypy.jit.metainterp.history import getkind
 from pypy.jit.metainterp.typesystem import deref, arrayItem
-from pypy.jit.metainterp.blackhole import BlackholeInterpreter
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, c_last_exception
 from pypy.rlib import objectmodel
 from pypy.rlib.jit import _we_are_jitted
@@ -15,6 +17,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass, rffi
 from pypy.rpython.rclass import IR_QUASIIMMUTABLE, IR_QUASIIMMUTABLE_ARRAY
 from pypy.translator.simplify import get_funcobj
 from pypy.translator.unsimplify import varoftype
+
 
 class UnsupportedMallocFlags(Exception):
     pass
@@ -234,6 +237,9 @@ class Transformer(object):
             raise Exception("Must cast_adr_to_ptr of directly read adr")
         prev_op.opname = 'getinteriorfield_gc_r'
         prev_op.result = op.result
+        descr = copy.copy(prev_op.args[2])
+        descr.typeinfo = "r"
+        prev_op.args = prev_op.args[:2] + [descr]
         return prev_op
 
     def rewrite_op_cast_bool_to_int(self, op): pass
@@ -856,9 +862,9 @@ class Transformer(object):
             if orig_value is not None:
                 v_value = orig_value
 
-            descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
-                                                  c_field.value)
             kind = getkind(v_value.concretetype)[0]
+            descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
+                                                  c_field.value, force_kind=kind)
             args = [v_inst, v_index, v_value, descr]
             return SpaceOperation('setinteriorfield_gc_%s' % kind, args,
                                   op.result)
