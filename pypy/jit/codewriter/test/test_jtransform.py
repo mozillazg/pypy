@@ -1234,7 +1234,7 @@ def test_unknown_operation():
     except Exception, e:
         assert 'foobar' in str(e)
 
-def test_interiorfield_struct():
+def test_arrayitem_struct():
     S = lltype.GcStruct("S",
         ("x", lltype.Signed),
         ("data", lltype.Array(lltype.Signed)),
@@ -1245,16 +1245,15 @@ def test_interiorfield_struct():
         [v, c_data, const(0), const(1)], varoftype(lltype.Void)
     )
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
-    assert op1.opname == "setinteriorfield_gc_i"
-    assert op1.args == [v, const(0), const(1), ('interiorfielddescr', S, "data")]
-
+    assert op1.opname == "setarrayitem_gc_i"
+    assert op1.args == [v, ('arraydescr', S), const(0), const(1)]
 
     op = SpaceOperation("getinteriorfield",
         [v, c_data, const(0)], varoftype(lltype.Signed)
     )
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
-    assert op1.opname == "getinteriorfield_gc_i"
-    assert op1.args == [v, const(0), ('interiorfielddescr', S, "data")]
+    assert op1.opname == "getarrayitem_gc_i"
+    assert op1.args == [v, ('arraydescr', S), const(0)]
 
 def test_cast_adr_to_ptr():
     S = lltype.GcStruct("S",
@@ -1274,8 +1273,8 @@ def test_cast_adr_to_ptr():
 
     Transformer(FakeCPU()).optimize_block(block)
     [op1] = block.operations
-    assert op1.opname == "getinteriorfield_gc_r"
-    assert op1.args == [v0, const(0), (('interiorfielddescr', S, 'data'), "r")]
+    assert op1.opname == "getarrayitem_gc_r"
+    assert op1.args == [v0, (('arraydescr', S,), "r"), const(0)]
     assert op1.result == v2
 
 def test_cast_ptr_to_adr():
@@ -1297,5 +1296,5 @@ def test_cast_ptr_to_adr():
 
     Transformer(FakeCPU()).optimize_block(block)
     [op1] = block.operations
-    assert op1.opname == "setinteriorfield_gc_r"
-    assert op1.args == [v0, const(0), v1, (('interiorfielddescr', S, 'data'), "r")]
+    assert op1.opname == "setarrayitem_gc_r"
+    assert op1.args == [v0, (('arraydescr', S), "r"), const(0), v1]

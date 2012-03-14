@@ -334,17 +334,11 @@ class LLtypeCPU(BaseCPU):
         token = history.getkind(getattr(S, fieldname))
         return self.getdescr(ofs, token[0], name=fieldname)
 
-    def interiorfielddescrof(self, A, fieldname, force_kind=None):
+    def interiorfielddescrof(self, A, fieldname):
+        S = A.OF
         width = symbolic.get_size(A)
-        if isinstance(A, lltype.GcArray):
-            S = A.OF
-            ofs, size = symbolic.get_field_token(S, fieldname)
-            token = history.getkind(getattr(S, fieldname))
-        else:
-            ofs, size = symbolic.get_field_token(A, fieldname)
-            token = history.getkind(getattr(A, fieldname).OF)
-        if force_kind is not None:
-            token = force_kind
+        ofs, size = symbolic.get_field_token(S, fieldname)
+        token = history.getkind(getattr(S, fieldname))
         return self.getdescr(ofs, token[0], name=fieldname, width=width)
 
     def interiorfielddescrof_dynamic(self, offset, width, fieldsize,
@@ -394,24 +388,16 @@ class LLtypeCPU(BaseCPU):
         return llimpl.grab_exc_value()
 
     def arraydescrof(self, A):
+        assert A.OF != lltype.Void
+        assert isinstance(A, lltype.GcArray) or A._hints.get('nolength', False)
         size = symbolic.get_size(A)
-        if isinstance(A, lltype.GcStruct):
-            token = 'S'
+        if isinstance(A.OF, lltype.Ptr) or isinstance(A.OF, lltype.Primitive):
+            token = history.getkind(A.OF)[0]
+        elif isinstance(A.OF, lltype.Struct):
+            token = 's'
         else:
-            assert A.OF != lltype.Void
-            assert isinstance(A, lltype.GcArray) or A._hints.get('nolength', False)
-            if isinstance(A.OF, lltype.Ptr) or isinstance(A.OF, lltype.Primitive):
-                token = history.getkind(A.OF)[0]
-            elif isinstance(A.OF, lltype.Struct):
-                token = 's'
-            else:
-                token = '?'
+            token = '?'
         return self.getdescr(size, token)
-
-    def copy_and_change_descr_typeinfo_to_ptr(self, descr):
-        return self.getdescr(descr.ofs, "r", descr.extrainfo, descr.name,
-                             descr.arg_types, descr.count_fields_if_immut,
-                             descr.ffi_flags, descr.width)
 
     # ---------- the backend-dependent operations ----------
 

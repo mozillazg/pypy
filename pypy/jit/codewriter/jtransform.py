@@ -233,12 +233,13 @@ class Transformer(object):
     def rewrite_op_cast_adr_to_ptr(self, op):
         # HACK
         prev_op = self._newoperations.pop()
-        if prev_op.opname != 'getinteriorfield_gc_i':
+        if prev_op.opname != 'getarrayitem_gc_i':
             raise Exception("Must cast_adr_to_ptr of directly read adr")
-        prev_op.opname = 'getinteriorfield_gc_r'
+        prev_op.opname = 'getarrayitem_gc_r'
         prev_op.result = op.result
-        descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(prev_op.args[2])
-        prev_op.args = prev_op.args[:2] + [descr]
+        prev_descr = prev_op.args[1]
+        descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(prev_descr)
+        prev_op.args = [prev_op.args[0]] + [descr] + prev_op.args[2:]
         return prev_op
 
     def rewrite_op_cast_bool_to_int(self, op): pass
@@ -812,21 +813,33 @@ class Transformer(object):
             opname = "unicodegetitem"
             return SpaceOperation(opname, [op.args[0], op.args[2]], op.result)
         else:
+            v_inst = op.args[0]
+            parts_v = op.args[1:]
             if op.result.concretetype is lltype.Void:
                 return
-            v_inst = op.args[0]
-
-            if isinstance(v_inst.concretetype.TO, lltype.GcArray):
-                v_inst, v_index, c_field = op.args
-            else:
-                v_inst, c_field, v_index = op.args
-
-            descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
-                                                  c_field.value)
-            args = [v_inst, v_index, descr]
             kind = getkind(op.result.concretetype)[0]
-            return SpaceOperation('getinteriorfield_gc_%s' % kind, args,
-                                  op.result)
+            if isinstance(v_inst.concretetype.TO, lltype.GcArray):
+                # only GcArray of Struct supported
+                STRUCT = v_inst.concretetype.TO.OF
+                assert isinstance(STRUCT, lltype.Struct)
+
+                v_index, c_field = parts_v
+                descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
+                                                      c_field.value)
+                args = [v_inst, v_index, descr]
+                return SpaceOperation('getinteriorfield_gc_%s' % kind, args,
+                                      op.result)
+            elif isinstance(v_inst.concretetype.TO, lltype.GcStruct):
+                # Supports the case of a GcStruct which contains an inlined
+                # array of simple types.
+                c_field, v_index = parts_v
+                assert v_inst.concretetype.TO._arrayfld == c_field.value
+                descr = self.cpu.arraydescrof(v_inst.concretetype.TO)
+                args = [v_inst, descr, v_index]
+                return SpaceOperation('getarrayitem_gc_%s' % kind, args,
+                                      op.result)
+            else:
+                raise Exception
 
     def rewrite_op_setinteriorfield(self, op):
         assert len(op.args) == 4
@@ -840,35 +853,44 @@ class Transformer(object):
             return SpaceOperation(opname, [op.args[0], op.args[2], op.args[3]],
                                   op.result)
         else:
-            orig_value = None
-            orig_result = None
-            prev_op = None
-            if self._newoperations and self._newoperations[-1].opname == "cast_ptr_to_adr":
-                prev_op = self._newoperations.pop()
-                [orig_value] = prev_op.args
-                orig_result = prev_op.result
-
             v_inst = op.args[0]
-            v_value = op.args[3]
+            v_value = op.args[-1]
+            parts_v = op.args[1:-1]
             if v_value.concretetype is lltype.Void:
                 return
+
             if isinstance(v_inst.concretetype.TO, lltype.GcArray):
-                v_inst, v_index, c_field, v_value = op.args
+                # only GcArray of Struct supported
+                STRUCT = v_inst.concretetype.TO.OF
+                assert isinstance(STRUCT, lltype.Struct)
+
+                v_index, c_field = parts_v
+                descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
+                                                      c_field.value)
+                args = [v_inst, v_index, v_value, descr]
+                kind = getkind(v_value.concretetype)[0]
+                return SpaceOperation('setinteriorfield_gc_%s' % kind, args,
+                                      op.result)
+            elif isinstance(v_inst.concretetype.TO, lltype.GcStruct):
+                # Supports the case of a GcStruct which contains an inlined
+                # array of simple types.
+                c_field, v_index = parts_v
+                assert v_inst.concretetype.TO._arrayfld == c_field.value
+
+                descr = self.cpu.arraydescrof(v_inst.concretetype.TO)
+
+                if self._newoperations and self._newoperations[-1].opname == "cast_ptr_to_adr":
+                    prev_op = self._newoperations.pop()
+                    assert v_value is prev_op.result
+                    descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(descr)
+                    v_value = prev_op.args[0]
+
+                args = [v_inst, descr, v_index, v_value]
+                kind = getkind(v_value.concretetype)[0]
+                return SpaceOperation('setarrayitem_gc_%s' % kind, args,
+                                      op.result)
             else:
-                v_inst, c_field, v_index, v_value = op.args
-
-            assert orig_result is None or orig_result is v_value
-            if orig_value is not None:
-                v_value = orig_value
-
-            descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
-                                                  c_field.value)
-            if prev_op is not None:
-                descr = self.cpu.copy_and_change_descr_typeinfo_to_ptr(descr)
-            kind = getkind(v_value.concretetype)[0]
-            args = [v_inst, v_index, v_value, descr]
-            return SpaceOperation('setinteriorfield_gc_%s' % kind, args,
-                                  op.result)
+                raise Exception("Obscure")
 
     def _rewrite_equality(self, op, opname):
         arg0, arg1 = op.args
