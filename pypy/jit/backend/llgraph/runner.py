@@ -388,9 +388,12 @@ class LLtypeCPU(BaseCPU):
         return llimpl.grab_exc_value()
 
     def arraydescrof(self, A):
-        assert A.OF != lltype.Void
-        assert isinstance(A, lltype.GcArray) or A._hints.get('nolength', False)
         size = symbolic.get_size(A)
+        if isinstance(A, lltype.GcStruct):
+            A = getattr(A, A._arrayfld)
+        else:
+            assert isinstance(A, lltype.GcArray) or A._hints.get('nolength', False)
+        assert A.OF != lltype.Void
         if isinstance(A.OF, lltype.Ptr) or isinstance(A.OF, lltype.Primitive):
             token = history.getkind(A.OF)[0]
         elif isinstance(A.OF, lltype.Struct):
@@ -398,6 +401,11 @@ class LLtypeCPU(BaseCPU):
         else:
             token = '?'
         return self.getdescr(size, token)
+
+    def copy_and_change_descr_typeinfo_to_ptr(self, descr):
+        return self.getdescr(descr.ofs, "r", descr.extrainfo, descr.name,
+                             descr.arg_types, descr.count_fields_if_immut,
+                             descr.ffi_flags, descr.width)
 
     # ---------- the backend-dependent operations ----------
 

@@ -1424,25 +1424,27 @@ def do_unicodegetitem(string, index):
     uni = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), string)
     return ord(uni.chars[index])
 
-def do_getarrayitem_gc_int(array, index):
-    array = array._obj.container
-    return cast_to_int(array.getitem(index))
+def new_do_getarrayitem(cast_func, gc):
+    def do_getarrayitem(array, index):
+        if gc:
+            array = array._obj.container
+            A = lltype.typeOf(array)
+            if isinstance(A, lltype.GcStruct):
+                array = getattr(array, A._arrayfld)
+        else:
+            array = array.adr.ptr._obj
+        value = array.getitem(index)
+        if cast_func is cast_to_ptr and lltype.typeOf(value) is llmemory.Address:
+            assert isinstance(A, lltype.GcStruct)
+            value = llmemory.cast_adr_to_ptr(value, llmemory.GCREF)
+        return cast_func(value)
+    return do_getarrayitem
 
-def do_getarrayitem_raw_int(array, index):
-    array = array.adr.ptr._obj
-    return cast_to_int(array.getitem(index))
-
-def do_getarrayitem_gc_float(array, index):
-    array = array._obj.container
-    return cast_to_floatstorage(array.getitem(index))
-
-def do_getarrayitem_raw_float(array, index):
-    array = maybe_uncast(FLOAT_ARRAY_TP, array.adr.ptr)
-    return cast_to_floatstorage(array._obj.getitem(index))
-
-def do_getarrayitem_gc_ptr(array, index):
-    array = array._obj.container
-    return cast_to_ptr(array.getitem(index))
+do_getarrayitem_gc_int = new_do_getarrayitem(cast_to_int, gc=True)
+do_getarrayitem_raw_int = new_do_getarrayitem(cast_to_int, gc=False)
+do_getarrayitem_gc_float = new_do_getarrayitem(cast_to_floatstorage, gc=True)
+do_getarrayitem_raw_float = new_do_getarrayitem(cast_to_floatstorage, gc=False)
+do_getarrayitem_gc_ptr = new_do_getarrayitem(cast_to_ptr, gc=True)
 
 def _getfield_gc(struct, fieldnum):
     STRUCT, fieldname = symbolic.TokenToField[fieldnum]
@@ -1504,36 +1506,39 @@ def do_new_array(arraynum, count):
     x = lltype.malloc(TYPE, count, zero=True)
     return cast_to_ptr(x)
 
-def do_setarrayitem_gc_int(array, index, newvalue):
-    array = array._obj.container
-    ITEMTYPE = lltype.typeOf(array).OF
-    newvalue = cast_from_int(ITEMTYPE, newvalue)
-    array.setitem(index, newvalue)
+def new_do_setarrayitem(cast_func, gc):
+    def do_setarrayitem(array, index, newvalue):
+        casted = False
+        if gc:
+            array = array._obj.container
+            A = lltype.typeOf(array)
+            if isinstance(A, lltype.GcStruct):
+                ITEMTYPE = getattr(A, A._arrayfld).OF
+                if (ITEMTYPE is llmemory.Address and
+                    isinstance(lltype.typeOf(newvalue), lltype.Ptr)):
+                    newvalue = llmemory.cast_ptr_to_adr(newvalue)
+                    casted = True
+            else:
+                ITEMTYPE = lltype.typeOf(array).OF
+        else:
+            array = array.adr.ptr
+            ITEMTYPE = lltype.typeOf(array).TO.OF
+        if not casted:
+            newvalue = cast_func(ITEMTYPE, newvalue)
+        if gc:
+            if isinstance(A, lltype.GcStruct):
+                getattr(array, A._arrayfld).setitem(index, newvalue)
+            else:
+                array.setitem(index, newvalue)
+        else:
+            array._obj.setitem(index, newvalue)
+    return do_setarrayitem
 
-def do_setarrayitem_raw_int(array, index, newvalue):
-    array = array.adr.ptr
-    ITEMTYPE = lltype.typeOf(array).TO.OF
-    newvalue = cast_from_int(ITEMTYPE, newvalue)
-    array._obj.setitem(index, newvalue)
-
-def do_setarrayitem_gc_float(array, index, newvalue):
-    array = array._obj.container
-    ITEMTYPE = lltype.typeOf(array).OF
-    newvalue = cast_from_floatstorage(ITEMTYPE, newvalue)
-    array.setitem(index, newvalue)
-
-
-def do_setarrayitem_raw_float(array, index, newvalue):
-    array = maybe_uncast(FLOAT_ARRAY_TP, array.adr.ptr)
-    ITEMTYPE = lltype.typeOf(array).TO.OF
-    newvalue = cast_from_floatstorage(ITEMTYPE, newvalue)
-    array._obj.setitem(index, newvalue)
-
-def do_setarrayitem_gc_ptr(array, index, newvalue):
-    array = array._obj.container
-    ITEMTYPE = lltype.typeOf(array).OF
-    newvalue = cast_from_ptr(ITEMTYPE, newvalue)
-    array.setitem(index, newvalue)
+do_setarrayitem_gc_int = new_do_setarrayitem(cast_from_int, gc=True)
+do_setarrayitem_raw_int = new_do_setarrayitem(cast_from_int, gc=False)
+do_setarrayitem_gc_float = new_do_setarrayitem(cast_from_floatstorage, gc=True)
+do_setarrayitem_raw_float = new_do_setarrayitem(cast_from_floatstorage, gc=False)
+do_setarrayitem_gc_ptr = new_do_setarrayitem(cast_from_ptr, gc=True)
 
 def new_setfield_gc(cast_func):
     def do_setfield_gc(struct, fieldnum, newvalue):
