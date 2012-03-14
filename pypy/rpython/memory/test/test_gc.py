@@ -751,17 +751,18 @@ class GCTest(object):
             def __init__(self, v):
                 self.v = v
 
-        def fn(v):
-            s = UntypedStorage("io")
+        def fn(v, i):
+            s = UntypedStorage("ios")
             s.setint(0, v)
             s.setinstance(1, A(v))
+            s.setstr(2, "abc" * i)
             rgc.collect()
-            return s.getint(0) + s.getinstance(1, A).v
+            return s.getint(0) + s.getinstance(1, A).v + len(s.getstr(2))
 
-        res = self.interpret(fn, [10])
-        assert res == 20
+        res = self.interpret(fn, [10, 1])
+        assert res == 23
 
-    def test_untyped_storage_multipled_objects(self):
+    def test_untyped_storage_multiple_objects(self):
         class A(object):
             def __init__(self, v):
                 self.v = v

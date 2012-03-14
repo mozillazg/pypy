@@ -20,6 +20,7 @@ INT = "i"
 BOOL = "b"
 FLOAT = "f"
 INSTANCE = "o"
+STRING = "s"
 
 class UntypedStorage(object):
     def __init__(self, shape):
@@ -74,6 +75,17 @@ class UntypedStorage(object):
     def setinstance(self, idx, obj):
         assert self.shape[idx] == INSTANCE
         self.storage[idx] = obj
+
+    def getstr(self, idx):
+        assert self.shape[idx] == STRING
+        s = self.storage[idx]
+        assert isinstance(s, str)
+        return s
+
+    def setstr(self, idx, s):
+        assert self.shape[idx] == STRING
+        assert isinstance(s, str)
+        self.storage[idx] = s
 
 class UntypedStorageEntry(ExtRegistryEntry):
     _about_ = UntypedStorage
@@ -139,6 +151,15 @@ class SomeUntypedStorage(annmodel.SomeObject):
         self._check_idx(s_idx)
         assert isinstance(s_obj, annmodel.SomeInstance)
 
+    def method_getstr(self, s_idx):
+        self._check_idx(s_idx)
+        return annmodel.SomeString()
+
+    def method_setstr(self, s_idx, s_s):
+        self._check_idx(s_idx)
+        assert annmodel.SomeString().contains(s_s)
+
+
 class __extend__(pairtype(SomeUntypedStorage, SomeUntypedStorage)):
     def union((self, other)):
         return SomeUntypedStorage()
@@ -189,8 +210,8 @@ def trace_untypedstorage(obj_addr, prev):
         char = (shape + llmemory.offsetof(STR, "chars") +
                 llmemory.itemoffsetof(STR.chars, 0) +
                 (llmemory.sizeof(STR.chars.OF) * i)).char[0]
-        # If it's an instance then we've found a GC pointer.
-        if char == INSTANCE:
+        # If it's an instance or string then we've found a GC pointer.
+        if char == INSTANCE or char == STRING:
             return data_ptr
         i += 1
     # If we've gotten to here, there are no GC-pointers left, return NULL to
@@ -219,6 +240,14 @@ class UntypedStorageRepr(Repr):
         hop.exception_cannot_occur()
         c_name = hop.inputconst(lltype.Void, "data")
         hop.genop("setinteriorfield", [v_arr, c_name, v_idx, v_value])
+
+    def _write_index_gc(self, hop, v_value):
+        v_arr = hop.inputarg(self, arg=0)
+        hop.genop("gc_writebarrier", [v_value, v_arr])
+        v_addr = hop.genop("cast_ptr_to_adr", [v_value],
+                           resulttype=llmemory.Address)
+
+        self._write_index(hop, v_addr)
 
     def convert_const(self, value):
         storage = self.ll_new(llstr(value.shape))
@@ -282,13 +311,18 @@ class UntypedStorageRepr(Repr):
         return hop.genop("cast_adr_to_ptr", [v_addr], resulttype=hop.r_result.lowleveltype)
 
     def rtype_method_setinstance(self, hop):
-        v_arr = hop.inputarg(self, arg=0)
         v_instance = hop.inputarg(hop.args_r[2], arg=2)
-        hop.genop("gc_writebarrier", [v_instance, v_arr])
 
-        v_addr = hop.genop("cast_ptr_to_adr", [v_instance],
-                           resulttype=llmemory.Address)
-        self._write_index(hop, v_addr)
+        self._write_index_gc(hop, v_instance)
+
+    def rtype_method_getstr(self, hop):
+        v_addr = self._read_index(hop)
+        return hop.genop("cast_adr_to_ptr", [v_addr], resulttype=string_repr)
+
+    def rtype_method_setstr(self, hop):
+        v_value = hop.inputarg(string_repr, arg=2)
+
+        self._write_index_gc(hop, v_value)
 
     @classmethod
     def ll_new(cls, shape):

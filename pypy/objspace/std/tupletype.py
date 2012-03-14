@@ -4,7 +4,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
-from pypy.rlib.rerased_raw import UntypedStorage, INT, BOOL, INSTANCE
+from pypy.rlib.rerased_raw import UntypedStorage, INT, BOOL, INSTANCE, STRING
 from pypy.rlib.unroll import unrolling_iterable
 
 
@@ -31,6 +31,13 @@ def _store_bool(space, storage, idx, w_obj):
 def _get_bool(space, storage, idx):
     return space.wrap(storage.getbool(idx))
 
+def _check_str(space, w_obj):
+    return space.is_w(space.type(w_obj), space.w_str)
+def _store_str(space, storage, idx, w_obj):
+    storage.setstr(idx, space.str_w(w_obj))
+def _get_str(space, storage, idx):
+    return space.wrap(storage.getstr(idx))
+
 def _check_instance(space, w_obj):
     return True
 def _store_instance(space, storage, idx, w_obj):
@@ -41,6 +48,7 @@ def _get_instance(space, storage, idx):
 SPECIALIZED_TYPES = unrolling_iterable([
     (INT, _check_int, _store_int, _get_int),
     (BOOL, _check_bool, _store_bool, _get_bool),
+    (STRING, _check_str, _store_str, _get_str),
     (INSTANCE, _check_instance, _store_instance, _get_instance)
 ])
 

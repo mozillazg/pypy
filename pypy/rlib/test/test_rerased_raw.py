@@ -5,47 +5,53 @@ from pypy.rpython.annlowlevel import hlstr
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
 
 
-def test_direct_int():
-    storage = rerased_raw.UntypedStorage("ii")
+class TestUntypedStorageDirect(object):
+    def test_int(self):
+        storage = rerased_raw.UntypedStorage("ii")
 
-    storage.setint(0, 2)
-    assert storage.getint(0) == 2
+        storage.setint(0, 2)
+        assert storage.getint(0) == 2
 
-    storage.setint(1, 5)
-    assert storage.getint(1) == 5
+        storage.setint(1, 5)
+        assert storage.getint(1) == 5
 
-def test_direct_float():
-    storage = rerased_raw.UntypedStorage("f")
-    storage.setfloat(0, 5.5)
+    def test_float(self):
+        storage = rerased_raw.UntypedStorage("f")
+        storage.setfloat(0, 5.5)
 
-    assert storage.getfloat(0) == 5.5
+        assert storage.getfloat(0) == 5.5
 
-def test_direct_bool():
-    storage = rerased_raw.UntypedStorage("bi")
-    storage.setbool(0, True)
+    def test_bool(self):
+        storage = rerased_raw.UntypedStorage("bi")
+        storage.setbool(0, True)
 
-    assert storage.getbool(0) is True
+        assert storage.getbool(0) is True
 
-def test_direct_instance():
-    class A(object):
-        def __init__(self, value):
-            self.value = value
+    def test_instance(self):
+        class A(object):
+            def __init__(self, value):
+                self.value = value
 
-    storage = rerased_raw.UntypedStorage("o")
-    storage.setinstance(0, A(4))
+        storage = rerased_raw.UntypedStorage("o")
+        storage.setinstance(0, A(4))
 
-    assert storage.getinstance(0, A).value == 4
+        assert storage.getinstance(0, A).value == 4
 
-def test_direct_getlength():
-    storage = rerased_raw.UntypedStorage("ooi")
-    assert storage.getlength() == 3
+    def test_str(self):
+        storage = rerased_raw.UntypedStorage("s")
+        storage.setstr(0, "abc")
 
-def test_direct_getshape():
-    storage = rerased_raw.UntypedStorage("ooi")
-    assert storage.getshape() == "ooi"
+        assert storage.getstr(0) == "abc"
 
+    def test_getlength(self):
+        storage = rerased_raw.UntypedStorage("ooi")
+        assert storage.getlength() == 3
 
-class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
+    def test_getshape(self):
+        storage = rerased_raw.UntypedStorage("ooi")
+        assert storage.getshape() == "ooi"
+
+class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
     def test_int(self):
         def f(x):
             storage = rerased_raw.UntypedStorage("i")
@@ -64,6 +70,16 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
         res = self.interpret(f, [True])
         assert res == True
 
+    def test_float(self):
+        py.test.skip("no float support yet")
+        def f(x):
+            storage = rerased_raw.UntypedStorage("f")
+            storage.setfloat(0, x)
+            return storage.getfloat(0)
+
+        res = self.interpret(f, [12.3])
+        assert res == 12.3
+
     def test_instance(self):
         class A(object):
             def __init__(self, v):
@@ -77,14 +93,15 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
         res = self.interpret(f, [27])
         assert res == 27
 
-    # def test_float(self):
-    #     def f(x):
-    #         storage = rerased_raw.UntypedStorage("f")
-    #         storage.setfloat(0, x)
-    #         return storage.getfloat(0)
+    def test_str(self):
+        data = ["abc"]
+        def f(i):
+            storage = rerased_raw.UntypedStorage("s")
+            storage.setstr(0, data[i])
+            return storage.getstr(0)
 
-    #     res = self.interpret(f, [12.3])
-    #     assert res == 12.3
+        res = self.interpret(f, [0])
+        assert self.ll_to_string(res) == "abc"
 
     def test_exception_catching(self):
         class A(object):
