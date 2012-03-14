@@ -1218,3 +1218,17 @@ def test_unknown_operation():
         tr.rewrite_operation(op)
     except Exception, e:
         assert 'foobar' in str(e)
+
+def test_interiorfield_struct():
+    S = lltype.GcStruct("S",
+        ("x", lltype.Signed),
+        ("data", lltype.Array(lltype.Signed)),
+    )
+    v = varoftype(lltype.Ptr(S))
+    c_data = Constant("data", lltype.Void)
+    op = SpaceOperation("setinteriorfield",
+        [v, c_data, const(0), const(1)], varoftype(lltype.Void)
+    )
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == "setinteriorfield_gc_i"
+    assert op1.args == [v, const(0), const(1), ('interiorfielddescr', S, "data")]

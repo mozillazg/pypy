@@ -462,6 +462,7 @@ class Transformer(object):
     rewrite_op_ullong_mod_zer      = _do_builtin_call
     rewrite_op_gc_identityhash = _do_builtin_call
     rewrite_op_gc_id           = _do_builtin_call
+    rewrite_op_gc_writebarrier = _do_builtin_call
     rewrite_op_uint_mod        = _do_builtin_call
     rewrite_op_cast_float_to_uint = _do_builtin_call
     rewrite_op_cast_uint_to_float = _do_builtin_call
@@ -820,13 +821,14 @@ class Transformer(object):
             return SpaceOperation(opname, [op.args[0], op.args[2], op.args[3]],
                                   op.result)
         else:
-            v_inst, v_index, c_field, v_value = op.args
+            v_inst = op.args[0]
+            v_value = op.args[3]
             if v_value.concretetype is lltype.Void:
                 return
-            # only GcArray of Struct supported
-            assert isinstance(v_inst.concretetype.TO, lltype.GcArray)
-            STRUCT = v_inst.concretetype.TO.OF
-            assert isinstance(STRUCT, lltype.Struct)
+            if isinstance(v_inst.concretetype.TO, lltype.GcArray):
+                v_inst, v_index, c_field, v_value = op.args
+            else:
+                v_inst, c_field, v_index, v_value = op.args
             descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
                                                   c_field.value)
             kind = getkind(v_value.concretetype)[0]

@@ -177,6 +177,9 @@ _ll_5_list_ll_arraycopy = rgc.ll_arraycopy
 def _ll_1_gc_identityhash(x):
     return lltype.identityhash(x)
 
+def _ll_2_gc_writebarrier(x, y):
+    llop.gc_writebarrier(lltype.Void, x, y)
+
 # the following function should not be "@elidable": I can think of
 # a corner case in which id(const) is constant-folded, and then 'const'
 # disappears and is collected too early (possibly causing another object
