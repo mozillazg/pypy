@@ -961,6 +961,19 @@ def test_str_newstr():
     assert op1.args == [v1]
     assert op1.result == v2
 
+def test_malloc_varsize_struct():
+    S = lltype.GcStruct('x', ('a', lltype.Signed),
+                        ('b', lltype.Array(lltype.Signed)))
+    v0 = varoftype(lltype.Signed)
+    v1 = varoftype(lltype.Ptr(S))
+    c_S = Constant(S, lltype.Void)
+    c_flavor = Constant({'flavor': 'gc'}, lltype.Void)
+    op = SpaceOperation('malloc_varsize', [c_S, c_flavor, v0], v1)
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == 'new_array'
+    assert op1.args == [('arraydescr', S), v0]
+    assert op1.result == v1
+
 def test_str_concat():
     # test that the oopspec is present and correctly transformed
     PSTR = lltype.Ptr(rstr.STR)
@@ -1257,7 +1270,8 @@ def test_cast_adr_to_ptr():
         SpaceOperation("cast_adr_to_ptr", [v1], v2)
     ]
 
-    op1 = Transformer(FakeCPU()).optimize_block(block)
+    Transformer(FakeCPU()).optimize_block(block)
+    [op1] = block.operations
     assert op1.opname == "getinteriorfield_gc_r"
-    assert op1.args == [v, const(0), ('interiorfielddescr', S, 'data')]
+    assert op1.args == [v0, const(0), ('interiorfielddescr', S, 'data')]
     assert op1.result == v2

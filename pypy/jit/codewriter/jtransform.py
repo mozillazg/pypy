@@ -52,7 +52,7 @@ class Transformer(object):
         self.vable_flags = {}
         renamings = {}
         renamings_constants = {}    # subset of 'renamings', {Var:Const} only
-        newoperations = []
+        self._newoperations = newoperations = []
         #
         def do_rename(var, var_or_const):
             if var.concretetype is lltype.Void:
@@ -225,6 +225,15 @@ class Transformer(object):
 
     def rewrite_op_jit_record_known_class(self, op):
         return SpaceOperation("record_known_class", [op.args[0], op.args[1]], None)
+
+    def rewrite_op_cast_adr_to_ptr(self, op):
+        # HACK
+        prev_op = self._newoperations.pop()
+        if prev_op.opname != 'getinteriorfield_gc_i':
+            raise Exception("Must cast_adr_to_ptr of directly read adr")
+        prev_op.opname = 'getinteriorfield_gc_r'
+        prev_op.result = op.result
+        return prev_op
 
     def rewrite_op_cast_bool_to_int(self, op): pass
     def rewrite_op_cast_bool_to_uint(self, op): pass
