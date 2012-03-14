@@ -33,38 +33,22 @@ class UntypedStorage(object):
     def getshape(self):
         return self.shape
 
-    def getint(self, idx):
-        assert self.shape[idx] == INT
-        v = self.storage[idx]
-        assert isinstance(v, int)
-        return v
+    def _typed_getset(char, cls):
+        def getter(self, idx):
+            assert self.shape[idx] == char
+            v = self.storage[idx]
+            assert isinstance(v, cls)
+            return v
+        def setter(self, idx, v):
+            assert self.shape[idx] == char
+            assert isinstance(v, cls)
+            self.storage[idx] = v
+        return getter, setter
 
-    def setint(self, idx, v):
-        assert self.shape[idx] == INT
-        assert isinstance(v, int)
-        self.storage[idx] = v
-
-    def getbool(self, idx):
-        assert self.shape[idx] == BOOL
-        v = self.storage[idx]
-        assert isinstance(v, bool)
-        return v
-
-    def setbool(self, idx, v):
-        assert self.shape[idx] == BOOL
-        assert isinstance(v, bool)
-        self.storage[idx] = v
-
-    def getfloat(self, idx):
-        assert self.shape[idx] == FLOAT
-        v = self.storage[idx]
-        assert isinstance(v, float)
-        return v
-
-    def setfloat(self, idx, f):
-        assert self.shape[idx] == FLOAT
-        assert isinstance(f, float)
-        self.storage[idx] = f
+    getint, setint = _typed_getset(INT, int)
+    getbool, setbool = _typed_getset(BOOL, bool)
+    getfloat, setfloat = _typed_getset(FLOAT, float)
+    getstr, setstr = _typed_getset(STRING, str)
 
     def getinstance(self, idx, cls):
         obj = self.storage[idx]
@@ -76,16 +60,6 @@ class UntypedStorage(object):
         assert self.shape[idx] == INSTANCE
         self.storage[idx] = obj
 
-    def getstr(self, idx):
-        assert self.shape[idx] == STRING
-        s = self.storage[idx]
-        assert isinstance(s, str)
-        return s
-
-    def setstr(self, idx, s):
-        assert self.shape[idx] == STRING
-        assert isinstance(s, str)
-        self.storage[idx] = s
 
 class UntypedStorageEntry(ExtRegistryEntry):
     _about_ = UntypedStorage
