@@ -17,6 +17,7 @@ from pypy.tool.pairtype import pairtype
 
 
 INT = "i"
+BOOL = "b"
 FLOAT = "f"
 INSTANCE = "o"
 
@@ -40,6 +41,17 @@ class UntypedStorage(object):
     def setint(self, idx, v):
         assert self.shape[idx] == INT
         assert isinstance(v, int)
+        self.storage[idx] = v
+
+    def getbool(self, idx):
+        assert self.shape[idx] == BOOL
+        v = self.storage[idx]
+        assert isinstance(v, bool)
+        return v
+
+    def setbool(self, idx, v):
+        assert self.shape[idx] == BOOL
+        assert isinstance(v, bool)
         self.storage[idx] = v
 
     def getfloat(self, idx):
@@ -99,6 +111,14 @@ class SomeUntypedStorage(annmodel.SomeObject):
     def method_setint(self, s_idx, s_v):
         self._check_idx(s_idx)
         assert annmodel.SomeInteger().contains(s_v)
+
+    def method_getbool(self, s_idx):
+        self._check_idx(s_idx)
+        return annmodel.SomeBool()
+
+    def method_setbool(self, s_idx, s_v):
+        self._check_idx(s_idx)
+        assert annmodel.SomeBool().contains(s_v)
 
     def method_getfloat(self, s_idx):
         self._check_idx(s_idx)
@@ -235,6 +255,15 @@ class UntypedStorageRepr(Repr):
 
     def rtype_method_setint(self, hop):
         v_value = hop.inputarg(lltype.Signed, arg=2)
+        v_addr = hop.genop("force_cast", [v_value], resulttype=llmemory.Address)
+        self._write_index(hop, v_addr)
+
+    def rtype_method_getbool(self, hop):
+        v_addr = self._read_index(hop)
+        return hop.genop("force_cast", [v_addr], resulttype=lltype.Bool)
+
+    def rtype_method_setbool(self, hop):
+        v_value = hop.inputarg(lltype.Bool, arg=2)
         v_addr = hop.genop("force_cast", [v_value], resulttype=llmemory.Address)
         self._write_index(hop, v_addr)
 

@@ -4,7 +4,8 @@ from pypy.interpreter import gateway
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
-from pypy.rlib.rerased_raw import UntypedStorage, INT, INSTANCE
+from pypy.rlib.rerased_raw import UntypedStorage, INT, BOOL, INSTANCE
+from pypy.rlib.unroll import unrolling_iterable
 
 
 MAXIMUM_SPECIALIZED_SIZE = 8
@@ -16,24 +17,52 @@ def wraptuple(space, list_w):
     make_tuple(space, w_tuple, list_w)
     return w_tuple
 
-def get_char_from_obj(space, w_obj):
-    if space.is_w(space.type(w_obj), space.w_int):
-        return INT
-    else:
-        return INSTANCE
+def _check_int(space, w_obj):
+    return space.is_w(space.type(w_obj), space.w_int)
+def _store_int(space, storage, idx, w_obj):
+    storage.setint(idx, space.int_w(w_obj))
+def _get_int(space, storage, idx):
+    return space.wrap(storage.getint(idx))
 
-def store_obj(space, storage, idx, w_obj):
-    if space.is_w(space.type(w_obj), space.w_int):
-        storage.setint(idx, space.int_w(w_obj))
-    else:
-        storage.setinstance(idx, w_obj)
+def _check_bool(space, w_obj):
+    return space.is_w(space.type(w_obj), space.w_bool)
+def _store_bool(space, storage, idx, w_obj):
+    storage.setbool(idx, space.is_true(w_obj))
+def _get_bool(space, storage, idx):
+    return space.wrap(storage.getbool(idx))
+
+def _check_instance(space, w_obj):
+    return True
+def _store_instance(space, storage, idx, w_obj):
+    storage.setinstance(idx, w_obj)
+def _get_instance(space, storage, idx):
+    return storage.getinstance(idx, W_Root)
+
+SPECIALIZED_TYPES = unrolling_iterable([
+    (INT, _check_int, _store_int, _get_int),
+    (BOOL, _check_bool, _store_bool, _get_bool),
+    (INSTANCE, _check_instance, _store_instance, _get_instance)
+])
+
+def get_char_from_obj(space, w_obj):
+    for char, check, store, read in SPECIALIZED_TYPES:
+        if check(space, w_obj):
+            return char
+    assert False
+
+def store_obj(space, storage, shape_char, idx, w_obj):
+    for char, check, store, read in SPECIALIZED_TYPES:
+        if shape_char == char:
+            store(space, storage, idx, w_obj)
+            return
+    assert False
 
 def read_obj(space, storage, idx):
-    char = storage.getshape()[idx]
-    if char == INT:
-        return space.wrap(storage.getint(idx))
-    else:
-        return storage.getinstance(idx, W_Root)
+    shape_char = storage.getshape()[idx]
+    for char, check, store, read in SPECIALIZED_TYPES:
+        if shape_char == char:
+            return read(space, storage, idx)
+    assert False
 
 def make_tuple(space, w_tuple, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject
@@ -45,7 +74,7 @@ def make_tuple(space, w_tuple, list_w):
     shape = space.str_w(space.new_interned_str("".join(shape_chars)))
     storage = UntypedStorage(shape)
     for i, w_item in enumerate(list_w):
-        store_obj(space, storage, i, w_item)
+        store_obj(space, storage, shape[i], i, w_item)
     W_TupleObject.__init__(w_tuple, storage)
     return w_tuple
 

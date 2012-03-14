@@ -140,6 +140,8 @@ class AppTest_SpecializedTuple(object):
     def test_bools(self):
         t = (True, False)
         assert self.get_specialization(t) == "bb"
+        assert t[0] is True
+        assert t[1] is False
 
     def test_strs(self):
         t = ("a", "b", "c")

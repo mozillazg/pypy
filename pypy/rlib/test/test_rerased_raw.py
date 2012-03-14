@@ -20,6 +20,12 @@ def test_direct_float():
 
     assert storage.getfloat(0) == 5.5
 
+def test_direct_bool():
+    storage = rerased_raw.UntypedStorage("bi")
+    storage.setbool(0, True)
+
+    assert storage.getbool(0) is True
+
 def test_direct_instance():
     class A(object):
         def __init__(self, value):
@@ -48,6 +54,15 @@ class TestRerasedRawLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [4])
         assert res == 4
+
+    def test_bool(self):
+        def f(x):
+            storage = rerased_raw.UntypedStorage("b")
+            storage.setbool(0, x)
+            return storage.getbool(0)
+
+        res = self.interpret(f, [True])
+        assert res == True
 
     def test_instance(self):
         class A(object):
