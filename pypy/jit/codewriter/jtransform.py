@@ -234,6 +234,7 @@ class Transformer(object):
     def rewrite_op_cast_int_to_unichar(self, op): pass
     def rewrite_op_cast_int_to_uint(self, op): pass
     def rewrite_op_cast_uint_to_int(self, op): pass
+    def rewrite_op_cast_ptr_to_adr(self, op): pass
 
     def _rewrite_symmetric(self, op):
         """Rewrite 'c1+v2' into 'v2+c1' in an attempt to avoid generating
@@ -795,13 +796,15 @@ class Transformer(object):
             opname = "unicodegetitem"
             return SpaceOperation(opname, [op.args[0], op.args[2]], op.result)
         else:
-            v_inst, v_index, c_field = op.args
             if op.result.concretetype is lltype.Void:
                 return
-            # only GcArray of Struct supported
-            assert isinstance(v_inst.concretetype.TO, lltype.GcArray)
-            STRUCT = v_inst.concretetype.TO.OF
-            assert isinstance(STRUCT, lltype.Struct)
+            v_inst = op.args[0]
+
+            if isinstance(v_inst.concretetype.TO, lltype.GcArray):
+                v_inst, v_index, c_field = op.args
+            else:
+                v_inst, c_field, v_index = op.args
+
             descr = self.cpu.interiorfielddescrof(v_inst.concretetype.TO,
                                                   c_field.value)
             args = [v_inst, v_index, descr]

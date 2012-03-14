@@ -1232,3 +1232,11 @@ def test_interiorfield_struct():
     op1 = Transformer(FakeCPU()).rewrite_operation(op)
     assert op1.opname == "setinteriorfield_gc_i"
     assert op1.args == [v, const(0), const(1), ('interiorfielddescr', S, "data")]
+
+
+    op = SpaceOperation("getinteriorfield",
+        [v, c_data, const(0)], varoftype(lltype.Signed)
+    )
+    op1 = Transformer(FakeCPU()).rewrite_operation(op)
+    assert op1.opname == "getinteriorfield_gc_i"
+    assert op1.args == [v, const(0), ('interiorfielddescr', S, "data")]
