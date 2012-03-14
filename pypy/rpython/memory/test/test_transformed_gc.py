@@ -935,18 +935,20 @@ class GenericMovingGCTests(GenericGCTests):
                 self.v = v
 
         def fn():
-            s = UntypedStorage("ios")
+            s = UntypedStorage("iosu")
             s.setint(0, 10)
             s.setinstance(1, A(10))
             s.setstr(2, str(A(3))[:3])
+            s.setunicode(3, unicode(s.getshape()))
             rgc.collect()
-            return s.getint(0) + s.getinstance(1, A).v + len(s.getstr(2))
+            return (s.getint(0) + s.getinstance(1, A).v + len(s.getstr(2)) +
+                len(s.getunicode(3)))
         return fn
 
     def test_untyped_storage(self):
         run = self.runner("untyped_storage")
         res = run([])
-        assert res == 23
+        assert res == 27
 
     def define_untyped_storage_multiple_objects(cls):
         class A(object):

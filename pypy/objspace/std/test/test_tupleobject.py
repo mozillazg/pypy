@@ -147,6 +147,10 @@ class AppTest_SpecializedTuple(object):
         t = ("a", "b", "c")
         assert self.get_specialization(t) == "sss"
 
+    def test_unicodes(self):
+        t = (u"a", "b", u"c")
+        assert self.get_specialization(t) == "usu"
+
     def test_mixed(self):
         t = (1, True, "a")
         assert self.get_specialization(t) == "ibs"

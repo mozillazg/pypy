@@ -11,7 +11,7 @@ from pypy.rpython.annlowlevel import (hlstr, llstr, llhelper,
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import rffi, lltype, llmemory
-from pypy.rpython.lltypesystem.rstr import STR, string_repr
+from pypy.rpython.lltypesystem.rstr import STR, string_repr, unicode_repr
 from pypy.rpython.rmodel import Repr
 from pypy.tool.pairtype import pairtype
 
@@ -21,6 +21,7 @@ BOOL = "b"
 FLOAT = "f"
 INSTANCE = "o"
 STRING = "s"
+UNICODE = "u"
 
 class UntypedStorage(object):
     def __init__(self, shape):
@@ -49,6 +50,7 @@ class UntypedStorage(object):
     getbool, setbool = _typed_getset(BOOL, bool)
     getfloat, setfloat = _typed_getset(FLOAT, float)
     getstr, setstr = _typed_getset(STRING, str)
+    getunicode, setunicode = _typed_getset(UNICODE, unicode)
 
     def getinstance(self, idx, cls):
         obj = self.storage[idx]
@@ -133,6 +135,14 @@ class SomeUntypedStorage(annmodel.SomeObject):
         self._check_idx(s_idx)
         assert annmodel.SomeString().contains(s_s)
 
+    def method_getunicode(self, s_idx):
+        self._check_idx(s_idx)
+        return annmodel.SomeUnicodeString()
+
+    def method_setunicode(self, s_idx, s_u):
+        self._check_idx(s_idx)
+        assert annmodel.SomeUnicodeString().contains(s_u)
+
 
 class __extend__(pairtype(SomeUntypedStorage, SomeUntypedStorage)):
     def union((self, other)):
@@ -184,8 +194,8 @@ def trace_untypedstorage(obj_addr, prev):
         char = (shape + llmemory.offsetof(STR, "chars") +
                 llmemory.itemoffsetof(STR.chars, 0) +
                 (llmemory.sizeof(STR.chars.OF) * i)).char[0]
-        # If it's an instance or string then we've found a GC pointer.
-        if char == INSTANCE or char == STRING:
+        # If it's any type of GC pointer, return it.
+        if char == INSTANCE or char == STRING or char == UNICODE:
             return data_ptr
         i += 1
     # If we've gotten to here, there are no GC-pointers left, return NULL to
@@ -295,7 +305,14 @@ class UntypedStorageRepr(Repr):
 
     def rtype_method_setstr(self, hop):
         v_value = hop.inputarg(string_repr, arg=2)
+        self._write_index_gc(hop, v_value)
 
+    def rtype_method_getunicode(self, hop):
+        v_addr = self._read_index(hop)
+        return hop.genop("cast_adr_to_ptr", [v_addr], resulttype=unicode_repr)
+
+    def rtype_method_setunicode(self, hop):
+        v_value = hop.inputarg(unicode_repr, arg=2)
         self._write_index_gc(hop, v_value)
 
     @classmethod

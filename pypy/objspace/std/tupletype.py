@@ -5,7 +5,7 @@ from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
 from pypy.rlib.rerased_raw import (UntypedStorage, INT, BOOL, FLOAT, INSTANCE,
-    STRING)
+    STRING, UNICODE)
 from pypy.rlib.unroll import unrolling_iterable
 
 
@@ -46,6 +46,13 @@ def _store_str(space, storage, idx, w_obj):
 def _get_str(space, storage, idx):
     return space.wrap(storage.getstr(idx))
 
+def _check_unicode(space, w_obj):
+    return space.is_w(space.type(w_obj), space.w_unicode)
+def _store_unicode(space, storage, idx, w_obj):
+    storage.setunicode(idx, space.unicode_w(w_obj))
+def _get_unicode(space, storage, idx):
+    return space.wrap(storage.getunicode(idx))
+
 def _check_instance(space, w_obj):
     return True
 def _store_instance(space, storage, idx, w_obj):
@@ -58,6 +65,7 @@ SPECIALIZED_TYPES = unrolling_iterable([
     (BOOL, _check_bool, _store_bool, _get_bool),
     (FLOAT, _check_float, _store_float, _get_float),
     (STRING, _check_str, _store_str, _get_str),
+    (UNICODE, _check_unicode, _store_unicode, _get_unicode),
     (INSTANCE, _check_instance, _store_instance, _get_instance)
 ])
 

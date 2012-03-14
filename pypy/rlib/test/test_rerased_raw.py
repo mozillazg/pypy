@@ -43,6 +43,12 @@ class TestUntypedStorageDirect(object):
 
         assert storage.getstr(0) == "abc"
 
+    def test_unicode(self):
+        storage= rerased_raw.UntypedStorage("u")
+        storage.setunicode(0, u"abc")
+
+        assert storage.getunicode(0) == u"abc"
+
     def test_getlength(self):
         storage = rerased_raw.UntypedStorage("ooi")
         assert storage.getlength() == 3
@@ -102,6 +108,17 @@ class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [0])
         assert self.ll_to_string(res) == "abc"
+
+    def test_unicode(self):
+        data = [u"abc"]
+        def f(i):
+            storage = rerased_raw.UntypedStorage("u")
+            storage.setunicode(0, data[i])
+            return storage.getunicode(0)
+
+        res = self.interpret(f, [0])
+        assert self.ll_to_string(res) == "abc"
+
 
     def test_exception_catching(self):
         class A(object):
