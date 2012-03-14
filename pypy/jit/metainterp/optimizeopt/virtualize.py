@@ -242,6 +242,7 @@ class VArrayValue(AbstractVirtualValue):
         self.arraydescr = arraydescr
         self.constvalue = constvalue
         self._items = [self.constvalue] * size
+        self._fields = None
 
     def getlength(self):
         return len(self._items)
@@ -253,6 +254,15 @@ class VArrayValue(AbstractVirtualValue):
     def setitem(self, index, itemvalue):
         assert isinstance(itemvalue, optimizer.OptValue)
         self._items[index] = itemvalue
+
+    def getfield(self, ofs, default):
+        return self._fields.get(ofs, default)
+
+    def setfield(self, ofs, fieldvalue):
+        assert isinstance(fieldvalue, optimizer.OptValue)
+        if self._fields is None:
+            self._fields = {}
+        self._fields[ofs] = fieldvalue
 
     def force_at_end_of_preamble(self, already_forced, optforce):
         if self in already_forced:

@@ -207,6 +207,13 @@ class LLtypeMixin(object):
     complexrealdescr = cpu.interiorfielddescrof(complexarray, "real")
     compleximagdescr = cpu.interiorfielddescrof(complexarray, "imag")
 
+    gcstructarray = lltype.GcStruct("StructArray",
+        ("x", lltype.Signed),
+        ("y", lltype.Array(lltype.Signed)),
+    )
+    gcstructarraydescr = cpu.arraydescrof(gcstructarray)
+    gcstructarray_fielddescr = cpu.fielddescrof(gcstructarray, "x")
+
     for _name, _os in [
         ('strconcatdescr',               'OS_STR_CONCAT'),
         ('strslicedescr',                'OS_STR_SLICE'),
@@ -432,7 +439,7 @@ class BaseTest(object):
         preamble.inputargs = inputargs
         preamble.resume_at_jump_descr = FakeDescrWithSnapshot()
 
-        token = JitCellToken() 
+        token = JitCellToken()
         preamble.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(token))] + \
                               operations +  \
                               [ResOperation(rop.LABEL, jump_args, None, descr=token)]
@@ -445,7 +452,7 @@ class BaseTest(object):
         loop.operations = [preamble.operations[-1]] + \
                           [inliner.inline_op(op, clone=False) for op in cloned_operations] + \
                           [ResOperation(rop.JUMP, [inliner.inline_arg(a) for a in jump_args],
-                                        None, descr=token)] 
+                                        None, descr=token)]
                           #[inliner.inline_op(jumpop)]
         assert loop.operations[-1].getopnum() == rop.JUMP
         assert loop.operations[0].getopnum() == rop.LABEL
@@ -464,7 +471,7 @@ class BaseTest(object):
             preamble.operations.insert(-1, op)
 
         return preamble
-        
+
 
 class FakeDescr(compile.ResumeGuardDescr):
     def clone_if_mutable(self):

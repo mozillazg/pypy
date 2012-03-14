@@ -5067,6 +5067,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_strunicode_loop(ops, expected)
 
+    def test_gcstruct_as_array(self):
+        ops = """
+        [i0]
+        p0 = new_array(3, descr=gcstructarraydescr)
+        setfield_gc(p0, i0, descr=gcstructarray_fielddescr)
+        i1 = getfield_gc(p0, descr=gcstructarray_fielddescr)
+        finish(i1)
+        """
+        expected = """
+        [i0]
+        finish(i0)
+        """
+        self.optimize_loop(ops, expected)
+
 
 class TestLLtype(BaseTestOptimizeBasic, LLtypeMixin):
     pass
