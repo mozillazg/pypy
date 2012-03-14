@@ -320,7 +320,7 @@ class _SetField(MicroInstruction):
 
 class _GetField(MicroInstruction):
     def render(self, generator, op):
-        # OOType produces void values on occassion that can safely be ignored
+        # OOType produces void values on occasion that can safely be ignored
         if op.result.concretetype is ootype.Void:
             return
         this, field = op.args

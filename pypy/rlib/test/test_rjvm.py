@@ -18,7 +18,12 @@ def test_static_method():
     assert isinstance(result, int)
     assert result == 42
 
-def test_invalid_static_method():
+def test_static_field():
+    result = java.lang.Integer.SIZE
+    assert isinstance(result, int)
+    assert result == 32
+
+def test_invalid_static_member():
     with py.test.raises(TypeError):
         java.lang.Math.typo(42)
 
@@ -46,7 +51,6 @@ def test_invalid_method_name():
     al.add("test")
     with py.test.raises(TypeError):
         al.typo(0)
-
 
 def test_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
@@ -137,8 +141,7 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 42
 
-    def test_static_fields(self):
-        py.test.skip()
+    def test_get_static_field(self):
         def fn():
             return java.lang.Integer.SIZE
         res = self.interpret(fn, [])

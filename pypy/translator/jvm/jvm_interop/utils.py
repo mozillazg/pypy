@@ -4,6 +4,7 @@ from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 
+
 class NativeRJvmInstanceExample(object):
     """
     Instances of this class can serve as "examples" of native classes. They only have attributes
@@ -12,18 +13,24 @@ class NativeRJvmInstanceExample(object):
     a dummy one to keep things simple.
     """
 
-    dummy_method = ootype._bound_meth(None, None, None)
-
-    def __init__(self, refclass):
+    def __init__(self, refclass, static=False):
         self.refclass = refclass
-        self.method_names = {str(m.getName()) for m in refclass.getMethods() if not rjvm._is_static(m)}
-        self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass) if not rjvm._is_static(f)}
+        self.static = static
+        staticness = check_staticness(static)
+        self.method_names = {str(m.getName()) for m in refclass.getMethods() if staticness(m)}
+        self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass, static)}
+
+        # Make dummy_method something that makes sense
+        if static:
+            self.dummy_method = ootype._overloaded_meth()
+        else:
+            self.dummy_method = ootype._bound_meth(None, None, None)
 
     def __getattr__(self, name):
         if name in self.method_names:
             return self.dummy_method
         elif name in self.field_names:
-            field, = [f for f in rjvm._get_fields(self.refclass) if str(f.getName()) == name]
+            field, = [f for f in rjvm._get_fields(self.refclass, self.static) if str(f.getName()) == name]
             jtype = field.getType()
             return jpype_type_to_ootype(jtype)._example()
         else:
@@ -99,11 +106,13 @@ def jvm_method_to_pypy_Meth(method, Meth_type=ootype.Meth, result=None):
     args = tuple(jpype_type_to_ootype(t) for t in method.getParameterTypes())
     if result is None:
         result = jpype_type_to_ootype(method.getReturnType())
-    result =  Meth_type(args, result)
+    result = Meth_type(args, result)
     return result
+
 
 def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth, result=None):
     return meth_type(jvm_method_to_pypy_Meth(method, Meth_type=Meth_type, result=result))
+
 
 def jpype_type_to_ootype(tpe):
     assert isinstance(tpe, jpype._jclass._JavaClass)
@@ -179,22 +188,25 @@ def wrap(value):
 
 
 def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=ootype.Meth, static=False):
-    if static:
-        staticness = rjvm._is_static
-    else:
-        staticness = lambda m: not rjvm._is_static(m)
-
+    staticness = check_staticness(static)
     java_methods = [m for m in refclass.getMethods() if staticness(m) and m.getName() == meth_name]
 
     if not java_methods:
         raise TypeError
     elif len(java_methods) == 1:
-        if static: # return a StaticMethod
+        if static:  # return a StaticMethod
             meth = jvm_method_to_pypy_Meth(java_methods[0], Meth_type=Meth_type)
-        else: # return an ootype.meth to be used in _lookup
+        else:  # return an ootype.meth to be used in _lookup
             meth = jvm_method_to_pypy_meth(java_methods[0], meth_type=meth_type, Meth_type=Meth_type)
     else:
         overloads = [jvm_method_to_pypy_meth(m, meth_type=meth_type, Meth_type=Meth_type) for m in java_methods]
         meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
 
     return meth
+
+
+def check_staticness(should_be_static):
+    if should_be_static:
+        return rjvm._is_static
+    else:
+        return lambda m: not rjvm._is_static(m)
