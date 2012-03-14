@@ -6,12 +6,12 @@ come from the oosupport directory.
 """
 
 from pypy.translator.oosupport.metavm import \
-     PushArg, PushAllArgs, StoreResult, InstructionList, New, OONewArray, DoNothing, Call,\
+     PushArg, PushAllArgs, StoreResult, InstructionList, New, OONewArray, DoNothing, \
      SetField, GetField, DownCast, RuntimeNew, OOString, OOUnicode, \
      CastTo, PushPrimitive
 from pypy.translator.jvm.metavm import \
      IndirectCall, JvmCallMethod, NewCustomDict, \
-     CastPrimitive, PushPyPy, PushComparisonResult, GetStaticField
+     CastPrimitive, PushPyPy, PushComparisonResult, GetStaticField, Call
 from pypy.rpython.ootypesystem import ootype
 from pypy.translator.jvm.cmpopcodes import cmp_opname
 

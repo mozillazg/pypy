@@ -1,6 +1,6 @@
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import rffi
-from pypy.translator.oosupport.metavm import MicroInstruction
+from pypy.translator.oosupport.metavm import MicroInstruction, _Call as OOCall
 from pypy.translator.jvm.typesystem import JvmScalarType, JvmClassType
 import pypy.translator.jvm.typesystem as jvm
 from pypy.translator.jvm.builtin import JvmBuiltInType
@@ -12,6 +12,17 @@ class _IndirectCall(MicroInstruction):
         method = interface.lookup_method('invoke')
         gen.emit(method)
 IndirectCall = _IndirectCall()
+
+class _Call(OOCall):
+    def render(self, generator, op):
+        sm = op.args[0].value
+        if getattr(sm, 'is_native', False):
+            for arg in op.args[1:]:
+                generator.load(arg)
+            generator.call_native(sm)
+        else:
+            OOCall.render(self, generator, op)
+Call = _Call()
 
 class _JvmCallMethod(MicroInstruction):
 
@@ -67,8 +78,9 @@ class _GetStaticField(MicroInstruction):
     def render(self, generator, op):
         jvm_class_wrapper, field_name = [arg.value for arg in op.args]
         class_name = jvm_class_wrapper.__name__
-        result_type = generator.db.lltype_to_cts(op.result.concretetype)
-        field = jvm.Field(class_name, field_name, result_type, static=True)
+        java_class = jvm.JvmClassType(class_name)
+        field_type = generator.db.lltype_to_cts(op.result.concretetype)
+        field = jvm.Field.s(java_class, field_name, field_type)
         generator.emit(field)
 
 GetStaticField = _GetStaticField()

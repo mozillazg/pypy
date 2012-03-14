@@ -438,16 +438,17 @@ class BranchIfFalse(MicroInstruction):
 
 
 def get_primitive_name(sm):
-    if hasattr(sm, 'graph') or is_native(sm):
+    try:
+        sm.graph
         return None
+    except AttributeError:
+        pass
     try:
         return 'rffi', sm._obj.oo_primitive
     except AttributeError:
         pass
     return sm._name.rsplit('.', 1)
 
-def is_native(sm):
-    return getattr(sm, 'is_native', False)
 
 class _Call(MicroInstruction):
         
@@ -464,8 +465,6 @@ class _Call(MicroInstruction):
 
         if is_primitive:
             generator.call_primitive(op, module, name)
-        elif is_native(callee):
-            generator.call_native(callee)
         else:
             generator.call_graph(callee.graph)
 
