@@ -138,32 +138,43 @@ def trace_untypedstorage(obj_addr, prev):
     # XXX: This has O(n**2) complexity because of the below loop, if we could
     # do more arithmetic ops on addresses then it could be O(n).
     shape_addr = obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "shape")
+    # prev == NULL means it's the first item, shape is always a GC pointer,
+    # return it first
     if not prev:
         return shape_addr
     shape = shape_addr.address[0]
+    # Find the length of the shape, which is also the length of data.
     length_offset = (llmemory.offsetof(STR, "chars") +
         llmemory.arraylengthoffset(STR.chars))
     length = (shape + length_offset).signed[0]
 
+    # seen_prev indicates whether our loop has gone past the "prev" addr.
     seen_prev = prev == shape_addr
     i = 0
     while i < length:
+        # This a pointer to the i-th item in data. (&obj_adr->data[i])
         data_ptr = (obj_addr + llmemory.offsetof(UNTYPEDSTORAGE, "data") +
             llmemory.itemoffsetof(UNTYPEDSTORAGE.data, 0) +
             llmemory.sizeof(UNTYPEDSTORAGE.data.OF) * i)
 
+        # Check to see if we have gotten past the previous value, if we
+        # haven't, check if we're there now.
         if not seen_prev:
             if data_ptr == prev:
                 seen_prev = True
             i += 1
             continue
 
+        # Find the i-th char in shape.
         char = (shape + llmemory.offsetof(STR, "chars") +
                 llmemory.itemoffsetof(STR.chars, 0) +
                 (llmemory.sizeof(STR.chars.OF) * i)).char[0]
+        # If it's an instance then we've found a GC pointer.
         if char == INSTANCE:
             return data_ptr
         i += 1
+    # If we've gotten to here, there are no GC-pointers left, return NULL to
+    # exit out.
     return llmemory.NULL
 trace_untypedstorage_ptr = llhelper(lltype.Ptr(CUSTOMTRACEFUNC), trace_untypedstorage)
 
