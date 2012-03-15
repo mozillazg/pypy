@@ -260,7 +260,6 @@ class UntypedStorageRepr(Repr):
 
     def rtype_method_setfloat(self, hop):
         v_value = hop.inputarg(lltype.Float, arg=2)
-
         v_addr = hop.genop("cast_float_to_adr", [v_value], resulttype=llmemory.Address)
         self._write_index(hop, v_addr)
 
@@ -270,7 +269,6 @@ class UntypedStorageRepr(Repr):
 
     def rtype_method_setinstance(self, hop):
         v_instance = hop.inputarg(hop.args_r[2], arg=2)
-
         self._write_index_gc(hop, v_instance)
 
     def rtype_method_getstr(self, hop):
