@@ -92,29 +92,20 @@ class SomeUntypedStorage(annmodel.SomeObject):
     def method_getshape(self):
         return annmodel.SomeString(can_be_None=False)
 
-    def method_getint(self, s_idx):
-        self._check_idx(s_idx)
-        return annmodel.SomeInteger()
+    def _typed_annotate_getset(s_type):
+        def method_get(self, s_idx):
+            self._check_idx(s_idx)
+            return s_type
+        def method_set(self, s_idx, s_v):
+            self._check_idx(s_idx)
+            assert s_type.contains(s_v)
+        return method_get, method_set
 
-    def method_setint(self, s_idx, s_v):
-        self._check_idx(s_idx)
-        assert annmodel.SomeInteger().contains(s_v)
-
-    def method_getbool(self, s_idx):
-        self._check_idx(s_idx)
-        return annmodel.SomeBool()
-
-    def method_setbool(self, s_idx, s_v):
-        self._check_idx(s_idx)
-        assert annmodel.SomeBool().contains(s_v)
-
-    def method_getfloat(self, s_idx):
-        self._check_idx(s_idx)
-        return annmodel.SomeFloat()
-
-    def method_setfloat(self, s_idx, s_f):
-        self._check_idx(s_idx)
-        assert annmodel.SomeFloat().contains(s_f)
+    method_getint, method_setint = _typed_annotate_getset(annmodel.SomeInteger())
+    method_getbool, method_setbool = _typed_annotate_getset(annmodel.SomeBool())
+    method_getfloat, method_setfloat = _typed_annotate_getset(annmodel.SomeFloat())
+    method_getstr, method_setstr = _typed_annotate_getset(annmodel.SomeString())
+    method_getunicode, method_setunicode = _typed_annotate_getset(annmodel.SomeUnicodeString())
 
     def method_getinstance(self, s_idx, s_cls):
         self._check_idx(s_idx)
@@ -127,27 +118,10 @@ class SomeUntypedStorage(annmodel.SomeObject):
         self._check_idx(s_idx)
         assert isinstance(s_obj, annmodel.SomeInstance)
 
-    def method_getstr(self, s_idx):
-        self._check_idx(s_idx)
-        return annmodel.SomeString()
-
-    def method_setstr(self, s_idx, s_s):
-        self._check_idx(s_idx)
-        assert annmodel.SomeString().contains(s_s)
-
-    def method_getunicode(self, s_idx):
-        self._check_idx(s_idx)
-        return annmodel.SomeUnicodeString()
-
-    def method_setunicode(self, s_idx, s_u):
-        self._check_idx(s_idx)
-        assert annmodel.SomeUnicodeString().contains(s_u)
-
 
 class __extend__(pairtype(SomeUntypedStorage, SomeUntypedStorage)):
     def union((self, other)):
         return SomeUntypedStorage()
-
 
 
 UNTYPEDSTORAGE = lltype.GcStruct("untypedstorage",
