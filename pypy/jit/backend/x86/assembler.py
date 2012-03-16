@@ -2392,6 +2392,7 @@ class Assembler386(object):
             # to itself) which we pretend is the return address :-/ :-/ :-/
             # It prevents us to store any %esp-based stack locations but we
             # don't so far.
+            raise AssertionError     # XXXXXXX we do: our own return address!
             adr = self.datablockwrapper.malloc_aligned(WORD, WORD)
             rffi.cast(rffi.CArrayPtr(lltype.Signed), adr)[0] = adr
             self.gcrootmap_retaddr_forced = adr
