@@ -22,7 +22,7 @@ class W_AbstractSeqIterObject(W_AbstractIterObject):
         index = self.index
         w_length = space.len(self.w_seq)
         w_len = space.sub(w_length, space.wrap(index))
-        if space.is_true(space.lt(w_len,space.wrap(0))):
+        if space.is_true(space.lt(w_len, space.wrap(0))):
             w_len = space.wrap(0)
         return w_len
 
@@ -30,8 +30,8 @@ class W_SeqIterObject(W_AbstractSeqIterObject):
     """Sequence iterator implementation for general sequences."""
 
 class W_FastListIterObject(W_AbstractSeqIterObject):
-    """Sequence iterator specialized for lists, accessing
-    directly their RPython-level list of wrapped objects.
+    """Sequence iterator specialized for lists, accessing directly their
+    RPython-level list of wrapped objects.
     """
 
 class W_ReverseSeqIterObject(W_Object):

@@ -3,6 +3,7 @@ import sys
 import py
 
 from pypy import conftest
+from pypy.jit.codewriter import longlong
 from pypy.jit.codewriter.policy import JitPolicy, StopAtXPolicy
 from pypy.jit.metainterp import pyjitpl, history
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_DICT
@@ -14,6 +15,7 @@ from pypy.rlib.jit import (JitDriver, we_are_jitted, hint, dont_look_inside,
     loop_invariant, elidable, promote, jit_debug, assert_green,
     AssertGreenFailed, unroll_safe, current_trace_length, look_inside_iff,
     isconstant, isvirtual, promote_string, set_param, record_known_class)
+from pypy.rlib.longlong2float import float2longlong
 from pypy.rlib.rarithmetic import ovfcheck, is_valid_int
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
@@ -3792,6 +3794,16 @@ class BaseLLtypeTests(BasicTests):
             return a[n].x
         res = self.interp_operations(g, [1])
         assert res == 3
+
+    def test_float2longlong(self):
+        def f(n):
+            return float2longlong(n)
+
+        for x in [2.5, float("nan"), -2.5, float("inf")]:
+            # There are tests elsewhere to verify the correctness of this.
+            expected = float2longlong(x)
+            res = self.interp_operations(f, [x])
+            assert longlong.getfloatstorage(res) == expected
 
 
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
