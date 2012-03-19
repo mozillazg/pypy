@@ -77,7 +77,6 @@ class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
         assert res == True
 
     def test_float(self):
-        py.test.skip("no float support yet")
         def f(x):
             storage = rerased_raw.UntypedStorage("f")
             storage.setfloat(0, x)

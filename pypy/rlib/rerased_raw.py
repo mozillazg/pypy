@@ -255,12 +255,14 @@ class UntypedStorageRepr(Repr):
         self._write_index(hop, v_addr)
 
     def rtype_method_getfloat(self, hop):
-        v_value = self._read_index(hop)
-        return hop.genop("cast_adr_to_float", [v_value], resulttype=lltype.Float)
+        v_addr = self._read_index(hop)
+        v_longlong = hop.genop("force_cast", [v_addr], resulttype=lltype.SignedLongLong)
+        return hop.genop("convert_longlong_bytes_to_float", [v_longlong], resulttype=lltype.Float)
 
     def rtype_method_setfloat(self, hop):
         v_value = hop.inputarg(lltype.Float, arg=2)
-        v_addr = hop.genop("cast_float_to_adr", [v_value], resulttype=llmemory.Address)
+        v_longlong = hop.genop("convert_float_bytes_to_longlong", [v_value], resulttype=lltype.SignedLongLong)
+        v_addr = hop.genop("force_cast", [v_longlong], resulttype=llmemory.Address)
         self._write_index(hop, v_addr)
 
     def rtype_method_getinstance(self, hop):
