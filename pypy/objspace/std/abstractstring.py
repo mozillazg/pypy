@@ -26,7 +26,7 @@ class Mixin_BaseStringMethods(object):
                 w_self._isupper, w_self._islower)
 
     def istitle(w_self, space):
-        return w_self._title(space)
+        return w_self._istitle(space)
 
     def capitalize(w_self, space):
         return w_self._capitalize(space)
@@ -36,6 +36,9 @@ class Mixin_BaseStringMethods(object):
 
     def swapcase(w_self, space):
         return w_self._transform(space, w_self._swapcase)
+
+    def title(w_self, space):
+        return w_self._title(space)
 
     def upper(w_self, space):
         return w_self._transform(space, w_self._upper)
@@ -147,7 +150,7 @@ class W_AbstractBaseStringObject(W_Object):
                 status = True
         return space.newbool(status)
 
-    def _title(w_self, space):
+    def _istitle(w_self, space):
         input = w_self.unwrap(space)
         cased = False
         previous_is_cased = False
@@ -180,6 +183,24 @@ class W_AbstractBaseStringObject(W_Object):
                 ch = it.nextchar()
                 ch = w_self._lower(ch)
                 bd.append(ch)
+        return w_self.construct(space, bd.build())
+
+    def _title(w_self, space):
+        sz = w_self.length(space)
+        if sz == 0:
+            return w_self
+        it = w_self.iterator(space)
+        bd = w_self.builder(space, sz)
+        pv = ' '
+        for i in range(sz):
+            ch = it.nextchar()
+            if not w_self._isalpha(pv):
+                ch = w_self._upper(ch)
+                bd.append(ch)
+            else:
+                ch = w_self._lower(ch)
+                bd.append(ch)
+            pv = ch
         return w_self.construct(space, bd.build())
 
     @specialize.arg(2)

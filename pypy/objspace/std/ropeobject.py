@@ -138,22 +138,7 @@ def str_capitalize__Rope(space, w_self):
     return w_self.capitalize(space)
 
 def str_title__Rope(space, w_self):
-    node = w_self._node
-    length = node.length()
-    buffer = [' '] * length
-    prev_letter = ' '
-
-    iter = rope.ItemIterator(node)
-    for pos in range(0, length):
-        ch = iter.nextchar()
-        if not prev_letter.isalpha():
-            buffer[pos] = w_self._upper(ch)
-        else:
-            buffer[pos] = w_self._lower(ch)
-
-        prev_letter = buffer[pos]
-
-    return W_RopeObject(rope.rope_from_charlist(buffer))
+    return w_self.title(space)
 
 def str_split__Rope_None_ANY(space, w_self, w_none, w_maxsplit=-1):
     selfnode = w_self._node

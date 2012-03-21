@@ -438,20 +438,7 @@ def unicode_rstrip__Unicode_String(space, w_self, w_chars):
 unicode_rstrip__Unicode_Rope = unicode_rstrip__Unicode_String
 
 def unicode_title__Unicode(space, w_self):
-    input = w_self._value
-    if len(input) == 0:
-        return w_self
-    builder = UnicodeBuilder(len(input))
-
-    previous_is_cased = False
-    for i in range(len(input)):
-        unichar = ord(input[i])
-        if previous_is_cased:
-            builder.append(unichr(unicodedb.tolower(unichar)))
-        else:
-            builder.append(unichr(unicodedb.totitle(unichar)))
-        previous_is_cased = unicodedb.iscased(unichar)
-    return W_UnicodeObject(builder.build())
+    return w_self.title(space)
 
 def unicode_capitalize__Unicode(space, w_self):
     return w_self.capitalize(space)

@@ -332,14 +332,11 @@ def str_upper__Bytearray(space, w_self):
 def str_swapcase__Bytearray(space, w_self):
     return w_self.swapcase(space)
 
-def str_capitalize__Bytearray(space, w_bytearray):
+def str_capitalize__Bytearray(space, w_self):
     return w_self.capitalize(space)
 
-def str_capitalize__Bytearray(space, w_bytearray):
-    w_str = str__Bytearray(space, w_bytearray)
-    w_res = stringobject.str_capitalize__String(space, w_str)
-    return String2Bytearray(space, w_res)
-
+def str_title__Bytearray(space, w_self):
+    return w_self.title(space)
 
 def str_count__Bytearray_Int_ANY_ANY(space, w_bytearray, w_char, w_start, w_stop):
     char = w_char.intval
@@ -492,11 +489,6 @@ def str_replace__Bytearray_ANY_ANY_ANY(space, w_bytearray, w_str1, w_str2, w_max
     w_str = str__Bytearray(space, w_bytearray)
     w_res = stringobject.str_replace__String_ANY_ANY_ANY(space, w_str, w_str1,
                                                          w_str2, w_max)
-    return String2Bytearray(space, w_res)
-
-def str_title__Bytearray(space, w_bytearray):
-    w_str = str__Bytearray(space, w_bytearray)
-    w_res = stringobject.str_title__String(space, w_str)
     return String2Bytearray(space, w_res)
 
 def str_ljust__Bytearray_ANY_ANY(space, w_bytearray, w_width, w_fillchar):
