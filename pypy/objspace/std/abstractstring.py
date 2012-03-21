@@ -5,6 +5,8 @@ from pypy.rlib.objectmodel import specialize
 class Mixin_BaseStringMethods(object):
     __slots__ = ()
 
+    _mixin_ = True
+
     def isalnum(w_self, space):
         return w_self._all_true(space, w_self._isalnum)
 
