@@ -154,25 +154,7 @@ def str_upper__String(space, w_self):
     return w_self.upper(space)
 
 def str_capitalize__String(space, w_self):
-    input = w_self._value
-    builder = StringBuilder(len(input))
-    if len(input) > 0:
-        ch = input[0]
-        if ch.islower():
-            o = ord(ch) - 32
-            builder.append(chr(o))
-        else:
-            builder.append(ch)
-
-        for i in range(1, len(input)):
-            ch = input[i]
-            if ch.isupper():
-                o = ord(ch) + 32
-                builder.append(chr(o))
-            else:
-                builder.append(ch)
-
-    return space.wrap(builder.build())
+    return w_self.capitalize(space)
 
 def str_title__String(space, w_self):
     input = w_self._value

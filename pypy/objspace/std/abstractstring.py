@@ -28,6 +28,9 @@ class Mixin_BaseStringMethods(object):
     def istitle(w_self, space):
         return w_self._title(space)
 
+    def capitalize(w_self, space):
+        return w_self._capitalize(space)
+
     def lower(w_self, space):
         return w_self._transform(space, w_self._lower)
 
@@ -164,6 +167,20 @@ class W_AbstractBaseStringObject(W_Object):
                 previous_is_cased = False
 
         return space.newbool(cased)
+
+    def _capitalize(w_self, space):
+        sz = w_self.length(space)
+        it = w_self.iterator(space)
+        bd = w_self.builder(space, sz)
+        if sz > 0:
+            ch = it.nextchar()
+            ch = w_self._upper(ch)
+            bd.append(ch)
+            for i in range(1, sz):
+                ch = it.nextchar()
+                ch = w_self._lower(ch)
+                bd.append(ch)
+        return w_self.construct(space, bd.build())
 
     @specialize.arg(2)
     def _transform(w_self, space, func):
