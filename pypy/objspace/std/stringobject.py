@@ -128,20 +128,12 @@ def str_isspace__String(space, w_self):
     return w_self.isspace(space)
 
 def str_islower__String(space, w_self):
-    """Return True if all cased characters in S are lowercase and there is
-at least one cased character in S, False otherwise."""
     return w_self.islower(space)
 
 def str_isupper__String(space, w_self):
-    """Return True if all cased characters in S are uppercase and there is
-at least one cased character in S, False otherwise."""
     return w_self.isupper(space)
 
 def str_istitle__String(space, w_self):
-    """Return True if S is a titlecased string and there is at least one
-character in S, i.e. uppercase characters may only follow uncased
-characters and lowercase characters only cased ones. Return False
-otherwise."""
     return w_self.istitle(space)
 
 def str_lower__String(space, w_self):
@@ -157,22 +149,7 @@ def str_capitalize__String(space, w_self):
     return w_self.capitalize(space)
 
 def str_title__String(space, w_self):
-    input = w_self._value
-    builder = StringBuilder(len(input))
-    prev_letter=' '
-
-    for pos in range(len(input)):
-        ch = input[pos]
-        if not prev_letter.isalpha():
-            ch = w_self._upper(ch)
-            builder.append(ch)
-        else:
-            ch = w_self._lower(ch)
-            builder.append(ch)
-
-        prev_letter = ch
-
-    return space.wrap(builder.build())
+    return w_self.title(space)
 
 def str_split__String_None_ANY(space, w_self, w_none, w_maxsplit=-1):
     maxsplit = space.int_w(w_maxsplit)

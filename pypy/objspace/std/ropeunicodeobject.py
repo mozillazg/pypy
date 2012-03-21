@@ -403,22 +403,7 @@ def unicode_rstrip__RopeUnicode_Rope(space, w_self, w_chars):
                              unicode_from_string(space, w_chars))
 
 def unicode_title__RopeUnicode(space, w_self):
-    input = w_self._node
-    length = input.length()
-    if length == 0:
-        return w_self
-    result = [u'\0'] * length
-    iter = rope.ItemIterator(input)
-
-    previous_is_cased = False
-    for i in range(input.length()):
-        unichar = iter.nextint()
-        if previous_is_cased:
-            result[i] = unichr(unicodedb.tolower(unichar))
-        else:
-            result[i] = unichr(unicodedb.totitle(unichar))
-        previous_is_cased = unicodedb.iscased(unichar)
-    return W_RopeUnicodeObject(rope.rope_from_unicharlist(result))
+    return w_self.title(space)
 
 def unicode_lower__RopeUnicode(space, w_self):
     return w_self.lower(space)
