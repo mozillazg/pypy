@@ -91,6 +91,13 @@ class RopeUnicodeBuilder(object):
         return rope.rope_from_unicharlist(self.data)
 
 
+class UnicodeIterator(rope.ItemIterator):
+    """"Iterate over unicode characters from rope iterator"""
+
+    def nextchar(self):
+        return self.nextunichar()
+
+
 class W_RopeUnicodeObject(unicodeobject.W_AbstractUnicodeObject):
     from pypy.objspace.std.unicodetype import unicode_typedef as typedef
     _immutable_fields_ = ['_node']
@@ -105,7 +112,7 @@ class W_RopeUnicodeObject(unicodeobject.W_AbstractUnicodeObject):
         return W_RopeUnicodeObject(data)
 
     def iterator(w_self, space):
-        return rope.ItemIterator(w_self._node)
+        return UnicodeIterator(w_self._node)
 
     def length(w_self, space):
         return w_self._node.length()
@@ -395,18 +402,6 @@ def unicode_rstrip__RopeUnicode_Rope(space, w_self, w_chars):
     return space.call_method(w_self, 'rstrip',
                              unicode_from_string(space, w_chars))
 
-def unicode_capitalize__RopeUnicode(space, w_self):
-    input = w_self._node
-    length = input.length()
-    if length == 0:
-        return w_self
-    result = [u'\0'] * length
-    iter = rope.ItemIterator(input)
-    result[0] = unichr(unicodedb.toupper(iter.nextint()))
-    for i in range(1, length):
-        result[i] = unichr(unicodedb.tolower(iter.nextint()))
-    return W_RopeUnicodeObject(rope.rope_from_unicharlist(result))
-
 def unicode_title__RopeUnicode(space, w_self):
     input = w_self._node
     length = input.length()
@@ -433,6 +428,9 @@ def unicode_upper__RopeUnicode(space, w_self):
 
 def unicode_swapcase__RopeUnicode(space, w_self):
     return w_self.swapcase(space)
+
+def unicode_capitalize__RopeUnicode(space, w_self):
+    return w_self.capitalize(space)
 
 def _convert_idx_params(space, w_self, w_start, w_end):
     self = w_self._node

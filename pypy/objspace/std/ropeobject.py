@@ -135,30 +135,7 @@ def str_upper__Rope(space, w_self):
     return w_self.upper(space)
 
 def str_capitalize__Rope(space, w_self):
-    node = w_self._node
-    length = node.length()
-    buffer = [' '] * length
-    if length > 0:
-        iter = rope.ItemIterator(node)
-        ch = iter.nextchar()
-        if ch.islower():
-            o = ord(ch) - 32
-            buffer[0] = chr(o)
-        else:
-            buffer[0] = ch
-
-        for i in range(1, length):
-            ch = iter.nextchar()
-            if ch.isupper():
-                o = ord(ch) + 32
-                buffer[i] = chr(o)
-            else:
-                buffer[i] = ch
-    else:
-        return W_RopeObject.EMPTY
-
-    return W_RopeObject(rope.rope_from_charlist(buffer))
-
+    return w_self.capitalize(space)
 
 def str_title__Rope(space, w_self):
     node = w_self._node
