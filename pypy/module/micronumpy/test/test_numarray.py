@@ -211,6 +211,18 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert a.shape == (3,)
         assert a.dtype is dtype(int)
 
+    def test_ndmin(self):
+        from _numpypy import array
+
+        arr = array([[[1]]], ndmin=1)
+        assert arr.shape == (1, 1, 1)
+
+    def test_noop_ndmin(self):
+        from _numpypy import array
+
+        arr = array([1], ndmin=3)
+        assert arr.shape == (1, 1, 1)
+
     def test_type(self):
         from _numpypy import array
         ar = array(range(5))
@@ -983,6 +995,10 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert a.sum() == 5
 
         raises(TypeError, 'a.sum(2, 3)')
+        d = array(0.)
+        b = a.sum(out=d)
+        assert b == d
+        assert isinstance(b, float)
 
     def test_reduce_nd(self):
         from numpypy import arange, array, multiply
@@ -1483,8 +1499,6 @@ class AppTestMultiDim(BaseNumpyAppTest):
         a = array([[1, 2], [3, 4], [5, 6], [7, 8],
                    [9, 10], [11, 12], [13, 14]])
         b = a[::2]
-        print a
-        print b
         assert (b == [[1, 2], [5, 6], [9, 10], [13, 14]]).all()
         c = b + b
         assert c[1][1] == 12
