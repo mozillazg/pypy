@@ -399,7 +399,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
 
     def unpackiterable(self, w_obj, expected_length=-1):
         if isinstance(w_obj, W_AbstractTupleObject):
-            t = w_obj.getitems_copy(space)
+            t = w_obj.getitems_copy(self)
         elif type(w_obj) is W_ListObject:
             t = w_obj.getitems_copy()
         else:
@@ -413,7 +413,7 @@ class StdObjSpace(ObjSpace, DescrOperation):
         """ Fast paths
         """
         if isinstance(w_obj, W_AbstractTupleObject):
-            t = w_obj.tolist(space)
+            t = w_obj.tolist(self)
         elif type(w_obj) is W_ListObject:
             if unroll:
                 t = w_obj.getitems_unroll()
