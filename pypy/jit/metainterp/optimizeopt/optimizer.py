@@ -59,7 +59,6 @@ class OptValue(object):
     def make_len_gt(self, mode, descr, val):
         if self.lenbound:
             assert self.lenbound.mode == mode
-            assert self.lenbound.descr == descr
             self.lenbound.bound.make_gt(IntBound(val, val))
         else:
             self.lenbound = LenBound(mode, descr, IntLowerBound(val + 1))
