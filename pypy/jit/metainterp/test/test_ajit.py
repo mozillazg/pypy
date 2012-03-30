@@ -3806,6 +3806,17 @@ class BaseLLtypeTests(BasicTests):
             res = self.interp_operations(f, [x])
             assert res == x or math.isnan(x) and math.isnan(res)
 
+    def test_untyped_storage(self):
+        class A(object):
+            def __init__(self, v):
+                self.v = v
+        def f(x):
+            storage = rerased_raw.UntypedStorage("io")
+            storage.setint(0, x)
+            storage.setinstance(1, A(x * 10))
+            return storage.getint(0) + storage.getinstance(1, A).v
+        res = self.interp_operations(f, [5])
+        assert res == 55
 
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
     def test_tagged(self):
@@ -3933,14 +3944,3 @@ class TestLLtype(BaseLLtypeTests, LLJitMixin):
         self.interp_operations(f, [1, 2, 3])
         self.check_operations_history(call=1, guard_no_exception=0)
 
-    def test_untyped_storage(self):
-        class A(object):
-            def __init__(self, v):
-                self.v = v
-        def f(x):
-            storage = rerased_raw.UntypedStorage("io")
-            storage.setint(0, x)
-            storage.setinstance(1, A(x * 10))
-            return storage.getint(0) + storage.getinstance(1, A).v
-        res = self.interp_operations(f, [5])
-        assert res == 55

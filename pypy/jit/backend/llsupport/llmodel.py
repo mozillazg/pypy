@@ -8,7 +8,7 @@ from pypy.jit.codewriter import heaptracker, longlong
 from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD, unroll_basic_sizes
-from pypy.jit.backend.llsupport.descr import (
+from pypy.jit.backend.llsupport.descr import (FLAG_POINTER,
     get_size_descr, get_field_descr, get_array_descr,
     get_call_descr, get_interiorfield_descr, get_dynamic_interiorfield_descr,
     FieldDescr, ArrayDescr, CallDescr, InteriorFieldDescr)
@@ -290,6 +290,9 @@ class AbstractLLCPU(AbstractCPU):
         from pypy.jit.backend.llsupport import ffisupport
         return ffisupport.get_call_descr_dynamic(self, ffi_args, ffi_result,
                                                  extrainfo, ffi_flags)
+
+    def copy_and_change_descr_typeinfo_to_ptr(self, descr):
+        return ArrayDescr(descr.basesize, descr.itemsize, descr.lendescr, FLAG_POINTER)
 
     def get_overflow_error(self):
         ovf_vtable = self.cast_adr_to_int(self._ovf_error_vtable)
