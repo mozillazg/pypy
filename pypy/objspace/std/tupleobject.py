@@ -114,8 +114,6 @@ def tuple_unroll_condition(space, w_tuple1, w_tuple2):
 
 @jit.look_inside_iff(tuple_unroll_condition)
 def eq__Tuple_Tuple(space, w_tuple1, w_tuple2):
-    if w_tuple1.tuplestorage.getshape() is not w_tuple2.tuplestorage.getshape():
-        return space.w_False
     if w_tuple1.length() != w_tuple2.length():
         return space.w_False
     for i in xrange(w_tuple1.length()):
