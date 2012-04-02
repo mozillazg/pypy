@@ -48,8 +48,9 @@ class JvmNativeStaticMethRepr(Repr):
 
         full_name = self.rjvm_class_wrapper.__name__ + '.' + self.name
         rjvm_method_wrapper = getattr(self.rjvm_class_wrapper, self.name)
-        call_rjvm_method = utils.call_method(rjvm_method_wrapper, static=True)
-        method = ootype.static_meth(method_type, full_name, _callable=call_rjvm_method)
+        method = ootype.static_meth(method_type, full_name)
+        call_rjvm_method = utils.call_method(rjvm_method_wrapper, method, static=True)
+        method._callable = call_rjvm_method
         method.is_native = True
         method_const = hop.inputconst(method_type, method)
 

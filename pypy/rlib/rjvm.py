@@ -151,6 +151,9 @@ def _is_static(method_or_field):
     """
     return jpype.java.lang.reflect.Modifier.isStatic(method_or_field.getModifiers())
 
+def _is_public(method_or_field):
+    return jpype.java.lang.reflect.Modifier.isPublic(method_or_field.getModifiers())
+
 def _get_fields(refclass, static=False):
     """
     Unfortunately JPype seems to crash when calling getFields() one a JavaClass :/
@@ -161,7 +164,7 @@ def _get_fields(refclass, static=False):
     else:
         staticness = lambda f: not _is_static(f)
 
-    return [f for f in refclass.getDeclaredFields() if staticness(f)]
+    return [f for f in refclass.getDeclaredFields() if staticness(f) and _is_public(f)]
 
 jpype.startJVM(jpype.getDefaultJVMPath(), "-ea")
 java = JvmPackageWrapper("java")
