@@ -26,7 +26,7 @@ class CLibraryBuilder(CBuilder):
 
     def compile(self):
         export_symbols = ([self.db.get(ep) for ep in self.getentrypointptr()] +
-                          ['RPython_StartupCode'])
+                          ['RPython_StartupCode', 'Py_Initialize'])
         extsymeci = ExternalCompilationInfo(export_symbols=export_symbols)
         self.eci = self.eci.merge(extsymeci)
         files = [self.c_source_filename] + self.extrafiles

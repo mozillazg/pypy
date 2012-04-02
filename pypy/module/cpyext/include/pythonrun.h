@@ -6,6 +6,8 @@
 extern "C" {
 #endif
 
+void Py_Initialize(void);
+
   void Py_FatalError(const char *msg);
 
 /* the -3 option will probably not be implemented */
