@@ -1304,9 +1304,12 @@ class OverloadingResolver(object):
                 raise TypeError, 'Bad overloading'
             signatures.add(ARGS)
 
-    def annotate(self, args_s):
-        METH = self.resolve(args_s)._TYPE
-        return self.lltype_to_annotation(METH.RESULT)
+    def annotate(self, args):
+        return self.lltype_to_annotation(self.result_type_for(args))
+
+    def result_type_for(self, args):
+        METH = self.resolve(args)._TYPE
+        return METH.RESULT
 
     def resolve(self, ARGS):
         # this overloading resolution algorithm is quite simple:

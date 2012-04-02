@@ -3,6 +3,7 @@ import ootypemodel
 from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.ootypesystem.ootype import typeOf
 
 
 class NativeRJvmInstanceExample(object):
@@ -70,6 +71,13 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
 
         ootype.OverloadingResolver.__init__(self, one_method_per_signature.values())
 
+    def _can_convert_from_to(self, arg1, arg2):
+        # Just the simplest logic for now:
+        if isinstance(arg2, ootypemodel.NativeRJvmInstance) and arg2.class_name == 'java.lang.Object':
+            # TODO: autoboxing?
+            return isinstance(arg1, ootypemodel.NativeRJvmInstance) or arg1 == ootype.String
+        return super(JvmOverloadingResolver, self)._can_convert_from_to(arg1, arg2)
+
     def _get_refclass(self, meth):
         return meth._TYPE.RESULT.refclass
 
@@ -124,6 +132,7 @@ def jpype_type_to_ootype(tpe):
 
 jpype_primitives_to_ootype_mapping = {
     jpype.java.lang.Integer.TYPE: ootype.Signed,
+    jpype.java.lang.Boolean.TYPE: ootype.Bool,
     jpype.java.lang.Void.TYPE: ootype.Void,
     jpype.java.lang.String: ootype.String,
 }
@@ -146,7 +155,7 @@ def has_matching_constructor(jvm_class_wrapper, s_args):
         return True
 
 
-def call_method(method, static=False):
+def call_method(jpype_method, pypy_meth, static=False):
     """
     Return a function that when called will "unwrap" arguments (_str('foo') => 'foo'),
     call the method and wrap the result. The returned function can be used as the
@@ -154,9 +163,14 @@ def call_method(method, static=False):
     """
     def callable(*args):
         start = 0 if static else 1
+        arg_types = [typeOf(arg) for arg in args[start:]]
         args = [unwrap(arg) for arg in args[start:]]   # skip the first arg, method is already bound
-        result = method(*args)
-        return wrap(result)
+        if isinstance(pypy_meth, ootype._overloaded_meth):
+            result_type = pypy_meth._resolver.result_type_for(arg_types)
+        else:
+            result_type = typeOf(pypy_meth).RESULT
+        result = jpype_method(*args)
+        return wrap(result, hint=result_type)
 
     return callable
 
@@ -168,21 +182,25 @@ def unwrap(value):
         return value._instance
     elif isinstance(value, ootype._string):
         return value._str
-    elif isinstance(value, (int, bool)):
+    elif isinstance(value, (int, bool, float)):
         return value
     else:
         raise AssertionError("Don't know how to unwrap %r" % value)
 
 
-def wrap(value):
+def wrap(value, hint=None):
     if isinstance(value, ootypemodel.JvmInstanceWrapper):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value.__refclass__), value)
     elif isinstance(value, (str, unicode)):
         return ootype._string(ootype.String, str(value))
     elif value is None:
         return None
-    elif isinstance(value, (int, float)):
-        return value
+    elif isinstance(value, (int, bool, float)):
+        # There's only one "special case"/JPype inconsistency for now
+        if hint is ootype.Bool:
+            return bool(value)
+        else:
+            return value
     else:
         raise AssertionError("Don't know how to wrap %r" % value)
 

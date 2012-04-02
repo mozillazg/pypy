@@ -127,20 +127,6 @@ class BaseTestRJVM(BaseRtypingTest):
         with py.test.raises(TypeError):
             self.interpret(fn, [])
 
-    def test_instance_fields(self):
-        py.test.skip(
-            "Turns out JPype has a 'feature' that calls point.getX() in the code below. "
-            "This breaks the test, since getX() returns a double instead of an int for some reason. "
-            "I don't think there's much point working on this, since java.awt.Point was the only class "
-            "I could find that uses raw instance fields anyway...")
-        def fn():
-            point = java.awt.Point(42,17)
-            point.y = 42
-            return point.x
-
-        res = self.interpret(fn, [])
-        assert res == 42
-
     def test_get_static_field(self):
         def fn():
             return java.lang.Integer.SIZE
@@ -158,6 +144,17 @@ class BaseTestRJVM(BaseRtypingTest):
             return java.lang.Math.abs(-42)
         res = self.interpret(fn, [])
         assert res == 42
+
+    def test_collections(self):
+        def fn():
+            array_list = java.util.ArrayList()
+            array_list.add("one")
+            array_list.add("two")
+            array_list.add("three")
+            return array_list.size()
+
+        res = self.interpret(fn, [])
+        assert res == 3
 
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):

@@ -44,6 +44,13 @@ class NativeRJvmInstance(ootype.NativeInstance):
         instance = clazz(*args)
         return _native_rjvm_instance(self, instance)
 
+    def _enforce(TYPE2, value):
+        if isinstance(TYPE2, NativeRJvmInstance) and TYPE2.class_name == 'java.lang.Object':
+            return value
+        else:
+            return super(NativeRJvmInstance, TYPE2)._enforce(value)
+
+
     def __eq__(self, other):
         if isinstance(other, NativeRJvmInstance):
             return self.class_name == other.class_name
@@ -73,7 +80,7 @@ class _native_rjvm_instance(object):
             return utils.wrap(getattr(self._instance, name))
         else:
             _, meth = self._TYPE._lookup(name)
-            meth._callable = utils.call_method(getattr(self._instance, name))
+            meth._callable = utils.call_method(getattr(self._instance, name), meth)
             return meth._bound(self._TYPE, self)
 
     def __setattr__(self, key, value):
