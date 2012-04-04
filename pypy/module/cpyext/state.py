@@ -10,6 +10,7 @@ class State:
         self.space = space
         self.reset()
         self.programname = lltype.nullptr(rffi.CCHARP.TO)
+        self.pythonhome = lltype.nullptr(rffi.CCHARP.TO)
         self.version = lltype.nullptr(rffi.CCHARP.TO)
 
     def reset(self):
@@ -102,6 +103,12 @@ class State:
             self.programname = rffi.str2charp(progname)
             lltype.render_immortal(self.programname)
         return self.programname
+
+    def set_programname(self, name):
+        self.programname = name
+
+    def set_pythonhome(self, home):
+        self.pythonhome = home
 
     def get_version(self):
         if not self.version:

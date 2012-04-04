@@ -250,7 +250,7 @@ class CBuilder(object):
             if self.config.translation.shared:
                 defines['PYPY_MAIN_FUNCTION'] = "pypy_main_startup"
                 self.eci = self.eci.merge(ExternalCompilationInfo(
-                    export_symbols=["pypy_main_startup", "Py_Initialize"]))
+                    export_symbols=["pypy_main_startup"]))
         self.eci, cfile, extra = gen_source(db, modulename, targetdir,
                                             self.eci, defines=defines,
                                             split=self.split)
@@ -334,7 +334,7 @@ class CExtModuleBuilder(CBuilder):
         assert self.c_source_filename 
         assert not self._compiled
         export_symbols = [self.db.get(self.getentrypointptr()),
-                          'RPython_StartupCode', 'Py_Initialize',
+                          'RPython_StartupCode',
                           ]
         if self.config.translation.countmallocs:
             export_symbols.append('malloc_counters')
