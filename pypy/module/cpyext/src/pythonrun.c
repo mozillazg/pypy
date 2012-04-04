@@ -36,15 +36,15 @@ Py_FatalError(const char *msg)
 }
 
 void Py_Initialize(void) {
-
+#ifdef PYPY_STANDALONE   /* 1 or 0, but defined */
     char *errmsg = RPython_StartupCode();
     if (errmsg) {
         fprintf(stderr, "unable to initialize PyPy: %s\n", errmsg);
         abort();
         return;
     }
+#endif
 
-    PyPy_Initialize();
-
+    _PyPy_Initialize();
 }
 

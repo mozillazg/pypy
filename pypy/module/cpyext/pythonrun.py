@@ -13,8 +13,8 @@ def Py_IsInitialized(space):
 def Py_GetProgramName(space):
     """
     Return the program name set with Py_SetProgramName(), or the default.
-    The returned string points into static storage; the caller should not modify its
-    value."""
+    The returned string points into static storage; the caller should
+    not modify its value."""
     return space.fromcache(State).get_programname()
 
 @cpython_api([rffi.CCHARP], lltype.Void, error=CANNOT_FAIL)
@@ -27,7 +27,8 @@ def Py_SetProgramName(space, name):
 @cpython_api([rffi.CCHARP], lltype.Void, error=CANNOT_FAIL)
 def Py_SetPythonHome(space, home):
     """
-    Set the default “home” directory, that is, the location of the standard Python libraries.
+    Set the default "home" directory, that is, the location of the
+    standard Python libraries.
     """
     space.fromcache(State).set_pythonhome(home)
 
@@ -79,7 +80,7 @@ def pypy_init(import_site):
 ''').interphook('pypy_init')
 
 @cpython_api([], lltype.Void, error=CANNOT_FAIL)
-def PyPy_Initialize(space):
+def _PyPy_Initialize(space):
     srcdir = pypy.__file__
     # set pythonhome/virtualenv
     pyhome = None
