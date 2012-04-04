@@ -1,6 +1,9 @@
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import cpython_api, CANNOT_FAIL
 from pypy.module.cpyext.state import State
+from pypy.interpreter import gateway
+import os
+import pypy
 
 @cpython_api([], rffi.INT_real, error=CANNOT_FAIL)
 def Py_IsInitialized(space):
@@ -13,6 +16,20 @@ def Py_GetProgramName(space):
     The returned string points into static storage; the caller should not modify its
     value."""
     return space.fromcache(State).get_programname()
+
+@cpython_api([rffi.CCHARP], lltype.Void, error=CANNOT_FAIL)
+def Py_SetProgramName(space, name):
+    """
+    Set the program name.
+    """
+    space.fromcache(State).set_programname(name)
+
+@cpython_api([rffi.CCHARP], lltype.Void, error=CANNOT_FAIL)
+def Py_SetPythonHome(space, home):
+    """
+    Set the default “home” directory, that is, the location of the standard Python libraries.
+    """
+    space.fromcache(State).set_pythonhome(home)
 
 @cpython_api([], rffi.CCHARP)
 def Py_GetVersion(space):
@@ -46,3 +63,38 @@ def Py_AtExit(space, func_ptr):
     except ValueError:
         return -1
     return 0
+
+@cpython_api([], lltype.Void, error=CANNOT_FAIL)
+def Py_Finalize(space):
+    space.finish()
+
+pypy_init = gateway.applevel('''
+def pypy_init(import_site):
+    if import_site:
+        try:
+            import site
+        except:
+            import sys
+            print >> sys.stderr, "import site\' failed"
+''').interphook('pypy_init')
+
+@cpython_api([], lltype.Void, error=CANNOT_FAIL)
+def PyPy_Initialize(space):
+    srcdir = pypy.__file__
+    # set pythonhome/virtualenv
+    pyhome = None
+    if space.fromcache(State).pythonhome:
+        pyhome = rffi.charp2str(space.fromcache(State).pythonhome)
+    space.appexec([space.wrap(srcdir), space.wrap(pyhome)], """(srcdir, pyhome):
+        import sys
+        import os
+        if pyhome:
+            srcdir = pyhome
+        else:
+            srcdir = os.path.dirname(os.path.dirname(srcdir))
+        sys.pypy_initial_path(srcdir)
+    """)
+    space.startup()
+    space.fromcache(State).startup(space)
+
+    pypy_init(space, space.wrap(True))

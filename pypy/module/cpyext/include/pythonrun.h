@@ -7,6 +7,8 @@ extern "C" {
 #endif
 
 void Py_Initialize(void);
+void Py_Finalize(void);
+void Py_SetPythonHome(char *);
 
   void Py_FatalError(const char *msg);
 
