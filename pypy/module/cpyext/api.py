@@ -324,6 +324,7 @@ FUNCTIONS = {}
 # files somewhere in the implementation of cpyext (rather than being defined in
 # RPython).
 SYMBOLS_C = [
+    'Py_Initialize',
     'Py_FatalError', 'PyOS_snprintf', 'PyOS_vsnprintf', 'PyArg_Parse',
     'PyArg_ParseTuple', 'PyArg_UnpackTuple', 'PyArg_ParseTupleAndKeywords',
     'PyArg_VaParse', 'PyArg_VaParseTupleAndKeywords', '_PyArg_NoKeywords',

@@ -34,3 +34,17 @@ Py_FatalError(const char *msg)
 #endif /* MS_WINDOWS */
 	abort();
 }
+
+void Py_Initialize(void) {
+
+    char *errmsg = RPython_StartupCode();
+    if (errmsg) {
+        fprintf(stderr, "unable to initialize PyPy: %s\n", errmsg);
+        abort();
+        return;
+    }
+
+    PyPy_Initialize();
+
+}
+
