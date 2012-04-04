@@ -29,19 +29,6 @@ int main(int argc, char *argv[]);
 int pypy_main_function(int argc, char *argv[]) __attribute__((__noinline__));
 #endif
 
-void Py_Initialize(void) {
-    pypy_asm_stack_bottom();
-    char *errmsg = RPython_StartupCode();
-    if (errmsg) {
-    	fprintf(stderr, "unable to initialize PyPy: %s\n", errmsg);
-        abort();
-        return;
-    }
-
-    pypy_g_call_startup();
-    pypy_g_State_startup(&pypy_g_pypy_module_cpyext_state_State);
-}
-
 int pypy_main_function(int argc, char *argv[])
 {
     char *errmsg;
