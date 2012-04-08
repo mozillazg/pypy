@@ -22,6 +22,7 @@ class AbstractLLCPU(AbstractCPU):
                  gcdescr=None):
         assert type(opts) is not bool
         self.opts = opts
+        self.arraydescr_cache = {}
 
         from pypy.jit.backend.llsupport.gc import get_ll_description
         AbstractCPU.__init__(self)
@@ -292,7 +293,14 @@ class AbstractLLCPU(AbstractCPU):
                                                  extrainfo, ffi_flags)
 
     def copy_and_change_descr_typeinfo_to_ptr(self, descr):
-        return ArrayDescr(descr.basesize, descr.itemsize, descr.lendescr, FLAG_POINTER)
+        key = (descr.basesize, descr.itemsize, descr.lendescr)
+        try:
+            return self.arraydescr_cache[key]
+        except KeyError:
+            new_descr = ArrayDescr(descr.basesize, descr.itemsize,
+                                   descr.lendescr, FLAG_POINTER)
+            self.arraydescr_cache[key] = new_descr
+            return new_descr
 
     def get_overflow_error(self):
         ovf_vtable = self.cast_adr_to_int(self._ovf_error_vtable)
