@@ -503,7 +503,9 @@ class PinEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         v_obj, = hop.inputargs(hop.args_r[0])
-        hop.genop('gc_pin', [v_obj])
+        v_addr = hop.genop('cast_ptr_to_adr', [v_obj],
+                           resulttype=llmemory.Address)
+        hop.genop('gc_pin', [v_addr])
 
 class UnpinEntry(ExtRegistryEntry):
     _about_ = unpin
@@ -514,4 +516,6 @@ class UnpinEntry(ExtRegistryEntry):
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         v_obj, = hop.inputargs(hop.args_r[0])
-        hop.genop('gc_unpin', [v_obj])
+        v_addr = hop.genop('cast_ptr_to_adr', [v_obj],
+                           resulttype=llmemory.Address)
+        hop.genop('gc_unpin', [v_addr])

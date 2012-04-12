@@ -746,6 +746,25 @@ class GCTest(object):
         res = self.interpret(fn, [])
         assert res == ord('y')
 
+    def test_pinning(self):
+        def f(i):
+            s = str(i)
+            if not rgc.can_move(s):
+                return 13
+            sum = 0
+            with rgc.pinned_object(s):
+                sum += int(rgc.can_move(s))
+            sum += 10 * int(rgc.can_move(s))
+            return sum
+
+        res = self.interpret(f, [10])
+        if not self.GCClass.moving_gc:
+            assert res == 13
+        elif self.GCClass.can_always_pin_objects:
+            assert res == 10
+        else:
+            assert res == 11
+
 from pypy.rlib.objectmodel import UnboxedValue
 
 class TaggedBase(object):
