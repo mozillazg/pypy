@@ -6,8 +6,7 @@ from pypy.rpython.memory.test import snippet
 from pypy.rpython.test.test_llinterp import get_interpreter
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.objectmodel import compute_unique_id
+from pypy.rlib.objectmodel import we_are_translated, compute_unique_id
 from pypy.rlib import rgc
 from pypy.rlib.rstring import StringBuilder
 from pypy.rlib.rarithmetic import LONG_BIT
@@ -937,6 +936,35 @@ class TestMiniMarkGC(TestSemiSpaceGC):
     GC_CAN_SHRINK_BIG_ARRAY = False
     GC_CAN_MALLOC_NONMOVABLE = True
     BUT_HOW_BIG_IS_A_BIG_STRING = 11*WORD
+
+    # those tests are here because they'll be messy and useless
+    # on GCs that can't pin objects
+    
+    def test_pinning_collect(self):
+        from pypy.rpython.lltypesystem import llmemory
+
+        TP = lltype.GcStruct('x', ('x', lltype.Signed), ('y', lltype.Signed))
+        
+        def f(i):
+            e = lltype.malloc(TP)
+            e.x = 3
+            prev = llmemory.cast_ptr_to_adr(e)
+            rgc.pin(e)
+            for k in range(i):
+                lltype.malloc(TP)
+            res = int(llmemory.cast_ptr_to_adr(e) == prev)
+            for k in range(i):
+                lltype.malloc(TP)
+            res += int(llmemory.cast_ptr_to_adr(e) == prev)
+            assert e.x == 3 # noone overwrote it
+            rgc.unpin(e)
+            for k in range(i):
+                lltype.malloc(TP)
+            assert e.x == 3 # noone overwrote it
+            return res
+
+        res = self.interpret(f, [10])
+        assert res == 2
 
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
     GC_PARAMS = {'card_page_indices': 4}

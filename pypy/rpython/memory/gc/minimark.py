@@ -305,12 +305,10 @@ class MiniMarkGC(MovingGCBase):
         # GCFLAG_HAS_SHADOW to their future location at the next
         # minor collection.
         self.nursery_objects_shadows = self.AddressDict()
-        # all pinned objects in the nursery
-        self.pinned_objects = self.AddressStack()
         # all pinned objects that were in the nursery *before* last
         # minor collect. This is a sorted stack that should be consulted when
         # considering next nursery ceiling
-        self.nursery_barriers = self.AddressStack()
+        self.nursery_barriers = self.AddressDeque()
     
         #
         # Allocate a nursery.  In case of auto_nursery_size, start by
@@ -452,6 +450,7 @@ class MiniMarkGC(MovingGCBase):
 
     def debug_rotate_nursery(self):
         if self.debug_rotating_nurseries is not None:
+            ll_assert(self.nursery_barriers.empty(), "non empty nursery barriers with rotating nursery")
             debug_start("gc-debug")
             oldnurs = self.nursery
             llarena.arena_protect(oldnurs, self._nursery_memory_size(), True)
@@ -587,22 +586,27 @@ class MiniMarkGC(MovingGCBase):
         and finally reserve 'totalsize' bytes at the start of the
         now-empty nursery.
         """
-        self.minor_collection()
+        if not self.nursery_top == self.nursery + self.nursery_size:
+            xxx
+        self.minor_collection(totalsize)
+        # try allocating now, otherwise we do a major collect
+        do_major_collect = False
         #
-        if self.get_total_memory_used() > self.next_major_collection_threshold:
+        if do_major_collect or (self.get_total_memory_used() > self.next_major_collection_threshold):
             self.major_collection()
             #
             # The nursery might not be empty now, because of
             # execute_finalizers().  If it is almost full again,
             # we need to fix it with another call to minor_collection().
             if self.nursery_free + totalsize > self.nursery_top:
-                self.minor_collection()
+                self.minor_collection(totalsize)
         #
         result = self.nursery_free
         self.nursery_free = result + totalsize
         ll_assert(self.nursery_free <= self.nursery_top, "nursery overflow")
         #
         if self.debug_tiny_nursery >= 0:   # for debugging
+            ll_assert(not self.nursery_barriers.non_empty(), "no support for nursery debug and pinning")
             if self.nursery_top - self.nursery_free > self.debug_tiny_nursery:
                 self.nursery_free = self.nursery_top - self.debug_tiny_nursery
         #
@@ -1245,7 +1249,7 @@ class MiniMarkGC(MovingGCBase):
     # ----------
     # Nursery collection
 
-    def minor_collection(self):
+    def minor_collection(self, min_size=0):
         """Perform a minor collection: find the objects from the nursery
         that remain alive and move them out."""
         #
@@ -1303,9 +1307,34 @@ class MiniMarkGC(MovingGCBase):
         #
         # All live nursery objects are out, and the rest dies.  Fill
         # the whole nursery with zero and reset the current nursery pointer.
-        llarena.arena_reset(self.nursery, self.nursery_size, 2)
+        # self.nursery_barriers are *not* freed
+        # XXX sort the nursery_barriers
+        new_barriers = self.AddressDeque()
+        prev = self.nursery
+        size_gc_header = self.gcheaderbuilder.size_gc_header
+        while self.nursery_barriers.non_empty():
+            next = self.nursery_barriers.popleft()
+            llarena.arena_reset(prev, next - prev, 2)
+            # clean the visited flag
+            obj = next + size_gc_header
+            self.header(obj).tid &= ~GCFLAG_VISITED
+            prev = prev + (next - prev) + (size_gc_header +
+                           self.get_size(obj))
+            new_barriers.append(next)
+        llarena.arena_reset(prev, self.nursery_top - prev, 2)
+        self.nursery_barriers.delete()
+        self.nursery_barriers = new_barriers
         self.debug_rotate_nursery()
         self.nursery_free = self.nursery
+        self.nursery_barriers.append(self.nursery + self.nursery_size)
+        self.nursery_top = self.nursery_barriers.popleft()
+        while self.nursery_barriers.non_empty() and self.nursery_free + min_size > self.nursery_top:
+            cur_obj_size = size_gc_header + self.get_size(self.nursery_free +
+                                                          size_gc_header)
+            self.nursery_free = self.nursery_free + cur_obj_size
+            self.nursery_top = self.nursery_barriers.popleft()
+        if self.nursery_free + min_size > self.nursery_top:
+            ll_assert(False, "too many pinned objects")
         #
         debug_print("minor collect, total memory used:",
                     self.get_total_memory_used())
@@ -1442,7 +1471,16 @@ class MiniMarkGC(MovingGCBase):
             return
         #
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        if self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+        if self.header(obj).tid & GCFLAG_PINNED:
+            hdr = self.header(obj)
+            if hdr.tid & GCFLAG_VISITED:
+                return
+            hdr.tid |= GCFLAG_VISITED
+            ll_assert(not self.header(obj).tid & GCFLAG_HAS_SHADOW, "support shadow with pinning")
+            ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
+            self.nursery_barriers.append(obj - size_gc_header)
+            return
+        elif self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
             #
             # Common case: 'obj' was not already forwarded (otherwise
             # tid == -42, containing all flags), and it doesn't have the
