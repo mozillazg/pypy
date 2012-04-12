@@ -3,7 +3,7 @@ from pypy.rpython.memory.support import get_address_stack
 from pypy.rpython.memory.support import get_address_deque
 
 from pypy.rpython.test.test_llinterp import interpret
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, llarena
 from pypy.rpython.lltypesystem.llmemory import raw_malloc, raw_free, NULL
 
 class TestAddressStack(object):
@@ -93,6 +93,26 @@ class TestAddressStack(object):
             a = ll.pop()
             assert a == addrs[i]
         assert not ll.non_empty()
+
+    def test_insert(self):
+        AddressStack = get_address_stack(chunk_size=5)
+        ll = AddressStack()
+        lla = llarena.arena_malloc(10, 2)
+        addrs = [lla + i for i in range(10)]
+        ll.insert(addrs[2])
+        ll.insert(addrs[1])
+        ll.insert(addrs[5])
+        ll.insert(addrs[4])
+        ll.insert(addrs[6])
+        ll.insert(addrs[9])
+        ll.insert(addrs[0])
+        ll.insert(addrs[8])
+        ll.insert(addrs[7])
+        ll.insert(addrs[3])
+        expected = range(10)
+        for i in expected:
+            a = ll.pop()
+            assert a == addrs[i]
 
 
 class TestAddressDeque:

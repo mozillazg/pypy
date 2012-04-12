@@ -966,5 +966,35 @@ class TestMiniMarkGC(TestSemiSpaceGC):
         res = self.interpret(f, [10])
         assert res == 2
 
+    def test_pinning_collect_2(self):
+        from pypy.rpython.lltypesystem import llmemory
+
+        TP = lltype.GcStruct('x', ('x', lltype.Signed), ('y', lltype.Signed))
+        
+        def f(i):
+            e = lltype.malloc(TP)
+            e.x = 3
+            lltype.malloc(TP)
+            e2 = lltype.malloc(TP)
+            e2.x = 5
+            rgc.pin(e2)
+            rgc.pin(e)
+            prev = llmemory.cast_ptr_to_adr(e)
+            prev2 = llmemory.cast_ptr_to_adr(e2)
+            for k in range(i):
+                lltype.malloc(TP)
+            res = int(llmemory.cast_ptr_to_adr(e) == prev)
+            res += int(llmemory.cast_ptr_to_adr(e2) == prev2)
+            rgc.unpin(e)
+            for k in range(i):
+                lltype.malloc(TP)
+            rgc.unpin(e2)
+            assert e.x == 3 # noone overwrote it
+            assert e2.x == 5 # noone overwrote it
+            return res
+
+        res = self.interpret(f, [10])
+        assert res == 2
+
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
     GC_PARAMS = {'card_page_indices': 4}

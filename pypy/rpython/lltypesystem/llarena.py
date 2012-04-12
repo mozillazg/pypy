@@ -394,7 +394,7 @@ def arena_protect(arena_addr, size, inaccessible):
     arena_addr = getfakearenaaddress(arena_addr)
     assert arena_addr.offset == 0
     assert size == arena_addr.arena.nbytes
-    arena_addr.arena.set_protect(inaccessible)
+    arena_addr.arena.set_protect(inaccessible)    
 
 # ____________________________________________________________
 #

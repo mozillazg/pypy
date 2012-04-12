@@ -173,6 +173,47 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 chunk.items[count] = got
                 got = next
 
+        def insert(self, addr):
+            """ Insert addr in the already sorted stack to make sure
+            the smallest one is on top
+            """
+            if self.used_in_last_chunk == 0:
+                self.append(addr)
+                return
+            got = self.pop()
+            read = self.used_in_last_chunk - 1
+            if read == -1 and got <= addr:
+                self.append(addr)
+                self.append(got)
+                return
+            read_chunk = self.chunk
+            self.append(got)
+            if got > addr:
+                self.append(addr)
+                return
+            write = self.used_in_last_chunk
+            if self.used_in_last_chunk == chunk_size:
+                self.enlarge()
+                write = 0
+            self.used_in_last_chunk += 1
+            write_chunk = self.chunk
+            while got < addr and not read_chunk is null_chunk:
+                write_chunk.items[write] = got
+                write -= 1
+                if write < 0:
+                    write_chunk = write_chunk.next
+                    write = chunk_size - 1
+                got = read_chunk.items[read]
+                read -= 1
+                if read < 0:
+                    read_chunk = read_chunk.next
+                    read = chunk_size - 1
+            if got < addr:
+                write_chunk.items[write] = got
+                write_chunk.items[0] = addr
+            else:
+                write_chunk.items[write] = addr
+
     cache[chunk_size] = AddressStack
     return AddressStack
 

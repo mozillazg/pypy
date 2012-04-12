@@ -247,6 +247,8 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_top  = NULL
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
+        self.surviving_pinned_objects = NULL
+        self.nursery_barriers = NULL
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
@@ -306,7 +308,7 @@ class MiniMarkGC(MovingGCBase):
         # minor collection.
         self.nursery_objects_shadows = self.AddressDict()
         # all pinned objects that were in the nursery *before* last
-        # minor collect. This is a sorted stack that should be consulted when
+        # minor collect. This is a sorted deque that should be consulted when
         # considering next nursery ceiling
         self.nursery_barriers = self.AddressDeque()
     
@@ -1257,6 +1259,8 @@ class MiniMarkGC(MovingGCBase):
         #
         # Before everything else, remove from 'old_objects_pointing_to_young'
         # the young arrays.
+        self.nursery_barriers.delete()
+        self.surviving_pinned_objects = self.AddressStack()
         if self.young_rawmalloced_objects:
             self.remove_young_arrays_from_old_objects_pointing_to_young()
         #
@@ -1308,22 +1312,24 @@ class MiniMarkGC(MovingGCBase):
         # All live nursery objects are out, and the rest dies.  Fill
         # the whole nursery with zero and reset the current nursery pointer.
         # self.nursery_barriers are *not* freed
-        # XXX sort the nursery_barriers
-        new_barriers = self.AddressDeque()
+        nursery_barriers = self.AddressDeque()
         prev = self.nursery
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        while self.nursery_barriers.non_empty():
-            next = self.nursery_barriers.popleft()
-            llarena.arena_reset(prev, next - prev, 2)
+        while self.surviving_pinned_objects.non_empty():
+            next = self.surviving_pinned_objects.pop()
+            assert next >= prev
+            size = llarena.getfakearenaaddress(next) - prev
+            llarena.arena_reset(prev, size, 2)
             # clean the visited flag
             obj = next + size_gc_header
             self.header(obj).tid &= ~GCFLAG_VISITED
-            prev = prev + (next - prev) + (size_gc_header +
+            prev = prev + size + (size_gc_header +
                            self.get_size(obj))
-            new_barriers.append(next)
+            nursery_barriers.append(next)
         llarena.arena_reset(prev, self.nursery_top - prev, 2)
-        self.nursery_barriers.delete()
-        self.nursery_barriers = new_barriers
+        self.surviving_pinned_objects.delete()
+        self.surviving_pinned_objects = NULL
+        self.nursery_barriers = nursery_barriers
         self.debug_rotate_nursery()
         self.nursery_free = self.nursery
         self.nursery_barriers.append(self.nursery + self.nursery_size)
@@ -1478,7 +1484,8 @@ class MiniMarkGC(MovingGCBase):
             hdr.tid |= GCFLAG_VISITED
             ll_assert(not self.header(obj).tid & GCFLAG_HAS_SHADOW, "support shadow with pinning")
             ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
-            self.nursery_barriers.append(obj - size_gc_header)
+            self.surviving_pinned_objects.insert(
+                llarena.getfakearenaaddress(obj - size_gc_header))
             return
         elif self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
             #
