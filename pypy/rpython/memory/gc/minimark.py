@@ -589,7 +589,17 @@ class MiniMarkGC(MovingGCBase):
         now-empty nursery.
         """
         if not self.nursery_top == self.nursery + self.nursery_size:
-            xxx
+            self.nursery_top = self.nursery_barriers.popleft()
+            size_gc_header = self.gcheaderbuilder.size_gc_header
+            while self.nursery_barriers.non_empty() and self.nursery_free + totalsize > self.nursery_top:
+                cur_obj_size = size_gc_header + self.get_size(
+                    self.nursery_free + size_gc_header)
+                self.nursery_free = self.nursery_free + cur_obj_size
+                self.nursery_top = self.nursery_barriers.popleft()
+            if self.nursery_free + totalsize <= self.nursery_top:
+                llarena.arena_reserve(self.nursery_free, totalsize)
+                res = self.nursery_free
+                self.nursery_free = res + totalsize
         self.minor_collection(totalsize)
         # try allocating now, otherwise we do a major collect
         do_major_collect = False
