@@ -763,7 +763,7 @@ class GCTest(object):
         elif self.GCClass.can_always_pin_objects:
             assert res == 10
         else:
-            assert res == 11
+            assert res == 11 or res == 13 # sometimes fresh objs can't move
 
 from pypy.rlib.objectmodel import UnboxedValue
 

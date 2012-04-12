@@ -113,8 +113,9 @@ GCFLAG_FINALIZATION_ORDERING = first_gcflag << 4
 # one bit per 'card_page_indices' indices.
 GCFLAG_HAS_CARDS    = first_gcflag << 5
 GCFLAG_CARDS_SET    = first_gcflag << 6     # <- at least one card bit is set
+GCFLAG_PINNED       = first_gcflag << 7
 
-TID_MASK            = (first_gcflag << 7) - 1
+TID_MASK            = (first_gcflag << 8) - 1
 
 
 FORWARDSTUB = lltype.GcStruct('forwarding_stub',
@@ -304,6 +305,13 @@ class MiniMarkGC(MovingGCBase):
         # GCFLAG_HAS_SHADOW to their future location at the next
         # minor collection.
         self.nursery_objects_shadows = self.AddressDict()
+        # all pinned objects in the nursery
+        self.pinned_objects = self.AddressStack()
+        # all pinned objects that were in the nursery *before* last
+        # minor collect. This is a sorted stack that should be consulted when
+        # considering next nursery ceiling
+        self.nursery_barriers = self.AddressStack()
+    
         #
         # Allocate a nursery.  In case of auto_nursery_size, start by
         # allocating a very small nursery, enough to do things like look
@@ -762,8 +770,14 @@ class MiniMarkGC(MovingGCBase):
 
     def can_move(self, obj):
         """Overrides the parent can_move()."""
-        return self.is_in_nursery(obj)
+        return (self.is_in_nursery(obj) and
+                not self.header(obj).tid & GCFLAG_PINNED)
 
+    def pin(self, obj):
+        self.header(obj).tid |= GCFLAG_PINNED
+
+    def unpin(self, obj):
+        self.header(obj).tid &= ~GCFLAG_PINNED
 
     def shrink_array(self, obj, smallerlength):
         #
