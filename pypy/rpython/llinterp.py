@@ -890,6 +890,12 @@ class LLFrame(object):
     def op_gc_stack_bottom(self):
         pass       # marker for trackgcroot.py
 
+    def op_gc_pin(self, obj):
+        self.heap.pin(obj)
+
+    def op_gc_unpin(self, obj):
+        self.heap.unpin(obj)
+
     def op_gc_shadowstackref_new(self):   # stacklet+shadowstack
         raise NotImplementedError("gc_shadowstackref_new")
     def op_gc_shadowstackref_context(self):

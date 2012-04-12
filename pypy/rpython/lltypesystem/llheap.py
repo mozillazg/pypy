@@ -35,3 +35,10 @@ def thread_start():
 
 def thread_die():
     pass
+
+def pin(obj):
+    pass
+
+def unpin(obj):
+    pass
+

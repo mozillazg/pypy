@@ -493,3 +493,25 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         hop.exception_is_here()
         return hop.genop('gc_typeids_z', [], resulttype = hop.r_result)
+
+class PinEntry(ExtRegistryEntry):
+    _about_ = pin
+
+    def compute_result_annotation(self, s_arg):
+        pass
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        v_obj, = hop.inputargs(hop.args_r[0])
+        hop.genop('gc_pin', [v_obj])
+
+class UnpinEntry(ExtRegistryEntry):
+    _about_ = unpin
+
+    def compute_result_annotation(self, s_arg):
+        pass
+
+    def specialize_call(self, hop):
+        hop.exception_cannot_occur()
+        v_obj, = hop.inputargs(hop.args_r[0])
+        hop.genop('gc_unpin', [v_obj])

@@ -177,3 +177,12 @@ def test_pin_obj():
     with rgc.pinned_object(l):
         l.append(3)
     assert l == [3]
+
+def test_interp_pin_obj():
+    def f(i):
+        l = []
+        with rgc.pinned_object(l):
+            l.append(i)
+        return l[0]
+    
+    assert interpret(f, [3]) == 3
