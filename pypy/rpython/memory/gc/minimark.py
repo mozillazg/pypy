@@ -600,7 +600,7 @@ class MiniMarkGC(MovingGCBase):
                 llarena.arena_reserve(self.nursery_free, totalsize)
                 res = self.nursery_free
                 self.nursery_free = res + totalsize
-            XXX   # it's missing a 'return' somewhere think
+                return res
         self.minor_collection(totalsize)
         # try allocating now, otherwise we do a major collect
         do_major_collect = False
