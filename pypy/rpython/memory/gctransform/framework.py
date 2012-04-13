@@ -446,6 +446,10 @@ class FrameworkGCTransformer(GCTransformer):
                                            [s_gc,
                                             annmodel.SomeInteger(nonneg=True)],
                                            annmodel.s_None)
+        self.pin_ptr = getfn(GCClass.pin,
+                             [s_gc, annmodel.SomeAddress()], annmodel.s_None)
+        self.unpin_ptr = getfn(GCClass.unpin,
+                               [s_gc, annmodel.SomeAddress()], annmodel.s_None)
 
         self.write_barrier_ptr = None
         self.write_barrier_from_array_ptr = None
@@ -746,6 +750,14 @@ class FrameworkGCTransformer(GCTransformer):
                            [op.args[0]], resulttype=llmemory.Address)
         hop.genop("direct_call", [self.can_move_ptr, self.c_const_gc, v_addr],
                   resultvar=op.result)
+
+    def gct_gc_pin(self, hop):
+        op = hop.spaceop
+        hop.genop("direct_call", [self.pin_ptr, self.c_const_gc, op.args[0]])
+
+    def gct_gc_unpin(self, hop):
+        op = hop.spaceop
+        hop.genop("direct_call", [self.unpin_ptr, self.c_const_gc, op.args[0]])
 
     def gct_shrink_array(self, hop):
         if self.shrink_array_ptr is None:
