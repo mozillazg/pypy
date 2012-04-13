@@ -247,8 +247,6 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_top  = NULL
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
-        self.surviving_pinned_objects = NULL
-        self.nursery_barriers = NULL
         #
         # The ArenaCollection() handles the nonmovable objects allocation.
         if ArenaCollectionClass is None:
@@ -452,7 +450,7 @@ class MiniMarkGC(MovingGCBase):
 
     def debug_rotate_nursery(self):
         if self.debug_rotating_nurseries is not None:
-            ll_assert(self.nursery_barriers.empty(), "non empty nursery barriers with rotating nursery")
+            ll_assert(not self.nursery_barriers.non_empty(), "non empty nursery barriers with rotating nursery")
             debug_start("gc-debug")
             oldnurs = self.nursery
             llarena.arena_protect(oldnurs, self._nursery_memory_size(), True)
@@ -1339,7 +1337,6 @@ class MiniMarkGC(MovingGCBase):
             nursery_barriers.append(next)
         llarena.arena_reset(prev, self.nursery_top - prev, 2)
         self.surviving_pinned_objects.delete()
-        self.surviving_pinned_objects = NULL
         self.nursery_barriers = nursery_barriers
         self.debug_rotate_nursery()
         self.nursery_free = self.nursery

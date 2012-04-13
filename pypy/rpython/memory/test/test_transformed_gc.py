@@ -43,6 +43,7 @@ class GCTest(object):
     gcpolicy = None
     GC_CAN_MOVE = False
     GC_CAN_MALLOC_NONMOVABLE = True
+    GC_CAN_ALWAYS_PIN = False
     taggedpointers = False
 
     def setup_class(cls):
@@ -726,6 +727,28 @@ class GenericGCTests(GCTest):
         res = fn([])
         assert res == ord('y')
 
+    def define_pinning(cls):
+        def f(i, j):
+            s = str(i)
+            if not rgc.can_move(s):
+                return 13
+            sum = 0
+            with rgc.pinned_object(s):
+                sum += int(rgc.can_move(s))
+            sum += 10 * int(rgc.can_move(s))
+            return sum
+        return f
+
+    def test_pinning(self):
+        res = self.runner("pinning")([10, 0])
+        if not self.GC_CAN_MOVE:
+            assert res == 13
+        elif self.GC_CAN_ALWAYS_PIN:
+            assert res == 10
+        else:
+            assert res == 11 or res == 13 # sometimes fresh objs can't move
+
+
 class GenericMovingGCTests(GenericGCTests):
     GC_CAN_MOVE = True
     GC_CAN_MALLOC_NONMOVABLE = False
@@ -1273,6 +1296,7 @@ class TestHybridGC(TestGenerationGC):
 class TestMiniMarkGC(TestHybridGC):
     gcname = "minimark"
     GC_CAN_TEST_ID = True
+    GC_CAN_ALWAYS_PIN = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
