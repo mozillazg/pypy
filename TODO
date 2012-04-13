@@ -1,0 +1,8 @@
+
+* implement limit on no of pinned objects + replace insert with qsort
+
+* use pinning
+
+* make sure objects with shadows work
+
+* implement tracing for pinned objects (check that it works)
