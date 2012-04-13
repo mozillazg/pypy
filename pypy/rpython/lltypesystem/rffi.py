@@ -714,6 +714,7 @@ def make_string_mappings(strtype):
         string is already nonmovable.  Must be followed by a
         free_nonmovingbuffer call.
         """
+        rgc.pin(data)
         if rgc.can_move(data):
             count = len(data)
             buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
@@ -743,7 +744,9 @@ def make_string_mappings(strtype):
             offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
         followed_2nd_path = (buf == cast(TYPEP, data_start))
         keepalive_until_here(data)
-        if not followed_2nd_path:
+        if followed_2nd_path:
+            rgc.unpin(data)
+        else:
             lltype.free(buf, flavor='raw')
     free_nonmovingbuffer._annenforceargs_ = [strtype, None]
 
