@@ -1487,22 +1487,12 @@ class MiniMarkGC(MovingGCBase):
             return
         #
         size_gc_header = self.gcheaderbuilder.size_gc_header
-        if self.header(obj).tid & GCFLAG_PINNED:
-            hdr = self.header(obj)
-            if hdr.tid & GCFLAG_VISITED:
-                return
-            hdr.tid |= GCFLAG_VISITED
-            ll_assert(not self.header(obj).tid & GCFLAG_HAS_SHADOW, "support shadow with pinning")
-            ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
-            self.surviving_pinned_objects.insert(
-                llarena.getfakearenaaddress(obj - size_gc_header))
-            return
-        elif self.header(obj).tid & GCFLAG_HAS_SHADOW == 0:
+        if self.header(obj).tid & (GCFLAG_HAS_SHADOW|GCFLAG_PINNED) == 0:
             #
             # Common case: 'obj' was not already forwarded (otherwise
             # tid == -42, containing all flags), and it doesn't have the
-            # HAS_SHADOW flag either.  We must move it out of the nursery,
-            # into a new nonmovable location.
+            # HAS_SHADOW or PINNED flags either.  We must move it out of
+            # the nursery, into a new nonmovable location.
             totalsize = size_gc_header + self.get_size(obj)
             newhdr = self._malloc_out_of_nursery(totalsize)
             #
@@ -1511,6 +1501,17 @@ class MiniMarkGC(MovingGCBase):
             # 'obj' was already forwarded.  Change the original reference
             # to point to its forwarding address, and we're done.
             root.address[0] = self.get_forwarding_address(obj)
+            return
+            #
+        elif self.header(obj).tid & GCFLAG_PINNED:
+            hdr = self.header(obj)
+            if hdr.tid & GCFLAG_VISITED:
+                return
+            hdr.tid |= GCFLAG_VISITED
+            ll_assert(not self.header(obj).tid & GCFLAG_HAS_SHADOW, "support shadow with pinning")
+            ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
+            self.surviving_pinned_objects.insert(
+                llarena.getfakearenaaddress(obj - size_gc_header))
             return
             #
         else:
