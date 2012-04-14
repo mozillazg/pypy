@@ -24,10 +24,10 @@ list_count    = SMM('count',  2,
                         ' occurrences of value')
 list_reverse  = SMM('reverse',1,
                     doc='L.reverse() -- reverse *IN PLACE*')
-list_sort     = SMM('sort',   3, defaults=(None, None, False),
-                    argnames=['key', 'reverse'],
-                    doc='L.sort(key=None, reverse=False) -- stable'
-                        ' sort *IN PLACE*')
+list_sort     = SMM('sort',   4, defaults=(None, None, False),
+                    argnames=['cmp', 'key', 'reverse'],
+                    doc='L.sort(cmp=None, key=None, reverse=False) -- stable'
+                        ' sort *IN PLACE*;\ncmp(x, y) -> -1, 0, 1')
 list_reversed = SMM('__reversed__', 1,
                     doc='L.__reversed__() -- return a reverse iterator over'
                         ' the list')
@@ -43,7 +43,7 @@ register_all(vars(), globals())
 def descr__new__(space, w_listtype, __args__):
     from pypy.objspace.std.listobject import W_ListObject
     w_obj = space.allocate_instance(W_ListObject, w_listtype)
-    W_ListObject.__init__(w_obj, space, [])
+    w_obj.clear(space)
     return w_obj
 
 # ____________________________________________________________

@@ -617,7 +617,7 @@ class BuiltinCode(eval.Code):
         space = func.space
         activation = self.activation
         scope_w = args.parse_obj(w_obj, func.name, self.sig,
-                                 func.defs_w, func.w_kw_defs, self.minargs)
+                                 func.defs_w, self.minargs)
         try:
             w_result = activation._run(space, scope_w)
         except DescrMismatch:
@@ -842,17 +842,11 @@ class interp2app(Wrappable):
     def _getdefaults(self, space):
         "NOT_RPYTHON"
         defs_w = []
-        
-        unwrap_spec = self._code._unwrap_spec[-len(self._staticdefs):]
-        for i, val in enumerate(self._staticdefs):
+        for val in self._staticdefs:
             if val is NoneNotWrapped:
                 defs_w.append(None)
             else:
-                spec = unwrap_spec[i]
-                if isinstance(val, str) and spec not in [str]:
-                    defs_w.append(space.wrapbytes(val))
-                else:
-                    defs_w.append(space.wrap(val))
+                defs_w.append(space.wrap(val))
         return defs_w
 
     # lazy binding to space
@@ -880,6 +874,12 @@ class GatewayCache(SpaceCache):
             fn.add_to_table()
         if gateway.as_classmethod:
             fn = ClassMethod(space.wrap(fn))
+        #
+        from pypy.module.sys.vm import exc_info
+        if code._bltin is exc_info:
+            assert space._code_of_sys_exc_info is None
+            space._code_of_sys_exc_info = code
+        #
         return fn
 
 

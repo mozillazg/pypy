@@ -4,12 +4,30 @@ from pypy.objspace.std import model, newformat
 from pypy.objspace.std.model import registerimplementation, W_Object
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.multimethod import FailedToImplementArgs
-from pypy.objspace.std.intobject import W_IntObject, W_AbstractIntObject
+from pypy.objspace.std.intobject import W_IntObject
 from pypy.objspace.std.noneobject import W_NoneObject
 from pypy.rlib.rbigint import rbigint, SHIFT
 
+class W_AbstractLongObject(W_Object):
+    __slots__ = ()
 
-class W_LongObject(W_AbstractIntObject):
+    def is_w(self, space, w_other):
+        if not isinstance(w_other, W_AbstractLongObject):
+            return False
+        if self.user_overridden_class or w_other.user_overridden_class:
+            return self is w_other
+        return space.bigint_w(self).eq(space.bigint_w(w_other))
+
+    def immutable_unique_id(self, space):
+        if self.user_overridden_class:
+            return None
+        from pypy.objspace.std.model import IDTAG_LONG as tag
+        b = space.bigint_w(self)
+        b = b.lshift(3).or_(rbigint.fromint(tag))
+        return space.newlong_from_rbigint(b)
+
+
+class W_LongObject(W_AbstractLongObject):
     """This is a wrapper of rbigint."""
     from pypy.objspace.std.longtype import long_typedef as typedef
     _immutable_fields_ = ['num']
@@ -96,18 +114,27 @@ def delegate_Int2Long(space, w_intobj):
     return W_LongObject.fromint(space, w_intobj.intval)
 
 
-# int__Long is supposed to do nothing, unless it has
+# long__Long is supposed to do nothing, unless it has
 # a derived long object, where it should return
 # an exact one.
-def int__Long(space, w_long1):
-    if space.is_w(space.type(w_long1), space.w_int):
+def long__Long(space, w_long1):
+    if space.is_w(space.type(w_long1), space.w_long):
         return w_long1
     l = w_long1.num
     return W_LongObject(l)
-trunc__Long = int__Long
+trunc__Long = long__Long
+
+def long__Int(space, w_intobj):
+    return space.newlong(w_intobj.intval)
+
+def int__Long(space, w_value):
+    try:
+        return space.newint(w_value.num.toint())
+    except OverflowError:
+        return long__Long(space, w_value)
 
 def index__Long(space, w_value):
-    return int__Long(space, w_value)
+    return long__Long(space, w_value)
 
 def float__Long(space, w_longobj):
     try:
@@ -169,6 +196,11 @@ def ge__Int_Long(space, w_int1, w_long2):
 
 def hash__Long(space, w_value):
     return space.wrap(w_value.num.hash())
+
+# coerce
+def coerce__Long_Long(space, w_long1, w_long2):
+    return space.newtuple([w_long1, w_long2])
+
 
 def add__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.add(w_long2.num))
@@ -243,7 +275,7 @@ def neg__Long(space, w_long1):
     return W_LongObject(w_long1.num.neg())
 
 def pos__Long(space, w_long):
-    return int__Long(space, w_long)
+    return long__Long(space, w_long)
 
 def abs__Long(space, w_long):
     return W_LongObject(w_long.num.abs())
@@ -286,6 +318,12 @@ def xor__Long_Long(space, w_long1, w_long2):
 
 def or__Long_Long(space, w_long1, w_long2):
     return W_LongObject(w_long1.num.or_(w_long2.num))
+
+def oct__Long(space, w_long1):
+    return space.wrap(w_long1.num.oct())
+
+def hex__Long(space, w_long1):
+    return space.wrap(w_long1.num.hex())
 
 def getnewargs__Long(space, w_long1):
     return space.newtuple([W_LongObject(w_long1.num)])

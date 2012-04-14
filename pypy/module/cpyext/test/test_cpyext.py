@@ -35,7 +35,7 @@ class TestApi:
 
 class AppTestApi:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi'])
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi', 'array'])
         from pypy.rlib.libffi import get_libc_name
         cls.w_libc = cls.space.wrap(get_libc_name())
 
@@ -165,11 +165,9 @@ class LeakCheckingTest(object):
         return leaking
 
 class AppTestCpythonExtensionBase(LeakCheckingTest):
-    extra_modules = []
     
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi'] +
-                                               cls.extra_modules)
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi', 'array'])
         cls.space.getbuiltinmodule("cpyext")
         from pypy.module.imp.importing import importhook
         importhook(cls.space, "os") # warm up reference counts
@@ -203,10 +201,6 @@ class AppTestCpythonExtensionBase(LeakCheckingTest):
         if filename is None, the module name will be used to construct the
         filename.
         """
-        name = name.encode()
-        if init is not None:
-            init = init.encode()
-        body = body.encode()
         if init is not None:
             code = """
             #include <Python.h>
@@ -690,7 +684,7 @@ class AppTestCpythonExtension(AppTestCpythonExtensionBase):
         mod = self.import_extension('foo', [
             ('newexc', 'METH_VARARGS',
              '''
-             char *name = _PyUnicode_AsString(PyTuple_GetItem(args, 0));
+             char *name = PyString_AsString(PyTuple_GetItem(args, 0));
              return PyErr_NewException(name, PyTuple_GetItem(args, 1),
                                        PyTuple_GetItem(args, 2));
              '''

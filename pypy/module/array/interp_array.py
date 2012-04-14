@@ -4,13 +4,14 @@ from pypy.interpreter.buffer import RWBuffer
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import GetSetProperty, make_weakref_descr
+from pypy.module._file.interp_file import W_File
 from pypy.objspace.std.model import W_Object
 from pypy.objspace.std.multimethod import FailedToImplement
 from pypy.objspace.std.stdtypedef import SMM, StdTypeDef
 from pypy.objspace.std.register_all import register_all
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, keepalive_until_here
 from pypy.rpython.lltypesystem import lltype, rffi
 
 
@@ -36,15 +37,15 @@ def w_array(space, w_cls, typecode, __args__):
 
             if len(__args__.arguments_w) > 0:
                 w_initializer = __args__.arguments_w[0]
-                if space.type(w_initializer) is space.w_bytes:
-                    a.fromstring(space.bytes_w(w_initializer))
+                if space.type(w_initializer) is space.w_str:
+                    a.fromstring(space.str_w(w_initializer))
                 elif space.type(w_initializer) is space.w_list:
                     a.fromlist(w_initializer)
                 else:
                     a.extend(w_initializer, True)
             break
     else:
-        msg = 'bad typecode (must be b, B, u, h, H, i, I, l, L, f or d)'
+        msg = 'bad typecode (must be c, b, B, u, h, H, i, I, l, L, f or d)'
         raise OperationError(space.w_ValueError, space.wrap(msg))
 
     return a
@@ -63,7 +64,6 @@ array_insert = SMM('insert', 3)
 array_tolist = SMM('tolist', 1)
 array_fromlist = SMM('fromlist', 2)
 array_tostring = SMM('tostring', 1)
-array_tobytes = SMM('tobytes', 1)
 array_fromstring = SMM('fromstring', 2)
 array_tounicode = SMM('tounicode', 1)
 array_fromunicode = SMM('fromunicode', 2)
@@ -124,6 +124,7 @@ class TypeCode(object):
         return True
 
 types = {
+    'c': TypeCode(lltype.Char,        'str_w'),
     'u': TypeCode(lltype.UniChar,     'unicode_w'),
     'b': TypeCode(rffi.SIGNEDCHAR,    'int_w', True, True),
     'B': TypeCode(rffi.UCHAR,         'int_w', True),
@@ -144,18 +145,24 @@ for k, v in types.items():
 unroll_typecodes = unrolling_iterable(types.keys())
 
 class ArrayBuffer(RWBuffer):
-    def __init__(self, data, bytes):
-        self.data = data
-        self.len = bytes
+    def __init__(self, array):
+        self.array = array
 
     def getlength(self):
-        return self.len
+        return self.array.len * self.array.itemsize
 
     def getitem(self, index):
-        return self.data[index]
+        array = self.array
+        data = array._charbuf_start()
+        char = data[index]
+        array._charbuf_stop()
+        return char
 
     def setitem(self, index, char):
-        self.data[index] = char
+        array = self.array
+        data = array._charbuf_start()
+        data[index] = char
+        array._charbuf_stop()
 
 
 def make_array(mytype):
@@ -277,9 +284,10 @@ def make_array(mytype):
             oldlen = self.len
             new = len(s) / mytype.bytes
             self.setlen(oldlen + new)
-            cbuf = self.charbuf()
+            cbuf = self._charbuf_start()
             for i in range(len(s)):
                 cbuf[oldlen * mytype.bytes + i] = s[i]
+            self._charbuf_stop()
 
         def fromlist(self, w_lst):
             s = self.len
@@ -309,8 +317,11 @@ def make_array(mytype):
             else:
                 self.fromsequence(w_iterable)
 
-        def charbuf(self):
-            return  rffi.cast(rffi.CCHARP, self.buffer)
+        def _charbuf_start(self):
+            return rffi.cast(rffi.CCHARP, self.buffer)
+
+        def _charbuf_stop(self):
+            keepalive_until_here(self)
 
         def w_getitem(self, space, idx):
             item = self.buffer[idx]
@@ -340,6 +351,9 @@ def make_array(mytype):
             w_a.buffer[j] = self.buffer[i]
             j += 1
         return w_a
+
+    def getslice__Array_ANY_ANY(space, self, w_i, w_j):
+        return space.getitem(self, space.newslice(w_i, w_j, space.w_None))
 
     def setitem__Array_ANY_ANY(space, self, w_idx, w_item):
         idx, stop, step = space.decode_index(w_idx, self.len)
@@ -372,6 +386,9 @@ def make_array(mytype):
                 for i in range(start, stop, step):
                     self.buffer[i] = w_item.buffer[j]
                     j += 1
+
+    def setslice__Array_ANY_ANY_ANY(space, self, w_i, w_j, w_x):
+        space.setitem(self, space.newslice(w_i, w_j, space.w_None), w_x)
 
     def array_append__Array_ANY(space, self, w_x):
         x = self.item_w(w_x)
@@ -445,6 +462,9 @@ def make_array(mytype):
         self.setlen(0)
         self.fromsequence(w_lst)
 
+    def delslice__Array_ANY_ANY(space, self, w_i, w_j):
+        return space.delitem(self, space.newslice(w_i, w_j, space.w_None))
+
     # Add and mul methods
 
     def add__Array_Array(space, self, other):
@@ -517,18 +537,18 @@ def make_array(mytype):
         self.fromlist(w_lst)
 
     def array_fromstring__Array_ANY(space, self, w_s):
-        self.fromstring(space.bytes_w(w_s))
-
-    def array_tobytes__Array(space, self):
-        cbuf = self.charbuf()
-        return self.space.wrapbytes(rffi.charpsize2str(cbuf, self.len * mytype.bytes))
+        self.fromstring(space.str_w(w_s))
 
     def array_tostring__Array(space, self):
-        space.warn("tostring() is deprecated. Use tobytes() instead.",
-                   space.w_DeprecationWarning)
-        return array_tobytes__Array(space, self)
+        cbuf = self._charbuf_start()
+        s = rffi.charpsize2str(cbuf, self.len * mytype.bytes)
+        self._charbuf_stop()
+        return self.space.wrap(s)
 
     def array_fromfile__Array_ANY_ANY(space, self, w_f, w_n):
+        if not isinstance(w_f, W_File):
+            msg = "arg1 must be open file"
+            raise OperationError(space.w_TypeError, space.wrap(msg))
         n = space.int_w(w_n)
 
         try:
@@ -536,20 +556,23 @@ def make_array(mytype):
         except OverflowError:
             raise MemoryError
         w_item = space.call_method(w_f, 'read', space.wrap(size))
-        item = space.bytes_w(w_item)
+        item = space.str_w(w_item)
         if len(item) < size:
             n = len(item) % self.itemsize
             elems = max(0, len(item) - (len(item) % self.itemsize))
             if n != 0:
                 item = item[0:elems]
-            w_item = space.wrapbytes(item)
+            w_item = space.wrap(item)
             array_fromstring__Array_ANY(space, self, w_item)
             msg = "not enough items in file"
             raise OperationError(space.w_EOFError, space.wrap(msg))
         array_fromstring__Array_ANY(space, self, w_item)
 
     def array_tofile__Array_ANY(space, self, w_f):
-        w_s = array_tobytes__Array(space, self)
+        if not isinstance(w_f, W_File):
+            msg = "arg1 must be open file"
+            raise OperationError(space.w_TypeError, space.wrap(msg))
+        w_s = array_tostring__Array(space, self)
         space.call_method(w_f, 'write', w_s)
 
     if mytype.typecode == 'u':
@@ -602,8 +625,7 @@ def make_array(mytype):
     # Misc methods
 
     def buffer__Array(space, self):
-        b = ArrayBuffer(self.charbuf(), self.len * mytype.bytes)
-        return space.wrap(b)
+        return space.wrap(ArrayBuffer(self))
 
     def array_buffer_info__Array(space, self):
         w_ptr = space.wrap(rffi.cast(lltype.Unsigned, self.buffer))
@@ -612,7 +634,7 @@ def make_array(mytype):
 
     def array_reduce__Array(space, self):
         if self.len > 0:
-            w_s = array_tobytes__Array(space, self)
+            w_s = array_tostring__Array(space, self)
             args = [space.wrap(mytype.typecode), w_s]
         else:
             args = [space.wrap(mytype.typecode)]
@@ -638,7 +660,7 @@ def make_array(mytype):
             raise OperationError(space.w_RuntimeError, space.wrap(msg))
         if self.len == 0:
             return
-        bytes = self.charbuf()
+        bytes = self._charbuf_start()
         tmp = [bytes[0]] * mytype.bytes
         for start in range(0, self.len * mytype.bytes, mytype.bytes):
             stop = start + mytype.bytes - 1
@@ -646,10 +668,15 @@ def make_array(mytype):
                 tmp[i] = bytes[start + i]
             for i in range(mytype.bytes):
                 bytes[stop - i] = tmp[i]
+        self._charbuf_stop()
 
     def repr__Array(space, self):
         if self.len == 0:
             return space.wrap("array('%s')" % self.typecode)
+        elif self.typecode == "c":
+            r = space.repr(array_tostring__Array(space, self))
+            s = "array('%s', %s)" % (self.typecode, space.str_w(r))
+            return space.wrap(s)
         elif self.typecode == "u":
             r = space.repr(array_tounicode__Array(space, self))
             s = "array('%s', %s)" % (self.typecode, space.str_w(r))

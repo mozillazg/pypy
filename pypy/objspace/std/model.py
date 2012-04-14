@@ -31,7 +31,7 @@ option_to_typename = {
 }
 
 IDTAG_INT     = 1
-#IDTAG_LONG    = 3
+IDTAG_LONG    = 3
 IDTAG_FLOAT   = 5
 IDTAG_COMPLEX = 7
 
@@ -44,7 +44,7 @@ class StdTypeModel:
         class result:
             from pypy.objspace.std.objecttype import object_typedef
             from pypy.objspace.std.booltype   import bool_typedef
-            #from pypy.objspace.std.inttype    import int_typedef
+            from pypy.objspace.std.inttype    import int_typedef
             from pypy.objspace.std.floattype  import float_typedef
             from pypy.objspace.std.complextype  import complex_typedef
             from pypy.objspace.std.settype import set_typedef
@@ -52,6 +52,7 @@ class StdTypeModel:
             from pypy.objspace.std.tupletype  import tuple_typedef
             from pypy.objspace.std.listtype   import list_typedef
             from pypy.objspace.std.dicttype   import dict_typedef
+            from pypy.objspace.std.basestringtype import basestring_typedef
             from pypy.objspace.std.stringtype import str_typedef
             from pypy.objspace.std.bytearraytype import bytearray_typedef
             from pypy.objspace.std.typetype   import type_typedef
@@ -184,8 +185,8 @@ class StdTypeModel:
             (complexobject.W_ComplexObject, complexobject.delegate_Bool2Complex),
             ]
         self.typeorder[intobject.W_IntObject] += [
-            (longobject.W_LongObject,   longobject.delegate_Int2Long),
             (floatobject.W_FloatObject, floatobject.delegate_Int2Float),
+            (longobject.W_LongObject,   longobject.delegate_Int2Long),
             (complexobject.W_ComplexObject, complexobject.delegate_Int2Complex),
             ]
         if config.objspace.std.withsmalllong:
@@ -216,23 +217,45 @@ class StdTypeModel:
         self.typeorder[setobject.W_FrozensetObject] += [
             (setobject.W_BaseSetObject, None)
             ]
+        if not config.objspace.std.withrope:
+            self.typeorder[stringobject.W_StringObject] += [
+             (unicodeobject.W_UnicodeObject, unicodeobject.delegate_String2Unicode),
+                ]
+        else:
+            from pypy.objspace.std import ropeobject
+            if config.objspace.std.withropeunicode:
+                from pypy.objspace.std import ropeunicodeobject
+                self.typeorder[ropeobject.W_RopeObject] += [
+                 (ropeunicodeobject.W_RopeUnicodeObject,
+                     ropeunicodeobject.delegate_Rope2RopeUnicode),
+                 ]
+            else:
+                self.typeorder[ropeobject.W_RopeObject] += [
+                 (unicodeobject.W_UnicodeObject, unicodeobject.delegate_String2Unicode),
+                    ]
         if config.objspace.std.withstrslice:
             from pypy.objspace.std import strsliceobject
             self.typeorder[strsliceobject.W_StringSliceObject] += [
                 (stringobject.W_StringObject,
                                        strsliceobject.delegate_slice2str),
+                (unicodeobject.W_UnicodeObject,
+                                       strsliceobject.delegate_slice2unicode),
                 ]
         if config.objspace.std.withstrjoin:
             from pypy.objspace.std import strjoinobject
             self.typeorder[strjoinobject.W_StringJoinObject] += [
                 (stringobject.W_StringObject,
                                        strjoinobject.delegate_join2str),
+                (unicodeobject.W_UnicodeObject,
+                                       strjoinobject.delegate_join2unicode)
                 ]
         elif config.objspace.std.withstrbuf:
             from pypy.objspace.std import strbufobject
             self.typeorder[strbufobject.W_StringBufferObject] += [
                 (stringobject.W_StringObject,
                                        strbufobject.delegate_buf2str),
+                (unicodeobject.W_UnicodeObject,
+                                       strbufobject.delegate_buf2unicode)
                 ]
         if config.objspace.std.withsmalltuple:
             from pypy.objspace.std import smalltupleobject

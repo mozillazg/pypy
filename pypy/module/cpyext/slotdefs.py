@@ -167,14 +167,16 @@ def wrap_sq_delitem(space, w_self, w_args, func):
     if rffi.cast(lltype.Signed, res) == -1:
         space.fromcache(State).check_and_raise_exception(always=True)
 
+# Warning, confusing function name (like CPython).  Used only for sq_contains.
 def wrap_objobjproc(space, w_self, w_args, func):
     func_target = rffi.cast(objobjproc, func)
     check_num_args(space, w_args, 1)
     w_value, = space.fixedview(w_args)
     res = generic_cpy_call(space, func_target, w_self, w_value)
-    if rffi.cast(lltype.Signed, res) == -1:
+    res = rffi.cast(lltype.Signed, res)
+    if res == -1:
         space.fromcache(State).check_and_raise_exception(always=True)
-    return space.wrap(res)
+    return space.wrap(bool(res))
 
 def wrap_objobjargproc(space, w_self, w_args, func):
     func_target = rffi.cast(objobjargproc, func)
@@ -183,7 +185,7 @@ def wrap_objobjargproc(space, w_self, w_args, func):
     res = generic_cpy_call(space, func_target, w_self, w_key, w_value)
     if rffi.cast(lltype.Signed, res) == -1:
         space.fromcache(State).check_and_raise_exception(always=True)
-    return space.wrap(res)
+    return space.w_None
 
 def wrap_delitem(space, w_self, w_args, func):
     func_target = rffi.cast(objobjargproc, func)
@@ -445,10 +447,23 @@ static slotdef slotdefs[] = {
           "x.__rmul__(n) <==> n*x"),
         SQSLOT("__getitem__", sq_item, slot_sq_item, wrap_sq_item,
                "x.__getitem__(y) <==> x[y]"),
+        SQSLOT("__getslice__", sq_slice, slot_sq_slice, wrap_ssizessizeargfunc,
+               "x.__getslice__(i, j) <==> x[i:j]\n\
+               \n\
+               Use of negative indices is not supported."),
         SQSLOT("__setitem__", sq_ass_item, slot_sq_ass_item, wrap_sq_setitem,
                "x.__setitem__(i, y) <==> x[i]=y"),
         SQSLOT("__delitem__", sq_ass_item, slot_sq_ass_item, wrap_sq_delitem,
                "x.__delitem__(y) <==> del x[y]"),
+        SQSLOT("__setslice__", sq_ass_slice, slot_sq_ass_slice,
+               wrap_ssizessizeobjargproc,
+               "x.__setslice__(i, j, y) <==> x[i:j]=y\n\
+               \n\
+               Use  of negative indices is not supported."),
+        SQSLOT("__delslice__", sq_ass_slice, slot_sq_ass_slice, wrap_delslice,
+               "x.__delslice__(i, j) <==> del x[i:j]\n\
+               \n\
+               Use of negative indices is not supported."),
         SQSLOT("__contains__", sq_contains, slot_sq_contains, wrap_objobjproc,
                "x.__contains__(y) <==> y in x"),
         SQSLOT("__iadd__", sq_inplace_concat, NULL,
@@ -500,7 +515,7 @@ static slotdef slotdefs[] = {
         UNSLOT("__pos__", nb_positive, slot_nb_positive, wrap_unaryfunc, "+x"),
         UNSLOT("__abs__", nb_absolute, slot_nb_absolute, wrap_unaryfunc,
                "abs(x)"),
-        UNSLOT("__bool__", nb_bool, slot_nb_bool, wrap_inquirypred,
+        UNSLOT("__nonzero__", nb_nonzero, slot_nb_nonzero, wrap_inquirypred,
                "x != 0"),
         UNSLOT("__invert__", nb_invert, slot_nb_invert, wrap_unaryfunc, "~x"),
         BINSLOT("__lshift__", nb_lshift, slot_nb_lshift, "<<"),
@@ -513,6 +528,8 @@ static slotdef slotdefs[] = {
         RBINSLOT("__rxor__", nb_xor, slot_nb_xor, "^"),
         BINSLOT("__or__", nb_or, slot_nb_or, "|"),
         RBINSLOT("__ror__", nb_or, slot_nb_or, "|"),
+        NBSLOT("__coerce__", nb_coerce, slot_nb_coerce, wrap_coercefunc,
+               "x.__coerce__(y) <==> coerce(x, y)"),
         UNSLOT("__int__", nb_int, slot_nb_int, wrap_unaryfunc,
                "int(x)"),
         UNSLOT("__long__", nb_long, slot_nb_long, wrap_unaryfunc,
@@ -593,8 +610,8 @@ static slotdef slotdefs[] = {
                "x.__ge__(y) <==> x>=y"),
         TPSLOT("__iter__", tp_iter, slot_tp_iter, wrap_unaryfunc,
                "x.__iter__() <==> iter(x)"),
-        TPSLOT("__next__", tp_iternext, slot_tp_iternext, wrap_next,
-               "x.__next__() -> the next value, or raise StopIteration"),
+        TPSLOT("next", tp_iternext, slot_tp_iternext, wrap_next,
+               "x.next() -> the next value, or raise StopIteration"),
         TPSLOT("__get__", tp_descr_get, slot_tp_descr_get, wrap_descr_get,
                "descr.__get__(obj[, type]) -> value"),
         TPSLOT("__set__", tp_descr_set, slot_tp_descr_set, wrap_descr_set,

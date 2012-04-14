@@ -14,7 +14,6 @@ from pypy.rlib.rfloat import (
     DTSF_ADD_DOT_0, DTSF_STR_PRECISION)
 from pypy.rlib.rbigint import rbigint
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.rlib.objectmodel import HASH_INF, HASH_NAN
 from pypy.rlib import rfloat
 from pypy.tool.sourcetools import func_with_new_name
 
@@ -93,13 +92,15 @@ def int__Float(space, w_value):
     try:
         value = ovfcheck_float_to_int(w_value.floatval)
     except OverflowError:
-        pass
+        return space.long(w_value)
     else:
         return space.newint(value)
+
+def long__Float(space, w_floatobj):
     try:
-        return W_LongObject.fromfloat(space, w_value.floatval)
+        return W_LongObject.fromfloat(space, w_floatobj.floatval)
     except OverflowError:
-        if isnan(w_value.floatval):
+        if isnan(w_floatobj.floatval):
             raise OperationError(
                 space.w_ValueError,
                 space.wrap("cannot convert float NaN to integer"))
@@ -110,7 +111,7 @@ def trunc__Float(space, w_floatobj):
     try:
         value = ovfcheck_float_to_int(whole)
     except OverflowError:
-        return int__Float(space, w_floatobj)
+        return long__Float(space, w_floatobj)
     else:
         return space.newint(value)
 
@@ -294,7 +295,7 @@ def _hash_float(space, v):
     from pypy.objspace.std.longobject import hash__Long
 
     if isnan(v):
-        return HASH_NAN
+        return 0
 
     # This is designed so that Python numbers of different types
     # that compare equal hash to the same value; otherwise comparisons
@@ -314,9 +315,9 @@ def _hash_float(space, v):
             except OverflowError:
                 # can't convert to long int -- arbitrary
                 if v < 0:
-                    return -HASH_INF
+                    return -271828
                 else:
-                    return HASH_INF
+                    return 314159
             return space.int_w(space.hash(w_lval))
 
     # The fractional part is non-zero, so we don't have to worry about
@@ -338,6 +339,10 @@ def _hash_float(space, v):
     x = intmask(hipart + int(v) + (expo << 15))
     return x
 
+
+# coerce
+def coerce__Float_Float(space, w_float1, w_float2):
+    return space.newtuple([w_float1, w_float2])
 
 
 def add__Float_Float(space, w_float1, w_float2):

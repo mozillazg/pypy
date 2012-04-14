@@ -63,11 +63,29 @@ class AppTestSSL:
         _ssl.RAND_egd("entropy")
 
     def test_sslwrap(self):
-        import ssl, _socket, sys, gc
+        import _ssl, _socket, sys, gc
         if sys.platform == 'darwin' or 'freebsd' in sys.platform:
             skip("hangs indefinitely on OSX & FreeBSD (also on CPython)")
         s = _socket.socket()
-        ss = ssl.wrap_socket(s)
+        ss = _ssl.sslwrap(s, 0)
+        exc = raises(_socket.error, ss.do_handshake)
+        if sys.platform == 'win32':
+            assert exc.value.errno == 10057 # WSAENOTCONN
+        else:
+            assert exc.value.errno == 32 # Broken pipe
+        del exc, ss, s
+        gc.collect()     # force the destructor() to be called now
+
+    def test_async_closed(self):
+        import _ssl, _socket, gc
+        s = _socket.socket()
+        s.settimeout(3)
+        ss = _ssl.sslwrap(s, 0)
+        s.close()
+        exc = raises(_ssl.SSLError, ss.write, "data")
+        assert exc.value.strerror == "Underlying socket has been closed."
+        del exc, ss, s
+        gc.collect()     # force the destructor() to be called now
 
 
 class AppTestConnectedSSL:
@@ -90,38 +108,52 @@ class AppTestConnectedSSL:
             """)
 
     def test_connect(self):
-        import ssl, gc
-        ss = ssl.wrap_socket(self.s)
+        import socket, gc
+        ss = socket.ssl(self.s)
+        self.s.close()
+        del ss; gc.collect()
+
+    def test_server(self):
+        import socket, gc
+        ss = socket.ssl(self.s)
+        assert isinstance(ss.server(), str)
+        self.s.close()
+        del ss; gc.collect()
+
+    def test_issuer(self):
+        import socket, gc
+        ss = socket.ssl(self.s)
+        assert isinstance(ss.issuer(), str)
         self.s.close()
         del ss; gc.collect()
 
     def test_write(self):
-        import ssl, gc
-        ss = ssl.wrap_socket(self.s)
+        import socket, gc
+        ss = socket.ssl(self.s)
         raises(TypeError, ss.write, 123)
-        num_bytes = ss.write(b"hello\n")
+        num_bytes = ss.write("hello\n")
         assert isinstance(num_bytes, int)
         assert num_bytes >= 0
         self.s.close()
         del ss; gc.collect()
 
     def test_read(self):
-        import ssl, gc
-        ss = ssl.wrap_socket(self.s)
-        raises(TypeError, ss.read, b"foo")
-        ss.write(b"hello\n")
+        import socket, gc
+        ss = socket.ssl(self.s)
+        raises(TypeError, ss.read, "foo")
+        ss.write("hello\n")
         data = ss.read()
-        assert isinstance(data, bytes)
+        assert isinstance(data, str)
         self.s.close()
         del ss; gc.collect()
 
     def test_read_upto(self):
-        import ssl, gc
-        ss = ssl.wrap_socket(self.s)
-        raises(TypeError, ss.read, b"foo")
-        ss.write(b"hello\n")
+        import socket, gc
+        ss = socket.ssl(self.s)
+        raises(TypeError, ss.read, "foo")
+        ss.write("hello\n")
         data = ss.read(10)
-        assert isinstance(data, bytes)
+        assert isinstance(data, str)
         assert len(data) == 10
         assert ss.pending() > 50 # many more bytes to read
         self.s.close()
@@ -129,15 +161,17 @@ class AppTestConnectedSSL:
 
     def test_shutdown(self):
         import socket, ssl, sys, gc
-        ss = ssl.wrap_socket(self.s)
-        ss.write(b"hello\n")
+        ss = socket.ssl(self.s)
+        ss.write("hello\n")
         try:
-            ss.shutdown(socket.SHUT_RDWR)
+            result = ss.shutdown()
         except socket.error, e:
+            # xxx obscure case; throwing errno 0 is pretty odd...
             if e.errno == 0:
-                pass  # xxx obscure case; throwing errno 0 is pretty odd...
+                skip("Shutdown raised errno 0. CPython does this too")
             raise
-        raises(AttributeError, ss.write, b"hello\n")
+        assert result is self.s._sock
+        raises(ssl.SSLError, ss.write, "hello\n")
         del ss; gc.collect()
 
 class AppTestConnectedSSL_Timeout(AppTestConnectedSSL):

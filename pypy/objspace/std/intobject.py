@@ -24,7 +24,7 @@ class W_AbstractIntObject(W_Object):
             return False
         if self.user_overridden_class or w_other.user_overridden_class:
             return self is w_other
-        return space.bigint_w(self).eq(space.bigint_w(w_other))
+        return space.int_w(self) == space.int_w(w_other)
 
     def immutable_unique_id(self, space):
         if self.user_overridden_class:
@@ -39,7 +39,7 @@ class W_IntObject(W_AbstractIntObject):
     __slots__ = 'intval'
     _immutable_fields_ = ['intval']
 
-    from pypy.objspace.std.longtype import long_typedef as typedef
+    from pypy.objspace.std.inttype import int_typedef as typedef
 
     def __init__(w_self, intval):
         assert is_valid_int(intval)
@@ -102,6 +102,10 @@ def hash__Int(space, w_int1):
     # hash functions, so there is not much sense special-casing it here either.
     # Make sure this is consistent with the hash of floats and longs.
     return get_integer(space, w_int1)
+
+# coerce
+def coerce__Int_Int(space, w_int1, w_int2):
+    return space.newtuple([w_int1, w_int2])
 
 
 def add__Int_Int(space, w_int1, w_int2):
@@ -330,6 +334,12 @@ def float__Int(space, w_int1):
     a = w_int1.intval
     x = float(a)
     return space.newfloat(x)
+
+def oct__Int(space, w_int1):
+    return space.wrap(oct(w_int1.intval))
+
+def hex__Int(space, w_int1):
+    return space.wrap(hex(w_int1.intval))
 
 def getnewargs__Int(space, w_int1):
     return space.newtuple([wrapint(space, w_int1.intval)])

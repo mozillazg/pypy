@@ -7,11 +7,14 @@ from pypy.objspace.std.register_all import register_all
 dict_copy       = SMM('copy',          1,
                       doc='D.copy() -> a shallow copy of D')
 dict_items      = SMM('items',         1,
-                      doc="D.items() -> a set-like object providing a view on D's item")
+                      doc="D.items() -> list of D's (key, value) pairs, as"
+                          ' 2-tuples')
 dict_keys       = SMM('keys',          1,
-                      doc="D.keys() -> a set-like object providing a view on D's keys")
+                      doc="D.keys() -> list of D's keys")
 dict_values     = SMM('values',        1,
-                      doc="D.values() -> an object providing a view on D's values")
+                      doc="D.values() -> list of D's values")
+dict_has_key    = SMM('has_key',       2,
+                      doc='D.has_key(k) -> True if D has a key k, else False')
 dict_clear      = SMM('clear',         1,
                       doc='D.clear() -> None.  Remove all items from D.')
 dict_get        = SMM('get',           3, defaults=(None,),
@@ -40,6 +43,12 @@ dict_iterkeys   = SMM('iterkeys',      1,
                       doc='D.iterkeys() -> an iterator over the keys of D')
 dict_itervalues = SMM('itervalues',    1,
                       doc='D.itervalues() -> an iterator over the values of D')
+dict_viewkeys   = SMM('viewkeys',      1,
+                      doc="D.viewkeys() -> a set-like object providing a view on D's keys")
+dict_viewitems  = SMM('viewitems',     1,
+                      doc="D.viewitems() -> a set-like object providing a view on D's items")
+dict_viewvalues = SMM('viewvalues',    1,
+                      doc="D.viewvalues() -> an object providing a view on D's values")
 dict_reversed   = SMM('__reversed__',      1)
 
 def dict_reversed__ANY(space, w_dict):
@@ -53,8 +62,14 @@ def descr_fromkeys(space, w_type, w_keys, w_fill=None):
         w_fill = space.w_None
     if space.is_w(w_type, space.w_dict):
         w_dict = W_DictMultiObject.allocate_and_init_instance(space, w_type)
-        for w_key in space.listview(w_keys):
-            w_dict.setitem(w_key, w_fill)
+
+        strlist = space.listview_str(w_keys)
+        if strlist is not None:
+            for key in strlist:
+                w_dict.setitem_str(key, w_fill)
+        else:
+            for w_key in space.listview(w_keys):
+                w_dict.setitem(w_key, w_fill)
     else:
         w_dict = space.call_function(w_type)
         for w_key in space.listview(w_keys):
@@ -72,10 +87,10 @@ app = gateway.applevel('''
         currently_in_repr[dict_id] = 1
         try:
             items = []
-            # XXX for now, we cannot use items() withut list at app-level
-            #     because we want a reasonable result instead of a RuntimeError
+            # XXX for now, we cannot use iteritems() at app-level because
+            #     we want a reasonable result instead of a RuntimeError
             #     even if the dict is mutated by the repr() in the loop.
-            for k, v in list(dict.items(d)):
+            for k, v in dict.items(d):
                 items.append(repr(k) + ": " + repr(v))
             return "{" +  ', '.join(items) + "}"
         finally:
@@ -137,7 +152,7 @@ def descr_dictiter__reduce__(w_self, space):
     This is of course not the standard way.
 
     XXX to do: remove this __reduce__ method and do
-    a registration with copyreg, instead.
+    a registration with copy_reg, instead.
     """
     w_mod    = space.getbuiltinmodule('_pickle_support')
     mod      = space.interp_w(MixedModule, w_mod)
