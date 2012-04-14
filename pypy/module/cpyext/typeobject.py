@@ -33,6 +33,7 @@ from pypy.interpreter.error import OperationError
 from pypy.rlib.rstring import rsplit
 from pypy.rlib.objectmodel import specialize
 from pypy.module.__builtin__.abstractinst import abstract_issubclass_w
+from pypy.module.__builtin__.interp_classobj import W_ClassObject
 from pypy.rlib import jit
 
 WARN_ABOUT_MISSING_SLOT_FUNCTIONS = False
@@ -306,6 +307,8 @@ class W_PyCTypeObject(W_TypeObject):
         if not space.is_true(space.issubtype(self, space.w_type)):
             self.flag_cpytype = True
         self.flag_heaptype = False
+        if pto.c_tp_doc:
+            self.w_doc = space.wrap(rffi.charp2str(pto.c_tp_doc))
 
 @bootstrap_function
 def init_typeobject(space):
@@ -335,13 +338,13 @@ def init_typeobject(space):
     track_reference(space, lltype.nullptr(PyObject.TO), space.w_type)
     track_reference(space, lltype.nullptr(PyObject.TO), space.w_object)
     track_reference(space, lltype.nullptr(PyObject.TO), space.w_tuple)
-    track_reference(space, lltype.nullptr(PyObject.TO), space.w_unicode)
+    track_reference(space, lltype.nullptr(PyObject.TO), space.w_str)
 
     # create the objects
     py_type = create_ref(space, space.w_type)
     py_object = create_ref(space, space.w_object)
     py_tuple = create_ref(space, space.w_tuple)
-    py_str = create_ref(space, space.w_unicode)
+    py_str = create_ref(space, space.w_str)
 
     # form cycles
     pto_type = rffi.cast(PyTypeObjectPtr, py_type)
@@ -366,7 +369,7 @@ def init_typeobject(space):
     track_reference(space, py_type, space.w_type, replace=True)
     track_reference(space, py_object, space.w_object, replace=True)
     track_reference(space, py_tuple, space.w_tuple, replace=True)
-    track_reference(space, py_str, space.w_unicode, replace=True)
+    track_reference(space, py_str, space.w_str, replace=True)
 
 
 @cpython_api([PyObject], lltype.Void, external=False)
@@ -517,8 +520,8 @@ def type_attach(space, py_obj, w_type):
         w_typename = space.getattr(w_type, space.wrap('__name__'))
         heaptype = rffi.cast(PyHeapTypeObject, pto)
         heaptype.c_ht_name = make_ref(space, w_typename)
-        from pypy.module.cpyext.unicodeobject import _PyUnicode_AsString
-        pto.c_tp_name = _PyUnicode_AsString(space, heaptype.c_ht_name)
+        from pypy.module.cpyext.stringobject import PyString_AsString
+        pto.c_tp_name = PyString_AsString(space, heaptype.c_ht_name)
     else:
         pto.c_tp_name = rffi.str2charp(w_type.getname(space))
     pto.c_tp_basicsize = -1 # hopefully this makes malloc bail out
@@ -575,6 +578,9 @@ def best_base(space, bases_w):
     w_winner = None
     w_base = None
     for w_base_i in bases_w:
+        if isinstance(w_base_i, W_ClassObject):
+            # old-style base
+            continue
         assert isinstance(w_base_i, W_TypeObject)
         w_candidate = solid_base(space, w_base_i)
         if not w_winner:
@@ -620,7 +626,6 @@ def _type_realize(space, py_obj):
     Creates an interpreter type from a PyTypeObject structure.
     """
     # missing:
-    # setting __doc__ if not defined and tp_doc defined
     # inheriting tp_as_* slots
     # unsupported:
     # tp_mro, tp_subclasses
@@ -712,7 +717,7 @@ def _PyType_Lookup(space, type, w_name):
     w_type = from_ref(space, rffi.cast(PyObject, type))
     assert isinstance(w_type, W_TypeObject)
 
-    if not space.isinstance_w(w_name, space.w_unicode):
+    if not space.isinstance_w(w_name, space.w_str):
         return None
     name = space.str_w(w_name)
     w_obj = w_type.lookup(name)

@@ -88,6 +88,9 @@ class BytecodeSpec(object):
         """NOT_RPYTHON. Add individual opcodes to the module constants."""
         g = globals()
         g.update(self.opmap)
+        g['SLICE'] = self.opmap["SLICE+0"]
+        g['STORE_SLICE'] = self.opmap["STORE_SLICE+0"]
+        g['DELETE_SLICE'] = self.opmap["DELETE_SLICE+0"]
 
     def __str__(self):
         return "<%s bytecode>" % (self.name,)
@@ -103,8 +106,8 @@ from opcode import (
     opmap as host_opmap, HAVE_ARGUMENT as host_HAVE_ARGUMENT)
 
 def load_pypy_opcode():
-    from pypy.tool.lib_pypy import LIB_PYTHON_MODIFIED
-    opcode_path = LIB_PYTHON_MODIFIED.join('opcode.py')
+    from pypy.tool.lib_pypy import LIB_PYTHON
+    opcode_path = LIB_PYTHON.join('opcode.py')
     d = {}
     execfile(str(opcode_path), d)
     for name in __all__:

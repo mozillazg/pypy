@@ -11,6 +11,7 @@ from pypy.module.cpyext.pyobject import (
     PyObject, PyObjectP, Py_DecRef, make_ref, from_ref, track_reference,
     make_typedescr, get_typedescr)
 from pypy.module.cpyext.stringobject import PyString_Check
+from pypy.module.sys.interp_encoding import setdefaultencoding
 from pypy.objspace.std import unicodeobject, unicodetype, stringtype
 from pypy.rlib import runicode
 from pypy.tool.sourcetools import func_renamer
@@ -21,8 +22,7 @@ import sys
 PyUnicodeObjectStruct = lltype.ForwardReference()
 PyUnicodeObject = lltype.Ptr(PyUnicodeObjectStruct)
 PyUnicodeObjectFields = (PyObjectFields +
-    (("buffer", rffi.CWCHARP), ("size", Py_ssize_t),
-     ("utf8buffer", rffi.CCHARP)))
+    (("buffer", rffi.CWCHARP), ("size", Py_ssize_t)))
 cpython_struct("PyUnicodeObject", PyUnicodeObjectFields, PyUnicodeObjectStruct)
 
 @bootstrap_function
@@ -80,8 +80,6 @@ def unicode_dealloc(space, py_obj):
     py_unicode = rffi.cast(PyUnicodeObject, py_obj)
     if py_unicode.c_buffer:
         lltype.free(py_unicode.c_buffer, flavor="raw")
-    if py_unicode.c_utf8buffer:
-        lltype.free(py_unicode.c_utf8buffer, flavor="raw")
     from pypy.module.cpyext.object import PyObject_dealloc
     PyObject_dealloc(space, py_obj)
 
@@ -224,17 +222,6 @@ def PyUnicode_AsUnicode(space, ref):
                              space.wrap("expected unicode object"))
     return PyUnicode_AS_UNICODE(space, ref)
 
-@cpython_api([PyObject], rffi.CCHARP)
-def _PyUnicode_AsString(space, ref):
-    ref_unicode = rffi.cast(PyUnicodeObject, ref)
-    if not ref_unicode.c_utf8buffer:
-        # Copy unicode buffer
-        w_unicode = from_ref(space, ref)
-        w_encoded = unicodetype.encode_object(space, w_unicode, "utf-8", "strict")
-        s = space.bytes_w(w_encoded)
-        ref_unicode.c_utf8buffer = rffi.str2charp(s)
-    return ref_unicode.c_utf8buffer
-
 @cpython_api([PyObject], Py_ssize_t, error=-1)
 def PyUnicode_GetSize(space, ref):
     if from_ref(space, rffi.cast(PyObject, ref.c_ob_type)) is space.w_unicode:
@@ -281,6 +268,15 @@ def PyUnicode_GetDefaultEncoding(space):
             default_encoding[i] = encoding[i]
             i += 1
     return default_encoding
+
+@cpython_api([CONST_STRING], rffi.INT_real, error=-1)
+def PyUnicode_SetDefaultEncoding(space, encoding):
+    """Sets the currently active default encoding. Returns 0 on
+    success, -1 in case of an error."""
+    w_encoding = space.wrap(rffi.charp2str(encoding))
+    setdefaultencoding(space, w_encoding)
+    default_encoding[0] = '\x00'
+    return 0
 
 @cpython_api([PyObject, CONST_STRING, CONST_STRING], PyObject)
 def PyUnicode_AsEncodedObject(space, w_unicode, llencoding, llerrors):
@@ -408,7 +404,7 @@ def PyUnicode_FromEncodedObject(space, w_obj, encoding, errors):
 @cpython_api([CONST_STRING], PyObject)
 def PyUnicode_FromString(space, s):
     """Create a Unicode object from an UTF-8 encoded null-terminated char buffer"""
-    w_str = space.wrapbytes(rffi.charp2str(s))
+    w_str = space.wrap(rffi.charp2str(s))
     return space.call_method(w_str, 'decode', space.wrap("utf-8"))
 
 @cpython_api([CONST_STRING, Py_ssize_t], PyObject)
@@ -602,3 +598,46 @@ def PyUnicode_Tailmatch(space, w_str, w_substr, start, end, direction):
     else:
         return stringtype.stringendswith(str, substr, start, end)
 
+@cpython_api([PyObject, PyObject, Py_ssize_t, Py_ssize_t], Py_ssize_t, error=-1)
+def PyUnicode_Count(space, w_str, w_substr, start, end):
+    """Return the number of non-overlapping occurrences of substr in
+    str[start:end].  Return -1 if an error occurred."""
+    w_count = space.call_method(w_str, "count", w_substr,
+                                space.wrap(start), space.wrap(end))
+    return space.int_w(w_count)
+
+@cpython_api([PyObject, PyObject, Py_ssize_t, Py_ssize_t, rffi.INT_real],
+             Py_ssize_t, error=-2)
+def PyUnicode_Find(space, w_str, w_substr, start, end, direction):
+    """Return the first position of substr in str*[*start:end] using
+    the given direction (direction == 1 means to do a forward search,
+    direction == -1 a backward search).  The return value is the index
+    of the first match; a value of -1 indicates that no match was
+    found, and -2 indicates that an error occurred and an exception
+    has been set."""
+    if rffi.cast(lltype.Signed, direction) > 0:
+        w_pos = space.call_method(w_str, "find", w_substr,
+                                  space.wrap(start), space.wrap(end))
+    else:
+        w_pos = space.call_method(w_str, "rfind", w_substr,
+                                  space.wrap(start), space.wrap(end))
+    return space.int_w(w_pos)
+
+@cpython_api([PyObject, PyObject, Py_ssize_t], PyObject)
+def PyUnicode_Split(space, w_str, w_sep, maxsplit):
+    """Split a string giving a list of Unicode strings.  If sep is
+    NULL, splitting will be done at all whitespace substrings.
+    Otherwise, splits occur at the given separator.  At most maxsplit
+    splits will be done.  If negative, no limit is set.  Separators
+    are not included in the resulting list."""
+    if w_sep is None:
+        w_sep = space.w_None
+    return space.call_method(w_str, "split", w_sep, space.wrap(maxsplit))
+
+@cpython_api([PyObject, rffi.INT_real], PyObject)
+def PyUnicode_Splitlines(space, w_str, keepend):
+    """Split a Unicode string at line breaks, returning a list of
+    Unicode strings.  CRLF is considered to be one line break.  If
+    keepend is 0, the Line break characters are not included in the
+    resulting strings."""
+    return space.call_method(w_str, "splitlines", space.wrap(keepend))

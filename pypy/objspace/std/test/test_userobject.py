@@ -160,14 +160,13 @@ class AppTestUserObject:
         assert lst == [42]
 
     def test_del_exception(self):
-        import sys, gc
-        from io import StringIO
+        import sys, StringIO, gc
         class A(object):
             def __del__(self):
                 yaddadlaouti
         prev = sys.stderr
         try:
-            sys.stderr = StringIO()
+            sys.stderr = StringIO.StringIO()
             A()
             gc.collect()
             res = sys.stderr.getvalue()
@@ -245,8 +244,12 @@ class AppTestUserObject:
             skip("disabled")
         if self.runappdirect:
             total = 500000
+            def rand():
+                import random
+                return random.randrange(0, 5)
         else:
             total = 50
+            rand = self.rand
         #
         class A(object):
             hash = None
@@ -257,7 +260,7 @@ class AppTestUserObject:
             a = A()
             a.next = tail.next
             tail.next = a
-            for j in range(self.rand()):
+            for j in range(rand()):
                 any = any.next
             if any.hash is None:
                 any.hash = hash(any)

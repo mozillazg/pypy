@@ -14,6 +14,20 @@ def countOf(a,b):
             count += 1
     return count
 
+def delslice(obj, start, end):
+    'delslice(a, b, c) -- Same as del a[b:c].'
+    if not isinstance(start, int) or not isinstance(end, int):
+        raise TypeError("an integer is expected")
+    del obj[start:end]
+__delslice__ = delslice
+
+def getslice(a, start, end):
+    'getslice(a, b, c) -- Same as a[b:c].'
+    if not isinstance(start, int) or not isinstance(end, int):
+        raise TypeError("an integer is expected")
+    return a[start:end] 
+__getslice__ = getslice
+
 def indexOf(a, b):
     'indexOf(a, b) -- Return the first index of b in a.'
     index = 0
@@ -21,7 +35,37 @@ def indexOf(a, b):
         if x == b:
             return index
         index += 1
-    raise ValueError('sequence.index(x): x not in sequence')
+    raise ValueError, 'sequence.index(x): x not in sequence'
+
+# XXX the following is approximative
+def isMappingType(obj,):
+    'isMappingType(a) -- Return True if a has a mapping type, False otherwise.'
+    # XXX this is fragile and approximative anyway
+    return hasattr(obj, '__getitem__') and hasattr(obj, 'keys')
+
+def isNumberType(obj,):
+    'isNumberType(a) -- Return True if a has a numeric type, False otherwise.'
+    return hasattr(obj, '__int__') or hasattr(obj, '__float__')
+
+def isSequenceType(obj,):
+    'isSequenceType(a) -- Return True if a has a sequence type, False otherwise.'
+    return hasattr(obj, '__getitem__') and not hasattr(obj, 'keys')
+
+def repeat(obj, num):
+    'repeat(a, b) -- Return a * b, where a is a sequence, and b is an integer.'
+    if not isinstance(num, (int, long)):
+        raise TypeError, 'an integer is required'
+    if not isSequenceType(obj):
+        raise TypeError, "non-sequence object can't be repeated"
+
+    return obj * num
+
+__repeat__ = repeat
+
+def setslice(a, b, c, d):
+    'setslice(a, b, c, d) -- Same as a[b:c] = d.'
+    a[b:c] = d 
+__setslice__ = setslice
 
 
 def attrgetter(attr, *attrs):
@@ -35,10 +79,12 @@ def attrgetter(attr, *attrs):
 
 def single_attr_getter(attr):
     if not isinstance(attr, str):
-        def _raise_typeerror(obj):
-            raise TypeError("argument must be a string, not %r" %
-                            (type(attr).__name__,))
-        return _raise_typeerror
+        if not isinstance(attr, unicode):
+            def _raise_typeerror(obj):
+                raise TypeError("argument must be a string, not %r" %
+                                (type(attr).__name__,))
+            return _raise_typeerror
+        attr = attr.encode('ascii')
     #
     def make_getter(name, prevfn=None):
         if prevfn is None:

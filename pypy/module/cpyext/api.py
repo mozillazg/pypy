@@ -23,6 +23,7 @@ from pypy.interpreter.module import Module
 from pypy.interpreter.function import StaticMethod
 from pypy.objspace.std.sliceobject import W_SliceObject
 from pypy.module.__builtin__.descriptor import W_Property
+from pypy.module.__builtin__.interp_classobj import W_ClassObject
 from pypy.module.__builtin__.interp_memoryview import W_MemoryView
 from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.unroll import unrolling_iterable
@@ -382,6 +383,7 @@ def build_exported_objects():
         "Type": "space.w_type",
         "String": "space.w_str",
         "Unicode": "space.w_unicode",
+        "BaseString": "space.w_basestring",
         "Dict": "space.w_dict",
         "Tuple": "space.w_tuple",
         "List": "space.w_list",
@@ -390,7 +392,7 @@ def build_exported_objects():
         "Int": "space.w_int",
         "Bool": "space.w_bool",
         "Float": "space.w_float",
-        "Long": "space.w_int",
+        "Long": "space.w_long",
         "Complex": "space.w_complex",
         "ByteArray": "space.w_bytearray",
         "MemoryView": "space.gettypeobject(W_MemoryView.typedef)",
@@ -401,13 +403,14 @@ def build_exported_objects():
         'Module': 'space.gettypeobject(Module.typedef)',
         'Property': 'space.gettypeobject(W_Property.typedef)',
         'Slice': 'space.gettypeobject(W_SliceObject.typedef)',
+        'Class': 'space.gettypeobject(W_ClassObject.typedef)',
         'StaticMethod': 'space.gettypeobject(StaticMethod.typedef)',
         'CFunction': 'space.gettypeobject(cpyext.methodobject.W_PyCFunctionObject.typedef)',
         'WrapperDescr': 'space.gettypeobject(cpyext.methodobject.W_PyCMethodObject.typedef)'
         }.items():
         GLOBALS['Py%s_Type#' % (cpyname, )] = ('PyTypeObject*', pypyexpr)
 
-    for cpyname in 'Method List Long Dict Tuple'.split():
+    for cpyname in 'Method List Long Dict Tuple Class'.split():
         FORWARD_DECLS.append('typedef struct { PyObject_HEAD } '
                              'Py%sObject' % (cpyname, ))
 build_exported_objects()
@@ -924,7 +927,7 @@ def build_eci(building_bridge, export_symbols, code):
                                source_dir / "pyerrors.c",
                                source_dir / "modsupport.c",
                                source_dir / "getargs.c",
-                               source_dir / "unicodeobject.c",
+                               source_dir / "stringobject.c",
                                source_dir / "mysnprintf.c",
                                source_dir / "pythonrun.c",
                                source_dir / "sysmodule.c",

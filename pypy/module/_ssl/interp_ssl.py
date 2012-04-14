@@ -1,17 +1,15 @@
 from __future__ import with_statement
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.interpreter.error import OperationError, wrap_oserror
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.baseobjspace import Wrappable
-from pypy.interpreter.typedef import TypeDef, GetSetProperty
+from pypy.interpreter.typedef import TypeDef
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib import rpoll, rsocket
 from pypy.rlib.ropenssl import *
-from pypy.rlib.rposix import get_errno
 
 from pypy.module._socket import interp_socket
-import weakref
 
 
 ## user defined constants
@@ -60,223 +58,21 @@ constants["PROTOCOL_SSLv3"]  = PY_SSL_VERSION_SSL3
 constants["PROTOCOL_SSLv23"] = PY_SSL_VERSION_SSL23
 constants["PROTOCOL_TLSv1"]  = PY_SSL_VERSION_TLS1
 
-# protocol options
-constants["OP_ALL"] = SSL_OP_ALL
-constants["OP_NO_SSLv2"] = SSL_OP_NO_SSLv2
-constants["OP_NO_SSLv3"] = SSL_OP_NO_SSLv3
-constants["OP_NO_TLSv1"] = SSL_OP_NO_TLSv1
-constants["HAS_SNI"] = HAS_SNI
-
-# OpenSSL version
-def _parse_version(ver):
-    ver, status = divmod(ver, 16)
-    ver, patch  = divmod(ver, 256)
-    ver, fix    = divmod(ver, 256)
-    ver, minor  = divmod(ver, 256)
-    ver, major  = divmod(ver, 256)
-    return (major, minor, fix, patch, status)
-# XXX use SSLeay() to get the version of the library linked against, which
-# could be different from the headers version.
-libver = OPENSSL_VERSION_NUMBER
-constants["OPENSSL_VERSION_NUMBER"] = libver
-constants["OPENSSL_VERSION_INFO"] = _parse_version(libver)
+constants["OPENSSL_VERSION_NUMBER"] = OPENSSL_VERSION_NUMBER
+ver = OPENSSL_VERSION_NUMBER
+ver, status = divmod(ver, 16)
+ver, patch  = divmod(ver, 256)
+ver, fix    = divmod(ver, 256)
+ver, minor  = divmod(ver, 256)
+ver, major  = divmod(ver, 256)
+constants["OPENSSL_VERSION_INFO"] = (major, minor, fix, patch, status)
 constants["OPENSSL_VERSION"] = SSLEAY_VERSION
-constants["_OPENSSL_API_VERSION"] = _parse_version(libver)
 
 def ssl_error(space, msg, errno=0):
     w_exception_class = get_error(space)
     w_exception = space.call_function(w_exception_class,
                                       space.wrap(errno), space.wrap(msg))
     return OperationError(w_exception_class, w_exception)
-
-
-class SSLContext(Wrappable):
-    def __init__(self, method):
-        self.ctx = libssl_SSL_CTX_new(method)
-
-        # Defaults
-        libssl_SSL_CTX_set_verify(self.ctx, SSL_VERIFY_NONE, None)
-        libssl_SSL_CTX_set_options(
-            self.ctx, SSL_OP_ALL & ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS)
-        libssl_SSL_CTX_set_session_id_context(self.ctx, "Python", len("Python"))
-
-    def __del__(self):
-        if self.ctx:
-            libssl_SSL_CTX_free(self.ctx)
-
-    @unwrap_spec(protocol=int)
-    def descr_new(space, w_subtype, protocol=PY_SSL_VERSION_SSL23):
-        self = space.allocate_instance(SSLContext, w_subtype)
-        if protocol == PY_SSL_VERSION_TLS1:
-            method = libssl_TLSv1_method()
-        elif protocol == PY_SSL_VERSION_SSL3:
-            method = libssl_SSLv3_method()
-        elif protocol == PY_SSL_VERSION_SSL2 and not OPENSSL_NO_SSL2:
-            method = libssl_SSLv2_method()
-        elif protocol == PY_SSL_VERSION_SSL23:
-            method = libssl_SSLv23_method()
-        else:
-            raise ssl_error(space, "invalid SSL protocol version")
-        self.__init__(method)
-        if not self.ctx:
-            raise ssl_error(space, "failed to allocate SSL context")
-        return space.wrap(self)
-
-    @unwrap_spec(cipherlist=str)
-    def set_ciphers_w(self, space, cipherlist):
-        ret = libssl_SSL_CTX_set_cipher_list(self.ctx, cipherlist)
-        if ret == 0:
-            # Clearing the error queue is necessary on some OpenSSL
-            # versions, otherwise the error will be reported again
-            # when another SSL call is done.
-            libssl_ERR_clear_error()
-            raise ssl_error(space, "No cipher can be selected.")
-
-    def get_verify_mode_w(self, space):
-        verify_mode = libssl_SSL_CTX_get_verify_mode(self.ctx)
-        if verify_mode == SSL_VERIFY_NONE:
-            return space.wrap(PY_SSL_CERT_NONE)
-        elif verify_mode == SSL_VERIFY_PEER:
-            return space.wrap(PY_SSL_CERT_OPTIONAL)
-        elif verify_mode == (SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT):
-            return space.wrap(PY_SSL_CERT_REQUIRED)
-        else:
-            raise ssl_error(
-                space,  "invalid return value from SSL_CTX_get_verify_mode")
-
-    def set_verify_mode_w(self, space, w_mode):
-        mode = space.int_w(w_mode)
-        if mode == PY_SSL_CERT_NONE:
-            verify_mode = SSL_VERIFY_NONE
-        elif mode == PY_SSL_CERT_OPTIONAL:
-            verify_mode = SSL_VERIFY_PEER
-        elif mode == PY_SSL_CERT_REQUIRED:
-            verify_mode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
-        else:
-            raise OperationError(space.w_ValueError, space.wrap(
-                    "invalid value for verify_mode"))
-        libssl_SSL_CTX_set_verify(self.ctx, verify_mode, None)
-        
-    def get_options_w(self, space):
-        return space.wrap(libssl_SSL_CTX_get_options(self.ctx))
-
-    def set_options_w(self, space, value):
-        opts = libssl_SSL_CTX_get_options(self.ctx)
-        clear = opts & ~new_opts
-        set = ~opts & new_opts
-        if clear:
-            if HAVE_SSL_CTX_CLEAR_OPTIONS:
-                libssl_SSL_CTX_clear_options(self.ctx, clear)
-            else:
-                raise OperationError(space.w_ValueError, space.wrap(
-                        "can't clear options before OpenSSL 0.9.8m"))
-        if set:
-            libssl_SSL_CTX_set_options(self.ctx, set)
-
-    def load_cert_chain_w(self, space, w_certfile, w_keyfile=None):
-        if space.is_w(w_certfile, space.w_None):
-            certfile = None
-        else:
-            certfile = space.str_w(w_certfile)
-        if space.is_w(w_keyfile, space.w_None):
-            keyfile = certfile
-        else:
-            keyfile = space.str_w(w_keyfile)
-
-        ret = libssl_SSL_CTX_use_certificate_chain_file(self.ctx, certfile)
-        if ret != 1:
-            errno = get_errno()
-            if errno:
-                libssl_ERR_clear_error()
-                raise wrap_oserror(space, OSError(errno, ''),
-                                   exception_name = 'w_IOError')
-            else:
-                raise _ssl_seterror(space, None, -1)
-
-        ret = libssl_SSL_CTX_use_PrivateKey_file(self.ctx, keyfile,
-                                                 SSL_FILETYPE_PEM)
-        if ret != 1:
-            errno = get_errno()
-            if errno:
-                libssl_ERR_clear_error()
-                raise wrap_oserror(space, OSError(errno, ''),
-                                   exception_name = 'w_IOError')
-            else:
-                raise _ssl_seterror(space, None, -1)
-
-        ret = libssl_SSL_CTX_check_private_key(self.ctx)
-        if ret != 1:
-            raise _ssl_seterror(space, None, -1)
-
-    def load_verify_locations_w(self, space, w_cafile=None, w_capath=None):
-        if space.is_w(w_cafile, space.w_None):
-            cafile = None
-        else:
-            cafile = space.str_w(w_cafile)
-        if space.is_w(w_capath, space.w_None):
-            capath = None
-        else:
-            capath = space.str_w(w_capath)
-        if cafile is None and capath is None:
-            raise OperationError(space.w_ValueError, space.wrap(
-                    "cafile and capath cannot be both omitted"))
-        ret = libssl_SSL_CTX_load_verify_locations(
-            self.ctx, cafile, capath)
-        if ret != 1:
-            errno = get_errno()
-            if errno:
-                libssl_ERR_clear_error()
-                raise wrap_oserror(space, OSError(errno, ''),
-                                   exception_name = 'w_IOError')
-            else:
-                raise _ssl_seterror(space, None, -1)
-
-    @unwrap_spec(server_side=int)
-    def wrap_socket_w(self, space, w_sock, server_side,
-                      w_server_hostname=None):
-        assert w_sock is not None
-        # server_hostname is either None (or absent), or to be encoded
-        # using the idna encoding.
-        if space.is_w(w_server_hostname, space.w_None):
-            hostname = None
-        else:
-            hostname = space.bytes_w(
-                space.call_method(w_server_hostname, "idna"))
-
-        if hostname and not HAS_SNI:
-            raise OperationError(space.w_ValueError,
-                                 space.wrap("server_hostname is not supported "
-                                            "by your OpenSSL library"))
-
-        return new_sslobject(space, self.ctx, w_sock, server_side, hostname)
-
-    def session_stats_w(self, space):
-        w_stats = space.newdict()
-        for name, ssl_func in SSL_CTX_STATS:
-            w_value = space.wrap(ssl_func(self.ctx))
-            space.setitem_str(w_stats, name, w_value)
-        return w_stats
-
-    def set_default_verify_paths_w(self, space):
-        ret = libssl_SSL_CTX_set_default_verify_paths(self.ctx)
-        if ret != 1:
-            raise _ssl_seterror(space, None, -1)
-
-
-SSLContext.typedef = TypeDef(
-    "_SSLContext",
-    __new__ = interp2app(SSLContext.descr_new.im_func),
-    verify_mode = GetSetProperty(SSLContext.get_verify_mode_w,
-                                 SSLContext.set_verify_mode_w),
-    _wrap_socket = interp2app(SSLContext.wrap_socket_w),
-    set_ciphers = interp2app(SSLContext.set_ciphers_w),
-    load_cert_chain = interp2app(SSLContext.load_cert_chain_w),
-    load_verify_locations = interp2app(SSLContext.load_verify_locations_w),
-    session_stats = interp2app(SSLContext.session_stats_w),
-    set_default_verify_paths=interp2app(SSLContext.set_default_verify_paths_w),
-)
-
-    
 
 if HAVE_OPENSSL_RAND:
     # helper routines for seeding the SSL PRNG
@@ -323,35 +119,56 @@ if HAVE_OPENSSL_RAND:
             raise ssl_error(space, msg)
         return space.wrap(bytes)
 
-
-class SSLSocket(Wrappable):
+class SSLObject(Wrappable):
     def __init__(self, space):
+        self.space = space
         self.w_socket = None
+        self.ctx = lltype.nullptr(SSL_CTX.TO)
         self.ssl = lltype.nullptr(SSL.TO)
         self.peer_cert = lltype.nullptr(X509.TO)
+        self._server = lltype.malloc(rffi.CCHARP.TO, X509_NAME_MAXLEN, flavor='raw')
+        self._server[0] = '\0'
+        self._issuer = lltype.malloc(rffi.CCHARP.TO, X509_NAME_MAXLEN, flavor='raw')
+        self._issuer[0] = '\0'
         self.shutdown_seen_zero = False
 
+    def server(self):
+        return self.space.wrap(rffi.charp2str(self._server))
+
+    def issuer(self):
+        return self.space.wrap(rffi.charp2str(self._issuer))
+
     def __del__(self):
+        self.enqueue_for_destruction(self.space, SSLObject.destructor,
+                                     '__del__() method of ')
+
+    def destructor(self):
+        assert isinstance(self, SSLObject)
         if self.peer_cert:
             libssl_X509_free(self.peer_cert)
         if self.ssl:
             libssl_SSL_free(self.ssl)
+        if self.ctx:
+            libssl_SSL_CTX_free(self.ctx)
+        lltype.free(self._server, flavor='raw')
+        lltype.free(self._issuer, flavor='raw')
 
     @unwrap_spec(data='bufferstr')
-    def write(self, space, data):
+    def write(self, data):
         """write(s) -> len
 
         Writes the string s into the SSL object.  Returns the number
         of bytes written."""
-        w_socket = self._get_socket(space)
+        self._refresh_nonblocking(self.space)
 
-        sockstate = check_socket_and_wait_for_timeout(space, w_socket, True)
+        sockstate = check_socket_and_wait_for_timeout(self.space,
+            self.w_socket, True)
         if sockstate == SOCKET_HAS_TIMED_OUT:
-            raise ssl_error(space, "The write operation timed out")
+            raise ssl_error(self.space, "The write operation timed out")
         elif sockstate == SOCKET_HAS_BEEN_CLOSED:
-            raise ssl_error(space, "Underlying socket has been closed.")
+            raise ssl_error(self.space, "Underlying socket has been closed.")
         elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
-            raise ssl_error(space, "Underlying socket too large for select().")
+            raise ssl_error(self.space, "Underlying socket too large for select().")
 
         num_bytes = 0
         while True:
@@ -361,18 +178,18 @@ class SSLSocket(Wrappable):
             err = libssl_SSL_get_error(self.ssl, num_bytes)
 
             if err == SSL_ERROR_WANT_READ:
-                sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, False)
+                sockstate = check_socket_and_wait_for_timeout(self.space,
+                    self.w_socket, False)
             elif err == SSL_ERROR_WANT_WRITE:
-                sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, True)
+                sockstate = check_socket_and_wait_for_timeout(self.space,
+                    self.w_socket, True)
             else:
                 sockstate = SOCKET_OPERATION_OK
 
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise ssl_error(space, "The write operation timed out")
+                raise ssl_error(self.space, "The write operation timed out")
             elif sockstate == SOCKET_HAS_BEEN_CLOSED:
-                raise ssl_error(space, "Underlying socket has been closed.")
+                raise ssl_error(self.space, "Underlying socket has been closed.")
             elif sockstate == SOCKET_IS_NONBLOCKING:
                 break
 
@@ -382,39 +199,38 @@ class SSLSocket(Wrappable):
                 break
 
         if num_bytes > 0:
-            return space.wrap(num_bytes)
+            return self.space.wrap(num_bytes)
         else:
-            raise _ssl_seterror(space, self, num_bytes)
+            raise _ssl_seterror(self.space, self, num_bytes)
 
-    def pending(self, space):
+    def pending(self):
         """pending() -> count
 
         Returns the number of already decrypted bytes available for read,
         pending on the connection."""
         count = libssl_SSL_pending(self.ssl)
         if count < 0:
-            raise _ssl_seterror(space, self, count)
-        return space.wrap(count)
+            raise _ssl_seterror(self.space, self, count)
+        return self.space.wrap(count)
 
     @unwrap_spec(num_bytes=int)
-    def read(self, space, num_bytes=1024):
+    def read(self, num_bytes=1024):
         """read([len]) -> string
 
         Read up to len bytes from the SSL socket."""
-        w_socket = self._get_socket(space)
 
         count = libssl_SSL_pending(self.ssl)
         if not count:
-            sockstate = check_socket_and_wait_for_timeout(
-                space, w_socket, False)
+            sockstate = check_socket_and_wait_for_timeout(self.space,
+                self.w_socket, False)
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise ssl_error(space, "The read operation timed out")
+                raise ssl_error(self.space, "The read operation timed out")
             elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
-                raise ssl_error(space, "Underlying socket too large for select().")
+                raise ssl_error(self.space, "Underlying socket too large for select().")
             elif sockstate == SOCKET_HAS_BEEN_CLOSED:
                 if libssl_SSL_get_shutdown(self.ssl) == SSL_RECEIVED_SHUTDOWN:
-                    return space.wrapbytes('')
-                raise ssl_error(space, "Socket closed without SSL shutdown handshake")
+                    return self.space.wrap('')
+                raise ssl_error(self.space, "Socket closed without SSL shutdown handshake")
 
         raw_buf, gc_buf = rffi.alloc_buffer(num_bytes)
         while True:
@@ -424,19 +240,19 @@ class SSLSocket(Wrappable):
             err = libssl_SSL_get_error(self.ssl, count)
 
             if err == SSL_ERROR_WANT_READ:
-                sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, False)
+                sockstate = check_socket_and_wait_for_timeout(self.space,
+                    self.w_socket, False)
             elif err == SSL_ERROR_WANT_WRITE:
-                sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, True)
+                sockstate = check_socket_and_wait_for_timeout(self.space,
+                    self.w_socket, True)
             elif (err == SSL_ERROR_ZERO_RETURN and
                   libssl_SSL_get_shutdown(self.ssl) == SSL_RECEIVED_SHUTDOWN):
-                return space.wrapbytes('')
+                return self.space.wrap("")
             else:
                 sockstate = SOCKET_OPERATION_OK
 
             if sockstate == SOCKET_HAS_TIMED_OUT:
-                raise ssl_error(space, "The read operation timed out")
+                raise ssl_error(self.space, "The read operation timed out")
             elif sockstate == SOCKET_IS_NONBLOCKING:
                 break
 
@@ -446,27 +262,21 @@ class SSLSocket(Wrappable):
                 break
 
         if count <= 0:
-            raise _ssl_seterror(space, self, count)
+            raise _ssl_seterror(self.space, self, count)
 
         result = rffi.str_from_buffer(raw_buf, gc_buf, num_bytes, count)
         rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
-        return space.wrapbytes(result)
+        return self.space.wrap(result)
 
-    def _get_socket(self, space):
-        w_socket = self.w_socket()
-        if w_socket is None:
-            raise ssl_error(space, "Underlying socket connection gone")
-
+    def _refresh_nonblocking(self, space):
         # just in case the blocking state of the socket has been changed
-        w_timeout = space.call_method(w_socket, "gettimeout")
+        w_timeout = space.call_method(self.w_socket, "gettimeout")
         nonblocking = not space.is_w(w_timeout, space.w_None)
         libssl_BIO_set_nbio(libssl_SSL_get_rbio(self.ssl), nonblocking)
         libssl_BIO_set_nbio(libssl_SSL_get_wbio(self.ssl), nonblocking)
 
-        return w_socket
-
     def do_handshake(self, space):
-        w_socket = self._get_socket(space)
+        self._refresh_nonblocking(space)
 
         # Actually negotiate SSL connection
         # XXX If SSL_do_handshake() returns 0, it's also a failure.
@@ -476,10 +286,10 @@ class SSLSocket(Wrappable):
             # XXX PyErr_CheckSignals()
             if err == SSL_ERROR_WANT_READ:
                 sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, False)
+                    space, self.w_socket, False)
             elif err == SSL_ERROR_WANT_WRITE:
                 sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, True)
+                    space, self.w_socket, True)
             else:
                 sockstate = SOCKET_OPERATION_OK
             if sockstate == SOCKET_HAS_TIMED_OUT:
@@ -502,14 +312,21 @@ class SSLSocket(Wrappable):
         if self.peer_cert:
             libssl_X509_free(self.peer_cert)
         self.peer_cert = libssl_SSL_get_peer_certificate(self.ssl)
+        if self.peer_cert:
+            libssl_X509_NAME_oneline(
+                libssl_X509_get_subject_name(self.peer_cert),
+                self._server, X509_NAME_MAXLEN)
+            libssl_X509_NAME_oneline(
+                libssl_X509_get_issuer_name(self.peer_cert),
+                self._issuer, X509_NAME_MAXLEN)
 
     def shutdown(self, space):
-        w_socket = self._get_socket(space)
-
         # Guard against closed socket
-        w_fileno = space.call_method(w_socket, "fileno")
+        w_fileno = space.call_method(self.w_socket, "fileno")
         if space.int_w(w_fileno) < 0:
             raise ssl_error(space, "Underlying socket has been closed")
+
+        self._refresh_nonblocking(space)
 
         zeros = 0
 
@@ -543,18 +360,18 @@ class SSLSocket(Wrappable):
             ssl_err = libssl_SSL_get_error(self.ssl, ret)
             if ssl_err == SSL_ERROR_WANT_READ:
                 sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, False)
+                    self.space, self.w_socket, False)
             elif ssl_err == SSL_ERROR_WANT_WRITE:
                 sockstate = check_socket_and_wait_for_timeout(
-                    space, w_socket, True)
+                    self.space, self.w_socket, True)
             else:
                 break
 
             if sockstate == SOCKET_HAS_TIMED_OUT:
                 if ssl_err == SSL_ERROR_WANT_READ:
-                    raise ssl_error(space, "The read operation timed out")
+                    raise ssl_error(self.space, "The read operation timed out")
                 else:
-                    raise ssl_error(space, "The write operation timed out")
+                    raise ssl_error(self.space, "The write operation timed out")
             elif sockstate == SOCKET_TOO_LARGE_FOR_SELECT:
                 raise ssl_error(space, "Underlying socket too large for select().")
             elif sockstate != SOCKET_OPERATION_OK:
@@ -564,7 +381,7 @@ class SSLSocket(Wrappable):
         if ret < 0:
             raise _ssl_seterror(space, self, ret)
 
-        return w_socket
+        return self.w_socket
 
     def cipher(self, space):
         if not self.ssl:
@@ -592,7 +409,7 @@ class SSLSocket(Wrappable):
         return space.newtuple([w_name, w_proto, w_bits])
 
     @unwrap_spec(der=bool)
-    def peer_certificate(self, space, der=False):
+    def peer_certificate(self, der=False):
         """peer_certificate([der=False]) -> certificate
 
         Returns the certificate for the peer.  If no certificate was provided,
@@ -604,7 +421,7 @@ class SSLSocket(Wrappable):
         peer certificate, or None if no certificate was provided.  This will
         return the certificate even if it wasn't validated."""
         if not self.peer_cert:
-            return space.w_None
+            return self.space.w_None
 
         if der:
             # return cert in DER-encoded format
@@ -612,19 +429,20 @@ class SSLSocket(Wrappable):
                 buf_ptr[0] = lltype.nullptr(rffi.CCHARP.TO)
                 length = libssl_i2d_X509(self.peer_cert, buf_ptr)
                 if length < 0:
-                    raise _ssl_seterror(space, self, length)
+                    raise _ssl_seterror(self.space, self, length)
                 try:
                     # this is actually an immutable bytes sequence
-                    return space.wrap(rffi.charp2str(buf_ptr[0]))
+                    return self.space.wrap(rffi.charpsize2str(buf_ptr[0],
+                                                              length))
                 finally:
                     libssl_OPENSSL_free(buf_ptr[0])
         else:
             verification = libssl_SSL_CTX_get_verify_mode(
                 libssl_SSL_get_SSL_CTX(self.ssl))
             if not verification & SSL_VERIFY_PEER:
-                return space.newdict()
+                return self.space.newdict()
             else:
-                return _decode_certificate(space, self.peer_cert)
+                return _decode_certificate(self.space, self.peer_cert)
 
 def _decode_certificate(space, certificate, verbose=False):
     w_retval = space.newdict()
@@ -808,19 +626,22 @@ def _create_tuple_for_attribute(space, name, value):
 
     return space.newtuple([w_name, w_value])
 
-SSLSocket.typedef = TypeDef("_SSLSocket",
-    write = interp2app(SSLSocket.write),
-    pending = interp2app(SSLSocket.pending),
-    read = interp2app(SSLSocket.read),
-    do_handshake = interp2app(SSLSocket.do_handshake),
-    shutdown = interp2app(SSLSocket.shutdown),
-    cipher = interp2app(SSLSocket.cipher),
-    peer_certificate = interp2app(SSLSocket.peer_certificate),
+SSLObject.typedef = TypeDef("SSLObject",
+    server = interp2app(SSLObject.server),
+    issuer = interp2app(SSLObject.issuer),
+    write = interp2app(SSLObject.write),
+    pending = interp2app(SSLObject.pending),
+    read = interp2app(SSLObject.read),
+    do_handshake = interp2app(SSLObject.do_handshake),
+    shutdown = interp2app(SSLObject.shutdown),
+    cipher = interp2app(SSLObject.cipher),
+    peer_certificate = interp2app(SSLObject.peer_certificate),
 )
 
 
-def new_sslobject(space, ctx, w_sock, side, server_hostname):
-    ss = SSLSocket(space)
+def new_sslobject(space, w_sock, side, w_key_file, w_cert_file,
+                  cert_mode, protocol, w_cacerts_file, w_ciphers):
+    ss = SSLObject(space)
 
     sock_fd = space.int_w(space.call_method(w_sock, "fileno"))
     w_timeout = space.call_method(w_sock, "gettimeout")
@@ -828,13 +649,79 @@ def new_sslobject(space, ctx, w_sock, side, server_hostname):
         has_timeout = False
     else:
         has_timeout = True
+    if space.is_w(w_key_file, space.w_None):
+        key_file = None
+    else:
+        key_file = space.str_w(w_key_file)
+    if space.is_w(w_cert_file, space.w_None):
+        cert_file = None
+    else:
+        cert_file = space.str_w(w_cert_file)
+    if space.is_w(w_cacerts_file, space.w_None):
+        cacerts_file = None
+    else:
+        cacerts_file = space.str_w(w_cacerts_file)
+    if space.is_w(w_ciphers, space.w_None):
+        ciphers = None
+    else:
+        ciphers = space.str_w(w_ciphers)
 
-    ss.ssl = libssl_SSL_new(ctx) # new ssl struct
+    if side == PY_SSL_SERVER and (not key_file or not cert_file):
+        raise ssl_error(space, "Both the key & certificate files "
+                        "must be specified for server-side operation")
+
+    # set up context
+    if protocol == PY_SSL_VERSION_TLS1:
+        method = libssl_TLSv1_method()
+    elif protocol == PY_SSL_VERSION_SSL3:
+        method = libssl_SSLv3_method()
+    elif protocol == PY_SSL_VERSION_SSL2 and not OPENSSL_NO_SSL2:
+        method = libssl_SSLv2_method()
+    elif protocol == PY_SSL_VERSION_SSL23:
+        method = libssl_SSLv23_method()
+    else:
+        raise ssl_error(space, "Invalid SSL protocol variant specified")
+    ss.ctx = libssl_SSL_CTX_new(method)
+    if not ss.ctx:
+        raise ssl_error(space, "Could not create SSL context")
+
+    if ciphers:
+        ret = libssl_SSL_CTX_set_cipher_list(ss.ctx, ciphers)
+        if ret == 0:
+            raise ssl_error(space, "No cipher can be selected.")
+
+    if cert_mode != PY_SSL_CERT_NONE:
+        if not cacerts_file:
+            raise ssl_error(space,
+                            "No root certificates specified for "
+                            "verification of other-side certificates.")
+        ret = libssl_SSL_CTX_load_verify_locations(ss.ctx, cacerts_file, None)
+        if ret != 1:
+            raise _ssl_seterror(space, None, 0)
+
+    if key_file:
+        ret = libssl_SSL_CTX_use_PrivateKey_file(ss.ctx, key_file,
+                                                 SSL_FILETYPE_PEM)
+        if ret < 1:
+            raise ssl_error(space, "SSL_CTX_use_PrivateKey_file error")
+
+        ret = libssl_SSL_CTX_use_certificate_chain_file(ss.ctx, cert_file)
+        if ret < 1:
+            raise ssl_error(space, "SSL_CTX_use_certificate_chain_file error")
+
+    # ssl compatibility
+    libssl_SSL_CTX_set_options(ss.ctx, 
+                               SSL_OP_ALL & ~SSL_OP_DONT_INSERT_EMPTY_FRAGMENTS)
+
+    verification_mode = SSL_VERIFY_NONE
+    if cert_mode == PY_SSL_CERT_OPTIONAL:
+        verification_mode = SSL_VERIFY_PEER
+    elif cert_mode == PY_SSL_CERT_REQUIRED:
+        verification_mode = SSL_VERIFY_PEER | SSL_VERIFY_FAIL_IF_NO_PEER_CERT
+    libssl_SSL_CTX_set_verify(ss.ctx, verification_mode, None)
+    ss.ssl = libssl_SSL_new(ss.ctx) # new ssl struct
     libssl_SSL_set_fd(ss.ssl, sock_fd) # set the socket for SSL
     libssl_SSL_set_mode(ss.ssl, SSL_MODE_AUTO_RETRY)
-
-    if server_hostname:
-        libssl_SSL_set_tlsext_host_name(ss.ssl, server_hostname);
 
     # If the socket is in non-blocking mode or timeout mode, set the BIO
     # to non-blocking mode (blocking is the default)
@@ -842,13 +729,14 @@ def new_sslobject(space, ctx, w_sock, side, server_hostname):
         # Set both the read and write BIO's to non-blocking mode
         libssl_BIO_set_nbio(libssl_SSL_get_rbio(ss.ssl), 1)
         libssl_BIO_set_nbio(libssl_SSL_get_wbio(ss.ssl), 1)
+    libssl_SSL_set_connect_state(ss.ssl)
 
     if side == PY_SSL_CLIENT:
         libssl_SSL_set_connect_state(ss.ssl)
     else:
         libssl_SSL_set_accept_state(ss.ssl)
 
-    ss.w_socket = weakref.ref(w_sock)
+    ss.w_socket = w_sock
     return ss
 
 def check_socket_and_wait_for_timeout(space, w_sock, writing):
@@ -926,7 +814,7 @@ def _ssl_seterror(space, ss, ret):
     elif err == SSL_ERROR_SYSCALL:
         e = libssl_ERR_get_error()
         if e == 0:
-            if ret == 0 or ss.w_socket() is None:
+            if ret == 0 or space.is_w(ss.w_socket, space.w_None):
                 errstr = "EOF occurred in violation of protocol"
                 errval = PY_SSL_ERROR_EOF
             elif ret == -1:
@@ -952,6 +840,16 @@ def _ssl_seterror(space, ss, ret):
 
     return ssl_error(space, errstr, errval)
 
+
+@unwrap_spec(side=int, cert_mode=int, protocol=int)
+def sslwrap(space, w_socket, side, w_key_file=None, w_cert_file=None,
+            cert_mode=PY_SSL_CERT_NONE, protocol=PY_SSL_VERSION_SSL23,
+            w_cacerts_file=None, w_ciphers=None):
+    """sslwrap(socket, side, [keyfile, certfile]) -> sslobject"""
+    return space.wrap(new_sslobject(
+        space, w_socket, side, w_key_file, w_cert_file,
+        cert_mode, protocol,
+        w_cacerts_file, w_ciphers))
 
 class Cache:
     def __init__(self, space):

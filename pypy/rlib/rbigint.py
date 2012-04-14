@@ -85,7 +85,7 @@ class Entry(extregistry.ExtRegistryEntry):
         s_DIGIT = self.bookkeeper.valueoftype(type(NULLDIGIT))
         assert s_DIGIT.contains(s_list.listdef.listitem.s_value)
     def specialize_call(self, hop):
-        pass
+        hop.exception_cannot_occur()
 
 
 class rbigint(object):
@@ -213,24 +213,6 @@ class rbigint(object):
         # then modify the result.
         return _decimalstr_to_bigint(s)
 
-    @staticmethod
-    def frombytes(s):
-        accum = 0
-        accumbits = 0
-        digits = []
-        for ch in s:
-            c = ord(ch)
-            accum <<= 8
-            accum |= c
-            accumbits += 8
-            if accumbits >= SHIFT:
-                digits.append(_store_digit(intmask(accum & MASK)))
-                accum >>= SHIFT
-                accumbits -= SHIFT
-        if accumbits:
-            digits.append(_store_digit(intmask(accum)))
-        return rbigint(digits[:], 1)
-
     @jit.elidable
     def toint(self):
         """
@@ -285,13 +267,13 @@ class rbigint(object):
     def tofloat(self):
         return _AsDouble(self)
 
-    def format(self, digits, prefix=''):
+    def format(self, digits, prefix='', suffix=''):
         # 'digits' is a string whose length is the base to use,
         # and where each character is the corresponding digit.
-        return _format(self, digits, prefix)
+        return _format(self, digits, prefix, suffix)
 
     def repr(self):
-        return _format(self, BASE10)
+        return _format(self, BASE10, '', 'L')
 
     def str(self):
         return _format(self, BASE10)
@@ -601,10 +583,10 @@ class rbigint(object):
         if self.sign == 0:
             return '0L'
         else:
-            return _format(self, BASE8, '0')
+            return _format(self, BASE8, '0', 'L')
 
     def hex(self):
-        return _format(self, BASE16, '0x')
+        return _format(self, BASE16, '0x', 'L')
 
     def log(self, base):
         # base is supposed to be positive or 0.0, which means we use e
@@ -1584,7 +1566,7 @@ BASE8  = '01234567'
 BASE10 = '0123456789'
 BASE16 = '0123456789abcdef'
 
-def _format(a, digits, prefix=''):
+def _format(a, digits, prefix='', suffix=''):
     """
     Convert a bigint object to a string, using a given conversion base.
     Return a string object.
@@ -1600,9 +1582,14 @@ def _format(a, digits, prefix=''):
     while i > 1:
         bits += 1
         i >>= 1
-    i = 5 + len(prefix) + (size_a*SHIFT + bits-1) // bits
+    i = 5 + len(prefix) + len(suffix) + (size_a*SHIFT + bits-1) // bits
     s = [chr(0)] * i
     p = i
+    j = len(suffix)
+    while j > 0:
+        p -= 1
+        j -= 1
+        s[p] = suffix[j]
 
     if a.sign == 0:
         p -= 1

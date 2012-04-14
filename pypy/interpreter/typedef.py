@@ -24,7 +24,7 @@ class TypeDef:
         self.bases = bases
         self.hasdict = '__dict__' in rawdict
         self.weakrefable = '__weakref__' in rawdict
-        self.doc = rawdict.get('__doc__', None)
+        self.doc = rawdict.pop('__doc__', None)
         for base in bases:
             self.hasdict     |= base.hasdict
             self.weakrefable |= base.weakrefable
@@ -321,7 +321,7 @@ def _builduserclswithfeature(config, supercls, *features):
             
             def user_setup(self, space, w_subtype):
                 self.w__dict__ = space.newdict(
-                    instance=True, classofinstance=w_subtype)
+                    instance=True)
                 base_user_setup(self, space, w_subtype)
 
             def setclass(self, space, w_subtype):
@@ -513,12 +513,6 @@ def interp_attrproperty(name, cls, doc=None):
         return space.wrap(getattr(obj, name))
     return GetSetProperty(fget, cls=cls, doc=doc)
 
-def interp_attrproperty_bytes(name, cls, doc=None):
-    "NOT_RPYTHON: initialization-time only"
-    def fget(space, obj):
-        return space.wrapbytes(getattr(obj, name))
-    return GetSetProperty(fget, cls=cls, doc=doc)
-
 def interp_attrproperty_w(name, cls, doc=None):
     "NOT_RPYTHON: initialization-time only"
     def fget(space, obj):
@@ -614,7 +608,7 @@ def generic_new_descr(W_Type):
 from pypy.interpreter.eval import Code, Frame
 from pypy.interpreter.pycode import PyCode, CO_VARARGS, CO_VARKEYWORDS
 from pypy.interpreter.pyframe import PyFrame
-from pypy.interpreter.pyopcode import SuspendedUnroller, W_OperationError
+from pypy.interpreter.pyopcode import SuspendedUnroller
 from pypy.interpreter.module import Module
 from pypy.interpreter.function import Function, Method, StaticMethod
 from pypy.interpreter.function import ClassMethod
@@ -730,11 +724,10 @@ PyCode.typedef = TypeDef('code',
     __reduce__   = interp2app(PyCode.descr__reduce__),
     __repr__ = interp2app(PyCode.repr),
     co_argcount = interp_attrproperty('co_argcount', cls=PyCode),
-    co_kwonlyargcount = interp_attrproperty('co_kwonlyargcount', cls=PyCode),
     co_nlocals = interp_attrproperty('co_nlocals', cls=PyCode),
     co_stacksize = interp_attrproperty('co_stacksize', cls=PyCode),
     co_flags = interp_attrproperty('co_flags', cls=PyCode),
-    co_code = interp_attrproperty_bytes('co_code', cls=PyCode),
+    co_code = interp_attrproperty('co_code', cls=PyCode),
     co_consts = GetSetProperty(PyCode.fget_co_consts),
     co_names = GetSetProperty(PyCode.fget_co_names),
     co_varnames =  GetSetProperty(PyCode.fget_co_varnames),
@@ -743,7 +736,7 @@ PyCode.typedef = TypeDef('code',
     co_filename = interp_attrproperty('co_filename', cls=PyCode),
     co_name = interp_attrproperty('co_name', cls=PyCode),
     co_firstlineno = interp_attrproperty('co_firstlineno', cls=PyCode),
-    co_lnotab = interp_attrproperty_bytes('co_lnotab', cls=PyCode),
+    co_lnotab = interp_attrproperty('co_lnotab', cls=PyCode),
     __weakref__ = make_weakref_descr(PyCode),
     )
 PyCode.typedef.acceptable_as_base_class = False
@@ -789,16 +782,10 @@ getset___module__ = GetSetProperty(Function.fget___module__,
 getset_func_defaults = GetSetProperty(Function.fget_func_defaults,
                                       Function.fset_func_defaults,
                                       Function.fdel_func_defaults)
-getset_func_kwdefaults = GetSetProperty(Function.fget_func_kwdefaults,
-                                        Function.fset_func_kwdefaults,
-                                        Function.fdel_func_kwdefaults)
 getset_func_code = GetSetProperty(Function.fget_func_code,
                                   Function.fset_func_code)
 getset_func_name = GetSetProperty(Function.fget_func_name,
                                   Function.fset_func_name)
-getset_func_annotations = GetSetProperty(Function.fget_func_annotations,
-                                        Function.fset_func_annotations,
-                                        Function.fdel_func_annotations)
 
 getset_func_dict = GetSetProperty(descr_get_dict, descr_set_dict, cls=Function)
 
@@ -810,15 +797,18 @@ Function.typedef = TypeDef("function",
     __repr__ = interp2app(Function.descr_function_repr, descrmismatch='__repr__'),
     __reduce__ = interp2app(Function.descr_function__reduce__),
     __setstate__ = interp2app(Function.descr_function__setstate__),
+    func_code = getset_func_code,
+    func_doc = getset_func_doc,
+    func_name = getset_func_name,
+    func_dict = getset_func_dict,
+    func_defaults = getset_func_defaults,
+    func_globals = interp_attrproperty_w('w_func_globals', cls=Function),
+    func_closure = GetSetProperty( Function.fget_func_closure ),
     __code__ = getset_func_code,
     __doc__ = getset_func_doc,
     __name__ = getset_func_name,
     __dict__ = getset_func_dict,
     __defaults__ = getset_func_defaults,
-    __kwdefaults__ = getset_func_kwdefaults,
-    __annotations__ = getset_func_annotations,
-    __globals__ = interp_attrproperty_w('w_func_globals', cls=Function),
-    __closure__ = GetSetProperty( Function.fget_func_closure ),
     __module__ = getset___module__,
     __weakref__ = make_weakref_descr(Function),
     )
@@ -829,8 +819,11 @@ Method.typedef = TypeDef(
     __new__ = interp2app(Method.descr_method__new__.im_func),
     __call__ = interp2app(Method.descr_method_call),
     __get__ = interp2app(Method.descr_method_get),
+    im_func  = interp_attrproperty_w('w_function', cls=Method),
     __func__ = interp_attrproperty_w('w_function', cls=Method),
+    im_self  = interp_attrproperty_w('w_instance', cls=Method),
     __self__ = interp_attrproperty_w('w_instance', cls=Method),
+    im_class = interp_attrproperty_w('w_class', cls=Method),
     __getattribute__ = interp2app(Method.descr_method_getattribute),
     __eq__ = interp2app(Method.descr_method_eq),
     __ne__ = descr_generic_ne,
@@ -908,8 +901,8 @@ PyTraceback.typedef.acceptable_as_base_class = False
 GeneratorIterator.typedef = TypeDef("generator",
     __repr__   = interp2app(GeneratorIterator.descr__repr__),
     __reduce__   = interp2app(GeneratorIterator.descr__reduce__),
-    __next__   = interp2app(GeneratorIterator.descr_next,
-                            descrmismatch='__next__'),
+    next       = interp2app(GeneratorIterator.descr_next,
+                            descrmismatch='next'),
     send       = interp2app(GeneratorIterator.descr_send,
                             descrmismatch='send'),
     throw      = interp2app(GeneratorIterator.descr_throw,
@@ -927,9 +920,7 @@ GeneratorIterator.typedef = TypeDef("generator",
 GeneratorIterator.typedef.acceptable_as_base_class = False
 
 Cell.typedef = TypeDef("cell",
-    __total_ordering__ = 'auto',
-    __lt__       = interp2app(Cell.descr__lt__),
-    __eq__       = interp2app(Cell.descr__eq__),
+    __cmp__      = interp2app(Cell.descr__cmp__),
     __hash__     = None,
     __reduce__   = interp2app(Cell.descr__reduce__),
     __setstate__ = interp2app(Cell.descr__setstate__),
@@ -949,5 +940,3 @@ NotImplemented.typedef.acceptable_as_base_class = False
 
 SuspendedUnroller.typedef = TypeDef("SuspendedUnroller")
 SuspendedUnroller.typedef.acceptable_as_base_class = False
-
-W_OperationError.typedef = TypeDef("OperationError")

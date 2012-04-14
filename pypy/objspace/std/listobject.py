@@ -48,10 +48,10 @@ def get_strategy_from_list_objects(space, list_w, sizehint):
 
     # check for strings
     for w_obj in list_w:
-        if not is_W_UnicodeObject(w_obj):
+        if not is_W_StringObject(w_obj):
             break
     else:
-        return space.fromcache(UnicodeListStrategy)
+        return space.fromcache(StringListStrategy)
 
     # check for floats
     for w_obj in list_w:
@@ -66,9 +66,9 @@ def is_W_IntObject(w_object):
     from pypy.objspace.std.intobject import W_IntObject
     return type(w_object) is W_IntObject
 
-def is_W_UnicodeObject(w_object):
-    from pypy.objspace.std.unicodeobject import W_UnicodeObject
-    return type(w_object) is W_UnicodeObject
+def is_W_StringObject(w_object):
+    from pypy.objspace.std.stringobject import W_StringObject
+    return type(w_object) is W_StringObject
 
 def is_W_FloatObject(w_object):
     from pypy.objspace.std.floatobject import W_FloatObject
@@ -100,7 +100,7 @@ class W_ListObject(W_AbstractListObject):
 
     @staticmethod
     def newlist_str(space, list_s):
-        strategy = space.fromcache(UnicodeListStrategy)
+        strategy = space.fromcache(StringListStrategy)
         storage = strategy.erase(list_s)
         return W_ListObject.from_storage_and_strategy(space, storage, strategy)
 
@@ -138,6 +138,16 @@ class W_ListObject(W_AbstractListObject):
         wrapped items, unwrapping them if neccessary and creating a
         new erased object as storage"""
         self.strategy.init_from_list_w(self, list_w)
+
+    def clear(self, space):
+        """Initializes (or overrides) the listobject as empty."""
+        self.space = space
+        if space.config.objspace.std.withliststrategies:
+            strategy = space.fromcache(EmptyListStrategy)
+        else:
+            strategy = space.fromcache(ObjectListStrategy)
+        self.strategy = strategy
+        strategy.clear(self)
 
     def clone(self):
         """Returns a clone by creating a new listobject
@@ -200,6 +210,11 @@ class W_ListObject(W_AbstractListObject):
         """ Return the items in the list as unwrapped strings. If the list does
         not use the list strategy, return None. """
         return self.strategy.getitems_str(self)
+
+    def getitems_int(self):
+        """ Return the items in the list as unwrapped ints. If the list does
+        not use the list strategy, return None. """
+        return self.strategy.getitems_int(self)
     # ___________________________________________________
 
 
@@ -300,6 +315,9 @@ class ListStrategy(object):
     def getitems_str(self, w_list):
         return None
 
+    def getitems_int(self, w_list):
+        return None
+
     def getstorage_copy(self, w_list):
         raise NotImplementedError
 
@@ -358,6 +376,9 @@ class EmptyListStrategy(ListStrategy):
         assert len(list_w) == 0
         w_list.lstorage = self.erase(None)
 
+    def clear(self, w_list):
+        w_list.lstorage = self.erase(None)
+
     erase, unerase = rerased.new_erasing_pair("empty")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
@@ -396,8 +417,8 @@ class EmptyListStrategy(ListStrategy):
     def switch_to_correct_strategy(self, w_list, w_item):
         if is_W_IntObject(w_item):
             strategy = self.space.fromcache(IntegerListStrategy)
-        elif is_W_UnicodeObject(w_item):
-            strategy = self.space.fromcache(UnicodeListStrategy)
+        elif is_W_StringObject(w_item):
+            strategy = self.space.fromcache(StringListStrategy)
         elif is_W_FloatObject(w_item):
             strategy = self.space.fromcache(FloatListStrategy)
         else:
@@ -515,6 +536,9 @@ class RangeListStrategy(ListStrategy):
         elif i >= length:
             raise IndexError
         return start + i * step
+
+    def getitems_int(self, w_list):
+        return self._getitems_range(w_list, False)
 
     def getitem(self, w_list, i):
         return self.wrap(self._getitem_unwrapped(w_list, i))
@@ -696,6 +720,7 @@ class AbstractUnwrappedStrategy(object):
             for i in l:
                 if i == obj:
                     return True
+            return False
         return ListStrategy.contains(self, w_list, w_obj)
 
     def length(self, w_list):
@@ -937,6 +962,9 @@ class ObjectListStrategy(AbstractUnwrappedStrategy, ListStrategy):
     def init_from_list_w(self, w_list, list_w):
         w_list.lstorage = self.erase(list_w)
 
+    def clear(self, w_list):
+        w_list.lstorage = self.erase([])
+
     def contains(self, w_list, w_obj):
         return ListStrategy.contains(self, w_list, w_obj)
 
@@ -970,6 +998,9 @@ class IntegerListStrategy(AbstractUnwrappedStrategy, ListStrategy):
         if reverse:
             l.reverse()
 
+    def getitems_int(self, w_list):
+        return self.unerase(w_list.lstorage)
+
 class FloatListStrategy(AbstractUnwrappedStrategy, ListStrategy):
     _none_value = 0.0
     _applevel_repr = "float"
@@ -997,7 +1028,7 @@ class FloatListStrategy(AbstractUnwrappedStrategy, ListStrategy):
         if reverse:
             l.reverse()
 
-class UnicodeListStrategy(AbstractUnwrappedStrategy, ListStrategy):
+class StringListStrategy(AbstractUnwrappedStrategy, ListStrategy):
     _none_value = None
     _applevel_repr = "str"
 
@@ -1005,21 +1036,21 @@ class UnicodeListStrategy(AbstractUnwrappedStrategy, ListStrategy):
         return self.space.wrap(stringval)
 
     def unwrap(self, w_string):
-        return self.space.unicode_w(w_string)
+        return self.space.str_w(w_string)
 
-    erase, unerase = rerased.new_erasing_pair("unicode")
+    erase, unerase = rerased.new_erasing_pair("string")
     erase = staticmethod(erase)
     unerase = staticmethod(unerase)
 
     def is_correct_type(self, w_obj):
-        return is_W_UnicodeObject(w_obj)
+        return is_W_StringObject(w_obj)
 
     def list_is_correct_type(self, w_list):
-        return w_list.strategy is self.space.fromcache(UnicodeListStrategy)
+        return w_list.strategy is self.space.fromcache(StringListStrategy)
 
     def sort(self, w_list, reverse):
         l = self.unerase(w_list.lstorage)
-        sorter = UnicodeSort(l, len(l))
+        sorter = StringSort(l, len(l))
         sorter.sort()
         if reverse:
             l.reverse()
@@ -1027,37 +1058,49 @@ class UnicodeListStrategy(AbstractUnwrappedStrategy, ListStrategy):
     def getitems_str(self, w_list):
         return self.unerase(w_list.lstorage)
 
-
 # _______________________________________________________
 
 init_signature = Signature(['sequence'], None, None)
 init_defaults = [None]
 
 def init__List(space, w_list, __args__):
-    from pypy.objspace.std.tupleobject import W_TupleObject
+    from pypy.objspace.std.tupleobject import W_AbstractTupleObject
     # this is on the silly side
     w_iterable, = __args__.parse_obj(
             None, 'list', init_signature, init_defaults)
-    w_list.__init__(space, [])
+    w_list.clear(space)
     if w_iterable is not None:
-        # unfortunately this is duplicating space.unpackiterable to avoid
-        # assigning a new RPython list to 'wrappeditems', which defeats the
-        # W_FastListIterObject optimization.
-        if isinstance(w_iterable, W_ListObject):
-            w_list.extend(w_iterable)
-        elif isinstance(w_iterable, W_TupleObject):
-            w_list.extend(W_ListObject(space, w_iterable.wrappeditems[:]))
-        else:
-            _init_from_iterable(space, w_list, w_iterable)
+        if type(w_iterable) is W_ListObject:
+            w_iterable.copy_into(w_list)
+            return
+        elif isinstance(w_iterable, W_AbstractTupleObject):
+            w_list.__init__(space, w_iterable.getitems_copy())
+            return
+
+        intlist = space.listview_int(w_iterable)
+        if intlist is not None:
+            w_list.strategy = strategy = space.fromcache(IntegerListStrategy)
+             # need to copy because intlist can share with w_iterable
+            w_list.lstorage = strategy.erase(intlist[:])
+            return
+
+        strlist = space.listview_str(w_iterable)
+        if strlist is not None:
+            w_list.strategy = strategy = space.fromcache(StringListStrategy)
+             # need to copy because intlist can share with w_iterable
+            w_list.lstorage = strategy.erase(strlist[:])
+            return
+
+        # xxx special hack for speed
+        from pypy.interpreter.generator import GeneratorIterator
+        if isinstance(w_iterable, GeneratorIterator):
+            w_iterable.unpack_into_w(w_list)
+            return
+        # /xxx
+        _init_from_iterable(space, w_list, w_iterable)
 
 def _init_from_iterable(space, w_list, w_iterable):
     # in its own function to make the JIT look into init__List
-    # xxx special hack for speed
-    from pypy.interpreter.generator import GeneratorIterator
-    if isinstance(w_iterable, GeneratorIterator):
-        w_iterable.unpack_into_w(w_list)
-        return
-    # /xxx
     w_iterator = space.iter(w_iterable)
     while True:
         try:
@@ -1087,6 +1130,32 @@ def getitem__List_Slice(space, w_list, w_slice):
     if slicelength == 0:
         return make_empty_list(space)
     return w_list.getslice(start, stop, step, slicelength)
+
+def getslice__List_ANY_ANY(space, w_list, w_start, w_stop):
+    length = w_list.length()
+    start, stop = normalize_simple_slice(space, length, w_start, w_stop)
+
+    slicelength = stop - start
+    if slicelength == 0:
+        return make_empty_list(space)
+    return w_list.getslice(start, stop, 1, stop - start)
+
+def setslice__List_ANY_ANY_List(space, w_list, w_start, w_stop, w_other):
+    length = w_list.length()
+    start, stop = normalize_simple_slice(space, length, w_start, w_stop)
+    w_list.setslice(start, 1, stop-start, w_other)
+
+def setslice__List_ANY_ANY_ANY(space, w_list, w_start, w_stop, w_iterable):
+    length = w_list.length()
+    start, stop = normalize_simple_slice(space, length, w_start, w_stop)
+    sequence_w = space.listview(w_iterable)
+    w_other = W_ListObject(space, sequence_w)
+    w_list.setslice(start, 1, stop-start, w_other)
+
+def delslice__List_ANY_ANY(space, w_list, w_start, w_stop):
+    length = w_list.length()
+    start, stop = normalize_simple_slice(space, length, w_start, w_stop)
+    w_list.deleteslice(start, 1, stop-start)
 
 def contains__List_ANY(space, w_list, w_obj):
     return space.wrap(w_list.contains(w_obj))
@@ -1351,7 +1420,7 @@ def list_reverse__List(space, w_list):
 TimSort = make_timsort_class()
 IntBaseTimSort = make_timsort_class()
 FloatBaseTimSort = make_timsort_class()
-UnicodeBaseTimSort = make_timsort_class()
+StringBaseTimSort = make_timsort_class()
 
 class KeyContainer(baseobjspace.W_Root):
     def __init__(self, w_key, w_item):
@@ -1375,9 +1444,23 @@ class FloatSort(FloatBaseTimSort):
     def lt(self, a, b):
         return a < b
 
-class UnicodeSort(UnicodeBaseTimSort):
+class StringSort(StringBaseTimSort):
     def lt(self, a, b):
         return a < b
+
+class CustomCompareSort(SimpleSort):
+    def lt(self, a, b):
+        space = self.space
+        w_cmp = self.w_cmp
+        w_result = space.call_function(w_cmp, a, b)
+        try:
+            result = space.int_w(w_result)
+        except OperationError, e:
+            if e.match(space, space.w_TypeError):
+                raise OperationError(space.w_TypeError,
+                    space.wrap("comparison function must return int"))
+            raise
+        return result < 0
 
 class CustomKeySort(SimpleSort):
     def lt(self, a, b):
@@ -1386,16 +1469,24 @@ class CustomKeySort(SimpleSort):
         space = self.space
         return space.is_true(space.lt(a.w_key, b.w_key))
 
-def list_sort__List_ANY_ANY(space, w_list, w_keyfunc, w_reverse):
+class CustomKeyCompareSort(CustomCompareSort):
+    def lt(self, a, b):
+        assert isinstance(a, KeyContainer)
+        assert isinstance(b, KeyContainer)
+        return CustomCompareSort.lt(self, a.w_key, b.w_key)
 
+def list_sort__List_ANY_ANY_ANY(space, w_list, w_cmp, w_keyfunc, w_reverse):
+
+    has_cmp = not space.is_w(w_cmp, space.w_None)
     has_key = not space.is_w(w_keyfunc, space.w_None)
     has_reverse = space.is_true(w_reverse)
 
     # create and setup a TimSort instance
-    if 0:
-        # this was the old "if has_cmp" path. We didn't remove the if not to
-        # diverge too much from default, to avoid spurious conflicts
-        pass
+    if has_cmp:
+        if has_key:
+            sorterclass = CustomKeyCompareSort
+        else:
+            sorterclass = CustomCompareSort
     else:
         if has_key:
             sorterclass = CustomKeySort
@@ -1408,6 +1499,7 @@ def list_sort__List_ANY_ANY(space, w_list, w_keyfunc, w_reverse):
 
     sorter = sorterclass(w_list.getitems(), w_list.length())
     sorter.space = space
+    sorter.w_cmp = w_cmp
 
     try:
         # The list is temporarily made empty, so that mutations performed

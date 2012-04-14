@@ -86,6 +86,7 @@ class Entry(ExtRegistryEntry):
         return s_None
 
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.inputconst(lltype.Void, None)
 
 # ____________________________________________________________
@@ -109,7 +110,7 @@ class FakeObjSpace(ObjSpace):
         "NOT_RPYTHON"
         raise NotImplementedError
 
-    def newdict(self, module=False, instance=False, classofinstance=None,
+    def newdict(self, module=False, instance=False, kwargs=False,
                 strdict=False):
         return w_some_obj()
 
@@ -158,10 +159,6 @@ class FakeObjSpace(ObjSpace):
     def _wrap_not_rpython(self, x):
         "NOT_RPYTHON"
         raise NotImplementedError
-
-    def wrapbytes(self, x):
-        assert isinstance(x, str)
-        return w_some_obj()
 
     def _see_interp2app(self, interp2app):
         "NOT_RPYTHON"
@@ -289,8 +286,8 @@ def setup():
     for name in (ObjSpace.ConstantTable +
                  ObjSpace.ExceptionTable +
                  ['int', 'str', 'float', 'long', 'tuple', 'list',
-                  'dict', 'bytes', 'complex', 'slice', 'bool',
-                  'type', 'text', 'object', 'unicode']):
+                  'dict', 'unicode', 'complex', 'slice', 'bool',
+                  'type', 'basestring', 'object']):
         setattr(FakeObjSpace, 'w_' + name, w_some_obj())
     #
     for (name, _, arity, _) in ObjSpace.MethodTable:
