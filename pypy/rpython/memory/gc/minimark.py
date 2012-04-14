@@ -333,7 +333,8 @@ class MiniMarkGC(MovingGCBase):
             # external factors, like trackgcroot or the handling of the write
             # barrier.  Implemented by still using 'minsize' for the nursery
             # size (needed to handle mallocs just below 'large_objects') but
-            # hacking at the current nursery position in collect_and_reserve().
+            # hacking at the current nursery position in
+            # maybe_collect_and_reserve().
             if newsize <= 0:
                 newsize = 4*1024*1024   # fixed to 4MB by default
                 #        (it was env.estimate_best_nursery_size())
@@ -502,7 +503,7 @@ class MiniMarkGC(MovingGCBase):
             result = self.nursery_free
             self.nursery_free = result + totalsize
             if self.nursery_free > self.nursery_top:
-                result = self.collect_and_reserve(totalsize)
+                result = self.maybe_collect_and_reserve(totalsize)
             #
             # Build the object.
             llarena.arena_reserve(result, totalsize)
@@ -561,7 +562,7 @@ class MiniMarkGC(MovingGCBase):
             result = self.nursery_free
             self.nursery_free = result + totalsize
             if self.nursery_free > self.nursery_top:
-                result = self.collect_and_reserve(totalsize)
+                result = self.maybe_collect_and_reserve(totalsize)
             #
             # Build the object.
             llarena.arena_reserve(result, totalsize)
@@ -580,7 +581,7 @@ class MiniMarkGC(MovingGCBase):
         if gen > 0:
             self.major_collection()
 
-    def collect_and_reserve(self, totalsize):
+    def maybe_collect_and_reserve(self, totalsize):
         """To call when nursery_free overflows nursery_top.
         Do a minor collection, and possibly also a major collection,
         and finally reserve 'totalsize' bytes at the start of the
@@ -595,7 +596,6 @@ class MiniMarkGC(MovingGCBase):
                 self.nursery_free = self.nursery_free + cur_obj_size
                 self.nursery_top = self.nursery_barriers.popleft()
             if self.nursery_free + totalsize <= self.nursery_top:
-                llarena.arena_reserve(self.nursery_free, totalsize)
                 res = self.nursery_free
                 self.nursery_free = res + totalsize
                 return res
@@ -622,7 +622,7 @@ class MiniMarkGC(MovingGCBase):
                 self.nursery_free = self.nursery_top - self.debug_tiny_nursery
         #
         return result
-    collect_and_reserve._dont_inline_ = True
+    maybe_collect_and_reserve._dont_inline_ = True
 
 
     def external_malloc(self, typeid, length, can_make_young=True):
@@ -789,10 +789,12 @@ class MiniMarkGC(MovingGCBase):
                 not self.header(obj).tid & GCFLAG_PINNED)
 
     def pin(self, obj):
-        self.header(obj).tid |= GCFLAG_PINNED
+        if self.is_in_nursery(obj):
+            self.header(obj).tid |= GCFLAG_PINNED
 
     def unpin(self, obj):
-        self.header(obj).tid &= ~GCFLAG_PINNED
+        if self.is_in_nursery(obj):
+            self.header(obj).tid &= ~GCFLAG_PINNED
 
     def shrink_array(self, obj, smallerlength):
         #

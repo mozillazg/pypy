@@ -522,6 +522,19 @@ class TestMiniMarkGCSimple(DirectGCTest):
             self.stackroots.pop()
     test_card_marker.GC_PARAMS = {"card_page_indices": 4}
 
+    def test_pin_1(self):
+        self.malloc(S)
+        s2 = self.malloc(S)
+        self.gc.pin(llmemory.cast_ptr_to_adr(s2))
+        self.stackroots.append(s2)
+        self.gc.minor_collection()
+        self.stackroots.pop()
+        self.malloc(S)
+        one = self.gc.nursery_free
+        self.malloc(S)
+        two = self.gc.nursery_free
+        assert one != two
+
     def test_writebarrier_before_copy(self):
         from pypy.rpython.memory.gc import minimark
         largeobj_size =  self.gc.nonlarge_max + 1
