@@ -1,15 +1,10 @@
 from pypy.rpython.memory.gctransform.transform import GCTransformer
-from pypy.rpython.memory.gctransform.support import find_gc_ptrs_in_type, \
-     get_rtti, ll_call_destructor, type_contains_pyobjs, var_ispyobj
+from pypy.rpython.memory.gctransform.support import get_rtti,\
+     ll_call_destructor, type_contains_pyobjs, var_ispyobj
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, llgroup
 from pypy.rpython import rmodel
 from pypy.rpython.memory import gctypelayout
-from pypy.rpython.memory.gc import marksweep
-from pypy.rpython.memory.gcheader import GCHeaderBuilder
-from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib import rgc
-from pypy.rlib.debug import ll_assert
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
 from pypy.translator.backendopt.finalizer import FinalizerAnalyzer
@@ -17,11 +12,11 @@ from pypy.annotation import model as annmodel
 from pypy.rpython import annlowlevel
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rpython.memory.gctypelayout import ll_weakref_deref, WEAKREF
-from pypy.rpython.memory.gctypelayout import convert_weakref_to, WEAKREFPTR
+from pypy.rpython.memory.gctypelayout import WEAKREFPTR
 from pypy.rpython.memory.gctransform.log import log
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rpython.lltypesystem.lloperation import llop, LL_OPERATIONS
-import sys, types
+from pypy.rpython.lltypesystem.lloperation import LL_OPERATIONS
+import types
 
 
 TYPE_ID = llgroup.HALFWORD
@@ -288,6 +283,14 @@ class FrameworkGCTransformer(GCTransformer):
         self.can_move_ptr = getfn(GCClass.can_move.im_func,
                                   [s_gc, annmodel.SomeAddress()],
                                   annmodel.SomeBool())
+        self.malloc_fixedsize_and_pin_ptr = getfn(
+            GCClass.malloc_fixedsize_and_pin,
+            [s_gc, s_typeid16, annmodel.SomeInteger(nonneg=True)],
+            s_gcref)
+        self.malloc_varsize_and_pin_ptr = getfn(
+            GCClass.malloc_varsize_and_pin,
+            [s_gc, s_typeid16] + [annmodel.SomeInteger(nonneg=True)] * 4,
+            s_gcref)
 
         if hasattr(GCClass, 'shrink_array'):
             self.shrink_array_ptr = getfn(
@@ -364,17 +367,6 @@ class FrameworkGCTransformer(GCTransformer):
                 inline = True)
         else:
             self.malloc_varsize_clear_fast_ptr = None
-
-        if getattr(GCClass, 'malloc_varsize_nonmovable', False):
-            malloc_nonmovable = func_with_new_name(
-                GCClass.malloc_varsize_nonmovable.im_func,
-                "malloc_varsize_nonmovable")
-            self.malloc_varsize_nonmovable_ptr = getfn(
-                malloc_nonmovable,
-                [s_gc, s_typeid16,
-                 annmodel.SomeInteger(nonneg=True)], s_gcref)
-        else:
-            self.malloc_varsize_nonmovable_ptr = None
 
         if getattr(GCClass, 'raw_malloc_memory_pressure', False):
             def raw_malloc_memory_pressure_varsize(length, itemsize):
@@ -690,10 +682,12 @@ class FrameworkGCTransformer(GCTransformer):
         c_has_light_finalizer = rmodel.inputconst(lltype.Bool,
                                                   has_light_finalizer)
 
-        if not op.opname.endswith('_varsize') and not flags.get('varsize'):
+        if not 'varsize' in op.opname and not flags.get('varsize'):
             #malloc_ptr = self.malloc_fixedsize_ptr
             zero = flags.get('zero', False)
-            if (self.malloc_fast_ptr is not None and
+            if op.opname == 'malloc_and_pin':
+                malloc_ptr = self.malloc_fixedsize_and_pin_ptr
+            elif (self.malloc_fast_ptr is not None and
                 not c_has_finalizer.value and
                 (self.malloc_fast_is_clearing or not zero)):
                 malloc_ptr = self.malloc_fast_ptr
@@ -712,18 +706,14 @@ class FrameworkGCTransformer(GCTransformer):
                                               info_varsize.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed,
                                               info_varsize.varitemsize)
-            if flags.get('nonmovable') and self.malloc_varsize_nonmovable_ptr:
-                # we don't have tests for such cases, let's fail
-                # explicitely
-                malloc_ptr = self.malloc_varsize_nonmovable_ptr
-                args = [self.c_const_gc, c_type_id, v_length]
+            if op.opname == 'malloc_varsize_and_pin':
+                malloc_ptr = self.malloc_varsize_and_pin_ptr
+            elif self.malloc_varsize_clear_fast_ptr is not None:
+                malloc_ptr = self.malloc_varsize_clear_fast_ptr
             else:
-                if self.malloc_varsize_clear_fast_ptr is not None:
-                    malloc_ptr = self.malloc_varsize_clear_fast_ptr
-                else:
-                    malloc_ptr = self.malloc_varsize_clear_ptr
-                args = [self.c_const_gc, c_type_id, v_length, c_size,
-                        c_varitemsize, c_ofstolength]
+                malloc_ptr = self.malloc_varsize_clear_ptr
+            args = [self.c_const_gc, c_type_id, v_length, c_size,
+                    c_varitemsize, c_ofstolength]
         livevars = self.push_roots(hop)
         v_result = hop.genop("direct_call", [malloc_ptr] + args,
                              resulttype=llmemory.GCREF)
@@ -1109,19 +1099,15 @@ class FrameworkGCTransformer(GCTransformer):
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
 
-    def gct_malloc_nonmovable_varsize(self, hop):
+    def gct_malloc_and_pin(self, hop):
         TYPE = hop.spaceop.result.concretetype
-        if self.gcdata.gc.can_malloc_nonmovable():
-            return self.gct_malloc_varsize(hop, {'nonmovable':True})
-        c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
-        return hop.cast_result(c)
+        v_raw = self.gct_fv_gc_malloc(hop, {'flavor': 'gc'}, TYPE.TO)
+        hop.cast_result(v_raw)
 
-    def gct_malloc_nonmovable(self, hop):
+    def gct_malloc_varisze_and_pin(self, hop):
         TYPE = hop.spaceop.result.concretetype
-        if self.gcdata.gc.can_malloc_nonmovable():
-            return self.gct_malloc(hop, {'nonmovable':True})
-        c = rmodel.inputconst(TYPE, lltype.nullptr(TYPE.TO))
-        return hop.cast_result(c)
+        v_raw = self.gct_fv_gc_malloc(hop, {'flavor': 'gc'}, TYPE.TO)
+        hop.cast_result(v_raw)
 
     def _set_into_gc_array_part(self, op):
         if op.opname == 'setarrayitem':

@@ -759,6 +759,9 @@ def make_string_mappings(strtype):
         safe high-level string. When the garbage collector cooperates, this
         allows for the process to be performed without an extra copy.
         Make sure to call keep_buffer_alive_until_here on the returned values.
+
+        Right now this is a version optimized for minimark which can pin values
+        in the nursery.
         """
         raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
         return raw_buf, lltype.nullptr(STRTYPE)

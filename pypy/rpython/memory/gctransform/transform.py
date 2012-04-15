@@ -548,14 +548,14 @@ class GCTransformer(BaseGCTransformer):
         flavor = flags['flavor']
         assert flavor != 'cpy', "cannot malloc CPython objects directly"
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
-        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor) 
+        assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
         return self.varsize_malloc_helper(hop, flags, meth, [])
 
-    def gct_malloc_nonmovable(self, *args, **kwds):
+    def gct_malloc_and_pin(self, *args, **kwds):
         return self.gct_malloc(*args, **kwds)
 
-    def gct_malloc_nonmovable_varsize(self, *args, **kwds):
-        return self.gct_malloc_varsize(*args, **kwds)
+    def gct_malloc_varsize_and_pin(self, hop, *args, **kwds):
+        return self.gct_malloc_varsize(hop, *args, **kwds)
 
     def gct_gc_add_memory_pressure(self, hop):
         if hasattr(self, 'raw_malloc_memory_pressure_ptr'):

@@ -391,23 +391,6 @@ class TestUsingBoehm(AbstractGCTestClass):
         c_fn = self.getcompiled(fn, [])
         assert not c_fn()
 
-    def test_malloc_nonmovable(self):
-        TP = lltype.GcArray(lltype.Char)
-        def func():
-            try:
-                from pypy.rlib import rgc
-                a = rgc.malloc_nonmovable(TP, 3)
-                rgc.collect()
-                if a:
-                    assert not rgc.can_move(a)
-                    return 0
-                return 1
-            except Exception, e:
-                return 2
-
-        run = self.getcompiled(func)
-        assert run() == 0
-
     def test_shrink_array(self):
         from pypy.rpython.lltypesystem.rstr import STR
         from pypy.rlib import rgc

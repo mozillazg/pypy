@@ -197,17 +197,6 @@ class HybridGC(GenerationGC):
 
     malloc_varsize_slowpath._dont_inline_ = True
 
-    def malloc_varsize_nonmovable(self, typeid, length):
-        return self.malloc_varsize_slowpath(typeid, length, True)
-
-    def malloc_nonmovable(self, typeid, length, zero):
-        # helper for testing, same as GCBase.malloc
-        if self.is_varsize(typeid):
-            gcref = self.malloc_varsize_slowpath(typeid, length, True)
-        else:
-            raise NotImplementedError("Not supported")
-        return llmemory.cast_ptr_to_adr(gcref)
-
     def can_move(self, addr):
         tid = self.header(addr).tid
         return not (tid & GCFLAG_EXTERNAL)
@@ -554,6 +543,3 @@ class HybridGC(GenerationGC):
                   "gen3: unexpected GCFLAG_UNVISITED")
         ll_assert((tid & GCFLAG_AGE_MASK) == GCFLAG_AGE_MAX,
                   "gen3: wrong age field")
-
-    def can_malloc_nonmovable(self):
-        return True

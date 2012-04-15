@@ -18,7 +18,7 @@ from pypy.rpython.lltypesystem.lltype import cast_ptr_to_int as gc_id
 def weakref_create_getlazy(objgetter):
     return weakref_create(objgetter())
 
-malloc_nonmovable = malloc
+malloc_and_pin = malloc
 
 def shrink_array(p, smallersize):
     return False

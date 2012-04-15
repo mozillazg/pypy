@@ -19,7 +19,7 @@ class TestUsingFramework(object):
     removetypeptr = False
     taggedpointers = False
     GC_CAN_MOVE = False
-    GC_CAN_MALLOC_NONMOVABLE = True
+    GC_CAN_MALLOC_AND_PIN = False
     GC_CAN_SHRINK_ARRAY = False
 
     _isolated_func = None
@@ -723,24 +723,24 @@ class TestUsingFramework(object):
     def test_can_move(self):
         assert self.run('can_move') == self.GC_CAN_MOVE
 
-    def define_malloc_nonmovable(cls):
+    def define_malloc_and_pin(cls):
         TP = lltype.GcArray(lltype.Char)
         def func():
             try:
-                a = rgc.malloc_nonmovable(TP, 3)
-                rgc.collect()
+                a = rgc.malloc_and_pin(TP, 3)
                 if a:
                     assert not rgc.can_move(a)
+                    rgc.unpin(a)
                     return 1
                 return 0
-            except Exception, e:
+            except Exception:
                 return 2
 
         return func
 
-    def test_malloc_nonmovable(self):
-        res = self.run('malloc_nonmovable')
-        assert res == self.GC_CAN_MALLOC_NONMOVABLE
+    def test_malloc_and_pin(self):
+        res = self.run('malloc_and_pin')
+        assert res == self.GC_CAN_MALLOC_AND_PIN
 
     def define_resizable_buffer(cls):
         from pypy.rpython.lltypesystem.rstr import STR
@@ -1189,7 +1189,6 @@ class TestSemiSpaceGC(TestUsingFramework, snippet.SemiSpaceGCTestDefines):
     gcpolicy = "semispace"
     should_be_moving = True
     GC_CAN_MOVE = True
-    GC_CAN_MALLOC_NONMOVABLE = False
     GC_CAN_SHRINK_ARRAY = True
 
     # for snippets
@@ -1366,7 +1365,6 @@ class TestGenerationalGC(TestSemiSpaceGC):
 class TestHybridGC(TestGenerationalGC):
     gcpolicy = "hybrid"
     should_be_moving = True
-    GC_CAN_MALLOC_NONMOVABLE = True
 
     def test_gc_set_max_heap_size(self):
         py.test.skip("not implemented")
@@ -1440,7 +1438,7 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 class TestMiniMarkGC(TestSemiSpaceGC):
     gcpolicy = "minimark"
     should_be_moving = True
-    GC_CAN_MALLOC_NONMOVABLE = True
+    GC_CAN_MALLOC_AND_PIN = True
     GC_CAN_SHRINK_ARRAY = True
 
     def test_gc_heap_stats(self):

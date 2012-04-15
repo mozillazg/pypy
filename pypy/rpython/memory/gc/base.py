@@ -49,9 +49,6 @@ class GCBase(object):
     def _teardown(self):
         pass
 
-    def can_malloc_nonmovable(self):
-        return not self.moving_gc
-
     def can_optimize_clean_setarrayitems(self):
         return True     # False in case of card marking
 
@@ -169,8 +166,12 @@ class GCBase(object):
         # lots of cast and reverse-cast around...
         return llmemory.cast_ptr_to_adr(ref)
 
-    def malloc_nonmovable(self, typeid, length=0, zero=False):
-        return self.malloc(typeid, length, zero)
+    def malloc_fixedsize_and_pin(self, typeid, size):
+        return lltype.nullptr(llmemory.GCREF.TO)
+
+    def malloc_varsize_and_pin(self, typeid, length, size, itemsize,
+                               offset_to_length):
+        return lltype.nullptr(llmemory.GCREF.TO)
 
     def id(self, ptr):
         return lltype.cast_ptr_to_int(ptr)
