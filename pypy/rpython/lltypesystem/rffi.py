@@ -739,8 +739,6 @@ def make_string_mappings(strtype):
         # if 'buf' points inside 'data'.  This is only possible if we
         # followed the 2nd case in get_nonmovingbuffer(); in the first case,
         # 'buf' points to its own raw-malloced memory.
-        import pdb
-        pdb.set_trace()
         data = llstrtype(data)
         data_start = cast_ptr_to_adr(data) + \
             offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
