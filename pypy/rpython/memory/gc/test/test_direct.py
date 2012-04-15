@@ -535,6 +535,15 @@ class TestMiniMarkGCSimple(DirectGCTest):
         two = self.gc.nursery_free
         assert one != two
 
+    def test_pin_shadow(self):
+        s = self.malloc(S)
+        self.stackroots.append(s)
+        self.gc.id(s) # allocate shadow
+        self.gc.pin(llmemory.cast_ptr_to_adr(s))
+        self.gc.minor_collection(1)
+        assert self.gc.nursery_free != self.gc.nursery
+        # we still have a pinned object
+
     def test_writebarrier_before_copy(self):
         from pypy.rpython.memory.gc import minimark
         largeobj_size =  self.gc.nonlarge_max + 1

@@ -1502,7 +1502,6 @@ class MiniMarkGC(MovingGCBase):
             if hdr.tid & GCFLAG_VISITED:
                 return
             hdr.tid |= GCFLAG_VISITED
-            ll_assert(not self.header(obj).tid & GCFLAG_HAS_SHADOW, "support shadow with pinning")
             ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
             self.surviving_pinned_objects.insert(
                 llarena.getfakearenaaddress(obj - size_gc_header))
