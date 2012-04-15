@@ -205,6 +205,10 @@ class MiniMarkGC(MovingGCBase):
         # minimal allocated size of the nursery is 2x the following
         # number (by default, at least 132KB on 32-bit and 264KB on 64-bit).
         "large_object": (16384+512)*WORD,
+
+        # number of allowed pinned objects, must be smaller than the size
+        # of one chunk for address stack
+        "max_number_of_pinned_objects": 100,
         }
 
     def __init__(self, config,
@@ -216,6 +220,7 @@ class MiniMarkGC(MovingGCBase):
                  major_collection_threshold=2.5,
                  growth_rate_max=2.5,   # for tests
                  card_page_indices=0,
+                 max_number_of_pinned_objects=100,
                  large_object=8*WORD,
                  ArenaCollectionClass=None,
                  **kwds):
@@ -226,6 +231,7 @@ class MiniMarkGC(MovingGCBase):
         self.small_request_threshold = small_request_threshold
         self.major_collection_threshold = major_collection_threshold
         self.growth_rate_max = growth_rate_max
+        self.max_number_of_pinned_objects = max_number_of_pinned_objects
         self.num_major_collects = 0
         self.min_heap_size = 0.0
         self.max_heap_size = 0.0
@@ -309,6 +315,7 @@ class MiniMarkGC(MovingGCBase):
         # minor collect. This is a sorted deque that should be consulted when
         # considering next nursery ceiling
         self.nursery_barriers = self.AddressDeque()
+        self.pinned_objects_in_nursery = 0
     
         #
         # Allocate a nursery.  In case of auto_nursery_size, start by
@@ -797,9 +804,13 @@ class MiniMarkGC(MovingGCBase):
                 not self.header(obj).tid & GCFLAG_PINNED)
 
     def pin(self, obj):
+        if self.pinned_objects_in_nursery >= self.max_number_of_pinned_objects:
+            return
+        self.pinned_objects_in_nursery += 1
         self.header(obj).tid |= GCFLAG_PINNED
 
     def unpin(self, obj):
+        self.pinned_objects_in_nursery -= 1
         self.header(obj).tid &= ~GCFLAG_PINNED
 
     def shrink_array(self, obj, smallerlength):
@@ -1264,6 +1275,8 @@ class MiniMarkGC(MovingGCBase):
         # the young arrays.
         self.nursery_barriers.delete()
         self.surviving_pinned_objects = self.AddressStack()
+        self.pinned_objects_in_nursery = 0
+        # we track only surviving objects, don't care about the rest
         if self.young_rawmalloced_objects:
             self.remove_young_arrays_from_old_objects_pointing_to_young()
         #
@@ -1318,6 +1331,7 @@ class MiniMarkGC(MovingGCBase):
         nursery_barriers = self.AddressDeque()
         prev = self.nursery
         size_gc_header = self.gcheaderbuilder.size_gc_header
+        self.surviving_pinned_objects.sort()
         while self.surviving_pinned_objects.non_empty():
             next = self.surviving_pinned_objects.pop()
             assert next >= prev
@@ -1501,7 +1515,8 @@ class MiniMarkGC(MovingGCBase):
                 return
             hdr.tid |= GCFLAG_VISITED
             ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
-            self.surviving_pinned_objects.insert(
+            self.pinned_objects_in_nursery += 1
+            self.surviving_pinned_objects.append(
                 llarena.getfakearenaaddress(obj - size_gc_header))
             return
             #

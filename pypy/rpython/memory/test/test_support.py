@@ -1,3 +1,5 @@
+
+import random
 from pypy.rlib.objectmodel import free_non_gc_object
 from pypy.rpython.memory.support import get_address_stack
 from pypy.rpython.memory.support import get_address_deque
@@ -94,25 +96,20 @@ class TestAddressStack(object):
             assert a == addrs[i]
         assert not ll.non_empty()
 
-    def test_insert(self):
-        AddressStack = get_address_stack(chunk_size=5)
-        ll = AddressStack()
-        lla = llarena.arena_malloc(10, 2)
-        addrs = [lla + i for i in range(10)]
-        ll.insert(addrs[2])
-        ll.insert(addrs[1])
-        ll.insert(addrs[5])
-        ll.insert(addrs[4])
-        ll.insert(addrs[6])
-        ll.insert(addrs[9])
-        ll.insert(addrs[0])
-        ll.insert(addrs[8])
-        ll.insert(addrs[7])
-        ll.insert(addrs[3])
-        expected = range(10)
-        for i in expected:
-            a = ll.pop()
-            assert a == addrs[i]
+    def test_sort(self):
+        AddressStack = get_address_stack(chunk_size=15)
+        for _ in range(13):
+            ll = AddressStack()
+            lla = llarena.arena_malloc(10, 2)
+            addrs = [lla + i for i in range(10)]
+            random.shuffle(addrs)
+            for i in addrs:
+                ll.append(i)
+            ll.sort()
+            expected = range(10)
+            for i in expected:
+                a = ll.pop()
+                assert a == addrs[i]
 
 
 class TestAddressDeque:

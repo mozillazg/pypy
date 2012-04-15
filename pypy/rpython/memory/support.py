@@ -1,6 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import free_non_gc_object, we_are_translated
-from pypy.rlib.rarithmetic import r_uint, LONG_BIT
 from pypy.rlib.debug import ll_assert
 from pypy.tool.identity_dict import identity_dict
 
@@ -59,7 +58,30 @@ def get_chunk_manager(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
 
     unused_chunks = FreeList()
     cache[chunk_size] = unused_chunks, null_chunk
-    return unused_chunks, null_chunk
+
+    def partition(array, left, right):
+        last_item = array[right]
+        pivot = last_item
+        storeindex = left
+        for i in range(left, right):
+            if array[i] >= pivot:
+                array[i], array[storeindex] = array[storeindex], array[i]
+                storeindex += 1
+        # Move pivot to its final place
+        array[storeindex], array[right] = last_item, array[storeindex]
+        return storeindex
+
+    def quicksort(array, left, right):
+        # sort array[left:right+1] (i.e. bounds included)
+        if right > left:
+            pivotnewindex = partition(array, left, right)
+            quicksort(array, left, pivotnewindex - 1)
+            quicksort(array, pivotnewindex + 1, right)
+
+    def sort_chunk(chunk, size):
+        quicksort(chunk.items, 0, size - 1)
+        
+    return unused_chunks, null_chunk, sort_chunk
 
 
 def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
@@ -68,7 +90,7 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
     except KeyError:
         pass
 
-    unused_chunks, null_chunk = get_chunk_manager(chunk_size)
+    unused_chunks, null_chunk, sort_chunk = get_chunk_manager(chunk_size)
 
     class AddressStack(object):
         _alloc_flavor_ = "raw"
@@ -173,46 +195,9 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 chunk.items[count] = got
                 got = next
 
-        def insert(self, addr):
-            """ Insert addr in the already sorted stack to make sure
-            the smallest one is on top
-            """
-            if self.used_in_last_chunk == 0:
-                self.append(addr)
-                return
-            got = self.pop()
-            read = self.used_in_last_chunk - 1
-            if read == -1 and got <= addr:
-                self.append(addr)
-                self.append(got)
-                return
-            read_chunk = self.chunk
-            self.append(got)
-            if got > addr:
-                self.append(addr)
-                return
-            write = self.used_in_last_chunk
-            if self.used_in_last_chunk == chunk_size:
-                self.enlarge()
-                write = 0
-            self.used_in_last_chunk += 1
-            write_chunk = self.chunk
-            while got < addr and not read_chunk is null_chunk:
-                write_chunk.items[write] = got
-                write -= 1
-                if write < 0:
-                    write_chunk = write_chunk.next
-                    write = chunk_size - 1
-                got = read_chunk.items[read]
-                read -= 1
-                if read < 0:
-                    read_chunk = read_chunk.next
-                    read = chunk_size - 1
-            if got < addr:
-                write_chunk.items[write] = got
-                write_chunk.items[0] = addr
-            else:
-                write_chunk.items[write] = addr
+        def sort(self):
+            ll_assert(self.chunk.next == null_chunk, "too big for sorting")
+            sort_chunk(self.chunk, self.used_in_last_chunk - 1)
 
     cache[chunk_size] = AddressStack
     return AddressStack

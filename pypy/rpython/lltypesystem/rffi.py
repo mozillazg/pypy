@@ -2,11 +2,11 @@ import py
 from pypy.annotation import model as annmodel
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import ll2ctypes
-from pypy.rpython.lltypesystem.llmemory import cast_adr_to_ptr, cast_ptr_to_adr
+from pypy.rpython.lltypesystem.llmemory import cast_ptr_to_adr
 from pypy.rpython.lltypesystem.llmemory import itemoffsetof, raw_memcopy
 from pypy.annotation.model import lltype_to_annotation
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.rlib.objectmodel import Symbolic, CDefinedIntSymbolic
+from pypy.rlib.objectmodel import Symbolic, we_are_translated
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -14,7 +14,6 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.tool.rfficache import platform
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.annlowlevel import llhelper
-from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder, assert_str0
 from pypy.rlib import jit
 from pypy.rpython.lltypesystem import llmemory
@@ -715,14 +714,15 @@ def make_string_mappings(strtype):
         free_nonmovingbuffer call.
         """
         rgc.pin(data)
-        if rgc.can_move(data):
+        if rgc.can_move(data) or not we_are_translated():
             count = len(data)
             buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
             for i in range(count):
                 buf[i] = data[i]
             return buf
         else:
-            data_start = cast_ptr_to_adr(llstrtype(data)) + \
+            ll_s = llstrtype(data)
+            data_start = cast_ptr_to_adr(ll_s) + \
                 offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
             return cast(TYPEP, data_start)
     get_nonmovingbuffer._annenforceargs_ = [strtype]
