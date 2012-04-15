@@ -19,6 +19,7 @@ def weakref_create_getlazy(objgetter):
     return weakref_create(objgetter())
 
 malloc_and_pin = malloc
+malloc_varsize_and_pin = malloc
 
 def shrink_array(p, smallersize):
     return False

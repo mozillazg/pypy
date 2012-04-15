@@ -75,8 +75,15 @@ def can_move(p):
     With other moving GCs like the MiniMark GC, it can be True for some
     time, then False for the same object, when we are sure that it won't
     move any more.
+
+    We keep it for False when uncompiled, because malloc_and_pin would actually
+    return an object. This executes more interesting paths, but also:
+
+    x = malloc_and_pin(T)
+    if x:
+       assert not can_move(x)
     """
-    return True
+    return False
 
 class CanMoveEntry(ExtRegistryEntry):
     _about_ = can_move
@@ -200,17 +207,20 @@ def ll_shrink_array(p, smallerlength):
     from pypy.rpython.lltypesystem.lloperation import llop
     from pypy.rlib.objectmodel import keepalive_until_here
 
+    TP = lltype.typeOf(p).TO
+    assert len(TP._names) == 2
+    field = getattr(p, TP._names[0])
+
+    if len(getattr(p, TP._arrayfld)) == smallerlength:
+        return p
     if llop.shrink_array(lltype.Bool, p, smallerlength):
         return p    # done by the GC
     # XXX we assume for now that the type of p is GcStruct containing a
     # variable array, with no further pointers anywhere, and exactly one
     # field in the fixed part -- like STR and UNICODE.
 
-    TP = lltype.typeOf(p).TO
     newp = lltype.malloc(TP, smallerlength)
 
-    assert len(TP._names) == 2
-    field = getattr(p, TP._names[0])
     setattr(newp, TP._names[0], field)
 
     ARRAY = getattr(TP, TP._arrayfld)

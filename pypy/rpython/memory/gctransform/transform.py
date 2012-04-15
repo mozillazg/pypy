@@ -377,6 +377,12 @@ class BaseGCTransformer(object):
     def gct_zero_gc_pointers_inside(self, hop):
         pass
 
+    def gct_gc_pin(self, hop):
+        pass
+
+    def gct_gc_unpin(self, hop):
+        pass
+
     def gct_gc_writebarrier_before_copy(self, hop):
         # We take the conservative default and return False here, meaning
         # that rgc.ll_arraycopy() will do the copy by hand (i.e. with a

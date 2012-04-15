@@ -7,11 +7,11 @@ Low-level implementations for the external functions of the 'os' module.
 
 import os, sys, errno
 import py
-from pypy.rpython.module.support import ll_strcpy, OOSupport
-from pypy.tool.sourcetools import func_with_new_name, func_renamer
+from pypy.rpython.module.support import OOSupport
+from pypy.tool.sourcetools import func_renamer
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.rpython.extfunc import (
-    BaseLazyRegistering, lazy_register, register_external)
+    BaseLazyRegistering, register_external)
 from pypy.rpython.extfunc import registering, registering_if, extdef
 from pypy.annotation.model import (
     SomeInteger, SomeString, SomeTuple, SomeFloat, SomeUnicodeString)
@@ -20,15 +20,9 @@ from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rlib import rposix
-from pypy.tool.udir import udir
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rpython.lltypesystem.rstr import mallocstr
-from pypy.rpython.annlowlevel import llstr
-from pypy.rpython.lltypesystem.llmemory import sizeof,\
-     itemoffsetof, cast_ptr_to_adr, cast_adr_to_ptr, offsetof
+from pypy.rpython.lltypesystem.llmemory import itemoffsetof, offsetof
 from pypy.rpython.lltypesystem.rstr import STR
-from pypy.rpython.annlowlevel import llstr
-from pypy.rlib import rgc
 from pypy.rlib.objectmodel import specialize
 
 str0 = SomeString(no_nul=True)

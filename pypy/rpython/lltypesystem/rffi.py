@@ -739,6 +739,8 @@ def make_string_mappings(strtype):
         # if 'buf' points inside 'data'.  This is only possible if we
         # followed the 2nd case in get_nonmovingbuffer(); in the first case,
         # 'buf' points to its own raw-malloced memory.
+        import pdb
+        pdb.set_trace()
         data = llstrtype(data)
         data_start = cast_ptr_to_adr(data) + \
             offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
@@ -763,8 +765,15 @@ def make_string_mappings(strtype):
         Right now this is a version optimized for minimark which can pin values
         in the nursery.
         """
-        raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
-        return raw_buf, lltype.nullptr(STRTYPE)
+        ll_s = rgc.malloc_and_pin(STRTYPE, count)
+        if not ll_s:
+            raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
+            return raw_buf, lltype.nullptr(STRTYPE)
+        else:
+            data_start = cast_ptr_to_adr(ll_s) + \
+                offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
+            raw_buf = cast(TYPEP, data_start)
+            return raw_buf, ll_s
     alloc_buffer._always_inline_ = True # to get rid of the returned tuple
     alloc_buffer._annenforceargs_ = [int]
 
@@ -777,7 +786,9 @@ def make_string_mappings(strtype):
         """
         assert allocated_size >= needed_size
 
-        if gc_buf and (allocated_size == needed_size):
+        if gc_buf:
+            if allocated_size != needed_size:
+                gc_buf = rgc.ll_shrink_array(gc_buf, needed_size)
             return hlstrtype(gc_buf)
 
         new_buf = lltype.malloc(STRTYPE, needed_size)
