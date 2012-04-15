@@ -989,34 +989,23 @@ class TestMiniMarkGC(TestSemiSpaceGC):
     def test_pin_collect_tracking(self):
         from pypy.rpython.lltypesystem import llmemory
 
-        S = lltype.GcStruct('S')
+        S = lltype.GcStruct('S', ('x', lltype.Signed))
         TP = lltype.GcStruct('x', ('x', lltype.Signed),
                              ('y', lltype.Ptr(S)))
         
         def f(i):
-            e = lltype.malloc(TP)
-            e.x = 3
-            lltype.malloc(TP)
-            e2 = lltype.malloc(TP)
-            e2.x = 5
-            rgc.pin(e2)
-            rgc.pin(e)
-            prev = llmemory.cast_ptr_to_adr(e)
-            prev2 = llmemory.cast_ptr_to_adr(e2)
+            s = lltype.malloc(S)
+            c = lltype.malloc(TP)
+            c.y = s
+            c.x = 3
+            rgc.pin(c)
             for k in range(i):
                 lltype.malloc(TP)
-            res = int(llmemory.cast_ptr_to_adr(e) == prev)
-            res += int(llmemory.cast_ptr_to_adr(e2) == prev2)
-            rgc.unpin(e)
-            for k in range(i):
-                lltype.malloc(TP)
-            rgc.unpin(e2)
-            assert e.x == 3 # noone overwrote it
-            assert e2.x == 5 # noone overwrote it
-            return res
+            rgc.unpin(c)
+            return c.y == s
 
         res = self.interpret(f, [10])
-        assert res == 2
+        assert res == 1
         
 
 class TestMiniMarkGCCardMarking(TestMiniMarkGC):
