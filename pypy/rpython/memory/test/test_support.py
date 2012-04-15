@@ -98,12 +98,13 @@ class TestAddressStack(object):
 
     def test_sort(self):
         AddressStack = get_address_stack(chunk_size=15)
+        lla = llarena.arena_malloc(10, 2)
+        addrs = [lla + i for i in range(10)]
         for _ in range(13):
             ll = AddressStack()
-            lla = llarena.arena_malloc(10, 2)
-            addrs = [lla + i for i in range(10)]
-            random.shuffle(addrs)
-            for i in addrs:
+            addr_copy = addrs[:]
+            random.shuffle(addr_copy)
+            for i in addr_copy:
                 ll.append(i)
             ll.sort()
             expected = range(10)
