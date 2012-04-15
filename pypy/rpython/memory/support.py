@@ -197,7 +197,7 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
 
         def sort(self):
             ll_assert(self.chunk.next == null_chunk, "too big for sorting")
-            sort_chunk(self.chunk, self.used_in_last_chunk - 1)
+            sort_chunk(self.chunk, self.used_in_last_chunk)
 
     cache[chunk_size] = AddressStack
     return AddressStack
