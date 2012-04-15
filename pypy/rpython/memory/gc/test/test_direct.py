@@ -541,6 +541,8 @@ class TestMiniMarkGCSimple(DirectGCTest):
         self.gc.id(s) # allocate shadow
         self.gc.pin(llmemory.cast_ptr_to_adr(s))
         self.gc.minor_collection(1)
+        self.gc.unpin(llmemory.cast_ptr_to_adr(s))
+        self.gc.minor_collection(1)
         assert self.gc.nursery_free != self.gc.nursery
         # we still have a pinned object
 
