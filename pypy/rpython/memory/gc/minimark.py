@@ -797,12 +797,10 @@ class MiniMarkGC(MovingGCBase):
                 not self.header(obj).tid & GCFLAG_PINNED)
 
     def pin(self, obj):
-        if self.is_in_nursery(obj):
-            self.header(obj).tid |= GCFLAG_PINNED
+        self.header(obj).tid |= GCFLAG_PINNED
 
     def unpin(self, obj):
-        if self.is_in_nursery(obj):
-            self.header(obj).tid &= ~GCFLAG_PINNED
+        self.header(obj).tid &= ~GCFLAG_PINNED
 
     def shrink_array(self, obj, smallerlength):
         #
