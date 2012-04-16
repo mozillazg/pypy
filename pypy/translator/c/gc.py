@@ -8,6 +8,7 @@ from pypy.rpython.lltypesystem.lltype import \
 from pypy.rpython.memory.gctransform import \
      refcounting, boehm, framework, asmgcroot
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.memory import gctypelayout
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 
 class BasicGcPolicy(object):
@@ -340,7 +341,7 @@ class FrameworkGcPolicy(BasicGcPolicy):
         return framework.WEAKREF
 
     def convert_weakref_to(self, ptarget):
-        return framework.convert_weakref_to(ptarget)
+        return gctypelayout.convert_weakref_to(ptarget)
 
     def OP_GC_RELOAD_POSSIBLY_MOVED(self, funcgen, op):
         if isinstance(op.args[1], Constant):
