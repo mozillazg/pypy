@@ -194,22 +194,22 @@ class W_Root(object):
     def immutable_unique_id(self, space):
         return None
 
-    def str_w(self, space):
-        w_msg = typed_unwrap_error_msg(space, "string", self)
+    def bytes_w(self, space):
+        w_msg = typed_unwrap_error_msg(space, "bytes", self)
         raise OperationError(space.w_TypeError, w_msg)
 
     def unicode_w(self, space):
         raise OperationError(space.w_TypeError,
-                             typed_unwrap_error_msg(space, "unicode", self))
+                             typed_unwrap_error_msg(space, "string", self))
 
     def int_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
-    
+
     def uint_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
-    
+
     def bigint_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
@@ -273,6 +273,7 @@ class ObjSpace(object):
     http://pypy.readthedocs.org/en/latest/objspace.html"""
 
     full_exceptions = True  # full support for exceptions (normalization & more)
+    py3k = True             # are we interpreting py3k bytecode?
 
     def __init__(self, config=None):
         "NOT_RPYTHON: Basic initialization of objects."
@@ -296,7 +297,6 @@ class ObjSpace(object):
         self.check_signal_action = None   # changed by the signal module
         self.user_del_action = UserDelAction(self)
         self.frame_trace_action = FrameTraceAction(self)
-        self._code_of_sys_exc_info = None
 
         from pypy.interpreter.pycode import cpython_magic, default_magic
         self.our_magic = default_magic
@@ -337,9 +337,8 @@ class ObjSpace(object):
 
     def finish(self):
         self.wait_for_thread_shutdown()
-        w_exitfunc = self.sys.getdictvalue(self, 'exitfunc')
-        if w_exitfunc is not None:
-            self.call_function(w_exitfunc)
+        w_atexit = self.getbuiltinmodule('atexit')
+        self.call_method(w_atexit, '_run_exitfuncs')
         from pypy.interpreter.module import Module
         for w_mod in self.builtin_modules.values():
             mod = self.interpclass_w(w_mod)
@@ -468,9 +467,9 @@ class ObjSpace(object):
                 if name not in modules:
                     modules.append(name)
 
-        # a bit of custom logic: rctime take precedence over time
+        # a bit of custom logic: time2 or rctime take precedence over time
         # XXX this could probably be done as a "requires" in the config
-        if 'rctime' in modules and 'time' in modules:
+        if ('time2' in modules or 'rctime' in modules) and 'time' in modules:
             modules.remove('time')
 
         if not self.config.objspace.nofaking:
@@ -507,24 +506,24 @@ class ObjSpace(object):
         self.exceptions_module = Module(self, w_name)
         self.exceptions_module.install()
 
-        from pypy.module.sys import Module
-        w_name = self.wrap('sys')
-        self.sys = Module(self, w_name)
-        self.sys.install()
-
         from pypy.module.imp import Module
         w_name = self.wrap('imp')
         mod = Module(self, w_name)
         mod.install()
 
+        from pypy.module.sys import Module
+        w_name = self.wrap('sys')
+        self.sys = Module(self, w_name)
+        self.sys.install()
+
         from pypy.module.__builtin__ import Module
-        w_name = self.wrap('__builtin__')
+        w_name = self.wrap('builtins')
         self.builtin = Module(self, w_name)
         w_builtin = self.wrap(self.builtin)
         w_builtin.install()
         self.setitem(self.builtin.w_dict, self.wrap('__builtins__'), w_builtin)
 
-        bootstrap_modules = set(('sys', 'imp', '__builtin__', 'exceptions'))
+        bootstrap_modules = set(('sys', 'imp', 'builtins', 'exceptions'))
         installed_builtin_modules = list(bootstrap_modules)
 
         exception_types_w = self.export_builtin_exceptions()
@@ -561,9 +560,15 @@ class ObjSpace(object):
     def export_builtin_exceptions(self):
         """NOT_RPYTHON"""
         w_dic = self.exceptions_module.getdict(self)
-        w_keys = self.call_method(w_dic, "keys")
         exc_types_w = {}
-        for w_name in self.unpackiterable(w_keys):
+        w_iter = self.iter(w_dic)
+        while True:
+            try:
+                w_name = self.next(w_iter)
+            except OperationError, e:
+                if not e.match(self, self.w_StopIteration):
+                    raise
+                break
             name = self.str_w(w_name)
             if not name.startswith('__'):
                 excname = name
@@ -610,7 +615,7 @@ class ObjSpace(object):
             self.fromcache(State).build_api(self)
         self.getbuiltinmodule('sys')
         self.getbuiltinmodule('imp')
-        self.getbuiltinmodule('__builtin__')
+        self.getbuiltinmodule('builtins')
         for mod in self.builtin_modules.values():
             mod.setup_after_space_initialization()
 
@@ -914,12 +919,6 @@ class ObjSpace(object):
         """
         return None
 
-    def view_as_kwargs(self, w_dict):
-        """ if w_dict is a kwargs-dict, return two lists, one of unwrapped
-        strings and one of wrapped values. otherwise return (None, None)
-        """
-        return (None, None)
-
     def newlist_str(self, list_s):
         return self.newlist([self.wrap(s) for s in list_s])
 
@@ -927,19 +926,14 @@ class ObjSpace(object):
     def exception_match(self, w_exc_type, w_check_class):
         """Checks if the given exception type matches 'w_check_class'."""
         if self.is_w(w_exc_type, w_check_class):
-            return True   # fast path (also here to handle string exceptions)
-        try:
-            if self.is_true(self.isinstance(w_check_class, self.w_tuple)):
-                for w_t in self.fixedview(w_check_class):
-                    if self.exception_match(w_exc_type, w_t):
-                        return True
-                else:
-                    return False
-            return self.exception_issubclass_w(w_exc_type, w_check_class)
-        except OperationError, e:
-            if e.match(self, self.w_TypeError):   # string exceptions maybe
+            return True   # fast path
+        if self.is_true(self.isinstance(w_check_class, self.w_tuple)):
+            for w_t in self.fixedview(w_check_class):
+                if self.exception_match(w_exc_type, w_t):
+                    return True
+            else:
                 return False
-            raise
+        return self.exception_issubclass_w(w_exc_type, w_check_class)
 
     def call_obj_args(self, w_callable, w_obj, args):
         if not self.config.objspace.disable_call_speedhacks:
@@ -960,15 +954,10 @@ class ObjSpace(object):
             # start of hack for performance
             from pypy.interpreter.function import Function, Method
             if isinstance(w_func, Method):
-                w_inst = w_func.w_instance
-                if w_inst is not None:
-                    if nargs < 4:
-                        func = w_func.w_function
-                        if isinstance(func, Function):
-                            return func.funccall(w_inst, *args_w)
-                elif args_w and (
-                        self.abstract_isinstance_w(args_w[0], w_func.w_class)):
-                    w_func = w_func.w_function
+                if nargs < 4:
+                    func = w_func.w_function
+                    if isinstance(func, Function):
+                        return func.funccall(w_func.w_instance, *args_w)
 
             if isinstance(w_func, Function):
                 return w_func.funccall(*args_w)
@@ -988,16 +977,10 @@ class ObjSpace(object):
         if not self.config.objspace.disable_call_speedhacks:
             # start of hack for performance
             if isinstance(w_func, Method):
-                w_inst = w_func.w_instance
-                if w_inst is not None:
-                    w_func = w_func.w_function
-                    # reuse callable stack place for w_inst
-                    frame.settopvalue(w_inst, nargs)
-                    nargs += 1
-                elif nargs > 0 and (
-                    self.abstract_isinstance_w(frame.peekvalue(nargs-1),   #    :-(
-                                               w_func.w_class)):
-                    w_func = w_func.w_function
+                # reuse callable stack place for w_inst
+                frame.settopvalue(w_func.w_instance, nargs)
+                nargs += 1
+                w_func = w_func.w_function
 
             if isinstance(w_func, Function):
                 return w_func.funccall_valuestack(nargs, frame)
@@ -1030,26 +1013,8 @@ class ObjSpace(object):
                 return w_value
         return None
 
-    def is_oldstyle_instance(self, w_obj):
-        # xxx hack hack hack
-        from pypy.module.__builtin__.interp_classobj import W_InstanceObject
-        obj = self.interpclass_w(w_obj)
-        return obj is not None and isinstance(obj, W_InstanceObject)
-
     def callable(self, w_obj):
-        if self.lookup(w_obj, "__call__") is not None:
-            if self.is_oldstyle_instance(w_obj):
-                # ugly old style class special treatment, but well ...
-                try:
-                    self.getattr(w_obj, self.wrap("__call__"))
-                    return self.w_True
-                except OperationError, e:
-                    if not e.match(self, self.w_AttributeError):
-                        raise
-                    return self.w_False
-            else:
-                return self.w_True
-        return self.w_False
+        return self.wrap(self.lookup(w_obj, "__call__") is not None)
 
     def issequence_w(self, w_obj):
         return (self.findattr(w_obj, self.wrap("__getitem__")) is not None)
@@ -1059,7 +1024,7 @@ class ObjSpace(object):
 
     # The code below only works
     # for the simple case (new-style instance).
-    # These methods are patched with the full logic by the __builtin__
+    # These methods are patched with the full logic by the builtins
     # module when it is loaded
 
     def abstract_issubclass_w(self, w_cls1, w_cls2):
@@ -1078,8 +1043,7 @@ class ObjSpace(object):
         # Equivalent to 'obj.__class__'.
         return self.type(w_obj)
 
-    # CPython rules allows old style classes or subclasses
-    # of BaseExceptions to be exceptions.
+    # CPython rules allows subclasses of BaseExceptions to be exceptions.
     # This is slightly less general than the case above, so we prefix
     # it with exception_
 
@@ -1305,7 +1269,7 @@ class ObjSpace(object):
         # unclear if there is any use at all for getting the bytes in
         # the unicode buffer.)
         try:
-            return self.str_w(w_obj)
+            return self.bytes_w(w_obj)
         except OperationError, e:
             if not e.match(self, self.w_TypeError):
                 raise
@@ -1318,12 +1282,31 @@ class ObjSpace(object):
         return self.str_w(w_obj)
 
     def str_w(self, w_obj):
-        return w_obj.str_w(self)
+        if self.isinstance_w(w_obj, self.w_unicode):
+            try:
+                return self.unicode_w(w_obj).encode('ascii')
+            except UnicodeEncodeError:
+                w_bytes = self.call_method(w_obj, 'encode', self.wrap('utf-8'))
+                return self.bytes_w(w_bytes)
+        else:
+            return w_obj.bytes_w(self)
+
+    def bytes_w(self, w_obj):
+        return w_obj.bytes_w(self)
 
     def str0_w(self, w_obj):
         "Like str_w, but rejects strings with NUL bytes."
         from pypy.rlib import rstring
-        result = w_obj.str_w(self)
+        result = self.str_w(w_obj)
+        if '\x00' in result:
+            raise OperationError(self.w_TypeError, self.wrap(
+                    'argument must be a string without NUL characters'))
+        return rstring.assert_str0(result)
+
+    def bytes0_w(self, w_obj):
+        "Like bytes_w, but rejects strings with NUL bytes."
+        from pypy.rlib import rstring
+        result = self.bytes_w(w_obj)
         if '\x00' in result:
             raise OperationError(self.w_TypeError, self.wrap(
                     'argument must be a string without NUL characters'))
@@ -1454,8 +1437,7 @@ class ObjSpace(object):
         # not os.close().  It's likely designed for 'select'.  It's irregular
         # in the sense that it expects either a real int/long or an object
         # with a fileno(), but not an object with an __int__().
-        if (not self.isinstance_w(w_fd, self.w_int) and
-            not self.isinstance_w(w_fd, self.w_long)):
+        if not self.isinstance_w(w_fd, self.w_int):
             try:
                 w_fileno = self.getattr(w_fd, self.wrap("fileno"))
             except OperationError, e:
@@ -1538,16 +1520,11 @@ ObjSpace.MethodTable = [
     ('getitem',         'getitem',   2, ['__getitem__']),
     ('setitem',         'setitem',   3, ['__setitem__']),
     ('delitem',         'delitem',   2, ['__delitem__']),
-    ('getslice',        'getslice',  3, ['__getslice__']),
-    ('setslice',        'setslice',  4, ['__setslice__']),
-    ('delslice',        'delslice',  3, ['__delslice__']),
     ('trunc',           'trunc',     1, ['__trunc__']),
     ('pos',             'pos',       1, ['__pos__']),
     ('neg',             'neg',       1, ['__neg__']),
-    ('nonzero',         'truth',     1, ['__nonzero__']),
+    ('nonzero',         'truth',     1, ['__bool__']),
     ('abs' ,            'abs',       1, ['__abs__']),
-    ('hex',             'hex',       1, ['__hex__']),
-    ('oct',             'oct',       1, ['__oct__']),
     ('ord',             'ord',       1, []),
     ('invert',          '~',         1, ['__invert__']),
     ('add',             '+',         2, ['__add__', '__radd__']),
@@ -1567,7 +1544,6 @@ ObjSpace.MethodTable = [
     ('int',             'int',       1, ['__int__']),
     ('index',           'index',     1, ['__index__']),
     ('float',           'float',     1, ['__float__']),
-    ('long',            'long',      1, ['__long__']),
     ('inplace_add',     '+=',        2, ['__iadd__']),
     ('inplace_sub',     '-=',        2, ['__isub__']),
     ('inplace_mul',     '*=',        2, ['__imul__']),
@@ -1587,11 +1563,9 @@ ObjSpace.MethodTable = [
     ('ne',              '!=',        2, ['__ne__', '__ne__']),
     ('gt',              '>',         2, ['__gt__', '__lt__']),
     ('ge',              '>=',        2, ['__ge__', '__le__']),
-    ('cmp',             'cmp',       2, ['__cmp__']),   # rich cmps preferred
-    ('coerce',          'coerce',    2, ['__coerce__', '__coerce__']),
     ('contains',        'contains',  2, ['__contains__']),
     ('iter',            'iter',      1, ['__iter__']),
-    ('next',            'next',      1, ['next']),
+    ('next',            'next',      1, ['__next__']),
 #    ('call',            'call',      3, ['__call__']),
     ('get',             'get',       3, ['__get__']),
     ('set',             'set',       3, ['__set__']),
@@ -1601,7 +1575,7 @@ ObjSpace.MethodTable = [
     ]
 
 ObjSpace.BuiltinModuleTable = [
-    '__builtin__',
+    'builtins',
     'sys',
     ]
 
@@ -1678,7 +1652,7 @@ if sys.platform.startswith("win"):
 
 ObjSpace.IrregularOpTable = [
     'wrap',
-    'str_w',
+    'bytes_w',
     'int_w',
     'float_w',
     'uint_w',
