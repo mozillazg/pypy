@@ -11,6 +11,7 @@ from pypy.translator.translator import TranslationContext
 from pypy.jit.backend.x86.arch import IS_X86_32, IS_X86_64
 from pypy.config.translationoption import DEFL_GC
 from pypy.rlib import rgc
+from pypy.rlib.rerased_raw import UntypedStorage
 
 class TestTranslationX86(CCompiledMixin):
     CPUClass = getcpuclass()
@@ -42,7 +43,7 @@ class TestTranslationX86(CCompiledMixin):
             return abs(x)
 
         jitdriver = JitDriver(greens = [],
-                              reds = ['total', 'frame', 'j'],
+                              reds = ['total', 'raw_storage', 'frame', 'j'],
                               virtualizables = ['frame'])
         def f(i, j):
             for param, _ in unroll_parameters:
@@ -53,14 +54,16 @@ class TestTranslationX86(CCompiledMixin):
             total = 0
             frame = Frame(i)
             j = float(j)
+            raw_storage = UntypedStorage("fi")
+            raw_storage.setfloat(0, 0.712)
             while frame.i > 3:
-                jitdriver.can_enter_jit(frame=frame, total=total, j=j)
-                jitdriver.jit_merge_point(frame=frame, total=total, j=j)
+                jitdriver.jit_merge_point(frame=frame, total=total, j=j,
+                                          raw_storage=raw_storage)
                 total += frame.i
                 if frame.i >= 20:
                     frame.i -= 2
                 frame.i -= 1
-                j *= -0.712
+                j *= -raw_storage.getfloat(0)
                 if j + (-j):    raise ValueError
                 k = myabs(j)
                 if k - abs(j):  raise ValueError
