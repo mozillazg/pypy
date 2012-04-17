@@ -1,11 +1,13 @@
 from pypy.interpreter.error import OperationError
-from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.module.cpyext.api import (cpython_api, Py_ssize_t, CANNOT_FAIL,
                                     build_type_checkers)
+from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.module.cpyext.pyobject import (PyObject, PyObjectP, Py_DecRef,
     borrow_from, make_ref, from_ref)
-from pypy.module.cpyext.pyerrors import PyErr_BadInternalCall
 from pypy.objspace.std.tupleobject import W_TupleObject
+from pypy.rlib.rerased_raw import INSTANCE
+from pypy.rpython.lltypesystem import rffi, lltype
+
 
 PyTuple_Check, PyTuple_CheckExact = build_type_checkers("Tuple")
 
@@ -29,7 +31,7 @@ def _setitem_tuple(space, w_t, pos, w_obj):
     # are also other implementations of tuples.
     from pypy.objspace.std.tupletype import store_obj
     assert isinstance(w_t, W_TupleObject)
-    store_obj(space, w_t.tuplestorage, pos, w_obj)
+    store_obj(space, w_t.tuplestorage, INSTANCE, pos, w_obj)
 
 @cpython_api([PyObject, Py_ssize_t], PyObject)
 def PyTuple_GetItem(space, w_t, pos):
