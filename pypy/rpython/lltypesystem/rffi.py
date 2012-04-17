@@ -785,6 +785,7 @@ def make_string_mappings(strtype):
         assert allocated_size >= needed_size
 
         if gc_buf:
+            rgc.unpin(gc_buf)
             if allocated_size != needed_size:
                 gc_buf = rgc.ll_shrink_array(gc_buf, needed_size)
             return hlstrtype(gc_buf)
