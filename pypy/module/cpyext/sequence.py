@@ -59,7 +59,7 @@ def PySequence_Fast_GET_ITEM(space, w_obj, index):
         w_res = w_obj.getitem(index)
     else:
         assert isinstance(w_obj, tupleobject.W_TupleObject)
-        w_res = w_obj.getitem(index)
+        w_res = w_obj.getitem(space, index)
     return borrow_from(w_obj, w_res)
 
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
