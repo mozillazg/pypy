@@ -57,7 +57,7 @@ class TestUntypedStorageDirect(object):
         storage = rerased_raw.UntypedStorage("ooi")
         assert storage.getshape() == "ooi"
 
-class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
+class BaseTestUntypedStorage(BaseRtypingTest):
     def test_int(self):
         def f(x):
             storage = rerased_raw.UntypedStorage("i")
@@ -164,7 +164,7 @@ class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
             return storage.getshape()
 
         llres = self.interpret(f, [])
-        assert hlstr(llres) == "ooi"
+        assert self.ll_to_string(llres) == "ooi"
 
     def test_const(self):
         class A(object):
@@ -183,3 +183,6 @@ class TestUntypedStorageLLType(LLRtypeMixin, BaseRtypingTest):
 
         res = self.interpret(f, [0])
         assert res == 21
+
+class TestUntypedStorageLLtype(LLRtypeMixin, BaseTestUntypedStorage):
+    pass

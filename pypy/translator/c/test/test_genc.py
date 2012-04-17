@@ -534,3 +534,4 @@ def test_inhibit_tail_call():
     else:
         assert 0, "the call was not found in the C source"
     assert 'PYPY_INHIBIT_TAIL_CALL();' in lines[i+1]
+
