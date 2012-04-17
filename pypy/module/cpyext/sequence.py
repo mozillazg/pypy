@@ -46,7 +46,7 @@ def PySequence_Fast(space, w_obj, m):
         isinstance(w_obj, tupleobject.W_TupleObject)):
         return w_obj
     try:
-        return tupleobject.W_TupleObject(space.fixedview(w_obj))
+        return space.newtuple(space.fixedview(w_obj))
     except OperationError:
         raise OperationError(space.w_TypeError, space.wrap(rffi.charp2str(m)))
 

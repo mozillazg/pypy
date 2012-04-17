@@ -150,7 +150,7 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
             def __init__(self):
                 self.foobar = 32
                 super(UnicodeSubclass2, self).__init__()
-        
+
         newobj = UnicodeSubclass2()
         assert newobj.get_val() == 42
         assert newobj.foobar == 32
@@ -282,7 +282,7 @@ class AppTestTypeObject(AppTestCpythonExtensionBase):
         class C(object):
             pass
         assert module.name_by_heaptype(C) == "C"
-        
+
 
 class TestTypes(BaseApiTest):
     def test_type_attributes(self, space, api):
@@ -295,7 +295,7 @@ class TestTypes(BaseApiTest):
 
         py_type = rffi.cast(PyTypeObjectPtr, ref)
         assert py_type.c_tp_alloc
-        assert from_ref(space, py_type.c_tp_mro).wrappeditems is w_class.mro_w
+        assert space.eq_w(from_ref(space, py_type.c_tp_mro), space.newtuple(w_class.mro_w))
 
         api.Py_DecRef(ref)
 
@@ -320,7 +320,7 @@ class TestTypes(BaseApiTest):
         w_obj = api._PyType_Lookup(w_type, space.wrap("__invalid"))
         assert w_obj is None
         assert api.PyErr_Occurred() is None
-    
+
 class AppTestSlots(AppTestCpythonExtensionBase):
     def test_some_slots(self):
         module = self.import_extension('foo', [
