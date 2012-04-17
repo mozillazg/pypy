@@ -59,7 +59,7 @@ def PySequence_Fast_GET_ITEM(space, w_obj, index):
         w_res = w_obj.getitem(index)
     else:
         assert isinstance(w_obj, tupleobject.W_TupleObject)
-        w_res = w_obj.wrappeditems[index]
+        w_res = w_obj.getitem(index)
     return borrow_from(w_obj, w_res)
 
 @cpython_api([PyObject], Py_ssize_t, error=CANNOT_FAIL)
@@ -72,7 +72,7 @@ def PySequence_Fast_GET_SIZE(space, w_obj):
     if isinstance(w_obj, listobject.W_ListObject):
         return w_obj.length()
     assert isinstance(w_obj, tupleobject.W_TupleObject)
-    return len(w_obj.wrappeditems)
+    return w_obj.length()
 
 @cpython_api([PyObject, Py_ssize_t, Py_ssize_t], PyObject)
 def PySequence_GetSlice(space, w_obj, start, end):
