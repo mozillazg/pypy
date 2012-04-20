@@ -542,9 +542,11 @@ class TestMiniMarkGCSimple(DirectGCTest):
         self.gc.pin(llmemory.cast_ptr_to_adr(s))
         self.gc.minor_collection(1)
         self.gc.unpin(llmemory.cast_ptr_to_adr(s))
-        self.gc.minor_collection(1)
         assert self.gc.nursery_free != self.gc.nursery
         # we still have a pinned object
+        self.gc.minor_collection(1)
+        assert self.gc.nursery_free == self.gc.nursery
+        # we don't have a pinned object any more
 
     def test_writebarrier_before_copy(self):
         from pypy.rpython.memory.gc import minimark

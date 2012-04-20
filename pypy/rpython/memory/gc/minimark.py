@@ -1262,6 +1262,12 @@ class MiniMarkGC(MovingGCBase):
                 self.old_objects_with_cards_set.append(dest_addr)
                 dest_hdr.tid |= GCFLAG_CARDS_SET
 
+    def record_pinned_object(self, obj, new_dict):
+        obj = obj + self.gcheaderbuilder.size_gc_header
+        shadow = self.nursery_objects_shadows.get(obj)
+        if shadow != NULL:
+            new_dict.setitem(obj, shadow)
+
     # ----------
     # Nursery collection
 
@@ -1318,7 +1324,14 @@ class MiniMarkGC(MovingGCBase):
         #
         # Clear this mapping.
         if self.nursery_objects_shadows.length() > 0:
-            self.nursery_objects_shadows.clear()
+            if self.surviving_pinned_objects.non_empty():
+                new_shadows = self.AddressDict()
+                self.surviving_pinned_objects.foreach(self.record_pinned_object,
+                                                      new_shadows)
+                self.nursery_objects_shadows.delete()
+                self.nursery_objects_shadows = new_shadows
+            else:
+                self.nursery_objects_shadows.clear()
         #
         # Walk the list of young raw-malloced objects, and either free
         # them or make them old.
