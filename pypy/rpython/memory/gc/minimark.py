@@ -1334,6 +1334,7 @@ class MiniMarkGC(MovingGCBase):
         self.surviving_pinned_objects.sort()
         while self.surviving_pinned_objects.non_empty():
             next = self.surviving_pinned_objects.pop()
+            self.pinned_objects_in_nursery += 1
             assert next >= prev
             size = llarena.getfakearenaaddress(next) - prev
             llarena.arena_reset(prev, size, 2)
@@ -1360,6 +1361,8 @@ class MiniMarkGC(MovingGCBase):
         #
         debug_print("minor collect, total memory used:",
                     self.get_total_memory_used())
+        debug_print("number of pinned objects:",
+                    self.pinned_objects_in_nursery)
         if self.DEBUG >= 2:
             self.debug_check_consistency()     # expensive!
         debug_stop("gc-minor")
