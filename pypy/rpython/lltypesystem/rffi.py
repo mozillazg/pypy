@@ -713,24 +713,26 @@ def make_string_mappings(strtype):
         string is already nonmovable.  Must be followed by a
         free_nonmovingbuffer call.
         """
-        rgc.pin(data)
-        if rgc.can_move(data) or not we_are_translated():
-            count = len(data)
-            buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
-            for i in range(count):
-                buf[i] = data[i]
-            return buf
-        else:
-            ll_s = llstrtype(data)
-            data_start = cast_ptr_to_adr(ll_s) + \
-                offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
-            return cast(TYPEP, data_start)
+        pinned = False
+        if rgc.can_move(data):
+            if rgc.pin(data):
+                pinned = True
+            else:
+                count = len(data)
+                buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
+                for i in range(count):
+                    buf[i] = data[i]
+                return buf, False, True
+        ll_s = llstrtype(data)
+        data_start = cast_ptr_to_adr(ll_s) + \
+                     offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
+        return cast(TYPEP, data_start), pinned, False
     get_nonmovingbuffer._annenforceargs_ = [strtype]
 
     # (str, char*) -> None
     # Can't inline this because of the raw address manipulation.
     @jit.dont_look_inside
-    def free_nonmovingbuffer(data, buf):
+    def free_nonmovingbuffer(data, buf, pinned, is_raw):
         """
         Either free a non-moving buffer or keep the original storage alive.
         """
@@ -739,17 +741,12 @@ def make_string_mappings(strtype):
         # if 'buf' points inside 'data'.  This is only possible if we
         # followed the 2nd case in get_nonmovingbuffer(); in the first case,
         # 'buf' points to its own raw-malloced memory.
-        ll_data = llstrtype(data)
-        data_start = cast_ptr_to_adr(ll_data) + \
-            offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
-        followed_2nd_path = (buf == cast(TYPEP, data_start))
         keepalive_until_here(data)
-        keepalive_until_here(ll_data)
-        if followed_2nd_path:
+        if pinned:
             rgc.unpin(data)
-        else:
+        elif is_raw:
             lltype.free(buf, flavor='raw')
-    free_nonmovingbuffer._annenforceargs_ = [strtype, None]
+    free_nonmovingbuffer._annenforceargs_ = [strtype, None, bool, bool]
 
     # int -> (char*, str)
     def alloc_buffer(count):
@@ -1070,20 +1067,22 @@ class scoped_nonmovingbuffer:
     def __init__(self, data):
         self.data = data
     def __enter__(self):
-        self.buf = get_nonmovingbuffer(self.data)
+        self.buf, self.pinned, self.is_raw = get_nonmovingbuffer(self.data)
         return self.buf
     def __exit__(self, *args):
-        free_nonmovingbuffer(self.data, self.buf)
+        free_nonmovingbuffer(self.data, self.buf, self.pinned, self.is_raw)
 
 
 class scoped_nonmoving_unicodebuffer:
     def __init__(self, data):
         self.data = data
     def __enter__(self):
-        self.buf = get_nonmoving_unicodebuffer(self.data)
+        self.buf, self.pinned, self.is_raw = get_nonmoving_unicodebuffer(
+            self.data)
         return self.buf
     def __exit__(self, *args):
-        free_nonmoving_unicodebuffer(self.data, self.buf)
+        free_nonmoving_unicodebuffer(self.data, self.buf, self.pinned,
+                                     self.is_raw)
 
 class scoped_alloc_buffer:
     def __init__(self, size):

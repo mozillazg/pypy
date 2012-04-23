@@ -1481,8 +1481,7 @@ if sys.platform == 'win32':
         if not final and is_dbcs_lead_byte(s[size-1]):
             size -= 1
 
-        dataptr = rffi.get_nonmovingbuffer(s)
-        try:
+        with rffi.scoped_nonmoving_unicodebuffer(s) as dataptr:
             # first get the size of the result
             usize = MultiByteToWideChar(CP_ACP, 0,
                                         dataptr, size,
@@ -1490,19 +1489,12 @@ if sys.platform == 'win32':
             if usize == 0:
                 raise rwin32.lastWindowsError()
 
-            raw_buf, gc_buf = rffi.alloc_unicodebuffer(usize)
-            try:
+            with rffi.scoped_alloc_unicodebuffer(usize) as buf:
                 # do the conversion
                 if MultiByteToWideChar(CP_ACP, 0,
-                                       dataptr, size, raw_buf, usize) == 0:
+                                       dataptr, size, buf.raw, usize) == 0:
                     raise rwin32.lastWindowsError()
-
-                return (rffi.unicode_from_buffer(raw_buf, gc_buf, usize, usize),
-                        size)
-            finally:
-                rffi.keep_unicodebuffer_alive_until_here(raw_buf, gc_buf)
-        finally:
-            rffi.free_nonmovingbuffer(s, dataptr)
+                return buf.str(usize), size
 
     def unicode_encode_mbcs(p, size, errors, errorhandler=None):
         if size == 0:
