@@ -631,14 +631,19 @@ class StructNode(ContainerNode):
 
         if T._hints.get('untyped_storage'):
             arrayfld = T._arrayfld
-            shapefld = [fld for fld in T._flds if fld != arrayfld]
             c_expr = defnode.access_expr(self.name, 'shape')
             lines = generic_initializationexpr(self.db, self.obj.shape,
                                                c_expr, decoration + 'shape')
             for line in lines:
                 yield "\t" + line
-            for i, obj in enumerate(ll_enumerate_elements(self.obj)):
-                xxx
+            arraydef = self.db.gettypedefnode(getattr(T, arrayfld))
+            for i, obj in ll_enumerate_elements(self.obj):
+                c_expr = '(void*)' + arraydef.access_expr(
+                    self.name + '.' + arrayfld, i)
+                lines = generic_initializationexpr(self.db, obj, c_expr,
+                                                   '%s[%d]' % (name, i))
+                for line in lines:
+                    yield '\t' + line
             is_empty = False
         else:
             for name, value in data:
