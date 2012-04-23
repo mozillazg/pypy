@@ -800,8 +800,7 @@ class MiniMarkGC(MovingGCBase):
 
     def can_move(self, obj):
         """Overrides the parent can_move()."""
-        return (self.is_in_nursery(obj) and
-                not self.header(obj).tid & GCFLAG_PINNED)
+        return not self.is_in_nursery(obj)
 
     def pin(self, obj):
         if not self.is_in_nursery(obj):
@@ -809,6 +808,8 @@ class MiniMarkGC(MovingGCBase):
         # objects out of nursery should be guarded by can_move = False
         # better check though.
         if self.pinned_objects_in_nursery >= self.max_number_of_pinned_objects:
+            return False
+        if self.header(obj).tid | GCFLAG_PINNED:
             return False
         self.pinned_objects_in_nursery += 1
         self.header(obj).tid |= GCFLAG_PINNED
