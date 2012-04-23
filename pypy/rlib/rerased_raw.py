@@ -24,6 +24,9 @@ INSTANCE = "o"
 STRING = "s"
 UNICODE = "u"
 
+# all the same size for now
+WORD = rffi.sizeof(llmemory.Address)
+
 class UntypedStorage(object):
     def __init__(self, shape):
         self.storage = [None] * len(shape)
@@ -304,12 +307,12 @@ class UntypedStorageRepr(Repr):
 def ll_enumerate_elements(storage):
     for i, elem in enumerate(storage.shape.chars):
         if elem in [INSTANCE, STRING, UNICODE]:
-            yield storage.data.items[i].ptr
+            yield WORD * i, storage.data.items[i].ptr
         elif elem == INT:
-            yield rffi.cast(lltype.Signed, storage.data.items[i])
+            yield WORD * i, rffi.cast(lltype.Signed, storage.data.items[i])
         elif elem == FLOAT:
-            yield longlong2float.longlong2float(rffi.cast(lltype.Signed, storage.data.items[i]))
+            yield WORD * i, longlong2float.longlong2float(rffi.cast(lltype.Signed, storage.data.items[i]))
         elif elem == BOOL:
-            yield rffi.cast(lltype.Bool, storage.data.items[i])
+            yield WORD * i, rffi.cast(lltype.Bool, storage.data.items[i])
         else:
             assert False

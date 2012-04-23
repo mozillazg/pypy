@@ -195,8 +195,10 @@ class BaseTestUntypedStorage(BaseRtypingTest):
 
         llres = self.interpret(f, [])._obj
         lst = list(rerased_raw.ll_enumerate_elements(llres))
-        assert hlstr(lst[0]) == "abc"
-        assert lst[1:] == [13, True, 3.5]
+        assert hlstr(lst[0][1]) == "abc"
+        assert lst[0][0] == 0
+        WORD = rerased_raw.WORD
+        assert lst[1:] == [(WORD, 13), (WORD * 2, True), (WORD * 3, 3.5)]
 
 class TestUntypedStorageLLtype(LLRtypeMixin, BaseTestUntypedStorage):
     pass
