@@ -6,6 +6,7 @@ making sure that the shape string is cached correctly.
 
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
+from pypy.rlib import longlong2float
 from pypy.rpython.annlowlevel import (hlstr, llstr, llhelper,
     cast_instance_to_base_ptr)
 from pypy.rpython.rclass import getinstancerepr
@@ -307,7 +308,7 @@ def ll_enumerate_elements(storage):
         elif elem == INT:
             yield rffi.cast(lltype.Signed, storage.data[i])
         elif elem == FLOAT:
-            yield rffi.cast(lltype.Float, storage.data[i])
+            yield longlong2float.longlong2float(storage.data[i])
         elif elem == BOOL:
             yield rffi.cast(lltype.Bool, storage.data[i])
         else:
