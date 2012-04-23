@@ -811,7 +811,7 @@ class MiniMarkGC(MovingGCBase):
         # better check though.
         if self.pinned_objects_in_nursery >= self.max_number_of_pinned_objects:
             return False
-        if self.header(obj).tid | GCFLAG_PINNED:
+        if self.header(obj).tid & GCFLAG_PINNED:
             return False
         self.pinned_objects_in_nursery += 1
         self.header(obj).tid |= GCFLAG_PINNED
