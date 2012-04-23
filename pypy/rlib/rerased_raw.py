@@ -303,12 +303,12 @@ class UntypedStorageRepr(Repr):
 def ll_enumerate_elements(storage):
     for i, elem in enumerate(storage.shape.chars):
         if elem in [INSTANCE, STRING, UNICODE]:
-            yield storage.data[i].ptr
+            yield storage.data.items[i].ptr
         elif elem == INT:
-            yield rffi.cast(lltype.Signed, storage.data[i])
+            yield rffi.cast(lltype.Signed, storage.data.items[i])
         elif elem == FLOAT:
-            yield rffi.cast(lltype.Float, storage.data[i])
+            yield rffi.cast(lltype.Float, storage.data.items[i])
         elif elem == BOOL:
-            yield rffi.cast(lltype.Bool, storage.data[i])
+            yield rffi.cast(lltype.Bool, storage.data.items[i])
         else:
             assert False

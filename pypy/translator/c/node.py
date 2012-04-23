@@ -13,7 +13,7 @@ from pypy.translator.c.primitive import PrimitiveType, name_signed
 from pypy.rlib import exports
 from pypy.rlib.rfloat import isfinite
 from pypy.rlib.rstackovf import _StackOverflow
-from pypy.rlib.rerased_raw import xxx
+from pypy.rlib.rerased_raw import ll_enumerate_elements
 from pypy.translator.c import extfunc
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from py.builtin import BaseException
@@ -582,9 +582,8 @@ class StructNode(ContainerNode):
             shapefld = [fld for fld in T._flds if fld != arrayfld][0]
             shape = getattr(self.obj, shapefld)
             yield shape
-            for elem in shape.chars:
-                import pdb
-                pdb.set_trace()
+            for elem in ll_enumerate_elements(self.obj):
+                yield elem
         for name in T._names:
             yield getattr(self.obj, name)
 
