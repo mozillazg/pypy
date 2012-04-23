@@ -308,7 +308,7 @@ def ll_enumerate_elements(storage):
         elif elem == INT:
             yield rffi.cast(lltype.Signed, storage.data.items[i])
         elif elem == FLOAT:
-            yield longlong2float.longlong2float(rffi.cast(lltype.Signed, storage.data[i]))
+            yield longlong2float.longlong2float(rffi.cast(lltype.Signed, storage.data.items[i]))
         elif elem == BOOL:
             yield rffi.cast(lltype.Bool, storage.data.items[i])
         else:
