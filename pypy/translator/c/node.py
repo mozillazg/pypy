@@ -582,7 +582,7 @@ class StructNode(ContainerNode):
             shapefld = [fld for fld in T._flds if fld != arrayfld][0]
             shape = getattr(self.obj, shapefld)
             yield shape
-            for elem in ll_enumerate_elements(self.obj):
+            for _, elem in ll_enumerate_elements(self.obj):
                 yield elem
         else:
             for name in T._names:
@@ -629,16 +629,28 @@ class StructNode(ContainerNode):
         else:
             padding_drop = []
 
-        for name, value in data:
-            if name in padding_drop:
-                continue
-            c_expr = defnode.access_expr(self.name, name)
-            lines = generic_initializationexpr(self.db, value, c_expr,
-                                               decoration + name)
+        if T._hints.get('untyped_storage'):
+            arrayfld = T._arrayfld
+            shapefld = [fld for fld in T._flds if fld != arrayfld]
+            c_expr = defnode.access_expr(self.name, 'shape')
+            lines = generic_initializationexpr(self.db, self.obj.shape,
+                                               c_expr, decoration + 'shape')
             for line in lines:
-                yield '\t' + line
-            if not lines[0].startswith('/*'):
-                is_empty = False
+                yield "\t" + line
+            for i, obj in enumerate(ll_enumerate_elements(self.obj)):
+                xxx
+            is_empty = False
+        else:
+            for name, value in data:
+                if name in padding_drop:
+                    continue
+                c_expr = defnode.access_expr(self.name, name)
+                lines = generic_initializationexpr(self.db, value, c_expr,
+                                                   decoration + name)
+                for line in lines:
+                    yield '\t' + line
+                if not lines[0].startswith('/*'):
+                    is_empty = False
         if is_empty:
             yield '\t%s' % '0,'
         yield '}'
