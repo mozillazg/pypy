@@ -133,7 +133,7 @@ class GCManagedHeap(object):
         return self.gc.can_move(addr)
 
     def pin(self, addr):
-        self.gc.pin(addr)
+        return self.gc.pin(addr)
 
     def unpin(self, addr):
         self.gc.unpin(addr)    

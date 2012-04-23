@@ -38,7 +38,7 @@ def thread_die():
     pass
 
 def pin(obj):
-    pass
+    return False
 
 def unpin(obj):
     pass

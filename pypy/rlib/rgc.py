@@ -19,7 +19,7 @@ def set_max_heap_size(nbytes):
     pass
 
 def pin(obj):
-    pass
+    return False
 
 def unpin(obj):
     pass
@@ -75,15 +75,8 @@ def can_move(p):
     With other moving GCs like the MiniMark GC, it can be True for some
     time, then False for the same object, when we are sure that it won't
     move any more.
-
-    We keep it for False when uncompiled, because malloc_and_pin would actually
-    return an object. This executes more interesting paths, but also:
-
-    x = malloc_and_pin(T)
-    if x:
-       assert not can_move(x)
     """
-    return False
+    return True
 
 class CanMoveEntry(ExtRegistryEntry):
     _about_ = can_move
@@ -506,14 +499,15 @@ class PinEntry(ExtRegistryEntry):
     _about_ = pin
 
     def compute_result_annotation(self, s_arg):
-        pass
+        from pypy.annotation.model import SomeBool
+        return SomeBool()
 
     def specialize_call(self, hop):
         hop.exception_cannot_occur()
         v_obj, = hop.inputargs(hop.args_r[0])
         v_addr = hop.genop('cast_ptr_to_adr', [v_obj],
                            resulttype=llmemory.Address)
-        hop.genop('gc_pin', [v_addr])
+        return hop.genop('gc_pin', [v_addr], resulttype=lltype.Bool)
 
 class UnpinEntry(ExtRegistryEntry):
     _about_ = unpin

@@ -891,7 +891,7 @@ class LLFrame(object):
         pass       # marker for trackgcroot.py
 
     def op_gc_pin(self, obj):
-        self.heap.pin(obj)
+        return self.heap.pin(obj)
 
     def op_gc_unpin(self, obj):
         self.heap.unpin(obj)
