@@ -127,6 +127,7 @@ class __extend__(pairtype(SomeUntypedStorage, SomeUntypedStorage)):
 UNTYPEDSTORAGE = lltype.GcStruct("untypedstorage",
     ("shape", lltype.Ptr(STR)),
     ("data", lltype.Array(llmemory.Address)),
+    hints={'untyped_storage': True},
     rtti=True,
 )
 
@@ -298,3 +299,16 @@ class UntypedStorageRepr(Repr):
     @classmethod
     def ll_getlength(cls, arr):
         return len(arr.shape.chars)
+
+def ll_enumerate_elements(storage):
+    for i, elem in enumerate(storage.shape.chars):
+        if elem in [INSTANCE, STRING, UNICODE]:
+            yield storage.data[i].ptr
+        elif elem == INT:
+            yield rffi.cast(lltype.Signed, storage.data[i])
+        elif elem == FLOAT:
+            yield rffi.cast(lltype.Float, storage.data[i])
+        elif elem == BOOL:
+            yield rffi.cast(lltype.Bool, storage.data[i])
+        else:
+            assert False
