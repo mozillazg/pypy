@@ -378,7 +378,10 @@ class BaseGCTransformer(object):
         pass
 
     def gct_gc_pin(self, hop):
-        pass
+        op = hop.spaceop
+        hop.genop("same_as",
+                  [rmodel.inputconst(lltype.Bool, False)],
+                  resultvar=op.result)
 
     def gct_gc_unpin(self, hop):
         pass

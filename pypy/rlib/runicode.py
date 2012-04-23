@@ -1499,8 +1499,7 @@ if sys.platform == 'win32':
     def unicode_encode_mbcs(p, size, errors, errorhandler=None):
         if size == 0:
             return ''
-        dataptr = rffi.get_nonmoving_unicodebuffer(p)
-        try:
+        with rffi.scoped_nonmoving_unicodebuffer(p) as dataptr:
             # first get the size of the result
             mbcssize = WideCharToMultiByte(CP_ACP, 0,
                                            dataptr, size, None, 0,
@@ -1519,5 +1518,3 @@ if sys.platform == 'win32':
                 return rffi.str_from_buffer(raw_buf, gc_buf, mbcssize, mbcssize)
             finally:
                 rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
-        finally:
-            rffi.free_nonmoving_unicodebuffer(p, dataptr)

@@ -180,7 +180,7 @@ class GCBase(object):
         return False
 
     def pin(self, addr):
-        pass
+        return False
 
     def unpin(self, addr):
         pass

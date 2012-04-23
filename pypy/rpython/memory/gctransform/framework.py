@@ -439,7 +439,8 @@ class FrameworkGCTransformer(GCTransformer):
                                             annmodel.SomeInteger(nonneg=True)],
                                            annmodel.s_None)
         self.pin_ptr = getfn(GCClass.pin,
-                             [s_gc, annmodel.SomeAddress()], annmodel.s_None)
+                             [s_gc, annmodel.SomeAddress()],
+                             annmodel.SomeBool())
         self.unpin_ptr = getfn(GCClass.unpin,
                                [s_gc, annmodel.SomeAddress()], annmodel.s_None)
 
@@ -743,7 +744,8 @@ class FrameworkGCTransformer(GCTransformer):
 
     def gct_gc_pin(self, hop):
         op = hop.spaceop
-        hop.genop("direct_call", [self.pin_ptr, self.c_const_gc, op.args[0]])
+        hop.genop("direct_call", [self.pin_ptr, self.c_const_gc, op.args[0]],
+                  resultvar=op.result)
 
     def gct_gc_unpin(self, hop):
         op = hop.spaceop

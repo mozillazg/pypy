@@ -521,7 +521,7 @@ class BaseTestRffi:
                         counter += 1
                 return counter
             finally:
-                free_nonmovingbuffer(d, buf, is_pinned_is_raw)
+                free_nonmovingbuffer(d, buf, is_pinned, is_raw)
         assert f() == len(d)
         fn = self.compile(f, [], gcpolicy='ref')
         assert fn() == len(d)
