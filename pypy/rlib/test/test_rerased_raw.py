@@ -193,7 +193,7 @@ class BaseTestUntypedStorage(BaseRtypingTest):
             storage.setbool(2, True)
             return storage
 
-        llres = self.interpret(f, [])
+        llres = self.interpret(f, [])._obj
         lst = list(rerased_raw.ll_enumerate_elements(llres))
         assert hlstr(lst[0]) == "abc"
         assert lst[1:] == [13, True, 3.5]
