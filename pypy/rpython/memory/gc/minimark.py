@@ -800,7 +800,7 @@ class MiniMarkGC(MovingGCBase):
 
     def can_move(self, obj):
         """Overrides the parent can_move()."""
-        return not self.is_in_nursery(obj)
+        return self.is_in_nursery(obj)
 
     def pin(self, obj):
         if not self.is_in_nursery(obj):
