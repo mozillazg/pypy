@@ -741,11 +741,11 @@ def make_string_mappings(strtype):
         # if 'buf' points inside 'data'.  This is only possible if we
         # followed the 2nd case in get_nonmovingbuffer(); in the first case,
         # 'buf' points to its own raw-malloced memory.
-        keepalive_until_here(data)
         if pinned:
             rgc.unpin(data)
-        elif is_raw:
+        if is_raw:
             lltype.free(buf, flavor='raw')
+        keepalive_until_here(data)
     free_nonmovingbuffer._annenforceargs_ = [strtype, None, bool, bool]
 
     # int -> (char*, str)
