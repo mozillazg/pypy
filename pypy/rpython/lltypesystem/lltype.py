@@ -1570,7 +1570,7 @@ def _struct_variety(flds, cache={}):
         return cache[tag]
     except KeyError:
         class _struct1(_struct):
-            __slots__ = flds
+            __slots__ = tag + ('__arena_location__',)
         cache[tag] = _struct1
         return _struct1
  
