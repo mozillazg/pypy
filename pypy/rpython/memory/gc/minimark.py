@@ -957,11 +957,12 @@ class MiniMarkGC(MovingGCBase):
 
     def debug_check_object(self, obj):
         # after a minor or major collection, no object should be in the nursery
-        ll_assert(not self.is_in_nursery(obj),
-                  "object in nursery after collection")
-        # similarily, all objects should have this flag:
-        ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS,
-                  "missing GCFLAG_TRACK_YOUNG_PTRS")
+        if not self.header(obj).tid & GCFLAG_PINNED:
+            ll_assert(not self.is_in_nursery(obj),
+                      "object in nursery after collection")
+            # similarily, all objects should have this flag:
+            ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS,
+                      "missing GCFLAG_TRACK_YOUNG_PTRS")
         # the GCFLAG_VISITED should not be set between collections
         ll_assert(self.header(obj).tid & GCFLAG_VISITED == 0,
                   "unexpected GCFLAG_VISITED")
