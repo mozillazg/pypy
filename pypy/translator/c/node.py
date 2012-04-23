@@ -584,8 +584,9 @@ class StructNode(ContainerNode):
             yield shape
             for elem in ll_enumerate_elements(self.obj):
                 yield elem
-        for name in T._names:
-            yield getattr(self.obj, name)
+        else:
+            for name in T._names:
+                yield getattr(self.obj, name)
 
     def getlength(self):
         T = self.getTYPE()
