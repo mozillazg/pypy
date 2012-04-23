@@ -4,9 +4,10 @@ import sys
 from pypy.rpython.memory import gcwrapper
 from pypy.rpython.memory.test import snippet
 from pypy.rpython.test.test_llinterp import get_interpreter
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rlib.objectmodel import we_are_translated, compute_unique_id
+from pypy.rlib.objectmodel import we_are_translated, compute_unique_id,\
+     keepalive_until_here
 from pypy.rlib import rgc
 from pypy.rlib.rstring import StringBuilder
 from pypy.rlib.rarithmetic import LONG_BIT
@@ -596,8 +597,11 @@ class GCTest(object):
         TP = lltype.GcArray(lltype.Char)
         def func():
             a = rgc.malloc_and_pin(TP, 3)
+            adr = llmemory.cast_ptr_to_adr(a)
             if a:
-                assert not rgc.can_move(a)
+                rgc.collect()
+                assert adr == llmemory.cast_ptr_to_adr(a)
+                keepalive_until_here(a)
                 return 1
             return 0
 

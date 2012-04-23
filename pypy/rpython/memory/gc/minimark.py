@@ -583,14 +583,16 @@ class MiniMarkGC(MovingGCBase):
 
     def malloc_fixedsize_and_pin(self, typeid, size):
         r = self.malloc_fixedsize_clear(typeid, size)
-        self.pin(llmemory.cast_ptr_to_adr(r))
+        if not self.pin(llmemory.cast_ptr_to_adr(r)):
+            return lltype.nullptr(llmemory.GCREF.TO)
         return r
         
     def malloc_varsize_and_pin(self, typeid, length, size, itemsize,
                                offset_to_length):
         r = self.malloc_varsize_clear(typeid, length, size, itemsize,
                                       offset_to_length)
-        self.pin(llmemory.cast_ptr_to_adr(r))
+        if not self.pin(llmemory.cast_ptr_to_adr(r)):
+            return lltype.nullptr(llmemory.GCREF.TO)
         return r        
 
     def collect(self, gen=1):
