@@ -202,6 +202,7 @@ class BaseTestUntypedStorage(BaseRtypingTest):
         res = self.interpret(f, [0])
         assert res == 14.5
 
+class TestUntypedStorageLLtype(LLRtypeMixin, BaseTestUntypedStorage):
     def test_enumerate_elements(self):
         def f():
             storage = rerased_raw.UntypedStorage("sibf")
@@ -218,6 +219,3 @@ class BaseTestUntypedStorage(BaseRtypingTest):
         assert lst[1:3] == [(1, 13), (2, True)]
         assert lst[3][0] == 3
         assert longlong2float.longlong2float(lst[3][1]) == 3.5
-
-class TestUntypedStorageLLtype(LLRtypeMixin, BaseTestUntypedStorage):
-    pass
