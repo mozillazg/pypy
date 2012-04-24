@@ -100,8 +100,9 @@ def make_tuple(space, w_tuple, list_w):
     for i, w_item in enumerate(list_w):
         shape_chars[i] = get_char_from_obj(space, w_item)
 
-    shape = space.str_w(space.new_interned_str("".join(shape_chars)))
-    jit.promote(shape)
+    w_shape = space.new_interned_str("".join(shape_chars))
+    jit.promote(w_shape)
+    shape = space.str_w(w_shape)
     storage = UntypedStorage(shape)
     for i, w_item in enumerate(list_w):
         store_obj(space, storage, shape[i], i, w_item)
