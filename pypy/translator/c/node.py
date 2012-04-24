@@ -483,7 +483,7 @@ class ExtTypeOpaqueDefNode:
 
 class ContainerNode(object):
     if USESLOTS:      # keep the number of slots down!
-        __slots__ = """db obj 
+        __slots__ = """db obj
                        typename implementationtypename
                         name
                         _funccodegen_owner
@@ -631,11 +631,17 @@ class StructNode(ContainerNode):
 
         if T._hints.get('untyped_storage'):
             arrayfld = T._arrayfld
+            c_expr = defnode.access_expr(self.name, "gcheader")
+            lines = generic_initializationexpr(self.db, gc_init, c_expr, decoration + "gcheader")
+            for line in lines:
+                yield '\t' + line
+
             c_expr = defnode.access_expr(self.name, 'shape')
             lines = generic_initializationexpr(self.db, self.obj.shape,
                                                c_expr, decoration + 'shape')
             for line in lines:
                 yield "\t" + line
+            # XXX: write out length of the array.
             arraydef = self.db.gettypedefnode(getattr(T, arrayfld))
             for i, obj in ll_enumerate_elements(self.obj):
                 c_expr = '(void*)' + arraydef.access_expr(
@@ -1069,7 +1075,7 @@ class PyObjectNode(ContainerNode):
                 return 'PyExc_RuntimeError'
         raise Exception("don't know how to simply render py object: %r" %
                         (value, ))
-    
+
     def forward_declaration(self):
         return []
 
