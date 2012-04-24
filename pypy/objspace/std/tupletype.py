@@ -4,6 +4,7 @@ from pypy.interpreter import gateway
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.objspace.std.register_all import register_all
 from pypy.objspace.std.stdtypedef import StdTypeDef, SMM
+from pypy.rlib import jit
 from pypy.rlib.rerased_raw import (UntypedStorage, INT, BOOL, FLOAT, INSTANCE,
     STRING, UNICODE)
 from pypy.rlib.unroll import unrolling_iterable
@@ -89,6 +90,9 @@ def read_obj(space, storage, idx):
             return read(space, storage, idx)
     assert False
 
+@jit.look_inside_iff(lambda space, w_tuple, list_w:
+    isvirtual(list_w) or (isconstant(len(list_w)) and len(list_w) <= 5)
+)
 def make_tuple(space, w_tuple, list_w):
     from pypy.objspace.std.tupleobject import W_TupleObject
 
