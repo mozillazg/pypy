@@ -642,6 +642,7 @@ class StructNode(ContainerNode):
             for line in lines:
                 yield "\t" + line
             # XXX: write out length of the array.
+            yield '\t%s, ' % len(self.obj.data.items)
             arraydef = self.db.gettypedefnode(getattr(T, arrayfld))
             for i, obj in ll_enumerate_elements(self.obj):
                 c_expr = '(void*)' + arraydef.access_expr(
