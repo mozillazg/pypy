@@ -278,6 +278,14 @@ class VArrayValue(AbstractVirtualValue):
             self.source_op.name = 'FORCE ' + self.source_op.name
         optforce.emit_operation(self.source_op)
         self.box = box = self.source_op.result
+        if self._fields:
+            for ofs, value in self._fields.iteritems():
+                if value.is_null():
+                    continue
+                subbox = value.force_box(optforce)
+                op = ResOperation(rop.SETFIELD_GC, [box, subbox], None, descr=ofs)
+                optforce.emit_operation(op)
+
         for index in range(len(self._items)):
             subvalue = self._items[index]
             if subvalue is not self.constvalue:
