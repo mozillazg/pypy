@@ -205,11 +205,11 @@ class W_Root(object):
     def int_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
-    
+
     def uint_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
-    
+
     def bigint_w(self, space):
         raise OperationError(space.w_TypeError,
                              typed_unwrap_error_msg(space, "integer", self))
@@ -759,6 +759,7 @@ class ObjSpace(object):
         self.interned_strings[s] = w_s
         return w_s
 
+    @jit.elidable
     def new_interned_str(self, s):
         try:
             return self.interned_strings[s]
@@ -1343,7 +1344,7 @@ class ObjSpace(object):
         if not self.is_true(self.isinstance(w_obj, self.w_str)):
             raise OperationError(self.w_TypeError,
                                  self.wrap('argument must be a string'))
-        return self.str_w(w_obj)            
+        return self.str_w(w_obj)
 
     def unicode_w(self, w_obj):
         return w_obj.unicode_w(self)
@@ -1655,7 +1656,7 @@ ObjSpace.ExceptionTable = [
     'UnicodeEncodeError',
     'UnicodeDecodeError',
     ]
-    
+
 if sys.platform.startswith("win"):
     ObjSpace.ExceptionTable += ['WindowsError']
 
