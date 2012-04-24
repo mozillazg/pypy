@@ -7,7 +7,7 @@ making sure that the shape string is cached correctly.
 from pypy.annotation import model as annmodel
 from pypy.annotation.bookkeeper import getbookkeeper
 from pypy.rlib import longlong2float
-from pypy.rpython.annlowlevel import (hlstr, llstr, llhelper,
+from pypy.rpython.annlowlevel import (hlstr, llstr, llunicode, llhelper,
     cast_instance_to_base_ptr)
 from pypy.rpython.rclass import getinstancerepr
 from pypy.rpython.extregistry import ExtRegistryEntry
@@ -214,6 +214,14 @@ class UntypedStorageRepr(Repr):
         for idx, (char, obj) in enumerate(zip(value.shape, value.storage)):
             if char == INT:
                 storage.data[idx] = rffi.cast(llmemory.Address, obj)
+            elif char == BOOL:
+                storage.data[idx] = rffi.cast(llmemory.Address, obj)
+            elif char == FLOAT:
+                storage.data[idx] = rffi.cast(llmemory.Address, longlong2float.float2longlong(obj))
+            elif char == STRING:
+                storage.data[idx] = llmemory.cast_ptr_to_adr(llstr(obj))
+            elif char == UNICODE:
+                storage.data[idx] = llmemory.cast_ptr_to_adr(llunicode(obj))
             elif char == INSTANCE:
                 bk = self.rtyper.annotator.bookkeeper
                 classdef = bk.getuniqueclassdef(type(obj))
@@ -308,7 +316,7 @@ def ll_enumerate_elements(storage):
         elif elem == INT:
             yield i, rffi.cast(lltype.Signed, storage.data.items[i])
         elif elem == FLOAT:
-            yield i, longlong2float.longlong2float(rffi.cast(lltype.Signed, storage.data.items[i]))
+            yield i, rffi.cast(lltype.Signed, storage.data.items[i])
         elif elem == BOOL:
             yield i, rffi.cast(lltype.Bool, storage.data.items[i])
         else:

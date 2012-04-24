@@ -1,6 +1,6 @@
 import py
 
-from pypy.rlib import rerased_raw
+from pypy.rlib import rerased_raw, longlong2float
 from pypy.rpython.annlowlevel import hlstr
 from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin
 
@@ -184,6 +184,24 @@ class BaseTestUntypedStorage(BaseRtypingTest):
         res = self.interpret(f, [0])
         assert res == 21
 
+    def test_const_types(self):
+        storage = rerased_raw.UntypedStorage("bfsu")
+        storage.setbool(0, True)
+        storage.setfloat(1, 2.5)
+        storage.setstr(2, "hello")
+        storage.setunicode(3, u"world!")
+
+        def f(i):
+            if i:
+                local_storage = rerased_raw.UntypedStorage("o")
+            else:
+                local_storage = storage
+            return (local_storage.getbool(0) + local_storage.getfloat(1) +
+                    len(local_storage.getstr(2)) + len(local_storage.getunicode(3)))
+
+        res = self.interpret(f, [0])
+        assert res == 14.5
+
     def test_enumerate_elements(self):
         def f():
             storage = rerased_raw.UntypedStorage("sibf")
@@ -197,7 +215,9 @@ class BaseTestUntypedStorage(BaseRtypingTest):
         lst = list(rerased_raw.ll_enumerate_elements(llres))
         assert hlstr(lst[0][1]) == "abc"
         assert lst[0][0] == 0
-        assert lst[1:] == [(1, 13), (2, True), (3, 3.5)]
+        assert lst[1:3] == [(1, 13), (2, True)]
+        assert lst[3][0] == 3
+        assert longlong2float.longlong2float(lst[3][1]) == 3.5
 
 class TestUntypedStorageLLtype(LLRtypeMixin, BaseTestUntypedStorage):
     pass
