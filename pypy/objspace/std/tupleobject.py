@@ -46,14 +46,17 @@ class W_TupleObject(W_AbstractTupleObject):
     def getitems_copy(self, space):
         return self.tolist(space)[:]
 
+    def _promote_for_read(self, idx):
+        if jit.isconstant(idx):
+            jit.promote(self.tuplestorage.getshape())
+
     def length(self):
         return self.tuplestorage.getlength()
 
     def getitem(self, space, i):
         from pypy.objspace.std.tupletype import read_obj
 
-        if jit.isconstant(i):
-            jit.promote(self.tuplestorage.getshape())
+        self._promote_for_read(i)
         return read_obj(space, self.tuplestorage, i)
 
 registerimplementation(W_TupleObject)
@@ -64,6 +67,7 @@ def len__Tuple(space, w_tuple):
 
 def getitem__Tuple_ANY(space, w_tuple, w_index):
     index = space.getindex_w(w_index, space.w_IndexError, "tuple index")
+    w_tuple._promote_for_read(index)
     if index < 0:
         index += w_tuple.length()
     if not (0 <= index < w_tuple.length()):
