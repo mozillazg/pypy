@@ -156,6 +156,5 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 3
 
-
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
