@@ -87,7 +87,7 @@ class JvmClassWrapper(CallableWrapper):
         self.class_ = _refclass_for(cls)
         self.__name__ = cls.__name__
 
-        self._static_method_names = {str(m.getName()) for m in self.class_.getMethods() if _is_static(m)}
+        self._static_method_names = {str(m.getName()) for m in _get_methods(self.class_, static=True)}
         self._static_field_names = {str(f.getName()) for f in _get_fields(self.class_, static=True)}
 
     def __getattr__(self, attr):
@@ -117,7 +117,7 @@ class JvmInstanceWrapper(Wrapper):
             self.__wrapped__ = obj
             refclass = _refclass_for(obj)
         self.__class_name = refclass.getName()
-        self.__method_names = {str(m.getName()) for m in refclass.getMethods() if not _is_static(m)}
+        self.__method_names = {str(m.getName()) for m in _get_methods(refclass)}
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
 
     def __getattr__(self, attr):
@@ -156,16 +156,20 @@ def _is_public(method_or_field):
     return jpype.java.lang.reflect.Modifier.isPublic(method_or_field.getModifiers())
 
 def _get_fields(refclass, static=False):
-    """
-    Unfortunately JPype seems to crash when calling getFields() one a JavaClass :/
-    For now let's stick to getDeclaredFields() and hope to fix this later...
-    """
     if static:
         staticness = _is_static
     else:
         staticness = lambda f: not _is_static(f)
 
     return [f for f in refclass.getFields() if staticness(f) and _is_public(f)]
+
+def _get_methods(refclass, static=False):
+    if static:
+        staticness = _is_static
+    else:
+        staticness = lambda f: not _is_static(f)
+
+    return [m for m in refclass.getMethods() if staticness(m) and _is_public(m)]
 
 def _refclass_for(o):
     if isinstance(o, RjvmJavaClassWrapper):
