@@ -82,7 +82,7 @@ class JvmClassWrapper(CallableWrapper):
 
     def __init__(self, cls):
         self.__wrapped__ = cls
-        self.__reflection_class__ = RjvmJavaClassWrapper.forName(cls.__javaclass__.getName())
+        self.__reflection_class__ = _refclass_for(cls)
         self.__name__ = cls.__name__
 
         refclass = self.__reflection_class__
@@ -110,15 +110,11 @@ class JvmInstanceWrapper(Wrapper):
 
     def __init__(self, obj):
         self.__wrapped__ = obj
-        if type(obj).__name__ == 'JavaClass':
-            refclass = jpype.java.lang.Class.forName('java.lang.Class').__javaclass__
-        else:
-            refclass = obj.__javaclass__
+        refclass = _refclass_for(obj)
         self.__class_name = refclass.getName()
         self.__method_names = {str(m.getName()) for m in refclass.getMethods() if not _is_static(m)}
 
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
-        self.__refclass__ = refclass
 
     def __getattr__(self, attr):
         if attr in self.__method_names:
@@ -165,15 +161,28 @@ def _get_fields(refclass, static=False):
     else:
         staticness = lambda f: not _is_static(f)
 
-    return [f for f in refclass.getDeclaredFields() if staticness(f) and _is_public(f)]
+    return [f for f in refclass.getFields() if staticness(f) and _is_public(f)]
 
+def _refclass_for(o):
+    if isinstance(o, JPypeJavaClass):
+        return RjvmJavaClassWrapper.forName(o.getName())
+    elif isinstance(o, JvmClassWrapper):
+        return o.__reflection_class__
+    elif isinstance(o, RjvmJavaClassWrapper):
+        return o
+    elif hasattr(o, '__javaclass__'):
+        return _refclass_for(o.__javaclass__)
+    else:
+        raise TypeError("Bad type for tpe!")
 
 jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
     "-Djava.class.path=%s" % os.path.abspath(os.path.dirname(__file__)))
 java = JvmPackageWrapper("java")
 RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
+JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
 def cleanup():
     jpype.shutdownJVM()
 
 atexit.register(cleanup)
+

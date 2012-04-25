@@ -9,11 +9,11 @@ class NativeRJvmInstance(ootype.NativeInstance):
     An OOType for native java instances. Uses reflection on a remote JVM
     (using JPype) to check attribute access.
     """
-    def __init__(self, refclass):
-        self.refclass = refclass
-        self.class_name = refclass.getName()
-        self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass)}
-        self.example = utils.NativeRJvmInstanceExample(refclass)  # used in self._example()
+    def __init__(self, tpe):
+        self.refclass = rjvm._refclass_for(tpe)
+        self.class_name = self.refclass.getName()
+        self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass)}
+        self.example = utils.NativeRJvmInstanceExample(self.refclass)  # used in self._example()
 
     def __repr__(self):
         return '<NativeJvmInstance %s>' % self.class_name
