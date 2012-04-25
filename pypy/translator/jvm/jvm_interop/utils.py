@@ -53,7 +53,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
         'concrete' version. Then the compiler emits code to the
         'concrete' version when you actually call sb.append("foo").
 
-        Here we ignore there 'abstract' versions.
+        Here we ignore these 'abstract' versions.
         """
         one_method_per_signature = dict()
         for meth in overloadings:
