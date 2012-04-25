@@ -67,7 +67,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
                     one_method_per_signature[signature] = meth
                 else:
                     assert other_refclass.getSuperclass().getName() == refclass.getName(),\
-                    "We only support very simple scenarios of 'return type overloading"
+                    "We only support very simple scenarios of 'return type overloading'"
 
         ootype.OverloadingResolver.__init__(self, one_method_per_signature.values())
 
@@ -127,7 +127,7 @@ def jpype_type_to_ootype(tpe):
     try:
         return jpype_primitives_to_ootype_mapping[tpe]
     except KeyError:
-        return ootypemodel.NativeRJvmInstance(tpe.__javaclass__)
+        return ootypemodel.NativeRJvmInstance(tpe)
 
 
 jpype_primitives_to_ootype_mapping = {
