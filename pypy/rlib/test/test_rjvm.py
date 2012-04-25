@@ -53,7 +53,7 @@ def test_invalid_method_name():
     with py.test.raises(TypeError):
         al.typo(0)
 
-def test_reflection():
+def test_interpreted_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
     assert isinstance(al_class, JvmInstanceWrapper)
 
@@ -70,8 +70,6 @@ def test_reflection():
     al = empty_constructor.newInstance([])
     assert isinstance(al, JvmInstanceWrapper)
     assert isinstance(al.add, JvmMethodWrapper)
-
-
 
     al_clear = al_class.getMethod('clear', [])
     assert isinstance(al_clear, JvmInstanceWrapper)
@@ -150,10 +148,17 @@ class BaseTestRJVM(BaseRtypingTest):
         assert res == 32
 
     def test_static_method_no_overload(self):
-        def fn():
+        def fn1():
             return java.lang.Integer.bitCount(5)
-        res = self.interpret(fn, [])
+        res = self.interpret(fn1, [])
         assert res == 2
+
+        def fn2():
+            p = java.util.regex.Pattern.compile('abc')
+            return p.toString()
+
+        res = self.interpret(fn2, [])
+        assert self.ll_to_string(res) == 'abc'
 
     def test_static_method_overload(self):
         def fn():
@@ -171,6 +176,15 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert res == 3
+
+    def test_reflection(self):
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            return al_class.getName()
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == 'java.util.ArrayList'
+
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
