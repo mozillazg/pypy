@@ -190,7 +190,7 @@ def unwrap(value):
 
 def wrap(value, hint=None):
     if isinstance(value, ootypemodel.JvmInstanceWrapper):
-        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value.__refclass__), value)
+        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value), value)
     elif isinstance(value, (str, unicode)):
         return ootype._string(ootype.String, str(value))
     elif value is None:

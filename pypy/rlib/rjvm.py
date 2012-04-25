@@ -164,12 +164,14 @@ def _get_fields(refclass, static=False):
     return [f for f in refclass.getFields() if staticness(f) and _is_public(f)]
 
 def _refclass_for(o):
-    if isinstance(o, JPypeJavaClass):
-        return RjvmJavaClassWrapper.forName(o.getName())
+    if isinstance(o, RjvmJavaClassWrapper):
+        return o
     elif isinstance(o, JvmClassWrapper):
         return o.__reflection_class__
-    elif isinstance(o, RjvmJavaClassWrapper):
-        return o
+    elif isinstance(o, JvmInstanceWrapper):
+        return _refclass_for(o.__wrapped__)
+    elif isinstance(o, JPypeJavaClass):
+        return RjvmJavaClassWrapper.forName(o.getName())
     elif hasattr(o, '__javaclass__'):
         return _refclass_for(o.__javaclass__)
     else:
