@@ -31,7 +31,7 @@ class NativeRJvmInstanceExample(object):
         if name in self.method_names:
             return self.dummy_method
         elif name in self.field_names:
-            field, = [f for f in rjvm._get_fields(self.refclass, self.static) if str(f.getName()) == name]
+            field = self.refclass.getField(name)
             jtype = field.getType()
             return jpype_type_to_ootype(jtype)._example()
         else:
@@ -206,8 +206,7 @@ def wrap(value, hint=None):
 
 
 def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=ootype.Meth, static=False):
-    staticness = check_staticness(static)
-    java_methods = [m for m in refclass.getMethods() if staticness(m) and m.getName() == meth_name]
+    java_methods = [m for m in rjvm._get_methods(refclass, static) if m.getName() == meth_name]
 
     if not java_methods:
         raise TypeError

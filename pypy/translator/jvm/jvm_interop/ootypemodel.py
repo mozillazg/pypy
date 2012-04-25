@@ -29,7 +29,7 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return field_name in self.field_names
 
     def _field_type(self, field_name):
-        field, = [f for f in rjvm._get_fields(self.refclass) if str(f.getName()) == field_name]
+        self.refclass.getField(field_name)
         return utils.jpype_type_to_ootype(field.getType())
 
     def _make_interp_instance(self, args):
