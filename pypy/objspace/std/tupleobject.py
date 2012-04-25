@@ -35,7 +35,7 @@ class W_TupleObject(W_AbstractTupleObject):
         self.tuplestorage = tuplestorage
 
     @jit.look_inside_iff(lambda self, space:
-        jit.isvirtual(self) or (jit.isconstant(self.length()) and self.length < UNROLL_TUPLE_LIMIT)
+        jit.isvirtual(self) or (jit.isconstant(self.length()) and self.length() < UNROLL_TUPLE_LIMIT)
     )
     def tolist(self, space):
         items_w = [None] * self.length()
