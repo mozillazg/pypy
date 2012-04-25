@@ -12,14 +12,14 @@ class SomeJvmClassWrapper(SomeObject):
         jvm_class_wrapper = self.const
         if not utils.has_matching_constructor(jvm_class_wrapper, s_args):
             raise TypeError('No matching constructor for %s!' % jvm_class_wrapper.__name__)
-        return SomeOOInstance(NativeRJvmInstance(jvm_class_wrapper.__reflection_class__))
+        return SomeOOInstance(NativeRJvmInstance(jvm_class_wrapper))
 
     def getattr(self, s_attr):
         assert self.is_constant()
         assert s_attr.is_constant()
         jvm_class_wrapper = self.const
         attrname = s_attr.const
-        refclass = jvm_class_wrapper.__reflection_class__
+        refclass = jvm_class_wrapper.class_
         example = utils.NativeRJvmInstanceExample(refclass, static=True)
 
         if not hasattr(example, attrname):

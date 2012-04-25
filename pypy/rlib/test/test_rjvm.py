@@ -1,4 +1,5 @@
 import py
+from pypy.rlib import rjvm
 import pypy.translator.jvm.jvm_interop # side effects!
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 
@@ -55,20 +56,35 @@ def test_invalid_method_name():
 def test_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
     assert isinstance(al_class, JvmInstanceWrapper)
-    constructors = al_class.getDeclaredConstructors()
-    meths = al_class.getDeclaredMethods()
-    empty_constructor, = (c for c in constructors if len(c.getParameterTypes()) == 0)
+
+    constructors = list(al_class.getConstructors())
+    assert len(constructors) == 3
+
+    empty_constructor = al_class.getConstructor([])
+
+    for types in ([], [rjvm.int_class], [java.util.Collection.class_]):
+        c = al_class.getConstructor(types)
+        assert isinstance(c, JvmInstanceWrapper)
+        assert isinstance(c.newInstance, JvmMethodWrapper)
+
     al = empty_constructor.newInstance([])
     assert isinstance(al, JvmInstanceWrapper)
     assert isinstance(al.add, JvmMethodWrapper)
-    al_clear, = (m for m in meths if m.getName() == 'clear')
+
+
+
+    al_clear = al_class.getMethod('clear', [])
     assert isinstance(al_clear, JvmInstanceWrapper)
     assert isinstance(al_clear.invoke, JvmMethodWrapper)
+
     al.add(7)
     assert al.size() == 1
+
     al_clear.invoke(al, [])
     assert al.isEmpty()
-    al_add, = (m for m in meths if m.getName() == 'add' and len(m.getParameterTypes()) == 1)
+    assert al.size() == 0
+
+    al_add = al_class.getMethod('add', [java.lang.Object.class_])
     assert isinstance(al_add, JvmInstanceWrapper)
     assert isinstance(al_add.invoke, JvmMethodWrapper)
     al_add.invoke(al, ["Hello"])
