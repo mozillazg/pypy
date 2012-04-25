@@ -49,6 +49,8 @@ class W_TupleObject(W_AbstractTupleObject):
     def getitem(self, space, i):
         from pypy.objspace.std.tupletype import read_obj
 
+        if jit.isconstant(i):
+            jit.promote(self.tuplestorage.getshape())
         return read_obj(space, self.tuplestorage, i)
 
 registerimplementation(W_TupleObject)

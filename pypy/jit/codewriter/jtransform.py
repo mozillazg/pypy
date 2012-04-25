@@ -496,7 +496,6 @@ class Transformer(object):
     def rewrite_op_hint(self, op):
         hints = op.args[1].value
         if hints.get('promote') and op.args[0].concretetype is not lltype.Void:
-            assert op.args[0].concretetype != lltype.Ptr(rstr.STR)
             kind = getkind(op.args[0].concretetype)
             op0 = SpaceOperation('-live-', [], None)
             op1 = SpaceOperation('%s_guard_value' % kind, [op.args[0]], None)
