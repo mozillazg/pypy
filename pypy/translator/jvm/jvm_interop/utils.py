@@ -143,7 +143,7 @@ def has_matching_constructor(jvm_class_wrapper, s_args):
     Create an overloaded method for all the constructors and reuse the code that
     resolves overloadings.
     """
-    refclass = jvm_class_wrapper.__reflection_class__
+    refclass = jvm_class_wrapper.class_
     overloads = [jvm_method_to_pypy_meth(c, result=ootype.Void) for c in refclass.getConstructors()]
     overloaded_meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
     args = tuple(JvmOverloadingResolver.annotation_to_lltype(arg) for arg in s_args)

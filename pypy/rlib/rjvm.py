@@ -50,7 +50,9 @@ class Wrapper(object):
     This is a mixin that provides methods to wrap JPype-level types in rjvm-level wrappers.
     """
     def _wrap_item(self, item):
-        if isinstance(item, jpype.java.lang.Object):
+        if isinstance(item, JPypeJavaClass):
+            return RjvmJavaClassWrapper(item.getName())
+        elif isinstance(item, jpype.java.lang.Object):
             return JvmInstanceWrapper(item)
         elif isinstance(item, jpype._jclass._JavaClass):
             return JvmInstanceWrapper(item.__javaclass__)
@@ -82,12 +84,11 @@ class JvmClassWrapper(CallableWrapper):
 
     def __init__(self, cls):
         self.__wrapped__ = cls
-        self.__reflection_class__ = _refclass_for(cls)
+        self.class_ = _refclass_for(cls)
         self.__name__ = cls.__name__
 
-        refclass = self.__reflection_class__
-        self._static_method_names = {str(m.getName()) for m in refclass.getMethods() if _is_static(m)}
-        self._static_field_names = {str(f.getName()) for f in _get_fields(refclass, static=True)}
+        self._static_method_names = {str(m.getName()) for m in self.class_.getMethods() if _is_static(m)}
+        self._static_field_names = {str(f.getName()) for f in _get_fields(self.class_, static=True)}
 
     def __getattr__(self, attr):
         if attr in self._static_method_names:
@@ -109,11 +110,14 @@ class JvmInstanceWrapper(Wrapper):
     """
 
     def __init__(self, obj):
-        self.__wrapped__ = obj
-        refclass = _refclass_for(obj)
+        if isinstance(obj, (JPypeJavaClass, RjvmJavaClassWrapper)):
+            self.__wrapped__ = _refclass_for(obj)
+            refclass = RjvmJavaClassWrapper(self.__wrapped__)
+        else:
+            self.__wrapped__ = obj
+            refclass = _refclass_for(obj)
         self.__class_name = refclass.getName()
         self.__method_names = {str(m.getName()) for m in refclass.getMethods() if not _is_static(m)}
-
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
 
     def __getattr__(self, attr):
@@ -167,7 +171,7 @@ def _refclass_for(o):
     if isinstance(o, RjvmJavaClassWrapper):
         return o
     elif isinstance(o, JvmClassWrapper):
-        return o.__reflection_class__
+        return o.class_
     elif isinstance(o, JvmInstanceWrapper):
         return _refclass_for(o.__wrapped__)
     elif isinstance(o, JPypeJavaClass):
@@ -182,6 +186,16 @@ jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
 java = JvmPackageWrapper("java")
 RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
+
+int_class = _refclass_for(java.lang.Integer.TYPE)
+long_class = _refclass_for(java.lang.Long.TYPE)
+short_class = _refclass_for(java.lang.Short.TYPE)
+byte_class = _refclass_for(java.lang.Byte.TYPE)
+float_class = _refclass_for(java.lang.Float.TYPE)
+double_class = _refclass_for(java.lang.Double.TYPE)
+boolean_class = _refclass_for(java.lang.Boolean.TYPE)
+char_class = _refclass_for(java.lang.Character.TYPE)
+void_class = _refclass_for(java.lang.Void.TYPE)
 
 def cleanup():
     jpype.shutdownJVM()
