@@ -1,3 +1,4 @@
+import os
 import jpype
 import atexit
 
@@ -81,7 +82,7 @@ class JvmClassWrapper(CallableWrapper):
 
     def __init__(self, cls):
         self.__wrapped__ = cls
-        self.__reflection_class__ = cls.__javaclass__
+        self.__reflection_class__ = RjvmJavaClassWrapper.forName(cls.__javaclass__.getName())
         self.__name__ = cls.__name__
 
         refclass = self.__reflection_class__
@@ -166,8 +167,11 @@ def _get_fields(refclass, static=False):
 
     return [f for f in refclass.getDeclaredFields() if staticness(f) and _is_public(f)]
 
-jpype.startJVM(jpype.getDefaultJVMPath(), "-ea")
+
+jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
+    "-Djava.class.path=%s" % os.path.abspath(os.path.dirname(__file__)))
 java = JvmPackageWrapper("java")
+RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 
 def cleanup():
     jpype.shutdownJVM()
