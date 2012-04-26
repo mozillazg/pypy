@@ -144,6 +144,9 @@ class JvmInstanceWrapper(Wrapper):
     def __repr__(self):
         return '<JvmInstanceWrapper %s>' % self.__wrapped__.__name__
 
+    def _downcast(self, TYPE):
+        return self
+
 
 class JvmMethodWrapper(CallableWrapper):
 

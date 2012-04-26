@@ -5,6 +5,7 @@ from pypy.rpython.ootypesystem.rdict import rtype_r_dict
 from pypy.objspace.flow.model import Constant
 from pypy.rlib import objectmodel
 from pypy.rpython.error import TyperError
+from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
 
 def rtype_new(hop):
     assert hop.args_s[0].is_constant()
@@ -55,7 +56,7 @@ def rtype_ooupcast(hop):
     return hop.genop('ooupcast', [v_inst], resulttype = hop.r_result.lowleveltype)
 
 def rtype_oodowncast(hop):
-    assert isinstance(hop.args_s[0].const, ootype.Instance)
+    assert isinstance(hop.args_s[0].const, (ootype.Instance, NativeRJvmInstance))
     assert isinstance(hop.args_s[1], annmodel.SomeOOInstance)
     v_inst = hop.inputarg(hop.args_r[1], arg=1)
     return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result.lowleveltype)

@@ -210,7 +210,6 @@ class BaseTestRJVM(BaseRtypingTest):
         assert self.ll_to_string(res) == 'int'
 
     def test_reflection_get_empty_constructor(self):
-
         ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
 
         def fn():
@@ -238,6 +237,33 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert res == 1
+
+    def test_reflection_instance_creation(self):
+        ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
+        ObjectArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Object))
+        ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
+
+        def fn1():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor(ootype.oonewarray(ClassArray, 0))
+            object_al = c.newInstance(ootype.oonewarray(ObjectArray, 0))
+            al = ootype.oodowncast(ArrayList, object_al)
+            return al.size()
+
+        res = self.interpret(fn1, [])
+        assert res == 0
+
+        def fn2():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor([java.lang.Integer.TYPE])
+            args = java.util.ArrayList()
+            args.add(java.lang.Integer.valueOf(15))
+            object_al = c.newInstance(args.toArray())
+            al = ootype.oodowncast(ArrayList, object_al)
+            return al.size()
+
+        res = self.interpret(fn2, [])
+        assert res == 0
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

@@ -201,6 +201,12 @@ def unwrap(value):
 def wrap(value, hint=None):
     if isinstance(value, ootypemodel.JvmInstanceWrapper):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value), value)
+    elif isinstance(value, jpype.java.lang.Object):
+        return wrap(ootypemodel.JvmInstanceWrapper(value))
+    elif isinstance(value, jpype._jarray._JavaArrayClass):
+        result = ootype._array(hint, len(value))
+        result._array = [wrap(el, hint=hint.ITEM) for el in value]
+        return result
     elif isinstance(value, (str, unicode)):
         return ootype._string(ootype.String, str(value))
     elif value is None:
