@@ -145,9 +145,10 @@ class BaseTestRJVM(BaseRtypingTest):
 
     def test_get_static_field(self):
         def fn():
-            return java.lang.Integer.SIZE
-        res = self.interpret(fn, [])
-        assert res == 32
+            return java.lang.Integer.SIZE, java.lang.System.out.toString()
+        (a,b) = self.ll_unpack_tuple(self.interpret(fn, []), 2)
+        assert a == 32
+        assert self.ll_to_string(b).startswith('java.io.PrintStream')
 
     def test_static_method_no_overload(self):
         def fn1():
@@ -179,14 +180,21 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 3
 
-    def test_reflection(self):
-
+    def test_reflection_for_name(self):
         def fn1():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             return al_class.getName()
 
         res = self.interpret(fn1, [])
         assert self.ll_to_string(res) == 'java.util.ArrayList'
+
+    def test_reflection_primitive_types(self):
+        def fn2():
+            int_class = java.lang.Integer.TYPE
+            return int_class.getName()
+
+        res = self.interpret(fn2, [])
+        assert self.ll_to_string(res) == 'int'
 
 #        def fn2():
 #            al_class = java.lang.Class.forName('java.util.ArrayList')
