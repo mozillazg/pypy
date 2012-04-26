@@ -8,6 +8,7 @@ import atexit
 # graphs, rtyped and interpreted or compiled to JVM bytecode.
 #
 # See test_rjvm.py for examples.
+from pypy.rpython.ootypesystem import ootype
 
 class JvmPackageWrapper(object):
     """
@@ -75,6 +76,8 @@ class CallableWrapper(Wrapper):
             return item.__wrapped__
         elif isinstance(item, list):
             return [self._unwrap_item(i) for i in item]
+        elif isinstance(item, ootype._array):
+            return self._unwrap_item(item._array)
         return item
 
     def __call__(self, *args):

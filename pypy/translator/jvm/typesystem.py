@@ -161,6 +161,9 @@ class JvmClassType(JvmType):
     def lookup_method(self, methodnm):
         raise KeyError(fieldnm) # we treat as opaque type
 
+    def jasmin_syntax(self):
+        return self.name.replace('.', '/')
+
 class JvmGeneratedClassType(JvmClassType):
     """ Abstract class extended by the classes in node.py that represent
     generated classes """

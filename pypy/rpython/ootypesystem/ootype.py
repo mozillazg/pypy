@@ -731,6 +731,9 @@ class Array(BuiltinADTType):
     def ll_convert_from_array(self, array):
         return array
 
+    def _enforce(self, value):
+        return BuiltinADTType._enforce(self, value)
+
 class Dict(BuiltinADTType):
     # placeholders for types
     SELFTYPE_T = object()

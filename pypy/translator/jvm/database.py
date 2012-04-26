@@ -506,6 +506,8 @@ class Database(OODatabase):
     def _array_type(self, ITEM):
         if ITEM in self.ooitemtype_to_array:
             return self.ooitemtype_to_array[ITEM]
+        elif isinstance(ITEM, NativeRJvmInstance):
+            return jvm.JvmArrayType(jvm.JvmClassType(ITEM.class_name))
         return jvm.jObjectArray
 
     def annotation_to_cts(self, _tp):

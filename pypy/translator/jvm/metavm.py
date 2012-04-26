@@ -79,9 +79,12 @@ class _GetStaticField(MicroInstruction):
         jvm_class_wrapper, field_name = [arg.value for arg in op.args]
         class_name = jvm_class_wrapper.__name__
         java_class = jvm.JvmClassType(class_name)
-        field_type = generator.db.lltype_to_cts(op.result.concretetype)
-        field = jvm.Field.s(java_class, field_name, field_type)
-        generator.emit(field)
+        if field_name == 'class_':
+            generator.emit(jvm.LDC, java_class)
+        else:
+            field_type = generator.db.lltype_to_cts(op.result.concretetype)
+            field = jvm.Field.s(java_class, field_name, field_type)
+            generator.emit(field)
 
 GetStaticField = _GetStaticField()
 

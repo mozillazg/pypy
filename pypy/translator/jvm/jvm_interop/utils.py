@@ -36,6 +36,8 @@ class NativeRJvmInstanceExample(object):
             field = self.refclass.getField(name)
             jtype = field.getType()
             return jpype_type_to_ootype(jtype)._example()
+        elif self.static and name == 'class_':
+            return ootypemodel.NativeRJvmInstance(rjvm.RjvmJavaClassWrapper.java_lang_Class)._example()
         else:
             raise TypeError(
                 "No method or field called %s found in %s." % (name, self.refclass.getName()))

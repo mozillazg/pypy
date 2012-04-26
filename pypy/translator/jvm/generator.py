@@ -848,6 +848,8 @@ class JasminGenerator(JVMGenerator):
         if interface: decl_str = "interface"
         else: decl_str = "class"
 
+        self.curclass.out(".bytecode 49.0\n")
+
         # Write the JasminXT header
         fields = ["public"]
         if abstract: fields.append('abstract')
