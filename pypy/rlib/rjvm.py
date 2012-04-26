@@ -51,7 +51,7 @@ class Wrapper(object):
     """
     def _wrap_item(self, item):
         if isinstance(item, JPypeJavaClass):
-            return RjvmJavaClassWrapper(item.getName())
+            return RjvmJavaClassWrapper.forName(item.getName())
         elif isinstance(item, jpype.java.lang.Object):
             return JvmInstanceWrapper(item)
         elif isinstance(item, jpype._jclass._JavaClass):
@@ -70,9 +70,16 @@ class CallableWrapper(Wrapper):
     rjvm-level wrapper.
     """
 
+    def _unwrap_item(self, item):
+        if isinstance(item, JvmInstanceWrapper):
+            return item.__wrapped__
+        elif isinstance(item, list):
+            return [self._unwrap_item(i) for i in item]
+        return item
+
     def __call__(self, *args):
-        args = [arg.__wrapped__ if isinstance(arg, JvmInstanceWrapper) else arg for arg in args]
-        result =  self.__wrapped__(*args)
+        new_args = [self._unwrap_item(arg) for arg in args]
+        result =  self.__wrapped__(*new_args)
         return self._wrap_item(result)
 
 
@@ -84,11 +91,12 @@ class JvmClassWrapper(CallableWrapper):
 
     def __init__(self, cls):
         self.__wrapped__ = cls
-        self.class_ = _refclass_for(cls)
+        self.__refclass__ = _refclass_for(cls)
+        self.class_ = self._wrap_item(self.__refclass__)
         self.__name__ = cls.__name__
 
-        self._static_method_names = {str(m.getName()) for m in _get_methods(self.class_, static=True)}
-        self._static_field_names = {str(f.getName()) for f in _get_fields(self.class_, static=True)}
+        self._static_method_names = {str(m.getName()) for m in _get_methods(self.__refclass__, static=True)}
+        self._static_field_names = {str(f.getName()) for f in _get_fields(self.__refclass__, static=True)}
 
     def __getattr__(self, attr):
         if attr in self._static_method_names:
@@ -112,7 +120,7 @@ class JvmInstanceWrapper(Wrapper):
     def __init__(self, obj):
         if isinstance(obj, (JPypeJavaClass, RjvmJavaClassWrapper)):
             self.__wrapped__ = _refclass_for(obj)
-            refclass = RjvmJavaClassWrapper(self.__wrapped__)
+            refclass = RjvmJavaClassWrapper.java_lang_Class
         else:
             self.__wrapped__ = obj
             refclass = _refclass_for(obj)
@@ -175,9 +183,12 @@ def _refclass_for(o):
     if isinstance(o, RjvmJavaClassWrapper):
         return o
     elif isinstance(o, JvmClassWrapper):
-        return o.class_
+        return o.__refclass__
     elif isinstance(o, JvmInstanceWrapper):
-        return _refclass_for(o.__wrapped__)
+        if isinstance(o.__wrapped__, RjvmJavaClassWrapper):
+            return RjvmJavaClassWrapper.java_lang_Class
+        else:
+            return _refclass_for(o.__wrapped__)
     elif isinstance(o, JPypeJavaClass):
         return RjvmJavaClassWrapper.forName(o.getName())
     elif hasattr(o, '__javaclass__'):
@@ -191,15 +202,15 @@ java = JvmPackageWrapper("java")
 RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
-int_class = _refclass_for(java.lang.Integer.TYPE)
-long_class = _refclass_for(java.lang.Long.TYPE)
-short_class = _refclass_for(java.lang.Short.TYPE)
-byte_class = _refclass_for(java.lang.Byte.TYPE)
-float_class = _refclass_for(java.lang.Float.TYPE)
-double_class = _refclass_for(java.lang.Double.TYPE)
-boolean_class = _refclass_for(java.lang.Boolean.TYPE)
-char_class = _refclass_for(java.lang.Character.TYPE)
-void_class = _refclass_for(java.lang.Void.TYPE)
+int_class = java.lang.Integer.TYPE
+long_class = java.lang.Long.TYPE
+short_class = java.lang.Short.TYPE
+byte_class = java.lang.Byte.TYPE
+float_class = java.lang.Float.TYPE
+double_class = java.lang.Double.TYPE
+boolean_class = java.lang.Boolean.TYPE
+char_class = java.lang.Character.TYPE
+void_class = java.lang.Void.TYPE
 
 def cleanup():
     jpype.shutdownJVM()

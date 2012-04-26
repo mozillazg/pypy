@@ -56,17 +56,19 @@ def test_invalid_method_name():
 def test_interpreted_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
     assert isinstance(al_class, JvmInstanceWrapper)
+    assert isinstance(rjvm.int_class, JvmInstanceWrapper)
+    assert isinstance(java.util.Collection.class_, JvmInstanceWrapper)
+
 
     constructors = list(al_class.getConstructors())
     assert len(constructors) == 3
-
-    empty_constructor = al_class.getConstructor([])
 
     for types in ([], [rjvm.int_class], [java.util.Collection.class_]):
         c = al_class.getConstructor(types)
         assert isinstance(c, JvmInstanceWrapper)
         assert isinstance(c.newInstance, JvmMethodWrapper)
 
+    empty_constructor = al_class.getConstructor([])
     al = empty_constructor.newInstance([])
     assert isinstance(al, JvmInstanceWrapper)
     assert isinstance(al.add, JvmMethodWrapper)
@@ -178,13 +180,19 @@ class BaseTestRJVM(BaseRtypingTest):
         assert res == 3
 
     def test_reflection(self):
-        def fn():
+
+        def fn1():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             return al_class.getName()
 
-        res = self.interpret(fn, [])
+        res = self.interpret(fn1, [])
         assert self.ll_to_string(res) == 'java.util.ArrayList'
 
+#        def fn2():
+#            al_class = java.lang.Class.forName('java.util.ArrayList')
+#            c = al_class.getConstructor([])
+#
+#        self.interpret(fn2, [])
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

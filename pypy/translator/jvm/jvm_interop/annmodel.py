@@ -1,3 +1,4 @@
+from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import _static_meth, StaticMethod
 from pypy.annotation.model import SomeOOInstance, SomeObject, SomeOOStaticMeth
@@ -19,7 +20,7 @@ class SomeJvmClassWrapper(SomeObject):
         assert s_attr.is_constant()
         jvm_class_wrapper = self.const
         attrname = s_attr.const
-        refclass = jvm_class_wrapper.class_
+        refclass = rjvm._refclass_for(jvm_class_wrapper)
         example = utils.NativeRJvmInstanceExample(refclass, static=True)
 
         if not hasattr(example, attrname):
