@@ -164,20 +164,18 @@ def _is_public(method_or_field):
     return jpype.java.lang.reflect.Modifier.isPublic(method_or_field.getModifiers())
 
 def _get_fields(refclass, static=False):
-    if static:
-        staticness = _is_static
-    else:
-        staticness = lambda f: not _is_static(f)
-
+    staticness = _check_staticness(static)
     return [f for f in refclass.getFields() if staticness(f) and _is_public(f)]
 
 def _get_methods(refclass, static=False):
-    if static:
-        staticness = _is_static
-    else:
-        staticness = lambda f: not _is_static(f)
-
+    staticness = _check_staticness(static)
     return [m for m in refclass.getMethods() if staticness(m) and _is_public(m)]
+
+def _check_staticness(should_be_static):
+    if should_be_static:
+        return _is_static
+    else:
+        return lambda m: not _is_static(m)
 
 def _refclass_for(o):
     if isinstance(o, RjvmJavaClassWrapper):

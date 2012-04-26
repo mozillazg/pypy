@@ -13,7 +13,7 @@ class NativeRJvmInstance(ootype.NativeInstance):
         self.refclass = rjvm._refclass_for(tpe)
         self.class_name = self.refclass.getName()
         self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass)}
-        self.example = utils.NativeRJvmInstanceExample(self.refclass)  # used in self._example()
+        self.example = utils.NativeRJvmInstanceExample(self)  # used in self._example()
 
     def __repr__(self):
         return '<NativeJvmInstance %s>' % self.class_name
@@ -44,11 +44,14 @@ class NativeRJvmInstance(ootype.NativeInstance):
         instance = clazz(*args)
         return _native_rjvm_instance(self, instance)
 
-    def _enforce(TYPE2, value):
-        if isinstance(TYPE2, NativeRJvmInstance) and TYPE2.class_name == 'java.lang.Object':
+    def _enforce(self, value):
+        if isinstance(value, JvmInstanceWrapper) and rjvm._refclass_for(value).getName() == self.class_name:
+            return _native_rjvm_instance(self, value)
+        tpe = ootype.typeOf(value)
+        if self.class_name == 'java.lang.Object' and tpe == ootype.String or isinstance(tpe, NativeRJvmInstance):
             return value
         else:
-            return super(NativeRJvmInstance, TYPE2)._enforce(value)
+            return super(NativeRJvmInstance, self)._enforce(value)
 
 
     def __eq__(self, other):

@@ -14,12 +14,14 @@ class NativeRJvmInstanceExample(object):
     a dummy one to keep things simple.
     """
 
-    def __init__(self, refclass, static=False):
-        self.refclass = refclass
+    def __init__(self, tpe, static=False):
+        assert isinstance(tpe, ootypemodel.NativeRJvmInstance)
+        self._TYPE = tpe
+        self.refclass = tpe.refclass
         self.static = static
-        staticness = check_staticness(static)
-        self.method_names = {str(m.getName()) for m in refclass.getMethods() if staticness(m)}
-        self.field_names = {str(f.getName()) for f in rjvm._get_fields(refclass, static)}
+        staticness = rjvm._check_staticness(static)
+        self.method_names = {str(m.getName()) for m in self.refclass.getMethods() if staticness(m)}
+        self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass, static)}
 
         # Make dummy_method something that makes sense
         if static:
@@ -221,9 +223,3 @@ def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=
 
     return meth
 
-
-def check_staticness(should_be_static):
-    if should_be_static:
-        return rjvm._is_static
-    else:
-        return lambda m: not rjvm._is_static(m)
