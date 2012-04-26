@@ -1,5 +1,6 @@
 import py
 from pypy.rlib import rjvm
+from pypy.rpython.ootypesystem import ootype
 import pypy.translator.jvm.jvm_interop # side effects!
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 
@@ -151,17 +152,11 @@ class BaseTestRJVM(BaseRtypingTest):
         assert self.ll_to_string(b).startswith('java.io.PrintStream')
 
     def test_static_method_no_overload(self):
-        def fn1():
-            return java.lang.Integer.bitCount(5)
-        res = self.interpret(fn1, [])
-        assert res == 2
-
-        def fn2():
-            p = java.util.regex.Pattern.compile('abc')
-            return p.toString()
-
-        res = self.interpret(fn2, [])
-        assert self.ll_to_string(res) == 'abc'
+        def fn():
+            return java.lang.Integer.bitCount(5), java.util.regex.Pattern.compile('abc').toString()
+        (a,b) = self.ll_unpack_tuple(self.interpret(fn, []), 2)
+        assert a == 2
+        assert self.ll_to_string(b) == 'abc'
 
     def test_static_method_overload(self):
         def fn():
@@ -178,6 +173,15 @@ class BaseTestRJVM(BaseRtypingTest):
             return array_list.size()
 
         res = self.interpret(fn, [])
+        assert res == 3
+
+    def test_array_arguments(self):
+        """No array covariance for now."""
+        def fn_array():
+            o = java.lang.Object()
+            return java.util.Arrays.asList([o, o, o]).size()
+
+        res = self.interpret(fn_array, [])
         assert res == 3
 
     def test_reflection_for_name(self):
