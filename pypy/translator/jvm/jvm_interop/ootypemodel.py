@@ -93,3 +93,7 @@ class _native_rjvm_instance(object):
 
     def __setattr__(self, key, value):
         setattr(self._instance, key, value)
+
+    def _downcast(self, TYPE):
+        assert ootype.typeOf(self) == TYPE
+        return self

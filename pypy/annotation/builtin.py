@@ -21,6 +21,8 @@ import pypy.rlib.rarithmetic
 import pypy.rlib.objectmodel
 
 # convenience only!
+from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
+
 def immutablevalue(x):
     return getbookkeeper().immutablevalue(x)
 
@@ -579,7 +581,12 @@ def ooupcast(I, i):
         raise AnnotatorError, 'Cannot cast %s to %s' % (i.ootype, I.const)
 
 def oodowncast(I, i):
-    assert isinstance(I.const, ootype.Instance)
+    assert isinstance(I.const, (ootype.Instance, NativeRJvmInstance))
+
+    if isinstance(I.const, NativeRJvmInstance) and isinstance(i.ootype, NativeRJvmInstance) \
+        and i.ootype.class_name == 'java.lang.Object':
+        return SomeOOInstance(I.const)
+
     if ootype.isSubclass(I.const, i.ootype):
         return SomeOOInstance(I.const)
     else:
