@@ -53,6 +53,8 @@ class NativeRJvmInstance(ootype.NativeInstance):
         else:
             return super(NativeRJvmInstance, self)._enforce(value)
 
+    def _defl(self, parent=None, parentindex=None):
+        return ootype._null_instance(self)
 
     def __eq__(self, other):
         if isinstance(other, NativeRJvmInstance):

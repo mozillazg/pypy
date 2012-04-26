@@ -126,9 +126,13 @@ def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth
 
 def jpype_type_to_ootype(tpe):
     assert isinstance(tpe, jpype._jclass._JavaClass)
-    try:
+    if tpe in jpype_primitives_to_ootype_mapping:
         return jpype_primitives_to_ootype_mapping[tpe]
-    except KeyError:
+    elif tpe.__javaclass__.isArray():
+        refclass = rjvm._refclass_for(tpe)
+        component_type = refclass.getComponentType()
+        return ootype.Array(ootypemodel.NativeRJvmInstance(component_type))
+    else:
         return ootypemodel.NativeRJvmInstance(tpe)
 
 
@@ -186,6 +190,8 @@ def unwrap(value):
         return value._str
     elif isinstance(value, (int, bool, float)):
         return value
+    elif isinstance(value, ootype._array):
+        return [unwrap(a) for a in value._array]
     else:
         raise AssertionError("Don't know how to unwrap %r" % value)
 

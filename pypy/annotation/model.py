@@ -627,6 +627,9 @@ def annotation_to_lltype(s_val, info=None):
     if type(s_val) is SomeInteger:
         return lltype.build_number(None, s_val.knowntype)
 
+    if isinstance(s_val, SomeList) and not s_val.listdef.listitem.resized:
+        return ootype.Array(annotation_to_lltype(s_val.listdef.listitem.s_value))
+
     for witness, T in annotation_to_ll_map:
         if witness.contains(s_val):
             return T
