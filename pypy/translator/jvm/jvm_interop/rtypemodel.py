@@ -25,7 +25,7 @@ class JvmClassWrapperRepr(Repr):
             # that follows this hop.
             return hop.inputconst(ootype.Void, None)
         else:
-            assert attrname in self.jvm_class_wrapper._static_field_names
+            assert attrname in self.jvm_class_wrapper._static_field_names or attrname == 'class_'
             c_class = hop.inputarg(hop.args_r[0], arg=0)
             c_name = hop.inputconst(ootype.Void, attrname)
             return hop.genop('oogetstaticfield', [c_class, c_name], resulttype=hop.r_result.lowleveltype)

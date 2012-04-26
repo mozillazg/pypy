@@ -2,6 +2,7 @@ import py
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 import pypy.translator.jvm.jvm_interop # side effects!
+from pypy.translator.jvm.jvm_interop import NativeRJvmInstance, ootypemodel
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 
 try:
@@ -179,32 +180,64 @@ class BaseTestRJVM(BaseRtypingTest):
         """No array covariance for now."""
         def fn_array():
             o = java.lang.Object()
-            return java.util.Arrays.asList([o, o, o]).size()
+            java.util.Arrays.asList([o, o, o])
 
-        res = self.interpret(fn_array, [])
-        assert res == 3
+        self.interpret(fn_array, [])
+
+    def test_array_empty_arguments(self):
+        """No array covariance for now."""
+        ObjectArray = ootype.Array(NativeRJvmInstance(java.lang.Object))
+
+        def fn_array():
+            java.util.Arrays.asList(ootype.oonewarray(ObjectArray, 0))
+
+        self.interpret(fn_array, [])
 
     def test_reflection_for_name(self):
-        def fn1():
+        def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             return al_class.getName()
 
-        res = self.interpret(fn1, [])
+        res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'java.util.ArrayList'
 
     def test_reflection_primitive_types(self):
-        def fn2():
+        def fn():
             int_class = java.lang.Integer.TYPE
             return int_class.getName()
 
-        res = self.interpret(fn2, [])
+        res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'int'
 
-#        def fn2():
-#            al_class = java.lang.Class.forName('java.util.ArrayList')
-#            c = al_class.getConstructor([])
-#
-#        self.interpret(fn2, [])
+    def test_reflection_get_empty_constructor(self):
+
+        ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
+
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor(ootype.oonewarray(ClassArray, 0))
+            return c.getModifiers()
+
+        res = self.interpret(fn, [])
+        assert res == 1
+
+    def test_reflection_get_int_constructor(self):
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor([java.lang.Integer.TYPE])
+            return c.getModifiers()
+
+        res = self.interpret(fn, [])
+        assert res == 1
+
+    def test_reflection_get_collection_constructor(self):
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor([java.util.Collection.class_])
+            return c.getModifiers()
+
+        res = self.interpret(fn, [])
+        assert res == 1
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

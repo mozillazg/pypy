@@ -593,9 +593,9 @@ class SomeOOStaticMeth(SomeObject):
         self.method = method
 
 annotation_to_ll_map = [
-    (SomeSingleFloat(), lltype.SingleFloat),
     (s_None, lltype.Void),   # also matches SomeImpossibleValue()
     (s_Bool, lltype.Bool),
+    (SomeSingleFloat(), lltype.SingleFloat),
     (SomeFloat(), lltype.Float),
     (SomeLongFloat(), lltype.LongFloat),
     (SomeChar(), lltype.Char),
