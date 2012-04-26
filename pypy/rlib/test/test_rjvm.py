@@ -93,6 +93,12 @@ def test_interpreted_reflection():
     assert al.get(0) == "Hello"
 
 
+ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
+ObjectArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Object))
+JInteger = NativeRJvmInstance(rjvm.java.lang.Integer)
+ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
+PrintStream = NativeRJvmInstance(rjvm.java.io.PrintStream)
+
 class BaseTestRJVM(BaseRtypingTest):
     def test_simple_constructor(self):
         def fn():
@@ -210,7 +216,6 @@ class BaseTestRJVM(BaseRtypingTest):
         assert self.ll_to_string(res) == 'int'
 
     def test_reflection_get_empty_constructor(self):
-        ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
 
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
@@ -239,10 +244,6 @@ class BaseTestRJVM(BaseRtypingTest):
         assert res == 1
 
     def test_reflection_instance_creation(self):
-        ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
-        ObjectArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Object))
-        ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
-
         def fn1():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor(ootype.oonewarray(ClassArray, 0))
@@ -264,6 +265,30 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn2, [])
         assert res == 0
+
+    def test_reflection_method_call(self):
+        def fn():
+            al = java.util.ArrayList()
+            o = java.lang.Object()
+            al.add(o)
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            size_meth = al_class.getMethod('size', ootype.oonewarray(ClassArray, 0))
+            size = ootype.oodowncast(JInteger, size_meth.invoke(al, ootype.oonewarray(ObjectArray, 0)))
+            return size.intValue()
+
+        res = self.interpret(fn, [])
+        assert res == 1
+
+    def test_reflection_static_field(self):
+        def fn():
+            system_class = java.lang.Class.forName('java.lang.System')
+            out_field = system_class.getField('out')
+            dummy = java.lang.Object()
+            out = ootype.oodowncast(PrintStream, out_field.get(dummy))
+            return out.toString()
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res).startswith('java.io.PrintStream@')
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
