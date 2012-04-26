@@ -64,6 +64,9 @@ class NativeRJvmInstance(ootype.NativeInstance):
         # This is what ootype.Instance does, I hope it makes sense...
         return object.__hash__(self)
 
+    def __repr__(self):
+        return "<NativeRJvmInstance %s>" % self.class_name
+
 
 class _native_rjvm_instance(object):
     """
