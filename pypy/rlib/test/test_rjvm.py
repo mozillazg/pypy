@@ -284,8 +284,9 @@ class BaseTestRJVM(BaseRtypingTest):
             system_class = java.lang.Class.forName('java.lang.System')
             out_field = system_class.getField('out')
             dummy = java.lang.Object()
-            out = ootype.oodowncast(PrintStream, out_field.get(dummy))
-            return out.toString()
+            out = out_field.get(dummy)
+            to_string_meth = java.lang.Class.forName('java.lang.Object').getMethod('toString', ootype.oonewarray(ClassArray, 0))
+            return to_string_meth.invoke(out, ootype.oonewarray(ObjectArray, 0))
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res).startswith('java.io.PrintStream@')
