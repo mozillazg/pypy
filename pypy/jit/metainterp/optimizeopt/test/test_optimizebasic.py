@@ -5119,25 +5119,6 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         self.optimize_loop(ops, expected)
 
-    def test_issue1080_basic(self):
-        ops = """
-        []
-        p69 = same_as(ConstPtr(myptr))
-        quasiimmut_field(p69, descr=quasiimmutdescr)
-        guard_not_invalidated() []        
-        p71 = getfield_gc(p69, descr=quasifielddescr) # inst_code
-        guard_value(p71, -4247) []
-        jump()
-        """
-        expected = """
-        []
-        p72 = getfield_gc(ConstPtr(myptr), descr=quasifielddescr)
-        guard_value(p72, -4247) []        
-        jump()
-        """
-        self.optimize_loop(ops, expected)
-        
-
 
 class TestLLtype(BaseTestOptimizeBasic, LLtypeMixin):
     pass
