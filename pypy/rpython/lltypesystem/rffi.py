@@ -703,7 +703,8 @@ def make_string_mappings(strtype):
             i += 1
         return assert_str0(b.build())
 
-    # str -> char*
+    # str -> char*, bool, bool
+    # XXX is still the JIT unhappy with that? investigate
     # Can't inline this because of the raw address manipulation.
     @jit.dont_look_inside
     def get_nonmovingbuffer(data):
@@ -729,7 +730,8 @@ def make_string_mappings(strtype):
         return cast(TYPEP, data_start), pinned, False
     get_nonmovingbuffer._annenforceargs_ = [strtype]
 
-    # (str, char*) -> None
+    # (str, char*, bool, bool) -> None
+    # XXX is still the JIT unhappy with that? investigate
     # Can't inline this because of the raw address manipulation.
     @jit.dont_look_inside
     def free_nonmovingbuffer(data, buf, pinned, is_raw):
@@ -748,34 +750,41 @@ def make_string_mappings(strtype):
         keepalive_until_here(data)
     free_nonmovingbuffer._annenforceargs_ = [strtype, None, bool, bool]
 
-    # int -> (char*, str)
+    # int -> (char*, str, bool)
     def alloc_buffer(count):
         """
-        Returns a (raw_buffer, gc_buffer) pair, allocated with count bytes.
-        The raw_buffer can be safely passed to a native function which expects
-        it to not move. Call str_from_buffer with the returned values to get a
-        safe high-level string. When the garbage collector cooperates, this
+        Returns a (raw_buffer, gc_buffer, pinned) triplet, allocated
+        with count bytes.  The raw_buffer can be safely passed to a
+        native function which expects it to not move. Call
+        str_from_buffer with the returned values to get a safe
+        high-level string. When the garbage collector cooperates, this
         allows for the process to be performed without an extra copy.
-        Make sure to call keep_buffer_alive_until_here on the returned values.
+        Make sure to call keep_buffer_alive_until_here on the returned
+        values.
 
-        Right now this is a version optimized for minimark which can pin values
-        in the nursery.
+        Right now this is a version optimized for minimark which can
+        pin values in the nursery.
         """
-        ll_s = rgc.malloc_and_pin(STRTYPE, count)
-        if not ll_s:
-            raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
-            return raw_buf, lltype.nullptr(STRTYPE)
+        ll_s = lltype.malloc(STRTYPE, count)
+        if rgc.can_move(ll_s):
+            pinned = rgc.pin(ll_s)
+            if not pinned:
+                raw_buf = lltype.malloc(TYPEP.TO, count, flavor='raw')
+                return raw_buf, lltype.nullptr(STRTYPE), False
         else:
-            data_start = cast_ptr_to_adr(ll_s) + \
-                offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
-            raw_buf = cast(TYPEP, data_start)
-            return raw_buf, ll_s
+            pinned = False
+        data_start = cast_ptr_to_adr(ll_s) + \
+                     offsetof(STRTYPE, 'chars') + itemoffsetof(STRTYPE.chars, 0)
+        raw_buf = cast(TYPEP, data_start)
+        return raw_buf, ll_s, pinned
     alloc_buffer._always_inline_ = True # to get rid of the returned tuple
     alloc_buffer._annenforceargs_ = [int]
 
-    # (char*, str, int, int) -> None
+    # (char*, str, int, int, bool) -> None
+    # XXX is still the JIT unhappy with that? investigate
     @jit.dont_look_inside
-    def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size):
+    def str_from_buffer(raw_buf, gc_buf, allocated_size, needed_size,
+                        is_pinned):
         """
         Converts from a pair returned by alloc_buffer to a high-level string.
         The returned string will be truncated to needed_size.
@@ -783,7 +792,8 @@ def make_string_mappings(strtype):
         assert allocated_size >= needed_size
 
         if gc_buf:
-            rgc.unpin(gc_buf)
+            if is_pinned:
+                rgc.unpin(gc_buf)
             if allocated_size != needed_size:
                 gc_buf = rgc.ll_shrink_array(gc_buf, needed_size)
             return hlstrtype(gc_buf)
@@ -803,6 +813,7 @@ def make_string_mappings(strtype):
         return hlstrtype(new_buf)
 
     # (char*, str) -> None
+    # XXX is the JIT unhappy?
     @jit.dont_look_inside
     def keep_buffer_alive_until_here(raw_buf, gc_buf):
         """
@@ -1088,23 +1099,25 @@ class scoped_alloc_buffer:
     def __init__(self, size):
         self.size = size
     def __enter__(self):
-        self.raw, self.gc_buf = alloc_buffer(self.size)
+        self.raw, self.gc_buf, self.pinned = alloc_buffer(self.size)
         return self
     def __exit__(self, *args):
         keep_buffer_alive_until_here(self.raw, self.gc_buf)
     def str(self, length):
-        return str_from_buffer(self.raw, self.gc_buf, self.size, length)
+        return str_from_buffer(self.raw, self.gc_buf, self.size, length,
+                               self.pinned)
 
 class scoped_alloc_unicodebuffer:
     def __init__(self, size):
         self.size = size
     def __enter__(self):
-        self.raw, self.gc_buf = alloc_unicodebuffer(self.size)
+        self.raw, self.gc_buf, self.pinned = alloc_unicodebuffer(self.size)
         return self
     def __exit__(self, *args):
         keep_unicodebuffer_alive_until_here(self.raw, self.gc_buf)
     def str(self, length):
-        return unicode_from_buffer(self.raw, self.gc_buf, self.size, length)
+        return unicode_from_buffer(self.raw, self.gc_buf, self.size, length,
+                                   self.pinned)
 
 # You would have to have a *huge* amount of data for this to block long enough
 # to be worth it to release the GIL.

@@ -880,20 +880,15 @@ class RegisterOs(BaseLazyRegistering):
                                   [rffi.INT, rffi.VOIDP, rffi.SIZE_T],
                                   rffi.SIZE_T)
 
-        offset = offsetof(STR, 'chars') + itemoffsetof(STR.chars, 0)
-
         def os_read_llimpl(fd, count):
             if count < 0:
                 raise OSError(errno.EINVAL, None)
-            raw_buf, gc_buf = rffi.alloc_buffer(count)
-            try:
-                void_buf = rffi.cast(rffi.VOIDP, raw_buf)
+            with rffi.scoped_alloc_buffer(count) as buf:
+                void_buf = rffi.cast(rffi.VOIDP, buf.raw)
                 got = rffi.cast(lltype.Signed, os_read(fd, void_buf, count))
                 if got < 0:
                     raise OSError(rposix.get_errno(), "os_read failed")
-                return rffi.str_from_buffer(raw_buf, gc_buf, count, got)
-            finally:
-                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
+                return buf.str(got)
             
         def os_read_oofakeimpl(fd, count):
             return OOSupport.to_rstr(os.read(fd, count))
