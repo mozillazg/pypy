@@ -1,4 +1,0 @@
-
-* implement limit on no of pinned objects + replace insert with qsort
-
-* implement tracing for pinned objects (check that it works)
