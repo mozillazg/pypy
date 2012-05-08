@@ -184,20 +184,30 @@ class BaseTestRJVM(BaseRtypingTest):
 
     def test_array_arguments(self):
         """No array covariance for now."""
-        def fn_array():
+        def fn():
             o = java.lang.Object()
             java.util.Arrays.asList([o, o, o])
 
-        self.interpret(fn_array, [])
+        self.interpret(fn, [])
 
     def test_array_empty_arguments(self):
         """No array covariance for now."""
-        ObjectArray = ootype.Array(NativeRJvmInstance(java.lang.Object))
-
-        def fn_array():
+        def fn():
             java.util.Arrays.asList(ootype.oonewarray(ObjectArray, 0))
 
-        self.interpret(fn_array, [])
+        self.interpret(fn, [])
+
+    def test_array_result(self):
+        def fn():
+            ms = java.lang.Class.forName('java.lang.Object').getMethods()
+            i = 0
+            for m in ms:
+                i += 1
+            return i, len(ms)
+
+        res = self.interpret(fn, [])
+        rs = self.ll_unpack_tuple(res, 2)
+        assert rs == (9, 9)
 
     def test_reflection_for_name(self):
         def fn():
