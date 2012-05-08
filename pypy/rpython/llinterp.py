@@ -702,18 +702,6 @@ class LLFrame(object):
         except MemoryError:
             self.make_llexception()
 
-    def op_malloc_and_pin(self, TYPE, flags):
-        flavor = flags['flavor']
-        assert flavor == 'gc'
-        zero = flags.get('zero', False)
-        return self.heap.malloc_and_pin(TYPE, zero=zero)
-
-    def op_malloc_varsize_and_pin(self, TYPE, flags, size):
-        flavor = flags['flavor']
-        assert flavor == 'gc'
-        zero = flags.get('zero', False)
-        return self.heap.malloc_varsize_and_pin(TYPE, size, zero=zero)
-
     def op_free(self, obj, flags):
         assert flags['flavor'] == 'raw'
         track_allocation = flags.get('track_allocation', True)

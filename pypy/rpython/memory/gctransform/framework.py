@@ -283,14 +283,6 @@ class FrameworkGCTransformer(GCTransformer):
         self.can_move_ptr = getfn(GCClass.can_move.im_func,
                                   [s_gc, annmodel.SomeAddress()],
                                   annmodel.SomeBool())
-        self.malloc_fixedsize_and_pin_ptr = getfn(
-            GCClass.malloc_fixedsize_and_pin,
-            [s_gc, s_typeid16, annmodel.SomeInteger(nonneg=True)],
-            s_gcref)
-        self.malloc_varsize_and_pin_ptr = getfn(
-            GCClass.malloc_varsize_and_pin,
-            [s_gc, s_typeid16] + [annmodel.SomeInteger(nonneg=True)] * 4,
-            s_gcref)
 
         if hasattr(GCClass, 'shrink_array'):
             self.shrink_array_ptr = getfn(
@@ -686,9 +678,7 @@ class FrameworkGCTransformer(GCTransformer):
         if not 'varsize' in op.opname and not flags.get('varsize'):
             #malloc_ptr = self.malloc_fixedsize_ptr
             zero = flags.get('zero', False)
-            if op.opname == 'malloc_and_pin':
-                malloc_ptr = self.malloc_fixedsize_and_pin_ptr
-            elif (self.malloc_fast_ptr is not None and
+            if (self.malloc_fast_ptr is not None and
                 not c_has_finalizer.value and
                 (self.malloc_fast_is_clearing or not zero)):
                 malloc_ptr = self.malloc_fast_ptr
@@ -707,9 +697,7 @@ class FrameworkGCTransformer(GCTransformer):
                                               info_varsize.ofstolength)
             c_varitemsize = rmodel.inputconst(lltype.Signed,
                                               info_varsize.varitemsize)
-            if op.opname == 'malloc_varsize_and_pin':
-                malloc_ptr = self.malloc_varsize_and_pin_ptr
-            elif self.malloc_varsize_clear_fast_ptr is not None:
+            if self.malloc_varsize_clear_fast_ptr is not None:
                 malloc_ptr = self.malloc_varsize_clear_fast_ptr
             else:
                 malloc_ptr = self.malloc_varsize_clear_ptr
@@ -1100,16 +1088,6 @@ class FrameworkGCTransformer(GCTransformer):
                   [self.get_typeids_z_ptr, self.c_const_gc],
                   resultvar=hop.spaceop.result)
         self.pop_roots(hop, livevars)
-
-    def gct_malloc_and_pin(self, hop):
-        TYPE = hop.spaceop.result.concretetype
-        v_raw = self.gct_fv_gc_malloc(hop, {'flavor': 'gc'}, TYPE.TO)
-        hop.cast_result(v_raw)
-
-    def gct_malloc_varisze_and_pin(self, hop):
-        TYPE = hop.spaceop.result.concretetype
-        v_raw = self.gct_fv_gc_malloc(hop, {'flavor': 'gc'}, TYPE.TO)
-        hop.cast_result(v_raw)
 
     def _set_into_gc_array_part(self, op):
         if op.opname == 'setarrayitem':

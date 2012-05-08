@@ -25,7 +25,6 @@ def stdout_ignore_ll_functions(msg):
 class GCTest(object):
     GC_PARAMS = {}
     GC_CAN_MOVE = False
-    GC_CAN_MALLOC_AND_PIN = False
     GC_CAN_SHRINK_ARRAY = False
     GC_CAN_SHRINK_BIG_ARRAY = False
     BUT_HOW_BIG_IS_A_BIG_STRING = 3*WORD
@@ -592,36 +591,6 @@ class GCTest(object):
             return rgc.can_move(lltype.malloc(TP, 1))
         assert self.interpret(func, []) == self.GC_CAN_MOVE
 
-
-    def test_malloc_and_pin(self):
-        TP = lltype.GcArray(lltype.Char)
-        def func():
-            a = rgc.malloc_and_pin(TP, 3)
-            adr = llmemory.cast_ptr_to_adr(a)
-            if a:
-                rgc.collect()
-                assert adr == llmemory.cast_ptr_to_adr(a)
-                keepalive_until_here(a)
-                return 1
-            return 0
-
-        assert self.interpret(func, []) == int(self.GC_CAN_MALLOC_AND_PIN)
-
-    def test_malloc_and_pin_fixsize(self):
-        S = lltype.GcStruct('S', ('x', lltype.Float))
-        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
-        def func():
-            try:
-                a = rgc.malloc_and_pin(TP)
-                if a:
-                    assert not rgc.can_move(a)
-                    return 1
-                return 0
-            except Exception:
-                return 2
-
-        assert self.interpret(func, []) == int(self.GC_CAN_MALLOC_AND_PIN)
-
     def test_shrink_array(self):
         from pypy.rpython.lltypesystem.rstr import STR
 
@@ -928,7 +897,6 @@ class TestHybridGCSmallHeap(GCTest):
 class TestMiniMarkGC(TestSemiSpaceGC):
     from pypy.rpython.memory.gc.minimark import MiniMarkGC as GCClass
     GC_CAN_SHRINK_BIG_ARRAY = False
-    GC_CAN_MALLOC_AND_PIN = True
     BUT_HOW_BIG_IS_A_BIG_STRING = 11*WORD
 
     # those tests are here because they'll be messy and useless

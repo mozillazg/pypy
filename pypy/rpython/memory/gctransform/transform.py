@@ -1,4 +1,3 @@
-import py
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant, \
      c_last_exception, checkgraph
@@ -7,22 +6,18 @@ from pypy.translator.unsimplify import insert_empty_startblock
 from pypy.translator.unsimplify import starts_with_empty_block
 from pypy.translator.backendopt.support import var_needsgc
 from pypy.translator.backendopt import inline
-from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.canraise import RaiseAnalyzer
 from pypy.translator.backendopt.ssa import DataFlowFamilyBuilder
 from pypy.translator.backendopt.constfold import constant_fold_graph
 from pypy.annotation import model as annmodel
 from pypy.rpython import rmodel
-from pypy.rpython.memory import gc
 from pypy.rpython.memory.gctransform.support import var_ispyobj
 from pypy.rpython.annlowlevel import MixLevelHelperAnnotator
 from pypy.rpython.rtyper import LowLevelOpList
 from pypy.rpython.rbuiltin import gen_cast
 from pypy.rlib.rarithmetic import ovfcheck
-import sys
-import os
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.translator.simplify import join_blocks, cleanup_graph
+from pypy.translator.simplify import cleanup_graph
 
 PyObjPtr = lltype.Ptr(lltype.PyObject)
 
@@ -559,12 +554,6 @@ class GCTransformer(BaseGCTransformer):
         meth = getattr(self, 'gct_fv_%s_malloc_varsize' % flavor, None)
         assert meth, "%s has no support for malloc_varsize with flavor %r" % (self, flavor)
         return self.varsize_malloc_helper(hop, flags, meth, [])
-
-    def gct_malloc_and_pin(self, *args, **kwds):
-        return self.gct_malloc(*args, **kwds)
-
-    def gct_malloc_varsize_and_pin(self, hop, *args, **kwds):
-        return self.gct_malloc_varsize(hop, *args, **kwds)
 
     def gct_gc_add_memory_pressure(self, hop):
         if hasattr(self, 'raw_malloc_memory_pressure_ptr'):

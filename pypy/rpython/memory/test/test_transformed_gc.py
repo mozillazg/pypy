@@ -1,10 +1,9 @@
 import py
-import sys
 import inspect
 from pypy.translator.c import gc
 from pypy.annotation import model as annmodel
 from pypy.annotation import policy as annpolicy
-from pypy.rpython.lltypesystem import lltype, llmemory, llarena, rffi, llgroup
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, llgroup
 from pypy.rpython.memory.gctransform import framework
 from pypy.rpython.lltypesystem.lloperation import llop, void
 from pypy.rlib.objectmodel import compute_unique_id, we_are_translated
@@ -42,7 +41,6 @@ ARGS = lltype.FixedSizeArray(lltype.Signed, 3)
 class GCTest(object):
     gcpolicy = None
     GC_CAN_MOVE = False
-    GC_CAN_MALLOC_AND_PIN = False
     GC_CAN_ALWAYS_PIN = False
     taggedpointers = False
 
@@ -643,42 +641,6 @@ class GenericGCTests(GCTest):
         res = run([])
         assert res == self.GC_CAN_MOVE
 
-    def define_malloc_and_pin(cls):
-        TP = lltype.GcArray(lltype.Char)
-        def func():
-            a = rgc.malloc_and_pin(TP, 3, zero=True)
-            if a:
-                assert not rgc.can_move(a)
-                rgc.unpin(a)
-                return 1
-            return 0
-
-        return func
-
-    def test_malloc_and_pin(self):
-        run = self.runner("malloc_and_pin")
-        assert int(self.GC_CAN_MALLOC_AND_PIN) == run([])
-
-    def define_malloc_and_pin_fixsize(cls):
-        S = lltype.GcStruct('S', ('x', lltype.Float))
-        TP = lltype.GcStruct('T', ('s', lltype.Ptr(S)))
-        def func():
-            try:
-                a = rgc.malloc_and_pin(TP)
-                if a:
-                    assert not rgc.can_move(a)
-                    rgc.unpin(a)
-                    return 1
-                return 0
-            except Exception:
-                return 2
-
-        return func
-
-    def test_malloc_and_pin_fixsize(self):
-        run = self.runner("malloc_and_pin_fixsize")
-        assert run([]) == int(self.GC_CAN_MALLOC_AND_PIN)
-
     def define_shrink_array(cls):
         from pypy.rpython.lltypesystem.rstr import STR
 
@@ -1222,7 +1184,6 @@ class TestGenerationalNoFullCollectGC(GCTest):
 
 class TestHybridGC(TestGenerationGC):
     gcname = "hybrid"
-    GC_CAN_MALLOC_AND_PIN = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
@@ -1290,7 +1251,6 @@ class TestMiniMarkGC(TestHybridGC):
     gcname = "minimark"
     GC_CAN_TEST_ID = True
     GC_CAN_ALWAYS_PIN = True
-    GC_CAN_MALLOC_AND_PIN = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):

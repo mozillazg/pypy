@@ -166,13 +166,6 @@ class GCBase(object):
         # lots of cast and reverse-cast around...
         return llmemory.cast_ptr_to_adr(ref)
 
-    def malloc_fixedsize_and_pin(self, typeid, size):
-        return lltype.nullptr(llmemory.GCREF.TO)
-
-    def malloc_varsize_and_pin(self, typeid, length, size, itemsize,
-                               offset_to_length):
-        return lltype.nullptr(llmemory.GCREF.TO)
-
     def id(self, ptr):
         return lltype.cast_ptr_to_int(ptr)
 

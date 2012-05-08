@@ -119,40 +119,6 @@ class DumpHeapEntry(ExtRegistryEntry):
         hop.exception_is_here()
         return hop.genop('gc_heap_stats', [], resulttype=hop.r_result)
 
-def malloc_and_pin(TP, n=None, zero=False):
-    """ Allocate a buffer and immediately pin it. If the GC does not support
-    pinning or cannot fulfill the request for some other reason, null ptr
-    is returned. Make sure you unpin this thing when you're done
-    """
-    return lltype.malloc(TP, n, zero=zero)
-
-class MallocAndPinEntry(ExtRegistryEntry):
-    _about_ = malloc_and_pin
-
-    def compute_result_annotation(self, s_TP, s_n=None, s_zero=None):
-        # basically return the same as malloc
-        from pypy.annotation.builtin import malloc
-        return malloc(s_TP, s_n, s_zero=s_zero)
-
-    def specialize_call(self, hop, i_zero=None):
-        assert hop.args_s[0].is_constant()
-        vlist = [hop.inputarg(lltype.Void, arg=0)]
-        opname = 'malloc_and_pin'
-        flags = {'flavor': 'gc'}
-        if i_zero is not None:
-            flags['zero'] = hop.args_s[i_zero].const
-            nb_args = hop.nb_args - 1
-        else:
-            nb_args = hop.nb_args
-        vlist.append(hop.inputconst(lltype.Void, flags))
-
-        if nb_args == 2:
-            vlist.append(hop.inputarg(lltype.Signed, arg=1))
-            opname = 'malloc_varsize_and_pin'
-
-        hop.exception_cannot_occur()
-        return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
-
 @jit.oopspec('list.ll_arraycopy(source, dest, source_start, dest_start, length)')
 @specialize.ll()
 @enforceargs(None, None, int, int, int)

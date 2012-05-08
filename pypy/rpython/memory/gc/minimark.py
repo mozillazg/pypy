@@ -581,20 +581,6 @@ class MiniMarkGC(MovingGCBase):
         #
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
-    def malloc_fixedsize_and_pin(self, typeid, size):
-        r = self.malloc_fixedsize_clear(typeid, size)
-        if not self.pin(llmemory.cast_ptr_to_adr(r)):
-            return lltype.nullptr(llmemory.GCREF.TO)
-        return r
-        
-    def malloc_varsize_and_pin(self, typeid, length, size, itemsize,
-                               offset_to_length):
-        r = self.malloc_varsize_clear(typeid, length, size, itemsize,
-                                      offset_to_length)
-        if not self.pin(llmemory.cast_ptr_to_adr(r)):
-            return lltype.nullptr(llmemory.GCREF.TO)
-        return r        
-
     def collect(self, gen=1):
         """Do a minor (gen=0) or major (gen>0) collection."""
         self.minor_collection()

@@ -1,14 +1,13 @@
 from pypy.translator.simplify import join_blocks, cleanup_graph
 from pypy.translator.unsimplify import copyvar, varoftype
 from pypy.translator.unsimplify import insert_empty_block, split_block
-from pypy.translator.backendopt import canraise, inline, support, removenoops
+from pypy.translator.backendopt import canraise, inline
 from pypy.objspace.flow.model import Block, Constant, Variable, Link, \
-    c_last_exception, SpaceOperation, checkgraph, FunctionGraph, mkentrymap
+    c_last_exception, SpaceOperation, FunctionGraph, mkentrymap
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.lltypesystem import lloperation
 from pypy.rpython import rtyper
-from pypy.rpython import rclass
 from pypy.rpython.rmodel import inputconst
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rlib.rarithmetic import r_singlefloat
@@ -255,9 +254,7 @@ class BaseExceptionTransformer(object):
               len(block.operations) and
               (block.exits[0].args[0].concretetype is lltype.Void or
                block.exits[0].args[0] is block.operations[-1].result) and
-              block.operations[-1].opname not in ('malloc',     # special cases
-                                                  'malloc_and_pin',
-                                                  'malloc_varsize_and_pin')):
+              block.operations[-1].opname != 'malloc'):     # special cases
             last_operation -= 1
         lastblock = block
         for i in range(last_operation, -1, -1):
@@ -438,14 +435,6 @@ class BaseExceptionTransformer(object):
             flavor = spaceop.args[1].value['flavor']
             if flavor == 'gc':
                 insert_zeroing_op = True
-        elif spaceop.opname in ['malloc_and_pin', 'malloc_varsize_and_pin']:
-            # xxx we cannot insert zero_gc_pointers_inside after
-            # malloc_and_pin, because it can return null.  For now
-            # we simply always force the zero=True flag on
-            # malloc_and_pin.
-            c_flags = spaceop.args[1]
-            c_flags.value = c_flags.value.copy()
-            spaceop.args[1].value['zero'] = True
         # NB. when inserting more special-cases here, keep in mind that
         # you also need to list the opnames in transform_block()
         # (see "special cases")

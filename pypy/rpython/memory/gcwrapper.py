@@ -56,25 +56,6 @@ class GCManagedHeap(object):
             return lltype.malloc(TYPE, n, flavor=flavor, zero=zero,
                                  track_allocation=track_allocation)
 
-    def malloc_and_pin(self, TYPE, n=None, zero=False):
-        typeid = self.get_type_id(TYPE)
-        size = self.gc.fixed_size(typeid)
-        result = self.gc.malloc_fixedsize_and_pin(typeid, size)
-        if result:
-            assert self.gc.malloc_zero_filled
-        return lltype.cast_opaque_ptr(lltype.Ptr(TYPE), result)
-
-    def malloc_varsize_and_pin(self, TYPE, n=None, zero=False):
-        typeid = self.get_type_id(TYPE)
-        size = self.gc.fixed_size(typeid)
-        itemsize = self.gc.varsize_item_sizes(typeid)
-        offset_to_length = self.gc.varsize_offset_to_length(typeid)
-        result = self.gc.malloc_varsize_and_pin(typeid, n, size, itemsize,
-                                              offset_to_length)
-        if result:
-            assert self.gc.malloc_zero_filled
-        return lltype.cast_opaque_ptr(lltype.Ptr(TYPE), result)
-
     def add_memory_pressure(self, size):
         if hasattr(self.gc, 'raw_malloc_memory_pressure'):
             self.gc.raw_malloc_memory_pressure(size)

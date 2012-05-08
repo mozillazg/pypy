@@ -1,13 +1,12 @@
 import py
 import sys, os, inspect
 
-from pypy.objspace.flow.model import summary
 from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.memory.test import snippet
 from pypy.rlib import rgc
 from pypy.rlib.objectmodel import keepalive_until_here
-from pypy.rlib.rstring import StringBuilder, UnicodeBuilder
+from pypy.rlib.rstring import StringBuilder
 from pypy.tool.udir import udir
 from pypy.translator.interactive import Translation
 from pypy.annotation import policy as annpolicy
@@ -19,7 +18,6 @@ class TestUsingFramework(object):
     removetypeptr = False
     taggedpointers = False
     GC_CAN_MOVE = False
-    GC_CAN_MALLOC_AND_PIN = False
     GC_CAN_SHRINK_ARRAY = False
 
     _isolated_func = None
@@ -723,25 +721,6 @@ class TestUsingFramework(object):
     def test_can_move(self):
         assert self.run('can_move') == self.GC_CAN_MOVE
 
-    def define_malloc_and_pin(cls):
-        TP = lltype.GcArray(lltype.Char)
-        def func():
-            try:
-                a = rgc.malloc_and_pin(TP, 3)
-                if a:
-                    assert not rgc.can_move(a)
-                    rgc.unpin(a)
-                    return 1
-                return 0
-            except Exception:
-                return 2
-
-        return func
-
-    def test_malloc_and_pin(self):
-        res = self.run('malloc_and_pin')
-        assert res == self.GC_CAN_MALLOC_AND_PIN
-
     def define_resizable_buffer(cls):
         from pypy.rpython.lltypesystem.rstr import STR
 
@@ -1438,7 +1417,6 @@ class TestMarkCompactGC(TestSemiSpaceGC):
 class TestMiniMarkGC(TestSemiSpaceGC):
     gcpolicy = "minimark"
     should_be_moving = True
-    GC_CAN_MALLOC_AND_PIN = True
     GC_CAN_SHRINK_ARRAY = True
 
     def test_gc_heap_stats(self):

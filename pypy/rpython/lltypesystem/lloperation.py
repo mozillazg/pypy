@@ -357,8 +357,6 @@ LL_OPERATIONS = {
 
     'malloc':               LLOp(canmallocgc=True),
     'malloc_varsize':       LLOp(canmallocgc=True),
-    'malloc_and_pin':    LLOp(canmallocgc=True),
-    'malloc_varsize_and_pin':LLOp(canmallocgc=True),
     'shrink_array':         LLOp(canrun=True),
     'zero_gc_pointers_inside': LLOp(),
     'free':                 LLOp(),
