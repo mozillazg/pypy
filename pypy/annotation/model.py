@@ -653,6 +653,12 @@ def lltype_to_annotation(T):
             return lltype_to_annotation(T.OF)
         if isinstance(T, lltype.Number):
             return SomeInteger(knowntype=T._type)
+        if isinstance(T, ootype.Array) and getattr(T, 'annotate_as_list', False):
+            from pypy.annotation.listdef import ListDef
+            bookkeeper = pypy.annotation.bookkeeper.getbookkeeper()
+            listdef = ListDef(bookkeeper, lltype_to_annotation(T.ITEM))
+            T.annotate_as_list = False
+            return SomeList(listdef)
         if isinstance(T, (ootype.Instance, ootype.BuiltinType, ootype.NativeInstance)):
             return SomeOOInstance(T)
         elif isinstance(T, ootype.StaticMethod):

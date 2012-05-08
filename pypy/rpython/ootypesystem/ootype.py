@@ -723,6 +723,12 @@ class Array(BuiltinADTType):
         self.ITEM = ITEMTYPE
         self._init_methods()
 
+    def _enforce(TYPE2, value):
+        TYPE1 = typeOf(value)
+        if isinstance(TYPE1, Array) and TYPE1.ITEM == TYPE2.ITEM:
+            return value
+        return BuiltinADTType._enforce(TYPE2, value)
+
     def ll_newlist(self, length):
         from pypy.rpython.ootypesystem import rlist
         return rlist.ll_newarray(self, length)
