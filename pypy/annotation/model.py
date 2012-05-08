@@ -612,9 +612,6 @@ def annotation_to_lltype(s_val, info=None):
         return ootype.Class
     if isinstance(s_val, SomeOOObject):
         return s_val.ootype
-    # TODO: Does the following break lltype code?
-    if isinstance(s_val, SomeString):
-        return ootype.String
     if isinstance(s_val, SomeInteriorPtr):
         p = s_val.ll_ptrtype
         if 0 in p.offsets:
@@ -637,6 +634,10 @@ def annotation_to_lltype(s_val, info=None):
         info = ''
     else:
         info = '%s: ' % info
+
+    if isinstance(s_val, SomeString):
+        return ootype.String
+
     raise ValueError("%sshould return a low-level type,\ngot instead %r" % (
         info, s_val))
 
