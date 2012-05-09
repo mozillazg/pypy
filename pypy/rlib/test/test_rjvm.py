@@ -93,8 +93,6 @@ def test_interpreted_reflection():
     assert al.get(0) == "Hello"
 
 
-ClassArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Class))
-ObjectArray = ootype.Array(NativeRJvmInstance(rjvm.java.lang.Object))
 JInteger = NativeRJvmInstance(rjvm.java.lang.Integer)
 ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
 PrintStream = NativeRJvmInstance(rjvm.java.io.PrintStream)
@@ -192,8 +190,9 @@ class BaseTestRJVM(BaseRtypingTest):
 
     def test_array_empty_arguments(self):
         """No array covariance for now."""
+
         def fn():
-            java.util.Arrays.asList(ootype.oonewarray(ObjectArray, 0))
+            java.util.Arrays.asList(rjvm.new_array(rjvm.java.lang.Object, 0))
 
         self.interpret(fn, [])
 
@@ -229,7 +228,7 @@ class BaseTestRJVM(BaseRtypingTest):
 
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
-            c = al_class.getConstructor(ootype.oonewarray(ClassArray, 0))
+            c = al_class.getConstructor(rjvm.new_array(java.lang.Class, 0))
             return c.getModifiers()
 
         res = self.interpret(fn, [])
@@ -256,7 +255,7 @@ class BaseTestRJVM(BaseRtypingTest):
     def test_reflection_get_collection_constructor_dynamic(self):
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
-            types = ootype.oonewarray(ClassArray, 1)
+            types = rjvm.new_array(java.lang.Class, 1)
             types[0] = java.lang.Class.forName('java.util.Collection')
             c = al_class.getConstructor(types)
             return c.getModifiers()
@@ -267,8 +266,8 @@ class BaseTestRJVM(BaseRtypingTest):
     def test_reflection_instance_creation(self):
         def fn1():
             al_class = java.lang.Class.forName('java.util.ArrayList')
-            c = al_class.getConstructor(ootype.oonewarray(ClassArray, 0))
-            object_al = c.newInstance(ootype.oonewarray(ObjectArray, 0))
+            c = al_class.getConstructor(rjvm.new_array(java.lang.Class, 0))
+            object_al = c.newInstance(rjvm.new_array(java.lang.Object, 0))
             al = ootype.oodowncast(ArrayList, object_al)
             return al.size()
 
@@ -293,8 +292,8 @@ class BaseTestRJVM(BaseRtypingTest):
             o = java.lang.Object()
             al.add(o)
             al_class = java.lang.Class.forName('java.util.ArrayList')
-            size_meth = al_class.getMethod('size', ootype.oonewarray(ClassArray, 0))
-            size = ootype.oodowncast(JInteger, size_meth.invoke(al, ootype.oonewarray(ObjectArray, 0)))
+            size_meth = al_class.getMethod('size', rjvm.new_array(java.lang.Class, 0))
+            size = ootype.oodowncast(JInteger, size_meth.invoke(al, rjvm.new_array(java.lang.Object, 0)))
             return size.intValue()
 
         res = self.interpret(fn, [])
@@ -306,11 +305,21 @@ class BaseTestRJVM(BaseRtypingTest):
             out_field = system_class.getField('out')
             dummy = java.lang.Object()
             out = out_field.get(dummy)
-            to_string_meth = java.lang.Class.forName('java.lang.Object').getMethod('toString', ootype.oonewarray(ClassArray, 0))
-            return to_string_meth.invoke(out, ootype.oonewarray(ObjectArray, 0))
+            to_string_meth = java.lang.Class.forName('java.lang.Object').getMethod('toString', rjvm.new_array(java.lang.Class, 0))
+            return to_string_meth.invoke(out, rjvm.new_array(java.lang.Object, 0))
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res).startswith('java.io.PrintStream@')
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
+
+class TestCPythonRJVM(BaseTestRJVM):
+    def interpret(self, fn, args):
+        return fn(*args)
+
+    def ll_to_string(self, s):
+        return s
+
+    def ll_unpack_tuple(self, t, size):
+        return t

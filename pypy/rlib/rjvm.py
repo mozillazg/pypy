@@ -82,7 +82,13 @@ class CallableWrapper(Wrapper):
 
     def __call__(self, *args):
         new_args = [self._unwrap_item(arg) for arg in args]
-        result =  self.__wrapped__(*new_args)
+        try:
+            result =  self.__wrapped__(*new_args)
+        except RuntimeError, e:
+            if e.message.startswith('No matching overloads found'):
+                raise TypeError
+            else:
+                raise
         return self._wrap_item(result)
 
 
@@ -205,6 +211,11 @@ jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
 java = JvmPackageWrapper("java")
 RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
+
+
+def new_array(type, size):
+    return [None] * size
+
 
 int_class = java.lang.Integer.TYPE
 long_class = java.lang.Long.TYPE
