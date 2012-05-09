@@ -934,13 +934,10 @@ class RSocket(object):
         if timeout == 1:
             raise SocketTimeout
         elif timeout == 0:
-            raw_buf, gc_buf = rffi.alloc_buffer(buffersize)
-            try:
-                read_bytes = _c.socketrecv(self.fd, raw_buf, buffersize, flags)
+            with rffi.scoped_alloc_buffer(buffersize) as buf:
+                read_bytes = _c.socketrecv(self.fd, buf.raw, buffersize, flags)
                 if read_bytes >= 0:
-                    return rffi.str_from_buffer(raw_buf, gc_buf, buffersize, read_bytes)
-            finally:
-                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
+                    return buf.str(read_bytes)
         raise self.error_handler()
 
     def recvinto(self, rwbuffer, nbytes, flags=0):
@@ -956,11 +953,11 @@ class RSocket(object):
         if timeout == 1:
             raise SocketTimeout
         elif timeout == 0:
-            raw_buf, gc_buf = rffi.alloc_buffer(buffersize)
-            try:
+            with rffi.scoped_alloc_buffer(buffersize) as buf:
                 address, addr_p, addrlen_p = self._addrbuf()
                 try:
-                    read_bytes = _c.recvfrom(self.fd, raw_buf, buffersize, flags,
+                    read_bytes = _c.recvfrom(self.fd, buf.raw,
+                                             buffersize, flags,
                                              addr_p, addrlen_p)
                     addrlen = rffi.cast(lltype.Signed, addrlen_p[0])
                 finally:
@@ -971,10 +968,7 @@ class RSocket(object):
                         address.addrlen = addrlen
                     else:
                         address = None
-                    data = rffi.str_from_buffer(raw_buf, gc_buf, buffersize, read_bytes)
-                    return (data, address)
-            finally:
-                rffi.keep_buffer_alive_until_here(raw_buf, gc_buf)
+                    return (buf.str(read_bytes), address)
         raise self.error_handler()
 
     def recvfrom_into(self, rwbuffer, nbytes, flags=0):
