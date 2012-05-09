@@ -1,12 +1,12 @@
 from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import _static_meth, StaticMethod
-from pypy.annotation.model import SomeOOInstance, SomeObject, SomeOOStaticMeth
+from pypy.annotation.model import SomeOOInstance, SomeObject, SomeOOStaticMeth, SomeInteger, s_None, s_ImpossibleValue
 from pypy.rlib.rjvm import JvmClassWrapper
 from pypy.rpython.extregistry import ExtRegistryEntry
+from pypy.tool.pairtype import pairtype
 from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
 import utils
-
 
 class SomeJvmClassWrapper(SomeObject):
     def simple_call(self, *s_args):
@@ -64,3 +64,17 @@ class JvmClassWrapperEntry(ExtRegistryEntry):
 
     def compute_annotation(self):
         return SomeJvmClassWrapper(self.instance)
+
+class __extend__(pairtype(SomeOOInstance, SomeInteger)):
+    def getitem((ooinst, index)):
+        if isinstance(ooinst.ootype, ootype.Array):
+            return SomeOOInstance(ooinst.ootype.ITEM)
+        return s_ImpossibleValue
+
+    def setitem((ooinst, index), s_value):
+        if isinstance(ooinst.ootype, ootype.Array):
+            if s_value is s_None:
+                return s_None
+            assert ooinst.ootype.ITEM == s_value.ootype
+            return s_None
+        return s_ImpossibleValue
