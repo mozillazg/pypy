@@ -5,14 +5,21 @@ class AppTestJvm:
         space = gettestobjspace(usemodules=('jvm',))
         cls.space = space
 
-    def test_app_hello(self):
+    def test_make_instance(self):
         import jvm
-        res = jvm.app_level_hello('Guido')
-        assert 'Guido' in res
-        assert 'app-level' in res
+        obj = jvm.make_instance('java.lang.Object')
 
-    def test_interp_hello(self):
-        import jvm
-        res = jvm.interp_level_hello('Guido')
-        assert 'Guido' in res
-        assert 'interp-level' in res
+        expected_methods = {'getClass', 'notifyAll', 'equals', 'hashCode',
+                            'toString', 'notify', 'wait'}
+
+        for name in expected_methods:
+            assert hasattr(obj, name)
+            assert name in getattr(obj, name)()
+
+        for name in [m for m in dir(obj) if not m.startswith('_')]:
+            assert name in expected_methods
+
+        assert obj._class_name == 'Object'
+        assert obj._full_name == 'java.lang.Object'
+
+
