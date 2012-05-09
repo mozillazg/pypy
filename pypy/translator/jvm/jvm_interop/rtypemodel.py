@@ -1,7 +1,11 @@
+from pypy.rpython.error import TyperError
+from pypy.rpython.ootypesystem.rootype import OOInstanceRepr
+from pypy.rpython.rlist import ll_len_foldable
+from pypy.tool.pairtype import pairtype
 import utils
 from pypy.translator.jvm.jvm_interop.annmodel import SomeJvmNativeStaticMeth
 from pypy.rpython.ootypesystem import ootype
-from pypy.rpython.rmodel import Repr
+from pypy.rpython.rmodel import Repr, IntegerRepr, inputconst
 
 
 class JvmClassWrapperRepr(Repr):
@@ -56,3 +60,29 @@ class JvmNativeStaticMethRepr(Repr):
 
         vlist = hop.inputargs(*hop.args_r)[1:]
         return hop.genop('direct_call', [method_const] + vlist, resulttype=method_type.RESULT)
+
+
+class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
+
+    def rtype_getitem((r_inst, r_int), hop):
+        NotImplemented
+
+    def rtype_setitem((r_inst, r_int), hop):
+        if not isinstance(r_inst.lowleveltype, ootype.Array):
+            raise TyperError("setitem() on a non-array instance")
+        c_setitem = inputconst(ootype.Void, "ll_setitem_fast")
+        vlist = hop.inputargs(*hop.args_r)
+        hop.exception_is_here()
+        # In ootype, arrays have methods. The ll_setitem_fast method is used
+        # to store values in arrays. This method call gets translated to
+        # *astore jvm opcodes by the code generator.
+        return hop.genop('oosend', [c_setitem] + vlist, resulttype=ootype.Void)
+
+class __extend__(OOInstanceRepr):
+
+    def rtype_len(self, hop):
+        if not isinstance(r_inst.lowleveltype, ootype.Array):
+            raise TypeError("len() on a non-array instance")
+        vlist = hop.inputargs(self)
+        hop.exception_cannot_occur()
+        return hop.gendirectcall(ll_len_foldable, vlist)

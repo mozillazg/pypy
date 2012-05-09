@@ -244,10 +244,21 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 1
 
-    def test_reflection_get_collection_constructor(self):
+    def test_reflection_get_collection_constructor_class_literal(self):
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor([java.util.Collection.class_])
+            return c.getModifiers()
+
+        res = self.interpret(fn, [])
+        assert res == 1
+
+    def test_reflection_get_collection_constructor_dynamic(self):
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            types = ootype.oonewarray(ClassArray, 1)
+            types[0] = java.lang.Class.forName('java.util.Collection')
+            c = al_class.getConstructor(types)
             return c.getModifiers()
 
         res = self.interpret(fn, [])
