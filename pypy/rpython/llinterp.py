@@ -1164,7 +1164,13 @@ class LLFrame(object):
 
     def op_oogetstaticfield(self, cls, name):
         assert isinstance(name, str)
-        return getattr(cls, name)
+        # TODO: Use something else than JvmClassWrapper in oogetstaticfield
+        import pypy.rlib.rjvm as rjvm
+        from pypy.translator.jvm.jvm_interop.utils import wrap
+        res = getattr(cls, name)
+        if isinstance(cls, rjvm.JvmClassWrapper):
+            res = wrap(res)
+        return res
 
     def op_oosend(self, message, inst, *args):
         checkinst(inst)

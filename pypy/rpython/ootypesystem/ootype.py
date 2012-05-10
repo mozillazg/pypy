@@ -285,6 +285,9 @@ class NativeInstance(OOType):
     def _make_interp_instance(self, args):
         raise NotImplementedError
 
+    def _is_string(self):
+        raise NotImplementedError
+
 class SpecializableType(OOType):
     def _specialize_type(self, TYPE, generic_types):
         if isinstance(TYPE, SpecializableType):
@@ -484,6 +487,8 @@ class String(AbstractString):
         TYPE = typeOf(value)
         if TYPE == self.CHAR:
             return make_string(value)
+        elif isinstance(TYPE, NativeInstance) and getattr(value, '_is_string', False):
+            return value._string()
         else:
             return BuiltinADTType._enforce(self, value)
 
@@ -1291,7 +1296,7 @@ class OverloadingResolver(object):
         ARGS = tuple(self._to_lltype(arg) for arg in ARGS)
         for meth in self.overloadings:
             METH = meth._TYPE
-            if METH.ARGS == ARGS:
+            if self._match_exactly(ARGS, METH.ARGS):
                 return meth # case 1
             elif self._check_signature(ARGS, METH.ARGS):
                 matches.append(meth)
@@ -1301,6 +1306,25 @@ class OverloadingResolver(object):
             raise TypeError, 'More than one method match, please use explicit casts'
         else:
             raise TypeError, 'No suitable overloading found for method'
+
+    def _match_exactly(self, ARGS1, ARGS2):
+        if ARGS1 == ARGS2:
+            return True
+
+        if len(ARGS1) != len(ARGS2):
+            return False
+        else:
+            for (a1, a2) in zip(ARGS1, ARGS2):
+                if a1 == a2:
+                    continue
+                elif a1 is String and isinstance(a2, NativeInstance) and a2._is_string():
+                    continue
+                elif a2 is String and isinstance(a1, NativeInstance) and a1._is_string():
+                    continue
+                else:
+                    return False
+            else:
+                return True
 
     def _check_signature(self, ARGS1, ARGS2):
         if len(ARGS1) != len(ARGS2):
