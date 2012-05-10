@@ -223,6 +223,9 @@ JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 def new_array(type, size):
     return [None] * size
 
+def downcast(type, instance):
+    assert isinstance(instance, JvmInstanceWrapper)
+    return instance
 
 int_class = java.lang.Integer.TYPE
 long_class = java.lang.Long.TYPE

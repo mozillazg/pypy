@@ -2,6 +2,7 @@ import jpype
 import ootypemodel
 from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance, SomeInteger
 from pypy.rlib import rjvm
+from pypy.rlib.rjvm import JvmClassWrapper
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import typeOf
@@ -239,13 +240,6 @@ def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=
     return meth
 
 
-#def rtype_oonewarray(hop):
-#    assert hop.args_s[0].is_constant()
-#    vlist = hop.inputarg(ootype.Void, arg=0)
-#    vlength = hop.inputarg(ootype.Signed, arg=1)
-#    return hop.genop('oonewarray', [vlist, vlength],
-#        resulttype = hop.r_result.lowleveltype)
-
 class Entry(ExtRegistryEntry):
     _about_ = rjvm.new_array
 
@@ -262,4 +256,20 @@ class Entry(ExtRegistryEntry):
         vlength = hop.inputarg(ootype.Signed, arg=1)
         return hop.genop('oonewarray', [vlist, vlength],
             resulttype = hop.r_result.lowleveltype)
+
+
+class Entry(ExtRegistryEntry):
+    _about_ = rjvm.downcast
+
+    def compute_result_annotation(self, type_s, inst_s):
+        assert type_s.is_constant()
+        assert isinstance(inst_s, SomeOOInstance)
+        assert isinstance(inst_s.ootype, ootypemodel.NativeRJvmInstance)
+        return SomeOOInstance(ootypemodel.NativeRJvmInstance(type_s.const))
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_s[0].const, JvmClassWrapper)
+        assert isinstance(hop.args_s[1], SomeOOInstance)
+        v_inst = hop.inputarg(hop.args_r[1], arg=1)
+        return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result)
 
