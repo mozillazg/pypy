@@ -81,7 +81,8 @@ class Mailbox:
         if not self._factory:
             return self.get_message(key)
         else:
-            return self._factory(self.get_file(key))
+            with contextlib.closing(self.get_file(key)) as file:
+                return self._factory(file)
 
     def get_message(self, key):
         """Return a Message representation or raise a KeyError."""
@@ -1872,6 +1873,33 @@ class _ProxyFile:
         self._pos = self._file.tell()
         return result
 
+    def __enter__(self):
+        """Context manager protocol support."""
+        return self
+
+    def __exit__(self, *exc):
+        self.close()
+
+    def readable(self):
+        return self._file.readable()
+
+    def writable(self):
+        return self._file.writable()
+
+    def seekable(self):
+        return self._file.seekable()
+
+    def flush(self):
+        return self._file.flush()
+
+    @property
+    def closed(self):
+        if not hasattr(self, '_file'):
+            return True
+        if not hasattr(self._file, 'closed'):
+            return False
+        return self._file.closed
+
 
 class _PartialFile(_ProxyFile):
     """A read-only wrapper of part of a file."""
@@ -1904,6 +1932,12 @@ class _PartialFile(_ProxyFile):
         if size is None or size < 0 or size > remaining:
             size = remaining
         return _ProxyFile._read(self, size, read_method)
+
+    def close(self):
+        # do *not* close the underlying file object for partial files,
+        # since it's global to the mailbox object
+        if hasattr(self, '_file'):
+            del self._file
 
 
 def _lock_file(f, dotlock=True):

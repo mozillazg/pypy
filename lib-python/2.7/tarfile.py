@@ -418,34 +418,34 @@ class _Stream:
         self.pos      = 0L
         self.closed   = False
 
-        if comptype == "gz":
-            try:
-                import zlib
-            except ImportError:
-                raise CompressionError("zlib module is not available")
-            self.zlib = zlib
-            self.crc = zlib.crc32("") & 0xffffffffL
-            try:
+        try:
+            if comptype == "gz":
+                try:
+                    import zlib
+                except ImportError:
+                    raise CompressionError("zlib module is not available")
+                self.zlib = zlib
+                self.crc = zlib.crc32("")
                 if mode == "r":
                     self._init_read_gz()
                 else:
                     self._init_write_gz()
-            except:
-                if not self._extfileobj:
-                    fileobj.close()
-                    self.closed = True
-                raise    
 
-        if comptype == "bz2":
-            try:
-                import bz2
-            except ImportError:
-                raise CompressionError("bz2 module is not available")
-            if mode == "r":
-                self.dbuf = ""
-                self.cmp = bz2.BZ2Decompressor()
-            else:
-                self.cmp = bz2.BZ2Compressor()
+            if comptype == "bz2":
+                try:
+                    import bz2
+                except ImportError:
+                    raise CompressionError("bz2 module is not available")
+                if mode == "r":
+                    self.dbuf = ""
+                    self.cmp = bz2.BZ2Decompressor()
+                else:
+                    self.cmp = bz2.BZ2Compressor()
+        except:
+            if not self._extfileobj:
+                self.fileobj.close()
+            self.closed = True
+            raise
 
     def __del__(self):
         if hasattr(self, "closed") and not self.closed:
@@ -585,7 +585,6 @@ class _Stream:
             return self.__read(size)
 
         c = len(self.dbuf)
-        t = [self.dbuf]
         while c < size:
             buf = self.__read(self.bufsize)
             if not buf:
@@ -594,27 +593,26 @@ class _Stream:
                 buf = self.cmp.decompress(buf)
             except IOError:
                 raise ReadError("invalid compressed data")
-            t.append(buf)
+            self.dbuf += buf
             c += len(buf)
-        t = "".join(t)
-        self.dbuf = t[size:]
-        return t[:size]
+        buf = self.dbuf[:size]
+        self.dbuf = self.dbuf[size:]
+        return buf
 
     def __read(self, size):
         """Return size bytes from stream. If internal buffer is empty,
            read another block from the stream.
         """
         c = len(self.buf)
-        t = [self.buf]
         while c < size:
             buf = self.fileobj.read(self.bufsize)
             if not buf:
                 break
-            t.append(buf)
+            self.buf += buf
             c += len(buf)
-        t = "".join(t)
-        self.buf = t[size:]
-        return t[:size]
+        buf = self.buf[:size]
+        self.buf = self.buf[size:]
+        return buf
 # class _Stream
 
 class _StreamProxy(object):
@@ -668,16 +666,14 @@ class _BZ2Proxy(object):
             self.bz2obj = bz2.BZ2Compressor()
 
     def read(self, size):
-        b = [self.buf]
         x = len(self.buf)
         while x < size:
             raw = self.fileobj.read(self.blocksize)
             if not raw:
                 break
             data = self.bz2obj.decompress(raw)
-            b.append(data)
+            self.buf += data
             x += len(data)
-        self.buf = "".join(b)
 
         buf = self.buf[:size]
         self.buf = self.buf[size:]
@@ -1688,14 +1684,16 @@ class TarFile(object):
 
             if filemode not in "rw":
                 raise ValueError("mode must be 'r' or 'w'")
-            fid = _Stream(name, filemode, comptype, fileobj, bufsize)
+
+            stream = _Stream(name, filemode, comptype, fileobj, bufsize)
             try:
-                t = cls(name, filemode, fid, **kwargs)
-                t._extfileobj = False
-                return t
+                t = cls(name, filemode, stream, **kwargs)
             except:
-                fid.close()
+                stream.close()
                 raise
+            t._extfileobj = False
+            return t
+
         elif mode in "aw":
             return cls.taropen(name, mode, fileobj, **kwargs)
 
@@ -1722,19 +1720,22 @@ class TarFile(object):
             gzip.GzipFile
         except (ImportError, AttributeError):
             raise CompressionError("gzip module is not available")
-        gz_fid = None
+
+        extfileobj = fileobj is not None
         try:
-            gz_fid = gzip.GzipFile(name, mode, compresslevel, fileobj)
-            t = cls.taropen(name, mode, gz_fid, **kwargs)
+            fileobj = gzip.GzipFile(name, mode + "b", compresslevel, fileobj)
+            t = cls.taropen(name, mode, fileobj, **kwargs)
         except IOError:
-            if gz_fid:
-                gz_fid.close()
+            if not extfileobj and fileobj is not None:
+                fileobj.close()
+            if fileobj is None:
+                raise
             raise ReadError("not a gzip file")
         except:
-            if gz_fid:
-                gz_fid.close()
-            raise 
-        t._extfileobj = False
+            if not extfileobj and fileobj is not None:
+                fileobj.close()
+            raise
+        t._extfileobj = extfileobj
         return t
 
     @classmethod
@@ -1750,21 +1751,16 @@ class TarFile(object):
         except ImportError:
             raise CompressionError("bz2 module is not available")
 
-        try:
-            if fileobj is not None:
-                bzfileobj = _BZ2Proxy(fileobj, mode)
-            else:
-                bzfileobj = bz2.BZ2File(name, mode, compresslevel=compresslevel)
-            t = cls.taropen(name, mode, bzfileobj, **kwargs)
+        if fileobj is not None:
+            fileobj = _BZ2Proxy(fileobj, mode)
+        else:
+            fileobj = bz2.BZ2File(name, mode, compresslevel=compresslevel)
 
+        try:
+            t = cls.taropen(name, mode, fileobj, **kwargs)
         except (IOError, EOFError):
-            if fileobj is None:
-                bzfileobj.close()
+            fileobj.close()
             raise ReadError("not a bzip2 file")
-        except:
-            if fileobj is None:
-                bzfileobj.close()
-            raise 
         t._extfileobj = False
         return t
 

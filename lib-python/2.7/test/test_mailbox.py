@@ -93,16 +93,14 @@ class TestMailbox(TestBase):
         key1 = self._box.add(self._template % 1)
         self.assertEqual(len(self._box), 2)
         method(key0)
-        l = len(self._box)
-        self.assertEqual(l, 1)
+        self.assertEqual(len(self._box), 1)
         self.assertRaises(KeyError, lambda: self._box[key0])
         self.assertRaises(KeyError, lambda: method(key0))
         self.assertEqual(self._box.get_string(key1), self._template % 1)
         key2 = self._box.add(self._template % 2)
         self.assertEqual(len(self._box), 2)
         method(key2)
-        l = len(self._box)
-        self.assertEqual(l, 1)
+        self.assertEqual(len(self._box), 1)
         self.assertRaises(KeyError, lambda: self._box[key2])
         self.assertRaises(KeyError, lambda: method(key2))
         self.assertEqual(self._box.get_string(key1), self._template % 1)
@@ -242,11 +240,7 @@ class TestMailbox(TestBase):
 
     def test_contains(self):
         # Check existence of keys using __contains__()
-        self._test_has_key_or_contains(self._box.__contains__)
-
-    def _test_has_key_or_contains(self, method):
-        # (Used by test_has_key() and test_contains().)
-        self.assertFalse(method('foo'))
+        self.assertNotIn('foo', self._box)
         key0 = self._box.add(self._template % 0)
         self.assertTrue(method(key0))
         self.assertFalse(method('foo'))
@@ -269,7 +263,7 @@ class TestMailbox(TestBase):
         for i in xrange(repetitions):
             self.assertEqual(len(self._box), i)
             keys.append(self._box.add(self._template % i))
-            self.assertEqual(len(self._box),  i + 1)
+            self.assertEqual(len(self._box), i + 1)
         for i in xrange(repetitions):
             self.assertEqual(len(self._box), repetitions - i)
             self._box.remove(keys[i])
@@ -403,6 +397,7 @@ class TestMailbox(TestBase):
         self._box.add(contents[0])
         self._box.add(contents[1])
         self._box.add(contents[2])
+        oldbox = self._box
         method()
         if should_call_close:
             self._box.close()
@@ -411,6 +406,7 @@ class TestMailbox(TestBase):
         self.assertEqual(len(keys), 3)
         for key in keys:
             self.assertIn(self._box.get_string(key), contents)
+        oldbox.close()
 
     def test_dump_message(self):
         # Write message representations to disk
@@ -841,15 +837,17 @@ class _TestMboxMMDF(TestMailbox):
             return
         pid = os.fork()
         if pid == 0:
-            # In the child, lock the mailbox.
-            self._box.lock()
-            time.sleep(2)
-            self._box.unlock()
-            os._exit(0)
+            # child
+            try:
+                # lock the mailbox, and signal the parent it can proceed
+                self._box.lock()
+                time.sleep(2)
+                self._box.unlock()
+            finally:
+                os._exit(0)
 
-        # In the parent, sleep a bit to give the child time to acquire
-        # the lock.
-        time.sleep(0.5)
+        # In the parent, wait until the child signals it locked the mailbox.
+        p.recv(1)
         try:
             self.assertRaises(mailbox.ExternalClashError,
                               self._box.lock)

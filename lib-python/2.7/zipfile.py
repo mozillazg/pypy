@@ -14,7 +14,7 @@ except ImportError:
     crc32 = binascii.crc32
 
 __all__ = ["BadZipfile", "error", "ZIP_STORED", "ZIP_DEFLATED", "is_zipfile",
-           "ZipInfo", "ZipFile", "PyZipFile", "LargeZipFile" ]
+           "ZipInfo", "ZipFile", "PyZipFile", "LargeZipFile"]
 
 class BadZipfile(Exception):
     pass
@@ -476,6 +476,7 @@ class ZipExtFile(io.BufferedIOBase):
     def __init__(self, fileobj, mode, zipinfo, decrypter=None):
         self._fileobj = fileobj
         self._decrypter = decrypter
+        self._close_fileobj = close_fileobj
 
         self._compress_type = zipinfo.compress_type
         self._compress_size = zipinfo.compress_size
@@ -647,10 +648,12 @@ class ZipExtFile(io.BufferedIOBase):
         self._offset += len(data)
         return data
 
-
-class ZipExtFileWithClose(ZipExtFile):
     def close(self):
-        self._fileobj.close()
+        try:
+            if self._close_fileobj:
+                self._fileobj.close()
+        finally:
+            super().close()
 
 
 class ZipFile:
@@ -868,9 +871,8 @@ class ZipFile:
 
     def read(self, name, pwd=None):
         """Return file bytes (as a string) for name."""
-        with self.open(name, "r", pwd) as f:
-            retval = f.read()
-            return retval
+        with self.open(name, "r", pwd) as fp:
+            return fp.read()
 
     def open(self, name, mode="r", pwd=None):
         """Return file-like object for 'name'."""
@@ -943,10 +945,8 @@ class ZipFile:
             if not self._filePassed:
                 zef_file.close()
             raise    
-        if self._filePassed:
-            return  ZipExtFile(zef_file, mode, zinfo, zd)
-        else:
-            return  ZipExtFileWithClose(zef_file, mode, zinfo, zd)
+        return  ZipExtFile(zef_file, mode, zinfo, zd,
+                          close_fileobj=not self._filePassed)
 
     def extract(self, member, path=None, pwd=None):
         """Extract a member from the archive to the current working directory,
@@ -1276,7 +1276,7 @@ class ZipFile:
 class PyZipFile(ZipFile):
     """Class to create ZIP archives with Python library files and packages."""
 
-    def writepy(self, pathname, basename = ""):
+    def writepy(self, pathname, basename=""):
         """Add all files from "pathname" to the ZIP archive.
 
         If pathname is a package directory, search the directory and
