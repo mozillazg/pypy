@@ -82,6 +82,9 @@ class __extend__(pairtype(SomeOOInstance, SomeInteger)):
         if isinstance(ooinst.ootype, ootype.Array):
             if s_value is s_None:
                 return s_None
-            assert ooinst.ootype.ITEM == s_value.ootype
+            assert (ooinst.ootype.ITEM == s_value.ootype or
+                    (isinstance(ooinst.ootype.ITEM, NativeRJvmInstance) and
+                     isinstance(s_value.ootype, NativeRJvmInstance) and
+                     ooinst.ootype.ITEM.class_name == 'java.lang.Object'))
             return s_None
         return s_ImpossibleValue
