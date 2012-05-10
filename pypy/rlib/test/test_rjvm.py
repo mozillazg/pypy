@@ -296,7 +296,7 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 1
 
-    def test_reflection_instance_creation(self):
+    def test_reflection_instance_creation_no_args(self):
         def fn1():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor(rjvm.new_array(java.lang.Class, 0))
@@ -307,16 +307,34 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn1, [])
         assert res == 0
 
-        def fn2():
+    def test_reflection_instance_creation_array_args(self):
+        def fn():
+            al_class = java.lang.Class.forName('java.util.ArrayList')
+            c = al_class.getConstructor([java.lang.Integer.TYPE])
+#            args = java.util.ArrayList()
+#            args.add(java.lang.Integer.valueOf(15))
+#            args_array = args.toArray()
+            args_array = rjvm.new_array(java.lang.Object, 1)
+            args_array[0] = java.lang.Integer.valueOf(15)
+            object_al = c.newInstance(args_array)
+            al = rjvm.downcast(java.util.ArrayList, object_al)
+            return al.size()
+
+        res = self.interpret(fn, [])
+        assert res == 0
+
+    def test_reflection_instance_creation_arraylist_args(self):
+        def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor([java.lang.Integer.TYPE])
             args = java.util.ArrayList()
             args.add(java.lang.Integer.valueOf(15))
-            object_al = c.newInstance(args.toArray())
+            args_array = args.toArray()
+            object_al = c.newInstance(args_array)
             al = rjvm.downcast(java.util.ArrayList, object_al)
             return al.size()
 
-        res = self.interpret(fn2, [])
+        res = self.interpret(fn, [])
         assert res == 0
 
     def test_reflection_method_call(self):

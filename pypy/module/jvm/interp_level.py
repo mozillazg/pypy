@@ -13,25 +13,21 @@ class W_JvmObject(Wrappable):
         self.space = space
         self.b_obj = b_obj
 
-#    @unwrap_spec(name=str, startfrom=int)
-#    def call_method(self, name, w_args, startfrom=0):
-#        return call_method(self.space, self.b_obj, self.b_obj.GetType(), name, w_args, startfrom)
 
 @unwrap_spec(class_name=str)
 def new(space, class_name):
-    b_java_cls = java.lang.Class.forName(class_name)
+    b_java_cls = java.lang.Class.forName('java.awt.Point')
 
-    names = {}
-    for b_method in b_java_cls.getMethods():
-        names[b_method.getName()] = True
+    types = new_array(java.lang.Class, 1)
+    args = new_array(java.lang.Object, 1)
 
-    names_w = [space.wrap(str(name)) for name in names.keys()]
+    types[0] = java.lang.Class.forName('java.awt.Point')
+    args[0] = java.awt.Point()
 
-    return space.newlist(names_w)
+    b_constructor = b_java_cls.getConstructor(types)
+    b_point_as_object = b_constructor.newInstance(args)
 
-#    args_len = len(args_w)
-#    types = new_array(java.lang.Class, 0)
-#    args = new_array(java.lang.Object, 0)
+    return space.wrap(str(b_point_as_object.toString()))
 
 #    i = 0
 #    for w_arg_type in args_w:
@@ -41,35 +37,11 @@ def new(space, class_name):
 #        types[i] = type_for_name(type_name)
 #        args[i] = arg
 #        i += 1
-
+#
 #    constructor = java_cls.getConstructor(types)
 #    b_obj = constructor.newInstance(args)
 #
-#    return wrap_jvm_obj(space, b_obj, class_name, java_cls)
-
-@unwrap_spec(class_name=str)
-def superclass(space, class_name):
-    b_cls = java.lang.Class.forName(class_name)
-    b_superclass = b_cls.getSuperclass()
-    return space.wrap(b_superclass.getName())
-
-
-def wrap_list_of_strings(space, lst):
-    list_w = [space.wrap(s) for s in lst]
-    return space.newlist(list_w)
-
-
-def unwrap_arg(space, w_arg, type_name):
-    if type_name == 'str':
-        return space.str_w(w_arg)
-
-    raise OperationError(space.w_TypeError, space.wrap("Unknown argument type %s" % type_name))
-
-def type_for_name(type_name):
-    if type_name == 'str':
-        return java.lang.String.class_
-    else:
-        return java.lang.Class.forName(type_name)
+#    return space.wrap(W_JvmObject(space, b_obj))
 
 
 def wrap_jvm_obj(space, b_obj, class_name, java_cls):
