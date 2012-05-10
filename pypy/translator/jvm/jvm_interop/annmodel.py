@@ -43,17 +43,24 @@ class SomeJvmClassWrapper(SomeObject):
 
 
 class SomeJvmNativeStaticMeth(SomeOOStaticMeth):
-    def __init__(self, method_type, rjvm_class_wrapper, name):
+    def __init__(self, method_type, jvm_class_wrapper, name):
         SomeOOStaticMeth.__init__(self, method_type)
         self.name = name
-        self.rjvm_class_wrapper = rjvm_class_wrapper
+        self.jvm_class_wrapper = jvm_class_wrapper
 
     def rtyper_makerepr(self, rtyper):
         from rtypemodel import JvmNativeStaticMethRepr
-        return JvmNativeStaticMethRepr(self.method, self.name, self.rjvm_class_wrapper)
+        return JvmNativeStaticMethRepr(self.method, self.name, self.jvm_class_wrapper)
 
     def rtyper_makekey(self):
         return self.__class__, self.method
+
+    def contains(self, other):
+        if isinstance(other, SomeJvmNativeStaticMeth):
+            return self.name == other.name and \
+                   self.jvm_class_wrapper.__name__ == other.jvm_class_wrapper.__name__
+
+        return super(SomeJvmNativeStaticMeth, self).contains(other)
 
 
 class JvmClassWrapperEntry(ExtRegistryEntry):

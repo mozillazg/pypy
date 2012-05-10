@@ -38,7 +38,7 @@ class NativeRJvmInstanceExample(object):
             jtype = field.getType()
             return jpype_type_to_ootype(jtype)._example()
         elif self.static and name == 'class_':
-            return ootypemodel.NativeRJvmInstance(rjvm.RjvmJavaClassWrapper.java_lang_Class)._example()
+            return ootypemodel.NativeRJvmInstance(rjvm.RjvmJavaLangClassWrapper.java_lang_Class)._example()
         else:
             raise TypeError(
                 "No method or field called %s found in %s." % (name, self.refclass.getName()))
@@ -60,10 +60,10 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
 
         Here we ignore these 'abstract' versions.
         """
-        one_method_per_signature = dict()
+        one_method_per_signature = {}
         for meth in overloadings:
             signature = meth._TYPE.ARGS
-            if not signature in one_method_per_signature:
+            if signature not in one_method_per_signature:
                 one_method_per_signature[signature] = meth
             else:
                 refclass = self._get_refclass(meth)
@@ -119,8 +119,7 @@ def jvm_method_to_pypy_Meth(method, Meth_type=ootype.Meth, result=None):
     args = tuple(jpype_type_to_ootype(t) for t in method.getParameterTypes())
     if result is None:
         result = jpype_type_to_ootype(method.getReturnType())
-    result = Meth_type(args, result)
-    return result
+    return Meth_type(args, result)
 
 
 def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth, result=None):
@@ -145,7 +144,6 @@ jpype_primitives_to_ootype_mapping = {
     jpype.java.lang.Integer.TYPE: ootype.Signed,
     jpype.java.lang.Boolean.TYPE: ootype.Bool,
     jpype.java.lang.Void.TYPE: ootype.Void,
-    jpype.java.lang.String: ootype.String,
 }
 
 
@@ -206,12 +204,12 @@ def wrap(value, hint=None):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value), value)
     elif isinstance(value, jpype.java.lang.Object):
         return wrap(ootypemodel.JvmInstanceWrapper(value))
-    elif isinstance(value, jpype._jarray._JavaArrayClass):
+    elif isinstance(value, list):
         result = ootype._array(hint, len(value))
         result._array = [wrap(el, hint=hint.ITEM) for el in value]
         return result
     elif isinstance(value, (str, unicode)):
-        return ootype._string(ootype.String, str(value))
+        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), value)
     elif value is None:
         return None
     elif isinstance(value, (int, bool, float)):
@@ -264,3 +262,4 @@ class Entry(ExtRegistryEntry):
         vlength = hop.inputarg(ootype.Signed, arg=1)
         return hop.genop('oonewarray', [vlist, vlength],
             resulttype = hop.r_result.lowleveltype)
+

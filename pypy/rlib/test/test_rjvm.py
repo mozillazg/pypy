@@ -1,8 +1,10 @@
 import py
-from pypy.rlib import rjvm
+from pypy.annotation.annrpython import RPythonAnnotator
+import pypy.annotation.model as annmodel
+from pypy.rlib import rjvm, rstring
 from pypy.rpython.ootypesystem import ootype
 import pypy.translator.jvm.jvm_interop # side effects!
-from pypy.translator.jvm.jvm_interop import NativeRJvmInstance, ootypemodel
+from pypy.translator.jvm.jvm_interop import NativeRJvmInstance
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 
 try:
@@ -12,6 +14,11 @@ except ImportError:
 
 from pypy.rlib.rjvm import java, JvmClassWrapper, JvmInstanceWrapper, JvmMethodWrapper, \
     JvmStaticMethodWrapper, JvmPackageWrapper
+
+JInteger = NativeRJvmInstance(rjvm.java.lang.Integer)
+ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
+PrintStream = NativeRJvmInstance(rjvm.java.io.PrintStream)
+JString = NativeRJvmInstance(rjvm.java.lang.String)
 
 def test_static_method():
     assert isinstance(java.lang, JvmPackageWrapper)
@@ -93,9 +100,38 @@ def test_interpreted_reflection():
     assert al.get(0) == "Hello"
 
 
-JInteger = NativeRJvmInstance(rjvm.java.lang.Integer)
-ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
-PrintStream = NativeRJvmInstance(rjvm.java.io.PrintStream)
+class TestRJvmAnnotation(object):
+
+    def test_strings_are_instances(self):
+        def fn():
+            o = java.lang.Object()
+            return o.toString()
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeOOInstance)
+
+    def test_str_on_strings(self):
+        def fn():
+            o = java.lang.Object()
+            return str(o.toString())
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeString)
+
+    def test_returning_string_as_object(self):
+        def fn():
+            al = java.util.ArrayList()
+            al.add('foobar')
+            str_as_obj = al.get(0)
+            str_as_jstr = ootype.oodowncast(JString, str_as_obj)
+            return str_as_jstr
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeOOInstance)
+
 
 class BaseTestRJVM(BaseRtypingTest):
     def test_simple_constructor(self):
@@ -129,7 +165,7 @@ class BaseTestRJVM(BaseRtypingTest):
         def fn():
             t = java.lang.Thread()
             t.setName('foo')
-            return t.getName()
+            return str(t.getName())
         res = self.ll_to_string(self.interpret(fn, []))
         assert res == 'foo'
 
@@ -138,7 +174,7 @@ class BaseTestRJVM(BaseRtypingTest):
             sb = java.lang.StringBuilder()
             sb.append('foo ')
             sb.append(7)
-            return sb.toString()
+            return str(sb.toString())
         res = self.ll_to_string(self.interpret(fn, []))
         assert res == 'foo 7'
 
@@ -151,14 +187,16 @@ class BaseTestRJVM(BaseRtypingTest):
 
     def test_get_static_field(self):
         def fn():
-            return java.lang.Integer.SIZE, java.lang.System.out.toString()
-        (a,b) = self.ll_unpack_tuple(self.interpret(fn, []), 2)
+            return java.lang.Integer.SIZE, str(java.lang.System.out.toString())
+
+        res = self.interpret(fn, [])
+        (a,b) = self.ll_unpack_tuple(res, 2)
         assert a == 32
         assert self.ll_to_string(b).startswith('java.io.PrintStream')
 
     def test_static_method_no_overload(self):
         def fn():
-            return java.lang.Integer.bitCount(5), java.util.regex.Pattern.compile('abc').toString()
+            return java.lang.Integer.bitCount(5), str(java.util.regex.Pattern.compile('abc').toString())
         (a,b) = self.ll_unpack_tuple(self.interpret(fn, []), 2)
         assert a == 2
         assert self.ll_to_string(b) == 'abc'
@@ -211,7 +249,7 @@ class BaseTestRJVM(BaseRtypingTest):
     def test_reflection_for_name(self):
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
-            return al_class.getName()
+            return str(al_class.getName())
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'java.util.ArrayList'
@@ -219,7 +257,7 @@ class BaseTestRJVM(BaseRtypingTest):
     def test_reflection_primitive_types(self):
         def fn():
             int_class = java.lang.Integer.TYPE
-            return int_class.getName()
+            return str(int_class.getName())
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'int'
@@ -299,17 +337,71 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 1
 
+    def test_returning_string_as_object(self):
+        def fn():
+            al = java.util.ArrayList()
+            al.add('foobar')
+            str_as_obj = al.get(0)
+            str_as_jstr = ootype.oodowncast(JString, str_as_obj)
+            return str(str_as_jstr)
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == 'foobar'
+
     def test_reflection_static_field(self):
         def fn():
             system_class = java.lang.Class.forName('java.lang.System')
             out_field = system_class.getField('out')
             dummy = java.lang.Object()
             out = out_field.get(dummy)
-            to_string_meth = java.lang.Class.forName('java.lang.Object').getMethod('toString', rjvm.new_array(java.lang.Class, 0))
-            return to_string_meth.invoke(out, rjvm.new_array(java.lang.Object, 0))
+            hashcode_meth = java.lang.Class.forName('java.lang.Object').getMethod('hashCode', rjvm.new_array(java.lang.Class, 0))
+            res_as_obj = hashcode_meth.invoke(out, rjvm.new_array(java.lang.Object, 0))
+            res_as_integer = ootype.oodowncast(JInteger, res_as_obj)
+            return res_as_integer.intValue()
 
         res = self.interpret(fn, [])
-        assert self.ll_to_string(res).startswith('java.io.PrintStream@')
+        assert isinstance(res, int)
+
+
+    def test_method_name(self):
+        def fn(s):
+            cls = java.lang.Class.forName(s)
+            m = cls.getMethods()[0]
+            name = m.getName()
+            return str(name)
+
+        res = self.interpret(fn, [self.string_to_ll('java.lang.Object')])
+        assert isinstance(self.ll_to_string(res), str)
+
+    def test_dicts_of_method_names(self):
+        def fn(class_name):
+            cls = java.lang.Class.forName(class_name)
+            names = {}
+            for m in cls.getMethods():
+                names[m.getName()] = True
+            return len(names)
+
+        res = self.interpret(fn, [self.string_to_ll('java.lang.Object')])
+        assert res == 7
+
+
+    def test_str_on_strings(self):
+        def fn():
+            o = java.lang.Object()
+            return str(o.toString())
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res).startswith('java.lang.Object')
+
+    def test_split_on_native_strings(self):
+        def fn():
+            parts = rstring.split('ala ma kota', ' ')
+            b_obj = java.lang.Object()
+            b_str = b_obj.toString()
+            return rstring.split(str(b_str), '@')[0]
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == 'java.lang.Object'
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
@@ -319,7 +411,14 @@ class TestCPythonRJVM(BaseTestRJVM):
         return fn(*args)
 
     def ll_to_string(self, s):
+        assert isinstance(s, str)
         return s
 
     def ll_unpack_tuple(self, t, size):
         return t
+
+    def string_to_ll(self, s):
+        return s
+
+    def test_returning_string_as_object(self):
+        py.test.skip()

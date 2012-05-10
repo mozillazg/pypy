@@ -52,13 +52,17 @@ class Wrapper(object):
     """
     def _wrap_item(self, item):
         if isinstance(item, JPypeJavaClass):
-            return RjvmJavaClassWrapper.forName(item.getName())
+            return RjvmJavaLangClassWrapper.forName(item.getName())
         elif isinstance(item, jpype.java.lang.Object):
             return JvmInstanceWrapper(item)
         elif isinstance(item, jpype._jclass._JavaClass):
             return JvmInstanceWrapper(item.__javaclass__)
         elif isinstance(item, (tuple, list)):
             return self._wrap_list(item)
+        elif isinstance(item, unicode):
+            return str(item)
+        elif isinstance(item, jpype._jarray._JavaArrayClass):
+            return self._wrap_list(list(item))
         return item
 
     def _wrap_list(self, lst):
@@ -120,6 +124,9 @@ class JvmClassWrapper(CallableWrapper):
     def __repr__(self):
         return '<JvmClassWrapper %s>' % self.__name__
 
+#    def _freeze_(self):
+#        return True
+
 
 class JvmInstanceWrapper(Wrapper):
     """
@@ -127,9 +134,9 @@ class JvmInstanceWrapper(Wrapper):
     """
 
     def __init__(self, obj):
-        if isinstance(obj, (JPypeJavaClass, RjvmJavaClassWrapper)):
+        if isinstance(obj, (JPypeJavaClass, RjvmJavaLangClassWrapper)):
             self.__wrapped__ = _refclass_for(obj)
-            refclass = RjvmJavaClassWrapper.java_lang_Class
+            refclass = RjvmJavaLangClassWrapper.java_lang_Class
         else:
             self.__wrapped__ = obj
             refclass = _refclass_for(obj)
@@ -190,17 +197,17 @@ def _check_staticness(should_be_static):
         return lambda m: not _is_static(m)
 
 def _refclass_for(o):
-    if isinstance(o, RjvmJavaClassWrapper):
+    if isinstance(o, RjvmJavaLangClassWrapper):
         return o
     elif isinstance(o, JvmClassWrapper):
         return o.__refclass__
     elif isinstance(o, JvmInstanceWrapper):
-        if isinstance(o.__wrapped__, RjvmJavaClassWrapper):
-            return RjvmJavaClassWrapper.java_lang_Class
+        if isinstance(o.__wrapped__, RjvmJavaLangClassWrapper):
+            return RjvmJavaLangClassWrapper.java_lang_Class
         else:
             return _refclass_for(o.__wrapped__)
     elif isinstance(o, JPypeJavaClass):
-        return RjvmJavaClassWrapper.forName(o.getName())
+        return RjvmJavaLangClassWrapper.forName(o.getName())
     elif hasattr(o, '__javaclass__'):
         return _refclass_for(o.__javaclass__)
     else:
@@ -209,7 +216,7 @@ def _refclass_for(o):
 jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
     "-Djava.class.path=%s" % os.path.abspath(os.path.dirname(__file__)))
 java = JvmPackageWrapper("java")
-RjvmJavaClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
+RjvmJavaLangClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
 

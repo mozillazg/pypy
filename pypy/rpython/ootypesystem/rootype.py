@@ -4,6 +4,7 @@ from pypy.rpython.rmodel import Repr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import Void, Class, Object
 from pypy.tool.pairtype import pairtype
+from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
 
 class __extend__(annmodel.SomeOOObject):
     def rtyper_makerepr(self, rtyper):
@@ -88,6 +89,12 @@ class OOInstanceRepr(Repr):
         else:
             return Repr.convert_const(self, value)
 
+    def rtype_str(self, hop):
+        assert self.lowleveltype.class_name == 'java.lang.String',\
+               "You can only call str() on java.lang.String instances!"
+
+        args_v = hop.inputargs(self)
+        return hop.genop('same_as', args_v, resulttype=hop.r_result)
 
 class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
     def rtype_is_((r_ins1, r_ins2), hop):
@@ -101,6 +108,13 @@ class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
         v = rpair.rtype_eq(hop)
         return hop.genop("bool_not", [v], resulttype=ootype.Bool)
 
+#    def convert_from_to((r_inst1, r_inst2), v, llops):
+#        if isinstance(r_inst1.lowleveltype,
+#            ootype.NativeInstance) and isinstance(r_inst2.lowleveltype,
+#            ootype.NativeInstance) and r_inst1.lowleveltype == r_inst2.lowleveltype:
+#            return v
+#        else:
+#            return NotImplemented
 
 class __extend__(pairtype(OOObjectRepr, OOObjectRepr)):
     def rtype_is_((r_obj1, r_obj2), hop):

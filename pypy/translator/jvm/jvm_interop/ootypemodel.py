@@ -22,6 +22,10 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return self.example
 
     def _lookup(self, meth_name):
+        if isinstance(meth_name, ootype._overloaded_meth_desc):
+            # This is only called by the inliner. Returning None stops it from
+            # inlining, which is what we want...
+            return None, None
         meth = utils.pypy_method_from_name(self.refclass, meth_name)
         return self, meth
 
@@ -45,13 +49,20 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return _native_rjvm_instance(self, instance)
 
     def _enforce(self, value):
-        if isinstance(value, JvmInstanceWrapper) and rjvm._refclass_for(value).getName() == self.class_name:
-            return _native_rjvm_instance(self, value)
+        if isinstance(value, ootype._string) and self.class_name == 'java.lang.String':
+            return value
+
+#        if isinstance(value, JvmInstanceWrapper) and rjvm._refclass_for(value).getName() == self.class_name:
+#            return _native_rjvm_instance(self, value)
+
         tpe = ootype.typeOf(value)
         if self.class_name == 'java.lang.Object' and tpe == ootype.String or isinstance(tpe, NativeRJvmInstance):
             return value
         else:
             return super(NativeRJvmInstance, self)._enforce(value)
+
+    def _is_string(self):
+        return self.class_name == 'java.lang.String'
 
     def _defl(self, parent=None, parentindex=None):
         return ootype._null_instance(self)
@@ -79,11 +90,14 @@ class _native_rjvm_instance(object):
     """
     def __init__(self, type, instance):
         assert isinstance(type, NativeRJvmInstance)
-        assert isinstance(instance, JvmInstanceWrapper)
+        assert isinstance(instance, (JvmInstanceWrapper, str))
         self.__dict__['_TYPE'] = type
         self.__dict__['_instance'] = instance
+        if isinstance(instance, str):
+            self.__dict__['_is_string'] = True
 
     def __getattr__(self, name):
+        assert not isinstance(self._instance, str), "We don't support calling String methods yet."
         if self._TYPE._check_field(name):
             return utils.wrap(getattr(self._instance, name))
         else:
@@ -97,3 +111,17 @@ class _native_rjvm_instance(object):
     def _downcast(self, TYPE):
         assert ootype.typeOf(self) == TYPE
         return self
+
+    def _string(self):
+        assert isinstance(self._instance, str)
+        return ootype._string(ootype.String, self._instance)
+
+    def __hash__(self):
+        # this way strings disguised as _native_rjvm_instances get proper hashes
+        return hash(self._instance)
+
+    def __eq__(self, other):
+        if isinstance(other, _native_rjvm_instance):
+            return self._instance == other._instance
+        else:
+            return False
