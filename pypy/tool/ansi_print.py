@@ -27,12 +27,18 @@ class AnsiLog:
         self.file = file
         self.fancy = True
         self.isatty = getattr(sys.stderr, 'isatty', lambda: False)
-        if self.fancy and self.isatty(): 
+        self.keywords_blacklist = set()
+        self.keywords_whitelist = set()
+        if self.fancy and self.isatty():
             self.mandelbrot_driver = Driver()
         else:
             self.mandelbrot_driver = None
 
     def __call__(self, msg):
+        if set(msg.keywords) & self.keywords_blacklist:
+            if not set(msg.keywords) & self.keywords_whitelist:
+                return
+
         tty = self.isatty()
         flush = False
         newline = True
@@ -67,6 +73,7 @@ class AnsiLog:
             AnsiLog.wrote_dot = False
             sys.stderr.write("\n")
         esc = tuple(esc)
+
         for line in msg.content().splitlines():
             ansi_print("[%s] %s" %(":".join(keywords), line), esc, 
                        file=self.file, newline=newline, flush=flush)

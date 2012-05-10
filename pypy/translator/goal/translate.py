@@ -321,4 +321,8 @@ def main():
 
 
 if __name__ == '__main__':
+    ansi_log.keywords_blacklist.update(
+            {'WARNING', 'platform', 'ctypes_config_cache', 'dot', 'annrpython',
+             'flowgraph', 'backendopt', 'graphs', 'translation'})
+    ansi_log.keywords_whitelist.add('info')
     main()
