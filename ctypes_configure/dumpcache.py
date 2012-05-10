@@ -33,8 +33,8 @@ def dumpcache(referencefilename, filename, config):
             # a simple type, hopefully
             f.write("%s = %s\n" % (key, ctypes_repr(val)))
     f.close()
-    print 'Wrote %s.' % (filename,)
-    sys.stdout.flush()
+#    print 'Wrote %s.' % (filename,)
+#    sys.stdout.flush()
 
 def ctypes_repr(cls):
     # ctypes_configure does not support nested structs so far
