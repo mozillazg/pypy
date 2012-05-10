@@ -1,4 +1,7 @@
 from pypy.interpreter.mixedmodule import MixedModule
+import pypy.translator.jvm.jvm_interop as jvm_interop
+
+jvm_interop.add_registry_entries()
 
 class Module(MixedModule):
     """
@@ -10,5 +13,5 @@ class Module(MixedModule):
     }
 
     interpleveldefs = {
-        'make_instance': 'interp_level.make_instance'
+        'new': 'interp_level.new',
     }
