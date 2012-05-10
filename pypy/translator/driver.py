@@ -754,13 +754,13 @@ $LEDIT $MONO "$(dirname $EXE)/$(basename $EXE)-data/%s" "$@" # XXX doesn't work 
         newexename = basename
         f = file(newexename, 'w')
         f.write("""#!/bin/bash
-LEDIT=`type -p ledit`
+RLWRAP=`type -p rlwrap`
 EXE=`readlink $0`
 if [ -z $EXE ]
 then
     EXE=$0
 fi
-$LEDIT java -Xmx256m -jar $EXE.jar "$@"
+$RLWRAP java -Djava.awt.headless=true -Xms512m -Xmx512m -jar $EXE.jar "$@"
 """)
         f.close()
         os.chmod(newexename, 0755)
