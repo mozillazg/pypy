@@ -416,6 +416,26 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'java.lang.Object'
 
+    def test_mod_jvm_like_code(self):
+        def fn():
+            args_w = [(java.awt.Point(), 'java.awt.Point')]
+
+            b_java_cls = java.lang.Class.forName('java.awt.Point')
+            types = rjvm.new_array(java.lang.Class, 1)
+            args = rjvm.new_array(java.lang.Object, 1)
+
+            for i, w_arg_type in enumerate(args_w):
+                w_arg, w_type = w_arg_type
+                type_name = w_type
+                b_arg = w_arg
+                types[i] = java.lang.Class.forName(type_name)
+                args[i] = b_arg
+
+            constructor = b_java_cls.getConstructor(types)
+            b_obj = constructor.newInstance(args)
+
+        self.interpret(fn, [])
+
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
 

@@ -1,26 +1,33 @@
-from pypy.conftest import gettestobjspace
 
-class AppTestJvm:
+class AppTestJvm(object):
     def setup_class(cls):
+        from pypy.conftest import gettestobjspace
         space = gettestobjspace(usemodules=('jvm',))
         cls.space = space
 
-#    def test_new(self):
-#        import jvm
-#
-#        to_string, methods = jvm.new('java.lang.Object')
-#        assert isinstance(methods, list)
-#        assert isinstance(to_string, str)
-#
-#        expected_methods = {'getClass', 'notifyAll', 'equals', 'hashCode',
-#                            'toString', 'notify', 'wait'}
-#
-#        assert set(methods) == expected_methods
-#        assert to_string.startswith('java.lang.Object@')
-
     def test_new(self):
         import jvm
-        s = jvm.new('')
-        assert isinstance(s, str)
-        assert s == 'java.awt.Point[x=0,y=0]'
+        POINT = 'java.awt.Point'
+        p1 = jvm.new(POINT)
+        p2 = jvm.new(POINT, (p1, POINT))
+        assert p1 == p1
+        assert p1 != p2
 
+if __name__ == '__main__':
+    tests = AppTestJvm()
+
+    print
+    print '=' * 80
+    print
+
+    for test_name in [name for name in dir(tests) if name.startswith('test_')]:
+        print test_name,
+        test_case = getattr(tests, test_name)
+        try:
+            test_case()
+        except:
+            print 'FAIL'
+        else:
+            print 'OK'
+
+    print
