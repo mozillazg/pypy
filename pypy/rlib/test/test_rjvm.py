@@ -1,29 +1,24 @@
 import py
-from pypy.annotation.annrpython import RPythonAnnotator
 import pypy.annotation.model as annmodel
-from pypy.rlib import rjvm, rstring
-from pypy.rpython.ootypesystem import ootype
-import pypy.translator.jvm.jvm_interop # side effects!
-from pypy.translator.jvm.jvm_interop import NativeRJvmInstance
+import pypy.rlib.rstring as rstring
+import pypy.translator.jvm.jvm_interop as jvm_interop
+import pypy.rlib.rjvm as rjvm
+from pypy.rlib.rjvm import java
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
+from pypy.annotation.annrpython import RPythonAnnotator
 
 try:
     import jpype
 except ImportError:
     py.test.skip("No JPype found, so I'm assuming you're not interested in rjvm.")
 
-from pypy.rlib.rjvm import java, JvmClassWrapper, JvmInstanceWrapper, JvmMethodWrapper, \
-    JvmStaticMethodWrapper, JvmPackageWrapper
+jvm_interop.add_registry_entries()
 
-JInteger = NativeRJvmInstance(rjvm.java.lang.Integer)
-ArrayList = NativeRJvmInstance(rjvm.java.util.ArrayList)
-PrintStream = NativeRJvmInstance(rjvm.java.io.PrintStream)
-JString = NativeRJvmInstance(rjvm.java.lang.String)
 
 def test_static_method():
-    assert isinstance(java.lang, JvmPackageWrapper)
-    assert isinstance(java.lang.Math, JvmClassWrapper)
-    assert isinstance(java.lang.Math.abs, JvmStaticMethodWrapper)
+    assert isinstance(java.lang, rjvm.JvmPackageWrapper)
+    assert isinstance(java.lang.Math, rjvm.JvmClassWrapper)
+    assert isinstance(java.lang.Math.abs, rjvm.JvmStaticMethodWrapper)
     result = java.lang.Math.abs(-42)
     assert isinstance(result, int)
     assert result == 42
@@ -43,8 +38,8 @@ def test_invalid_class_name():
 
 def test_class_instantiate():
     al = java.util.ArrayList()
-    assert isinstance(al, JvmInstanceWrapper)
-    assert isinstance(al.add, JvmMethodWrapper)
+    assert isinstance(al, rjvm.JvmInstanceWrapper)
+    assert isinstance(al.add, rjvm.JvmMethodWrapper)
     al.add("test")
     assert al.get(0) == "test"
 
@@ -64,9 +59,9 @@ def test_invalid_method_name():
 
 def test_interpreted_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
-    assert isinstance(al_class, JvmInstanceWrapper)
-    assert isinstance(rjvm.int_class, JvmInstanceWrapper)
-    assert isinstance(java.util.Collection.class_, JvmInstanceWrapper)
+    assert isinstance(al_class, rjvm.JvmInstanceWrapper)
+    assert isinstance(rjvm.int_class, rjvm.JvmInstanceWrapper)
+    assert isinstance(java.util.Collection.class_, rjvm.JvmInstanceWrapper)
 
 
     constructors = list(al_class.getConstructors())
@@ -74,17 +69,17 @@ def test_interpreted_reflection():
 
     for types in ([], [rjvm.int_class], [java.util.Collection.class_]):
         c = al_class.getConstructor(types)
-        assert isinstance(c, JvmInstanceWrapper)
-        assert isinstance(c.newInstance, JvmMethodWrapper)
+        assert isinstance(c, rjvm.JvmInstanceWrapper)
+        assert isinstance(c.newInstance, rjvm.JvmMethodWrapper)
 
     empty_constructor = al_class.getConstructor([])
     al = empty_constructor.newInstance([])
-    assert isinstance(al, JvmInstanceWrapper)
-    assert isinstance(al.add, JvmMethodWrapper)
+    assert isinstance(al, rjvm.JvmInstanceWrapper)
+    assert isinstance(al.add, rjvm.JvmMethodWrapper)
 
     al_clear = al_class.getMethod('clear', [])
-    assert isinstance(al_clear, JvmInstanceWrapper)
-    assert isinstance(al_clear.invoke, JvmMethodWrapper)
+    assert isinstance(al_clear, rjvm.JvmInstanceWrapper)
+    assert isinstance(al_clear.invoke, rjvm.JvmMethodWrapper)
 
     al.add(7)
     assert al.size() == 1
@@ -94,8 +89,8 @@ def test_interpreted_reflection():
     assert al.size() == 0
 
     al_add = al_class.getMethod('add', [java.lang.Object.class_])
-    assert isinstance(al_add, JvmInstanceWrapper)
-    assert isinstance(al_add.invoke, JvmMethodWrapper)
+    assert isinstance(al_add, rjvm.JvmInstanceWrapper)
+    assert isinstance(al_add.invoke, rjvm.JvmMethodWrapper)
     al_add.invoke(al, ["Hello"])
     assert al.get(0) == "Hello"
 
@@ -125,7 +120,7 @@ class TestRJvmAnnotation(object):
             al = java.util.ArrayList()
             al.add('foobar')
             str_as_obj = al.get(0)
-            str_as_jstr = ootype.oodowncast(JString, str_as_obj)
+            str_as_jstr = rjvm.downcast(java.lang.String, str_as_obj)
             return str_as_jstr
 
         a = RPythonAnnotator()
@@ -230,7 +225,7 @@ class BaseTestRJVM(BaseRtypingTest):
         """No array covariance for now."""
 
         def fn():
-            java.util.Arrays.asList(rjvm.new_array(rjvm.java.lang.Object, 0))
+            java.util.Arrays.asList(rjvm.new_array(java.lang.Object, 0))
 
         self.interpret(fn, [])
 
@@ -306,7 +301,7 @@ class BaseTestRJVM(BaseRtypingTest):
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor(rjvm.new_array(java.lang.Class, 0))
             object_al = c.newInstance(rjvm.new_array(java.lang.Object, 0))
-            al = ootype.oodowncast(ArrayList, object_al)
+            al = rjvm.downcast(java.util.ArrayList, object_al)
             return al.size()
 
         res = self.interpret(fn1, [])
@@ -318,7 +313,7 @@ class BaseTestRJVM(BaseRtypingTest):
             args = java.util.ArrayList()
             args.add(java.lang.Integer.valueOf(15))
             object_al = c.newInstance(args.toArray())
-            al = ootype.oodowncast(ArrayList, object_al)
+            al = rjvm.downcast(java.util.ArrayList, object_al)
             return al.size()
 
         res = self.interpret(fn2, [])
@@ -331,7 +326,7 @@ class BaseTestRJVM(BaseRtypingTest):
             al.add(o)
             al_class = java.lang.Class.forName('java.util.ArrayList')
             size_meth = al_class.getMethod('size', rjvm.new_array(java.lang.Class, 0))
-            size = ootype.oodowncast(JInteger, size_meth.invoke(al, rjvm.new_array(java.lang.Object, 0)))
+            size = rjvm.downcast(java.lang.Integer, size_meth.invoke(al, rjvm.new_array(java.lang.Object, 0)))
             return size.intValue()
 
         res = self.interpret(fn, [])
@@ -342,7 +337,7 @@ class BaseTestRJVM(BaseRtypingTest):
             al = java.util.ArrayList()
             al.add('foobar')
             str_as_obj = al.get(0)
-            str_as_jstr = ootype.oodowncast(JString, str_as_obj)
+            str_as_jstr = rjvm.downcast(java.lang.String, str_as_obj)
             return str(str_as_jstr)
 
         res = self.interpret(fn, [])
@@ -356,7 +351,7 @@ class BaseTestRJVM(BaseRtypingTest):
             out = out_field.get(dummy)
             hashcode_meth = java.lang.Class.forName('java.lang.Object').getMethod('hashCode', rjvm.new_array(java.lang.Class, 0))
             res_as_obj = hashcode_meth.invoke(out, rjvm.new_array(java.lang.Object, 0))
-            res_as_integer = ootype.oodowncast(JInteger, res_as_obj)
+            res_as_integer = rjvm.downcast(java.lang.Integer, res_as_obj)
             return res_as_integer.intValue()
 
         res = self.interpret(fn, [])
