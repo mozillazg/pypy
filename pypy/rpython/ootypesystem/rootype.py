@@ -59,6 +59,12 @@ class OOInstanceRepr(Repr):
     def __init__(self, ootype):
         self.lowleveltype = ootype
 
+    def __eq__(self, other):
+        return self.lowleveltype == other.lowleveltype
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         s_inst = hop.args_s[0]
@@ -108,13 +114,6 @@ class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
         v = rpair.rtype_eq(hop)
         return hop.genop("bool_not", [v], resulttype=ootype.Bool)
 
-#    def convert_from_to((r_inst1, r_inst2), v, llops):
-#        if isinstance(r_inst1.lowleveltype,
-#            ootype.NativeInstance) and isinstance(r_inst2.lowleveltype,
-#            ootype.NativeInstance) and r_inst1.lowleveltype == r_inst2.lowleveltype:
-#            return v
-#        else:
-#            return NotImplemented
 
 class __extend__(pairtype(OOObjectRepr, OOObjectRepr)):
     def rtype_is_((r_obj1, r_obj2), hop):

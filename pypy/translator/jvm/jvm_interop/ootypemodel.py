@@ -77,8 +77,7 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return not self.__eq__(other)
 
     def __hash__(self):
-        # This is what ootype.Instance does, I hope it makes sense...
-        return object.__hash__(self)
+        return hash(self.class_name)
 
     def __repr__(self):
         return "<NativeRJvmInstance %s>" % self.class_name
