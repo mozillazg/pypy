@@ -188,6 +188,7 @@ class JvmGeneratedSource(object):
         assert self.compiled
         strargs = [self._make_str(a) for a in args]
         cmd = [getoption('java'),
+               '-Djava.awt.headless=true',
                '-Xmx256M', # increase the heapsize so the microbenchmarks run
                '-cp',
                str(self.javadir)+os.pathsep+str(self.jnajar),
