@@ -416,7 +416,7 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'java.lang.Object'
 
-    def test_mod_jvm_like_code(self):
+    def test_code_for_new(self):
         def fn():
             args_w = [(java.awt.Point(), 'java.awt.Point')]
 
@@ -435,6 +435,29 @@ class BaseTestRJVM(BaseRtypingTest):
             b_obj = constructor.newInstance(args)
 
         self.interpret(fn, [])
+
+    def test_code_for_get_methods(self):
+        def get_methods(class_name):
+            b_java_cls = java.lang.Class.forName(class_name)
+            result = {}
+
+            for method in b_java_cls.getMethods():
+
+                if method.getName() not in result:
+                    result[method.getName()] = []
+
+                return_type_name = str(method.getReturnType().getName())
+                arg_types_names = [str(t.getName()) for t in method.getParameterTypes()]
+
+                result[method.getName()].append((return_type_name, arg_types_names))
+
+            i = 0
+            for k,v in result.iteritems():
+                i += 1
+            return i
+
+        res = self.interpret(get_methods, [self.string_to_ll('java.lang.Object')])
+        assert res == 7
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

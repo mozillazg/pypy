@@ -13,6 +13,25 @@ class AppTestJvm(object):
         assert p1 == p1
         assert p1 != p2
 
+    def test_get_methods(self):
+        import jvm
+        ms = jvm.get_methods('java.lang.Object')
+        assert isinstance(ms, dict)
+        assert set(ms.keys()) == {'equals',
+                                  'getClass',
+                                  'hashCode',
+                                  'notify',
+                                  'notifyAll',
+                                  'toString',
+                                  'wait'}
+        assert len(ms['wait']) == 3
+
+        ms = jvm.get_methods('java.lang.StringBuilder')
+        appends = ms['append']
+        for ret_type, args in appends:
+            assert 'Abstract' not in ret_type
+
+
 if __name__ == '__main__':
     tests = AppTestJvm()
 

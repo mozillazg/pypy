@@ -34,13 +34,56 @@ def new(space, class_name, args_w):
 
     return w_obj
 
+@unwrap_spec(class_name=str)
+def get_methods(space, class_name):
+    b_java_cls = java.lang.Class.forName(class_name)
+    result = {}
 
-def is_static(m):
-    return java.lang.reflect.Modifier.isStatic(m.getModifiers())
+    for method in b_java_cls.getMethods():
+        if is_static(method): continue
+        if not is_public(method.getReturnType()): continue
 
-path, _ = os.path.split(__file__)
-app_level_file = os.path.join(path, 'app_level_private.py')
-app_level = ApplevelClass(file(app_level_file).read())
-del path, app_level_file
+        if method.getName() not in result:
+            result[method.getName()] = []
 
-w_make_java_class = app_level.interphook('make_java_class')
+        b_return_type_name = method.getReturnType().getName()
+        arg_types_names_b = [t.getName() for t in method.getParameterTypes()]
+
+        result[method.getName()].append((b_return_type_name, arg_types_names_b))
+
+    return wrap_get_methods_result(space, result)
+
+def wrap_get_methods_result(space, result):
+    """
+    Result of get_methods is a dict from method names to lists of signatures.
+    Each signature is a tuple of the form (return type, arg_types) where
+    arg_types is a list of type names.
+
+    We want to wrap the whole structure. All strings are 'native' and have
+    to be cast to str.
+    """
+    w_result = space.newdict()
+
+    for name, sigs in result.iteritems():
+        w_key = space.wrap(str(name))
+        value = []
+
+        for b_ret_type, args_b in sigs:
+            w_ret_type = space.wrap(str(b_ret_type))
+            args_w = [space.wrap(str(b_arg)) for b_arg in args_b]
+            w_args = space.newlist(args_w)
+            w_entry = space.newtuple([w_ret_type, w_args])
+            value.append(w_entry)
+
+        w_value = space.newlist(value)
+
+        space.setitem(w_result, w_key, w_value)
+
+    return w_result
+
+def is_static(method):
+    return java.lang.reflect.Modifier.isStatic(method.getModifiers())
+
+def is_public(cls):
+    return java.lang.reflect.Modifier.isPublic(cls.getModifiers())
+
