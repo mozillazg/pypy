@@ -473,7 +473,8 @@ class ZipExtFile(io.BufferedIOBase):
     # Search for universal newlines or line chunks.
     PATTERN = re.compile(r'^(?P<chunk>[^\r\n]+)|(?P<newline>\n|\r\n?)')
 
-    def __init__(self, fileobj, mode, zipinfo, decrypter=None):
+    def __init__(self, fileobj, mode, zipinfo, decrypter=None,
+                 close_fileobj=False):
         self._fileobj = fileobj
         self._decrypter = decrypter
         self._close_fileobj = close_fileobj
@@ -653,7 +654,7 @@ class ZipExtFile(io.BufferedIOBase):
             if self._close_fileobj:
                 self._fileobj.close()
         finally:
-            super().close()
+            super(io.BufferedIOBase, self).close()
 
 
 class ZipFile:

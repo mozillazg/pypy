@@ -19,6 +19,7 @@ import email
 import email.message
 import email.generator
 import StringIO
+import contextlib
 try:
     if sys.platform == 'os2emx':
         # OS/2 EMX fcntl() not adequate
@@ -81,8 +82,7 @@ class Mailbox:
         if not self._factory:
             return self.get_message(key)
         else:
-            with contextlib.closing(self.get_file(key)) as file:
-                return self._factory(file)
+	        return self._factory(self.get_file(key))
 
     def get_message(self, key):
         """Return a Message representation or raise a KeyError."""
@@ -1932,12 +1932,6 @@ class _PartialFile(_ProxyFile):
         if size is None or size < 0 or size > remaining:
             size = remaining
         return _ProxyFile._read(self, size, read_method)
-
-    def close(self):
-        # do *not* close the underlying file object for partial files,
-        # since it's global to the mailbox object
-        if hasattr(self, '_file'):
-            del self._file
 
 
 def _lock_file(f, dotlock=True):

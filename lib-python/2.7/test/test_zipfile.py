@@ -1288,16 +1288,16 @@ class UniversalNewlineTests(unittest.TestCase):
             for sep, fn in self.arcfiles.items():
                 with zipfp.open(fn, "rU") as zipopen:
                     data = ''
-                while True:
-                    read = zipopen.readline()
-                    if not read:
-                        break
-                    data += read
+                    while True:
+                        read = zipopen.readline()
+                        if not read:
+                            break
+                        data += read
 
-                    read = zipopen.read(5)
-                    if not read:
-                        break
-                    data += read
+                        read = zipopen.read(5)
+                        if not read:
+                            break
+                        data += read
 
             self.assertEqual(data, self.arcdata['\n'])
 

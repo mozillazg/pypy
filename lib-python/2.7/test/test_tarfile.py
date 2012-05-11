@@ -65,10 +65,8 @@ class UstarReadTest(ReadTest):
         tarinfo = self.tar.getmember("ustar/regtype")
         with open(os.path.join(TEMPDIR, "ustar/regtype"), "rU") as fobj1:
             lines1 = fobj1.readlines()
-
-        fobj = self.tar.extractfile(tarinfo)
+        fobj2 = self.tar.extractfile(tarinfo)
         try:
-            fobj2 = io.TextIOWrapper(fobj)
             lines2 = fobj2.readlines()
             self.assertTrue(lines1 == lines2,
                     "fileobj.readlines() failed")
@@ -78,7 +76,7 @@ class UstarReadTest(ReadTest):
                     "I will gladly admit that Python is not the fastest running scripting language.\n",
                     "fileobj.readlines() failed")
         finally:
-            fobj.close()
+            fobj2.close()
 
     def test_fileobj_iter(self):
         self.tar.extract("ustar/regtype", TEMPDIR)
@@ -323,7 +321,8 @@ class MiscReadTest(CommonReadTest):
 
     @unittest.skipUnless(hasattr(os, "link"),
                          "Missing hardlink implementation")
-    @support.skip_unless_symlink
+    @unittest.skipUnless(hasattr(os, "symlink"),
+                         "Missing symlink implementation")
     def test_extract_hardlink(self):
         # Test hardlink extraction (e.g. bug #857297).
         tar = tarfile.open(tarname, errorlevel=1, encoding="iso8859-1")
@@ -642,6 +641,8 @@ class PaxReadTest(LongnameTest):
             self.assertEqual(tarinfo.uname, "tarfile")
             self.assertEqual(tarinfo.gname, "tarfile")
             self.assertEqual(tarinfo.pax_headers.get("VENDOR.umlauts"), u"ƒ÷‹‰ˆ¸ﬂ")
+        finally:
+            tar.close()
 
     def test_pax_number_fields(self):
         # All following number fields are read from the pax header.
@@ -758,7 +759,8 @@ class WriteTest(WriteTestBase):
                 os.remove(target)
                 os.remove(link)
 
-    @support.skip_unless_symlink
+    @unittest.skipUnless(hasattr(os, "symlink"),
+                         "Missing symlink implementation")
     def test_symlink_size(self):
         path = os.path.join(TEMPDIR, "symlink")
         os.symlink("link_target", path)
@@ -801,7 +803,7 @@ class WriteTest(WriteTestBase):
 
             tar = tarfile.open(tmpname, self.mode, encoding="iso8859-1")
             try:
-                with support.check_warnings(("use the filter argument",
+                with test_support.check_warnings(("use the filter argument",
                                              DeprecationWarning)):
                     tar.add(tempdir, arcname="empty_dir", exclude=exclude)
             finally:
@@ -919,6 +921,7 @@ class WriteTest(WriteTestBase):
             try:
                 for t in tar:
                     self.assert_(t.name == "." or t.name.startswith("./"))
+            finally:
                 tar.close()
         finally:
             os.chdir(cwd)
@@ -1358,7 +1361,7 @@ class PaxUnicodeTest(UstarUnicodeTest):
             t = tarfile.TarInfo()
             t.pax_headers["path"] = name
             tar.addfile(t)
-       finally:
+        finally:
             tar.close()
 
     def test_error_handlers(self):
