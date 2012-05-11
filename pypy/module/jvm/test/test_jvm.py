@@ -84,6 +84,17 @@ class AppTestJvm(object):
         assert tpe == 'java.lang.Boolean'
         assert jvm.unbox(res) is True
 
+    def test_str_argument(self):
+        import jvm
+        sb = jvm.new('java.lang.StringBuilder', ('foobar', str))
+        res, _ = jvm.call_method(sb, 'toString')
+        assert jvm.unbox(res) == 'foobar'
+
+    def test_app_level_works(self):
+        import jvm
+        res = jvm.object_methods()
+        assert isinstance(res, dict)
+        assert len(res['wait']) == 3
 
 if __name__ == '__main__':
     tests = AppTestJvm()

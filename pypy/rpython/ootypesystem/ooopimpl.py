@@ -61,7 +61,8 @@ def is_inst(inst):
     return T is ootype.Object or T is ootype.Class or\
         isinstance(T, (ootype.Instance,
                        ootype.BuiltinType,
-                       ootype.StaticMethod,))
+                       ootype.StaticMethod,
+                       ootype.NativeInstance))
 
 def checkinst(inst):
     assert is_inst(inst)
