@@ -31,6 +31,16 @@ class AppTestJvm(object):
         for ret_type, args in appends:
             assert 'Abstract' not in ret_type
 
+    def test_call_method_equals(self):
+        import jvm
+        POINT = 'java.awt.Point'
+        p1 = jvm.new(POINT)
+        p2 = jvm.new(POINT, (p1, POINT))
+
+        (res, tpe) = jvm.call_method(p1, 'equals', (p2, 'java.lang.Object'))
+        assert isinstance(tpe, str)
+        assert tpe == 'java.lang.Boolean'
+
 
 if __name__ == '__main__':
     tests = AppTestJvm()
