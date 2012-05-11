@@ -598,8 +598,8 @@ class MiniMarkGC(MovingGCBase):
             size_gc_header = self.gcheaderbuilder.size_gc_header
             while self.nursery_barriers.non_empty() and self.nursery_free + totalsize > self.nursery_top:
                 cur_obj_size = size_gc_header + self.get_size(
-                    self.nursery_free + size_gc_header)
-                self.nursery_free = self.nursery_free + cur_obj_size
+                    self.nursery_top + size_gc_header)
+                self.nursery_free = self.nursery_top + cur_obj_size
                 self.nursery_top = self.nursery_barriers.popleft()
             if self.nursery_free + totalsize <= self.nursery_top:
                 res = self.nursery_free
@@ -1361,9 +1361,9 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_barriers.append(self.nursery + self.nursery_size)
         self.nursery_top = self.nursery_barriers.popleft()
         while self.nursery_barriers.non_empty() and self.nursery_free + min_size > self.nursery_top:
-            cur_obj_size = size_gc_header + self.get_size(self.nursery_free +
+            cur_obj_size = size_gc_header + self.get_size(self.nursery_top +
                                                           size_gc_header)
-            self.nursery_free = self.nursery_free + cur_obj_size
+            self.nursery_free = self.nursery_top + cur_obj_size
             self.nursery_top = self.nursery_barriers.popleft()
         if self.nursery_free + min_size > self.nursery_top:
             ll_assert(False, "too many pinned objects")
