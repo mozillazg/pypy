@@ -24,18 +24,6 @@ def pin(obj):
 def unpin(obj):
     pass
 
-
-class pinned_object(object):
-    def __init__(self, obj):
-        self.obj = obj
-        
-    def __enter__(self):
-        pin(self.obj)
-        return self
-    
-    def __exit__(self, *args):
-        unpin(self.obj)
-
 # ____________________________________________________________
 # Annotation and specialization
 
