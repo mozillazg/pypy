@@ -240,7 +240,11 @@ class TestMailbox(TestBase):
 
     def test_contains(self):
         # Check existence of keys using __contains__()
-        self.assertNotIn('foo', self._box)
+        self._test_has_key_or_contains(self._box.__contains__)
+
+    def _test_has_key_or_contains(self, method):
+        # (Used by test_has_key() and test_contains().)
+        self.assertFalse(method('foo'))
         key0 = self._box.add(self._template % 0)
         self.assertTrue(method(key0))
         self.assertFalse(method('foo'))
@@ -837,17 +841,15 @@ class _TestMboxMMDF(TestMailbox):
             return
         pid = os.fork()
         if pid == 0:
-            # child
-            try:
-                # lock the mailbox, and signal the parent it can proceed
-                self._box.lock()
-                time.sleep(2)
-                self._box.unlock()
-            finally:
-                os._exit(0)
-
-        # In the parent, wait until the child signals it locked the mailbox.
-        p.recv(1)
+            # In the child, lock the mailbox.
+            self._box.lock()
+            time.sleep(2)
+            self._box.unlock()
+            os._exit(0)
+ 
+        # In the parent, sleep a bit to give the child time to acquire
+        # the lock.
+        time.sleep(0.5)
         try:
             self.assertRaises(mailbox.ExternalClashError,
                               self._box.lock)
