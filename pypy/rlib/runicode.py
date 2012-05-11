@@ -1495,7 +1495,7 @@ if sys.platform == 'win32':
         if not final and is_dbcs_lead_byte(s[size-1]):
             size -= 1
 
-        with rffi.scoped_nonmoving_unicodebuffer(s) as dataptr:
+        with rffi.scoped_nonmoving_buffer(s) as dataptr:
             # first get the size of the result
             usize = MultiByteToWideChar(CP_ACP, 0,
                                         dataptr, size,
