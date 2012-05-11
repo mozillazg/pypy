@@ -54,10 +54,13 @@ def call_method(space, jvm_obj, method_name, args_w):
     b_java_class = b_obj.getClass()
     b_meth = b_java_class.getMethod(method_name, types)
     b_res = b_meth.invoke(b_obj, args)
-    w_type_name = space.wrap(str(b_res.getClass().getName()))
-    w_res = space.wrap(W_JvmObject(space, b_res))
-
-    return space.newtuple([w_res, w_type_name])
+    if b_res:
+        w_type_name = space.wrap(str(b_res.getClass().getName()))
+        w_res = space.wrap(W_JvmObject(space, b_res))
+        return space.newtuple([w_res, w_type_name])
+    else:
+        w_type_name = space.wrap('void')
+        return space.newtuple([space.w_None, w_type_name])
 
 @unwrap_spec(jvm_obj=W_JvmObject)
 def unbox(space, jvm_obj):
@@ -119,8 +122,40 @@ def get_args_types(space, args_w):
     args = new_array(java.lang.Object, args_len)
     for i, w_arg_type in enumerate(args_w):
         w_arg, w_type = space.unpackiterable(w_arg_type, 2)
-        type_name = space.str_w(w_type)
-        b_arg = space.interp_w(W_JvmObject, w_arg).b_obj
-        types[i] = java.lang.Class.forName(type_name)
+        type_name = unwrap_type(space, w_type)
+        b_arg = unwrap_arg(space, w_arg, type_name)
+        types[i] = type_for_name(type_name)
         args[i] = b_arg
     return args, types
+
+def unwrap_type(space, w_type):
+    if space.is_true(space.isinstance(w_type, space.w_str)):
+        return space.str_w(w_type)
+    elif space.is_w(w_type, space.w_str):
+        return 'str'
+    elif space.is_w(w_type, space.w_int):
+        return 'int'
+    elif space.is_w(w_type, space.w_bool):
+        return 'bool'
+    else:
+        w_template = space.wrap("Don't know how to handle type %r")
+        w_msg = space.mod(w_template, w_type)
+        raise OperationError(space.w_TypeError, w_msg)
+
+def type_for_name(type_name):
+    if type_name == 'str':
+        return java.lang.String.class_
+    elif type_name == 'int':
+        return java.lang.Integer.TYPE
+    elif type_name == 'bool':
+        return java.lang.Boolean.TYPE
+    else:
+        return java.lang.Class.forName(type_name)
+
+def unwrap_arg(space, w_arg, type_name):
+    if type_name == 'int':
+        return space.int_w(w_arg)
+    elif type_name == 'bool':
+        return space.bool_w(w_arg)
+    else:
+        return space.interp_w(W_JvmObject, w_arg).b_obj

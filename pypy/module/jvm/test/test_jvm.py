@@ -65,6 +65,26 @@ class AppTestJvm(object):
         assert isinstance(unboxed_bool, bool)
         assert unboxed_bool == False
 
+    def test_int_argument(self):
+        import jvm
+        al = jvm.new('java.util.ArrayList', (10, int))
+
+    def test_void_method(self):
+        import jvm
+        al = jvm.new('java.util.ArrayList')
+        (res, tpe) = jvm.call_method(al, 'clear')
+        assert res is None
+        assert tpe == 'void'
+
+    def test_bool_argument(self):
+        import jvm
+        t = jvm.new('java.lang.Thread')
+        jvm.call_method(t, 'setDaemon', (True, bool))
+        (res, tpe) = jvm.call_method(t, 'isDaemon')
+        assert tpe == 'java.lang.Boolean'
+        assert jvm.unbox(res) is True
+
+
 if __name__ == '__main__':
     tests = AppTestJvm()
 
