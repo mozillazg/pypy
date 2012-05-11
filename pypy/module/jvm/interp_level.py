@@ -71,6 +71,9 @@ def unbox(space, jvm_obj):
     elif class_name == 'java.lang.Integer':
         b_integer = rjvm.downcast(java.lang.Integer, b_obj)
         return space.wrap(b_integer.intValue())
+    elif class_name == 'java.lang.Boolean':
+        b_bool = rjvm.downcast(java.lang.Boolean, b_obj)
+        return space.wrap(bool(b_bool.booleanValue()))
     else:
         raise OperationError(space.w_TypeError,
                              space.wrap("Don't know how to unbox objects of type %s" %
