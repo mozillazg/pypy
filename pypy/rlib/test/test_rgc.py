@@ -176,7 +176,6 @@ def test_pin_obj():
     l = []
     assert rgc.pin(l) is False
     l.append(3)
-    rgc.unpin(l)
     assert l == [3]
 
 def test_interp_pin_obj():

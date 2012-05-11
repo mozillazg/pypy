@@ -38,5 +38,6 @@ def pin(obj):
     return False
 
 def unpin(obj):
-    pass
+    raise AssertionError("pin() always returns False, "
+                         "so unpin() should not be called")
 
