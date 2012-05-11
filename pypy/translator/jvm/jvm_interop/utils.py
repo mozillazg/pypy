@@ -63,13 +63,23 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
         """
         one_method_per_signature = {}
         for meth in overloadings:
+            METH = typeOf(meth)
+            if (isinstance(METH.RESULT, ootypemodel.NativeRJvmInstance) and
+                not rjvm._is_public(METH.RESULT.refclass)):
+                continue
+
             signature = meth._TYPE.ARGS
             if signature not in one_method_per_signature:
                 one_method_per_signature[signature] = meth
             else:
                 refclass = self._get_refclass(meth)
                 other_refclass = self._get_refclass(one_method_per_signature[signature])
-                if refclass.getSuperclass().getName() == other_refclass.getName():
+
+                if refclass.isInterface() and not other_refclass.isInterface():
+                    continue
+                elif other_refclass.isInterface() and not refclass.isInterface():
+                    one_method_per_signature[signature] = meth
+                elif refclass.getSuperclass().getName() == other_refclass.getName():
                     one_method_per_signature[signature] = meth
                 else:
                     assert other_refclass.getSuperclass().getName() == refclass.getName(),\
