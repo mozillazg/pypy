@@ -154,8 +154,10 @@ def type_for_name(type_name):
 
 def unwrap_arg(space, w_arg, type_name):
     if type_name == 'int':
-        return space.int_w(w_arg)
+        return java.lang.Integer(space.int_w(w_arg))
     elif type_name == 'bool':
-        return space.bool_w(w_arg)
+        return java.lang.Boolean(space.bool_w(w_arg))
+    elif type_name == 'str':
+        return java.lang.String(space.str_w(w_arg))
     else:
         return space.interp_w(W_JvmObject, w_arg).b_obj

@@ -40,6 +40,24 @@ class _jvm_str(object):
     def getClass(self):
         return java.lang.String.class_
 
+class _jvm_array(object):
+    def __init__(self, lst):
+        self.__lst = lst
+
+    def __setitem__(self, key, value):
+        from pypy.translator.jvm.jvm_interop.ootypemodel import _native_rjvm_instance
+        assert isinstance(value, JvmInstanceWrapper)
+        self.__lst[key] = value
+
+    def __getitem__(self, item):
+        return self.__lst[item]
+
+    def __iter__(self):
+        return iter(self.__lst)
+
+    def __len__(self):
+        return len(self.__lst)
+
 class JvmPackageWrapper(object):
     """
     Proxy to java packages. You can access atrributes of a
@@ -88,11 +106,11 @@ class Wrapper(object):
         elif isinstance(item, jpype._jclass._JavaClass):
             return JvmInstanceWrapper(item.__javaclass__)
         elif isinstance(item, (tuple, list)):
-            return self._wrap_list(item)
+            return _jvm_array(self._wrap_list(item))
         elif isinstance(item, (str, unicode)):
             return _jvm_str(str(item))
         elif isinstance(item, jpype._jarray._JavaArrayClass):
-            return self._wrap_list(list(item))
+            return _jvm_array(self._wrap_list(list(item)))
         return item
 
     def _wrap_list(self, lst):
@@ -108,7 +126,7 @@ class CallableWrapper(Wrapper):
     def _unwrap_item(self, item):
         if isinstance(item, JvmInstanceWrapper):
             return item.__wrapped__
-        elif isinstance(item, list):
+        elif isinstance(item, (list, _jvm_array)):
             return [self._unwrap_item(i) for i in item]
         elif isinstance(item, ootype._array):
             return self._unwrap_item(item._array)
@@ -172,7 +190,7 @@ class JvmInstanceWrapper(Wrapper):
         else:
             self.__wrapped__ = obj
             refclass = _refclass_for(obj)
-        self.__class_name = refclass.getName()
+        self._class_name = refclass.getName()
         self.__method_names = {str(m.getName()) for m in _get_methods(refclass)}
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
 
@@ -184,7 +202,7 @@ class JvmInstanceWrapper(Wrapper):
         else:
             raise TypeError(
                 "No instance method called {method_name} found in class {class_name}".format(
-                    method_name=attr, class_name=self.__class_name))
+                    method_name=attr, class_name=self._class_name))
 
     def __repr__(self):
         return '<JvmInstanceWrapper %s>' % self.__wrapped__.__name__
@@ -253,7 +271,7 @@ JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
 
 def new_array(type, size):
-    return [None] * size
+    return _jvm_array([None] * size)
 
 def downcast(type, instance):
     assert isinstance(instance, (JvmInstanceWrapper, _jvm_str))

@@ -1,6 +1,6 @@
 import py
 import pypy.annotation.model as annmodel
-import pypy.rlib.rstring as rstring
+from pypy.rlib import rstring, rarithmetic
 import pypy.translator.jvm.jvm_interop as jvm_interop
 import pypy.rlib.rjvm as rjvm
 from pypy.rlib.rjvm import java
@@ -128,6 +128,40 @@ class TestRJvmAnnotation(object):
         s = a.build_types(fn, [])
         assert isinstance(s, annmodel.SomeOOInstance)
 
+    def test_intval_is_integer(self):
+        def fn():
+            b_integer = java.lang.Integer(16)
+            integer = b_integer.intValue()
+            return integer
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeInteger)
+
+    def test_intval_is_really_integer(self):
+        def fn():
+            b1 = rarithmetic.highest_bit(8)
+            b2 = rarithmetic.highest_bit(java.lang.Integer(8).intValue())
+            return b2
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [])
+        assert isinstance(s, annmodel.SomeInteger)
+
+
+    def test_common_type(self):
+        def fn(x):
+            if x == 1:
+                v = java.lang.Integer(17)
+            elif x == 2:
+                v = java.lang.Boolean(True)
+            else:
+                v = java.lang.String('foobar')
+            return v
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [int])
+        assert isinstance(s, annmodel.SomeOOInstance)
 
 class BaseTestRJVM(BaseRtypingTest):
     def test_simple_constructor(self):
@@ -416,6 +450,23 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'java.lang.Object'
+
+    def test_common_type(self):
+        def fn(x):
+            if x == 1:
+                v = java.lang.Integer(17)
+            elif x == 2:
+                v = java.lang.Boolean(True)
+            else:
+                v = java.lang.String('foobar')
+
+            return 1 if v else 0
+
+        res = self.interpret(fn, [2])
+        assert res == 1
+
+    def test_getting_int_value_from_integers(self):
+        pass
 
     def test_code_for_new(self):
         def fn():

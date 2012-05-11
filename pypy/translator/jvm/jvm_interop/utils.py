@@ -215,7 +215,7 @@ def wrap(value, hint=None):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value), value)
     elif isinstance(value, jpype.java.lang.Object):
         return wrap(ootypemodel.JvmInstanceWrapper(value))
-    elif isinstance(value, list):
+    elif isinstance(value, rjvm._jvm_array):
         result = ootype._array(hint, len(value))
         result._array = [wrap(el, hint=hint.ITEM) for el in value]
         return result

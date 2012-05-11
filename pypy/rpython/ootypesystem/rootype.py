@@ -114,6 +114,15 @@ class __extend__(pairtype(OOInstanceRepr, OOInstanceRepr)):
         v = rpair.rtype_eq(hop)
         return hop.genop("bool_not", [v], resulttype=ootype.Bool)
 
+    def convert_from_to((r_ins1, r_ins2), v, llops):
+        if (isinstance(r_ins1.lowleveltype, NativeRJvmInstance) and
+            isinstance(r_ins2.lowleveltype, NativeRJvmInstance) and
+            r_ins2.lowleveltype.class_name == 'java.lang.Object'):
+            v = llops.genop('ooupcast', [v],
+                            resulttype = r_ins2.lowleveltype)
+            return v
+        else:
+            return NotImplemented
 
 class __extend__(pairtype(OOObjectRepr, OOObjectRepr)):
     def rtype_is_((r_obj1, r_obj2), hop):

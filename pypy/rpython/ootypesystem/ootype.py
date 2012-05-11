@@ -1716,7 +1716,8 @@ class _array(_builtin_type):
         assert (self._TYPE.ITEM is Void or
                 typeOf(item) == self._TYPE.ITEM or
                 (isinstance(self._TYPE.ITEM, NativeInstance) and
-                 self._TYPE.ITEM.class_name == 'java.lang.Object'))
+                 self._TYPE.ITEM.class_name == 'java.lang.Object' and
+                 isinstance(typeOf(item), (NativeInstance, String))))
         assert typeOf(index) == Signed
         assert index >= 0
         self._array[index] = item
@@ -1984,6 +1985,10 @@ def isSubclass(C1, C2):
     return False
 
 def commonBaseclass(INSTANCE1, INSTANCE2):
+    from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
+    from pypy.rlib.rjvm import java
+    if isinstance(INSTANCE1, NativeInstance) and isinstance(INSTANCE2, NativeInstance):
+        return NativeRJvmInstance(java.lang.Object)
     c = INSTANCE1
     while c is not None:
         if isSubclass(INSTANCE2, c):

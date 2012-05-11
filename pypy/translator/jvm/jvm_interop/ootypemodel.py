@@ -124,3 +124,7 @@ class _native_rjvm_instance(object):
             return self._instance == other._instance
         else:
             return False
+
+    def _upcast(self, TYPE):
+        assert isinstance(TYPE, NativeRJvmInstance) and TYPE.class_name == 'java.lang.Object'
+        return self
