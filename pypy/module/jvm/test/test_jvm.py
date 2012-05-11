@@ -30,6 +30,9 @@ class AppTestJvm(object):
         appends = ms['append']
         for ret_type, args in appends:
             assert 'Abstract' not in ret_type
+            assert not ret_type.startswith('[')
+            for a in args:
+                assert not a.startswith('[')
 
     def test_call_method_equals(self):
         import jvm
