@@ -120,6 +120,8 @@ class Wrapper(object):
             return _jvm_str(str(item))
         elif isinstance(item, jpype._jarray._JavaArrayClass):
             return _jvm_array(self._wrap_list(list(item)))
+        elif item is None:
+            return None
         return item
 
     def _wrap_list(self, lst):
@@ -199,7 +201,9 @@ class JvmInstanceWrapper(Wrapper):
         else:
             self.__wrapped__ = obj
             refclass = _refclass_for(obj)
-        self._class_name = refclass.getName()
+
+        self.__refclass = refclass
+        self.__class_name = refclass.getName()
         self.__method_names = {str(m.getName()) for m in _get_methods(refclass)}
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
 
@@ -211,7 +215,7 @@ class JvmInstanceWrapper(Wrapper):
         else:
             raise TypeError(
                 "No instance method called {method_name} found in class {class_name}".format(
-                    method_name=attr, class_name=self._class_name))
+                    method_name=attr, class_name=self.__class_name))
 
     def __repr__(self):
         return '<JvmInstanceWrapper %s>' % self.__wrapped__.__name__

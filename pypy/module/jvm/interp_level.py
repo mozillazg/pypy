@@ -96,6 +96,15 @@ def unbox(space, jvm_obj):
                              space.wrap("Don't know how to unbox objects of type %s" %
                                         class_name))
 
+@unwrap_spec(class_name=str)
+def superclass(space, class_name):
+    b_cls = java.lang.Class.forName(class_name)
+    b_superclass = b_cls.getSuperclass()
+    if b_superclass:
+        return space.wrap(str(b_superclass.getName()))
+    else:
+        return space.w_None
+
 def wrap_get_methods_result(space, result):
     """
     Result of get_methods is a dict from method names to lists of signatures.

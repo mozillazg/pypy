@@ -532,6 +532,18 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(get_methods, [self.string_to_ll('java.lang.Object')])
         assert res == 7
 
+    def test_null_is_none(self):
+        def fn():
+            cls = java.lang.Object.class_
+            sup = cls.getSuperclass()
+            if sup:
+                return True
+            else:
+                return False
+
+        res = self.interpret(fn, [])
+        assert res == False
+
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
 
