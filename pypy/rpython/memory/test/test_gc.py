@@ -722,19 +722,17 @@ class GCTest(object):
             s = str(i)
             if not rgc.can_move(s):
                 return 13
-            sum = 0
-            with rgc.pinned_object(s):
-                sum += int(rgc.can_move(s))
-            sum += 10 * int(rgc.can_move(s))
+            sum = int(rgc.pin(s))
+            rgc.unpin(s)
             return sum
 
         res = self.interpret(f, [10])
         if not self.GCClass.moving_gc:
             assert res == 13
         elif self.GCClass.can_always_pin_objects:
-            assert res == 10
+            assert res == 1
         else:
-            assert res == 11 or res == 13 # sometimes fresh objs can't move
+            assert res == 0 or res == 13
 
 from pypy.rlib.objectmodel import UnboxedValue
 
