@@ -16,16 +16,7 @@ class W_JvmObject(Wrappable):
 @unwrap_spec(class_name=str)
 def new(space, class_name, args_w):
     b_java_cls = java.lang.Class.forName(class_name)
-    args_len = len(args_w)
-    types = new_array(java.lang.Class, args_len)
-    args = new_array(java.lang.Object, args_len)
-
-    for i, w_arg_type in enumerate(args_w):
-        w_arg, w_type = space.unpackiterable(w_arg_type, 2)
-        type_name = space.str_w(w_type)
-        b_arg = space.interp_w(W_JvmObject, w_arg).b_obj
-        types[i] = java.lang.Class.forName(type_name)
-        args[i] = b_arg
+    args, types = get_args_types(space, args_w)
 
     constructor = b_java_cls.getConstructor(types)
 
@@ -52,6 +43,19 @@ def get_methods(space, class_name):
         result[method.getName()].append((b_return_type_name, arg_types_names_b))
 
     return wrap_get_methods_result(space, result)
+
+@unwrap_spec(method_name=str)
+def call_method(space, w_obj, method_name, args_w):
+    b_obj = space.interp_w(W_JvmObject, w_obj).b_obj
+    args, types = get_args_types(space, args_w)
+
+    b_java_class = b_obj.getClass()
+    b_meth = b_java_class.getMethod(method_name, types)
+    b_res = b_meth.invoke(b_obj, args)
+    w_type_name = space.wrap(str(b_res.getClass().getName()))
+    w_res = space.wrap(W_JvmObject(space, b_res))
+
+    return space.newtuple([w_res, w_type_name])
 
 def wrap_get_methods_result(space, result):
     """
@@ -87,3 +91,14 @@ def is_static(method):
 def is_public(cls):
     return java.lang.reflect.Modifier.isPublic(cls.getModifiers())
 
+def get_args_types(space, args_w):
+    args_len = len(args_w)
+    types = new_array(java.lang.Class, args_len)
+    args = new_array(java.lang.Object, args_len)
+    for i, w_arg_type in enumerate(args_w):
+        w_arg, w_type = space.unpackiterable(w_arg_type, 2)
+        type_name = space.str_w(w_type)
+        b_arg = space.interp_w(W_JvmObject, w_arg).b_obj
+        types[i] = java.lang.Class.forName(type_name)
+        args[i] = b_arg
+    return args, types
