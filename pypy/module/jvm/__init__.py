@@ -9,9 +9,9 @@ class Module(MixedModule):
     """
 
     appleveldefs = {
-#        'app_level_hello': 'app_level.hello'
     }
 
     interpleveldefs = {
         'new': 'interp_level.new',
+        'get_methods': 'interp_level.get_methods',
     }
