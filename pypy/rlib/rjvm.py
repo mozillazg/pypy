@@ -112,6 +112,8 @@ class CallableWrapper(Wrapper):
             return [self._unwrap_item(i) for i in item]
         elif isinstance(item, ootype._array):
             return self._unwrap_item(item._array)
+        elif isinstance(item, _jvm_str):
+            return str(item)
         return item
 
     def __call__(self, *args):
