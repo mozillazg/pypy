@@ -41,24 +41,29 @@ class AppTestJvm(object):
         assert isinstance(tpe, str)
         assert tpe == 'java.lang.Boolean'
 
-
     def test_call_method_toString(self):
         import jvm
         p1 = jvm.new('java.awt.Point')
         (res, tpe) = jvm.call_method(p1, 'toString')
         assert tpe == 'java.lang.String'
-        str_res = jvm.unbox(res)
-        assert isinstance(str_res, str)
-        assert str_res == 'java.awt.Point[x=0,y=0]'
 
-    def test_unboxing_ints(self):
+    def test_unboxing(self):
         import jvm
         p1 = jvm.new('java.awt.Point')
         s, _ = jvm.call_method(p1, 'toString')
+        unboxed_str = jvm.unbox(s)
+        assert isinstance(unboxed_str, str)
+        assert unboxed_str == 'java.awt.Point[x=0,y=0]'
+
         l, _ = jvm.call_method(s, 'length')
-        length = jvm.unbox(l)
-        assert isinstance(length, int)
-        assert length == len('java.awt.Point[x=0,y=0]')
+        unboxed_int = jvm.unbox(l)
+        assert isinstance(unboxed_int, int)
+        assert unboxed_int == len('java.awt.Point[x=0,y=0]')
+
+        b, _ = jvm.call_method(s, 'isEmpty')
+        unboxed_bool = jvm.unbox(b)
+        assert isinstance(unboxed_bool, bool)
+        assert unboxed_bool == False
 
 if __name__ == '__main__':
     tests = AppTestJvm()
