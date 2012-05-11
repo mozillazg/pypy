@@ -174,15 +174,18 @@ def test_get_memory_usage():
 
 def test_pin_obj():
     l = []
-    with rgc.pinned_object(l):
-        l.append(3)
+    assert rgc.pin(l) is False
+    l.append(3)
+    rgc.unpin(l)
     assert l == [3]
 
 def test_interp_pin_obj():
     def f(i):
         l = []
-        with rgc.pinned_object(l):
-            l.append(i)
+        pinned = rgc.pin(l)
+        l.append(i)
+        if pinned:
+            rgc.unpin(l)
         return l[0]
     
     assert interpret(f, [3]) == 3
