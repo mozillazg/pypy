@@ -3,7 +3,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ApplevelClass, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
-from pypy.rlib import rjvm
+from pypy.rlib import rjvm, rstring
 from pypy.rlib.rjvm import java, new_array
 
 class W_JvmObject(Wrappable):
@@ -30,19 +30,33 @@ def new(space, class_name, args_w):
 @unwrap_spec(class_name=str)
 def get_methods(space, class_name):
     b_java_cls = java.lang.Class.forName(class_name)
-    result = {}
+    by_name_sig = {}
 
     for method in b_java_cls.getMethods():
         if is_static(method): continue
         if not is_public(method.getReturnType()): continue
 
-        if method.getName() not in result:
-            result[method.getName()] = []
+        if method.getName() not in by_name_sig:
+            by_name_sig[method.getName()] = {}
 
-        b_return_type_name = method.getReturnType().getName()
-        arg_types_names_b = [t.getName() for t in method.getParameterTypes()]
+        sig = ','.join([str(type_name(t)) for t in method.getParameterTypes()])
 
-        result[method.getName()].append((b_return_type_name, arg_types_names_b))
+        if sig not in by_name_sig[method.getName()]:
+            by_name_sig[method.getName()][sig] = method
+        elif method.isBridge():
+            continue
+        else:
+            by_name_sig[method.getName()][sig] = method
+
+    result = {}
+    for name, sig_to_meth in by_name_sig.iteritems():
+        if name not in result:
+            result[name] = []
+
+        for method in sig_to_meth.itervalues():
+            b_return_type_name = type_name(method.getReturnType())
+            arg_types_names_b = [type_name(t) for t in method.getParameterTypes()]
+            result[name].append((b_return_type_name, arg_types_names_b))
 
     return wrap_get_methods_result(space, result)
 
@@ -161,3 +175,12 @@ def unwrap_arg(space, w_arg, type_name):
         return java.lang.String(space.str_w(w_arg))
     else:
         return space.interp_w(W_JvmObject, w_arg).b_obj
+
+def type_name(t):
+    if t.isArray():
+        sb = rstring.StringBuilder()
+        sb.append(str(t.getComponentType().getName()))
+        sb.append('[]')
+        return sb.build()
+    else:
+        return str(t.getName())
