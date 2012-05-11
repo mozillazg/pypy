@@ -957,6 +957,7 @@ class TestMiniMarkGC(TestSemiSpaceGC):
         assert res == 2
 
     def test_pin_collect_tracking(self):
+        py.test.skip("not supported right now, maybe never")
         from pypy.rpython.lltypesystem import llmemory
 
         S = lltype.GcStruct('S', ('x', lltype.Signed))
