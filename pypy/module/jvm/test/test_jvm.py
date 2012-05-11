@@ -109,7 +109,9 @@ if __name__ == '__main__':
         try:
             test_case()
         except Exception:
-            print 'FAIL'
+            print 'FAIL!!!!!!'
+            print
+            print
         else:
             print 'OK'
 
