@@ -8,6 +8,7 @@ from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
 
 try:
+    #noinspection PyUnresolvedReferences
     import jpype
 except ImportError:
     py.test.skip("No JPype found, so I'm assuming you're not interested in rjvm.")
@@ -41,7 +42,7 @@ def test_class_instantiate():
     assert isinstance(al, rjvm.JvmInstanceWrapper)
     assert isinstance(al.add, rjvm.JvmMethodWrapper)
     al.add("test")
-    assert al.get(0) == "test"
+    assert str(al.get(0)) == "test"
 
 def test_class_repr():
     al = java.util.ArrayList
@@ -92,7 +93,7 @@ def test_interpreted_reflection():
     assert isinstance(al_add, rjvm.JvmInstanceWrapper)
     assert isinstance(al_add.invoke, rjvm.JvmMethodWrapper)
     al_add.invoke(al, ["Hello"])
-    assert al.get(0) == "Hello"
+    assert str(al.get(0)) == "Hello"
 
 
 class TestRJvmAnnotation(object):
@@ -476,5 +477,3 @@ class TestCPythonRJVM(BaseTestRJVM):
     def string_to_ll(self, s):
         return s
 
-    def test_returning_string_as_object(self):
-        py.test.skip()

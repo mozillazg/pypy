@@ -219,8 +219,8 @@ def wrap(value, hint=None):
         result = ootype._array(hint, len(value))
         result._array = [wrap(el, hint=hint.ITEM) for el in value]
         return result
-    elif isinstance(value, (str, unicode)):
-        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), value)
+    elif isinstance(value, rjvm._jvm_str):
+        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), str(value))
     elif value is None:
         return None
     elif isinstance(value, (int, bool, float)):

@@ -10,6 +10,36 @@ import atexit
 # See test_rjvm.py for examples.
 from pypy.rpython.ootypesystem import ootype
 
+class _jvm_str(object):
+    """
+    This class reflects the fact, that we don't unify java.lang.String instances with (Some)Strings
+    in the ootypesystem. This forces you to call str(...) on native strings.
+    """
+
+    def __init__(self, str):
+        self.__str = str
+
+    def __str__(self):
+        return self.__str
+
+    def __eq__(self, other):
+        if isinstance(other, _jvm_str):
+            return self.__str == other.__str
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.__str)
+
+    def __repr__(self):
+        return '<_jvm_str "%s">' % self.__str
+
+    def getClass(self):
+        return java.lang.String.class_
+
 class JvmPackageWrapper(object):
     """
     Proxy to java packages. You can access atrributes of a
@@ -59,8 +89,8 @@ class Wrapper(object):
             return JvmInstanceWrapper(item.__javaclass__)
         elif isinstance(item, (tuple, list)):
             return self._wrap_list(item)
-        elif isinstance(item, unicode):
-            return str(item)
+        elif isinstance(item, (str, unicode)):
+            return _jvm_str(str(item))
         elif isinstance(item, jpype._jarray._JavaArrayClass):
             return self._wrap_list(list(item))
         return item
@@ -224,7 +254,7 @@ def new_array(type, size):
     return [None] * size
 
 def downcast(type, instance):
-    assert isinstance(instance, JvmInstanceWrapper)
+    assert isinstance(instance, (JvmInstanceWrapper, _jvm_str))
     return instance
 
 int_class = java.lang.Integer.TYPE
