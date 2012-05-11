@@ -99,6 +99,12 @@ class AppTestJvm(object):
         assert isinstance(res, dict)
         assert len(res['wait']) == 3
 
+    def test_superclass(self):
+        import jvm
+        assert jvm.superclass('java.lang.String') == 'java.lang.Object'
+        assert jvm.superclass('java.lang.StringBuilder') == 'java.lang.AbstractStringBuilder'
+        assert jvm.superclass('java.lang.Object') is None
+
 if __name__ == '__main__':
     tests = AppTestJvm()
 
