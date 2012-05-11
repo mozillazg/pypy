@@ -47,7 +47,18 @@ class AppTestJvm(object):
         p1 = jvm.new('java.awt.Point')
         (res, tpe) = jvm.call_method(p1, 'toString')
         assert tpe == 'java.lang.String'
+        str_res = jvm.unbox(res)
+        assert isinstance(str_res, str)
+        assert str_res == 'java.awt.Point[x=0,y=0]'
 
+    def test_unboxing_ints(self):
+        import jvm
+        p1 = jvm.new('java.awt.Point')
+        s, _ = jvm.call_method(p1, 'toString')
+        l, _ = jvm.call_method(s, 'length')
+        length = jvm.unbox(l)
+        assert isinstance(length, int)
+        assert length == len('java.awt.Point[x=0,y=0]')
 
 if __name__ == '__main__':
     tests = AppTestJvm()

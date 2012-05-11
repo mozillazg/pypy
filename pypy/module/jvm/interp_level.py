@@ -1,7 +1,9 @@
 import os
 from pypy.interpreter.baseobjspace import Wrappable
+from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import ApplevelClass, unwrap_spec
 from pypy.interpreter.typedef import TypeDef
+from pypy.rlib import rjvm
 from pypy.rlib.rjvm import java, new_array
 
 class W_JvmObject(Wrappable):
@@ -44,9 +46,9 @@ def get_methods(space, class_name):
 
     return wrap_get_methods_result(space, result)
 
-@unwrap_spec(method_name=str)
-def call_method(space, w_obj, method_name, args_w):
-    b_obj = space.interp_w(W_JvmObject, w_obj).b_obj
+@unwrap_spec(method_name=str, jvm_obj=W_JvmObject)
+def call_method(space, jvm_obj, method_name, args_w):
+    b_obj = jvm_obj.b_obj
     args, types = get_args_types(space, args_w)
 
     b_java_class = b_obj.getClass()
@@ -56,6 +58,23 @@ def call_method(space, w_obj, method_name, args_w):
     w_res = space.wrap(W_JvmObject(space, b_res))
 
     return space.newtuple([w_res, w_type_name])
+
+@unwrap_spec(jvm_obj=W_JvmObject)
+def unbox(space, jvm_obj):
+    #TODO compare classes not names
+    b_obj = jvm_obj.b_obj
+    class_name = str(b_obj.getClass().getName())
+
+    if class_name == 'java.lang.String':
+        b_str = rjvm.downcast(java.lang.String, b_obj)
+        return space.wrap(str(b_str))
+    elif class_name == 'java.lang.Integer':
+        b_integer = rjvm.downcast(java.lang.Integer, b_obj)
+        return space.wrap(b_integer.intValue())
+    else:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("Don't know how to unbox objects of type %s" %
+                                        class_name))
 
 def wrap_get_methods_result(space, result):
     """
