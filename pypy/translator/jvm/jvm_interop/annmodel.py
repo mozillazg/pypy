@@ -53,7 +53,7 @@ class SomeJvmNativeStaticMeth(SomeOOStaticMeth):
         return JvmNativeStaticMethRepr(self.method, self.name, self.jvm_class_wrapper)
 
     def rtyper_makekey(self):
-        return self.__class__, self.method
+        return self.__class__, self.name
 
     def contains(self, other):
         if isinstance(other, SomeJvmNativeStaticMeth):

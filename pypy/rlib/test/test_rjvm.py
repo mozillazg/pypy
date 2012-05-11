@@ -465,8 +465,29 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [2])
         assert res == 1
 
-    def test_getting_int_value_from_integers(self):
-        pass
+    def test_two_static_method_calls(self):
+        def f1():
+            v1 = java.lang.reflect.Modifier.isPublic(1)
+            v2 = java.lang.reflect.Modifier.isPrivate(1)
+            return v1, v2
+
+        res = self.interpret(f1, [])
+        (a,b) = self.ll_unpack_tuple(res, 2)
+        assert bool(a)
+        assert not bool(b)
+
+#        def f2():
+#            b_cls = java.lang.Class.forName('java.lang.Object')
+#            mods = b_cls.getModifiers()
+#            res = 0
+#            if java.lang.reflect.Modifier.isPublic(mods):
+#                res += 1
+#            if java.lang.reflect.Modifier.isPrivate(mods):
+#                res += 1
+#            return res
+#
+#        res = self.interpret(f2, [])
+#        assert res == 1
 
     def test_code_for_new(self):
         def fn():

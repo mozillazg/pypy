@@ -58,6 +58,10 @@ class _jvm_array(object):
     def __len__(self):
         return len(self.__lst)
 
+# We want packages to be constant at annotation, so make sure we return the same instances
+# for the same names.
+const_cache = {}
+
 class JvmPackageWrapper(object):
     """
     Proxy to java packages. You can access atrributes of a
@@ -76,13 +80,18 @@ class JvmPackageWrapper(object):
         self.__wrapped__ = temp_module
 
     def __getattr__(self, attr):
+        new_name = self.__javaname__ + '.' + attr
         if attr[0].isupper():
             if isinstance(getattr(self.__wrapped__, attr), type):
-                return JvmClassWrapper(getattr(self.__wrapped__, attr))
+                if new_name not in const_cache:
+                    const_cache[new_name] = JvmClassWrapper(getattr(self.__wrapped__, attr))
+                return const_cache[new_name]
             else:
                 raise TypeError("There is no class called %s in package %s" % (attr, self.__javaname__))
         elif isinstance(getattr(self.__wrapped__, attr), jpype.JPackage):
-            return JvmPackageWrapper(self.__javaname__ + '.' + attr)
+            if new_name not in const_cache:
+                const_cache[new_name] = JvmPackageWrapper(new_name)
+            return const_cache[new_name]
         else:
             raise AssertionError("getattr on a JPype package should return a another package or a class - right?")
 
