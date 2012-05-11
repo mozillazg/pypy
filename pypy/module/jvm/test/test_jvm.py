@@ -42,6 +42,13 @@ class AppTestJvm(object):
         assert tpe == 'java.lang.Boolean'
 
 
+    def test_call_method_toString(self):
+        import jvm
+        p1 = jvm.new('java.awt.Point')
+        (res, tpe) = jvm.call_method(p1, 'toString')
+        assert tpe == 'java.lang.String'
+
+
 if __name__ == '__main__':
     tests = AppTestJvm()
 
@@ -54,7 +61,7 @@ if __name__ == '__main__':
         test_case = getattr(tests, test_name)
         try:
             test_case()
-        except:
+        except Exception:
             print 'FAIL'
         else:
             print 'OK'
