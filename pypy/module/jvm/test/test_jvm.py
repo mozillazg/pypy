@@ -93,17 +93,19 @@ class AppTestJvm(object):
         res, _ = jvm.call_method(sb, 'toString')
         assert jvm.unbox(res) == 'foobar'
 
-    def test_app_level_works(self):
-        import jvm
-        res = jvm.object_methods()
-        assert isinstance(res, dict)
-        assert len(res['wait']) == 3
-
     def test_superclass(self):
         import jvm
         assert jvm.superclass('java.lang.String') == 'java.lang.Object'
         assert jvm.superclass('java.lang.StringBuilder') == 'java.lang.AbstractStringBuilder'
         assert jvm.superclass('java.lang.Object') is None
+
+    def test_overloading_exact_match(self):
+        from jvm import java
+        sb = java.lang.StringBuilder()
+        sb.append(42)
+        sb.append(True)
+        sb.append('Foobar')
+        assert sb.toString() == '42trueFoobar'
 
 if __name__ == '__main__':
     tests = AppTestJvm()

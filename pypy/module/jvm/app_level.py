@@ -1,8 +1,5 @@
 import jvm
 
-def object_methods():
-    return jvm.get_methods('java.lang.Object')
-
 class JvmMethodWrapper(object):
     __slots__ = ('meth_name', 'overloads')
 
@@ -19,6 +16,8 @@ class JvmMethodWrapper(object):
     def __repr__(self):
         return '%s(%s)' % (self.__class__.__name__, repr(self.meth_name))
 
+unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}
+type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
 
 class JvmBoundMethod(object):
     __slots__ = ('im_name', 'im_self', 'overloads')
@@ -29,13 +28,10 @@ class JvmBoundMethod(object):
         self.overloads = overloads
 
     def __call__(self, *args):
-        assert len(self.overloads) == 1, "No overloaded methods for now..."
-
-        args_with_types = [make_pair(arg) for arg in args]
-
+        args_with_types = self.__find_overload(args)
         (res, tpe) = jvm.call_method(self.im_self._inst, self.im_name, *args_with_types)
 
-        if tpe in {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}:
+        if tpe in unboxable_types:
             return jvm.unbox(res)
         elif tpe == 'void':
             assert res is None
@@ -44,19 +40,43 @@ class JvmBoundMethod(object):
             cls = get_class(tpe)
             return cls(res)
 
-
     def __repr__(self):
         return '<bound JVM method %s.%s of %s>' % (self.im_self._class_name,
                                                    self.im_name,
                                                    self.im_self)
 
-def make_pair(arg):
-    if isinstance(arg, (str, int, bool)):
-        return arg, type(arg)
-    elif isinstance(arg, _JavaObjectWrapper):
-        return arg._inst, arg._class_name
-    else:
-        raise TypeError("Don't know what type %r is." % arg)
+    def __find_overload(self, args):
+        matches = set()
+
+        for ret_tpe, version in self.overloads:
+            if self.__exact_match(version, args):
+                return self.__add_types(version, args)
+            elif self.__matches(version, args):
+                matches.add(version)
+
+        assert len(matches) == 1, "Bad overloading, please use explicit casts."
+        match, = matches
+        return self.__add_types(match, args)
+
+    def __exact_match(self, types, args):
+        if len(types) != len(args):
+            return False
+
+        if not types:
+            return True
+
+        for tpe_name, arg in zip(types, args):
+            if isinstance(arg, _JavaObjectWrapper) and arg._class_name != tpe_name:
+                return False
+            else:
+                return type(arg) == type_mapping.get(tpe_name)
+
+    def __matches(self, version, args):
+        return False
+
+    def __add_types(self, version, args):
+        return [(arg, type_mapping.get(name, name)) for arg, name in zip(args, version)]
+
 
 class _JavaObjectWrapper(object):
     pass
