@@ -1,6 +1,7 @@
 """
 Low-level implementations for the external functions of the 'os' module.
 """
+from __future__ import with_statement
 
 # Implementation details about those functions
 # might be found in doc/rffi.txt

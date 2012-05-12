@@ -1,4 +1,5 @@
 # this registry uses the new interface for external functions
+from __future__ import with_statement
 
 from pypy.rpython.extfunc import register_external
 
