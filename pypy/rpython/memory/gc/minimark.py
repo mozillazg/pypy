@@ -593,35 +593,44 @@ class MiniMarkGC(MovingGCBase):
         and finally reserve 'totalsize' bytes at the start of the
         now-empty nursery.
         """
-        while self.nursery_barriers.non_empty():
-            # move over to the next contiguous block of memory
-            size_gc_header = self.gcheaderbuilder.size_gc_header
-            pinned_obj_size = size_gc_header + self.get_size(
-                self.nursery_top + size_gc_header)
-            self.nursery_free = self.nursery_top + pinned_obj_size
-            self.nursery_top = self.nursery_barriers.popleft()
-            # try again
+        count = 0
+        #
+        while True:
+            if self.nursery_barriers.non_empty():
+                # first thing we can try: if there are non-contiguous
+                # blocks from pinned objects, move to the next one
+                size_gc_header = self.gcheaderbuilder.size_gc_header
+                pinned_obj_size = size_gc_header + self.get_size(
+                    self.nursery_top + size_gc_header)
+                self.nursery_free = self.nursery_top + pinned_obj_size
+                self.nursery_top = self.nursery_barriers.popleft()
+                #
+            else:
+                # do a minor collection
+                self.minor_collection()
+                # here, the nursery contains only pinned objects and
+                # allocation will succeed (maybe not in the first
+                # block).  If we reach this point for the first time
+                # then check if we should do a major collection.  If we
+                # do then afterward the nursery is again in a random
+                # state because of execute_finalizers(); so we might
+                # reach this point a second time, but not more.
+                count += 1
+                if count == 1:
+                    if (self.get_total_memory_used() >
+                            self.next_major_collection_threshold):
+                        self.major_collection()
+                else:
+                    ll_assert(count == 2,
+                              "Seeing minor_collection() more than twice. "
+                              "Too many pinned objects?")
+            #
+            # Attempt to get 'totalsize' out of the nursery now.  This
+            # may fail again, and then we loop; but it's the uncommon case.
             result = self.nursery_free
             self.nursery_free = result + totalsize
             if self.nursery_free <= self.nursery_top:
-                return result
-        #
-        self.minor_collection(totalsize)
-        # try allocating now, otherwise we do a major collect
-        do_major_collect = False
-        #
-        if do_major_collect or (self.get_total_memory_used() > self.next_major_collection_threshold):
-            self.major_collection()
-            #
-            # The nursery might not be empty now, because of
-            # execute_finalizers().  If it is almost full again,
-            # we need to fix it with another call to minor_collection().
-            if self.nursery_free + totalsize > self.nursery_top:
-                self.minor_collection(totalsize)
-        #
-        result = self.nursery_free
-        self.nursery_free = result + totalsize
-        ll_assert(self.nursery_free <= self.nursery_top, "nursery overflow")
+                break
         #
         if self.debug_tiny_nursery >= 0:   # for debugging
             ll_assert(not self.nursery_barriers.non_empty(), "no support for nursery debug and pinning")
@@ -1268,7 +1277,7 @@ class MiniMarkGC(MovingGCBase):
     # ----------
     # Nursery collection
 
-    def minor_collection(self, min_size=0):
+    def minor_collection(self):
         """Perform a minor collection: find the objects from the nursery
         that remain alive and move them out."""
         #
@@ -1361,13 +1370,6 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_free = self.nursery
         self.nursery_barriers.append(self.nursery + self.nursery_size)
         self.nursery_top = self.nursery_barriers.popleft()
-        while self.nursery_barriers.non_empty() and self.nursery_free + min_size > self.nursery_top:
-            cur_obj_size = size_gc_header + self.get_size(self.nursery_top +
-                                                          size_gc_header)
-            self.nursery_free = self.nursery_top + cur_obj_size
-            self.nursery_top = self.nursery_barriers.popleft()
-        if self.nursery_free + min_size > self.nursery_top:
-            ll_assert(False, "too many pinned objects")
         #
         debug_print("minor collect, total memory used:",
                     self.get_total_memory_used())
