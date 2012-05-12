@@ -49,6 +49,9 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return _native_rjvm_instance(self, instance)
 
     def _enforce(self, value):
+        if value is None:
+            return _native_rjvm_instance(self, None)
+
         if isinstance(value, ootype._string) and self.class_name == 'java.lang.String':
             return value
 
@@ -87,10 +90,10 @@ class _native_rjvm_instance(object):
     """
     'Executable' version of NativeRJvmInstance.
     """
-    def __init__(self, type, instance):
-        assert isinstance(type, NativeRJvmInstance)
-        assert isinstance(instance, (JvmInstanceWrapper, str))
-        self.__dict__['_TYPE'] = type
+    def __init__(self, tpe, instance):
+        assert isinstance(tpe, NativeRJvmInstance)
+        assert isinstance(instance, (JvmInstanceWrapper, str, type(None)))
+        self.__dict__['_TYPE'] = tpe
         self.__dict__['_instance'] = instance
         if isinstance(instance, str):
             self.__dict__['_is_string'] = True
@@ -128,3 +131,6 @@ class _native_rjvm_instance(object):
     def _upcast(self, TYPE):
         assert isinstance(TYPE, NativeRJvmInstance) and TYPE.class_name == 'java.lang.Object'
         return self
+
+    def __nonzero__(self):
+        return self._instance is not None
