@@ -80,21 +80,21 @@ def call_method(space, jvm_obj, method_name, args_w):
 def unbox(space, jvm_obj):
     #TODO compare classes not names
     b_obj = jvm_obj.b_obj
-    class_name = str(b_obj.getClass().getName())
+    b_cls = b_obj.getClass()
 
-    if class_name == 'java.lang.String':
+    if b_cls == java.lang.String.class_:
         b_str = rjvm.downcast(java.lang.String, b_obj)
         return space.wrap(str(b_str))
-    elif class_name == 'java.lang.Integer':
+    elif b_cls == java.lang.Integer.class_:
         b_integer = rjvm.downcast(java.lang.Integer, b_obj)
         return space.wrap(b_integer.intValue())
-    elif class_name == 'java.lang.Boolean':
+    elif b_cls == java.lang.Boolean.class_:
         b_bool = rjvm.downcast(java.lang.Boolean, b_obj)
         return space.wrap(bool(b_bool.booleanValue()))
     else:
         raise OperationError(space.w_TypeError,
                              space.wrap("Don't know how to unbox objects of type %s" %
-                                        class_name))
+                                        str(b_cls.getName())))
 
 @unwrap_spec(class_name=str)
 def superclass(space, class_name):
