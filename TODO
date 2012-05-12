@@ -1,0 +1,6 @@
+TODO
+====
+
+* Bridge support for UntypedStorage (need to store the fields of a VirtualArray and restore them)
+* Support for platforms where pointer/long/double are different sizes in UntypedStorage
+* More complete benchmarking.
