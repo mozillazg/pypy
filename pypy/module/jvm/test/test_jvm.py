@@ -68,6 +68,18 @@ class AppTestJvm(object):
         assert isinstance(unboxed_bool, bool)
         assert unboxed_bool == False
 
+    def test_boxing(self):
+        import jvm
+        boxed_str = jvm.box('foobar')
+        assert '_JvmObject' in repr(boxed_str)
+
+        try:
+            jvm.box(7)
+        except TypeError:
+            pass
+        else:
+            assert False
+
     def test_int_argument(self):
         import jvm
         al = jvm.new('java.util.ArrayList', (10, int))
@@ -106,6 +118,18 @@ class AppTestJvm(object):
         sb.append(True)
         sb.append('Foobar')
         assert sb.toString() == '42trueFoobar'
+
+        al = java.util.ArrayList()
+        assert al.size() == 0
+        o = java.lang.Object()
+        al.add(o)
+        assert al.size() == 1
+
+    def test_overloading_nonexact_match(self):
+        from jvm import java
+        al = java.util.ArrayList()
+        al.add('foobar')
+        assert al.size() == 1
 
 if __name__ == '__main__':
     tests = AppTestJvm()
