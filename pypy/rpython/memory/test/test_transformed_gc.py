@@ -41,7 +41,7 @@ ARGS = lltype.FixedSizeArray(lltype.Signed, 3)
 class GCTest(object):
     gcpolicy = None
     GC_CAN_MOVE = False
-    GC_CAN_ALWAYS_PIN = False
+    GC_CAN_USUALLY_PIN = False
     taggedpointers = False
 
     def setup_class(cls):
@@ -699,7 +699,7 @@ class GenericGCTests(GCTest):
         res = self.runner("pinning")([10, 0])
         if not self.GC_CAN_MOVE:
             assert res == 13
-        elif self.GC_CAN_ALWAYS_PIN:
+        elif self.GC_CAN_USUALLY_PIN:
             assert res == 1
         else:
             assert res == 0 or res == 13 # sometimes fresh objs can't move
@@ -1247,7 +1247,7 @@ class TestHybridGC(TestGenerationGC):
 class TestMiniMarkGC(TestHybridGC):
     gcname = "minimark"
     GC_CAN_TEST_ID = True
-    GC_CAN_ALWAYS_PIN = True
+    GC_CAN_USUALLY_PIN = True
 
     class gcpolicy(gc.FrameworkGcPolicy):
         class transformerclass(framework.FrameworkGCTransformer):
