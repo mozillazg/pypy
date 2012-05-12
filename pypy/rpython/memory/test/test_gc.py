@@ -722,14 +722,15 @@ class GCTest(object):
             s = str(i)
             if not rgc.can_move(s):
                 return 13
-            sum = int(rgc.pin(s))
-            rgc.unpin(s)
-            return sum
+            res = int(rgc.pin(s))
+            if res:
+                rgc.unpin(s)
+            return res
 
         res = self.interpret(f, [10])
         if not self.GCClass.moving_gc:
             assert res == 13
-        elif self.GCClass.can_always_pin_objects:
+        elif self.GCClass.can_usually_pin_objects:
             assert res == 1
         else:
             assert res == 0 or res == 13
@@ -909,7 +910,7 @@ class TestMiniMarkGC(TestSemiSpaceGC):
             e = lltype.malloc(TP)
             e.x = 3
             prev = llmemory.cast_ptr_to_adr(e)
-            rgc.pin(e)
+            assert rgc.pin(e)
             for k in range(i):
                 lltype.malloc(TP)
             res = int(llmemory.cast_ptr_to_adr(e) == prev)
@@ -937,8 +938,8 @@ class TestMiniMarkGC(TestSemiSpaceGC):
             lltype.malloc(TP)
             e2 = lltype.malloc(TP)
             e2.x = 5
-            rgc.pin(e2)
-            rgc.pin(e)
+            assert rgc.pin(e2)
+            assert rgc.pin(e)
             prev = llmemory.cast_ptr_to_adr(e)
             prev2 = llmemory.cast_ptr_to_adr(e2)
             for k in range(i):
@@ -969,7 +970,7 @@ class TestMiniMarkGC(TestSemiSpaceGC):
             c = lltype.malloc(TP)
             c.y = s
             c.x = 3
-            rgc.pin(c)
+            assert rgc.pin(c)
             for k in range(i):
                 lltype.malloc(TP)
             rgc.unpin(c)

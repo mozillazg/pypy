@@ -131,7 +131,7 @@ class MiniMarkGC(MovingGCBase):
     needs_write_barrier = True
     prebuilt_gc_objects_are_static_roots = False
     malloc_zero_filled = True    # xxx experiment with False
-    can_always_pin_objects = True
+    can_usually_pin_objects = True
     gcflag_extra = GCFLAG_FINALIZATION_ORDERING
 
     # All objects start with a HDR, i.e. with a field 'tid' which contains
@@ -248,9 +248,10 @@ class MiniMarkGC(MovingGCBase):
         # it gives a lower bound on the allowed size of the nursery.
         self.nonlarge_max = large_object - 1
         #
-        self.nursery      = NULL
-        self.nursery_free = NULL
-        self.nursery_top  = NULL
+        self.nursery      = NULL     # start of the nursery
+        self.nursery_free = NULL     # first free location, current ptr
+        self.nursery_limit= NULL     # current limit up to which allocate
+        self.nursery_top  = NULL     # end of the nursery
         self.debug_tiny_nursery = -1
         self.debug_rotating_nurseries = None
         #
@@ -311,7 +312,7 @@ class MiniMarkGC(MovingGCBase):
         # GCFLAG_HAS_SHADOW to their future location at the next
         # minor collection.
         self.nursery_objects_shadows = self.AddressDict()
-        # all pinned objects that were in the nursery *before* last
+        # all surviving pinned objects that were in the nursery *before* last
         # minor collect. This is a sorted deque that should be consulted when
         # considering next nursery ceiling
         self.nursery_barriers = self.AddressDeque()
@@ -404,6 +405,7 @@ class MiniMarkGC(MovingGCBase):
         self.nursery_free = self.nursery
         # the end of the nursery:
         self.nursery_top = self.nursery + self.nursery_size
+        self.nursery_limit = self.nursery_top
         # initialize the threshold
         self.min_heap_size = max(self.min_heap_size, self.nursery_size *
                                               self.major_collection_threshold)
@@ -468,6 +470,7 @@ class MiniMarkGC(MovingGCBase):
             llarena.arena_protect(newnurs, self._nursery_memory_size(), False)
             self.nursery = newnurs
             self.nursery_top = self.nursery + self.nursery_size
+            self.nursery_limit = self.nursery_top
             debug_print("switching from nursery", oldnurs,
                         "to nursery", self.nursery,
                         "size", self.nursery_size)
@@ -509,7 +512,7 @@ class MiniMarkGC(MovingGCBase):
             # there, do a collect first.
             result = self.nursery_free
             self.nursery_free = result + totalsize
-            if self.nursery_free > self.nursery_top:
+            if self.nursery_free > self.nursery_limit:
                 result = self.maybe_collect_and_reserve(totalsize)
             #
             # Build the object.
@@ -568,7 +571,7 @@ class MiniMarkGC(MovingGCBase):
             # there, do a collect first.
             result = self.nursery_free
             self.nursery_free = result + totalsize
-            if self.nursery_free > self.nursery_top:
+            if self.nursery_free > self.nursery_limit:
                 result = self.maybe_collect_and_reserve(totalsize)
             #
             # Build the object.
@@ -588,10 +591,11 @@ class MiniMarkGC(MovingGCBase):
             self.major_collection()
 
     def maybe_collect_and_reserve(self, totalsize):
-        """To call when nursery_free overflows nursery_top.
-        Do a minor collection, and possibly also a major collection,
-        and finally reserve 'totalsize' bytes at the start of the
-        now-empty nursery.
+        """To call when nursery_free overflows nursery_limit.
+        Walks to the next block of contiguous memory between pinned
+        objects.  If there isn't any, do a minor collection, and
+        possibly also a major collection.  Returns when it succeeded
+        in reserving 'totalsize' bytes in the nursery.
         """
         count = 0
         #
@@ -601,9 +605,9 @@ class MiniMarkGC(MovingGCBase):
                 # blocks from pinned objects, move to the next one
                 size_gc_header = self.gcheaderbuilder.size_gc_header
                 pinned_obj_size = size_gc_header + self.get_size(
-                    self.nursery_top + size_gc_header)
-                self.nursery_free = self.nursery_top + pinned_obj_size
-                self.nursery_top = self.nursery_barriers.popleft()
+                    self.nursery_limit + size_gc_header)
+                self.nursery_free = self.nursery_limit + pinned_obj_size
+                self.nursery_limit = self.nursery_barriers.popleft()
                 #
             else:
                 # do a minor collection
@@ -629,7 +633,7 @@ class MiniMarkGC(MovingGCBase):
             # may fail again, and then we loop; but it's the uncommon case.
             result = self.nursery_free
             self.nursery_free = result + totalsize
-            if self.nursery_free <= self.nursery_top:
+            if self.nursery_free <= self.nursery_limit:
                 break
         #
         if self.debug_tiny_nursery >= 0:   # for debugging
@@ -789,7 +793,9 @@ class MiniMarkGC(MovingGCBase):
         if self.next_major_collection_threshold < 0:
             # cannot trigger a full collection now, but we can ensure
             # that one will occur very soon
-            self.nursery_free = self.nursery_top
+            while self.nursery_barriers.non_empty():
+                self.nursery_barriers.popleft()
+            self.nursery_free = self.nursery_limit = self.nursery_top
 
     def can_optimize_clean_setarrayitems(self):
         if self.card_page_indices > 0:
@@ -1369,7 +1375,7 @@ class MiniMarkGC(MovingGCBase):
         self.debug_rotate_nursery()
         self.nursery_free = self.nursery
         self.nursery_barriers.append(self.nursery + self.nursery_size)
-        self.nursery_top = self.nursery_barriers.popleft()
+        self.nursery_limit = self.nursery_barriers.popleft()
         #
         debug_print("minor collect, total memory used:",
                     self.get_total_memory_used())
