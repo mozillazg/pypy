@@ -544,6 +544,15 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == False
 
+    def test_comparing_classes(self):
+        def fn():
+            c1 = java.lang.Class.forName('java.lang.String')
+            c2 = java.lang.String.class_
+            return c1 == c2
+
+        res = self.interpret(fn, [])
+        assert res == True
+
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass
 

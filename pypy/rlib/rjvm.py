@@ -208,7 +208,9 @@ class JvmInstanceWrapper(Wrapper):
         self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
 
     def __getattr__(self, attr):
-        if attr in self.__method_names:
+        if attr == '__wrapped__':
+            return self.__wrapped__
+        elif attr in self.__method_names:
             return JvmMethodWrapper(getattr(self.__wrapped__, attr))
         elif attr in self.__field_names:
             return self._wrap_item(getattr(self.__wrapped__, attr))
@@ -223,6 +225,17 @@ class JvmInstanceWrapper(Wrapper):
     def _downcast(self, TYPE):
         return self
 
+    def __eq__(self, other):
+        if isinstance(other, JvmInstanceWrapper):
+            return bool(self.__wrapped__ == other.__wrapped__)
+        else:
+            return False
+
+    def __ne__(self, other):
+        return not self.__eq__(other)
+
+    def __hash__(self):
+        return hash(self.__wrapped__)
 
 class JvmMethodWrapper(CallableWrapper):
 
