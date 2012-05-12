@@ -593,18 +593,19 @@ class MiniMarkGC(MovingGCBase):
         and finally reserve 'totalsize' bytes at the start of the
         now-empty nursery.
         """
-        if not self.nursery_top == self.nursery + self.nursery_size:
-            self.nursery_top = self.nursery_barriers.popleft()
+        while self.nursery_barriers.non_empty():
+            # move over to the next contiguous block of memory
             size_gc_header = self.gcheaderbuilder.size_gc_header
-            while self.nursery_barriers.non_empty() and self.nursery_free + totalsize > self.nursery_top:
-                cur_obj_size = size_gc_header + self.get_size(
-                    self.nursery_top + size_gc_header)
-                self.nursery_free = self.nursery_top + cur_obj_size
-                self.nursery_top = self.nursery_barriers.popleft()
-            if self.nursery_free + totalsize <= self.nursery_top:
-                res = self.nursery_free
-                self.nursery_free = res + totalsize
-                return res
+            pinned_obj_size = size_gc_header + self.get_size(
+                self.nursery_top + size_gc_header)
+            self.nursery_free = self.nursery_top + pinned_obj_size
+            self.nursery_top = self.nursery_barriers.popleft()
+            # try again
+            result = self.nursery_free
+            self.nursery_free = result + totalsize
+            if self.nursery_free <= self.nursery_top:
+                return result
+        #
         self.minor_collection(totalsize)
         # try allocating now, otherwise we do a major collect
         do_major_collect = False
