@@ -78,7 +78,6 @@ def call_method(space, jvm_obj, method_name, args_w):
 
 @unwrap_spec(jvm_obj=W_JvmObject)
 def unbox(space, jvm_obj):
-    #TODO compare classes not names
     b_obj = jvm_obj.b_obj
     b_cls = b_obj.getClass()
 
@@ -95,6 +94,16 @@ def unbox(space, jvm_obj):
         raise OperationError(space.w_TypeError,
                              space.wrap("Don't know how to unbox objects of type %s" %
                                         str(b_cls.getName())))
+
+def box(space, w_obj):
+    if space.is_true(space.isinstance(w_obj, space.w_str)):
+        s = space.str_w(w_obj)
+        b_str = java.lang.String(s)
+        return space.wrap(W_JvmObject(space, b_str))
+    else:
+        w_template = space.wrap("Don't know how to box %r")
+        w_msg = space.mod(w_template, w_obj)
+        raise OperationError(space.w_TypeError, w_msg)
 
 @unwrap_spec(class_name=str)
 def superclass(space, class_name):
@@ -123,7 +132,7 @@ def wrap_get_methods_result(space, result):
         for b_ret_type, args_b in sigs:
             w_ret_type = space.wrap(str(b_ret_type))
             args_w = [space.wrap(str(b_arg)) for b_arg in args_b]
-            w_args = space.newlist(args_w)
+            w_args = space.newtuple(args_w)
             w_entry = space.newtuple([w_ret_type, w_args])
             value.append(w_entry)
 

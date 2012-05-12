@@ -29,6 +29,8 @@ class JvmBoundMethod(object):
 
     def __call__(self, *args):
         args_with_types = self.__find_overload(args)
+        #return 'calling with args %s' % args_with_types
+
         (res, tpe) = jvm.call_method(self.im_self._inst, self.im_name, *args_with_types)
 
         if tpe in unboxable_types:
@@ -54,6 +56,7 @@ class JvmBoundMethod(object):
             elif self.__matches(version, args):
                 matches.add(version)
 
+        assert len(matches) > 0, "No overloads found!"
         assert len(matches) == 1, "Bad overloading, please use explicit casts."
         match, = matches
         return self.__add_types(match, args)
@@ -69,14 +72,46 @@ class JvmBoundMethod(object):
             if isinstance(arg, _JavaObjectWrapper) and arg._class_name != tpe_name:
                 return False
             else:
-                return type(arg) == type_mapping.get(tpe_name)
+                return type(arg) is type_mapping.get(tpe_name)
 
-    def __matches(self, version, args):
-        return False
+    def __matches(self, types, args):
+        if len(types) != len(args):
+            return False
+
+        for tpe_name, arg in zip(types, args):
+            if isinstance(arg, _JavaObjectWrapper):
+                cls_name = arg._class_name
+                return is_subclass(tpe_name, cls_name)
+            elif isinstance(arg, str):
+                cls_name = 'java.lang.String'
+                return is_subclass(tpe_name, cls_name)
+            else:
+                return type(arg) is type_mapping.get(tpe_name)
 
     def __add_types(self, version, args):
-        return [(arg, type_mapping.get(name, name)) for arg, name in zip(args, version)]
+        res = []
+        for arg, name in zip(args, version):
+            tpe = type_mapping.get(name, name)
 
+            if isinstance(arg, _JavaObjectWrapper):
+                arg = arg._inst
+            elif isinstance(arg, str) and name != 'java.lang.String':
+                arg = jvm.box(arg)
+
+            res.append((arg, tpe))
+
+        return res
+
+
+def is_subclass(c1, c2):
+    """
+    Returns True iff c1 is a subclass of c2. c1 and c2 are represented as strings
+    containing names of the classes.
+    """
+    while c2 is not None and c1 != c2:
+        c2 = jvm.superclass(c2)
+
+    return c1 == c2
 
 class _JavaObjectWrapper(object):
     pass
