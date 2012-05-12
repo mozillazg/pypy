@@ -820,9 +820,10 @@ class MiniMarkGC(MovingGCBase):
         return True
 
     def unpin(self, obj):
-        if self.header(obj).tid & GCFLAG_PINNED:
-            self.pinned_objects_in_nursery -= 1
-            self.header(obj).tid &= ~GCFLAG_PINNED
+        ll_assert(self.header(obj).tid & GCFLAG_PINNED != 0,
+                  "unpin: object is already not pinned")
+        self.pinned_objects_in_nursery -= 1
+        self.header(obj).tid &= ~GCFLAG_PINNED
 
     def shrink_array(self, obj, smallerlength):
         #
@@ -965,6 +966,14 @@ class MiniMarkGC(MovingGCBase):
             # similarily, all objects should have this flag:
             ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS != 0,
                       "missing GCFLAG_TRACK_YOUNG_PTRS")
+        else:
+            # exception: pinned objects are in the nursery and nursery
+            # objects never have GCFLAG_TRACK_YOUNG_PTRS
+            ll_assert(self.is_in_nursery(obj),
+                                  "pinned object not in nursery")
+            ll_assert(self.header(obj).tid & GCFLAG_TRACK_YOUNG_PTRS == 0,
+                      "pinned nursery object with GCFLAG_TRACK_YOUNG_PTRS")
+        #
         # the GCFLAG_VISITED should not be set between collections
         ll_assert(self.header(obj).tid & GCFLAG_VISITED == 0,
                   "unexpected GCFLAG_VISITED")
@@ -1535,6 +1544,9 @@ class MiniMarkGC(MovingGCBase):
             if hdr.tid & GCFLAG_VISITED:
                 return
             hdr.tid |= GCFLAG_VISITED
+            # XXX note that this assumes that the pinned object has no more
+            # references, because it will not be traced!  It's ok as long
+            # as we only pin strings and similar objects.
             ll_assert(not self.header(obj).tid & GCFLAG_HAS_CARDS, "support cards with pinning")
             self.pinned_objects_in_nursery += 1
             self.surviving_pinned_objects.append(
@@ -1676,6 +1688,7 @@ class MiniMarkGC(MovingGCBase):
         # Debugging checks
         ll_assert(self.nursery_free == self.nursery,
                   "nursery not empty in major_collection()")
+        # ^^^ but note that there may still be pinned objects
         self.debug_check_consistency()
         #
         # Note that a major collection is non-moving.  The goal is only to
@@ -1859,8 +1872,13 @@ class MiniMarkGC(MovingGCBase):
         # flag set, then the object should be in 'prebuilt_root_objects',
         # and the GCFLAG_VISITED will be reset at the end of the
         # collection.
+        #
+        # Finally, pinned objects in the nursery are ignored (and not
+        # traced; this is the same as during minor collection).  We don't
+        # set GCFLAG_VISITED on them because nobody would clear it.
+        #
         hdr = self.header(obj)
-        if hdr.tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS):
+        if hdr.tid & (GCFLAG_VISITED | GCFLAG_NO_HEAP_PTRS | GCFLAG_PINNED):
             return
         #
         # It's the first time.  We set the flag.
