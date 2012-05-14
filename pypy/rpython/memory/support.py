@@ -196,6 +196,9 @@ def get_address_stack(chunk_size=DEFAULT_CHUNK_SIZE, cache={}):
                 got = next
 
         def sort(self):
+            """Sorts the items in the AddressStack.  They must not be more
+            than one chunk of them.  This results in a **reverse** order,
+            so that the first pop()ped items are the smallest ones."""
             ll_assert(self.chunk.next == null_chunk, "too big for sorting")
             sort_chunk(self.chunk, self.used_in_last_chunk)
 
