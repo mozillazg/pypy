@@ -149,7 +149,21 @@ class TestRJvmAnnotation(object):
         assert isinstance(s, annmodel.SomeInteger)
 
 
-    def test_common_type(self):
+    def test_ann_upcasting(self):
+        def fn(x):
+            if x == 1:
+                v = rjvm.upcast(java.lang.Object, java.lang.Integer(17))
+            elif x == 2:
+                v = rjvm.upcast(java.lang.Object, java.lang.Boolean(True))
+            else:
+                v = rjvm.upcast(java.lang.Object, rjvm.native_string('foobar'))
+            return v.toString()
+
+        a = RPythonAnnotator()
+        s = a.build_types(fn, [int])
+        assert isinstance(s, annmodel.SomeOOInstance)
+
+    def test_ann_common_type(self):
         def fn(x):
             if x == 1:
                 v = java.lang.Integer(17)
@@ -157,7 +171,7 @@ class TestRJvmAnnotation(object):
                 v = java.lang.Boolean(True)
             else:
                 v = rjvm.native_string('foobar')
-            return v
+            return v.toString()
 
         a = RPythonAnnotator()
         s = a.build_types(fn, [int])
@@ -563,6 +577,19 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert self.ll_to_string(res) == 'foobar'
+
+    def test_exceptions_static_call(self):
+        py.test.skip()
+        def fn():
+            try:
+                b_cls = java.lang.Class.forName('foobar')
+                return False
+            except:
+               return True
+
+        res = self.interpret(fn, [])
+        assert res is True
+
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

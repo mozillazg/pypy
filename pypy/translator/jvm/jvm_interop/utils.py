@@ -272,9 +272,11 @@ class Entry(ExtRegistryEntry):
 
     def compute_result_annotation(self, type_s, inst_s):
         assert type_s.is_constant()
+        TYPE = type_s.const
+        assert isinstance(TYPE, JvmClassWrapper)
         assert isinstance(inst_s, SomeOOInstance)
         assert isinstance(inst_s.ootype, ootypemodel.NativeRJvmInstance)
-        return SomeOOInstance(ootypemodel.NativeRJvmInstance(type_s.const))
+        return SomeOOInstance(ootypemodel.NativeRJvmInstance(TYPE))
 
     def specialize_call(self, hop):
         assert isinstance(hop.args_s[0].const, JvmClassWrapper)
@@ -282,6 +284,25 @@ class Entry(ExtRegistryEntry):
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result)
 
+
+class Entry(ExtRegistryEntry):
+    _about_ = rjvm.upcast
+
+    def compute_result_annotation(self, type_s, inst_s):
+        assert type_s.is_constant()
+        TYPE = type_s.const
+        assert isinstance(TYPE, JvmClassWrapper)
+        assert isinstance(inst_s, SomeOOInstance)
+        assert isinstance(inst_s.ootype, ootypemodel.NativeRJvmInstance)
+        OOTYPE = ootypemodel.NativeRJvmInstance(TYPE)
+        assert ootype.isSubclass(inst_s.ootype, OOTYPE)
+        return SomeOOInstance(OOTYPE)
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_s[0].const, JvmClassWrapper)
+        assert isinstance(hop.args_s[1], SomeOOInstance)
+        v_inst = hop.inputarg(hop.args_r[1], arg=1)
+        return hop.genop('ooupcast', [v_inst], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
     _about_ = rjvm.native_string
