@@ -75,7 +75,8 @@ class JvmClassWrapperEntry(ExtRegistryEntry):
 class __extend__(pairtype(SomeOOInstance, SomeInteger)):
     def getitem((ooinst, index)):
         if isinstance(ooinst.ootype, ootype.Array):
-            return SomeOOInstance(ooinst.ootype.ITEM)
+            # TODO: what about arrays of numbers?
+            return SomeOOInstance(ooinst.ootype.ITEM, can_be_None=True)
         return s_ImpossibleValue
 
     def setitem((ooinst, index), s_value):

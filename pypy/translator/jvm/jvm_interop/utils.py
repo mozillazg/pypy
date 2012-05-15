@@ -109,7 +109,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
     @classmethod
     def lltype_to_annotation(cls, TYPE):
         if isinstance(TYPE, ootypemodel.NativeRJvmInstance):
-            return SomeOOInstance(TYPE)
+            return SomeOOInstance(TYPE, can_be_None=True)
         elif TYPE is ootype.Char:
             return SomeChar()
         elif TYPE is ootype.String:
@@ -222,9 +222,8 @@ def wrap(value, hint=None):
     elif isinstance(value, rjvm._jvm_str):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), str(value))
     elif value is None:
-        return None
+        return ootypemodel._null_native_rjvm_instance(hint)
     elif isinstance(value, (int, bool, float)):
-        # There's only one "special case"/JPype inconsistency for now
         if hint is ootype.Bool:
             return bool(value)
         else:

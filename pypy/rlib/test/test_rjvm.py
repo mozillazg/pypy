@@ -417,7 +417,6 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert isinstance(res, int)
 
-
     def test_method_name(self):
         def fn(s):
             cls = java.lang.Class.forName(s)
@@ -438,7 +437,6 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [self.string_to_ll('java.lang.Object')])
         assert res == 7
-
 
     def test_str_on_strings(self):
         def fn():
@@ -537,6 +535,15 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert res == False
+
+    def test_null_is_none_2(self):
+        def fn(b):
+            if b:
+                v = java.lang.Object()
+            else:
+                v = None
+            return v
+        res = self.interpret(fn, [False])
 
     def test_comparing_classes(self):
         def fn():
