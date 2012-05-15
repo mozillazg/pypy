@@ -1,8 +1,13 @@
+from pypy.rpython.ootypesystem.ootype import _null_mixin
 import utils
 from pypy.rlib import rjvm
 from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper
 from pypy.rpython.ootypesystem import ootype
 
+# TODO: cache for NativeRJvmInstance objects.
+# For now we only need nulls to be the same.
+
+nulls = {}
 
 class NativeRJvmInstance(ootype.NativeInstance):
     """
@@ -14,9 +19,17 @@ class NativeRJvmInstance(ootype.NativeInstance):
         self.class_name = self.refclass.getName()
         self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass)}
         self.example = utils.NativeRJvmInstanceExample(self)  # used in self._example()
+        if self.class_name not in nulls:
+            nulls[self.class_name] = _null_native_rjvm_instance(self)
+        self._null = nulls[self.class_name]
 
-    def __repr__(self):
-        return '<NativeJvmInstance %s>' % self.class_name
+    @property
+    def _superclass(self):
+        super_class = self.refclass.getSuperclass()
+        if super_class:
+            return NativeRJvmInstance(super_class)
+        else:
+            return None
 
     def _example(self):
         return self.example
@@ -32,10 +45,6 @@ class NativeRJvmInstance(ootype.NativeInstance):
     def _check_field(self, field_name):
         return field_name in self.field_names
 
-    def _field_type(self, field_name):
-        self.refclass.getField(field_name)
-        return utils.jpype_type_to_ootype(field.getType())
-
     def _make_interp_instance(self, args):
         """
         This is called be ootype.new() to make the _native_rjvm_instance object.
@@ -49,26 +58,46 @@ class NativeRJvmInstance(ootype.NativeInstance):
         return _native_rjvm_instance(self, instance)
 
     def _enforce(self, value):
-        if value is None:
-            return _native_rjvm_instance(self, None)
+        TYPE = ootype.typeOf(value)
 
-        if isinstance(value, ootype._string) and self.class_name == 'java.lang.String':
+        if TYPE == self:
             return value
 
-#        if isinstance(value, JvmInstanceWrapper) and rjvm._refclass_for(value).getName() == self.class_name:
-#            return _native_rjvm_instance(self, value)
+        if TYPE is ootype.String:
+            NATIVE_STRING = NativeRJvmInstance(rjvm.java.lang.String)
+            if ootype.isSubclass(NATIVE_STRING, self):
+                return value
+            else:
+                raise TypeError
+        elif (isinstance(TYPE, NativeRJvmInstance) and
+              not isinstance(value._instance, str) and
+              # object of this type are wrapped in RjvmJavaClassWrapper by rjvm,
+              # so the 'shortcut' doesn't work:
+              not self.class_name == 'java.lang.Class'):
 
-        tpe = ootype.typeOf(value)
-        if self.class_name == 'java.lang.Object' and tpe == ootype.String or isinstance(tpe, NativeRJvmInstance):
+            if self.refclass.isInstance(value._instance.__wrapped__):
+                return value
+            else:
+                raise TypeError
+        elif (isinstance(TYPE, NativeRJvmInstance) and
+              # check the subclassing manually for the special cases mentioned above:
+              ootype.isSubclass(TYPE, self)):
             return value
         else:
-            return super(NativeRJvmInstance, self)._enforce(value)
+            raise TypeError
+
 
     def _is_string(self):
         return self.class_name == 'java.lang.String'
 
     def _defl(self, parent=None, parentindex=None):
-        return ootype._null_instance(self)
+        return self._null
+
+    def __repr__(self):
+        return '<NativeJvmInstance %s>' % self.class_name
+
+    def __str__(self):
+        return repr(self)
 
     def __eq__(self, other):
         if isinstance(other, NativeRJvmInstance):
@@ -79,6 +108,7 @@ class NativeRJvmInstance(ootype.NativeInstance):
     def __ne__(self, other):
         return not self.__eq__(other)
 
+    #noinspection PyMethodOverriding
     def __hash__(self):
         return hash(self.class_name)
 
@@ -134,3 +164,7 @@ class _native_rjvm_instance(object):
 
     def __nonzero__(self):
         return self._instance is not None
+
+class _null_native_rjvm_instance(_null_mixin(_native_rjvm_instance), _native_rjvm_instance):
+    def __init__(self, TYPE):
+        self.__dict__["_TYPE"] = TYPE
