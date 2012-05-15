@@ -46,7 +46,7 @@ class _jvm_array(object):
 
     def __setitem__(self, key, value):
         from pypy.translator.jvm.jvm_interop.ootypemodel import _native_rjvm_instance
-        assert isinstance(value, JvmInstanceWrapper)
+        assert isinstance(value, (JvmInstanceWrapper, _jvm_str))
         self.__lst[key] = value
 
     def __getitem__(self, item):
@@ -302,6 +302,9 @@ def new_array(type, size):
 def downcast(type, instance):
     assert isinstance(instance, (JvmInstanceWrapper, _jvm_str))
     return instance
+
+def native_string(s):
+    return _jvm_str(s)
 
 int_class = java.lang.Integer.TYPE
 long_class = java.lang.Long.TYPE

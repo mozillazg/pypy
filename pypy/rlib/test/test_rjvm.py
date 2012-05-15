@@ -156,7 +156,7 @@ class TestRJvmAnnotation(object):
             elif x == 2:
                 v = java.lang.Boolean(True)
             else:
-                v = java.lang.String('foobar')
+                v = rjvm.native_string('foobar')
             return v
 
         a = RPythonAnnotator()
@@ -553,6 +553,16 @@ class BaseTestRJVM(BaseRtypingTest):
 
         res = self.interpret(fn, [])
         assert res == True
+
+    def test_native_strings(self):
+        def fn():
+            obj_array = rjvm.new_array(java.lang.Object, 3)
+            obj_array[1] = rjvm.native_string('foobar')
+            b_str = rjvm.downcast(java.lang.String, obj_array[1])
+            return str(b_str)
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res) == 'foobar'
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
     pass

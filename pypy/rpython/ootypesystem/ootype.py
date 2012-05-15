@@ -1713,11 +1713,12 @@ class _array(_builtin_type):
 
     def ll_setitem_fast(self, index, item):
         # NOT_RPYTHON
+        TYPE = typeOf(item)
         assert (self._TYPE.ITEM is Void or
-                typeOf(item) == self._TYPE.ITEM or
+                self._TYPE.ITEM == TYPE or
                 (isinstance(self._TYPE.ITEM, NativeInstance) and
-                 self._TYPE.ITEM.class_name == 'java.lang.Object' and
-                 isinstance(typeOf(item), (NativeInstance, String))))
+                 isinstance(TYPE, NativeInstance) and
+                 isSubclass(TYPE, self._TYPE.ITEM)))
         assert typeOf(index) == Signed
         assert index >= 0
         self._array[index] = item
