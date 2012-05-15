@@ -114,6 +114,8 @@ class AppTestJvm(object):
     def test_overloading_exact_match(self):
         from jvm import java
         sb = java.lang.StringBuilder()
+        assert 'append' in dir(sb)
+        assert 'StringBuilder'in str(type(sb))
         sb.append(42)
         sb.append(True)
         sb.append('Foobar')
