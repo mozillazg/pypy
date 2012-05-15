@@ -18,6 +18,7 @@ class JvmClassWrapperRepr(Repr):
         jvm_native_instance = hop.r_result.lowleveltype
         args = [hop.inputarg(r_arg, i) for (i, r_arg) in enumerate(hop.args_r[1:], start=1)]
         class_and_args = [hop.inputconst(ootype.Void, jvm_native_instance)] + args
+        hop.exception_is_here()
         return hop.genop('new', class_and_args, resulttype=jvm_native_instance)
 
     def rtype_getattr(self, hop):
@@ -32,6 +33,7 @@ class JvmClassWrapperRepr(Repr):
             assert attrname in self.jvm_class_wrapper._static_field_names or attrname == 'class_'
             c_class = hop.inputarg(hop.args_r[0], arg=0)
             c_name = hop.inputconst(ootype.Void, attrname)
+            hop.exception_cannot_occur()
             return hop.genop('oogetstaticfield', [c_class, c_name], resulttype=hop.r_result.lowleveltype)
 
 
@@ -59,13 +61,19 @@ class JvmNativeStaticMethRepr(Repr):
         method_const = hop.inputconst(method_type, method)
 
         vlist = hop.inputargs(*hop.args_r)[1:]
+        hop.exception_is_here()
         return hop.genop('direct_call', [method_const] + vlist, resulttype=method_type.RESULT)
 
 
 class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 
     def rtype_getitem((r_inst, r_int), hop):
-        NotImplemented
+        if not isinstance(r_inst.lowleveltype, ootype.Array):
+            raise TyperError("getitem() on a non-array instance")
+        c_getitem = inputconst(ootype.Void, "ll_getitem_fast")
+        vlist = hop.inputargs(*hop.args_r)
+        hop.exception_is_here()
+        return hop.genop('oosend', [c_getitem] + vlist, resulttype=hop.r_result)
 
     def rtype_setitem((r_inst, r_int), hop):
         if not isinstance(r_inst.lowleveltype, ootype.Array):

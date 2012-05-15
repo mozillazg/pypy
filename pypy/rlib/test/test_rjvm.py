@@ -276,6 +276,16 @@ class BaseTestRJVM(BaseRtypingTest):
         rs = self.ll_unpack_tuple(res, 2)
         assert rs == (9, 9)
 
+    def test_array_setitem(self):
+        def fn():
+            arr = rjvm.new_array(java.lang.Object, 5)
+            o = java.lang.Object()
+            arr[2] = o
+            return str(arr[2].toString())
+
+        res = self.interpret(fn, [])
+        assert self.ll_to_string(res).startswith('java.lang.Object@')
+
     def test_reflection_for_name(self):
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
@@ -346,9 +356,6 @@ class BaseTestRJVM(BaseRtypingTest):
         def fn():
             al_class = java.lang.Class.forName('java.util.ArrayList')
             c = al_class.getConstructor([java.lang.Integer.TYPE])
-#            args = java.util.ArrayList()
-#            args.add(java.lang.Integer.valueOf(15))
-#            args_array = args.toArray()
             args_array = rjvm.new_array(java.lang.Object, 1)
             args_array[0] = java.lang.Integer.valueOf(15)
             object_al = c.newInstance(args_array)
@@ -475,19 +482,6 @@ class BaseTestRJVM(BaseRtypingTest):
         (a,b) = self.ll_unpack_tuple(res, 2)
         assert bool(a)
         assert not bool(b)
-
-#        def f2():
-#            b_cls = java.lang.Class.forName('java.lang.Object')
-#            mods = b_cls.getModifiers()
-#            res = 0
-#            if java.lang.reflect.Modifier.isPublic(mods):
-#                res += 1
-#            if java.lang.reflect.Modifier.isPrivate(mods):
-#                res += 1
-#            return res
-#
-#        res = self.interpret(f2, [])
-#        assert res == 1
 
     def test_code_for_new(self):
         def fn():
