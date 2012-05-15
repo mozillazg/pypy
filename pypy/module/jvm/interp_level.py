@@ -98,7 +98,7 @@ def unbox(space, jvm_obj):
 def box(space, w_obj):
     if space.is_true(space.isinstance(w_obj, space.w_str)):
         s = space.str_w(w_obj)
-        b_str = java.lang.String(s)
+        b_str = rjvm.native_string(s)
         return space.wrap(W_JvmObject(space, b_str))
     else:
         w_template = space.wrap("Don't know how to box %r")
@@ -190,7 +190,7 @@ def unwrap_arg(space, w_arg, type_name):
     elif type_name == 'bool':
         return java.lang.Boolean(space.bool_w(w_arg))
     elif type_name == 'str':
-        return java.lang.String(space.str_w(w_arg))
+        return rjvm.native_string(space.str_w(w_arg))
     else:
         return space.interp_w(W_JvmObject, w_arg).b_obj
 

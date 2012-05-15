@@ -220,7 +220,7 @@ def wrap(value, hint=None):
         result._array = [wrap(el, hint=hint.ITEM) for el in value]
         return result
     elif isinstance(value, rjvm._jvm_str):
-        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), str(value))
+        return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), value)
     elif value is None:
         return ootypemodel._null_native_rjvm_instance(hint)
     elif isinstance(value, (int, bool, float)):
@@ -281,4 +281,17 @@ class Entry(ExtRegistryEntry):
         assert isinstance(hop.args_s[1], SomeOOInstance)
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result)
+
+
+class Entry(ExtRegistryEntry):
+    _about_ = rjvm.native_string
+
+    def compute_result_annotation(self, str_s):
+        assert isinstance(str_s, SomeString)
+        return SomeOOInstance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String))
+
+    def specialize_call(self, hop):
+        assert isinstance(hop.args_s[0], SomeString)
+        v_str = hop.inputarg(hop.args_r[0], arg=0)
+        return hop.genop('same_as', [v_str], resulttype=ootypemodel.NativeRJvmInstance(rjvm.java.lang.String))
 

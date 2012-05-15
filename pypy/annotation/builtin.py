@@ -579,12 +579,7 @@ def ooupcast(I, i):
         raise AnnotatorError, 'Cannot cast %s to %s' % (i.ootype, I.const)
 
 def oodowncast(I, i):
-    from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
-    assert isinstance(I.const, (ootype.Instance, NativeRJvmInstance))
-
-    if isinstance(I.const, NativeRJvmInstance) and isinstance(i.ootype, NativeRJvmInstance) \
-        and i.ootype.class_name == 'java.lang.Object':
-        return SomeOOInstance(I.const)
+    assert isinstance(I.const, (ootype.Instance, ootype.NativeInstance))
 
     if ootype.isSubclass(I.const, i.ootype):
         return SomeOOInstance(I.const)

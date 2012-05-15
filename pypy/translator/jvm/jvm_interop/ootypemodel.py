@@ -66,11 +66,11 @@ class NativeRJvmInstance(ootype.NativeInstance):
         if TYPE is ootype.String:
             NATIVE_STRING = NativeRJvmInstance(rjvm.java.lang.String)
             if ootype.isSubclass(NATIVE_STRING, self):
-                return value
+                return _native_rjvm_instance(NATIVE_STRING, rjvm._jvm_str(value._str))
             else:
                 raise TypeError
-        elif (isinstance(TYPE, NativeRJvmInstance) and
-              not isinstance(value._instance, str) and
+        if (isinstance(TYPE, NativeRJvmInstance) and
+              not isinstance(value._instance, rjvm._jvm_str) and
               # object of this type are wrapped in RjvmJavaClassWrapper by rjvm,
               # so the 'shortcut' doesn't work:
               not self.class_name == 'java.lang.Class'):
@@ -122,14 +122,14 @@ class _native_rjvm_instance(object):
     """
     def __init__(self, tpe, instance):
         assert isinstance(tpe, NativeRJvmInstance)
-        assert isinstance(instance, (JvmInstanceWrapper, str, type(None)))
+        assert isinstance(instance, (JvmInstanceWrapper, rjvm._jvm_str))
         self.__dict__['_TYPE'] = tpe
         self.__dict__['_instance'] = instance
-        if isinstance(instance, str):
+        if isinstance(instance, rjvm._jvm_str):
             self.__dict__['_is_string'] = True
 
     def __getattr__(self, name):
-        assert not isinstance(self._instance, str), "We don't support calling String methods yet."
+        assert not isinstance(self._instance, rjvm._jvm_str), "We don't support calling String methods yet."
         if self._TYPE._check_field(name):
             return utils.wrap(getattr(self._instance, name))
         else:
@@ -145,8 +145,8 @@ class _native_rjvm_instance(object):
         return self
 
     def _string(self):
-        assert isinstance(self._instance, str)
-        return ootype._string(ootype.String, self._instance)
+        assert isinstance(self._instance, rjvm._jvm_str)
+        return ootype._string(ootype.String, str(self._instance))
 
     def __hash__(self):
         # this way strings disguised as _native_rjvm_instances get proper hashes
