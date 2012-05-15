@@ -1986,10 +1986,6 @@ def isSubclass(C1, C2):
     return False
 
 def commonBaseclass(INSTANCE1, INSTANCE2):
-    from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
-    from pypy.rlib.rjvm import java
-    if isinstance(INSTANCE1, NativeInstance) and isinstance(INSTANCE2, NativeInstance):
-        return NativeRJvmInstance(java.lang.Object)
     c = INSTANCE1
     while c is not None:
         if isSubclass(INSTANCE2, c):

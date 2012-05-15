@@ -5,7 +5,7 @@ Binary operations between SomeValues.
 import py
 import operator
 from pypy.tool.pairtype import pair, pairtype
-from pypy.annotation.model import SomeObject, SomeInteger, SomeBool, s_Bool
+from pypy.annotation.model import SomeObject, SomeInteger, SomeBool, s_Bool, SomeOOBoundMeth
 from pypy.annotation.model import SomeString, SomeChar, SomeList, SomeDict
 from pypy.annotation.model import SomeUnicodeCodePoint
 from pypy.annotation.model import SomeTuple, SomeImpossibleValue, s_ImpossibleValue
@@ -918,6 +918,16 @@ class __extend__(pairtype(SomeOOInstance, SomeOOInstance)):
         common = ootype.commonBaseclass(r1.ootype, r2.ootype)
         assert common is not None, 'Mixing of incompatible instances %r, %r' %(r1.ootype, r2.ootype)
         return SomeOOInstance(common, can_be_None=r1.can_be_None or r2.can_be_None)
+
+class __extend__(pairtype(SomeOOBoundMeth, SomeOOBoundMeth)):
+    def union((r1, r2)):
+        assert r1.name == r2.name, 'Mixing of different methods %r, %r' %(r1.ootype, r2.ootype)
+        common = ootype.commonBaseclass(r1.ootype, r2.ootype)
+        try:
+            common._lookup(r1.name)
+        except TypeError:
+            raise TypeError('Common subclass %r has no method %s' % (common, r1.name))
+        return SomeOOBoundMeth(common, name=r1.name)
 
 class __extend__(pairtype(SomeOOClass, SomeOOClass)):
     def union((r1, r2)):

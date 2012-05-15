@@ -1,17 +1,16 @@
 import os
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
-from pypy.interpreter.gateway import ApplevelClass, unwrap_spec
+from pypy.interpreter.gateway import unwrap_spec
 from pypy.interpreter.typedef import TypeDef
 from pypy.rlib import rjvm, rstring
 from pypy.rlib.rjvm import java, new_array
 
 class W_JvmObject(Wrappable):
-
+    __slots__ = ('b_obj',)
     typedef = TypeDef('_JvmObject')
 
-    def __init__(self, space, b_obj):
-        self.space = space
+    def __init__(self, b_obj):
         self.b_obj = b_obj
 
 
@@ -23,7 +22,7 @@ def new(space, class_name, args_w):
     constructor = b_java_cls.getConstructor(types)
 
     b_obj = constructor.newInstance(args)
-    w_obj = space.wrap(W_JvmObject(space, b_obj))
+    w_obj = space.wrap(W_JvmObject(b_obj))
 
     return w_obj
 
@@ -70,7 +69,7 @@ def call_method(space, jvm_obj, method_name, args_w):
     b_res = b_meth.invoke(b_obj, args)
     if b_res:
         w_type_name = space.wrap(str(b_res.getClass().getName()))
-        w_res = space.wrap(W_JvmObject(space, b_res))
+        w_res = space.wrap(W_JvmObject(b_res))
         return space.newtuple([w_res, w_type_name])
     else:
         w_type_name = space.wrap('void')
@@ -99,7 +98,7 @@ def box(space, w_obj):
     if space.is_true(space.isinstance(w_obj, space.w_str)):
         s = space.str_w(w_obj)
         b_str = rjvm.native_string(s)
-        return space.wrap(W_JvmObject(space, b_str))
+        return space.wrap(W_JvmObject(b_str))
     else:
         w_template = space.wrap("Don't know how to box %r")
         w_msg = space.mod(w_template, w_obj)
