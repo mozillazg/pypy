@@ -547,13 +547,24 @@ class BaseTestRJVM(BaseRtypingTest):
     def test_exceptions_static_call(self):
         def fn():
             try:
-                b_cls = java.lang.Class.forName('foobar')
+                java.lang.Class.forName('foobar')
                 return False
             except rjvm.ReflectionException:
                return True
 
         res = self.interpret(fn, [])
         assert res
+
+    def test_floats(self):
+        def fn():
+            sb = java.lang.StringBuilder()
+            sb.append(3.0)
+            return java.lang.Math.PI, str(sb.toString())
+
+        res = self.interpret(fn, [])
+        pi, s = self.ll_unpack_tuple(res, 2)
+        assert 3 < pi < 4
+        assert self.ll_to_string(s) == '3.0'
 
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):

@@ -153,6 +153,7 @@ def jpype_type_to_ootype(tpe):
 jpype_primitives_to_ootype_mapping = {
     jpype.java.lang.Integer.TYPE: ootype.Signed,
     jpype.java.lang.Boolean.TYPE: ootype.Bool,
+    jpype.java.lang.Double.TYPE: ootype.Float,
     jpype.java.lang.Void.TYPE: ootype.Void,
 }
 
@@ -222,11 +223,12 @@ def wrap(value, hint=None):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), value)
     elif value is None:
         return ootypemodel._null_native_rjvm_instance(hint)
-    elif isinstance(value, (int, bool, float)):
-        if hint is ootype.Bool:
-            return bool(value)
-        else:
-            return value
+    elif hint is ootype.Bool and isinstance(value, (int, bool)):
+        return bool(value)
+    elif hint is ootype.Signed and isinstance(value, (int, float)):
+        return int(value)
+    elif isinstance(value, (int, float, bool)):
+        return value
     else:
         raise AssertionError("Don't know how to wrap %r" % value)
 

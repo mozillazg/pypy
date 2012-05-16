@@ -1,7 +1,7 @@
 import jvm
 
 unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean', 'java.lang.Double'}
-type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
+type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str, 'double': float}
 
 class JvmPackageWrapper(object):
     def __init__(self, name):

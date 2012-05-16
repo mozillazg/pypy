@@ -34,13 +34,16 @@ class NativeRJvmInstance(ootype.NativeInstance):
     def _example(self):
         return self.example
 
-    def _lookup(self, meth_name):
-        if isinstance(meth_name, ootype._overloaded_meth_desc):
+    def _lookup(self, name):
+        if isinstance(name, ootype._overloaded_meth_desc):
             # This is only called by the inliner. Returning None stops it from
             # inlining, which is what we want...
             return None, None
-        meth = utils.pypy_method_from_name(self.refclass, meth_name)
-        return self, meth
+        if name in self.field_names:
+            return self, None
+        else:
+            meth = utils.pypy_method_from_name(self.refclass, name)
+            return self, meth
 
     def _check_field(self, field_name):
         return field_name in self.field_names

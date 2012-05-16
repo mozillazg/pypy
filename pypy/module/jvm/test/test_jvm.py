@@ -321,6 +321,14 @@ class AppTestJvm(object):
         from jvm import java
         assert java.lang.Integer.SIZE == 32
 
+    def test_floats(self):
+        from jvm import java
+        pi = java.lang.Math.PI
+        assert 3 < pi < 4
+        p = java.awt.Point()
+        p.setLocation(7.0, 12.0)
+        assert p.x == 7
+
 if __name__ == '__main__':
     tests = AppTestJvm()
 
