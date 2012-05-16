@@ -145,7 +145,6 @@ def jpype_type_to_ootype(tpe):
         refclass = rjvm._refclass_for(tpe)
         component_type = refclass.getComponentType()
         res = ootype.Array(ootypemodel.NativeRJvmInstance(component_type))
-        res.annotate_as_list = True
         return res
     else:
         return ootypemodel.NativeRJvmInstance(tpe)

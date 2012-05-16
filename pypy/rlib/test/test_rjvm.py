@@ -282,7 +282,7 @@ class BaseTestRJVM(BaseRtypingTest):
         def fn():
             ms = java.lang.Class.forName('java.lang.Object').getMethods()
             i = 0
-            for m in ms:
+            for m in xrange(len(ms)):
                 i += 1
             return i, len(ms)
 
@@ -441,17 +441,6 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [self.string_to_ll('java.lang.Object')])
         assert isinstance(self.ll_to_string(res), str)
 
-    def test_dicts_of_method_names(self):
-        def fn(class_name):
-            cls = java.lang.Class.forName(class_name)
-            names = {}
-            for m in cls.getMethods():
-                names[m.getName()] = True
-            return len(names)
-
-        res = self.interpret(fn, [self.string_to_ll('java.lang.Object')])
-        assert res == 7
-
     def test_str_on_strings(self):
         def fn():
             o = java.lang.Object()
@@ -514,29 +503,6 @@ class BaseTestRJVM(BaseRtypingTest):
             b_obj = constructor.newInstance(args)
 
         self.interpret(fn, [])
-
-    def test_code_for_get_methods(self):
-        def get_methods(class_name):
-            b_java_cls = java.lang.Class.forName(class_name)
-            result = {}
-
-            for method in b_java_cls.getMethods():
-
-                if method.getName() not in result:
-                    result[method.getName()] = []
-
-                return_type_name = str(method.getReturnType().getName())
-                arg_types_names = [str(t.getName()) for t in method.getParameterTypes()]
-
-                result[method.getName()].append((return_type_name, arg_types_names))
-
-            i = 0
-            for k,v in result.iteritems():
-                i += 1
-            return i
-
-        res = self.interpret(get_methods, [self.string_to_ll('java.lang.Object')])
-        assert res == 7
 
     def test_null_is_none(self):
         def fn():

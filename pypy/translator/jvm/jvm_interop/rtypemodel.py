@@ -89,8 +89,8 @@ class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 class __extend__(OOInstanceRepr):
 
     def rtype_len(self, hop):
-        if not isinstance(r_inst.lowleveltype, ootype.Array):
+        if not isinstance(self.lowleveltype, ootype.Array):
             raise TypeError("len() on a non-array instance")
         vlist = hop.inputargs(self)
         hop.exception_cannot_occur()
-        return hop.gendirectcall(ll_len_foldable, vlist)
+        return hop.gendirectcall(ll_len_foldable, *vlist)
