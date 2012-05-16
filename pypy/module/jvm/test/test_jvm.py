@@ -2,11 +2,13 @@
 class AppTestJvm(object):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
+
         space = gettestobjspace(usemodules=('jvm',))
         cls.space = space
 
     def test_new(self):
         import jvm
+
         POINT = 'java.awt.Point'
         p1 = jvm.new(POINT)
         p2 = jvm.new(POINT, (p1, POINT))
@@ -15,6 +17,7 @@ class AppTestJvm(object):
 
     def test_new_bad_class_name(self):
         import jvm
+
         try:
             jvm.new('foo')
         except TypeError:
@@ -26,6 +29,7 @@ class AppTestJvm(object):
 
     def test_new_exception_in_constructor(self):
         import jvm
+
         try:
             jvm.new('java.lang.StringBuilder', (-1, int))
         except RuntimeError:
@@ -37,10 +41,11 @@ class AppTestJvm(object):
 
     def test_new_bad_arg_type(self):
         import jvm
+
         try:
             POINT = 'java.awt.Point'
             p1 = jvm.new(POINT)
-            p2 = jvm.new(POINT, (p1, 'foo'))
+            jvm.new(POINT, (p1, 'foo'))
         except TypeError:
             pass
         except:
@@ -50,6 +55,7 @@ class AppTestJvm(object):
 
     def test_bad_method_name(self):
         import jvm
+
         try:
             POINT = 'java.awt.Point'
             p1 = jvm.new(POINT)
@@ -63,6 +69,7 @@ class AppTestJvm(object):
 
     def test_bad_type_name(self):
         import jvm
+
         try:
             POINT = 'java.awt.Point'
             p1 = jvm.new(POINT)
@@ -77,6 +84,7 @@ class AppTestJvm(object):
 
     def test_exception_in_method(self):
         import jvm
+
         sb = jvm.new('java.lang.StringBuilder')
         try:
             jvm.call_method(sb, 'setLength', (-1, int))
@@ -89,6 +97,7 @@ class AppTestJvm(object):
 
     def test_get_methods(self):
         import jvm
+
         ms = jvm.get_methods('java.lang.Object')
         assert isinstance(ms, dict)
         assert set(ms.keys()) == {'equals',
@@ -110,6 +119,7 @@ class AppTestJvm(object):
 
     def test_call_method_equals(self):
         import jvm
+
         POINT = 'java.awt.Point'
         p1 = jvm.new(POINT)
         p2 = jvm.new(POINT, (p1, POINT))
@@ -120,12 +130,14 @@ class AppTestJvm(object):
 
     def test_call_method_toString(self):
         import jvm
+
         p1 = jvm.new('java.awt.Point')
         (res, tpe) = jvm.call_method(p1, 'toString')
         assert tpe == 'java.lang.String'
 
     def test_unboxing(self):
         import jvm
+
         p1 = jvm.new('java.awt.Point')
         s, _ = jvm.call_method(p1, 'toString')
         unboxed_str = jvm.unbox(s)
@@ -144,6 +156,7 @@ class AppTestJvm(object):
 
     def test_boxing(self):
         import jvm
+
         boxed_str = jvm.box('foobar')
         assert '_JvmObject' in repr(boxed_str)
 
@@ -156,10 +169,12 @@ class AppTestJvm(object):
 
     def test_int_argument(self):
         import jvm
-        al = jvm.new('java.util.ArrayList', (10, int))
+
+        jvm.new('java.util.ArrayList', (10, int))
 
     def test_void_method(self):
         import jvm
+
         al = jvm.new('java.util.ArrayList')
         (res, tpe) = jvm.call_method(al, 'clear')
         assert res is None
@@ -167,6 +182,7 @@ class AppTestJvm(object):
 
     def test_bool_argument(self):
         import jvm
+
         t = jvm.new('java.lang.Thread')
         jvm.call_method(t, 'setDaemon', (True, bool))
         (res, tpe) = jvm.call_method(t, 'isDaemon')
@@ -175,21 +191,59 @@ class AppTestJvm(object):
 
     def test_str_argument(self):
         import jvm
+
         sb = jvm.new('java.lang.StringBuilder', ('foobar', str))
         res, _ = jvm.call_method(sb, 'toString')
         assert jvm.unbox(res) == 'foobar'
 
     def test_superclass(self):
         import jvm
+
         assert jvm.superclass('java.lang.String') == 'java.lang.Object'
-        assert jvm.superclass('java.lang.StringBuilder') == 'java.lang.AbstractStringBuilder'
+        assert jvm.superclass(
+            'java.lang.StringBuilder') == 'java.lang.AbstractStringBuilder'
         assert jvm.superclass('java.lang.Object') is None
+
+    def test_get_field(self):
+        import jvm
+
+        p1 = jvm.new('java.awt.Point')
+        res, tpe = jvm.get_field(p1, 'x')
+        assert res is not None
+        assert tpe == 'java.lang.Integer'
+
+    def test_get_bad_field(self):
+        import jvm
+
+        p1 = jvm.new('java.awt.Point')
+        try:
+            jvm.get_field(p1, 'foobar')
+        except TypeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_get_fields(self):
+        import jvm
+        fs = jvm.get_fields('java.awt.Point')
+        assert set(fs) == {'x', 'y'}
+
+    def test_api_fields(self):
+        from jvm import java
+        p = java.awt.Point()
+        assert 'x' in dir(p)
+        assert p.x == 0
+        p.setLocation(17, 42)
+        assert p.x == 17
 
     def test_overloading_exact_match(self):
         from jvm import java
+
         sb = java.lang.StringBuilder()
         assert 'append' in dir(sb)
-        assert 'StringBuilder'in str(type(sb))
+        assert 'StringBuilder' in str(type(sb))
         sb.append(42)
         sb.append(True)
         sb.append('Foobar')
@@ -203,9 +257,11 @@ class AppTestJvm(object):
 
     def test_overloading_nonexact_match(self):
         from jvm import java
+
         al = java.util.ArrayList()
         al.add('foobar')
         assert al.size() == 1
+
 
 if __name__ == '__main__':
     tests = AppTestJvm()

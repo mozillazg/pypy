@@ -12,23 +12,7 @@ class W_JvmObject(Wrappable):
     def __init__(self, b_obj):
         self.b_obj = b_obj
 
-
-def class_for_name(space, class_name):
-    try:
-        return java.lang.Class.forName(class_name)
-    except rjvm.ReflectionException:
-        raise OperationError(space.w_TypeError,
-                             space.wrap("Class %s not found!" % class_name))
-
-
-def raise_runtime_error(space, msg):
-    raise OperationError(space.w_RuntimeError,
-                         space.wrap(msg))
-
-
-def raise_type_error(space, msg):
-    raise OperationError(space.w_TypeError, space.wrap(msg))
-
+# ============== Module API ==============
 
 @unwrap_spec(class_name=str)
 def new(space, class_name, args_w):
@@ -40,6 +24,7 @@ def new(space, class_name, args_w):
         b_obj = constructor.newInstance(args)
     except rjvm.ReflectionException:
         raise_runtime_error(space, "Error running constructor")
+
     w_obj = space.wrap(W_JvmObject(b_obj))
 
     return w_obj
@@ -52,12 +37,12 @@ def get_methods(space, class_name):
 
     for method in b_java_cls.getMethods():
         if is_static(method): continue
-        if not is_public(method.getReturnType()): continue
+        if not is_public(method.getReturnType().getModifiers()): continue
 
         if method.getName() not in by_name_sig:
             by_name_sig[method.getName()] = {}
 
-        sig = ','.join([str(type_name(t)) for t in method.getParameterTypes()])
+        sig = ','.join([str(get_type_name(t)) for t in method.getParameterTypes()])
 
         if sig not in by_name_sig[method.getName()]:
             by_name_sig[method.getName()][sig] = method
@@ -72,13 +57,23 @@ def get_methods(space, class_name):
             result[name] = []
 
         for method in sig_to_meth.itervalues():
-            b_return_type_name = type_name(method.getReturnType())
-            arg_types_names_b = [type_name(t) for t in
+            b_return_type_name = get_type_name(method.getReturnType())
+            arg_types_names_b = [get_type_name(t) for t in
                                  method.getParameterTypes()]
             result[name].append((b_return_type_name, arg_types_names_b))
 
     return wrap_get_methods_result(space, result)
 
+
+@unwrap_spec(class_name=str)
+def get_fields(space, class_name):
+    b_java_cls = class_for_name(space, class_name)
+    res = []
+    for f in b_java_cls.getFields():
+        if not is_public(f.getModifiers()): continue
+        res.append(space.wrap(str(f.getName())))
+
+    return space.newlist(res)
 
 @unwrap_spec(method_name=str, jvm_obj=W_JvmObject)
 def call_method(space, jvm_obj, method_name, args_w):
@@ -98,13 +93,7 @@ def call_method(space, jvm_obj, method_name, args_w):
     except rjvm.ReflectionException:
         raise_runtime_error(space, "Error invoking method")
 
-    if b_res:
-        w_type_name = space.wrap(str(b_res.getClass().getName()))
-        w_res = space.wrap(W_JvmObject(b_res))
-        return space.newtuple([w_res, w_type_name])
-    else:
-        w_type_name = space.wrap('void')
-        return space.newtuple([space.w_None, w_type_name])
+    return wrap_result(space, b_res)
 
 
 @unwrap_spec(jvm_obj=W_JvmObject)
@@ -149,6 +138,25 @@ def superclass(space, class_name):
         return space.w_None
 
 
+@unwrap_spec(jvm_obj=W_JvmObject, field_name=str)
+def get_field(space, jvm_obj, field_name):
+    b_obj = space.interp_w(W_JvmObject, jvm_obj).b_obj
+    b_class = b_obj.getClass()
+
+    try:
+        b_field = b_class.getField(field_name)
+    except rjvm.ReflectionException:
+        raise_type_error(space, "No field called %s in class %s" % (field_name, str(b_class.getName())))
+
+    try:
+        b_res = b_field.get(b_obj)
+    except rjvm.ReflectionException:
+        raise_runtime_error(space, "Error getting field")
+
+    return wrap_result(space, b_res)
+
+# ============== Helper functions ==============
+
 def wrap_get_methods_result(space, result):
     """
     Result of get_methods is a dict from method names to lists of signatures.
@@ -182,8 +190,8 @@ def is_static(method):
     return java.lang.reflect.Modifier.isStatic(method.getModifiers())
 
 
-def is_public(cls):
-    return java.lang.reflect.Modifier.isPublic(cls.getModifiers())
+def is_public(m):
+    return java.lang.reflect.Modifier.isPublic(m)
 
 
 def get_args_types(space, args_w):
@@ -236,7 +244,7 @@ def unwrap_arg(space, w_arg, type_name):
         return space.interp_w(W_JvmObject, w_arg).b_obj
 
 
-def type_name(t):
+def get_type_name(t):
     if t.isArray():
         sb = rstring.StringBuilder()
         sb.append(str(t.getComponentType().getName()))
@@ -244,3 +252,28 @@ def type_name(t):
         return sb.build()
     else:
         return str(t.getName())
+
+def class_for_name(space, class_name):
+    try:
+        return java.lang.Class.forName(class_name)
+    except rjvm.ReflectionException:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("Class %s not found!" % class_name))
+
+
+def raise_runtime_error(space, msg):
+    raise OperationError(space.w_RuntimeError,
+                         space.wrap(msg))
+
+
+def raise_type_error(space, msg):
+    raise OperationError(space.w_TypeError, space.wrap(msg))
+
+def wrap_result(space, b_res):
+    if b_res:
+        w_type_name = space.wrap(str(b_res.getClass().getName()))
+        w_res = space.wrap(W_JvmObject(b_res))
+        return space.newtuple([w_res, w_type_name])
+    else:
+        w_type_name = space.wrap('void')
+        return space.newtuple([space.w_None, w_type_name])

@@ -156,7 +156,8 @@ class CallableWrapper(Wrapper):
         except jpype.JavaException, e:
             if e.javaClass().__name__ in {'java.lang.ClassNotFoundException',
                                           'java.lang.reflect.InvocationTargetException',
-                                          'java.lang.NoSuchMethodException',}:
+                                          'java.lang.NoSuchMethodException',
+                                          'java.lang.NoSuchFieldException',}:
                 raise ReflectionException
             else:
                 raise
