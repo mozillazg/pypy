@@ -23,7 +23,7 @@ def new(space, class_name, args_w):
     try:
         b_obj = constructor.newInstance(args)
     except rjvm.ReflectionException:
-        raise_runtime_error(space, "Error running constructor")
+        raise raise_runtime_error(space, "Error running constructor")
 
     w_obj = space.wrap(W_JvmObject(b_obj))
 
@@ -58,9 +58,9 @@ def get_methods(space, class_name):
 
         for method in sig_to_meth.itervalues():
             b_return_type_name = get_type_name(method.getReturnType())
-            arg_types_names_b = [get_type_name(t) for t in
+            arg_types_names = [get_type_name(t) for t in
                                  method.getParameterTypes()]
-            result[name].append((b_return_type_name, arg_types_names_b))
+            result[name].append((b_return_type_name, arg_types_names))
 
     return wrap_get_methods_result(space, result)
 
@@ -73,7 +73,18 @@ def get_fields(space, class_name):
         if not is_public(f.getModifiers()): continue
         res.append(space.wrap(str(f.getName())))
 
-    return space.newlist(res)
+    return space.newtuple(res)
+
+@unwrap_spec(class_name=str)
+def get_constructors(space, class_name):
+    res = []
+    b_java_class = class_for_name(space, class_name)
+
+    for c in b_java_class.getConstructors():
+        arg_types_names = [space.wrap(get_type_name(t)) for t in c.getParameterTypes()]
+        res.append(space.newtuple(arg_types_names))
+
+    return space.newtuple(res)
 
 @unwrap_spec(method_name=str, jvm_obj=W_JvmObject)
 def call_method(space, jvm_obj, method_name, args_w):
@@ -85,13 +96,13 @@ def call_method(space, jvm_obj, method_name, args_w):
     try:
         b_meth = b_java_class.getMethod(method_name, types)
     except rjvm.ReflectionException:
-        raise_type_error(space,
+        raise raise_type_error(space,
                          "No method called %s found in class %s" % (method_name, str(b_java_class.getName())))
 
     try:
         b_res = b_meth.invoke(b_obj, args)
     except rjvm.ReflectionException:
-        raise_runtime_error(space, "Error invoking method")
+        raise raise_runtime_error(space, "Error invoking method")
 
     return wrap_result(space, b_res)
 
@@ -146,14 +157,38 @@ def get_field(space, jvm_obj, field_name):
     try:
         b_field = b_class.getField(field_name)
     except rjvm.ReflectionException:
-        raise_type_error(space, "No field called %s in class %s" % (field_name, str(b_class.getName())))
+        raise raise_type_error(space, "No field called %s in class %s" % (field_name, str(b_class.getName())))
 
     try:
         b_res = b_field.get(b_obj)
     except rjvm.ReflectionException:
-        raise_runtime_error(space, "Error getting field")
+        raise raise_runtime_error(space, "Error getting field")
 
     return wrap_result(space, b_res)
+
+@unwrap_spec(jvm_obj=W_JvmObject, field_name=str)
+def set_field(space, jvm_obj, field_name, w_val):
+    b_obj = space.interp_w(W_JvmObject, jvm_obj).b_obj
+    b_class = b_obj.getClass()
+
+    try:
+        b_field = b_class.getField(field_name)
+    except rjvm.ReflectionException:
+        raise raise_type_error(space, "No field called %s in class %s" % (field_name, str(b_class.getName())))
+
+    if space.is_true(space.isinstance(w_val, space.w_str)):
+        b_val = unwrap_arg(space, w_val, 'str')
+    elif space.is_true(space.isinstance(w_val, space.w_int)):
+        b_val = unwrap_arg(space, w_val, 'int')
+    else:
+        b_val = unwrap_arg(space, w_val, "some java type hopefully")
+
+    try:
+        b_field.set(b_obj, b_val)
+    except rjvm.ReflectionException:
+        raise raise_runtime_error(space, "Error setting field")
+
+    return space.w_None
 
 # ============== Helper functions ==============
 
@@ -163,8 +198,7 @@ def wrap_get_methods_result(space, result):
     Each signature is a tuple of the form (return type, arg_types) where
     arg_types is a list of type names.
 
-    We want to wrap the whole structure. All strings are 'native' and have
-    to be cast to str.
+    We want to wrap the whole structure.
     """
     w_result = space.newdict()
 
@@ -262,12 +296,12 @@ def class_for_name(space, class_name):
 
 
 def raise_runtime_error(space, msg):
-    raise OperationError(space.w_RuntimeError,
+    return OperationError(space.w_RuntimeError,
                          space.wrap(msg))
 
 
 def raise_type_error(space, msg):
-    raise OperationError(space.w_TypeError, space.wrap(msg))
+    return OperationError(space.w_TypeError, space.wrap(msg))
 
 def wrap_result(space, b_res):
     if b_res:

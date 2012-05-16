@@ -3,6 +3,19 @@ import jvm
 unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}
 type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
 
+class JvmPackageWrapper(object):
+    def __init__(self, name):
+        self.__name = name
+
+    def __getattr__(self, attr):
+        new_name = '{0}.{1}'.format(self.__name, attr)
+        if attr[0].isupper():
+            return get_class(new_name)
+        else:
+            if new_name not in packages:
+                packages[new_name] = JvmPackageWrapper(new_name)
+            return packages[new_name]
+
 
 class JvmMethodWrapper(object):
     __slots__ = ('meth_name', 'overloads')
@@ -16,6 +29,7 @@ class JvmMethodWrapper(object):
             raise TypeError("No unbound methods for now...")
         else:
             return JvmBoundMethod(self.meth_name, self.overloads, obj)
+
 
 class JvmFieldWrapper(object):
     __slots__ = ('field_name', 'is_static')
@@ -31,6 +45,14 @@ class JvmFieldWrapper(object):
             res, tpe = jvm.get_field(obj._inst, self.field_name)
             return handle_result(res, tpe)
 
+    def __set__(self, obj, value):
+        if obj is None and not self.is_static:
+            raise TypeError("No static fields for now...")
+        else:
+            if isinstance(value, _JavaObjectWrapper):
+                value = value._inst
+            jvm.set_field(obj._inst, self.field_name, value)
+
 class JvmBoundMethod(object):
     __slots__ = ('im_name', 'im_self', 'overloads')
 
@@ -40,7 +62,7 @@ class JvmBoundMethod(object):
         self.overloads = overloads
 
     def __call__(self, *args):
-        args_with_types = self.__find_overload(args)
+        args_with_types = find_overload(self.overloads, args)
         (res, tpe) = jvm.call_method(self.im_self._inst, self.im_name, *args_with_types)
         return handle_result(res, tpe)
 
@@ -49,60 +71,7 @@ class JvmBoundMethod(object):
                                                    self.im_name,
                                                    self.im_self)
 
-    def __find_overload(self, args):
-        matches = set()
-
-        for ret_tpe, version in self.overloads:
-            if self.__exact_match(version, args):
-                return self.__add_types(version, args)
-            elif self.__matches(version, args):
-                matches.add(version)
-
-        assert len(matches) > 0, "No overloads found!"
-        assert len(matches) == 1, "Bad overloading, please use explicit casts."
-        match, = matches
-        return self.__add_types(match, args)
-
-    def __exact_match(self, types, args):
-        if len(types) != len(args):
-            return False
-
-        if not types:
-            return True
-
-        for tpe_name, arg in zip(types, args):
-            if isinstance(arg, _JavaObjectWrapper) and arg._class_name != tpe_name:
-                return False
-            else:
-                return type(arg) is type_mapping.get(tpe_name)
-
-    def __matches(self, types, args):
-        if len(types) != len(args):
-            return False
-
-        for tpe_name, arg in zip(types, args):
-            if isinstance(arg, _JavaObjectWrapper):
-                cls_name = arg._class_name
-                return is_subclass(tpe_name, cls_name)
-            elif isinstance(arg, str):
-                cls_name = 'java.lang.String'
-                return is_subclass(tpe_name, cls_name)
-            else:
-                return type(arg) is type_mapping.get(tpe_name)
-
-    def __add_types(self, version, args):
-        res = []
-        for arg, name in zip(args, version):
-            tpe = type_mapping.get(name, name)
-
-            if isinstance(arg, _JavaObjectWrapper):
-                arg = arg._inst
-            elif isinstance(arg, str) and name != 'java.lang.String':
-                arg = jvm.box(arg)
-
-            res.append((arg, tpe))
-
-        return res
+java = JvmPackageWrapper('java')
 
 
 def is_subclass(c1, c2):
@@ -116,7 +85,9 @@ def is_subclass(c1, c2):
     return c1 == c2
 
 class _JavaObjectWrapper(object):
-    pass
+    def __init__(self, inst, class_name):
+        self._inst = inst
+        self._class_name = class_name
 
 def make_app_class(class_name):
     methods = jvm.get_methods(class_name)
@@ -130,11 +101,12 @@ def make_app_class(class_name):
         dct[field_name] = JvmFieldWrapper(field_name, is_static=False)
 
     def make_init(class_name):
-        def init(self, inst=None):
-            if inst is None:
-                inst = jvm.new(class_name)
-            self._inst = inst
-            self._class_name = class_name
+        def init(self, *args, **kwargs):
+            if '_inst' in kwargs:
+                _inst = kwargs['_inst']
+            else:
+                _inst = construct(class_name, args)
+            _JavaObjectWrapper.__init__(self, _inst, class_name)
 
         return init
 
@@ -160,20 +132,67 @@ def handle_result(res, tpe):
         return None
     else:
         cls = get_class(tpe)
-        return cls(res)
+        return cls(_inst=res)
 
-class JvmPackageWrapper(object):
-    def __init__(self, name):
-        self.__name = name
+def add_types(version, args):
+    res = []
+    for arg, name in zip(args, version):
+        tpe = type_mapping.get(name, name)
 
-    def __getattr__(self, attr):
-        new_name = '{0}.{1}'.format(self.__name, attr)
-        if attr[0].isupper():
-            return get_class(new_name)
+        if isinstance(arg, _JavaObjectWrapper):
+            arg = arg._inst
+        elif isinstance(arg, str) and name != 'java.lang.String':
+            arg = jvm.box(arg)
+
+        res.append((arg, tpe))
+
+    return res
+
+
+def find_overload(overloads, args):
+    cadidates = set()
+    for ret_tpe, version in overloads:
+        if exact_match(version, args):
+            return add_types(version, args)
+        elif matches(version, args):
+            cadidates.add(version)
+    assert len(cadidates) > 0, "No overloads found!"
+    assert len(cadidates) == 1, "Bad overloading, please use explicit casts."
+    match, = cadidates
+    return add_types(match, args)
+
+
+def exact_match(types, args):
+    if len(types) != len(args):
+        return False
+
+    if not types:
+        return True
+
+    for tpe_name, arg in zip(types, args):
+        if isinstance(arg, _JavaObjectWrapper) and arg._class_name != tpe_name:
+            return False
         else:
-            if new_name not in packages:
-                packages[new_name] = JvmPackageWrapper(new_name)
-            return packages[new_name]
+            return type(arg) is type_mapping.get(tpe_name)
 
 
-java = JvmPackageWrapper('java')
+def matches(types, args):
+    if len(types) != len(args):
+        return False
+
+    for tpe_name, arg in zip(types, args):
+        if isinstance(arg, _JavaObjectWrapper):
+            cls_name = arg._class_name
+            return is_subclass(tpe_name, cls_name)
+        elif isinstance(arg, str):
+            cls_name = 'java.lang.String'
+            return is_subclass(tpe_name, cls_name)
+        else:
+            return type(arg) is type_mapping.get(tpe_name)
+
+
+def construct(class_name, args):
+    signatures = jvm.get_constructors(class_name)
+    overloads = [(class_name, sig) for sig in signatures]
+    args_with_types = find_overload(overloads, args)
+    return jvm.new(class_name, *args_with_types)

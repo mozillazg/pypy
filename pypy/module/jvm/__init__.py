@@ -16,8 +16,10 @@ class Module(MixedModule):
         'new': 'interp_level.new',
         'get_methods': 'interp_level.get_methods',
         'get_fields': 'interp_level.get_fields',
+        'get_constructors': 'interp_level.get_constructors',
         'call_method': 'interp_level.call_method',
         'get_field': 'interp_level.get_field',
+        'set_field': 'interp_level.set_field',
         'box': 'interp_level.box',
         'unbox': 'interp_level.unbox',
         'superclass': 'interp_level.superclass'

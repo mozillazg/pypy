@@ -230,13 +230,44 @@ class AppTestJvm(object):
         fs = jvm.get_fields('java.awt.Point')
         assert set(fs) == {'x', 'y'}
 
-    def test_api_fields(self):
+    def test_api_get_fields(self):
         from jvm import java
         p = java.awt.Point()
         assert 'x' in dir(p)
         assert p.x == 0
         p.setLocation(17, 42)
         assert p.x == 17
+
+    def test_get_constructors(self):
+        import jvm
+        cs = jvm.get_constructors('java.lang.Object')
+        assert cs == ((),)
+
+        cs = jvm.get_constructors('java.awt.Point')
+        assert set(cs) == {(), ('int', 'int'), ('java.awt.Point',)}
+
+    def test_api_constructors(self):
+        from jvm import java
+        p1 = java.awt.Point()
+        assert p1.x == 0
+        p1.setLocation(17,42)
+        assert p1.x == 17
+        p2 = java.awt.Point(8,8)
+        assert p2.x == 8
+        p3 = java.awt.Point(p1)
+        assert p3.x == 17
+
+    def test_setting_fields(self):
+        import jvm
+        from jvm import java
+
+        p = java.awt.Point()
+        assert p.x == 0
+        jvm.set_field(p._inst, 'x', 17)
+        assert p.x == 17
+        p.x = 42
+        assert p.x == 42
+
 
     def test_overloading_exact_match(self):
         from jvm import java
