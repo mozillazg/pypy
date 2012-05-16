@@ -1,5 +1,9 @@
 import jvm
 
+unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}
+type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
+
+
 class JvmMethodWrapper(object):
     __slots__ = ('meth_name', 'overloads')
 
@@ -7,17 +11,25 @@ class JvmMethodWrapper(object):
         self.meth_name = meth_name
         self.overloads = overloads
 
-    def __get__(self, obj, type_):
+    def __get__(self, obj, _):
         if obj is None:
-            raise TypeError('No unbound methods for now...')
+            raise TypeError("No unbound methods for now...")
         else:
             return JvmBoundMethod(self.meth_name, self.overloads, obj)
 
-    def __repr__(self):
-        return '%s(%s)' % (self.__class__.__name__, repr(self.meth_name))
+class JvmFieldWrapper(object):
+    __slots__ = ('field_name', 'is_static')
 
-unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}
-type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
+    def __init__(self, field_name, is_static):
+        self.field_name = field_name
+        self.is_static = is_static
+
+    def __get__(self, obj, _):
+        if obj is None and not self.is_static:
+            raise TypeError("No static fields for now...")
+        else:
+            res, tpe = jvm.get_field(obj._inst, self.field_name)
+            return handle_result(res, tpe)
 
 class JvmBoundMethod(object):
     __slots__ = ('im_name', 'im_self', 'overloads')
@@ -29,18 +41,8 @@ class JvmBoundMethod(object):
 
     def __call__(self, *args):
         args_with_types = self.__find_overload(args)
-        #return 'calling with args %s' % args_with_types
-
         (res, tpe) = jvm.call_method(self.im_self._inst, self.im_name, *args_with_types)
-
-        if tpe in unboxable_types:
-            return jvm.unbox(res)
-        elif tpe == 'void':
-            assert res is None
-            return None
-        else:
-            cls = get_class(tpe)
-            return cls(res)
+        return handle_result(res, tpe)
 
     def __repr__(self):
         return '<bound JVM method %s.%s of %s>' % (self.im_self._class_name,
@@ -118,10 +120,14 @@ class _JavaObjectWrapper(object):
 
 def make_app_class(class_name):
     methods = jvm.get_methods(class_name)
+    fields = jvm.get_fields(class_name)
 
     dct = {}
     for method_name, versions in methods.iteritems():
         dct[method_name] = JvmMethodWrapper(method_name, versions)
+
+    for field_name in fields:
+        dct[field_name] = JvmFieldWrapper(field_name, is_static=False)
 
     def make_init(class_name):
         def init(self, inst=None):
@@ -145,6 +151,16 @@ def get_class(class_name):
     if class_name not in classes:
         classes[class_name] = make_app_class(class_name)
     return classes[class_name]
+
+def handle_result(res, tpe):
+    if tpe in unboxable_types:
+        return jvm.unbox(res)
+    elif tpe == 'void':
+        assert res is None
+        return None
+    else:
+        cls = get_class(tpe)
+        return cls(res)
 
 class JvmPackageWrapper(object):
     def __init__(self, name):
