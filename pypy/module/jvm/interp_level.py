@@ -137,9 +137,9 @@ def unbox(space, jvm_obj):
     elif b_cls == java.lang.Boolean.class_:
         b_bool = rjvm.downcast(java.lang.Boolean, b_obj)
         return space.wrap(bool(b_bool.booleanValue()))
-#    elif b_cls == java.lang.Double.class_:
-#        b_float = rjvm.downcast(java.lang.Double, b_obj)
-#        return space.wrap(b_float.doubleValue())
+    elif b_cls == java.lang.Double.class_:
+        b_float = rjvm.downcast(java.lang.Double, b_obj)
+        return space.wrap(b_float.doubleValue())
     else:
         raise OperationError(space.w_TypeError,
                              space.wrap(
@@ -311,8 +311,8 @@ def unwrap_type(space, w_type):
         return 'int'
     elif space.is_w(w_type, space.w_bool):
         return 'bool'
-#    elif space.is_w(w_type, space.w_float):
-#        return 'float'
+    elif space.is_w(w_type, space.w_float):
+        return 'float'
     else:
         w_template = space.wrap("Don't know how to handle type %r")
         w_msg = space.mod(w_template, w_type)
@@ -326,8 +326,8 @@ def type_for_name(space, type_name):
         return java.lang.Integer.TYPE
     elif type_name == 'bool':
         return java.lang.Boolean.TYPE
-#    elif type_name == 'float':
-#        return java.lang.Double.TYPE
+    elif type_name == 'float':
+        return java.lang.Double.TYPE
     else:
         return class_for_name(space, type_name)
 
@@ -337,8 +337,8 @@ def unwrap_arg(space, w_arg, type_name):
         return java.lang.Integer(space.int_w(w_arg))
     elif type_name == 'bool':
         return java.lang.Boolean(space.bool_w(w_arg))
-#    elif type_name == 'float':
-#        return java.lang.Double(space.float_w(w_arg))
+    elif type_name == 'float':
+        return java.lang.Double(space.float_w(w_arg))
     elif type_name == 'str':
         return rjvm.native_string(space.str_w(w_arg))
     else:
