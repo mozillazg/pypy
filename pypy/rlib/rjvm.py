@@ -51,8 +51,8 @@ class _jvm_array(object):
     def __getitem__(self, item):
         return self.__lst[item]
 
-    def __iter__(self):
-        return iter(self.__lst)
+#    def __iter__(self):
+#        return iter(self.__lst)
 
     def __len__(self):
         return len(self.__lst)

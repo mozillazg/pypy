@@ -47,7 +47,9 @@ def get_static_methods(space, class_name):
 def _get_fields(space, class_name, static):
     b_java_cls = class_for_name(space, class_name)
     res = []
-    for f in b_java_cls.getFields():
+    fields = b_java_cls.getFields()
+    for i in xrange(len(fields)):
+        f = fields[i]
         if not is_public(f.getModifiers()): continue
         if static:
             if not is_static(f.getModifiers()): continue
@@ -70,8 +72,13 @@ def get_constructors(space, class_name):
     res = []
     b_java_class = class_for_name(space, class_name)
 
-    for c in b_java_class.getConstructors():
-        arg_types_names = [space.wrap(get_type_name(t)) for t in c.getParameterTypes()]
+    constructors = b_java_class.getConstructors()
+    for i in xrange(len(constructors)):
+        c = constructors[i]
+        arg_types_names = []
+        types = c.getParameterTypes()
+        for j in xrange(len(types)):
+            arg_types_names.append(space.wrap(get_type_name(types[j])))
         res.append(space.newtuple(arg_types_names))
 
     return space.newtuple(res)
@@ -206,7 +213,9 @@ def set_static_field_value(space, class_name, field_name, w_val):
 
 def _get_methods(b_java_cls, static):
     by_name_sig = {}
-    for method in b_java_cls.getMethods():
+    methods = b_java_cls.getMethods()
+    for i in xrange(len(methods)):
+        method = methods[i]
         if static:
             if not is_static(method.getModifiers()): continue
         else:
@@ -217,8 +226,12 @@ def _get_methods(b_java_cls, static):
         if method.getName() not in by_name_sig:
             by_name_sig[method.getName()] = {}
 
-        sig = ','.join(
-            [str(get_type_name(t)) for t in method.getParameterTypes()])
+        type_names = []
+        types = method.getParameterTypes()
+        for j in xrange(len(types)):
+            type_names.append(str(get_type_name(types[j])))
+
+        sig = ','.join(type_names)
 
         if sig not in by_name_sig[method.getName()]:
             by_name_sig[method.getName()][sig] = method
@@ -233,8 +246,10 @@ def _get_methods(b_java_cls, static):
 
         for method in sig_to_meth.itervalues():
             b_return_type_name = get_type_name(method.getReturnType())
-            arg_types_names = [get_type_name(t) for t in
-                               method.getParameterTypes()]
+            arg_types_names = []
+            types = method.getParameterTypes()
+            for i in xrange(len(types)):
+                arg_types_names.append(get_type_name(types[i]))
             result[name].append((b_return_type_name, arg_types_names))
     return result
 
