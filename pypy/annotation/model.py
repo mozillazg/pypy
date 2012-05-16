@@ -276,10 +276,6 @@ class SomeList(SomeObject):
     def __eq__(self, other):
         if self.__class__ is not other.__class__:
             return False
-        if (isinstance(self.listdef.listitem.s_value, SomeOOInstance) and
-            isinstance(other.listdef.listitem.s_value, SomeOOInstance) and
-            self.listdef.listitem.s_value == other.listdef.listitem.s_value):
-            return True
         if not self.listdef.same_as(other.listdef):
             return False
         selfdic = self.__dict__.copy()
