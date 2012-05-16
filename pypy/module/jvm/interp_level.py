@@ -1,4 +1,3 @@
-import os
 from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.gateway import unwrap_spec
@@ -14,21 +13,41 @@ class W_JvmObject(Wrappable):
         self.b_obj = b_obj
 
 
+def class_for_name(space, class_name):
+    try:
+        return java.lang.Class.forName(class_name)
+    except rjvm.ReflectionException:
+        raise OperationError(space.w_TypeError,
+                             space.wrap("Class %s not found!" % class_name))
+
+
+def raise_runtime_error(space, msg):
+    raise OperationError(space.w_RuntimeError,
+                         space.wrap(msg))
+
+
+def raise_type_error(space, msg):
+    raise OperationError(space.w_TypeError, space.wrap(msg))
+
+
 @unwrap_spec(class_name=str)
 def new(space, class_name, args_w):
-    b_java_cls = java.lang.Class.forName(class_name)
+    b_java_cls = class_for_name(space, class_name)
     args, types = get_args_types(space, args_w)
 
     constructor = b_java_cls.getConstructor(types)
-
-    b_obj = constructor.newInstance(args)
+    try:
+        b_obj = constructor.newInstance(args)
+    except rjvm.ReflectionException:
+        raise_runtime_error(space, "Error running constructor")
     w_obj = space.wrap(W_JvmObject(b_obj))
 
     return w_obj
 
+
 @unwrap_spec(class_name=str)
 def get_methods(space, class_name):
-    b_java_cls = java.lang.Class.forName(class_name)
+    b_java_cls = class_for_name(space, class_name)
     by_name_sig = {}
 
     for method in b_java_cls.getMethods():
@@ -54,10 +73,12 @@ def get_methods(space, class_name):
 
         for method in sig_to_meth.itervalues():
             b_return_type_name = type_name(method.getReturnType())
-            arg_types_names_b = [type_name(t) for t in method.getParameterTypes()]
+            arg_types_names_b = [type_name(t) for t in
+                                 method.getParameterTypes()]
             result[name].append((b_return_type_name, arg_types_names_b))
 
     return wrap_get_methods_result(space, result)
+
 
 @unwrap_spec(method_name=str, jvm_obj=W_JvmObject)
 def call_method(space, jvm_obj, method_name, args_w):
@@ -65,8 +86,18 @@ def call_method(space, jvm_obj, method_name, args_w):
     args, types = get_args_types(space, args_w)
 
     b_java_class = b_obj.getClass()
-    b_meth = b_java_class.getMethod(method_name, types)
-    b_res = b_meth.invoke(b_obj, args)
+
+    try:
+        b_meth = b_java_class.getMethod(method_name, types)
+    except rjvm.ReflectionException:
+        raise_type_error(space,
+                         "No method called %s found in class %s" % (method_name, str(b_java_class.getName())))
+
+    try:
+        b_res = b_meth.invoke(b_obj, args)
+    except rjvm.ReflectionException:
+        raise_runtime_error(space, "Error invoking method")
+
     if b_res:
         w_type_name = space.wrap(str(b_res.getClass().getName()))
         w_res = space.wrap(W_JvmObject(b_res))
@@ -74,6 +105,7 @@ def call_method(space, jvm_obj, method_name, args_w):
     else:
         w_type_name = space.wrap('void')
         return space.newtuple([space.w_None, w_type_name])
+
 
 @unwrap_spec(jvm_obj=W_JvmObject)
 def unbox(space, jvm_obj):
@@ -91,8 +123,10 @@ def unbox(space, jvm_obj):
         return space.wrap(bool(b_bool.booleanValue()))
     else:
         raise OperationError(space.w_TypeError,
-                             space.wrap("Don't know how to unbox objects of type %s" %
-                                        str(b_cls.getName())))
+                             space.wrap(
+                                 "Don't know how to unbox objects of type %s" %
+                                 str(b_cls.getName())))
+
 
 def box(space, w_obj):
     if space.is_true(space.isinstance(w_obj, space.w_str)):
@@ -104,14 +138,16 @@ def box(space, w_obj):
         w_msg = space.mod(w_template, w_obj)
         raise OperationError(space.w_TypeError, w_msg)
 
+
 @unwrap_spec(class_name=str)
 def superclass(space, class_name):
-    b_cls = java.lang.Class.forName(class_name)
+    b_cls = class_for_name(space, class_name)
     b_superclass = b_cls.getSuperclass()
     if b_superclass:
         return space.wrap(str(b_superclass.getName()))
     else:
         return space.w_None
+
 
 def wrap_get_methods_result(space, result):
     """
@@ -141,11 +177,14 @@ def wrap_get_methods_result(space, result):
 
     return w_result
 
+
 def is_static(method):
     return java.lang.reflect.Modifier.isStatic(method.getModifiers())
 
+
 def is_public(cls):
     return java.lang.reflect.Modifier.isPublic(cls.getModifiers())
+
 
 def get_args_types(space, args_w):
     args_len = len(args_w)
@@ -155,9 +194,10 @@ def get_args_types(space, args_w):
         w_arg, w_type = space.unpackiterable(w_arg_type, 2)
         type_name = unwrap_type(space, w_type)
         b_arg = unwrap_arg(space, w_arg, type_name)
-        types[i] = type_for_name(type_name)
+        types[i] = type_for_name(space, type_name)
         args[i] = b_arg
     return args, types
+
 
 def unwrap_type(space, w_type):
     if space.is_true(space.isinstance(w_type, space.w_str)):
@@ -173,7 +213,8 @@ def unwrap_type(space, w_type):
         w_msg = space.mod(w_template, w_type)
         raise OperationError(space.w_TypeError, w_msg)
 
-def type_for_name(type_name):
+
+def type_for_name(space, type_name):
     if type_name == 'str':
         return java.lang.String.class_
     elif type_name == 'int':
@@ -181,7 +222,8 @@ def type_for_name(type_name):
     elif type_name == 'bool':
         return java.lang.Boolean.TYPE
     else:
-        return java.lang.Class.forName(type_name)
+        return class_for_name(space, type_name)
+
 
 def unwrap_arg(space, w_arg, type_name):
     if type_name == 'int':
@@ -192,6 +234,7 @@ def unwrap_arg(space, w_arg, type_name):
         return rjvm.native_string(space.str_w(w_arg))
     else:
         return space.interp_w(W_JvmObject, w_arg).b_obj
+
 
 def type_name(t):
     if t.isArray():

@@ -1,3 +1,4 @@
+from pypy.rlib import rjvm
 from pypy.translator.translator import graphof
 
 # ___________________________________________________________________________
@@ -12,6 +13,10 @@ def with_types(type_list):
 @with_types([])
 def throwZeroDivisionError():
     raise ZeroDivisionError
+
+@with_types([])
+def throwReflectionException():
+    raise rjvm.ReflectionException
 
 @with_types([])
 def throwIndexError():
