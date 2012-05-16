@@ -1,4 +1,4 @@
-
+#noinspection PyBroadException,PyUnresolvedReferences
 class AppTestJvm(object):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
@@ -12,6 +12,80 @@ class AppTestJvm(object):
         p2 = jvm.new(POINT, (p1, POINT))
         assert p1 == p1
         assert p1 != p2
+
+    def test_new_bad_class_name(self):
+        import jvm
+        try:
+            jvm.new('foo')
+        except TypeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_new_exception_in_constructor(self):
+        import jvm
+        try:
+            jvm.new('java.lang.StringBuilder', (-1, int))
+        except RuntimeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_new_bad_arg_type(self):
+        import jvm
+        try:
+            POINT = 'java.awt.Point'
+            p1 = jvm.new(POINT)
+            p2 = jvm.new(POINT, (p1, 'foo'))
+        except TypeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_bad_method_name(self):
+        import jvm
+        try:
+            POINT = 'java.awt.Point'
+            p1 = jvm.new(POINT)
+            jvm.call_method(p1, 'foobar')
+        except TypeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_bad_type_name(self):
+        import jvm
+        try:
+            POINT = 'java.awt.Point'
+            p1 = jvm.new(POINT)
+            p2 = jvm.new(POINT, (p1, 'foo'))
+            jvm.call_method(p1, 'equals', (p2, 'foobar'))
+        except TypeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
+
+    def test_exception_in_method(self):
+        import jvm
+        sb = jvm.new('java.lang.StringBuilder')
+        try:
+            jvm.call_method(sb, 'setLength', (-1, int))
+        except RuntimeError:
+            pass
+        except:
+            assert False
+        else:
+            assert False
 
     def test_get_methods(self):
         import jvm

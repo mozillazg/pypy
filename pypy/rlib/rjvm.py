@@ -153,6 +153,13 @@ class CallableWrapper(Wrapper):
                 raise TypeError
             else:
                 raise
+        except jpype.JavaException, e:
+            if e.javaClass().__name__ in {'java.lang.ClassNotFoundException',
+                                          'java.lang.reflect.InvocationTargetException',
+                                          'java.lang.NoSuchMethodException',}:
+                raise ReflectionException
+            else:
+                raise
         return self._wrap_item(result)
 
 
@@ -294,6 +301,8 @@ java = JvmPackageWrapper("java")
 RjvmJavaLangClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
 JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
+class ReflectionException(Exception):
+    pass
 
 def new_array(type, size):
     return _jvm_array([None] * size)

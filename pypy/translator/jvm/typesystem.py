@@ -219,6 +219,7 @@ jPyPyAbstractMethodException = JvmClassType('pypy.AbstractMethodException')
 jStackOverflowError = JvmClassType('java.lang.StackOverflowError', throwable=True)
 jOutOfMemoryError = JvmClassType('java.lang.OutOfMemoryError', throwable=True)
 jArithmeticException = JvmClassType('java.lang.ArithmeticException', throwable=True)
+jReflectiveOperationException = JvmClassType('java.lang.ReflectiveOperationException', throwable=True)
 
 class JvmScalarType(JvmType):
     """

@@ -579,20 +579,20 @@ class BaseTestRJVM(BaseRtypingTest):
         assert self.ll_to_string(res) == 'foobar'
 
     def test_exceptions_static_call(self):
-        py.test.skip()
         def fn():
             try:
                 b_cls = java.lang.Class.forName('foobar')
                 return False
-            except:
+            except rjvm.ReflectionException:
                return True
 
         res = self.interpret(fn, [])
-        assert res is True
+        assert res
 
 
 class TestRJVM(BaseTestRJVM, OORtypeMixin):
-    pass
+    def test_exceptions_static_call(self):
+        py.test.skip()
 
 class TestCPythonRJVM(BaseTestRJVM):
     def interpret(self, fn, args):

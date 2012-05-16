@@ -15,6 +15,7 @@ interface defined by database.JvmType.
 
 from pypy.objspace.flow import \
      model as flowmodel
+from pypy.rlib import rjvm
 from pypy.rpython.lltypesystem import \
      lltype
 from pypy.rpython.ootypesystem import \
@@ -339,6 +340,7 @@ class GraphFunction(OOFunction, Function):
             (ZeroDivisionError, jvmtype.jArithmeticException),
             (RuntimeError, jvmtype.jStackOverflowError),
             (MemoryError, jvmtype.jOutOfMemoryError),
+            (rjvm.ReflectionException, jvmtype.jReflectiveOperationException),
             ]
 
         for pyexccls, jexcty in translation_table:
