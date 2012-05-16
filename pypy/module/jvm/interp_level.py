@@ -33,47 +33,37 @@ def new(space, class_name, args_w):
 @unwrap_spec(class_name=str)
 def get_methods(space, class_name):
     b_java_cls = class_for_name(space, class_name)
-    by_name_sig = {}
-
-    for method in b_java_cls.getMethods():
-        if is_static(method): continue
-        if not is_public(method.getReturnType().getModifiers()): continue
-
-        if method.getName() not in by_name_sig:
-            by_name_sig[method.getName()] = {}
-
-        sig = ','.join([str(get_type_name(t)) for t in method.getParameterTypes()])
-
-        if sig not in by_name_sig[method.getName()]:
-            by_name_sig[method.getName()][sig] = method
-        elif method.isBridge():
-            continue
-        else:
-            by_name_sig[method.getName()][sig] = method
-
-    result = {}
-    for name, sig_to_meth in by_name_sig.iteritems():
-        if name not in result:
-            result[name] = []
-
-        for method in sig_to_meth.itervalues():
-            b_return_type_name = get_type_name(method.getReturnType())
-            arg_types_names = [get_type_name(t) for t in
-                                 method.getParameterTypes()]
-            result[name].append((b_return_type_name, arg_types_names))
-
+    result = _get_methods(b_java_cls, static=False)
     return wrap_get_methods_result(space, result)
 
 
 @unwrap_spec(class_name=str)
-def get_fields(space, class_name):
+def get_static_methods(space, class_name):
+    b_java_cls = class_for_name(space, class_name)
+    result = _get_methods(b_java_cls, static=True)
+    return wrap_get_methods_result(space, result)
+
+
+def _get_fields(space, class_name, static):
     b_java_cls = class_for_name(space, class_name)
     res = []
     for f in b_java_cls.getFields():
         if not is_public(f.getModifiers()): continue
+        if static:
+            if not is_static(f.getModifiers()): continue
+        else:
+            if is_static(f.getModifiers()): continue
         res.append(space.wrap(str(f.getName())))
-
     return space.newtuple(res)
+
+
+@unwrap_spec(class_name=str)
+def get_fields(space, class_name):
+    return _get_fields(space, class_name, static=False)
+
+@unwrap_spec(class_name=str)
+def get_static_fields(space, class_name):
+    return _get_fields(space, class_name, static=True)
 
 @unwrap_spec(class_name=str)
 def get_constructors(space, class_name):
@@ -107,6 +97,25 @@ def call_method(space, jvm_obj, method_name, args_w):
     return wrap_result(space, b_res)
 
 
+@unwrap_spec(class_name=str, method_name=str)
+def call_static_method(space, class_name, method_name, args_w):
+    b_java_class = class_for_name(space, class_name)
+    args, types = get_args_types(space, args_w)
+
+    try:
+        b_meth = b_java_class.getMethod(method_name, types)
+    except rjvm.ReflectionException:
+        raise raise_type_error(space,
+                         "No method called %s found in class %s" % (method_name, str(b_java_class.getName())))
+
+    try:
+        b_res = b_meth.invoke(b_java_class, args)
+    except rjvm.ReflectionException:
+        raise raise_runtime_error(space, "Error invoking method")
+
+    return wrap_result(space, b_res)
+
+
 @unwrap_spec(jvm_obj=W_JvmObject)
 def unbox(space, jvm_obj):
     b_obj = jvm_obj.b_obj
@@ -121,6 +130,9 @@ def unbox(space, jvm_obj):
     elif b_cls == java.lang.Boolean.class_:
         b_bool = rjvm.downcast(java.lang.Boolean, b_obj)
         return space.wrap(bool(b_bool.booleanValue()))
+#    elif b_cls == java.lang.Double.class_:
+#        b_float = rjvm.downcast(java.lang.Double, b_obj)
+#        return space.wrap(b_float.doubleValue())
     else:
         raise OperationError(space.w_TypeError,
                              space.wrap(
@@ -150,24 +162,20 @@ def superclass(space, class_name):
 
 
 @unwrap_spec(jvm_obj=W_JvmObject, field_name=str)
-def get_field(space, jvm_obj, field_name):
+def get_field_value(space, jvm_obj, field_name):
     b_obj = space.interp_w(W_JvmObject, jvm_obj).b_obj
     b_class = b_obj.getClass()
+    return _get_field_value(space, b_class, b_obj, field_name)
 
-    try:
-        b_field = b_class.getField(field_name)
-    except rjvm.ReflectionException:
-        raise raise_type_error(space, "No field called %s in class %s" % (field_name, str(b_class.getName())))
 
-    try:
-        b_res = b_field.get(b_obj)
-    except rjvm.ReflectionException:
-        raise raise_runtime_error(space, "Error getting field")
+@unwrap_spec(class_name=str, field_name=str)
+def get_static_field_value(space, class_name, field_name):
+    b_class = class_for_name(space, class_name)
+    return _get_field_value(space, b_class, None, field_name)
 
-    return wrap_result(space, b_res)
 
 @unwrap_spec(jvm_obj=W_JvmObject, field_name=str)
-def set_field(space, jvm_obj, field_name, w_val):
+def set_field_value(space, jvm_obj, field_name, w_val):
     b_obj = space.interp_w(W_JvmObject, jvm_obj).b_obj
     b_class = b_obj.getClass()
 
@@ -190,7 +198,45 @@ def set_field(space, jvm_obj, field_name, w_val):
 
     return space.w_None
 
+@unwrap_spec(class_name=str, field_name=str)
+def set_static_field_value(space, class_name, field_name, w_val):
+    pass
+
 # ============== Helper functions ==============
+
+def _get_methods(b_java_cls, static):
+    by_name_sig = {}
+    for method in b_java_cls.getMethods():
+        if static:
+            if not is_static(method.getModifiers()): continue
+        else:
+            if is_static(method.getModifiers()): continue
+
+        if not is_public(method.getReturnType().getModifiers()): continue
+
+        if method.getName() not in by_name_sig:
+            by_name_sig[method.getName()] = {}
+
+        sig = ','.join(
+            [str(get_type_name(t)) for t in method.getParameterTypes()])
+
+        if sig not in by_name_sig[method.getName()]:
+            by_name_sig[method.getName()][sig] = method
+        elif method.isBridge():
+            continue
+        else:
+            by_name_sig[method.getName()][sig] = method
+    result = {}
+    for name, sig_to_meth in by_name_sig.iteritems():
+        if name not in result:
+            result[name] = []
+
+        for method in sig_to_meth.itervalues():
+            b_return_type_name = get_type_name(method.getReturnType())
+            arg_types_names = [get_type_name(t) for t in
+                               method.getParameterTypes()]
+            result[name].append((b_return_type_name, arg_types_names))
+    return result
 
 def wrap_get_methods_result(space, result):
     """
@@ -220,8 +266,8 @@ def wrap_get_methods_result(space, result):
     return w_result
 
 
-def is_static(method):
-    return java.lang.reflect.Modifier.isStatic(method.getModifiers())
+def is_static(m):
+    return java.lang.reflect.Modifier.isStatic(m)
 
 
 def is_public(m):
@@ -250,6 +296,8 @@ def unwrap_type(space, w_type):
         return 'int'
     elif space.is_w(w_type, space.w_bool):
         return 'bool'
+#    elif space.is_w(w_type, space.w_float):
+#        return 'float'
     else:
         w_template = space.wrap("Don't know how to handle type %r")
         w_msg = space.mod(w_template, w_type)
@@ -263,6 +311,8 @@ def type_for_name(space, type_name):
         return java.lang.Integer.TYPE
     elif type_name == 'bool':
         return java.lang.Boolean.TYPE
+#    elif type_name == 'float':
+#        return java.lang.Double.TYPE
     else:
         return class_for_name(space, type_name)
 
@@ -272,6 +322,8 @@ def unwrap_arg(space, w_arg, type_name):
         return java.lang.Integer(space.int_w(w_arg))
     elif type_name == 'bool':
         return java.lang.Boolean(space.bool_w(w_arg))
+#    elif type_name == 'float':
+#        return java.lang.Double(space.float_w(w_arg))
     elif type_name == 'str':
         return rjvm.native_string(space.str_w(w_arg))
     else:
@@ -311,3 +363,16 @@ def wrap_result(space, b_res):
     else:
         w_type_name = space.wrap('void')
         return space.newtuple([space.w_None, w_type_name])
+
+
+def _get_field_value(space, b_class, b_obj, field_name):
+    try:
+        b_field = b_class.getField(field_name)
+    except rjvm.ReflectionException:
+        raise raise_type_error(space, "No field called %s in class %s" % (
+            field_name, str(b_class.getName())))
+    try:
+        b_res = b_field.get(b_obj)
+    except rjvm.ReflectionException:
+        raise raise_runtime_error(space, "Error getting field")
+    return wrap_result(space, b_res)

@@ -208,7 +208,7 @@ class AppTestJvm(object):
         import jvm
 
         p1 = jvm.new('java.awt.Point')
-        res, tpe = jvm.get_field(p1, 'x')
+        res, tpe = jvm.get_field_value(p1, 'x')
         assert res is not None
         assert tpe == 'java.lang.Integer'
 
@@ -217,7 +217,7 @@ class AppTestJvm(object):
 
         p1 = jvm.new('java.awt.Point')
         try:
-            jvm.get_field(p1, 'foobar')
+            jvm.get_field_value(p1, 'foobar')
         except TypeError:
             pass
         except:
@@ -263,7 +263,7 @@ class AppTestJvm(object):
 
         p = java.awt.Point()
         assert p.x == 0
-        jvm.set_field(p._inst, 'x', 17)
+        jvm.set_field_value(p._inst, 'x', 17)
         assert p.x == 17
         p.x = 42
         assert p.x == 42
@@ -293,6 +293,33 @@ class AppTestJvm(object):
         al.add('foobar')
         assert al.size() == 1
 
+    def test_static_methods(self):
+        import jvm
+        ms = jvm.get_static_methods('java.util.Collections')
+        assert isinstance(ms, dict)
+        assert 'emptyList' in ms
+
+        res, tpe = jvm.call_static_method('java.util.Collections', 'emptyList')
+        assert res is not None
+        assert 'list' in tpe.lower()
+
+        res, tpe = jvm.call_static_method('java.lang.Math', 'abs', (-17, int))
+        assert tpe == 'java.lang.Integer'
+        assert jvm.unbox(res) == 17
+
+    def test_api_static_methods(self):
+        from jvm import java
+        assert 'abs' in dir(java.lang.Math)
+        assert java.lang.Math.abs(-17) == 17
+
+    def test_static_fields(self):
+        import jvm
+        res, tpe = jvm.get_static_field_value('java.lang.Integer', 'SIZE')
+        assert tpe == 'java.lang.Integer'
+        assert jvm.unbox(res) == 32
+
+        from jvm import java
+        assert java.lang.Integer.SIZE == 32
 
 if __name__ == '__main__':
     tests = AppTestJvm()

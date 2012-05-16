@@ -1,6 +1,6 @@
 import jvm
 
-unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean'}
+unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean', 'java.lang.Double'}
 type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str}
 
 class JvmPackageWrapper(object):
@@ -18,8 +18,6 @@ class JvmPackageWrapper(object):
 
 
 class JvmMethodWrapper(object):
-    __slots__ = ('meth_name', 'overloads')
-
     def __init__(self, meth_name, overloads):
         self.meth_name = meth_name
         self.overloads = overloads
@@ -32,17 +30,22 @@ class JvmMethodWrapper(object):
 
 
 class JvmFieldWrapper(object):
-    __slots__ = ('field_name', 'is_static')
-
-    def __init__(self, field_name, is_static):
+    def __init__(self, field_name, class_name, is_static):
         self.field_name = field_name
         self.is_static = is_static
+        self.class_name = class_name
 
     def __get__(self, obj, _):
         if obj is None and not self.is_static:
-            raise TypeError("No static fields for now...")
+            raise TypeError("%s is not static!" % self.field_name)
+        elif obj is not None and self.is_static:
+            raise TypeError("%s is static!" % self.field_name)
         else:
-            res, tpe = jvm.get_field(obj._inst, self.field_name)
+            if self.is_static:
+                res, tpe = jvm.get_static_field_value(self.class_name, self.field_name)
+            else:
+                res, tpe = jvm.get_field_value(obj._inst, self.field_name)
+
             return handle_result(res, tpe)
 
     def __set__(self, obj, value):
@@ -51,25 +54,37 @@ class JvmFieldWrapper(object):
         else:
             if isinstance(value, _JavaObjectWrapper):
                 value = value._inst
-            jvm.set_field(obj._inst, self.field_name, value)
+            jvm.set_field_value(obj._inst, self.field_name, value)
+
 
 class JvmBoundMethod(object):
-    __slots__ = ('im_name', 'im_self', 'overloads')
-
-    def __init__(self, im_name, overloads, im_self):
-        self.im_name = im_name
-        self.im_self = im_self
+    def __init__(self, method_name, overloads, obj):
+        self.method_name = method_name
+        self.obj = obj
         self.overloads = overloads
 
     def __call__(self, *args):
         args_with_types = find_overload(self.overloads, args)
-        (res, tpe) = jvm.call_method(self.im_self._inst, self.im_name, *args_with_types)
+        res, tpe = jvm.call_method(self.obj._inst, self.method_name, *args_with_types)
         return handle_result(res, tpe)
 
     def __repr__(self):
-        return '<bound JVM method %s.%s of %s>' % (self.im_self._class_name,
-                                                   self.im_name,
-                                                   self.im_self)
+        return '<bound JVM method %s.%s of %s>' % (self.obj._class_name,
+                                                   self.method_name,
+                                                   self.obj)
+
+
+class JvmStaticMethod(object):
+    def __init__(self, class_name, method_name, overloads):
+        self.class_name = class_name
+        self.method_name = method_name
+        self.overloads = overloads
+
+    def __call__(self, *args):
+        args_with_types = find_overload(self.overloads, args)
+        res, tpe = jvm.call_static_method(self.class_name, self.method_name, *args_with_types)
+        return handle_result(res, tpe)
+
 
 java = JvmPackageWrapper('java')
 
@@ -91,14 +106,23 @@ class _JavaObjectWrapper(object):
 
 def make_app_class(class_name):
     methods = jvm.get_methods(class_name)
+    static_methods = jvm.get_static_methods(class_name)
     fields = jvm.get_fields(class_name)
+    static_fields = jvm.get_static_fields(class_name)
 
     dct = {}
+
     for method_name, versions in methods.iteritems():
         dct[method_name] = JvmMethodWrapper(method_name, versions)
 
+    for method_name, versions in static_methods.iteritems():
+        dct[method_name] = JvmStaticMethod(class_name, method_name, versions)
+
     for field_name in fields:
-        dct[field_name] = JvmFieldWrapper(field_name, is_static=False)
+        dct[field_name] = JvmFieldWrapper(field_name, class_name, is_static=False)
+
+    for field_name in static_fields:
+        dct[field_name] = JvmFieldWrapper(field_name, class_name, is_static=True)
 
     def make_init(class_name):
         def init(self, *args, **kwargs):
