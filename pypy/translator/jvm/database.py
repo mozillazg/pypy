@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.ootypesystem import ootype, rclass
 from pypy.rpython.ootypesystem.module import ll_os
 from pypy.translator.jvm import node, methods
-from pypy.translator.jvm.jvm_interop import NativeRJvmInstance
+from pypy.translator.jvm.rjvm_support import NativeRJvmInstance
 from pypy.translator.jvm.option import getoption
 from pypy.translator.jvm.builtin import JvmBuiltInType
 from pypy.translator.oosupport.database import Database as OODatabase

@@ -3,7 +3,7 @@ from pypy.rpython.ootypesystem.rootype import OOInstanceRepr
 from pypy.rpython.rlist import ll_len_foldable
 from pypy.tool.pairtype import pairtype
 import utils
-from pypy.translator.jvm.jvm_interop.annmodel import SomeJvmNativeStaticMeth
+from pypy.translator.jvm.rjvm_support.annmodel import SomeJvmNativeStaticMeth
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.rmodel import Repr, IntegerRepr, inputconst
 

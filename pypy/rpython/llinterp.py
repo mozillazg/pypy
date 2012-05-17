@@ -1166,7 +1166,7 @@ class LLFrame(object):
         assert isinstance(name, str)
         # TODO: Use something else than JvmClassWrapper in oogetstaticfield
         import pypy.rlib.rjvm as rjvm
-        from pypy.translator.jvm.jvm_interop.utils import wrap
+        from pypy.translator.jvm.rjvm_support.utils import wrap
         res = getattr(cls, name)
         if isinstance(cls, rjvm.JvmClassWrapper):
             res = wrap(res)

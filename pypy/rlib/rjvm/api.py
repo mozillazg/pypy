@@ -1,19 +1,19 @@
-import os
-import jpype
-import atexit
-
 # Classes from this file allow you to write java code "directly" in
 # RPython. Code fragments like "sb = java.lang.StringBuilder()" can be
 # executed using regular python with JPype installed, turned into flow
-# graphs, rtyped and interpreted or compiled to JVM bytecode.
+# graphs, rtyped and compiled to JVM bytecode.
+#
+# Testing with LLInterpreter is also supported.
 #
 # See test_rjvm.py for examples.
+import jpype
+import helpers
 from pypy.rpython.ootypesystem import ootype
 
-class _jvm_str(object):
+class jvm_str(object):
     """
-    This class reflects the fact, that we don't unify java.lang.String instances with (Some)Strings
-    in the ootypesystem. This forces you to call str(...) on native strings.
+    This class reflects the fact, that we don't unify java.lang.String instances with (Some)Strings.
+    This forces you to call str(...) on native strings.
     """
 
     def __init__(self, str):
@@ -23,7 +23,7 @@ class _jvm_str(object):
         return self.__str
 
     def __eq__(self, other):
-        if isinstance(other, _jvm_str):
+        if isinstance(other, jvm_str):
             return self.__str == other.__str
         else:
             return False
@@ -40,12 +40,16 @@ class _jvm_str(object):
     def getClass(self):
         return java.lang.String.class_
 
-class _jvm_array(object):
+class jvm_array(object):
+    """
+    This class reflects the fact, that we don't unify JVM arrays with (Some)Lists.
+    Arrays are not iterable, but support __len__, __getitem__ and __setitem__.
+    """
     def __init__(self, lst):
         self.__lst = lst
 
     def __setitem__(self, key, value):
-        assert isinstance(value, (JvmInstanceWrapper, _jvm_str))
+        assert isinstance(value, (JvmInstanceWrapper, jvm_str))
         self.__lst[key] = value
 
     def __getitem__(self, item):
@@ -57,13 +61,13 @@ class _jvm_array(object):
     def __len__(self):
         return len(self.__lst)
 
-# We want packages to be constant at annotation, so make sure we return the same instances
-# for the same names.
+# We want packages to be constant at annotation time, so make sure we return
+# the same instances for the same names.
 const_cache = {}
 
 class JvmPackageWrapper(object):
     """
-    Proxy to java packages. You can access atrributes of a
+    Proxy to java packages. You can access attributes of a
     JvmPackageWrapper to obtain proxies to nested packages or classes
     inside a package. We assume package names start with lowercase
     letters and class names with uppercase.
@@ -107,18 +111,18 @@ class Wrapper(object):
     This is a mixin that provides methods to wrap JPype-level types in rjvm-level wrappers.
     """
     def _wrap_item(self, item):
-        if isinstance(item, JPypeJavaClass):
-            return RjvmJavaLangClassWrapper.forName(item.getName())
+        if isinstance(item, helpers.JPypeJavaClass):
+            return helpers.RjvmJavaLangClassWrapper.forName(item.getName())
         elif isinstance(item, jpype.java.lang.Object):
             return JvmInstanceWrapper(item)
         elif isinstance(item, jpype._jclass._JavaClass):
             return JvmInstanceWrapper(item.__javaclass__)
         elif isinstance(item, (tuple, list)):
-            return _jvm_array(self._wrap_list(item))
+            return jvm_array(self._wrap_list(item))
         elif isinstance(item, (str, unicode)):
-            return _jvm_str(str(item))
+            return jvm_str(str(item))
         elif isinstance(item, jpype._jarray._JavaArrayClass):
-            return _jvm_array(self._wrap_list(list(item)))
+            return jvm_array(self._wrap_list(list(item)))
         elif item is None:
             return None
         return item
@@ -129,18 +133,18 @@ class Wrapper(object):
 class CallableWrapper(Wrapper):
     """
     This is a mixin for objects that delegate the __call__ method to
-    self.__wrapped__ (a JPype-level proxy) and wrap the result as an
+    self.__wrapped__ (a JPype-level proxy) and wrap the result in an
     rjvm-level wrapper.
     """
 
     def _unwrap_item(self, item):
         if isinstance(item, JvmInstanceWrapper):
             return item.__wrapped__
-        elif isinstance(item, (list, _jvm_array)):
+        elif isinstance(item, (list, jvm_array)):
             return [self._unwrap_item(i) for i in item]
         elif isinstance(item, ootype._array):
             return self._unwrap_item(item._array)
-        elif isinstance(item, _jvm_str):
+        elif isinstance(item, jvm_str):
             return str(item)
         return item
 
@@ -149,18 +153,13 @@ class CallableWrapper(Wrapper):
         try:
             result =  self.__wrapped__(*new_args)
         except RuntimeError, e:
-            if e.message.startswith('No matching overloads found'):
-                raise TypeError
+            if e.message.startswith("No matching overloads found"):
+                raise TypeError("No matching overloads found!")
             else:
                 raise
         except jpype.JavaException, e:
-            if e.javaClass().__name__ in {'java.lang.ClassNotFoundException',
-                                          'java.lang.reflect.InvocationTargetException',
-                                          'java.lang.NoSuchMethodException',
-                                          'java.lang.NoSuchFieldException',}:
-                raise ReflectionException
-            else:
-                raise
+            raise helpers.handle_java_exception(e)
+
         return self._wrap_item(result)
 
 
@@ -172,12 +171,12 @@ class JvmClassWrapper(CallableWrapper):
 
     def __init__(self, cls):
         self.__wrapped__ = cls
-        self.__refclass__ = _refclass_for(cls)
+        self.__refclass__ = helpers._refclass_for(cls)
         self.class_ = self._wrap_item(self.__refclass__)
         self.__name__ = cls.__name__
 
-        self._static_method_names = {str(m.getName()) for m in _get_methods(self.__refclass__, static=True)}
-        self._static_field_names = {str(f.getName()) for f in _get_fields(self.__refclass__, static=True)}
+        self._static_method_names = {str(m.getName()) for m in helpers._get_methods(self.__refclass__, static=True)}
+        self._static_field_names = {str(f.getName()) for f in helpers._get_fields(self.__refclass__, static=True)}
 
     def __getattr__(self, attr):
         if attr in self._static_method_names:
@@ -192,9 +191,6 @@ class JvmClassWrapper(CallableWrapper):
     def __repr__(self):
         return '<JvmClassWrapper %s>' % self.__name__
 
-#    def _freeze_(self):
-#        return True
-
 
 class JvmInstanceWrapper(Wrapper):
     """
@@ -202,17 +198,17 @@ class JvmInstanceWrapper(Wrapper):
     """
 
     def __init__(self, obj):
-        if isinstance(obj, (JPypeJavaClass, RjvmJavaLangClassWrapper)):
-            self.__wrapped__ = _refclass_for(obj)
-            refclass = RjvmJavaLangClassWrapper.java_lang_Class
+        if isinstance(obj, (helpers.JPypeJavaClass, helpers.RjvmJavaLangClassWrapper)):
+            self.__wrapped__ = helpers._refclass_for(obj)
+            refclass = helpers.RjvmJavaLangClassWrapper.java_lang_Class
         else:
             self.__wrapped__ = obj
-            refclass = _refclass_for(obj)
+            refclass = helpers._refclass_for(obj)
 
         self.__refclass = refclass
         self.__class_name = refclass.getName()
-        self.__method_names = {str(m.getName()) for m in _get_methods(refclass)}
-        self.__field_names = {str(f.getName()) for f in _get_fields(refclass)}
+        self.__method_names = {str(m.getName()) for m in helpers._get_methods(refclass)}
+        self.__field_names = {str(f.getName()) for f in helpers._get_fields(refclass)}
 
     def __getattr__(self, attr):
         if attr == '__wrapped__':
@@ -244,93 +240,45 @@ class JvmInstanceWrapper(Wrapper):
     def __hash__(self):
         return hash(self.__wrapped__)
 
-class JvmMethodWrapper(CallableWrapper):
 
+class JvmMethodWrapper(CallableWrapper):
+    __slots__ = ('__wrapped__',)
     def __init__(self, meth):
         self.__wrapped__ = meth
 
 
 class JvmStaticMethodWrapper(CallableWrapper):
+    __slots__ = ('__wrapped__',)
     def __init__(self, static_meth):
         self.__wrapped__ = static_meth
 
 
-def _is_static(method_or_field):
-    """
-    Check if the jpype proxy to a java.lang.reflect.Method (or Field) object
-    represents a static method (field).
-    """
-    return jpype.java.lang.reflect.Modifier.isStatic(method_or_field.getModifiers())
+# Main 'entry point' to the package
+java = JvmPackageWrapper('java')
 
-def _is_public(method_or_field):
-    return jpype.java.lang.reflect.Modifier.isPublic(method_or_field.getModifiers())
-
-def _get_fields(refclass, static=False):
-    staticness = _check_staticness(static)
-    return [f for f in refclass.getFields() if staticness(f) and _is_public(f)]
-
-def _get_methods(refclass, static=False):
-    staticness = _check_staticness(static)
-    return [m for m in refclass.getMethods() if staticness(m) and _is_public(m)]
-
-def _check_staticness(should_be_static):
-    if should_be_static:
-        return _is_static
-    else:
-        return lambda m: not _is_static(m)
-
-def _refclass_for(o):
-    if isinstance(o, RjvmJavaLangClassWrapper):
-        return o
-    elif isinstance(o, JvmClassWrapper):
-        return o.__refclass__
-    elif isinstance(o, JvmInstanceWrapper):
-        if isinstance(o.__wrapped__, RjvmJavaLangClassWrapper):
-            return RjvmJavaLangClassWrapper.java_lang_Class
-        else:
-            return _refclass_for(o.__wrapped__)
-    elif isinstance(o, JPypeJavaClass):
-        return RjvmJavaLangClassWrapper.forName(o.getName())
-    elif hasattr(o, '__javaclass__'):
-        return _refclass_for(o.__javaclass__)
-    else:
-        raise TypeError("Bad type for tpe!")
-
-jpype.startJVM(jpype.getDefaultJVMPath(), "-ea",
-    "-Djava.class.path=%s" % os.path.abspath(os.path.dirname(__file__)))
-java = JvmPackageWrapper("java")
-RjvmJavaLangClassWrapper = jpype.JClass('RjvmJavaClassWrapper')
-JPypeJavaClass = type(jpype.java.lang.String.__javaclass__)
 
 class ReflectionException(Exception):
     pass
 
+
+# These functions get compiled to appropriate JVM instructions:
 def new_array(type, size):
-    return _jvm_array([None] * size)
+    return jvm_array([None] * size)
+
 
 def downcast(type, instance):
-    assert isinstance(instance, (JvmInstanceWrapper, _jvm_str))
+    assert isinstance(instance, (JvmInstanceWrapper, jvm_str))
     return instance
+
 
 def upcast(type, instance):
-    assert isinstance(instance, (JvmInstanceWrapper, _jvm_str))
+    assert isinstance(instance, (JvmInstanceWrapper, jvm_str))
     return instance
 
+
 def native_string(s):
-    return _jvm_str(s)
-
-int_class = java.lang.Integer.TYPE
-long_class = java.lang.Long.TYPE
-short_class = java.lang.Short.TYPE
-byte_class = java.lang.Byte.TYPE
-float_class = java.lang.Float.TYPE
-double_class = java.lang.Double.TYPE
-boolean_class = java.lang.Boolean.TYPE
-char_class = java.lang.Character.TYPE
-void_class = java.lang.Void.TYPE
-
-def cleanup():
-    jpype.shutdownJVM()
-
-atexit.register(cleanup)
-
+    """
+    Turns a Python string into a java.lang.String instance. In compiled code
+    this is a no-op.
+    """
+    return jvm_str(s)

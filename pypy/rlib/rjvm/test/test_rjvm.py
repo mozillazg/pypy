@@ -1,11 +1,11 @@
 import py
 import pypy.annotation.model as annmodel
-from pypy.rlib import rstring, rarithmetic
-import pypy.translator.jvm.jvm_interop as jvm_interop
 import pypy.rlib.rjvm as rjvm
+from pypy.rlib import rstring, rarithmetic
 from pypy.rlib.rjvm import java
 from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
+import pypy.translator.jvm.rjvm_support as rjvm_support
 
 try:
     #noinspection PyUnresolvedReferences
@@ -13,8 +13,7 @@ try:
 except ImportError:
     py.test.skip("No JPype found, so I'm assuming you're not interested in rjvm.")
 
-jvm_interop.add_registry_entries()
-
+rjvm_support.add_registry_entries()
 
 def test_static_method():
     assert isinstance(java.lang, rjvm.JvmPackageWrapper)
@@ -61,14 +60,13 @@ def test_invalid_method_name():
 def test_interpreted_reflection():
     al_class = java.lang.Class.forName("java.util.ArrayList")
     assert isinstance(al_class, rjvm.JvmInstanceWrapper)
-    assert isinstance(rjvm.int_class, rjvm.JvmInstanceWrapper)
     assert isinstance(java.util.Collection.class_, rjvm.JvmInstanceWrapper)
 
 
     constructors = list(al_class.getConstructors())
     assert len(constructors) == 3
 
-    for types in ([], [rjvm.int_class], [java.util.Collection.class_]):
+    for types in ([], [java.util.Collection.class_]):
         c = al_class.getConstructor(types)
         assert isinstance(c, rjvm.JvmInstanceWrapper)
         assert isinstance(c.newInstance, rjvm.JvmMethodWrapper)
