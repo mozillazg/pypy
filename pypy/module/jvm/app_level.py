@@ -1,9 +1,15 @@
 import jvm
 
-unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean', 'java.lang.Double'}
-type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str, 'double': float}
+# ============== App-level module API =======================
+
+# Design of the classes below is based on rjvm.py and the clr module.
 
 class JvmPackageWrapper(object):
+    """
+    getattr on packages can form new packages or create "JVM classes",
+    depending on whether the first letter of the attribute is upper
+    or lower case.
+    """
     def __init__(self, name):
         self.__name = name
 
@@ -12,9 +18,9 @@ class JvmPackageWrapper(object):
         if attr[0].isupper():
             return get_class(new_name)
         else:
-            if new_name not in packages:
-                packages[new_name] = JvmPackageWrapper(new_name)
-            return packages[new_name]
+            if new_name not in packages_cache:
+                packages_cache[new_name] = JvmPackageWrapper(new_name)
+            return packages_cache[new_name]
 
 
 class JvmMethodWrapper(object):
@@ -23,41 +29,15 @@ class JvmMethodWrapper(object):
         self.overloads = overloads
 
     def __get__(self, obj, _):
-        if obj is None:
-            raise TypeError("No unbound methods for now...")
-        else:
-            return JvmBoundMethod(self.meth_name, self.overloads, obj)
-
-
-class JvmFieldWrapper(object):
-    def __init__(self, field_name, class_name, is_static):
-        self.field_name = field_name
-        self.is_static = is_static
-        self.class_name = class_name
-
-    def __get__(self, obj, _):
-        if obj is None and not self.is_static:
-            raise TypeError("%s is not static!" % self.field_name)
-        elif obj is not None and self.is_static:
-            raise TypeError("%s is static!" % self.field_name)
-        else:
-            if self.is_static:
-                res, tpe = jvm.get_static_field_value(self.class_name, self.field_name)
-            else:
-                res, tpe = jvm.get_field_value(obj._inst, self.field_name)
-
-            return handle_result(res, tpe)
-
-    def __set__(self, obj, value):
-        if obj is None and not self.is_static:
-            raise TypeError("No static fields for now...")
-        else:
-            if isinstance(value, _JavaObjectWrapper):
-                value = value._inst
-            jvm.set_field_value(obj._inst, self.field_name, value)
+        assert obj is not None, "No unbound methods for now..."
+        return JvmBoundMethod(self.meth_name, self.overloads, obj)
 
 
 class JvmBoundMethod(object):
+    """
+    JvmBoundMethods will invoke jvm.call_method(...) when called, handling
+    method overloading and turning the result into something useful.
+    """
     def __init__(self, method_name, overloads, obj):
         self.method_name = method_name
         self.obj = obj
@@ -75,6 +55,9 @@ class JvmBoundMethod(object):
 
 
 class JvmStaticMethod(object):
+    """
+    The static equivalent of JvmBoundMethod.
+    """
     def __init__(self, class_name, method_name, overloads):
         self.class_name = class_name
         self.method_name = method_name
@@ -86,25 +69,83 @@ class JvmStaticMethod(object):
         return handle_result(res, tpe)
 
 
+class JvmFieldWrapper(object):
+    """
+    A descriptor that delegates __get__ and __set__ to the low-level jvm functions.
+    """
+    def __init__(self, field_name, class_name, is_static):
+        self.field_name = field_name
+        self.is_static = is_static
+        self.class_name = class_name
+
+    def __get__(self, obj, _):
+        self.check_staticness(obj)
+
+        if self.is_static:
+            res, tpe = jvm.get_static_field_value(self.class_name, self.field_name)
+        else:
+            res, tpe = jvm.get_field_value(obj._inst, self.field_name)
+
+        return handle_result(res, tpe)
+
+    def __set__(self, obj, value):
+        self.check_staticness(obj)
+
+        if isinstance(value, _JavaObjectWrapper):
+            value = value._inst
+
+        if self.is_static:
+            jvm.set_static_field_value(self.class_name, self.field_name, value)
+        else:
+            jvm.set_field_value(obj._inst, self.field_name, value)
+
+    def check_staticness(self, obj):
+        if obj is None and not self.is_static:
+            raise TypeError("%s is not static!" % self.field_name)
+        elif obj is not None and self.is_static:
+            raise TypeError("%s is static!" % self.field_name)
+
+
+# 'main entry point' to the jvm module
 java = JvmPackageWrapper('java')
 
 
-def is_subclass(c1, c2):
-    """
-    Returns True iff c1 is a subclass of c2. c1 and c2 are represented as strings
-    containing names of the classes.
-    """
-    while c2 is not None and c1 != c2:
-        c2 = jvm.superclass(c2)
+# ==================== Helper code =======================
 
-    return c1 == c2
 
 class _JavaObjectWrapper(object):
+    """
+    All generated "JVM classes" derive from _JavaObjectWrapper, so you can
+    do an isinstance(...) check to see if you're dealing with an JVM object.
+    """
     def __init__(self, inst, class_name):
         self._inst = inst
         self._class_name = class_name
 
-def make_app_class(class_name):
+unboxable_types = {'java.lang.String', 'java.lang.Integer', 'java.lang.Boolean', 'java.lang.Double'}
+type_mapping = {'int': int, 'boolean': bool, 'java.lang.String': str, 'double': float}
+
+def is_subclass(c1, c2):
+    """
+    Returns True iff c2 is a subclass of c1. c1 and c2 are represented as strings
+    containing names of the classes.
+    """
+    c = c2
+    while c is not None:
+        if c == c1:
+            return True
+        c = jvm.superclass(c)
+    return False
+
+def __make_app_class(class_name):
+    """
+    DON'T USE THIS DIRECTLY! Use get_class instead.
+
+    Generates a new class for a given (fully qualified) JVM class name. The new
+    class prepends "Java" to its name, so java.lang.StringBuilder becomes
+    JavaStringBuilder. __dict__ of the new class contains entries for all static
+    and instance fields and methods of the class (which are public).
+    """
     methods = jvm.get_methods(class_name)
     static_methods = jvm.get_static_methods(class_name)
     fields = jvm.get_fields(class_name)
@@ -140,15 +181,23 @@ def make_app_class(class_name):
 
     return cls
 
-classes = {}
-packages = {}
+classes_cache = {}
+packages_cache = {}
 
 def get_class(class_name):
-    if class_name not in classes:
-        classes[class_name] = make_app_class(class_name)
-    return classes[class_name]
+    """
+    This is __make_app_class with memoization. Makes sure two different JVM
+    objects of the same JVM type have the same Python-level type.
+    """
+    if class_name not in classes_cache:
+        classes_cache[class_name] = __make_app_class(class_name)
+    return classes_cache[class_name]
 
 def handle_result(res, tpe):
+    """
+    Wrap a bare _JvmObject in a rich wrapper (see __make_app_class). Unbox
+    primitive values, turn null results into None.
+    """
     if tpe in unboxable_types:
         return jvm.unbox(res)
     elif tpe == 'void':
@@ -159,6 +208,10 @@ def handle_result(res, tpe):
         return cls(_inst=res)
 
 def add_types(version, args):
+    """
+    Annotate args with types, according to the chosen overloaded version of
+    a method. The result is suitable for use with jvm.new or jvm.call_method.
+    """
     res = []
     for arg, name in zip(args, version):
         tpe = type_mapping.get(name, name)
@@ -174,11 +227,15 @@ def add_types(version, args):
 
 
 def find_overload(overloads, args):
+    """
+    Finds the right overload based on the provided args. Return args
+    annotated with proper types.
+    """
     cadidates = set()
     for ret_tpe, version in overloads:
         if exact_match(version, args):
             return add_types(version, args)
-        elif matches(version, args):
+        elif nonexact_match(version, args):
             cadidates.add(version)
     assert len(cadidates) > 0, "No overloads found!"
     assert len(cadidates) == 1, "Bad overloading, please use explicit casts."
@@ -187,6 +244,9 @@ def find_overload(overloads, args):
 
 
 def exact_match(types, args):
+    """
+    Check if args match the types signature exactly.
+    """
     if len(types) != len(args):
         return False
 
@@ -200,7 +260,10 @@ def exact_match(types, args):
             return type(arg) is type_mapping.get(tpe_name)
 
 
-def matches(types, args):
+def nonexact_match(types, args):
+    """
+    Check if args match the types signature at all.
+    """
     if len(types) != len(args):
         return False
 
@@ -216,6 +279,10 @@ def matches(types, args):
 
 
 def construct(class_name, args):
+    """
+    Call the class constructor with the given args. This is called from
+    __init__ in the generated "JVM classes".
+    """
     signatures = jvm.get_constructors(class_name)
     overloads = [(class_name, sig) for sig in signatures]
     args_with_types = find_overload(overloads, args)

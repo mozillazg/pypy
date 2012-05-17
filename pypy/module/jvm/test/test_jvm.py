@@ -1,4 +1,4 @@
-#noinspection PyBroadException,PyUnresolvedReferences
+#noinspection PyUnresolvedReferences
 class AppTestJvm(object):
     def setup_class(cls):
         from pypy.conftest import gettestobjspace
@@ -22,8 +22,6 @@ class AppTestJvm(object):
             jvm.new('foo')
         except TypeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -34,8 +32,6 @@ class AppTestJvm(object):
             jvm.new('java.lang.StringBuilder', (-1, int))
         except RuntimeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -48,8 +44,6 @@ class AppTestJvm(object):
             jvm.new(POINT, (p1, 'foo'))
         except TypeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -62,8 +56,6 @@ class AppTestJvm(object):
             jvm.call_method(p1, 'foobar')
         except TypeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -77,8 +69,6 @@ class AppTestJvm(object):
             jvm.call_method(p1, 'equals', (p2, 'foobar'))
         except TypeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -90,8 +80,6 @@ class AppTestJvm(object):
             jvm.call_method(sb, 'setLength', (-1, int))
         except RuntimeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -157,11 +145,12 @@ class AppTestJvm(object):
     def test_boxing(self):
         import jvm
 
-        boxed_str = jvm.box('foobar')
-        assert '_JvmObject' in repr(boxed_str)
+        for obj in ['foobar', 1, 7.3, False]:
+            boxed_obj = jvm.box(obj)
+            assert '_JvmObject' in repr(boxed_obj)
 
         try:
-            jvm.box(7)
+            jvm.box(None)
         except TypeError:
             pass
         else:
@@ -220,8 +209,6 @@ class AppTestJvm(object):
             jvm.get_field_value(p1, 'foobar')
         except TypeError:
             pass
-        except:
-            assert False
         else:
             assert False
 
@@ -292,6 +279,9 @@ class AppTestJvm(object):
         al = java.util.ArrayList()
         al.add('foobar')
         assert al.size() == 1
+        o = java.lang.Object()
+        al.add(o)
+        assert al.size() == 2
 
     def test_static_methods(self):
         import jvm
@@ -329,7 +319,10 @@ class AppTestJvm(object):
         p.setLocation(7.0, 12.0)
         assert p.x == 7
 
+
 if __name__ == '__main__':
+    # You can run this file directly using the compiled pypy-jvm interpreter,
+    # just in case.
     tests = AppTestJvm()
 
     print
@@ -342,8 +335,8 @@ if __name__ == '__main__':
         try:
             test_case()
         except Exception:
-            print 'FAIL!!!!!!'
             print
+            print 'FAIL!!!!!!'
             print
         else:
             print 'OK'
