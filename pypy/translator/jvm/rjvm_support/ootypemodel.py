@@ -1,7 +1,6 @@
 from pypy.rpython.ootypesystem.ootype import _null_mixin
 import utils
-from pypy.rlib import rjvm
-from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper
+from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper, helpers, jvm_str, java
 from pypy.rpython.ootypesystem import ootype
 
 # TODO: cache for NativeRJvmInstance objects.
@@ -15,9 +14,9 @@ class NativeRJvmInstance(ootype.NativeInstance):
     (using JPype) to check attribute access.
     """
     def __init__(self, tpe):
-        self.refclass = rjvm._refclass_for(tpe)
+        self.refclass = helpers._refclass_for(tpe)
         self.class_name = self.refclass.getName()
-        self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass)}
+        self.field_names = {str(f.getName()) for f in helpers._get_fields(self.refclass)}
         self.example = utils.NativeRJvmInstanceExample(self)  # used in self._example()
         if self.class_name not in nulls:
             nulls[self.class_name] = _null_native_rjvm_instance(self)
@@ -67,13 +66,13 @@ class NativeRJvmInstance(ootype.NativeInstance):
             return value
 
         if TYPE is ootype.String:
-            NATIVE_STRING = NativeRJvmInstance(rjvm.java.lang.String)
+            NATIVE_STRING = NativeRJvmInstance(java.lang.String)
             if ootype.isSubclass(NATIVE_STRING, self):
-                return _native_rjvm_instance(NATIVE_STRING, rjvm._jvm_str(value._str))
+                return _native_rjvm_instance(NATIVE_STRING, jvm_str(value._str))
             else:
                 raise TypeError
         if (isinstance(TYPE, NativeRJvmInstance) and
-              not isinstance(value._instance, rjvm._jvm_str) and
+              not isinstance(value._instance, jvm_str) and
               # object of this type are wrapped in RjvmJavaClassWrapper by rjvm,
               # so the 'shortcut' doesn't work:
               not self.class_name == 'java.lang.Class'):
@@ -125,14 +124,14 @@ class _native_rjvm_instance(object):
     """
     def __init__(self, tpe, instance):
         assert isinstance(tpe, NativeRJvmInstance)
-        assert isinstance(instance, (JvmInstanceWrapper, rjvm._jvm_str))
+        assert isinstance(instance, (JvmInstanceWrapper, jvm_str))
         self.__dict__['_TYPE'] = tpe
         self.__dict__['_instance'] = instance
-        if isinstance(instance, rjvm._jvm_str):
+        if isinstance(instance, jvm_str):
             self.__dict__['_is_string'] = True
 
     def __getattr__(self, name):
-        assert not isinstance(self._instance, rjvm._jvm_str), "We don't support calling String methods yet."
+        assert not isinstance(self._instance, jvm_str), "We don't support calling String methods yet."
         if self._TYPE._check_field(name):
             return utils.wrap(getattr(self._instance, name))
         else:
@@ -148,7 +147,7 @@ class _native_rjvm_instance(object):
         return self
 
     def _string(self):
-        assert isinstance(self._instance, rjvm._jvm_str)
+        assert isinstance(self._instance, jvm_str)
         return ootype._string(ootype.String, str(self._instance))
 
     def __hash__(self):

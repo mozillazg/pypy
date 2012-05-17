@@ -5,7 +5,7 @@ from pypy.rpython.ootypesystem.rdict import rtype_r_dict
 from pypy.objspace.flow.model import Constant
 from pypy.rlib import objectmodel
 from pypy.rpython.error import TyperError
-from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
+from pypy.translator.jvm.rjvm_support.ootypemodel import NativeRJvmInstance
 
 def rtype_new(hop):
     assert hop.args_s[0].is_constant()

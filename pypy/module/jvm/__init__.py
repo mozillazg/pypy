@@ -1,7 +1,7 @@
 from pypy.interpreter.mixedmodule import MixedModule
-import pypy.translator.jvm.jvm_interop as jvm_interop
+import pypy.translator.jvm.rjvm_support as rjvm_support
 
-jvm_interop.add_registry_entries()
+rjvm_support.add_registry_entries()
 
 class Module(MixedModule):
     """

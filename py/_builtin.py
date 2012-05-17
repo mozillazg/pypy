@@ -109,7 +109,7 @@ _sysex = (KeyboardInterrupt, SystemExit, MemoryError, GeneratorExit)
 
 if sys.version_info >= (3, 0):
     exec ("print_ = print ; exec_=exec")
-    import builtins
+    import consts
 
     # some backward compatibility helpers
     _basestring = str

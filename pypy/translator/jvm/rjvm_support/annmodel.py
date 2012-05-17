@@ -1,11 +1,10 @@
-from pypy.rlib import rjvm
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import _static_meth, StaticMethod
 from pypy.annotation.model import SomeOOInstance, SomeObject, SomeOOStaticMeth, SomeInteger, s_None, s_ImpossibleValue
-from pypy.rlib.rjvm import JvmClassWrapper
+from pypy.rlib.rjvm import JvmClassWrapper, helpers
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.tool.pairtype import pairtype
-from pypy.translator.jvm.jvm_interop.ootypemodel import NativeRJvmInstance
+import ootypemodel
 import utils
 
 class SomeJvmClassWrapper(SomeObject):
@@ -13,15 +12,15 @@ class SomeJvmClassWrapper(SomeObject):
         jvm_class_wrapper = self.const
         if not utils.has_matching_constructor(jvm_class_wrapper, s_args):
             raise TypeError('No matching constructor for %s!' % jvm_class_wrapper.__name__)
-        return SomeOOInstance(NativeRJvmInstance(jvm_class_wrapper))
+        return SomeOOInstance(ootypemodel.NativeRJvmInstance(jvm_class_wrapper))
 
     def getattr(self, s_attr):
         assert self.is_constant()
         assert s_attr.is_constant()
         jvm_class_wrapper = self.const
         attrname = s_attr.const
-        refclass = rjvm._refclass_for(jvm_class_wrapper)
-        example = utils.NativeRJvmInstanceExample(NativeRJvmInstance(jvm_class_wrapper), static=True)
+        refclass = helpers._refclass_for(jvm_class_wrapper)
+        example = utils.NativeRJvmInstanceExample(ootypemodel.NativeRJvmInstance(jvm_class_wrapper), static=True)
 
         if not hasattr(example, attrname):
             raise TypeError("Class %s has no member called %s" % (jvm_class_wrapper.__name__, attrname))
@@ -57,8 +56,8 @@ class SomeJvmNativeStaticMeth(SomeOOStaticMeth):
 
     def contains(self, other):
         if isinstance(other, SomeJvmNativeStaticMeth):
-            return self.name == other.name and \
-                   self.jvm_class_wrapper.__name__ == other.jvm_class_wrapper.__name__
+            return (self.name == other.name and
+                    self.jvm_class_wrapper.__name__ == other.jvm_class_wrapper.__name__)
 
         return super(SomeJvmNativeStaticMeth, self).contains(other)
 
@@ -72,6 +71,7 @@ class JvmClassWrapperEntry(ExtRegistryEntry):
     def compute_annotation(self):
         return SomeJvmClassWrapper(self.instance)
 
+#noinspection PyClassicStyleClass
 class __extend__(pairtype(SomeOOInstance, SomeInteger)):
     def getitem((ooinst, index)):
         if isinstance(ooinst.ootype, ootype.Array):
@@ -84,8 +84,8 @@ class __extend__(pairtype(SomeOOInstance, SomeInteger)):
             if s_value is s_None:
                 return s_None
             assert (ooinst.ootype.ITEM == s_value.ootype or
-                    (isinstance(ooinst.ootype.ITEM, NativeRJvmInstance) and
-                     isinstance(s_value.ootype, NativeRJvmInstance) and
+                    (isinstance(ooinst.ootype.ITEM, ootypemodel.NativeRJvmInstance) and
+                     isinstance(s_value.ootype, ootypemodel.NativeRJvmInstance) and
                      ooinst.ootype.ITEM.class_name == 'java.lang.Object'))
             return s_None
         return s_ImpossibleValue

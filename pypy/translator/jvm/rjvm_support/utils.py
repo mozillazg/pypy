@@ -1,8 +1,8 @@
 import jpype
 import ootypemodel
+import pypy.rlib.rjvm as rjvm
+import pypy.rlib.rjvm.helpers as helpers
 from pypy.annotation.model import SomeString, SomeChar, SomeOOInstance, SomeInteger
-from pypy.rlib import rjvm
-from pypy.rlib.rjvm import JvmClassWrapper
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import typeOf
@@ -21,9 +21,9 @@ class NativeRJvmInstanceExample(object):
         self._TYPE = tpe
         self.refclass = tpe.refclass
         self.static = static
-        staticness = rjvm._check_staticness(static)
+        staticness = helpers._check_staticness(static)
         self.method_names = {str(m.getName()) for m in self.refclass.getMethods() if staticness(m)}
-        self.field_names = {str(f.getName()) for f in rjvm._get_fields(self.refclass, static)}
+        self.field_names = {str(f.getName()) for f in helpers._get_fields(self.refclass, static)}
 
         # Make dummy_method something that makes sense
         if static:
@@ -39,7 +39,7 @@ class NativeRJvmInstanceExample(object):
             jtype = field.getType()
             return jpype_type_to_ootype(jtype)._example()
         elif self.static and name == 'class_':
-            return ootypemodel.NativeRJvmInstance(rjvm.RjvmJavaLangClassWrapper.java_lang_Class)._example()
+            return ootypemodel.NativeRJvmInstance(helpers.RjvmJavaLangClassWrapper.java_lang_Class)._example()
         else:
             raise TypeError(
                 "No method or field called %s found in %s." % (name, self.refclass.getName()))
@@ -65,7 +65,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
         for meth in overloadings:
             METH = typeOf(meth)
             if (isinstance(METH.RESULT, ootypemodel.NativeRJvmInstance) and
-                not rjvm._is_public(METH.RESULT.refclass)):
+                not helpers._is_public(METH.RESULT.refclass)):
                 continue
 
             signature = meth._TYPE.ARGS
@@ -142,7 +142,7 @@ def jpype_type_to_ootype(tpe):
     if tpe in jpype_primitives_to_ootype_mapping:
         return jpype_primitives_to_ootype_mapping[tpe]
     elif tpe.__javaclass__.isArray():
-        refclass = rjvm._refclass_for(tpe)
+        refclass = helpers._refclass_for(tpe)
         component_type = refclass.getComponentType()
         res = ootype.Array(ootypemodel.NativeRJvmInstance(component_type))
         return res
@@ -163,7 +163,7 @@ def has_matching_constructor(jvm_class_wrapper, s_args):
     Create an overloaded method for all the constructors and reuse the code that
     resolves overloadings.
     """
-    refclass = rjvm._refclass_for(jvm_class_wrapper)
+    refclass = helpers._refclass_for(jvm_class_wrapper)
     overloads = [jvm_method_to_pypy_meth(c, result=ootype.Void) for c in refclass.getConstructors()]
     overloaded_meth = ootype._overloaded_meth(*overloads, resolver=JvmOverloadingResolver)
     args = tuple(JvmOverloadingResolver.annotation_to_lltype(arg) for arg in s_args)
@@ -215,11 +215,11 @@ def wrap(value, hint=None):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(value), value)
     elif isinstance(value, jpype.java.lang.Object):
         return wrap(ootypemodel.JvmInstanceWrapper(value))
-    elif isinstance(value, rjvm._jvm_array):
+    elif isinstance(value, rjvm.jvm_array):
         result = ootype._array(hint, len(value))
         result._array = [wrap(el, hint=hint.ITEM) for el in value]
         return result
-    elif isinstance(value, rjvm._jvm_str):
+    elif isinstance(value, rjvm.jvm_str):
         return ootypemodel._native_rjvm_instance(ootypemodel.NativeRJvmInstance(rjvm.java.lang.String), value)
     elif value is None:
         return ootypemodel._null_native_rjvm_instance(hint)
@@ -234,7 +234,7 @@ def wrap(value, hint=None):
 
 
 def pypy_method_from_name(refclass, meth_name, meth_type=ootype.meth, Meth_type=ootype.Meth, static=False):
-    java_methods = [m for m in rjvm._get_methods(refclass, static) if m.getName() == meth_name]
+    java_methods = [m for m in helpers._get_methods(refclass, static) if m.getName() == meth_name]
 
     if not java_methods:
         raise TypeError
@@ -274,13 +274,13 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self, type_s, inst_s):
         assert type_s.is_constant()
         TYPE = type_s.const
-        assert isinstance(TYPE, JvmClassWrapper)
+        assert isinstance(TYPE, rjvm.JvmClassWrapper)
         assert isinstance(inst_s, SomeOOInstance)
         assert isinstance(inst_s.ootype, ootypemodel.NativeRJvmInstance)
         return SomeOOInstance(ootypemodel.NativeRJvmInstance(TYPE))
 
     def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0].const, JvmClassWrapper)
+        assert isinstance(hop.args_s[0].const, rjvm.JvmClassWrapper)
         assert isinstance(hop.args_s[1], SomeOOInstance)
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result)
@@ -292,7 +292,7 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self, type_s, inst_s):
         assert type_s.is_constant()
         TYPE = type_s.const
-        assert isinstance(TYPE, JvmClassWrapper)
+        assert isinstance(TYPE, rjvm.JvmClassWrapper)
         assert isinstance(inst_s, SomeOOInstance)
         assert isinstance(inst_s.ootype, ootypemodel.NativeRJvmInstance)
         OOTYPE = ootypemodel.NativeRJvmInstance(TYPE)
@@ -300,7 +300,7 @@ class Entry(ExtRegistryEntry):
         return SomeOOInstance(OOTYPE)
 
     def specialize_call(self, hop):
-        assert isinstance(hop.args_s[0].const, JvmClassWrapper)
+        assert isinstance(hop.args_s[0].const, rjvm.JvmClassWrapper)
         assert isinstance(hop.args_s[1], SomeOOInstance)
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
         return hop.genop('ooupcast', [v_inst], resulttype = hop.r_result)
