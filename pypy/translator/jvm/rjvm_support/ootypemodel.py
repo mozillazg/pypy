@@ -1,10 +1,15 @@
-from pypy.rpython.ootypesystem.ootype import _null_mixin
+"""
+This module contains additions to ootype system (low-level types),
+needed to support RJVM.
+"""
+
 import utils
+from pypy.rpython.ootypesystem.ootype import _null_mixin
 from pypy.rlib.rjvm import JvmInstanceWrapper, JvmPackageWrapper, helpers, jvm_str, java
 from pypy.rpython.ootypesystem import ootype
 
 # TODO: cache for NativeRJvmInstance objects.
-# For now we only need nulls to be the same.
+# For now we only need nulls to be unique for a given type.
 
 nulls = {}
 
@@ -36,7 +41,8 @@ class NativeRJvmInstance(ootype.NativeInstance):
     def _lookup(self, name):
         if isinstance(name, ootype._overloaded_meth_desc):
             # This is only called by the inliner. Returning None stops it from
-            # inlining, which is what we want...
+            # inlining, which is what we want, since there is no RPython code
+            # for native methods.
             return None, None
         if name in self.field_names:
             return self, None
