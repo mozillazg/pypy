@@ -11,9 +11,9 @@ from pypy.rpython.ootypesystem.ootype import typeOf
 class NativeRJvmInstanceExample(object):
     """
     Instances of this class can serve as "examples" of native classes. They only have attributes
-    that correspond to instance methods and fields of the underlying java class. We have to return an
-    instance of ootype._bound_meth to please the rest of the translation process, so we return
-    a dummy one to keep things simple.
+    that correspond to instance (or static) methods and fields of the underlying java class.
+    We have to return an instance of ootype._bound_meth to please the rest of the translation process,
+    so we return a dummy one to keep things simple.
     """
 
     def __init__(self, tpe, static=False):
@@ -47,19 +47,11 @@ class NativeRJvmInstanceExample(object):
 
 class JvmOverloadingResolver(ootype.OverloadingResolver):
     def __init__(self, overloadings):
-        """The problem we have is that sometimes on the bytecode level
+        """
+        The problem we have is that sometimes on the bytecode level
         there are methods with the same name and arguments but
-        different return types. For instance, for every abstract
-        method defined in AbstractStringBuilder that returns an
-        AbstractStringBuilder, the 'real' StringBuilder defines a
-        method that returns a StringBuilder. The javac compiler is
-        smart enough to also generate a second method, which has
-        AbstractStringBuilder as the return type (to provide an
-        implementation of the abstract method) and only calls the
-        'concrete' version. Then the compiler emits code to the
-        'concrete' version when you actually call sb.append("foo").
-
-        Here we ignore these 'abstract' versions.
+        different return types. These are called 'bridge methods'. Here
+        we exclude them from the overload finding algorithm.
         """
         one_method_per_signature = {}
         for meth in overloadings:
@@ -72,18 +64,10 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
             if signature not in one_method_per_signature:
                 one_method_per_signature[signature] = meth
             else:
-                refclass = self._get_refclass(meth)
-                other_refclass = self._get_refclass(one_method_per_signature[signature])
-
-                if refclass.isInterface() and not other_refclass.isInterface():
+                if meth.isBridge():
                     continue
-                elif other_refclass.isInterface() and not refclass.isInterface():
-                    one_method_per_signature[signature] = meth
-                elif refclass.getSuperclass().getName() == other_refclass.getName():
-                    one_method_per_signature[signature] = meth
                 else:
-                    assert other_refclass.getSuperclass().getName() == refclass.getName(),\
-                    "We only support very simple scenarios of 'return type overloading'"
+                    one_method_per_signature[signature] = meth
 
         ootype.OverloadingResolver.__init__(self, one_method_per_signature.values())
 

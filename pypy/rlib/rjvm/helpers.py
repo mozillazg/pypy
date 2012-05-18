@@ -27,7 +27,7 @@ def _check_staticness(should_be_static):
 def _refclass_for(o):
     """
     Get the appropriate instance of java.lang.Class for objects of various
-    types that show up in RJVM code.
+    types that show up in RJVM code. refclass stands for "reflection-level class".
     """
     if isinstance(o, RjvmJavaLangClassWrapper):
         return o

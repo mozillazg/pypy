@@ -1,14 +1,20 @@
+"""
+This module contains additions to the RTyper model (Reprs) that are needed
+to support RJVM.
+"""
+
+import utils
 from pypy.rpython.error import TyperError
 from pypy.rpython.ootypesystem.rootype import OOInstanceRepr
 from pypy.rpython.rlist import ll_len_foldable
 from pypy.tool.pairtype import pairtype
-import utils
 from pypy.translator.jvm.rjvm_support.annmodel import SomeJvmNativeStaticMeth
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.rmodel import Repr, IntegerRepr, inputconst
 
 
 class JvmClassWrapperRepr(Repr):
+    # classes are not first-class values:
     lowleveltype = ootype.Void
 
     def __init__(self, jvm_class_wrapper):
@@ -65,6 +71,7 @@ class JvmNativeStaticMethRepr(Repr):
         return hop.genop('direct_call', [method_const] + vlist, resulttype=method_type.RESULT)
 
 
+#noinspection PyClassicStyleClass
 class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
 
     def rtype_getitem((r_inst, r_int), hop):
@@ -73,6 +80,9 @@ class __extend__(pairtype(OOInstanceRepr, IntegerRepr)):
         c_getitem = inputconst(ootype.Void, "ll_getitem_fast")
         vlist = hop.inputargs(*hop.args_r)
         hop.exception_is_here()
+        # In ootype, arrays have methods. The ll_getitem_fast method is used
+        # to load values from arrays. This method call gets translated to
+        # *aload jvm opcodes by the code generator.
         return hop.genop('oosend', [c_getitem] + vlist, resulttype=hop.r_result)
 
     def rtype_setitem((r_inst, r_int), hop):
