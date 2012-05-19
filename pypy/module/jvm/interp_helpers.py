@@ -140,13 +140,19 @@ def raise_type_error(space, msg):
     return OperationError(space.w_TypeError, space.wrap(msg))
 
 
-def wrap_result(space, b_res):
+def wrap_result(space, b_result, b_static_result_class):
     """
     Wrap an native object in a tuple of W_JvmObject and type name as string.
+    If the dynamic type of the result is public, use it. If not (for example it's
+    a private implementation of an interface) use the statically known result type.
     """
-    if b_res:
-        w_type_name = space.wrap(str(b_res.getClass().getName()))
-        w_res = space.wrap(W_JvmObject(b_res))
+    if b_result:
+        b_result_class = b_result.getClass()
+        if not is_public(b_result_class.getModifiers()):
+            b_result_class = b_static_result_class
+
+        w_type_name = space.wrap(str(b_result_class.getName()))
+        w_res = space.wrap(W_JvmObject(b_result))
         return space.newtuple([w_res, w_type_name])
     else:
         w_type_name = space.wrap('void')

@@ -64,7 +64,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
             if signature not in one_method_per_signature:
                 one_method_per_signature[signature] = meth
             else:
-                if meth.isBridge():
+                if METH.is_bridge:
                     continue
                 else:
                     one_method_per_signature[signature] = meth
@@ -114,7 +114,12 @@ def jvm_method_to_pypy_Meth(method, Meth_type=ootype.Meth, result=None):
     args = tuple(jpype_type_to_ootype(t) for t in method.getParameterTypes())
     if result is None:
         result = jpype_type_to_ootype(method.getReturnType())
-    return Meth_type(args, result)
+    res = Meth_type(args, result)
+    if hasattr(method, 'isBridge'):
+        res.is_bridge = method.isBridge()
+    else:
+        res.is_bridge = False
+    return res
 
 
 def jvm_method_to_pypy_meth(method, meth_type=ootype.meth, Meth_type=ootype.Meth, result=None):
