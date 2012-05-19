@@ -53,7 +53,7 @@ class AppTestJvm(object):
         try:
             POINT = 'java.awt.Point'
             p1 = jvm.new(POINT)
-            jvm.call_method(p1, 'foobar')
+            jvm.call_method(p1, POINT, 'foobar')
         except TypeError:
             pass
         else:
@@ -66,7 +66,7 @@ class AppTestJvm(object):
             POINT = 'java.awt.Point'
             p1 = jvm.new(POINT)
             p2 = jvm.new(POINT, (p1, 'foo'))
-            jvm.call_method(p1, 'equals', (p2, 'foobar'))
+            jvm.call_method(p1, POINT, 'equals', (p2, 'foobar'))
         except TypeError:
             pass
         else:
@@ -75,9 +75,10 @@ class AppTestJvm(object):
     def test_exception_in_method(self):
         import jvm
 
-        sb = jvm.new('java.lang.StringBuilder')
+        STRING_BUILDER = 'java.lang.StringBuilder'
+        sb = jvm.new(STRING_BUILDER)
         try:
-            jvm.call_method(sb, 'setLength', (-1, int))
+            jvm.call_method(sb, STRING_BUILDER, 'setLength', (-1, int))
         except RuntimeError:
             pass
         else:
@@ -112,32 +113,33 @@ class AppTestJvm(object):
         p1 = jvm.new(POINT)
         p2 = jvm.new(POINT, (p1, POINT))
 
-        (res, tpe) = jvm.call_method(p1, 'equals', (p2, 'java.lang.Object'))
+        (res, tpe) = jvm.call_method(p1, POINT, 'equals', (p2, 'java.lang.Object'))
         assert isinstance(tpe, str)
         assert tpe == 'java.lang.Boolean'
 
     def test_call_method_toString(self):
         import jvm
 
-        p1 = jvm.new('java.awt.Point')
-        (res, tpe) = jvm.call_method(p1, 'toString')
+        POINT = 'java.awt.Point'
+        p1 = jvm.new(POINT)
+        (res, tpe) = jvm.call_method(p1, POINT, 'toString')
         assert tpe == 'java.lang.String'
 
     def test_unboxing(self):
         import jvm
-
-        p1 = jvm.new('java.awt.Point')
-        s, _ = jvm.call_method(p1, 'toString')
+        POINT = 'java.awt.Point'
+        p1 = jvm.new(POINT)
+        s, _ = jvm.call_method(p1, POINT, 'toString')
         unboxed_str = jvm.unbox(s)
         assert isinstance(unboxed_str, str)
         assert unboxed_str == 'java.awt.Point[x=0,y=0]'
-
-        l, _ = jvm.call_method(s, 'length')
+        STRING = 'java.lang.String'
+        l, _ = jvm.call_method(s, STRING, 'length')
         unboxed_int = jvm.unbox(l)
         assert isinstance(unboxed_int, int)
         assert unboxed_int == len('java.awt.Point[x=0,y=0]')
 
-        b, _ = jvm.call_method(s, 'isEmpty')
+        b, _ = jvm.call_method(s, STRING, 'isEmpty')
         unboxed_bool = jvm.unbox(b)
         assert isinstance(unboxed_bool, bool)
         assert unboxed_bool == False
@@ -164,25 +166,27 @@ class AppTestJvm(object):
     def test_void_method(self):
         import jvm
 
-        al = jvm.new('java.util.ArrayList')
-        (res, tpe) = jvm.call_method(al, 'clear')
+        ARRAY_LIST = 'java.util.ArrayList'
+        al = jvm.new(ARRAY_LIST)
+        (res, tpe) = jvm.call_method(al, ARRAY_LIST, 'clear')
         assert res is None
         assert tpe == 'void'
 
     def test_bool_argument(self):
         import jvm
 
-        t = jvm.new('java.lang.Thread')
-        jvm.call_method(t, 'setDaemon', (True, bool))
-        (res, tpe) = jvm.call_method(t, 'isDaemon')
+        THREAD = 'java.lang.Thread'
+        t = jvm.new(THREAD)
+        jvm.call_method(t, THREAD, 'setDaemon', (True, bool))
+        (res, tpe) = jvm.call_method(t, THREAD, 'isDaemon')
         assert tpe == 'java.lang.Boolean'
         assert jvm.unbox(res) is True
 
     def test_str_argument(self):
         import jvm
-
-        sb = jvm.new('java.lang.StringBuilder', ('foobar', str))
-        res, _ = jvm.call_method(sb, 'toString')
+        STRING_BUILDER = 'java.lang.StringBuilder'
+        sb = jvm.new(STRING_BUILDER, ('foobar', str))
+        res, _ = jvm.call_method(sb, STRING_BUILDER, 'toString')
         assert jvm.unbox(res) == 'foobar'
 
     def test_superclass(self):
@@ -318,6 +322,17 @@ class AppTestJvm(object):
         p = java.awt.Point()
         p.setLocation(7.0, 12.0)
         assert p.x == 7
+
+    def test_interfaces(self):
+        import jvm
+        from jvm import java
+        hs = java.util.HashSet()
+
+        _it, tpe = jvm.call_method(hs._inst, 'java.util.HashSet', 'iterator')
+        assert tpe == 'java.util.Iterator'
+
+        it = hs.iterator()
+        assert not it.hasNext()
 
 
 if __name__ == '__main__':

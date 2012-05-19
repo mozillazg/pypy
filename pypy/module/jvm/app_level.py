@@ -45,7 +45,7 @@ class JvmBoundMethod(object):
 
     def __call__(self, *args):
         args_with_types = find_overload(self.overloads, args)
-        res, tpe = jvm.call_method(self.obj._inst, self.method_name, *args_with_types)
+        res, tpe = jvm.call_method(self.obj._inst, self.obj._class_name, self.method_name, *args_with_types)
         return handle_result(res, tpe)
 
     def __repr__(self):

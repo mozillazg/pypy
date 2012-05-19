@@ -88,8 +88,8 @@ def get_constructors(space, class_name):
     return space.newtuple(res)
 
 
-@unwrap_spec(method_name=str, jvm_obj=W_JvmObject)
-def call_method(space, jvm_obj, method_name, args_w):
+@unwrap_spec(class_name=str, method_name=str, jvm_obj=W_JvmObject)
+def call_method(space, jvm_obj, class_name, method_name, args_w):
     """
     Calls method with the given name on the given object, which should be a
     W_JvmObject. Any arguments should be of the form (arg, type) where arg is
@@ -103,7 +103,7 @@ def call_method(space, jvm_obj, method_name, args_w):
     b_obj = jvm_obj.b_obj
     args, types = helpers.get_args_types(space, args_w)
 
-    b_java_class = b_obj.getClass()
+    b_java_class = helpers.class_for_name(space, class_name)
 
     try:
         b_meth = b_java_class.getMethod(method_name, types)
@@ -116,7 +116,7 @@ def call_method(space, jvm_obj, method_name, args_w):
     except rjvm.ReflectionException:
         raise helpers.raise_runtime_error(space, "Error invoking method")
 
-    return helpers.wrap_result(space, b_res)
+    return helpers.wrap_result(space, b_res, b_meth.getReturnType())
 
 
 @unwrap_spec(class_name=str, method_name=str)
@@ -138,7 +138,7 @@ def call_static_method(space, class_name, method_name, args_w):
     except rjvm.ReflectionException:
         raise helpers.raise_runtime_error(space, "Error invoking method")
 
-    return helpers.wrap_result(space, b_res)
+    return helpers.wrap_result(space, b_res, b_meth.getReturnType())
 
 
 @unwrap_spec(jvm_obj=W_JvmObject)
@@ -315,7 +315,7 @@ def _get_field_value(space, b_class, b_obj, field_name):
         b_res = b_field.get(b_obj)
     except rjvm.ReflectionException:
         raise helpers.raise_runtime_error(space, "Error getting field")
-    return helpers.wrap_result(space, b_res)
+    return helpers.wrap_result(space, b_res, b_field.getType())
 
 
 def _set_field_value(space, b_class, b_obj, field_name, w_val):
