@@ -189,6 +189,8 @@ def superclass(space, class_name):
     b_superclass = b_cls.getSuperclass()
     if b_superclass:
         return space.wrap(str(b_superclass.getName()))
+    elif b_cls.isInterface():
+        return space.wrap('java.lang.Object')
     else:
         return space.w_None
 
