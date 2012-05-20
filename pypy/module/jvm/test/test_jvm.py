@@ -334,6 +334,9 @@ class AppTestJvm(object):
         it = hs.iterator()
         assert not it.hasNext()
 
+        al = java.util.ArrayList()
+        al.add(it)
+
 
 if __name__ == '__main__':
     # You can run this file directly using the compiled pypy-jvm interpreter,
