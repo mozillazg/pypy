@@ -7,7 +7,7 @@ def pytest_ignore_collect(path):
 
 def compile_so_file():
     from pypy.translator.platform import platform
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    from platformer.cbuild import ExternalCompilationInfo
     udir = pytest.ensuretemp('_ctypes_test')
     cfile = py.path.local(__file__).dirpath().join("_ctypes_test.c")
 

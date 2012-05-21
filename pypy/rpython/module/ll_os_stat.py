@@ -5,16 +5,15 @@ indexed like a tuple but also exposes the st_xxx attributes.
 import os, sys
 from pypy.annotation import model as annmodel
 from pypy.tool.pairtype import pairtype
-from pypy.tool.sourcetools import func_with_new_name, func_renamer
+from pypy.tool.sourcetools import func_renamer
 from pypy.rpython import extregistry
-from pypy.rpython.extfunc import register_external, extdef
+from pypy.rpython.extfunc import extdef
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem.rtupletype import TUPLE_TYPE
 from pypy.rlib import rposix
 from pypy.rlib.rarithmetic import intmask
-from pypy.rlib.objectmodel import specialize
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.annlowlevel import hlstr
 
 # Support for float times is here.
@@ -311,9 +310,6 @@ def make_win32_stat_impl(name, traits):
     # - file modification times suffer from forth-and-back conversions between
     #   UTC and local time
     # Therefore, we implement our own stat, based on the Win32 API directly.
-    from pypy.rpython.tool import rffi_platform as platform
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
-    from pypy.rlib import rwin32
 
     assert len(STAT_FIELDS) == 10    # no extra fields on Windows
 

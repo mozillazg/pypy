@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.extfunc import register_external
 from pypy.module._minimal_curses import interp_curses
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 eci = ExternalCompilationInfo(
     includes = ['curses.h', 'term.h'],

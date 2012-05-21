@@ -6,8 +6,7 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.autopath import pypydir
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib import rposix
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.tool.autopath import pypydir
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.annotation.model import SomeString
 
 class CConfig:

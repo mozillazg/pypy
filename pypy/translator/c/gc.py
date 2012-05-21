@@ -2,13 +2,12 @@ import sys
 from pypy.objspace.flow.model import Constant
 from pypy.translator.c.support import cdecl
 from pypy.translator.c.node import ContainerNode
-from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Ptr, ContainerType, RttiStruct, \
-     RuntimeTypeInfo, getRuntimeTypeInfo, top_container
+from pypy.rpython.lltypesystem.lltype import typeOf, RttiStruct, \
+     RuntimeTypeInfo, top_container
 from pypy.rpython.memory.gctransform import \
      refcounting, boehm, framework, asmgcroot
-from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rpython.lltypesystem import lltype
+from platformer.cbuild import ExternalCompilationInfo
 
 class BasicGcPolicy(object):
 

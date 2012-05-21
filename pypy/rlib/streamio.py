@@ -176,7 +176,7 @@ StreamErrors = (OSError, StreamError)     # errors that can generally be raised
 
 if sys.platform == "win32":
     from pypy.rlib.rwin32 import BOOL, HANDLE, get_osfhandle, GetLastError
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    from platformer.cbuild import ExternalCompilationInfo
     from pypy.rpython.lltypesystem import rffi
 
     _eci = ExternalCompilationInfo()

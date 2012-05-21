@@ -4,13 +4,13 @@ Common types, functions from core win32 libraries, such as kernel32
 
 from pypy.rpython.tool import rffi_platform
 from pypy.tool.udir import udir
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import CompilationError
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.rposix import validate_fd
 from pypy.rlib import jit
-import os, sys, errno
+import os, errno
 
 # This module can be imported on any platform,
 # but most symbols are not usable...

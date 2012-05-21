@@ -25,7 +25,7 @@ Long history:
     Converted to RPython by arigo.
 """
 
-from pypy.rlib.rarithmetic import r_uint, r_ulonglong, intmask
+from pypy.rlib.rarithmetic import r_uint, r_ulonglong
 
 
 if r_uint.BITS == 32:
@@ -40,7 +40,7 @@ else:
 
     # ----- start of custom code, think about something better... -----
     from pypy.rpython.lltypesystem import lltype, rffi
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
+    from platformer.cbuild import ExternalCompilationInfo
     eci = ExternalCompilationInfo(post_include_bits=["""
 static unsigned long pypy__rotateLeft(unsigned long x, long n) {
     unsigned int x1 = x;    /* arithmetic directly on int */

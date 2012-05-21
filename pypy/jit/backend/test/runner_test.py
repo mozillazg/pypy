@@ -19,6 +19,7 @@ from pypy.jit.codewriter import heaptracker, longlong
 from pypy.rlib import longlong2float
 from pypy.rlib.rarithmetic import intmask, is_valid_int
 from pypy.jit.backend.detect_cpu import autodetect_main_model_and_size
+from platformer.cbuild import ExternalCompilationInfo
 
 
 def boxfloat(x):
@@ -2839,7 +2840,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_short_result_of_call_direct(self):
         # Test that calling a function that returns a CHAR, SHORT or INT,
         # signed or unsigned, properly gets zero-extended or sign-extended.
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         for RESTYPE in [rffi.SIGNEDCHAR, rffi.UCHAR,
                         rffi.SHORT, rffi.USHORT,
                         rffi.INT, rffi.UINT,
@@ -2873,7 +2873,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_short_result_of_call_compiled(self):
         # Test that calling a function that returns a CHAR, SHORT or INT,
         # signed or unsigned, properly gets zero-extended or sign-extended.
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         for RESTYPE in [rffi.SIGNEDCHAR, rffi.UCHAR,
                         rffi.SHORT, rffi.USHORT,
                         rffi.INT, rffi.UINT,
@@ -2913,7 +2912,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_longlong_result_of_call_direct(self):
         if not self.cpu.supports_longlong:
             py.test.skip("longlong test")
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.rlib.rarithmetic import r_longlong
         eci = ExternalCompilationInfo(
             separate_module_sources=["""
@@ -2941,7 +2939,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_longlong_result_of_call_compiled(self):
         if not self.cpu.supports_longlong:
             py.test.skip("test of longlong result")
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.rlib.rarithmetic import r_longlong
         eci = ExternalCompilationInfo(
             separate_module_sources=["""
@@ -2970,7 +2967,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_singlefloat_result_of_call_direct(self):
         if not self.cpu.supports_singlefloats:
             py.test.skip("singlefloat test")
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.rlib.rarithmetic import r_singlefloat
         eci = ExternalCompilationInfo(
             separate_module_sources=["""
@@ -2988,7 +2984,6 @@ class LLtypeBackendTest(BaseBackendTest):
         assert f(value) == expected
         #
         FUNC = self.FuncType([lltype.SingleFloat], lltype.SingleFloat)
-        FPTR = self.Ptr(FUNC)
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         ivalue = longlong.singlefloat2int(value)
@@ -3000,7 +2995,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_singlefloat_result_of_call_compiled(self):
         if not self.cpu.supports_singlefloats:
             py.test.skip("test of singlefloat result")
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.rlib.rarithmetic import r_singlefloat
         eci = ExternalCompilationInfo(
             separate_module_sources=["""
@@ -3018,7 +3012,6 @@ class LLtypeBackendTest(BaseBackendTest):
         assert f(value) == expected
         #
         FUNC = self.FuncType([lltype.SingleFloat], lltype.SingleFloat)
-        FPTR = self.Ptr(FUNC)
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         funcbox = self.get_funcbox(self.cpu, f)

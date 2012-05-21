@@ -5,7 +5,7 @@ based on the Win32 API.
 from __future__ import with_statement
 
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.tool.sourcetools import func_renamer
 from pypy.rlib.objectmodel import specialize

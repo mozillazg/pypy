@@ -8,14 +8,11 @@ termios module is there
 import termios
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.extfunc import lazy_register, register_external
+from pypy.rpython.extfunc import register_external
 from pypy.rlib.rarithmetic import intmask
-from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.annotation import model as annmodel
-from pypy.rpython import rclass
 from pypy.rlib import rtermios, rposix
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 eci = ExternalCompilationInfo(
     includes = ['termios.h', 'unistd.h']

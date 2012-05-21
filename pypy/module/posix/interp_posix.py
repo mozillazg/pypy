@@ -4,12 +4,11 @@ from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import r_longlong
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.interpreter.error import OperationError, wrap_oserror, wrap_oserror2
-from pypy.interpreter.error import operationerrfmt
 from pypy.rpython.module.ll_os import RegisterOs
 from pypy.rpython.module import ll_os_stat
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.module.sys.interp_encoding import getfilesystemencoding
 
 import os, sys

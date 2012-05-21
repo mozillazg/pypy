@@ -7,7 +7,7 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.tool.autopath import pypydir
 from pypy.rlib import jit, rposix
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 from pypy.rlib.rfloat import isfinite, isinf, isnan, INFINITY, NAN
 

@@ -1,8 +1,7 @@
 import py
 
 from pypy.tool.udir import udir
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from subprocess import Popen, PIPE, STDOUT
+from platformer.cbuild import ExternalCompilationInfo
 
 class TestEci:
     def setup_class(cls):

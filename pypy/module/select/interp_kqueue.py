@@ -6,7 +6,7 @@ from pypy.rlib._rsocket_rffi import socketclose
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 
 eci = ExternalCompilationInfo(

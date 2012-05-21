@@ -14,7 +14,6 @@ from pypy.rlib import exports
 from pypy.rlib.rfloat import isfinite
 from pypy.rlib.rstackovf import _StackOverflow
 from pypy.translator.c import extfunc
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from py.builtin import BaseException
 
 def needs_gcheader(T):

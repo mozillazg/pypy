@@ -3,16 +3,12 @@ This file defines utilities for manipulating the stack in an
 RPython-compliant way, intended mostly for use by the Stackless PyPy.
 """
 
-import inspect
-
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rlib import rgc
-from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.rpython.controllerentry import Controller, SomeControlledInstance
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 # ____________________________________________________________
 

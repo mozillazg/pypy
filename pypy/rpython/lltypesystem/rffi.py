@@ -12,7 +12,7 @@ from pypy.rlib import rarithmetic, rgc
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.tool.rfficache import platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rstring import StringBuilder, UnicodeBuilder, assert_str0
@@ -575,7 +575,6 @@ def CExternVariable(TYPE, name, eci, _CConstantClass=CConstant,
     the given global C variable.
     """
     from pypy.translator.c.primitive import PrimitiveType
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
     # XXX we cannot really enumerate all C types here, do it on a case-by-case
     #     basis
     if c_type is None:

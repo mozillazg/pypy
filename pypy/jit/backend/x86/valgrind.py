@@ -4,7 +4,7 @@ Support for valgrind: tell it when we patch code in-place.
 
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.objectmodel import we_are_translated
 
 

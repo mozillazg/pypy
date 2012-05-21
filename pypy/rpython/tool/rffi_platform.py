@@ -6,9 +6,8 @@ import struct
 import py
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
-from pypy.rpython.lltypesystem import llmemory
 from pypy.tool.gcc_cache import build_executable_cache, try_compile_cache
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import CompilationError
 from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir

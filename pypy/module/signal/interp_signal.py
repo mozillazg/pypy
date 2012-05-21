@@ -6,7 +6,7 @@ from pypy.interpreter.gateway import unwrap_spec
 import signal as cpy_signal
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 import py
 import sys
 from pypy.tool import autopath

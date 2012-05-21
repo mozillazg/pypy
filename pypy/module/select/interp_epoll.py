@@ -10,7 +10,7 @@ from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform
 from pypy.rlib._rsocket_rffi import socketclose, FD_SETSIZE
 from pypy.rlib.rposix import get_errno
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 
 eci = ExternalCompilationInfo(

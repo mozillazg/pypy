@@ -4,7 +4,7 @@ from pypy.interpreter.error import wrap_windowserror, OperationError
 from pypy.rlib import rwin32
 from pypy.rlib.rarithmetic import r_uint
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.tool import rffi_platform
 from pypy.module._multiprocessing.interp_connection import w_handle
 

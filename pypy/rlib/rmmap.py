@@ -1,8 +1,8 @@
 
 from pypy.rpython.tool import rffi_platform
-from pypy.rpython.lltypesystem import rffi, lltype, llmemory
+from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib import rposix
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.nonconst import NonConstant
 
 import sys

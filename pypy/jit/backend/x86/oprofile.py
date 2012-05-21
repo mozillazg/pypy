@@ -1,7 +1,6 @@
 from pypy.rpython.tool import rffi_platform
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rpython.lltypesystem import rffi
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.rposix import get_errno
 from pypy.jit.backend.x86 import profagent
 

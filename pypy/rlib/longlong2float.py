@@ -11,7 +11,7 @@ from pypy.annotation import model as annmodel
 from pypy.rlib.rarithmetic import r_int64
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 
 # -------- implement longlong2float and float2longlong --------

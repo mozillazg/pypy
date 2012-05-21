@@ -5,7 +5,7 @@ from pypy.translator.c.database import LowLevelDatabase
 from pypy.translator.c.extfunc import pre_include_code_lines
 from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir, pypydir
 from pypy.tool import isolate, runsubprocess

@@ -1,6 +1,4 @@
-import ctypes
 import sys, os
-import atexit
 
 import py
 
@@ -10,28 +8,19 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import ll2ctypes
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib.objectmodel import we_are_translated
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.gensupp import NameManager
 from pypy.tool.udir import udir
-from pypy.translator import platform
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root
 from pypy.interpreter.gateway import unwrap_spec
-from pypy.interpreter.nestedscope import Cell
-from pypy.interpreter.module import Module
-from pypy.interpreter.function import StaticMethod
-from pypy.objspace.std.sliceobject import W_SliceObject
-from pypy.module.__builtin__.descriptor import W_Property
-from pypy.module.__builtin__.interp_classobj import W_ClassObject
-from pypy.module.__builtin__.interp_memoryview import W_MemoryView
 from pypy.rlib.entrypoint import entrypoint
 from pypy.rlib.rposix import is_valid_fd, validate_fd
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.exports import export_struct
 from pypy.module import exceptions
-from pypy.module.exceptions import interp_exceptions
 # CPython 2.4 compatibility
 from py.builtin import BaseException
 from pypy.tool.sourcetools import func_with_new_name

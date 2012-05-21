@@ -4,7 +4,7 @@ The table 'native_fmttable' is also used by pypy.module.array.interp_array.
 """
 import struct
 
-from pypy.rlib import jit, longlong2float
+from pypy.rlib import longlong2float
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib.rarithmetic import r_singlefloat, widen
 from pypy.rlib.rstruct import standardfmttable as std
@@ -12,7 +12,7 @@ from pypy.rlib.rstruct.error import StructError
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 
 native_is_bigendian = struct.pack("=i", 1) == struct.pack(">i", 1)

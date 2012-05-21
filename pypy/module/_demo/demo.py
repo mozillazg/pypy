@@ -4,8 +4,8 @@ from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.interpreter.typedef import TypeDef, GetSetProperty
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-import sys, math
+from platformer.cbuild import ExternalCompilationInfo
+import math
 
 time_t = rffi_platform.getsimpletype('time_t', '#include <time.h>', rffi.LONG)
 

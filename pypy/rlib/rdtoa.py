@@ -1,6 +1,6 @@
 from __future__ import with_statement
 from pypy.rlib import rfloat
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.tool.autopath import pypydir
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib import jit

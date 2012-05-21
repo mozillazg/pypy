@@ -1,6 +1,6 @@
 import sys
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.jit.backend.x86.arch import WORD
 
 

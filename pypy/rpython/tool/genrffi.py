@@ -3,10 +3,7 @@
 import ctypes
 from pypy.rpython.lltypesystem import rffi
 from pypy.rpython.lltypesystem import lltype
-from pypy.rlib.unroll import unrolling_iterable
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-
-import py
+from platformer.cbuild import ExternalCompilationInfo
 
 #rffi.UINT = rffi.INT # XXX
 #rffi.UCHAR = lltype.Char # XXX

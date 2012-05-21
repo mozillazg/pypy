@@ -1,4 +1,4 @@
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import CompilationError
 import py
 import sys

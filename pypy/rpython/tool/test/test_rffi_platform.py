@@ -3,7 +3,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 from pypy.tool.udir import udir
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rlib.rfloat import isnan

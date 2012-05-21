@@ -1,6 +1,5 @@
 from pypy.tool.autopath import pypydir
 from pypy.translator.platform import CompilationError
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.tool.compat import md5
 import py
 

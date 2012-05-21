@@ -138,7 +138,7 @@ if hasattr(__import__(os.name), 'unsetenv'):
 # ____________________________________________________________
 # Access to the 'environ' external variable
 
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 if sys.platform.startswith('darwin'):
     CCHARPPP = rffi.CArrayPtr(rffi.CCHARPP)

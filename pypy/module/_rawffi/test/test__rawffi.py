@@ -2,11 +2,11 @@
 
 from pypy.conftest import gettestobjspace
 from pypy.translator.platform import platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.module._rawffi.interp_rawffi import TYPEMAP
 from pypy.module._rawffi.tracker import Tracker
 
-import os, sys, py
+import sys, py
 
 class AppTestFfi:
     def prepare_c_example():

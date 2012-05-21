@@ -1,10 +1,9 @@
 import py
 from pypy.tool.autopath import pypydir
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.tool import rffi_platform
 from pypy.rlib.rarithmetic import is_emulated_long
-import sys
 
 
 cdir = py.path.local(pypydir) / 'translator' / 'c'

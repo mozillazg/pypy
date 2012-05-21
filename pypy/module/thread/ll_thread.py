@@ -1,6 +1,6 @@
 
 from pypy.rpython.lltypesystem import rffi, lltype, llmemory
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 import py
 from pypy.rlib import jit, rgc
 from pypy.rlib.debug import ll_assert

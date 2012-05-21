@@ -1,8 +1,7 @@
 import os
-from pypy.rpython.lltypesystem.rffi import (CConstant, CExternVariable,
-        INT, CCHARPP)
-from pypy.rpython.lltypesystem import lltype, ll2ctypes, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rpython.lltypesystem.rffi import CConstant, CExternVariable, INT
+from pypy.rpython.lltypesystem import ll2ctypes, rffi
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.objectmodel import specialize
 from pypy.rlib import jit

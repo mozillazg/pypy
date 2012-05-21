@@ -6,10 +6,8 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem import llgroup
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.annlowlevel import llhelper
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.jit.codewriter import heaptracker
 from pypy.jit.metainterp.history import ConstPtr, AbstractDescr
-from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.backend.llsupport import symbolic
 from pypy.jit.backend.llsupport.symbolic import WORD
 from pypy.jit.backend.llsupport.descr import SizeDescr, ArrayDescr

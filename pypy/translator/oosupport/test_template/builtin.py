@@ -212,7 +212,7 @@ class BaseTestBuiltin(BaseTestRbuiltin):
 
     def test_rffi_primitive(self):
         from pypy.rpython.lltypesystem import rffi, lltype
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        from platformer.cbuild import ExternalCompilationInfo
         eci = ExternalCompilationInfo(
             includes = ['ctype.h']
         )

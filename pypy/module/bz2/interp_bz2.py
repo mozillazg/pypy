@@ -7,7 +7,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.typedef import TypeDef, interp_attrproperty
 from pypy.interpreter.gateway import interp2app, unwrap_spec
 from pypy.rlib.streamio import Stream
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform as compiler
 from pypy.rlib.rarithmetic import intmask, r_longlong
 import sys

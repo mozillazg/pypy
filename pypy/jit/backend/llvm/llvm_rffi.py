@@ -1,7 +1,7 @@
 import py, os, sys
 import pypy
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.translator.tool.cbuild import ExternalCompilationInfo, log
+from platformer.cbuild import ExternalCompilationInfo, log
 
 if not sys.platform.startswith('linux'):
     py.test.skip("Linux only for now")

@@ -10,7 +10,7 @@ from pypy.rlib import jit
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rtimer import read_timestamp, _is_64_bit
 from pypy.rpython.lltypesystem import rffi, lltype
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.tool.autopath import pypydir
 from pypy.rlib.rarithmetic import r_longlong
 

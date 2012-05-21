@@ -58,7 +58,7 @@ class TestMkrffi(object):
         import ctypes
         from pypy.tool.udir import udir
         from pypy.translator.platform import platform
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        from platformer.cbuild import ExternalCompilationInfo
         
         c_source = """
         void *int_to_void_p(int arg) {}

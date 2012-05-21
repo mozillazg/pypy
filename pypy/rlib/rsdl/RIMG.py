@@ -1,7 +1,6 @@
 import sys
-from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.rpython.tool import rffi_platform as platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from pypy.rpython.lltypesystem import rffi
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.rsdl import RSDL
 
 

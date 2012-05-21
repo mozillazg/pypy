@@ -5,14 +5,14 @@ from __future__ import with_statement
 from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.rarithmetic import intmask, r_uint, is_emulated_long
+from pypy.rlib.rarithmetic import intmask, is_emulated_long
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.rmmap import alloc
 from pypy.rlib.rdynload import dlopen, dlclose, dlsym, dlsym_byordinal
-from pypy.rlib.rdynload import DLOpenError, DLLHANDLE
+from pypy.rlib.rdynload import DLLHANDLE
 from pypy.rlib import jit
 from pypy.tool.autopath import pypydir
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 import py
 import os

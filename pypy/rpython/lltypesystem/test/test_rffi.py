@@ -5,19 +5,17 @@ from pypy.rpython.lltypesystem.rffi import *
 from pypy.rpython.lltypesystem.rffi import _keeper_for_type # crap
 from pypy.rlib.rposix import get_errno, set_errno
 from pypy.translator.c.test.test_genc import compile as compile_c
-from pypy.rpython.lltypesystem.lltype import Signed, Ptr, Char, malloc
-from pypy.rpython.lltypesystem.rstr import STR
+from pypy.rpython.lltypesystem.lltype import Signed, Char
 from pypy.rpython.lltypesystem import lltype
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
-from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
 from pypy.rpython.rtyper import RPythonTyper
 from pypy.translator.backendopt.all import backend_optimizations
 from pypy.translator.translator import graphof
 from pypy.conftest import option
 from pypy.objspace.flow.model import summary
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rlib.rarithmetic import r_singlefloat
 
 class BaseTestRffi:
@@ -267,7 +265,6 @@ class BaseTestRffi:
         h_file = udir.join("opaque.h")
         h_file.write(h_source)
     
-        from pypy.rpython.tool import rffi_platform
         eci = ExternalCompilationInfo(
             includes=['opaque.h'],
             include_dirs=[str(udir)],
@@ -320,7 +317,6 @@ class BaseTestRffi:
         h_file = udir.join("opaque2%s.h" % (ctype_pref, ))
         h_file.write(h_source)
     
-        from pypy.rpython.tool import rffi_platform
         eci = ExternalCompilationInfo(
             includes=[h_file.basename],
             include_dirs=[str(udir)]

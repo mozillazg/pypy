@@ -5,7 +5,7 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.rpython.lltypesystem import lltype
 from pypy.rlib.rarithmetic import ovfcheck_float_to_int, intmask
 from pypy.rlib import rposix
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 import os
 import sys
 import time as pytime

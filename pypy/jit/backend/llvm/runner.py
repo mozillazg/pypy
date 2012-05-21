@@ -5,7 +5,6 @@ from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib import runicode
 from pypy.jit.metainterp.history import AbstractDescr, INT
 from pypy.jit.metainterp.history import BoxInt, BoxPtr
-from pypy.jit.backend.model import AbstractCPU
 from pypy.jit.backend.llvm import llvm_rffi
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.resoperation import rop, ResOperation
@@ -74,7 +73,7 @@ class LLVMCPU(object):
         self._zer_error_instance = self._get_prebuilt_error(ZeroDivisionError)
         #
         # temporary (Boehm only)
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        from platformer.cbuild import ExternalCompilationInfo
         compilation_info = ExternalCompilationInfo(libraries=['gc'])
         self.malloc_fn_ptr = rffi.llexternal("GC_malloc",
                                              [rffi.SIZE_T],

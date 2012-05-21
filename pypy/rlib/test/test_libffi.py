@@ -99,8 +99,8 @@ class TestLibffiCall(BaseFfiTest):
     @classmethod
     def setup_class(cls):
         from pypy.tool.udir import udir
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
-        from pypy.translator.tool.cbuild import STANDARD_DEFINES
+        from platformer.cbuild import ExternalCompilationInfo
+        from platformer.cbuild import STANDARD_DEFINES
         from pypy.translator.platform import platform
 
         BaseFfiTest.setup_class()

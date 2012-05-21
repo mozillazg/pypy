@@ -1,6 +1,7 @@
 import array, weakref
 from pypy.rpython.lltypesystem import llmemory
 from pypy.rlib.rarithmetic import is_valid_int
+from platformer.cbuild import ExternalCompilationInfo
 
 
 # An "arena" is a large area of memory which can hold a number of
@@ -405,7 +406,6 @@ def arena_protect(arena_addr, size, inaccessible):
 import os, sys
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.extfunc import register_external
-from pypy.rlib.objectmodel import CDefinedIntSymbolic
 
 if sys.platform.startswith('linux'):
     # This only works with linux's madvise(), which is really not a memory
@@ -417,7 +417,6 @@ if sys.platform.startswith('linux'):
     # lazily-allocating pages on all Linux systems.
 
     from pypy.rpython.tool import rffi_platform
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
     _eci = ExternalCompilationInfo(includes=['sys/mman.h'])
     MADV_DONTNEED = rffi_platform.getconstantinteger('MADV_DONTNEED',
                                                      '#include <sys/mman.h>')
@@ -507,7 +506,6 @@ else:
     clear_large_memory_chunk = llmemory.raw_memclear
 
 if os.name == "posix":
-    from pypy.translator.tool.cbuild import ExternalCompilationInfo
     _eci = ExternalCompilationInfo(includes=['sys/mman.h'])
     raw_mprotect = rffi.llexternal('mprotect',
                                    [llmemory.Address, rffi.SIZE_T, rffi.INT],

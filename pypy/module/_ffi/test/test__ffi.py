@@ -1,19 +1,14 @@
 from pypy.conftest import gettestobjspace
-from pypy.translator.platform import platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
-from pypy.module._rawffi.interp_rawffi import TYPEMAP
-from pypy.module._rawffi.tracker import Tracker
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform
 
-import os, sys, py
+import sys, py
 
 class AppTestFfi:
 
     @classmethod
     def prepare_c_example(cls):
         from pypy.tool.udir import udir
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
-        from pypy.translator.platform import platform
 
         c_file = udir.ensure("test__ffi", dir=1).join("foolib.c")
         # automatically collect the C source from the docstrings of the tests

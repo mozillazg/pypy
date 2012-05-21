@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem.rffi import CCHARP
 from pypy.rlib.rposix import get_errno as geterrno
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.translator.platform import platform as target_platform
 
 from pypy.rlib.rarithmetic import intmask, r_uint

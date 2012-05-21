@@ -6,7 +6,7 @@ from pypy.interpreter.error import wrap_oserror, OperationError
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rlib import rgc
 from pypy.rlib.rarithmetic import r_uint
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.tool import rffi_platform as platform
 from pypy.module.thread import ll_thread
 from pypy.module._multiprocessing.interp_connection import w_handle

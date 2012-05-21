@@ -7,6 +7,7 @@ from pypy.rlib.clibffi import *
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.lltypesystem import rffi, lltype
+from platformer.cbuild import ExternalCompilationInfo
 import py
 import sys
 import time
@@ -262,7 +263,6 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(tpe2, flavor='raw')
 
     def test_struct_by_val(self):
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.translator.platform import platform
         from pypy.tool.udir import udir
 
@@ -313,7 +313,6 @@ class TestCLibffi(BaseFfiTest):
         assert not ALLOCATED
 
     def test_ret_struct_val(self):
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.translator.platform import platform
         from pypy.tool.udir import udir
 
@@ -389,7 +388,6 @@ class TestCLibffi(BaseFfiTest):
         assert not ALLOCATED
 
     def test_cdll_life_time(self):
-        from pypy.translator.tool.cbuild import ExternalCompilationInfo
         from pypy.translator.platform import platform
         from pypy.tool.udir import udir
 

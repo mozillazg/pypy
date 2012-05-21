@@ -6,7 +6,7 @@ from pypy.annotation.model import SomeString
 from pypy.rlib import objectmodel
 from pypy.rpython.extfunc import register_external
 from pypy.rpython.tool import rffi_platform
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 
 USE_SHORT_FLOAT_REPR = True # XXX make it a translation option?

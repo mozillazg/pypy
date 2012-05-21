@@ -2,16 +2,15 @@ import py
 import sys, struct
 import ctypes
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
-from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem.ll2ctypes import lltype2ctypes, ctypes2lltype
 from pypy.rpython.lltypesystem.ll2ctypes import standard_c_lib
 from pypy.rpython.lltypesystem.ll2ctypes import uninitialized2ctypes
-from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED, force_cast
+from pypy.rpython.lltypesystem.ll2ctypes import ALLOCATED
 from pypy.rpython.lltypesystem.ll2ctypes import cast_adr_to_int, get_ctypes_type
 from pypy.rpython.lltypesystem.ll2ctypes import _llgcopaque
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rlib import rposix
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 from pypy.tool.udir import udir
 from pypy.rpython.test.test_llinterp import interpret
 from pypy.annotation.annrpython import RPythonAnnotator

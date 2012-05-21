@@ -1,8 +1,8 @@
 
 from pypy.translator.driver import TranslationDriver
-from pypy.translator.c.genc import CBuilder, CCompilerDriver
+from pypy.translator.c.genc import CBuilder
 from pypy.rpython.typesystem import getfunctionptr
-from pypy.translator.tool.cbuild import ExternalCompilationInfo
+from platformer.cbuild import ExternalCompilationInfo
 
 class CLibraryBuilder(CBuilder):
     standalone = False
