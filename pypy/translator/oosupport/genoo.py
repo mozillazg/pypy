@@ -77,13 +77,10 @@ class GenOO(object):
             self.db.pending_function(self.translator.graphs[0])
 
     def gen_pendings(self):
-        import sys
         n = 0
         while self.db._pending_nodes:
             node = self.db._pending_nodes.pop()
-            sys.stderr.write(repr(node)+'\n')
             node.render(self.ilasm)
-            sys.stderr.write(repr(node)+ '   DONE\n')
             self.db._rendered_nodes.add(node)
             n+=1
             if (n%100) == 0:
