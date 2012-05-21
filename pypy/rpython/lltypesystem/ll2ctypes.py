@@ -26,7 +26,7 @@ from pypy.annotation import model as annmodel
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.rpython import raddress
-from pypy.translator.platform import platform
+from platformer import platform
 from array import array
 try:
     from thread import _local as tlsobject
