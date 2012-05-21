@@ -123,10 +123,12 @@ class Function(object):
         self.ilasm = ilasm
         self.generator = self._create_generator(self.ilasm)
         graph = self.graph
+        log('begin_render')
         self.begin_render()
 
         self.return_block = None
         self.raise_block = None
+        log('iterblocks')
         for block in graph.iterblocks():
             if self._is_return_block(block):
                 self.return_block = block
