@@ -9,13 +9,6 @@ from pypy.translator.oosupport.treebuilder import SubOperation
 from pypy.translator.oosupport.metavm import InstructionList, StoreResult
 from pypy.tool.identity_dict import identity_dict
 
-more_details = True
-
-def log(s):
-    import sys
-    if more_details:
-        sys.stderr.write(s + '\n')
-
 def render_sub_op(sub_op, db, generator):
     op = sub_op.op
     instr_list = db.genoo.opcodes.get(op.opname, None)
@@ -114,24 +107,16 @@ class Function(object):
         raise NotImplementedError
 
     def render(self, ilasm):
-        import pdb
-        if 'get_static_field_value' in self.graph.name:
-            pdb.set_trace()
-
-        log('Function.render')
-
         if self.db.graph_name(self.graph) is not None and not self.is_method:
             return # already rendered
 
         self.ilasm = ilasm
         self.generator = self._create_generator(self.ilasm)
         graph = self.graph
-        log('begin_render')
         self.begin_render()
 
         self.return_block = None
         self.raise_block = None
-        log('iterblocks')
         for block in graph.iterblocks():
             if self._is_return_block(block):
                 self.return_block = block
@@ -140,12 +125,9 @@ class Function(object):
             else:
                 self.set_label(self._get_block_name(block))
                 if self._is_exc_handling_block(block):
-                    log('render_exc_handling_block: %s' % block.operations)
                     self.render_exc_handling_block(block)
-                    log('OK')
                 else:
                     self.render_normal_block(block)
-                    log('OK')
 
         # render return blocks at the end just to please the .NET
         # runtime that seems to need a return statement at the end of
@@ -252,8 +234,6 @@ class Function(object):
         raise NotImplementedError
             
     def render_normal_block(self, block):
-        import sys
-
         for op in block.operations:
             self._render_op(op)
 
