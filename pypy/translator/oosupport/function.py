@@ -144,7 +144,6 @@ class Function(object):
                     self.render_exc_handling_block(block)
                     log('OK')
                 else:
-                    log('render_normal_block: %s' % block.operations)
                     self.render_normal_block(block)
                     log('OK')
 
@@ -256,7 +255,6 @@ class Function(object):
         import sys
 
         for op in block.operations:
-            log('Rendering op %r' % op)
             self._render_op(op)
 
         if block.exitswitch is None:
