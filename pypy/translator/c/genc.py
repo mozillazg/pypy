@@ -7,22 +7,13 @@ from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype
-from pypy.tool.udir import udir
+from pypy.tool.udir import udir, pypydir
 from pypy.tool import isolate, runsubprocess
-from pypy.translator.c.support import log, c_string_constant
+from pypy.translator.c.support import log
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
 from pypy.rlib import exports
 from pypy.tool.nullpath import NullPyPathLocal
-
-def import_module_from_directory(dir, modname):
-    file, pathname, description = imp.find_module(modname, [str(dir)])
-    try:
-        mod = imp.load_module(modname, file, pathname, description)
-    finally:
-        if file:
-            file.close()
-    return mod
 
 class ProfOpt(object):
     #XXX assuming gcc style flags for now
@@ -35,7 +26,6 @@ class ProfOpt(object):
         platform = self.compiler.platform
         if platform.name.startswith('darwin'):
             # XXX incredible hack for darwin
-            cfiles = self.compiler.cfiles
             STR = '/*--no-profiling-for-this-file!--*/'
             no_prof = []
             prof = []
@@ -256,7 +246,8 @@ class CBuilder(object):
                                             split=self.split)
         self.c_source_filename = py.path.local(cfile)
         self.extrafiles = self.eventually_copy(extra)
-        self.gen_makefile(targetdir, exe_name=exe_name)
+        self.gen_makefile(targetdir, exe_name=exe_name, proj_dir=pypydir,
+                          proj_main_function="pypy_main_startup")
         return cfile
 
     def eventually_copy(self, cfiles):
@@ -1007,6 +998,6 @@ def gen_source(database, modulename, targetdir,
         fi.close()
 
     eci = add_extra_files(eci)
-    eci = eci.convert_sources_to_files(being_main=True)
+    eci = eci.convert_sources_to_files(main_clause='"#define NOT_MAIN_FILE\n')
     files, eci = eci.get_module_files()
     return eci, filename, sg.getextrafiles() + list(files)

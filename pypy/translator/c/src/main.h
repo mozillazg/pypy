@@ -15,8 +15,8 @@ int main(int argc, char *argv[]);
 
 #ifndef PYPY_NOT_MAIN_FILE
 
-#ifndef PYPY_MAIN_FUNCTION
-#define PYPY_MAIN_FUNCTION main
+#ifndef MAIN_FUNCTION
+#define MAIN_FUNCTION main
 #endif
 
 #ifdef __GNUC__
