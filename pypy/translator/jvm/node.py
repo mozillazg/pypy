@@ -340,7 +340,10 @@ class GraphFunction(OOFunction, Function):
             (ZeroDivisionError, jvmtype.jArithmeticException),
             (RuntimeError, jvmtype.jStackOverflowError),
             (MemoryError, jvmtype.jOutOfMemoryError),
-            (rjvm.ReflectionException, jvmtype.jReflectiveOperationException),
+            (rjvm.ReflectionException, jvmtype.jNoSuchFieldException),
+            (rjvm.ReflectionException, jvmtype.jClassNotFoundException),
+            (rjvm.ReflectionException, jvmtype.jNoSuchMethodException),
+            (rjvm.ReflectionException, jvmtype.jInvocationTargetException),
             ]
 
         for pyexccls, jexcty in translation_table:

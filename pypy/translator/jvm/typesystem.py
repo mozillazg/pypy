@@ -219,7 +219,11 @@ jPyPyAbstractMethodException = JvmClassType('pypy.AbstractMethodException')
 jStackOverflowError = JvmClassType('java.lang.StackOverflowError', throwable=True)
 jOutOfMemoryError = JvmClassType('java.lang.OutOfMemoryError', throwable=True)
 jArithmeticException = JvmClassType('java.lang.ArithmeticException', throwable=True)
-jReflectiveOperationException = JvmClassType('java.lang.ReflectiveOperationException', throwable=True)
+jNoSuchFieldException = JvmClassType('java.lang.NoSuchFieldException', throwable=True)
+jClassNotFoundException = JvmClassType('java.lang.ClassNotFoundException', throwable=True)
+jNoSuchMethodException = JvmClassType('java.lang.NoSuchMethodException', throwable=True)
+jInvocationTargetException = JvmClassType('java.lang.reflect.InvocationTargetException', throwable=True)
+
 
 class JvmScalarType(JvmType):
     """
