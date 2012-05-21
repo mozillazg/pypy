@@ -114,6 +114,9 @@ class Function(object):
         raise NotImplementedError
 
     def render(self, ilasm):
+        import pdb
+        if 'get_static_field_value' in self.graph.name:
+            pdb.set_trace()
 
         log('Function.render')
 
