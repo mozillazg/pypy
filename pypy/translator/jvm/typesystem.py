@@ -356,7 +356,7 @@ class JvmNativeClass(JvmClassType):
 
     def lookup_method(self, spec):
         import sys
-        sys.stderr.write('====== lookup_method %r =======' % spec)
+        sys.stderr.write('====== lookup_method %r =======\n' % spec)
         assert isinstance(spec, (str, ootype._overloaded_meth_desc))
 
         if isinstance(spec, ootype._overloaded_meth_desc):
@@ -370,7 +370,7 @@ class JvmNativeClass(JvmClassType):
             meth = meth._resolver.resolve(spec.TYPE.ARGS)
 
         res =  self._make_java_method(meth, name)
-        sys.stderr.write('====== end of lookup_method %r =======' % spec)
+        sys.stderr.write('====== end of lookup_method %r =======\n' % spec)
         return res
 
     def _make_java_method(self, meth, name):

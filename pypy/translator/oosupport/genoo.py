@@ -81,9 +81,9 @@ class GenOO(object):
         n = 0
         while self.db._pending_nodes:
             node = self.db._pending_nodes.pop()
-            sys.stderr.write(repr(node))
+            sys.stderr.write(repr(node)+'\n')
             node.render(self.ilasm)
-            sys.stderr.write(repr(node)+ '   DONE')
+            sys.stderr.write(repr(node)+ '   DONE\n')
             self.db._rendered_nodes.add(node)
             n+=1
             if (n%100) == 0:
