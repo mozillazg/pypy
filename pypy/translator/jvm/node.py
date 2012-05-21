@@ -885,10 +885,6 @@ class Class(Node, JvmGeneratedClassType):
     def render(self, gen):
         import sys
 
-        global more_details
-        if 'get_static_field_value' in self.name:
-            more_details = True
-
         self.rendered = True
         sys.stderr.write('begin_class\n')
         gen.begin_class(self, self.super_class)
