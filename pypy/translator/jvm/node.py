@@ -883,6 +883,7 @@ class Class(Node, JvmGeneratedClassType):
         self.abstract_methods[jmethod.method_name] = jmethod
 
     def render(self, gen):
+        import sys
         self.rendered = True
         gen.begin_class(self, self.super_class)
 
@@ -891,6 +892,8 @@ class Class(Node, JvmGeneratedClassType):
 
         for field, fielddef in self.fields.values():
             gen.add_field(field)
+
+        sys.stderr.write('constructor')
 
         # Emit the constructor:
         gen.begin_constructor()
@@ -903,16 +906,24 @@ class Class(Node, JvmGeneratedClassType):
                 field.store(gen)           # store value into field
         gen.end_constructor()
 
+        sys.stderr.write('rendering methods')
+
         for method in self.methods.values():
             method.render(gen)
+
+        sys.stderr.write('rendering abstract methods')
 
         for method in self.abstract_methods.values():
             gen.begin_j_function(self, method)
             gen.new_with_jtype(jPyPyAbstractMethodException)
             gen.throw()
             gen.end_function()
-        
+
+        sys.stderr.write('end_class')
+
         gen.end_class()
+
+        sys.stderr.write('DONE')
 
 class InterlinkFunction(Function):
 
