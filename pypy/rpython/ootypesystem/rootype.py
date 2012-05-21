@@ -4,7 +4,6 @@ from pypy.rpython.rmodel import Repr
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.ootypesystem.ootype import Void, Class, Object
 from pypy.tool.pairtype import pairtype
-from pypy.translator.jvm.rjvm_support.ootypemodel import NativeRJvmInstance
 
 class __extend__(annmodel.SomeOOObject):
     def rtyper_makerepr(self, rtyper):
