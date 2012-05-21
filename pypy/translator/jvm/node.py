@@ -33,7 +33,7 @@ from pypy.translator.jvm.methods import \
      BaseDumpMethod, InstanceDumpMethod, RecordDumpMethod, \
      ConstantStringDumpMethod
 from pypy.translator.oosupport.function import \
-     Function as OOFunction
+     Function as OOFunction, more_details
 from pypy.translator.oosupport.constant import \
      push_constant
 from pypy.translator.oosupport.treebuilder import \
@@ -884,6 +884,11 @@ class Class(Node, JvmGeneratedClassType):
 
     def render(self, gen):
         import sys
+
+        global more_details
+        if 'get_static_field_value' in self.name:
+            more_details = True
+
         self.rendered = True
         sys.stderr.write('begin_class\n')
         gen.begin_class(self, self.super_class)
@@ -910,6 +915,7 @@ class Class(Node, JvmGeneratedClassType):
         sys.stderr.write('rendering methods\n')
 
         for method in self.methods.values():
+            sys.stderr.write('rendering method %r\n' % method)
             method.render(gen)
 
         sys.stderr.write('rendering abstract methods\n')
