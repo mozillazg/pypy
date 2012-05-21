@@ -33,7 +33,7 @@ from pypy.translator.jvm.methods import \
      BaseDumpMethod, InstanceDumpMethod, RecordDumpMethod, \
      ConstantStringDumpMethod
 from pypy.translator.oosupport.function import \
-     Function as OOFunction, more_details
+     Function as OOFunction
 from pypy.translator.oosupport.constant import \
      push_constant
 from pypy.translator.oosupport.treebuilder import \
@@ -883,19 +883,14 @@ class Class(Node, JvmGeneratedClassType):
         self.abstract_methods[jmethod.method_name] = jmethod
 
     def render(self, gen):
-        import sys
-
         self.rendered = True
-        sys.stderr.write('begin_class\n')
         gen.begin_class(self, self.super_class)
-        sys.stderr.write('interfaces\n')
+
         for inter in self.interfaces:
             gen.implements(inter)
-        sys.stderr.write('fields\n')
+
         for field, fielddef in self.fields.values():
             gen.add_field(field)
-
-        sys.stderr.write('constructor\n')
 
         # Emit the constructor:
         gen.begin_constructor()
@@ -908,13 +903,8 @@ class Class(Node, JvmGeneratedClassType):
                 field.store(gen)           # store value into field
         gen.end_constructor()
 
-        sys.stderr.write('rendering methods\n')
-
         for method in self.methods.values():
-            sys.stderr.write('rendering method %r\n' % method)
             method.render(gen)
-
-        sys.stderr.write('rendering abstract methods\n')
 
         for method in self.abstract_methods.values():
             gen.begin_j_function(self, method)
@@ -922,11 +912,8 @@ class Class(Node, JvmGeneratedClassType):
             gen.throw()
             gen.end_function()
 
-        sys.stderr.write('end_class\n')
-
         gen.end_class()
 
-        sys.stderr.write('DONE\n')
 
 class InterlinkFunction(Function):
 
