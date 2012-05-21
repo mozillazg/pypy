@@ -355,6 +355,7 @@ class JvmNativeClass(JvmClassType):
         raise NotImplementedError
 
     def lookup_method(self, spec):
+        print('====== lookup_method %r =======' % spec)
         assert isinstance(spec, (str, ootype._overloaded_meth_desc))
 
         if isinstance(spec, ootype._overloaded_meth_desc):
@@ -367,7 +368,9 @@ class JvmNativeClass(JvmClassType):
         if isinstance(meth, ootype._overloaded_meth):
             meth = meth._resolver.resolve(spec.TYPE.ARGS)
 
-        return self._make_java_method(meth, name)
+        res =  self._make_java_method(meth, name)
+        print('====== end of lookup_method %r =======' % spec)
+        return res
 
     def _make_java_method(self, meth, name):
         arg_types = [self.db.annotation_to_cts(arg) for arg in meth._TYPE.ARGS]
