@@ -9,7 +9,7 @@ from pypy.translator.oosupport.treebuilder import SubOperation
 from pypy.translator.oosupport.metavm import InstructionList, StoreResult
 from pypy.tool.identity_dict import identity_dict
 
-more_details = False
+more_details = True
 
 def log(s):
     import sys
