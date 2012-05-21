@@ -212,7 +212,7 @@ def get_static_field_value(space, class_name, field_name):
     Equivalent of get_field_value for static fields.
     """
     b_class = helpers.class_for_name(space, class_name)
-    return _get_field_value(space, b_class, None, field_name)
+    return _get_field_value(space, b_class, b_class, field_name)
 
 
 @unwrap_spec(jvm_obj=W_JvmObject, field_name=str)
