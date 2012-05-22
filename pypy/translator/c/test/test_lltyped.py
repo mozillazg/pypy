@@ -762,7 +762,7 @@ class TestLowLevelType(test_typed.CompilationTestCase):
         import sys
         from pypy.rpython.lltypesystem import llgroup
         from pypy.rpython.lltypesystem.lloperation import llop
-        from pypy.translator.platform import CompilationError
+        from platformer import CompilationError
         if toobig and sys.maxint > 2147483647:
             py.test.skip("not easy to test groups too big on 64-bit platforms")
         grp = llgroup.group("big")

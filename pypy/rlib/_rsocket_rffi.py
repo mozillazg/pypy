@@ -5,7 +5,7 @@ from pypy.rpython.tool import rffi_platform as platform
 from pypy.rpython.lltypesystem.rffi import CCHARP
 from pypy.rlib.rposix import get_errno as geterrno
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform as target_platform
+from platformer import platform as target_platform
 
 from pypy.rlib.rarithmetic import intmask, r_uint
 import os,sys

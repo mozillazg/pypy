@@ -472,7 +472,7 @@ class TranslationDriver(SimpleTaskEngine):
     def possibly_check_for_boehm(self):
         if self.config.translation.gc == "boehm":
             from pypy.rpython.tool.rffi_platform import configure_boehm
-            from pypy.translator.platform import CompilationError
+            from platformer import CompilationError
             try:
                 configure_boehm(self.translator.platform)
             except CompilationError, e:

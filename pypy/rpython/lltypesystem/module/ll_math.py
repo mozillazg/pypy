@@ -8,7 +8,7 @@ from pypy.tool.sourcetools import func_with_new_name
 from pypy.tool.autopath import pypydir
 from pypy.rlib import jit, rposix
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 from pypy.rlib.rfloat import isfinite, isinf, isnan, INFINITY, NAN
 
 use_library_isinf_isnan = False

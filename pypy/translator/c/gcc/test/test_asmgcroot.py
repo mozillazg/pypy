@@ -6,7 +6,7 @@ from pypy.translator.c.genc import CStandaloneBuilder
 from pypy.annotation.listdef import s_list_of_strings
 from pypy import conftest
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform as compiler
+from platformer import platform as compiler
 from pypy.rlib.rarithmetic import is_emulated_long
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.entrypoint import entrypoint, secondary_entrypoints

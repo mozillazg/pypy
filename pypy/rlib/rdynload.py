@@ -5,7 +5,7 @@ from pypy.rpython.tool import rffi_platform
 from pypy.rpython.lltypesystem import rffi
 from pypy.rlib.rarithmetic import r_uint
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 
 import sys
 

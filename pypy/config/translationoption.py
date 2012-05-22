@@ -404,11 +404,11 @@ def set_opt_level(config, level):
 # ----------------------------------------------------------------
 
 def set_platform(config):
-    from pypy.translator.platform import set_platform
+    from platformer import set_platform
     set_platform(config.translation.platform, config.translation.cc)
 
 def get_platform(config):
-    from pypy.translator.platform import pick_platform    
+    from platformer import pick_platform    
     opt = config.translation.platform
     cc = config.translation.cc
     return pick_platform(opt, cc)

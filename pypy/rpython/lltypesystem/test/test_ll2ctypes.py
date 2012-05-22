@@ -1386,7 +1386,7 @@ class TestLL2Ctypes(object):
 
 class TestPlatform(object):
     def test_lib_on_libpaths(self):
-        from pypy.translator.platform import platform
+        from platformer import platform
 
         tmpdir = udir.join('lib_on_libppaths')
         tmpdir.ensure(dir=1)
@@ -1407,7 +1407,7 @@ class TestPlatform(object):
         if not sys.platform.startswith('linux'):
             py.test.skip("Not supported")
 
-        from pypy.translator.platform import platform
+        from platformer import platform
 
         tmpdir = udir.join('lib_on_libppaths_prefix')
         tmpdir.ensure(dir=1)

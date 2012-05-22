@@ -101,7 +101,7 @@ class TestLibffiCall(BaseFfiTest):
         from pypy.tool.udir import udir
         from platformer.cbuild import ExternalCompilationInfo
         from platformer.cbuild import STANDARD_DEFINES
-        from pypy.translator.platform import platform
+        from platformer import platform
 
         BaseFfiTest.setup_class()
         # prepare C code as an example, so we can load it and call

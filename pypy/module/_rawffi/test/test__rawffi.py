@@ -1,7 +1,7 @@
 
 
 from pypy.conftest import gettestobjspace
-from pypy.translator.platform import platform
+from platformer import platform
 from platformer.cbuild import ExternalCompilationInfo
 from pypy.module._rawffi.interp_rawffi import TYPEMAP
 from pypy.module._rawffi.tracker import Tracker

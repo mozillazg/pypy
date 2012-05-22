@@ -8,7 +8,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 from pypy.tool.gcc_cache import build_executable_cache, try_compile_cache
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import CompilationError
+from platformer import CompilationError
 from pypy.tool.udir import udir
 from pypy.tool.autopath import pypydir
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong, intmask
@@ -687,7 +687,7 @@ void dump(char* key, int value) {
 """
 
 def run_example_code(filepath, eci, ignore_errors=False):
-    eci = eci.convert_sources_to_files(being_main=True)
+    eci = eci.convert_sources_to_files(main_clause='#define PYPY_NOT_MAIN_FILE')
     files = [filepath]
     output = build_executable_cache(files, eci, ignore_errors=ignore_errors)
     section = None
@@ -791,7 +791,7 @@ def configure_external_library(name, eci, configurations,
 
 def configure_boehm(platform=None):
     if platform is None:
-        from pypy.translator.platform import platform
+        from platformer import platform
     if sys.platform == 'win32':
         import platform as host_platform # just to ask for the arch. Confusion-alert!
         if host_platform.architecture()[0] == '32bit':

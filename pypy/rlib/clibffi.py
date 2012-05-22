@@ -13,7 +13,7 @@ from pypy.rlib.rdynload import DLLHANDLE
 from pypy.rlib import jit
 from pypy.tool.autopath import pypydir
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 import py
 import os
 import sys

@@ -7,7 +7,7 @@ from pypy.rlib import rgc
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.tool import rffi_platform
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 
 import sys
 import weakref

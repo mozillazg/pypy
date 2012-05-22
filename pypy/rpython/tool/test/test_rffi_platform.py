@@ -4,7 +4,7 @@ from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.lltypesystem import rffi
 from pypy.tool.udir import udir
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 from pypy.rlib.rarithmetic import r_uint, r_longlong, r_ulonglong
 from pypy.rlib.rfloat import isnan
 

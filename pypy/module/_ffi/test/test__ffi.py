@@ -1,6 +1,6 @@
 from pypy.conftest import gettestobjspace
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import platform
+from platformer import platform
 
 import sys, py
 

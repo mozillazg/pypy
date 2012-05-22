@@ -28,7 +28,7 @@ def pytest_configure(config):
 
 def _set_platform(opt, opt_str, value, parser):
     from pypy.config.translationoption import PLATFORMS
-    from pypy.translator.platform import set_platform
+    from platformer import set_platform
     if value not in PLATFORMS:
         raise ValueError("%s not in %s" % (value, PLATFORMS))
     set_platform(value, None)

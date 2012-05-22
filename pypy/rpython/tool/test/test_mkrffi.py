@@ -57,7 +57,7 @@ class TestMkrffi(object):
     def setup_class(cls):
         import ctypes
         from pypy.tool.udir import udir
-        from pypy.translator.platform import platform
+        from platformer import platform
         from platformer.cbuild import ExternalCompilationInfo
         
         c_source = """

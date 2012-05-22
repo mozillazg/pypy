@@ -122,7 +122,7 @@ class TestEci:
                        'dxowqbncpqympqhe-config')
 
     def test_platforms(self):
-        from pypy.translator.platform import Platform
+        from platformer import Platform
 
         class Maemo(Platform):
             def __init__(self, cc=None):

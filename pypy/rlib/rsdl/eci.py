@@ -1,5 +1,5 @@
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import CompilationError
+from platformer import CompilationError
 import py
 import sys
 

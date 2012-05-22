@@ -5,7 +5,7 @@ Common types, functions from core win32 libraries, such as kernel32
 from pypy.rpython.tool import rffi_platform
 from pypy.tool.udir import udir
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator.platform import CompilationError
+from platformer import CompilationError
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.rposix import validate_fd
@@ -142,7 +142,7 @@ if WIN32:
         # Prior to Visual Studio 8, the MSVCRT dll doesn't export the
         # _dosmaperr() function, which is available only when compiled
         # against the static CRT library.
-        from pypy.translator.platform import host_factory
+        from platformer import host_factory
         static_platform = host_factory()
         if static_platform.name == 'msvc':
             static_platform.cflags = ['/MT']  # static CRT

@@ -9,7 +9,7 @@ from pypy import conftest
 
 def setup_module(mod):
     from pypy.rpython.tool.rffi_platform import configure_boehm
-    from pypy.translator.platform import CompilationError
+    from platformer import CompilationError
     try:
         configure_boehm()
     except CompilationError:

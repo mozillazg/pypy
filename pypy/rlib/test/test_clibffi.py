@@ -263,7 +263,7 @@ class TestCLibffi(BaseFfiTest):
         lltype.free(tpe2, flavor='raw')
 
     def test_struct_by_val(self):
-        from pypy.translator.platform import platform
+        from platformer import platform
         from pypy.tool.udir import udir
 
         c_file = udir.ensure("test_libffi", dir=1).join("xlib.c")
@@ -313,7 +313,7 @@ class TestCLibffi(BaseFfiTest):
         assert not ALLOCATED
 
     def test_ret_struct_val(self):
-        from pypy.translator.platform import platform
+        from platformer import platform
         from pypy.tool.udir import udir
 
         c_file = udir.ensure("test_libffi", dir=1).join("xlib.c")
@@ -388,7 +388,7 @@ class TestCLibffi(BaseFfiTest):
         assert not ALLOCATED
 
     def test_cdll_life_time(self):
-        from pypy.translator.platform import platform
+        from platformer import platform
         from pypy.tool.udir import udir
 
         c_file = udir.ensure("test_libffi", dir=1).join("xlib.c")
