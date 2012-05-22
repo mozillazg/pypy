@@ -7,8 +7,10 @@ from pypy.translator.llsupport.wrapper import new_wrapper
 from pypy.translator.gensupp import uniquemodulename, NameManager
 from platformer.cbuild import ExternalCompilationInfo
 from pypy.rpython.lltypesystem import lltype
-from pypy.tool.udir import udir, pypydir
-from pypy.tool import isolate, runsubprocess
+from pypy.tool.udir import udir
+from pypy.tool.autopath import pypydir
+from pypy.tool import isolate
+from platformer import runsubprocess
 from pypy.translator.c.support import log
 from pypy.rpython.typesystem import getfunctionptr
 from pypy.translator.c import gc
