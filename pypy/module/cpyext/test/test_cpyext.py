@@ -7,7 +7,7 @@ import py
 from pypy.conftest import gettestobjspace
 from pypy.rpython.lltypesystem import lltype, ll2ctypes
 from platformer.cbuild import ExternalCompilationInfo
-from pypy.translator import platform
+import platformer as platform
 from pypy.translator.gensupp import uniquemodulename
 from pypy.tool.udir import udir
 from pypy.module.cpyext import api
