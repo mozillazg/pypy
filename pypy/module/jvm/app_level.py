@@ -108,6 +108,10 @@ class JvmFieldWrapper(object):
 
 # 'main entry point' to the jvm module
 java = JvmPackageWrapper('java')
+javax = JvmPackageWrapper('javax')
+
+def package(name):
+    return JvmPackageWrapper(name)
 
 
 # ==================== Helper code =======================

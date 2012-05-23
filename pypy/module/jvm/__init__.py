@@ -9,7 +9,9 @@ class Module(MixedModule):
     """
 
     appleveldefs = {
-        'java': 'app_level.java'
+        'java': 'app_level.java',
+        'javax': 'app_level.javax',
+        'package': 'app_level.package',
     }
 
     interpleveldefs = {
