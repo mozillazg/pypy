@@ -47,13 +47,19 @@ if sys.platform == 'win32':
 
 DEFAULT_VALUE = object()
 
+
 class GlobalPyobjContainer(object):
     def __init__(self):
         self.objs = []
+        self.cleared = []
 
     def add(self, obj):
-        num = len(self.objs)
-        self.objs.append(weakref.ref(obj))
+        if self.cleared:
+            num = self.cleared.pop()
+            self.objs[num] = obj
+        else:
+            num = len(self.objs)
+            self.objs.append(obj)
         return num
 
     def get(self, num):
