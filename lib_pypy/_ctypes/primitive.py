@@ -53,6 +53,10 @@ class GlobalPyobjContainer(object):
         self.objs = []
         self.cleared = []
 
+    def kill(self, num):
+        self.objs[num] = None
+        self.cleared.append(num)
+
     def add(self, obj):
         if self.cleared:
             num = self.cleared.pop()
@@ -63,7 +67,7 @@ class GlobalPyobjContainer(object):
         return num
 
     def get(self, num):
-        return self.objs[num]()
+        return self.objs[num]
 
 pyobj_container = GlobalPyobjContainer()
 
@@ -105,6 +109,11 @@ FROM_PARAM_BY_TYPE = {
     'P': from_param_void_p,
     }
 
+
+def py_object_dtor(self):
+    index = self._buffer[0]
+    pyobj_container.kill(index)
+
 class SimpleType(_CDataMeta):
     def __new__(self, name, bases, dct):
         try:
@@ -122,6 +131,9 @@ class SimpleType(_CDataMeta):
             raise ValueError('%s is not a type character' % (tp))
         default = TP_TO_DEFAULT[tp]
         ffiarray = _rawffi.Array(tp)
+        if tp == 'O':
+            dct['__del__'] = py_object_dtor
+
         result = type.__new__(self, name, bases, dct)
         result._ffiargshape = tp
         result._ffishape = tp
@@ -222,6 +234,7 @@ class SimpleType(_CDataMeta):
             def _getvalue(self):
                 return pyobj_container.get(self._buffer[0])
             result.value = property(_getvalue, _setvalue)
+
 
         elif tp == 'X':
             from ctypes import WinDLL
