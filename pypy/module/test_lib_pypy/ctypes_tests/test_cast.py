@@ -95,3 +95,5 @@ class TestCast(BaseCTypesTestChecker):
         param = c_uint(42)
         py.test.raises(ArgumentError, "cast(param, c_void_p)")
         
+    def test_cast_pyobjct(self):
+        obj = py_object('test')
