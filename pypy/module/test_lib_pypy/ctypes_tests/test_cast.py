@@ -96,4 +96,14 @@ class TestCast(BaseCTypesTestChecker):
         py.test.raises(ArgumentError, "cast(param, c_void_p)")
         
     def test_cast_pyobjct(self):
-        obj = py_object('test')
+        from _ctypes.primitive import pyobj_container
+        pyobj = 'test'
+        obj = py_object(pyobj)
+        idx = pyobj_container.objs.index(pyobj)
+        assert idx == obj._buffer[0]
+        del obj
+        import gc
+        gc.collect()
+        gc.collect()
+        gc.collect()
+        assert pyobj_container.get(idx) is None
