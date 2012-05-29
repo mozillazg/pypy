@@ -101,9 +101,15 @@ class TestCast(BaseCTypesTestChecker):
         class Weak(object):
             pass
         self.do_test_cast_pyobjct(Weak)
+        from _ctypes.primitive import pyobj_container
+        assert pyobj_container.get(-1) is None
 
     def test_cast_pyobj_nonweakrefabl(self):
         self.do_test_cast_pyobjct(lambda: 'a'+'b')
+        
+        from _ctypes.primitive import pyobj_container
+        # we leaked here
+        assert pyobj_container.get(-1) is not None
 
     def do_test_cast_pyobjct(self, make_obj):
         from _ctypes.primitive import pyobj_container
@@ -118,4 +124,3 @@ class TestCast(BaseCTypesTestChecker):
         del pyobj
         gc.collect()
 
-        assert pyobj_container.get(idx) is None
