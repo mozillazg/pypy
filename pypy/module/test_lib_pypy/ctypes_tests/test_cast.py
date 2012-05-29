@@ -95,15 +95,27 @@ class TestCast(BaseCTypesTestChecker):
         param = c_uint(42)
         py.test.raises(ArgumentError, "cast(param, c_void_p)")
         
-    def test_cast_pyobjct(self):
+
+    
+    def test_cast_pyobj_weakrefable(self):
+        class Weak(object):
+            pass
+        self.do_test_cast_pyobjct(Weak)
+
+    def test_cast_pyobj_nonweakrefabl(self):
+        self.do_test_cast_pyobjct(lambda: 'a'+'b')
+
+    def do_test_cast_pyobjct(self, make_obj):
         from _ctypes.primitive import pyobj_container
-        pyobj = 'test'
+        pyobj = make_obj()
         obj = py_object(pyobj)
-        idx = pyobj_container.objs.index(pyobj)
+        idx = len(pyobj_container.objs)-1
         assert idx == obj._buffer[0]
         del obj
         import gc
         gc.collect()
+        assert pyobj_container.get(idx) is pyobj
+        del pyobj
         gc.collect()
-        gc.collect()
+
         assert pyobj_container.get(idx) is None
