@@ -61,6 +61,8 @@ class GlobalPyobjContainer(object):
             ref = weakref.ref(obj)
         except TypeError:
             #XXX: this leaks things like strings
+            import warnings
+            warnings.warn('%r cant be weakrefed, it will leak' % (obj,))
             ref = lambda obj=obj: obj
         self.objs.append(ref)
         return num
