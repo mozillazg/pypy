@@ -106,7 +106,7 @@ class __extend__(pairtype(SomeOOInstance, SomeInteger)):
     def setitem((ooinst, index), s_value):
         if isinstance(ooinst.ootype, ootype.Array):
             if s_value is s_None:
-                return s_Nonec
+                return s_None
             assert (ooinst.ootype.ITEM == s_value.ootype or
                     (isinstance(ooinst.ootype.ITEM, ootypemodel.NativeRJvmInstance) and
                      isinstance(s_value.ootype, ootypemodel.NativeRJvmInstance) and
