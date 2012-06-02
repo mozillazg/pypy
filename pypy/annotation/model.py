@@ -623,17 +623,18 @@ def annotation_to_lltype(s_val, info=None):
         return s_val.ll_ptrtype
     if type(s_val) is SomeInteger:
         return lltype.build_number(None, s_val.knowntype)
+
     for witness, T in annotation_to_ll_map:
         if witness.contains(s_val):
             return T
-    if info is None:
-        info = ''
-    else:
-        info = '%s: ' % info
 
     if isinstance(s_val, SomeString):
         return ootype.String
 
+    if info is None:
+        info = ''
+    else:
+        info = '%s: ' % info
     raise ValueError("%sshould return a low-level type,\ngot instead %r" % (
         info, s_val))
 

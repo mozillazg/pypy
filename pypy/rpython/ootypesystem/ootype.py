@@ -282,11 +282,12 @@ class NativeInstance(OOType):
     Type for instances of built-in classes. We don't know their members
     up-front and have to handle them differently.
     """
+    def __init__(self):
+        self._is_native_string = False
+
     def _make_interp_instance(self, args):
         raise NotImplementedError
 
-    def _is_string(self):
-        raise NotImplementedError
 
 class SpecializableType(OOType):
     def _specialize_type(self, TYPE, generic_types):
@@ -487,7 +488,7 @@ class String(AbstractString):
         TYPE = typeOf(value)
         if TYPE == self.CHAR:
             return make_string(value)
-        elif isinstance(TYPE, NativeInstance) and getattr(value, '_is_string', False):
+        elif isinstance(TYPE, NativeInstance) and value._is_native_string:
             return value._string()
         else:
             return BuiltinADTType._enforce(self, value)
@@ -1317,9 +1318,9 @@ class OverloadingResolver(object):
             for (a1, a2) in zip(ARGS1, ARGS2):
                 if a1 == a2:
                     continue
-                elif a1 is String and isinstance(a2, NativeInstance) and a2._is_string():
+                elif a1 is String and isinstance(a2, NativeInstance) and a2._is_native_string:
                     continue
-                elif a2 is String and isinstance(a1, NativeInstance) and a1._is_string():
+                elif a2 is String and isinstance(a1, NativeInstance) and a1._is_native_string:
                     continue
                 else:
                     return False
