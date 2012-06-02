@@ -2,6 +2,7 @@
 A color print.
 """
 
+import os
 import sys
 from py.io import ansi_print
 from pypy.tool.ansi_mandelbrot import Driver
@@ -27,12 +28,22 @@ class AnsiLog:
         self.file = file
         self.fancy = True
         self.isatty = getattr(sys.stderr, 'isatty', lambda: False)
-        self.keywords_blacklist = set()
-        self.keywords_whitelist = set()
         if self.fancy and self.isatty():
             self.mandelbrot_driver = Driver()
         else:
             self.mandelbrot_driver = None
+
+        # You can set these environment variables to control the ammount of information
+        # you get during the translation process. For example:
+        #
+        # export PYPY_LOG_BLACKLIST="WARNING,platform,ctypes_config_cache,annrpython,flowgraph"
+        # export PYPY_LOG_WHITELIST="info,ERROR"
+        #
+        # You can add 'dot' to the blacklist to disable the 'progress bar'.
+        #
+        self.keywords_blacklist = set(os.getenv('PYPY_LOG_BLACKLIST', '').split(','))
+        self.keywords_whitelist = set(os.getenv('PYPY_LOG_WHITELIST', '').split(','))
+
 
     def __call__(self, msg):
         if set(msg.keywords) & self.keywords_blacklist:

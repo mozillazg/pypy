@@ -1,6 +1,10 @@
 import os, sys
 import ctypes
+import py.log
+from pypy.tool.ansi_print import ansi_log
 
+log = py.log.Producer('dumpcache')
+py.log.setconsumer('dumpcache', ansi_log)
 
 def dumpcache(referencefilename, filename, config):
     dirname = os.path.dirname(referencefilename)
@@ -33,8 +37,7 @@ def dumpcache(referencefilename, filename, config):
             # a simple type, hopefully
             f.write("%s = %s\n" % (key, ctypes_repr(val)))
     f.close()
-#    print 'Wrote %s.' % (filename,)
-#    sys.stdout.flush()
+    log.info('Wrote %s.' % (filename,))
 
 def ctypes_repr(cls):
     # ctypes_configure does not support nested structs so far
