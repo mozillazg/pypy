@@ -253,6 +253,7 @@ class Entry(ExtRegistryEntry):
         TYPE = ootypemodel.NativeRJvmInstance(hop.args_s[0].const)
         vlist = hop.inputconst(ootype.Void, ootype.Array(TYPE))
         vlength = hop.inputarg(ootype.Signed, arg=1)
+        hop.exception_is_here()
         return hop.genop('oonewarray', [vlist, vlength],
             resulttype = hop.r_result.lowleveltype)
 
@@ -272,6 +273,7 @@ class Entry(ExtRegistryEntry):
         assert isinstance(hop.args_s[0].const, rjvm.JvmClassWrapper)
         assert isinstance(hop.args_s[1], SomeOOInstance)
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
+        hop.exception_is_here()
         return hop.genop('oodowncast', [v_inst], resulttype = hop.r_result)
 
 
@@ -292,6 +294,7 @@ class Entry(ExtRegistryEntry):
         assert isinstance(hop.args_s[0].const, rjvm.JvmClassWrapper)
         assert isinstance(hop.args_s[1], SomeOOInstance)
         v_inst = hop.inputarg(hop.args_r[1], arg=1)
+        hop.exception_cannot_occur()
         return hop.genop('ooupcast', [v_inst], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
@@ -304,5 +307,6 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         assert isinstance(hop.args_s[0], SomeString)
         v_str = hop.inputarg(hop.args_r[0], arg=0)
+        hop.exception_cannot_occur()
         return hop.genop('same_as', [v_str], resulttype=ootypemodel.NativeRJvmInstance(rjvm.java.lang.String))
 

@@ -410,7 +410,7 @@ class FlowExecutionContext(ExecutionContext):
         w_new = Constant(newvalue)
         f = self.crnt_frame
         stack_items_w = f.locals_stack_w
-        for i in range(f.valuestackdepth-1, f.nlocals-1, -1):
+        for i in range(f.valuestackdepth-1, f.pycode.co_nlocals-1, -1):
             w_v = stack_items_w[i]
             if isinstance(w_v, Constant):
                 if w_v.value is oldvalue:
@@ -433,6 +433,13 @@ class FlowSpaceFrame(pyframe.CPythonFrame):
         block = WithBlock(self, next_instr + offsettoend, self.lastblock)
         self.lastblock = block
         self.pushvalue(w_result)
+
+    def BUILD_LIST_FROM_ARG(self, _, next_instr):
+        # This opcode was added with pypy-1.8.  Here is a simpler
+        # version, enough for annotation.
+        last_val = self.popvalue()
+        self.pushvalue(self.space.newlist([]))
+        self.pushvalue(last_val)
 
     # XXX Unimplemented 2.7 opcodes ----------------
 

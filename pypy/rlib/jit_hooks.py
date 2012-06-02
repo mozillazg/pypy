@@ -22,6 +22,7 @@ def register_helper(s_result):
                 c_name = hop.inputconst(lltype.Void, 'access_helper')
                 args_v = [hop.inputarg(arg, arg=i)
                           for i, arg in enumerate(hop.args_r)]
+                hop.exception_cannot_occur()
                 return hop.genop('jit_marker', [c_name, c_func] + args_v,
                                  resulttype=hop.r_result)
         return helper
@@ -52,7 +53,10 @@ def resop_new(no, llargs, llres):
     from pypy.jit.metainterp.history import ResOperation
 
     args = [_cast_to_box(llargs[i]) for i in range(len(llargs))]
-    res = _cast_to_box(llres)
+    if llres:
+        res = _cast_to_box(llres)
+    else:
+        res = None
     return _cast_to_gcref(ResOperation(no, args, res))
 
 @register_helper(annmodel.SomePtr(llmemory.GCREF))
