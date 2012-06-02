@@ -926,7 +926,7 @@ class __extend__(pairtype(SomeOOBoundMeth, SomeOOBoundMeth)):
         try:
             common._lookup(r1.name)
         except TypeError:
-            raise TypeError('Common subclass %r has no method %s' % (common, r1.name))
+            raise TypeError('Common base class %r has no method %s' % (common, r1.name))
         return SomeOOBoundMeth(common, name=r1.name)
 
 class __extend__(pairtype(SomeOOClass, SomeOOClass)):

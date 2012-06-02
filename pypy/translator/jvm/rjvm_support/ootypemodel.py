@@ -95,7 +95,8 @@ class NativeRJvmInstance(ootype.NativeInstance):
             raise TypeError
 
 
-    def _is_string(self):
+    @property
+    def _is_native_string(self):
         return self.class_name == 'java.lang.String'
 
     def _defl(self, parent=None, parentindex=None):
@@ -134,7 +135,7 @@ class _native_rjvm_instance(object):
         self.__dict__['_TYPE'] = tpe
         self.__dict__['_instance'] = instance
         if isinstance(instance, jvm_str):
-            self.__dict__['_is_string'] = True
+            self.__dict__['_is_native_string'] = True
 
     def __getattr__(self, name):
         assert not isinstance(self._instance, jvm_str), "We don't support calling String methods yet."
