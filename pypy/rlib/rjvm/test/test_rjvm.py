@@ -293,7 +293,6 @@ class BaseTestRJVM(BaseRtypingTest):
             arr = rjvm.new_array(java.lang.Object, 5)
             o = java.lang.Object()
             arr[2] = o
-            arr[0] = None
             return str(arr[2].toString())
 
         res = self.interpret(fn, [])
