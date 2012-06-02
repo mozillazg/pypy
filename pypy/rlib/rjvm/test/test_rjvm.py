@@ -260,17 +260,27 @@ class BaseTestRJVM(BaseRtypingTest):
         res = self.interpret(fn, [])
         assert res == 3
 
-    def test_array_arguments(self):
+    def test_array_arguments_list(self):
         """No array covariance for now."""
+        py.test.skip("Don't unify lists and arrays for now...")
         def fn():
             o = java.lang.Object()
             java.util.Arrays.asList([o, o, o])
 
         self.interpret(fn, [])
 
-    def test_array_empty_arguments(self):
-        """No array covariance for now."""
+    def test_array_arguments(self):
+        def fn():
+            o = java.lang.Object()
+            arr = rjvm.new_array(java.lang.Object, 3)
+            arr[0] = o
+            arr[1] = o
+            arr[2] = o
+            java.util.Arrays.asList(arr)
 
+        self.interpret(fn, [])
+
+    def test_array_empty_arguments(self):
         def fn():
             java.util.Arrays.asList(rjvm.new_array(java.lang.Object, 0))
 
