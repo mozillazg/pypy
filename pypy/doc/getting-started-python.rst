@@ -50,10 +50,10 @@ the version you have is not 4.2 or you will run into `this bug`_.
      libz-dev libbz2-dev libncurses-dev libexpat1-dev \
      libssl-dev libgc-dev python-sphinx python-greenlet
 
-   On a Fedora box these are::
+   On a Fedora-16 box these are::
 
      [user@fedora-or-rh-box ~]$ sudo yum install \
-     gcc make python-devel libffi-devel pkg-config \
+     gcc make python-devel libffi-devel pkgconfig \
      zlib-devel bzip2-devel ncurses-devel expat-devel \
      openssl-devel gc-devel python-sphinx python-greenlet
 
@@ -103,18 +103,22 @@ translation options that where used to produce this particular
 executable. The executable behaves mostly like a normal Python interpreter::
 
     $ ./pypy-c
-    Python 2.7.0 (61ef2a11b56a, Mar 02 2011, 03:00:11)
-    [PyPy 1.6.0 with GCC 4.4.3] on linux2
+    Python 2.7.2 (0e28b379d8b3, Feb 09 2012, 19:41:03)
+    [PyPy 1.8.0 with GCC 4.4.3] on linux2
     Type "help", "copyright", "credits" or "license" for more information.
     And now for something completely different: ``this sentence is false''
     >>>> 46 - 4
     42
     >>>> from test import pystone
     >>>> pystone.main()
-    Pystone(1.1) time for 50000 passes = 0.280017
-    This machine benchmarks at 178561 pystones/second
-    >>>>
+    Pystone(1.1) time for 50000 passes = 0.220015
+    This machine benchmarks at 227257 pystones/second
+    >>>> pystone.main()
+    Pystone(1.1) time for 50000 passes = 0.060004
+    This machine benchmarks at 833278 pystones/second
+    >>>> 
 
+Note that pystone gets faster as the JIT kicks in.
 This executable can be moved around or copied on other machines; see
 Installation_ below.
 

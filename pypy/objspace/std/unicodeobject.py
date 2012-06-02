@@ -16,6 +16,7 @@ from pypy.rlib.rstring import UnicodeBuilder
 from pypy.rlib.runicode import unicode_encode_unicode_escape
 from pypy.module.unicodedata import unicodedb
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.rlib import jit
 
 from pypy.objspace.std.formatting import mod_format
 from pypy.objspace.std.stringtype import stringstartswith, stringendswith
@@ -201,7 +202,7 @@ def contains__Unicode_Unicode(space, w_container, w_item):
     return space.newbool(container.find(item) != -1)
 
 def unicode_join__Unicode_ANY(space, w_self, w_list):
-    list_w = space.unpackiterable(w_list)
+    list_w = space.listview(w_list)
     size = len(list_w)
 
     if size == 0:
@@ -214,24 +215,25 @@ def unicode_join__Unicode_ANY(space, w_self, w_list):
 
     return _unicode_join_many_items(space, w_self, list_w, size)
 
+@jit.look_inside_iff(lambda space, w_self, list_w, size:
+                     jit.loop_unrolling_heuristic(list_w, size))
 def _unicode_join_many_items(space, w_self, list_w, size):
     self = w_self._value
-    sb = UnicodeBuilder()
+    prealloc_size = len(self) * (size - 1)
+    for i in range(size):
+        try:
+            prealloc_size += len(space.unicode_w(list_w[i]))
+        except OperationError, e:
+            if not e.match(space, space.w_TypeError):
+                raise
+            raise operationerrfmt(space.w_TypeError,
+                        "sequence item %d: expected string or Unicode", i)
+    sb = UnicodeBuilder(prealloc_size)
     for i in range(size):
         if self and i != 0:
             sb.append(self)
         w_s = list_w[i]
-        if isinstance(w_s, W_UnicodeObject):
-            # shortcut for performance
-            sb.append(w_s._value)
-        else:
-            try:
-                sb.append(space.unicode_w(w_s))
-            except OperationError, e:
-                if not e.match(space, space.w_TypeError):
-                    raise
-                raise operationerrfmt(space.w_TypeError,
-                    "sequence item %d: expected string or Unicode", i)
+        sb.append(space.unicode_w(w_s))
     return space.wrap(sb.build())
 
 def hash__Unicode(space, w_uni):

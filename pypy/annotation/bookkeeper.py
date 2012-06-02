@@ -342,10 +342,11 @@ class Bookkeeper(object):
             else:
                 raise Exception("seeing a prebuilt long (value %s)" % hex(x))
         elif issubclass(tp, str): # py.lib uses annotated str subclasses
+            no_nul = not '\x00' in x
             if len(x) == 1:
-                result = SomeChar()
+                result = SomeChar(no_nul=no_nul)
             else:
-                result = SomeString()
+                result = SomeString(no_nul=no_nul)
         elif tp is unicode:
             if len(x) == 1:
                 result = SomeUnicodeCodePoint()
@@ -530,8 +531,11 @@ class Bookkeeper(object):
                 try:
                     assert pyobj._freeze_()
                 except AttributeError:
-                    raise Exception("unexpected prebuilt constant: %r" % (
-                        pyobj,))
+                    if hasattr(pyobj, '__call__'):
+                        msg = "object with a __call__ is not RPython"
+                    else:
+                        msg = "unexpected prebuilt constant"
+                    raise Exception("%s: %r" % (msg, pyobj))
                 result = self.getfrozen(pyobj)
             self.descs[pyobj] = result
             return result

@@ -64,6 +64,12 @@ class AppTestUnicodeString:
         check(', '.join([u'a']), u'a')
         check(', '.join(['a', u'b']), u'a, b')
         check(u', '.join(['a', 'b']), u'a, b')
+        try:
+            u''.join([u'a', 2, 3])
+        except TypeError, e:
+            assert 'sequence item 1' in str(e)
+        else:
+            raise Exception("DID NOT RAISE")
 
     if sys.version_info >= (2,3):
         def test_contains_ex(self):
@@ -298,6 +304,7 @@ class AppTestUnicodeString:
     def test_long_from_unicode(self):
         assert long(u'12345678901234567890') == 12345678901234567890
         assert int(u'12345678901234567890') == 12345678901234567890
+        assert long(u'123', 7) == 66
 
     def test_int_from_unicode(self):
         assert int(u'12345') == 12345

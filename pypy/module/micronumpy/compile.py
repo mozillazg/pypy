@@ -6,10 +6,12 @@ It should not be imported by the module itself
 import re
 
 from pypy.interpreter.baseobjspace import InternalSpaceCache, W_Root
+from pypy.interpreter.error import OperationError
 from pypy.module.micronumpy import interp_boxes
 from pypy.module.micronumpy.interp_dtype import get_dtype_cache
 from pypy.module.micronumpy.interp_numarray import (Scalar, BaseArray,
      scalar_w, W_NDimArray, array)
+from pypy.module.micronumpy.interp_arrayops import where
 from pypy.module.micronumpy import interp_ufuncs
 from pypy.rlib.objectmodel import specialize, instantiate
 
@@ -32,13 +34,17 @@ class TokenizerError(Exception):
 class BadToken(Exception):
     pass
 
-SINGLE_ARG_FUNCTIONS = ["sum", "prod", "max", "min", "all", "any", "unegative"]
+SINGLE_ARG_FUNCTIONS = ["sum", "prod", "max", "min", "all", "any",
+                        "unegative", "flat", "tostring"]
+TWO_ARG_FUNCTIONS = ["dot", 'take']
+THREE_ARG_FUNCTIONS = ['where']
 
 class FakeSpace(object):
-    w_ValueError = None
-    w_TypeError = None
-    w_IndexError = None
-    w_OverflowError = None
+    w_ValueError = "ValueError"
+    w_TypeError = "TypeError"
+    w_IndexError = "IndexError"
+    w_OverflowError = "OverflowError"
+    w_NotImplementedError = "NotImplementedError"
     w_None = None
 
     w_bool = "bool"
@@ -48,10 +54,15 @@ class FakeSpace(object):
     w_long = "long"
     w_tuple = 'tuple'
     w_slice = "slice"
+    w_str = "str"
+    w_unicode = "unicode"
 
     def __init__(self):
         """NOT_RPYTHON"""
         self.fromcache = InternalSpaceCache(self).getorbuild
+
+    def _freeze_(self):
+        return True
 
     def issequence_w(self, w_obj):
         return isinstance(w_obj, ListObject) or isinstance(w_obj, W_NDimArray)
@@ -85,8 +96,12 @@ class FakeSpace(object):
             return BoolObject(obj)
         elif isinstance(obj, int):
             return IntObject(obj)
+        elif isinstance(obj, long):
+            return LongObject(obj)
         elif isinstance(obj, W_Root):
             return obj
+        elif isinstance(obj, str):
+            return StringObject(obj)
         raise NotImplementedError
 
     def newlist(self, items):
@@ -112,6 +127,16 @@ class FakeSpace(object):
             return w_obj.intval
         elif isinstance(w_obj, FloatObject):
             return int(w_obj.floatval)
+        elif isinstance(w_obj, SliceObject):
+            raise OperationError(self.w_TypeError, self.wrap("slice."))
+        raise NotImplementedError
+
+    def index(self, w_obj):
+        return self.wrap(self.int_w(w_obj))
+
+    def str_w(self, w_obj):
+        if isinstance(w_obj, StringObject):
+            return w_obj.v
         raise NotImplementedError
 
     def int(self, w_obj):
@@ -144,6 +169,15 @@ class FakeSpace(object):
     def allocate_instance(self, klass, w_subtype):
         return instantiate(klass)
 
+    def newtuple(self, list_w):
+        return ListObject(list_w)
+
+    def newdict(self):
+        return {}
+
+    def setitem(self, dict, item, value):
+        dict[item] = value
+
     def len_w(self, w_obj):
         if isinstance(w_obj, ListObject):
             return len(w_obj.items)
@@ -169,6 +203,11 @@ class IntObject(W_Root):
     def __init__(self, intval):
         self.intval = intval
 
+class LongObject(W_Root):
+    tp = FakeSpace.w_long
+    def __init__(self, intval):
+        self.intval = intval
+
 class ListObject(W_Root):
     tp = FakeSpace.w_list
     def __init__(self, items):
@@ -180,6 +219,11 @@ class SliceObject(W_Root):
         self.start = start
         self.stop = stop
         self.step = step
+
+class StringObject(W_Root):
+    tp = FakeSpace.w_str
+    def __init__(self, v):
+        self.v = v
 
 class InterpreterState(object):
     def __init__(self, code):
@@ -371,12 +415,12 @@ class FunctionCall(Node):
                                                  for arg in self.args]))
 
     def execute(self, interp):
+        arr = self.args[0].execute(interp)
+        if not isinstance(arr, BaseArray):
+            raise ArgumentNotAnArray
         if self.name in SINGLE_ARG_FUNCTIONS:
             if len(self.args) != 1 and self.name != 'sum':
                 raise ArgumentMismatch
-            arr = self.args[0].execute(interp)
-            if not isinstance(arr, BaseArray):
-                raise ArgumentNotAnArray
             if self.name == "sum":
                 if len(self.args)>1:
                     w_res = arr.descr_sum(interp.space,
@@ -396,21 +440,51 @@ class FunctionCall(Node):
             elif self.name == "unegative":
                 neg = interp_ufuncs.get(interp.space).negative
                 w_res = neg.call(interp.space, [arr])
+            elif self.name == "flat":
+                w_res = arr.descr_get_flatiter(interp.space)
+            elif self.name == "tostring":
+                arr.descr_tostring(interp.space)
+                w_res = None
             else:
                 assert False # unreachable code
-            if isinstance(w_res, BaseArray):
-                return w_res
-            if isinstance(w_res, FloatObject):
-                dtype = get_dtype_cache(interp.space).w_float64dtype
-            elif isinstance(w_res, BoolObject):
-                dtype = get_dtype_cache(interp.space).w_booldtype
-            elif isinstance(w_res, interp_boxes.W_GenericBox):
-                dtype = w_res.get_dtype(interp.space)
+        elif self.name in TWO_ARG_FUNCTIONS:
+            if len(self.args) != 2:
+                raise ArgumentMismatch
+            arg = self.args[1].execute(interp)
+            if not isinstance(arg, BaseArray):
+                raise ArgumentNotAnArray
+            if self.name == "dot":
+                w_res = arr.descr_dot(interp.space, arg)
+            elif self.name == 'take':
+                w_res = arr.descr_take(interp.space, arg)
             else:
-                dtype = None
-            return scalar_w(interp.space, dtype, w_res)
+                assert False # unreachable code
+        elif self.name in THREE_ARG_FUNCTIONS:
+            if len(self.args) != 3:
+                raise ArgumentMismatch
+            arg1 = self.args[1].execute(interp)
+            arg2 = self.args[2].execute(interp)
+            if not isinstance(arg1, BaseArray):
+                raise ArgumentNotAnArray
+            if not isinstance(arg2, BaseArray):
+                raise ArgumentNotAnArray
+            if self.name == "where":
+                w_res = where(interp.space, arr, arg1, arg2)
+            else:
+                assert False
         else:
             raise WrongFunctionName
+        if isinstance(w_res, BaseArray):
+            return w_res
+        if isinstance(w_res, FloatObject):
+            dtype = get_dtype_cache(interp.space).w_float64dtype
+        elif isinstance(w_res, BoolObject):
+            dtype = get_dtype_cache(interp.space).w_booldtype
+        elif isinstance(w_res, interp_boxes.W_GenericBox):
+            dtype = w_res.get_dtype(interp.space)
+        else:
+            dtype = None
+        return scalar_w(interp.space, dtype, w_res)
 
 _REGEXES = [
     ('-?[\d\.]+', 'number'),

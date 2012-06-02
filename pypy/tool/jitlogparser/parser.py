@@ -93,7 +93,7 @@ class SimpleParser(OpParser):
                         end_index += 1
                     op.asm = '\n'.join([asm[i][1] for i in range(asm_index, end_index)])
         return loop
-                    
+
     def _asm_disassemble(self, d, origin_addr, tp):
         from pypy.jit.backend.x86.tool.viewcode import machine_code_dump
         return list(machine_code_dump(d, tp, origin_addr))
@@ -109,7 +109,7 @@ class SimpleParser(OpParser):
         if not argspec.strip():
             return [], None
         if opname == 'debug_merge_point':
-            return argspec.split(", ", 1), None
+            return argspec.split(", ", 2), None
         else:
             args = argspec.split(', ')
             descr = None
@@ -140,13 +140,15 @@ class TraceForOpcode(object):
     bytecode_name = None
     is_bytecode = True
     inline_level = None
+    has_dmp = False
 
     def parse_code_data(self, arg):
         m = re.search('<code object ([<>\w]+)[\.,] file \'(.+?)\'[\.,] line (\d+)> #(\d+) (\w+)',
                       arg)
         if m is None:
             # a non-code loop, like StrLiteralSearch or something
-            self.bytecode_name = arg
+            if arg:
+                self.bytecode_name = arg
         else:
             self.name, self.filename, lineno, bytecode_no, self.bytecode_name = m.groups()
             self.startlineno = int(lineno)
@@ -157,7 +159,7 @@ class TraceForOpcode(object):
         for op in operations:
             if op.name == 'debug_merge_point':
                 self.inline_level = int(op.args[0])
-                self.parse_code_data(op.args[1][1:-1])
+                self.parse_code_data(op.args[2][1:-1])
                 break
         else:
             self.inline_level = 0
@@ -218,7 +220,7 @@ class Function(object):
         self.inputargs = inputargs
         self.chunks = chunks
         for chunk in self.chunks:
-            if chunk.filename is not None:
+            if chunk.bytecode_name is not None:
                 self.startlineno = chunk.startlineno
                 self.filename = chunk.filename
                 self.name = chunk.name
@@ -385,7 +387,7 @@ def import_log(logname, ParserCls=SimpleParser):
             m = re.search('guard \d+', comm)
             name = m.group(0)
         else:
-            name = comm[2:comm.find(':')-1]
+            name = " ".join(comm[2:].split(" ", 2)[:2])
         if name in dumps:
             bname, start_ofs, dump = dumps[name]
             loop.force_asm = (lambda dump=dump, start_ofs=start_ofs,
@@ -415,7 +417,7 @@ def split_trace(trace):
         part.descr = descrs[i]
         part.comment = trace.comment
         parts.append(part)
-    
+
     return parts
 
 def parse_log_counts(input, loops):

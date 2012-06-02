@@ -265,7 +265,6 @@ class AppTestNonblocking(object):
 
         if option.runappdirect:
             py.test.skip("works with internals of _file impl on py.py")
-
         state = [0]
         def read(fd, n=None):
             if fd != 42:
@@ -279,7 +278,7 @@ class AppTestNonblocking(object):
             return ''
         os.read = read
         stdin = W_File(cls.space)
-        stdin.file_fdopen(42, "r", 1)
+        stdin.file_fdopen(42, 'rb', 1)
         stdin.name = '<stdin>'
         cls.w_stream = stdin
 

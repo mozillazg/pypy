@@ -323,6 +323,17 @@ class DictRepr(AbstractDictRepr):
         hop.exception_is_here()
         return hop.gendirectcall(ll_popitem, cTUPLE, v_dict)
 
+    def rtype_method_pop(self, hop):
+        if hop.nb_args == 2:
+            v_args = hop.inputargs(self, self.key_repr)
+            target = ll_pop
+        elif hop.nb_args == 3:
+            v_args = hop.inputargs(self, self.key_repr, self.value_repr)
+            target = ll_pop_default
+        hop.exception_is_here()
+        v_res = hop.gendirectcall(target, *v_args)
+        return self.recast_value(hop.llops, v_res)
+
 class __extend__(pairtype(DictRepr, rmodel.Repr)):
 
     def rtype_getitem((r_dict, r_key), hop):
@@ -491,8 +502,6 @@ def ll_dict_delitem(d, key):
         raise KeyError
     _ll_dict_del(d, i)
 
-# XXX: Move the size checking and resize into a single call which is opauqe to
-# the JIT when the dict isn't virtual, to avoid extra branches.
 @jit.look_inside_iff(lambda d, i: jit.isvirtual(d) and jit.isconstant(i))
 def _ll_dict_del(d, i):
     d.entries.mark_deleted(i)
@@ -505,18 +514,32 @@ def _ll_dict_del(d, i):
         entry.key = lltype.nullptr(ENTRY.key.TO)
     if ENTRIES.must_clear_value:
         entry.value = lltype.nullptr(ENTRY.value.TO)
-    num_entries = len(d.entries)
-    if num_entries > DICT_INITSIZE and d.num_items < num_entries / 4:
-        ll_dict_resize(d)
+    #
+    # The rest is commented out: like CPython we no longer shrink the
+    # dictionary here.  It may shrink later if we try to append a number
+    # of new items to it.  Unsure if this behavior was designed in
+    # CPython or is accidental.  A design reason would be that if you
+    # delete all items in a dictionary (e.g. with a series of
+    # popitem()), then CPython avoids shrinking the table several times.
+    #num_entries = len(d.entries)
+    #if num_entries > DICT_INITSIZE and d.num_items <= num_entries / 4:
+    #    ll_dict_resize(d)
+    # A previous xxx: move the size checking and resize into a single
+    # call which is opaque to the JIT when the dict isn't virtual, to
+    # avoid extra branches.
 
 def ll_dict_resize(d):
     old_entries = d.entries
     old_size = len(old_entries)
     # make a 'new_size' estimate and shrink it if there are many
-    # deleted entry markers
-    new_size = old_size * 2
-    while new_size > DICT_INITSIZE and d.num_items < new_size / 4:
-        new_size /= 2
+    # deleted entry markers.  See CPython for why it is a good idea to
+    # quadruple the dictionary size as long as it's not too big.
+    if d.num_items > 50000: new_estimate = d.num_items * 2
+    else:                   new_estimate = d.num_items * 4
+    new_size = DICT_INITSIZE
+    while new_size <= new_estimate:
+        new_size *= 2
+    #
     d.entries = lltype.typeOf(old_entries).TO.allocate(new_size)
     d.num_items = 0
     d.resize_counter = new_size * 2
@@ -874,3 +897,18 @@ def ll_popitem(ELEM, dic):
     r.item1 = recast(ELEM.TO.item1, entry.value)
     _ll_dict_del(dic, i)
     return r
+
+def ll_pop(dic, key):
+    i = ll_dict_lookup(dic, key, dic.keyhash(key))
+    if not i & HIGHEST_BIT:
+        value = ll_get_value(dic, i)
+        _ll_dict_del(dic, i)
+        return value
+    else:
+        raise KeyError
+
+def ll_pop_default(dic, key, dfl):
+    try:
+        return ll_pop(dic, key)
+    except KeyError:
+        return dfl
