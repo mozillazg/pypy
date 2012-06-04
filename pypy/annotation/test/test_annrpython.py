@@ -483,7 +483,7 @@ class TestAnnotateTestCase:
                 return a_str.strip(' ')
             elif n == 1:
                 return a_str.rstrip(' ')
-            else: 
+            else:
                 return a_str.lstrip(' ')
         s = a.build_types(f, [int, annmodel.SomeString(no_nul=True)])
         assert s.no_nul
@@ -3737,6 +3737,48 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [int])
         assert s.listdef.listitem.range_step == 0
 
+    def test_specialize_arg_memo(self):
+        @objectmodel.specialize.memo()
+        def g(n):
+            return n
+        @objectmodel.specialize.arg(0)
+        def f(i):
+            return g(i)
+        def main(i):
+            if i == 2:
+                return f(2)
+            elif i == 3:
+                return f(3)
+            else:
+                raise NotImplementedError
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(main, [int])
+        assert isinstance(s, annmodel.SomeInteger)
+
+    def test_join_none_and_nonnull(self):
+        from pypy.rlib.rstring import assert_str0
+        
+        def f(i):
+            a = str(i)
+            a = assert_str0(a)
+            return a.join([None])
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s, annmodel.SomeString)
+        assert not s.can_be_None
+
+    def test_no___call__(self):
+        class X(object):
+            def __call__(self):
+                xxx
+        x = X()
+        def f():
+            return x
+        a = self.RPythonAnnotator()
+        e = py.test.raises(Exception, a.build_types, f, [])
+        assert 'object with a __call__ is not RPython' in str(e.value)
 
 def g(n):
     return [0,1,2,n]

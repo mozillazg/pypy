@@ -204,6 +204,14 @@ def isvirtual(value):
     return NonConstant(False)
 isvirtual._annspecialcase_ = "specialize:call_location"
 
+LIST_CUTOFF = 2
+
+@specialize.call_location()
+def loop_unrolling_heuristic(lst, size):
+    """ In which cases iterating over items of lst can be unrolled
+    """
+    return isvirtual(lst) or (isconstant(size) and size <= LIST_CUTOFF)
+
 class Entry(ExtRegistryEntry):
     _about_ = hint
 
@@ -405,8 +413,8 @@ PARAMETER_DOCS = {
     'retrace_limit': 'how many times we can try retracing before giving up',
     'max_retrace_guards': 'number of extra guards a retrace can cause',
     'max_unroll_loops': 'number of extra unrollings a loop can cause',
-    'enable_opts': 'INTERNAL USE ONLY: optimizations to enable, or all = %s' %
-                       ENABLE_ALL_OPTS,
+    'enable_opts': 'INTERNAL USE ONLY (MAY NOT WORK OR LEAD TO CRASHES): '
+                   'optimizations to enable, or all = %s' % ENABLE_ALL_OPTS,
     }
 
 PARAMETERS = {'threshold': 1039, # just above 1024, prime

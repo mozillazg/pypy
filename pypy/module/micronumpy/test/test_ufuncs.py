@@ -1,7 +1,6 @@
 
 from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
 
-
 class AppTestUfuncs(BaseNumpyAppTest):
     def test_ufunc_instance(self):
         from _numpypy import add, ufunc
@@ -149,7 +148,11 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert math.isnan(fmax(0, nan))
         assert math.isnan(fmax(nan, nan))
         # The numpy docs specify that the FIRST NaN should be used if both are NaN
-        assert math.copysign(1.0, fmax(nnan, nan)) == -1.0
+        # Since comparisons with nnan and nan all return false,
+        # use copysign on both sides to sidestep bug in nan representaion
+        # on Microsoft win32
+        assert math.copysign(1., fmax(nnan, nan)) == math.copysign(1., nnan)
+
 
     def test_fmin(self):
         from _numpypy import fmin
@@ -165,7 +168,9 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert math.isnan(fmin(0, nan))
         assert math.isnan(fmin(nan, nan))
         # The numpy docs specify that the FIRST NaN should be used if both are NaN
-        assert math.copysign(1.0, fmin(nnan, nan)) == -1.0
+        # use copysign on both sides to sidestep bug in nan representaion
+        # on Microsoft win32
+        assert math.copysign(1., fmin(nnan, nan)) == math.copysign(1., nnan)
 
     def test_fmod(self):
         from _numpypy import fmod
@@ -228,12 +233,15 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert a[1] == 0
 
     def test_signbit(self):
-        from _numpypy import signbit, copysign
+        from _numpypy import signbit
 
-        assert (signbit([0, 0.0, 1, 1.0, float('inf'), float('nan')]) ==
-            [False, False, False, False, False, False]).all()
-        assert (signbit([-0, -0.0, -1, -1.0, float('-inf'), -float('nan'), float('-nan')]) ==
-            [False,  True,  True,  True,  True,  True, True]).all()
+        assert (signbit([0, 0.0, 1, 1.0, float('inf')]) ==
+            [False, False, False, False, False]).all()
+        assert (signbit([-0, -0.0, -1, -1.0, float('-inf')]) ==
+            [False,  True,  True,  True,  True]).all()
+        skip('sign of nan is non-determinant')
+        assert (signbit([float('nan'), float('-nan'), -float('nan')]) ==
+            [False, True, True]).all()    
 
     def test_reciporocal(self):
         from _numpypy import array, reciprocal
@@ -253,24 +261,17 @@ class AppTestUfuncs(BaseNumpyAppTest):
         for i in range(3):
             assert c[i] == a[i] - b[i]
 
-    def test_floorceil(self):
-        from _numpypy import array, floor, ceil
+    def test_floorceiltrunc(self):
+        from _numpypy import array, floor, ceil, trunc
         import math
-        reference = [-2.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0]
-        a = array([-1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5])
-        b = floor(a)
-        for i in range(5):
-            assert b[i] == reference[i]
-        reference = [-1.0, -1.0, -1.0, 0.0, 1.0, 2.0, 1.0]
-        a = array([-1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5])
-        b = ceil(a)
-        assert (reference == b).all()
-        inf = float("inf")
-        data = [1.5, 2.9999, -1.999, inf]
-        results = [math.floor(x) for x in data]
-        assert (floor(data) == results).all()
-        results = [math.ceil(x) for x in data]
-        assert (ceil(data) == results).all()
+        ninf, inf = float("-inf"), float("inf")
+        a = array([ninf, -1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5, inf])
+        assert ([ninf, -2.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == floor(a)).all()
+        assert ([ninf, -1.0, -1.0, -1.0, 0.0, 1.0, 2.0, 1.0, inf] == ceil(a)).all()
+        assert ([ninf, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == trunc(a)).all()
+        assert all([math.isnan(f(float("nan"))) for f in floor, ceil, trunc])
+        assert all([math.copysign(1, f(abs(float("nan")))) == 1 for f in floor, ceil, trunc])
+        assert all([math.copysign(1, f(-abs(float("nan")))) == -1 for f in floor, ceil, trunc])
 
     def test_copysign(self):
         from _numpypy import array, copysign
@@ -597,6 +598,12 @@ class AppTestUfuncs(BaseNumpyAppTest):
         assert (bitwise_not(a) == ~a).all()
         assert (invert(a) == ~a).all()
 
+    def test_shift(self):
+        from _numpypy import left_shift, right_shift
+
+        assert (left_shift([5, 1], [2, 13]) == [20, 2**13]).all()
+        assert (right_shift(10, range(5)) == [10, 5, 2, 1, 0]).all()
+
     def test_comparisons(self):
         import operator
         from _numpypy import equal, not_equal, less, less_equal, greater, greater_equal
@@ -763,6 +770,8 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_logaddexp(self):
         import math
+        import sys
+        float_max, float_min = sys.float_info.max, sys.float_info.min
         from _numpypy import logaddexp
 
         # From the numpy documentation
@@ -773,7 +782,8 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
         assert logaddexp(0, 0) == math.log(2)
         assert logaddexp(float('-inf'), 0) == 0
-        assert logaddexp(12345678, 12345678) == float('inf')
+        assert logaddexp(float_max, float_max) == float_max
+        assert logaddexp(float_min, float_min) == math.log(2)
 
         assert math.isnan(logaddexp(float('nan'), 1))
         assert math.isnan(logaddexp(1, float('nan')))
@@ -786,6 +796,8 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
     def test_logaddexp2(self):
         import math
+        import sys
+        float_max, float_min = sys.float_info.max, sys.float_info.min
         from _numpypy import logaddexp2
         log2 = math.log(2)
 
@@ -797,7 +809,8 @@ class AppTestUfuncs(BaseNumpyAppTest):
 
         assert logaddexp2(0, 0) == 1
         assert logaddexp2(float('-inf'), 0) == 0
-        assert logaddexp2(12345678, 12345678) == float('inf')
+        assert logaddexp2(float_max, float_max) == float_max
+        assert logaddexp2(float_min, float_min) == 1.0
 
         assert math.isnan(logaddexp2(float('nan'), 1))
         assert math.isnan(logaddexp2(1, float('nan')))

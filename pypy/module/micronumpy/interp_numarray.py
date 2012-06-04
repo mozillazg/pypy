@@ -72,9 +72,10 @@ class BaseArray(Wrappable):
             arr.force_if_needed()
         del self.invalidates[:]
 
-    def add_invalidates(self, other):
-        self.invalidates.append(other)
-
+    def add_invalidates(self, space, other):
+        if get_numarray_cache(space).enable_invalidation:
+            self.invalidates.append(other)
+        
     def descr__new__(space, w_subtype, w_size, w_dtype=None):
         dtype = space.interp_w(interp_dtype.W_Dtype,
             space.call_function(space.gettypefor(interp_dtype.W_Dtype), w_dtype)
@@ -349,12 +350,31 @@ class BaseArray(Wrappable):
         if shape_len == 1:
             if space.isinstance_w(w_idx, space.w_int):
                 return True
+
+            try:
+                value = space.int_w(space.index(w_idx))
+                return True
+            except OperationError:
+                pass
+
+            try:
+                value = space.int_w(w_idx)
+                return True
+            except OperationError:
+                pass
+
             if space.isinstance_w(w_idx, space.w_slice):
                 return False
         elif (space.isinstance_w(w_idx, space.w_slice) or
               space.isinstance_w(w_idx, space.w_int)):
             return False
-        lgt = space.len_w(w_idx)
+
+        try:
+            lgt = space.len_w(w_idx)
+        except OperationError:
+            raise OperationError(space.w_IndexError,
+                                 space.wrap("index must be either an int or a sequence."))
+
         if lgt > shape_len:
             raise OperationError(space.w_IndexError,
                                  space.wrap("invalid index"))
@@ -513,7 +533,30 @@ class BaseArray(Wrappable):
             arr = concrete.copy(space)
             arr.setshape(space, new_shape)
         return arr
-
+       
+    @unwrap_spec(axis1=int, axis2=int)
+    def descr_swapaxes(self, space, axis1, axis2):
+        """a.swapaxes(axis1, axis2)
+    
+        Return a view of the array with `axis1` and `axis2` interchanged.
+    
+        Refer to `numpy.swapaxes` for full documentation.
+    
+        See Also
+        --------
+        numpy.swapaxes : equivalent function
+        """
+        concrete = self.get_concrete()
+        shape = concrete.shape[:]
+        strides = concrete.strides[:]
+        backstrides = concrete.backstrides[:]
+        shape[axis1], shape[axis2] = shape[axis2], shape[axis1]   
+        strides[axis1], strides[axis2] = strides[axis2], strides[axis1]
+        backstrides[axis1], backstrides[axis2] = backstrides[axis2], backstrides[axis1] 
+        arr = W_NDimSlice(concrete.start, strides, 
+                           backstrides, shape, concrete)
+        return space.wrap(arr)   
+                                      
     def descr_tolist(self, space):
         if len(self.shape) == 0:
             assert isinstance(self, Scalar)
@@ -647,11 +690,17 @@ class BaseArray(Wrappable):
         return self.getitem(offset).convert_to(longdtype).item(
             space)
 
+    @jit.unroll_safe
     def descr_item(self, space, w_arg=None):
         if space.is_w(w_arg, space.w_None):
-            if not isinstance(self, Scalar):
-                raise OperationError(space.w_ValueError, space.wrap("index out of bounds"))
-            return self.value.item(space)
+            if isinstance(self, Scalar):
+                return self.value.item(space)
+            if support.product(self.shape) == 1:
+                return self.descr_getitem(space,
+                                          space.newtuple([space.wrap(0) for i
+                                                   in range(len(self.shape))]))
+            raise OperationError(space.w_ValueError,
+                                 space.wrap("index out of bounds"))
         if space.isinstance_w(w_arg, space.w_int):
             if isinstance(self, Scalar):
                 raise OperationError(space.w_ValueError, space.wrap("index out of bounds"))
@@ -798,7 +847,6 @@ class Call1(VirtualArray):
                                                             out_arg=None):
         VirtualArray.__init__(self, name, shape, res_dtype, out_arg)
         self.values = values
-        self.size = values.size
         self.ufunc = ufunc
         self.calc_dtype = calc_dtype
 
@@ -1006,8 +1054,21 @@ class ConcreteArray(BaseArray):
 
     @jit.unroll_safe
     def _index_of_single_item(self, space, w_idx):
-        if space.isinstance_w(w_idx, space.w_int):
-            idx = space.int_w(w_idx)
+        is_valid = False
+        try:
+            idx = space.int_w(space.index(w_idx))
+            is_valid = True
+        except OperationError:
+            pass
+
+        if not is_valid:
+            try:
+                idx = space.int_w(w_idx)
+                is_valid = True
+            except OperationError:
+                pass
+
+        if is_valid:
             if idx < 0:
                 idx = self.shape[0] + idx
             if idx < 0 or idx >= self.shape[0]:
@@ -1412,6 +1473,7 @@ BaseArray.typedef = TypeDef(
     copy = interp2app(BaseArray.descr_copy),
     flatten = interp2app(BaseArray.descr_flatten),
     reshape = interp2app(BaseArray.descr_reshape),
+    swapaxes = interp2app(BaseArray.descr_swapaxes),
     tolist = interp2app(BaseArray.descr_tolist),
     take = interp2app(BaseArray.descr_take),
     compress = interp2app(BaseArray.descr_compress),
@@ -1559,3 +1621,10 @@ def isna(space, w_obj):
         arr.fill(space, space.wrap(False))
         return arr
     return space.wrap(False)
+
+class NumArrayCache(object):
+    def __init__(self, space):
+        self.enable_invalidation = True
+
+def get_numarray_cache(space):
+    return space.fromcache(NumArrayCache)

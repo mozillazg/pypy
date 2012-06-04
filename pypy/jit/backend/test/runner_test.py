@@ -1660,20 +1660,37 @@ class LLtypeBackendTest(BaseBackendTest):
         assert s.x == chr(190)
         assert s.y == chr(150)
 
-    def test_field_raw_pure(self):
-        # This is really testing the same thing as test_field_basic but can't
-        # hurt...
-        S = lltype.Struct('S', ('x', lltype.Signed))
+    def test_fielddescrof_dynamic(self):
+        S = lltype.Struct('S',
+                          ('x', lltype.Signed),
+                          ('y', lltype.Signed),
+                          )
+        longsize = rffi.sizeof(lltype.Signed)
+        y_ofs = longsize
         s = lltype.malloc(S, flavor='raw')
         sa = llmemory.cast_ptr_to_adr(s)
         s_box = BoxInt(heaptracker.adr2int(sa))
+        #
+        field = self.cpu.fielddescrof(S, 'y')
+        field_dyn = self.cpu.fielddescrof_dynamic(offset=y_ofs,
+                                                  fieldsize=longsize,
+                                                  is_pointer=False,
+                                                  is_float=False,
+                                                  is_signed=True)
+        assert field.is_pointer_field() == field_dyn.is_pointer_field()
+        assert field.is_float_field()   == field_dyn.is_float_field()
+        if 'llgraph' not in str(self.cpu):
+            assert field.is_field_signed()  == field_dyn.is_field_signed()
+
+        #
         for get_op, set_op in ((rop.GETFIELD_RAW, rop.SETFIELD_RAW),
                                (rop.GETFIELD_RAW_PURE, rop.SETFIELD_RAW)):
-            fd = self.cpu.fielddescrof(S, 'x')
-            self.execute_operation(set_op, [s_box, BoxInt(32)], 'void',
-                                   descr=fd)
-            res = self.execute_operation(get_op, [s_box], 'int', descr=fd)
-            assert res.getint()  == 32
+            for descr in (field, field_dyn):
+                self.execute_operation(set_op, [s_box, BoxInt(32)], 'void',
+                                       descr=descr)
+                res = self.execute_operation(get_op, [s_box], 'int', descr=descr)
+                assert res.getint()  == 32
+
         lltype.free(s, flavor='raw')
 
     def test_new_with_vtable(self):
@@ -1818,12 +1835,12 @@ class LLtypeBackendTest(BaseBackendTest):
         assert not excvalue
 
     def test_cond_call_gc_wb(self):
-        def func_void(a, b):
-            record.append((a, b))
+        def func_void(a):
+            record.append(a)
         record = []
         #
         S = lltype.GcStruct('S', ('tid', lltype.Signed))
-        FUNC = self.FuncType([lltype.Ptr(S), lltype.Ptr(S)], lltype.Void)
+        FUNC = self.FuncType([lltype.Ptr(S)], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
         funcbox = self.get_funcbox(self.cpu, func_ptr)
         class WriteBarrierDescr(AbstractDescr):
@@ -1849,26 +1866,25 @@ class LLtypeBackendTest(BaseBackendTest):
                                    [BoxPtr(sgcref), ConstPtr(tgcref)],
                                    'void', descr=WriteBarrierDescr())
             if cond:
-                assert record == [(s, t)]
+                assert record == [s]
             else:
                 assert record == []
 
     def test_cond_call_gc_wb_array(self):
-        def func_void(a, b, c):
-            record.append((a, b, c))
+        def func_void(a):
+            record.append(a)
         record = []
         #
         S = lltype.GcStruct('S', ('tid', lltype.Signed))
-        FUNC = self.FuncType([lltype.Ptr(S), lltype.Signed, lltype.Ptr(S)],
-                             lltype.Void)
+        FUNC = self.FuncType([lltype.Ptr(S)], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
         funcbox = self.get_funcbox(self.cpu, func_ptr)
         class WriteBarrierDescr(AbstractDescr):
             jit_wb_if_flag = 4096
             jit_wb_if_flag_byteofs = struct.pack("i", 4096).index('\x10')
             jit_wb_if_flag_singlebyte = 0x10
-            jit_wb_cards_set = 0
-            def get_write_barrier_from_array_fn(self, cpu):
+            jit_wb_cards_set = 0       # <= without card marking
+            def get_write_barrier_fn(self, cpu):
                 return funcbox.getint()
         #
         for cond in [False, True]:
@@ -1885,13 +1901,15 @@ class LLtypeBackendTest(BaseBackendTest):
                        [BoxPtr(sgcref), ConstInt(123), BoxPtr(sgcref)],
                        'void', descr=WriteBarrierDescr())
             if cond:
-                assert record == [(s, 123, s)]
+                assert record == [s]
             else:
                 assert record == []
 
     def test_cond_call_gc_wb_array_card_marking_fast_path(self):
-        def func_void(a, b, c):
-            record.append((a, b, c))
+        def func_void(a):
+            record.append(a)
+            if cond == 1:      # the write barrier sets the flag
+                s.data.tid |= 32768
         record = []
         #
         S = lltype.Struct('S', ('tid', lltype.Signed))
@@ -1905,34 +1923,40 @@ class LLtypeBackendTest(BaseBackendTest):
                                      ('card6', lltype.Char),
                                      ('card7', lltype.Char),
                                      ('data',  S))
-        FUNC = self.FuncType([lltype.Ptr(S), lltype.Signed, lltype.Ptr(S)],
-                             lltype.Void)
+        FUNC = self.FuncType([lltype.Ptr(S)], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), func_void)
         funcbox = self.get_funcbox(self.cpu, func_ptr)
         class WriteBarrierDescr(AbstractDescr):
             jit_wb_if_flag = 4096
             jit_wb_if_flag_byteofs = struct.pack("i", 4096).index('\x10')
             jit_wb_if_flag_singlebyte = 0x10
-            jit_wb_cards_set = 8192
-            jit_wb_cards_set_byteofs = struct.pack("i", 8192).index('\x20')
-            jit_wb_cards_set_singlebyte = 0x20
+            jit_wb_cards_set = 32768
+            jit_wb_cards_set_byteofs = struct.pack("i", 32768).index('\x80')
+            jit_wb_cards_set_singlebyte = -0x80
             jit_wb_card_page_shift = 7
             def get_write_barrier_from_array_fn(self, cpu):
                 return funcbox.getint()
         #
-        for BoxIndexCls in [BoxInt, ConstInt]:
-            for cond in [False, True]:
+        for BoxIndexCls in [BoxInt, ConstInt]*3:
+            for cond in [-1, 0, 1, 2]:
+                # cond=-1:GCFLAG_TRACK_YOUNG_PTRS, GCFLAG_CARDS_SET are not set
+                # cond=0: GCFLAG_CARDS_SET is never set
+                # cond=1: GCFLAG_CARDS_SET is not set, but the wb sets it
+                # cond=2: GCFLAG_CARDS_SET is already set
                 print
                 print '_'*79
                 print 'BoxIndexCls =', BoxIndexCls
-                print 'JIT_WB_CARDS_SET =', cond
+                print 'testing cond =', cond
                 print
                 value = random.randrange(-sys.maxint, sys.maxint)
-                value |= 4096
-                if cond:
-                    value |= 8192
+                if cond >= 0:
+                    value |= 4096
                 else:
-                    value &= ~8192
+                    value &= ~4096
+                if cond == 2:
+                    value |= 32768
+                else:
+                    value &= ~32768
                 s = lltype.malloc(S_WITH_CARDS, immortal=True, zero=True)
                 s.data.tid = value
                 sgcref = rffi.cast(llmemory.GCREF, s.data)
@@ -1941,11 +1965,13 @@ class LLtypeBackendTest(BaseBackendTest):
                 self.execute_operation(rop.COND_CALL_GC_WB_ARRAY,
                            [BoxPtr(sgcref), box_index, BoxPtr(sgcref)],
                            'void', descr=WriteBarrierDescr())
-                if cond:
+                if cond in [0, 1]:
+                    assert record == [s.data]
+                else:
                     assert record == []
+                if cond in [1, 2]:
                     assert s.card6 == '\x02'
                 else:
-                    assert record == [(s.data, (9<<7) + 17, s.data)]
                     assert s.card6 == '\x00'
                 assert s.card0 == '\x00'
                 assert s.card1 == '\x00'
@@ -1954,6 +1980,9 @@ class LLtypeBackendTest(BaseBackendTest):
                 assert s.card4 == '\x00'
                 assert s.card5 == '\x00'
                 assert s.card7 == '\x00'
+                if cond == 1:
+                    value |= 32768
+                assert s.data.tid == value
 
     def test_force_operations_returning_void(self):
         values = []
