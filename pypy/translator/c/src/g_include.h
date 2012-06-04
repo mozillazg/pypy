@@ -2,7 +2,7 @@
 /************************************************************/
 /***  C header file for code produced by genc.py          ***/
 
-#ifndef PYPY_STANDALONE
+#ifdef PYPY_CPYTHON_EXTENSION
 #  include "Python.h"
 #  include "compile.h"
 #  include "frameobject.h"
@@ -60,4 +60,9 @@
 #  ifdef _MSC_VER
 #    pragma warning(disable: 4033 4102 4101 4716)
 #  endif
+#endif
+
+/* work around waitpid expecting different pointer type */
+#ifdef __CYGWIN__
+#include "src/cygwin_wait.h"
 #endif

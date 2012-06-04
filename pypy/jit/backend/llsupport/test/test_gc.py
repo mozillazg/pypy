@@ -11,6 +11,7 @@ from pypy.jit.metainterp.resoperation import get_deep_immutable_oplist
 from pypy.jit.tool.oparser import parse
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.jit.metainterp.optimizeopt.util import equaloplists
+from pypy.rlib.rarithmetic import is_valid_int
 
 def test_boehm():
     gc_ll_descr = GcLLDescr_boehm(None, None, None)
@@ -57,6 +58,7 @@ class TestGcRootMapAsmGcc:
         def frame_pos(n):
             return -4*(4+n)
         gcrootmap = GcRootMap_asmgcc()
+        gcrootmap.is_64_bit = False
         num1 = frame_pos(-5)
         num1a = num1|2
         num2 = frame_pos(55)
@@ -102,7 +104,7 @@ class TestGcRootMapAsmGcc:
         gcrootmap.put(retaddr, shapeaddr)
         assert gcrootmap._gcmap[0] == retaddr
         assert gcrootmap._gcmap[1] == shapeaddr
-        p = rffi.cast(rffi.LONGP, gcrootmap.gcmapstart())
+        p = rffi.cast(rffi.SIGNEDP, gcrootmap.gcmapstart())
         assert p[0] == retaddr
         assert (gcrootmap.gcmapend() ==
                 gcrootmap.gcmapstart() + rffi.sizeof(lltype.Signed) * 2)
@@ -274,8 +276,8 @@ class FakeLLOp(object):
                             repr(offset_to_length), p))
         return p
 
-    def _write_barrier_failing_case(self, adr_struct, adr_newptr):
-        self.record.append(('barrier', adr_struct, adr_newptr))
+    def _write_barrier_failing_case(self, adr_struct):
+        self.record.append(('barrier', adr_struct))
 
     def get_write_barrier_failing_case(self, FPTRTYPE):
         return llhelper(FPTRTYPE, self._write_barrier_failing_case)
@@ -400,7 +402,7 @@ class TestFramework(object):
         #
         s_hdr.tid |= gc_ll_descr.GCClass.JIT_WB_IF_FLAG
         gc_ll_descr.do_write_barrier(s_gcref, r_gcref)
-        assert self.llop1.record == [('barrier', s_adr, r_adr)]
+        assert self.llop1.record == [('barrier', s_adr)]
 
     def test_gen_write_barrier(self):
         gc_ll_descr = self.gc_ll_descr
@@ -418,9 +420,9 @@ class TestFramework(object):
         assert newops[0].getarg(1) == v_value
         assert newops[0].result is None
         wbdescr = newops[0].getdescr()
-        assert isinstance(wbdescr.jit_wb_if_flag, int)
-        assert isinstance(wbdescr.jit_wb_if_flag_byteofs, int)
-        assert isinstance(wbdescr.jit_wb_if_flag_singlebyte, int)
+        assert is_valid_int(wbdescr.jit_wb_if_flag)
+        assert is_valid_int(wbdescr.jit_wb_if_flag_byteofs)
+        assert is_valid_int(wbdescr.jit_wb_if_flag_singlebyte)
 
     def test_get_rid_of_debug_merge_point(self):
         operations = [

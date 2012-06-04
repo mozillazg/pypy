@@ -14,10 +14,10 @@ import signal
 
 def setup_module(mod):
     if os.name != 'nt':
-        mod.space = gettestobjspace(usemodules=['posix', 'fcntl'])
+        mod.space = gettestobjspace(usemodules=['posix', 'fcntl', 'struct'])
     else:
         # On windows, os.popen uses the subprocess module
-        mod.space = gettestobjspace(usemodules=['posix', '_rawffi', 'thread'])
+        mod.space = gettestobjspace(usemodules=['posix', '_rawffi', 'thread', 'struct'])
     mod.path = udir.join('posixtestfile.txt')
     mod.path.write("this is a test")
     mod.path2 = udir.join('test_posix2-')
@@ -29,6 +29,7 @@ def setup_module(mod):
     mod.pdir = pdir
     unicode_dir = udir.ensure('fi\xc5\x9fier.txt', dir=True)
     unicode_dir.join('somefile').write('who cares?')
+    unicode_dir.join('caf\xe9').write('who knows?')
     mod.unicode_dir = unicode_dir
 
     # in applevel tests, os.stat uses the CPython os.stat.
@@ -308,14 +309,22 @@ class AppTestPosix:
                           'file2']
 
     def test_listdir_unicode(self):
+        import sys
         unicode_dir = self.unicode_dir
         if unicode_dir is None:
             skip("encoding not good enough")
         posix = self.posix
         result = posix.listdir(unicode_dir)
-        result.sort()
-        assert result == [u'somefile']
-        assert type(result[0]) is unicode
+        typed_result = [(type(x), x) for x in result]
+        assert (unicode, u'somefile') in typed_result
+        try:
+            u = "caf\xe9".decode(sys.getfilesystemencoding())
+        except UnicodeDecodeError:
+            # Could not decode, listdir returned the byte string
+            assert (str, "caf\xe9") in typed_result
+        else:
+            assert (unicode, u) in typed_result
+
 
     def test_access(self):
         pdir = self.pdir + '/file1'
@@ -406,6 +415,7 @@ class AppTestPosix:
         def test_execv_no_args(self):
             os = self.posix
             raises(ValueError, os.execv, "notepad", [])
+            raises(ValueError, os.execve, "notepad", [], {})
 
         def test_execv_raising2(self):
             os = self.posix
@@ -476,12 +486,11 @@ class AppTestPosix:
     if hasattr(__import__(os.name), "spawnve"):
         def test_spawnve(self):
             os = self.posix
-            import sys
-            print self.python
+            env = {'PATH':os.environ['PATH'], 'FOOBAR': '42'}
             ret = os.spawnve(os.P_WAIT, self.python,
                              ['python', '-c',
                               "raise(SystemExit(int(__import__('os').environ['FOOBAR'])))"],
-                             {'FOOBAR': '42'})
+                             env)
             assert ret == 42
 
     def test_popen(self):
@@ -931,6 +940,23 @@ class AppTestPosix:
             # check that the warning points to the call to os.tmpnam(),
             # not to some code inside app_posix.py
             assert w[-1].lineno == f_tmpnam_warning.func_code.co_firstlineno
+
+    def test_has_kill(self):
+        import os
+        assert hasattr(os, 'kill')
+
+    def test_pipe_flush(self):
+        os = self.posix
+        ffd, gfd = os.pipe()
+        f = os.fdopen(ffd, 'r')
+        g = os.fdopen(gfd, 'w')
+        g.write('he')
+        g.flush()
+        x = f.read(1)
+        assert x == 'h'
+        f.flush()
+        x = f.read(1)
+        assert x == 'e'
 
 
 class AppTestEnvironment(object):

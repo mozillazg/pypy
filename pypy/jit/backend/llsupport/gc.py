@@ -1,7 +1,6 @@
 import os
 from pypy.rlib import rgc
 from pypy.rlib.objectmodel import we_are_translated, specialize
-from pypy.rlib.debug import fatalerror
 from pypy.rlib.rarithmetic import ovfcheck, r_uint
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 from pypy.rpython.lltypesystem import llgroup
@@ -209,6 +208,7 @@ class GcRootMap_asmgcc(object):
     This is the class supporting --gcrootfinder=asmgcc.
     """
     is_shadow_stack = False
+    is_64_bit = (WORD == 8)
 
     LOC_REG       = 0
     LOC_ESP_PLUS  = 1
@@ -337,17 +337,17 @@ class GcRootMap_asmgcc(object):
             self._gcmap_deadentries += 1
             item += asmgcroot.arrayitemsize
 
-    def get_basic_shape(self, is_64_bit=False):
+    def get_basic_shape(self):
         # XXX: Should this code even really know about stack frame layout of
         # the JIT?
-        if is_64_bit:
-            return [chr(self.LOC_EBP_PLUS  | 8),
-                    chr(self.LOC_EBP_MINUS | 8),
-                    chr(self.LOC_EBP_MINUS | 16),
-                    chr(self.LOC_EBP_MINUS | 24),
-                    chr(self.LOC_EBP_MINUS | 32),
-                    chr(self.LOC_EBP_MINUS | 40),
-                    chr(self.LOC_EBP_PLUS  | 0),
+        if self.is_64_bit:
+            return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   8(%rbp)
+                    chr(self.LOC_EBP_MINUS | 4),    # saved %rbx:  at  -8(%rbp)
+                    chr(self.LOC_EBP_MINUS | 8),    # saved %r12:  at -16(%rbp)
+                    chr(self.LOC_EBP_MINUS | 12),   # saved %r13:  at -24(%rbp)
+                    chr(self.LOC_EBP_MINUS | 16),   # saved %r14:  at -32(%rbp)
+                    chr(self.LOC_EBP_MINUS | 20),   # saved %r15:  at -40(%rbp)
+                    chr(self.LOC_EBP_PLUS  | 0),    # saved %rbp:  at    (%rbp)
                     chr(0)]
         else:
             return [chr(self.LOC_EBP_PLUS  | 4),    # return addr: at   4(%ebp)
@@ -367,7 +367,11 @@ class GcRootMap_asmgcc(object):
         shape.append(chr(number | flag))
 
     def add_frame_offset(self, shape, offset):
-        assert (offset & 3) == 0
+        if self.is_64_bit:
+            assert (offset & 7) == 0
+            offset >>= 1
+        else:
+            assert (offset & 3) == 0
         if offset >= 0:
             num = self.LOC_EBP_PLUS | offset
         else:
@@ -550,7 +554,7 @@ class GcRootMap_shadowstack(object):
     def initialize(self):
         pass
 
-    def get_basic_shape(self, is_64_bit=False):
+    def get_basic_shape(self):
         return []
 
     def add_frame_offset(self, shape, offset):
@@ -604,7 +608,6 @@ class WriteBarrierDescr(AbstractDescr):
     def __init__(self, gc_ll_descr):
         self.llop1 = gc_ll_descr.llop1
         self.WB_FUNCPTR = gc_ll_descr.WB_FUNCPTR
-        self.WB_ARRAY_FUNCPTR = gc_ll_descr.WB_ARRAY_FUNCPTR
         self.fielddescr_tid = gc_ll_descr.fielddescr_tid
         #
         GCClass = gc_ll_descr.GCClass
@@ -619,6 +622,11 @@ class WriteBarrierDescr(AbstractDescr):
             self.jit_wb_card_page_shift = GCClass.JIT_WB_CARD_PAGE_SHIFT
             self.jit_wb_cards_set_byteofs, self.jit_wb_cards_set_singlebyte = (
                 self.extract_flag_byte(self.jit_wb_cards_set))
+            #
+            # the x86 backend uses the following "accidental" facts to
+            # avoid one instruction:
+            assert self.jit_wb_cards_set_byteofs == self.jit_wb_if_flag_byteofs
+            assert self.jit_wb_cards_set_singlebyte == -0x80
         else:
             self.jit_wb_cards_set = 0
 
@@ -626,7 +634,7 @@ class WriteBarrierDescr(AbstractDescr):
         # if convenient for the backend, we compute the info about
         # the flag as (byte-offset, single-byte-flag).
         import struct
-        value = struct.pack("l", flag_word)
+        value = struct.pack(lltype.SignedFmt, flag_word)
         assert value.count('\x00') == len(value) - 1    # only one byte is != 0
         i = 0
         while value[i] == '\x00': i += 1
@@ -642,7 +650,7 @@ class WriteBarrierDescr(AbstractDescr):
         # returns a function with arguments [array, index, newvalue]
         llop1 = self.llop1
         funcptr = llop1.get_write_barrier_from_array_failing_case(
-            self.WB_ARRAY_FUNCPTR)
+            self.WB_FUNCPTR)
         funcaddr = llmemory.cast_ptr_to_adr(funcptr)
         return cpu.cast_adr_to_int(funcaddr)    # this may return 0
 
@@ -726,9 +734,7 @@ class GcLLDescr_framework(GcLLDescription):
 
     def _setup_write_barrier(self):
         self.WB_FUNCPTR = lltype.Ptr(lltype.FuncType(
-            [llmemory.Address, llmemory.Address], lltype.Void))
-        self.WB_ARRAY_FUNCPTR = lltype.Ptr(lltype.FuncType(
-            [llmemory.Address, lltype.Signed, llmemory.Address], lltype.Void))
+            [llmemory.Address], lltype.Void))
         self.write_barrier_descr = WriteBarrierDescr(self)
 
     def _make_functions(self, really_not_translated):
@@ -801,11 +807,19 @@ class GcLLDescr_framework(GcLLDescription):
         self.generate_function('malloc_unicode', malloc_unicode,
                                [lltype.Signed])
 
-        # Rarely called: allocate a fixed-size amount of bytes, but
-        # not in the nursery, because it is too big.  Implemented like
-        # malloc_nursery_slowpath() above.
-        self.generate_function('malloc_fixedsize', malloc_nursery_slowpath,
-                               [lltype.Signed])
+        # Never called as far as I can tell, but there for completeness:
+        # allocate a fixed-size object, but not in the nursery, because
+        # it is too big.
+        def malloc_big_fixedsize(size, tid):
+            if self.DEBUG:
+                self._random_usage_of_xmm_registers()
+            type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
+            check_typeid(type_id)
+            return llop1.do_malloc_fixedsize_clear(llmemory.GCREF,
+                                                   type_id, size,
+                                                   False, False, False)
+        self.generate_function('malloc_big_fixedsize', malloc_big_fixedsize,
+                               [lltype.Signed] * 2)
 
     def _bh_malloc(self, sizedescr):
         from pypy.rpython.memory.gctypelayout import check_typeid
@@ -878,8 +892,7 @@ class GcLLDescr_framework(GcLLDescription):
             # the GC, and call it immediately
             llop1 = self.llop1
             funcptr = llop1.get_write_barrier_failing_case(self.WB_FUNCPTR)
-            funcptr(llmemory.cast_ptr_to_adr(gcref_struct),
-                    llmemory.cast_ptr_to_adr(gcref_newptr))
+            funcptr(llmemory.cast_ptr_to_adr(gcref_struct))
 
     def can_use_nursery_malloc(self, size):
         return size < self.max_size_of_young_obj

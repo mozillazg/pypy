@@ -171,7 +171,7 @@ TYPES = {
     'unicodesetitem'  : (('ref', 'int', 'int'), 'int'),
     'cast_ptr_to_int' : (('ref',), 'int'),
     'cast_int_to_ptr' : (('int',), 'ref'),
-    'debug_merge_point': (('ref', 'int'), None),
+    'debug_merge_point': (('ref', 'int', 'int'), None),
     'force_token'     : ((), 'int'),
     'call_may_force'  : (('int', 'varargs'), 'intorptr'),
     'guard_not_forced': ((), None),
@@ -780,6 +780,9 @@ class Frame(object):
         self.overflow_flag = ovf
         return z
 
+    def op_keepalive(self, _, x):
+        pass
+
     # ----------
     # delegating to the builtins do_xxx() (done automatically for simple cases)
 
@@ -820,7 +823,9 @@ class Frame(object):
     op_getfield_gc_pure = op_getfield_gc
 
     def op_getfield_raw(self, fielddescr, struct):
-        if fielddescr.typeinfo == REF:
+        if fielddescr.arg_types == 'dynamic': # abuse of .arg_types
+            return do_getfield_raw_dynamic(struct, fielddescr)
+        elif fielddescr.typeinfo == REF:
             return do_getfield_raw_ptr(struct, fielddescr.ofs)
         elif fielddescr.typeinfo == INT:
             return do_getfield_raw_int(struct, fielddescr.ofs)
@@ -916,7 +921,9 @@ class Frame(object):
             raise NotImplementedError
 
     def op_setfield_raw(self, fielddescr, struct, newvalue):
-        if fielddescr.typeinfo == REF:
+        if fielddescr.arg_types == 'dynamic': # abuse of .arg_types
+            do_setfield_raw_dynamic(struct, fielddescr, newvalue)
+        elif fielddescr.typeinfo == REF:
             do_setfield_raw_ptr(struct, fielddescr.ofs, newvalue)
         elif fielddescr.typeinfo == INT:
             do_setfield_raw_int(struct, fielddescr.ofs, newvalue)
@@ -1497,6 +1504,17 @@ def do_getfield_raw_float(struct, fieldnum):
 def do_getfield_raw_ptr(struct, fieldnum):
     return cast_to_ptr(_getfield_raw(struct, fieldnum))
 
+def do_getfield_raw_dynamic(struct, fielddescr):
+    from pypy.rlib import libffi
+    addr = cast_from_int(rffi.VOIDP, struct)
+    ofs = fielddescr.ofs
+    if fielddescr.is_pointer_field():
+        assert False, 'fixme'
+    elif fielddescr.is_float_field():
+        assert False, 'fixme'
+    else:
+        return libffi._struct_getfield(lltype.Signed, addr, ofs)
+
 def do_new(size):
     TYPE = symbolic.Size2Type[size]
     x = lltype.malloc(TYPE, zero=True)
@@ -1593,6 +1611,17 @@ def do_setfield_raw_ptr(struct, fieldnum, newvalue):
     FIELDTYPE = getattr(STRUCT, fieldname)
     newvalue = cast_from_ptr(FIELDTYPE, newvalue)
     setattr(ptr, fieldname, newvalue)
+
+def do_setfield_raw_dynamic(struct, fielddescr, newvalue):
+    from pypy.rlib import libffi
+    addr = cast_from_int(rffi.VOIDP, struct)
+    ofs = fielddescr.ofs
+    if fielddescr.is_pointer_field():
+        assert False, 'fixme'
+    elif fielddescr.is_float_field():
+        assert False, 'fixme'
+    else:
+        libffi._struct_setfield(lltype.Signed, addr, ofs, newvalue)
 
 def do_newstr(length):
     x = rstr.mallocstr(length)
@@ -1794,6 +1823,7 @@ def setannotation(func, annotation, specialize_as_constant=False):
         if specialize_as_constant:
             def specialize_call(self, hop):
                 llvalue = func(hop.args_s[0].const)
+                hop.exception_cannot_occur()
                 return hop.inputconst(lltype.typeOf(llvalue), llvalue)
         else:
             # specialize as direct_call
@@ -1810,6 +1840,7 @@ def setannotation(func, annotation, specialize_as_constant=False):
                     sm = ootype._static_meth(FUNCTYPE, _name=func.__name__, _callable=func)
                     cfunc = hop.inputconst(FUNCTYPE, sm)
                 args_v = hop.inputargs(*hop.args_r)
+                hop.exception_is_here()
                 return hop.genop('direct_call', [cfunc] + args_v, hop.r_result)
 
 

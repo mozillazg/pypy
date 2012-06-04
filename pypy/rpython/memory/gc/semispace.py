@@ -641,7 +641,7 @@ class SemiSpaceGC(MovingGCBase):
         between collections."""
         tid = self.header(obj).tid
         if tid & GCFLAG_EXTERNAL:
-            ll_assert(tid & GCFLAG_FORWARDED, "bug: external+!forwarded")
+            ll_assert(tid & GCFLAG_FORWARDED != 0, "bug: external+!forwarded")
             ll_assert(not (self.tospace <= obj < self.free),
                       "external flag but object inside the semispaces")
         else:
