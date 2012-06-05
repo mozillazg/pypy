@@ -90,7 +90,7 @@ class JvmPackageWrapper(object):
                     const_cache[new_name] = JvmClassWrapper(getattr(self.__wrapped__, attr))
                 return const_cache[new_name]
             else:
-                raise TypeError("There is no class called %s in package %s" % (attr, self.__javaname__))
+                raise AttributeError("There is no class called %s in package %s" % (attr, self.__javaname__))
         elif isinstance(getattr(self.__wrapped__, attr), jpype.JPackage):
             if new_name not in const_cache:
                 const_cache[new_name] = JvmPackageWrapper(new_name)
@@ -184,7 +184,7 @@ class JvmClassWrapper(CallableWrapper):
         elif attr in self._static_field_names:
             return self._wrap_item(getattr(self.__wrapped__, attr))
         else:
-            raise TypeError(
+            raise AttributeError(
                 "There's no static member called {member_name} in class {class_name}.".format(
                     member_name=attr, class_name=self.__name__))
 
@@ -211,14 +211,12 @@ class JvmInstanceWrapper(Wrapper):
         self.__field_names = {str(f.getName()) for f in helpers._get_fields(refclass)}
 
     def __getattr__(self, attr):
-        if attr == '__wrapped__':
-            return self.__wrapped__
-        elif attr in self.__method_names:
+        if attr in self.__method_names:
             return JvmMethodWrapper(getattr(self.__wrapped__, attr))
         elif attr in self.__field_names:
             return self._wrap_item(getattr(self.__wrapped__, attr))
         else:
-            raise TypeError(
+            raise AttributeError(
                 "No instance method called {method_name} found in class {class_name}".format(
                     method_name=attr, class_name=self.__class_name))
 

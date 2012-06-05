@@ -29,11 +29,11 @@ def test_static_field():
     assert result == 32
 
 def test_invalid_static_member():
-    with py.test.raises(TypeError):
+    with py.test.raises(AttributeError):
         java.lang.Math.typo(42)
 
 def test_invalid_class_name():
-    with py.test.raises(TypeError):
+    with py.test.raises(AttributeError):
         java.lang.Typo()
 
 def test_class_instantiate():
@@ -54,7 +54,7 @@ def test_instance_repr():
 def test_invalid_method_name():
     al = java.util.ArrayList()
     al.add("test")
-    with py.test.raises(TypeError):
+    with py.test.raises(AttributeError):
         al.typo(0)
 
 def test_interpreted_reflection():
@@ -200,7 +200,7 @@ class BaseTestRJVM(BaseRtypingTest):
             sb = java.lang.StringBuilder()
             sb.foobar()
 
-        with py.test.raises(TypeError):
+        with py.test.raises(AttributeError):
             self.interpret(fn, [])
 
     def test_method_call_no_overload(self):
