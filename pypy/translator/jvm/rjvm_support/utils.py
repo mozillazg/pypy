@@ -41,7 +41,7 @@ class NativeRJvmInstanceExample(object):
         elif self.static and name == 'class_':
             return ootypemodel.NativeRJvmInstance(helpers.RjvmJavaLangClassWrapper.java_lang_Class)._example()
         else:
-            raise TypeError(
+            raise AttributeError(
                 "No method or field called %s found in %s." % (name, self.refclass.getName()))
 
 
