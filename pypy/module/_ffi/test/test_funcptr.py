@@ -40,7 +40,7 @@ class BaseAppTestFFI(object):
         space = gettestobjspace(usemodules=('_ffi', '_rawffi'))
         cls.space = space
         cls.w_iswin32 = space.wrap(sys.platform == 'win32')
-        cls.w_libfoo_name = space.wrap(cls.prepare_c_example())
+        cls.w_libfoo_name = space.wrap(cls.prepare_c_example()) 
         cls.w_libc_name = space.wrap(get_libc_name())
         libm_name = get_libm_name(sys.platform)
         cls.w_libm_name = space.wrap(libm_name)
@@ -627,4 +627,17 @@ class AppTestFFI(BaseAppTestFFI):
                             types.void, FUNCFLAG_STDCALL)
         sleep(10)
 
- 
+    def test_ordinal_func(self):
+        """
+            DLLEXPORT int AAA_first_ordinal_function()
+            {
+                return 42;
+            }
+        """
+        if not self.iswin32:
+            skip("windows specific")
+        from _ffi import CDLL, types
+        libfoo = CDLL(self.libfoo_name)
+        f_name = libfoo.getfunc('AAA_first_ordinal_function', [], types.sint)
+        f_ord = libfoo.getfunc(1, [], types.sint)
+        assert f_name.getaddr() == f_ord.getaddr()
