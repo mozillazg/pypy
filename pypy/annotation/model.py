@@ -645,9 +645,6 @@ def annotation_to_lltype(s_val, info=None):
         if witness.contains(s_val):
             return T
 
-    if isinstance(s_val, SomeString):
-        return ootype.String
-
     if info is None:
         info = ''
     else:

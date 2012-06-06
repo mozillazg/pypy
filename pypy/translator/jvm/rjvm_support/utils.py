@@ -74,8 +74,7 @@ class JvmOverloadingResolver(ootype.OverloadingResolver):
     def _can_convert_from_to(self, arg1, arg2):
         # Just the simplest logic for now:
         if isinstance(arg2, ootypemodel.NativeRJvmInstance) and arg2.class_name == 'java.lang.Object':
-            # TODO: autoboxing?
-            return isinstance(arg1, ootypemodel.NativeRJvmInstance) or arg1 == ootype.String
+            return isinstance(arg1, ootypemodel.NativeRJvmInstance)
         return super(JvmOverloadingResolver, self)._can_convert_from_to(arg1, arg2)
 
     def _get_refclass(self, meth):

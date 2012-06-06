@@ -3,7 +3,7 @@ from pypy.interpreter.gateway import unwrap_spec
 from pypy.module.jvm import interp_helpers as helpers
 from pypy.module.jvm.interp_helpers import W_JvmObject
 from pypy.rlib import rjvm
-from pypy.rlib.rjvm import java
+from pypy.rlib.rjvm import java, native_string
 
 # ============== Interp-level module API ==============
 
@@ -106,7 +106,7 @@ def call_method(space, jvm_obj, class_name, method_name, args_w):
     b_java_class = helpers.class_for_name(space, class_name)
 
     try:
-        b_meth = b_java_class.getMethod(method_name, types)
+        b_meth = b_java_class.getMethod(native_string(method_name), types)
     except rjvm.ReflectionException:
         raise helpers.raise_type_error(space,
                          "No method called %s found in class %s" % (method_name, str(b_java_class.getName())))
@@ -126,9 +126,10 @@ def call_static_method(space, class_name, method_name, args_w):
     """
     b_java_class = helpers.class_for_name(space, class_name)
     args, types = helpers.get_args_types(space, args_w)
+    b_method_name = native_string(method_name)
 
     try:
-        b_meth = b_java_class.getMethod(method_name, types)
+        b_meth = b_java_class.getMethod(b_method_name, types)
     except rjvm.ReflectionException:
         raise helpers.raise_type_error(space,
                          "No method called %s found in class %s" % (method_name, str(b_java_class.getName())))
@@ -308,8 +309,9 @@ def _get_field_value(space, b_class, b_obj, field_name):
     """
     The logic behind get_(static)_field_value.
     """
+    b_field_name = native_string(field_name)
     try:
-        b_field = b_class.getField(field_name)
+        b_field = b_class.getField(b_field_name)
     except rjvm.ReflectionException:
         raise helpers.raise_type_error(space, "No field called %s in class %s" % (
             field_name, str(b_class.getName())))
@@ -324,8 +326,9 @@ def _set_field_value(space, b_class, b_obj, field_name, w_val):
     """
     The logic behind set_(static)_field_value.
     """
+    b_field_name = native_string(field_name)
     try:
-        b_field = b_class.getField(field_name)
+        b_field = b_class.getField(b_field_name)
     except rjvm.ReflectionException:
         msg = "No field called %s in class %s" % (field_name, str(b_class.getName()))
         raise helpers.raise_type_error(space, msg)

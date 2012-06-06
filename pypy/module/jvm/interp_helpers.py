@@ -2,7 +2,8 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError
 from pypy.interpreter.typedef import TypeDef
 from pypy.rlib import rjvm, rstring
-from pypy.rlib.rjvm import java
+from pypy.rlib.rjvm import java, native_string
+
 
 class W_JvmObject(Wrappable):
     """
@@ -124,8 +125,9 @@ def get_type_name(b_type):
         return str(b_type.getName())
 
 def class_for_name(space, class_name):
+    b_class_name = native_string(class_name)
     try:
-        return java.lang.Class.forName(class_name)
+        return java.lang.Class.forName(b_class_name)
     except rjvm.ReflectionException:
         raise OperationError(space.w_TypeError,
                              space.wrap("Class %s not found!" % class_name))
