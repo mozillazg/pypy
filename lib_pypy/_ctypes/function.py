@@ -59,7 +59,7 @@ class CFuncPtrType(_CDataMeta):
 class CFuncPtr(_CData):
     __metaclass__ = CFuncPtrType
 
-    _argtypes_ = None
+    _argtypes_ = []
     _restype_ = None
     _errcheck_ = None
     _flags_ = 0
