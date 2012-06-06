@@ -58,12 +58,6 @@ class OOInstanceRepr(Repr):
     def __init__(self, ootype):
         self.lowleveltype = ootype
 
-    def __eq__(self, other):
-        return self.lowleveltype == other.lowleveltype
-
-    def __ne__(self, other):
-        return not self.__eq__(other)
-
     def rtype_getattr(self, hop):
         attr = hop.args_s[1].const
         s_inst = hop.args_s[0]
