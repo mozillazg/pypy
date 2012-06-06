@@ -146,6 +146,8 @@ class CallableWrapper(Wrapper):
             return self._unwrap_item(item._array)
         elif isinstance(item, jvm_str):
             return str(item)
+        elif isinstance(item, str):
+            raise TypeError("You have to wrap strings using rjvm.native_string!")
         return item
 
     def __call__(self, *args):
