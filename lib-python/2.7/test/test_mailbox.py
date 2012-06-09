@@ -20,7 +20,7 @@ except ImportError:
 # Silence Py3k warning
 rfc822 = test_support.import_module('rfc822', deprecated=True)
 
-class TestBase(unittest.TestCase):
+class TestBase:
 
     def _check_sample(self, msg):
         # Inspect a mailbox.Message representation of the sample message
