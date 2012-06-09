@@ -19,7 +19,6 @@ import email
 import email.message
 import email.generator
 import StringIO
-import contextlib
 try:
     if sys.platform == 'os2emx':
         # OS/2 EMX fcntl() not adequate
@@ -82,7 +81,7 @@ class Mailbox:
         if not self._factory:
             return self.get_message(key)
         else:
-	        return self._factory(self.get_file(key))
+            return self._factory(self.get_file(key))
 
     def get_message(self, key):
         """Return a Message representation or raise a KeyError."""
@@ -248,11 +247,9 @@ class Maildir(Mailbox):
             else:
                 raise NoSuchMailboxError(self._path)
         self._toc = {}
-        self._toc_mtimes = {}
-        for subdir in ('cur', 'new'):
-            self._toc_mtimes[subdir] = os.path.getmtime(self._paths[subdir])
-        self._last_read = time.time()  # Records last time we read cur/new
-        self._skewfactor = 0.1         # Adjust if os/fs clocks are skewing
+        self._toc_mtimes = {'cur': 0, 'new': 0}
+        self._last_read = 0         # Records last time we read cur/new
+        self._skewfactor = 0.1      # Adjust if os/fs clocks are skewing
 
     def add(self, message):
         """Add message and return assigned key."""
@@ -1861,8 +1858,10 @@ class _ProxyFile:
 
     def close(self):
         """Close the file."""
-        self._file.close()
-        del self._file
+        if hasattr(self, '_file'):
+            if hasattr(self._file, 'close'):
+                self._file.close()
+            del self._file
 
     def _read(self, size, read_method):
         """Read size bytes using read_method."""
@@ -1872,33 +1871,6 @@ class _ProxyFile:
         result = read_method(size)
         self._pos = self._file.tell()
         return result
-
-    def __enter__(self):
-        """Context manager protocol support."""
-        return self
-
-    def __exit__(self, *exc):
-        self.close()
-
-    def readable(self):
-        return self._file.readable()
-
-    def writable(self):
-        return self._file.writable()
-
-    def seekable(self):
-        return self._file.seekable()
-
-    def flush(self):
-        return self._file.flush()
-
-    @property
-    def closed(self):
-        if not hasattr(self, '_file'):
-            return True
-        if not hasattr(self._file, 'closed'):
-            return False
-        return self._file.closed
 
 
 class _PartialFile(_ProxyFile):
@@ -1932,6 +1904,12 @@ class _PartialFile(_ProxyFile):
         if size is None or size < 0 or size > remaining:
             size = remaining
         return _ProxyFile._read(self, size, read_method)
+
+    def close(self):
+        # do *not* close the underlying file object for partial files,
+        # since it's global to the mailbox object
+        if hasattr(self, '_file'):
+            del self._file
 
 
 def _lock_file(f, dotlock=True):
