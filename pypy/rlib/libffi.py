@@ -397,11 +397,6 @@ class Func(AbstractFuncPtr):
 
 # ======================================================================
 
-def _dlsym_by_name_or_ord(lib, name):
-    if isinstance(name, str):
-        return dlsym(lib,name)
-    else:
-        return dlsym_byordinal(lib,name)
 
 # XXX: it partially duplicate the code in clibffi.py
 class CDLL(object):
@@ -417,8 +412,7 @@ class CDLL(object):
             self.lib = rffi.cast(DLLHANDLE, 0)
 
     def getpointer(self, name, argtypes, restype, flags=FUNCFLAG_CDECL):
-        return Func(name, argtypes, restype, 
-                    _dlsym_by_name_or_ord(self.lib, name),
+        return Func(name, argtypes, restype, dlsym(self.lib, name),
                     flags=flags, keepalive=self)
 
     def getpointer_by_ordinal(self, name, argtypes, restype,
@@ -432,8 +426,7 @@ class CDLL(object):
 if os.name == 'nt':
     class WinDLL(CDLL):
         def getpointer(self, name, argtypes, restype, flags=FUNCFLAG_STDCALL):
-            return Func(name, argtypes, restype, 
-                        _dlsym_by_name_or_ord(self.lib, name),
+            return Func(name, argtypes, restype, dlsym(self.lib, name),
                         flags=flags, keepalive=self)
         def getpointer_by_ordinal(self, name, argtypes, restype,
                                   flags=FUNCFLAG_STDCALL):
