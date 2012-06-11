@@ -617,10 +617,6 @@ class _singlefileMailbox(Mailbox):
         """Write any pending changes to disk."""
         if not self._pending:
             return
-        if self._file.closed:
-            self._pending = False
-            return
-        # In order to be writing anything out at all, self._toc must
         # already have been generated (and presumably has been modified
         # by adding or deleting an item).
         assert self._toc is not None
@@ -1817,10 +1813,6 @@ class _ProxyFile:
             self._pos = f.tell()
         else:
             self._pos = pos
-
-    def __del__(self):
-        if hasattr(self,'_file'):
-            self.close()
 
     def read(self, size=None):
         """Read bytes."""
