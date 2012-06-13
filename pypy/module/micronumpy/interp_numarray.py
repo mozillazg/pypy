@@ -187,7 +187,11 @@ class BaseArray(Wrappable):
             get_printable_location=signature.new_printable_location(op_name),
             name='numpy_' + op_name,
         )
-        def loop(self, axis, out):
+        def loop(self, space, axis, out):
+            if isinstance(self, Scalar):
+                return 0
+            if axis >= len(self.shape):
+                raise OperationError(space.w_ValueError, space.wrap("axis(=%d) out of bounds" % axis))
             sig = self.find_sig()
             frame = sig.create_frame(self)
             cur_best = sig.eval(frame, self)
@@ -226,7 +230,7 @@ class BaseArray(Wrappable):
                         'output must be an array'))
             else:
                 out = w_out
-            return space.wrap(loop(self, axis, out))
+            return space.wrap(loop(self, space, axis, out))
         return func_with_new_name(impl, "reduce_arg%s_impl" % op_name)
 
     descr_argmax = _reduce_argmax_argmin_impl("max")
