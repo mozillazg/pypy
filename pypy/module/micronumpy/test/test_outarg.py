@@ -1,4 +1,3 @@
-import py
 from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
 
 class AppTestOutArg(BaseNumpyAppTest):
@@ -124,3 +123,15 @@ class AppTestOutArg(BaseNumpyAppTest):
             cast_error = raises(TypeError, negative, c, a)
             assert str(cast_error.value) == \
             "Cannot cast ufunc negative output from dtype('float64') to dtype('int64') with casting rule 'same_kind'"
+
+    def test_argminmax(self):
+        from numpypy import arange
+        a = arange(15).reshape(5, 3)
+        b = arange(15).reshape(5,3)
+        c = a.argmax(0, out=b[1])
+        assert (c == [4, 4, 4]).all()
+        assert (c == b[1]).all()
+        c = a.argmax(1, out=b[:,1])
+        assert (c == [2, 2, 2, 2, 2]).all()
+        assert (c == b[:,1]).all()
+
