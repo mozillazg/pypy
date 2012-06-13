@@ -187,7 +187,7 @@ class BaseArray(Wrappable):
             get_printable_location=signature.new_printable_location(op_name),
             name='numpy_' + op_name,
         )
-        def loop(self):
+        def loop(self, axis, out):
             sig = self.find_sig()
             frame = sig.create_frame(self)
             cur_best = sig.eval(frame, self)
@@ -211,11 +211,22 @@ class BaseArray(Wrappable):
                 idx += 1
             return result
 
-        def impl(self, space):
+        def impl(self, space, w_axis=None, w_out=None):
             if self.size == 0:
                 raise OperationError(space.w_ValueError,
                     space.wrap("Can't call %s on zero-size arrays" % op_name))
-            return space.wrap(loop(self))
+            if space.is_w(w_axis, space.w_None):
+                axis = -1
+            else:
+                axis = space.int_w(w_axis)
+            if space.is_w(w_out, space.w_None) or not w_out:
+                out = None
+            elif not isinstance(w_out, BaseArray):
+                raise OperationError(space.w_TypeError, space.wrap( 
+                        'output must be an array'))
+            else:
+                out = w_out
+            return space.wrap(loop(self, axis, out))
         return func_with_new_name(impl, "reduce_arg%s_impl" % op_name)
 
     descr_argmax = _reduce_argmax_argmin_impl("max")
