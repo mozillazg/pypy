@@ -187,11 +187,9 @@ class BaseArray(Wrappable):
             get_printable_location=signature.new_printable_location(op_name),
             name='numpy_' + op_name,
         )
-        def loop(self, space, axis, out):
+        def do_argminmax(self, axis, out):
             if isinstance(self, Scalar):
                 return 0
-            if axis >= len(self.shape):
-                raise OperationError(space.w_ValueError, space.wrap("axis(=%d) out of bounds" % axis))
             sig = self.find_sig()
             frame = sig.create_frame(self)
             cur_best = sig.eval(frame, self)
@@ -223,6 +221,8 @@ class BaseArray(Wrappable):
                 axis = -1
             else:
                 axis = space.int_w(w_axis)
+                if axis >= len(self.shape) or axis<0:
+                    raise OperationError(space.w_ValueError, space.wrap("axis(=%d) out of bounds" % axis))
             if space.is_w(w_out, space.w_None) or not w_out:
                 out = None
             elif not isinstance(w_out, BaseArray):
@@ -230,7 +230,28 @@ class BaseArray(Wrappable):
                         'output must be an array'))
             else:
                 out = w_out
-            return space.wrap(loop(self, space, axis, out))
+                shapelen = len(self.shape)
+                if axis<0:
+                    shape = [1]
+                else:
+                    shape = self.shape[:axis] + self.shape[axis + 1:]
+                #Test for shape agreement
+                if len(out.shape) > len(shape):
+                    raise operationerrfmt(space.w_TypesError,
+                        'invalid shape for output array')
+                elif len(out.shape) < len(shape):
+                    raise operationerrfmt(space.w_TypesError,
+                        'invalid shape for output array')
+                elif out.shape != shape:
+                    raise operationerrfmt(space.w_TypesError,
+                        'invalid shape for output array')
+                #Test for dtype agreement, perhaps create an itermediate
+                #if out.dtype != self.dtype:
+                #    raise OperationError(space.w_TypeError, space.wrap(
+                #        "mismatched  dtypes"))
+            return space.wrap(do_argminmax(self, ufunc_name, 
+        return func_with_new_name(impl, "reduce_%s_impl" % ufunc_name)
+            return space.wrap(do_argminmax(self, axis, out))
         return func_with_new_name(impl, "reduce_arg%s_impl" % op_name)
 
     descr_argmax = _reduce_argmax_argmin_impl("max")
