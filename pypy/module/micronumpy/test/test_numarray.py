@@ -5,7 +5,7 @@ from pypy.conftest import option
 from pypy.interpreter.error import OperationError
 from pypy.module.micronumpy.appbridge import get_appbridge_cache
 from pypy.module.micronumpy.interp_iter import Chunk, Chunks
-from pypy.module.micronumpy.interp_numarray import W_NDimArray, shape_agreement
+#from pypy.module.micronumpy.interp_numarray import W_NDimArray, shape_agreement
 from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
 
 class MockDtype(object):
@@ -22,6 +22,9 @@ def create_slice(a, chunks):
     return Chunks(chunks).apply(a)
 
 class TestNumArrayDirect(object):
+    def setup_class(cls):
+        py.test.skip("unsupported")
+    
     def newslice(self, *args):
         return self.space.newslice(*[self.space.wrap(arg) for arg in args])
 
@@ -268,7 +271,7 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert x.ndim == 3
         # numpy actually raises an AttributeError, but _numpypy raises an
         # TypeError
-        raises(TypeError, 'x.ndim = 3')
+        raises((AttributeError, TypeError), 'x.ndim = 3')
 
     def test_init(self):
         from _numpypy import zeros
@@ -451,7 +454,7 @@ class AppTestNumArray(BaseNumpyAppTest):
         assert a[1] == 0.
         assert a[3] == 1.
         b[::-1] = b
-        assert b[0] == 0.
+        assert b[0] == 1.
         assert b[1] == 0.
 
     def test_setslice_of_slice_array(self):
@@ -576,7 +579,7 @@ class AppTestNumArray(BaseNumpyAppTest):
     def test_set_shape(self):
         from _numpypy import array, zeros
         a = array([])
-        a.shape = []
+        raises(ValueError, "a.shape = []")
         a = array(range(12))
         a.shape = (3, 4)
         assert (a == [range(4), range(4, 8), range(8, 12)]).all()
@@ -1091,7 +1094,7 @@ class AppTestNumArray(BaseNumpyAppTest):
         raises(ValueError, a.mean, 3)
 
     def test_sum(self):
-        from _numpypy import array
+        from _numpypy import array, ndarray
         a = array(range(5))
         assert a.sum() == 10
         assert a[:4].sum() == 6
@@ -1104,7 +1107,7 @@ class AppTestNumArray(BaseNumpyAppTest):
         d = array(0.)
         b = a.sum(out=d)
         assert b == d
-        assert isinstance(b, float)
+        assert isinstance(b, ndarray)
 
     def test_reduce_nd(self):
         from numpypy import arange, array, multiply
@@ -1319,7 +1322,7 @@ class AppTestNumArray(BaseNumpyAppTest):
         from _numpypy import array
         a = array(range(5))
         a[::-1] = a
-        assert (a == [0, 1, 2, 1, 0]).all()
+        assert (a == [4, 3, 2, 1, 0]).all()
         # but we force intermediates
         a = array(range(5))
         a[::-1] = a + a
@@ -1327,7 +1330,10 @@ class AppTestNumArray(BaseNumpyAppTest):
 
     def test_debug_repr(self):
         from _numpypy import zeros, sin
-        from _numpypy.pypy import debug_repr
+        try:
+            from _numpypy.pypy import debug_repr
+        except ImportError:
+            skip("-A run unsupported")
         a = zeros(1)
         assert debug_repr(a) == 'Array'
         assert debug_repr(a + a) == 'Call2(add, Array, Array)'
@@ -1342,7 +1348,10 @@ class AppTestNumArray(BaseNumpyAppTest):
 
     def test_remove_invalidates(self):
         from _numpypy import array
-        from _numpypy.pypy import remove_invalidates
+        try:
+            from _numpypy.pypy import remove_invalidates
+        except ImportError:
+            skip("-A run unsupported")
         a = array([1, 2, 3])
         b = a + a
         remove_invalidates(a)
@@ -1439,16 +1448,16 @@ class AppTestNumArray(BaseNumpyAppTest):
         f = concatenate((f1, [2], f1, [7]))
         assert (f == [0,1,2,0,1,7]).all()
 
-        bad_axis = raises(ValueError, concatenate, (a1,a2), axis=1)
-        assert str(bad_axis.value) == "bad axis argument"
+        bad_axis = raises((IndexError, ValueError), concatenate, (a1,a2), axis=1)
+        assert str(bad_axis.value) == "axis 1 out of bounds [0, 1)"
 
         concat_zero = raises(ValueError, concatenate, ())
         assert str(concat_zero.value) == \
-            "concatenation of zero-length sequences is impossible"
+            "need at least one array to concatenate"
 
         dims_disagree = raises(ValueError, concatenate, (a1, b1), axis=0)
         assert str(dims_disagree.value) == \
-            "array dimensions must agree except for axis being concatenated"
+            "all the input arrays must have same number of dimensions"
         a = array([1, 2, 3, 4, 5, 6])
         a = (a + a)[::2]
         b = concatenate((a[:3], a[-3:]))
@@ -1610,18 +1619,6 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert a[0][1][1] == 13
         assert a[1][2][1] == 15
 
-    def test_init_2(self):
-        import _numpypy
-        raises(ValueError, _numpypy.array, [[1], 2])
-        raises(ValueError, _numpypy.array, [[1, 2], [3]])
-        raises(ValueError, _numpypy.array, [[[1, 2], [3, 4], 5]])
-        raises(ValueError, _numpypy.array, [[[1, 2], [3, 4], [5]]])
-        a = _numpypy.array([[1, 2], [4, 5]])
-        assert a[0, 1] == 2
-        assert a[0][1] == 2
-        a = _numpypy.array(([[[1, 2], [3, 4], [5, 6]]]))
-        assert (a[0, 1] == [3, 4]).all()
-
     def test_setitem_slice(self):
         import _numpypy
         a = _numpypy.zeros((3, 4))
@@ -1743,9 +1740,7 @@ class AppTestMultiDim(BaseNumpyAppTest):
         from _numpypy import zeros
         a = zeros((4, 3, 2))
         b = zeros((4, 2))
-        exc = raises(ValueError, lambda: a + b)
-        assert str(exc.value) == "operands could not be broadcast" \
-            " together with shapes (4,3,2) (4,2)"
+        raises(ValueError, lambda: a + b)
 
     def test_reduce(self):
         from _numpypy import array
@@ -1822,8 +1817,8 @@ class AppTestMultiDim(BaseNumpyAppTest):
         raises(IndexError, "b[11]")
         raises(IndexError, "b[-11]")
         raises(IndexError, 'b[0, 1]')
-        assert b.index == 3
-        assert b.coords == (0,3)
+        assert b.index == 0
+        assert b.coords == (0,0)
 
     def test_flatiter_setitem(self):
         from _numpypy import arange, array
@@ -1835,7 +1830,10 @@ class AppTestMultiDim(BaseNumpyAppTest):
         b[0:2] = [[[100]]]
         assert(a[0,0] == 100)
         assert(a[1,0] == 100)
-        raises(IndexError, 'b[array([10, 11])] == [-20, -40]')
+        assert b[:].shape == (12,)
+        b[array([10, 11])] = [-20, -40]
+        assert b[10] == -20
+        assert b[11] == -40
 
     def test_flatiter_ops(self):
         from _numpypy import arange, array
@@ -1889,7 +1887,6 @@ class AppTestMultiDim(BaseNumpyAppTest):
         a = a[::2]
         i = a.__array_interface__
         assert isinstance(i['data'][0], int)
-        raises(TypeError, getattr, array(3), '__array_interface__')
 
     def test_array_indexing_one_elem(self):
         skip("not yet")
@@ -1962,6 +1959,7 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert array(x, copy=True) is not x
 
     def test_isna(self):
+        skip("unsupported one way or another")
         from _numpypy import isna, array
         # XXX for now
         assert not isna(3)
@@ -2000,14 +1998,14 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert type(array(True).item()) is bool
         assert type(array(3.5).item()) is float
         raises((ValueError, IndexError), "array(3).item(15)")
-        raises(ValueError, "array([1, 2, 3]).item()")
+        raises((ValueError, IndexError), "array([1, 2, 3]).item()")
         assert array([3]).item(0) == 3
         assert type(array([3]).item(0)) is int
         assert array([1, 2, 3]).item(-1) == 3
         a = array([1, 2, 3])
         assert a[::2].item(1) == 3
         assert (a + a).item(1) == 4
-        raises(ValueError, "array(5).item(1)")
+        raises((ValueError, IndexError), "array(5).item(1)")
         assert array([1]).item() == 1
 
 class AppTestSupport(BaseNumpyAppTest):
@@ -2076,7 +2074,9 @@ class AppTestSupport(BaseNumpyAppTest):
         r = fromstring("\x01\x00\x02", dtype='bool')
         assert (r == [True, False, True]).all()
         s = fromstring("1,2,3,,5", dtype=bool, sep=",")
-        assert (s == [True, True, True, False, True]).all()
+        assert (s == [True, True, True, True, True]).all()
+        s = fromstring("1,2,3,,5", sep=",")
+        assert (s == [1, 2, 3, -1, 5]).all()
         t = fromstring("", bool)
         assert (t == []).all()
         u = fromstring("\x01\x00\x00\x00\x00\x00\x00\x00", dtype=int)
@@ -2224,3 +2224,29 @@ class AppTestRecordDtype(BaseNumpyAppTest):
         assert arr[1]['y']['x'] == 0.0
         assert arr[1]['x'] == 15
         
+
+class AppTestNotDirect(BaseNumpyAppTest):
+    def setup_class(cls):
+        BaseNumpyAppTest.setup_class.im_func(cls)
+        if option.runappdirect:
+            py.test.skip("not a direct test")
+    
+    def test_init_2(self):
+        import _numpypy
+        raises(ValueError, _numpypy.array, [[1], 2])
+        raises(ValueError, _numpypy.array, [[1, 2], [3]])
+        raises(ValueError, _numpypy.array, [[[1, 2], [3, 4], 5]])
+        raises(ValueError, _numpypy.array, [[[1, 2], [3, 4], [5]]])
+        a = _numpypy.array([[1, 2], [4, 5]])
+        assert a[0, 1] == 2
+        assert a[0][1] == 2
+        a = _numpypy.array(([[[1, 2], [3, 4], [5, 6]]]))
+        assert (a[0, 1] == [3, 4]).all()
+
+    def test_broadcast_wrong_shapes(self):
+        from _numpypy import zeros
+        a = zeros((4, 3, 2))
+        b = zeros((4, 2))
+        exc = raises(ValueError, lambda: a + b)
+        assert str(exc.value) == "operands could not be broadcast" \
+            " together with shapes (4,3,2) (4,2)"

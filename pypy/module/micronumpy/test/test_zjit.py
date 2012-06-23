@@ -4,6 +4,7 @@ good assembler
 """
 
 import py
+py.test.skip("disabled")
 
 from pypy.jit.metainterp import pyjitpl
 from pypy.jit.metainterp.test.support import LLJitMixin
