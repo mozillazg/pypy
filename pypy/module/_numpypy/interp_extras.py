@@ -1,5 +1,5 @@
 from pypy.interpreter.gateway import unwrap_spec
-from pypy.module.micronumpy.interp_numarray import BaseArray, get_numarray_cache
+from pypy.module._numpypy.interp_numarray import BaseArray, get_numarray_cache
 
 
 @unwrap_spec(array=BaseArray)

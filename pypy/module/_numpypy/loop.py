@@ -4,7 +4,7 @@ signatures
 """
 
 from pypy.rlib.jit import JitDriver, hint, unroll_safe, promote
-from pypy.module.micronumpy.interp_iter import ConstantIterator
+from pypy.module._numpypy.interp_iter import ConstantIterator
 
 class NumpyEvalFrame(object):
     _virtualizable2_ = ['iterators[*]', 'final_iter', 'arraylist[*]',

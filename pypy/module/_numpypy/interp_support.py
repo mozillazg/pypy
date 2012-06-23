@@ -1,7 +1,7 @@
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import unwrap_spec
 from pypy.rpython.lltypesystem import lltype, rffi
-from pypy.module.micronumpy import interp_dtype
+from pypy.module._numpypy import interp_dtype
 from pypy.objspace.std.strutil import strip_spaces
 from pypy.rlib import jit
 from pypy.rlib.rarithmetic import maxint
@@ -9,7 +9,7 @@ from pypy.rlib.rarithmetic import maxint
 FLOAT_SIZE = rffi.sizeof(lltype.Float)
 
 def _fromstring_text(space, s, count, sep, length, dtype):
-    from pypy.module.micronumpy.interp_numarray import W_NDimArray
+    from pypy.module._numpypy.interp_numarray import W_NDimArray
 
     sep_stripped = strip_spaces(sep)
     skip_bad_vals = len(sep_stripped) == 0
@@ -61,7 +61,7 @@ def _fromstring_text(space, s, count, sep, length, dtype):
     return space.wrap(a)
 
 def _fromstring_bin(space, s, count, length, dtype):
-    from pypy.module.micronumpy.interp_numarray import W_NDimArray
+    from pypy.module._numpypy.interp_numarray import W_NDimArray
     
     itemsize = dtype.itemtype.get_element_size()
     assert itemsize >= 0

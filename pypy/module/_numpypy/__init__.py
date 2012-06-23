@@ -9,20 +9,16 @@ class PyPyModule(MixedModule):
     }
     appleveldefs = {}
 
-class MultiArrayModule(MixedModule):
-    interpleveldefs = {
-        'ndarray': 'interp_numarray.W_NDArray',
-    }
-
 class Module(MixedModule):
     applevel_name = '_numpypy'
 
     submodules = {
         'pypy': PyPyModule,
-        'multiarray': MultiArrayModule,
     }
 
-    interpleveldefs = {}
+    interpleveldefs = {
+        'ndarray': 'interp_numarray.W_NDArray',
+    }
     appleveldefs = {}
 
     # interpleveldefs = {

@@ -1,7 +1,7 @@
 
 from pypy.rlib import jit
 from pypy.rlib.objectmodel import instantiate
-from pypy.module.micronumpy.strides import calculate_broadcast_strides,\
+from pypy.module._numpypy.strides import calculate_broadcast_strides,\
      calculate_slice_strides, calculate_dot_strides, enumerate_chunks
 
 """ This is a mini-tutorial on iterators, strides, and
@@ -57,7 +57,7 @@ class RecordChunk(BaseChunk):
         self.name = name
 
     def apply(self, arr):
-        from pypy.module.micronumpy.interp_numarray import W_NDimSlice
+        from pypy.module._numpypy.interp_numarray import W_NDimSlice
 
         arr = arr.get_concrete()
         ofs, subdtype = arr.dtype.fields[self.name]
@@ -81,7 +81,7 @@ class Chunks(BaseChunk):
         return shape[:] + old_shape[s:]
 
     def apply(self, arr):
-        from pypy.module.micronumpy.interp_numarray import W_NDimSlice,\
+        from pypy.module._numpypy.interp_numarray import W_NDimSlice,\
              VirtualSlice, ConcreteArray
 
         shape = self.extend_shape(arr.shape)

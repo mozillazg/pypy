@@ -1,7 +1,7 @@
 import py
 py.test.skip("disabled")
 
-from pypy.module.micronumpy.compile import (numpy_compile, Assignment,
+from pypy.module._numpypy.compile import (numpy_compile, Assignment,
     ArrayConstant, FloatConstant, Operator, Variable, RangeConstant, Execute,
     FunctionCall, FakeSpace)
 

@@ -1,7 +1,7 @@
 
-from pypy.module.micronumpy.interp_numarray import convert_to_array,\
+from pypy.module._numpypy.interp_numarray import convert_to_array,\
      VirtualArray
-from pypy.module.micronumpy import signature
+from pypy.module._numpypy import signature
 
 class WhereArray(VirtualArray):
     def __init__(self, space, arr, x, y):

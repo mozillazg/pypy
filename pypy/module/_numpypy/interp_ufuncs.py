@@ -2,11 +2,11 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec, NoneNotWrapped
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
-from pypy.module.micronumpy import interp_boxes, interp_dtype, loop
+from pypy.module._numpypy import interp_boxes, interp_dtype, loop
 from pypy.rlib import jit
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.module.micronumpy.interp_support import unwrap_axis_arg
+from pypy.module._numpypy.interp_support import unwrap_axis_arg
 
 class W_Ufunc(Wrappable):
     _attrs_ = ["name", "promote_to_float", "promote_bools", "identity"]
@@ -119,7 +119,7 @@ class W_Ufunc(Wrappable):
         array([[ 1,  5],
                [ 9, 13]])
         """
-        from pypy.module.micronumpy.interp_numarray import BaseArray
+        from pypy.module._numpypy.interp_numarray import BaseArray
         if w_axis is None:
             w_axis = space.wrap(0)
         if space.is_w(w_out, space.w_None):
@@ -133,7 +133,7 @@ class W_Ufunc(Wrappable):
 
     def reduce(self, space, w_obj, multidim, promote_to_largest, w_axis,
                keepdims=False, out=None):
-        from pypy.module.micronumpy.interp_numarray import convert_to_array, \
+        from pypy.module._numpypy.interp_numarray import convert_to_array, \
                                              Scalar, ReduceArray, W_NDimArray
         if self.argcount != 2:
             raise OperationError(space.w_ValueError, space.wrap("reduce only "
@@ -205,7 +205,7 @@ class W_Ufunc(Wrappable):
         return val
 
     def do_axis_reduce(self, obj, dtype, axis, result):
-        from pypy.module.micronumpy.interp_numarray import AxisReduce
+        from pypy.module._numpypy.interp_numarray import AxisReduce
         arr = AxisReduce(self.func, self.name, self.identity, obj.shape, dtype,
                          result, obj, axis)
         loop.compute(arr)
@@ -225,7 +225,7 @@ class W_Ufunc1(W_Ufunc):
         self.bool_result = bool_result
 
     def call(self, space, args_w):
-        from pypy.module.micronumpy.interp_numarray import (Call1, BaseArray,
+        from pypy.module._numpypy.interp_numarray import (Call1, BaseArray,
             convert_to_array, Scalar, shape_agreement)
         if len(args_w)<2:
             [w_obj] = args_w
@@ -292,7 +292,7 @@ class W_Ufunc2(W_Ufunc):
 
     @jit.unroll_safe
     def call(self, space, args_w):
-        from pypy.module.micronumpy.interp_numarray import (Call2,
+        from pypy.module._numpypy.interp_numarray import (Call2,
             convert_to_array, Scalar, shape_agreement, BaseArray)
         if len(args_w) > 2:
             [w_lhs, w_rhs, w_out] = args_w

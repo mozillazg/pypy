@@ -2,7 +2,7 @@ from pypy.conftest import gettestobjspace
 
 class AppTestNumpy:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['micronumpy'])
+        cls.space = gettestobjspace(usemodules=['_numpypy'])
 
     def test_imports(self):
         try:

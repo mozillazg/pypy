@@ -123,7 +123,7 @@ class PyPyJitPolicy(JitPolicy):
             modname, rest = modname.split('.', 1)
         else:
             rest = ''
-        if modname in ['pypyjit', 'signal', 'micronumpy', 'math', 'exceptions',
+        if modname in ['pypyjit', 'signal', '_numpypy', 'math', 'exceptions',
                        'imp', 'sys', 'array', '_ffi', 'itertools', 'operator',
                        'posix', '_socket', '_sre', '_lsprof', '_weakref',
                        '__pypy__', 'cStringIO', '_collections', 'struct',

@@ -1,4 +1,4 @@
-from pypy.module.micronumpy.interp_iter import ViewIterator
+from pypy.module._numpypy.interp_iter import ViewIterator
 
 class TestIterDirect(object):
     def test_C_viewiterator(self):

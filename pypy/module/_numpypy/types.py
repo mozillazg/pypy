@@ -3,7 +3,7 @@ import math
 import struct
 
 from pypy.interpreter.error import OperationError
-from pypy.module.micronumpy import interp_boxes
+from pypy.module._numpypy import interp_boxes
 from pypy.objspace.std.floatobject import float2string
 from pypy.rlib import rfloat, libffi, clibffi
 from pypy.rlib.objectmodel import specialize, we_are_translated
@@ -959,7 +959,7 @@ class RecordType(BaseType):
 
     @jit.unroll_safe
     def coerce(self, space, dtype, w_item):
-        from pypy.module.micronumpy.interp_numarray import W_NDimArray
+        from pypy.module._numpypy.interp_numarray import W_NDimArray
 
         if isinstance(w_item, interp_boxes.W_VoidBox):
             return w_item

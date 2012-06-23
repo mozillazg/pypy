@@ -1,6 +1,6 @@
-from pypy.module.micronumpy.strides import calculate_dot_strides
+from pypy.module._numpypy.strides import calculate_dot_strides
 from pypy.interpreter.error import OperationError
-from pypy.module.micronumpy.interp_iter import ViewIterator
+from pypy.module._numpypy.interp_iter import ViewIterator
 from pypy.rlib import jit
 
 def dot_printable_location(shapelen):

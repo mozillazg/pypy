@@ -1,9 +1,9 @@
 from pypy.rlib.objectmodel import r_dict, compute_identity_hash, compute_hash
 from pypy.rlib.rarithmetic import intmask
-from pypy.module.micronumpy.interp_iter import ConstantIterator, AxisIterator,\
+from pypy.module._numpypy.interp_iter import ConstantIterator, AxisIterator,\
      ViewTransform, BroadcastTransform
 from pypy.tool.pairtype import extendabletype
-from pypy.module.micronumpy.loop import ComputationDone
+from pypy.module._numpypy.loop import ComputationDone
 from pypy.rlib import jit
 
 """ Signature specifies both the numpy expression that has been constructed
@@ -97,7 +97,7 @@ class Signature(object):
         self.iter_no = no
 
     def create_frame(self, arr):
-        from pypy.module.micronumpy.loop import NumpyEvalFrame
+        from pypy.module._numpypy.loop import NumpyEvalFrame
         
         iterlist = []
         arraylist = []
@@ -134,7 +134,7 @@ class ArraySignature(ConcreteSignature):
         return 'Array'
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_numarray import ConcreteArray
+        from pypy.module._numpypy.interp_numarray import ConcreteArray
         concr = arr.get_concrete()
         # this get_concrete never forces assembler. If we're here and array
         # is not of a concrete class it means that we have a _forced_result,
@@ -144,7 +144,7 @@ class ArraySignature(ConcreteSignature):
         self.array_no = _add_ptr_to_cache(concr.storage, cache)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import ConcreteArray
+        from pypy.module._numpypy.interp_numarray import ConcreteArray
         concr = arr.get_concrete()
         assert isinstance(concr, ConcreteArray)
         if self.iter_no >= len(iterlist):
@@ -169,7 +169,7 @@ class ScalarSignature(ConcreteSignature):
             iterlist.append(iter)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Scalar
+        from pypy.module._numpypy.interp_numarray import Scalar
         assert isinstance(arr, Scalar)
         return arr.value
 
@@ -192,7 +192,7 @@ class VirtualSliceSignature(Signature):
         self.child = child
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_numarray import VirtualSlice
+        from pypy.module._numpypy.interp_numarray import VirtualSlice
         assert isinstance(arr, VirtualSlice)
         self.child._invent_array_numbering(arr.child, cache)
 
@@ -209,13 +209,13 @@ class VirtualSliceSignature(Signature):
         return self.child.eq(other.child, compare_array_no)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import VirtualSlice
+        from pypy.module._numpypy.interp_numarray import VirtualSlice
         assert isinstance(arr, VirtualSlice)
         transforms = [ViewTransform(arr.chunks)] + transforms 
         self.child._create_iter(iterlist, arraylist, arr.child, transforms)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import VirtualSlice
+        from pypy.module._numpypy.interp_numarray import VirtualSlice
         assert isinstance(arr, VirtualSlice)
         return self.child.eval(frame, arr.child)
 
@@ -249,17 +249,17 @@ class Call1(Signature):
         self.child._invent_numbering(cache, allnumbers)
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_numarray import Call1
+        from pypy.module._numpypy.interp_numarray import Call1
         assert isinstance(arr, Call1)
         self.child._invent_array_numbering(arr.values, cache)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call1
+        from pypy.module._numpypy.interp_numarray import Call1
         assert isinstance(arr, Call1)
         self.child._create_iter(iterlist, arraylist, arr.values, transforms)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Call1
+        from pypy.module._numpypy.interp_numarray import Call1
         assert isinstance(arr, Call1)
         v = self.child.eval(frame, arr.values).convert_to(arr.calc_dtype)
         return self.unfunc(arr.calc_dtype, v)
@@ -274,7 +274,7 @@ class BroadcastUfunc(Call1):
         return 'BroadcastUfunc(%s, %s)' % (self.name, self.child.debug_repr())
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call1
+        from pypy.module._numpypy.interp_numarray import Call1
 
         assert isinstance(arr, Call1)
         vtransforms = [BroadcastTransform(arr.values.shape)] + transforms
@@ -282,7 +282,7 @@ class BroadcastUfunc(Call1):
         self.res._create_iter(iterlist, arraylist, arr.res, transforms)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Call1
+        from pypy.module._numpypy.interp_numarray import Call1
         assert isinstance(arr, Call1)
         v = self.child.eval(frame, arr.values).convert_to(arr.calc_dtype)
         return self.unfunc(arr.calc_dtype, v)
@@ -311,7 +311,7 @@ class Call2(Signature):
                 self.right.eq(other.right, compare_array_no))
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
         assert isinstance(arr, Call2)
         self.left._invent_array_numbering(arr.left, cache)
         self.right._invent_array_numbering(arr.right, cache)
@@ -321,14 +321,14 @@ class Call2(Signature):
         self.right._invent_numbering(cache, allnumbers)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
 
         assert isinstance(arr, Call2)
         self.left._create_iter(iterlist, arraylist, arr.left, transforms)
         self.right._create_iter(iterlist, arraylist, arr.right, transforms)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
         assert isinstance(arr, Call2)
         lhs = self.left.eval(frame, arr.left).convert_to(self.calc_dtype)
         rhs = self.right.eval(frame, arr.right).convert_to(self.calc_dtype)
@@ -343,7 +343,7 @@ class ResultSignature(Call2):
         Call2.__init__(self, None, 'assign', dtype, left, right)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import ResultArray
+        from pypy.module._numpypy.interp_numarray import ResultArray
 
         assert isinstance(arr, ResultArray)
         offset = frame.get_final_iter().offset
@@ -352,7 +352,7 @@ class ResultSignature(Call2):
 
 class BroadcastResultSignature(ResultSignature):
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import ResultArray
+        from pypy.module._numpypy.interp_numarray import ResultArray
 
         assert isinstance(arr, ResultArray)
         rtransforms = [BroadcastTransform(arr.left.shape)] + transforms
@@ -365,7 +365,7 @@ class ToStringSignature(Call1):
 
     @jit.unroll_safe
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import ToStringArray
+        from pypy.module._numpypy.interp_numarray import ToStringArray
 
         assert isinstance(arr, ToStringArray)
         arr.res_str.setitem(0, self.child.eval(frame, arr.values).convert_to(
@@ -379,7 +379,7 @@ class BroadcastLeft(Call2):
         self.right._invent_numbering(cache, allnumbers)
     
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
 
         assert isinstance(arr, Call2)
         ltransforms = [BroadcastTransform(arr.shape)] + transforms
@@ -392,7 +392,7 @@ class BroadcastRight(Call2):
         self.right._invent_numbering(new_cache(), allnumbers)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
 
         assert isinstance(arr, Call2)
         rtransforms = [BroadcastTransform(arr.shape)] + transforms
@@ -405,7 +405,7 @@ class BroadcastBoth(Call2):
         self.right._invent_numbering(new_cache(), allnumbers)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
 
         assert isinstance(arr, Call2)
         rtransforms = [BroadcastTransform(arr.shape)] + transforms
@@ -423,7 +423,7 @@ class ReduceSignature(Call2):
         self.done_func = done_func
         
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import ReduceArray
+        from pypy.module._numpypy.interp_numarray import ReduceArray
         assert isinstance(arr, ReduceArray)
         rval = self.right.eval(frame, arr.right).convert_to(self.calc_dtype)
         if self.done_func is not None and self.done_func(self.calc_dtype, rval):
@@ -435,7 +435,7 @@ class ReduceSignature(Call2):
 
 class SliceloopSignature(Call2):
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import Call2
+        from pypy.module._numpypy.interp_numarray import Call2
         
         assert isinstance(arr, Call2)
         ofs = frame.iterators[0].offset
@@ -456,7 +456,7 @@ class SliceloopBroadcastSignature(SliceloopSignature):
         self.right._invent_numbering(cache, allnumbers)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import SliceArray
+        from pypy.module._numpypy.interp_numarray import SliceArray
 
         assert isinstance(arr, SliceArray)
         rtransforms = [BroadcastTransform(arr.shape)] + transforms
@@ -465,7 +465,7 @@ class SliceloopBroadcastSignature(SliceloopSignature):
 
 class AxisReduceSignature(Call2):
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_numarray import AxisReduce,\
+        from pypy.module._numpypy.interp_numarray import AxisReduce,\
              ConcreteArray
 
         assert isinstance(arr, AxisReduce)
@@ -480,13 +480,13 @@ class AxisReduceSignature(Call2):
         self.right._invent_numbering(cache, allnumbers)
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_numarray import AxisReduce
+        from pypy.module._numpypy.interp_numarray import AxisReduce
 
         assert isinstance(arr, AxisReduce)
         self.right._invent_array_numbering(arr.right, cache)
 
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_numarray import AxisReduce
+        from pypy.module._numpypy.interp_numarray import AxisReduce
 
         assert isinstance(arr, AxisReduce)
         iterator = frame.get_final_iter()
@@ -527,7 +527,7 @@ class WhereSignature(Signature):
                 self.ysig.eq(other.ysig, compare_array_no))
 
     def _invent_array_numbering(self, arr, cache):
-        from pypy.module.micronumpy.interp_arrayops import WhereArray
+        from pypy.module._numpypy.interp_arrayops import WhereArray
         assert isinstance(arr, WhereArray)
         self.arrsig._invent_array_numbering(arr.arr, cache)
         self.xsig._invent_array_numbering(arr.x, cache)
@@ -539,7 +539,7 @@ class WhereSignature(Signature):
         self.ysig._invent_numbering(cache, allnumbers)
 
     def _create_iter(self, iterlist, arraylist, arr, transforms):
-        from pypy.module.micronumpy.interp_arrayops import WhereArray
+        from pypy.module._numpypy.interp_arrayops import WhereArray
 
         assert isinstance(arr, WhereArray)
         # XXX this does not support broadcasting correctly
@@ -548,7 +548,7 @@ class WhereSignature(Signature):
         self.ysig._create_iter(iterlist, arraylist, arr.y, transforms)
  
     def eval(self, frame, arr):
-        from pypy.module.micronumpy.interp_arrayops import WhereArray
+        from pypy.module._numpypy.interp_arrayops import WhereArray
         assert isinstance(arr, WhereArray)
         lhs = self.xsig.eval(frame, arr.x).convert_to(self.dtype)
         rhs = self.ysig.eval(frame, arr.y).convert_to(self.dtype)

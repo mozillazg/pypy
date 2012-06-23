@@ -2484,7 +2484,7 @@ class TestAnnotateTestCase:
         assert s.const == 5
 
     def test_multiple_mixins_mro(self):
-        # an obscure situation, but it occurred in module/micronumpy/types.py
+        # an obscure situation, but it occurred in module/_numpypy/types.py
         class A(object):
             _mixin_ = True
             def foo(self): return 1
