@@ -509,9 +509,10 @@ class AppTestTypes(BaseNumpyAppTest):
         assert dtype('i4').alignment == 4
 
     def test_typeinfo(self):
-        from _numpypy import typeinfo, void, number, int64, bool_
+        from numpy.core.multiarray import typeinfo
+        from _numpypy import void, number, longlong, bool_
         assert typeinfo['Number'] == number
-        assert typeinfo['LONGLONG'] == ('q', 9, 64, 8, 9223372036854775807L, -9223372036854775808L, int64)
+        assert typeinfo['LONGLONG'] == ('q', 9, 64, 8, 9223372036854775807L, -9223372036854775808L, longlong)
         assert typeinfo['VOID'] == ('V', 20, 0, 1, void)
         assert typeinfo['BOOL'] == ('?', 0, 8, 1, 1, 0, bool_)
 
