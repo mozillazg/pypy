@@ -1,4 +1,4 @@
-from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
+from pypy.module._numpypy.test.test_base import BaseNumpyAppTest
 
 
 class AppTestFromNumeric(BaseNumpyAppTest):

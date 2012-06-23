@@ -9,10 +9,10 @@ py.test.skip("disabled")
 from pypy.jit.metainterp import pyjitpl
 from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.warmspot import reset_stats
-from pypy.module.micronumpy import interp_boxes
-from pypy.module.micronumpy.compile import (FakeSpace,
+from pypy.module._numpypy import interp_boxes
+from pypy.module._numpypy.compile import (FakeSpace,
     IntObject, Parser, InterpreterState)
-from pypy.module.micronumpy.interp_numarray import (W_NDimArray,
+from pypy.module._numpypy.interp_numarray import (W_NDimArray,
      BaseArray, W_FlatIterator)
 from pypy.rlib.nonconst import NonConstant
 

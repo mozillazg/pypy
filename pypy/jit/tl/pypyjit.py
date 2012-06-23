@@ -44,7 +44,7 @@ config.objspace.usemodules._lsprof = False
 #
 config.objspace.usemodules._ffi = True
 #config.objspace.usemodules.cppyy = True
-config.objspace.usemodules.micronumpy = False
+config.objspace.usemodules._numpypy = False
 #
 set_pypy_opt_level(config, level='jit')
 

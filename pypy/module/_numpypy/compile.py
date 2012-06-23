@@ -7,12 +7,12 @@ import re
 
 from pypy.interpreter.baseobjspace import InternalSpaceCache, W_Root
 from pypy.interpreter.error import OperationError
-from pypy.module.micronumpy import interp_boxes
-from pypy.module.micronumpy.interp_dtype import get_dtype_cache
-from pypy.module.micronumpy.interp_numarray import (Scalar, BaseArray,
+from pypy.module._numpypy import interp_boxes
+from pypy.module._numpypy.interp_dtype import get_dtype_cache
+from pypy.module._numpypy.interp_numarray import (Scalar, BaseArray,
      scalar_w, W_NDimArray, array)
-from pypy.module.micronumpy.interp_arrayops import where
-from pypy.module.micronumpy import interp_ufuncs
+from pypy.module._numpypy.interp_arrayops import where
+from pypy.module._numpypy import interp_ufuncs
 from pypy.rlib.objectmodel import specialize, instantiate
 
 

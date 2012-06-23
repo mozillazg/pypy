@@ -15,7 +15,7 @@ MIXIN_64 = (int_typedef,) if LONG_BIT == 64 else ()
 
 def new_dtype_getter(name):
     def _get_dtype(space):
-        from pypy.module.micronumpy.interp_dtype import get_dtype_cache
+        from pypy.module._numpypy.interp_dtype import get_dtype_cache
         return getattr(get_dtype_cache(space), "w_%sdtype" % name)
 
     def new(space, w_subtype, w_value):
@@ -67,21 +67,21 @@ class W_GenericBox(Wrappable):
 
     def _binop_impl(ufunc_name):
         def impl(self, space, w_other, w_out=None):
-            from pypy.module.micronumpy import interp_ufuncs
+            from pypy.module._numpypy import interp_ufuncs
             return getattr(interp_ufuncs.get(space), ufunc_name).call(space,
                                                             [self, w_other, w_out])
         return func_with_new_name(impl, "binop_%s_impl" % ufunc_name)
 
     def _binop_right_impl(ufunc_name):
         def impl(self, space, w_other, w_out=None):
-            from pypy.module.micronumpy import interp_ufuncs
+            from pypy.module._numpypy import interp_ufuncs
             return getattr(interp_ufuncs.get(space), ufunc_name).call(space,
                                                             [w_other, self, w_out])
         return func_with_new_name(impl, "binop_right_%s_impl" % ufunc_name)
 
     def _unaryop_impl(ufunc_name):
         def impl(self, space, w_out=None):
-            from pypy.module.micronumpy import interp_ufuncs
+            from pypy.module._numpypy import interp_ufuncs
             return getattr(interp_ufuncs.get(space), ufunc_name).call(space,
                                                                     [self, w_out])
         return func_with_new_name(impl, "unaryop_%s_impl" % ufunc_name)
@@ -246,8 +246,8 @@ class W_CharacterBox(W_FlexibleBox):
 
 class W_StringBox(W_CharacterBox):
     def descr__new__string_box(space, w_subtype, w_arg):
-        from pypy.module.micronumpy.interp_numarray import W_NDimArray
-        from pypy.module.micronumpy.interp_dtype import new_string_dtype
+        from pypy.module._numpypy.interp_numarray import W_NDimArray
+        from pypy.module._numpypy.interp_dtype import new_string_dtype
 
         arg = space.str_w(space.str(w_arg))
         arr = W_NDimArray([1], new_string_dtype(space, len(arg)))
@@ -258,8 +258,8 @@ class W_StringBox(W_CharacterBox):
 
 class W_UnicodeBox(W_CharacterBox):
     def descr__new__unicode_box(space, w_subtype, w_arg):
-        from pypy.module.micronumpy.interp_numarray import W_NDimArray
-        from pypy.module.micronumpy.interp_dtype import new_unicode_dtype
+        from pypy.module._numpypy.interp_numarray import W_NDimArray
+        from pypy.module._numpypy.interp_dtype import new_unicode_dtype
 
         arg = space.unicode_w(unicode_from_object(space, w_arg))
         arr = W_NDimArray([1], new_unicode_dtype(space, len(arg)))

@@ -1,9 +1,9 @@
 import py
-from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
+from pypy.module._numpypy.test.test_base import BaseNumpyAppTest
 
 class AppTestOutArg(BaseNumpyAppTest):
     def test_reduce_out(self):
-        from numpypy import arange, zeros, array
+        from numpy import arange, zeros, array
         a = arange(15).reshape(5, 3)
         b = arange(12).reshape(4,3)
         c = a.sum(0, out=b[1])
@@ -25,14 +25,14 @@ class AppTestOutArg(BaseNumpyAppTest):
         assert (c == [True, True]).all()
 
     def test_reduce_intermediary(self):
-        from numpypy import arange, array
+        from numpy import arange, array
         a = arange(15).reshape(5, 3)
         b = array(range(3), dtype=bool)
         c = a.prod(0, out=b)
         assert(b == [False,  True,  True]).all()
 
     def test_ufunc_out(self):
-        from _numpypy import array, negative, zeros, sin
+        from numpy import array, negative, zeros, sin
         from math import sin as msin
         a = array([[1, 2], [3, 4]])
         c = zeros((2,2,2))
@@ -61,7 +61,7 @@ class AppTestOutArg(BaseNumpyAppTest):
         raises(ValueError, 'negative(a, out=b)')
 
     def test_binfunc_out(self):
-        from _numpypy import array, add
+        from numpy import array, add
         a = array([[1, 2], [3, 4]])
         out = array([[1, 2], [3, 4]])
         c = add(a, a, out=out)
@@ -85,7 +85,7 @@ class AppTestOutArg(BaseNumpyAppTest):
         assert b.dtype == out.dtype
         
     def test_applevel(self):
-        from _numpypy import array, sum, max, min
+        from numpy import array, sum, max, min
         a = array([[1, 2], [3, 4]])
         out = array([[0, 0], [0, 0]])
         c = sum(a, axis=0, out=out[0])
@@ -98,7 +98,7 @@ class AppTestOutArg(BaseNumpyAppTest):
         assert (c != out[1]).all()
         
     def test_ufunc_cast(self):
-        from _numpypy import array, negative, add, sum
+        from numpy import array, negative, add, sum
         a = array(16, dtype = int)
         c = array(0, dtype = float)
         b = negative(a, out=c)

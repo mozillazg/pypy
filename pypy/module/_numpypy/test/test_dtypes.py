@@ -1,11 +1,11 @@
 import py
 from pypy.conftest import option
-from pypy.module.micronumpy.test.test_base import BaseNumpyAppTest
+from pypy.module._numpypy.test.test_base import BaseNumpyAppTest
 from pypy.interpreter.gateway import interp2app
 
 class AppTestDtypes(BaseNumpyAppTest):
     def test_dtype(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         d = dtype('?')
         assert d.num == 0
@@ -20,7 +20,7 @@ class AppTestDtypes(BaseNumpyAppTest):
         raises(KeyError, 'dtype(int)["asdasd"]')
 
     def test_dtype_eq(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         assert dtype("int8") == "int8"
         assert "int8" == dtype("int8")
@@ -28,7 +28,7 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert dtype(bool) == bool
 
     def test_dtype_with_types(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         assert dtype(bool).num == 0
         assert dtype(int).num == 7
@@ -36,13 +36,13 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert dtype(float).num == 12
 
     def test_array_dtype_attr(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
 
         a = array(range(5), long)
         assert a.dtype is dtype(long)
 
     def test_repr_str(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         assert '.dtype' in repr(dtype)
         d = dtype('?')
@@ -50,7 +50,7 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert str(d) == "bool"
 
     def test_bool_array(self):
-        from _numpypy import array, False_, True_
+        from numpy import array, False_, True_
 
         a = array([0, 1, 2, 2.5], dtype='?')
         assert a[0] is False_
@@ -58,7 +58,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert a[i] is True_
 
     def test_copy_array_with_dtype(self):
-        from _numpypy import array, False_, longlong
+        from numpy import array, False_, longlong
 
         a = array([0, 1, 2, 3], dtype=long)
         # int on 64-bit, long in 32-bit
@@ -72,35 +72,35 @@ class AppTestDtypes(BaseNumpyAppTest):
         assert b[0] is False_
 
     def test_zeros_bool(self):
-        from _numpypy import zeros, False_
+        from numpy import zeros, False_
 
         a = zeros(10, dtype=bool)
         for i in range(10):
             assert a[i] is False_
 
     def test_ones_bool(self):
-        from _numpypy import ones, True_
+        from numpy import ones, True_
 
         a = ones(10, dtype=bool)
         for i in range(10):
             assert a[i] is True_
 
     def test_zeros_long(self):
-        from _numpypy import zeros, longlong
+        from numpy import zeros, longlong
         a = zeros(10, dtype=long)
         for i in range(10):
             assert isinstance(a[i], longlong)
             assert a[1] == 0
 
     def test_ones_long(self):
-        from _numpypy import ones, longlong
+        from numpy import ones, longlong
         a = ones(10, dtype=long)
         for i in range(10):
             assert isinstance(a[i], longlong)
             assert a[1] == 1
 
     def test_overflow(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
         assert array([128], 'b')[0] == -128
         assert array([256], 'B')[0] == 0
         assert array([32768], 'h')[0] == -32768
@@ -112,7 +112,7 @@ class AppTestDtypes(BaseNumpyAppTest):
         raises(OverflowError, "array([2**64], 'Q')")
 
     def test_bool_binop_types(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
         types = [
             '?', 'b', 'B', 'h', 'H', 'i', 'I', 'l', 'L', 'q', 'Q', 'f', 'd'
         ]
@@ -121,7 +121,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert (a + array([0], t)).dtype is dtype(t)
 
     def test_binop_types(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
         tests = [('b','B','h'), ('b','h','h'), ('b','H','i'), ('b','i','i'),
                  ('b','l','l'), ('b','q','q'), ('b','Q','d'), ('B','h','h'),
                  ('B','H','H'), ('B','i','i'), ('B','I','I'), ('B','l','l'),
@@ -143,7 +143,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert (array([1], d1) + array([1], d2)).dtype is dtype(dout)
 
     def test_add_int8(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
 
         a = array(range(5), dtype="int8")
         b = a + a
@@ -152,7 +152,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert b[i] == i * 2
 
     def test_add_int16(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
 
         a = array(range(5), dtype="int16")
         b = a + a
@@ -161,7 +161,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert b[i] == i * 2
 
     def test_add_uint32(self):
-        from _numpypy import array, dtype
+        from numpy import array, dtype
 
         a = array(range(5), dtype="I")
         b = a + a
@@ -170,44 +170,44 @@ class AppTestDtypes(BaseNumpyAppTest):
             assert b[i] == i * 2
 
     def test_shape(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         assert dtype(long).shape == ()
 
     def test_cant_subclass(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         # You can't subclass dtype
         raises(TypeError, type, "Foo", (dtype,), {})
 
     def test_aliases(self):
-        from _numpypy import dtype
+        from numpy import dtype
 
         assert dtype("float") is dtype(float)
 
     def test_index_int8(self):
-        from _numpypy import array, int8
+        from numpy import array, int8
 
         a = array(range(10), dtype=int8)
         b = array([0] * 10, dtype=int8)
         for idx in b: a[idx] += 1
 
     def test_index_int16(self):
-        from _numpypy import array, int16
+        from numpy import array, int16
 
         a = array(range(10), dtype=int16)
         b = array([0] * 10, dtype=int16)
         for idx in b: a[idx] += 1
 
     def test_index_int32(self):
-        from _numpypy import array, int32
+        from numpy import array, int32
 
         a = array(range(10), dtype=int32)
         b = array([0] * 10, dtype=int32)
         for idx in b: a[idx] += 1
 
     def test_index_int64(self):
-        from _numpypy import array, int64
+        from numpy import array, int64
 
         a = array(range(10), dtype=int64)
         b = array([0] * 10, dtype=int64)
@@ -215,7 +215,7 @@ class AppTestDtypes(BaseNumpyAppTest):
             a[idx] += 1
 
     def test_hash(self):
-        import _numpypy as numpy
+        import numpy
         for tp, value in [
             (numpy.int8, 4),
             (numpy.int16, 5),
@@ -229,7 +229,7 @@ class AppTestDtypes(BaseNumpyAppTest):
 
 class AppTestTypes(BaseNumpyAppTest):
     def test_abstract_types(self):
-        import _numpypy as numpy
+        import numpy
         raises(TypeError, numpy.generic, 0)
         raises(TypeError, numpy.number, 0)
         raises(TypeError, numpy.integer, 0)
@@ -243,16 +243,16 @@ class AppTestTypes(BaseNumpyAppTest):
         raises(TypeError, numpy.inexact, 0)
 
     def test_new(self):
-        import _numpypy as np
+        import numpy as np
         assert np.int_(4) == 4
         assert np.float_(3.4) == 3.4
 
     def test_pow(self):
-        from _numpypy import int_
+        from numpy import int_
         assert int_(4) ** 2 == 16
 
     def test_bool(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.bool_.mro() == [numpy.bool_, numpy.generic, object]
         assert numpy.bool_(3) is numpy.True_
@@ -267,7 +267,7 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.bool_("False") is numpy.True_
 
     def test_int8(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.int8.mro() == [numpy.int8, numpy.signedinteger, numpy.integer, numpy.number, numpy.generic, object]
 
@@ -289,7 +289,7 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.int8('128') == -128
 
     def test_uint8(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.uint8.mro() == [numpy.uint8, numpy.unsignedinteger, numpy.integer, numpy.number, numpy.generic, object]
 
@@ -312,7 +312,7 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.uint8('256') == 0
 
     def test_int16(self):
-        import _numpypy as numpy
+        import numpy
 
         x = numpy.int16(3)
         assert x == 3
@@ -322,7 +322,7 @@ class AppTestTypes(BaseNumpyAppTest):
         assert numpy.int16('32768') == -32768
 
     def test_uint16(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.uint16(65535) == 65535
         assert numpy.uint16(65536) == 0
@@ -331,7 +331,7 @@ class AppTestTypes(BaseNumpyAppTest):
 
     def test_int32(self):
         import sys
-        import _numpypy as numpy
+        import numpy
 
         x = numpy.int32(23)
         assert x == 23
@@ -347,7 +347,7 @@ class AppTestTypes(BaseNumpyAppTest):
 
     def test_uint32(self):
         import sys
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.uint32(10) == 10
 
@@ -358,14 +358,14 @@ class AppTestTypes(BaseNumpyAppTest):
             assert numpy.uint32('4294967296') == 0
 
     def test_int_(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.int_ is numpy.dtype(int).type
         assert numpy.int_.mro() == [numpy.int_, numpy.signedinteger, numpy.integer, numpy.number, numpy.generic, int, object]
 
     def test_int64(self):
         import sys
-        import _numpypy as numpy
+        import numpy
 
         if sys.maxint == 2 ** 63 -1:
             assert numpy.int64.mro() == [numpy.int64, numpy.signedinteger, numpy.integer, numpy.number, numpy.generic, int, object]
@@ -383,7 +383,7 @@ class AppTestTypes(BaseNumpyAppTest):
 
     def test_uint64(self):
         import sys
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.uint64.mro() == [numpy.uint64, numpy.unsignedinteger, numpy.integer, numpy.number, numpy.generic, object]
 
@@ -398,7 +398,7 @@ class AppTestTypes(BaseNumpyAppTest):
         raises(OverflowError, numpy.uint64(18446744073709551616))
 
     def test_float32(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.float32.mro() == [numpy.float32, numpy.floating, numpy.inexact, numpy.number, numpy.generic, object]
 
@@ -407,7 +407,7 @@ class AppTestTypes(BaseNumpyAppTest):
         raises(ValueError, numpy.float32, '23.2df')
 
     def test_float64(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.float64.mro() == [numpy.float64, numpy.floating, numpy.inexact, numpy.number, numpy.generic, float, object]
 
@@ -422,7 +422,7 @@ class AppTestTypes(BaseNumpyAppTest):
         raises(ValueError, numpy.float64, '23.2df')
 
     def test_subclass_type(self):
-        import _numpypy as numpy
+        import numpy
 
         class X(numpy.float64):
             def m(self):
@@ -433,13 +433,13 @@ class AppTestTypes(BaseNumpyAppTest):
         assert b.m() == 12
 
     def test_long_as_index(self):
-        from _numpypy import int_, float64
+        from numpy import int_, float64
         assert (1, 2, 3)[int_(1)] == 2
         raises(TypeError, lambda: (1, 2, 3)[float64(1)])
 
     def test_int(self):
         import sys
-        from _numpypy import int32, int64, int_
+        from numpy import int32, int64, int_
         assert issubclass(int_, int)
         if sys.maxint == (1<<31) - 1:
             assert issubclass(int32, int)
@@ -449,7 +449,7 @@ class AppTestTypes(BaseNumpyAppTest):
             assert int_ is int64
 
     def test_various_types(self):
-        import _numpypy as numpy
+        import numpy
         import sys
 
         assert numpy.int16 is numpy.short
@@ -461,7 +461,7 @@ class AppTestTypes(BaseNumpyAppTest):
             assert numpy.intp is numpy.int32
 
     def test_mro(self):
-        import _numpypy as numpy
+        import numpy
 
         assert numpy.int16.__mro__ == (numpy.int16, numpy.signedinteger,
                                        numpy.integer, numpy.number,
@@ -470,7 +470,7 @@ class AppTestTypes(BaseNumpyAppTest):
 
     def test_operators(self):
         from operator import truediv
-        from _numpypy import float64, int_, True_, False_
+        from numpy import float64, int_, True_, False_
         assert 5 / int_(2) == int_(2)
         assert truediv(int_(3), int_(2)) == float64(1.5)
         assert truediv(3, int_(2)) == float64(1.5)
@@ -495,7 +495,7 @@ class AppTestTypes(BaseNumpyAppTest):
         raises(TypeError, lambda: float64(3) & 1)
 
     def test_alternate_constructs(self):
-        from _numpypy import dtype
+        from numpy import dtype
         nnp = self.non_native_prefix
         byteorder = self.native_prefix
         assert dtype('i8') == dtype(byteorder + 'i8') == dtype('=i8') # XXX should be equal == dtype(long)
@@ -505,12 +505,12 @@ class AppTestTypes(BaseNumpyAppTest):
         assert dtype(byteorder + 'i8').byteorder == '='
 
     def test_alignment(self):
-        from _numpypy import dtype
+        from numpy import dtype
         assert dtype('i4').alignment == 4
 
     def test_typeinfo(self):
         from numpy.core.multiarray import typeinfo
-        from _numpypy import void, number, longlong, bool_
+        from numpy import void, number, longlong, bool_
         assert typeinfo['Number'] == number
         assert typeinfo['LONGLONG'] == ('q', 9, 64, 8, 9223372036854775807L, -9223372036854775808L, longlong)
         assert typeinfo['VOID'] == ('V', 20, 0, 1, void)
@@ -518,13 +518,13 @@ class AppTestTypes(BaseNumpyAppTest):
 
 class AppTestStrUnicodeDtypes(BaseNumpyAppTest):
     def test_str_unicode(self):
-        from _numpypy import str_, unicode_, character, flexible, generic
+        from numpy import str_, unicode_, character, flexible, generic
 
         assert str_.mro() == [str_, str, basestring, character, flexible, generic, object]
         assert unicode_.mro() == [unicode_, unicode, basestring, character, flexible, generic, object]
 
     def test_str_dtype(self):
-        from _numpypy import dtype, str_
+        from numpy import dtype, str_
 
         raises(TypeError, "dtype('Sx')")
         d = dtype('S8')
@@ -536,7 +536,7 @@ class AppTestStrUnicodeDtypes(BaseNumpyAppTest):
         assert d.num == 18
 
     def test_unicode_dtype(self):
-        from _numpypy import dtype, unicode_
+        from numpy import dtype, unicode_
 
         raises(TypeError, "dtype('Ux')")
         d = dtype('U8')
@@ -548,16 +548,16 @@ class AppTestStrUnicodeDtypes(BaseNumpyAppTest):
         assert d.num == 19
 
     def test_string_boxes(self):
-        from _numpypy import str_
+        from numpy import str_
         assert isinstance(str_(3), str_)
 
     def test_unicode_boxes(self):
-        from _numpypy import unicode_
+        from numpy import unicode_
         assert isinstance(unicode_(3), unicode)
 
 class AppTestRecordDtypes(BaseNumpyAppTest):
     def test_create(self):
-        from _numpypy import dtype, void
+        from numpy import dtype, void
 
         raises(ValueError, "dtype([('x', int), ('x', float)])")
         d = dtype([("x", "int32"), ("y", "int32"), ("z", "int32"), ("value", float)])
@@ -576,7 +576,7 @@ class AppTestRecordDtypes(BaseNumpyAppTest):
 
     def test_create_from_dict(self):
         skip("not yet")
-        from _numpypy import dtype
+        from numpy import dtype
         d = dtype({'names': ['a', 'b', 'c'],
                    })
 
@@ -597,7 +597,7 @@ class AppTestNotDirect(BaseNumpyAppTest):
             py.test.skip("not a direct test")
 
     def test_non_native(self):
-        from _numpypy import array
+        from numpy import array
         a = array([1, 2, 3], dtype=self.non_native_prefix + 'i2')
         assert a[0] == 1
         assert (a + a)[1] == 4
