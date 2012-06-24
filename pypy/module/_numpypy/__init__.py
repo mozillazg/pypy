@@ -18,6 +18,7 @@ class Module(MixedModule):
 
     interpleveldefs = {
         'ndarray': 'interp_numarray.W_NDArray',
+        'array':   'interp_numarray.descr_array',
     }
     appleveldefs = {}
 
