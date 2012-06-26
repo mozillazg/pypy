@@ -642,7 +642,7 @@ def argsort(a, axis=-1, kind='quicksort', order=None):
     raise NotImplementedError('Waiting on interp level method')
 
 
-def argmax(a, axis=None):
+def argmax(a, axis=None, out=None):
     """
     Indices of the maximum values along an axis.
 
@@ -692,13 +692,12 @@ def argmax(a, axis=None):
     1
 
     """
-    assert axis is None
     if not hasattr(a, 'argmax'):
         a = numpypy.array(a)
-    return a.argmax()
+    return a.argmax(axis=axis, out=out)
 
 
-def argmin(a, axis=None):
+def argmin(a, axis=None, out=None):
     """
     Return the indices of the minimum values along an axis.
 
@@ -708,10 +707,9 @@ def argmin(a, axis=None):
         documentation.
 
     """
-    assert axis is None
     if not hasattr(a, 'argmin'):
         a = numpypy.array(a)
-    return a.argmin()
+    return a.argmin(axis=axis, out=out)
 
 
 def searchsorted(a, v, side='left'):

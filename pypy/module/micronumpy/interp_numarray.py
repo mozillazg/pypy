@@ -15,6 +15,7 @@ from pypy.rlib import jit
 from pypy.rlib.rstring import StringBuilder
 from pypy.rpython.lltypesystem import lltype, rffi
 from pypy.tool.sourcetools import func_with_new_name
+from pypy.module.micronumpy.interp_support import unwrap_axis_arg
 
 
 count_driver = jit.JitDriver(
@@ -156,10 +157,6 @@ class BaseArray(Wrappable):
 
     def _reduce_ufunc_impl(ufunc_name, promote_to_largest=False):
         def impl(self, space, w_axis=None, w_out=None):
-            if space.is_w(w_axis, space.w_None):
-                axis = -1
-            else:
-                axis = space.int_w(w_axis)
             if space.is_w(w_out, space.w_None) or not w_out:
                 out = None
             elif not isinstance(w_out, BaseArray):
@@ -168,7 +165,7 @@ class BaseArray(Wrappable):
             else:
                 out = w_out
             return getattr(interp_ufuncs.get(space), ufunc_name).reduce(space,
-                                        self, True, promote_to_largest, axis,
+                                        self, True, promote_to_largest, w_axis,
                                                                    False, out)
         return func_with_new_name(impl, "reduce_%s_impl" % ufunc_name)
 
@@ -181,21 +178,30 @@ class BaseArray(Wrappable):
     descr_any = _reduce_ufunc_impl('logical_or')
 
     def _reduce_argmax_argmin_impl(op_name):
+        name='numpy_arg' + op_name,
         reduce_driver = jit.JitDriver(
             greens=['shapelen', 'sig'],
             reds=['result', 'idx', 'frame', 'self', 'cur_best', 'dtype'],
             get_printable_location=signature.new_printable_location(op_name),
-            name='numpy_' + op_name,
+            name=name
         )
-        def do_argminmax(self, axis, out):
+        def do_argminmax(self, space, axis, out):
             if isinstance(self, Scalar):
                 return 0
+            dtype = self.find_dtype()
+            if axis < len(self.shape):
+                if out:
+                    return do_axisminmax(self, space, axis, out)
+                else:
+                    shape = self.shape[:axis] + self.shape[axis + 1:]
+                    result = W_NDimArray(shape,
+                            interp_dtype.get_dtype_cache(space).w_uint32dtype)
+                    return do_axisminmax(self, space, axis, result)
             sig = self.find_sig()
             frame = sig.create_frame(self)
             cur_best = sig.eval(frame, self)
             shapelen = len(self.shape)
             frame.next(shapelen)
-            dtype = self.find_dtype()
             result = 0
             idx = 1
             while not frame.done():
@@ -211,18 +217,19 @@ class BaseArray(Wrappable):
                     cur_best = new_best
                 frame.next(shapelen)
                 idx += 1
+            if out:
+                out.setitem(0, result)
             return result
+        def do_axisminmax(self, space, axis, out):
+            arr = AxisMinMaxReduce(op_name, name, out, self, axis)
+            loop.compute(arr)
+            return arr.left
 
         def impl(self, space, w_axis=None, w_out=None):
             if self.size == 0:
                 raise OperationError(space.w_ValueError,
                     space.wrap("Can't call %s on zero-size arrays" % op_name))
-            if space.is_w(w_axis, space.w_None):
-                axis = -1
-            else:
-                axis = space.int_w(w_axis)
-                if axis >= len(self.shape) or axis<0:
-                    raise OperationError(space.w_ValueError, space.wrap("axis(=%d) out of bounds" % axis))
+            axis = unwrap_axis_arg(space, len(self.shape), w_axis)    
             if space.is_w(w_out, space.w_None) or not w_out:
                 out = None
             elif not isinstance(w_out, BaseArray):
@@ -230,28 +237,25 @@ class BaseArray(Wrappable):
                         'output must be an array'))
             else:
                 out = w_out
-                shapelen = len(self.shape)
-                if axis<0:
-                    shape = [1]
-                else:
+                if axis<len(self.shape):
                     shape = self.shape[:axis] + self.shape[axis + 1:]
+                else:
+                    shape = [1]
                 #Test for shape agreement
                 if len(out.shape) > len(shape):
-                    raise operationerrfmt(space.w_TypesError,
-                        'invalid shape for output array')
+                    raise OperationError(space.w_TypesError,
+                        space.wrap('invalid shape for output array'))
                 elif len(out.shape) < len(shape):
-                    raise operationerrfmt(space.w_TypesError,
-                        'invalid shape for output array')
+                    raise OperationError(space.w_TypesError,
+                        space.wrape('invalid shape for output array'))
                 elif out.shape != shape:
-                    raise operationerrfmt(space.w_TypesError,
-                        'invalid shape for output array')
+                    raise OperationError(space.w_TypesError,
+                        space.wrape('invalid shape for output array'))
                 #Test for dtype agreement, perhaps create an itermediate
                 #if out.dtype != self.dtype:
                 #    raise OperationError(space.w_TypeError, space.wrap(
                 #        "mismatched  dtypes"))
-            return space.wrap(do_argminmax(self, ufunc_name, 
-        return func_with_new_name(impl, "reduce_%s_impl" % ufunc_name)
-            return space.wrap(do_argminmax(self, axis, out))
+            return space.wrap(do_argminmax(self, space, axis, out))
         return func_with_new_name(impl, "reduce_arg%s_impl" % op_name)
 
     descr_argmax = _reduce_argmax_argmin_impl("max")
@@ -606,11 +610,10 @@ class BaseArray(Wrappable):
 
     def descr_mean(self, space, w_axis=None, w_out=None):
         if space.is_w(w_axis, space.w_None):
-            w_axis = space.wrap(-1)
             w_denom = space.wrap(support.product(self.shape))
         else:
-            dim = space.int_w(w_axis)
-            w_denom = space.wrap(self.shape[dim])
+            axis = unwrap_axis_arg(space, len(self.shape), w_axis)
+            w_denom = space.wrap(self.shape[axis])
         return space.div(self.descr_sum_promote(space, w_axis, w_out), w_denom)
 
     def descr_var(self, space, w_axis=None):
@@ -999,6 +1002,7 @@ class ReduceArray(Call2):
                                  signature.ScalarSignature(self.res_dtype),
                                          self.right.create_sig(), done_func)
 
+
 class AxisReduce(Call2):
     def __init__(self, ufunc, name, identity, shape, dtype, left, right, dim):
         Call2.__init__(self, ufunc, name, shape, dtype, dtype,
@@ -1016,6 +1020,26 @@ class AxisReduce(Call2):
                                  signature.ScalarSignature(self.res_dtype),
                                              self.right.create_sig())
 
+class AxisMinMaxReduce(AxisReduce):
+    def __init__(self, ufunc, name, left, right, dim):
+        AxisReduce.__init__(self, ufunc, name, None, right.shape, right.dtype,
+                            left, right, dim)
+        # There must be a better way than these intermediate variables
+        # as we traverse the array, but since order can be left-right
+        # or left may be a slice, I couldn't think of how to do it.
+        # best_val is probably necessary: it hold the current best
+        # curr_index is the shape of left (the output value) 
+        #    If I could conveniently convert a iterator.offset to the
+        #    position along left using dim, then it could be caclulated
+        #    rather than incremented in each call to Signature.eval()
+        self.best_val = W_NDimArray(left.shape, right.dtype)
+        self.curr_index = W_NDimArray(left.shape, left.dtype)
+
+    def create_sig(self):
+        return signature.AxisMinMaxSignature(self.ufunc, self.name,
+                                             self.res_dtype, 
+                                 signature.ScalarSignature(self.res_dtype),
+                                             self.right.create_sig())
 class SliceArray(Call2):
     def __init__(self, shape, dtype, left, right, no_broadcast=False):
         self.no_broadcast = no_broadcast
@@ -1346,12 +1370,24 @@ def count_reduce_items(space, arr, w_axis=None, skipna=False, keepdims=True):
         raise OperationError(space.w_NotImplementedError, space.wrap("unsupported"))
     if space.is_w(w_axis, space.w_None):
         return space.wrap(support.product(arr.shape))
+    shapelen = len(arr.shape)
     if space.isinstance_w(w_axis, space.w_int):
-        return space.wrap(arr.shape[space.int_w(w_axis)])
+        axis = space.int_w(w_axis)
+        if axis < -shapelen or axis>= shapelen:
+            raise operationerrfmt(space.w_ValueError,
+                "axis entry %d is out of bounds [%d, %d)", axis,
+                -shapelen, shapelen)
+        return space.wrap(arr.shape[axis])    
+    # numpy as of June 2012 does not implement this 
     s = 1
     elems = space.fixedview(w_axis)
     for w_elem in elems:
-        s *= arr.shape[space.int_w(w_elem)]
+        axis = space.int_w(w_elem)
+        if axis < -shapelen or axis>= shapelen:
+            raise operationerrfmt(space.w_ValueError,
+                "axis entry %d is out of bounds [%d, %d)", axis,
+                -shapelen, shapelen)
+        s *= arr.shape[axis]
     return space.wrap(s)
 
 def dot(space, w_obj, w_obj2):

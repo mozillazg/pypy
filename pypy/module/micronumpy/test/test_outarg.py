@@ -125,17 +125,19 @@ class AppTestOutArg(BaseNumpyAppTest):
             "Cannot cast ufunc negative output from dtype('float64') to dtype('int64') with casting rule 'same_kind'"
 
     def test_argminmax(self):
-        from numpypy import arange, argmin
+        from numpypy import arange, argmin, argmax, ones
         a = arange(15).reshape(5, 3)
         b = arange(15).reshape(5,3)
+        c = a.argmax(0)
+        assert (c == [4, 4, 4]).all()
         c = a.argmax(0, out=b[1])
         assert (c == [4, 4, 4]).all()
         assert (c == b[1]).all()
         c = a.argmax(1, out=b[:,1])
         assert (c == [2, 2, 2, 2, 2]).all()
         assert (c == b[:,1]).all()
-        raises(ValueError, argmin, a, -2)
-        raises(ValueError, argmin, a, 2)
+        raises(ValueError, argmin, a, -3)
+        raises(ValueError, argmax, a, 2)
         b = ones((5,3), dtype=float)
         c = a.argmin(0, out=b[1])
         assert (b[1] == [0, 0, 0]).all()
