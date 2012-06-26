@@ -463,6 +463,7 @@ class SliceloopBroadcastSignature(SliceloopSignature):
         self.left._create_iter(iterlist, arraylist, arr.left, transforms)
         self.right._create_iter(iterlist, arraylist, arr.right, rtransforms)
 
+
 class AxisReduceSignature(Call2):
     def _create_iter(self, iterlist, arraylist, arr, transforms):
         from pypy.module.micronumpy.interp_numarray import AxisReduce,\
@@ -502,6 +503,53 @@ class AxisReduceSignature(Call2):
         arr.left.setitem(iterator.offset, value)
     def debug_repr(self):
         return 'AxisReduceSig(%s, %s)' % (self.name, self.right.debug_repr())
+
+
+class AxisMinMaxSignature(AxisReduceSignature):
+    def _create_iter(self, iterlist, arraylist, arr, transforms):
+        from pypy.module.micronumpy.interp_numarray import AxisMinMaxReduce,\
+             ConcreteArray
+
+        assert isinstance(arr, AxisMinMaxReduce)
+        left = arr.left
+        assert isinstance(left, ConcreteArray)
+        iterlist.append(AxisIterator(left.start, arr.dim, arr.shape,
+                                     left.strides, left.backstrides))
+        self.right._create_iter(iterlist, arraylist, arr.right, transforms)
+
+    def _invent_array_numbering(self, arr, cache):
+        from pypy.module.micronumpy.interp_numarray import AxisMinMaxReduce
+
+        assert isinstance(arr, AxisMinMaxReduce)
+        self.right._invent_array_numbering(arr.right, cache)
+
+    def eval(self, frame, arr):
+        from pypy.module.micronumpy.interp_numarray import AxisMinMaxReduce
+
+        assert isinstance(arr, AxisMinMaxReduce)
+        iterator = frame.get_final_iter()
+        # The idea is to store the best index in arr.left, and the
+        # best value in arr.best_val
+        calc_dtype = arr.right.dtype
+        index_dtype = arr.left.dtype
+        v = self.right.eval(frame, arr.right)
+        if iterator.first_line:
+            arr.best_val.setitem(iterator.offset, v)
+            best_index = index_dtype.box(0)
+            arr.left.setitem(iterator.offset, best_index)
+            arr.curr_index.setitem(iterator.offset, best_index)
+        else:
+            cur_index = arr.curr_index.getitem(iterator.offset)
+            cur_index = getattr(index_dtype.itemtype,'add')(cur_index,
+                                index_dtype.box(1))
+            arr.curr_index.setitem(iterator.offset, cur_index)
+            best = arr.best_val.getitem(iterator.offset)
+            value = getattr(calc_dtype.itemtype, self.binfunc)(best, v)
+            if calc_dtype.itemtype.ne(value, best):
+                arr.left.setitem(iterator.offset, cur_index)
+                arr.best_val.setitem(iterator.offset, value)
+    def debug_repr(self):
+        return 'AxisMinMaxSig(%s, %s)' % (self.name, self.right.debug_repr())
 
 class WhereSignature(Signature):
     _immutable_fields_ = ['dtype', 'arrdtype', 'arrsig', 'xsig', 'ysig']
