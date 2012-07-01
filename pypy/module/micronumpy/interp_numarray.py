@@ -189,6 +189,7 @@ class BaseArray(Wrappable):
             if isinstance(self, Scalar):
                 return 0
             dtype = self.find_dtype()
+            assert axis>=0
             if axis < len(self.shape):
                 if out:
                     return do_axisminmax(self, space, axis, out)
@@ -221,7 +222,10 @@ class BaseArray(Wrappable):
                 out.setitem(0, result)
             return result
         def do_axisminmax(self, space, axis, out):
-            arr = AxisMinMaxReduce(op_name, name, out, self, axis)
+            # This needs to pull in the impl func from W_Ufunc2 to be compatible
+            # with reduce, use maximum and minimum instead of max and min
+            func = getattr(interp_ufuncs.get(space), op_name + 'imum').func
+            arr = AxisMinMaxReduce(func, name, out, self, axis)
             loop.compute(arr)
             return arr.left
 
@@ -237,6 +241,7 @@ class BaseArray(Wrappable):
                         'output must be an array'))
             else:
                 out = w_out
+                assert axis >= 0
                 if axis<len(self.shape):
                     shape = self.shape[:axis] + self.shape[axis + 1:]
                 else:
@@ -1022,7 +1027,9 @@ class AxisReduce(Call2):
 
 class AxisMinMaxReduce(AxisReduce):
     def __init__(self, ufunc, name, left, right, dim):
-        AxisReduce.__init__(self, ufunc, name, None, right.shape, right.dtype,
+        rdtype = right.find_dtype()
+        ldtype = left.find_dtype()
+        AxisReduce.__init__(self, ufunc, name, None, right.shape, rdtype,
                             left, right, dim)
         # There must be a better way than these intermediate variables
         # as we traverse the array, but since order can be left-right
@@ -1032,8 +1039,8 @@ class AxisMinMaxReduce(AxisReduce):
         #    If I could conveniently convert a iterator.offset to the
         #    position along left using dim, then it could be caclulated
         #    rather than incremented in each call to Signature.eval()
-        self.best_val = W_NDimArray(left.shape, right.dtype)
-        self.curr_index = W_NDimArray(left.shape, left.dtype)
+        self.best_val = W_NDimArray(left.shape, rdtype)
+        self.curr_index = W_NDimArray(left.shape, ldtype)
 
     def create_sig(self):
         return signature.AxisMinMaxSignature(self.ufunc, self.name,

@@ -544,7 +544,7 @@ class AxisMinMaxSignature(AxisReduceSignature):
                                 index_dtype.box(1))
             arr.curr_index.setitem(iterator.offset, cur_index)
             best = arr.best_val.getitem(iterator.offset)
-            value = getattr(calc_dtype.itemtype, self.binfunc)(best, v)
+            value = self.binfunc(calc_dtype, best, v)
             if calc_dtype.itemtype.ne(value, best):
                 arr.left.setitem(iterator.offset, cur_index)
                 arr.best_val.setitem(iterator.offset, value)
