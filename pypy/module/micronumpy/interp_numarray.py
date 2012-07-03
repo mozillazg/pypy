@@ -8,7 +8,7 @@ from pypy.module.micronumpy.appbridge import get_appbridge_cache
 from pypy.module.micronumpy.dot import multidim_dot, match_dot_shapes
 from pypy.module.micronumpy.interp_iter import (ArrayIterator,
     SkipLastAxisIterator, Chunk, ViewIterator, Chunks, RecordChunk,
-    NewAxisChunk)
+    NewAxisChunk, AxisFirstIterator)
 from pypy.module.micronumpy.strides import (shape_agreement,
     find_shape_and_elems, get_shape_from_iterable, calc_new_strides, to_coords)
 from pypy.rlib import jit
@@ -178,7 +178,7 @@ class BaseArray(Wrappable):
     descr_any = _reduce_ufunc_impl('logical_or')
 
     def _reduce_argmax_argmin_impl(op_name):
-        name='numpy_arg' + op_name,
+        name='numpy_arg_' + op_name
         reduce_driver = jit.JitDriver(
             greens=['shapelen', 'sig'],
             reds=['result', 'idx', 'frame', 'self', 'cur_best', 'dtype'],
@@ -189,14 +189,15 @@ class BaseArray(Wrappable):
             if isinstance(self, Scalar):
                 return 0
             dtype = self.find_dtype()
+            # numpy compatability demands int32 not uint32
+            res_dtype = interp_dtype.get_dtype_cache(space).w_int32dtype
             assert axis>=0
             if axis < len(self.shape):
                 if out:
                     return do_axisminmax(self, space, axis, out)
                 else:
                     shape = self.shape[:axis] + self.shape[axis + 1:]
-                    result = W_NDimArray(shape,
-                            interp_dtype.get_dtype_cache(space).w_uint32dtype)
+                    result = W_NDimArray(shape, res_dtype)
                     return do_axisminmax(self, space, axis, result)
             sig = self.find_sig()
             frame = sig.create_frame(self)
@@ -219,15 +220,34 @@ class BaseArray(Wrappable):
                 frame.next(shapelen)
                 idx += 1
             if out:
-                out.setitem(0, result)
-            return result
+                out.setitem(0, out.find_dtype().box(result))
+                return out
+            return Scalar(res_dtype, res_dtype.box(result))
         def do_axisminmax(self, space, axis, out):
-            # This needs to pull in the impl func from W_Ufunc2 to be compatible
-            # with reduce, use maximum and minimum instead of max and min
-            func = getattr(interp_ufuncs.get(space), op_name + 'imum').func
-            arr = AxisMinMaxReduce(func, name, out, self, axis)
-            loop.compute(arr)
-            return arr.left
+            dtype = self.find_dtype()
+            source = AxisFirstIterator(self, axis)
+            dest = ViewIterator(out.start, out.strides, out.backstrides, 
+                                out.shape)
+            firsttime = True
+            while not source.done:
+                cur_val = self.getitem(source.offset)
+                #print 'indices are',source.indices
+                cur_index = source.get_dim_index()
+                if cur_index == 0:
+                    if not firsttime:
+                        dest = dest.next(len(self.shape))
+                    firsttime = False    
+                    cur_best = cur_val
+                    out.setitem(dest.offset, dtype.box(0))
+                    #print 'setting out[',dest.offset,'] to 0'
+                else:
+                    new_best = getattr(dtype.itemtype, op_name)(cur_best, cur_val)
+                    if dtype.itemtype.ne(new_best, cur_best):
+                        cur_best = new_best
+                        out.setitem(dest.offset, dtype.box(cur_index))
+                        #print 'setting out[',dest.offset,'] to',cur_index
+                source.next()
+            return out
 
         def impl(self, space, w_axis=None, w_out=None):
             if self.size == 0:
@@ -1025,28 +1045,7 @@ class AxisReduce(Call2):
                                  signature.ScalarSignature(self.res_dtype),
                                              self.right.create_sig())
 
-class AxisMinMaxReduce(AxisReduce):
-    def __init__(self, ufunc, name, left, right, dim):
-        rdtype = right.find_dtype()
-        ldtype = left.find_dtype()
-        AxisReduce.__init__(self, ufunc, name, None, right.shape, rdtype,
-                            left, right, dim)
-        # There must be a better way than these intermediate variables
-        # as we traverse the array, but since order can be left-right
-        # or left may be a slice, I couldn't think of how to do it.
-        # best_val is probably necessary: it hold the current best
-        # curr_index is the shape of left (the output value) 
-        #    If I could conveniently convert a iterator.offset to the
-        #    position along left using dim, then it could be caclulated
-        #    rather than incremented in each call to Signature.eval()
-        self.best_val = W_NDimArray(left.shape, rdtype)
-        self.curr_index = W_NDimArray(left.shape, ldtype)
 
-    def create_sig(self):
-        return signature.AxisMinMaxSignature(self.ufunc, self.name,
-                                             self.res_dtype, 
-                                 signature.ScalarSignature(self.res_dtype),
-                                             self.right.create_sig())
 class SliceArray(Call2):
     def __init__(self, shape, dtype, left, right, no_broadcast=False):
         self.no_broadcast = no_broadcast

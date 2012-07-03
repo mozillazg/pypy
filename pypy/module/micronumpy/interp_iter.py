@@ -357,3 +357,26 @@ class SkipLastAxisIterator(object):
                 self.offset -= self.arr.backstrides[i]
         else:
             self.done = True
+
+class AxisFirstIterator(object):
+    def __init__(self, arr, dim):
+        self.arr = arr
+        self.indices = [0] * len(arr.shape)
+        self.done = False
+        self.offset = arr.start
+        self.dimorder = [dim] +range(len(arr.shape)-1, dim, -1) + range(dim-1, -1, -1)
+
+    def next(self):
+        for i in self.dimorder:
+            if self.indices[i] < self.arr.shape[i] - 1:
+                self.indices[i] += 1
+                self.offset += self.arr.strides[i]
+                break
+            else:
+                self.indices[i] = 0
+                self.offset -= self.arr.backstrides[i]
+        else:
+            self.done = True
+
+    def get_dim_index(self):
+        return self.indices[0]
