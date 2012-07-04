@@ -1739,6 +1739,36 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert a.argmax() == 5
         assert a[:2, ].argmax() == 3
 
+    def test_argmax_axis(self):
+        from _numpypy import array
+        # Some random values, tested via cut-and-paste
+        # from numpy
+        vals = [57, 42, 57, 20, 81, 82, 65, 16, 52, 32,
+                24, 95, 99,  4, 86, 60, 38, 28, 67, 45,
+                68, 66, 13, 76, 98, 96, 61,  4,  0, 13,
+                94, 30, 36, 89, 31, 54, 43,  6, 58, 84,
+                15, 22, 41,  3, 49, 81, 65, 53, 85, 14, 
+                56, 37, 60, 11, 77, 9, 16, 80, 94, 43]
+        a = array(vals).reshape(5,3,4)
+        b = a.argmax(0)
+        assert (b == [[1, 2, 1, 3],
+                      [0, 0, 2, 1],
+                      [1, 2, 4, 0]]).all()
+        b = a.argmax(1)
+        assert (b == [[1, 1, 1, 2],
+                      [0, 2, 0, 2],
+                      [0, 0, 1, 2],
+                      [2, 2, 2, 0],
+                      [0, 2, 2, 2]]).all()
+        b = a.argmax(2)
+        assert (b == [[0, 1, 3], [0, 2, 3],
+                      [0, 2, 1], [3, 2, 1],
+                      [0, 2, 2]]).all()
+        b = a[:,2,:].argmax(1)
+        assert(b == [3, 3, 1, 1, 2]).all()
+
+
+
     def test_broadcast_wrong_shapes(self):
         from _numpypy import zeros
         a = zeros((4, 3, 2))

@@ -224,6 +224,9 @@ class BaseArray(Wrappable):
                 return out
             return Scalar(res_dtype, res_dtype.box(result))
         def do_axisminmax(self, space, axis, out):
+            # Use a AxisFirstIterator to walk along self, with dimensions
+            # reordered to move along 'axis' fastest. Every time 'axis' 's
+            # index is 0, move to the next value of out.
             dtype = self.find_dtype()
             source = AxisFirstIterator(self, axis)
             dest = ViewIterator(out.start, out.strides, out.backstrides, 
@@ -231,7 +234,6 @@ class BaseArray(Wrappable):
             firsttime = True
             while not source.done:
                 cur_val = self.getitem(source.offset)
-                #print 'indices are',source.indices
                 cur_index = source.get_dim_index()
                 if cur_index == 0:
                     if not firsttime:
@@ -239,13 +241,11 @@ class BaseArray(Wrappable):
                     firsttime = False    
                     cur_best = cur_val
                     out.setitem(dest.offset, dtype.box(0))
-                    #print 'setting out[',dest.offset,'] to 0'
                 else:
                     new_best = getattr(dtype.itemtype, op_name)(cur_best, cur_val)
                     if dtype.itemtype.ne(new_best, cur_best):
                         cur_best = new_best
                         out.setitem(dest.offset, dtype.box(cur_index))
-                        #print 'setting out[',dest.offset,'] to',cur_index
                 source.next()
             return out
 

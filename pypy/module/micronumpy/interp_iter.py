@@ -379,4 +379,4 @@ class AxisFirstIterator(object):
             self.done = True
 
     def get_dim_index(self):
-        return self.indices[0]
+        return self.indices[self.dimorder[0]]
