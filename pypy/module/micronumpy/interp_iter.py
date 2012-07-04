@@ -364,7 +364,10 @@ class AxisFirstIterator(object):
         self.indices = [0] * len(arr.shape)
         self.done = False
         self.offset = arr.start
-        self.dimorder = [dim] +range(len(arr.shape)-1, dim, -1) + range(dim-1, -1, -1)
+        # range is an iterator, make its result concrete
+        second_piece = [i for i in range(len(arr.shape)-1, dim, -1)]
+        third_piece = [i for i in range(dim-1, -1, -1)]
+        self.dimorder = [dim] + second_piece + third_piece
 
     def next(self):
         for i in self.dimorder:
