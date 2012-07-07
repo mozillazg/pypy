@@ -923,50 +923,50 @@ class AppTestCheckFinite(BaseNumpyAppTest):
 
 
 class AppTestNaNFuncts(BaseNumpyAppTest):
-    def setup_class(cls):
-        super(AppTestNaNFuncts, cls).setup_class()
-        cls.w_A = cls.space.appexec([], """
-            from _numpypy import array
-            return array([[[ nan, 0.01319214, 0.01620964],
-                           [ 0.11704017, nan, 0.75157887],
-                           [ 0.28333658, 0.1630199 , nan       ]],
-                          [[ 0.59541557, nan, 0.37910852],
-                           [ nan, 0.87964135, nan       ],
-                           [ 0.70543747, nan, 0.34306596]],
-                          [[ 0.72687499, 0.91084584, nan       ],
-                           [ 0.84386844, 0.38944762, 0.23913896],
-                           [ nan, 0.37068164, 0.33850425]]])
-                    """)
-        
-
+    # Helper function to make a constant.
+    # (Was used in a "def setUp(self)")
+    def _get_A(self):
+        from _numpypy import array, nan
+        return array([[[ nan, 0.01319214, 0.01620964],
+                       [ 0.11704017, nan, 0.75157887],
+                       [ 0.28333658, 0.1630199 , nan       ]],
+                      [[ 0.59541557, nan, 0.37910852],
+                       [ nan, 0.87964135, nan       ],
+                       [ 0.70543747, nan, 0.34306596]],
+                      [[ 0.72687499, 0.91084584, nan       ],
+                       [ 0.84386844, 0.38944762, 0.23913896],
+                       [ nan, 0.37068164, 0.33850425]]])
+    
     def test_nansum(self):
         from _numpypy import nansum, array
-        assert_almost_equal(nansum(self.A), 8.0664079100000006)
-        assert_almost_equal(nansum(self.A, 0),
+        A = self._get_A()
+        assert_almost_equal(nansum(A), 8.0664079100000006)
+        assert_almost_equal(nansum(A, 0),
                             array([[ 1.32229056, 0.92403798, 0.39531816],
                                    [ 0.96090861, 1.26908897, 0.99071783],
                                    [ 0.98877405, 0.53370154, 0.68157021]]))
-        assert_almost_equal(nansum(self.A, 1),
+        assert_almost_equal(nansum(A, 1),
                             array([[ 0.40037675, 0.17621204, 0.76778851],
                                    [ 1.30085304, 0.87964135, 0.72217448],
                                    [ 1.57074343, 1.6709751 , 0.57764321]]))
-        assert_almost_equal(nansum(self.A, 2),
+        assert_almost_equal(nansum(A, 2),
                             array([[ 0.02940178, 0.86861904, 0.44635648],
                                    [ 0.97452409, 0.87964135, 1.04850343],
                                    [ 1.63772083, 1.47245502, 0.70918589]]))
 
     def test_nanmin(self):
         from _numpypy import nanmin, array, nan, isnan
-        assert_almost_equal(nanmin(self.A), 0.01319214)
-        assert_almost_equal(nanmin(self.A, 0),
+        A = self._get_A()
+        assert_almost_equal(nanmin(A), 0.01319214)
+        assert_almost_equal(nanmin(A, 0),
                             array([[ 0.59541557, 0.01319214, 0.01620964],
                                    [ 0.11704017, 0.38944762, 0.23913896],
                                    [ 0.28333658, 0.1630199 , 0.33850425]]))
-        assert_almost_equal(nanmin(self.A, 1),
+        assert_almost_equal(nanmin(A, 1),
                             array([[ 0.11704017, 0.01319214, 0.01620964],
                                    [ 0.59541557, 0.87964135, 0.34306596],
                                    [ 0.72687499, 0.37068164, 0.23913896]]))
-        assert_almost_equal(nanmin(self.A, 2),
+        assert_almost_equal(nanmin(A, 2),
                             array([[ 0.01319214, 0.11704017, 0.1630199 ],
                                    [ 0.37910852, 0.87964135, 0.34306596],
                                    [ 0.72687499, 0.23913896, 0.33850425]]))
@@ -974,41 +974,40 @@ class AppTestNaNFuncts(BaseNumpyAppTest):
 
     def test_nanargmin(self):
         from _numpypy import nanargmin, array
-        assert_almost_equal(nanargmin(self.A), 1)
-        assert_almost_equal(nanargmin(self.A, 0),
-                            array([[1, 0, 0],
-                                   [0, 2, 2],
-                                   [0, 0, 2]]))
-        assert_almost_equal(nanargmin(self.A, 1),
-                            array([[1, 0, 0],
-                                   [0, 1, 2],
-                                   [0, 2, 1]]))
-        assert_almost_equal(nanargmin(self.A, 2),
-                            array([[1, 0, 1],
-                                   [2, 1, 2],
-                                   [0, 2, 2]]))
+        A = self._get_A()
+        assert nanargmin(A) == 1
+        assert (nanargmin(A, 0) == array([[1, 0, 0],
+                                          [0, 2, 2],
+                                          [0, 0, 2]])).all()
+        assert (nanargmin(A, 1) == array([[1, 0, 0],
+                                          [0, 1, 2],
+                                          [0, 2, 1]])).all()
+        assert (nanargmin(A, 2) == array([[1, 0, 1],
+                                          [2, 1, 2],
+                                          [0, 2, 2]])).all()
 
     def test_nanmax(self):
         from _numpypy import nanmax, array, nan, isnan
-        assert_almost_equal(nanmax(self.A), 0.91084584000000002)
-        assert_almost_equal(nanmax(self.A, 0),
+        A = self._get_A()
+        assert_almost_equal(nanmax(A), 0.91084584000000002)
+        assert_almost_equal(nanmax(A, 0),
                             array([[ 0.72687499, 0.91084584, 0.37910852],
                                    [ 0.84386844, 0.87964135, 0.75157887],
                                    [ 0.70543747, 0.37068164, 0.34306596]]))
-        assert_almost_equal(nanmax(self.A, 1),
+        assert_almost_equal(nanmax(A, 1),
                             array([[ 0.28333658, 0.1630199 , 0.75157887],
                                    [ 0.70543747, 0.87964135, 0.37910852],
                                    [ 0.84386844, 0.91084584, 0.33850425]]))
-        assert_almost_equal(nanmax(self.A, 2),
+        assert_almost_equal(nanmax(A, 2),
                             array([[ 0.01620964, 0.75157887, 0.28333658],
                                    [ 0.59541557, 0.87964135, 0.70543747],
                                    [ 0.91084584, 0.84386844, 0.37068164]]))
         assert isnan(nanmax([nan, nan]))
 
     def test_nanmin_allnan_on_axis(self):
-        from _numpypy import nanmin, isnan, nan
-        assert_array_equal(isnan(nanmin([[nan] * 2] * 3, axis=1)),
-                     [True, True, True])
+        from _numpypy import nanmin, isnan, nan, array
+        assert (isnan(nanmin([[nan] * 2] * 3, axis=1)) == 
+                array([True, True, True])).all()
 
     def test_nanmin_masked(self):
         from _numpypy import nan, nanmin, isinf, zeros
@@ -1020,87 +1019,97 @@ class AppTestNaNFuncts(BaseNumpyAppTest):
         assert_equal(a._mask, ctrl_mask)
         assert_equal(isinf(a), zeros((2, 4), dtype=bool))
 
-'''
 class AppTestNanFunctsIntTypes(BaseNumpyAppTest):
-
-    int_types = (int8, int16, int32, int64, uint8, uint16, uint32, uint64)
-
-    def setUp(self, *args, **kwargs):
-        self.A = array([127, 39,  93,  87, 46])
-
-    def integer_arrays(self):
-        for dtype in self.int_types:
-            yield self.A.astype(dtype)
-
     def test_nanmin(self):
-        min_value = min(self.A)
-        for A in self.integer_arrays():
-            assert_equal(nanmin(A), min_value)
+        from _numpypy import array, nanmin, min
+        from _numpypy import int8, int16, int32, int64, uint8, uint16, uint32, uint64
+        A = array([127, 39,  93,  87, 46])
+        min_value = min(A)
+        for dtype in (int8, int16, int32, int64, uint8, uint16, uint32, uint64):
+            B = A.astype(dtype)
+            assert_equal(nanmin(B), min_value)
 
     def test_nanmax(self):
-        max_value = max(self.A)
-        for A in self.integer_arrays():
-            assert_equal(nanmax(A), max_value)
+        from _numpypy import array, nanmax, max
+        from _numpypy import int8, int16, int32, int64, uint8, uint16, uint32, uint64
+        A = array([127, 39,  93,  87, 46])
+        max_value = max(A)
+        for dtype in (int8, int16, int32, int64, uint8, uint16, uint32, uint64):
+            B = A.astype(dtype)
+            assert_equal(nanmax(B), max_value)
 
     def test_nanargmin(self):
-        min_arg = argmin(self.A)
-        for A in self.integer_arrays():
-            assert_equal(nanargmin(A), min_arg)
+        from _numpypy import array, nanargmin, argmin
+        from _numpypy import int8, int16, int32, int64, uint8, uint16, uint32, uint64
+        A = array([127, 39,  93,  87, 46])
+        min_arg = argmin(A)
+        for dtype in (int8, int16, int32, int64, uint8, uint16, uint32, uint64):
+            B = A.astype(dtype)
+            assert_equal(nanargmin(B), min_arg)
 
     def test_nanargmax(self):
-        max_arg = argmax(self.A)
-        for A in self.integer_arrays():
-            assert_equal(nanargmax(A), max_arg)
-
+        from _numpypy import array, nanargmax, argmax
+        from _numpypy import int8, int16, int32, int64, uint8, uint16, uint32, uint64
+        A = array([127, 39,  93,  87, 46])
+        max_arg = argmax(A)
+        for dtype in (int8, int16, int32, int64, uint8, uint16, uint32, uint64):
+            B = A.astype(dtype)
+            assert_equal(nanargmax(B), max_arg)
 
 class AppTestCorrCoef(BaseNumpyAppTest):
-    A = array([[ 0.15391142, 0.18045767, 0.14197213],
-               [ 0.70461506, 0.96474128, 0.27906989],
-               [ 0.9297531 , 0.32296769, 0.19267156]])
-    B = array([[ 0.10377691, 0.5417086 , 0.49807457],
-               [ 0.82872117, 0.77801674, 0.39226705],
-               [ 0.9314666 , 0.66800209, 0.03538394]])
-    res1 = array([[ 1.        , 0.9379533 , -0.04931983],
-               [ 0.9379533 , 1.        , 0.30007991],
-               [-0.04931983, 0.30007991, 1.        ]])
-    res2 = array([[ 1.        , 0.9379533 , -0.04931983,
-                 0.30151751, 0.66318558, 0.51532523],
-               [ 0.9379533 , 1.        , 0.30007991,
-                 - 0.04781421, 0.88157256, 0.78052386],
-               [-0.04931983, 0.30007991, 1.        ,
-                 - 0.96717111, 0.71483595, 0.83053601],
-               [ 0.30151751, -0.04781421, -0.96717111,
-                 1.        , -0.51366032, -0.66173113],
-               [ 0.66318558, 0.88157256, 0.71483595,
-                 - 0.51366032, 1.        , 0.98317823],
-               [ 0.51532523, 0.78052386, 0.83053601,
-                 - 0.66173113, 0.98317823, 1.        ]])
+    def test_all(self):
+        from _numpypy import array, corrcoef
+        # Merge the tests together so I don't have class state.
+        A = array([[ 0.15391142, 0.18045767, 0.14197213],
+                   [ 0.70461506, 0.96474128, 0.27906989],
+                   [ 0.9297531 , 0.32296769, 0.19267156]])
+        B = array([[ 0.10377691, 0.5417086 , 0.49807457],
+                   [ 0.82872117, 0.77801674, 0.39226705],
+                   [ 0.9314666 , 0.66800209, 0.03538394]])
+        res1 = array([[ 1.        , 0.9379533 , -0.04931983],
+                   [ 0.9379533 , 1.        , 0.30007991],
+                   [-0.04931983, 0.30007991, 1.        ]])
+        res2 = array([[ 1.        , 0.9379533 , -0.04931983,
+                     0.30151751, 0.66318558, 0.51532523],
+                   [ 0.9379533 , 1.        , 0.30007991,
+                     - 0.04781421, 0.88157256, 0.78052386],
+                   [-0.04931983, 0.30007991, 1.        ,
+                     - 0.96717111, 0.71483595, 0.83053601],
+                   [ 0.30151751, -0.04781421, -0.96717111,
+                     1.        , -0.51366032, -0.66173113],
+                   [ 0.66318558, 0.88157256, 0.71483595,
+                     - 0.51366032, 1.        , 0.98317823],
+                   [ 0.51532523, 0.78052386, 0.83053601,
+                     - 0.66173113, 0.98317823, 1.        ]])
 
-    def test_simple(self):
-        assert_almost_equal(corrcoef(self.A), self.res1)
-        assert_almost_equal(corrcoef(self.A, self.B), self.res2)
+        # def test_simple(self):
+        assert_almost_equal(corrcoef(A), res1, decimal=6)
+        assert_almost_equal(corrcoef(A, B), res2, decimal=6)
 
-    def test_ddof(self):
-        assert_almost_equal(corrcoef(self.A, ddof=-1), self.res1)
-        assert_almost_equal(corrcoef(self.A, self.B, ddof=-1), self.res2)
+        # test_ddof(self):
+        assert_almost_equal(corrcoef(A, ddof=-1), res1, decimal=6)
+        assert_almost_equal(corrcoef(A, B, ddof=-1), res2, decimal=6)
 
-    def test_empty(self):
-        assert_equal(corrcoef(np.array([])).size, 0)
-        assert_equal(corrcoef(np.array([]).reshape(0, 2)).shape, (0, 2))
+        # test_empty(self):
+        assert_equal(corrcoef(array([])).size, 0)
+        assert_equal(corrcoef(array([]).reshape(0, 2)).shape, (0, 2))
 
 
 class AppTestCov(BaseNumpyAppTest):
     def test_basic(self):
-        x = np.array([[0, 2], [1, 1], [2, 0]]).T
-        assert_allclose(np.cov(x), np.array([[ 1.,-1.], [-1.,1.]]))
+        from _numpypy import array, cov
+        x = array([[0, 2], [1, 1], [2, 0]]).T
+        assert_allclose(cov(x), array([[ 1.,-1.], [-1.,1.]]))
 
     def test_empty(self):
-        assert_equal(cov(np.array([])).size, 0)
-        assert_equal(cov(np.array([]).reshape(0, 2)).shape, (0, 2))
+        from _numpypy import array, cov
+        assert_equal(cov(array([])).size, 0)
+        assert_equal(cov(array([]).reshape(0, 2)).shape, (0, 2))
 
 
 class AppTest_i0(BaseNumpyAppTest):
     def test_simple(self):
+        from _numpypy import i0, array
         assert_almost_equal(i0(0.5), array(1.0634833707413234))
         A = array([ 0.49842636, 0.6969809 , 0.22011976, 0.0155549])
         assert_almost_equal(i0(A),
@@ -1120,6 +1129,7 @@ class AppTest_i0(BaseNumpyAppTest):
 
 class AppTestKaiser(BaseNumpyAppTest):
     def test_simple(self):
+        from _numpypy import array, kaiser, isfinite
         assert_almost_equal(kaiser(0, 1.0), array([]))
         assert isfinite(kaiser(1, 1.0))
         assert_almost_equal(kaiser(2, 1.0), array([ 0.78984831, 0.78984831]))
@@ -1131,11 +1141,14 @@ class AppTestKaiser(BaseNumpyAppTest):
                                     0.88409679, 0.58285404]))
 
     def test_int_beta(self):
-        kaiser(3, 4)
+        from _numpypy import array, kaiser
+        assert_almost_equal(kaiser(3, 4),
+                            array([0.08848053,  1.0, 0.08848053]))
 
 
 class AppTestMsort(BaseNumpyAppTest):
     def test_simple(self):
+        from _numpypy import array, msort
         A = array([[ 0.44567325, 0.79115165, 0.5490053 ],
                    [ 0.36844147, 0.37325583, 0.96098397],
                    [ 0.64864341, 0.52929049, 0.39172155]])
@@ -1147,6 +1160,7 @@ class AppTestMsort(BaseNumpyAppTest):
 
 class AppTestMeshgrid(BaseNumpyAppTest):
     def test_simple(self):
+        from _numpypy import meshgrid, array, all
         [X, Y] = meshgrid([1, 2, 3], [4, 5, 6, 7])
         assert all(X == array([[1, 2, 3],
                                [1, 2, 3],
@@ -1160,43 +1174,46 @@ class AppTestMeshgrid(BaseNumpyAppTest):
 
 class AppTestPiecewise(BaseNumpyAppTest):
     def test_simple(self):
+        from _numpypy import piecewise, array
         # Condition is single bool list
         x = piecewise([0, 0], [True, False], [1])
-        assert_array_equal(x, [1, 0])
+        assert_array_equal(x, array([1, 0]))
 
         # List of conditions: single bool list
         x = piecewise([0, 0], [[True, False]], [1])
-        assert_array_equal(x, [1, 0])
+        assert_array_equal(x, array([1, 0]))
 
         # Conditions is single bool array
         x = piecewise([0, 0], array([True, False]), [1])
-        assert_array_equal(x, [1, 0])
+        assert_array_equal(x, array([1, 0]))
 
         # Condition is single int array
         x = piecewise([0, 0], array([1, 0]), [1])
-        assert_array_equal(x, [1, 0])
+        assert_array_equal(x, array([1, 0]))
 
         # List of conditions: int array
         x = piecewise([0, 0], [array([1, 0])], [1])
-        assert_array_equal(x, [1, 0])
+        assert_array_equal(x, array([1, 0]))
 
 
         x = piecewise([0, 0], [[False, True]], [lambda x:-1])
-        assert_array_equal(x, [0, -1])
+        assert_array_equal(x, array([0, -1]))
 
         x = piecewise([1, 2], [[True, False], [False, True]], [3, 4])
-        assert_array_equal(x, [3, 4])
+        assert_array_equal(x, array([3, 4]))
 
     def test_default(self):
+        from _numpypy import piecewise, array
         # No value specified for x[1], should be 0
         x = piecewise([1, 2], [True, False], [2])
-        assert_array_equal(x, [2, 0])
+        assert_array_equal(x, array([2, 0]))
 
         # Should set x[1] to 3
         x = piecewise([1, 2], [True, False], [2, 3])
-        assert_array_equal(x, [2, 3])
+        assert_array_equal(x, array([2, 3]))
 
     def test_0d(self):
+        from _numpypy import array, piecewise
         x = array(3)
         y = piecewise(x, x > 3, [4, 0])
         assert y.ndim == 0
@@ -1205,128 +1222,139 @@ class AppTestPiecewise(BaseNumpyAppTest):
 
 class AppTestBincount(BaseNumpyAppTest):
     def test_simple(self):
-        y = np.bincount(np.arange(4))
-        assert_array_equal(y, np.ones(4))
+        from _numpypy import bincount, arange, ones
+        y = bincount(arange(4))
+        assert_array_equal(y, ones(4))
 
     def test_simple2(self):
-        y = np.bincount(np.array([1, 5, 2, 4, 1]))
-        assert_array_equal(y, np.array([0, 2, 1, 0, 1, 1]))
+        from _numpypy import bincount, array
+        y = bincount(array([1, 5, 2, 4, 1]))
+        assert_array_equal(y, array([0, 2, 1, 0, 1, 1]))
 
     def test_simple_weight(self):
-        x = np.arange(4)
-        w = np.array([0.2, 0.3, 0.5, 0.1])
-        y = np.bincount(x, w)
+        from _numpypy import arange, array, bincount
+        x = arange(4)
+        w = array([0.2, 0.3, 0.5, 0.1])
+        y = bincount(x, w)
         assert_array_equal(y, w)
 
     def test_simple_weight2(self):
-        x = np.array([1, 2, 4, 5, 2])
-        w = np.array([0.2, 0.3, 0.5, 0.1, 0.2])
-        y = np.bincount(x, w)
-        assert_array_equal(y, np.array([0, 0.2, 0.5, 0, 0.5, 0.1]))
+        from _numpypy import array, bincount
+        x = array([1, 2, 4, 5, 2])
+        w = array([0.2, 0.3, 0.5, 0.1, 0.2])
+        y = bincount(x, w)
+        assert_array_equal(y, array([0, 0.2, 0.5, 0, 0.5, 0.1]))
 
     def test_with_minlength(self):
-        x = np.array([0, 1, 0, 1, 1])
-        y = np.bincount(x, minlength=3)
-        assert_array_equal(y, np.array([2, 3, 0]))
+        from _numpypy import array, bincount
+        x = array([0, 1, 0, 1, 1])
+        y = bincount(x, minlength=3)
+        assert_array_equal(y, array([2, 3, 0]))
 
     def test_with_minlength_smaller_than_maxvalue(self):
-        x = np.array([0, 1, 1, 2, 2, 3, 3])
-        y = np.bincount(x, minlength=2)
-        assert_array_equal(y, np.array([1, 2, 2, 2]))
+        from _numpypy import array, bincount
+        x = array([0, 1, 1, 2, 2, 3, 3])
+        y = bincount(x, minlength=2)
+        assert_array_equal(y, array([1, 2, 2, 2]))
 
     def test_with_minlength_and_weights(self):
-        x = np.array([1, 2, 4, 5, 2])
-        w = np.array([0.2, 0.3, 0.5, 0.1, 0.2])
-        y = np.bincount(x, w, 8)
-        assert_array_equal(y, np.array([0, 0.2, 0.5, 0, 0.5, 0.1, 0, 0]))
+        from _numpypy import array, bincount        
+        x = array([1, 2, 4, 5, 2])
+        w = array([0.2, 0.3, 0.5, 0.1, 0.2])
+        y = bincount(x, w, 8)
+        assert_array_equal(y, array([0, 0.2, 0.5, 0, 0.5, 0.1, 0, 0]))
 
     def test_empty(self):
-        x = np.array([], dtype=int)
-        y = np.bincount(x)
+        from _numpypy import array, bincount
+        x = array([], dtype=int)
+        y = bincount(x)
         assert_array_equal(x,y)
 
     def test_empty_with_minlength(self):
-        x = np.array([], dtype=int)
-        y = np.bincount(x, minlength=5)
-        assert_array_equal(y, np.zeros(5, dtype=int))
+        from _numpypy import array, bincount, zeros        
+        x = array([], dtype=int)
+        y = bincount(x, minlength=5)
+        assert_array_equal(y, zeros(5, dtype=int))
 
 
 class AppTestInterp(BaseNumpyAppTest):
     def test_exceptions(self):
+        from _numpypy import interp
         assert_raises(ValueError, interp, 0, [], [])
         assert_raises(ValueError, interp, 0, [0], [1, 2])
 
     def test_basic(self):
-        x = np.linspace(0, 1, 5)
-        y = np.linspace(0, 1, 5)
-        x0 = np.linspace(0, 1, 50)
-        assert_almost_equal(np.interp(x0, x, y), x0)
+        from _numpypy import linspace, interp
+        x = linspace(0, 1, 5)
+        y = linspace(0, 1, 5)
+        x0 = linspace(0, 1, 50)
+        assert_almost_equal(interp(x0, x, y), x0)
 
     def test_right_left_behavior(self):
+        from _numpypy import interp
         assert_equal(interp([-1, 0, 1], [0], [1]), [1,1,1])
         assert_equal(interp([-1, 0, 1], [0], [1], left=0), [0,1,1])
         assert_equal(interp([-1, 0, 1], [0], [1], right=0), [1,1,0])
         assert_equal(interp([-1, 0, 1], [0], [1], left=0, right=0), [0,1,0])
 
     def test_scalar_interpolation_point(self):
-        x = np.linspace(0, 1, 5)
-        y = np.linspace(0, 1, 5)
+        from _numpypy import linspace, float32, float64, interp
+        x = linspace(0, 1, 5)
+        y = linspace(0, 1, 5)
         x0 = 0
-        assert_almost_equal(np.interp(x0, x, y), x0)
+        assert_almost_equal(interp(x0, x, y), x0)
         x0 = .3
-        assert_almost_equal(np.interp(x0, x, y), x0)
-        x0 = np.float32(.3)
-        assert_almost_equal(np.interp(x0, x, y), x0)
-        x0 = np.float64(.3)
-        assert_almost_equal(np.interp(x0, x, y), x0)
+        assert_almost_equal(interp(x0, x, y), x0)
+        x0 = float32(.3)
+        assert_almost_equal(interp(x0, x, y), x0)
+        x0 = float64(.3)
+        assert_almost_equal(interp(x0, x, y), x0)
 
     def test_zero_dimensional_interpolation_point(self):
-        x = np.linspace(0, 1, 5)
-        y = np.linspace(0, 1, 5)
-        x0 = np.array(.3)
-        assert_almost_equal(np.interp(x0, x, y), x0)
-        x0 = np.array(.3, dtype=object)
-        assert_almost_equal(np.interp(x0, x, y), .3)
+        from _numpypy import linspace, array, interp
+        x = linspace(0, 1, 5)
+        y = linspace(0, 1, 5)
+        x0 = array(.3)
+        assert_almost_equal(interp(x0, x, y), x0)
+        x0 = array(.3, dtype=object)
+        assert_almost_equal(interp(x0, x, y), .3)
+
+class AppTestOtherTests(BaseNumpyAppTest):
+    def test_percentile_list(self):
+        from _numpypy import percentile
+        assert_equal(percentile([1, 2, 3], 0), 1)
+
+    def test_percentile_out(self):
+        from _numpypy import array, zeros, percentile, array, zeros
+        x = array([1, 2, 3])
+        y = zeros((3,))
+        p = (1, 2, 3)
+        percentile(x, p, out=y)
+        assert_equal(y, percentile(x, p))
+
+        x = array([[1, 2, 3],
+                   [4, 5, 6]])
+
+        y = zeros((3, 3))
+        percentile(x, p, axis=0, out=y)
+        assert_equal(y, percentile(x, p, axis=0))
+
+        y = zeros((3, 2))
+        percentile(x, p, axis=1, out=y)
+        assert_equal(y, percentile(x, p, axis=1))
 
 
-def compare_results(res, desired):
-    for i in range(len(desired)):
-        assert_array_equal(res[i], desired[i])
-
-
-def test_percentile_list():
-    assert_equal(np.percentile([1, 2, 3], 0), 1)
-
-def test_percentile_out():
-    x = np.array([1, 2, 3])
-    y = np.zeros((3,))
-    p = (1, 2, 3)
-    np.percentile(x, p, out=y)
-    assert_equal(y, np.percentile(x, p))
-
-    x = np.array([[1, 2, 3],
-                  [4, 5, 6]])
-
-    y = np.zeros((3, 3))
-    np.percentile(x, p, axis=0, out=y)
-    assert_equal(y, np.percentile(x, p, axis=0))
-
-    y = np.zeros((3, 2))
-    np.percentile(x, p, axis=1, out=y)
-    assert_equal(y, np.percentile(x, p, axis=1))
-
-
-def test_median():
-    a0 = np.array(1)
-    a1 = np.arange(2)
-    a2 = np.arange(6).reshape(2, 3)
-    assert_allclose(np.median(a0), 1)
-    assert_allclose(np.median(a1), 0.5)
-    assert_allclose(np.median(a2), 2.5)
-    assert_allclose(np.median(a2, axis=0), [1.5,  2.5,  3.5])
-    assert_allclose(np.median(a2, axis=1), [1, 4])
+    def test_median(self):
+        from _numpypy import array, arange, median
+        a0 = array(1)
+        a1 = arange(2)
+        a2 = arange(6).reshape(2, 3)
+        assert_allclose(median(a0), 1)
+        assert_allclose(median(a1), 0.5)
+        assert_allclose(median(a2), 2.5)
+        assert_allclose(median(a2, axis=0), [1.5,  2.5,  3.5])
+        assert_allclose(median(a2, axis=1), [1, 4])
 
 
 if __name__ == "__main__":
     run_module_suite()
-'''
