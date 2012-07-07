@@ -261,6 +261,40 @@ class AppTestUfuncs(BaseNumpyAppTest):
         for i in range(3):
             assert c[i] == a[i] - b[i]
 
+
+    def test_around(self):
+        from _numpypy import array, around
+        ninf, inf = float("-inf"), float("inf")
+        a = array([ninf, -1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5, inf])
+        assert ([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == around(a)).all()
+        assert ([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == around(a, 0)).all()
+        assert ([1,2,3,11] == around([1,2,3,11], decimals=1)).all()
+        assert ([0,0,0,10] == around([1,2,3,11], decimals=-1)).all()
+
+    def test_round_(self):
+        # This is the same as 'around'
+        from _numpypy import array, round_
+        ninf, inf = float("-inf"), float("inf")
+        a = array([ninf, -1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5, inf])
+        assert ([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == round_(a)).all()
+        assert ([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == round_(a, 0)).all()
+        assert ([1,2,3,11] == round_([1,2,3,11], decimals=1)).all()
+        assert ([0,0,0,10] == round_([1,2,3,11], decimals=-1)).all()
+
+    def test_rint(self):
+        # This is a subset of 'around'
+        from _numpypy import array, rint
+        ninf, inf = float("-inf"), float("inf")
+        a = array([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf])
+        assert ([ninf, -1.0, -2.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == rint(a)).all()
+        
+    def test_fix(self):
+        from _numpypy import array, fix
+        ninf, inf = float("-inf"), float("inf")
+        a = array([ninf, -1.4, -1.5, -1.0, 0.0, 1.0, 1.4, 0.5, inf])
+        assert ([ninf, -1.0, -1.0, -1.0, 0.0, 1.0, 1.0, 0.0, inf] == fix(a)).all()
+
+
     def test_floorceiltrunc(self):
         from _numpypy import array, floor, ceil, trunc
         import math
@@ -421,6 +455,52 @@ class AppTestUfuncs(BaseNumpyAppTest):
         a = array([float('nan')])
         b = arctan2(a, 0)
         assert math.isnan(b[0])
+
+    def test_hypot(self):
+        from _numpypy import array, hypot
+        a = array([3.0, 5.0, float('inf')])
+        b = array([4.0, -12.0, 10.0])
+        expected = array([5.0, 13.0, float('inf')])
+        c = hypot(a, b)
+        assert (c == expected).all()
+
+    def test_unwrap(self):
+        from _numpypy import array, unwrap, abs, pi, amax
+
+        # Simple usage
+        a = array([ 0.,  0.78539816,  1.57079633,  5.49778714,  6.28318531])
+        b = unwrap(a)
+        expected = array([ 0.,  0.78539816,  1.57079633, -0.78539816,  0.])
+        assert max(abs(b - expected)) < 0.00001
+
+        # Named parameters, using the defaults
+        a = array([ 0.,  0.78539816,  1.57079633,  5.49778714,  6.28318531])
+        b = unwrap(p=a, discont=pi, axis=-1)
+        expected = array([ 0.,  0.78539816,  1.57079633, -0.78539816,  0.])
+        assert max(abs(b - expected)) < 0.00001
+
+        # Change the discont to 2*pi
+        a = array([ 0.,  0.78539816,  1.57079633,  5.49778714,  6.28318531])
+        b = unwrap(a, 2*pi)
+        expected = array([ 0.,  0.78539816,  1.57079633, 5.49778714,  6.28318531])
+        assert max(abs(b - expected)) < 0.00001
+
+        # Change the axis to 1
+        a = array([
+            [0.,  1.0],
+            [0.78539816, 2.0],
+            [1.57079633, 3.0],
+            [5.49778714, 4.0],
+            [6.28318531, 5.0]])
+        b = unwrap(a, axis=0)
+        expected = array([
+            [0.,  1.0],
+            [0.78539816, 2.0],
+            [1.57079633, 3.0],
+            [-0.78539816, 4.0],
+            [0.0, 5.0]])
+        assert amax(abs(b - expected)) < 0.00001
+        
 
     def test_sinh(self):
         import math
