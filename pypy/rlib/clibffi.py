@@ -84,7 +84,7 @@ if not _WIN32:
     path_libffi_a = None
     if hasattr(platform, 'library_dirs_for_libffi_a'):
         path_libffi_a = find_libffi_a()
-    if path_libffi_a is not None:
+    if False and path_libffi_a is not None:
         # platforms on which we want static linking
         libraries = []
         link_files = [path_libffi_a]
