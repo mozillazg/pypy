@@ -2,7 +2,7 @@ from pypy.interpreter.baseobjspace import Wrappable
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.gateway import interp2app, unwrap_spec, NoneNotWrapped
 from pypy.interpreter.typedef import TypeDef, GetSetProperty, interp_attrproperty
-from pypy.module._numpypy import interp_boxes, interp_dtype, loop
+from pypy.module._numpypy import interp_boxes, interp_dtype
 from pypy.rlib import jit
 from pypy.rlib.rarithmetic import LONG_BIT
 from pypy.tool.sourcetools import func_with_new_name
@@ -267,15 +267,16 @@ class W_Ufunc1(W_Ufunc):
                     ",".join([str(x) for x in w_obj.shape]),
                     ",".join([str(x) for x in out.shape]),
                     )
-            w_res = Call1(self.func, self.name, out.shape, calc_dtype,
-                                         res_dtype, w_obj, out)
+        xxx
+        #compute(w_res, self.func, )
+        #    w_res = Call1(self.func, self.name, out.shape, calc_dtype,
+        #                                 res_dtype, w_obj, out)
             #Force it immediately
-            w_res.get_concrete()
-        else:
-            w_res = Call1(self.func, self.name, w_obj.shape, calc_dtype,
-                                         res_dtype, w_obj)
-        w_obj.add_invalidates(space, w_res)
-        return w_res
+        #    w_res.get_concrete()
+        #else:
+        #    w_res = Call1(self.func, self.name, w_obj.shape, calc_dtype,
+        #                                 res_dtype, w_obj)
+        #return w_res
 
 
 class W_Ufunc2(W_Ufunc):
@@ -292,8 +293,6 @@ class W_Ufunc2(W_Ufunc):
 
     @jit.unroll_safe
     def call(self, space, args_w):
-        from pypy.module._numpypy.interp_numarray import (Call2,
-            convert_to_array, Scalar, shape_agreement, BaseArray)
         if len(args_w) > 2:
             [w_lhs, w_rhs, w_out] = args_w
         else:
