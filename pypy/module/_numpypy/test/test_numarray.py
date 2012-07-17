@@ -4,7 +4,7 @@ import py
 from pypy.conftest import option
 from pypy.interpreter.error import OperationError
 from pypy.module._numpypy.appbridge import get_appbridge_cache
-from pypy.module._numpypy.interp_iter import Chunk, Chunks
+#from pypy.module._numpypy.interp_iter import Chunk, Chunks
 #from pypy.module._numpypy.interp_numarray import W_NDimArray, shape_agreement
 from pypy.module._numpypy.test.test_base import BaseNumpyAppTest
 
