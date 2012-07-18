@@ -1923,6 +1923,15 @@ class AppTestMultiDim(BaseNumpyAppTest):
         assert isinstance(i['data'][0], int)
         raises(TypeError, getattr, array(3), '__array_interface__')
 
+    def test_buffer(self):
+        from _numpypy import ndarray, array
+
+        a = array([1, 2, 3])
+        b = ndarray([3], 'i8', buffer=a.__array_interface__['data'][0])
+        assert b[1] == 2
+        b[1] = 13
+        assert a[1] == 13
+
     def test_array_indexing_one_elem(self):
         skip("not yet")
         from _numpypy import array, arange
