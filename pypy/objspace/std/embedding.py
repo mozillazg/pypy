@@ -36,8 +36,11 @@ def prepare_function(space, ll_names, ll_s):
     s = rffi.charp2str(ll_s)
     w_globals = space.fromcache(Cache).w_globals
     ec = space.getexecutioncontext()
-    code_w = ec.compiler.compile(s, '<input>', 'exec', 0)
-    code_w.exec_code(space, w_globals, w_globals)
+    try:
+        code_w = ec.compiler.compile(s, '<input>', 'exec', 0)
+        code_w.exec_code(space, w_globals, w_globals)
+    except OperationError, e:
+        e.write_unraisable(space, "compiling of functions")
 
 @export_function([rffi.CCHARP, lltype.Signed, rffi.CArrayPtr(rffi.VOIDP)],
                  rffi.VOIDP)
