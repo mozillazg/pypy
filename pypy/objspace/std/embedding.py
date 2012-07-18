@@ -1,10 +1,8 @@
 
+from pypy.rlib.entrypoint import entrypoint
 from pypy.rpython.lltypesystem import rffi, lltype
 from pypy.rpython.lltypesystem.lloperation import llop
-from pypy.interpreter.pyopcode import prepare_exec
-from pypy.interpreter.pycode import PyCode
 from pypy.interpreter.error import OperationError
-from pypy.interpreter import eval
 
 FUNCTIONS = {}
 
@@ -65,5 +63,8 @@ def call_function(space, ll_name, numargs, ll_args):
     return res
 
 def initialize(space):
-    for name, func in FUNCTIONS.iteritems():
-        pass
+    for name, (func, argtypes, restype) in FUNCTIONS.iteritems():
+        def newfunc(*args):
+            return func(space, *args)
+        deco = entrypoint("embedding", argtypes, 'pypy_' + name, relax=True)
+        deco(newfunc)
