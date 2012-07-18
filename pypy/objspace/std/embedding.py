@@ -31,8 +31,8 @@ def export_function(argtypes, restype):
         return func
     return wrapper
 
-@export_function([rffi.CArrayPtr(rffi.CCHARP), rffi.CCHARP], lltype.Void)
-def prepare_function(space, ll_names, ll_s):
+@export_function([rffi.CCHARP], lltype.Void)
+def prepare_function(space, ll_s):
     s = rffi.charp2str(ll_s)
     w_globals = space.fromcache(Cache).w_globals
     ec = space.getexecutioncontext()
