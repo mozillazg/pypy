@@ -62,10 +62,14 @@ def call_function(space, ll_name, numargs, ll_args):
         return lltype.nullptr(rffi.VOIDP)
     return res
 
+def _newfunc(space, name, func):
+    def newfunc(*args):
+        return func(space, *args)
+    newfunc.func_name = 'pypy_' + name
+    return newfunc
+
 def initialize(space):
     for name, (func, argtypes, restype) in FUNCTIONS.iteritems():
-        def newfunc(*args):
-            return func(space, *args)
-        newfunc.func_name = 'pypy_' + name
+        newfunc = _newfunc(space, name, func)
         deco = entrypoint("embedding", argtypes, 'pypy_' + name, relax=True)
         deco(newfunc)
