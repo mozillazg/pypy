@@ -54,12 +54,12 @@ def call_function(space, ll_name, numargs, ll_args):
         w_res = space.call(w_item, space.newtuple([space.wrap(i) for i in args]))
     except OperationError:
         print "Error calling the function"
-        return lltype.nullptr(rffi.VOIDP)
+        return lltype.nullptr(rffi.VOIDP.TO)
     try:
         res = space.int_w(w_res)
     except OperationError:
         print "Function did not return int"
-        return lltype.nullptr(rffi.VOIDP)
+        return lltype.nullptr(rffi.VOIDP.TO)
     return res
 
 def _newfunc(space, name, func):
