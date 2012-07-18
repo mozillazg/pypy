@@ -60,7 +60,7 @@ def call_function(space, ll_name, numargs, ll_args):
     except OperationError:
         print "Function did not return int"
         return lltype.nullptr(rffi.VOIDP.TO)
-    return res
+    return rffi.cast(rffi.VOIDP, res)
 
 def _newfunc(space, name, func):
     def newfunc(*args):
