@@ -77,12 +77,16 @@ class BaseArray(Wrappable):
         if get_numarray_cache(space).enable_invalidation:
             self.invalidates.append(other)
         
-    def descr__new__(space, w_subtype, w_size, w_dtype=None):
+    def descr__new__(space, w_subtype, w_size, w_dtype=None, w_buffer=None):
         dtype = space.interp_w(interp_dtype.W_Dtype,
             space.call_function(space.gettypefor(interp_dtype.W_Dtype), w_dtype)
         )
         shape = _find_shape(space, w_size)
-        return space.wrap(W_NDimArray(shape[:], dtype=dtype))
+        if w_buffer is not None and not space.is_w(w_buffer, space.w_None):
+            buffer = space.int_w(w_buffer)
+        else:
+            buffer = 0
+        return space.wrap(W_NDimArray(shape[:], dtype=dtype, buffer=buffer))
 
     def _unaryop_impl(ufunc_name):
         def impl(self, space, w_out=None):
@@ -1004,13 +1008,18 @@ class ConcreteArray(BaseArray):
     """
     _immutable_fields_ = ['storage']
 
-    def __init__(self, shape, dtype, order='C', parent=None):
+    def __init__(self, shape, dtype, order='C', parent=None, buffer=0):
+        from pypy.module.micronumpy.types import VOID_STORAGE
+        
         self.parent = parent
         self.size = support.product(shape) * dtype.get_size()
         if parent is not None:
             self.storage = parent.storage
         else:
-            self.storage = dtype.itemtype.malloc(self.size)
+            if buffer != 0:
+                self.storage = rffi.cast(lltype.Ptr(VOID_STORAGE), buffer)
+            else:
+                self.storage = dtype.itemtype.malloc(self.size)
         self.order = order
         self.dtype = dtype
         if self.strides is None:
