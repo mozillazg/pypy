@@ -13,7 +13,6 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.translator.tool.cbuild import ExternalCompilationInfo
 from pypy.translator.gensupp import NameManager
 from pypy.tool.udir import udir
-from pypy.translator import platform
 from pypy.module.cpyext.state import State
 from pypy.interpreter.error import OperationError, operationerrfmt
 from pypy.interpreter.baseobjspace import W_Root

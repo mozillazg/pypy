@@ -84,6 +84,10 @@ class StdObjSpace(ObjSpace, DescrOperation):
             transparent.setup(self)
 
         self.setup_isinstance_cache()
+        # setup embedding API if enabled
+        if self.config.objspace.std.withembeddingapi:
+            from pypy.objspace.std import embedding
+            embedding.initialize(self)
 
     def get_builtin_types(self):
         return self.builtin_types
