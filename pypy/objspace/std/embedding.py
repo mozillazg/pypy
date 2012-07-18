@@ -66,5 +66,6 @@ def initialize(space):
     for name, (func, argtypes, restype) in FUNCTIONS.iteritems():
         def newfunc(*args):
             return func(space, *args)
+        newfunc.func_name = 'pypy_' + name
         deco = entrypoint("embedding", argtypes, 'pypy_' + name, relax=True)
         deco(newfunc)
