@@ -348,7 +348,8 @@ pypy_optiondescription = OptionDescription("objspace", "Object Space Options", [
                    requires=[("translation.rweakref", True)]),
         BoolOption("withembeddingapi",
                    "enable embedding API",
-                   default=True),
+                   default=True,
+                   requires=[("translation.secondaryentrypoints", "embedding")]),
         
      ]),
 ])
