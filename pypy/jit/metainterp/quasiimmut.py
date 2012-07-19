@@ -111,7 +111,7 @@ class QuasiImmutDescr(AbstractDescr):
         self.mutatefielddescr = mutatefielddescr
         gcref = structbox.getref_base()
         self.qmut = get_current_qmut_instance(cpu, gcref, mutatefielddescr)
-        self.constantfieldbox = self.get_current_constant_fieldvalue()
+        #self.constantfieldbox = self.get_current_constant_fieldvalue()
 
     def get_current_constant_fieldvalue(self):
         from pypy.jit.metainterp import executor

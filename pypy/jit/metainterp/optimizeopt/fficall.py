@@ -111,7 +111,7 @@ class OptFfiCall(Optimization):
         self.rollback_maybe('invalid op', op)
         Optimization.emit_operation(self, op)
 
-    def optimize_CALL(self, op):
+    def optimize_CALL_i(self, op):
         oopspec = self._get_oopspec(op)
         ops = [op]
         if oopspec == EffectInfo.OS_LIBFFI_PREPARE:
@@ -129,8 +129,14 @@ class OptFfiCall(Optimization):
         #
         for op in ops:
             self.emit_operation(op)
+    optimize_CALL_f = optimize_CALL_i
+    optimize_CALL_p = optimize_CALL_i
+    optimize_CALL_N = optimize_CALL_i
 
-    optimize_CALL_MAY_FORCE = optimize_CALL
+    optimize_CALL_MAY_FORCE_i = optimize_CALL_i
+    optimize_CALL_MAY_FORCE_p = optimize_CALL_i
+    optimize_CALL_MAY_FORCE_N = optimize_CALL_i
+    optimize_CALL_MAY_FORCE_f = optimize_CALL_i
 
     def optimize_FORCE_TOKEN(self, op):
         # The handling of force_token needs a bit of explanation.

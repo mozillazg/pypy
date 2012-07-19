@@ -56,7 +56,7 @@ class OptPure(Optimization):
         if nextop:
             self.emit_operation(nextop)
 
-    def optimize_CALL_PURE(self, op):
+    def optimize_CALL_PURE_i(self, op):
         args = self.optimizer.make_args_key(op)
         oldop = self.pure_operations.get(args, None)
         if oldop is not None and oldop.getdescr() is op.getdescr():
@@ -74,6 +74,9 @@ class OptPure(Optimization):
         args = op.getarglist()
         self.emit_operation(ResOperation(rop.CALL, args, op.result,
                                          op.getdescr()))
+    optimize_CALL_PURE_f = optimize_CALL_PURE_i
+    optimize_CALL_PURE_p = optimize_CALL_PURE_i
+    optimize_CALL_PURE_N = optimize_CALL_PURE_i
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:

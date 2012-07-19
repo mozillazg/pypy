@@ -437,7 +437,7 @@ class OptVirtualize(optimizer.Optimization):
         # will work too (but just be a little pointless, as the structure
         # was already forced).
 
-    def optimize_GETFIELD_GC(self, op):
+    def optimize_GETFIELD_GC_i(self, op):
         value = self.getvalue(op.getarg(0))
         # If this is an immutable field (as indicated by op.is_always_pure())
         # then it's safe to reuse the virtual's field, even if it has been
@@ -456,10 +456,14 @@ class OptVirtualize(optimizer.Optimization):
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
+    optimize_GETFIELD_GC_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
     # note: the following line does not mean that the two operations are
     # completely equivalent, because GETFIELD_GC_PURE is_always_pure().
-    optimize_GETFIELD_GC_PURE = optimize_GETFIELD_GC
+    optimize_GETFIELD_GC_PURE_i = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_PURE_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_i
 
     def optimize_SETFIELD_GC(self, op):
         value = self.getvalue(op.getarg(0))
@@ -499,7 +503,7 @@ class OptVirtualize(optimizer.Optimization):
             ###self.optimize_default(op)
             self.emit_operation(op)
 
-    def optimize_GETARRAYITEM_GC(self, op):
+    def optimize_GETARRAYITEM_GC_i(self, op):
         value = self.getvalue(op.getarg(0))
         if value.is_virtual():
             indexbox = self.get_constant_box(op.getarg(1))
@@ -509,10 +513,14 @@ class OptVirtualize(optimizer.Optimization):
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
+    optimize_GETARRAYITEM_GC_p = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_f = optimize_GETARRAYITEM_GC_i
 
     # note: the following line does not mean that the two operations are
     # completely equivalent, because GETARRAYITEM_GC_PURE is_always_pure().
-    optimize_GETARRAYITEM_GC_PURE = optimize_GETARRAYITEM_GC
+    optimize_GETARRAYITEM_GC_PURE_i = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_i
 
     def optimize_SETARRAYITEM_GC(self, op):
         value = self.getvalue(op.getarg(0))
@@ -524,7 +532,7 @@ class OptVirtualize(optimizer.Optimization):
         value.ensure_nonnull()
         self.emit_operation(op)
 
-    def optimize_GETINTERIORFIELD_GC(self, op):
+    def optimize_GETINTERIORFIELD_GC_i(self, op):
         value = self.getvalue(op.getarg(0))
         if value.is_virtual():
             indexbox = self.get_constant_box(op.getarg(1))
@@ -539,6 +547,8 @@ class OptVirtualize(optimizer.Optimization):
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
+    optimize_GETINTERIORFIELD_GC_p = optimize_GETINTERIORFIELD_GC_i
+    optimize_GETINTERIORFIELD_GC_f = optimize_GETINTERIORFIELD_GC_i
 
     def optimize_SETINTERIORFIELD_GC(self, op):
         value = self.getvalue(op.getarg(0))

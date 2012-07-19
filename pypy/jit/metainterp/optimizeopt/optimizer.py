@@ -249,7 +249,7 @@ CVAL_ZERO    = ConstantValue(CONST_0)
 CVAL_ZERO_FLOAT = ConstantValue(Const._new(0.0))
 llhelper.CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
 oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
-REMOVED = AbstractResOp(None)
+REMOVED = AbstractResOp()
 
 
 class Optimization(object):
@@ -631,12 +631,14 @@ class Optimizer(Optimization):
     def optimize_DEBUG_MERGE_POINT(self, op):
         self.emit_operation(op)
 
-    def optimize_GETARRAYITEM_GC_PURE(self, op):
+    def optimize_GETARRAYITEM_GC_PURE_i(self, op):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
             arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
         self.optimize_default(op)
+    optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_PURE_i
+    optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_PURE_i    
 
     def optimize_STRGETITEM(self, op):
         indexvalue = self.getvalue(op.getarg(1))
@@ -655,8 +657,10 @@ class Optimizer(Optimization):
     # These are typically removed already by OptRewrite, but it can be
     # dissabled and unrolling emits some SAME_AS ops to setup the
     # optimizier state. These needs to always be optimized out.
-    def optimize_SAME_AS(self, op):
+    def optimize_SAME_AS_i(self, op):
         self.make_equal_to(op.result, self.getvalue(op.getarg(0)))
+    optimize_SAME_AS_f = optimize_SAME_AS_i
+    optimize_SAME_AS_p = optimize_SAME_AS_i
 
     def optimize_MARK_OPAQUE_PTR(self, op):
         value = self.getvalue(op.getarg(0))

@@ -5,7 +5,10 @@ from pypy.rpython.lltypesystem.lltype import typeOf
 @specialize.arg(0)
 def ResOperation(opnum, args, result, descr=None):
     cls = opclasses[opnum]
-    op = cls(result)
+    if result is None:
+        op = cls()
+    else:
+        op = cls(result)
     op.initarglist(args)
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
@@ -459,7 +462,7 @@ _oplist = [
     'FLOAT_ABS/1/f',
     'CAST_FLOAT_TO_INT/1/i',          # don't use for unsigned ints; we would
     'CAST_INT_TO_FLOAT/1/f',          # need some messy code in the backend
-    'CAST_FLOAT_TO_SINGLEFLOAT/1/f',
+    'CAST_FLOAT_TO_SINGLEFLOAT/1/i',
     'CAST_SINGLEFLOAT_TO_FLOAT/1/f',
     'CONVERT_FLOAT_BYTES_TO_LONGLONG/1/f',
     'CONVERT_LONGLONG_BYTES_TO_FLOAT/1/f',
@@ -559,8 +562,8 @@ _oplist = [
     #'OOSEND',                     # ootype operation
     #'OOSEND_PURE',                # ootype operation
     'CALL_PURE/*d/*',             # removed before it's passed to the backend
-    'CALL_MALLOC_GC/*d/*',      # like CALL, but NULL => propagate MemoryError
-    'CALL_MALLOC_NURSERY/1/*',  # nursery malloc, const number of bytes, zeroed
+    'CALL_MALLOC_GC/*d/p',      # like CALL, but NULL => propagate MemoryError
+    'CALL_MALLOC_NURSERY/1/p',  # nursery malloc, const number of bytes, zeroed
     '_CALL_LAST',
     '_CANRAISE_LAST', # ----- end of can_raise operations -----
 
@@ -655,7 +658,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
 
     if tp == '*':
         res = []
-        for tp in ['f', 'p', 'i']:
+        for tp in ['f', 'p', 'i', 'N']:
             cls_name = '%s_OP_%s' % (name, tp)
             bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
             dic = {'opnum': opnum}

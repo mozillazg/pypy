@@ -364,7 +364,7 @@ class OptHeap(Optimization):
                 cf.force_lazy_setfield(self)
         return pendingfields
 
-    def optimize_GETFIELD_GC(self, op):
+    def optimize_GETFIELD_GC_i(self, op):
         structvalue = self.getvalue(op.getarg(0))
         cf = self.field_cache(op.getdescr())
         fieldvalue = cf.getfield_from_cache(self, structvalue)
@@ -377,8 +377,10 @@ class OptHeap(Optimization):
         # then remember the result of reading the field
         fieldvalue = self.getvalue(op.result)
         cf.remember_field_value(structvalue, fieldvalue, op)
+    optimize_GETFIELD_GC_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
-    def optimize_GETFIELD_GC_PURE(self, op):
+    def optimize_GETFIELD_GC_PURE_i(self, op):
         structvalue = self.getvalue(op.getarg(0))
         cf = self.field_cache(op.getdescr())
         fieldvalue = cf.getfield_from_cache(self, structvalue)
@@ -388,6 +390,8 @@ class OptHeap(Optimization):
         # default case: produce the operation
         structvalue.ensure_nonnull()
         self.emit_operation(op)
+    optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_PURE_i
+    optimize_GETFIELD_GC_PURE_p = optimize_GETFIELD_GC_PURE_i
 
     def optimize_SETFIELD_GC(self, op):
         if self.has_pure_result(rop.GETFIELD_GC_PURE, [op.getarg(0)],
@@ -400,7 +404,7 @@ class OptHeap(Optimization):
         cf.do_setfield(self, op)
         
 
-    def optimize_GETARRAYITEM_GC(self, op):
+    def optimize_GETARRAYITEM_GC_i(self, op):
         arrayvalue = self.getvalue(op.getarg(0))
         indexvalue = self.getvalue(op.getarg(1))
         cf = None
@@ -422,8 +426,10 @@ class OptHeap(Optimization):
         if cf is not None:
             fieldvalue = self.getvalue(op.result)
             cf.remember_field_value(arrayvalue, fieldvalue, op)
+    optimize_GETARRAYITEM_GC_p = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_f = optimize_GETARRAYITEM_GC_i
 
-    def optimize_GETARRAYITEM_GC_PURE(self, op):
+    def optimize_GETARRAYITEM_GC_PURE_i(self, op):
         arrayvalue = self.getvalue(op.getarg(0))
         indexvalue = self.getvalue(op.getarg(1))
         cf = None
@@ -441,6 +447,8 @@ class OptHeap(Optimization):
         # default case: produce the operation
         arrayvalue.ensure_nonnull()
         self.emit_operation(op)
+    optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_PURE_i
+    optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_PURE_i
 
     def optimize_SETARRAYITEM_GC(self, op):
         if self.has_pure_result(rop.GETARRAYITEM_GC_PURE, [op.getarg(0),
