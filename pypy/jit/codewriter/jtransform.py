@@ -536,7 +536,7 @@ class Transformer(object):
             # XXX only strings or simple arrays for now
             ARRAY = op.args[0].value
             arraydescr = self.cpu.arraydescrof(ARRAY)
-            return SpaceOperation('new_array', [arraydescr, op.args[2]],
+            return SpaceOperation('new_array', [op.args[2], arraydescr],
                                   op.result)
 
     def rewrite_op_free(self, op):
@@ -569,7 +569,7 @@ class Transformer(object):
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.result.concretetype)
         return SpaceOperation('getarrayitem_%s_%s' % (ARRAY._gckind, kind[0]),
-                              [op.args[0], arraydescr, op.args[1]],
+                              [op.args[0], op.args[1], arraydescr],
                               op.result)
 
     def rewrite_op_setarrayitem(self, op):
@@ -1459,7 +1459,7 @@ class Transformer(object):
         if pure:
             extra = 'pure_' + extra
         op = SpaceOperation('getarrayitem_gc_%s' % extra,
-                            [args[0], arraydescr, v_index], op.result)
+                            [args[0], v_index, arraydescr], op.result)
         return extraop + [op]
 
     def do_fixed_list_getitem_foldable(self, op, args, arraydescr):

@@ -412,14 +412,14 @@ class MIFrame(object):
 ##    def opimpl_subclassof(self, box1, box2):
 ##        self.execute(rop.SUBCLASSOF, box1, box2)
 
-    @arguments("descr", "box")
-    def opimpl_new_array(self, itemsizedescr, lengthbox):
+    @arguments("box", "descr")
+    def opimpl_new_array(self, lengthbox, itemsizedescr):
         resbox = self.execute_with_descr(rop.NEW_ARRAY, itemsizedescr, lengthbox)
         self.metainterp.heapcache.new_array(resbox, lengthbox)
         return resbox
 
     @specialize.arg(1)
-    def _do_getarrayitem_gc_any(self, op, arraybox, arraydescr, indexbox):
+    def _do_getarrayitem_gc_any(self, op, arraybox, indexbox, arraydescr):
         tobox = self.metainterp.heapcache.getarrayitem(
                 arraybox, arraydescr, indexbox)
         if tobox:
@@ -434,25 +434,27 @@ class MIFrame(object):
                 arraybox, arraydescr, indexbox, resbox)
         return resbox
 
-    @arguments("box", "descr", "box")
-    def _opimpl_getarrayitem_gc_any(self, arraybox, arraydescr, indexbox):
-        return self._do_getarrayitem_gc_any(rop.GETARRAYITEM_GC, arraybox, arraydescr, indexbox)
+    @arguments("box", "box", "descr")
+    def _opimpl_getarrayitem_gc_any(self, arraybox, indexbox, arraydescr):
+        return self._do_getarrayitem_gc_any(rop.GETARRAYITEM_GC, arraybox,
+                                            indexbox, arraydescr)
 
     opimpl_getarrayitem_gc_i = _opimpl_getarrayitem_gc_any
     opimpl_getarrayitem_gc_r = _opimpl_getarrayitem_gc_any
     opimpl_getarrayitem_gc_f = _opimpl_getarrayitem_gc_any
 
-    @arguments("box", "descr", "box")
-    def _opimpl_getarrayitem_raw_any(self, arraybox, arraydescr, indexbox):
+    @arguments("box", "box", "descr")
+    def _opimpl_getarrayitem_raw_any(self, arraybox, indexbox, arraydescr):
         return self.execute_with_descr(rop.GETARRAYITEM_RAW,
                                        arraydescr, arraybox, indexbox)
 
     opimpl_getarrayitem_raw_i = _opimpl_getarrayitem_raw_any
     opimpl_getarrayitem_raw_f = _opimpl_getarrayitem_raw_any
 
-    @arguments("box", "descr", "box")
-    def _opimpl_getarrayitem_gc_pure_any(self, arraybox, arraydescr, indexbox):
-        return self._do_getarrayitem_gc_any(rop.GETARRAYITEM_GC_PURE, arraybox, arraydescr, indexbox)
+    @arguments("box", "box", "descr")
+    def _opimpl_getarrayitem_gc_pure_any(self, arraybox, indexbox, arraydescr):
+        return self._do_getarrayitem_gc_any(rop.GETARRAYITEM_GC_PURE, arraybox,
+                                            indexbox, arraydescr)
 
     opimpl_getarrayitem_gc_pure_i = _opimpl_getarrayitem_gc_pure_any
     opimpl_getarrayitem_gc_pure_r = _opimpl_getarrayitem_gc_pure_any
@@ -505,7 +507,7 @@ class MIFrame(object):
                        sizebox):
         sbox = self.opimpl_new(structdescr)
         self._opimpl_setfield_gc_any(sbox, lengthdescr, sizebox)
-        abox = self.opimpl_new_array(arraydescr, sizebox)
+        abox = self.opimpl_new_array(sizebox, arraydescr)
         self._opimpl_setfield_gc_any(sbox, itemsdescr, abox)
         return sbox
 
@@ -514,7 +516,7 @@ class MIFrame(object):
                             arraydescr, sizehintbox):
         sbox = self.opimpl_new(structdescr)
         self._opimpl_setfield_gc_any(sbox, lengthdescr, history.CONST_FALSE)
-        abox = self.opimpl_new_array(arraydescr, sizehintbox)
+        abox = self.opimpl_new_array(sizehintbox, arraydescr)
         self._opimpl_setfield_gc_any(sbox, itemsdescr, abox)
         return sbox
 
@@ -1734,6 +1736,7 @@ class MetaInterp(object):
 
     @specialize.arg(1)
     def execute_and_record_varargs(self, opnum, argboxes, descr=None):
+        xxxx
         history.check_descr(descr)
         # execute the operation
         profiler = self.staticdata.profiler

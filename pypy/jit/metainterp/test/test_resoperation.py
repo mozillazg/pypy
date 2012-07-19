@@ -68,7 +68,7 @@ def test_instantiate():
     op = rop.ResOperation(rop.rop.CALL_p, ['a', 'b'],
                           lltype.nullptr(llmemory.GCREF.TO), descr=mydescr)
     assert op.getarglist() == ['a', 'b']
-    assert not op.getpointer()
+    assert not op.getref_base()
     assert op.getdescr() is mydescr    
 
 def test_can_malloc():

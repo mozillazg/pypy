@@ -1,6 +1,8 @@
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.lltypesystem.llmemory import GCREF
 from pypy.rpython.lltypesystem.lltype import typeOf
+from pypy.jit.codewriter import longlong
+from pypy.rlib.objectmodel import compute_identity_hash
 
 @specialize.arg(0)
 def ResOperation(opnum, args, result, descr=None):
@@ -15,8 +17,62 @@ def ResOperation(opnum, args, result, descr=None):
         op.setdescr(descr)
     return op
 
+class AbstractValue(object):
+    __slots__ = ()
 
-class AbstractResOp(object):
+    def getint(self):
+        raise NotImplementedError
+
+    def getfloatstorage(self):
+        raise NotImplementedError
+
+    def getfloat(self):
+        return longlong.getrealfloat(self.getfloatstorage())
+
+    def getlonglong(self):
+        assert longlong.supports_longlong
+        return self.getfloatstorage()
+
+    def getref_base(self):
+        raise NotImplementedError
+
+    def getref(self, TYPE):
+        raise NotImplementedError
+    getref._annspecialcase_ = 'specialize:arg(1)'
+
+    def _get_hash_(self):
+        return compute_identity_hash(self)
+
+    # XXX the interface below has to be revisited
+
+    def clonebox(self):
+        raise NotImplementedError
+
+    def constbox(self):
+        raise NotImplementedError
+
+    def nonconstbox(self):
+        raise NotImplementedError
+
+    def getaddr(self):
+        raise NotImplementedError
+
+    def sort_key(self):
+        raise NotImplementedError
+
+    def nonnull(self):
+        raise NotImplementedError
+
+    def repr_rpython(self):
+        return '%s' % self
+
+    def _get_str(self):
+        raise NotImplementedError
+
+    def same_box(self, other):
+        return self is other
+
+class AbstractResOp(AbstractValue):
     """The central ResOperation class, representing one operation."""
 
     # debug
@@ -176,15 +232,6 @@ class AbstractResOp(object):
             return False     # for tests
         return opboolresult[opnum]
 
-    def getint(self):
-        raise NotImplementedError
-
-    def getfloat(self):
-        raise NotImplementedError
-
-    def getpointer(self):
-        raise NotImplementedError
-
 class ResOpNone(object):
     _mixin_ = True
     
@@ -205,10 +252,11 @@ class ResOpFloat(object):
     _mixin_ = True
     
     def __init__(self, floatval):
-        assert isinstance(floatval, float)
+        #assert isinstance(floatval, float)
+        # XXX not sure between float or float storage
         self.floatval = floatval
 
-    def getfloat(self):
+    def getfloatstorage(self):
         return self.floatval
 
 class ResOpPointer(object):
@@ -218,7 +266,7 @@ class ResOpPointer(object):
         assert typeOf(pval) == GCREF
         self.pval = pval
 
-    def getpointer(self):
+    def getref_base(self):
         return self.pval
 
 # ===================
@@ -585,7 +633,7 @@ opname = {}      # mapping numbers to the original names, for debugging
 oparity = []     # mapping numbers to the arity of the operation or -1
 opwithdescr = [] # mapping numbers to a flag "takes a descr"
 opboolresult= [] # mapping numbers to a flag "returns a boolean"
-
+optp = []        # mapping numbers to typename of returnval 'i', 'p', 'N' or 'f'
 
 def setup(debug_print=False):
     i = 0
@@ -604,9 +652,8 @@ def setup(debug_print=False):
         if not basename.startswith('_'):
             clss = create_classes_for_op(basename, i, arity, withdescr, tp)
         else:
-            clss = []
-            setattr(rop, basename, i)
-        for cls, name in clss:
+            clss = [(None, basename, None)]
+        for cls, name, tp in clss:
             if debug_print:
                 print '%30s = %d' % (name, i)
             opname[i] = name
@@ -616,6 +663,7 @@ def setup(debug_print=False):
             oparity.append(arity)
             opwithdescr.append(withdescr)
             opboolresult.append(boolresult)
+            optp.append(tp)
             assert (len(opclasses)==len(oparity)==len(opwithdescr)
                     ==len(opboolresult))
 
@@ -662,14 +710,14 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
             cls_name = '%s_OP_%s' % (name, tp)
             bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
             dic = {'opnum': opnum}
-            res.append((type(cls_name, bases, dic), name + '_' + tp))
+            res.append((type(cls_name, bases, dic), name + '_' + tp, tp))
             opnum += 1
         return res   
     else:
         cls_name = '%s_OP' % name
         bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
         dic = {'opnum': opnum}
-        return [(type(cls_name, bases, dic), name)]
+        return [(type(cls_name, bases, dic), name, tp)]
 
 setup(__name__ == '__main__')   # print out the table when run directly
 del _oplist

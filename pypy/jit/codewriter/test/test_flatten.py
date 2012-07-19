@@ -687,9 +687,9 @@ class TestFlatten:
             array[2] = 5
             return array[2] + len(array)
         self.encoding_test(f, [], """
-            new_array <Descr>, $5 -> %r0
+            new_array $5, <Descr> -> %r0
             setarrayitem_gc_i %r0, <Descr>, $2, $5
-            getarrayitem_gc_i %r0, <Descr>, $2 -> %i0
+            getarrayitem_gc_i %r0, $2, <Descr> -> %i0
             arraylen_gc %r0, <Descr> -> %i1
             int_add %i0, %i1 -> %i2
             int_return %i2
@@ -703,7 +703,7 @@ class TestFlatten:
             x = array[2]
             return len(array)
         self.encoding_test(f, [], """
-            new_array <Descr>, $5 -> %r0
+            new_array $5, <Descr> -> %r0
             arraylen_gc %r0, <Descr> -> %i0
             int_return %i0
         """, transform=True)

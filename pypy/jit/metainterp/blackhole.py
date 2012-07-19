@@ -1110,29 +1110,29 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_v(jitcode.get_fnaddr_as_int(), jitcode.calldescr,
                              args_i, args_r, args_f)
 
-    @arguments("cpu", "d", "i", returns="r")
-    def bhimpl_new_array(cpu, arraydescr, length):
+    @arguments("cpu", "i", "d", returns="r")
+    def bhimpl_new_array(cpu, length, arraydescr):
         return cpu.bh_new_array(arraydescr, length)
 
-    @arguments("cpu", "r", "d", "i", returns="i")
-    def bhimpl_getarrayitem_gc_i(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="i")
+    def bhimpl_getarrayitem_gc_i(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_i(arraydescr, array, index)
-    @arguments("cpu", "r", "d", "i", returns="r")
-    def bhimpl_getarrayitem_gc_r(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="r")
+    def bhimpl_getarrayitem_gc_r(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_r(arraydescr, array, index)
-    @arguments("cpu", "r", "d", "i", returns="f")
-    def bhimpl_getarrayitem_gc_f(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="f")
+    def bhimpl_getarrayitem_gc_f(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_f(arraydescr, array, index)
 
     bhimpl_getarrayitem_gc_pure_i = bhimpl_getarrayitem_gc_i
     bhimpl_getarrayitem_gc_pure_r = bhimpl_getarrayitem_gc_r
     bhimpl_getarrayitem_gc_pure_f = bhimpl_getarrayitem_gc_f
 
-    @arguments("cpu", "i", "d", "i", returns="i")
-    def bhimpl_getarrayitem_raw_i(cpu, array, arraydescr, index):
+    @arguments("cpu", "i", "i", "d", returns="i")
+    def bhimpl_getarrayitem_raw_i(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_raw_i(arraydescr, array, index)
-    @arguments("cpu", "i", "d", "i", returns="f")
-    def bhimpl_getarrayitem_raw_f(cpu, array, arraydescr, index):
+    @arguments("cpu", "i", "i", "d", returns="f")
+    def bhimpl_getarrayitem_raw_f(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_raw_f(arraydescr, array, index)
 
     @arguments("cpu", "r", "d", "i", "i")

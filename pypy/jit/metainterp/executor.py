@@ -8,7 +8,7 @@ from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
 from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID, AbstractDescr
 from pypy.jit.metainterp import resoperation
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, ResOperation
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 from pypy.jit.codewriter import longlong
 
@@ -300,7 +300,8 @@ def _make_execute_list():
             # find which list to store the operation in, based on num_args
             num_args = resoperation.oparity[value]
             withdescr = resoperation.opwithdescr[value]
-            dictkey = num_args, withdescr
+            optp = resoperation.optp[value]
+            dictkey = num_args, withdescr, optp
             if dictkey not in execute_by_num_args:
                 execute_by_num_args[dictkey] = [None] * (rop._LAST+1)
             execute = execute_by_num_args[dictkey]
@@ -369,9 +370,14 @@ def make_execute_function_with_boxes(name, func):
     # Make a wrapper for 'func'.  The func is a simple bhimpl_xxx function
     # from the BlackholeInterpreter class.  The wrapper is a new function
     # that receives and returns boxed values.
-    for argtype in func.argtypes:
+    has_descr = False
+    for i, argtype in enumerate(func.argtypes):
         if argtype not in ('i', 'r', 'f', 'd', 'cpu'):
             return None
+        if argtype == 'd':
+            if i != len(func.argtypes) - 1:
+                raise AssertionError("Descr should be the last one")
+            has_descr = True
     if list(func.argtypes).count('d') > 1:
         return None
     if func.resulttype not in ('i', 'r', 'f', None):
@@ -379,25 +385,27 @@ def make_execute_function_with_boxes(name, func):
     argtypes = unrolling_iterable(func.argtypes)
     resulttype = func.resulttype
     #
-    def do(cpu, _, *argboxes):
+    def do(cpu, _, *args):
         newargs = ()
+        orig_args = args
         for argtype in argtypes:
             if argtype == 'cpu':
                 value = cpu
             elif argtype == 'd':
-                value = argboxes[-1]
+                value = args[-1]
                 assert isinstance(value, AbstractDescr)
-                argboxes = argboxes[:-1]
+                args = args[:-1]
             else:
-                argbox = argboxes[0]
-                argboxes = argboxes[1:]
-                if argtype == 'i':   value = argbox.getint()
-                elif argtype == 'r': value = argbox.getref_base()
-                elif argtype == 'f': value = argbox.getfloatstorage()
+                arg = args[0]
+                args = args[1:]
+                if argtype == 'i':   value = arg.getint()
+                elif argtype == 'r': value = arg.getref_base()
+                elif argtype == 'f': value = arg.getfloatstorage()
             newargs = newargs + (value,)
-        assert not argboxes
+        assert not args
         #
         result = func(*newargs)
+        ResOperation(opnum, orig_args, result, )
         #
         if resulttype == 'i': return BoxInt(result)
         if resulttype == 'r': return BoxPtr(result)
@@ -407,19 +415,19 @@ def make_execute_function_with_boxes(name, func):
     do.func_name = 'do_' + name
     return do
 
-def get_execute_funclist(num_args, withdescr):
+def get_execute_funclist(num_args, withdescr, tp):
     # workaround, similar to the next one
-    return EXECUTE_BY_NUM_ARGS[num_args, withdescr]
+    return EXECUTE_BY_NUM_ARGS[num_args, withdescr, tp]
 get_execute_funclist._annspecialcase_ = 'specialize:memo'
 
-def get_execute_function(opnum, num_args, withdescr):
+def get_execute_function(opnum, num_args, withdescr, tp):
     # workaround for an annotation limitation: putting this code in
     # a specialize:memo function makes sure the following line is
     # constant-folded away.  Only works if opnum and num_args are
     # constants, of course.
-    func = EXECUTE_BY_NUM_ARGS[num_args, withdescr][opnum]
-    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s, %s][%s]" % (
-        num_args, withdescr, resoperation.opname[opnum])
+    func = EXECUTE_BY_NUM_ARGS[num_args, withdescr, tp][opnum]
+    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s, %s, %s][%s]" % (
+        num_args, withdescr, tp, resoperation.opname[opnum])
     return func
 get_execute_function._annspecialcase_ = 'specialize:memo'
 
@@ -429,18 +437,19 @@ def has_descr(opnum):
 has_descr._annspecialcase_ = 'specialize:memo'
 
 
-def execute(cpu, metainterp, opnum, descr, *argboxes):
+def execute(cpu, metainterp, opnum, descr, *args):
     # only for opnums with a fixed arity
-    num_args = len(argboxes)
+    num_args = len(args)
     withdescr = has_descr(opnum)
+    tp = resoperation.optp[opnum]
     if withdescr:
         check_descr(descr)
-        argboxes = argboxes + (descr,)
+        args = args + (descr,)
     else:
         assert descr is None
-    func = get_execute_function(opnum, num_args, withdescr)
-    return func(cpu, metainterp, *argboxes)  # note that the 'argboxes' tuple
-                                             # optionally ends with the descr
+    func = get_execute_function(opnum, num_args, withdescr, tp)
+    return func(cpu, metainterp, *args)  # note that the 'args' tuple
+                                         # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(2)'
 
 def execute_varargs(cpu, metainterp, opnum, argboxes, descr):

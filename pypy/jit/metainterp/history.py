@@ -8,9 +8,8 @@ from pypy.rlib.rarithmetic import r_int64, is_valid_int
 
 from pypy.conftest import option
 
-from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.resoperation import ResOperation, rop, AbstractValue
 from pypy.jit.codewriter import heaptracker, longlong
-from pypy.rlib.objectmodel import compute_identity_hash
 import weakref
 
 # ____________________________________________________________
@@ -83,59 +82,6 @@ def repr_rpython(box, typechars):
     return '%s/%s%d' % (box._get_hash_(), typechars,
                         compute_unique_id(box))
 
-
-class AbstractValue(object):
-    __slots__ = ()
-
-    def getint(self):
-        raise NotImplementedError
-
-    def getfloatstorage(self):
-        raise NotImplementedError
-
-    def getfloat(self):
-        return longlong.getrealfloat(self.getfloatstorage())
-
-    def getlonglong(self):
-        assert longlong.supports_longlong
-        return self.getfloatstorage()
-
-    def getref_base(self):
-        raise NotImplementedError
-
-    def getref(self, TYPE):
-        raise NotImplementedError
-    getref._annspecialcase_ = 'specialize:arg(1)'
-
-    def _get_hash_(self):
-        return compute_identity_hash(self)
-
-    def clonebox(self):
-        raise NotImplementedError
-
-    def constbox(self):
-        raise NotImplementedError
-
-    def nonconstbox(self):
-        raise NotImplementedError
-
-    def getaddr(self):
-        raise NotImplementedError
-
-    def sort_key(self):
-        raise NotImplementedError
-
-    def nonnull(self):
-        raise NotImplementedError
-
-    def repr_rpython(self):
-        return '%s' % self
-
-    def _get_str(self):
-        raise NotImplementedError
-
-    def same_box(self, other):
-        return self is other
 
 class AbstractDescr(AbstractValue):
     __slots__ = ()
