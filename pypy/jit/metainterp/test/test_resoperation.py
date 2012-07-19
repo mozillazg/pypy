@@ -32,10 +32,10 @@ def test_concrete_classes():
     assert issubclass(cls, rop.BinaryOp)
     assert cls.getopnum.im_func(cls) == rop.rop.INT_ADD
 
-    cls = rop.opclasses[rop.rop.CALL]
+    cls = rop.opclasses[rop.rop.CALL_i]
     assert issubclass(cls, rop.ResOpWithDescr)
     assert issubclass(cls, rop.N_aryOp)
-    assert cls.getopnum.im_func(cls) == rop.rop.CALL
+    assert cls.getopnum.im_func(cls) == rop.rop.CALL_i
 
     cls = rop.opclasses[rop.rop.GUARD_TRUE]
     assert issubclass(cls, rop.GuardResOp)
@@ -46,31 +46,43 @@ def test_mixins_in_common_base():
     INT_ADD = rop.opclasses[rop.rop.INT_ADD]
     assert len(INT_ADD.__bases__) == 1
     BinaryPlainResOp = INT_ADD.__bases__[0]
-    assert BinaryPlainResOp.__name__ == 'BinaryPlainResOp'
-    assert BinaryPlainResOp.__bases__ == (rop.BinaryOp, rop.PlainResOp)
+    assert BinaryPlainResOp.__name__ == 'BinaryPlainResOpInt'
+    assert BinaryPlainResOp.__bases__ == (rop.BinaryOp, rop.ResOpInt,
+                                          rop.PlainResOp)
     INT_SUB = rop.opclasses[rop.rop.INT_SUB]
     assert INT_SUB.__bases__[0] is BinaryPlainResOp
 
 def test_instantiate():
-    op = rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 'c')
+    from pypy.rpython.lltypesystem import lltype, llmemory
+    
+    op = rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 15)
     assert op.getarglist() == ['a', 'b']
-    assert op.result == 'c'
+    assert op.getint() == 15
 
     mydescr = AbstractDescr()
-    op = rop.ResOperation(rop.rop.CALL, ['a', 'b'], 'c', descr=mydescr)
+    op = rop.ResOperation(rop.rop.CALL_f, ['a', 'b'], 15.5, descr=mydescr)
     assert op.getarglist() == ['a', 'b']
-    assert op.result == 'c'
+    assert op.getfloat() == 15.5
     assert op.getdescr() is mydescr
 
+    op = rop.ResOperation(rop.rop.CALL_p, ['a', 'b'],
+                          lltype.nullptr(llmemory.GCREF.TO), descr=mydescr)
+    assert op.getarglist() == ['a', 'b']
+    assert not op.getpointer()
+    assert op.getdescr() is mydescr    
+
 def test_can_malloc():
+    from pypy.rpython.lltypesystem import lltype, llmemory
+
     mydescr = AbstractDescr()
-    assert rop.ResOperation(rop.rop.NEW, [], 'b').can_malloc()
-    call = rop.ResOperation(rop.rop.CALL, ['a', 'b'], 'c', descr=mydescr)
+    p = lltype.malloc(llmemory.GCREF.TO)
+    assert rop.ResOperation(rop.rop.NEW, [], p).can_malloc()
+    call = rop.ResOperation(rop.rop.CALL_i, ['a', 'b'], 3, descr=mydescr)
     assert call.can_malloc()
-    assert not rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 'c').can_malloc()
+    assert not rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 3).can_malloc()
 
 def test_get_deep_immutable_oplist():
-    ops = [rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 'c')]
+    ops = [rop.ResOperation(rop.rop.INT_ADD, ['a', 'b'], 3)]
     newops = rop.get_deep_immutable_oplist(ops)
     py.test.raises(TypeError, "newops.append('foobar')")
     py.test.raises(TypeError, "newops[0] = 'foobar'")

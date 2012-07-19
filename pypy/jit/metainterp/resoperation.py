@@ -1,5 +1,8 @@
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.rpython.lltypesystem.llmemory import GCREF
+from pypy.rpython.lltypesystem.lltype import typeOf
 
+@specialize.arg(0)
 def ResOperation(opnum, args, result, descr=None):
     cls = opclasses[opnum]
     op = cls(result)
@@ -17,11 +20,6 @@ class AbstractResOp(object):
     name = ""
     pc = 0
     opnum = 0
-
-    _attrs_ = ('result',)
-
-    def __init__(self, result):
-        self.result = result
 
     def getopnum(self):
         return self.opnum
@@ -175,6 +173,50 @@ class AbstractResOp(object):
             return False     # for tests
         return opboolresult[opnum]
 
+    def getint(self):
+        raise NotImplementedError
+
+    def getfloat(self):
+        raise NotImplementedError
+
+    def getpointer(self):
+        raise NotImplementedError
+
+class ResOpNone(object):
+    _mixin_ = True
+    
+    def __init__(self):
+        pass # no return value
+
+class ResOpInt(object):
+    _mixin_ = True
+    
+    def __init__(self, intval):
+        assert isinstance(intval, int)
+        self.intval = intval
+
+    def getint(self):
+        return self.intval
+
+class ResOpFloat(object):
+    _mixin_ = True
+    
+    def __init__(self, floatval):
+        assert isinstance(floatval, float)
+        self.floatval = floatval
+
+    def getfloat(self):
+        return self.floatval
+
+class ResOpPointer(object):
+    _mixin_ = True
+    
+    def __init__(self, pval):
+        assert typeOf(pval) == GCREF
+        self.pval = pval
+
+    def getpointer(self):
+        return self.pval
 
 # ===================
 # Top of the hierachy
@@ -371,96 +413,96 @@ class N_aryOp(object):
 
 _oplist = [
     '_FINAL_FIRST',
-    'JUMP/*d',
-    'FINISH/*d',
+    'JUMP/*d/N',
+    'FINISH/*d/N',
     '_FINAL_LAST',
 
-    'LABEL/*d',
+    'LABEL/*d/N',
 
     '_GUARD_FIRST',
     '_GUARD_FOLDABLE_FIRST',
-    'GUARD_TRUE/1d',
-    'GUARD_FALSE/1d',
-    'GUARD_VALUE/2d',
-    'GUARD_CLASS/2d',
-    'GUARD_NONNULL/1d',
-    'GUARD_ISNULL/1d',
-    'GUARD_NONNULL_CLASS/2d',
+    'GUARD_TRUE/1d/N',
+    'GUARD_FALSE/1d/N',
+    'GUARD_VALUE/2d/N',
+    'GUARD_CLASS/2d/N',
+    'GUARD_NONNULL/1d/N',
+    'GUARD_ISNULL/1d/N',
+    'GUARD_NONNULL_CLASS/2d/N',
     '_GUARD_FOLDABLE_LAST',
-    'GUARD_NO_EXCEPTION/0d',    # may be called with an exception currently set
-    'GUARD_EXCEPTION/1d',       # may be called with an exception currently set
-    'GUARD_NO_OVERFLOW/0d',
-    'GUARD_OVERFLOW/0d',
-    'GUARD_NOT_FORCED/0d',      # may be called with an exception currently set
-    'GUARD_NOT_INVALIDATED/0d',
+    'GUARD_NO_EXCEPTION/0d/N',   # may be called with an exception currently set
+    'GUARD_EXCEPTION/1d/N',      # may be called with an exception currently set
+    'GUARD_NO_OVERFLOW/0d/N',
+    'GUARD_OVERFLOW/0d/N',
+    'GUARD_NOT_FORCED/0d/N',     # may be called with an exception currently set
+    'GUARD_NOT_INVALIDATED/0d/N',
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
     '_ALWAYS_PURE_FIRST', # ----- start of always_pure operations -----
-    'INT_ADD/2',
-    'INT_SUB/2',
-    'INT_MUL/2',
-    'INT_FLOORDIV/2',
-    'UINT_FLOORDIV/2',
-    'INT_MOD/2',
-    'INT_AND/2',
-    'INT_OR/2',
-    'INT_XOR/2',
-    'INT_RSHIFT/2',
-    'INT_LSHIFT/2',
-    'UINT_RSHIFT/2',
-    'FLOAT_ADD/2',
-    'FLOAT_SUB/2',
-    'FLOAT_MUL/2',
-    'FLOAT_TRUEDIV/2',
-    'FLOAT_NEG/1',
-    'FLOAT_ABS/1',
-    'CAST_FLOAT_TO_INT/1',          # don't use for unsigned ints; we would
-    'CAST_INT_TO_FLOAT/1',          # need some messy code in the backend
-    'CAST_FLOAT_TO_SINGLEFLOAT/1',
-    'CAST_SINGLEFLOAT_TO_FLOAT/1',
-    'CONVERT_FLOAT_BYTES_TO_LONGLONG/1',
-    'CONVERT_LONGLONG_BYTES_TO_FLOAT/1',
+    'INT_ADD/2/i',
+    'INT_SUB/2/i',
+    'INT_MUL/2/i',
+    'INT_FLOORDIV/2/i',
+    'UINT_FLOORDIV/2/i',
+    'INT_MOD/2/i',
+    'INT_AND/2/i',
+    'INT_OR/2/i',
+    'INT_XOR/2/i',
+    'INT_RSHIFT/2/i',
+    'INT_LSHIFT/2/i',
+    'UINT_RSHIFT/2/i',
+    'FLOAT_ADD/2/f',
+    'FLOAT_SUB/2/f',
+    'FLOAT_MUL/2/f',
+    'FLOAT_TRUEDIV/2/f',
+    'FLOAT_NEG/1/f',
+    'FLOAT_ABS/1/f',
+    'CAST_FLOAT_TO_INT/1/i',          # don't use for unsigned ints; we would
+    'CAST_INT_TO_FLOAT/1/f',          # need some messy code in the backend
+    'CAST_FLOAT_TO_SINGLEFLOAT/1/f',
+    'CAST_SINGLEFLOAT_TO_FLOAT/1/f',
+    'CONVERT_FLOAT_BYTES_TO_LONGLONG/1/f',
+    'CONVERT_LONGLONG_BYTES_TO_FLOAT/1/f',
     #
-    'INT_LT/2b',
-    'INT_LE/2b',
-    'INT_EQ/2b',
-    'INT_NE/2b',
-    'INT_GT/2b',
-    'INT_GE/2b',
-    'UINT_LT/2b',
-    'UINT_LE/2b',
-    'UINT_GT/2b',
-    'UINT_GE/2b',
-    'FLOAT_LT/2b',
-    'FLOAT_LE/2b',
-    'FLOAT_EQ/2b',
-    'FLOAT_NE/2b',
-    'FLOAT_GT/2b',
-    'FLOAT_GE/2b',
+    'INT_LT/2b/i',
+    'INT_LE/2b/i',
+    'INT_EQ/2b/i',
+    'INT_NE/2b/i',
+    'INT_GT/2b/i',
+    'INT_GE/2b/i',
+    'UINT_LT/2b/i',
+    'UINT_LE/2b/i',
+    'UINT_GT/2b/i',
+    'UINT_GE/2b/i',
+    'FLOAT_LT/2b/i',
+    'FLOAT_LE/2b/i',
+    'FLOAT_EQ/2b/i',
+    'FLOAT_NE/2b/i',
+    'FLOAT_GT/2b/i',
+    'FLOAT_GE/2b/i',
     #
-    'INT_IS_ZERO/1b',
-    'INT_IS_TRUE/1b',
-    'INT_NEG/1',
-    'INT_INVERT/1',
+    'INT_IS_ZERO/1b/i',
+    'INT_IS_TRUE/1b/i',
+    'INT_NEG/1/i',
+    'INT_INVERT/1/i',
     #
-    'SAME_AS/1',      # gets a Const or a Box, turns it into another Box
-    'CAST_PTR_TO_INT/1',
-    'CAST_INT_TO_PTR/1',
+    'SAME_AS/1/*',      # gets a Const or a Box, turns it into another Box
+    'CAST_PTR_TO_INT/1/i',
+    'CAST_INT_TO_PTR/1/p',
     #
-    'PTR_EQ/2b',
-    'PTR_NE/2b',
-    'INSTANCE_PTR_EQ/2b',
-    'INSTANCE_PTR_NE/2b',
+    'PTR_EQ/2b/i',
+    'PTR_NE/2b/i',
+    'INSTANCE_PTR_EQ/2b/i',
+    'INSTANCE_PTR_NE/2b/i',
     #
-    'ARRAYLEN_GC/1d',
-    'STRLEN/1',
-    'STRGETITEM/2',
-    'GETFIELD_GC_PURE/1d',
-    'GETFIELD_RAW_PURE/1d',
-    'GETARRAYITEM_GC_PURE/2d',
-    'UNICODELEN/1',
-    'UNICODEGETITEM/2',
+    'ARRAYLEN_GC/1d/i',
+    'STRLEN/1/i',
+    'STRGETITEM/2/i',
+    'GETFIELD_GC_PURE/1d/*',
+    'GETFIELD_RAW_PURE/1d/*',
+    'GETARRAYITEM_GC_PURE/2d/*',
+    'UNICODELEN/1/i',
+    'UNICODEGETITEM/2/i',
     #
     # ootype operations
     #'INSTANCEOF/1db',
@@ -468,64 +510,64 @@ _oplist = [
     #
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
 
-    'GETARRAYITEM_GC/2d',
-    'GETARRAYITEM_RAW/2d',
-    'GETINTERIORFIELD_GC/2d',
-    'GETINTERIORFIELD_RAW/2d',
-    'GETFIELD_GC/1d',
-    'GETFIELD_RAW/1d',
+    'GETARRAYITEM_GC/2d/*',
+    'GETARRAYITEM_RAW/2d/*',
+    'GETINTERIORFIELD_GC/2d/*',
+    'GETINTERIORFIELD_RAW/2d/*',
+    'GETFIELD_GC/1d/*',
+    'GETFIELD_RAW/1d/*',
     '_MALLOC_FIRST',
-    'NEW/0d',
-    'NEW_WITH_VTABLE/1',
-    'NEW_ARRAY/1d',
-    'NEWSTR/1',
-    'NEWUNICODE/1',
+    'NEW/0d/p',
+    'NEW_WITH_VTABLE/1/p',
+    'NEW_ARRAY/1d/p',
+    'NEWSTR/1/p',
+    'NEWUNICODE/1/p',
     '_MALLOC_LAST',
-    'FORCE_TOKEN/0',
-    'VIRTUAL_REF/2',         # removed before it's passed to the backend
-    'READ_TIMESTAMP/0',
-    'MARK_OPAQUE_PTR/1b',
+    'FORCE_TOKEN/0/i',
+    'VIRTUAL_REF/2/i',         # removed before it's passed to the backend
+    'READ_TIMESTAMP/0/f',
+    'MARK_OPAQUE_PTR/1b/N',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
-    'SETARRAYITEM_GC/3d',
-    'SETARRAYITEM_RAW/3d',
-    'SETINTERIORFIELD_GC/3d',
-    'SETINTERIORFIELD_RAW/3d',
-    'SETFIELD_GC/2d',
-    'SETFIELD_RAW/2d',
-    'STRSETITEM/3',
-    'UNICODESETITEM/3',
+    'SETARRAYITEM_GC/3d/N',
+    'SETARRAYITEM_RAW/3d/N',
+    'SETINTERIORFIELD_GC/3d/N',
+    'SETINTERIORFIELD_RAW/3d/N',
+    'SETFIELD_GC/2d/N',
+    'SETFIELD_RAW/2d/N',
+    'STRSETITEM/3/N',
+    'UNICODESETITEM/3/N',
     #'RUNTIMENEW/1',     # ootype operation
-    'COND_CALL_GC_WB/2d', # [objptr, newvalue] (for the write barrier)
-    'COND_CALL_GC_WB_ARRAY/3d', # [objptr, arrayindex, newvalue] (write barr.)
-    'DEBUG_MERGE_POINT/*',      # debugging only
-    'JIT_DEBUG/*',              # debugging only
-    'VIRTUAL_REF_FINISH/2',   # removed before it's passed to the backend
-    'COPYSTRCONTENT/5',       # src, dst, srcstart, dststart, length
-    'COPYUNICODECONTENT/5',
-    'QUASIIMMUT_FIELD/1d',    # [objptr], descr=SlowMutateDescr
-    'RECORD_KNOWN_CLASS/2',   # [objptr, clsptr]
-    'KEEPALIVE/1',
+    'COND_CALL_GC_WB/2d/N', # [objptr, newvalue] (for the write barrier)
+    'COND_CALL_GC_WB_ARRAY/3d/N', # [objptr, arrayindex, newvalue] (write barr.)
+    'DEBUG_MERGE_POINT/*/N',      # debugging only
+    'JIT_DEBUG/*/N',              # debugging only
+    'VIRTUAL_REF_FINISH/2/N',   # removed before it's passed to the backend
+    'COPYSTRCONTENT/5/N',       # src, dst, srcstart, dststart, length
+    'COPYUNICODECONTENT/5/N',
+    'QUASIIMMUT_FIELD/1d/N',    # [objptr], descr=SlowMutateDescr
+    'RECORD_KNOWN_CLASS/2/N',   # [objptr, clsptr]
+    'KEEPALIVE/1/N',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     '_CALL_FIRST',
-    'CALL/*d',
-    'CALL_ASSEMBLER/*d',  # call already compiled assembler
-    'CALL_MAY_FORCE/*d',
-    'CALL_LOOPINVARIANT/*d',
-    'CALL_RELEASE_GIL/*d',  # release the GIL and "close the stack" for asmgcc
+    'CALL/*d/*',
+    'CALL_ASSEMBLER/*d/*',  # call already compiled assembler
+    'CALL_MAY_FORCE/*d/*',
+    'CALL_LOOPINVARIANT/*d/*',
+    'CALL_RELEASE_GIL/*d/*',  # release the GIL and "close the stack" for asmgcc
     #'OOSEND',                     # ootype operation
     #'OOSEND_PURE',                # ootype operation
-    'CALL_PURE/*d',             # removed before it's passed to the backend
-    'CALL_MALLOC_GC/*d',      # like CALL, but NULL => propagate MemoryError
-    'CALL_MALLOC_NURSERY/1',  # nursery malloc, const number of bytes, zeroed
+    'CALL_PURE/*d/*',             # removed before it's passed to the backend
+    'CALL_MALLOC_GC/*d/*',      # like CALL, but NULL => propagate MemoryError
+    'CALL_MALLOC_NURSERY/1/*',  # nursery malloc, const number of bytes, zeroed
     '_CALL_LAST',
     '_CANRAISE_LAST', # ----- end of can_raise operations -----
 
     '_OVF_FIRST', # ----- start of is_ovf operations -----
-    'INT_ADD_OVF/2',
-    'INT_SUB_OVF/2',
-    'INT_MUL_OVF/2',
+    'INT_ADD_OVF/2/i',
+    'INT_SUB_OVF/2/i',
+    'INT_MUL_OVF/2/i',
     '_OVF_LAST', # ----- end of is_ovf operations -----
     '_LAST',     # for the backend to add more internal operations
 ]
@@ -543,11 +585,10 @@ opboolresult= [] # mapping numbers to a flag "returns a boolean"
 
 
 def setup(debug_print=False):
-    for i, name in enumerate(_oplist):
-        if debug_print:
-            print '%30s = %d' % (name, i)
-        if '/' in name:
-            name, arity = name.split('/')
+    i = 0
+    for basename in _oplist:
+        if '/' in basename:
+            basename, arity, tp = basename.split('/')
             withdescr = 'd' in arity
             boolresult = 'b' in arity
             arity = arity.rstrip('db')
@@ -556,38 +597,51 @@ def setup(debug_print=False):
             else:
                 arity = int(arity)
         else:
-            arity, withdescr, boolresult = -1, True, False       # default
-        setattr(rop, name, i)
-        if not name.startswith('_'):
-            opname[i] = name
-            cls = create_class_for_op(name, i, arity, withdescr)
+            arity, withdescr, boolresult, tp = -1, True, False, "N"  # default
+        if not basename.startswith('_'):
+            clss = create_classes_for_op(basename, i, arity, withdescr, tp)
         else:
-            cls = None
-        opclasses.append(cls)
-        oparity.append(arity)
-        opwithdescr.append(withdescr)
-        opboolresult.append(boolresult)
-    assert len(opclasses)==len(oparity)==len(opwithdescr)==len(opboolresult)==len(_oplist)
+            clss = []
+            setattr(rop, basename, i)
+        for cls, name in clss:
+            if debug_print:
+                print '%30s = %d' % (name, i)
+            opname[i] = name
+            setattr(rop, name, i)
+            i += 1
+            opclasses.append(cls)
+            oparity.append(arity)
+            opwithdescr.append(withdescr)
+            opboolresult.append(boolresult)
+            assert (len(opclasses)==len(oparity)==len(opwithdescr)
+                    ==len(opboolresult))
 
-def get_base_class(mixin, base):
+def get_base_class(mixin, tpmixin, base):
     try:
-        return get_base_class.cache[(mixin, base)]
+        return get_base_class.cache[(mixin, tpmixin, base)]
     except KeyError:
         arity_name = mixin.__name__[:-2]  # remove the trailing "Op"
-        name = arity_name + base.__name__ # something like BinaryPlainResOp
-        bases = (mixin, base)
+        name = arity_name + base.__name__ + tpmixin.__name__[5:]
+        # something like BinaryPlainResOpInt
+        bases = (mixin, tpmixin, base)
         cls = type(name, bases, {})
-        get_base_class.cache[(mixin, base)] = cls
+        get_base_class.cache[(mixin, tpmixin, base)] = cls
         return cls
 get_base_class.cache = {}
 
-def create_class_for_op(name, opnum, arity, withdescr):
+def create_classes_for_op(name, opnum, arity, withdescr, tp):
     arity2mixin = {
         0: NullaryOp,
         1: UnaryOp,
         2: BinaryOp,
         3: TernaryOp
         }
+    tpmixin = {
+        'N': ResOpNone,
+        'i': ResOpInt,
+        'f': ResOpFloat,
+        'p': ResOpPointer,
+    }
 
     is_guard = name.startswith('GUARD')
     if is_guard:
@@ -599,10 +653,20 @@ def create_class_for_op(name, opnum, arity, withdescr):
         baseclass = PlainResOp
     mixin = arity2mixin.get(arity, N_aryOp)
 
-    cls_name = '%s_OP' % name
-    bases = (get_base_class(mixin, baseclass),)
-    dic = {'opnum': opnum}
-    return type(cls_name, bases, dic)
+    if tp == '*':
+        res = []
+        for tp in ['f', 'p', 'i']:
+            cls_name = '%s_OP_%s' % (name, tp)
+            bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
+            dic = {'opnum': opnum}
+            res.append((type(cls_name, bases, dic), name + '_' + tp))
+            opnum += 1
+        return res   
+    else:
+        cls_name = '%s_OP' % name
+        bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
+        dic = {'opnum': opnum}
+        return [(type(cls_name, bases, dic), name)]
 
 setup(__name__ == '__main__')   # print out the table when run directly
 del _oplist
