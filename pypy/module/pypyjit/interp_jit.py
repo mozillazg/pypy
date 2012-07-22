@@ -48,13 +48,13 @@ def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
     return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
-    reds = ['frame', 'ec']
-    greens = ['next_instr', 'is_being_profiled', 'pycode']
+    reds = ['frame', 'ec', 'next_instr', 'pycode']
+    greens = ['is_being_profiled', 'opcode']
     virtualizables = ['frame']
 
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
-                              get_jitcell_at = get_jitcell_at,
-                              set_jitcell_at = set_jitcell_at,
+#                              get_jitcell_at = get_jitcell_at,
+#                              set_jitcell_at = set_jitcell_at,
                               confirm_enter_jit = confirm_enter_jit,
                               can_never_inline = can_never_inline,
                               should_unroll_one_iteration =
@@ -69,9 +69,11 @@ class __extend__(PyFrame):
         is_being_profiled = self.is_being_profiled
         try:
             while True:
+                opcode = pycode.co_code[next_instr]
                 pypyjitdriver.jit_merge_point(ec=ec,
                     frame=self, next_instr=next_instr, pycode=pycode,
-                    is_being_profiled=is_being_profiled)
+                    is_being_profiled=is_being_profiled,
+                                              opcode=opcode)
                 co_code = pycode.co_code
                 self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
@@ -92,9 +94,9 @@ class __extend__(PyFrame):
             ec.bytecode_trace(self, decr_by)
             jumpto = r_uint(self.last_instr)
         #
-        pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
-                                    pycode=self.getcode(),
-                                    is_being_profiled=self.is_being_profiled)
+        #pypyjitdriver.can_enter_jit(frame=self, ec=ec, next_instr=jumpto,
+        #                            pycode=self.getcode(),
+        #                            is_being_profiled=self.is_being_profiled)
         return jumpto
 
 def _get_adapted_tick_counter():
