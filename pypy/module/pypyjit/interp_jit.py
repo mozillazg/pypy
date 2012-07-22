@@ -15,14 +15,14 @@ from pypy.interpreter.pyframe import PyFrame
 from pypy.interpreter.pyopcode import ExitFrame
 from opcode import opmap
 
-PyFrame._virtualizable2_ = ['last_instr', 'pycode',
-                            'valuestackdepth', 'locals_stack_w[*]',
-                            'cells[*]',
-                            'last_exception',
-                            'lastblock',
-                            'is_being_profiled',
-                            'w_globals',
-                            ]
+#PyFrame._virtualizable2_ = ['last_instr', 'pycode',
+#                            'valuestackdepth', 'locals_stack_w[*]',
+#                            'cells[*]',
+#                            'last_exception',
+#                            'lastblock',
+#                            'is_being_profiled',
+#                            'w_globals',
+#                            ]
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
 
@@ -51,7 +51,7 @@ def get_printable_location(is_profiled, co):
 class PyPyJitDriver(JitDriver):
     reds = ['next_instr', 'frame', 'ec', 'pycode']
     greens = ['is_being_profiled', 'opcode']
-    virtualizables = ['frame']
+#    virtualizables = ['frame']
 
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
 #                              get_jitcell_at = get_jitcell_at,
