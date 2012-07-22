@@ -48,7 +48,7 @@ def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
     return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
-    reds = ['frame', 'ec', 'next_instr', 'pycode']
+    reds = ['next_instr', 'frame', 'ec', 'pycode']
     greens = ['is_being_profiled', 'opcode']
     virtualizables = ['frame']
 
