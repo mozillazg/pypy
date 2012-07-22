@@ -31,21 +31,22 @@ def get_printable_location(is_profiled, co):
     name = opcode_method_names[ord(co)]
     return name
 
-def get_jitcell_at(next_instr, is_being_profiled, bytecode):
-    return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
+#def get_jitcell_at(next_instr, is_being_profiled, bytecode):
+#    return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
 
-def set_jitcell_at(newcell, next_instr, is_being_profiled, bytecode):
-    bytecode.jit_cells[next_instr, is_being_profiled] = newcell
+#def set_jitcell_at(newcell, next_instr, is_being_profiled, bytecode):
+#    bytecode.jit_cells[next_instr, is_being_profiled] = newcell
 
-def confirm_enter_jit(next_instr, is_being_profiled, bytecode, frame, ec):
-    return (frame.w_f_trace is None and
-            ec.w_tracefunc is None)
+#def confirm_enter_jit(next_instr, is_being_profiled, bytecode, frame, ec):
+#    return True
+    #return (frame.w_f_trace is None and
+    #        ec.w_tracefunc is None)
 
-def can_never_inline(next_instr, is_being_profiled, bytecode):
-    return False
+#def can_never_inline(next_instr, is_being_profiled, bytecode):
+#    return False
 
-def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
-    return (bytecode.co_flags & CO_GENERATOR) != 0
+#def should_unroll_one_iteration(next_instr, is_being_profiled, bytecode):
+#    return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
     reds = ['next_instr', 'frame', 'ec', 'pycode']
@@ -55,10 +56,10 @@ class PyPyJitDriver(JitDriver):
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
 #                              get_jitcell_at = get_jitcell_at,
 #                              set_jitcell_at = set_jitcell_at,
-                              confirm_enter_jit = confirm_enter_jit,
-                              can_never_inline = can_never_inline,
-                              should_unroll_one_iteration =
-                              should_unroll_one_iteration,
+#                              confirm_enter_jit = confirm_enter_jit,
+#                              can_never_inline = can_never_inline,
+#                              should_unroll_one_iteration =
+#                              should_unroll_one_iteration,
                               name='pypyjit')
 
 class __extend__(PyFrame):
