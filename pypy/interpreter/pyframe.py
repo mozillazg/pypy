@@ -433,7 +433,8 @@ class PyFrame(eval.Frame):
         return self.pycode.hidden_applevel
 
     def getcode(self):
-        return hint(self.pycode, promote=True)
+        return self.pycode
+        #return hint(self.pycode, promote=True)
 
     @jit.dont_look_inside
     def getfastscope(self):
