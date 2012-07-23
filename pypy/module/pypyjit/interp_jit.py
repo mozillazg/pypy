@@ -53,7 +53,7 @@ def set_jitcell_at(newcell, is_being_profiled, opcode):
 #    return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
-    reds = ['next_instr', 'frame', 'ec', 'pycode', 'prev_opcode']
+    reds = ['next_instr', 'prev_opcode', 'frame', 'ec', 'pycode']
     greens = ['is_being_profiled', 'opcode']
 #    virtualizables = ['frame']
 
