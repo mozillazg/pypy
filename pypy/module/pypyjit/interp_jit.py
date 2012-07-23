@@ -31,11 +31,15 @@ def get_printable_location(is_profiled, co):
     name = opcode_method_names[ord(co)]
     return name
 
-#def get_jitcell_at(next_instr, is_being_profiled, bytecode):
-#    return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
+ALL_JITCELLS = [None] * 255
 
-#def set_jitcell_at(newcell, next_instr, is_being_profiled, bytecode):
-#    bytecode.jit_cells[next_instr, is_being_profiled] = newcell
+def get_jitcell_at(is_being_profiled, opcode):
+    return ALL_JITCELLS[ord(opcode)]
+    #return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
+
+def set_jitcell_at(newcell, is_being_profiled, opcode):
+    #bytecode.jit_cells[next_instr, is_being_profiled] = newcell
+    ALL_JITCELLS[ord(opcode)] = newcell
 
 #def confirm_enter_jit(next_instr, is_being_profiled, bytecode, frame, ec):
 #    return True
@@ -54,8 +58,8 @@ class PyPyJitDriver(JitDriver):
 #    virtualizables = ['frame']
 
 pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
-#                              get_jitcell_at = get_jitcell_at,
-#                              set_jitcell_at = set_jitcell_at,
+                              get_jitcell_at = get_jitcell_at,
+                              set_jitcell_at = set_jitcell_at,
 #                              confirm_enter_jit = confirm_enter_jit,
 #                              can_never_inline = can_never_inline,
 #                              should_unroll_one_iteration =
@@ -130,10 +134,10 @@ class __extend__(PyCode):
 
     def _initialize(self):
         PyCode__initialize(self)
-        self.jit_cells = {}
+        #self.jit_cells = {}
 
     def _freeze_(self):
-        self.jit_cells = {}
+        #self.jit_cells = {}
         return False
 
 # ____________________________________________________________
