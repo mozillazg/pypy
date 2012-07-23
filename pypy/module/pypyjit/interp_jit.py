@@ -26,20 +26,20 @@ from opcode import opmap
 
 JUMP_ABSOLUTE = opmap['JUMP_ABSOLUTE']
 
-def get_printable_location(is_profiled, co):
-    from pypy.tool.stdlib_opcode import opcode_method_names
-    name = opcode_method_names[ord(co)]
-    return name
+#def get_printable_location(is_profiled, co):
+#    from pypy.tool.stdlib_opcode import opcode_method_names
+#    name = opcode_method_names[ord(co)]
+#    return name
 
 ALL_JITCELLS = [None] * 255
 
-def get_jitcell_at(is_being_profiled, opcode):
-    return ALL_JITCELLS[ord(opcode)]
+#def get_jitcell_at(is_being_profiled, opcode):
+#    return ALL_JITCELLS[ord(opcode)]
     #return bytecode.jit_cells.get((next_instr, is_being_profiled), None)
 
-def set_jitcell_at(newcell, is_being_profiled, opcode):
+#def set_jitcell_at(newcell, is_being_profiled, opcode):
     #bytecode.jit_cells[next_instr, is_being_profiled] = newcell
-    ALL_JITCELLS[ord(opcode)] = newcell
+#    ALL_JITCELLS[ord(opcode)] = newcell
 
 #def confirm_enter_jit(next_instr, is_being_profiled, bytecode, frame, ec):
 #    return True
@@ -53,13 +53,14 @@ def set_jitcell_at(newcell, is_being_profiled, opcode):
 #    return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
-    reds = ['next_instr', 'prev_opcode', 'frame', 'ec', 'pycode']
-    greens = ['is_being_profiled', 'opcode']
+    reds = ['next_instr', 'opcode', 'frame', 'ec', 'pycode']
+    greens = []
 #    virtualizables = ['frame']
 
-pypyjitdriver = PyPyJitDriver(get_printable_location = get_printable_location,
-                              get_jitcell_at = get_jitcell_at,
-                              set_jitcell_at = set_jitcell_at,
+pypyjitdriver = PyPyJitDriver(
+    #get_printable_location = get_printable_location,
+#                              get_jitcell_at = get_jitcell_at,
+#                              set_jitcell_at = set_jitcell_at,
 #                              confirm_enter_jit = confirm_enter_jit,
 #                              can_never_inline = can_never_inline,
 #                              should_unroll_one_iteration =
@@ -71,26 +72,15 @@ class __extend__(PyFrame):
     def dispatch(self, pycode, next_instr, ec):
         self = hint(self, access_directly=True)
         next_instr = r_uint(next_instr)
-        is_being_profiled = self.is_being_profiled
-        opcode = pycode.co_code[next_instr]
         try:
             while True:
-                prev_opcode = opcode
                 opcode = pycode.co_code[next_instr]
-                pypyjitdriver.can_enter_jit(ec=ec,
-                    frame=self, next_instr=next_instr, pycode=pycode,
-                    is_being_profiled=is_being_profiled,
-                                            opcode=opcode,
-                                            prev_opcode=prev_opcode)
                 pypyjitdriver.jit_merge_point(ec=ec,
                     frame=self, next_instr=next_instr, pycode=pycode,
-                    is_being_profiled=is_being_profiled,
-                                              opcode=prev_opcode,
-                                              prev_opcode=prev_opcode)
+                                              opcode=opcode)
                 co_code = pycode.co_code
                 #self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
-                is_being_profiled = self.is_being_profiled
         except ExitFrame:
             return self.popvalue()
 
