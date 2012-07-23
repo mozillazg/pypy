@@ -49,7 +49,7 @@ def get_printable_location(is_profiled, co):
 #    return (bytecode.co_flags & CO_GENERATOR) != 0
 
 class PyPyJitDriver(JitDriver):
-    reds = ['next_instr', 'frame', 'ec', 'pycode']
+    reds = ['next_instr', 'frame', 'ec', 'pycode', 'prev_opcode']
     greens = ['is_being_profiled', 'opcode']
 #    virtualizables = ['frame']
 
@@ -68,15 +68,23 @@ class __extend__(PyFrame):
         self = hint(self, access_directly=True)
         next_instr = r_uint(next_instr)
         is_being_profiled = self.is_being_profiled
+        opcode = pycode.co_code[next_instr]
         try:
             while True:
+                prev_opcode = opcode
                 opcode = pycode.co_code[next_instr]
+                pypyjitdriver.can_enter_jit(ec=ec,
+                    frame=self, next_instr=next_instr, pycode=pycode,
+                    is_being_profiled=is_being_profiled,
+                                            opcode=opcode,
+                                            prev_opcode=prev_opcode)
                 pypyjitdriver.jit_merge_point(ec=ec,
                     frame=self, next_instr=next_instr, pycode=pycode,
                     is_being_profiled=is_being_profiled,
-                                              opcode=opcode)
+                                              opcode=prev_opcode,
+                                              prev_opcode=prev_opcode)
                 co_code = pycode.co_code
-                self.valuestackdepth = hint(self.valuestackdepth, promote=True)
+                #self.valuestackdepth = hint(self.valuestackdepth, promote=True)
                 next_instr = self.handle_bytecode(co_code, next_instr, ec)
                 is_being_profiled = self.is_being_profiled
         except ExitFrame:
