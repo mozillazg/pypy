@@ -899,6 +899,12 @@ def setup(debug_print=False):
         if not k.startswith('__'):
             setattr(rop_lowercase, k.lower(), v)
 
+    ALLCALLS = []
+    for k, v in rop.__dict__.iteritems():
+        if k.startswith('CALL'):
+            ALLCALLS.append(v)
+    opgroups.ALLCALLS = tuple(ALLCALLS)
+
 def get_base_class(mixin, tpmixin, base):
     try:
         return get_base_class.cache[(mixin, tpmixin, base)]

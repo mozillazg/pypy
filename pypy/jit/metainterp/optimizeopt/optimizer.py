@@ -528,7 +528,10 @@ class Optimizer(Optimization):
             return None
         else:
             self.ensure_imported(value)
-            return value.force_box(self)
+            value = value.force_box(self)
+            if value is v:
+                return None
+            return value
 
     @specialize.argtype(0)
     def _emit_operation(self, op):
