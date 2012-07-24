@@ -2,7 +2,7 @@ from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.lltypesystem.llmemory import GCREF
 from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.jit.codewriter import longlong
-from pypy.rlib.objectmodel import compute_identity_hash
+from pypy.rlib.objectmodel import compute_identity_hash, newlist_hint
 
 INT   = 'i'
 REF   = 'r'
@@ -204,9 +204,6 @@ class AbstractResOp(AbstractValue):
         raise NotImplementedError
 
     def getarg(self, i):
-        raise NotImplementedError
-
-    def setarg(self, i, box):
         raise NotImplementedError
 
     def numargs(self):
@@ -438,6 +435,8 @@ class ResOpWithDescr(AbstractResOp):
         # backend provides it with cpu.fielddescrof(), cpu.arraydescrof(),
         # cpu.calldescrof(), and cpu.typedescrof().
         self._check_descr(descr)
+        if self._descr is not None:
+            raise Exception("descr already set!")
         self._descr = descr
 
     def cleardescr(self):
@@ -458,6 +457,8 @@ class GuardResOp(ResOpWithDescr):
         return self._fail_args
 
     def setfailargs(self, fail_args):
+        if self._fail_args is not None:
+            raise Exception("Setting fail args on a resop already constructed!")
         self._fail_args = fail_args
 
 # ============
@@ -481,9 +482,6 @@ class NullaryOp(object):
     def getarg(self, i):
         raise IndexError
 
-    def setarg(self, i, box):
-        raise IndexError
-
     def foreach_arg(self, func):
         pass
 
@@ -492,6 +490,9 @@ class NullaryOp(object):
         if self.is_guard():
             r.setfailargs(self.getfailargs())
         return r
+
+    def copy_if_modified_by_optimization(self, opt):
+        return self
 
 class UnaryOp(object):
     _mixin_ = True
@@ -515,12 +516,6 @@ class UnaryOp(object):
         else:
             raise IndexError
 
-    def setarg(self, i, box):
-        if i == 0:
-            self._arg0 = box
-        else:
-            raise IndexError
-
     @specialize.arg(1)
     def foreach_arg(self, func):
         func(self.getopnum(), 0, self._arg0)
@@ -531,6 +526,13 @@ class UnaryOp(object):
         if self.is_guard():
             r.setfailargs(self.getfailargs())
         return r
+
+    def copy_if_modified_by_optimization(self, opt):
+        new_arg = opt.get_value_replacement(self._arg0)
+        if new_arg is None:
+            return self
+        return create_resop_1(self.opnum, self.getresult(), new_arg,
+                              self.getdescrclone())
 
 class BinaryOp(object):
     _mixin_ = True
@@ -554,14 +556,6 @@ class BinaryOp(object):
         else:
             raise IndexError
 
-    def setarg(self, i, box):
-        if i == 0:
-            self._arg0 = box
-        elif i == 1:
-            self._arg1 = box
-        else:
-            raise IndexError
-
     def getarglist(self):
         return [self._arg0, self._arg1]
 
@@ -576,6 +570,16 @@ class BinaryOp(object):
         if self.is_guard():
             r.setfailargs(self.getfailargs())
         return r
+
+    def copy_if_modified_by_optimization(self, opt):
+        new_arg0 = opt.get_value_replacement(self._arg0)
+        new_arg1 = opt.get_value_replacement(self._arg1)
+        if new_arg0 is None and new_arg1 is None:
+            return self
+        return create_resop_2(self.opnum, self.getresult(),
+                              new_arg0 or self._arg0,
+                              new_arg1 or self._arg1,
+                              self.getdescrclone())
 
 
 class TernaryOp(object):
@@ -606,16 +610,6 @@ class TernaryOp(object):
         else:
             raise IndexError
 
-    def setarg(self, i, box):
-        if i == 0:
-            self._arg0 = box
-        elif i == 1:
-            self._arg1 = box
-        elif i == 2:
-            self._arg2 = box
-        else:
-            raise IndexError
-
     @specialize.arg(1)
     def foreach_arg(self, func):
         func(self.getopnum(), 0, self._arg0)
@@ -626,7 +620,19 @@ class TernaryOp(object):
         assert not self.is_guard()
         return create_resop_3(self.opnum, self.getresult(), self._arg0,
                               self._arg1, self._arg2, self.getdescrclone())
-    
+
+    def copy_if_modified_by_optimization(self, opt):
+        new_arg0 = opt.get_value_replacement(self._arg0)
+        new_arg1 = opt.get_value_replacement(self._arg1)
+        new_arg2 = opt.get_value_replacement(self._arg2)
+        if new_arg0 is None and new_arg1 is None and new_arg2 is None:
+            return self
+        return create_resop_3(self.opnum, self.getresult(),
+                              new_arg0 or self._arg0,
+                              new_arg1 or self._arg1,
+                              new_arg2 or self._arg2,
+                              self.getdescrclone())
+
 
 class N_aryOp(object):
     _mixin_ = True
@@ -646,9 +652,6 @@ class N_aryOp(object):
     def getarg(self, i):
         return self._args[i]
 
-    def setarg(self, i, box):
-        self._args[i] = box
-
     @specialize.arg(1)
     def foreach_arg(self, func):
         for i, arg in enumerate(self._args):
@@ -659,6 +662,23 @@ class N_aryOp(object):
         return create_resop(self.opnum, self.getresult(), self._args[:],
                               self.getdescrclone())
 
+    def copy_if_modified_by_optimization(self, opt):
+        newargs = None
+        for i, arg in enumerate(self._args):
+            new_arg = opt.get_value_replacement(arg)
+            if new_arg is not None:
+                if newargs is None:
+                    newargs = newlist_hint(len(self._args))
+                    for k in range(i):
+                        newargs.append(self._args[k])
+                    self._args[:i]
+                newargs.append(new_arg)
+            elif newargs is not None:
+                newargs.append(arg)
+        if newargs is None:
+            return self
+        return create_resop(self.opnum, self.getresult(),
+                            newargs, self.getdescrclone())
 
 # ____________________________________________________________
 

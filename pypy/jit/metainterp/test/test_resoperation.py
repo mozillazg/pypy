@@ -12,6 +12,9 @@ class FakeBox(object):
     def __ne__(self, other):
         return not self == other
 
+    def __hash__(self):
+        return hash(self.v)
+
     def __str__(self):
         return self.v
 
@@ -35,13 +38,10 @@ def test_arity_mixins():
         obj = cls()
         obj.initarglist(range(n))
         assert obj.getarglist() == range(n)
-        for i in range(n):
-            obj.setarg(i, i*2)
         assert obj.numargs() == n
         for i in range(n):
-            assert obj.getarg(i) == i*2
+            assert obj.getarg(i) == i
         py.test.raises(IndexError, obj.getarg, n+1)
-        py.test.raises(IndexError, obj.setarg, n+1, 0)
 
     for n, cls in cases:
         test_case(n, cls)
@@ -104,14 +104,6 @@ def test_can_malloc():
     assert not rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox('a'),
                                   FakeBox('b')).can_malloc()
 
-def test_get_deep_immutable_oplist():
-    ops = [rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox('a'), FakeBox('b'))]
-    newops = rop.get_deep_immutable_oplist(ops)
-    py.test.raises(TypeError, "newops.append('foobar')")
-    py.test.raises(TypeError, "newops[0] = 'foobar'")
-    py.test.raises(AssertionError, "newops[0].setarg(0, 'd')")
-    py.test.raises(AssertionError, "newops[0].setdescr('foobar')")
-
 def test_clone():
     mydescr = AbstractDescr()
     op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None, descr=mydescr)
@@ -152,3 +144,43 @@ def test_repr():
     assert repr(op) == 'guard_no_exception(, descr=descr)'
     op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
     assert repr(op) == '3 = int_add(a, b)'
+    # XXX more tests once we decide what we actually want to print
+
+class MockOpt(object):
+    def __init__(self, replacements):
+        self.d = replacements
+
+    def get_value_replacement(self, v):
+        if v in self.d:
+            return FakeBox('rrr')
+        return None
+
+def test_copy_if_modified_by_optimization():
+    mydescr = FakeDescr()
+    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None, descr=mydescr)
+    assert op.copy_if_modified_by_optimization(MockOpt({})) is op
+    op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
+    assert op.copy_if_modified_by_optimization(MockOpt({})) is op
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('a')])))
+    assert op2 is not op
+    assert op2.getarg(0) == FakeBox('rrr')
+    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('c')])))
+    assert op2 is op
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
+    assert op2 is not op
+    assert op2._arg0 is op._arg0
+    assert op2._arg1 != op._arg1
+    assert op2.getint() == op.getint()
+    op = rop.create_resop_3(rop.rop.STRSETITEM, None, FakeBox('a'),
+                            FakeBox('b'), FakeBox('c'))
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
+    assert op2 is not op
+    op = rop.create_resop(rop.rop.CALL_i, 13, [FakeBox('a'), FakeBox('b'),
+                            FakeBox('c')], descr=mydescr)
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('aa')])))
+    assert op2 is op
+    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
+    assert op2 is not op
+    assert op2.getarglist() == [FakeBox("a"), FakeBox("rrr"), FakeBox("c")]
+    assert op2.getdescr() == mydescr

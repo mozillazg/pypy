@@ -9,7 +9,8 @@ from pypy.rlib import nonconst, rstack
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
 from pypy.jit.metainterp.history import Box, TargetToken
-from pypy.jit.metainterp.resoperation import rop, create_resop
+from pypy.jit.metainterp.resoperation import rop, create_resop, create_resop_0,\
+     create_resop_1, create_resop_2
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
@@ -952,7 +953,7 @@ class MIFrame(object):
             promoted_box = resbox.constbox()
             # This is GUARD_VALUE because GUARD_TRUE assumes the existance
             # of a label when computing resumepc
-            self.generate_guard(rop.GUARD_VALUE, resbox, [promoted_box],
+            self.generate_guard(rop.GUARD_VALUE, resbox, promoted_box,
                                 resumepc=orgpc)
             self.metainterp.replace_box(box, constbox)
             return constbox
@@ -965,7 +966,7 @@ class MIFrame(object):
     def opimpl_guard_class(self, orgpc, box):
         clsbox = self.cls_of_box(box)
         if not self.metainterp.heapcache.is_class_known(box):
-            self.generate_guard(rop.GUARD_CLASS, box, [clsbox], resumepc=orgpc)
+            self.generate_guard(rop.GUARD_CLASS, box, clsbox, resumepc=orgpc)
             self.metainterp.heapcache.class_now_known(box)
         return clsbox
 
@@ -1064,7 +1065,7 @@ class MIFrame(object):
     def opimpl_raise(self, orgpc, exc_value_box):
         # xxx hack
         clsbox = self.cls_of_box(exc_value_box)
-        self.generate_guard(rop.GUARD_CLASS, exc_value_box, [clsbox],
+        self.generate_guard(rop.GUARD_CLASS, exc_value_box, clsbox,
                             resumepc=orgpc)
         self.metainterp.class_of_last_exc_is_const = True
         self.metainterp.last_exc_value_box = exc_value_box
@@ -1239,14 +1240,10 @@ class MIFrame(object):
         except ChangeFrame:
             pass
 
-    def generate_guard(self, opnum, box=None, extraargs=[], resumepc=-1):
-        if isinstance(box, Const):    # no need for a guard
+    def generate_guard(self, opnum, box1=None, box2=None, resumepc=-1):
+        if isinstance(box1, Const):    # no need for a guard
             return
         metainterp = self.metainterp
-        if box is not None:
-            moreargs = [box] + extraargs
-        else:
-            moreargs = list(extraargs)
         metainterp_sd = metainterp.staticdata
         if opnum == rop.GUARD_NOT_FORCED:
             resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
@@ -1255,8 +1252,14 @@ class MIFrame(object):
             resumedescr = compile.ResumeGuardNotInvalidated()
         else:
             resumedescr = compile.ResumeGuardDescr()
-        guard_op = metainterp.history.record(opnum, moreargs, None,
-                                             descr=resumedescr)
+        if box1 is None:
+            guard_op = create_resop_0(opnum, None, descr=resumedescr)
+        elif box2 is None:
+            guard_op = create_resop_1(opnum, None, box1, descr=resumedescr)
+        else:
+            guard_op = create_resop_2(opnum, None, box1, box2,
+                                      descr=resumedescr)
+        metainterp.history.record(guard_op)
         self.capture_resumedata(resumedescr, resumepc)
         self.metainterp.staticdata.profiler.count_ops(opnum, Counters.GUARDS)
         # count
@@ -2645,18 +2648,19 @@ def _get_opimpl_method(name, argcodes):
                 if self.debug:
                     print '-> %s!' % e.__class__.__name__
                 raise
-            if self.debug:
-                print resultop
-            assert argcodes[next_argcode] == '>'
-            result_argcode = argcodes[next_argcode + 1]
-            assert resultop.type == {'i': resoperation.INT,
-                                     'r': resoperation.REF,
-                                     'f': resoperation.FLOAT,
-                                     'v': resoperation.VOID}[result_argcode]
+            if resultop is not None:
+                if self.debug:
+                    print resultop.getresult()
+                assert argcodes[next_argcode] == '>'
+                result_argcode = argcodes[next_argcode + 1]
+                assert resultop.type == {'i': resoperation.INT,
+                                         'r': resoperation.REF,
+                                         'f': resoperation.FLOAT}[result_argcode]
         else:
             resultop = unboundmethod(self, *args)
         #
-        self.make_result_of_lastop(resultop)
+        if resultop is not None:
+            self.make_result_of_lastop(resultop)
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)

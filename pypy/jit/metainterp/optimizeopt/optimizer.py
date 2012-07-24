@@ -521,18 +521,19 @@ class Optimizer(Optimization):
             self.bool_boxes[self.getvalue(op)] = None
         self._emit_operation(op)
 
+    def get_value_replacement(self, v):
+        try:
+            value = self.values[v]
+        except KeyError:
+            return None
+        else:
+            self.ensure_imported(value)
+            return value.force_box(self)
+
     @specialize.argtype(0)
     def _emit_operation(self, op):
         assert op.getopnum() not in opgroups.CALL_PURE
-        for i in range(op.numargs()):
-            arg = op.getarg(i)
-            try:
-                value = self.values[arg]
-            except KeyError:
-                pass
-            else:
-                self.ensure_imported(value)
-                op.setarg(i, value.force_box(self))
+        op = op.copy_if_modified_by_optimization(self)
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.Counters.OPT_GUARDS)
