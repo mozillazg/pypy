@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDebugInfo, Counters
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
-from pypy.jit.metainterp.resoperation import rop, get_deep_immutable_oplist
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import TreeLoop, Box, History, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
 from pypy.jit.metainterp.history import BoxPtr, BoxObj, BoxFloat, Const, ConstInt
@@ -329,7 +329,7 @@ def send_loop_to_backend(greenkey, jitdriver_sd, metainterp_sd, loop, type):
     else:
         debug_info = None
         hooks = None
-    operations = get_deep_immutable_oplist(loop.operations)
+    operations = loop.operations
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
@@ -374,7 +374,6 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
     else:
         hooks = None
         debug_info = None
-    operations = get_deep_immutable_oplist(operations)
     metainterp_sd.profiler.start_backend()
     debug_start("jit-backend")
     try:
@@ -816,9 +815,8 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_trace = create_empty_loop(metainterp)
     new_trace.inputargs = inputargs = metainterp.history.inputargs[:]
-    # clone ops, as optimize_bridge can mutate the ops
 
-    new_trace.operations = [op.clone() for op in metainterp.history.operations]
+    new_trace.operations = metainterp.history.operations
     new_trace.resume_at_jump_descr = resume_at_jump_descr
     metainterp_sd = metainterp.staticdata
     state = metainterp.jitdriver_sd.warmstate
@@ -900,7 +898,6 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
         ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
         ]
     operations[1].setfailargs([])
-    operations = get_deep_immutable_oplist(operations)
     cpu.compile_loop(inputargs, operations, jitcell_token, log=False)
     if memory_manager is not None:    # for tests
         memory_manager.keep_loop_alive(jitcell_token)
