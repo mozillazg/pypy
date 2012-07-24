@@ -200,20 +200,21 @@ class BaseCPU(model.AbstractCPU):
                 c._obj.externalobj.operations[-1].setdescr(descr)
             for i in range(op.numargs()):
                 x = op.getarg(i)
-                if isinstance(x, history.Box):
+                if not x.is_constant():
                     llimpl.compile_add_var(c, var2index[x])
-                elif isinstance(x, history.ConstInt):
-                    llimpl.compile_add_int_const(c, x.value)
-                elif isinstance(x, self.ts.ConstRef):
-                    llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
-                elif isinstance(x, history.ConstFloat):
-                    llimpl.compile_add_float_const(c, x.value)
-                elif isinstance(x, Descr):
-                    llimpl.compile_add_descr_arg(c, x.ofs, x.typeinfo,
-                                                 x.arg_types)
                 else:
-                    raise Exception("'%s' args contain: %r" % (op.getopname(),
-                                                               x))
+                    if isinstance(x, history.ConstInt):
+                        llimpl.compile_add_int_const(c, x.value)
+                    elif isinstance(x, self.ts.ConstRef):
+                        llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
+                    elif isinstance(x, history.ConstFloat):
+                        llimpl.compile_add_float_const(c, x.value)
+                    elif isinstance(x, Descr):
+                        llimpl.compile_add_descr_arg(c, x.ofs, x.typeinfo,
+                                                     x.arg_types)
+                    else:
+                        raise Exception("'%s' args contain: %r" % (op.getopname(),
+                                                                   x))
             if op.is_guard():
                 faildescr = op.getdescr()
                 assert isinstance(faildescr, history.AbstractFailDescr)
@@ -234,11 +235,11 @@ class BaseCPU(model.AbstractCPU):
                         llimpl.compile_add_fail_arg(c, -1)
 
             if op.type == INT:
-                var2index[x] = llimpl.compile_add_int_result(c)
+                var2index[op] = llimpl.compile_add_int_result(c)
             elif op.type == REF:
-                var2index[x] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
+                var2index[op] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
             elif op.type == FLOAT:
-                var2index[x] = llimpl.compile_add_float_result(c)
+                var2index[op] = llimpl.compile_add_float_result(c)
         op = operations[-1]
         assert op.is_final()
         if op.getopnum() == rop.JUMP:

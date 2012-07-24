@@ -7,7 +7,8 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          ConstInt, ConstPtr,
                                          BoxObj,
                                          ConstObj, BoxFloat, ConstFloat)
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
+     create_resop
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.tool.oparser import parse
@@ -77,46 +78,46 @@ class Runner(object):
         if result_type == 'void':
             result = None
         elif result_type == 'int':
-            result = BoxInt()
+            result = 0
         elif result_type == 'ref':
-            result = BoxPtr()
+            result = lltype.nullptr(llmemory.GCREF)
         elif result_type == 'float':
-            result = BoxFloat()
+            result = 0.0
         else:
             raise ValueError(result_type)
+        op0 = create_resop_dispatch(opnum, result, valueboxes)
         if result is None:
             results = []
         else:
-            results = [result]
-        operations = [ResOperation(opnum, valueboxes, result),
-                      ResOperation(rop.FINISH, results, None,
-                                   descr=BasicFailDescr(0))]
-        if operations[0].is_guard():
-            operations[0].setfailargs([])
+            results = [op0]
+        op1 = create_resop(rop.FINISH, results, None, descr=BasicFailDescr(0))
+        if op0.is_guard():
+            op0.setfailargs([])
             if not descr:
                 descr = BasicFailDescr(1)
         if descr is not None:
-            operations[0].setdescr(descr)
+            op0.setdescr(descr)
         inputargs = []
         for box in valueboxes:
             if isinstance(box, Box) and box not in inputargs:
                 inputargs.append(box)
-        return inputargs, operations
+        return inputargs, [op0, op1]
 
 class BaseBackendTest(Runner):
 
     avoid_instances = False
 
+    class namespace:
+        faildescr = BasicFailDescr(1)
+
     def test_compile_linear_loop(self):
-        i0 = BoxInt()
-        i1 = BoxInt()
-        operations = [
-            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
-            ResOperation(rop.FINISH, [i1], None, descr=BasicFailDescr(1))
-            ]
-        inputargs = [i0]
+        loop = parse("""
+        [i0]
+        i1 = int_add(i0, 1)
+        finish(i1, descr=faildescr)
+        """, namespace=self.namespace.__dict__)
         looptoken = JitCellToken()
-        self.cpu.compile_loop(inputargs, operations, looptoken)
+        self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 2)
         res = self.cpu.get_latest_value_int(0)
         assert res == 3
