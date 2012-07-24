@@ -387,6 +387,9 @@ class Box(AbstractValue):
     def forget_value(self):
         raise NotImplementedError
 
+    def is_constant(self):
+        return False
+
 class BoxInt(Box):
     type = INT
     _attrs_ = ('value',)
@@ -739,11 +742,7 @@ class TreeLoop(object):
                         assert box in seen
             else:
                 assert op.getfailargs() is None
-            box = op.result
-            if box is not None:
-                assert isinstance(box, Box)
-                assert box not in seen
-                seen[box] = True
+            seen[op] = True
             if op.getopnum() == rop.LABEL:
                 inputargs = op.getarglist()
                 for box in inputargs:

@@ -121,8 +121,9 @@ class OptRewrite(Optimization):
         else:
             self.emit_operation(op)
             # Synthesize the reverse op for optimize_default to reuse
-            self.pure(rop.INT_SUB, [op.result, op.getarg(1)], op.getarg(0))
-            self.pure(rop.INT_SUB, [op.result, op.getarg(0)], op.getarg(1))
+            # XXX disable for now
+            #self.pure(rop.INT_SUB, [op, op.getarg(1)], op.getarg(0))
+            #self.pure(rop.INT_SUB, [op, op.getarg(0)], op.getarg(1))
 
     def optimize_INT_MUL(self, op):
         v1 = self.getvalue(op.getarg(0))

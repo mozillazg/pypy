@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          ConstInt, ConstPtr,
                                          BoxObj,
                                          ConstObj, BoxFloat, ConstFloat)
-from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.tool.oparser import parse

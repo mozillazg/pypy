@@ -4,7 +4,7 @@ from pypy.jit.metainterp.jitexc import JitException
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, MODE_ARRAY
 from pypy.jit.metainterp.history import ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, opgroups
 from pypy.rlib.objectmodel import we_are_translated
 
 
@@ -230,7 +230,7 @@ class OptHeap(Optimization):
             posponedop = self.posponedop
             self.posponedop = None
             self.next_optimization.propagate_forward(posponedop)
-        if (op.is_comparison() or op.getopnum() == rop.CALL_MAY_FORCE
+        if (op.is_comparison() or op.getopnum() in opgroups.CALL_MAY_FORCE
             or op.is_ovf()):
             self.posponedop = op
         else:

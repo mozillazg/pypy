@@ -10,6 +10,20 @@ FLOAT = 'f'
 STRUCT = 's'
 VOID  = 'v'
 
+def create_resop_dispatch(opnum, result, args, descr=None):
+    cls = opclasses[opnum]
+    if cls.NUMARGS == 0:
+        return create_resop_0(opnum, result, descr)
+    elif cls.NUMARGS == 1:
+        return create_resop_1(opnum, result, args[0], descr)
+    elif cls.NUMARGS == 2:
+        return create_resop_2(opnum, result, args[0], args[1], descr)
+    elif cls.NUMARGS == 3:
+        return create_resop_1(opnum, result, args[0], args[1], args[2],
+                              args[3], descr)
+    else:
+        return create_resop(opnum, result, args, descr)
+
 @specialize.arg(0)
 def create_resop(opnum, result, args, descr=None):
     cls = opclasses[opnum]
@@ -813,12 +827,18 @@ _oplist = [
 class rop(object):
     pass
 
+class rop_lowercase(object):
+    pass # for convinience
+
 opclasses = []   # mapping numbers to the concrete ResOp class
 opname = {}      # mapping numbers to the original names, for debugging
 oparity = []     # mapping numbers to the arity of the operation or -1
 opwithdescr = [] # mapping numbers to a flag "takes a descr"
 opboolresult= [] # mapping numbers to a flag "returns a boolean"
 optp = []        # mapping numbers to typename of returnval 'i', 'p', 'N' or 'f'
+
+class opgroups(object):
+    pass
 
 def setup(debug_print=False):
     i = 0
@@ -829,6 +849,8 @@ def setup(debug_print=False):
             boolresult = 'b' in arity
             arity = arity.rstrip('db')
             if arity == '*':
+                setattr(opgroups, basename, (basename + '_i', basename + '_N',
+                                             basename + '_f', basename + '_p'))
                 arity = -1
             else:
                 arity = int(arity)
@@ -851,6 +873,10 @@ def setup(debug_print=False):
             optp.append(tp)
             assert (len(opclasses)==len(oparity)==len(opwithdescr)
                     ==len(opboolresult))
+
+    for k, v in rop.__dict__.iteritems():
+        if not k.startswith('__'):
+            setattr(rop_lowercase, k.lower(), v)
 
 def get_base_class(mixin, tpmixin, base):
     try:

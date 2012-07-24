@@ -95,8 +95,8 @@ class OptPure(Optimization):
     def setup(self):
         self.optimizer.optpure = self
 
-    def pure(self, opnum, args, result):
-        op = ResOperation(opnum, args, result)
+    def pure(self, opnum, arg0, arg1, result):
+        op = create_resopt_2(opnum, args, result)
         key = self.optimizer.make_args_key(op)
         if key not in self.pure_operations:
             self.pure_operations[key] = op

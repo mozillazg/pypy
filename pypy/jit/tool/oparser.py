@@ -5,14 +5,15 @@ in a nicer fashion
 
 from pypy.jit.tool.oparser_model import get_model
 
-from pypy.jit.metainterp.resoperation import rop, ResOperation, \
-                                            ResOpWithDescr, N_aryOp, \
-                                            UnaryOp, PlainResOp
+from pypy.jit.metainterp.resoperation import rop, opclasses, rop_lowercase,\
+     ResOpWithDescr, N_aryOp, UnaryOp, PlainResOp, create_resop_dispatch,\
+     ResOpNone
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 class ParseError(Exception):
     pass
 
-class ESCAPE_OP(N_aryOp, ResOpWithDescr):
+class ESCAPE_OP(N_aryOp, ResOpNone, ResOpWithDescr):
 
     OPNUM = -123
 
@@ -28,7 +29,7 @@ class ESCAPE_OP(N_aryOp, ResOpWithDescr):
     def clone(self):
         return ESCAPE_OP(self.OPNUM, self.getarglist()[:], self.result, self.getdescr())
 
-class FORCE_SPILL(UnaryOp, PlainResOp):
+class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
 
     OPNUM = -124
 
@@ -184,6 +185,17 @@ class OpParser(object):
                 self.newvar(arg)
             return self.vars[arg]
 
+    def _example_for(self, opnum):
+        kind = opclasses[opnum].type
+        if kind == 'i':
+            return 0
+        elif kind == 'f':
+            return 0.0
+        elif kind == 'r':
+            return lltype.nullptr(llmemory.GCREF.TO)
+        else:
+            return None
+
     def parse_args(self, opname, argspec):
         args = []
         descr = None
@@ -210,7 +222,7 @@ class OpParser(object):
             raise ParseError("invalid line: %s" % line)
         opname = line[:num]
         try:
-            opnum = getattr(rop, opname.upper())
+            opnum = getattr(rop_lowercase, opname)
         except AttributeError:
             if opname == 'escape':
                 opnum = ESCAPE_OP.OPNUM
@@ -255,13 +267,13 @@ class OpParser(object):
 
         return opnum, args, descr, fail_args
 
-    def create_op(self, opnum, args, result, descr):
+    def create_op(self, opnum, result, args, descr):
         if opnum == ESCAPE_OP.OPNUM:
             return ESCAPE_OP(opnum, args, result, descr)
         if opnum == FORCE_SPILL.OPNUM:
             return FORCE_SPILL(opnum, args, result, descr)
         else:
-            return ResOperation(opnum, args, result, descr)
+            return create_resop_dispatch(opnum, result, args, descr)
 
     def parse_result_op(self, line):
         res, op = line.split("=", 1)
@@ -270,16 +282,15 @@ class OpParser(object):
         opnum, args, descr, fail_args = self.parse_op(op)
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
-        rvar = self.box_for_var(res)
-        self.vars[res] = rvar
-        res = self.create_op(opnum, args, rvar, descr)
+        opres = self.create_op(opnum, self._example_for(opnum), args, descr)
+        self.vars[res] = opres
         if fail_args is not None:
             res.setfailargs(fail_args)
-        return res
+        return opres
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
-        res = self.create_op(opnum, args, None, descr)
+        res = self.create_op(opnum, self._example_for(opnum), args, descr)
         if fail_args is not None:
             res.setfailargs(fail_args)
         return res

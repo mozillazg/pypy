@@ -233,17 +233,12 @@ class BaseCPU(model.AbstractCPU):
                     else:
                         llimpl.compile_add_fail_arg(c, -1)
 
-            x = op.result
-            if x is not None:
-                if isinstance(x, history.BoxInt):
-                    var2index[x] = llimpl.compile_add_int_result(c)
-                elif isinstance(x, self.ts.BoxRef):
-                    var2index[x] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
-                elif isinstance(x, history.BoxFloat):
-                    var2index[x] = llimpl.compile_add_float_result(c)
-                else:
-                    raise Exception("%s.result contain: %r" % (op.getopname(),
-                                                               x))
+            if op.type == INT:
+                var2index[x] = llimpl.compile_add_int_result(c)
+            elif op.type == REF:
+                var2index[x] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
+            elif op.type == FLOAT:
+                var2index[x] = llimpl.compile_add_float_result(c)
         op = operations[-1]
         assert op.is_final()
         if op.getopnum() == rop.JUMP:

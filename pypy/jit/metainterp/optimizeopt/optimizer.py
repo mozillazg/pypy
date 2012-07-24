@@ -6,7 +6,7 @@ from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     args_dict)
-from pypy.jit.metainterp.resoperation import rop, AbstractResOp
+from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
@@ -348,7 +348,6 @@ class Optimizer(Optimization):
         self.opaque_pointers = {}
         self.replaces_guard = {}
         self._newoperations = []
-        self.seen_results = {}
         self.optimizer = self
         self.optpure = None
         self.optearlyforce = None
@@ -453,7 +452,6 @@ class Optimizer(Optimization):
 
     def clear_newoperations(self):
         self._newoperations = []
-        self.seen_results = {}
 
     def make_equal_to(self, box, value, replace=False):
         assert isinstance(value, OptValue)
@@ -515,17 +513,17 @@ class Optimizer(Optimization):
         self.first_optimization.propagate_forward(op)
 
     def propagate_forward(self, op):
-        self.producer[op.result] = op
+        self.producer[op] = op
         dispatch_opt(self, op)
 
     def emit_operation(self, op):
         if op.returns_bool_result():
-            self.bool_boxes[self.getvalue(op.result)] = None
+            self.bool_boxes[self.getvalue(op)] = None
         self._emit_operation(op)
 
     @specialize.argtype(0)
     def _emit_operation(self, op):
-        assert op.getopnum() != rop.CALL_PURE
+        assert op.getopnum() not in opgroups.CALL_PURE
         for i in range(op.numargs()):
             arg = op.getarg(i)
             try:
@@ -546,10 +544,6 @@ class Optimizer(Optimization):
                 op = self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
-        if op.result:
-            if op.result in self.seen_results:
-                raise ValueError, "invalid optimization"
-            self.seen_results[op.result] = None
         self._newoperations.append(op)
 
     def replace_op(self, old_op, new_op):

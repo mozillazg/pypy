@@ -67,6 +67,9 @@ def get_mock_model():
                     Box._counter += 1
                 return self._str
 
+            def is_constant(self):
+                return False
+
         class BoxInt(Box):
             type = 'i'
 
@@ -82,6 +85,9 @@ def get_mock_model():
 
             def _get_str(self):
                 return str(self.value)
+
+            def is_constant(self):
+                return True
 
         class ConstInt(Const):
             pass
@@ -122,31 +128,26 @@ def get_model(use_mock):
     else:
         model = get_real_model()
 
-    class ExtendedTreeLoop(model.TreeLoop):
+    #class ExtendedTreeLoop(model.TreeLoop):
 
-        def getboxes(self):
-            def opboxes(operations):
-                for op in operations:
-                    yield op.result
-                    for box in op.getarglist():
-                        yield box
-            def allboxes():
-                for box in self.inputargs:
-                    yield box
-                for box in opboxes(self.operations):
-                    yield box
+        # def getboxes(self):
+        #     def allboxes():
+        #         for box in self.inputargs:
+        #             yield box
+        #         for op in self.operations:
+        #             yield op
 
-            boxes = Boxes()
-            for box in allboxes():
-                if isinstance(box, model.Box):
-                    name = str(box)
-                    setattr(boxes, name, box)
-            return boxes
+        #     boxes = Boxes()
+        #     for box in allboxes():
+        #         if isinstance(box, model.Box):
+        #             name = str(box)
+        #             setattr(boxes, name, box)
+        #     return boxes
 
-        def setvalues(self, **kwds):
-            boxes = self.getboxes()
-            for name, value in kwds.iteritems():
-                getattr(boxes, name).value = value
+    #    def setvalues(self, **kwds):
+    #        boxes = self.getboxes()
+    #        for name, value in kwds.iteritems():
+    #            getattr(boxes, name).value = value
 
-    model.ExtendedTreeLoop = ExtendedTreeLoop
+    model.ExtendedTreeLoop = model.TreeLoop
     return model

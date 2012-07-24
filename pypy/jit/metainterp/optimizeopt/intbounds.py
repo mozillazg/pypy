@@ -87,7 +87,7 @@ class OptIntBounds(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         self.emit_operation(op)
-        r = self.getvalue(op.result)
+        r = self.getvalue(op)
         b = v1.intbound.add_bound(v2.intbound)
         if b.bounded():
             r.intbound.intersect(b)

@@ -1,12 +1,6 @@
 import py
-from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rclass
-from pypy.rpython.test.test_llinterp import interpret
-from pypy.rlib.unroll import unrolling_iterable
+from pypy.rpython.lltypesystem import lltype, llmemory
 
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, Const, ConstInt,\
-     TreeLoop
-from pypy.jit.metainterp.resoperation import ResOperation, rop
-from pypy.jit.metainterp.executor import execute
 from pypy.jit.codewriter import heaptracker
 from pypy.jit.backend.test.runner_test import LLtypeBackendTest
 
