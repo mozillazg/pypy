@@ -11,9 +11,16 @@ class FakeBox(object):
 
     def __ne__(self, other):
         return not self == other
-    
+
+    def __str__(self):
+        return self.v
+
     def is_constant(self):
         return False
+
+class FakeDescr(AbstractDescr):
+    def __repr__(self):
+        return 'descr'
 
 def test_arity_mixins():
     cases = [
@@ -68,19 +75,19 @@ def test_mixins_in_common_base():
 def test_instantiate():
     from pypy.rpython.lltypesystem import lltype, llmemory
     
-    op = rop.create_resop_2(rop.rop.INT_ADD, FakeBox('a'), FakeBox('b'), 15)
+    op = rop.create_resop_2(rop.rop.INT_ADD, 15, FakeBox('a'), FakeBox('b'))
     assert op.getarglist() == [FakeBox('a'), FakeBox('b')]
     assert op.getint() == 15
 
     mydescr = AbstractDescr()
-    op = rop.create_resop(rop.rop.CALL_f, [FakeBox('a'),
-                                           FakeBox('b')], 15.5, descr=mydescr)
+    op = rop.create_resop(rop.rop.CALL_f, 15.5, [FakeBox('a'),
+                                           FakeBox('b')], descr=mydescr)
     assert op.getarglist() == [FakeBox('a'), FakeBox('b')]
     assert op.getfloat() == 15.5
     assert op.getdescr() is mydescr
 
-    op = rop.create_resop(rop.rop.CALL_p, [FakeBox('a'), FakeBox('b')],
-                          lltype.nullptr(llmemory.GCREF.TO), descr=mydescr)
+    op = rop.create_resop(rop.rop.CALL_p, lltype.nullptr(llmemory.GCREF.TO),
+                          [FakeBox('a'), FakeBox('b')], descr=mydescr)
     assert op.getarglist() == [FakeBox('a'), FakeBox('b')]
     assert not op.getref_base()
     assert op.getdescr() is mydescr    
@@ -91,14 +98,14 @@ def test_can_malloc():
     mydescr = AbstractDescr()
     p = lltype.malloc(llmemory.GCREF.TO)
     assert rop.create_resop_0(rop.rop.NEW, p).can_malloc()
-    call = rop.create_resop(rop.rop.CALL_i, [FakeBox('a'),
-                                             FakeBox('b')], 3, descr=mydescr)
+    call = rop.create_resop(rop.rop.CALL_i, 3, [FakeBox('a'),
+                                                FakeBox('b')], descr=mydescr)
     assert call.can_malloc()
-    assert not rop.create_resop_2(rop.rop.INT_ADD, FakeBox('a'),
-                                  FakeBox('b'), 3).can_malloc()
+    assert not rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox('a'),
+                                  FakeBox('b')).can_malloc()
 
 def test_get_deep_immutable_oplist():
-    ops = [rop.create_resop_2(rop.rop.INT_ADD, FakeBox('a'), FakeBox('b'), 3)]
+    ops = [rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox('a'), FakeBox('b'))]
     newops = rop.get_deep_immutable_oplist(ops)
     py.test.raises(TypeError, "newops.append('foobar')")
     py.test.raises(TypeError, "newops[0] = 'foobar'")
@@ -113,28 +120,35 @@ def test_clone():
     assert not op2 is op
     assert op2.getresult() is None
     assert op2.getfailargs() is op.getfailargs()
-    op = rop.create_resop_1(rop.rop.INT_IS_ZERO, FakeBox('a'), 1)
+    op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
     op2 = op.clone()
     assert op2 is not op
     assert op2._arg0 == FakeBox('a')
     assert op2.getint() == 1
-    op = rop.create_resop_2(rop.rop.INT_ADD, FakeBox('a'), FakeBox('b'), 1)
+    op = rop.create_resop_2(rop.rop.INT_ADD, 1, FakeBox('a'), FakeBox('b'))
     op2 = op.clone()
     assert op2 is not op
     assert op2._arg0 == FakeBox('a')
     assert op2._arg1 == FakeBox('b')
     assert op2.getint() == 1
-    op = rop.create_resop_3(rop.rop.STRSETITEM, FakeBox('a'), FakeBox('b'),
-                            FakeBox('c'), None)
+    op = rop.create_resop_3(rop.rop.STRSETITEM, None, FakeBox('a'),
+                            FakeBox('b'), FakeBox('c'))
     op2 = op.clone()
     assert op2 is not op
     assert op2._arg0 == FakeBox('a')
     assert op2._arg1 == FakeBox('b')
     assert op2._arg2 == FakeBox('c')
     assert op2.getresult() is None
-    op = rop.create_resop(rop.rop.CALL_i, [FakeBox('a'), FakeBox('b'),
-                            FakeBox('c')], 13, descr=mydescr)
+    op = rop.create_resop(rop.rop.CALL_i, 13, [FakeBox('a'), FakeBox('b'),
+                            FakeBox('c')], descr=mydescr)
     op2 = op.clone()
     assert op2 is not op
     assert op2._args == [FakeBox('a'), FakeBox('b'), FakeBox('c')]
     assert op2.getint() == 13
+
+def test_repr():
+    mydescr = FakeDescr()
+    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None, descr=mydescr)
+    assert repr(op) == 'guard_no_exception(, descr=descr)'
+    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
+    assert repr(op) == '3 = int_add(a, b)'

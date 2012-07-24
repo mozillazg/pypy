@@ -385,33 +385,36 @@ def make_execute_function_with_boxes(opnum, name, func):
     if func.resulttype not in ('i', 'r', 'f', None):
         return None
     argtypes = unrolling_iterable(func.argtypes)
+    if len(func.argtypes) <= 3:
+        create_resop_func = getattr(resoperation,
+                                    'create_resop_%d' % len(func.argtypes))
     #
-    def do(cpu, _, *args):
-        newargs = ()
-        orig_args = args
-        for argtype in argtypes:
-            if argtype == 'cpu':
-                value = cpu
-            elif argtype == 'd':
-                value = args[-1]
-                assert isinstance(value, AbstractDescr)
-                args = args[:-1]
-            else:
-                arg = args[0]
-                args = args[1:]
-                if argtype == 'i':   value = arg.getint()
-                elif argtype == 'r': value = arg.getref_base()
-                elif argtype == 'f': value = arg.getfloatstorage()
-            newargs = newargs + (value,)
-        assert not args
+        def do(cpu, _, *args):
+            newargs = ()
+            orig_args = args
+            for argtype in argtypes:
+                if argtype == 'cpu':
+                    value = cpu
+                elif argtype == 'd':
+                    value = args[-1]
+                    assert isinstance(value, AbstractDescr)
+                    args = args[:-1]
+                else:
+                    arg = args[0]
+                    args = args[1:]
+                    if argtype == 'i':   value = arg.getint()
+                    elif argtype == 'r': value = arg.getref_base()
+                    elif argtype == 'f': value = arg.getfloatstorage()
+                newargs = newargs + (value,)
+            assert not args
+            #
+            result = func(*newargs)
+            return create_resop_func(opnum, result, *orig_args)
+            #
         #
-        result = func(*newargs)
-        if has_descr:
-            return create_resop(opnum, orig_args[:-1], result, orig_args[-1])
-        else:
-            return create_resop(opnum, orig_args, result)
-        #
-    #
+    else:
+        def do(*args):
+            xxx
     do.func_name = 'do_' + name
     return do
 

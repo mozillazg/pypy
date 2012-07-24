@@ -11,7 +11,7 @@ STRUCT = 's'
 VOID  = 'v'
 
 @specialize.arg(0)
-def create_resop(opnum, args, result, descr=None):
+def create_resop(opnum, result, args, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == -1
     if cls.is_always_pure():
@@ -44,7 +44,7 @@ def create_resop_0(opnum, result, descr=None):
     return op
 
 @specialize.arg(0)
-def create_resop_1(opnum, arg0, result, descr=None):
+def create_resop_1(opnum, result, arg0, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == 1
     if cls.is_always_pure():
@@ -61,7 +61,7 @@ def create_resop_1(opnum, arg0, result, descr=None):
     return op
 
 @specialize.arg(0)
-def create_resop_2(opnum, arg0, arg1, result, descr=None):
+def create_resop_2(opnum, result, arg0, arg1, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == 2
     if cls.is_always_pure():
@@ -79,7 +79,7 @@ def create_resop_2(opnum, arg0, arg1, result, descr=None):
     return op
 
 @specialize.arg(0)
-def create_resop_3(opnum, arg0, arg1, arg2, result, descr=None):
+def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == 3
     if cls.is_always_pure():
@@ -233,8 +233,9 @@ class AbstractResOp(AbstractValue):
 
     def repr(self, graytext=False):
         # RPython-friendly version
-        if self.result is not None:
-            sres = '%s = ' % (self.result,)
+        resultrepr = self.getresultrepr()
+        if resultrepr is not None:
+            sres = '%s = ' % (resultrepr,)
         else:
             sres = ''
         if self.name:
@@ -333,6 +334,9 @@ class ResOpNone(object):
     def getresult(self):
         return None
 
+    def getresultrepr(self):
+        return None
+
 class ResOpInt(object):
     _mixin_ = True
     type = INT
@@ -344,6 +348,9 @@ class ResOpInt(object):
     def getint(self):
         return self.intval
     getresult = getint
+
+    def getresultrepr(self):
+        return str(self.intval)
 
     @staticmethod
     def wrap_constant(intval):
@@ -358,6 +365,9 @@ class ResOpFloat(object):
         #assert isinstance(floatval, float)
         # XXX not sure between float or float storage
         self.floatval = floatval
+
+    def getresultrepr(self):
+        return str(self.floatval)
 
     def getfloatstorage(self):
         return self.floatval
@@ -379,6 +389,10 @@ class ResOpPointer(object):
     def getref_base(self):
         return self.pval
     getresult = getref_base
+
+    def getresultrepr(self):
+        # XXX what do we want to put in here?
+        return str(self.pval)
 
     @staticmethod
     def wrap_constant(pval):
@@ -497,7 +511,7 @@ class UnaryOp(object):
         func(self.getopnum(), 0, self._arg0)
 
     def clone(self):
-        r = create_resop_1(self.opnum, self._arg0, self.getresult(),
+        r = create_resop_1(self.opnum, self.getresult(), self._arg0,
                               self.getdescrclone())
         if self.is_guard():
             r.setfailargs(self.getfailargs())
@@ -542,8 +556,8 @@ class BinaryOp(object):
         func(self.getopnum(), 1, self._arg1)
 
     def clone(self):
-        r = create_resop_2(self.opnum, self._arg0, self._arg1,
-                           self.getresult(),  self.getdescrclone())
+        r = create_resop_2(self.opnum, self.getresult(), self._arg0, self._arg1,
+                           self.getdescrclone())
         if self.is_guard():
             r.setfailargs(self.getfailargs())
         return r
@@ -595,8 +609,8 @@ class TernaryOp(object):
 
     def clone(self):
         assert not self.is_guard()
-        return create_resop_3(self.opnum, self._arg0, self._arg1, self._arg2,
-                              self.getresult(), self.getdescrclone())
+        return create_resop_3(self.opnum, self.getresult(), self._arg0,
+                              self._arg1, self._arg2, self.getdescrclone())
     
 
 class N_aryOp(object):
@@ -627,7 +641,7 @@ class N_aryOp(object):
 
     def clone(self):
         assert not self.is_guard()
-        return create_resop(self.opnum, self._args[:], self.getresult(),
+        return create_resop(self.opnum, self.getresult(), self._args[:],
                               self.getdescrclone())
 
 

@@ -2180,7 +2180,7 @@ class MetaInterp(object):
         # FIXME: kill TerminatingLoopToken?
         # FIXME: can we call compile_trace?
         token = loop_tokens[0].finishdescr
-        self.history.record(create_resop(rop.FINISH, exits, None, descr=token))
+        self.history.record(create_resop(rop.FINISH, None, exits, descr=token))
         target_token = compile.compile_trace(self, self.resumekey)
         if target_token is not token:
             compile.giveup()
