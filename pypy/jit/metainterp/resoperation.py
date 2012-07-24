@@ -9,6 +9,7 @@ REF   = 'r'
 FLOAT = 'f'
 STRUCT = 's'
 VOID  = 'v'
+HOLE = '_'
 
 def create_resop_dispatch(opnum, result, args, descr=None):
     cls = opclasses[opnum]
