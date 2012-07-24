@@ -5,7 +5,7 @@ from pypy.jit.metainterp.optimizeopt import optimizer, virtualize
 from pypy.jit.metainterp.optimizeopt.optimizer import CONST_0, CONST_1
 from pypy.jit.metainterp.optimizeopt.optimizer import llhelper, REMOVED
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython import annlowlevel

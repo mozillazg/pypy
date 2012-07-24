@@ -1,7 +1,7 @@
 import sys, os
 from pypy.jit.metainterp.history import Box, Const, ConstInt, getkind
 from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
-from pypy.jit.metainterp.history import INT, REF, FLOAT, HOLE
+from pypy.jit.metainterp.resoperation import INT, REF, FLOAT
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import jitprof

@@ -9,7 +9,7 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.jit.metainterp import history
-from pypy.jit.metainterp.history import REF, INT, FLOAT, STRUCT
+from pypy.jit.metainterp.resoperation import REF, INT, FLOAT, STRUCT
 from pypy.jit.metainterp.warmstate import unwrap
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend import model

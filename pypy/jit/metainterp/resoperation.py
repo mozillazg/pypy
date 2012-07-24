@@ -4,9 +4,22 @@ from pypy.rpython.lltypesystem.lltype import typeOf
 from pypy.jit.codewriter import longlong
 from pypy.rlib.objectmodel import compute_identity_hash
 
+INT   = 'i'
+REF   = 'r'
+FLOAT = 'f'
+STRUCT = 's'
+VOID  = 'v'
+
 @specialize.arg(0)
-def ResOperation(opnum, args, result, descr=None):
+def create_resop(opnum, args, result, descr=None):
     cls = opclasses[opnum]
+    assert cls.NUMARGS == -1
+    if cls.is_always_pure():
+        for arg in args:
+            if not arg.is_constant():
+                break
+        else:
+            return cls.wrap_constant(result)
     if result is None:
         op = cls()
     else:
@@ -16,6 +29,84 @@ def ResOperation(opnum, args, result, descr=None):
         assert isinstance(op, ResOpWithDescr)
         op.setdescr(descr)
     return op
+
+@specialize.arg(0)
+def create_resop_0(opnum, result, descr=None):
+    cls = opclasses[opnum]
+    assert cls.NUMARGS == 0
+    if result is None:
+        op = cls()
+    else:
+        op = cls(result)
+    if descr is not None:
+        assert isinstance(op, ResOpWithDescr)
+        op.setdescr(descr)
+    return op
+
+@specialize.arg(0)
+def create_resop_1(opnum, arg0, result, descr=None):
+    cls = opclasses[opnum]
+    assert cls.NUMARGS == 1
+    if cls.is_always_pure():
+        if arg0.is_constant():
+            return cls.wrap_constant(result)
+    if result is None:
+        op = cls()
+    else:
+        op = cls(result)
+    op._arg0 = arg0
+    if descr is not None:
+        assert isinstance(op, ResOpWithDescr)
+        op.setdescr(descr)
+    return op
+
+@specialize.arg(0)
+def create_resop_2(opnum, arg0, arg1, result, descr=None):
+    cls = opclasses[opnum]
+    assert cls.NUMARGS == 2
+    if cls.is_always_pure():
+        if arg0.is_constant() and arg1.is_constant():
+            return cls.wrap_constant(result)
+    if result is None:
+        op = cls()
+    else:
+        op = cls(result)
+    op._arg0 = arg0
+    op._arg1 = arg1
+    if descr is not None:
+        assert isinstance(op, ResOpWithDescr)
+        op.setdescr(descr)
+    return op
+
+@specialize.arg(0)
+def create_resop_3(opnum, arg0, arg1, arg2, result, descr=None):
+    cls = opclasses[opnum]
+    assert cls.NUMARGS == 3
+    if cls.is_always_pure():
+        if arg0.is_constant() and arg1.is_constant() and arg2.is_constant():
+            return cls.wrap_constant(result)
+    if result is None:
+        op = cls()
+    else:
+        op = cls(result)
+    op._arg0 = arg0
+    op._arg1 = arg1
+    op._arg2 = arg2
+    if descr is not None:
+        assert isinstance(op, ResOpWithDescr)
+        op.setdescr(descr)
+    return op
+
+def copy_and_change(self, opnum, args=None, result=None, descr=None):
+    "shallow copy: the returned operation is meant to be used in place of self"
+    if args is None:
+        args = self.getarglist()
+    if result is None:
+        result = self.result
+    if descr is None:
+        descr = self.getdescr()
+    newop = ResOperation(opnum, args, result, descr)
+    return newop
 
 class AbstractValue(object):
     __slots__ = ()
@@ -72,6 +163,9 @@ class AbstractValue(object):
     def same_box(self, other):
         return self is other
 
+    def is_constant(self):
+        return False
+
 class AbstractResOp(AbstractValue):
     """The central ResOperation class, representing one operation."""
 
@@ -80,8 +174,9 @@ class AbstractResOp(AbstractValue):
     pc = 0
     opnum = 0
 
-    def getopnum(self):
-        return self.opnum
+    @classmethod
+    def getopnum(cls):
+        return cls.opnum
 
     # methods implemented by the arity mixins
     # ---------------------------------------
@@ -118,6 +213,9 @@ class AbstractResOp(AbstractValue):
     def getdescr(self):
         return None
 
+    def getdescrclone(self):
+        return None
+
     def setdescr(self, descr):
         raise NotImplementedError
 
@@ -126,28 +224,6 @@ class AbstractResOp(AbstractValue):
 
     # common methods
     # --------------
-
-    def copy_and_change(self, opnum, args=None, result=None, descr=None):
-        "shallow copy: the returned operation is meant to be used in place of self"
-        if args is None:
-            args = self.getarglist()
-        if result is None:
-            result = self.result
-        if descr is None:
-            descr = self.getdescr()
-        newop = ResOperation(opnum, args, result, descr)
-        return newop
-
-    def clone(self):
-        args = self.getarglist()
-        descr = self.getdescr()
-        if descr is not None:
-            descr = descr.clone_if_mutable()
-        op = ResOperation(self.getopnum(), args[:], self.result, descr)
-        if not we_are_translated():
-            op.name = self.name
-            op.pc = self.pc
-        return op
 
     def __repr__(self):
         try:
@@ -176,56 +252,71 @@ class AbstractResOp(AbstractValue):
             return '%s%s%s(%s, descr=%r)' % (prefix, sres, self.getopname(),
                                              ', '.join([str(a) for a in args]), descr)
 
-    def getopname(self):
+    @classmethod
+    def getopname(cls):
         try:
-            return opname[self.getopnum()].lower()
+            return opname[cls.getopnum()].lower()
         except KeyError:
-            return '<%d>' % self.getopnum()
+            return '<%d>' % cls.getopnum()
 
-    def is_guard(self):
-        return rop._GUARD_FIRST <= self.getopnum() <= rop._GUARD_LAST
+    @classmethod
+    def is_guard(cls):
+        return rop._GUARD_FIRST <= cls.getopnum() <= rop._GUARD_LAST
 
-    def is_foldable_guard(self):
-        return rop._GUARD_FOLDABLE_FIRST <= self.getopnum() <= rop._GUARD_FOLDABLE_LAST
+    @classmethod
+    def is_foldable_guard(cls):
+        return rop._GUARD_FOLDABLE_FIRST <= cls.getopnum() <= rop._GUARD_FOLDABLE_LAST
 
-    def is_guard_exception(self):
-        return (self.getopnum() == rop.GUARD_EXCEPTION or
-                self.getopnum() == rop.GUARD_NO_EXCEPTION)
+    @classmethod
+    def is_guard_exception(cls):
+        return (cls.getopnum() == rop.GUARD_EXCEPTION or
+                cls.getopnum() == rop.GUARD_NO_EXCEPTION)
 
-    def is_guard_overflow(self):
-        return (self.getopnum() == rop.GUARD_OVERFLOW or
-                self.getopnum() == rop.GUARD_NO_OVERFLOW)
+    @classmethod
+    def is_guard_overflow(cls):
+        return (cls.getopnum() == rop.GUARD_OVERFLOW or
+                cls.getopnum() == rop.GUARD_NO_OVERFLOW)
 
-    def is_always_pure(self):
-        return rop._ALWAYS_PURE_FIRST <= self.getopnum() <= rop._ALWAYS_PURE_LAST
+    @classmethod
+    def is_always_pure(cls):
+        return rop._ALWAYS_PURE_FIRST <= cls.getopnum() <= rop._ALWAYS_PURE_LAST
 
-    def has_no_side_effect(self):
-        return rop._NOSIDEEFFECT_FIRST <= self.getopnum() <= rop._NOSIDEEFFECT_LAST
+    @classmethod
+    def has_no_side_effect(cls):
+        return rop._NOSIDEEFFECT_FIRST <= cls.getopnum() <= rop._NOSIDEEFFECT_LAST
 
-    def can_raise(self):
-        return rop._CANRAISE_FIRST <= self.getopnum() <= rop._CANRAISE_LAST
+    @classmethod
+    def can_raise(cls):
+        return rop._CANRAISE_FIRST <= cls.getopnum() <= rop._CANRAISE_LAST
 
-    def is_malloc(self):
+    @classmethod
+    def is_malloc(cls):
         # a slightly different meaning from can_malloc
-        return rop._MALLOC_FIRST <= self.getopnum() <= rop._MALLOC_LAST
+        return rop._MALLOC_FIRST <= cls.getopnum() <= rop._MALLOC_LAST
 
-    def can_malloc(self):
-        return self.is_call() or self.is_malloc()
+    @classmethod
+    def can_malloc(cls):
+        return cls.is_call() or cls.is_malloc()
 
-    def is_call(self):
-        return rop._CALL_FIRST <= self.getopnum() <= rop._CALL_LAST
+    @classmethod
+    def is_call(cls):
+        return rop._CALL_FIRST <= cls.getopnum() <= rop._CALL_LAST
 
-    def is_ovf(self):
-        return rop._OVF_FIRST <= self.getopnum() <= rop._OVF_LAST
+    @classmethod
+    def is_ovf(cls):
+        return rop._OVF_FIRST <= cls.getopnum() <= rop._OVF_LAST
 
-    def is_comparison(self):
-        return self.is_always_pure() and self.returns_bool_result()
+    @classmethod
+    def is_comparison(cls):
+        return cls.is_always_pure() and cls.returns_bool_result()
 
-    def is_final(self):
-        return rop._FINAL_FIRST <= self.getopnum() <= rop._FINAL_LAST
+    @classmethod
+    def is_final(cls):
+        return rop._FINAL_FIRST <= cls.getopnum() <= rop._FINAL_LAST
 
-    def returns_bool_result(self):
-        opnum = self.getopnum()
+    @classmethod
+    def returns_bool_result(cls):
+        opnum = cls.getopnum()
         if we_are_translated():
             assert opnum >= 0
         elif opnum < 0:
@@ -234,12 +325,17 @@ class AbstractResOp(AbstractValue):
 
 class ResOpNone(object):
     _mixin_ = True
+    type = VOID
     
     def __init__(self):
         pass # no return value
 
+    def getresult(self):
+        return None
+
 class ResOpInt(object):
     _mixin_ = True
+    type = INT
     
     def __init__(self, intval):
         assert isinstance(intval, int)
@@ -247,9 +343,16 @@ class ResOpInt(object):
 
     def getint(self):
         return self.intval
+    getresult = getint
+
+    @staticmethod
+    def wrap_constant(intval):
+        from pypy.jit.metainterp.history import ConstInt
+        return ConstInt(intval)
 
 class ResOpFloat(object):
     _mixin_ = True
+    type = FLOAT
     
     def __init__(self, floatval):
         #assert isinstance(floatval, float)
@@ -258,9 +361,16 @@ class ResOpFloat(object):
 
     def getfloatstorage(self):
         return self.floatval
+    getresult = getfloatstorage
+
+    @staticmethod
+    def wrap_constant(floatval):
+        from pypy.jit.metainterp.history import ConstFloat
+        return ConstFloat(floatval)
 
 class ResOpPointer(object):
     _mixin_ = True
+    type = REF
     
     def __init__(self, pval):
         assert typeOf(pval) == GCREF
@@ -268,6 +378,12 @@ class ResOpPointer(object):
 
     def getref_base(self):
         return self.pval
+    getresult = getref_base
+
+    @staticmethod
+    def wrap_constant(pval):
+        from pypy.jit.metainterp.history import ConstPtr
+        return ConstPtr(pval)
 
 # ===================
 # Top of the hierachy
@@ -282,6 +398,9 @@ class ResOpWithDescr(AbstractResOp):
 
     def getdescr(self):
         return self._descr
+
+    def getdescrclone(self):
+        return self._descr.clone_if_mutable()
 
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
@@ -312,22 +431,14 @@ class GuardResOp(ResOpWithDescr):
     def setfailargs(self, fail_args):
         self._fail_args = fail_args
 
-    def copy_and_change(self, opnum, args=None, result=None, descr=None):
-        newop = AbstractResOp.copy_and_change(self, opnum, args, result, descr)
-        newop.setfailargs(self.getfailargs())
-        return newop
-
-    def clone(self):
-        newop = AbstractResOp.clone(self)
-        newop.setfailargs(self.getfailargs())
-        return newop
-
 # ============
 # arity mixins
 # ============
 
 class NullaryOp(object):
     _mixin_ = True
+
+    NUMARGS = 0
 
     def initarglist(self, args):
         assert len(args) == 0
@@ -344,10 +455,20 @@ class NullaryOp(object):
     def setarg(self, i, box):
         raise IndexError
 
+    def foreach_arg(self, func):
+        pass
+
+    def clone(self):
+        r = create_resop_0(self.opnum, self.getresult(), self.getdescrclone())
+        if self.is_guard():
+            r.setfailargs(self.getfailargs())
+        return r
 
 class UnaryOp(object):
     _mixin_ = True
     _arg0 = None
+
+    NUMARGS = 1
 
     def initarglist(self, args):
         assert len(args) == 1
@@ -371,11 +492,23 @@ class UnaryOp(object):
         else:
             raise IndexError
 
+    @specialize.arg(1)
+    def foreach_arg(self, func):
+        func(self.getopnum(), 0, self._arg0)
+
+    def clone(self):
+        r = create_resop_1(self.opnum, self._arg0, self.getresult(),
+                              self.getdescrclone())
+        if self.is_guard():
+            r.setfailargs(self.getfailargs())
+        return r
 
 class BinaryOp(object):
     _mixin_ = True
     _arg0 = None
     _arg1 = None
+
+    NUMARGS = 2
 
     def initarglist(self, args):
         assert len(args) == 2
@@ -403,12 +536,26 @@ class BinaryOp(object):
     def getarglist(self):
         return [self._arg0, self._arg1]
 
+    @specialize.arg(1)
+    def foreach_arg(self, func):
+        func(self.getopnum(), 0, self._arg0)
+        func(self.getopnum(), 1, self._arg1)
+
+    def clone(self):
+        r = create_resop_2(self.opnum, self._arg0, self._arg1,
+                           self.getresult(),  self.getdescrclone())
+        if self.is_guard():
+            r.setfailargs(self.getfailargs())
+        return r
+
 
 class TernaryOp(object):
     _mixin_ = True
     _arg0 = None
     _arg1 = None
     _arg2 = None
+
+    NUMARGS = 3
 
     def initarglist(self, args):
         assert len(args) == 3
@@ -440,9 +587,23 @@ class TernaryOp(object):
         else:
             raise IndexError
 
+    @specialize.arg(1)
+    def foreach_arg(self, func):
+        func(self.getopnum(), 0, self._arg0)
+        func(self.getopnum(), 1, self._arg1)
+        func(self.getopnum(), 2, self._arg2)
+
+    def clone(self):
+        assert not self.is_guard()
+        return create_resop_3(self.opnum, self._arg0, self._arg1, self._arg2,
+                              self.getresult(), self.getdescrclone())
+    
+
 class N_aryOp(object):
     _mixin_ = True
     _args = None
+
+    NUMARGS = -1
 
     def initarglist(self, args):
         self._args = args
@@ -458,6 +619,16 @@ class N_aryOp(object):
 
     def setarg(self, i, box):
         self._args[i] = box
+
+    @specialize.arg(1)
+    def foreach_arg(self, func):
+        for i, arg in enumerate(self._args):
+            func(self.getopnum(), i, arg)
+
+    def clone(self):
+        assert not self.is_guard()
+        return create_resop(self.opnum, self._args[:], self.getresult(),
+                              self.getdescrclone())
 
 
 # ____________________________________________________________

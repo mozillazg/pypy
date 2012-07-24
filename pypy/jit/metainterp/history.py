@@ -8,18 +8,13 @@ from pypy.rlib.rarithmetic import r_int64, is_valid_int
 
 from pypy.conftest import option
 
-from pypy.jit.metainterp.resoperation import ResOperation, rop, AbstractValue
+from pypy.jit.metainterp.resoperation import rop, AbstractValue, INT, REF,\
+     FLOAT
+
 from pypy.jit.codewriter import heaptracker, longlong
 import weakref
 
 # ____________________________________________________________
-
-INT   = 'i'
-REF   = 'r'
-FLOAT = 'f'
-STRUCT = 's'
-HOLE  = '_'
-VOID  = 'v'
 
 FAILARGS_LIMIT = 1000
 
@@ -151,6 +146,9 @@ class Const(AbstractValue):
 
     def __repr__(self):
         return 'Const(%s)' % self._getrepr_()
+
+    def is_constant(self):
+        return True
 
 
 class ConstInt(Const):
@@ -799,10 +797,8 @@ class History(object):
         self.inputargs = None
         self.operations = []
 
-    def record(self, opnum, argboxes, resbox, descr=None):
-        op = ResOperation(opnum, argboxes, resbox, descr)
+    def record(self, op):
         self.operations.append(op)
-        return op
 
     def substitute_operation(self, position, opnum, argboxes, descr=None):
         resbox = self.operations[position].result

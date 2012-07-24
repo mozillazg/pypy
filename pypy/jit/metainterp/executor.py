@@ -5,10 +5,11 @@ from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rlib.rarithmetic import ovfcheck, r_longlong, is_valid_int
 from pypy.rlib.rtimer import read_timestamp
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr
-from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID, AbstractDescr
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr,\
+     AbstractDescr
+from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, VOID
 from pypy.jit.metainterp import resoperation
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop, create_resop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 from pypy.jit.codewriter import longlong
 
@@ -333,6 +334,7 @@ def _make_execute_list():
             name = 'bhimpl_' + key.lower()
             if hasattr(BlackholeInterpreter, name):
                 func = make_execute_function_with_boxes(
+                    value,
                     key.lower(),
                     getattr(BlackholeInterpreter, name).im_func)
                 if func is not None:
@@ -366,7 +368,7 @@ def _make_execute_list():
             #raise AssertionError("missing %r" % (key,))
     return execute_by_num_args
 
-def make_execute_function_with_boxes(name, func):
+def make_execute_function_with_boxes(opnum, name, func):
     # Make a wrapper for 'func'.  The func is a simple bhimpl_xxx function
     # from the BlackholeInterpreter class.  The wrapper is a new function
     # that receives and returns boxed values.
@@ -383,7 +385,6 @@ def make_execute_function_with_boxes(name, func):
     if func.resulttype not in ('i', 'r', 'f', None):
         return None
     argtypes = unrolling_iterable(func.argtypes)
-    resulttype = func.resulttype
     #
     def do(cpu, _, *args):
         newargs = ()
@@ -405,12 +406,11 @@ def make_execute_function_with_boxes(name, func):
         assert not args
         #
         result = func(*newargs)
-        ResOperation(opnum, orig_args, result, )
+        if has_descr:
+            return create_resop(opnum, orig_args[:-1], result, orig_args[-1])
+        else:
+            return create_resop(opnum, orig_args, result)
         #
-        if resulttype == 'i': return BoxInt(result)
-        if resulttype == 'r': return BoxPtr(result)
-        if resulttype == 'f': return BoxFloat(result)
-        return None
     #
     do.func_name = 'do_' + name
     return do

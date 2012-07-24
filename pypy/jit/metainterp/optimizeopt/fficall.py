@@ -1,7 +1,7 @@
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.rlib import clibffi, libffi
 from pypy.rlib.debug import debug_print
 from pypy.rlib.libffi import Func

@@ -1,6 +1,6 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.optimizeopt.vstring import VAbstractStringValue
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop
 
 class OptEarlyForce(Optimization):
     def propagate_forward(self, op):

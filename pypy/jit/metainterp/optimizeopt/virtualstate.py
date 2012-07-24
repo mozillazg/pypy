@@ -8,7 +8,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import LEVEL_CONSTANT, \
 from pypy.jit.metainterp.history import BoxInt, ConstInt, BoxPtr, Const
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.objectmodel import we_are_translated

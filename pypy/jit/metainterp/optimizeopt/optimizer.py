@@ -6,7 +6,7 @@ from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     args_dict)
-from pypy.jit.metainterp.resoperation import rop, ResOperation, AbstractResOp
+from pypy.jit.metainterp.resoperation import rop, AbstractResOp
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.debug import debug_start, debug_stop, debug_print

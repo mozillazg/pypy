@@ -50,11 +50,12 @@ class HeapCache(object):
     def _output_indirection(self, box):
         return self.output_indirections.get(box, box)
 
-    def invalidate_caches(self, opnum, descr, argboxes):
-        self.mark_escaped(opnum, argboxes)
-        self.clear_caches(opnum, descr, argboxes)
+    def invalidate_caches(self, op):
+        self.mark_escaped(op)
+        self.clear_caches(op)
 
-    def mark_escaped(self, opnum, argboxes):
+    def mark_escaped(self, op):
+        opnum = op.getopnum()
         if opnum == rop.SETFIELD_GC:
             assert len(argboxes) == 2
             box, valuebox = argboxes
@@ -77,23 +78,22 @@ class HeapCache(object):
               opnum != rop.MARK_OPAQUE_PTR and
               opnum != rop.PTR_EQ and
               opnum != rop.PTR_NE):
-            idx = 0
-            for box in argboxes:
-                # setarrayitem_gc don't escape its first argument
-                if not (idx == 0 and opnum in [rop.SETARRAYITEM_GC]):
-                    self._escape(box)
-                idx += 1
+            op.foreach_arg(self._escape)
 
-    def _escape(self, box):
-        if box in self.new_boxes:
-            self.new_boxes[box] = False
-        if box in self.dependencies:
-            deps = self.dependencies[box]
-            del self.dependencies[box]
+    def _escape(self, opnum, idx, source):
+        # setarrayitem_gc don't escape its first argument
+        if idx == 0 and opnum == rop.SETARRAYITEM_GC:
+            return
+        if source in self.new_boxes:
+            self.new_boxes[source] = False
+        if source in self.dependencies:
+            deps = self.dependencies[source]
+            del self.dependencies[source]
             for dep in deps:
                 self._escape(dep)
 
-    def clear_caches(self, opnum, descr, argboxes):
+    def clear_caches(self, op):
+        opnum = op.getopnum()
         if (opnum == rop.SETFIELD_GC or
             opnum == rop.SETARRAYITEM_GC or
             opnum == rop.SETFIELD_RAW or

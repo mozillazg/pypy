@@ -7,7 +7,7 @@ from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.optimizer import *
 from pypy.jit.metainterp.optimizeopt.generalize import KillHugeIntBounds
 from pypy.jit.metainterp.inliner import Inliner
-from pypy.jit.metainterp.resoperation import rop, ResOperation
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.resume import Snapshot
 import sys, os
 

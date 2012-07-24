@@ -1,6 +1,6 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import ResOperation, rop
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import TargetToken, JitCellToken
 
 class OptSimplify(Optimization):

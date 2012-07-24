@@ -9,7 +9,8 @@ from pypy.rlib import nonconst, rstack
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
 from pypy.jit.metainterp.history import Box, TargetToken
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, create_resop
+from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
 from pypy.jit.metainterp.jitprof import EmptyProfiler
@@ -164,8 +165,10 @@ class MIFrame(object):
                 assert not oldbox.same_box(b)
 
 
-    def make_result_of_lastop(self, resultbox):
-        got_type = resultbox.type
+    def make_result_of_lastop(self, resultop):
+        got_type = resultop.type
+        if got_type == resoperation.VOID:
+            return
         # XXX disabled for now, conflicts with str_guard_value
         #if not we_are_translated():
         #    typeof = {'i': history.INT,
@@ -173,14 +176,14 @@ class MIFrame(object):
         #              'f': history.FLOAT}
         #    assert typeof[self.jitcode._resulttypes[self.pc]] == got_type
         target_index = ord(self.bytecode[self.pc-1])
-        if got_type == history.INT:
-            self.registers_i[target_index] = resultbox
-        elif got_type == history.REF:
+        if got_type == resoperation.INT:
+            self.registers_i[target_index] = resultop
+        elif got_type == resoperation.REF:
             #debug_print(' ->',
             #            llmemory.cast_ptr_to_adr(resultbox.getref_base()))
-            self.registers_r[target_index] = resultbox
-        elif got_type == history.FLOAT:
-            self.registers_f[target_index] = resultbox
+            self.registers_r[target_index] = resultop
+        elif got_type == resoperation.FLOAT:
+            self.registers_f[target_index] = resultop
         else:
             raise AssertionError("bad result box type")
 
@@ -1299,6 +1302,7 @@ class MIFrame(object):
 
     @specialize.arg(1)
     def execute_varargs(self, opnum, argboxes, descr, exc, pure):
+        xxx
         self.metainterp.clear_exception()
         resbox = self.metainterp.execute_and_record_varargs(opnum, argboxes,
                                                             descr=descr)
@@ -1468,10 +1472,10 @@ class MetaInterpStaticData(object):
         # store this information for fastpath of call_assembler
         # (only the paths that can actually be taken)
         for jd in self.jitdrivers_sd:
-            name = {history.INT: 'int',
-                    history.REF: 'ref',
-                    history.FLOAT: 'float',
-                    history.VOID: 'void'}[jd.result_type]
+            name = {resoperation.INT: 'int',
+                    resoperation.REF: 'ref',
+                    resoperation.FLOAT: 'float',
+                    resoperation.VOID: 'void'}[jd.result_type]
             tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
             jd.portal_finishtoken = tokens[0].finishdescr
             num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
@@ -1651,14 +1655,14 @@ class MetaInterp(object):
                 self.aborted_tracing(stb.reason)
             sd = self.staticdata
             result_type = self.jitdriver_sd.result_type
-            if result_type == history.VOID:
+            if result_type == resoperation.VOID:
                 assert resultbox is None
                 raise sd.DoneWithThisFrameVoid()
-            elif result_type == history.INT:
+            elif result_type == resoperation.INT:
                 raise sd.DoneWithThisFrameInt(resultbox.getint())
-            elif result_type == history.REF:
+            elif result_type == resoperation.REF:
                 raise sd.DoneWithThisFrameRef(self.cpu, resultbox.getref_base())
-            elif result_type == history.FLOAT:
+            elif result_type == resoperation.FLOAT:
                 raise sd.DoneWithThisFrameFloat(resultbox.getfloatstorage())
             else:
                 assert False
@@ -1727,12 +1731,10 @@ class MetaInterp(object):
         # execute the operation
         profiler = self.staticdata.profiler
         profiler.count_ops(opnum)
-        resbox = executor.execute(self.cpu, self, opnum, descr, *argboxes)
-        if rop._ALWAYS_PURE_FIRST <= opnum <= rop._ALWAYS_PURE_LAST:
-            return self._record_helper_pure(opnum, resbox, descr, *argboxes)
-        else:
-            return self._record_helper_nonpure_varargs(opnum, resbox, descr,
-                                                       list(argboxes))
+        resop = executor.execute(self.cpu, self, opnum, descr, *argboxes)
+        if not resop.is_constant():
+            self._record(resop)
+        return resop
 
     @specialize.arg(1)
     def execute_and_record_varargs(self, opnum, argboxes, descr=None):
@@ -1750,15 +1752,6 @@ class MetaInterp(object):
         else:
             resbox = self._record_helper_nonpure_varargs(opnum, resbox, descr, argboxes)
         return resbox
-
-    def _record_helper_pure(self, opnum, resbox, descr, *argboxes):
-        canfold = self._all_constants(*argboxes)
-        if canfold:
-            resbox = resbox.constbox()       # ensure it is a Const
-            return resbox
-        else:
-            resbox = resbox.nonconstbox()    # ensure it is a Box
-            return self._record_helper_nonpure_varargs(opnum, resbox, descr, list(argboxes))
 
     def _record_helper_pure_varargs(self, opnum, resbox, descr, argboxes):
         canfold = self._all_constants_varargs(argboxes)
@@ -1783,6 +1776,18 @@ class MetaInterp(object):
         self.attach_debug_info(op)
         return resbox
 
+    def _record(self, resop):
+        opnum = resop.getopnum()
+        if (rop._OVF_FIRST <= opnum <= rop._OVF_LAST and
+            self.last_exc_value_box is None and
+            resop.all_constant_args()):
+            return resop.constbox()
+        profiler = self.staticdata.profiler
+        profiler.count_ops(opnum, Counters.RECORDED_OPS)
+        self.heapcache.invalidate_caches(resop)
+        self.history.record(resop)
+        self.attach_debug_info(resop)
+        return resop
 
     def attach_debug_info(self, op):
         if (not we_are_translated() and op is not None
@@ -2157,17 +2162,17 @@ class MetaInterp(object):
         # temporarily put a JUMP to a pseudo-loop
         sd = self.staticdata
         result_type = self.jitdriver_sd.result_type
-        if result_type == history.VOID:
+        if result_type == resoperation.VOID:
             assert exitbox is None
             exits = []
             loop_tokens = sd.loop_tokens_done_with_this_frame_void
-        elif result_type == history.INT:
+        elif result_type == resoperation.INT:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_int
-        elif result_type == history.REF:
+        elif result_type == resoperation.REF:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_ref
-        elif result_type == history.FLOAT:
+        elif result_type == resoperation.FLOAT:
             exits = [exitbox]
             loop_tokens = sd.loop_tokens_done_with_this_frame_float
         else:
@@ -2175,7 +2180,7 @@ class MetaInterp(object):
         # FIXME: kill TerminatingLoopToken?
         # FIXME: can we call compile_trace?
         token = loop_tokens[0].finishdescr
-        self.history.record(rop.FINISH, exits, None, descr=token)
+        self.history.record(create_resop(rop.FINISH, exits, None, descr=token))
         target_token = compile.compile_trace(self, self.resumekey)
         if target_token is not token:
             compile.giveup()
@@ -2635,30 +2640,23 @@ def _get_opimpl_method(name, argcodes):
             if self.debug:
                 print '\tpyjitpl: %s(%s)' % (name, ', '.join(map(repr, args))),
             try:
-                resultbox = unboundmethod(self, *args)
+                resultop = unboundmethod(self, *args)
             except Exception, e:
                 if self.debug:
                     print '-> %s!' % e.__class__.__name__
                 raise
-            if num_return_args == 0:
-                if self.debug:
-                    print
-                assert resultbox is None
-            else:
-                if self.debug:
-                    print '-> %r' % (resultbox,)
-                assert argcodes[next_argcode] == '>'
-                result_argcode = argcodes[next_argcode + 1]
-                assert resultbox.type == {'i': history.INT,
-                                          'r': history.REF,
-                                          'f': history.FLOAT}[result_argcode]
+            if self.debug:
+                print resultop
+            assert argcodes[next_argcode] == '>'
+            result_argcode = argcodes[next_argcode + 1]
+            assert resultop.type == {'i': resoperation.INT,
+                                     'r': resoperation.REF,
+                                     'f': resoperation.FLOAT,
+                                     'v': resoperation.VOID}[result_argcode]
         else:
-            resultbox = unboundmethod(self, *args)
+            resultop = unboundmethod(self, *args)
         #
-        if resultbox is not None:
-            self.make_result_of_lastop(resultbox)
-        elif not we_are_translated():
-            assert self._result_argcode in 'v?'
+        self.make_result_of_lastop(resultop)
     #
     unboundmethod = getattr(MIFrame, 'opimpl_' + name).im_func
     argtypes = unrolling_iterable(unboundmethod.argtypes)

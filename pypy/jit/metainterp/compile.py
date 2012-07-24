@@ -9,7 +9,7 @@ from pypy.rlib.jit import JitDebugInfo, Counters
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
-from pypy.jit.metainterp.resoperation import ResOperation, rop, get_deep_immutable_oplist
+from pypy.jit.metainterp.resoperation import rop, get_deep_immutable_oplist
 from pypy.jit.metainterp.history import TreeLoop, Box, History, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
 from pypy.jit.metainterp.history import BoxPtr, BoxObj, BoxFloat, Const, ConstInt
