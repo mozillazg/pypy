@@ -39,7 +39,7 @@ class OptSimplify(Optimization):
         if not self.unroll:
             descr = op.getdescr()
             if isinstance(descr, JitCellToken):
-                return self.optimize_JUMP(op)
+                return self.optimize_JUMP(op.copy_and_change(rop.JUMP))
             self.last_label_descr = op.getdescr()
         self.emit_operation(op)
         
