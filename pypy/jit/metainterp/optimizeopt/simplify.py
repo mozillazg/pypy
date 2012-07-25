@@ -39,23 +39,26 @@ class OptSimplify(Optimization):
         if not self.unroll:
             descr = op.getdescr()
             if isinstance(descr, JitCellToken):
-                return self.optimize_JUMP(op.copy_and_change(rop.JUMP))
+                return self.optimize_JUMP(op)
             self.last_label_descr = op.getdescr()
         self.emit_operation(op)
         
     def optimize_JUMP(self, op):
         if not self.unroll:
             descr = op.getdescr()
+            newdescr = None
             assert isinstance(descr, JitCellToken)
             if not descr.target_tokens:
                 assert self.last_label_descr is not None
                 target_token = self.last_label_descr
                 assert isinstance(target_token, TargetToken)
                 assert target_token.targeting_jitcell_token is descr
-                op.setdescr(self.last_label_descr)
+                newdescr = self.last_label_descr
             else:
                 assert len(descr.target_tokens) == 1
-                op.setdescr(descr.target_tokens[0])
+                newdescr = descr.target_tokens[0]
+            if newdescr is not descr or op.opnum != rop.JUMP:
+                op = op.copy_and_change(op.opnum, descr=newdescr)
         self.emit_operation(op)
 
 dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',

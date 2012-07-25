@@ -119,8 +119,9 @@ def compile_loop(metainterp, greenkey, start,
     part.resume_at_jump_descr = resume_at_jump_descr
     part.operations = ([create_resop(rop.LABEL, None, inputargs,
                                      descr=TargetToken(jitcell_token))] +
-                       h_ops[start:] + [create_resop(rop.LABEL, None, jumpargs,
-                                                     descr=jitcell_token)])
+                       [h_ops[i].clone() for i in range(start, len(h_ops))]+
+                       [create_resop(rop.LABEL, None, jumpargs,
+                                     descr=jitcell_token)])
 
     try:
         optimize_trace(metainterp_sd, part, jitdriver_sd.warmstate.enable_opts)
@@ -139,10 +140,11 @@ def compile_loop(metainterp, greenkey, start,
     while part.operations[-1].getopnum() == rop.LABEL:
         inliner = Inliner(inputargs, jumpargs)
         part.quasi_immutable_deps = None
-        part.operations = [part.operations[-1]] + \
-                          [inliner.inline_op(h_ops[i]) for i in range(start, len(h_ops))] + \
-                          [ResOperation(rop.JUMP, [inliner.inline_arg(a) for a in jumpargs],
-                                        None, descr=jitcell_token)]
+        part.operations = ([part.operations[-1]] +
+             [inliner.inline_op(h_ops[i]) for i in range(start, len(h_ops))] +
+             [create_resop(rop.JUMP, None,
+                           [inliner.get_value_replacement(a) for a in jumpargs],
+                           descr=jitcell_token)])
         target_token = part.operations[0].getdescr()
         assert isinstance(target_token, TargetToken)
         all_target_tokens.append(target_token)

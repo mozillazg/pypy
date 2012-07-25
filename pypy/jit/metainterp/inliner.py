@@ -12,27 +12,15 @@ class Inliner(object):
                 self.argmap[inputargs[i]] = jump_args[i]
         self.snapshot_map = {None: None}
 
-    def inline_op(self, newop, ignore_result=False, clone=True,
-                  ignore_failargs=False):
-        if clone:
-            newop = newop.clone()
-        args = newop.getarglist()
-        newop.initarglist([self.inline_arg(a) for a in args])
-
+    def inline_op(self, op):
+        newop = op.copy_if_modified_by_optimization(self, force_copy=True)
         if newop.is_guard():
-            args = newop.getfailargs()
-            if args and not ignore_failargs:
-                newop.setfailargs([self.inline_arg(a) for a in args])
-            else:
-                newop.setfailargs([])
+            args = op.getfailargs()
+            if args:
+                newop.setfailargs([self.get_value_replacement(a) for a in args])
 
-        if newop.result and not ignore_result:
-            old_result = newop.result
-            newop.result = newop.result.clonebox()
-            self.argmap[old_result] = newop.result
-
+        self.argmap[op] = newop
         self.inline_descr_inplace(newop.getdescr())
-
         return newop
 
     def inline_descr_inplace(self, descr):
@@ -40,7 +28,7 @@ class Inliner(object):
         if isinstance(descr, ResumeGuardDescr):
             descr.rd_snapshot = self.inline_snapshot(descr.rd_snapshot)
 
-    def inline_arg(self, arg):
+    def get_value_replacement(self, arg):
         if arg is None:
             return None
         if isinstance(arg, Const):
@@ -50,7 +38,7 @@ class Inliner(object):
     def inline_snapshot(self, snapshot):
         if snapshot in self.snapshot_map:
             return self.snapshot_map[snapshot]
-        boxes = [self.inline_arg(a) for a in snapshot.boxes]
+        boxes = [self.get_value_replacement(a) for a in snapshot.boxes]
         new_snapshot = Snapshot(self.inline_snapshot(snapshot.prev), boxes)
         self.snapshot_map[snapshot] = new_snapshot
         return new_snapshot

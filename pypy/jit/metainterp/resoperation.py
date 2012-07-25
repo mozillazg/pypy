@@ -485,14 +485,17 @@ class NullaryOp(object):
         return r
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum):
-        r = create_resop_0(newopnum, self.getresult(), self.getdescrclone())
+    def copy_and_change(self, newopnum, descr=None):
+        r = create_resop_0(newopnum, self.getresult(),
+                           descr or self.getdescrclone())
         if r.is_guard():
             r.setfailargs(self.getfailargs())
             assert self.is_guard()
         return r
 
-    def copy_if_modified_by_optimization(self, opt):
+    def copy_if_modified_by_optimization(self, opt, force_copy=False):
+        if force_copy:
+            return self.clone()
         return self
 
 class UnaryOp(object):
@@ -528,17 +531,18 @@ class UnaryOp(object):
             r.setfailargs(self.getfailargs())
         return r
 
-    def copy_if_modified_by_optimization(self, opt):
+    @specialize.argtype(1)
+    def copy_if_modified_by_optimization(self, opt, force_copy=False):
         new_arg = opt.get_value_replacement(self._arg0)
-        if new_arg is None:
+        if not force_copy and new_arg is None:
             return self
         return create_resop_1(self.opnum, self.getresult(), new_arg,
                               self.getdescrclone())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None):
+    def copy_and_change(self, newopnum, arg0=None, descr=None):
         r = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
-                           self.getdescrclone())
+                           descr or self.getdescrclone())
         if r.is_guard():
             r.setfailargs(self.getfailargs())
             assert self.is_guard()
@@ -581,10 +585,11 @@ class BinaryOp(object):
             r.setfailargs(self.getfailargs())
         return r
 
-    def copy_if_modified_by_optimization(self, opt):
+    @specialize.argtype(1)
+    def copy_if_modified_by_optimization(self, opt, force_copy=False):
         new_arg0 = opt.get_value_replacement(self._arg0)
         new_arg1 = opt.get_value_replacement(self._arg1)
-        if new_arg0 is None and new_arg1 is None:
+        if not force_copy and new_arg0 is None and new_arg1 is None:
             return self
         return create_resop_2(self.opnum, self.getresult(),
                               new_arg0 or self._arg0,
@@ -592,10 +597,10 @@ class BinaryOp(object):
                               self.getdescrclone())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None, arg1=None):
+    def copy_and_change(self, newopnum, arg0=None, arg1=None, descr=None):
         r = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1,
-                           self.getdescrclone())
+                           descr or self.getdescrclone())
         if r.is_guard():
             r.setfailargs(self.getfailargs())
             assert self.is_guard()
@@ -640,12 +645,14 @@ class TernaryOp(object):
         return create_resop_3(self.opnum, self.getresult(), self._arg0,
                               self._arg1, self._arg2, self.getdescrclone())
 
-    def copy_if_modified_by_optimization(self, opt):
+    @specialize.argtype(1)
+    def copy_if_modified_by_optimization(self, opt, force_copy=False):
         assert not self.is_guard()
         new_arg0 = opt.get_value_replacement(self._arg0)
         new_arg1 = opt.get_value_replacement(self._arg1)
         new_arg2 = opt.get_value_replacement(self._arg2)
-        if new_arg0 is None and new_arg1 is None and new_arg2 is None:
+        if (not force_copy and new_arg0 is None and new_arg1 is None and
+            new_arg2 is None):
             return self
         return create_resop_3(self.opnum, self.getresult(),
                               new_arg0 or self._arg0,
@@ -654,10 +661,11 @@ class TernaryOp(object):
                               self.getdescrclone())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None, arg1=None, arg2=None):
+    def copy_and_change(self, newopnum, arg0=None, arg1=None, arg2=None,
+                        descr=None):
         r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1, arg2 or self._arg2,
-                           self.getdescrclone())
+                           descr or self.getdescrclone())
         assert not r.is_guard()
         return r
 
@@ -689,8 +697,12 @@ class N_aryOp(object):
         return create_resop(self.opnum, self.getresult(), self._args[:],
                               self.getdescrclone())
 
-    def copy_if_modified_by_optimization(self, opt):
-        newargs = None
+    @specialize.argtype(1)
+    def copy_if_modified_by_optimization(self, opt, force_copy=False):
+        if force_copy:
+            newargs = []
+        else:
+            newargs = None
         for i, arg in enumerate(self._args):
             new_arg = opt.get_value_replacement(arg)
             if new_arg is not None:
@@ -708,9 +720,10 @@ class N_aryOp(object):
                             newargs, self.getdescrclone())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, newargs=None):
+    def copy_and_change(self, newopnum, newargs=None, descr=None):
         r = create_resop(newopnum, self.getresult(),
-                         newargs or self.getarglist(), self.getdescrclone())
+                         newargs or self.getarglist(),
+                         descr or self.getdescrclone())
         assert not r.is_guard()
         return r
 
