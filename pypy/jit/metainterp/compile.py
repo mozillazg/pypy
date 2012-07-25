@@ -1,7 +1,5 @@
 import weakref
 from pypy.rpython.lltypesystem import lltype
-from pypy.rpython.ootypesystem import ootype
-from pypy.objspace.flow.model import Constant, Variable
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib import rstack
@@ -9,12 +7,11 @@ from pypy.rlib.jit import JitDebugInfo, Counters
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
-from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.history import TreeLoop, Box, History, JitCellToken, TargetToken
+from pypy.jit.metainterp.resoperation import rop, create_resop
+from pypy.jit.metainterp.history import TreeLoop, Box, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
-from pypy.jit.metainterp.history import BoxPtr, BoxObj, BoxFloat, Const, ConstInt
+from pypy.jit.metainterp.history import BoxPtr, BoxFloat, ConstInt
 from pypy.jit.metainterp import history
-from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.inliner import Inliner
 from pypy.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP
@@ -114,16 +111,16 @@ def compile_loop(metainterp, greenkey, start,
 
     metainterp_sd = metainterp.staticdata
     jitdriver_sd = metainterp.jitdriver_sd
-    history = metainterp.history
 
     jitcell_token = make_jitcell_token(jitdriver_sd)
     part = create_empty_loop(metainterp)
     part.inputargs = inputargs[:]
-    h_ops = history.operations
+    h_ops = metainterp.history.operations
     part.resume_at_jump_descr = resume_at_jump_descr
-    part.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(jitcell_token))] + \
-                      [h_ops[i].clone() for i in range(start, len(h_ops))] + \
-                      [ResOperation(rop.LABEL, jumpargs, None, descr=jitcell_token)]
+    part.operations = ([create_resop(rop.LABEL, None, inputargs,
+                                     descr=TargetToken(jitcell_token))] +
+                       h_ops[start:] + [create_resop(rop.LABEL, None, jumpargs,
+                                                     descr=jitcell_token)])
 
     try:
         optimize_trace(metainterp_sd, part, jitdriver_sd.warmstate.enable_opts)

@@ -1050,7 +1050,8 @@ class MIFrame(object):
         loc = jitdriver_sd.warmstate.get_location_str(greenkey)
         debug_print(loc)
         args = [ConstInt(jd_index), ConstInt(portal_call_depth), ConstInt(current_call_id)] + greenkey
-        self.metainterp.history.record(rop.DEBUG_MERGE_POINT, args, None)
+        dmp = create_resop(rop.DEBUG_MERGE_POINT, None, args)
+        self.metainterp.history.record(dmp)
 
     @arguments("box", "label")
     def opimpl_goto_if_exception_mismatch(self, vtablebox, next_exc_target):

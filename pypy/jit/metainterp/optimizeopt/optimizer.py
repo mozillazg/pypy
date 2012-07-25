@@ -293,9 +293,9 @@ class Optimization(object):
     def new_const_item(self, arraydescr):
         return self.optimizer.new_const_item(arraydescr)
 
-    def pure(self, opnum, args, result):
+    def pure(self, opnum, result, arg0, arg1):
         if self.optimizer.optpure:
-            self.optimizer.optpure.pure(opnum, args, result)
+            self.optimizer.optpure.pure(opnum, result, arg0, arg1)
 
     def has_pure_result(self, opnum, args, descr):
         if self.optimizer.optpure:

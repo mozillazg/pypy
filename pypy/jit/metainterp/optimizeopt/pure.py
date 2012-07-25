@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, create_resop_2
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     args_dict)
 
@@ -52,7 +52,7 @@ class OptPure(Optimization):
         # otherwise, the operation remains
         self.emit_operation(op)
         if op.returns_bool_result():
-            self.optimizer.bool_boxes[self.getvalue(op.result)] = None        
+            self.optimizer.bool_boxes[self.getvalue(op)] = None        
         if nextop:
             self.emit_operation(nextop)
 
@@ -95,8 +95,8 @@ class OptPure(Optimization):
     def setup(self):
         self.optimizer.optpure = self
 
-    def pure(self, opnum, arg0, arg1, result):
-        op = create_resopt_2(opnum, args, result)
+    def pure(self, opnum, result, arg0, arg1):
+        op = create_resop_2(opnum, result, arg0, arg1)
         key = self.optimizer.make_args_key(op)
         if key not in self.pure_operations:
             self.pure_operations[key] = op

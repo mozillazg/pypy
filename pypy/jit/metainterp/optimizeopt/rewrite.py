@@ -33,19 +33,22 @@ class OptRewrite(Optimization):
     def try_boolinvers(self, op, targs):
         oldop = self.get_pure_result(targs)
         if oldop is not None and oldop.getdescr() is op.getdescr():
-            value = self.getvalue(oldop.result)
+            value = self.getvalue(oldop)
             if value.is_constant():
                 if value.box.same_constant(CONST_1):
-                    self.make_constant(op.result, CONST_0)
+                    self.make_constant(op, CONST_0)
                     return True
                 elif value.box.same_constant(CONST_0):
-                    self.make_constant(op.result, CONST_1)
+                    self.make_constant(op, CONST_1)
                     return True
 
         return False
 
 
     def find_rewritable_bool(self, op, args):
+        # XXXX
+        return False
+        
         try:
             oldopnum = opboolinvers[op.getopnum()]
         except KeyError:
@@ -65,7 +68,7 @@ class OptRewrite(Optimization):
                                                               None))
             oldop = self.get_pure_result(targs)
             if oldop is not None and oldop.getdescr() is op.getdescr():
-                self.make_equal_to(op.result, self.getvalue(oldop.result))
+                self.make_equal_to(op, self.getvalue(oldop))
                 return True
 
         try:
@@ -84,7 +87,7 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v1.is_null() or v2.is_null():
-            self.make_constant_int(op.result, 0)
+            self.make_constant_int(op, 0)
         else:
             self.emit_operation(op)
 
@@ -92,9 +95,9 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v1.is_null():
-            self.make_equal_to(op.result, v2)
+            self.make_equal_to(op, v2)
         elif v2.is_null():
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
 
@@ -102,12 +105,12 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
             # Synthesize the reverse ops for optimize_default to reuse
-            self.pure(rop.INT_ADD, [op.result, op.getarg(1)], op.getarg(0))
-            self.pure(rop.INT_SUB, [op.getarg(0), op.result], op.getarg(1))
+            self.pure(rop.INT_ADD, op.getarg(0), op, op.getarg(1))
+            self.pure(rop.INT_SUB, op.getarg(1), op.getarg(0), op)
 
     def optimize_INT_ADD(self, op):
         v1 = self.getvalue(op.getarg(0))
@@ -115,9 +118,9 @@ class OptRewrite(Optimization):
 
         # If one side of the op is 0 the result is the other side.
         if v1.is_constant() and v1.box.getint() == 0:
-            self.make_equal_to(op.result, v2)
+            self.make_equal_to(op, v2)
         elif v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
             # Synthesize the reverse op for optimize_default to reuse
@@ -131,12 +134,12 @@ class OptRewrite(Optimization):
 
         # If one side of the op is 1 the result is the other side.
         if v1.is_constant() and v1.box.getint() == 1:
-            self.make_equal_to(op.result, v2)
+            self.make_equal_to(op, v2)
         elif v2.is_constant() and v2.box.getint() == 1:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         elif (v1.is_constant() and v1.box.getint() == 0) or \
              (v2.is_constant() and v2.box.getint() == 0):
-            self.make_constant_int(op.result, 0)
+            self.make_constant_int(op, 0)
         else:
             for lhs, rhs in [(v1, v2), (v2, v1)]:
                 if lhs.is_constant():
@@ -153,7 +156,7 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(op.getarg(1))
 
         if v2.is_constant() and v2.box.getint() == 1:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
 
@@ -162,7 +165,7 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(op.getarg(1))
 
         if v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
 
@@ -171,7 +174,7 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(op.getarg(1))
 
         if v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
 
@@ -187,20 +190,20 @@ class OptRewrite(Optimization):
 
             if v1.is_constant():
                 if v1.box.getfloat() == 1.0:
-                    self.make_equal_to(op.result, v2)
+                    self.make_equal_to(op, v2)
                     return
                 elif v1.box.getfloat() == -1.0:
                     self.emit_operation(ResOperation(
-                        rop.FLOAT_NEG, [rhs], op.result
+                        rop.FLOAT_NEG, [rhs], op
                     ))
                     return
         self.emit_operation(op)
-        self.pure(rop.FLOAT_MUL, [arg2, arg1], op.result)
+        self.pure(rop.FLOAT_MUL, [arg2, arg1], op)
 
     def optimize_FLOAT_NEG(self, op):
         v1 = op.getarg(0)
         self.emit_operation(op)
-        self.pure(rop.FLOAT_NEG, [op.result], v1)
+        self.pure(rop.FLOAT_NEG, [op], v1)
 
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.getarg(0))
@@ -327,7 +330,7 @@ class OptRewrite(Optimization):
 
         resvalue = self.loop_invariant_results.get(key, None)
         if resvalue is not None:
-            self.make_equal_to(op.result, resvalue)
+            self.make_equal_to(op, resvalue)
             self.last_emitted_operation = REMOVED
             return
         # change the op to be a normal call, from the backend's point of view
@@ -335,7 +338,7 @@ class OptRewrite(Optimization):
         self.loop_invariant_producer[key] = op
         op = op.copy_and_change(rop.CALL)
         self.emit_operation(op)
-        resvalue = self.getvalue(op.result)
+        resvalue = self.getvalue(op)
         self.loop_invariant_results[key] = resvalue
     optimize_CALL_LOOPINVARIANT_p = optimize_CALL_LOOPINVARIANT_i
     optimize_CALL_LOOPINVARIANT_f = optimize_CALL_LOOPINVARIANT_i
@@ -344,15 +347,15 @@ class OptRewrite(Optimization):
     def _optimize_nullness(self, op, box, expect_nonnull):
         value = self.getvalue(box)
         if value.is_nonnull():
-            self.make_constant_int(op.result, expect_nonnull)
+            self.make_constant_int(op, expect_nonnull)
         elif value.is_null():
-            self.make_constant_int(op.result, not expect_nonnull)
+            self.make_constant_int(op, not expect_nonnull)
         else:
             self.emit_operation(op)
 
     def optimize_INT_IS_TRUE(self, op):
         if self.getvalue(op.getarg(0)) in self.optimizer.bool_boxes:
-            self.make_equal_to(op.result, self.getvalue(op.getarg(0)))
+            self.make_equal_to(op, self.getvalue(op.getarg(0)))
             return
         self._optimize_nullness(op, op.getarg(0), True)
 
@@ -365,17 +368,17 @@ class OptRewrite(Optimization):
         if value0.is_virtual():
             if value1.is_virtual():
                 intres = (value0 is value1) ^ expect_isnot
-                self.make_constant_int(op.result, intres)
+                self.make_constant_int(op, intres)
             else:
-                self.make_constant_int(op.result, expect_isnot)
+                self.make_constant_int(op, expect_isnot)
         elif value1.is_virtual():
-            self.make_constant_int(op.result, expect_isnot)
+            self.make_constant_int(op, expect_isnot)
         elif value1.is_null():
             self._optimize_nullness(op, op.getarg(0), expect_isnot)
         elif value0.is_null():
             self._optimize_nullness(op, op.getarg(1), expect_isnot)
         elif value0 is value1:
-            self.make_constant_int(op.result, not expect_isnot)
+            self.make_constant_int(op, not expect_isnot)
         else:
             if instance:
                 cls0 = value0.get_constant_class(self.optimizer.cpu)
@@ -384,7 +387,7 @@ class OptRewrite(Optimization):
                     if cls1 is not None and not cls0.same_constant(cls1):
                         # cannot be the same object, as we know that their
                         # class is different
-                        self.make_constant_int(op.result, expect_isnot)
+                        self.make_constant_int(op, expect_isnot)
                         return
             self.emit_operation(op)
 
@@ -408,7 +411,7 @@ class OptRewrite(Optimization):
 ##            result = self.optimizer.cpu.ts.subclassOf(self.optimizer.cpu,
 ##                                                      realclassbox,
 ##                                                      checkclassbox)
-##            self.make_constant_int(op.result, result)
+##            self.make_constant_int(op, result)
 ##            return
 ##        self.emit_operation(op)
 
@@ -470,7 +473,7 @@ class OptRewrite(Optimization):
                 pass
             else:
                 # this removes a CALL_PURE with all constant arguments.
-                self.make_constant(op.result, result)
+                self.make_constant(op, result)
                 self.last_emitted_operation = REMOVED
                 return
         self.emit_operation(op)
@@ -490,10 +493,10 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(op.getarg(1))
 
         if v2.is_constant() and v2.box.getint() == 1:
-            self.make_equal_to(op.result, v1)
+            self.make_equal_to(op, v1)
             return
         elif v1.is_constant() and v1.box.getint() == 0:
-            self.make_constant_int(op.result, 0)
+            self.make_constant_int(op, 0)
             return
         if v1.intbound.known_ge(IntBound(0, 0)) and v2.is_constant():
             val = v2.box.getint()
@@ -503,15 +506,15 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
 
     def optimize_CAST_PTR_TO_INT(self, op):
-        self.pure(rop.CAST_INT_TO_PTR, [op.result], op.getarg(0))
+        self.pure(rop.CAST_INT_TO_PTR, [op], op.getarg(0))
         self.emit_operation(op)
 
     def optimize_CAST_INT_TO_PTR(self, op):
-        self.pure(rop.CAST_PTR_TO_INT, [op.result], op.getarg(0))
+        self.pure(rop.CAST_PTR_TO_INT, [op], op.getarg(0))
         self.emit_operation(op)
 
     def optimize_SAME_AS_i(self, op):
-        self.make_equal_to(op.result, self.getvalue(op.getarg(0)))
+        self.make_equal_to(op, self.getvalue(op.getarg(0)))
     optimize_SAME_AS_p = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
 

@@ -112,17 +112,6 @@ def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
         op.setdescr(descr)
     return op
 
-def copy_and_change(self, opnum, args=None, result=None, descr=None):
-    "shallow copy: the returned operation is meant to be used in place of self"
-    if args is None:
-        args = self.getarglist()
-    if result is None:
-        result = self.result
-    if descr is None:
-        descr = self.getdescr()
-    newop = ResOperation(opnum, args, result, descr)
-    return newop
-
 class AbstractValue(object):
     __slots__ = ()
 
@@ -336,6 +325,10 @@ class AbstractResOp(AbstractValue):
             return False     # for tests
         return opboolresult[opnum]
 
+# ===========
+# type mixins
+# ===========
+
 class ResOpNone(object):
     _mixin_ = True
     type = VOID
@@ -491,6 +484,14 @@ class NullaryOp(object):
             r.setfailargs(self.getfailargs())
         return r
 
+    @specialize.arg(1)
+    def copy_and_change(self, newopnum):
+        r = create_resop_0(newopnum, self.getresult(), self.getdescrclone())
+        if r.is_guard():
+            r.setfailargs(self.getfailargs())
+            assert self.is_guard()
+        return r
+
     def copy_if_modified_by_optimization(self, opt):
         return self
 
@@ -533,6 +534,15 @@ class UnaryOp(object):
             return self
         return create_resop_1(self.opnum, self.getresult(), new_arg,
                               self.getdescrclone())
+
+    @specialize.arg(1)
+    def copy_and_change(self, newopnum, arg0=None):
+        r = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
+                           self.getdescrclone())
+        if r.is_guard():
+            r.setfailargs(self.getfailargs())
+            assert self.is_guard()
+        return r
 
 class BinaryOp(object):
     _mixin_ = True
@@ -581,6 +591,15 @@ class BinaryOp(object):
                               new_arg1 or self._arg1,
                               self.getdescrclone())
 
+    @specialize.arg(1)
+    def copy_and_change(self, newopnum, arg0=None, arg1=None):
+        r = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
+                           arg1 or self._arg1,
+                           self.getdescrclone())
+        if r.is_guard():
+            r.setfailargs(self.getfailargs())
+            assert self.is_guard()
+        return r
 
 class TernaryOp(object):
     _mixin_ = True
@@ -622,6 +641,7 @@ class TernaryOp(object):
                               self._arg1, self._arg2, self.getdescrclone())
 
     def copy_if_modified_by_optimization(self, opt):
+        assert not self.is_guard()
         new_arg0 = opt.get_value_replacement(self._arg0)
         new_arg1 = opt.get_value_replacement(self._arg1)
         new_arg2 = opt.get_value_replacement(self._arg2)
@@ -633,6 +653,13 @@ class TernaryOp(object):
                               new_arg2 or self._arg2,
                               self.getdescrclone())
 
+    @specialize.arg(1)
+    def copy_and_change(self, newopnum, arg0=None, arg1=None, arg2=None):
+        r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
+                           arg1 or self._arg1, arg2 or self._arg2,
+                           self.getdescrclone())
+        assert not r.is_guard()
+        return r
 
 class N_aryOp(object):
     _mixin_ = True
@@ -679,6 +706,13 @@ class N_aryOp(object):
             return self
         return create_resop(self.opnum, self.getresult(),
                             newargs, self.getdescrclone())
+
+    @specialize.arg(1)
+    def copy_and_change(self, newopnum, newargs=None):
+        r = create_resop(newopnum, self.getresult(),
+                         newargs or self.getarglist(), self.getdescrclone())
+        assert not r.is_guard()
+        return r
 
 # ____________________________________________________________
 
