@@ -7,6 +7,7 @@ from pypy.rpython.test.tool import BaseRtypingTest, OORtypeMixin
 from pypy.annotation.annrpython import RPythonAnnotator
 import pypy.translator.jvm.rjvm_support as rjvm_support
 
+
 try:
     #noinspection PyUnresolvedReferences
     import jpype
