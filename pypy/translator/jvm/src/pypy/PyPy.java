@@ -287,6 +287,10 @@ public class PyPy implements Constants {
         return Double.longBitsToDouble(l);
     }
 
+    public long pypy__thread_get_ident() {
+        return Thread.currentThread().getId();
+    }
+
     public long pypy__float2longlong(double d) {
         return Double.doubleToRawLongBits(d);
     }
