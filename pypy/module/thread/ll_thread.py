@@ -46,7 +46,8 @@ c_thread_start = llexternal('RPyThreadStart', [CALLBACK], rffi.LONG,
                                               # importantly, reacquire it
                                               # around the callback
 c_thread_get_ident = llexternal('RPyThreadGetIdent', [], rffi.LONG,
-                                _nowrapper=True)    # always call directly
+                                _nowrapper=True,    # always call directly
+                                oo_primitive="pypy__thread_get_ident")
 
 TLOCKP = rffi.COpaquePtr('struct RPyOpaque_ThreadLock',
                           compilation_info=eci)
