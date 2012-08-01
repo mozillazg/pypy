@@ -187,7 +187,7 @@ class ObjectOrientedTypeSystem(TypeSystem):
         return hop.genop('oois', v_list, resulttype=lltype.Bool)
 
     def check_rffi_call(self, func):
-        if not hasattr(func._ptr._obj, 'oo_promitive'):
+        if not hasattr(func._ptr._obj, 'oo_primitive'):
             raise TyperError(
                 "Calling {func_name} via rffi, but it has no OO primitive assigned.".format(func_name=func.func_name))
 
