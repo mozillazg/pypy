@@ -101,6 +101,11 @@ in a graph."""
         from pypy.rpython.normalizecalls import perform_normalizations
         perform_normalizations(rtyper)
 
+    def check_rffi_call(self, func):
+        """Check if the rffi primitive is correct. Raise a TypeError otherwise.
+        """
+        pass
+
 class LowLevelTypeSystem(TypeSystem):
     name = "lltypesystem"
     callable_trait = (lltype.FuncType, lltype.functionptr)
@@ -180,6 +185,11 @@ class ObjectOrientedTypeSystem(TypeSystem):
             
         v_list = hop.inputargs(robj1, robj2)
         return hop.genop('oois', v_list, resulttype=lltype.Bool)
+
+    def check_rffi_call(self, func):
+        if not hasattr(func._ptr._obj, 'oo_promitive'):
+            raise TyperError(
+                "Calling {func_name} via rffi, but it has no OO primitive assigned.".format(func_name=func.func_name))
 
 # All typesystems are singletons
 LowLevelTypeSystem.instance = LowLevelTypeSystem()

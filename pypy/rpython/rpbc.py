@@ -5,7 +5,7 @@ from pypy.annotation import model as annmodel
 from pypy.annotation import description
 from pypy.objspace.flow.model import Constant
 from pypy.rpython.lltypesystem.lltype import \
-     typeOf, Void, Bool, nullptr, frozendict, Ptr, Struct, malloc
+     typeOf, Void, Bool, nullptr, frozendict, Ptr, Struct, malloc, FuncType
 from pypy.rpython.error import TyperError
 from pypy.rpython.rmodel import Repr, inputconst, CanBeNull, \
         mangle, inputdesc, warning, impossible_repr
@@ -322,6 +322,14 @@ class AbstractFunctionsPBCRepr(CanBeNull, Repr):
         args = bk.build_args(opname, hop.args_s[1:])
         s_pbc = hop.args_s[0]   # possibly more precise than self.s_pbc
         descs = list(s_pbc.descriptions)
+
+        try:
+            s_pbc.const._ptr._obj.external
+            # This is an rffi call
+            self.rtyper.type_system.check_rffi_call(s_pbc.const)
+        except AttributeError:
+            pass
+
         vfcs = description.FunctionDesc.variant_for_call_site
         shape, index = vfcs(bk, self.callfamily, descs, args, hop.spaceop)
         row_of_graphs = self.callfamily.calltables[shape][index]

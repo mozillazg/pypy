@@ -2,6 +2,7 @@ import os, math
 import errno
 import stat
 from py.builtin import sorted
+from py.test import raises
 from pypy.tool import udir
 from pypy.rpython.test.test_rbuiltin import BaseTestRbuiltin
 from pypy.rpython.module.test.test_ll_time import BaseTestTime as llBaseTestTime
@@ -225,6 +226,23 @@ class BaseTestBuiltin(BaseTestRbuiltin):
             return tolower(n)
         res = self.interpret(fn, [ord('A')])
         assert res == ord('a')
+
+
+    def test_rffi_missing_primitive(self):
+        from pypy.rpython.lltypesystem import rffi, lltype
+        from pypy.translator.tool.cbuild import ExternalCompilationInfo
+        eci = ExternalCompilationInfo(
+            includes = ['ctype.h']
+        )
+
+        tolower_no_oo_primitive = rffi.llexternal('tolower', [lltype.Signed], lltype.Signed,
+                                                  compilation_info=eci)
+
+        def fn(n):
+            return tolower_no_oo_primitive(n)
+
+        with raises(TypeError):
+            self.interpret(fn, ord('A'))
 
 
     def test_rlocale(self):
