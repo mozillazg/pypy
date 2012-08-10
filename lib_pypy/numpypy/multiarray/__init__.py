@@ -27,3 +27,19 @@ class nditer(object):
     '''
     def __init__(*args, **kwargs):
         raise ValueError('not implemented yet')
+
+class nested_iters(object):
+    def __init__(*args, **kwargs):
+        raise ValueError('not implemented yet')
+
+class broadcast(object):
+    def __init__(*args, **kwargs):
+        raise ValueError('not implemented yet')
+
+def copyto(dst, src, casting='same_kind', where=None, preservena=False):
+    raise ValueError('not implemented yet')
+
+def count_nonzero(a):
+    if not hasattr(a,'flat'):
+        a = ndarray(a)
+    return sum(a.flat != 0)
