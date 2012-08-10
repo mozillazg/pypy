@@ -134,6 +134,8 @@ else:
         loader = PackageLoader(infunc=True)
         return loader(*packages, **options)
 
+    import numpypy
+
     import add_newdocs
     __all__ = ['add_newdocs']
 
@@ -142,7 +144,7 @@ else:
     from testing import Tester
     test = Tester().test
     bench = Tester().bench
-
+    
     import core
     from core import *
     import compat
