@@ -41,5 +41,10 @@ def copyto(dst, src, casting='same_kind', where=None, preservena=False):
 
 def count_nonzero(a):
     if not hasattr(a,'flat'):
-        a = ndarray(a)
-    return sum(a.flat != 0)
+        try:
+            a = ndarray(a)
+            return sum(a.flat != 0)
+        except TypeError:
+            if isinstance(a, (tuple, list)):
+                return len(a)
+        return 1
