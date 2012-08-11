@@ -352,6 +352,17 @@ class DirectVRef(object):
         be forced by the '()' operator."""
         return self._state == 'non-forced'
 
+    @property
+    def dereference_or_copy(self):
+        """ Get a forced version, but without forcing the original virtual.
+        Useful for things like profilers where we want the object, but
+        we don't care if modifications will be reflected in the underlaying
+        JIT code.
+        """
+        # note that this always returns the original object and never
+        # a copy when untranslated
+        return self._x
+
     def _finish(self):
         if self._state == 'non-forced':
             self._state = 'invalid'
