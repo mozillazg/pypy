@@ -54,5 +54,22 @@ def empty_like(a, dtype=None, order='K', subok=True):
         a = ndarray(a)
     if dtype is None:
         dtype = a.dtype
+    if order != 'K' and order != 'C':
+        raise ValueError('not implemented yet')
     #return zeros(a.shape, dtype=dtype, order=order, subok=subok)
     return zeros(a.shape, dtype=dtype)
+
+def fromiter(iterable, dtype, count=-1):
+    if count > 0:
+        retVal = ndarray(count, dtype=dtype)
+    else:
+        retVal = ndarray(1, dtype=dtype)
+    for i,value in enumerate(iterable):
+        if i>=count and count>0:
+            break
+        if i>= retVal.size:
+            tmp = ndarray(retVal.size*2, dtype = dtype)
+            tmp[:i] = retVal[:i]
+            retVal = tmp
+        retVal[i] = value
+    return retVal[:i+1]
