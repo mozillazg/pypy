@@ -14,7 +14,7 @@ from pypy.rpython.test.tool import BaseRtypingTest, LLRtypeMixin, OORtypeMixin
 from pypy.rpython.ootypesystem import ootype
 
 class X(object):
-    pass
+    x = 3
 
 class Y(X):
     pass
@@ -145,6 +145,12 @@ class BaseTestVRef(BaseRtypingTest):
         x = self.interpret(f, [])
         assert x is False
 
+    def test_rtype_dereference_or_copy(self):
+        def f():
+            vref = virtual_ref(X())
+            return vref.dereference_or_copy.x
+        x = self.interpret(f, [])
+        assert x == 3
 
 class TestLLtype(BaseTestVRef, LLRtypeMixin):
     OBJECTTYPE = OBJECTPTR
@@ -155,3 +161,6 @@ class TestOOtype(BaseTestVRef, OORtypeMixin):
     OBJECTTYPE = OBJECT 
     def castable(self, TO, var):
         return ootype.isSubclass(lltype.typeOf(var), TO)
+
+    def test_rtype_dereference_or_copy(self):
+        py.test.skip("not supported")

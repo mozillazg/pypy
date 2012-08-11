@@ -26,8 +26,12 @@ class SomeVRef(annmodel.SomeObject):
         return self.s_instance
 
     def getattr(self, s_attr):
-        assert s_attr.const == 'virtual'
-        return annmodel.s_Bool
+        if s_attr.const == 'virtual':
+            return annmodel.s_Bool
+        elif s_attr.const == 'dereference_or_copy':
+            return self.s_instance
+        else:
+            raise AssertionError("Unknown attribute %s" % s_attr.const)
 
     def rtyper_makerepr(self, rtyper):
         if rtyper.type_system.name == 'lltypesystem':
@@ -67,10 +71,17 @@ class VRefRepr(Repr):
 
     def rtype_getattr(self, hop):
         s_attr = hop.args_s[1]
-        assert s_attr.const == 'virtual'
-        v = hop.inputarg(self, arg=0)
         hop.exception_cannot_occur()
-        return hop.genop('jit_is_virtual', [v], resulttype = lltype.Bool)
+        v = hop.inputarg(self, arg=0)
+        if s_attr.const == 'virtual':
+            return hop.genop('jit_is_virtual', [v], resulttype = lltype.Bool)
+        elif s_attr.const == 'dereference_or_copy':
+            v_result = hop.genop('jit_dereference_or_copy', [v],
+                                 resulttype = OBJECTPTR)
+            return hop.genop('cast_pointer', [v_result],
+                             resulttype = hop.r_result)
+        else:
+            raise AssertionError("Unknown attribute %s" % s_attr.const)
 
 from pypy.rpython.ootypesystem.rclass import OBJECT
 
