@@ -32,3 +32,8 @@ def test_fromiter():
     b = multiarray.fromiter(iterable, np.dtype(float))
     assert b.dtype == np.dtype(float)
     assert all(b == [0., 1., 4., 9., 16.]) == True
+    iterable = (x*x for x in range(5))
+    raises(ValueError, multiarray.fromiter, iterable, np.dtype(float), 10)
+    iterable = (x*x for x in range(5))
+    b = multiarray.fromiter(iterable, np.dtype(float), 3)
+    assert all(b == [0., 1., 4.]) == True
