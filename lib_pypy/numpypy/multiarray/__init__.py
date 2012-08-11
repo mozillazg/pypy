@@ -72,4 +72,9 @@ def fromiter(iterable, dtype, count=-1):
             tmp[:i] = retVal[:i]
             retVal = tmp
         retVal[i] = value
+    if i<count:
+        raise ValueError('iterator too short')
     return retVal[:i+1]
+
+def fromfile(_file, dtype=float, count=-1, sep=''):
+    raise ValueError('not implemented yet')
