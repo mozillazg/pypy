@@ -50,8 +50,6 @@ def count_nonzero(a):
     return 1
 
 def empty_like(a, dtype=None, order='K', subok=True):
-    if not hasattr(a,'dtype'):
-        a = ndarray(a)
     if dtype is None:
         dtype = a.dtype
     if order != 'K' and order != 'C':
@@ -78,3 +76,74 @@ def fromiter(iterable, dtype, count=-1):
 
 def fromfile(_file, dtype=float, count=-1, sep=''):
     raise ValueError('not implemented yet')
+
+def frombuffer(buffer, dtype=float, count=-1, offset=0):
+    raise ValueError('not implemented yet')
+
+def newbuffer(size):
+    return bytearray(size)
+
+def getbuffer(a, *args):
+    if not hasattr(a,'size'):
+        a = ndarray(a)
+    offset = 0
+    size = a.size
+    if len(args)>0:
+        offset = args[0]
+    if len(args)>1:
+        size = args[1]
+    raise ValueError('not implemented yet')
+
+def int_asbuffer(*args, **kwargs):
+    raise ValueError('not implemented yet')
+
+def _fastCopyAndTranspose(*args, **kwargs):
+    raise ValueError('not implemented yet')
+
+def set_numeric_ops(**kwargw):
+    raise ValueError('not implemented yet')
+
+def can_cast(fromtype, totype, casting = 'safe'):
+    if not isinstance(fromtype, dtype):
+        raise ValueError('improper call to can_cast')
+    if not isinstance(totype, dtype):
+        raise ValueError('improper call to can_cast')
+    if casting not in ('no', 'equiv', 'safe', 'same_kind', 'unsafe'):
+        raise ValueError('improper call to can_cast')
+    raise ValueError('not implemented yet')
+
+def promote_types(type1, type2):
+    if not isinstance(type1, dtype):
+        raise ValueError('improper call to can_cast')
+    if not isinstance(type2, dtype):
+        raise ValueError('improper call to can_cast')
+    raise ValueError('not implemented yet')
+
+def min_scalar_type(a):
+    raise ValueError('not implemented yet')
+
+def result_type(*args):
+    raise ValueError('not implemented yet')
+
+def lexsort(keys, axis=-1):
+    raise ValueError('not implemented yet')
+
+def compare_chararrays(*args, **kwargs):
+    raise ValueError('not implemented yet')
+
+def putmask(a, mask, values):
+    raise ValueError('not implemented yet')
+
+def einsum(subscripts, *operands, **kwargs):
+    #kwargs is out=None, dtype=None, order='K', casting='safe'
+    raise ValueError('not implemented yet')
+
+def inner(a,b):
+    raise ValueError('not implemented yet')
+
+def format_longfloat(*args, **kwargs):
+    raise ValueError('not implemented yet')
+
+def datetime_as_string(*args, **kwargs):
+    raise ValueError('not implemented yet')
+
