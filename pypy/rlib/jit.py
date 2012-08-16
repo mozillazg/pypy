@@ -352,16 +352,12 @@ class DirectVRef(object):
         be forced by the '()' operator."""
         return self._state == 'non-forced'
 
-    @property
-    def dereference_or_copy(self):
-        """ Get a forced version, but without forcing the original virtual.
-        Useful for things like profilers where we want the object, but
-        we don't care if modifications will be reflected in the underlaying
-        JIT code.
+    def getfield(self, fieldname):
+        """ Get a field, either by reading a field directly if the reference
+        is not virtual at all, or will fish it from the resume data. If
+        the field is itself virtual, you'll receive a null pointer.
         """
-        # note that this always returns the original object and never
-        # a copy when untranslated
-        return self._x
+        return getattr(self._x, fieldname)
 
     def _finish(self):
         if self._state == 'non-forced':

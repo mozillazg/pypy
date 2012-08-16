@@ -145,12 +145,16 @@ class BaseTestVRef(BaseRtypingTest):
         x = self.interpret(f, [])
         assert x is False
 
-    def test_rtype_dereference_or_copy(self):
+    def test_rtype_getfield(self):
+        class X(object):
+            def __init__(self, x):
+                self.x = x
+        
         def f():
-            vref = virtual_ref(X())
-            return vref.dereference_or_copy.x
+            vref = virtual_ref(X(1))
+            return vref.getfield('x')
         x = self.interpret(f, [])
-        assert x == 3
+        assert x == 1
 
 class TestLLtype(BaseTestVRef, LLRtypeMixin):
     OBJECTTYPE = OBJECTPTR
@@ -162,5 +166,5 @@ class TestOOtype(BaseTestVRef, OORtypeMixin):
     def castable(self, TO, var):
         return ootype.isSubclass(lltype.typeOf(var), TO)
 
-    def test_rtype_dereference_or_copy(self):
+    def test_rtype_getfield(self):
         py.test.skip("not supported")

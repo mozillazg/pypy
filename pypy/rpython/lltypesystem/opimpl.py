@@ -557,11 +557,11 @@ def op_jit_force_virtualizable(*args):
 def op_jit_force_virtual(x):
     return x
 
+def op_jit_vref_getfield(x, field):
+    return getattr(x, 'inst_' + field)
+
 def op_jit_is_virtual(x):
     return False
-
-def op_jit_dereference_or_copy(x):
-    return x
 
 def op_jit_force_quasi_immutable(*args):
     pass
