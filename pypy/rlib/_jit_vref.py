@@ -28,10 +28,10 @@ class SomeVRef(annmodel.SomeObject):
     def getattr(self, s_attr):
         if s_attr.const == 'virtual':
             return annmodel.s_Bool
-        elif s_attr.const == 'dereference_or_copy':
-            return self.s_instance
-        else:
-            raise AssertionError("Unknown attribute %s" % s_attr.const)
+        return annmodel.SomeObject.getattr(self, s_attr)
+
+    def method_getfield(self, s_name):
+        return self.s_instance.getattr(s_name)
 
     def rtyper_makerepr(self, rtyper):
         if rtyper.type_system.name == 'lltypesystem':
@@ -75,13 +75,17 @@ class VRefRepr(Repr):
         v = hop.inputarg(self, arg=0)
         if s_attr.const == 'virtual':
             return hop.genop('jit_is_virtual', [v], resulttype = lltype.Bool)
-        elif s_attr.const == 'dereference_or_copy':
-            v_result = hop.genop('jit_dereference_or_copy', [v],
-                                 resulttype = OBJECTPTR)
-            return hop.genop('cast_pointer', [v_result],
-                             resulttype = hop.r_result)
-        else:
-            raise AssertionError("Unknown attribute %s" % s_attr.const)
+        return Repr.rtype_getattr(self, hop)
+
+    def rtype_method_getfield(self, hop):
+        attr = hop.args_s[1].const
+        hop.exception_cannot_occur()
+        v = hop.inputarg(self, arg=0)
+        c_name = hop.inputconst(lltype.Void, attr)
+        r_arg = hop.rtyper.getrepr(hop.args_s[0].s_instance)
+        v2 = hop.genop('cast_pointer', [v], resulttype=r_arg)
+        return hop.genop('jit_vref_getfield', [v2, c_name],
+                         resulttype = hop.r_result)
 
 from pypy.rpython.ootypesystem.rclass import OBJECT
 
