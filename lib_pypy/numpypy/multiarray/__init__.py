@@ -147,3 +147,17 @@ def format_longfloat(*args, **kwargs):
 def datetime_as_string(*args, **kwargs):
     raise ValueError('not implemented yet')
 
+def busday_offset(dates, offsets, roll='raise', weekmask='1111100', holidays=None, busdaycal=None, out=None):
+    raise ValueError('not implemented yet')
+
+def busday_count(begindates, enddates, weekmask='1111100', holidays=[], busdaycal=None, out=None):
+    raise ValueError('not implemented yet')
+
+def is_busday(dates, weekmask='1111100', holidays=None, busdaycal=None, out=None):
+    raise ValueError('not implemented yet')
+
+def busdaycalendar(weekmask='1111100', holidays=None):
+    raise ValueError('not implemented yet')
+
+
+
