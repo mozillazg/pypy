@@ -412,9 +412,11 @@ def _set_up_aliases():
     for alias, t in type_pairs:
         try:
             allTypes[alias] = allTypes[t]
-            sctypeDict[alias] = sctypeDict[t]
         except KeyError:
-            print 'dtype',t,'not implemented in numpypy, will be missing in numerictypes.sctypeDict'
+            print 'dtype',t,"not implemented in numpypy, using dtype('void') instead"
+            allTypes[t] = allTypes['void']
+            allTypes[alias] = allTypes[t]
+        sctypeDict[alias] = sctypeDict['void']
     # Remove aliases overriding python types and modules
     to_remove = ['ulong', 'object', 'unicode', 'int', 'long', 'float',
                  'complex', 'bool', 'string', 'datetime', 'timedelta']
@@ -900,10 +902,7 @@ for name in _toadd:
     if isinstance(name, tuple):
         sctypeDict[name[0]] = name[1]
     else:
-        try:
-            sctypeDict[name] = allTypes['%s_' % name]
-        except:
-            print 'dtype',name,'not implemented, not assigned in numerictypes.sctypeDict'
+        sctypeDict[name] = allTypes['%s_' % name]
 
 del _toadd, name
 
@@ -913,6 +912,8 @@ for key in allTypes:
     __all__.append(key)
 
 del key
+
+complex_ = dtype('void')
 
 typecodes = {'Character':'c',
              'Integer':'bhilqp',
