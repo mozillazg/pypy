@@ -159,5 +159,7 @@ def is_busday(dates, weekmask='1111100', holidays=None, busdaycal=None, out=None
 def busdaycalendar(weekmask='1111100', holidays=None):
     raise ValueError('not implemented yet')
 
+def _vec_string(*args, **kwargs):
+    raise ValueError('not implemented yet')
 
 
