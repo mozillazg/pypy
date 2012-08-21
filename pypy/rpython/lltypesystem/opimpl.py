@@ -558,7 +558,8 @@ def op_jit_force_virtual(x):
     return x
 
 def op_jit_vref_getfield(x, field):
-    return getattr(x, 'inst_' + field)
+    # XXX is this even a correct hack?
+    return getattr(x._obj._parentstructure(), 'inst_' + field)
 
 def op_jit_is_virtual(x):
     return False
