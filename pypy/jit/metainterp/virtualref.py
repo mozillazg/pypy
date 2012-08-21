@@ -36,11 +36,19 @@ class VirtualRefInfo:
     def _freeze_(self):
         return True
 
+    def _find_type_of_virtualref(self):
+        # XXX limitation is that we can only have one type
+        for graph in graphs:
+            for block in graph.iterblocks():
+                for op in block.operations:
+
     def replace_force_virtual_with_call(self, graphs):
         # similar to rvirtualizable2.replace_force_virtualizable_with_call().
         c_force_virtual_ptr = None
         c_is_virtual_ptr = None
+        c_getfield_ptrs = {} # fieldname -> function
         force_virtual_count = 0
+        self._find_type_of_virtualref()
         for graph in graphs:
             for block in graph.iterblocks():
                 for op in block.operations:
@@ -60,6 +68,16 @@ class VirtualRefInfo:
                         #
                         op.opname = 'direct_call'
                         op.args = [c_is_virtual_ptr, op.args[0]]
+                    if op.opname == 'jit_vref_getfield':
+                        # get a function for each field
+                        key = op.args[1].value
+                        c_func = c_getfield_ptrs.get(key, None)
+                        if c_func is None:
+                            c_func = self.get_vref_getfield_fnptr(key,
+                                                        op.result.concretetype)
+                            c_getfield_ptrs[key] = c_func
+                        op.opname = 'direct_call'
+                        op.args = [c_func, op.args[0]]
         #
         if c_force_virtual_ptr is not None:
             log("replaced %d 'jit_force_virtual' with %r" % (force_virtual_count,
@@ -135,6 +153,18 @@ class VirtualRefInfo:
         funcptr = self.warmrunnerdesc.helper_func(
             lltype.Ptr(FUNC),
             force_virtual_if_necessary)
+        return inputconst(lltype.typeOf(funcptr), funcptr)
+
+    def get_vref_getfield_fnptr(self, name, RES_TP):
+        def read_virtual_field(inst):
+            if inst.typeptr != self.jit_virtual_ref_vtable:
+                lltype.cast_ptr(
+                xxx
+            xxx
+        FUNC = lltype.FuncType([rclass.OBJECTPTR], RES_TP)
+        funcptr = self.warmrunnerdesc.helper_func(
+            lltype.Ptr(FUNC),
+            read_virtual_field)
         return inputconst(lltype.typeOf(funcptr), funcptr)
 
     def get_is_virtual_fnptr(self):

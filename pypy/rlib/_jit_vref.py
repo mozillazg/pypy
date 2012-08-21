@@ -53,6 +53,7 @@ class VRefRepr(Repr):
 
     def specialize_call(self, hop):
         r_generic_object = getinstancerepr(hop.rtyper, None)
+        hop.genop('jit_record_vref', [hop.args_v[0]], resulttype=lltype.Void)
         [v] = hop.inputargs(r_generic_object)   # might generate a cast_pointer
         hop.exception_cannot_occur()
         return v
@@ -82,9 +83,7 @@ class VRefRepr(Repr):
         hop.exception_cannot_occur()
         v = hop.inputarg(self, arg=0)
         c_name = hop.inputconst(lltype.Void, attr)
-        r_arg = hop.rtyper.getrepr(hop.args_s[0].s_instance)
-        v2 = hop.genop('cast_pointer', [v], resulttype=r_arg)
-        return hop.genop('jit_vref_getfield', [v2, c_name],
+        return hop.genop('jit_vref_getfield', [v, c_name],
                          resulttype = hop.r_result)
 
 from pypy.rpython.ootypesystem.rclass import OBJECT

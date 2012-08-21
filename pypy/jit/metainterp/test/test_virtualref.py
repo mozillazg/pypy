@@ -654,6 +654,30 @@ class VRefTests:
         res = self.meta_interp(f, [10])
         assert res == 0
 
+    def test_vref_getfield(self):
+        driver = JitDriver(greens = [], reds = ['n', 's'])
+
+        class X(object):
+            def __init__(self, x):
+                self.x = x
+
+        @dont_look_inside
+        def residual(vref):
+            return vref.getfield('x')
+
+        def f(n):
+            s = 0
+            while n > 0:
+                driver.jit_merge_point(n=n, s=s)
+                x = X(1)
+                v = virtual_ref(x)
+                s += residual(v)
+                virtual_ref_finish(v, x)
+                n -= 1
+            return s
+
+        res = self.meta_interp(f, [10])
+        assert res == 10
 
 class TestLLtype(VRefTests, LLJitMixin):
     pass
