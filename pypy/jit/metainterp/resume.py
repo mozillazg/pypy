@@ -793,6 +793,9 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
     resumereader.done()
     return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
+def read_field_from_resumedata(metainterp, storage, greenfield_info):
+    xxx
+
 class ResumeDataBoxReader(AbstractResumeDataReader):
     unique_id = lambda: None
 

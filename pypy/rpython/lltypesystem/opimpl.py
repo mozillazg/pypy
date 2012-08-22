@@ -570,6 +570,9 @@ def op_jit_force_quasi_immutable(*args):
 def op_jit_record_known_class(x, y):
     pass
 
+def op_jit_record_vref(x):
+    pass
+
 def op_get_group_member(TYPE, grpptr, memberoffset):
     from pypy.rpython.lltypesystem import llgroup
     assert isinstance(memberoffset, llgroup.GroupMemberOffset)

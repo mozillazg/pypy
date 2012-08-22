@@ -2,7 +2,7 @@ import weakref
 from pypy.rpython.lltypesystem import lltype
 from pypy.rpython.ootypesystem import ootype
 from pypy.objspace.flow.model import Constant, Variable
-from pypy.rlib.objectmodel import we_are_translated
+from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib import rstack
 from pypy.rlib.jit import JitDebugInfo, Counters
@@ -638,6 +638,12 @@ class ResumeAtPositionDescr(ResumeGuardDescr):
         self.copy_all_attributes_into(res)
         return res
 
+@specialize.arg(2)
+def read_field_from_resume(cpu, token, fieldname):
+    faildescr = cpu.force(token)
+    assert isinstance(faildescr, ResumeGuardForcedDescr)
+    return faildescr.handle_async_field_read(token, fieldname)
+
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def __init__(self, metainterp_sd, jitdriver_sd):
@@ -685,6 +691,13 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # Handle all_virtuals: keep them for later blackholing from the
         # future failure of the GUARD_NOT_FORCED
         self.save_data(force_token, all_virtuals)
+
+    @specialize.arg(2)
+    def handle_async_field_read(self, force_token, fieldname):
+        from pypy.jit.metainterp.resume import read_field_from_resumedata
+        metainterp_sd = self.metainterp_sd
+        ginfo = self.jitdriver_sd.greenfield_info
+        return read_field_from_resumedata(metainterp_sd, self, ginfo)
 
     def save_data(self, key, value):
         globaldata = self.metainterp_sd.globaldata
