@@ -727,6 +727,149 @@ class BaseArray(Wrappable):
     def descr_repeat(self, space, repeats, w_axis=None):
         return repeat(space, self, repeats, w_axis)
 
+    def descr_argsort(self, space, w_axis=-1, w_kind='quicksort', w_order=None):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "argsort not implemented yet"))
+
+    def descr_astype(self, space, w_type):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "astype not implemented yet"))
+
+    def descr_base(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "base not implemented yet"))
+
+    def descr_byteswap(self, space, w_inplace=False):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "byteswap not implemented yet"))
+
+    def descr_choose(self, space, w_choices, w_out=None, w_mode='raise'):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "choose not implemented yet"))
+
+    def descr_clip(self, space, w_min, w_max, w_out=None):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "clip not implemented yet"))
+
+    def descr_conj(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "conj not implemented yet"))
+
+    def descr_ctypes(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "ctypes not implemented yet"))
+
+    def descr_cumprod(self, space, w_axis=None, w_dtype=None, w_out=None): 
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "cumprod not implemented yet"))
+
+    def descr_cumsum(self, space, w_axis=None, w_dtype=None, w_out=None): 
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "cumsum not implemented yet"))
+
+    def descr_data(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "data not implemented yet"))
+
+    def descr_diagonal(self, space, w_offset=0, w_axis1=0, w_axis2=1): 
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "diagonal not implemented yet"))
+
+    def descr_dump(self, space, w_file):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "dump not implemented yet"))
+
+    def descr_dumps(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "dumps not implemented yet"))
+
+    def descr_get_flags(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "getting flags not implemented yet"))
+
+    def descr_set_flags(self, space, w_args):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "setting flags not implemented yet"))
+
+    @unwrap_spec(offset=int)    
+    def descr_getfield(self, space, w_dtype, offset):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "getfield not implemented yet"))
+
+    def descr_imag(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "imag not implemented yet"))
+
+    def descr_itemset(self, space, w_arg):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "itemset not implemented yet"))
+
+    @unwrap_spec(neworder=str)    
+    def descr_newbyteorder(self, space, neworder):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "newbyteorder not implemented yet"))
+
+    def descr_ptp(self, space, w_axis=None, w_out=None):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "ptp (peak to peak) not implemented yet"))
+
+    def descr_put(self, space, w_indices, w_values, w_mode='raise'):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "put not implemented yet"))
+
+    def descr_real(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "real not implemented yet"))
+
+    def descr_resize(self, space, w_new_shape, w_refcheck=True):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "resize not implemented yet"))
+
+    def descr_round(self, space, w_decimals=0, w_out=None):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "round not implemented yet"))
+
+    def descr_searchsorted(self, space, w_v, w_side='left'):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "searchsorted not implemented yet"))
+
+    def descr_setasflat(self, space, w_v):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "setasflat not implemented yet"))
+
+    def descr_setfield(self, space, w_val, w_dtype, w_offset=0):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "setfield not implemented yet"))
+
+    def descr_setflags(self, space, w_write=None, w_align=None, w_uic=None): 
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "setflags not implemented yet"))
+
+    def descr_sort(self, space, w_axis=-1, w_kind='quicksort', w_order=None):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "sort not implemented yet"))
+
+    def descr_squeeze(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "squeeze not implemented yet"))
+
+    def descr_strides(self, space):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "strides not implemented yet"))
+
+    def descr_tofile(self, space, w_fid, w_sep="", w_format="%s"):
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "tofile not implemented yet"))
+
+    def descr_trace(self, space, w_offset=0, w_axis1=0, w_axis2=1,
+                    w_dtype=None, w_out=None): 
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "trace not implemented yet"))
+
+    def descr_view(self, space, w_dtype=None, w_type=None) :
+        raise OperationError(space.w_NotImplementedError, space.wrap(
+            "view not implemented yet"))
+
 def convert_to_array(space, w_obj):
     if isinstance(w_obj, BaseArray):
         return w_obj
@@ -1492,6 +1635,43 @@ BaseArray.typedef = TypeDef(
     compress = interp2app(BaseArray.descr_compress),
     repeat = interp2app(BaseArray.descr_repeat),
     count_nonzero = interp2app(BaseArray.descr_count_nonzero),
+
+    argsort = interp2app(BaseArray.descr_argsort),
+    astype = interp2app(BaseArray.descr_astype),
+    base = GetSetProperty(BaseArray.descr_base),
+    byteswap = interp2app(BaseArray.descr_byteswap),
+    choose = interp2app(BaseArray.descr_choose),
+    clip = interp2app(BaseArray.descr_clip),
+    conj = interp2app(BaseArray.descr_conj),
+    conjugate = interp2app(BaseArray.descr_conj),
+    ctypes = GetSetProperty(BaseArray.descr_ctypes),
+    cumprod = interp2app(BaseArray.descr_cumprod),
+    cumsum = interp2app(BaseArray.descr_cumsum),
+    data = GetSetProperty(BaseArray.descr_data),
+    diagonal = interp2app(BaseArray.descr_diagonal),
+    dump = interp2app(BaseArray.descr_dump),
+    dumps = interp2app(BaseArray.descr_dumps),
+    flags = GetSetProperty(BaseArray.descr_get_flags,
+                           BaseArray.descr_set_flags),
+    getfield = interp2app(BaseArray.descr_getfield),
+    imag = GetSetProperty(BaseArray.descr_imag),
+    itemset = interp2app(BaseArray.descr_itemset),
+    newbyteorder = interp2app(BaseArray.descr_newbyteorder),
+    ptp = interp2app(BaseArray.descr_ptp),
+    put = interp2app(BaseArray.descr_put),
+    real = GetSetProperty(BaseArray.descr_real),
+    resize = interp2app(BaseArray.descr_resize),
+    round = interp2app(BaseArray.descr_round),
+    searchsorted = interp2app(BaseArray.descr_searchsorted),
+    setasflat = interp2app(BaseArray.descr_setasflat),
+    setfield = interp2app(BaseArray.descr_setfield),
+    setflags = interp2app(BaseArray.descr_setflags),
+    sort = interp2app(BaseArray.descr_sort),
+    squeeze = interp2app(BaseArray.descr_squeeze),
+    strides = GetSetProperty(BaseArray.descr_strides),
+    tofile = interp2app(BaseArray.descr_tofile),
+    trace = interp2app(BaseArray.descr_trace),
+    view = interp2app(BaseArray.descr_view),
 )
 
 
