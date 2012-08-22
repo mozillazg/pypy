@@ -36,11 +36,19 @@ class VirtualRefInfo:
     def _freeze_(self):
         return True
 
-    def _find_type_of_virtualref(self):
+    def _find_type_of_virtualref(self, graphs):
         # XXX limitation is that we can only have one type
+        T = None
         for graph in graphs:
             for block in graph.iterblocks():
                 for op in block.operations:
+                    if op.opname == 'jit_record_vref':
+                        new_T = op.args[0].concretetype
+                        if T is None:
+                            T = new_T
+                        else:
+                            assert T == new_T, "Different vref types %s and %s" % (T, new_T)
+        self._vref_T = T
 
     def replace_force_virtual_with_call(self, graphs):
         # similar to rvirtualizable2.replace_force_virtualizable_with_call().
@@ -48,7 +56,7 @@ class VirtualRefInfo:
         c_is_virtual_ptr = None
         c_getfield_ptrs = {} # fieldname -> function
         force_virtual_count = 0
-        self._find_type_of_virtualref()
+        self._find_type_of_virtualref(graphs)
         for graph in graphs:
             for block in graph.iterblocks():
                 for op in block.operations:
@@ -158,9 +166,19 @@ class VirtualRefInfo:
     def get_vref_getfield_fnptr(self, name, RES_TP):
         def read_virtual_field(inst):
             if inst.typeptr != self.jit_virtual_ref_vtable:
-                lltype.cast_ptr(
-                xxx
-            xxx
+                inst = lltype.cast_pointer(self._vref_T, inst)
+                return getattr(inst, 'inst_' + name)
+            vref = lltype.cast_pointer(lltype.Ptr(self.JIT_VIRTUAL_REF), inst)
+            token = vref.virtual_token
+            if token == self.TOKEN_TRACING_RESCALL or token == self.TOKEN_NONE:
+                # not a virtual at all, just pretending to be one
+                forced = lltype.cast_pointer(self._vref_T, vref.forced)
+                return getattr(forced, 'inst_' + name)
+            else: 
+                assert not vref.forced
+                from pypy.jit.metainterp.compile import read_field_from_resume
+                return read_field_from_resume(self.cpu, token, name)
+                
         FUNC = lltype.FuncType([rclass.OBJECTPTR], RES_TP)
         funcptr = self.warmrunnerdesc.helper_func(
             lltype.Ptr(FUNC),
