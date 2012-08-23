@@ -2,16 +2,23 @@
 #from .core import *
 
 import sys
+import math as _math
 #sys.modules.setdefault('numpy', sys.modules['numpypy'])
 
-import _numpypy as umath
+import _numpypy
+umath = _numpypy
+
 import multiarray
 sys.modules['numpy.core.multiarray'] = multiarray
-sys.modules['numpy.core.umath'] = umath
+sys.modules['numpy.core.umath'] = _numpypy
 
 import numerictypes
 sys.modules['numerictypes'] = numerictypes
 sys.modules['numpy.core.numerictypes'] = numerictypes
+
+import scalarmath
+sys.modules['scalarmath'] = scalarmath
+sys.modules['numpy.core.scalarmath'] = scalarmath
 
 umath.ERR_IGNORE = 0
 umath.ERR_WARN  = 1
@@ -39,3 +46,12 @@ umath.seterrobj = _seterrobj
 
 umath.PINF = float('inf')
 umath.NAN = float('nan')
+umath.pi = _math.pi
+
+del _math
+
+def not_implemented_func(*args, **kwargs):
+    raise NotImplementedError("implemented yet")
+
+setattr(_numpypy, 'frompyfunc', not_implemented_func)
+setattr(_numpypy, 'mod', not_implemented_func)
