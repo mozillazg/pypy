@@ -311,7 +311,10 @@ if ctypes is not None:
         except AttributeError: pass
         else: return
 
-        typestr = _dtype(dtype).str
+        try:
+            typestr = _dtype(dtype).str
+        except:
+            typestr = _dtype(dtype).byteorder + _dtype(dtype).kind + '%d' % _dtype(dtype).itemsize
         _typecodes[typestr] = simple_type
 
         def __array_interface__(self):
