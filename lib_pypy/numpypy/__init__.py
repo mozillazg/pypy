@@ -1,5 +1,4 @@
-#from _numpypy import *
-#from .core import *
+
 
 import sys
 import math as _math
@@ -9,7 +8,9 @@ import _numpypy
 umath = _numpypy
 
 import multiarray
+sys.modules['multiarray'] = multiarray
 sys.modules['numpy.core.multiarray'] = multiarray
+sys.modules['umath'] = umath
 sys.modules['numpy.core.umath'] = _numpypy
 
 import numerictypes
@@ -19,6 +20,11 @@ sys.modules['numpy.core.numerictypes'] = numerictypes
 import scalarmath
 sys.modules['scalarmath'] = scalarmath
 sys.modules['numpy.core.scalarmath'] = scalarmath
+
+import _compiled_base
+sys.modules['_compiled_base'] = _compiled_base
+sys.modules['numpy.lib._compiled_base'] = _compiled_base
+
 
 umath.ERR_IGNORE = 0
 umath.ERR_WARN  = 1
@@ -48,6 +54,11 @@ umath.PINF = float('inf')
 umath.NAN = float('nan')
 umath.pi = _math.pi
 
+#mangle the __all__ of numpy.core so that import numpy.core.numerictypes works
+from numpy import core
+core.__all__ += ['multiarray', 'numerictypes', 'umath']
+core.numerictypes = numerictypes
+
 del _math
 
 def not_implemented_func(*args, **kwargs):
@@ -55,3 +66,5 @@ def not_implemented_func(*args, **kwargs):
 
 setattr(_numpypy, 'frompyfunc', not_implemented_func)
 setattr(_numpypy, 'mod', not_implemented_func)
+
+core.complexfloating = None
