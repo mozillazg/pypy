@@ -82,7 +82,8 @@ sys.modules['fftpack_lite'] = fftpack_lite
 import mtrand
 sys.modules['mtrand'] = mtrand
 
-
+sys.modules['ma'] = mtrand
+sys.modules['matrixlib'] = mtrand
 
 
 
