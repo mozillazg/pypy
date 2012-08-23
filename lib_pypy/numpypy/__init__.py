@@ -60,6 +60,8 @@ def not_implemented_func(*args, **kwargs):
 setattr(_numpypy, 'frompyfunc', not_implemented_func)
 setattr(_numpypy, 'mod', not_implemented_func)
 setattr(_numpypy, 'conjugate', not_implemented_func)
+setattr(multiarray, '_flagdict', not_implemented_func)
+setattr(multiarray, 'flagsobj', not_implemented_func)
 
 #mangle the __all__ of numpy.core so that import numpy.core.numerictypes works
 from numpy import core
@@ -76,6 +78,11 @@ sys.modules['numpy.linalg'] = linalg
 
 import fftpack_lite
 sys.modules['fftpack_lite'] = fftpack_lite
-del _math
+
+import mtrand
+sys.modules['mtrand'] = mtrand
+
+
+
 
 
