@@ -59,6 +59,7 @@ def not_implemented_func(*args, **kwargs):
 
 setattr(_numpypy, 'frompyfunc', not_implemented_func)
 setattr(_numpypy, 'mod', not_implemented_func)
+setattr(_numpypy, 'conjugate', not_implemented_func)
 
 #mangle the __all__ of numpy.core so that import numpy.core.numerictypes works
 from numpy import core
@@ -72,6 +73,9 @@ core.complexfloating = None
 # 
 import linalg
 sys.modules['numpy.linalg'] = linalg
+
+import fftpack_lite
+sys.modules['fftpack_lite'] = fftpack_lite
 del _math
 
 
