@@ -54,17 +54,24 @@ umath.PINF = float('inf')
 umath.NAN = float('nan')
 umath.pi = _math.pi
 
-#mangle the __all__ of numpy.core so that import numpy.core.numerictypes works
-from numpy import core
-core.__all__ += ['multiarray', 'numerictypes', 'umath']
-core.numerictypes = numerictypes
-
-del _math
-
 def not_implemented_func(*args, **kwargs):
     raise NotImplementedError("implemented yet")
 
 setattr(_numpypy, 'frompyfunc', not_implemented_func)
 setattr(_numpypy, 'mod', not_implemented_func)
 
+#mangle the __all__ of numpy.core so that import numpy.core.numerictypes works
+from numpy import core
+core.__all__ += ['multiarray', 'numerictypes', 'umath']
+core.numerictypes = numerictypes
 core.complexfloating = None
+
+#goal: use local lapack_lite for "from numpy.linalg import lapack_lite" 
+# problem: import numpy.lib imports polynomial which imports linalg. If I import numpy.linalg, it will
+# import numpy.lib and try to import itself agian, before I can set lapack_lite
+# 
+import linalg
+sys.modules['numpy.linalg'] = linalg
+del _math
+
+

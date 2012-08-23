@@ -19,8 +19,8 @@ from numpy.core import array, asarray, zeros, empty, transpose, \
         newaxis, ravel, all, Inf, dot, add, multiply, identity, sqrt, \
         maximum, flatnonzero, diagonal, arange, fastCopyAndTranspose, sum, \
         isfinite, size, finfo, absolute, log, exp
-from numpy.lib import triu
-from numpy.linalg import lapack_lite
+#from numpy.lib import triu
+import lapack_lite
 from numpy.matrixlib.defmatrix import matrix_power
 from numpy.compat import asbytes
 
@@ -699,6 +699,7 @@ def qr(a, mode='full'):
 
 
 # Eigenvalues
+
 
 def eigvals(a):
     """
