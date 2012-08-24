@@ -164,6 +164,8 @@ class VirtualRefInfo:
         return inputconst(lltype.typeOf(funcptr), funcptr)
 
     def get_vref_getfield_fnptr(self, name, RES_TP):
+        descr = self.cpu.fielddescrof(self._vref_T.TO, 'inst_' + name)
+        
         def read_virtual_field(inst):
             if inst.typeptr != self.jit_virtual_ref_vtable:
                 inst = lltype.cast_pointer(self._vref_T, inst)
@@ -174,10 +176,11 @@ class VirtualRefInfo:
                 # not a virtual at all, just pretending to be one
                 forced = lltype.cast_pointer(self._vref_T, vref.forced)
                 return getattr(forced, 'inst_' + name)
-            else: 
+            else:
                 assert not vref.forced
                 from pypy.jit.metainterp.compile import read_field_from_resume
-                return read_field_from_resume(self.cpu, token, name)
+                return read_field_from_resume(self.cpu, token, descr, vref,
+                                              RES_TP)
                 
         FUNC = lltype.FuncType([rclass.OBJECTPTR], RES_TP)
         funcptr = self.warmrunnerdesc.helper_func(

@@ -793,8 +793,45 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
     resumereader.done()
     return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
-def read_field_from_resumedata(metainterp, storage, greenfield_info):
-    xxx
+@specialize.arg(6)
+def read_field_from_resumedata(metainterp_sd, storage, vinfo, greenfield_info,
+                               fielddescr, vinst, RES_TP):
+    cpu = metainterp_sd.cpu
+    numb = storage.rd_numb
+    end = len(numb.nums)
+    vinst = lltype.cast_opaque_ptr(llmemory.GCREF, vinst)
+    for i in range(0, end, 2):
+        # that's a vref
+        num, tag = untag(numb.nums[i + 1])
+        if tag == TAGBOX:
+            inst = cpu.get_latest_value_ref(num)
+            if inst == vinst:
+                # we found the correct vref, now we look for virtuals
+                # that are supposed to be stored in the place.
+                # Note that since we passed the vref to a residual
+                # call, it cannot potentially be virtual
+                num, tag = untag(numb.nums[i])
+                if tag != TAGVIRTUAL:
+                    raise Exception("I'm not sure if this can happen, non-virtual, but not stored in a vref")
+                vinfo = storage.rd_virtuals[num]
+                for j, descr in enumerate(vinfo.fielddescrs):
+                    if descr == fielddescr:
+                        cpunum, tag = untag(vinfo.fieldnums[j])
+                        assert tag in [TAGBOX, TAGCONST, TAGINT]
+                        # no support for virtuals
+                        if descr.is_pointer_field():
+                            xxx
+                        elif descr.is_float_field():
+                            xxx
+                        else:
+                            if tag == TAGINT:
+                                return rffi.cast(RES_TP, cpunum)
+                            xxx
+                else:
+                    assert False, "unreachable code"
+    else:
+        assert False, "cannot find the correct vref"
+
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
     unique_id = lambda: None
