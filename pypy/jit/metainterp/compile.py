@@ -638,11 +638,11 @@ class ResumeAtPositionDescr(ResumeGuardDescr):
         self.copy_all_attributes_into(res)
         return res
 
-@specialize.arg(2)
-def read_field_from_resume(cpu, token, fieldname):
+@specialize.arg(4)
+def read_field_from_resume(cpu, token, descr, vinst, TP):
     faildescr = cpu.force(token)
     assert isinstance(faildescr, ResumeGuardForcedDescr)
-    return faildescr.handle_async_field_read(token, fieldname)
+    return faildescr.handle_async_field_read(token, descr, vinst, TP)
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
@@ -692,12 +692,14 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # future failure of the GUARD_NOT_FORCED
         self.save_data(force_token, all_virtuals)
 
-    @specialize.arg(2)
-    def handle_async_field_read(self, force_token, fieldname):
+    @specialize.arg(4)
+    def handle_async_field_read(self, force_token, descr, vinst, TP):
         from pypy.jit.metainterp.resume import read_field_from_resumedata
         metainterp_sd = self.metainterp_sd
+        vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
-        return read_field_from_resumedata(metainterp_sd, self, ginfo)
+        return read_field_from_resumedata(metainterp_sd, self, vinfo, ginfo,
+                                          descr, vinst, TP)
 
     def save_data(self, key, value):
         globaldata = self.metainterp_sd.globaldata
