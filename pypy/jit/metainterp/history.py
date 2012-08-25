@@ -736,12 +736,10 @@ class TreeLoop(object):
                 if hasattr(op.getdescr(), '_debug_suboperations'):
                     ops = op.getdescr()._debug_suboperations
                     TreeLoop.check_consistency_of_branch(ops, seen.copy())
-                for failarg in op.getfailargs() or []:
+                for failarg in op.get_extra("failargs") or []:
                     if failarg is not None:
                         assert not failarg.is_constant()
                         assert failarg in seen
-            else:
-                assert op.getfailargs() is None
             seen[op] = True
             if op.getopnum() == rop.LABEL:
                 inputargs = op.getarglist()

@@ -119,7 +119,7 @@ def compile_loop(metainterp, greenkey, start,
     part.resume_at_jump_descr = resume_at_jump_descr
     part.operations = ([create_resop(rop.LABEL, None, inputargs,
                                      descr=TargetToken(jitcell_token))] +
-                       [h_ops[i].clone() for i in range(start, len(h_ops))]+
+                       [h_ops[i] for i in range(start, len(h_ops))]+
                        [create_resop(rop.LABEL, None, jumpargs,
                                      descr=jitcell_token)])
 
@@ -476,8 +476,6 @@ class ResumeGuardDescr(ResumeDescr):
     _counters = None    # they get stored in _counters then.
 
     # this class also gets the following attributes stored by resume.py code
-    rd_snapshot = None
-    rd_frame_info_list = None
     rd_numb = lltype.nullptr(NUMBERING)
     rd_consts = None
     rd_virtuals = None
@@ -610,31 +608,11 @@ class ResumeGuardDescr(ResumeDescr):
                                self, inputargs, new_loop.operations,
                                new_loop.original_jitcell_token)
 
-    def copy_all_attributes_into(self, res):
-        # XXX a bit ugly to have to list them all here
-        res.rd_snapshot = self.rd_snapshot
-        res.rd_frame_info_list = self.rd_frame_info_list
-        res.rd_numb = self.rd_numb
-        res.rd_consts = self.rd_consts
-        res.rd_virtuals = self.rd_virtuals
-        res.rd_pendingfields = self.rd_pendingfields
-
-    def _clone_if_mutable(self):
-        res = ResumeGuardDescr()
-        self.copy_all_attributes_into(res)
-        return res
-
 class ResumeGuardNotInvalidated(ResumeGuardDescr):
-    def _clone_if_mutable(self):
-        res = ResumeGuardNotInvalidated()
-        self.copy_all_attributes_into(res)
-        return res
+    pass
 
 class ResumeAtPositionDescr(ResumeGuardDescr):
-    def _clone_if_mutable(self):
-        res = ResumeAtPositionDescr()
-        self.copy_all_attributes_into(res)
-        return res
+    pass
 
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
@@ -711,12 +689,6 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
             else:
                 assert 0, "not found: %r" % (key,)
         return data
-
-    def _clone_if_mutable(self):
-        res = ResumeGuardForcedDescr(self.metainterp_sd,
-                                     self.jitdriver_sd)
-        self.copy_all_attributes_into(res)
-        return res
 
 
 class AbstractResumeGuardCounters(object):
@@ -813,7 +785,7 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     # Attempt to use optimize_bridge().  This may return None in case
     # it does not work -- i.e. none of the existing old_loop_tokens match.
     new_trace = create_empty_loop(metainterp)
-    new_trace.inputargs = inputargs = metainterp.history.inputargs[:]
+    new_trace.inputargs = metainterp.history.inputargs[:]
 
     new_trace.operations = metainterp.history.operations
     new_trace.resume_at_jump_descr = resume_at_jump_descr

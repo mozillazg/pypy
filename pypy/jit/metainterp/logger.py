@@ -14,6 +14,7 @@ class Logger(object):
         self.guard_number = guard_number
 
     def log_loop(self, inputargs, operations, number=0, type=None, ops_offset=None, name=''):
+        return
         if type is None:
             debug_start("jit-log-noopt-loop")
             logops = self._log_operations(inputargs, operations, ops_offset)
@@ -31,6 +32,7 @@ class Logger(object):
         return logops
 
     def log_bridge(self, inputargs, operations, number=-1, ops_offset=None):
+        return
         if number == -1:
             debug_start("jit-log-noopt-bridge")
             logops = self._log_operations(inputargs, operations, ops_offset)

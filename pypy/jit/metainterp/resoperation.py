@@ -178,9 +178,26 @@ class AbstractResOp(AbstractValue):
     pc = 0
     opnum = 0
 
+    extras = None
+    # ResOps are immutable, however someone can store a temporary
+    # extra mutable stuff here, in the extras field. Other fields (including
+    # descr) should be deeply immutable. This replaces various dictionaries
+    # that has been previously used.
+
+    @specialize.arg(1)
+    def get_extra(self, key):
+        return getattr(self, key)
+
+    @specialize.arg(1)
+    def set_extra(self, key, value):
+        setattr(self, key, value)
+
     @classmethod
     def getopnum(cls):
         return cls.opnum
+
+    def __hash__(self):
+        raise Exception("Should not hash resops, use get/set extra instead")
 
     # methods implemented by the arity mixins
     # ---------------------------------------
@@ -198,23 +215,10 @@ class AbstractResOp(AbstractValue):
     def numargs(self):
         raise NotImplementedError
 
-
-    # methods implemented by GuardResOp
-    # ---------------------------------
-
-    def getfailargs(self):
-        return None
-
-    def setfailargs(self, fail_args):
-        raise NotImplementedError
-
     # methods implemented by ResOpWithDescr
     # -------------------------------------
 
     def getdescr(self):
-        return None
-
-    def getdescrclone(self):
         return None
 
     def setdescr(self, descr):
@@ -418,9 +422,6 @@ class ResOpWithDescr(AbstractResOp):
     def getdescr(self):
         return self._descr
 
-    def getdescrclone(self):
-        return self._descr.clone_if_mutable()
-
     def setdescr(self, descr):
         # for 'call', 'new', 'getfield_gc'...: the descr is a prebuilt
         # instance provided by the backend holding details about the type
@@ -444,15 +445,25 @@ class ResOpWithDescr(AbstractResOp):
 
 class GuardResOp(ResOpWithDescr):
 
-    _fail_args = None
+    # gathered during tracing
+    _rd_snapshot = None
+    _rd_frame_info_list = None
 
-    def getfailargs(self):
-        return self._fail_args
+    def get_rd_snapshot(self):
+        return self._rd_snapshot
 
-    def setfailargs(self, fail_args):
-        if self._fail_args is not None:
-            raise Exception("Setting fail args on a resop already constructed!")
-        self._fail_args = fail_args
+    def set_rd_snapshot(self, rd_snapshot):
+        if self._rd_snapshot is not None:
+            raise Exception("rd_snapshot already set")
+        self._rd_snapshot = rd_snapshot
+
+    def get_rd_frame_info_list(self):
+        return self._rd_frame_info_list
+
+    def set_rd_frame_info_list(self, rd_frame_info_list):
+        if self._rd_frame_info_list is not None:
+            raise Exception("rd_frame_info_list already set")
+        self._rd_frame_info_list = rd_frame_info_list
 
 # ============
 # arity mixins
@@ -478,24 +489,12 @@ class NullaryOp(object):
     def foreach_arg(self, func):
         pass
 
-    def clone(self):
-        r = create_resop_0(self.opnum, self.getresult(), self.getdescrclone())
-        if self.is_guard():
-            r.setfailargs(self.getfailargs())
-        return r
-
     @specialize.arg(1)
     def copy_and_change(self, newopnum, descr=None):
-        r = create_resop_0(newopnum, self.getresult(),
-                           descr or self.getdescrclone())
-        if r.is_guard():
-            r.setfailargs(self.getfailargs())
-            assert self.is_guard()
-        return r
+        return create_resop_0(newopnum, self.getresult(),
+                              descr or self.getdescr())
 
-    def copy_if_modified_by_optimization(self, opt, force_copy=False):
-        if force_copy:
-            return self.clone()
+    def copy_if_modified_by_optimization(self, opt):
         return self
 
 class UnaryOp(object):
@@ -524,29 +523,18 @@ class UnaryOp(object):
     def foreach_arg(self, func):
         func(self.getopnum(), 0, self._arg0)
 
-    def clone(self):
-        r = create_resop_1(self.opnum, self.getresult(), self._arg0,
-                              self.getdescrclone())
-        if self.is_guard():
-            r.setfailargs(self.getfailargs())
-        return r
-
     @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt, force_copy=False):
+    def copy_if_modified_by_optimization(self, opt):
         new_arg = opt.get_value_replacement(self._arg0)
-        if not force_copy and new_arg is None:
+        if new_arg is None:
             return self
         return create_resop_1(self.opnum, self.getresult(), new_arg,
-                              self.getdescrclone())
+                              self.getdescr())
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, descr=None):
-        r = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
-                           descr or self.getdescrclone())
-        if r.is_guard():
-            r.setfailargs(self.getfailargs())
-            assert self.is_guard()
-        return r
+        return create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
+                              descr or self.getdescr())
 
 class BinaryOp(object):
     _mixin_ = True
@@ -578,33 +566,22 @@ class BinaryOp(object):
         func(self.getopnum(), 0, self._arg0)
         func(self.getopnum(), 1, self._arg1)
 
-    def clone(self):
-        r = create_resop_2(self.opnum, self.getresult(), self._arg0, self._arg1,
-                           self.getdescrclone())
-        if self.is_guard():
-            r.setfailargs(self.getfailargs())
-        return r
-
     @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt, force_copy=False):
+    def copy_if_modified_by_optimization(self, opt):
         new_arg0 = opt.get_value_replacement(self._arg0)
         new_arg1 = opt.get_value_replacement(self._arg1)
-        if not force_copy and new_arg0 is None and new_arg1 is None:
+        if new_arg0 is None and new_arg1 is None:
             return self
         return create_resop_2(self.opnum, self.getresult(),
                               new_arg0 or self._arg0,
                               new_arg1 or self._arg1,
-                              self.getdescrclone())
+                              self.getdescr())
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, arg1=None, descr=None):
-        r = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
-                           arg1 or self._arg1,
-                           descr or self.getdescrclone())
-        if r.is_guard():
-            r.setfailargs(self.getfailargs())
-            assert self.is_guard()
-        return r
+        return create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
+                              arg1 or self._arg1,
+                              descr or self.getdescr())
 
 class TernaryOp(object):
     _mixin_ = True
@@ -640,32 +617,26 @@ class TernaryOp(object):
         func(self.getopnum(), 1, self._arg1)
         func(self.getopnum(), 2, self._arg2)
 
-    def clone(self):
-        assert not self.is_guard()
-        return create_resop_3(self.opnum, self.getresult(), self._arg0,
-                              self._arg1, self._arg2, self.getdescrclone())
-
     @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt, force_copy=False):
+    def copy_if_modified_by_optimization(self, opt):
         assert not self.is_guard()
         new_arg0 = opt.get_value_replacement(self._arg0)
         new_arg1 = opt.get_value_replacement(self._arg1)
         new_arg2 = opt.get_value_replacement(self._arg2)
-        if (not force_copy and new_arg0 is None and new_arg1 is None and
-            new_arg2 is None):
+        if new_arg0 is None and new_arg1 is None and new_arg2 is None:
             return self
         return create_resop_3(self.opnum, self.getresult(),
                               new_arg0 or self._arg0,
                               new_arg1 or self._arg1,
                               new_arg2 or self._arg2,
-                              self.getdescrclone())
+                              self.getdescr())
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, arg1=None, arg2=None,
                         descr=None):
         r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1, arg2 or self._arg2,
-                           descr or self.getdescrclone())
+                           descr or self.getdescr())
         assert not r.is_guard()
         return r
 
@@ -692,17 +663,9 @@ class N_aryOp(object):
         for i, arg in enumerate(self._args):
             func(self.getopnum(), i, arg)
 
-    def clone(self):
-        assert not self.is_guard()
-        return create_resop(self.opnum, self.getresult(), self._args[:],
-                              self.getdescrclone())
-
     @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt, force_copy=False):
-        if force_copy:
-            newargs = []
-        else:
-            newargs = None
+    def copy_if_modified_by_optimization(self, opt):
+        newargs = None
         for i, arg in enumerate(self._args):
             new_arg = opt.get_value_replacement(arg)
             if new_arg is not None:
@@ -717,13 +680,13 @@ class N_aryOp(object):
         if newargs is None:
             return self
         return create_resop(self.opnum, self.getresult(),
-                            newargs, self.getdescrclone())
+                            newargs, self.getdescr())
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, newargs=None, descr=None):
         r = create_resop(newopnum, self.getresult(),
                          newargs or self.getarglist(),
-                         descr or self.getdescrclone())
+                         descr or self.getdescr())
         assert not r.is_guard()
         return r
 
