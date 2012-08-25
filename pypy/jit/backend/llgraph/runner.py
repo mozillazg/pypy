@@ -588,6 +588,8 @@ class LLtypeCPU(BaseCPU):
         return lltype.malloc(LOOP_RUN_CONTAINER, 0)
 
     def force(self, force_token):
+        XXX # split in two pieces, one which only puts stuff where it belongs
+        # and does not force anything. Do the same with x86
         token = llmemory.cast_int_to_adr(force_token)
         frame = llimpl.get_forced_token_frame(token)
         fail_index = llimpl.force(frame)
