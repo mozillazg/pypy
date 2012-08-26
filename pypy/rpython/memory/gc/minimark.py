@@ -132,7 +132,7 @@ class MiniMarkGC(MovingGCBase):
     inline_simple_malloc_varsize = True
     needs_write_barrier = True
     prebuilt_gc_objects_are_static_roots = False
-    malloc_zero_filled = True    # xxx experiment with False
+    malloc_zero_filled = False
     gcflag_extra = GCFLAG_FINALIZATION_ORDERING
 
     # All objects start with a HDR, i.e. with a field 'tid' which contains
@@ -379,7 +379,7 @@ class MiniMarkGC(MovingGCBase):
         # the nursery than really needed, to simplify pointer arithmetic
         # in malloc_fixedsize_clear().  The few extra pages are never used
         # anyway so it doesn't even count.
-        nursery = llarena.arena_malloc(self._nursery_memory_size(), 2)
+        nursery = llarena.arena_malloc(self._nursery_memory_size(), 0)
         if not nursery:
             raise MemoryError("cannot allocate nursery")
         return nursery
@@ -461,10 +461,11 @@ class MiniMarkGC(MovingGCBase):
             debug_stop("gc-debug")
 
 
-    def malloc_fixedsize_clear(self, typeid, size,
-                               needs_finalizer=False,
-                               is_finalizer_light=False,
-                               contains_weakptr=False):
+    def _make_malloc_fixedsize(clear):
+      def malloc_fixedsize(self, typeid, size,
+                           needs_finalizer=False,
+                           is_finalizer_light=False,
+                           contains_weakptr=False):
         size_gc_header = self.gcheaderbuilder.size_gc_header
         totalsize = size_gc_header + size
         rawtotalsize = raw_malloc_usage(totalsize)
@@ -474,7 +475,7 @@ class MiniMarkGC(MovingGCBase):
         if needs_finalizer and not is_finalizer_light:
             ll_assert(not contains_weakptr,
                      "'needs_finalizer' and 'contains_weakptr' both specified")
-            obj = self.external_malloc(typeid, 0, can_make_young=False)
+            obj = self.external_malloc_clear(typeid, 0, can_make_young=False)
             self.objects_with_finalizers.append(obj)
         #
         # If totalsize is greater than nonlarge_max (which should never be
@@ -483,7 +484,7 @@ class MiniMarkGC(MovingGCBase):
         elif rawtotalsize > self.nonlarge_max:
             ll_assert(not contains_weakptr,
                       "'contains_weakptr' specified for a large object")
-            obj = self.external_malloc(typeid, 0)
+            obj = self.external_malloc_clear(typeid, 0)
             #
         else:
             # If totalsize is smaller than minimal_size_in_nursery, round it
@@ -500,6 +501,13 @@ class MiniMarkGC(MovingGCBase):
                 result = self.collect_and_reserve(totalsize)
             #
             # Build the object.
+            if clear:
+                if we_are_translated():
+                    llarena.arena_reset(result + llmemory.sizeof(self.HDR),
+                                        totalsize - llmemory.sizeof(self.HDR),
+                                        2)    # don't need to zero out .tid
+                else:
+                    llarena.arena_reset(result, totalsize, 2)
             llarena.arena_reserve(result, totalsize)
             obj = result + size_gc_header
             if is_finalizer_light:
@@ -511,6 +519,12 @@ class MiniMarkGC(MovingGCBase):
                 self.young_objects_with_weakrefs.append(obj)
         #
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
+      return malloc_fixedsize
+
+    malloc_fixedsize       = _make_malloc_fixedsize(clear=False)
+    malloc_fixedsize_clear = func_with_new_name(
+                                 _make_malloc_fixedsize(clear=True),
+                                 'malloc_fixedsize_clear')
 
 
     def malloc_varsize_clear(self, typeid, length, size, itemsize,
@@ -536,7 +550,7 @@ class MiniMarkGC(MovingGCBase):
             # If the total size of the object would be larger than
             # 'nonlarge_max', then allocate it externally.  We also
             # go there if 'length' is actually negative.
-            obj = self.external_malloc(typeid, length)
+            obj = self.external_malloc_clear(typeid, length)
             #
         else:
             # With the above checks we know now that totalsize cannot be more
@@ -604,7 +618,7 @@ class MiniMarkGC(MovingGCBase):
     collect_and_reserve._dont_inline_ = True
 
 
-    def external_malloc(self, typeid, length, can_make_young=True):
+    def external_malloc_clear(self, typeid, length, can_make_young=True):
         """Allocate a large object using the ArenaCollection or
         raw_malloc(), possibly as an object with card marking enabled,
         if it has gc pointers in its var-sized part.  'length' should be
@@ -614,7 +628,7 @@ class MiniMarkGC(MovingGCBase):
         # Here we really need a valid 'typeid', not 0 (as the JIT might
         # try to send us if there is still a bug).
         ll_assert(bool(self.combine(typeid, 0)),
-                  "external_malloc: typeid == 0")
+                  "external_malloc_clear: typeid == 0")
         #
         # Compute the total size, carefully checking for overflows.
         size_gc_header = self.gcheaderbuilder.size_gc_header
@@ -794,16 +808,16 @@ class MiniMarkGC(MovingGCBase):
 
 
     def malloc_fixedsize_nonmovable(self, typeid):
-        obj = self.external_malloc(typeid, 0)
+        obj = self.external_malloc_clear(typeid, 0)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_varsize_nonmovable(self, typeid, length):
-        obj = self.external_malloc(typeid, length)
+        obj = self.external_malloc_clear(typeid, length)
         return llmemory.cast_adr_to_ptr(obj, llmemory.GCREF)
 
     def malloc_nonmovable(self, typeid, length, zero):
         # helper for testing, same as GCBase.malloc
-        return self.external_malloc(typeid, length or 0)    # None -> 0
+        return self.external_malloc_clear(typeid, length or 0)    # None -> 0
 
 
     # ----------
@@ -1258,9 +1272,9 @@ class MiniMarkGC(MovingGCBase):
         if self.young_rawmalloced_objects:
             self.free_young_rawmalloced_objects()
         #
-        # All live nursery objects are out, and the rest dies.  Fill
-        # the whole nursery with zero and reset the current nursery pointer.
-        llarena.arena_reset(self.nursery, self.nursery_size, 2)
+        # All live nursery objects are out, and the rest dies.
+        # Reset the current nursery pointer.
+        llarena.arena_reset(self.nursery, self.nursery_size, 0)
         self.debug_rotate_nursery()
         self.nursery_free = self.nursery
         #
