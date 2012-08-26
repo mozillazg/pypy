@@ -3,16 +3,13 @@ from pypy.jit.metainterp.optimizeopt import virtualize
 from pypy.jit.metainterp.optimizeopt.optimizer import LEVEL_CONSTANT, \
                                                       LEVEL_KNOWNCLASS, \
                                                       LEVEL_NONNULL, \
-                                                      LEVEL_UNKNOWN, \
-                                                      MININT, MAXINT, OptValue
-from pypy.jit.metainterp.history import BoxInt, ConstInt, BoxPtr, Const
+                                                      LEVEL_UNKNOWN
+from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.optimizeopt.intutils import IntUnbounded
+from pypy.jit.metainterp.resoperation import rop, Const, ConstInt
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
-from pypy.rlib.objectmodel import we_are_translated
-import os
 
 class BadVirtualState(Exception):
     pass

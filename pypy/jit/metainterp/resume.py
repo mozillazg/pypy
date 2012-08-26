@@ -1,6 +1,5 @@
-import sys, os
-from pypy.jit.metainterp.history import Box, Const, ConstInt, getkind
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat
+from pypy.jit.metainterp.resoperation import Const, ConstInt, getkind
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, Box
 from pypy.jit.metainterp.resoperation import INT, REF, FLOAT
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.jit.metainterp.resoperation import rop
@@ -12,7 +11,6 @@ from pypy.rlib import rarithmetic, rstack
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rlib.debug import have_debug_prints, ll_assert
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
-from pypy.jit.metainterp.optimize import InvalidLoop
 
 # Logic to encode the chain of frames and the state of the boxes at a
 # guard operation, and to decode it again.  This is a bit advanced,

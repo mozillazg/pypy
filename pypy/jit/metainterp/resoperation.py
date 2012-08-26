@@ -175,11 +175,20 @@ class AbstractValue(object):
 
     @specialize.arg(1)
     def get_extra(self, key):
+        if key == 'llgraph_var2index':
+            return self.llgraph_var2index
         raise KeyError
 
     @specialize.arg(1)
     def set_extra(self, key, value):
+        if key == 'llgraph_var2index':
+            self.llgraph_var2index = value
+            return
         raise KeyError
+
+    @specialize.arg(1)
+    def del_extra(self, key):
+        pass
 
 def getkind(TYPE, supports_floats=True,
                   supports_longlong=True,
@@ -488,6 +497,7 @@ class AbstractResOp(AbstractValue):
         'failargs': 'arguments for guard ops that are alive. '
                     'valid from optimizations (store_final_args) until '
                     'the backend',
+        'llgraph_var2index': 'llgraph internal attribute',
     }
 
     extras = None
@@ -507,6 +517,10 @@ class AbstractResOp(AbstractValue):
         if key not in self.DOCUMENTED_KEYS:
             raise Exception("Please document '%s' extra parameter and it's lifetime" % key)
         setattr(self, key, value)
+
+    @specialize.arg(1)
+    def del_extra(self, key):
+        delattr(self, key)
 
     @classmethod
     def getopnum(cls):

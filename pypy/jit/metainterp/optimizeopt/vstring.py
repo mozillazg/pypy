@@ -1,11 +1,11 @@
 from pypy.jit.codewriter.effectinfo import EffectInfo
-from pypy.jit.metainterp.history import (BoxInt, Const, ConstInt, ConstPtr,
+from pypy.jit.metainterp.history import (BoxInt,
     get_const_ptr_for_string, get_const_ptr_for_unicode, BoxPtr, REF, INT)
 from pypy.jit.metainterp.optimizeopt import optimizer, virtualize
 from pypy.jit.metainterp.optimizeopt.optimizer import CONST_0, CONST_1
 from pypy.jit.metainterp.optimizeopt.optimizer import llhelper, REMOVED
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, ConstPtr
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython import annlowlevel

@@ -1,13 +1,11 @@
 import sys
-from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1, CONST_0, \
-                                                  MODE_ARRAY, MODE_STR, MODE_UNICODE
-from pypy.jit.metainterp.history import ConstInt
+from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
+     CONST_0, MODE_ARRAY, MODE_STR, MODE_UNICODE
 from pypy.jit.metainterp.optimizeopt.intutils import (IntBound, IntLowerBound,
     IntUpperBound)
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, ConstInt
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.rlib.rarithmetic import LONG_BIT
 
 
 class OptIntBounds(Optimization):

@@ -4,11 +4,9 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          BasicFailDescr,
                                          BoxInt, Box, BoxPtr,
                                          JitCellToken, TargetToken,
-                                         ConstInt, ConstPtr,
-                                         BoxObj,
-                                         ConstObj, BoxFloat, ConstFloat)
+                                         BoxObj, BoxFloat)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
-     create_resop
+     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass

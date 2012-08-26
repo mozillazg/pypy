@@ -7,10 +7,10 @@ from pypy.rlib.jit import JitDebugInfo, Counters
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
-from pypy.jit.metainterp.resoperation import rop, create_resop
+from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt
 from pypy.jit.metainterp.history import TreeLoop, Box, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
-from pypy.jit.metainterp.history import BoxPtr, BoxFloat, ConstInt
+from pypy.jit.metainterp.history import BoxPtr, BoxFloat
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.inliner import Inliner

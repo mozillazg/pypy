@@ -1,15 +1,14 @@
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
-from pypy.jit.metainterp.history import BoxInt, BoxFloat, Const, ConstInt, REF, INT
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, REF
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
-from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
-    args_dict)
-from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups
+from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
+from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
+     Const, ConstInt
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.tool.pairtype import extendabletype
-from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.objectmodel import specialize
 
 LEVEL_UNKNOWN    = '\x00'

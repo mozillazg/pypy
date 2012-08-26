@@ -8,8 +8,9 @@ from pypy.rlib.jit_hooks import LOOP_RUN_CONTAINER
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.jit.metainterp import history
-from pypy.jit.metainterp.resoperation import REF, INT, FLOAT, STRUCT, HOLE
+from pypy.jit.metainterp import history, resoperation
+from pypy.jit.metainterp.resoperation import REF, INT, FLOAT, STRUCT, HOLE,\
+     getkind, VOID
 from pypy.jit.metainterp.warmstate import unwrap
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend import model
@@ -167,22 +168,22 @@ class BaseCPU(model.AbstractCPU):
         model.AbstractCPU.free_loop_and_bridges(self, compiled_loop_token)
 
     def _compile_loop_or_bridge(self, c, inputargs, operations, clt):
-        var2index = {}
         for box in inputargs:
             if isinstance(box, history.BoxInt):
-                var2index[box] = llimpl.compile_start_int_var(c)
+                r = llimpl.compile_start_int_var(c)
             elif isinstance(box, self.ts.BoxRef):
                 TYPE = self.ts.BASETYPE
-                var2index[box] = llimpl.compile_start_ref_var(c, TYPE)
+                r = llimpl.compile_start_ref_var(c, TYPE)
             elif isinstance(box, history.BoxFloat):
-                var2index[box] = llimpl.compile_start_float_var(c)
+                r = llimpl.compile_start_float_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
+            box.set_extra("llgraph_var2index", r)
         llimpl.compile_started_vars(clt)
-        self._compile_operations(c, operations, var2index, clt)
+        self._compile_operations(c, operations, clt)
         return c
 
-    def _compile_operations(self, c, operations, var2index, clt):
+    def _compile_operations(self, c, operations, clt):
         for op in operations:
             llimpl.compile_add(c, op.getopnum())
             descr = op.getdescr()
@@ -201,13 +202,13 @@ class BaseCPU(model.AbstractCPU):
             for i in range(op.numargs()):
                 x = op.getarg(i)
                 if not x.is_constant():
-                    llimpl.compile_add_var(c, var2index[x])
+                    llimpl.compile_add_var(c, x.get_extra("llgraph_var2index"))
                 else:
-                    if isinstance(x, history.ConstInt):
+                    if isinstance(x, resoperation.ConstInt):
                         llimpl.compile_add_int_const(c, x.value)
                     elif isinstance(x, self.ts.ConstRef):
                         llimpl.compile_add_ref_const(c, x.value, self.ts.BASETYPE)
-                    elif isinstance(x, history.ConstFloat):
+                    elif isinstance(x, resoperation.ConstFloat):
                         llimpl.compile_add_float_const(c, x.value)
                     elif isinstance(x, Descr):
                         llimpl.compile_add_descr_arg(c, x.ofs, x.typeinfo,
@@ -219,7 +220,7 @@ class BaseCPU(model.AbstractCPU):
                 faildescr = op.getdescr()
                 assert isinstance(faildescr, history.AbstractFailDescr)
                 faildescr._fail_args_types = []
-                for box in op.getfailargs():
+                for box in op.get_extra("failargs"):
                     if box is None:
                         type = HOLE
                     else:
@@ -228,18 +229,21 @@ class BaseCPU(model.AbstractCPU):
                 fail_index = self.get_fail_descr_number(faildescr)
                 index = llimpl.compile_add_fail(c, fail_index)
                 faildescr._compiled_fail = c, index
-                for box in op.getfailargs():
+                for box in op.get_extra("failargs"):
                     if box is not None:
-                        llimpl.compile_add_fail_arg(c, var2index[box])
+                        llimpl.compile_add_fail_arg(c,
+                                          box.get_extra("llgraph_var2index"))
                     else:
                         llimpl.compile_add_fail_arg(c, -1)
 
             if op.type == INT:
-                var2index[op] = llimpl.compile_add_int_result(c)
+                r = llimpl.compile_add_int_result(c)
             elif op.type == REF:
-                var2index[op] = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
+                r = llimpl.compile_add_ref_result(c, self.ts.BASETYPE)
             elif op.type == FLOAT:
-                var2index[op] = llimpl.compile_add_float_result(c)
+                r = llimpl.compile_add_float_result(c)
+            if op.type != VOID:
+                op.set_extra("llgraph_var2index", r)
         op = operations[-1]
         assert op.is_final()
         if op.getopnum() == rop.JUMP:
@@ -332,7 +336,7 @@ class LLtypeCPU(BaseCPU):
 
     def fielddescrof(self, S, fieldname):
         ofs, size = symbolic.get_field_token(S, fieldname)
-        token = history.getkind(getattr(S, fieldname))
+        token = getkind(getattr(S, fieldname))
         return self.getdescr(ofs, token[0], name=fieldname)
 
     def fielddescrof_dynamic(self, offset, fieldsize, is_pointer, is_float, is_signed):
@@ -349,7 +353,7 @@ class LLtypeCPU(BaseCPU):
         S = A.OF
         width = symbolic.get_size(A)
         ofs, size = symbolic.get_field_token(S, fieldname)
-        token = history.getkind(getattr(S, fieldname))
+        token = getkind(getattr(S, fieldname))
         return self.getdescr(ofs, token[0], name=fieldname, width=width)
 
     def interiorfielddescrof_dynamic(self, offset, width, fieldsize,
@@ -367,12 +371,12 @@ class LLtypeCPU(BaseCPU):
     def calldescrof(self, FUNC, ARGS, RESULT, extrainfo):
         arg_types = []
         for ARG in ARGS:
-            token = history.getkind(ARG)
+            token = getkind(ARG)
             if token != 'void':
                 if token == 'float' and longlong.is_longlong(ARG):
                     token = 'L'
                 arg_types.append(token[0])
-        token = history.getkind(RESULT)
+        token = getkind(RESULT)
         if token == 'float' and longlong.is_longlong(RESULT):
             token = 'L'
         return self.getdescr(0, token[0], extrainfo=extrainfo,
@@ -403,7 +407,7 @@ class LLtypeCPU(BaseCPU):
         assert isinstance(A, lltype.GcArray) or A._hints.get('nolength', False)
         size = symbolic.get_size(A)
         if isinstance(A.OF, lltype.Ptr) or isinstance(A.OF, lltype.Primitive):
-            token = history.getkind(A.OF)[0]
+            token = getkind(A.OF)[0]
         elif isinstance(A.OF, lltype.Struct):
             token = 's'
         else:
@@ -625,8 +629,8 @@ class OOtypeCPU_xxx_disabled(BaseCPU):
 
     def typedescr2classbox(self, descr):
         assert isinstance(descr, TypeDescr)
-        return history.ConstObj(ootype.cast_to_object(
-                            ootype.runtimeClass(descr.TYPE)))
+        return resoperation.ConstObj(ootype.cast_to_object(
+            ootype.runtimeClass(descr.TYPE)))
 
     def get_exception(self):
         if llimpl._last_exception:
@@ -855,8 +859,8 @@ class TypeDescr(OODescr):
         self.setarrayitem = setarrayitem
         self.getarraylength = getarraylength
         self.instanceof = instanceof
-        self._is_array_of_pointers = (history.getkind(TYPE) == 'ref')
-        self._is_array_of_floats = (history.getkind(TYPE) == 'float')
+        self._is_array_of_pointers = (getkind(TYPE) == 'ref')
+        self._is_array_of_floats = (getkind(TYPE) == 'float')
 
     def is_array_of_pointers(self):
         # for arrays, TYPE is the type of the array item.
@@ -890,8 +894,8 @@ class FieldDescr(OODescr):
 
         self.getfield = getfield
         self.setfield = setfield
-        self._is_pointer_field = (history.getkind(T) == 'ref')
-        self._is_float_field = (history.getkind(T) == 'float')
+        self._is_pointer_field = (getkind(T) == 'ref')
+        self._is_float_field = (getkind(T) == 'float')
 
     def sort_key(self):
         return self._keys.getkey((self.TYPE, self.fieldname))
