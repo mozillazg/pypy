@@ -85,28 +85,6 @@ class BaseTestOparser(object):
         assert str(loop.inputargs[0]) == 'i42'
         assert loop.operations[1].getarg(0) is loop.operations[0]
 
-    def test_getboxes(self):
-        py.test.skip("what is it?")
-        x = """
-        [i0]
-        i1 = int_add(i0, 10)
-        """
-        loop = self.parse(x, None, {})
-        boxes = loop.getboxes()
-        assert boxes.i0 is loop.inputargs[0]
-        assert boxes.i1 is loop.operations[0].result
-
-    def test_setvalues(self):
-        py.test.skip("what is it?")
-        x = """
-        [i0]
-        i1 = int_add(i0, 10)
-        """
-        loop = self.parse(x, None, {})
-        loop.setvalues(i0=32, i1=42)
-        assert loop.inputargs[0].value == 32
-        assert loop.operations[0].result.value == 42
-
     def test_getvar_const_ptr(self):
         x = '''
         []
