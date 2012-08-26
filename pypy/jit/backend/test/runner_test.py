@@ -272,21 +272,16 @@ class BaseBackendTest(Runner):
             assert res == 1 + i
 
     def test_get_latest_value_count(self):
-        i0 = BoxInt()
-        i1 = BoxInt()
-        i2 = BoxInt()
         faildescr1 = BasicFailDescr(1)
-        looptoken = JitCellToken()
         targettoken = TargetToken()
-        operations = [
-            ResOperation(rop.LABEL, [i0], None, descr=targettoken),
-            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
-            ResOperation(rop.INT_LE, [i1, ConstInt(9)], i2),
-            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
-            ResOperation(rop.JUMP, [i1], None, descr=targettoken),
-            ]
-        inputargs = [i0]
-        operations[3].setfailargs([None, i1, None])
+        inputargs, operations, looptoken = self.parse("""
+        [i0]
+        label(i0, descr=targettoken)
+        i1 = int_add(i0, 1)
+        i2 = int_le(i1, 9)
+        guard_true(i2, descr=faildescr1) [None, i1, None]
+        jump(i1, descr=targettoken)
+        """, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
 
         fail = self.cpu.execute_token(looptoken, 2)
@@ -299,28 +294,27 @@ class BaseBackendTest(Runner):
         self.cpu.clear_latest_values(3)
 
     def test_finish(self):
-        i0 = BoxInt()
         class UntouchableFailDescr(AbstractFailDescr):
             def __setattr__(self, name, value):
                 if name == 'index':
                     return AbstractFailDescr.__setattr__(self, name, value)
                 py.test.fail("finish descrs should not be touched")
         faildescr = UntouchableFailDescr() # to check that is not touched
-        looptoken = JitCellToken()
-        operations = [
-            ResOperation(rop.FINISH, [i0], None, descr=faildescr)
-            ]
-        self.cpu.compile_loop([i0], operations, looptoken)
+        inputargs, operations, looptoken = self.parse("""
+        [i0]
+        finish(i0, descr=faildescr)
+        """)
+        self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 99)
         assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
         assert res == 99
 
-        looptoken = JitCellToken()
-        operations = [
-            ResOperation(rop.FINISH, [ConstInt(42)], None, descr=faildescr)
-            ]
-        self.cpu.compile_loop([], operations, looptoken)
+        inputargs, operations, looptoken = self.parse("""
+        []
+        finish(42)
+        """)
+        self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken)
         assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
