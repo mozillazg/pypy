@@ -502,12 +502,7 @@ class MiniMarkGC(MovingGCBase):
             #
             # Build the object.
             if clear:
-                if we_are_translated():
-                    llarena.arena_reset(result + llmemory.sizeof(self.HDR),
-                                        totalsize - llmemory.sizeof(self.HDR),
-                                        2)    # don't need to zero out .tid
-                else:
-                    llarena.arena_reset(result, totalsize, 2)
+                llarena.arena_reset(result, totalsize, 2)
             llarena.arena_reserve(result, totalsize)
             obj = result + size_gc_header
             if is_finalizer_light:
