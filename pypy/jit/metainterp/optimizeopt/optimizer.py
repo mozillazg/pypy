@@ -337,12 +337,10 @@ class Optimizer(Optimization):
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
-        self.values = {}
         self.interned_refs = self.cpu.ts.new_ref_dict()
         self.interned_ints = {}
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.bool_boxes = {}
-        self.producer = {}
         self.pendingfields = []
         self.quasi_immutable_deps = None
         self.opaque_pointers = {}
@@ -513,7 +511,6 @@ class Optimizer(Optimization):
         self.first_optimization.propagate_forward(op)
 
     def propagate_forward(self, op):
-        self.producer[op] = op
         dispatch_opt(self, op)
 
     def emit_operation(self, op):
@@ -523,7 +520,7 @@ class Optimizer(Optimization):
 
     def get_value_replacement(self, v):
         try:
-            value = self.values[v]
+            value = v.get_extra("opt_replacement")
         except KeyError:
             return None
         else:

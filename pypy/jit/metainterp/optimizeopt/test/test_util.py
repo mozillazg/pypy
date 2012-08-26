@@ -1,25 +1,21 @@
 import py, random
 
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
-from pypy.rpython.ootypesystem import ootype
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.rpython.rclass import FieldListAccessor, IR_QUASIIMMUTABLE
 
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp.history import (BoxInt, BoxPtr, ConstInt, ConstPtr,
-                                         Const, TreeLoop, BoxObj,
-                                         ConstObj, AbstractDescr,
+from pypy.jit.metainterp.history import (BoxPtr, TreeLoop, AbstractDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.optimizeopt.util import sort_descrs, equaloplists
-from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.codewriter.effectinfo import EffectInfo
-from pypy.jit.codewriter.heaptracker import register_known_gctype, adr2int
+from pypy.jit.codewriter.heaptracker import register_known_gctype
 from pypy.jit.tool.oparser import parse, pure_parse
 from pypy.jit.metainterp.quasiimmut import QuasiImmutDescr
 from pypy.jit.metainterp import compile, resume, history
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.config.pypyoption import get_pypy_config
-from pypy.jit.metainterp.resoperation import rop, opname, ResOperation
+from pypy.jit.metainterp.resoperation import rop, create_resop
 from pypy.jit.metainterp.optimizeopt.unroll import Inliner
 
 def test_sort_descrs():

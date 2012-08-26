@@ -170,6 +170,14 @@ class AbstractValue(object):
     def is_constant(self):
         return False
 
+    @specialize.arg(1)
+    def get_extra(self, key):
+        raise KeyError
+
+    @specialize.arg(1)
+    def set_extra(self, key, value):
+        raise KeyError
+
 class AbstractResOp(AbstractValue):
     """The central ResOperation class, representing one operation."""
 
@@ -186,6 +194,8 @@ class AbstractResOp(AbstractValue):
 
     @specialize.arg(1)
     def get_extra(self, key):
+        if not hasattr(self, key):
+            raise KeyError
         return getattr(self, key)
 
     @specialize.arg(1)
