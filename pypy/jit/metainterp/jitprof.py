@@ -112,7 +112,7 @@ class Profiler(BaseProfiler):
     def count_ops(self, opnum, kind=Counters.OPS):
         from pypy.jit.metainterp.resoperation import rop
         self.counters[kind] += 1
-        if opnum == rop.CALL and kind == Counters.RECORDED_OPS:# or opnum == rop.OOSEND:
+        if rop._CALL_FIRST <= opnum <= rop._CALL_LAST and kind == Counters.RECORDED_OPS:# or opnum == rop.OOSEND:
             self.calls += 1
 
     def print_stats(self):

@@ -1,6 +1,6 @@
 
 from pypy.rpython.extregistry import ExtRegistryEntry
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, Symbolic
 from pypy.rlib.objectmodel import compute_unique_id
@@ -9,7 +9,7 @@ from pypy.rlib.rarithmetic import r_int64, is_valid_int
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import rop, AbstractValue, INT, REF,\
-     FLOAT
+     FLOAT, repr_pointer, repr_object, ConstPtr
 
 from pypy.jit.codewriter import heaptracker, longlong
 import weakref
@@ -17,65 +17,6 @@ import weakref
 # ____________________________________________________________
 
 FAILARGS_LIMIT = 1000
-
-def getkind(TYPE, supports_floats=True,
-                  supports_longlong=True,
-                  supports_singlefloats=True):
-    if TYPE is lltype.Void:
-        return "void"
-    elif isinstance(TYPE, lltype.Primitive):
-        if TYPE is lltype.Float and supports_floats:
-            return 'float'
-        if TYPE is lltype.SingleFloat and supports_singlefloats:
-            return 'int'     # singlefloats are stored in an int
-        if TYPE in (lltype.Float, lltype.SingleFloat):
-            raise NotImplementedError("type %s not supported" % TYPE)
-        # XXX fix this for oo...
-        if (TYPE != llmemory.Address and
-            rffi.sizeof(TYPE) > rffi.sizeof(lltype.Signed)):
-            if supports_longlong:
-                assert rffi.sizeof(TYPE) == 8
-                return 'float'
-            raise NotImplementedError("type %s is too large" % TYPE)
-        return "int"
-    elif isinstance(TYPE, lltype.Ptr):
-        if TYPE.TO._gckind == 'raw':
-            return "int"
-        else:
-            return "ref"
-    elif isinstance(TYPE, ootype.OOType):
-        return "ref"
-    else:
-        raise NotImplementedError("type %s not supported" % TYPE)
-getkind._annspecialcase_ = 'specialize:memo'
-
-def repr_pointer(box):
-    from pypy.rpython.lltypesystem import rstr
-    try:
-        T = box.value._obj.container._normalizedcontainer(check=False)._TYPE
-        if T is rstr.STR:
-            return repr(box._get_str())
-        return '*%s' % (T._name,)
-    except AttributeError:
-        return box.value
-
-def repr_object(box):
-    try:
-        TYPE = box.value.obj._TYPE
-        if TYPE is ootype.String:
-            return '(%r)' % box.value.obj._str
-        if TYPE is ootype.Class or isinstance(TYPE, ootype.StaticMethod):
-            return '(%r)' % box.value.obj
-        if isinstance(box.value.obj, ootype._view):
-            return repr(box.value.obj._inst._TYPE)
-        else:
-            return repr(TYPE)
-    except AttributeError:
-        return box.value
-
-def repr_rpython(box, typechars):
-    return '%s/%s%d' % (box._get_hash_(), typechars,
-                        compute_unique_id(box))
 
 
 class AbstractDescr(AbstractValue):
@@ -113,227 +54,6 @@ class AbstractMethDescr(AbstractDescr):
     def get_jitcode_for_class(self, oocls):
         return self.jitcodes[oocls]
 
-
-class Const(AbstractValue):
-    __slots__ = ()
-
-    @staticmethod
-    def _new(x):
-        "NOT_RPYTHON"
-        T = lltype.typeOf(x)
-        kind = getkind(T)
-        if kind == "int":
-            if isinstance(T, lltype.Ptr):
-                intval = heaptracker.adr2int(llmemory.cast_ptr_to_adr(x))
-            else:
-                intval = lltype.cast_primitive(lltype.Signed, x)
-            return ConstInt(intval)
-        elif kind == "ref":
-            return cpu.ts.new_ConstRef(x)
-        elif kind == "float":
-            return ConstFloat(longlong.getfloatstorage(x))
-        else:
-            raise NotImplementedError(kind)
-
-    def constbox(self):
-        return self
-
-    def same_box(self, other):
-        return self.same_constant(other)
-
-    def same_constant(self, other):
-        raise NotImplementedError
-
-    def __repr__(self):
-        return 'Const(%s)' % self._getrepr_()
-
-    def is_constant(self):
-        return True
-
-
-class ConstInt(Const):
-    type = INT
-    value = 0
-    _attrs_ = ('value',)
-
-    def __init__(self, value):
-        if not we_are_translated():
-            if is_valid_int(value):
-                value = int(value)    # bool -> int
-            else:
-                assert isinstance(value, Symbolic)
-        self.value = value
-
-    def clonebox(self):
-        return BoxInt(self.value)
-
-    nonconstbox = clonebox
-
-    def getint(self):
-        return self.value
-
-    def getaddr(self):
-        return heaptracker.int2adr(self.value)
-
-    def _get_hash_(self):
-        return make_hashable_int(self.value)
-
-    def same_constant(self, other):
-        if isinstance(other, ConstInt):
-            return self.value == other.value
-        return False
-
-    def nonnull(self):
-        return self.value != 0
-
-    def _getrepr_(self):
-        return self.value
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'ci')
-
-CONST_FALSE = ConstInt(0)
-CONST_TRUE  = ConstInt(1)
-
-class ConstFloat(Const):
-    type = FLOAT
-    value = longlong.ZEROF
-    _attrs_ = ('value',)
-
-    def __init__(self, valuestorage):
-        assert lltype.typeOf(valuestorage) is longlong.FLOATSTORAGE
-        self.value = valuestorage
-
-    def clonebox(self):
-        return BoxFloat(self.value)
-
-    nonconstbox = clonebox
-
-    def getfloatstorage(self):
-        return self.value
-
-    def _get_hash_(self):
-        return longlong.gethash(self.value)
-
-    def same_constant(self, other):
-        if isinstance(other, ConstFloat):
-            return self.value == other.value
-        return False
-
-    def nonnull(self):
-        return self.value != longlong.ZEROF
-
-    def _getrepr_(self):
-        return self.getfloat()
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'cf')
-
-CONST_FZERO = ConstFloat(longlong.ZEROF)
-
-class ConstPtr(Const):
-    type = REF
-    value = lltype.nullptr(llmemory.GCREF.TO)
-    _attrs_ = ('value',)
-
-    def __init__(self, value):
-        assert lltype.typeOf(value) == llmemory.GCREF
-        self.value = value
-
-    def clonebox(self):
-        return BoxPtr(self.value)
-
-    nonconstbox = clonebox
-
-    def getref_base(self):
-        return self.value
-
-    def getref(self, PTR):
-        return lltype.cast_opaque_ptr(PTR, self.getref_base())
-    getref._annspecialcase_ = 'specialize:arg(1)'
-
-    def _get_hash_(self):
-        if self.value:
-            return lltype.identityhash(self.value)
-        else:
-            return 0
-
-    def getaddr(self):
-        return llmemory.cast_ptr_to_adr(self.value)
-
-    def same_constant(self, other):
-        if isinstance(other, ConstPtr):
-            return self.value == other.value
-        return False
-
-    def nonnull(self):
-        return bool(self.value)
-
-    _getrepr_ = repr_pointer
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'cp')
-
-    def _get_str(self):    # for debugging only
-        from pypy.rpython.annlowlevel import hlstr
-        from pypy.rpython.lltypesystem import rstr
-        try:
-            return hlstr(lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR),
-                                                self.value))
-        except lltype.UninitializedMemoryAccess:
-            return '<uninitialized string>'
-
-CONST_NULL = ConstPtr(ConstPtr.value)
-
-class ConstObj(Const):
-    type = REF
-    value = ootype.NULL
-    _attrs_ = ('value',)
-
-    def __init__(self, value):
-        assert ootype.typeOf(value) is ootype.Object
-        self.value = value
-
-    def clonebox(self):
-        return BoxObj(self.value)
-
-    nonconstbox = clonebox
-
-    def getref_base(self):
-       return self.value
-
-    def getref(self, OBJ):
-        return ootype.cast_from_object(OBJ, self.getref_base())
-    getref._annspecialcase_ = 'specialize:arg(1)'
-
-    def _get_hash_(self):
-        if self.value:
-            return ootype.identityhash(self.value)
-        else:
-            return 0
-
-##    def getaddr(self):
-##        # so far this is used only when calling
-##        # CodeWriter.IndirectCallset.bytecode_for_address.  We don't need a
-##        # real addr, but just a key for the dictionary
-##        return self.value
-
-    def same_constant(self, other):
-        if isinstance(other, ConstObj):
-            return self.value == other.value
-        return False
-
-    def nonnull(self):
-        return bool(self.value)
-
-    _getrepr_ = repr_object
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'co')
-
-    def _get_str(self):    # for debugging only
-        from pypy.rpython.annlowlevel import hlstr
-        return hlstr(ootype.cast_from_object(ootype.String, self.value))
 
 class Box(AbstractValue):
     __slots__ = ()
@@ -546,17 +266,6 @@ class BoxObj(Box):
 
 # ____________________________________________________________
 
-
-def make_hashable_int(i):
-    from pypy.rpython.lltypesystem.ll2ctypes import NotCtypesAllocatedStructure
-    if not we_are_translated() and isinstance(i, llmemory.AddressAsInt):
-        # Warning: such a hash changes at the time of translation
-        adr = heaptracker.int2adr(i)
-        try:
-            return llmemory.cast_adr_to_int(adr, "emulated")
-        except NotCtypesAllocatedStructure:
-            return 12345 # use an arbitrary number for the hash
-    return i
 
 def get_const_ptr_for_string(s):
     from pypy.rpython.annlowlevel import llstr

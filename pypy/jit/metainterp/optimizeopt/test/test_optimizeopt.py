@@ -1,21 +1,16 @@
 import py
 from pypy.rlib.objectmodel import instantiate
 from pypy.jit.metainterp.optimizeopt.test.test_util import (
-    LLtypeMixin, BaseTest, Storage, _sortboxes, convert_old_style_to_targets)
+    LLtypeMixin, BaseTest, convert_old_style_to_targets)
 import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
-from pypy.jit.metainterp.optimizeopt import ALL_OPTS_DICT, build_opt_chain
+from pypy.jit.metainterp.optimizeopt import build_opt_chain
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.history import AbstractDescr, ConstInt, BoxInt
-from pypy.jit.metainterp.history import TreeLoop, JitCellToken, TargetToken
-from pypy.jit.metainterp.jitprof import EmptyProfiler
-from pypy.jit.metainterp import executor, compile, resume, history
-from pypy.jit.metainterp.resoperation import rop, opname, ResOperation
-from pypy.jit.tool.oparser import pure_parse
-from pypy.jit.metainterp.optimizeopt.util import args_dict
+from pypy.jit.metainterp.history import AbstractDescr, ConstInt, TreeLoop
+from pypy.jit.metainterp import compile, resume
+from pypy.jit.metainterp.resoperation import rop, opname
 from pypy.jit.metainterp.optimizeopt.test.test_optimizebasic import FakeMetaInterpStaticData
 from pypy.config.pypyoption import get_pypy_config
-from pypy.jit.metainterp.optimizeopt.unroll import Inliner
 
 def test_build_opt_chain():
     def check(chain, expected_names):

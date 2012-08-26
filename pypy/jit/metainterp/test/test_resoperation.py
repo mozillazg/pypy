@@ -184,5 +184,5 @@ def test_copy_and_change():
 
 def test_get_set_extra():
     op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
-    op.set_extra("x", 2)
-    assert op.get_extra("x") == 2
+    op.set_extra("failargs", 2)
+    assert op.get_extra("failargs") == 2

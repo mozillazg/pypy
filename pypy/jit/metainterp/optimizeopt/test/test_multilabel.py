@@ -1,9 +1,8 @@
 from __future__ import with_statement
 from pypy.jit.metainterp.optimizeopt.test.test_util import (
-    LLtypeMixin, BaseTest, Storage, _sortboxes, FakeDescrWithSnapshot,
-    FakeMetaInterpStaticData)
-from pypy.jit.metainterp.history import TreeLoop, JitCellToken, TargetToken
-from pypy.jit.metainterp.resoperation import rop, opname, ResOperation
+    LLtypeMixin, BaseTest, FakeDescrWithSnapshot, FakeMetaInterpStaticData)
+from pypy.jit.metainterp.history import TreeLoop
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.optimize import InvalidLoop
 from py.test import raises
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization

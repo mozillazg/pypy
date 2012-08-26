@@ -40,7 +40,7 @@ class BaseTestOparser(object):
         loop = self.parse(x, None, locals())
         assert len(loop.operations) == 1
         assert loop.operations[0].getdescr()
-        assert loop.operations[0].getfailargs() == []
+        assert loop.operations[0].get_extra("failargs") == []
 
     def test_descr(self):
         class Xyz(AbstractDescr):
@@ -204,7 +204,7 @@ class BaseTestOparser(object):
         guard_true(i0, descr=<Guard0>)
         '''
         loop = self.parse(x, nonstrict=True)
-        assert loop.operations[0].getfailargs() == []
+        assert loop.operations[0].get_extra("failargs") == []
 
     def test_no_inputargs(self):
         x = '''

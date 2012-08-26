@@ -3,7 +3,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llstr, oostr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_instance_to_base_obj
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, resoperation
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.objectmodel import r_dict, specialize
 
@@ -44,15 +44,15 @@ class LLTypeHelper(TypeSystemHelper):
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_ptr)
     BASETYPE = llmemory.GCREF
     BoxRef = history.BoxPtr
-    ConstRef = history.ConstPtr
+    ConstRef = resoperation.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
-    NULLREF = history.ConstPtr.value
-    CONST_NULL = history.ConstPtr(NULLREF)
+    NULLREF = resoperation.ConstPtr.value
+    CONST_NULL = resoperation.ConstPtr(NULLREF)
     CVAL_NULLREF = None # patched by optimizeopt.py
 
     def new_ConstRef(self, x):
         ptrval = lltype.cast_opaque_ptr(llmemory.GCREF, x)
-        return history.ConstPtr(ptrval)
+        return resoperation.ConstPtr(ptrval)
 
     def get_typeptr(self, obj):
         return obj.typeptr
@@ -75,7 +75,7 @@ class LLTypeHelper(TypeSystemHelper):
     def cls_of_box(self, box):
         obj = box.getref(lltype.Ptr(rclass.OBJECT))
         cls = llmemory.cast_ptr_to_adr(obj.typeptr)
-        return history.ConstInt(heaptracker.adr2int(cls))
+        return resoperation.ConstInt(heaptracker.adr2int(cls))
 
     def instanceOf(self, instbox, clsbox):
         adr = clsbox.getaddr()
@@ -84,7 +84,7 @@ class LLTypeHelper(TypeSystemHelper):
         return rclass.ll_isinstance(real_instance, bounding_class)
 
     def get_exception_box(self, etype):
-        return history.ConstInt(etype)
+        return resoperation.ConstInt(etype)
 
     def get_exc_value_box(self, evalue):
         return history.BoxPtr(evalue)
@@ -111,7 +111,7 @@ class LLTypeHelper(TypeSystemHelper):
 
     def conststr(self, str):
         ll = llstr(str)
-        return history.ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, ll))
+        return resoperation.ConstPtr(lltype.cast_opaque_ptr(llmemory.GCREF, ll))
 
     # A dict whose keys are refs (like the .value of BoxPtr).
     # It is an r_dict on lltype.  Two copies, to avoid conflicts with
@@ -153,15 +153,15 @@ class OOTypeHelper(TypeSystemHelper):
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_obj)
     BASETYPE = ootype.Object
     BoxRef = history.BoxObj
-    ConstRef = history.ConstObj
+    ConstRef = resoperation.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
-    NULLREF = history.ConstObj.value
-    CONST_NULL = history.ConstObj(NULLREF)
+    NULLREF = resoperation.ConstObj.value
+    CONST_NULL = resoperation.ConstObj(NULLREF)
     CVAL_NULLREF = None # patched by optimizeopt.py
     
     def new_ConstRef(self, x):
         obj = ootype.cast_to_object(x)
-        return history.ConstObj(obj)
+        return resoperation.ConstObj(obj)
 
     def get_typeptr(self, obj):
         return ootype.classof(obj)
@@ -183,7 +183,7 @@ class OOTypeHelper(TypeSystemHelper):
     def cls_of_box(self, cpu, box):
         obj = box.getref(ootype.ROOT)
         oocls = ootype.classof(obj)
-        return history.ConstObj(ootype.cast_to_object(oocls))
+        return resoperation.ConstObj(ootype.cast_to_object(oocls))
 
     def subclassOf(self, cpu, clsbox1, clsbox2):
         cls1 = clsbox1.getref(ootype.Class)
@@ -191,7 +191,7 @@ class OOTypeHelper(TypeSystemHelper):
         return ootype.subclassof(cls1, cls2)
 
     def get_exception_box(self, etype):
-        return history.ConstObj(etype)
+        return resoperation.ConstObj(etype)
 
     def get_exc_value_box(self, evalue):
         return history.BoxObj(evalue)
@@ -218,7 +218,7 @@ class OOTypeHelper(TypeSystemHelper):
 
     def conststr(self, str):
         oo = oostr(str)
-        return history.ConstObj(ootype.cast_to_object(oo))
+        return resoperation.ConstObj(ootype.cast_to_object(oo))
 
     # A dict whose keys are refs (like the .value of BoxObj).
     # It is a normal dict on ootype.  Two copies, to avoid conflicts
