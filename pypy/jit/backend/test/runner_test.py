@@ -104,27 +104,26 @@ class BaseBackendTest(Runner):
 
     avoid_instances = False
 
-    class namespace:
-        faildescr = BasicFailDescr(1)
-        faildescr2 = BasicFailDescr(2)
-        faildescr3 = BasicFailDescr(3)
-        faildescr4 = BasicFailDescr(4)
-        faildescr5 = BasicFailDescr(4)
-        targettoken = TargetToken()
-
-    def parse(self, s, namespace=None):
+    def parse(self, s, namespace):
         from pypy.jit.tool.oparser import parse
         if namespace is None:
-            namespace = self.namespace.__dict__
+            namespace = {}
+        else:
+            namespace = namespace.copy()
+        if 'targettoken' not in namespace:
+            namespace['targettoken'] = TargetToken()
+        if 'faildescr' not in namespace:
+            namespace['faildescr'] = BasicFailDescr(1)
         loop = parse(s, namespace=namespace)
         return loop.inputargs, loop.operations, JitCellToken()
 
     def test_compile_linear_loop(self):
+        faildescr = BasicFailDescr(1)
         inputargs, ops, token = self.parse("""
         [i0]
         i1 = int_add(i0, 1)
         finish(i1, descr=faildescr)
-        """)
+        """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         fail = self.cpu.execute_token(token, 2)
         res = self.cpu.get_latest_value_int(0)
@@ -132,14 +131,16 @@ class BaseBackendTest(Runner):
         assert fail.identifier == 1
 
     def test_compile_loop(self):
+        faildescr = BasicFailDescr(2)
+        targettoken = TargetToken()
         inputargs, operations, looptoken = self.parse('''
         [i0]
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr2) [i1]
+        guard_true(i2, descr=faildescr) [i1]
         jump(i1, descr=targettoken)
-        ''')
+        ''', namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 2)
         assert fail.identifier == 2
@@ -147,6 +148,8 @@ class BaseBackendTest(Runner):
         assert res == 10
 
     def test_compile_with_holes_in_fail_args(self):
+        faildescr3 = BasicFailDescr(3)
+        targettoken = TargetToken()
         inputargs, operations, looptoken = self.parse("""
         [i3]
         i0 = int_sub(i3, 42)
@@ -155,7 +158,7 @@ class BaseBackendTest(Runner):
         i2 = int_le(i1, 9)
         guard_true(i2, descr=faildescr3) [None, None, i1, None]
         jump(i1, descr=targettoken)
-        """)
+        """, namespace=locals())
 
         self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 44)
@@ -189,14 +192,17 @@ class BaseBackendTest(Runner):
     def test_compile_bridge(self):
         self.cpu.total_compiled_loops = 0
         self.cpu.total_compiled_bridges = 0
+        faildescr4 = BasicFailDescr(4)
+        targettoken =  TargetToken()
         inputargs, operations, looptoken = self.parse("""
         [i0]
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2, descr=faildescr4) [i1]
+        guard_true(i2, descr=faildescr) [i1]
         jump(i1, descr=targettoken)
-        """)
+        """, namespace={'faildescr': faildescr4,
+                        'targettoken': targettoken})
         self.cpu.compile_loop(inputargs, operations, looptoken)
 
         inputargs, bridge_ops, _ = self.parse("""
@@ -204,12 +210,13 @@ class BaseBackendTest(Runner):
         i3 = int_le(i1b, 19)
         guard_true(i3, descr=faildescr5) [i1b]
         jump(i1b, descr=targettoken)
-        """)
-        self.cpu.compile_bridge(self.namespace.faildescr4,
+        """, namespace={'faildescr5': BasicFailDescr(5),
+                        'targettoken': targettoken})
+        self.cpu.compile_bridge(faildescr4,
                                 inputargs, bridge_ops, looptoken)
 
         fail = self.cpu.execute_token(looptoken, 2)
-        assert fail.identifier == 4
+        assert fail.identifier == 5
         res = self.cpu.get_latest_value_int(0)
         assert res == 20
 
@@ -300,10 +307,11 @@ class BaseBackendTest(Runner):
                     return AbstractFailDescr.__setattr__(self, name, value)
                 py.test.fail("finish descrs should not be touched")
         faildescr = UntouchableFailDescr() # to check that is not touched
+        namespace = {'faildescr': faildescr}
         inputargs, operations, looptoken = self.parse("""
         [i0]
         finish(i0, descr=faildescr)
-        """)
+        """, namespace=namespace)
         self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 99)
         assert fail is faildescr
@@ -312,39 +320,38 @@ class BaseBackendTest(Runner):
 
         inputargs, operations, looptoken = self.parse("""
         []
-        finish(42)
-        """)
+        finish(42, descr=faildescr)
+        """, namespace=namespace)
         self.cpu.compile_loop(inputargs, operations, looptoken)
         fail = self.cpu.execute_token(looptoken)
         assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
         assert res == 42
 
-        looptoken = JitCellToken()
-        operations = [
-            ResOperation(rop.FINISH, [], None, descr=faildescr)
-            ]
+        _, operations, looptoken = self.parse("""
+        []
+        finish(descr=faildescr)
+        """, namespace=namespace)
         self.cpu.compile_loop([], operations, looptoken)
         fail = self.cpu.execute_token(looptoken)
         assert fail is faildescr
 
         if self.cpu.supports_floats:
-            looptoken = JitCellToken()
-            f0 = BoxFloat()
-            operations = [
-                ResOperation(rop.FINISH, [f0], None, descr=faildescr)
-                ]
-            self.cpu.compile_loop([f0], operations, looptoken)
+            inputargs, operations, looptoken = self.parse("""
+            [f0]
+            finish(f0, descr=faildescr)
+            """, namespace)
+            self.cpu.compile_loop(inputargs, operations, looptoken)
             value = longlong.getfloatstorage(-61.25)
             fail = self.cpu.execute_token(looptoken, value)
             assert fail is faildescr
             res = self.cpu.get_latest_value_float(0)
             assert longlong.getrealfloat(res) == -61.25
 
-            looptoken = JitCellToken()
-            operations = [
-                ResOperation(rop.FINISH, [constfloat(42.5)], None, descr=faildescr)
-                ]
+            _, operations, looptoken = self.parse("""
+            []
+            finish(42.5, descr=faildescr)
+            """, namespace)
             self.cpu.compile_loop([], operations, looptoken)
             fail = self.cpu.execute_token(looptoken)
             assert fail is faildescr
@@ -353,25 +360,17 @@ class BaseBackendTest(Runner):
 
     def test_execute_operations_in_env(self):
         cpu = self.cpu
-        x = BoxInt(123)
-        y = BoxInt(456)
-        z = BoxInt(579)
-        t = BoxInt(455)
-        u = BoxInt(0)    # False
-        looptoken = JitCellToken()
-        targettoken = TargetToken()
-        operations = [
-            ResOperation(rop.LABEL, [y, x], None, descr=targettoken),
-            ResOperation(rop.INT_ADD, [x, y], z),
-            ResOperation(rop.INT_SUB, [y, ConstInt(1)], t),
-            ResOperation(rop.INT_EQ, [t, ConstInt(0)], u),
-            ResOperation(rop.GUARD_FALSE, [u], None,
-                         descr=BasicFailDescr()),
-            ResOperation(rop.JUMP, [t, z], None, descr=targettoken),
-            ]
-        operations[-2].setfailargs([t, z])
-        cpu.compile_loop([x, y], operations, looptoken)
-        res = self.cpu.execute_token(looptoken, 0, 10)
+        inputargs, operations, looptoken = self.parse("""
+        [x, y]
+        label(y, x, descr=targettoken)
+        z = int_add(x, y)
+        t = int_sub(y, 1)
+        u = int_eq(t, 0)
+        guard_false(u, descr=faildescr) [t, z]
+        jump(t, z, descr=targettoken)
+        """, None)
+        cpu.compile_loop(inputargs, operations, looptoken)
+        self.cpu.execute_token(looptoken, 0, 10)
         assert self.cpu.get_latest_value_int(0) == 0
         assert self.cpu.get_latest_value_int(1) == 55
 
