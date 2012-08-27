@@ -6,7 +6,7 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          JitCellToken, TargetToken,
                                          BoxObj, BoxFloat)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
-     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj
+     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj, create_resop_2
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -87,7 +87,7 @@ class Runner(object):
             results = []
         else:
             results = [op0]
-        op1 = create_resop(rop.FINISH, results, None, descr=BasicFailDescr(0))
+        op1 = create_resop(rop.FINISH, None, results, descr=BasicFailDescr(0))
         if op0.is_guard():
             op0.setfailargs([])
             if not descr:
@@ -361,13 +361,13 @@ class BaseBackendTest(Runner):
     def test_execute_operations_in_env(self):
         cpu = self.cpu
         inputargs, operations, looptoken = self.parse("""
-        [x, y]
-        label(y, x, descr=targettoken)
-        z = int_add(x, y)
-        t = int_sub(y, 1)
-        u = int_eq(t, 0)
-        guard_false(u, descr=faildescr) [t, z]
-        jump(t, z, descr=targettoken)
+        [ix, iy]
+        label(iy, ix, descr=targettoken)
+        iz = int_add(ix, iy)
+        it = int_sub(iy, 1)
+        iu = int_eq(it, 0)
+        guard_false(iu, descr=faildescr) [it, iz]
+        jump(it, iz, descr=targettoken)
         """, None)
         cpu.compile_loop(inputargs, operations, looptoken)
         self.cpu.execute_token(looptoken, 0, 10)
@@ -392,42 +392,35 @@ class BaseBackendTest(Runner):
     def test_ovf_operations(self, reversed=False):
         minint = -sys.maxint-1
         boom = 'boom'
-        for opnum, testcases in [
-            (rop.INT_ADD_OVF, [(10, -2, 8),
+        for op, testcases in [
+            ('int_add_ovf', [(10, -2, 8),
                                (-1, minint, boom),
                                (sys.maxint//2, sys.maxint//2+2, boom)]),
-            (rop.INT_SUB_OVF, [(-20, -23, 3),
+            ('int_sub_ovf', [(-20, -23, 3),
                                (-2, sys.maxint, boom),
                                (sys.maxint//2, -(sys.maxint//2+2), boom)]),
-            (rop.INT_MUL_OVF, [(minint/2, 2, minint),
+            ('int_mul_ovf', [(minint/2, 2, minint),
                                (-2, -(minint/2), minint),
                                (minint/2, -2, boom)]),
             ]:
-            v1 = BoxInt(testcases[0][0])
-            v2 = BoxInt(testcases[0][1])
-            v_res = BoxInt()
-            #
             if not reversed:
-                ops = [
-                    ResOperation(opnum, [v1, v2], v_res),
-                    ResOperation(rop.GUARD_NO_OVERFLOW, [], None,
-                                 descr=BasicFailDescr(1)),
-                    ResOperation(rop.FINISH, [v_res], None,
-                                 descr=BasicFailDescr(2)),
-                    ]
-                ops[1].setfailargs([])
+                inputargs, operations, looptoken = self.parse("""
+                [i1, i2]
+                ires = %s(i1, i2)
+                guard_no_overflow(descr=faildescr1) []
+                finish(ires, descr=faildescr2)
+                """ % op, namespace={'faildescr1': BasicFailDescr(1),
+                                     'faildescr2': BasicFailDescr(2)})
             else:
-                v_exc = self.cpu.ts.BoxRef()
-                ops = [
-                    ResOperation(opnum, [v1, v2], v_res),
-                    ResOperation(rop.GUARD_OVERFLOW, [], None,
-                                 descr=BasicFailDescr(1)),
-                    ResOperation(rop.FINISH, [], None, descr=BasicFailDescr(2)),
-                    ]
-                ops[1].setfailargs([v_res])
+                inputargs, operations, looptoken = self.parse("""
+                [i1, i2]
+                ires = %s(i1, i2)
+                guard_overflow(descr=faildescr1) [ires]
+                finish(descr=faildescr2)
+                """ % op, namespace={'faildescr1': BasicFailDescr(1),
+                                     'faildescr2': BasicFailDescr(2)})
             #
-            looptoken = JitCellToken()
-            self.cpu.compile_loop([v1, v2], ops, looptoken)
+            self.cpu.compile_loop(inputargs, operations, looptoken)
             for x, y, z in testcases:
                 excvalue = self.cpu.grab_exc_value()
                 assert not excvalue
@@ -496,7 +489,7 @@ class BaseBackendTest(Runner):
             # first, try it with the "normal" calldescr
             calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                         EffectInfo.MOST_GENERAL)
-            res = self.execute_operation(rop.CALL,
+            res = self.execute_operation(rop.CALL_i,
                                          [funcbox, BoxInt(num), BoxInt(num)],
                                          'int', descr=calldescr)
             assert res.value == 2 * num

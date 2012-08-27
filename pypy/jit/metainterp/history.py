@@ -9,7 +9,7 @@ from pypy.rlib.rarithmetic import r_int64, is_valid_int
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import rop, AbstractValue, INT, REF,\
-     FLOAT, repr_pointer, repr_object, ConstPtr
+     FLOAT, repr_pointer, repr_object, ConstPtr, ConstFloat
 
 from pypy.jit.codewriter import heaptracker, longlong
 import weakref

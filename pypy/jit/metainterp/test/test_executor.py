@@ -1,18 +1,15 @@
 import py
 import sys, random
 from pypy.rlib.rarithmetic import r_uint, intmask
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import llmemory, rffi
 from pypy.jit.metainterp.executor import execute
 from pypy.jit.metainterp.executor import execute_varargs, execute_nonspec
 from pypy.jit.metainterp.resoperation import rop, opboolinvers, opboolreflex, opname
-from pypy.jit.metainterp.history import BoxInt, ConstInt
-from pypy.jit.metainterp.history import BoxPtr, ConstPtr
-from pypy.jit.metainterp.history import BoxFloat, ConstFloat
-from pypy.jit.metainterp.history import AbstractDescr, Box
+from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, AbstractDescr
+from pypy.jit.metainterp.resoperation import ConstInt, ConstPtr, ConstFloat
 from pypy.jit.metainterp import history
 from pypy.jit.codewriter import longlong
 from pypy.jit.backend.model import AbstractCPU
-from pypy.rpython.lltypesystem import  llmemory, rffi
 
 class FakeDescr(AbstractDescr):
     pass

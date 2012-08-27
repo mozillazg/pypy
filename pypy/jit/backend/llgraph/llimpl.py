@@ -932,7 +932,7 @@ class Frame(object):
         else:
             raise NotImplementedError
 
-    def op_call(self, calldescr, func, *args):
+    def op_call_i(self, calldescr, func, *args):
         return self._do_call(calldescr, func, args, call_with_llptr=False)
 
     def op_call_release_gil(self, calldescr, func, *args):

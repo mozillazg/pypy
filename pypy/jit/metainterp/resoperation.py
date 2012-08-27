@@ -15,6 +15,8 @@ VOID  = 'v'
 HOLE = '_'
 
 def create_resop_dispatch(opnum, result, args, descr=None):
+    """ NOT_RPYTHON this is for tests only!
+    """
     cls = opclasses[opnum]
     if cls.NUMARGS == 0:
         return create_resop_0(opnum, result, descr)
