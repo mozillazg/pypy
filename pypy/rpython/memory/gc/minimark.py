@@ -568,6 +568,7 @@ class MiniMarkGC(MovingGCBase):
                 result = self.collect_and_reserve(totalsize)
             #
             # Build the object.
+            llarena.arena_reset(result, totalsize, 2)
             llarena.arena_reserve(result, totalsize)
             self.init_gc_object(result, typeid, flags=0)
             #
