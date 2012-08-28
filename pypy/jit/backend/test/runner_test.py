@@ -764,8 +764,6 @@ class BaseBackendTest(Runner):
                                                          BoxInt(744)],
                                    'void', descr=arraydescr)
         assert r is None
-        import pdb
-        pdb.set_trace()
         r = self.execute_operation(rop.GETARRAYITEM_GC_i, [a_box, BoxInt(310)],
                                    'int', descr=arraydescr)
         assert r == 744
