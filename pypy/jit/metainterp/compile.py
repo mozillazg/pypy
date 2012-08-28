@@ -1,5 +1,5 @@
 import weakref
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib import rstack
@@ -7,11 +7,12 @@ from pypy.rlib.jit import JitDebugInfo, Counters
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
-from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt
+from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt,\
+     ConstPtr
 from pypy.jit.metainterp.history import TreeLoop, Box, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
 from pypy.jit.metainterp.history import BoxPtr, BoxFloat
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, resoperation
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.inliner import Inliner
 from pypy.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP
@@ -741,7 +742,7 @@ class ResumeGuardCountersInt(AbstractResumeGuardCounters):
 class ResumeGuardCountersRef(AbstractResumeGuardCounters):
     def __init__(self):
         self.counters = [0] * 5
-        self.values = [history.ConstPtr.value] * 5
+        self.values = [ConstPtr.value] * 5
     see_ref = func_with_new_name(_see, 'see_ref')
 
 class ResumeGuardCountersFloat(AbstractResumeGuardCounters):
@@ -842,33 +843,38 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
         else: raise AssertionError
         inputargs.append(box)
     k = jitdriver_sd.portal_runner_adr
-    funcbox = history.ConstInt(heaptracker.adr2int(k))
+    funcbox = ConstInt(heaptracker.adr2int(k))
     callargs = [funcbox] + greenboxes + inputargs
     #
     result_type = jitdriver_sd.result_type
-    if result_type == history.INT:
-        result = BoxInt()
-    elif result_type == history.REF:
-        result = BoxPtr()
-    elif result_type == history.FLOAT:
-        result = BoxFloat()
-    elif result_type == history.VOID:
-        result = None
+    jd = jitdriver_sd
+    if result_type == resoperation.INT:
+        op0 = resoperation.create_resop(rop.CALL_i, 0, callargs,
+                                        descr=jd.portal_calldescr)
+    elif result_type == resoperation.REF:
+        null = lltype.nullptr(llmemory.GCREF.TO)
+        op0 = resoperation.create_resop(rop.CALL_p, null, callargs,
+                                        descr=jd.portal_calldescr)
+    elif result_type == resoperation.FLOAT:
+        op0 = resoperation.create_resop(rop.CALL_p, 0.0, callargs,
+                                        descr=jd.portal_calldescr)
+    elif result_type == resoperation.VOID:
+        op0 = resoperation.create_resop(rop.CALL_n, None, callargs,
+                                        descr=jd.portal_calldescr)
     else:
         assert 0, "bad result_type"
-    if result is not None:
-        finishargs = [result]
+    #
+    faildescr = PropagateExceptionDescr()
+    op1 = resoperation.create_resop_0(rop.GUARD_NO_EXCEPTION, None,
+                                      descr=faildescr)
+    op1.set_extra("failargs", [])
+    if result_type != resoperation.VOID:
+        finishargs = [op0]
     else:
         finishargs = []
-    #
-    jd = jitdriver_sd
-    faildescr = PropagateExceptionDescr()
-    operations = [
-        ResOperation(rop.CALL, callargs, result, descr=jd.portal_calldescr),
-        ResOperation(rop.GUARD_NO_EXCEPTION, [], None, descr=faildescr),
-        ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
-        ]
-    operations[1].setfailargs([])
+    op2 = resoperation.create_resop(rop.FINISH, None, finishargs,
+                                    descr=jd.portal_finishtoken)
+    operations = [op0, op1, op2]
     cpu.compile_loop(inputargs, operations, jitcell_token, log=False)
     if memory_manager is not None:    # for tests
         memory_manager.keep_loop_alive(jitcell_token)

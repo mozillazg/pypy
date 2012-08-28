@@ -1,8 +1,7 @@
 from pypy.config.pypyoption import get_pypy_config
-from pypy.jit.metainterp.history import TargetToken, ConstInt, History, Stats
-from pypy.jit.metainterp.history import BoxInt, INT
+from pypy.jit.metainterp.resoperation import ConstInt
+from pypy.jit.metainterp.history import INT, History, Stats
 from pypy.jit.metainterp.compile import compile_loop
-from pypy.jit.metainterp.compile import ResumeGuardDescr
 from pypy.jit.metainterp.compile import ResumeGuardCountersInt
 from pypy.jit.metainterp.compile import compile_tmp_callback
 from pypy.jit.metainterp import jitprof, typesystem, compile
@@ -64,7 +63,7 @@ def test_compile_loop():
     #
     loop = parse('''
     [p1]
-    i1 = getfield_gc(p1, descr=valuedescr)
+    i1 = getfield_gc_i(p1, descr=valuedescr)
     i2 = int_add(i1, 1)
     p2 = new_with_vtable(ConstClass(node_vtable))
     setfield_gc(p2, i2, descr=valuedescr)

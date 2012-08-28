@@ -6,11 +6,10 @@ import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimizeopt import build_opt_chain
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.history import AbstractDescr, ConstInt, TreeLoop
+from pypy.jit.metainterp.history import AbstractDescr, TreeLoop
 from pypy.jit.metainterp import compile, resume
-from pypy.jit.metainterp.resoperation import rop, opname
+from pypy.jit.metainterp.resoperation import rop, opname, ConstInt
 from pypy.jit.metainterp.optimizeopt.test.test_optimizebasic import FakeMetaInterpStaticData
-from pypy.config.pypyoption import get_pypy_config
 
 def test_build_opt_chain():
     def check(chain, expected_names):
