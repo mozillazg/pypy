@@ -1071,7 +1071,7 @@ _oplist = [
     'CAST_INT_TO_FLOAT/1/f',          # need some messy code in the backend
     'CAST_FLOAT_TO_SINGLEFLOAT/1/i',
     'CAST_SINGLEFLOAT_TO_FLOAT/1/f',
-    'CONVERT_FLOAT_BYTES_TO_LONGLONG/1/f',
+    'CONVERT_FLOAT_BYTES_TO_LONGLONG/1/L', # float on 32bit, int on 64bit
     'CONVERT_LONGLONG_BYTES_TO_FLOAT/1/f',
     #
     'INT_LT/2b/i',
@@ -1138,7 +1138,7 @@ _oplist = [
     '_MALLOC_LAST',
     'FORCE_TOKEN/0/i',
     'VIRTUAL_REF/2/i',         # removed before it's passed to the backend
-    'READ_TIMESTAMP/0/f',
+    'READ_TIMESTAMP/0/L',      # float on 32bit, int on 64bit
     'MARK_OPAQUE_PTR/1b/N',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
@@ -1295,6 +1295,11 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
             opnum += 1
         return res   
     else:
+        if tp == 'L':
+            if longlong.is_64_bit:
+                tp = 'i'
+            else:
+                tp = 'f'
         cls_name = '%s_OP' % name
         bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
         dic = {'opnum': opnum}

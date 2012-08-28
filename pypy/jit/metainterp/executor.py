@@ -7,7 +7,7 @@ from pypy.rlib.rtimer import read_timestamp
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp.history import check_descr, AbstractDescr
 from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, rop,\
-     create_resop, create_resop_1, create_resop_2
+     create_resop, create_resop_1, create_resop_2, create_resop_0
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 from pypy.jit.codewriter import longlong
@@ -157,15 +157,22 @@ def do_raw_store(cpu, _, addrbox, offsetbox, valuebox, arraydescr):
     else:
         cpu.bh_raw_store_i(addr, offset, arraydescr, valuebox.getint())
 
-def do_raw_load(cpu, _, addrbox, offsetbox, arraydescr):
+def do_raw_load_p(cpu, _, addrbox, offsetbox, arraydescr):
+    raise AssertionError("cannot store GC pointers in raw store")
+
+def do_raw_load_i(cpu, _, addrbox, offsetbox, arraydescr):
     addr = addrbox.getint()
     offset = offsetbox.getint()
-    if arraydescr.is_array_of_pointers():
-        raise AssertionError("cannot store GC pointers in raw store")
-    elif arraydescr.is_array_of_floats():
-        return BoxFloat(cpu.bh_raw_load_f(addr, offset, arraydescr))
-    else:
-        return BoxInt(cpu.bh_raw_load_i(addr, offset, arraydescr))
+    res = cpu.bh_raw_load_i(addr, offset, arraydescr) 
+    return create_resop_2(rop.RAW_LOAD_i, res, addrbox, offsetbox,
+                          descr=arraydescr)
+
+def do_raw_load_f(cpu, _, addrbox, offsetbox, arraydescr):
+    addr = addrbox.getint()
+    offset = offsetbox.getint()
+    res = cpu.bh_raw_load_f(addr, offset, arraydescr)
+    return create_resop_2(rop.RAW_LOAD_f, res, addrbox, offsetbox,
+                          descr=arraydescr)
 
 def exec_new_with_vtable(cpu, clsbox):
     from pypy.jit.codewriter import heaptracker
@@ -234,14 +241,12 @@ def do_copyunicodecontent(cpu, _, srcbox, dstbox,
     rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
 
 def do_read_timestamp(cpu, _):
-    XXX # how do we deal with that?
     x = read_timestamp()
     if longlong.is_64_bit:
         assert is_valid_int(x)            # 64-bit
-        return BoxInt(x)
     else:
         assert isinstance(x, r_longlong)  # 32-bit
-        return BoxFloat(x)
+    return create_resop_0(rop.READ_TIMESTAMP, x)
 
 def do_keepalive(cpu, _, x):
     pass

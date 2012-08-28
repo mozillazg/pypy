@@ -285,7 +285,7 @@ class OpParser(object):
         opres = self.create_op(opnum, self._example_for(opnum), args, descr)
         self.vars[res] = opres
         if fail_args is not None:
-            res.set_extra("failargs", fail_args)
+            opres.set_extra("failargs", fail_args)
         return opres
 
     def parse_op_no_result(self, line):

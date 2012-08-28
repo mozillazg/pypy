@@ -953,7 +953,7 @@ class Frame(object):
     def op_call_i(self, calldescr, func, *args):
         return self._do_call(calldescr, func, args, call_with_llptr=False)
     op_call_f = op_call_i
-    op_call_N = op_call_i
+    op_call_n = op_call_i
     op_call_p = op_call_i
 
     def op_call_release_gil(self, calldescr, func, *args):

@@ -1,5 +1,4 @@
-from pypy.jit.metainterp.history import ConstInt
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, ConstInt
 
 
 class HeapCache(object):
