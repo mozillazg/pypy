@@ -7,7 +7,8 @@ from pypy.rlib.debug import make_sure_not_resized
 from pypy.rlib import nonconst, rstack
 
 from pypy.jit.metainterp import history, compile, resume
-from pypy.jit.metainterp.history import Const, ConstInt, ConstPtr, ConstFloat
+from pypy.jit.metainterp.resoperation import Const, ConstInt, ConstPtr,\
+     ConstFloat
 from pypy.jit.metainterp.history import Box, TargetToken
 from pypy.jit.metainterp.resoperation import rop, create_resop, create_resop_0,\
      create_resop_1, create_resop_2

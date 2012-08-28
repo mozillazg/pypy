@@ -6,7 +6,8 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          JitCellToken, TargetToken,
                                          BoxObj, BoxFloat)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
-     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj, create_resop_2
+     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj, create_resop_2,\
+     create_resop_1
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -1150,7 +1151,7 @@ class BaseBackendTest(Runner):
             for srcbox in inputargs:
                 n = r.randrange(0, len(inputargs))
                 otherbox = inputargs[n]
-                if otherbox.type == srcbox.type:
+                if otherbox[0] == srcbox[0]:
                     remixing.append((srcbox, otherbox))
                 else:
                     otherbox = srcbox
@@ -1160,22 +1161,20 @@ class BaseBackendTest(Runner):
             inputargs.insert(index_counter, "i0")
             jumpargs.insert(index_counter, "i1")
             inp = ", ".join(inputargs)
-            import pdb
-            pdb.set_trace()
-            inputargs, operations, looptoken = self.parse("""
+            inpargs, operations, looptoken = self.parse("""
             [%s]
-            label(%s)
-            i1 = int_sub(i1, 1)
+            label(%s, descr=targettoken)
+            i1 = int_sub(i0, 1)
             i2 = int_ge(i1, 0)
             guard_true(i2, descr=faildescr) [%s]
             jump(%s, descr=targettoken)
-            """ % (inp, inp, inp, ", ".join(jumpargs)))
+            """ % (inp, inp, inp, ", ".join(jumpargs)), None)
             #
-            self.cpu.compile_loop(inputargs, operations, looptoken)
+            self.cpu.compile_loop(inpargs, operations, looptoken)
             #
             values = []
             S = lltype.GcStruct('S')
-            for box in inputargs:
+            for box in inpargs:
                 if isinstance(box, BoxInt):
                     values.append(r.randrange(-10000, 10000))
                 elif isinstance(box, BoxPtr):
@@ -1188,7 +1187,7 @@ class BaseBackendTest(Runner):
             values[index_counter] = 11
             #
             fail = self.cpu.execute_token(looptoken, *values)
-            assert fail.identifier == 15
+            assert fail.identifier == 1
             #
             dstvalues = values[:]
             for _ in range(11):
@@ -1200,7 +1199,7 @@ class BaseBackendTest(Runner):
             #
             assert dstvalues[index_counter] == 11
             dstvalues[index_counter] = 0
-            for i, (box, val) in enumerate(zip(inputargs, dstvalues)):
+            for i, (box, val) in enumerate(zip(inpargs, dstvalues)):
                 if isinstance(box, BoxInt):
                     got = self.cpu.get_latest_value_int(i)
                 elif isinstance(box, BoxPtr):
@@ -1215,39 +1214,38 @@ class BaseBackendTest(Runner):
     def test_compile_bridge_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
-        fboxes = [BoxFloat() for i in range(12)]
-        i2 = BoxInt()
-        targettoken = TargetToken()
+        fboxes = "f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11"
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
-        operations = [
-            ResOperation(rop.LABEL, fboxes, None, descr=targettoken),
-            ResOperation(rop.FLOAT_LE, [fboxes[0], constfloat(9.2)], i2),
-            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
-            ResOperation(rop.FINISH, fboxes, None, descr=faildescr2),
-            ]
-        operations[-2].setfailargs(fboxes)
-        looptoken = JitCellToken()
-        self.cpu.compile_loop(fboxes, operations, looptoken)
+        targettoken = TargetToken()
+        inputargs, operations, looptoken = self.parse("""
+        [%(fboxes)s]
+        label(%(fboxes)s, descr=targettoken)
+        i2 = float_le(f0, 9.2)
+        guard_true(i2, descr=faildescr1) [%(fboxes)s]
+        finish(%(fboxes)s, descr=faildescr2)
+        """ % {'fboxes': fboxes}, {'faildescr1': faildescr1,
+                                   'faildescr2': faildescr2,
+                                   'targettoken': targettoken})
+        self.cpu.compile_loop(inputargs, operations, looptoken)
 
-        fboxes2 = [BoxFloat() for i in range(12)]
-        f3 = BoxFloat()
-        bridge = [
-            ResOperation(rop.FLOAT_SUB, [fboxes2[0], constfloat(1.0)], f3),
-            ResOperation(rop.JUMP, [f3]+fboxes2[1:], None, descr=targettoken),
-        ]
+        inputargs, operations, _  = self.parse("""
+        [%s]
+        f15 = float_sub(f0, 1.0)
+        jump(f15, %s, descr=targettoken)
+        """ % (fboxes, fboxes[4:]), {'targettoken': targettoken})
 
-        self.cpu.compile_bridge(faildescr1, fboxes2, bridge, looptoken)
+        self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken)
 
         args = []
-        for i in range(len(fboxes)):
+        for i in range(len(fboxes.split(","))):
             x = 13.5 + 6.73 * i
             args.append(longlong.getfloatstorage(x))
         fail = self.cpu.execute_token(looptoken, *args)
         assert fail.identifier == 2
         res = self.cpu.get_latest_value_float(0)
         assert longlong.getrealfloat(res) == 8.5
-        for i in range(1, len(fboxes)):
+        for i in range(1, len(fboxes.split(","))):
             got = longlong.getrealfloat(self.cpu.get_latest_value_float(i))
             assert got == 13.5 + 6.73 * i
 
@@ -1274,17 +1272,15 @@ class BaseBackendTest(Runner):
                         ibox2 = BoxInt()
                     else:
                         ibox2 = ConstInt(-42)
-                    b1 = BoxInt()
                     faildescr1 = BasicFailDescr(1)
                     faildescr2 = BasicFailDescr(2)
                     inputargs = [ib for ib in [ibox1, ibox2]
                                     if isinstance(ib, BoxInt)]
-                    operations = [
-                        ResOperation(opname, [ibox1, ibox2], b1),
-                        ResOperation(opguard, [b1], None, descr=faildescr1),
-                        ResOperation(rop.FINISH, [], None, descr=faildescr2),
-                        ]
-                    operations[-2].setfailargs([])
+                    op0 = create_resop_2(opname, 0, ibox1, ibox2)
+                    op1 = create_resop_1(opguard, None, op0, descr=faildescr1)
+                    op2 = create_resop(rop.FINISH, None, [], descr=faildescr2)
+                    op1.set_extra("failargs", [])
+                    operations = [op0, op1, op2]
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(inputargs, operations, looptoken)
                     #
@@ -1329,17 +1325,15 @@ class BaseBackendTest(Runner):
                         fbox2 = BoxFloat()
                     else:
                         fbox2 = constfloat(-4.5)
-                    b1 = BoxInt()
                     faildescr1 = BasicFailDescr(1)
                     faildescr2 = BasicFailDescr(2)
                     inputargs = [fb for fb in [fbox1, fbox2]
                                     if isinstance(fb, BoxFloat)]
-                    operations = [
-                        ResOperation(opname, [fbox1, fbox2], b1),
-                        ResOperation(opguard, [b1], None, descr=faildescr1),
-                        ResOperation(rop.FINISH, [], None, descr=faildescr2),
-                        ]
-                    operations[-2].setfailargs([])
+                    op0 = create_resop_2(opname, 0, fbox1, fbox2)
+                    op1 = create_resop_1(opguard, None, op0, descr=faildescr1)
+                    op1.set_extra("failargs", [])
+                    op2 = create_resop(rop.FINISH, None, [], descr=faildescr2)
+                    operations = [op0, op1, op2]
                     looptoken = JitCellToken()
                     self.cpu.compile_loop(inputargs, operations, looptoken)
                     #
@@ -1386,16 +1380,16 @@ class BaseBackendTest(Runner):
         for opnum, boxargs, rettype, retvalue in tests:
             inputargs += [box for box in boxargs if isinstance(box, Box)]
             if rettype == 'int':
-                boxres = BoxInt()
+                res = 0
             elif rettype == 'float':
-                boxres = BoxFloat()
+                res = 0.0
             else:
                 assert 0
-            operations.append(ResOperation(opnum, boxargs, boxres))
+            operations.append(create_resop_dispatch(opnum, res, boxargs))
         # Unique-ify inputargs
         inputargs = list(set(inputargs))
         faildescr = BasicFailDescr(1)
-        operations.append(ResOperation(rop.FINISH, [], None,
+        operations.append(create_resop(rop.FINISH, None, [],
                                        descr=faildescr))
         looptoken = JitCellToken()
         #
@@ -1444,13 +1438,13 @@ class BaseBackendTest(Runner):
                 got = self.execute_operation(opnum, list(testcase),
                                              expectedtype)
                 if isnan(expected):
-                    ok = isnan(got.getfloat())
+                    ok = isnan(got)
                 elif isinf(expected):
-                    ok = isinf(got.getfloat())
+                    ok = isinf(got)
                 elif isinstance(got, BoxFloat):
-                    ok = (got.getfloat() == expected)
+                    ok = got == expected
                 else:
-                    ok = got.value == expected
+                    ok = got == expected
                 if not ok:
                     raise AssertionError("%s(%s): got %r, expected %r" % (
                         opname[opnum], ', '.join(map(repr, realvalues)),
@@ -1460,14 +1454,13 @@ class BaseBackendTest(Runner):
                 if isinstance(expected, bool):
                     for guard_opnum, expected_id in [(rop.GUARD_TRUE, 1),
                                                      (rop.GUARD_FALSE, 0)]:
-                        box = BoxInt()
-                        operations = [
-                            ResOperation(opnum, list(testcase), box),
-                            ResOperation(guard_opnum, [box], None,
-                                         descr=BasicFailDescr(4)),
-                            ResOperation(rop.FINISH, [], None,
-                                         descr=BasicFailDescr(5))]
-                        operations[1].setfailargs([])
+                        op0 = create_resop_2(opnum, 0, *testcase)
+                        op1 = create_resop_1(guard_opnum, None, op0,
+                                             descr=BasicFailDescr(4))
+                        op2 = create_resop(rop.FINISH, None, [],
+                                           descr=BasicFailDescr(5))
+                        op1.set_extra("failargs", [])
+                        operations = [op0, op1, op2]
                         looptoken = JitCellToken()
                         # Use "set" to unique-ify inputargs
                         unique_testcase_list = list(set(testcase))
