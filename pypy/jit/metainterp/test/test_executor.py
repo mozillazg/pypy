@@ -62,6 +62,11 @@ class FakeCPU(AbstractCPU):
     def bh_strsetitem(self, string, index, newvalue):
         self.fakestrsetitem = (string, index, newvalue)
 
+    def bh_getarrayitem_gc_i(self, arraydescr, array, index):
+        assert isinstance(arraydescr, FakeDescr)
+        assert isinstance(index, int)
+        return 13
+
 def boxfloat(x):
     return BoxFloat(longlong.getfloatstorage(x))
 
@@ -72,17 +77,19 @@ def constfloat(x):
 def test_execute():
     cpu = FakeCPU()
     descr = FakeDescr()
-    box = execute(cpu, None, rop.INT_ADD, None, BoxInt(40), ConstInt(2))
-    assert box.value == 42
-    box = execute(cpu, None, rop.NEW, descr)
-    assert box.value.fakeargs == ('new', descr)
+    resop = execute(cpu, None, rop.INT_ADD, None, BoxInt(40), ConstInt(2))
+    assert resop.intval == 42
+    resop = execute(cpu, None, rop.NEW, descr)
+    assert resop.pval.fakeargs == ('new', descr)
+    execute(cpu, None, rop.JIT_DEBUG, None, BoxInt(1), BoxInt(2), BoxInt(3),
+            BoxInt(4))
 
 def test_execute_varargs():
     cpu = FakeCPU()
     descr = FakeCallDescr()
     argboxes = [BoxInt(99999), BoxInt(321), constfloat(2.25), ConstInt(123),
                 BoxPtr(), boxfloat(5.5)]
-    box = execute_varargs(cpu, FakeMetaInterp(), rop.CALL, argboxes, descr)
+    box = execute_varargs(cpu, FakeMetaInterp(), rop.CALL_f, argboxes, descr)
     assert box.getfloat() == 42.5
     assert cpu.fakecalled == (99999, descr, [321, 123],
                               [ConstPtr.value],
@@ -95,16 +102,16 @@ def test_execute_nonspec():
     # cases with a descr
     # arity == -1
     argboxes = [BoxInt(321), ConstInt(123)]
-    box = execute_nonspec(cpu, FakeMetaInterp(), rop.CALL,
+    box = execute_nonspec(cpu, FakeMetaInterp(), rop.CALL_f,
                           argboxes, FakeCallDescr())
     assert box.getfloat() == 42.5
     # arity == 0
     box = execute_nonspec(cpu, None, rop.NEW, [], descr)
-    assert box.value.fakeargs == ('new', descr)
+    assert box.pval.fakeargs == ('new', descr)
     # arity == 1
     box1 = BoxPtr()
     box = execute_nonspec(cpu, None, rop.ARRAYLEN_GC, [box1], descr)
-    assert box.value == 55
+    assert box.intval == 55
     # arity == 2
     box2 = boxfloat(222.2)
     fielddescr = FakeFieldDescr()
@@ -120,13 +127,19 @@ def test_execute_nonspec():
     # cases without descr
     # arity == 1
     box = execute_nonspec(cpu, None, rop.INT_INVERT, [box3])
-    assert box.value == ~33
+    assert box.intval == ~33
     # arity == 2
     box = execute_nonspec(cpu, None, rop.INT_LSHIFT, [box3, BoxInt(3)])
-    assert box.value == 33 << 3
+    assert box.intval == 33 << 3
     # arity == 3
     execute_nonspec(cpu, None, rop.STRSETITEM, [box1, BoxInt(3), box3])
     assert cpu.fakestrsetitem == (box1.value, 3, box3.value)
+
+def test_getarrayitems():
+    cpu = FakeCPU()
+    resop = execute_nonspec(cpu, None, rop.GETARRAYITEM_GC_i,
+                            [BoxPtr(), BoxInt(12)], FakeArrayDescr())
+    assert resop.intval == 13
 
 # ints
 

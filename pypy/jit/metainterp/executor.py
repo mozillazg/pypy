@@ -5,100 +5,94 @@ from pypy.rpython.lltypesystem import lltype, rstr
 from pypy.rlib.rarithmetic import ovfcheck, r_longlong, is_valid_int
 from pypy.rlib.rtimer import read_timestamp
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, check_descr,\
-     AbstractDescr
-from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, VOID
+from pypy.jit.metainterp.history import check_descr, AbstractDescr
+from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, rop,\
+     create_resop, create_resop_1, create_resop_2
 from pypy.jit.metainterp import resoperation
-from pypy.jit.metainterp.resoperation import rop, create_resop
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter, NULL
 from pypy.jit.codewriter import longlong
 
 # ____________________________________________________________
 
-def do_call(cpu, metainterp, argboxes, descr):
-    xxx
-    assert metainterp is not None
-    # count the number of arguments of the different types
-    count_i = count_r = count_f = 0
-    for i in range(1, len(argboxes)):
-        type = argboxes[i].type
-        if   type == INT:   count_i += 1
-        elif type == REF:   count_r += 1
-        elif type == FLOAT: count_f += 1
-    # allocate lists for each type that has at least one argument
-    if count_i: args_i = [0] * count_i
-    else:       args_i = None
-    if count_r: args_r = [NULL] * count_r
-    else:       args_r = None
-    if count_f: args_f = [longlong.ZEROF] * count_f
-    else:       args_f = None
-    # fill in the lists
-    count_i = count_r = count_f = 0
-    for i in range(1, len(argboxes)):
-        box = argboxes[i]
-        if   box.type == INT:
-            args_i[count_i] = box.getint()
-            count_i += 1
-        elif box.type == REF:
-            args_r[count_r] = box.getref_base()
-            count_r += 1
-        elif box.type == FLOAT:
-            args_f[count_f] = box.getfloatstorage()
-            count_f += 1
-    # get the function address as an integer
-    func = argboxes[0].getint()
-    # do the call using the correct function from the cpu
-    rettype = descr.get_result_type()
-    if rettype == INT or rettype == 'S':       # *S*ingle float
-        try:
-            result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
-        except Exception, e:
-            metainterp.execute_raised(e)
-            result = 0
-        return BoxInt(result)
-    if rettype == REF:
-        try:
-            result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
-        except Exception, e:
-            metainterp.execute_raised(e)
-            result = NULL
-        return BoxPtr(result)
-    if rettype == FLOAT or rettype == 'L':     # *L*ong long
-        try:
-            result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
-        except Exception, e:
-            metainterp.execute_raised(e)
-            result = longlong.ZEROF
-        return BoxFloat(result)
-    if rettype == VOID:
-        try:
-            cpu.bh_call_v(func, descr, args_i, args_r, args_f)
-        except Exception, e:
-            metainterp.execute_raised(e)
-        return None
-    raise AssertionError("bad rettype")
+def new_do_call(opnum, tp):
+    def do_call(cpu, metainterp, argboxes, descr):
+        assert metainterp is not None
+        # count the number of arguments of the different types
+        count_i = count_r = count_f = 0
+        for i in range(1, len(argboxes)):
+            type = argboxes[i].type
+            if   type == INT:   count_i += 1
+            elif type == REF:   count_r += 1
+            elif type == FLOAT: count_f += 1
+        # allocate lists for each type that has at least one argument
+        if count_i: args_i = [0] * count_i
+        else:       args_i = None
+        if count_r: args_r = [NULL] * count_r
+        else:       args_r = None
+        if count_f: args_f = [longlong.ZEROF] * count_f
+        else:       args_f = None
+        # fill in the lists
+        count_i = count_r = count_f = 0
+        for i in range(1, len(argboxes)):
+            box = argboxes[i]
+            if   box.type == INT:
+                args_i[count_i] = box.getint()
+                count_i += 1
+            elif box.type == REF:
+                args_r[count_r] = box.getref_base()
+                count_r += 1
+            elif box.type == FLOAT:
+                args_f[count_f] = box.getfloatstorage()
+                count_f += 1
+        # get the function address as an integer
+        func = argboxes[0].getint()
+        # do the call using the correct function from the cpu
+        if tp == 'i':
+            try:
+                result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
+            except Exception, e:
+                metainterp.execute_raised(e)
+                result = 0
+            return create_resop(opnum, result, argboxes, descr)
+        if tp == 'p':
+            try:
+                result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
+            except Exception, e:
+                metainterp.execute_raised(e)
+                result = NULL
+            return create_resop(opnum, result, argboxes, descr)
+        if tp == 'f':
+            try:
+                result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
+            except Exception, e:
+                metainterp.execute_raised(e)
+                result = longlong.ZEROF
+            return create_resop(opnum, result, argboxes, descr)
+        if tp == 'N':
+            try:
+                cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+            except Exception, e:
+                metainterp.execute_raised(e)
+            return create_resop(opnum, None, argboxes, descr)
+        raise AssertionError("bad rettype")
+    return do_call
 
-do_call_loopinvariant = do_call
-do_call_may_force = do_call
-
-def do_getarrayitem_gc(cpu, _, arraybox, indexbox, arraydescr):
-    array = arraybox.getref_base()
-    index = indexbox.getint()
-    if arraydescr.is_array_of_pointers():
-        return BoxPtr(cpu.bh_getarrayitem_gc_r(arraydescr, array, index))
-    elif arraydescr.is_array_of_floats():
-        return BoxFloat(cpu.bh_getarrayitem_gc_f(arraydescr, array, index))
-    else:
-        return BoxInt(cpu.bh_getarrayitem_gc_i(arraydescr, array, index))
-
-def do_getarrayitem_raw(cpu, _, arraybox, indexbox, arraydescr):
-    array = arraybox.getint()
-    index = indexbox.getint()
-    assert not arraydescr.is_array_of_pointers()
-    if arraydescr.is_array_of_floats():
-        return BoxFloat(cpu.bh_getarrayitem_raw_f(arraydescr, array, index))
-    else:
-        return BoxInt(cpu.bh_getarrayitem_raw_i(arraydescr, array, index))
+do_call_i = new_do_call(rop.CALL_i, 'i')
+do_call_f = new_do_call(rop.CALL_f, 'f')
+do_call_p = new_do_call(rop.CALL_p, 'p')
+do_call_n = new_do_call(rop.CALL_N, 'N')
+do_call_loopinvariant_i = new_do_call(rop.CALL_LOOPINVARIANT_i, 'i')
+do_call_loopinvariant_f = new_do_call(rop.CALL_LOOPINVARIANT_f, 'f')
+do_call_loopinvariant_p = new_do_call(rop.CALL_LOOPINVARIANT_p, 'p')
+do_call_loopinvariant_n = new_do_call(rop.CALL_LOOPINVARIANT_N, 'N')
+do_call_may_force_i = new_do_call(rop.CALL_MAY_FORCE_i, 'i')
+do_call_may_force_f = new_do_call(rop.CALL_MAY_FORCE_f, 'f')
+do_call_may_force_p = new_do_call(rop.CALL_MAY_FORCE_p, 'p')
+do_call_may_force_n = new_do_call(rop.CALL_MAY_FORCE_N, 'N')
+do_call_pure_i = new_do_call(rop.CALL_PURE_i, 'i')
+do_call_pure_f = new_do_call(rop.CALL_PURE_f, 'f')
+do_call_pure_p = new_do_call(rop.CALL_PURE_p, 'p')
+do_call_pure_n = new_do_call(rop.CALL_PURE_N, 'N')
 
 def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getref_base()
@@ -122,16 +116,6 @@ def do_setarrayitem_raw(cpu, _, arraybox, indexbox, itembox, arraydescr):
     else:
         cpu.bh_setarrayitem_raw_i(arraydescr, array, index, itembox.getint())
 
-def do_getinteriorfield_gc(cpu, _, arraybox, indexbox, descr):
-    array = arraybox.getref_base()
-    index = indexbox.getint()
-    if descr.is_pointer_field():
-        return BoxPtr(cpu.bh_getinteriorfield_gc_r(array, index, descr))
-    elif descr.is_float_field():
-        return BoxFloat(cpu.bh_getinteriorfield_gc_f(array, index, descr))
-    else:
-        return BoxInt(cpu.bh_getinteriorfield_gc_i(array, index, descr))
-
 def do_setinteriorfield_gc(cpu, _, arraybox, indexbox, valuebox, descr):
     array = arraybox.getref_base()
     index = indexbox.getint()
@@ -144,25 +128,6 @@ def do_setinteriorfield_gc(cpu, _, arraybox, indexbox, valuebox, descr):
     else:
         cpu.bh_setinteriorfield_gc_i(array, index, descr,
                                      valuebox.getint())
-
-def do_getfield_gc(cpu, _, structbox, fielddescr):
-    struct = structbox.getref_base()
-    if fielddescr.is_pointer_field():
-        return BoxPtr(cpu.bh_getfield_gc_r(struct, fielddescr))
-    elif fielddescr.is_float_field():
-        return BoxFloat(cpu.bh_getfield_gc_f(struct, fielddescr))
-    else:
-        return BoxInt(cpu.bh_getfield_gc_i(struct, fielddescr))
-
-def do_getfield_raw(cpu, _, structbox, fielddescr):
-    check_descr(fielddescr)
-    struct = structbox.getint()
-    if fielddescr.is_pointer_field():
-        return BoxPtr(cpu.bh_getfield_raw_r(struct, fielddescr))
-    elif fielddescr.is_float_field():
-        return BoxFloat(cpu.bh_getfield_raw_f(struct, fielddescr))
-    else:
-        return BoxInt(cpu.bh_getfield_raw_i(struct, fielddescr))
 
 def do_setfield_gc(cpu, _, structbox, itembox, fielddescr):
     struct = structbox.getref_base()
@@ -189,7 +154,8 @@ def exec_new_with_vtable(cpu, clsbox):
     return cpu.bh_new_with_vtable(descr, vtable)
 
 def do_new_with_vtable(cpu, _, clsbox):
-    return BoxPtr(exec_new_with_vtable(cpu, clsbox))
+    pval = exec_new_with_vtable(cpu, clsbox)
+    return create_resop_1(rop.NEW_WITH_VTABLE, pval, clsbox)
 
 def do_int_add_ovf(cpu, metainterp, box1, box2):
     # the overflow operations can be called without a metainterp, if an
@@ -202,7 +168,7 @@ def do_int_add_ovf(cpu, metainterp, box1, box2):
         assert metainterp is not None
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    return BoxInt(z)
+    return create_resop_2(rop.INT_ADD_OVF, z, box1, box2)
 
 def do_int_sub_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
@@ -213,7 +179,7 @@ def do_int_sub_ovf(cpu, metainterp, box1, box2):
         assert metainterp is not None
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    return BoxInt(z)
+    return create_resop_2(rop.INT_SUB_OVF, z, box1, box2)
 
 def do_int_mul_ovf(cpu, metainterp, box1, box2):
     a = box1.getint()
@@ -224,7 +190,7 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
         assert metainterp is not None
         metainterp.execute_raised(OverflowError(), constant=True)
         z = 0
-    return BoxInt(z)
+    return create_resop_2(rop.INT_MUL_OVF, z, box1, box2)
 
 def do_same_as(cpu, _, box):
     return box.clonebox()
@@ -248,6 +214,7 @@ def do_copyunicodecontent(cpu, _, srcbox, dstbox,
     rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
 
 def do_read_timestamp(cpu, _):
+    XXX # how do we deal with that?
     x = read_timestamp()
     if longlong.is_64_bit:
         assert is_valid_int(x)            # 64-bit
@@ -257,6 +224,9 @@ def do_read_timestamp(cpu, _):
         return BoxFloat(x)
 
 def do_keepalive(cpu, _, x):
+    pass
+
+def do_jit_debug(cpu, _, arg0, arg1, arg2, arg3):
     pass
 
 # ____________________________________________________________
@@ -301,8 +271,7 @@ def _make_execute_list():
             # find which list to store the operation in, based on num_args
             num_args = resoperation.oparity[value]
             withdescr = resoperation.opwithdescr[value]
-            optp = resoperation.optp[value]
-            dictkey = num_args, withdescr, optp
+            dictkey = num_args, withdescr
             if dictkey not in execute_by_num_args:
                 execute_by_num_args[dictkey] = [None] * (rop._LAST+1)
             execute = execute_by_num_args[dictkey]
@@ -372,22 +341,25 @@ def make_execute_function_with_boxes(opnum, name, func):
     # Make a wrapper for 'func'.  The func is a simple bhimpl_xxx function
     # from the BlackholeInterpreter class.  The wrapper is a new function
     # that receives and returns boxed values.
-    has_descr = False
     for i, argtype in enumerate(func.argtypes):
         if argtype not in ('i', 'r', 'f', 'd', 'cpu'):
             return None
         if argtype == 'd':
             if i != len(func.argtypes) - 1:
                 raise AssertionError("Descr should be the last one")
-            has_descr = True
     if list(func.argtypes).count('d') > 1:
         return None
     if func.resulttype not in ('i', 'r', 'f', None):
         return None
     argtypes = unrolling_iterable(func.argtypes)
-    if len(func.argtypes) <= 3:
+    # count the actual arguments
+    real_args = 0
+    for argtype in func.argtypes:
+        if argtype in ('i', 'r', 'f'):
+            real_args += 1
+    if real_args <= 3:
         create_resop_func = getattr(resoperation,
-                                    'create_resop_%d' % len(func.argtypes))
+                                    'create_resop_%d' % real_args)
     #
         def do(cpu, _, *args):
             newargs = ()
@@ -413,24 +385,23 @@ def make_execute_function_with_boxes(opnum, name, func):
             #
         #
     else:
-        def do(*args):
-            xxx
+        return None # it's only jitdebug, deal with it by hand
     do.func_name = 'do_' + name
     return do
 
-def get_execute_funclist(num_args, withdescr, tp):
+def get_execute_funclist(num_args, withdescr):
     # workaround, similar to the next one
-    return EXECUTE_BY_NUM_ARGS[num_args, withdescr, tp]
+    return EXECUTE_BY_NUM_ARGS[num_args, withdescr]
 get_execute_funclist._annspecialcase_ = 'specialize:memo'
 
-def get_execute_function(opnum, num_args, withdescr, tp):
+def get_execute_function(opnum, num_args, withdescr):
     # workaround for an annotation limitation: putting this code in
     # a specialize:memo function makes sure the following line is
     # constant-folded away.  Only works if opnum and num_args are
     # constants, of course.
-    func = EXECUTE_BY_NUM_ARGS[num_args, withdescr, tp][opnum]
-    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s, %s, %s][%s]" % (
-        num_args, withdescr, tp, resoperation.opname[opnum])
+    func = EXECUTE_BY_NUM_ARGS[num_args, withdescr][opnum]
+    assert func is not None, "EXECUTE_BY_NUM_ARGS[%s, %s][%s]" % (
+        num_args, withdescr, resoperation.opname[opnum])
     return func
 get_execute_function._annspecialcase_ = 'specialize:memo'
 
@@ -444,13 +415,12 @@ def execute(cpu, metainterp, opnum, descr, *args):
     # only for opnums with a fixed arity
     num_args = len(args)
     withdescr = has_descr(opnum)
-    tp = resoperation.optp[opnum]
     if withdescr:
         check_descr(descr)
         args = args + (descr,)
     else:
         assert descr is None
-    func = get_execute_function(opnum, num_args, withdescr, tp)
+    func = get_execute_function(opnum, num_args, withdescr)
     return func(cpu, metainterp, *args)  # note that the 'args' tuple
                                          # optionally ends with the descr
 execute._annspecialcase_ = 'specialize:arg(2)'
