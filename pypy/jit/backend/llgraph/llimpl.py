@@ -811,17 +811,18 @@ class Frame(object):
 
     op_getarrayitem_raw_pure = op_getarrayitem_raw
 
-    def op_getfield_gc(self, fielddescr, struct):
-        if fielddescr.typeinfo == REF:
-            return do_getfield_gc_ptr(struct, fielddescr.ofs)
-        elif fielddescr.typeinfo == INT:
-            return do_getfield_gc_int(struct, fielddescr.ofs)
-        elif fielddescr.typeinfo == FLOAT:
-            return do_getfield_gc_float(struct, fielddescr.ofs)
-        else:
-            raise NotImplementedError
+    def op_getfield_gc_i(self, fielddescr, struct):
+        return do_getfield_gc_int(struct, fielddescr.ofs)
 
-    op_getfield_gc_pure = op_getfield_gc
+    def op_getfield_gc_f(self, fielddescr, struct):
+        return do_getfield_gc_float(struct, fielddescr.ofs)
+
+    def op_getfield_gc_p(self, fielddescr, struct):
+        return do_getfield_gc_ptr(struct, fielddescr.ofs)
+
+    op_getfield_gc_pure_i = op_getfield_gc_i
+    op_getfield_gc_pure_f = op_getfield_gc_f
+    op_getfield_gc_pure_p = op_getfield_gc_p
 
     def op_getfield_raw(self, fielddescr, struct):
         if fielddescr.typeinfo == REF:
@@ -951,6 +952,9 @@ class Frame(object):
 
     def op_call_i(self, calldescr, func, *args):
         return self._do_call(calldescr, func, args, call_with_llptr=False)
+    op_call_f = op_call_i
+    op_call_N = op_call_i
+    op_call_p = op_call_i
 
     def op_call_release_gil(self, calldescr, func, *args):
         return self._do_call(calldescr, func, args, call_with_llptr=True)

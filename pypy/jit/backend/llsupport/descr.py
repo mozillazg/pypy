@@ -2,8 +2,9 @@ import py
 from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.jit.backend.llsupport import symbolic, support
-from pypy.jit.metainterp.history import AbstractDescr, getkind
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.resoperation import getkind
+from pypy.jit.metainterp import resoperation
 from pypy.jit.codewriter import heaptracker, longlong
 from pypy.jit.codewriter.longlong import is_longlong
 
@@ -278,9 +279,9 @@ class CallDescr(AbstractDescr):
                 result_flag = FLAG_SIGNED
             else:
                 result_flag = FLAG_UNSIGNED
-        elif result_type == history.REF:
+        elif result_type == resoperation.REF:
             result_flag = FLAG_POINTER
-        elif result_type == history.FLOAT or result_type == 'L':
+        elif result_type == resoperation.FLOAT or result_type == 'L':
             result_flag = FLAG_FLOAT
         elif result_type == 'S':
             result_flag = FLAG_UNSIGNED
@@ -363,20 +364,20 @@ class CallDescr(AbstractDescr):
         args = ", ".join([process(c) for c in self.arg_classes])
 
         result_type = self.get_result_type()
-        if result_type == history.INT:
+        if result_type == resoperation.INT:
             result = 'rffi.cast(lltype.Signed, res)'
             category = 'i'
-        elif result_type == history.REF:
+        elif result_type == resoperation.REF:
             assert RESULT == llmemory.GCREF   # should be ensured by the caller
             result = 'lltype.cast_opaque_ptr(llmemory.GCREF, res)'
             category = 'r'
-        elif result_type == history.FLOAT:
+        elif result_type == resoperation.FLOAT:
             result = 'longlong.getfloatstorage(res)'
             category = 'f'
         elif result_type == 'L':
             result = 'rffi.cast(lltype.SignedLongLong, res)'
             category = 'f'
-        elif result_type == history.VOID:
+        elif result_type == resoperation.VOID:
             result = '0'
             category = 'i'
         elif result_type == 'S':

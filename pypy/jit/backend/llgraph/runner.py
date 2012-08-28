@@ -367,7 +367,7 @@ class LLtypeCPU(BaseCPU):
         try:
             for arg in cif_description.atypes:
                 kind = get_ffi_type_kind(self, arg)
-                if kind != history.VOID:
+                if kind != resoperation.VOID:
                     arg_types.append(kind)
             reskind = get_ffi_type_kind(self, cif_description.rtype)
         except UnsupportedKind:
