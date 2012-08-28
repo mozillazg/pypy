@@ -2,7 +2,7 @@ from weakref import WeakValueDictionary
 from pypy.tool.pairtype import pairtype
 from pypy.annotation import model as annmodel
 from pypy.rpython.error import TyperError
-from pypy.rlib.objectmodel import malloc_zero_filled, we_are_translated
+from pypy.rlib.objectmodel import malloc_varsize_zero_filled, we_are_translated
 from pypy.rlib.objectmodel import _hash_string, enforceargs
 from pypy.rlib.objectmodel import keepalive_until_here, specialize
 from pypy.rlib.debug import ll_assert
@@ -39,7 +39,7 @@ def new_malloc(TP, name):
     def mallocstr(length):
         ll_assert(length >= 0, "negative string length")
         r = malloc(TP, length)
-        if not we_are_translated() or not malloc_zero_filled:
+        if not we_are_translated() or not malloc_varsize_zero_filled:
             r.hash = 0
         return r
     mallocstr._annspecialcase_ = 'specialize:semierased'

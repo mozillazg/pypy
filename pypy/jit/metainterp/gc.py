@@ -3,6 +3,7 @@ Support for the various GCs.
 """
 
 class GcDescription:
+    malloc_varsize_zero_filled = True
     def __init__(self, config):
         self.config = config
 
@@ -23,7 +24,7 @@ class GC_hybrid(GcDescription):
     malloc_zero_filled = True
 
 class GC_minimark(GcDescription):
-    malloc_zero_filled = True
+    malloc_zero_filled = False
 
 
 def get_description(config):
