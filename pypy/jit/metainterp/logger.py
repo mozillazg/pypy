@@ -1,11 +1,9 @@
-import os
 from pypy.rlib.debug import have_debug_prints
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.history import Const, ConstInt, Box, \
-     BoxInt, ConstFloat, BoxFloat, AbstractFailDescr, TargetToken
+from pypy.jit.metainterp.resoperation import rop, ConstInt
+from pypy.jit.metainterp.history import BoxInt, BoxFloat, TargetToken
 
 class Logger(object):
 
@@ -14,7 +12,7 @@ class Logger(object):
         self.guard_number = guard_number
 
     def log_loop(self, inputargs, operations, number=0, type=None, ops_offset=None, name=''):
-        return
+        return 
         if type is None:
             debug_start("jit-log-noopt-loop")
             logops = self._log_operations(inputargs, operations, ops_offset)
