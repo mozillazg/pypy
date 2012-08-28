@@ -263,6 +263,7 @@ class CDefinedIntSymbolic(Symbolic):
         return lltype.Signed
 
 malloc_zero_filled = CDefinedIntSymbolic('MALLOC_ZERO_FILLED', default=0)
+malloc_varsize_zero_filled = True      # always True for now
 running_on_llinterp = CDefinedIntSymbolic('RUNNING_ON_LLINTERP', default=1)
 # running_on_llinterp is meant to have the value 0 in all backends
 

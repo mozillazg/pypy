@@ -7,7 +7,7 @@ from pypy.rpython.rstr import AbstractStringRepr, AbstractCharRepr
 from pypy.rpython.lltypesystem.lltype import typeOf, Ptr, Void, Signed, Bool
 from pypy.rpython.lltypesystem.lltype import nullptr, Char, UniChar, Number
 from pypy.rpython import robject
-from pypy.rlib.objectmodel import malloc_zero_filled
+from pypy.rlib.objectmodel import malloc_varsize_zero_filled
 from pypy.rlib.debug import ll_assert
 from pypy.rlib.rarithmetic import ovfcheck, widen, r_uint, intmask
 from pypy.rpython.annlowlevel import ADTInterface
@@ -502,8 +502,9 @@ def ll_alloc_and_set(LIST, count, item):
         check = widen(item)
     else:
         check = item
-    if (not malloc_zero_filled) or check: # as long as malloc it is known to zero the allocated memory avoid zeroing twice
-
+    if (not malloc_varsize_zero_filled) or check:
+        # as long as malloc_varsize is known to zero the allocated memory,
+        # avoid zeroing twice
         i = 0
         while i < count:
             l.ll_setitem_fast(i, item)
