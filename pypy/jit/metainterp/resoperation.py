@@ -1040,7 +1040,7 @@ _oplist = [
     'GUARD_NONNULL_CLASS/2d/N',
     '_GUARD_FOLDABLE_LAST',
     'GUARD_NO_EXCEPTION/0d/N',   # may be called with an exception currently set
-    'GUARD_EXCEPTION/1d/N',      # may be called with an exception currently set
+    'GUARD_EXCEPTION/1d/p',      # may be called with an exception currently set
     'GUARD_NO_OVERFLOW/0d/N',
     'GUARD_OVERFLOW/0d/N',
     'GUARD_NOT_FORCED/0d/N',     # may be called with an exception currently set
@@ -1213,8 +1213,8 @@ def setup(debug_print=False):
             boolresult = 'b' in arity
             arity = arity.rstrip('db')
             if arity == '*':
-                setattr(opgroups, basename, (basename + '_i', basename + '_N',
-                                             basename + '_f', basename + '_p'))
+                cur = len(opclasses)
+                setattr(opgroups, basename, (cur, cur + 1, cur + 2, cur + 3))
                 arity = -1
             else:
                 arity = int(arity)

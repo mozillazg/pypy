@@ -17,7 +17,7 @@ from pypy.rpython.llinterp import LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
 from pypy.jit.metainterp import resoperation
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, opgroups
 from pypy.jit.backend.llgraph import symbolic
 from pypy.jit.codewriter import longlong
 
@@ -800,17 +800,14 @@ class Frame(object):
     op_getarrayitem_gc_pure_f = op_getarrayitem_gc_f
     op_getarrayitem_gc_pure_p = op_getarrayitem_gc_p
 
-    def op_getarrayitem_raw(self, arraydescr, array, index):
-        if arraydescr.typeinfo == REF:
-            raise NotImplementedError("getarrayitem_raw -> gcref")
-        elif arraydescr.typeinfo == INT:
-            return do_getarrayitem_raw_int(array, index, arraydescr.ofs)
-        elif arraydescr.typeinfo == FLOAT:
-            return do_getarrayitem_raw_float(array, index)
-        else:
-            raise NotImplementedError
+    def op_getarrayitem_raw_i(self, arraydescr, array, index):
+        return do_getarrayitem_raw_int(array, index, arraydescr.ofs)
 
-    op_getarrayitem_raw_pure = op_getarrayitem_raw
+    def op_getarrayitem_raw_f(self, arraydescr, array, index):
+        return do_getarrayitem_raw_float(array, index)
+
+    op_getarrayitem_raw_pure_i = op_getarrayitem_raw_i
+    op_getarrayitem_raw_pure_f = op_getarrayitem_raw_f
 
     def op_getfield_gc_i(self, fielddescr, struct):
         return do_getfield_gc_int(struct, fielddescr.ofs)
@@ -847,15 +844,11 @@ class Frame(object):
         else:
             raise NotImplementedError
 
-    def op_raw_load(self, arraydescr, addr, offset):
-        if arraydescr.typeinfo == REF: 
-            raise AssertionError("cannot store GC pointer in raw storage")
-        elif arraydescr.typeinfo == INT:
-            return do_raw_load_int(addr, offset, arraydescr.ofs)
-        elif arraydescr.typeinfo == FLOAT:
-            return do_raw_load_float(addr, offset)
-        else:
-            raise NotImplementedError
+    def op_raw_load_i(self, arraydescr, addr, offset):
+        return do_raw_load_int(addr, offset, arraydescr.ofs)
+
+    def op_raw_load_f(self, arraydescr, addr, offset):
+        return do_raw_load_float(addr, offset)
 
     def op_new(self, size):
         return do_new(size.ofs)
@@ -956,8 +949,11 @@ class Frame(object):
     op_call_n = op_call_i
     op_call_p = op_call_i
 
-    def op_call_release_gil(self, calldescr, func, *args):
+    def op_call_release_gil_i(self, calldescr, func, *args):
         return self._do_call(calldescr, func, args, call_with_llptr=True)
+    op_call_release_gil_f = op_call_release_gil_i
+    op_call_release_gil_n = op_call_release_gil_i
+    op_call_release_gil_p = op_call_release_gil_i
 
     def _do_call(self, calldescr, func, args, call_with_llptr):
         global _last_exception
@@ -1009,18 +1005,25 @@ class Frame(object):
     def op_read_timestamp(self, descr):
         return read_timestamp()
 
-    def op_call_may_force(self, calldescr, func, *args):
+    def op_call_may_force_i(self, calldescr, func, *args):
         assert not self._forced
         self._may_force = self.opindex
         try:
-            return self.op_call(calldescr, func, *args)
+            return self.op_call_i(calldescr, func, *args)
         finally:
             self._may_force = -1
 
-    def op_call_assembler(self, wref_loop_token, *args):
+    op_call_may_force_f = op_call_may_force_i
+    op_call_may_force_p = op_call_may_force_i
+    op_call_may_force_n = op_call_may_force_i
+
+    def op_call_assembler_i(self, wref_loop_token, *args):
         if we_are_translated():
             raise ValueError("CALL_ASSEMBLER not supported")
         return self._do_call_assembler(wref_loop_token, *args)
+    op_call_assembler_p = op_call_assembler_i
+    op_call_assembler_n = op_call_assembler_i
+    op_call_assembler_f = op_call_assembler_i
 
     def _do_call_assembler(self, wref_loop_token, *args):
         global _last_exception
@@ -1383,7 +1386,7 @@ def force(opaque_frame):
     call_op = frame.loop.operations[frame._may_force]
     guard_op = frame.loop.operations[frame._may_force+1]
     opnum = call_op.opnum
-    assert opnum == rop.CALL_MAY_FORCE or opnum == rop.CALL_ASSEMBLER
+    assert opnum in opgroups.CALL_MAY_FORCE or opnum in opgroups.CALL_ASSEMBLER
     frame._populate_fail_args(guard_op, skip=call_op.result)
     return frame.fail_index
 
