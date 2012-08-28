@@ -1,5 +1,5 @@
 from pypy.tool.algo import regalloc
-from pypy.jit.metainterp.history import getkind
+from pypy.jit.metainterp.resoperation import getkind
 from pypy.jit.codewriter.flatten import ListOfKind
 
 

@@ -342,7 +342,6 @@ class FakeMetaInterpStaticData(object):
         self.options = Fake()
         self.globaldata = Fake()
         self.config = get_pypy_config(translating=True)
-        self.config.translation.jit_ffi = True
 
     class logger_noopt:
         @classmethod

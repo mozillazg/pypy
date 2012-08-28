@@ -1,4 +1,5 @@
-from pypy.jit.metainterp.history import AbstractDescr, getkind
+from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.resoperation import getkind
 from pypy.jit.codewriter.flatten import Register, Label, TLabel, KINDS
 from pypy.jit.codewriter.flatten import ListOfKind, IndirectCallTargets
 from pypy.jit.codewriter.format import format_assembler

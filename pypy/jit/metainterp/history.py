@@ -18,7 +18,6 @@ import weakref
 
 FAILARGS_LIMIT = 1000
 
-
 class AbstractDescr(AbstractValue):
     __slots__ = ()
 

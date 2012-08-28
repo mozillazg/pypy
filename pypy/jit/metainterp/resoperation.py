@@ -1095,6 +1095,7 @@ _oplist = [
     'INT_IS_TRUE/1b/i',
     'INT_NEG/1/i',
     'INT_INVERT/1/i',
+    'INT_FORCE_GE_ZERO/1/i',
     #
     'SAME_AS/1/*',      # gets a Const or a Box, turns it into another Box
     'CAST_PTR_TO_INT/1/i',
@@ -1111,6 +1112,7 @@ _oplist = [
     'GETFIELD_GC_PURE/1d/*',
     'GETFIELD_RAW_PURE/1d/*',
     'GETARRAYITEM_GC_PURE/2d/*',
+    'GETARRAYITEM_RAW_PURE/2d/*',
     'UNICODELEN/1/i',
     'UNICODEGETITEM/2/i',
     #
@@ -1124,6 +1126,7 @@ _oplist = [
     'GETARRAYITEM_RAW/2d/*',
     'GETINTERIORFIELD_GC/2d/*',
     'GETINTERIORFIELD_RAW/2d/*',
+    'RAW_LOAD/2d/*',
     'GETFIELD_GC/1d/*',
     'GETFIELD_RAW/1d/*',
     '_MALLOC_FIRST',
@@ -1142,7 +1145,8 @@ _oplist = [
     'SETARRAYITEM_GC/3d/N',
     'SETARRAYITEM_RAW/3d/N',
     'SETINTERIORFIELD_GC/3d/N',
-    'SETINTERIORFIELD_RAW/3d/N',
+    'SETINTERIORFIELD_RAW/3d/N', # only used by llsupport/rewrite.py
+    'RAW_STORE/3d/N',
     'SETFIELD_GC/2d/N',
     'SETFIELD_RAW/2d/N',
     'STRSETITEM/3/N',

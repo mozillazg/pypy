@@ -1,4 +1,4 @@
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import resoperation
 from pypy.tool.udir import udir
 
 import py
@@ -63,11 +63,10 @@ class JitPolicy(object):
             contains_loop = contains_loop and not getattr(
                     func, '_jit_unroll_safe_', False)
 
-        unsupported = contains_unsupported_variable_type(graph,
+        res = see_function and not contains_unsupported_variable_type(graph,
                             self.supports_floats,
                             self.supports_longlong,
                             self.supports_singlefloats)
-        res = see_function and not unsupported
         if res and contains_loop:
             self.unsafe_loopy_graphs.add(graph)
         res = res and not contains_loop
@@ -89,7 +88,7 @@ class JitPolicy(object):
 def contains_unsupported_variable_type(graph, supports_floats,
                                               supports_longlong,
                                               supports_singlefloats):
-    getkind = history.getkind
+    getkind = resoperation.getkind
     try:
         for block in graph.iterblocks():
             for v in block.inputargs:

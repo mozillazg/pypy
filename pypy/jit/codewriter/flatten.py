@@ -1,5 +1,6 @@
 from pypy.objspace.flow.model import Variable, Constant, c_last_exception
-from pypy.jit.metainterp.history import AbstractDescr, getkind
+from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.resoperation import getkind
 from pypy.rpython.lltypesystem import lltype
 
 

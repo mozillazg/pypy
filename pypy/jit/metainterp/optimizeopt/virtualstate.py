@@ -285,7 +285,8 @@ class VArrayStructStateInfo(AbstractVirtualStateInfo):
 
 
 class NotVirtualStateInfo(AbstractVirtualStateInfo):
-    def __init__(self, value):
+    def __init__(self, value, is_opaque=False):
+        self.is_opaque = is_opaque
         self.known_class = value.known_class
         self.level = value.level
         if value.intbound is None:
@@ -353,6 +354,9 @@ class NotVirtualStateInfo(AbstractVirtualStateInfo):
 
         if self.lenbound or other.lenbound:
             raise InvalidLoop('The array length bounds does not match.')
+
+        if self.is_opaque:
+            raise InvalidLoop('Generating guards for opaque pointers is not safe')
 
         if self.level == LEVEL_KNOWNCLASS and \
            box.nonnull() and \
@@ -557,7 +561,8 @@ class VirtualStateAdder(resume.ResumeDataVirtualAdder):
         return VirtualState([self.state(box) for box in jump_args])
 
     def make_not_virtual(self, value):
-        return NotVirtualStateInfo(value)
+        is_opaque = value in self.optimizer.opaque_pointers
+        return NotVirtualStateInfo(value, is_opaque)
 
     def make_virtual(self, known_class, fielddescrs):
         return VirtualStateInfo(known_class, fielddescrs)
@@ -582,6 +587,7 @@ class ShortBoxes(object):
         self.rename = {}
         self.optimizer = optimizer
         self.availible_boxes = availible_boxes
+        self.assumed_classes = {}
 
         if surviving_boxes is not None:
             for box in surviving_boxes:
@@ -675,6 +681,12 @@ class ShortBoxes(object):
             raise BoxNotProducable
 
     def add_potential(self, op, synthetic=False):
+        if op.result and op.result in self.optimizer.values:
+            value = self.optimizer.values[op.result]
+            if value in self.optimizer.opaque_pointers:
+                classbox = value.get_constant_class(self.optimizer.cpu)
+                if classbox:
+                    self.assumed_classes[op.result] = classbox
         if op.result not in self.potential_ops:
             self.potential_ops[op.result] = op
         else:
