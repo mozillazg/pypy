@@ -787,17 +787,18 @@ class Frame(object):
     # ----------
     # delegating to the builtins do_xxx() (done automatically for simple cases)
 
-    def op_getarrayitem_gc(self, arraydescr, array, index):
-        if arraydescr.typeinfo == REF:
-            return do_getarrayitem_gc_ptr(array, index)
-        elif arraydescr.typeinfo == INT:
-            return do_getarrayitem_gc_int(array, index)
-        elif arraydescr.typeinfo == FLOAT:
-            return do_getarrayitem_gc_float(array, index)
-        else:
-            raise NotImplementedError
+    def op_getarrayitem_gc_i(self, arraydescr, array, index):
+        return do_getarrayitem_gc_int(array, index)
 
-    op_getarrayitem_gc_pure = op_getarrayitem_gc
+    def op_getarrayitem_gc_p(self, arraydescr, array, index):
+        return do_getarrayitem_gc_ptr(array, index)
+
+    def op_getarrayitem_gc_f(self, arraydescr, array, index):
+        return do_getarrayitem_gc_float(array, index)
+
+    op_getarrayitem_gc_pure_i = op_getarrayitem_gc_i
+    op_getarrayitem_gc_pure_f = op_getarrayitem_gc_f
+    op_getarrayitem_gc_pure_p = op_getarrayitem_gc_p
 
     def op_getarrayitem_raw(self, arraydescr, array, index):
         if arraydescr.typeinfo == REF:
@@ -887,15 +888,14 @@ class Frame(object):
         else:
             raise NotImplementedError
 
-    def op_getinteriorfield_gc(self, descr, array, index):
-        if descr.typeinfo == REF:
-            return do_getinteriorfield_gc_ptr(array, index, descr.ofs)
-        elif descr.typeinfo == INT:
-            return do_getinteriorfield_gc_int(array, index, descr.ofs)
-        elif descr.typeinfo == FLOAT:
-            return do_getinteriorfield_gc_float(array, index, descr.ofs)
-        else:
-            raise NotImplementedError
+    def op_getinteriorfield_gc_i(self, descr, array, index):
+        return do_getinteriorfield_gc_int(array, index, descr.ofs)
+
+    def op_getinteriorfield_gc_p(self, descr, array, index):
+        return do_getinteriorfield_gc_ptr(array, index, descr.ofs)
+
+    def op_getinteriorfield_gc_f(self, descr, array, index):
+        return do_getinteriorfield_gc_float(array, index, descr.ofs)
 
     def op_getinteriorfield_raw(self, descr, array, index):
         if descr.typeinfo == REF:
@@ -1426,8 +1426,10 @@ class GuardFailed(Exception):
 # ____________________________________________________________
 
 
-def do_same_as(x):
+def do_same_as_i(x):
     return x
+do_same_as_p = do_same_as_i
+do_same_as_f = do_same_as_i
 
 def do_arraylen_gc(arraydescr, array):
     array = array._obj.container

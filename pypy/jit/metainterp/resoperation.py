@@ -25,8 +25,7 @@ def create_resop_dispatch(opnum, result, args, descr=None):
     elif cls.NUMARGS == 2:
         return create_resop_2(opnum, result, args[0], args[1], descr)
     elif cls.NUMARGS == 3:
-        return create_resop_1(opnum, result, args[0], args[1], args[2],
-                              args[3], descr)
+        return create_resop_3(opnum, result, args[0], args[1], args[2], descr)
     else:
         return create_resop(opnum, result, args, descr)
 
@@ -67,7 +66,8 @@ def create_resop_0(opnum, result, descr=None):
 def create_resop_1(opnum, result, arg0, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == 1
-    if cls.is_always_pure():
+    if (cls.is_always_pure() and
+        opnum not in (rop.SAME_AS_i, rop.SAME_AS_f, rop.SAME_AS_p)):
         if arg0.is_constant():
             return cls.wrap_constant(result)
     if result is None:
