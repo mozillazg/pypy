@@ -3,13 +3,12 @@ from pypy.rlib.objectmodel import instantiate
 from pypy.jit.metainterp.optimizeopt.test.test_util import (
     LLtypeMixin, BaseTest, FakeMetaInterpStaticData, convert_old_style_to_targets)
 from pypy.jit.metainterp.history import TargetToken, JitCellToken
-from pypy.jit.metainterp.test.test_compile import FakeLogger
 import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.history import ConstInt, BoxInt, get_const_ptr_for_string
+from pypy.jit.metainterp.history import BoxInt, get_const_ptr_for_string
 from pypy.jit.metainterp import executor, compile, resume
-from pypy.jit.metainterp.resoperation import rop, opname
+from pypy.jit.metainterp.resoperation import rop, opname, ConstInt
 from pypy.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():
