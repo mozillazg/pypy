@@ -4,10 +4,12 @@ from pypy.annotation import model as annmodel
 from pypy.objspace.flow.operation import op_appendices
 from pypy.rpython.lltypesystem.lltype import Signed, Unsigned, Bool, Float, \
      Void, Char, UniChar, malloc, pyobjectptr, UnsignedLongLong, \
-     SignedLongLong, build_number, Number, cast_primitive, typeOf
+     SignedLongLong, build_number, Number, cast_primitive, typeOf, \
+     SignedLongLongLong
 from pypy.rpython.rmodel import IntegerRepr, inputconst
 from pypy.rpython.robject import PyObjRepr, pyobj_repr
-from pypy.rlib.rarithmetic import intmask, r_int, r_uint, r_ulonglong, r_longlong
+from pypy.rlib.rarithmetic import intmask, r_int, r_uint, r_ulonglong, \
+     r_longlong, is_emulated_long
 from pypy.rpython.error import TyperError, MissingRTypeOperation
 from pypy.rpython.rmodel import log
 from pypy.rlib import objectmodel
@@ -31,9 +33,9 @@ class __extend__(annmodel.SomeInteger):
 
 signed_repr = getintegerrepr(Signed, 'int_')
 signedlonglong_repr = getintegerrepr(SignedLongLong, 'llong_')
+signedlonglonglong_repr = getintegerrepr(SignedLongLongLong, 'lllong_')
 unsigned_repr = getintegerrepr(Unsigned, 'uint_')
 unsignedlonglong_repr = getintegerrepr(UnsignedLongLong, 'ullong_')
-
 
 class __extend__(pairtype(IntegerRepr, IntegerRepr)):
 
@@ -309,6 +311,8 @@ class __extend__(IntegerRepr):
         if hop.has_implicit_exception(ValueError):
             hop.exception_is_here()
             hop.gendirectcall(ll_check_chr, vlist[0])
+        else:
+            hop.exception_cannot_occur()
         return hop.genop('cast_int_to_char', vlist, resulttype=Char)
 
     def rtype_unichr(_, hop):
@@ -316,6 +320,8 @@ class __extend__(IntegerRepr):
         if hop.has_implicit_exception(ValueError):
             hop.exception_is_here()
             hop.gendirectcall(ll_check_unichr, vlist[0])
+        else:
+            hop.exception_cannot_occur()
         return hop.genop('cast_int_to_unichar', vlist, resulttype=UniChar)
 
     def rtype_is_true(self, hop):
@@ -437,6 +443,11 @@ py_to_ll_conversion_functions = {
     Unsigned: ('RPyLong_AsUnsignedLong', lambda pyo: r_uint(pyo._obj.value)),
     Signed: ('PyInt_AsLong', lambda pyo: int(pyo._obj.value))
 }
+if is_emulated_long: # win64
+    py_to_ll_conversion_functions.update( {
+        Unsigned: ('RPyLong_AsUnsignedLongLong', lambda pyo: r_ulonglong(pyo._obj.value)),
+        Signed: ('RPyLong_AsLongLong', lambda pyo: r_longlong(pyo._obj.value)),
+    } )    
 
 ll_to_py_conversion_functions = {
     UnsignedLongLong: ('PyLong_FromUnsignedLongLong', lambda i: pyobjectptr(i)),
@@ -444,6 +455,11 @@ ll_to_py_conversion_functions = {
     Unsigned: ('PyLong_FromUnsignedLong', lambda i: pyobjectptr(i)),
     Signed: ('PyInt_FromLong', lambda i: pyobjectptr(i)),
 }
+if is_emulated_long: # win64
+    ll_to_py_conversion_functions.update( {
+        Unsigned: ('PyLong_FromUnsignedLongLong', lambda i: pyobjectptr(i)),
+        Signed: ('PyLong_FromLongLong', lambda i: pyobjectptr(i)),
+    } )
     
 
 class __extend__(pairtype(PyObjRepr, IntegerRepr)):

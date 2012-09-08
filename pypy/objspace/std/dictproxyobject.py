@@ -1,6 +1,6 @@
 from pypy.objspace.std.model import registerimplementation, W_Object
 from pypy.objspace.std.register_all import register_all
-from pypy.objspace.std.dictmultiobject import W_DictMultiObject, IteratorImplementation
+from pypy.objspace.std.dictmultiobject import W_DictMultiObject, create_iterator_classes
 from pypy.objspace.std.dictmultiobject import DictStrategy
 from pypy.objspace.std.typeobject import unwrap_cell
 from pypy.interpreter.error import OperationError, operationerrfmt
@@ -20,7 +20,17 @@ class DictProxyStrategy(DictStrategy):
     def getitem(self, w_dict, w_key):
         space = self.space
         w_lookup_type = space.type(w_key)
-        if space.is_w(w_lookup_type, space.w_str):
+        if (space.is_w(w_lookup_type, space.w_str) or  # Most common path first
+            space.abstract_issubclass_w(w_lookup_type, space.w_str)):
+            return self.getitem_str(w_dict, space.str_w(w_key))
+        elif space.abstract_issubclass_w(w_lookup_type, space.w_unicode):
+            try:
+                w_key = space.str(w_key)
+            except OperationError, e:
+                if not e.match(space, space.w_UnicodeEncodeError):
+                    raise
+                # non-ascii unicode is never equal to a byte string
+                return None
             return self.getitem_str(w_dict, space.str_w(w_key))
         else:
             return None
@@ -71,12 +81,9 @@ class DictProxyStrategy(DictStrategy):
     def length(self, w_dict):
         return len(self.unerase(w_dict.dstorage).dict_w)
 
-    def iter(self, w_dict):
-        return DictProxyIteratorImplementation(self.space, self, w_dict)
-
     def keys(self, w_dict):
         space = self.space
-        return [space.wrap(key) for key in self.unerase(w_dict.dstorage).dict_w.iterkeys()]
+        return space.newlist_str(self.unerase(w_dict.dstorage).dict_w.keys())
 
     def values(self, w_dict):
         return [unwrap_cell(self.space, w_value) for w_value in self.unerase(w_dict.dstorage).dict_w.itervalues()]
@@ -96,14 +103,15 @@ class DictProxyStrategy(DictStrategy):
         w_type.dict_w.clear()
         w_type.mutated(None)
 
-class DictProxyIteratorImplementation(IteratorImplementation):
-    def __init__(self, space, strategy, dictimplementation):
-        IteratorImplementation.__init__(self, space, dictimplementation)
-        w_type = strategy.unerase(dictimplementation.dstorage)
-        self.iterator = w_type.dict_w.iteritems()
+    def getiterkeys(self, w_dict):
+        return self.unerase(w_dict.dstorage).dict_w.iterkeys()
+    def getitervalues(self, w_dict):
+        return self.unerase(w_dict.dstorage).dict_w.itervalues()
+    def getiteritems(self, w_dict):
+        return self.unerase(w_dict.dstorage).dict_w.iteritems()
+    def wrapkey(space, key):
+        return space.wrap(key)
+    def wrapvalue(space, value):
+        return unwrap_cell(space, value)
 
-    def next_entry(self):
-        for key, w_value in self.iterator:
-            return (self.space.wrap(key), unwrap_cell(self.space, w_value))
-        else:
-            return (None, None)
+create_iterator_classes(DictProxyStrategy)

@@ -138,8 +138,8 @@ class MallocNonMovingEntry(ExtRegistryEntry):
         return hop.genop(opname, vlist, resulttype = hop.r_result.lowleveltype)
 
 @jit.oopspec('list.ll_arraycopy(source, dest, source_start, dest_start, length)')
-@specialize.ll()
 @enforceargs(None, None, int, int, int)
+@specialize.ll()
 def ll_arraycopy(source, dest, source_start, dest_start, length):
     from pypy.rpython.lltypesystem.lloperation import llop
     from pypy.rlib.objectmodel import keepalive_until_here
@@ -382,6 +382,7 @@ class Entry(ExtRegistryEntry):
     def compute_result_annotation(self):
         return s_list_of_gcrefs()
     def specialize_call(self, hop):
+        hop.exception_cannot_occur()
         return hop.genop('gc_get_rpy_roots', [], resulttype = hop.r_result)
 
 class Entry(ExtRegistryEntry):
@@ -392,6 +393,7 @@ class Entry(ExtRegistryEntry):
         return s_list_of_gcrefs()
     def specialize_call(self, hop):
         vlist = hop.inputargs(hop.args_r[0])
+        hop.exception_cannot_occur()
         return hop.genop('gc_get_rpy_referents', vlist,
                          resulttype = hop.r_result)
 
@@ -402,6 +404,7 @@ class Entry(ExtRegistryEntry):
         return annmodel.SomeInteger()
     def specialize_call(self, hop):
         vlist = hop.inputargs(hop.args_r[0])
+        hop.exception_cannot_occur()
         return hop.genop('gc_get_rpy_memory_usage', vlist,
                          resulttype = hop.r_result)
 
@@ -412,6 +415,7 @@ class Entry(ExtRegistryEntry):
         return annmodel.SomeInteger()
     def specialize_call(self, hop):
         vlist = hop.inputargs(hop.args_r[0])
+        hop.exception_cannot_occur()
         return hop.genop('gc_get_rpy_type_index', vlist,
                          resulttype = hop.r_result)
 
@@ -430,6 +434,7 @@ class Entry(ExtRegistryEntry):
         return annmodel.SomeBool()
     def specialize_call(self, hop):
         vlist = hop.inputargs(hop.args_r[0])
+        hop.exception_cannot_occur()
         return hop.genop('gc_is_rpy_instance', vlist,
                          resulttype = hop.r_result)
 
@@ -449,6 +454,7 @@ class Entry(ExtRegistryEntry):
         classrepr = getclassrepr(hop.rtyper, classdef)
         vtable = classrepr.getvtable()
         assert lltype.typeOf(vtable) == rclass.CLASSTYPE
+        hop.exception_cannot_occur()
         return Constant(vtable, concretetype=rclass.CLASSTYPE)
 
 class Entry(ExtRegistryEntry):
@@ -469,3 +475,6 @@ class Entry(ExtRegistryEntry):
     def specialize_call(self, hop):
         hop.exception_is_here()
         return hop.genop('gc_typeids_z', [], resulttype = hop.r_result)
+
+def lltype_is_gc(TP):
+    return getattr(getattr(TP, "TO", None), "_gckind", "?") == 'gc'

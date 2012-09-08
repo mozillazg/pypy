@@ -1,6 +1,6 @@
 from pypy.objspace.flow.model import FunctionGraph, Constant, Variable, c_last_exception
-from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong
-from pypy.rlib.rarithmetic import r_ulonglong
+from pypy.rlib.rarithmetic import intmask, r_uint, ovfcheck, r_longlong, r_longlonglong
+from pypy.rlib.rarithmetic import r_ulonglong, is_valid_int
 from pypy.rpython.lltypesystem import lltype, llmemory, lloperation, llheap
 from pypy.rpython.lltypesystem import rclass
 from pypy.rpython.ootypesystem import ootype
@@ -152,7 +152,8 @@ class LLInterpreter(object):
             etype = frame.op_direct_call(exdata.fn_type_of_exc_inst, evalue)
             if etype == klass:
                 return cls
-        raise ValueError, "couldn't match exception"
+        raise ValueError("couldn't match exception, maybe it"
+                      " has RPython attributes like OSError?")
 
     def get_transformed_exc_data(self, graph):
         if hasattr(graph, 'exceptiontransformed'):
@@ -770,6 +771,10 @@ class LLFrame(object):
         checkadr(adr)
         return llmemory.cast_adr_to_int(adr, mode)
 
+    def op_convert_float_bytes_to_longlong(self, f):
+        from pypy.rlib import longlong2float
+        return longlong2float.float2longlong(f)
+
     def op_weakref_create(self, v_obj):
         def objgetter():    # special support for gcwrapper.py
             return self.getval(v_obj)
@@ -996,16 +1001,33 @@ class LLFrame(object):
 
     op_raw_memmove = op_raw_memcopy # this is essentially the same here
 
-    def op_raw_load(self, addr, typ, offset):
+    def op_raw_load(self, RESTYPE, addr, offset):
         checkadr(addr)
-        value = getattr(addr, str(typ).lower())[offset]
-        assert lltype.typeOf(value) == typ
+        if isinstance(offset, int):
+            from pypy.rpython.lltypesystem import rffi
+            ll_p = rffi.cast(rffi.CCHARP, addr)
+            ll_p = rffi.cast(rffi.CArrayPtr(RESTYPE),
+                             rffi.ptradd(ll_p, offset))
+            value = ll_p[0]
+        else:
+            assert offset.TYPE == RESTYPE
+            value = getattr(addr, str(RESTYPE).lower())[offset.repeat]
+        assert lltype.typeOf(value) == RESTYPE
         return value
+    op_raw_load.need_result_type = True
 
-    def op_raw_store(self, addr, typ, offset, value):
+    def op_raw_store(self, addr, offset, value):
         checkadr(addr)
-        assert lltype.typeOf(value) == typ
-        getattr(addr, str(typ).lower())[offset] = value
+        ARGTYPE = lltype.typeOf(value)
+        if isinstance(offset, int):
+            from pypy.rpython.lltypesystem import rffi
+            ll_p = rffi.cast(rffi.CCHARP, addr)
+            ll_p = rffi.cast(rffi.CArrayPtr(ARGTYPE),
+                             rffi.ptradd(ll_p, offset))
+            ll_p[0] = value
+        else:
+            assert offset.TYPE == ARGTYPE
+            getattr(addr, str(ARGTYPE).lower())[offset.repeat] = value
 
     def op_stack_malloc(self, size): # mmh
         raise NotImplementedError("backend only")
@@ -1021,22 +1043,22 @@ class LLFrame(object):
     # Overflow-detecting variants
 
     def op_int_neg_ovf(self, x):
-        assert type(x) is int
+        assert is_valid_int(x)
         try:
             return ovfcheck(-x)
         except OverflowError:
             self.make_llexception()
 
     def op_int_abs_ovf(self, x):
-        assert type(x) is int
+        assert is_valid_int(x)
         try:
             return ovfcheck(abs(x))
         except OverflowError:
             self.make_llexception()
 
     def op_int_lshift_ovf(self, x, y):
-        assert isinstance(x, int)
-        assert isinstance(y, int)
+        assert is_valid_int(x)
+        assert is_valid_int(y)
         try:
             return ovfcheck(x << y)
         except OverflowError:
@@ -1060,7 +1082,9 @@ class LLFrame(object):
                 return r
                 '''%locals()
         elif operator == '%':
-            code = '''r = %(checkfn)s(x %% y)
+            ## overflow check on % does not work with emulated int
+            code = '''%(checkfn)s(x // y)
+                r = x %% y
                 if x^y < 0 and x%%y != 0:
                     r -= y
                 return r
@@ -1077,15 +1101,15 @@ class LLFrame(object):
                 self.make_llexception()
         """ % locals()).compile() in globals(), d
 
-    _makefunc2('op_int_add_ovf', '+', '(int, llmemory.AddressOffset)')
-    _makefunc2('op_int_mul_ovf', '*', '(int, llmemory.AddressOffset)', 'int')
-    _makefunc2('op_int_sub_ovf',          '-',  'int')
-    _makefunc2('op_int_floordiv_ovf',     '//', 'int')  # XXX negative args
-    _makefunc2('op_int_floordiv_zer',     '//', 'int')  # can get off-by-one
-    _makefunc2('op_int_floordiv_ovf_zer', '//', 'int')  # (see op_int_floordiv)
-    _makefunc2('op_int_mod_ovf',          '%',  'int')
-    _makefunc2('op_int_mod_zer',          '%',  'int')
-    _makefunc2('op_int_mod_ovf_zer',      '%',  'int')
+    _makefunc2('op_int_add_ovf', '+', '(int, long, llmemory.AddressOffset)')
+    _makefunc2('op_int_mul_ovf', '*', '(int, long, llmemory.AddressOffset)', '(int, long)')
+    _makefunc2('op_int_sub_ovf',          '-',  '(int, long)')
+    _makefunc2('op_int_floordiv_ovf',     '//', '(int, long)')  # XXX negative args
+    _makefunc2('op_int_floordiv_zer',     '//', '(int, long)')  # can get off-by-one
+    _makefunc2('op_int_floordiv_ovf_zer', '//', '(int, long)')  # (see op_int_floordiv)
+    _makefunc2('op_int_mod_ovf',          '%',  '(int, long)')
+    _makefunc2('op_int_mod_zer',          '%',  '(int, long)')
+    _makefunc2('op_int_mod_ovf_zer',      '%',  '(int, long)')
 
     _makefunc2('op_uint_floordiv_zer',    '//', 'r_uint')
     _makefunc2('op_uint_mod_zer',         '%',  'r_uint')
@@ -1096,6 +1120,9 @@ class LLFrame(object):
     _makefunc2('op_ullong_floordiv_zer',  '//', 'r_ulonglong')
     _makefunc2('op_ullong_mod_zer',       '%',  'r_ulonglong')
 
+    _makefunc2('op_lllong_floordiv_zer',   '//', 'r_longlonglong')
+    _makefunc2('op_lllong_mod_zer',        '%',  'r_longlonglong')
+    
     def op_int_add_nonneg_ovf(self, x, y):
         if isinstance(y, int):
             assert y >= 0
@@ -1107,7 +1134,7 @@ class LLFrame(object):
             x = x.default
         # if type(x) is a subclass of Symbolic, bool(x) will usually raise
         # a TypeError -- unless __nonzero__ has been explicitly overridden.
-        assert isinstance(x, (int, Symbolic))
+        assert is_valid_int(x) or isinstance(x, Symbolic)
         return bool(x)
 
     # hack for jit.codegen.llgraph
@@ -1129,7 +1156,7 @@ class LLFrame(object):
         
     def op_oonewarray(self, ARRAY, length):
         assert isinstance(ARRAY, ootype.Array)
-        assert isinstance(length, int)
+        assert is_valid_int(length)
         return ootype.oonewarray(ARRAY, length)
 
     def op_runtimenew(self, class_):

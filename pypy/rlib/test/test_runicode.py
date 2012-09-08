@@ -209,12 +209,19 @@ class TestDecoding(UnicodeTests):
         u = u'\U000abcde'
         assert encode(u, len(u), None) == '+2m/c3g-'
         decode = self.getdecoder('utf-7')
-        s = '+3ADYAA-'
-        raises(UnicodeError, decode, s, len(s), None)
-        def replace_handler(errors, codec, message, input, start, end):
-            return u'?', end
-        assert decode(s, len(s), None, final=True,
-                      errorhandler = replace_handler) == (u'??', len(s))
+
+        # Unpaired surrogates are passed through
+        assert encode(u'\uD801', 1, None) == '+2AE-'
+        assert encode(u'\uD801x', 2, None) == '+2AE-x'
+        assert encode(u'\uDC01', 1, None) == '+3AE-'
+        assert encode(u'\uDC01x', 2, None) == '+3AE-x'
+        assert decode('+2AE-', 5, None) == (u'\uD801', 5)
+        assert decode('+2AE-x', 6, None) == (u'\uD801x', 6)
+        assert decode('+3AE-', 5, None) == (u'\uDC01', 5)
+        assert decode('+3AE-x', 6, None) == (u'\uDC01x', 6)
+
+        assert encode(u'\uD801\U000abcde', 2, None) == '+2AHab9ze-'
+        assert decode('+2AHab9ze-', 10, None) == (u'\uD801\U000abcde', 10)
 
 
 class TestUTF8Decoding(UnicodeTests):
@@ -628,8 +635,13 @@ class TestUTF8Decoding(UnicodeTests):
             assert decoder(seq, len(seq), None, final=True,
                            errorhandler=self.ignore_handler) == (res, len(seq))
 
-
 class TestEncoding(UnicodeTests):
+    def replace_handler(self, errors, codec, message, input, start, end):
+        if errors=='strict':
+            runicode.raise_unicode_exception_encode(errors, codec, message,
+                                                    input, start, end)
+        return u'?', end
+
     def test_all_ascii(self):
         for i in range(128):
             if sys.version >= "2.7":
@@ -701,6 +713,12 @@ class TestEncoding(UnicodeTests):
         self.checkencode(u"\N{GREEK CAPITAL LETTER PHI}", "mbcs") # a F
         self.checkencode(u"\N{GREEK CAPITAL LETTER PSI}", "mbcs") # a ?
 
+    def test_encode_decimal(self):
+        encoder = self.getencoder('decimal')
+        assert encoder(u' 12, 34 ', 8, None) == ' 12, 34 '
+        raises(UnicodeEncodeError, encoder, u' 12, \u1234 ', 7, None)
+        assert encoder(u'u\u1234', 2, 'replace', self.replace_handler) == 'u?'
+
 class TestTranslation(object):
     def setup_class(cls):
         if runicode.MAXUNICODE != sys.maxunicode:
@@ -728,3 +746,18 @@ class TestTranslation(object):
 
         res = interpret(f, [0x10140])
         assert res == 0x10140
+
+    def test_encode_surrogate_pair(self):
+        u = runicode.UNICHR(0xD800) + runicode.UNICHR(0xDC00)
+        if runicode.MAXUNICODE < 65536:
+            # Narrow unicode build, consider utf16 surrogate pairs
+            assert runicode.unicode_encode_unicode_escape(
+                u, len(u), True) == r'\U00010000'
+            assert runicode.unicode_encode_raw_unicode_escape(
+                u, len(u), True) == r'\U00010000'
+        else:
+            # Wide unicode build, don't merge utf16 surrogate pairs
+            assert runicode.unicode_encode_unicode_escape(
+                u, len(u), True) == r'\ud800\udc00'
+            assert runicode.unicode_encode_raw_unicode_escape(
+                u, len(u), True) == r'\ud800\udc00'

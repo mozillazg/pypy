@@ -658,7 +658,7 @@ class AppTest_Descroperation:
         class X(object):
             def __len__(self): return 1L
             __nonzero__ = __len__
-        assert X()
+        raises(TypeError, bool, X())  # must return bool or int, not long
         del X.__nonzero__
         assert X()
 
@@ -668,6 +668,7 @@ class AppTest_Descroperation:
             def __len__(self):
                 return sys.maxsize + 1
         raises(OverflowError, len, X())
+        raises(OverflowError, bool, X())
 
     def test_len_underflow(self):
         import sys
@@ -675,10 +676,12 @@ class AppTest_Descroperation:
             def __len__(self):
                 return -1
         raises(ValueError, len, X())
+        raises(ValueError, bool, X())
         class Y(object):
             def __len__(self):
                 return -1L
         raises(ValueError, len, Y())
+        raises(ValueError, bool, Y())
 
     def test_len_custom__int__(self):
         class X(object):
@@ -691,8 +694,38 @@ class AppTest_Descroperation:
 
         l = len(X(3.0))
         assert l == 3 and type(l) is int
+        assert X(3.0)
+        assert not X(0.0)
         l = len(X(X(2)))
         assert l == 2 and type(l) is int
+        assert X(X(2))
+        assert not X(X(0))
+
+    def test_bool___contains__(self):
+        class X(object):
+            def __contains__(self, item):
+                if item == 'foo':
+                    return 42
+                else:
+                    return 'hello world'
+        x = X()
+        res = 'foo' in x
+        assert res is True
+        res = 'bar' in x
+        assert res is True
+        #
+        class MyError(Exception):
+            pass
+        class CannotConvertToBool(object):
+            def __nonzero__(self):
+                raise MyError
+        class X(object):
+            def __contains__(self, item):
+                return CannotConvertToBool()
+        x = X()
+        raises(MyError, "'foo' in x")
+        
+            
 
 class AppTestWithBuiltinShortcut(AppTest_Descroperation):
     OPTIONS = {'objspace.std.builtinshortcut': True}

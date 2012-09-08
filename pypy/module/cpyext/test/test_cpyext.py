@@ -35,8 +35,8 @@ class TestApi:
 
 class AppTestApi:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi'])
-        from pypy.rlib.libffi import get_libc_name
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi', 'array'])
+        from pypy.rlib.clibffi import get_libc_name
         cls.w_libc = cls.space.wrap(get_libc_name())
 
     def test_load_error(self):
@@ -106,10 +106,7 @@ class LeakCheckingTest(object):
             del obj
         import gc; gc.collect()
 
-        try:
-            del space.getexecutioncontext().cpyext_threadstate
-        except AttributeError:
-            pass
+        space.getexecutioncontext().cleanup_cpyext_state()
 
         for w_obj in state.non_heaptypes_w:
             Py_DecRef(space, w_obj)
@@ -168,8 +165,9 @@ class LeakCheckingTest(object):
         return leaking
 
 class AppTestCpythonExtensionBase(LeakCheckingTest):
+    
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi'])
+        cls.space = gettestobjspace(usemodules=['cpyext', 'thread', '_rawffi', 'array'])
         cls.space.getbuiltinmodule("cpyext")
         from pypy.module.imp.importing import importhook
         importhook(cls.space, "os") # warm up reference counts

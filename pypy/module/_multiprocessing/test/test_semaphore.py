@@ -2,6 +2,7 @@ from pypy.conftest import gettestobjspace
 from pypy.module._multiprocessing.interp_semaphore import (
     RECURSIVE_MUTEX, SEMAPHORE)
 
+
 class AppTestSemaphore:
     def setup_class(cls):
         space = gettestobjspace(usemodules=('_multiprocessing', 'thread'))
@@ -17,6 +18,8 @@ class AppTestSemaphore:
         kind = self.SEMAPHORE
         value = 1
         maxvalue = 1
+        # the following line gets OSError: [Errno 38] Function not implemented
+        # if /dev/shm is not mounted on Linux
         sem = SemLock(kind, value, maxvalue)
         assert sem.kind == kind
         assert sem.maxvalue == maxvalue
@@ -48,6 +51,8 @@ class AppTestSemaphore:
         kind = self.RECURSIVE
         value = 1
         maxvalue = 1
+        # the following line gets OSError: [Errno 38] Function not implemented
+        # if /dev/shm is not mounted on Linux
         sem = SemLock(kind, value, maxvalue)
 
         sem.acquire()

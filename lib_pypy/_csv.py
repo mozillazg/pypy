@@ -414,7 +414,7 @@ class Reader(object):
 
     def _parse_add_char(self, c):
         if len(self.field) + len(c) > _field_limit:
-            raise Error("field larget than field limit (%d)" % (_field_limit))
+            raise Error("field larger than field limit (%d)" % (_field_limit))
         self.field += c
         
 
@@ -504,9 +504,12 @@ class Writer(object):
                 quoted = True
 
             if field is None:
-                self._join_append("", quoted, rowlen == 1)
+                value = ""
+            elif isinstance(field, float):
+                value = repr(field)
             else:
-                self._join_append(str(field), quoted, rowlen == 1)
+                value = str(field)
+            self._join_append(value, quoted, rowlen == 1)
 
         # add line terminator
         self.rec.append(dialect.lineterminator)
