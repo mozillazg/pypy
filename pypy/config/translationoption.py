@@ -24,6 +24,7 @@ PLATFORMS = [
     'maemo',
     'host',
     'distutils',
+    'arm',
 ]
 
 translation_optiondescription = OptionDescription(
@@ -117,13 +118,11 @@ translation_optiondescription = OptionDescription(
                          ("translation.gcrootfinder", DEFL_ROOTFINDER_WITHJIT),
                          ("translation.list_comprehension_operations", True)]),
     ChoiceOption("jit_backend", "choose the backend for the JIT",
-                 ["auto", "x86", "x86-without-sse2", "llvm"],
+                 ["auto", "x86", "x86-without-sse2", "llvm", 'arm'],
                  default="auto", cmdline="--jit-backend"),
     ChoiceOption("jit_profiler", "integrate profiler support into the JIT",
                  ["off", "oprofile"],
                  default="off"),
-    # jit_ffi is automatically turned on by withmod-_ffi (which is enabled by default)
-    BoolOption("jit_ffi", "optimize libffi calls", default=False, cmdline=None),
     BoolOption("check_str_without_nul",
                "Forbid NUL chars in strings in some external function calls",
                default=False, cmdline=None),
@@ -182,11 +181,6 @@ translation_optiondescription = OptionDescription(
 
     # Flags of the TranslationContext:
     BoolOption("simplifying", "Simplify flow graphs", default=True),
-    BoolOption("builtins_can_raise_exceptions",
-               "When true, assume any call to a 'simple' builtin such as "
-               "'hex' can raise an arbitrary exception",
-               default=False,
-               cmdline=None),
     BoolOption("list_comprehension_operations",
                "When true, look for and special-case the sequence of "
                "operations that results from a list comprehension and "
@@ -413,7 +407,7 @@ def set_platform(config):
     set_platform(config.translation.platform, config.translation.cc)
 
 def get_platform(config):
-    from pypy.translator.platform import pick_platform    
+    from pypy.translator.platform import pick_platform
     opt = config.translation.platform
     cc = config.translation.cc
     return pick_platform(opt, cc)

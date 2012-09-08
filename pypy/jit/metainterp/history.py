@@ -4,7 +4,8 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
 from pypy.rlib.objectmodel import we_are_translated, Symbolic
 from pypy.rlib.objectmodel import compute_unique_id
-from pypy.rlib.rarithmetic import r_int64
+from pypy.rlib.rarithmetic import r_int64, is_valid_int
+
 from pypy.conftest import option
 
 from pypy.jit.metainterp.resoperation import ResOperation, rop
@@ -38,7 +39,7 @@ def getkind(TYPE, supports_floats=True,
         # XXX fix this for oo...
         if (TYPE != llmemory.Address and
             rffi.sizeof(TYPE) > rffi.sizeof(lltype.Signed)):
-            if supports_longlong:
+            if supports_longlong and TYPE is not lltype.LongFloat:
                 assert rffi.sizeof(TYPE) == 8
                 return 'float'
             raise NotImplementedError("type %s is too large" % TYPE)
@@ -213,7 +214,7 @@ class ConstInt(Const):
 
     def __init__(self, value):
         if not we_are_translated():
-            if isinstance(value, int):
+            if is_valid_int(value):
                 value = int(value)    # bool -> int
             else:
                 assert isinstance(value, Symbolic)
@@ -448,7 +449,7 @@ class BoxInt(Box):
 
     def __init__(self, value=0):
         if not we_are_translated():
-            if isinstance(value, int):
+            if is_valid_int(value):
                 value = int(value)    # bool -> int
             else:
                 assert isinstance(value, Symbolic)
@@ -705,6 +706,7 @@ class TargetToken(AbstractDescr):
 
         self.virtual_state = None
         self.exported_state = None
+        self.short_preamble = None
 
     def repr_of_descr(self):
         return 'TargetToken(%d)' % compute_unique_id(self)

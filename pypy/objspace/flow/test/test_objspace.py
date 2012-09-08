@@ -1,6 +1,6 @@
 from __future__ import with_statement
 import new
-import py
+import py, sys
 from pypy.objspace.flow.model import Constant, Block, Link, Variable
 from pypy.objspace.flow.model import mkentrymap, c_last_exception
 from pypy.interpreter.argument import Arguments
@@ -32,8 +32,8 @@ class Base:
         if conftest.option.view:
             graph.show()
 
-    def setup_class(cls): 
-        cls.space = FlowObjSpace() 
+    def setup_class(cls):
+        cls.space = FlowObjSpace()
 
     def all_operations(self, graph):
         result = {}
@@ -77,7 +77,7 @@ class TestFlowObjSpace(Base):
         if i < 0:
             i = j
         return user_defined_function(i) + 1
-    
+
     def test_ifthenelse(self):
         x = self.codetest(self.ifthenelse)
 
@@ -96,7 +96,7 @@ class TestFlowObjSpace(Base):
     #__________________________________________________________
     def print_(i):
         print i
-    
+
     def test_print(self):
         x = self.codetest(self.print_)
 
@@ -124,7 +124,7 @@ class TestFlowObjSpace(Base):
         if i:
             i = 5
         return i
-    
+
     def test_union_hard(self):
         x = self.codetest(self.union_hard)
 
@@ -135,7 +135,7 @@ class TestFlowObjSpace(Base):
             total += i
             i = i - 1
         return total
-    
+
     def test_while_union(self):
         x = self.codetest(self.while_union)
 
@@ -145,7 +145,7 @@ class TestFlowObjSpace(Base):
         for i in lst:
             total += i
         return total
-    
+
     def test_simple_for(self):
         x = self.codetest(self.simple_for)
 
@@ -311,7 +311,7 @@ class TestFlowObjSpace(Base):
                     else:
                         found[link.exitcase] = None
         assert found == {IndexError: True, KeyError: True, Exception: None}
-    
+
     def reraiseAnything(x):
         try:
             pow(x, 5)
@@ -354,7 +354,7 @@ class TestFlowObjSpace(Base):
     #__________________________________________________________
     def raise1(msg):
         raise IndexError
-    
+
     def test_raise1(self):
         x = self.codetest(self.raise1)
         simplify_graph(x)
@@ -371,7 +371,7 @@ class TestFlowObjSpace(Base):
     #__________________________________________________________
     def raise2(msg):
         raise IndexError, msg
-    
+
     def test_raise2(self):
         x = self.codetest(self.raise2)
         # XXX can't check the shape of the graph, too complicated...
@@ -379,7 +379,7 @@ class TestFlowObjSpace(Base):
     #__________________________________________________________
     def raise3(msg):
         raise IndexError(msg)
-    
+
     def test_raise3(self):
         x = self.codetest(self.raise3)
         # XXX can't check the shape of the graph, too complicated...
@@ -387,7 +387,7 @@ class TestFlowObjSpace(Base):
     #__________________________________________________________
     def raise4(stuff):
         raise stuff
-    
+
     def test_raise4(self):
         x = self.codetest(self.raise4)
 
@@ -405,7 +405,7 @@ class TestFlowObjSpace(Base):
         except IndexError:
             return -1
         return 0
-    
+
     def test_raise_and_catch_1(self):
         x = self.codetest(self.raise_and_catch_1)
 
@@ -416,7 +416,7 @@ class TestFlowObjSpace(Base):
         except IndexError:
             return -1
         return 0
-    
+
     def test_catch_simple_call(self):
         x = self.codetest(self.catch_simple_call)
 
@@ -427,7 +427,7 @@ class TestFlowObjSpace(Base):
         except (IndexError, OSError):
             return -1
         return 0
-    
+
     def test_multiple_catch_simple_call(self):
         graph = self.codetest(self.multiple_catch_simple_call)
         simplify_graph(graph)
@@ -447,7 +447,7 @@ class TestFlowObjSpace(Base):
         del x
         for i in range(10):
             pass
-    
+
     def test_dellocal(self):
         x = self.codetest(self.dellocal)
 
@@ -456,7 +456,7 @@ class TestFlowObjSpace(Base):
         x = DATA['x']
         z = DATA[name]
         return x, z
-    
+
     def test_globalconstdict(self):
         x = self.codetest(self.globalconstdict)
 
@@ -464,12 +464,12 @@ class TestFlowObjSpace(Base):
     def dictliteral(name):
         x = {'x': 1}
         return x
-    
+
     def test_dictliteral(self):
         x = self.codetest(self.dictliteral)
 
     #__________________________________________________________
-    
+
     def specialcases(x):
         operator.lt(x,3)
         operator.le(x,3)
@@ -488,7 +488,7 @@ class TestFlowObjSpace(Base):
         # the following ones are constant-folded
         operator.eq(2,3)
         operator.__gt__(2,3)
-    
+
     def test_specialcases(self):
         x = self.codetest(self.specialcases)
         from pypy.translator.simplify import join_blocks
@@ -701,6 +701,13 @@ class TestFlowObjSpace(Base):
             from pypy import this_does_not_exist
         py.test.raises(ImportError, 'self.codetest(f)')
 
+    def test_relative_import(self):
+        def f():
+            from ..test.test_objspace import FlowObjSpace
+        # Check that the function works in Python
+        assert f() is None
+        self.codetest(f)
+
     def test_mergeable(self):
         def myfunc(x):
             if x:
@@ -765,7 +772,7 @@ class TestFlowObjSpace(Base):
                 raise
         graph = self.codetest(f)
         simplify_graph(graph)
-        assert self.all_operations(graph) == {'getitem_idx': 1}        
+        assert self.all_operations(graph) == {'getitem_idx': 1}
 
         def f(c, x):
             try:
@@ -775,7 +782,7 @@ class TestFlowObjSpace(Base):
         graph = self.codetest(f)
         simplify_graph(graph)
         assert self.all_operations(graph) == {'getitem_key': 1}
-        
+
         def f(c, x):
             try:
                 return c[x]
@@ -794,7 +801,7 @@ class TestFlowObjSpace(Base):
         simplify_graph(graph)
         self.show(graph)
         assert self.all_operations(graph) == {'getitem_idx_key': 1}
-        
+
         def f(c, x):
             try:
                 return c[x]
@@ -812,7 +819,7 @@ class TestFlowObjSpace(Base):
         graph = self.codetest(f)
         simplify_graph(graph)
         assert self.all_operations(graph) == {'getitem_key': 1}
-  
+
         def f(c, x):
             try:
                 return c[x]
@@ -849,16 +856,25 @@ class TestFlowObjSpace(Base):
                         c.co_filename, c.co_name, c.co_firstlineno,
                         c.co_lnotab)
 
+    def patch_opcodes(self, *opcodes):
+        flow_meth_names = flowcontext.FlowSpaceFrame.opcode_method_names
+        pyframe_meth_names = PyFrame.opcode_method_names
+        for name in opcodes:
+            num = bytecode_spec.opmap[name]
+            setattr(self, 'old_' + name, flow_meth_names[num])
+            flow_meth_names[num] = pyframe_meth_names[num]
+
+    def unpatch_opcodes(self, *opcodes):
+        flow_meth_names = flowcontext.FlowSpaceFrame.opcode_method_names
+        for name in opcodes:
+            num = bytecode_spec.opmap[name]
+            flow_meth_names[num] = getattr(self, 'old_' + name)
+
     def test_callmethod_opcode(self):
         """ Tests code generated by pypy-c compiled with CALL_METHOD
         bytecode
         """
-        flow_meth_names = flowcontext.FlowSpaceFrame.opcode_method_names
-        pyframe_meth_names = PyFrame.opcode_method_names
-        for name in ['CALL_METHOD', 'LOOKUP_METHOD']:
-            num = bytecode_spec.opmap[name]
-            locals()['old_' + name] = flow_meth_names[num]
-            flow_meth_names[num] = pyframe_meth_names[num]
+        self.patch_opcodes('CALL_METHOD', 'LOOKUP_METHOD')
         try:
             class X:
                 def m(self):
@@ -878,9 +894,31 @@ class TestFlowObjSpace(Base):
             assert all_ops['simple_call'] == 2
             assert all_ops['getattr'] == 1
         finally:
-            for name in ['CALL_METHOD', 'LOOKUP_METHOD']:
-                num = bytecode_spec.opmap[name]
-                flow_meth_names[num] = locals()['old_' + name]
+            self.unpatch_opcodes('CALL_METHOD', 'LOOKUP_METHOD')
+
+    def test_build_list_from_arg_opcode(self):
+        """ Tests code generated by pypy-c compiled with BUILD_LIST_FROM_ARG
+        bytecode
+        """
+        if sys.version_info < (2, 7):
+            py.test.skip("2.7 only test")
+        self.patch_opcodes('BUILD_LIST_FROM_ARG')
+        try:
+            def f():
+                return [i for i in "abc"]
+
+            # this code is generated by pypy-c when compiling above f
+            pypy_code = 'd\x01\x00\xcb\x00\x00D]\x0c\x00}\x00\x00|\x00\x00^\x02\x00q\x07\x00S'
+            new_c = self.monkey_patch_code(f.func_code, 3, 67, pypy_code, (),
+                                           ('i',))
+            f2 = new.function(new_c, locals(), 'f')
+
+            graph = self.codetest(f2)
+            all_ops = self.all_operations(graph)
+            assert all_ops == {'newlist': 1, 'getattr': 1, 'simple_call': 1,
+                               'iter': 1, 'next': 1}
+        finally:
+            self.unpatch_opcodes('BUILD_LIST_FROM_ARG')
 
     def test_dont_capture_RuntimeError(self):
         class Foo:
@@ -956,71 +994,14 @@ class TestFlowObjSpace(Base):
                 pass
         py.test.raises(error.FlowingError, "self.codetest(f)")
 
-
-class TestFlowObjSpaceDelay(Base):
-    def setup_class(cls):
-        cls.space = FlowObjSpace()
-        cls.space.do_imports_immediately = False
-
-    def test_import_something(self):
+    def test_locals_dict(self):
         def f():
-            from some.unknown.module import stuff
-        g = self.codetest(f)
-
-
-class TestGenInterpStyle(Base):
-    def setup_class(cls):
-        cls.space = FlowObjSpace()
-        cls.space.config.translation.builtins_can_raise_exceptions = True
-
-    def reraiseAttributeError(v):
-        try:
-            x = getattr(v, "y")
-        except AttributeError:
-            raise
-
-    def test_reraiseAttributeError(self):
-        x = self.codetest(self.reraiseAttributeError)
-        simplify_graph(x)
-        self.show(x)
-        excfound = []
-        for link in x.iterlinks():
-            if link.target is x.exceptblock:
-                excfound.append(link.exitcase)
-        assert len(excfound) == 2
-        excfound.sort()
-        expected = [Exception, AttributeError]
-        expected.sort()
-        assert excfound == expected
-
-    def reraiseTypeError(dic):
-        try:
-            x = dic[5]
-        except TypeError:
-            raise
-
-    def test_reraiseTypeError(self):
-        x = self.codetest(self.reraiseTypeError)
-        simplify_graph(x)
-        self.show(x)
-        excfound = []
-        for link in x.iterlinks():
-            if link.target is x.exceptblock:
-                excfound.append(link.exitcase)
-        assert len(excfound) == 2
-        excfound.sort()
-        expected = [Exception, TypeError]
-        expected.sort()
-        assert excfound == expected
-
-    def test_can_catch_special_exceptions(self):
-        def f():
-            try:
-                f()
-            except NotImplementedError:
-                pass
+            x = 5
+            return x
+            exec "None"
         graph = self.codetest(f)
-        # assert did not crash
+        assert len(graph.startblock.exits) == 1
+        assert graph.startblock.exits[0].target == graph.returnblock
 
 
 DATA = {'x': 5,
@@ -1028,14 +1009,3 @@ DATA = {'x': 5,
 
 def user_defined_function():
     pass
-
-
-def test_extract_cell_content():
-    class Strange(object):
-        def __cmp__(self, other):
-            assert False, "should not be called"
-    strange = Strange()
-    def f():
-        return strange
-    res = objspace.extract_cell_content(f.func_closure[0])
-    assert res is strange

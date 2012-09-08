@@ -3,7 +3,7 @@ from pypy.conftest import gettestobjspace
 
 class AppTestHashlib:
     def setup_class(cls):
-        cls.space = gettestobjspace(usemodules=['_hashlib'])
+        cls.space = gettestobjspace(usemodules=['_hashlib', 'array', 'struct'])
 
     def test_simple(self):
         import _hashlib
@@ -20,6 +20,7 @@ class AppTestHashlib:
                                     'sha512': 64,
                                     }.items():
             h = hashlib.new(name)
+            assert h.name == name
             assert h.digest_size == expected_size
             assert h.digestsize == expected_size
             #

@@ -1,13 +1,13 @@
 import py
 from pypy.rlib.rarithmetic import (r_int, r_uint, intmask, r_singlefloat,
-                                   r_ulonglong, r_longlong, r_longfloat,
-                                   base_int, normalizedinttype, longlongmask)
+                                   r_ulonglong, r_longlong, r_longfloat, r_longlonglong,
+                                   base_int, normalizedinttype, longlongmask, longlonglongmask)
 from pypy.rlib.objectmodel import Symbolic
 from pypy.tool.uid import Hashable
 from pypy.tool.identity_dict import identity_dict
 from pypy.tool import leakfinder
 from types import NoneType
-from sys import maxint
+from pypy.rlib.rarithmetic import maxint, is_valid_int, is_emulated_long
 import weakref
 
 class State(object):
@@ -667,6 +667,7 @@ class Number(Primitive):
 
 _numbertypes = {int: Number("Signed", int, intmask)}
 _numbertypes[r_int] = _numbertypes[int]
+_numbertypes[r_longlonglong] = Number("SignedLongLongLong", r_longlonglong, longlonglongmask)
 if r_longlong is not r_int:
     _numbertypes[r_longlong] = Number("SignedLongLong", r_longlong,
                                       longlongmask)
@@ -681,9 +682,15 @@ def build_number(name, type):
     number = _numbertypes[type] = Number(name, type)
     return number
 
+if is_emulated_long:
+    SignedFmt = 'q'
+else:
+    SignedFmt = 'l'
+
 Signed   = build_number("Signed", int)
 Unsigned = build_number("Unsigned", r_uint)
 SignedLongLong = build_number("SignedLongLong", r_longlong)
+SignedLongLongLong = build_number("SignedLongLongLong", r_longlonglong)
 UnsignedLongLong = build_number("UnsignedLongLong", r_ulonglong)
 
 Float       = Primitive("Float",       0.0)                  # C type 'double'
@@ -1162,7 +1169,7 @@ class _abstract_ptr(object):
         try:
             return self._lookup_adtmeth(field_name)
         except AttributeError:
-            raise AttributeError("%r instance has no field %r" % (self._T._name,
+            raise AttributeError("%r instance has no field %r" % (self._T,
                                                                   field_name))
 
     def __setattr__(self, field_name, val):
@@ -1654,7 +1661,7 @@ class _array(_parentable):
     __slots__ = ('items',)
 
     def __init__(self, TYPE, n, initialization=None, parent=None, parentindex=None):
-        if not isinstance(n, int):
+        if not is_valid_int(n):
             raise TypeError, "array length must be an int"
         if n < 0:
             raise ValueError, "negative array length"

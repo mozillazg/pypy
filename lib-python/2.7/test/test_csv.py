@@ -54,8 +54,10 @@ class Test_Csv(unittest.TestCase):
         self.assertEqual(obj.dialect.skipinitialspace, False)
         self.assertEqual(obj.dialect.strict, False)
         # Try deleting or changing attributes (they are read-only)
-        self.assertRaises(TypeError, delattr, obj.dialect, 'delimiter')
-        self.assertRaises(TypeError, setattr, obj.dialect, 'delimiter', ':')
+        self.assertRaises((TypeError, AttributeError), delattr, obj.dialect,
+                          'delimiter')
+        self.assertRaises((TypeError, AttributeError), setattr, obj.dialect,
+                          'delimiter', ':')
         self.assertRaises(AttributeError, delattr, obj.dialect, 'quoting')
         self.assertRaises(AttributeError, setattr, obj.dialect,
                           'quoting', None)
@@ -206,6 +208,18 @@ class Test_Csv(unittest.TestCase):
         finally:
             fileobj.close()
             os.unlink(name)
+
+    def test_write_float(self):
+        # Issue 13573: loss of precision because csv.writer
+        # uses str() for floats instead of repr()
+        orig_row = [1.234567890123, 1.0/7.0, 'abc']
+        f = StringIO()
+        c = csv.writer(f, quoting=csv.QUOTE_NONNUMERIC)
+        c.writerow(orig_row)
+        f.seek(0)
+        c = csv.reader(f, quoting=csv.QUOTE_NONNUMERIC)
+        new_row = next(c)
+        self.assertEqual(orig_row, new_row)
 
     def _read_test(self, input, expect, **kwargs):
         reader = csv.reader(input, **kwargs)
@@ -784,7 +798,7 @@ class TestArrayWrites(unittest.TestCase):
         try:
             writer = csv.writer(fileobj, dialect="excel")
             writer.writerow(a)
-            expected = ",".join([str(i) for i in a])+"\r\n"
+            expected = ",".join([repr(i) for i in a])+"\r\n"
             fileobj.seek(0)
             self.assertEqual(fileobj.read(), expected)
         finally:
@@ -800,7 +814,7 @@ class TestArrayWrites(unittest.TestCase):
         try:
             writer = csv.writer(fileobj, dialect="excel")
             writer.writerow(a)
-            expected = ",".join([str(i) for i in a])+"\r\n"
+            expected = ",".join([repr(i) for i in a])+"\r\n"
             fileobj.seek(0)
             self.assertEqual(fileobj.read(), expected)
         finally:

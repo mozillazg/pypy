@@ -46,6 +46,7 @@ void pypysig_ignore(int signum);  /* signal will be ignored (SIG_IGN) */
 void pypysig_default(int signum); /* signal will do default action (SIG_DFL) */
 void pypysig_setflag(int signum); /* signal will set a flag which can be
                                      queried with pypysig_poll() */
+void pypysig_reinstall(int signum);
 int pypysig_set_wakeup_fd(int fd);
 
 /* utility to poll for signals that arrived */
@@ -54,7 +55,7 @@ int pypysig_poll(void);   /* => signum or -1 */
 /* When a signal is received, pypysig_counter is set to -1. */
 /* This is a struct for the JIT. See interp_signal.py. */
 struct pypysig_long_struct {
-    long value;
+    Signed value;
 };
 extern struct pypysig_long_struct pypysig_counter;
 

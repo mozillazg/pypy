@@ -4,7 +4,7 @@ from pypy.conftest import gettestobjspace
 
 class AppTestCodecs:
     def setup_class(cls):
-        space = gettestobjspace(usemodules=('unicodedata',))
+        space = gettestobjspace(usemodules=('unicodedata', 'struct'))
         cls.space = space
 
     def test_register_noncallable(self):
@@ -585,7 +585,7 @@ class AppTestPartialEvaluation:
             assert exc.end == 3
 
     def test_utf7_surrogate(self):
-        raises(UnicodeDecodeError, '+3ADYAA-'.decode, 'utf-7')
+        assert '+3ADYAA-'.decode('utf-7') == u'\udc00\ud800'
 
     def test_utf_16_encode_decode(self):
         import codecs, sys

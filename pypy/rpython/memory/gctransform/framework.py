@@ -8,7 +8,6 @@ from pypy.rpython.memory.gc import marksweep
 from pypy.rpython.memory.gcheader import GCHeaderBuilder
 from pypy.rlib.rarithmetic import ovfcheck
 from pypy.rlib import rgc
-from pypy.rlib.debug import ll_assert
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.translator.backendopt import graphanalyze
 from pypy.translator.backendopt.support import var_needsgc
@@ -456,13 +455,12 @@ class FrameworkGCTransformer(GCTransformer):
                                             annmodel.SomeAddress()],
                                            annmodel.s_None,
                                            inline=True)
-            func = getattr(gcdata.gc, 'remember_young_pointer', None)
+            func = getattr(gcdata.gc, 'jit_remember_young_pointer', None)
             if func is not None:
                 # func should not be a bound method, but a real function
                 assert isinstance(func, types.FunctionType)
                 self.write_barrier_failing_case_ptr = getfn(func,
-                                               [annmodel.SomeAddress(),
-                                                annmodel.SomeAddress()],
+                                               [annmodel.SomeAddress()],
                                                annmodel.s_None)
             func = getattr(GCClass, 'write_barrier_from_array', None)
             if func is not None:
@@ -473,16 +471,15 @@ class FrameworkGCTransformer(GCTransformer):
                                             annmodel.SomeInteger()],
                                            annmodel.s_None,
                                            inline=True)
-                func = getattr(gcdata.gc, 'remember_young_pointer_from_array3',
+                func = getattr(gcdata.gc,
+                               'jit_remember_young_pointer_from_array',
                                None)
                 if func is not None:
                     # func should not be a bound method, but a real function
                     assert isinstance(func, types.FunctionType)
                     self.write_barrier_from_array_failing_case_ptr = \
                                              getfn(func,
-                                                   [annmodel.SomeAddress(),
-                                                    annmodel.SomeInteger(),
-                                                    annmodel.SomeAddress()],
+                                                   [annmodel.SomeAddress()],
                                                    annmodel.s_None)
         self.statistics_ptr = getfn(GCClass.statistics.im_func,
                                     [s_gc, annmodel.SomeInteger()],
@@ -1227,11 +1224,10 @@ class FrameworkGCTransformer(GCTransformer):
         c_len = rmodel.inputconst(lltype.Signed, len(livevars) )
         base_addr = hop.genop("direct_call", [self.incr_stack_ptr, c_len ],
                               resulttype=llmemory.Address)
-        c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
         for k,var in enumerate(livevars):
-            c_k = rmodel.inputconst(lltype.Signed, k)
+            c_k = rmodel.inputconst(lltype.Signed, k * sizeofaddr)
             v_adr = gen_cast(hop.llops, llmemory.Address, var)
-            hop.genop("raw_store", [base_addr, c_type, c_k, v_adr])
+            hop.genop("raw_store", [base_addr, c_k, v_adr])
         return livevars
 
     def pop_roots(self, hop, livevars):
@@ -1244,10 +1240,9 @@ class FrameworkGCTransformer(GCTransformer):
                               resulttype=llmemory.Address)
         if self.gcdata.gc.moving_gc:
             # for moving collectors, reload the roots into the local variables
-            c_type = rmodel.inputconst(lltype.Void, llmemory.Address)
             for k,var in enumerate(livevars):
-                c_k = rmodel.inputconst(lltype.Signed, k)
-                v_newaddr = hop.genop("raw_load", [base_addr, c_type, c_k],
+                c_k = rmodel.inputconst(lltype.Signed, k * sizeofaddr)
+                v_newaddr = hop.genop("raw_load", [base_addr, c_k],
                                       resulttype=llmemory.Address)
                 hop.genop("gc_reload_possibly_moved", [v_newaddr, var])
 

@@ -433,7 +433,25 @@ class BaseArrayTests:
         a = self.array('h', 'Hi')
         buf = buffer(a)
         assert buf[1] == 'i'
-        #raises(TypeError, buf.__setitem__, 1, 'o')
+
+    def test_buffer_write(self):
+        a = self.array('c', 'hello')
+        buf = buffer(a)
+        print repr(buf)
+        try:
+            buf[3] = 'L'
+        except TypeError:
+            skip("buffer(array) returns a read-only buffer on CPython")
+        assert a.tostring() == 'helLo'
+
+    def test_buffer_keepalive(self):
+        buf = buffer(self.array('c', 'text'))
+        assert buf[2] == 'x'
+        #
+        a = self.array('c', 'foobarbaz')
+        buf = buffer(a)
+        a.fromstring('some extra text')
+        assert buf[:] == 'foobarbazsome extra text'
 
     def test_list_methods(self):
         assert repr(self.array('i')) == "array('i')"
@@ -871,6 +889,54 @@ class AppTestArray(BaseArrayTests):
         a = self.array('b', range(4))
         a[::-1] = a
         assert a == self.array('b', [3, 2, 1, 0])
+
+    def test_array_multiply(self):
+        a = self.array('b', [0])
+        b = a * 13
+        assert b[12] == 0
+        b = 13 * a
+        assert b[12] == 0
+        a *= 13
+        assert a[12] == 0
+        a = self.array('b', [1])
+        b = a * 13
+        assert b[12] == 1
+        b = 13 * a
+        assert b[12] == 1
+        a *= 13
+        assert a[12] == 1
+        a = self.array('i', [0])
+        b = a * 13
+        assert b[12] == 0
+        b = 13 * a
+        assert b[12] == 0
+        a *= 13
+        assert a[12] == 0
+        a = self.array('i', [1])
+        b = a * 13
+        assert b[12] == 1
+        b = 13 * a
+        assert b[12] == 1
+        a *= 13
+        assert a[12] == 1
+        a = self.array('i', [0, 0])
+        b = a * 13
+        assert len(b) == 26
+        assert b[22] == 0
+        b = 13 * a
+        assert len(b) == 26
+        assert b[22] == 0
+        a *= 13
+        assert a[22] == 0
+        assert len(a) == 26
+        a = self.array('f', [-0.0])
+        b = a * 13
+        assert len(b) == 13
+        assert str(b[12]) == "-0.0"
+        a = self.array('d', [-0.0])
+        b = a * 13
+        assert len(b) == 13
+        assert str(b[12]) == "-0.0"
 
 
 class AppTestArrayBuiltinShortcut(AppTestArray):

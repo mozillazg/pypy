@@ -144,6 +144,10 @@ _ll_0_newlist.need_result_type = True
 _ll_1_newlist.need_result_type = True
 _ll_2_newlist.need_result_type = True
 
+def _ll_1_newlist_hint(LIST, hint):
+    return LIST.ll_newlist_hint(hint)
+_ll_1_newlist_hint.need_result_type = True
+
 def _ll_1_list_len(l):
     return l.ll_length()
 def _ll_2_list_getitem(l, index):
@@ -425,32 +429,6 @@ def _ll_2_ullong_mod_zer(xll, yll):
 
 def _ll_2_uint_mod(xll, yll):
     return llop.uint_mod(lltype.Unsigned, xll, yll)
-
-
-# libffi support
-# --------------
-
-def func(llfunc):
-    from pypy.rlib.libffi import Func
-    return cast_base_ptr_to_instance(Func, llfunc)
-
-def _ll_1_libffi_prepare_call(llfunc):
-    return func(llfunc)._prepare()
-
-def _ll_4_libffi_push_int(llfunc, value, ll_args, i):
-    return func(llfunc)._push_int(value, ll_args, i)
-
-def _ll_4_libffi_push_float(llfunc, value, ll_args, i):
-    return func(llfunc)._push_float(value, ll_args, i)
-
-def _ll_3_libffi_call_int(llfunc, funcsym, ll_args):
-    return func(llfunc)._do_call(funcsym, ll_args, rffi.LONG)
-
-def _ll_3_libffi_call_float(llfunc, funcsym, ll_args):
-    return func(llfunc)._do_call(funcsym, ll_args, rffi.DOUBLE)
-
-def _ll_3_libffi_call_void(llfunc, funcsym, ll_args):
-    return func(llfunc)._do_call(funcsym, ll_args, lltype.Void)
 
 
 # in the following calls to builtins, the JIT is allowed to look inside:
