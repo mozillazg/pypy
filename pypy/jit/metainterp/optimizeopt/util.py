@@ -85,37 +85,50 @@ def descrlist_dict():
 
 # ____________________________________________________________
 
-def args_eq(args1, args2):
-    make_sure_not_resized(args1)
-    make_sure_not_resized(args2)
-    if len(args1) != len(args2):
-        return False
-    for i in range(len(args1)):
-        arg1 = args1[i]
-        arg2 = args2[i]
-        if arg1 is None:
-            if arg2 is not None:
-                return False
-        elif not arg1.same_box(arg2):
-            return False
-    return True
+BUCKET_SIZE = 1000
 
-def args_hash(args):
-    make_sure_not_resized(args)
-    res = 0x345678
-    for arg in args:
-        if arg is None:
-            y = 17
-        else:
-            y = arg._get_hash_()
-        res = intmask((1000003 * res) ^ y)
-    return res
+class ArgsDict(object):
+    """ An imprecise dict. If you look it up and it's there, it's correct,
+    however we don't care about collisions, so a colliding element can
+    kick someone else out
+    """
+    def __init__(self):
+        self.buckets = [None] * BUCKET_SIZE
 
-def args_dict():
-    return r_dict(args_eq, args_hash)
+    def get(self, op):
+        hash = op.get_hash()
 
-def args_dict_box():
-    return r_dict(args_eq, args_hash)
+# def args_eq(args1, args2):
+#     make_sure_not_resized(args1)
+#     make_sure_not_resized(args2)
+#     if len(args1) != len(args2):
+#         return False
+#     for i in range(len(args1)):
+#         arg1 = args1[i]
+#         arg2 = args2[i]
+#         if arg1 is None:
+#             if arg2 is not None:
+#                 return False
+#         elif not arg1.same_box(arg2):
+#             return False
+#     return True
+
+# def args_hash(args):
+#     make_sure_not_resized(args)
+#     res = 0x345678
+#     for arg in args:
+#         if arg is None:
+#             y = 17
+#         else:
+#             y = arg._get_hash_()
+#         res = intmask((1000003 * res) ^ y)
+#     return res
+
+# def args_dict():
+#     return r_dict(args_eq, args_hash)
+
+# def args_dict_box():
+#     return r_dict(args_eq, args_hash)
 
 
 # ____________________________________________________________

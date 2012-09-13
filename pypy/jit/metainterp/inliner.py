@@ -1,3 +1,4 @@
+
 from pypy.jit.metainterp.resoperation import Const
 from pypy.jit.metainterp.resume import Snapshot
 

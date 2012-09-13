@@ -11,3 +11,6 @@ class InvalidLoop(JitException):
         debug_print(msg)
         debug_stop("jit-abort")
         self.msg = msg
+
+def unroll_and_optimize_loop(loop, call_pure_results=None):
+    xxx

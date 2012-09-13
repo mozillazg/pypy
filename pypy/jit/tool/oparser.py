@@ -23,11 +23,9 @@ class ESCAPE_OP(N_aryOp, ResOpNone, ResOpWithDescr):
         self.initarglist(args)
         self.setdescr(descr)
 
-    def getopnum(self):
-        return self.OPNUM
-
-    def clone(self):
-        return ESCAPE_OP(self.OPNUM, self.getarglist()[:], self.result, self.getdescr())
+    @classmethod
+    def getopnum(cls):
+        return cls.OPNUM
 
 class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
 

@@ -405,6 +405,7 @@ class Optimizer(Optimization):
         if constbox is None:
             return box
         if constbox.type == REF:
+            xxx
             value = constbox.getref_base()
             if not value:
                 return box
@@ -419,9 +420,10 @@ class Optimizer(Optimization):
     def getvalue(self, box):
         box = self.getinterned(box)
         try:
-            value = self.values[box]
+            value = box.get_extra("optimize_value")
         except KeyError:
-            value = self.values[box] = OptValue(box)
+            value = OptValue(box)
+            box.set_extra("optimize_value", value)
         self.ensure_imported(value)
         return value
 
@@ -433,7 +435,7 @@ class Optimizer(Optimization):
         if isinstance(box, Const):
             return box
         try:
-            value = self.values[box]
+            value = box.get_extra("optimize_value")
             self.ensure_imported(value)
         except KeyError:
             return None

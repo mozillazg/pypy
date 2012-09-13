@@ -359,7 +359,7 @@ class Storage(compile.ResumeGuardDescr):
         self.metainterp_sd = metainterp_sd
         self.original_greenkey = original_greenkey
     def store_final_boxes(self, op, boxes):
-        op.setfailargs(boxes)
+        op.set_extra("failargs", boxes)
     def __eq__(self, other):
         return type(self) is type(other)      # xxx obscure
     def clone_if_mutable(self):
@@ -397,15 +397,15 @@ class BaseTest(object):
         assert equaloplists(optimized.operations,
                             expected.operations, False, remap, text_right)
 
-    def _do_optimize_loop(self, loop, call_pure_results):
+    def _do_optimize_loop(self, loop):
         from pypy.jit.metainterp.optimizeopt import optimize_trace
-        from pypy.jit.metainterp.optimizeopt.util import args_dict
+        #from pypy.jit.metainterp.optimizeopt.util import args_dict
 
         self.loop = loop
-        loop.call_pure_results = args_dict()
-        if call_pure_results is not None:
-            for k, v in call_pure_results.items():
-                loop.call_pure_results[list(k)] = v
+        #loop.call_pure_results = args_dict()
+        #if call_pure_results is not None:
+        #    for k, v in call_pure_results.items():
+        #        loop.call_pure_results[list(k)] = v
         metainterp_sd = FakeMetaInterpStaticData(self.cpu)
         if hasattr(self, 'vrefinfo'):
             metainterp_sd.virtualref_info = self.vrefinfo
@@ -414,32 +414,35 @@ class BaseTest(object):
         #
         optimize_trace(metainterp_sd, loop, self.enable_opts)
 
-    def unroll_and_optimize(self, loop, call_pure_results=None):
+    def unroll_and_optimize(self, loop):#, call_pure_results=None):
         operations =  loop.operations
         jumpop = operations[-1]
         assert jumpop.getopnum() == rop.JUMP
         inputargs = loop.inputargs
 
-        jump_args = jumpop.getarglist()[:]
+        jump_args = jumpop.getarglist()
         operations = operations[:-1]
-        cloned_operations = [op.clone() for op in operations]
 
         preamble = TreeLoop('preamble')
         preamble.inputargs = inputargs
         preamble.resume_at_jump_descr = FakeDescrWithSnapshot()
 
-        token = JitCellToken() 
-        preamble.operations = [ResOperation(rop.LABEL, inputargs, None, descr=TargetToken(token))] + \
-                              operations +  \
-                              [ResOperation(rop.LABEL, jump_args, None, descr=token)]
-        self._do_optimize_loop(preamble, call_pure_results)
+        token = JitCellToken()
+        preamble.operations = [create_resop(rop.LABEL, None, inputargs,
+                                            descr=TargetToken(token))] + \
+                                            operations +  \
+                              [create_resop(rop.LABEL, None, jump_args,
+                                            descr=token)]
+        self._do_optimize_loop(preamble)#, call_pure_results)
 
         assert preamble.operations[-1].getopnum() == rop.LABEL
 
+        import pdb
+        pdb.set_trace()
         inliner = Inliner(inputargs, jump_args)
         loop.resume_at_jump_descr = preamble.resume_at_jump_descr
         loop.operations = [preamble.operations[-1]] + \
-                          [inliner.inline_op(op, clone=False) for op in cloned_operations] + \
+                          [inliner.inline_op(op) for op in cloned_operations] + \
                           [ResOperation(rop.JUMP, [inliner.inline_arg(a) for a in jump_args],
                                         None, descr=token)] 
                           #[inliner.inline_op(jumpop)]

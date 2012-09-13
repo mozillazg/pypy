@@ -143,11 +143,6 @@ class AbstractValue(object):
     def _get_hash_(self):
         return compute_identity_hash(self)
 
-    # XXX the interface below has to be revisited
-
-    def clonebox(self):
-        raise NotImplementedError
-
     def constbox(self):
         raise NotImplementedError
 
@@ -223,26 +218,160 @@ def getkind(TYPE, supports_floats=True,
         raise NotImplementedError("type %s not supported" % TYPE)
 getkind._annspecialcase_ = 'specialize:memo'
 
+def repr_pointer(box):
+    from pypy.rpython.lltypesystem import rstr
+    try:
+        T = box.value._obj.container._normalizedcontainer(check=False)._TYPE
+        if T is rstr.STR:
+            return repr(box._get_str())
+        return '*%s' % (T._name,)
+    except AttributeError:
+        return box.value
+
+class Box(AbstractValue):
+    __slots__ = ()
+    _counter = 0
+
+    def nonconstbox(self):
+        return self
+
+    def __repr__(self):
+        result = str(self)
+        if self._extended_display:
+            result += '(%s)' % self._getrepr_()
+        return result
+
+    def __str__(self):
+        if not hasattr(self, '_str'):
+            try:
+                if self.type == INT:
+                    t = 'i'
+                elif self.type == FLOAT:
+                    t = 'f'
+                else:
+                    t = 'p'
+            except AttributeError:
+                t = 'b'
+            self._str = '%s%d' % (t, Box._counter)
+            Box._counter += 1
+        return self._str
+
+    def _get_str(self):    # for debugging only
+        return self.constbox()._get_str()
+
+    def forget_value(self):
+        raise NotImplementedError
+
+    def is_constant(self):
+        return False
+
+class BoxInt(Box):
+    type = INT
+    _attrs_ = ('value',)
+
+    def __init__(self, value=0):
+        if not we_are_translated():
+            if is_valid_int(value):
+                value = int(value)    # bool -> int
+            else:
+                assert isinstance(value, Symbolic)
+        self.value = value
+
+    def forget_value(self):
+        self.value = 0
+
+    def constbox(self):
+        return ConstInt(self.value)
+
+    def getint(self):
+        return self.value
+
+    def getaddr(self):
+        return heaptracker.int2adr(self.value)
+
+    def _get_hash_(self):
+        return make_hashable_int(self.value)
+
+    def nonnull(self):
+        return self.value != 0
+
+    def _getrepr_(self):
+        return self.value
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'bi')
+
+class BoxFloat(Box):
+    type = FLOAT
+    _attrs_ = ('value',)
+
+    def __init__(self, valuestorage=longlong.ZEROF):
+        assert lltype.typeOf(valuestorage) is longlong.FLOATSTORAGE
+        self.value = valuestorage
+
+    def forget_value(self):
+        self.value = longlong.ZEROF
+
+    def constbox(self):
+        return ConstFloat(self.value)
+
+    def getfloatstorage(self):
+        return self.value
+
+    def _get_hash_(self):
+        return longlong.gethash(self.value)
+
+    def nonnull(self):
+        return self.value != longlong.ZEROF
+
+    def _getrepr_(self):
+        return self.getfloat()
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'bf')
+
+class BoxPtr(Box):
+    type = REF
+    _attrs_ = ('value',)
+
+    def __init__(self, value=lltype.nullptr(llmemory.GCREF.TO)):
+        assert lltype.typeOf(value) == llmemory.GCREF
+        self.value = value
+
+    def forget_value(self):
+        self.value = lltype.nullptr(llmemory.GCREF.TO)
+
+    def constbox(self):
+        return ConstPtr(self.value)
+
+    def getref_base(self):
+        return self.value
+
+    def getref(self, PTR):
+        return lltype.cast_opaque_ptr(PTR, self.getref_base())
+    getref._annspecialcase_ = 'specialize:arg(1)'
+
+    def getaddr(self):
+        return llmemory.cast_ptr_to_adr(self.value)
+
+    def _get_hash_(self):
+        if self.value:
+            return lltype.identityhash(self.value)
+        else:
+            return 0
+
+    def nonnull(self):
+        return bool(self.value)
+
+    def repr_rpython(self):
+        return repr_rpython(self, 'bp')
+
+    _getrepr_ = repr_pointer
+
+NULLBOX = BoxPtr()
+
 class Const(AbstractValue):
     __slots__ = ()
-
-    @staticmethod
-    def _new(x):
-        "NOT_RPYTHON"
-        T = lltype.typeOf(x)
-        kind = getkind(T)
-        if kind == "int":
-            if isinstance(T, lltype.Ptr):
-                intval = heaptracker.adr2int(llmemory.cast_ptr_to_adr(x))
-            else:
-                intval = lltype.cast_primitive(lltype.Signed, x)
-            return ConstInt(intval)
-        elif kind == "ref":
-            return cpu.ts.new_ConstRef(x)
-        elif kind == "float":
-            return ConstFloat(longlong.getfloatstorage(x))
-        else:
-            raise NotImplementedError(kind)
 
     def constbox(self):
         return self
@@ -263,16 +392,6 @@ def repr_rpython(box, typechars):
     return '%s/%s%d' % (box._get_hash_(), typechars,
                         compute_unique_id(box))
 
-
-def repr_pointer(box):
-    from pypy.rpython.lltypesystem import rstr
-    try:
-        T = box.value._obj.container._normalizedcontainer(check=False)._TYPE
-        if T is rstr.STR:
-            return repr(box._get_str())
-        return '*%s' % (T._name,)
-    except AttributeError:
-        return box.value
 
 def repr_object(box):
     try:
@@ -312,11 +431,8 @@ class ConstInt(Const):
                 assert isinstance(value, Symbolic)
         self.value = value
 
-    def clonebox(self):
-        from pypy.jit.metainterp.history import BoxInt
+    def nonconstbox(self):
         return BoxInt(self.value)
-
-    nonconstbox = clonebox
 
     def getint(self):
         return self.value
@@ -353,11 +469,8 @@ class ConstFloat(Const):
         assert lltype.typeOf(valuestorage) is longlong.FLOATSTORAGE
         self.value = valuestorage
 
-    def clonebox(self):
-        from pypy.jit.metainterp.history import BoxFloat
+    def nonconstbox(self):
         return BoxFloat(self.value)
-
-    nonconstbox = clonebox
 
     def getfloatstorage(self):
         return self.value
@@ -390,11 +503,8 @@ class ConstPtr(Const):
         assert lltype.typeOf(value) == llmemory.GCREF
         self.value = value
 
-    def clonebox(self):
-        from pypy.jit.metainterp.history import BoxPtr
+    def nonconstbox(self):
         return BoxPtr(self.value)
-
-    nonconstbox = clonebox
 
     def getref_base(self):
         return self.value
@@ -436,57 +546,6 @@ class ConstPtr(Const):
 
 CONST_NULL = ConstPtr(ConstPtr.value)
 
-class ConstObj(Const):
-    type = REF
-    value = ootype.NULL
-    _attrs_ = ('value',)
-
-    def __init__(self, value):
-        assert ootype.typeOf(value) is ootype.Object
-        self.value = value
-
-    def clonebox(self):
-        from pypy.jit.metainterp.history import BoxObj
-        return BoxObj(self.value)
-
-    nonconstbox = clonebox
-
-    def getref_base(self):
-       return self.value
-
-    def getref(self, OBJ):
-        return ootype.cast_from_object(OBJ, self.getref_base())
-    getref._annspecialcase_ = 'specialize:arg(1)'
-
-    def _get_hash_(self):
-        if self.value:
-            return ootype.identityhash(self.value)
-        else:
-            return 0
-
-##    def getaddr(self):
-##        # so far this is used only when calling
-##        # CodeWriter.IndirectCallset.bytecode_for_address.  We don't need a
-##        # real addr, but just a key for the dictionary
-##        return self.value
-
-    def same_constant(self, other):
-        if isinstance(other, ConstObj):
-            return self.value == other.value
-        return False
-
-    def nonnull(self):
-        return bool(self.value)
-
-    _getrepr_ = repr_object
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'co')
-
-    def _get_str(self):    # for debugging only
-        from pypy.rpython.annlowlevel import hlstr
-        return hlstr(ootype.cast_from_object(ootype.String, self.value))
-
 class AbstractResOp(AbstractValue):
     """The central ResOperation class, representing one operation."""
 
@@ -500,6 +559,8 @@ class AbstractResOp(AbstractValue):
                     'valid from optimizations (store_final_args) until '
                     'the backend',
         'llgraph_var2index': 'llgraph internal attribute',
+        'optimize_value': 'value replacement for the optimizer. only valid for'
+                          ' the length of optimization pass',
     }
 
     extras = None
@@ -529,6 +590,9 @@ class AbstractResOp(AbstractValue):
         return cls.opnum
 
     def __hash__(self):
+        import sys
+        if sys._getframe(1).f_code.co_filename.endswith('resume.py'):
+            return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
 
     # methods implemented by the arity mixins
@@ -1308,7 +1372,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
 setup(__name__ == '__main__')   # print out the table when run directly
 del _oplist
 
-opboolinvers = {
+_opboolinvers = {
     rop.INT_EQ: rop.INT_NE,
     rop.INT_NE: rop.INT_EQ,
     rop.INT_LT: rop.INT_GE,
@@ -1332,7 +1396,7 @@ opboolinvers = {
     rop.PTR_NE: rop.PTR_EQ,
     }
 
-opboolreflex = {
+_opboolreflex = {
     rop.INT_EQ: rop.INT_EQ,
     rop.INT_NE: rop.INT_NE,
     rop.INT_LT: rop.INT_GT,
@@ -1355,3 +1419,10 @@ opboolreflex = {
     rop.PTR_EQ: rop.PTR_EQ,
     rop.PTR_NE: rop.PTR_NE,
     }
+
+opboolinvers = [-1] * len(opclasses)
+opboolreflex = [-1] * len(opclasses)
+for k, v in _opboolreflex.iteritems():
+    opboolreflex[k] = v
+for k, v in _opboolinvers.iteritems():
+    opboolinvers[k] = v

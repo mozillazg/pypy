@@ -105,6 +105,7 @@ def record_loop_or_bridge(metainterp_sd, loop):
 def compile_loop(metainterp, greenkey, start,
                  inputargs, jumpargs,
                  resume_at_jump_descr, full_preamble_needed=True):
+    XXX # requires a rewrite
     """Try to compile a new procedure by closing the current history back
     to the first operation.
     """
@@ -498,7 +499,7 @@ class ResumeGuardDescr(ResumeDescr):
         assert guard_value_op.getopnum() == rop.GUARD_VALUE
         box = guard_value_op.getarg(0)
         try:
-            i = guard_value_op.getfailargs().index(box)
+            i = guard_value_op.get_extra("failargs").index(box)
         except ValueError:
             return     # xxx probably very rare
         else:

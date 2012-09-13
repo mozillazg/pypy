@@ -24,8 +24,7 @@ class OptRewrite(Optimization):
             sb.add_potential(op)
 
     def propagate_forward(self, op):
-        args = self.optimizer.make_args_key(op)
-        if self.find_rewritable_bool(op, args):
+        if self.find_rewritable_bool(op):
             return
 
         dispatch_opt(self, op)
@@ -45,25 +44,16 @@ class OptRewrite(Optimization):
         return False
 
 
-    def find_rewritable_bool(self, op, args):
-        # XXXX
-        return False
-        
-        try:
-            oldopnum = opboolinvers[op.getopnum()]
-        except KeyError:
-            pass
-        else:
+    def find_rewritable_bool(self, op):
+        oldopnum = opboolinvers[op.getopnum()]
+        if oldopnum != -1:
             targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[0], args[1]],
                                                               None))
             if self.try_boolinvers(op, targs):
                 return True
 
-        try:
-            oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
-        except KeyError:
-            pass
-        else:
+        oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
+        if oldopnum != -1:
             targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[1], args[0]],
                                                               None))
             oldop = self.get_pure_result(targs)
@@ -71,11 +61,8 @@ class OptRewrite(Optimization):
                 self.make_equal_to(op, self.getvalue(oldop))
                 return True
 
-        try:
-            oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
-        except KeyError:
-            pass
-        else:
+        oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
+        if oldopnum != -1:
             targs = self.optimizer.make_args_key(ResOperation(oldopnum, [args[1], args[0]],
                                                               None))
             if self.try_boolinvers(op, targs):
