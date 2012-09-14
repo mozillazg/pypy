@@ -1,7 +1,6 @@
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, maxint, is_valid_int
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt
-from pypy.jit.metainterp.history import BoxInt
 MAXINT = maxint
 MININT = -maxint - 1
 

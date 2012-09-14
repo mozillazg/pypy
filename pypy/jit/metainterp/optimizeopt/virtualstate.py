@@ -4,10 +4,10 @@ from pypy.jit.metainterp.optimizeopt.optimizer import LEVEL_CONSTANT, \
                                                       LEVEL_KNOWNCLASS, \
                                                       LEVEL_NONNULL, \
                                                       LEVEL_UNKNOWN
-from pypy.jit.metainterp.history import BoxInt, BoxPtr
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntUnbounded
-from pypy.jit.metainterp.resoperation import rop, Const, ConstInt
+from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, BoxInt,\
+     BoxPtr
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 

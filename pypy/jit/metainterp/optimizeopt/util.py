@@ -85,18 +85,31 @@ def descrlist_dict():
 
 # ____________________________________________________________
 
-BUCKET_SIZE = 1000
+BUCKET_SIZE = 1024
 
 class ArgsDict(object):
     """ An imprecise dict. If you look it up and it's there, it's correct,
     however we don't care about collisions, so a colliding element can
     kick someone else out
     """
-    def __init__(self):
-        self.buckets = [None] * BUCKET_SIZE
+    def __init__(self, bucket_size=BUCKET_SIZE):
+        self.buckets = [None] * bucket_size
+        self.bucket_size = bucket_size
 
     def get(self, op):
-        hash = op.get_hash()
+        hash = op._get_hash_() & self.bucket_size
+        candidate = self.buckets[hash]
+        if candidate is None:
+            return None
+        if candidate.__class__ != op.__class__:
+            return None # collision
+        if op.eq(candidate):
+            return candidate
+        return None
+
+    def setitem(self, op):
+        hash = op._get_hash_() & self.bucket_size
+        self.buckets[hash] = op # don't care about collisions
 
 # def args_eq(args1, args2):
 #     make_sure_not_resized(args1)

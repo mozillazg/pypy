@@ -1,12 +1,12 @@
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
-from pypy.jit.metainterp.history import BoxInt, BoxFloat, REF
+from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
-     Const, ConstInt
+     Const, ConstInt, ConstFloat
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
 from pypy.tool.pairtype import extendabletype
 from pypy.rlib.objectmodel import specialize
@@ -245,9 +245,9 @@ class ConstantValue(OptValue):
 CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
 CVAL_ZERO    = ConstantValue(CONST_0)
-CVAL_ZERO_FLOAT = ConstantValue(Const._new(0.0))
+CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(0.0))
 llhelper.CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
-oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
+#oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
 REMOVED = AbstractResOp()
 
 

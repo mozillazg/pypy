@@ -9,9 +9,9 @@ from pypy.tool.sourcetools import func_with_new_name
 
 from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt,\
      ConstPtr
-from pypy.jit.metainterp.history import TreeLoop, Box, JitCellToken, TargetToken
-from pypy.jit.metainterp.history import AbstractFailDescr, BoxInt
-from pypy.jit.metainterp.history import BoxPtr, BoxFloat
+from pypy.jit.metainterp.history import TreeLoop, JitCellToken, TargetToken
+from pypy.jit.metainterp.history import AbstractFailDescr
+from pypy.jit.metainterp.resoperation import BoxPtr, BoxFloat, Box, BoxInt
 from pypy.jit.metainterp import history, resoperation
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.inliner import Inliner

@@ -1,7 +1,6 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
 from pypy.jit.metainterp.resoperation import rop, create_resop_2
-from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
-    args_dict)
+from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 
 class OptPure(Optimization):
     def __init__(self):

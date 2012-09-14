@@ -5,7 +5,7 @@ from pypy.rpython.lltypesystem.rclass import OBJECT, OBJECT_VTABLE
 from pypy.rpython.rclass import FieldListAccessor, IR_QUASIIMMUTABLE
 
 from pypy.jit.backend.llgraph import runner
-from pypy.jit.metainterp.history import (BoxPtr, TreeLoop, AbstractDescr,
+from pypy.jit.metainterp.history import (TreeLoop, AbstractDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.optimizeopt.util import sort_descrs, equaloplists
 from pypy.jit.codewriter.effectinfo import EffectInfo
@@ -15,7 +15,7 @@ from pypy.jit.metainterp.quasiimmut import QuasiImmutDescr
 from pypy.jit.metainterp import compile, resume, history
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.config.pypyoption import get_pypy_config
-from pypy.jit.metainterp.resoperation import rop, create_resop
+from pypy.jit.metainterp.resoperation import rop, create_resop, BoxPtr
 from pypy.jit.metainterp.optimizeopt.unroll import Inliner
 
 def test_sort_descrs():

@@ -3,7 +3,7 @@ from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import cast_base_ptr_to_instance, llstr, oostr
 from pypy.rpython.annlowlevel import cast_instance_to_base_ptr
 from pypy.rpython.annlowlevel import cast_instance_to_base_obj
-from pypy.jit.metainterp import history, resoperation
+from pypy.jit.metainterp import resoperation
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.objectmodel import r_dict, specialize
 
@@ -43,7 +43,7 @@ class LLTypeHelper(TypeSystemHelper):
     nullptr = staticmethod(lltype.nullptr)
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_ptr)
     BASETYPE = llmemory.GCREF
-    BoxRef = history.BoxPtr
+    BoxRef = resoperation.BoxPtr
     ConstRef = resoperation.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
     NULLREF = resoperation.ConstPtr.value
@@ -87,7 +87,7 @@ class LLTypeHelper(TypeSystemHelper):
         return resoperation.ConstInt(etype)
 
     def get_exc_value_box(self, evalue):
-        return history.BoxPtr(evalue)
+        return resoperation.BoxPtr(evalue)
 
     def get_exception_obj(self, evaluebox):
         # only works when translated
@@ -152,11 +152,11 @@ class OOTypeHelper(TypeSystemHelper):
     nullptr = staticmethod(ootype.null)
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_obj)
     BASETYPE = ootype.Object
-    BoxRef = history.BoxObj
-    ConstRef = resoperation.ConstObj
+    #BoxRef = resoperation.BoxObj
+    #ConstRef = resoperation.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
-    NULLREF = resoperation.ConstObj.value
-    CONST_NULL = resoperation.ConstObj(NULLREF)
+    #$NULLREF = resoperation.ConstObj.value
+    #CONST_NULL = resoperation.ConstObj(NULLREF)
     CVAL_NULLREF = None # patched by optimizeopt.py
     
     def new_ConstRef(self, x):
@@ -194,7 +194,7 @@ class OOTypeHelper(TypeSystemHelper):
         return resoperation.ConstObj(etype)
 
     def get_exc_value_box(self, evalue):
-        return history.BoxObj(evalue)
+        return resoperation.BoxObj(evalue)
 
     def get_exception_obj(self, evaluebox):
         # only works when translated
