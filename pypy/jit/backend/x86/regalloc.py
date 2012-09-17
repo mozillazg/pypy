@@ -1468,9 +1468,9 @@ for name, value in RegAlloc.__dict__.iteritems():
 
 def get_ebp_ofs(position):
     # Argument is a frame position (0, 1, 2...).
-    # Returns (ebp-20), (ebp-24), (ebp-28)...
+    # Returns (ebp+36), (ebp+40), (ebp+44)...
     # i.e. the n'th word beyond the fixed frame size.
-    return -WORD * (FRAME_FIXED_SIZE + position)
+    return WORD * (FRAME_FIXED_SIZE + position)
 
 def _valid_addressing_size(size):
     return size == 1 or size == 2 or size == 4 or size == 8
