@@ -5,7 +5,7 @@ from pypy.jit.codewriter import longlong
 from pypy.rlib.objectmodel import compute_identity_hash, newlist_hint,\
      compute_unique_id, Symbolic
 from pypy.jit.codewriter import heaptracker
-from pypy.rlib.rarithmetic import is_valid_int
+from pypy.rlib.rarithmetic import is_valid_int, intmask
 
 INT   = 'i'
 REF   = 'r'
@@ -552,6 +552,7 @@ class AbstractResOp(AbstractValue):
     # debug
     name = ""
     pc = 0
+    _hash = 0
     opnum = 0
 
     DOCUMENTED_KEYS = {
@@ -594,6 +595,20 @@ class AbstractResOp(AbstractValue):
         if sys._getframe(1).f_code.co_filename.endswith('resume.py'):
             return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
+
+    def _get_hash_(self):
+        # rpython level implementation of hash, cache it because computations
+        # depending on the arguments might be a little tricky
+        if self._hash != 0:
+            return self._hash
+        hash = (intmask(self.getopnum() << 18) +
+                intmask(self.get_result_hash() << 13) +
+                intmask(self.get_descr_hash() << 5) +
+                self.get_arg_hash())
+        if hash == 0:
+            hash = -1
+        self._hash = hash
+        return hash
 
     # methods implemented by the arity mixins
     # ---------------------------------------
@@ -742,6 +757,9 @@ class ResOpNone(object):
     def getresultrepr(self):
         return None
 
+    def get_result_hash(self):
+        return 0
+
 class ResOpInt(object):
     _mixin_ = True
     type = INT
@@ -760,6 +778,9 @@ class ResOpInt(object):
     @staticmethod
     def wrap_constant(intval):
         return ConstInt(intval)
+
+    def get_result_hash(self):
+        return make_hashable_int(self.intval)
 
 class ResOpFloat(object):
     _mixin_ = True
@@ -781,6 +802,9 @@ class ResOpFloat(object):
     def wrap_constant(floatval):
         return ConstFloat(floatval)
 
+    def get_result_hash(self):
+        return longlong.gethash(self.floatval)
+
 class ResOpPointer(object):
     _mixin_ = True
     type = REF
@@ -797,6 +821,12 @@ class ResOpPointer(object):
         # XXX what do we want to put in here?
         return str(self.pval)
 
+    def get_result_hash(self):
+        if self.pval:
+            return lltype.identityhash(self.pval)
+        else:
+            return 0
+
     @staticmethod
     def wrap_constant(pval):
         return ConstPtr(pval)
@@ -806,7 +836,8 @@ class ResOpPointer(object):
 # ===================
 
 class PlainResOp(AbstractResOp):
-    pass
+    def get_descr_hash(self):
+        return 0
 
 class ResOpWithDescr(AbstractResOp):
 
@@ -835,6 +866,8 @@ class ResOpWithDescr(AbstractResOp):
         from pypy.jit.metainterp.history import check_descr
         check_descr(descr)
 
+    def get_descr_hash(self):
+        return self._descr._get_hash_()
 
 class GuardResOp(ResOpWithDescr):
 
@@ -880,7 +913,7 @@ class NullaryOp(object):
         raise IndexError
 
     def foreach_arg(self, func):
-        pass
+        pass        
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, descr=None):
@@ -889,6 +922,9 @@ class NullaryOp(object):
 
     def copy_if_modified_by_optimization(self, opt):
         return self
+
+    def get_arg_hash(self):
+        return 0
 
 class UnaryOp(object):
     _mixin_ = True
@@ -928,6 +964,9 @@ class UnaryOp(object):
     def copy_and_change(self, newopnum, arg0=None, descr=None):
         return create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
                               descr or self.getdescr())
+
+    def get_arg_hash(self):
+        return self._arg0._get_hash_()
 
 class BinaryOp(object):
     _mixin_ = True
@@ -975,6 +1014,10 @@ class BinaryOp(object):
         return create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
                               arg1 or self._arg1,
                               descr or self.getdescr())
+
+    def get_arg_hash(self):
+        return (intmask(self._arg0._get_hash_() << 16) +
+                self._arg1._get_hash_())
 
 class TernaryOp(object):
     _mixin_ = True
@@ -1033,6 +1076,11 @@ class TernaryOp(object):
         assert not r.is_guard()
         return r
 
+    def get_arg_hash(self):
+        return (intmask(self._arg0._get_hash_() << 24) +
+                intmask(self._arg1._get_hash_() << 16) +
+                self._arg2._get_hash_())
+
 class N_aryOp(object):
     _mixin_ = True
     _args = None
@@ -1082,6 +1130,12 @@ class N_aryOp(object):
                          descr or self.getdescr())
         assert not r.is_guard()
         return r
+
+    def get_arg_hash(self):
+        hash = 0
+        for i, arg in enumerate(self._args):
+            hash += intmask(arg._get_hash_() << (i & 15))
+        return hash
 
 # ____________________________________________________________
 

@@ -1,6 +1,7 @@
 import py
 from pypy.jit.metainterp import resoperation as rop
 from pypy.jit.metainterp.history import AbstractDescr
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 class FakeBox(object):
     def __init__(self, v):
@@ -26,6 +27,9 @@ class FakeBox(object):
 class FakeDescr(AbstractDescr):
     def __repr__(self):
         return 'descr'
+
+    def _get_hash_(self):
+        return id(self)
 
 def test_arity_mixins():
     cases = [
@@ -186,3 +190,52 @@ def test_get_set_extra():
     op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
     op.set_extra("failargs", 2)
     assert op.get_extra("failargs") == 2
+
+def test_hashes():
+    arg1 = rop.create_resop_1(rop.rop.FLOAT_NEG, 12.5, rop.BoxFloat(3.5))
+    op = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
+                            arg1)
+    op1 = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
+                            rop.ConstFloat(1.0))
+    op2 = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(2.0),
+                            arg1)
+    op3 = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.2, rop.ConstFloat(3.0),
+                            arg1)
+    assert op1._get_hash_() != op._get_hash_()
+    assert op2._get_hash_() != op._get_hash_()
+    assert op3._get_hash_() != op._get_hash_()
+
+    op = rop.create_resop_0(rop.rop.FORCE_TOKEN, 13)
+    op1 = rop.create_resop_0(rop.rop.FORCE_TOKEN, 15)
+    assert op._get_hash_() != op1._get_hash_()
+    S = lltype.GcStruct('S')
+    s = lltype.malloc(S)
+    nonnull_ref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
+    nullref = lltype.nullptr(llmemory.GCREF.TO)
+    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
+    op1 = rop.create_resop_1(rop.rop.NEWSTR, nonnull_ref, rop.BoxInt(5))
+    assert op._get_hash_() != op1._get_hash_()
+    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
+    op1 = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(15))
+    assert op._get_hash_() != op1._get_hash_()
+
+    descr = FakeDescr()
+    descr2 = FakeDescr()
+    op = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0), rop.BoxFloat(2.0),
+                                               rop.BoxPtr(nullref)], descr)
+    op1 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
+                                                rop.BoxFloat(2.0),
+                                                rop.BoxPtr(nullref)], descr2)
+    op2 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
+                                                rop.BoxFloat(2.5),
+                                                rop.BoxPtr(nullref)], descr)
+    op3 = rop.create_resop(rop.rop.CALL_i, 15, [rop.BoxInt(0),
+                                                rop.BoxFloat(2.0),
+                                                rop.BoxPtr(nullref)], descr)
+    op4 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
+                                                rop.BoxFloat(2.0),
+                                                rop.BoxPtr(nonnull_ref)], descr)
+    assert op1._get_hash_() != op._get_hash_()
+    assert op2._get_hash_() != op._get_hash_()
+    assert op3._get_hash_() != op._get_hash_()
+    assert op4._get_hash_() != op._get_hash_()
