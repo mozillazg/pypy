@@ -164,7 +164,7 @@ class AbstractValue(object):
     def _get_str(self):
         raise NotImplementedError
 
-    def same_box(self, other):
+    def eq(self, other):
         return self is other
 
     def is_constant(self):
@@ -376,7 +376,7 @@ class Const(AbstractValue):
     def constbox(self):
         return self
 
-    def same_box(self, other):
+    def eq(self, other):
         return self.same_constant(other)
 
     def same_constant(self, other):
@@ -610,6 +610,22 @@ class AbstractResOp(AbstractValue):
         self._hash = hash
         return hash
 
+    def eq(self, other):
+        if self is other:
+            return True
+        if self.__class__ != other.__class__:
+            # note that this checks for opnum already
+            return False
+        descr = self.getdescr()
+        if descr is not None:
+            if other.getdescr() is not descr:
+                return False
+        if not self.result_eq(other):
+            return False
+        if not self.args_eq(other):
+            return False
+        return True
+
     # methods implemented by the arity mixins
     # ---------------------------------------
 
@@ -760,6 +776,9 @@ class ResOpNone(object):
     def get_result_hash(self):
         return 0
 
+    def result_eq(self, other):
+        return True
+
 class ResOpInt(object):
     _mixin_ = True
     type = INT
@@ -781,6 +800,10 @@ class ResOpInt(object):
 
     def get_result_hash(self):
         return make_hashable_int(self.intval)
+
+    def result_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return self.intval == other.intval
 
 class ResOpFloat(object):
     _mixin_ = True
@@ -804,6 +827,10 @@ class ResOpFloat(object):
 
     def get_result_hash(self):
         return longlong.gethash(self.floatval)
+
+    def result_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return self.floatval == other.floatval
 
 class ResOpPointer(object):
     _mixin_ = True
@@ -830,6 +857,10 @@ class ResOpPointer(object):
     @staticmethod
     def wrap_constant(pval):
         return ConstPtr(pval)
+
+    def result_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return self.pval == other.pval
 
 # ===================
 # Top of the hierachy
@@ -867,7 +898,7 @@ class ResOpWithDescr(AbstractResOp):
         check_descr(descr)
 
     def get_descr_hash(self):
-        return self._descr._get_hash_()
+        return compute_identity_hash(self._descr)
 
 class GuardResOp(ResOpWithDescr):
 
@@ -926,6 +957,9 @@ class NullaryOp(object):
     def get_arg_hash(self):
         return 0
 
+    def args_eq(self, other):
+        return True
+
 class UnaryOp(object):
     _mixin_ = True
     _arg0 = None
@@ -967,6 +1001,10 @@ class UnaryOp(object):
 
     def get_arg_hash(self):
         return self._arg0._get_hash_()
+
+    def args_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return self._arg0.eq(other._arg0)
 
 class BinaryOp(object):
     _mixin_ = True
@@ -1018,6 +1056,10 @@ class BinaryOp(object):
     def get_arg_hash(self):
         return (intmask(self._arg0._get_hash_() << 16) +
                 self._arg1._get_hash_())
+
+    def args_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return self._arg0.eq(other._arg0) and self._arg1.eq(other._arg1)
 
 class TernaryOp(object):
     _mixin_ = True
@@ -1081,6 +1123,11 @@ class TernaryOp(object):
                 intmask(self._arg1._get_hash_() << 16) +
                 self._arg2._get_hash_())
 
+    def args_eq(self, other):
+        assert isinstance(other, self.__class__)
+        return (self._arg0.eq(other._arg0) and self._arg1.eq(other._arg1) and
+                self._arg2.eq(other._arg2))
+
 class N_aryOp(object):
     _mixin_ = True
     _args = None
@@ -1136,6 +1183,12 @@ class N_aryOp(object):
         for i, arg in enumerate(self._args):
             hash += intmask(arg._get_hash_() << (i & 15))
         return hash
+
+    def args_eq(self, other):
+        for i, arg in enumerate(self._args):
+            if not arg.eq(other._args[i]):
+                return False
+        return True
 
 # ____________________________________________________________
 

@@ -1,17 +1,13 @@
 
 from pypy.rpython.extregistry import ExtRegistryEntry
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.ootypesystem import ootype
-from pypy.rlib.objectmodel import we_are_translated, Symbolic
+from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.objectmodel import compute_unique_id
-from pypy.rlib.rarithmetic import r_int64, is_valid_int
+from pypy.rlib.rarithmetic import r_int64
+from pypy.jit.metainterp.resoperation import rop, AbstractValue, ConstPtr
 
 from pypy.conftest import option
 
-from pypy.jit.metainterp.resoperation import rop, AbstractValue, INT, REF,\
-     FLOAT, repr_pointer, repr_object, ConstPtr, ConstFloat
-
-from pypy.jit.codewriter import heaptracker, longlong
 import weakref
 
 # ____________________________________________________________

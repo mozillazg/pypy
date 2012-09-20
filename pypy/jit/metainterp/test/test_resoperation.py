@@ -191,10 +191,12 @@ def test_get_set_extra():
     op.set_extra("failargs", 2)
     assert op.get_extra("failargs") == 2
 
-def test_hashes():
+def test_hashes_eq():
     arg1 = rop.create_resop_1(rop.rop.FLOAT_NEG, 12.5, rop.BoxFloat(3.5))
     op = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
                             arg1)
+    ope = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
+                             arg1)
     op1 = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
                             rop.ConstFloat(1.0))
     op2 = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(2.0),
@@ -204,10 +206,17 @@ def test_hashes():
     assert op1._get_hash_() != op._get_hash_()
     assert op2._get_hash_() != op._get_hash_()
     assert op3._get_hash_() != op._get_hash_()
+    assert not op1.eq(op)
+    assert not op.eq(op1)
+    assert not op2.eq(op)
+    assert not op3.eq(op)
+    assert ope._get_hash_() == op._get_hash_()
+    assert ope.eq(op)
 
     op = rop.create_resop_0(rop.rop.FORCE_TOKEN, 13)
     op1 = rop.create_resop_0(rop.rop.FORCE_TOKEN, 15)
     assert op._get_hash_() != op1._get_hash_()
+    assert not op.eq(op1)
     S = lltype.GcStruct('S')
     s = lltype.malloc(S)
     nonnull_ref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
@@ -215,9 +224,11 @@ def test_hashes():
     op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
     op1 = rop.create_resop_1(rop.rop.NEWSTR, nonnull_ref, rop.BoxInt(5))
     assert op._get_hash_() != op1._get_hash_()
+    assert not op.eq(op1)
     op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
     op1 = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(15))
     assert op._get_hash_() != op1._get_hash_()
+    assert not op.eq(op1)
 
     descr = FakeDescr()
     descr2 = FakeDescr()
@@ -239,3 +250,21 @@ def test_hashes():
     assert op2._get_hash_() != op._get_hash_()
     assert op3._get_hash_() != op._get_hash_()
     assert op4._get_hash_() != op._get_hash_()
+    assert not op.eq(op1)
+    assert not op.eq(op2)
+    assert not op.eq(op3)
+    assert not op.eq(op4)
+
+    # class StrangeDescr(AbstractDescr):
+    #     def _get_hash_(self):
+    #         return 13
+
+    # descr = StrangeDescr()
+    # op1 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
+    #                                             rop.BoxFloat(2.0),
+    #                                            rop.BoxPtr(nullref)], descr)
+    # op2 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
+    #                                             rop.BoxFloat(2.0),
+    #                                            rop.BoxPtr(nullref)], descr)
+    # assert op1._get_hash_() == op2._get_hash_()
+    # assert not op1.eq(op2)
