@@ -7,8 +7,7 @@ when executing on top of the llinterpreter.
 import weakref
 from pypy.objspace.flow.model import Variable, Constant
 from pypy.annotation import model as annmodel
-from pypy.jit.metainterp.history import REF, INT, FLOAT
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp.resoperation import REF, INT, FLOAT
 from pypy.jit.codewriter import heaptracker
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rffi
 from pypy.rpython.ootypesystem import ootype

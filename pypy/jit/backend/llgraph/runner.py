@@ -169,12 +169,12 @@ class BaseCPU(model.AbstractCPU):
 
     def _compile_loop_or_bridge(self, c, inputargs, operations, clt):
         for box in inputargs:
-            if isinstance(box, history.BoxInt):
+            if isinstance(box, resoperation.BoxInt):
                 r = llimpl.compile_start_int_var(c)
             elif isinstance(box, self.ts.BoxRef):
                 TYPE = self.ts.BASETYPE
                 r = llimpl.compile_start_ref_var(c, TYPE)
-            elif isinstance(box, history.BoxFloat):
+            elif isinstance(box, resoperation.BoxFloat):
                 r = llimpl.compile_start_float_var(c)
             else:
                 raise Exception("box is: %r" % (box,))
@@ -665,12 +665,6 @@ class OOtypeCPU_xxx_disabled(BaseCPU):
         assert isinstance(typedescr, TypeDescr)
         return typedescr.create()
 
-    def do_runtimenew(self, classbox):
-        "NOT_RPYTHON"
-        classobj = classbox.getref(ootype.Class)
-        res = ootype.runtimenew(classobj)
-        return history.BoxObj(ootype.cast_to_object(res))
-
     def do_instanceof(self, box1, typedescr):
         assert isinstance(typedescr, TypeDescr)
         return typedescr.instanceof(box1)
@@ -730,12 +724,10 @@ def make_getargs(ARGS):
     return getargs
 
 def boxresult(RESULT, result):
-    if isinstance(RESULT, ootype.OOType):
-        return history.BoxObj(ootype.cast_to_object(result))
-    elif RESULT is lltype.Float:
-        return history.BoxFloat(result)
+    if RESULT is lltype.Float:
+        return resoperation.BoxFloat(result)
     else:
-        return history.BoxInt(lltype.cast_primitive(ootype.Signed, result))
+        return resoperation.BoxInt(lltype.cast_primitive(ootype.Signed, result))
 boxresult._annspecialcase_ = 'specialize:arg(0)'
 
 
@@ -847,7 +839,7 @@ class TypeDescr(OODescr):
 
         def instanceof(box):
             obj = box.getref(ootype.ROOT)
-            return history.BoxInt(ootype.instanceof(obj, TYPE))
+            return resoperation.BoxInt(ootype.instanceof(obj, TYPE))
 
         self.create = create
         self.create_array = create_array

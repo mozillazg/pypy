@@ -9,9 +9,9 @@ from pypy.rlib import nonconst, rstack
 from pypy.jit.metainterp import history, compile, resume
 from pypy.jit.metainterp.resoperation import Const, ConstInt, ConstPtr,\
      ConstFloat
-from pypy.jit.metainterp.history import Box, TargetToken
+from pypy.jit.metainterp.history import TargetToken
 from pypy.jit.metainterp.resoperation import rop, create_resop, create_resop_0,\
-     create_resop_1, create_resop_2
+     create_resop_1, create_resop_2, Box
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
@@ -22,7 +22,6 @@ from pypy.jit.metainterp.heapcache import HeapCache
 from pypy.rlib.objectmodel import specialize
 from pypy.jit.codewriter.jitcode import JitCode, SwitchDictDescr
 from pypy.jit.codewriter import heaptracker
-from pypy.jit.metainterp.optimizeopt.util import args_dict_box
 
 # ____________________________________________________________
 

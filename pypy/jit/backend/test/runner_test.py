@@ -2,12 +2,10 @@ import py, sys, random, os, struct, operator
 from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          AbstractDescr,
                                          BasicFailDescr,
-                                         BoxInt, Box, BoxPtr,
-                                         JitCellToken, TargetToken,
-                                         BoxObj, BoxFloat)
+                                         JitCellToken, TargetToken)
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
-     create_resop, ConstInt, ConstPtr, ConstFloat, ConstObj, create_resop_2,\
-     create_resop_1
+     create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
+     create_resop_1, BoxInt, Box, BoxPtr, BoxFloat
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -50,7 +48,7 @@ class Runner(object):
         for box in inputargs:
             if isinstance(box, BoxInt):
                 args.append(box.getint())
-            elif isinstance(box, (BoxPtr, BoxObj)):
+            elif isinstance(box, BoxPtr):
                 args.append(box.getref_base())
             elif isinstance(box, BoxFloat):
                 args.append(box.getfloatstorage())
@@ -553,7 +551,7 @@ class BaseBackendTest(Runner):
             func_ptr = llhelper(FPTR, f)
             FUNC = deref(FPTR)
             funcconst = self.get_funcbox(self.cpu, func_ptr)
-            funcbox = funcconst.clonebox()
+            funcbox = funcconst.nonconstbox()
             calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                         EffectInfo.MOST_GENERAL)
             res = self.execute_operation(rop.CALL_i,
@@ -724,13 +722,16 @@ class BaseBackendTest(Runner):
             assert self.guard_failed
 
     def test_ooops(self):
+        def clone(box):
+            return BoxPtr(box.value)
+        
         u1_box, U_box = self.alloc_instance(self.U)
         u2_box, U_box = self.alloc_instance(self.U)
         r = self.execute_operation(rop.PTR_EQ, [u1_box,
-                                                u1_box.clonebox()], 'int')
+                                                clone(u1_box)], 'int')
         assert r == 1
         r = self.execute_operation(rop.PTR_NE, [u2_box,
-                                                u2_box.clonebox()], 'int')
+                                                clone(u2_box)], 'int')
         assert r == 0
         r = self.execute_operation(rop.PTR_EQ, [u1_box, u2_box], 'int')
         assert r == 0
@@ -739,14 +740,14 @@ class BaseBackendTest(Runner):
         #
         null_box = self.null_instance()
         r = self.execute_operation(rop.PTR_EQ, [null_box,
-                                                null_box.clonebox()], 'int')
+                                                clone(null_box)], 'int')
         assert r == 1
         r = self.execute_operation(rop.PTR_EQ, [u1_box, null_box], 'int')
         assert r == 0
         r = self.execute_operation(rop.PTR_EQ, [null_box, u2_box], 'int')
         assert r == 0
         r = self.execute_operation(rop.PTR_NE, [null_box,
-                                                null_box.clonebox()], 'int')
+                                                clone(null_box)], 'int')
         assert r == 0
         r = self.execute_operation(rop.PTR_NE, [u2_box, null_box], 'int')
         assert r == 1
@@ -3292,45 +3293,3 @@ class LLtypeBackendTest(BaseBackendTest):
             result = rawstorage.raw_storage_getitem(T, p, 16)
             assert result == rffi.cast(T, value)
             rawstorage.free_raw_storage(p)
-
-class OOtypeBackendTest(BaseBackendTest):
-
-    type_system = 'ootype'
-    Ptr = staticmethod(lambda x: x)
-    FuncType = ootype.StaticMethod
-    malloc = staticmethod(ootype.new)
-    nullptr = staticmethod(ootype.null)
-
-    def setup_class(cls):
-        py.test.skip("ootype tests skipped")
-
-    @classmethod
-    def get_funcbox(cls, cpu, func_ptr):
-        return BoxObj(ootype.cast_to_object(func_ptr))
-
-    S = ootype.Instance('S', ootype.ROOT, {'value': ootype.Signed,
-                                           'chr1': ootype.Char,
-                                           'chr2': ootype.Char})
-    S._add_fields({'next': S})
-    T = ootype.Instance('T', S)
-    U = ootype.Instance('U', T)
-
-    def alloc_instance(self, T):
-        t = ootype.new(T)
-        cls = ootype.classof(t)
-        t_box = BoxObj(ootype.cast_to_object(t))
-        T_box = ConstObj(ootype.cast_to_object(cls))
-        return t_box, T_box
-
-    def null_instance(self):
-        return BoxObj(ootype.NULL)
-
-    def alloc_array_of(self, ITEM, length):
-        py.test.skip("implement me")
-
-    def alloc_string(self, string):
-        py.test.skip("implement me")
-
-    def alloc_unicode(self, unicode):
-        py.test.skip("implement me")
-

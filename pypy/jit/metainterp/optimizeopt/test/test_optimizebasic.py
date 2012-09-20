@@ -6,9 +6,9 @@ from pypy.jit.metainterp.history import TargetToken, JitCellToken
 import pypy.jit.metainterp.optimizeopt.optimizer as optimizeopt
 import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.history import BoxInt, get_const_ptr_for_string
+from pypy.jit.metainterp.history import get_const_ptr_for_string
 from pypy.jit.metainterp import executor, compile, resume
-from pypy.jit.metainterp.resoperation import rop, opname, ConstInt
+from pypy.jit.metainterp.resoperation import rop, opname, ConstInt, BoxInt
 from pypy.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():

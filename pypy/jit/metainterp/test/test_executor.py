@@ -5,8 +5,9 @@ from pypy.rpython.lltypesystem import llmemory, rffi
 from pypy.jit.metainterp.executor import execute
 from pypy.jit.metainterp.executor import execute_varargs, execute_nonspec
 from pypy.jit.metainterp.resoperation import rop, opboolinvers, opboolreflex, opname
-from pypy.jit.metainterp.history import BoxInt, BoxPtr, BoxFloat, AbstractDescr
-from pypy.jit.metainterp.resoperation import ConstInt, ConstPtr, ConstFloat
+from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.resoperation import ConstInt, ConstPtr, ConstFloat,\
+     BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp import history
 from pypy.jit.codewriter import longlong
 from pypy.jit.backend.model import AbstractCPU

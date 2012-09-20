@@ -231,6 +231,7 @@ def repr_pointer(box):
 class Box(AbstractValue):
     __slots__ = ()
     _counter = 0
+    _extended_display = True
 
     def nonconstbox(self):
         return self
