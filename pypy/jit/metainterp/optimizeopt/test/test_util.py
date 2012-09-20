@@ -381,8 +381,7 @@ class BaseTest(object):
     def parse(self, s, boxkinds=None):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
-                     boxkinds=boxkinds,
-                     invent_fail_descr=self.invent_fail_descr)
+                     boxkinds=boxkinds)
 
     def invent_fail_descr(self, model, fail_args):
         if fail_args is None:
@@ -414,6 +413,11 @@ class BaseTest(object):
         if hasattr(self, 'callinfocollection'):
             metainterp_sd.callinfocollection = self.callinfocollection
         #
+        for op in loop.operations:
+            if op.is_guard():
+                fail_args = op.get_extra("failargs")
+                op._rd_frame_info_list = resume.FrameInfo(None, "code", 11)
+                op._rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
         optimize_trace(metainterp_sd, loop, self.enable_opts)
 
     def unroll_and_optimize(self, loop, call_pure_results=None):
@@ -487,11 +491,11 @@ class FakeDescrWithSnapshot(compile.ResumeGuardDescr):
 def convert_old_style_to_targets(loop, jump):
     newloop = TreeLoop(loop.name)
     newloop.inputargs = loop.inputargs
-    newloop.operations = [ResOperation(rop.LABEL, loop.inputargs, None, descr=FakeDescr())] + \
+    newloop.operations = [create_resop(rop.LABEL, None, loop.inputargs, descr=FakeDescr())] + \
                       loop.operations
     if not jump:
         assert newloop.operations[-1].getopnum() == rop.JUMP
-        newloop.operations[-1] = ResOperation(rop.LABEL, newloop.operations[-1].getarglist(), None, descr=FakeDescr())
+        newloop.operations[-1] = create_resop(rop.LABEL, None, newloop.operations[-1].getarglist(), descr=FakeDescr())
     return newloop
 
 # ____________________________________________________________

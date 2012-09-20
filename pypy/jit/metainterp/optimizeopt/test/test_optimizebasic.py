@@ -9,7 +9,7 @@ from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.history import get_const_ptr_for_string
 from pypy.jit.metainterp import executor, compile, resume
 from pypy.jit.metainterp.resoperation import rop, opname, ConstInt, BoxInt,\
-     create_resop_1
+     create_resop_1, create_resop
 from pypy.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():
@@ -117,10 +117,10 @@ class BaseTestBasic(BaseTest):
     def optimize_loop(self, ops, optops, call_pure_results=None):
         loop = self.parse(ops)
         token = JitCellToken()
-        loop.operations = [ResOperation(rop.LABEL, loop.inputargs, None, descr=TargetToken(token))] + \
+        loop.operations = [create_resop(rop.LABEL, None, loop.inputargs, descr=TargetToken(token))] + \
                           loop.operations
         if loop.operations[-1].getopnum() == rop.JUMP:
-            loop.operations[-1].setdescr(token)
+            loop.operations[-1]._descr = token
         expected = convert_old_style_to_targets(self.parse(optops), jump=True)
         self._do_optimize_loop(loop, call_pure_results)
         print '\n'.join([str(o) for o in loop.operations])

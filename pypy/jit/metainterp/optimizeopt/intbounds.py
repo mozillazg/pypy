@@ -4,7 +4,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
 from pypy.jit.metainterp.optimizeopt.intutils import (IntBound, IntLowerBound,
     IntUpperBound)
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop, ConstInt
+from pypy.jit.metainterp.resoperation import rop, ConstInt, AbstractResOp
 from pypy.jit.metainterp.optimize import InvalidLoop
 
 
@@ -31,7 +31,8 @@ class OptIntBounds(Optimization):
         b = v.intbound
         if b.has_lower and b.has_upper and b.lower == b.upper:
             v.make_constant(ConstInt(b.lower))
-        dispatch_bounds_ops(self, box)
+        if isinstance(box, AbstractResOp):
+            dispatch_bounds_ops(self, box)
 
     def optimize_GUARD_TRUE(self, op):
         self.emit_operation(op)

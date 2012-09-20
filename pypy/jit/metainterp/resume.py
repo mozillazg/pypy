@@ -52,6 +52,7 @@ def _ensure_parent_resumedata(framestack, n):
 
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
+    xxx
     n = len(framestack)-1
     top = framestack[n]
     _ensure_parent_resumedata(framestack, n)

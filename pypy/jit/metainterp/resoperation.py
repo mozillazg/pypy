@@ -977,13 +977,17 @@ class NullaryOp(object):
     def getarg(self, i):
         raise IndexError
 
-    def foreach_arg(self, func):
+    def foreach_arg(self, func, arg):
         pass        
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, descr=None):
-        return create_resop_0(newopnum, self.getresult(),
-                              descr or self.getdescr())
+        res = create_resop_0(newopnum, self.getresult(),
+                             descr or self.getdescr())
+        if self.is_guard():
+            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+            res.set_rd_snapshot(self.get_rd_snapshot())
+        return res
 
     def copy_if_modified_by_optimization(self, opt):
         return self
@@ -1017,8 +1021,8 @@ class UnaryOp(object):
             raise IndexError
 
     @specialize.arg(1)
-    def foreach_arg(self, func):
-        func(self.getopnum(), 0, self._arg0)
+    def foreach_arg(self, func, arg):
+        func(arg, self.getopnum(), 0, self._arg0)
 
     @specialize.argtype(1)
     def copy_if_modified_by_optimization(self, opt):
@@ -1030,8 +1034,12 @@ class UnaryOp(object):
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, descr=None):
-        return create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
-                              descr or self.getdescr())
+        res = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
+                             descr or self.getdescr())
+        if self.is_guard():
+            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+            res.set_rd_snapshot(self.get_rd_snapshot())
+        return res
 
     def get_arg_hash(self):
         return self._arg0._get_hash_()
@@ -1066,9 +1074,9 @@ class BinaryOp(object):
         return [self._arg0, self._arg1]
 
     @specialize.arg(1)
-    def foreach_arg(self, func):
-        func(self.getopnum(), 0, self._arg0)
-        func(self.getopnum(), 1, self._arg1)
+    def foreach_arg(self, func, arg):
+        func(arg, self.getopnum(), 0, self._arg0)
+        func(arg, self.getopnum(), 1, self._arg1)
 
     @specialize.argtype(1)
     def copy_if_modified_by_optimization(self, opt):
@@ -1083,9 +1091,13 @@ class BinaryOp(object):
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, arg1=None, descr=None):
-        return create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
-                              arg1 or self._arg1,
-                              descr or self.getdescr())
+        res = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
+                             arg1 or self._arg1,
+                             descr or self.getdescr())
+        if self.is_guard():
+            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+            res.set_rd_snapshot(self.get_rd_snapshot())
+        return res
 
     def get_arg_hash(self):
         return (intmask(self._arg0._get_hash_() << 16) +
@@ -1124,10 +1136,10 @@ class TernaryOp(object):
             raise IndexError
 
     @specialize.arg(1)
-    def foreach_arg(self, func):
-        func(self.getopnum(), 0, self._arg0)
-        func(self.getopnum(), 1, self._arg1)
-        func(self.getopnum(), 2, self._arg2)
+    def foreach_arg(self, func, arg):
+        func(arg, self.getopnum(), 0, self._arg0)
+        func(arg, self.getopnum(), 1, self._arg1)
+        func(arg, self.getopnum(), 2, self._arg2)
 
     @specialize.argtype(1)
     def copy_if_modified_by_optimization(self, opt):
@@ -1181,9 +1193,9 @@ class N_aryOp(object):
         return self._args[i]
 
     @specialize.arg(1)
-    def foreach_arg(self, func):
+    def foreach_arg(self, func, arg):
         for i, arg in enumerate(self._args):
-            func(self.getopnum(), i, arg)
+            func(arg, self.getopnum(), i, arg)
 
     @specialize.argtype(1)
     def copy_if_modified_by_optimization(self, opt):

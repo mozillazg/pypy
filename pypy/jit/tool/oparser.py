@@ -45,16 +45,12 @@ class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
         return FORCE_SPILL(self.OPNUM, self.getarglist()[:])
 
 
-def default_fail_descr(model, fail_args=None):
-    return model.BasicFailDescr()
-
-
 class OpParser(object):
 
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system, boxkinds,
-                 invent_fail_descr=default_fail_descr,
+                 invent_fail_descr=True,
                  nonstrict=False):
         self.input = input
         self.vars = {}
@@ -378,7 +374,7 @@ class OpParser(object):
         return base_indent, inpargs, lines
 
 def parse(input, cpu=None, namespace=None, type_system='lltype',
-          boxkinds=None, invent_fail_descr=default_fail_descr,
+          boxkinds=None, invent_fail_descr=True,
           no_namespace=False, nonstrict=False, OpParser=OpParser):
     if namespace is None and not no_namespace:
         namespace = {}
@@ -386,7 +382,7 @@ def parse(input, cpu=None, namespace=None, type_system='lltype',
                     invent_fail_descr, nonstrict).parse()
 
 def pure_parse(*args, **kwds):
-    kwds['invent_fail_descr'] = None
+    kwds['invent_fail_descr'] = False
     return parse(*args, **kwds)
 
 
