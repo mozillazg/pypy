@@ -169,34 +169,39 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={},
         for i in range(op1.numargs()):
             x = op1.getarg(i)
             y = op2.getarg(i)
-            assert x.same_box(remap.get(y, y))
+            assert x.eq(remap.get(y, y))
         if op2 in remap:
             if op2 is None:
                 assert op1 == remap[op2]
             else:
-                assert op1.same_box(remap[op2])
+                assert op1.eq(remap[op2])
         else:
             remap[op2] = op1
         if op1.getopnum() not in (rop.JUMP, rop.LABEL):      # xxx obscure
             assert op1.getdescr() == op2.getdescr()
-        if op1.getfailargs() or op2.getfailargs():
-            assert len(op1.getfailargs()) == len(op2.getfailargs())
-            if strict_fail_args:
-                for x, y in zip(op1.getfailargs(), op2.getfailargs()):
-                    if x is None:
-                        assert remap.get(y, y) is None
-                    else:
-                        assert x.same_box(remap.get(y, y))
-            else:
-                fail_args1 = set(op1.getfailargs())
-                fail_args2 = set([remap.get(y, y) for y in op2.getfailargs()])
-                for x in fail_args1:
-                    for y in fail_args2:
-                        if x.same_box(y):
-                            fail_args2.remove(y)
-                            break
-                    else:
-                        assert False
+        if op1.is_guard():
+            assert op2.is_guard()
+            if op1.get_extra("failargs") or op2.get_extra("failargs"):
+                assert (len(op1.get_extra("failargs")) ==
+                        len(op2.get_extra("failargs")))
+                if strict_fail_args:
+                    for x, y in zip(op1.get_extra("failargs"),
+                                    op2.get_extra("failargs")):
+                        if x is None:
+                            assert remap.get(y, y) is None
+                        else:
+                            assert x.eq(remap.get(y, y))
+                else:
+                    fail_args1 = set(op1.get_extra("failargs"))
+                    fail_args2 = set([remap.get(y, y) for y in
+                                      op2.get_extra("failargs")])
+                    for x in fail_args1:
+                        for y in fail_args2:
+                            if x.eq(y):
+                                fail_args2.remove(y)
+                                break
+                        else:
+                            assert False
     assert len(oplist1) == len(oplist2)
     print '-'*totwidth
     return True

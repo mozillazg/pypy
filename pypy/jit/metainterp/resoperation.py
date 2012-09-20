@@ -593,7 +593,8 @@ class AbstractResOp(AbstractValue):
 
     def __hash__(self):
         import sys
-        if sys._getframe(1).f_code.co_filename.endswith('resume.py'):
+        co_fname = sys._getframe(1).f_code.co_filename
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py'):
             return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
 
