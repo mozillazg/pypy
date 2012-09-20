@@ -183,6 +183,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constant_propagate(self):
         ops = """
         [i]
+        guard_value(i, 2) []
         i0 = int_add(i, 3)
         i1 = int_is_true(i0)
         guard_true(i1) []
@@ -192,8 +193,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         jump(i)
         """
         expected = """
-        []
-        jump()
+        [i]
+        guard_value(i, 2) []
+        jump(i)
         """
         self.optimize_loop(ops, expected)
 

@@ -34,7 +34,7 @@ class OptPure(Optimization):
                 resbox = self.optimizer.constant_fold(op)
                 # note that INT_xxx_OVF is not done from here, and the
                 # overflows in the INT_xxx operations are ignored
-                self.optimizer.make_constant(op.result, resbox)
+                self.optimizer.make_constant(op, resbox)
                 return
 
             # did we do the exact same operation already?

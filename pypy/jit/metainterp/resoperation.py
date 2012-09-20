@@ -593,6 +593,10 @@ class AbstractResOp(AbstractValue):
         return getattr(self, key)
 
     @specialize.arg(1)
+    def has_extra(self, key):
+        return hasattr(self, key)
+
+    @specialize.arg(1)
     def set_extra(self, key, value):
         if key not in self.DOCUMENTED_KEYS:
             raise Exception("Please document '%s' extra parameter and it's lifetime" % key)
