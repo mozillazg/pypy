@@ -198,7 +198,8 @@ class AbstractValue(object):
 
     @specialize.arg(1)
     def del_extra(self, key):
-        pass
+        if key == 'optimize_value':
+            del self._optimize_value
 
 def getkind(TYPE, supports_floats=True,
                   supports_longlong=True,

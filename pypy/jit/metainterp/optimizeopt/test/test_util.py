@@ -444,8 +444,6 @@ class BaseTest(object):
         assert preamble.operations[-1].getopnum() == rop.LABEL
 
         loop.resume_at_jump_descr = preamble.resume_at_jump_descr
-        for op in operations:
-            op.del_extra("optimize_value")
         assert not jump_args
         # deal with jump args
         loop.operations = [preamble.operations[-1]] + \

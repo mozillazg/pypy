@@ -195,25 +195,27 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         expected = """
         [i]
         guard_value(i, 2) []
-        jump(i)
+        jump(2)
         """
         self.optimize_loop(ops, expected)
 
     def test_constant_propagate_ovf(self):
         ops = """
-        []
-        i0 = int_add_ovf(2, 3)
+        [i]
+        guard_value(i, 2) []
+        i0 = int_add_ovf(i, 3)
         guard_no_overflow() []
         i1 = int_is_true(i0)
         guard_true(i1) []
         i2 = int_is_zero(i1)
         guard_false(i2) []
         guard_value(i0, 5) []
-        jump()
+        jump(i)
         """
         expected = """
-        []
-        jump()
+        [i]
+        guard_value(i, 2) []
+        jump(2)
         """
         self.optimize_loop(ops, expected)
 

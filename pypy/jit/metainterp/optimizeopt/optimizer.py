@@ -514,6 +514,10 @@ class Optimizer(Optimization):
             self.clear_newoperations()
         for op in self.loop.operations:
             self.first_optimization.propagate_forward(op)
+        for arg in self.loop.inputargs:
+            arg.del_extra("optimize_value")
+        for op in self.loop.operations:
+            op.del_extra("optimize_value")
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
