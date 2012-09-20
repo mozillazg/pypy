@@ -46,6 +46,7 @@ def create_resop(opnum, result, args, descr=None):
     op.initarglist(args)
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
+        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -59,6 +60,7 @@ def create_resop_0(opnum, result, descr=None):
         op = cls(result)
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
+        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -77,6 +79,7 @@ def create_resop_1(opnum, result, arg0, descr=None):
     op._arg0 = arg0
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
+        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -95,6 +98,7 @@ def create_resop_2(opnum, result, arg0, arg1, descr=None):
     op._arg1 = arg1
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
+        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -114,6 +118,7 @@ def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
     op._arg2 = arg2
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
+        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -174,12 +179,20 @@ class AbstractValue(object):
     def get_extra(self, key):
         if key == 'llgraph_var2index':
             return self.llgraph_var2index
+        if key == 'optimize_value':
+            try:
+                return self._optimize_value
+            except AttributeError:
+                raise KeyError
         raise KeyError
 
     @specialize.arg(1)
     def set_extra(self, key, value):
         if key == 'llgraph_var2index':
             self.llgraph_var2index = value
+            return
+        if key == 'optimize_value':
+            self._optimize_value = value
             return
         raise KeyError
 
@@ -926,6 +939,22 @@ class GuardResOp(ResOpWithDescr):
         if self._rd_frame_info_list is not None:
             raise Exception("rd_frame_info_list already set")
         self._rd_frame_info_list = rd_frame_info_list
+
+    def invent_descr(self):
+        from pypy.jit.metainterp import compile
+        
+        opnum = self.getopnum()
+        if opnum == rop.GUARD_NOT_FORCED:
+            descr = compile.ResumeGuardForcedDescr(metainterp_sd,
+                                                   metainterp.jitdriver_sd)
+        elif opnum == rop.GUARD_NOT_INVALIDATED:
+            descr = compile.ResumeGuardNotInvalidated()
+        else:
+            descr = compile.ResumeGuardDescr()
+        descr.rd_snapshot = self._rd_snapshot
+        descr.rd_frame_info_list = self._rd_frame_info_list
+        self.setdescr(descr)
+        return descr
 
 # ============
 # arity mixins

@@ -1017,7 +1017,8 @@ class MIFrame(object):
     @arguments("orgpc", "int", "boxes3", "jitcode_position", "boxes3")
     def opimpl_jit_merge_point(self, orgpc, jdindex, greenboxes,
                                jcposition, redboxes):
-        resumedescr = compile.ResumeAtPositionDescr()
+        #resumedescr = compile.ResumeAtPositionDescr()
+        xxx 
         self.capture_resumedata(resumedescr, orgpc)
 
         any_operation = len(self.metainterp.history.operations) > 0
@@ -1280,13 +1281,7 @@ class MIFrame(object):
             return
         metainterp = self.metainterp
         metainterp_sd = metainterp.staticdata
-        if opnum == rop.GUARD_NOT_FORCED:
-            resumedescr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                   metainterp.jitdriver_sd)
-        elif opnum == rop.GUARD_NOT_INVALIDATED:
-            resumedescr = compile.ResumeGuardNotInvalidated()
-        else:
-            resumedescr = compile.ResumeGuardDescr()
+        xxx
         if box1 is None:
             guard_op = create_resop_0(opnum, None, descr=resumedescr)
         elif box2 is None:

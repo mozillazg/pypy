@@ -371,10 +371,6 @@ class Storage(compile.ResumeGuardDescr):
         op.set_extra("failargs", boxes)
     def __eq__(self, other):
         return type(self) is type(other)      # xxx obscure
-    def clone_if_mutable(self):
-        res = Storage(self.metainterp_sd, self.original_greenkey)
-        self.copy_all_attributes_into(res)
-        return res
 
 def _sortboxes(boxes):
     _kind2count = {INT: 1, REF: 2, FLOAT: 3}
@@ -446,6 +442,7 @@ class BaseTest(object):
         loop.resume_at_jump_descr = preamble.resume_at_jump_descr
         for op in operations:
             op.del_extra("optimize_value")
+        assert not jump_args
         # deal with jump args
         loop.operations = [preamble.operations[-1]] + \
                           operations + \

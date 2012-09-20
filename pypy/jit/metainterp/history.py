@@ -20,14 +20,6 @@ class AbstractDescr(AbstractValue):
     def repr_of_descr(self):
         return '%r' % (self,)
 
-    def _clone_if_mutable(self):
-        return self
-    def clone_if_mutable(self):
-        clone = self._clone_if_mutable()
-        if not we_are_translated():
-            assert clone.__class__ is self.__class__
-        return clone
-
 class AbstractFailDescr(AbstractDescr):
     index = -1
 

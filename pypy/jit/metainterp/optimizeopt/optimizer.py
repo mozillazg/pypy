@@ -560,8 +560,10 @@ class Optimizer(Optimization):
             assert False
 
     def store_final_boxes_in_guard(self, op):
-        descr = op.getdescr()
-        assert isinstance(descr, compile.ResumeGuardDescr)
+        if op.getdescr() is not None:
+            # means we need to copy the op and attach a new descr
+            op = op.copy_and_change(op.getopnum(), descr=None)
+        descr = op.invent_descr()
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         try:
             newboxes = modifier.finish(self, self.pendingfields)

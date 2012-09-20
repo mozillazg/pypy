@@ -491,7 +491,7 @@ class ResumeGuardDescr(ResumeDescr):
     CNT_FLOAT      =  0x60000000
 
     def store_final_boxes(self, guard_op, boxes):
-        guard_op.setfailargs(boxes)
+        guard_op.set_extra("failargs", boxes)
         self.guard_opnum = guard_op.getopnum()
 
     def make_a_counter_per_value(self, guard_value_op):

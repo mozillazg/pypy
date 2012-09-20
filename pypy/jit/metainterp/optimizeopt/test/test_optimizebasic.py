@@ -8,26 +8,26 @@ import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.history import get_const_ptr_for_string
 from pypy.jit.metainterp import executor, compile, resume
-from pypy.jit.metainterp.resoperation import rop, opname, ConstInt, BoxInt
+from pypy.jit.metainterp.resoperation import rop, opname, ConstInt, BoxInt,\
+     create_resop_1
 from pypy.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():
-    from pypy.jit.metainterp.compile import ResumeGuardDescr
     from pypy.jit.metainterp.resume import tag, TAGBOX
     b0 = BoxInt()
     b1 = BoxInt()
     opt = optimizeopt.Optimizer(FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
-    fdescr = ResumeGuardDescr()
-    op = ResOperation(rop.GUARD_TRUE, ['dummy'], None, descr=fdescr)
+    op = create_resop_1(rop.GUARD_TRUE, None, 'dummy')
     # setup rd data
     fi0 = resume.FrameInfo(None, "code0", 11)
-    fdescr.rd_frame_info_list = resume.FrameInfo(fi0, "code1", 33)
+    op._rd_frame_info_list = resume.FrameInfo(fi0, "code1", 33)
     snapshot0 = resume.Snapshot(None, [b0])
-    fdescr.rd_snapshot = resume.Snapshot(snapshot0, [b1])
+    op._rd_snapshot = resume.Snapshot(snapshot0, [b1])
     #
     opt.store_final_boxes_in_guard(op)
-    if op.getfailargs() == [b0, b1]:
+    fdescr = op.getdescr()
+    if op.get_extra("failargs") == [b0, b1]:
         assert list(fdescr.rd_numb.nums)      == [tag(1, TAGBOX)]
         assert list(fdescr.rd_numb.prev.nums) == [tag(0, TAGBOX)]
     else:
