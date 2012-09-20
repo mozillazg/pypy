@@ -250,16 +250,11 @@ class OpParser(object):
                             raise ParseError(
                                 "Unknown var in fail_args: %s" % arg)
                     fail_args.append(fail_arg)
-            if descr is None and self.invent_fail_descr:
-                descr = self.invent_fail_descr(self.model, fail_args)
             if hasattr(descr, '_oparser_uses_descr_of_guard'):
                 descr._oparser_uses_descr_of_guard(self, fail_args)
         else:
             fail_args = None
-            if opnum == rop.FINISH:
-                if descr is None and self.invent_fail_descr:
-                    descr = self.invent_fail_descr(self.model, fail_args)
-            elif opnum == rop.JUMP:
+            if opnum == rop.JUMP:
                 if descr is None and self.invent_fail_descr:
                     descr = self.original_jitcell_token
 

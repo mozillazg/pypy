@@ -91,7 +91,7 @@ def decode_hp_hint_args(op):
     assert len(reds_v) == numreds
     #
     def _sort(args_v, is_green):
-        from pypy.jit.metainterp.history import getkind
+        from pypy.jit.metainterp.resoperation import getkind
         lst = [v for v in args_v if v.concretetype is not lltype.Void]
         if is_green:
             assert len(lst) == len(args_v), (

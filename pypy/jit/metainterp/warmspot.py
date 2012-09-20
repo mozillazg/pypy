@@ -17,7 +17,7 @@ from pypy.translator.simplify import get_functype
 from pypy.translator.backendopt import removenoops
 from pypy.translator.unsimplify import call_final_function
 
-from pypy.jit.metainterp import history, pyjitpl, gc, memmgr
+from pypy.jit.metainterp import history, pyjitpl, gc, memmgr, resoperation
 from pypy.jit.metainterp.pyjitpl import MetaInterpStaticData
 from pypy.jit.metainterp.jitprof import Profiler, EmptyProfiler
 from pypy.jit.metainterp.jitexc import JitException
@@ -280,8 +280,8 @@ class WarmRunnerDesc(object):
         graph.func._jit_unroll_safe_ = True
         jd.jitdriver = block.operations[pos].args[1].value
         jd.portal_runner_ptr = "<not set so far>"
-        jd.result_type = history.getkind(jd.portal_graph.getreturnvar()
-                                         .concretetype)[0]
+        jd.result_type = resoperation.getkind(jd.portal_graph.getreturnvar()
+                                              .concretetype)[0]
         self.jitdrivers_sd.append(jd)
 
     def check_access_directly_sanity(self, graphs):
@@ -530,7 +530,7 @@ class WarmRunnerDesc(object):
         greens_v, reds_v = support.decode_hp_hint_args(op)
         ALLARGS = [v.concretetype for v in (greens_v + reds_v)]
         jd._green_args_spec = [v.concretetype for v in greens_v]
-        jd.red_args_types = [history.getkind(v.concretetype) for v in reds_v]
+        jd.red_args_types = [resoperation.getkind(v.concretetype) for v in reds_v]
         jd.num_green_args = len(jd._green_args_spec)
         jd.num_red_args = len(jd.red_args_types)
         RESTYPE = graph.getreturnvar().concretetype
@@ -541,11 +541,11 @@ class WarmRunnerDesc(object):
         #
         if jd.result_type == 'v':
             ASMRESTYPE = lltype.Void
-        elif jd.result_type == history.INT:
+        elif jd.result_type == resoperation.INT:
             ASMRESTYPE = lltype.Signed
-        elif jd.result_type == history.REF:
+        elif jd.result_type == resoperation.REF:
             ASMRESTYPE = llmemory.GCREF
-        elif jd.result_type == history.FLOAT:
+        elif jd.result_type == resoperation.FLOAT:
             ASMRESTYPE = lltype.Float
         else:
             assert False
@@ -704,7 +704,7 @@ class WarmRunnerDesc(object):
         portalfunc_ARGS = []
         nums = {}
         for i, ARG in enumerate(PORTALFUNC.ARGS):
-            kind = history.getkind(ARG)
+            kind = resoperation.getkind(ARG)
             assert kind != 'void'
             if i < len(jd.jitdriver.greens):
                 color = 'green'
@@ -718,7 +718,7 @@ class WarmRunnerDesc(object):
         #
         rtyper = self.translator.rtyper
         RESULT = PORTALFUNC.RESULT
-        result_kind = history.getkind(RESULT)
+        result_kind = resoperation.getkind(RESULT)
         ts = self.cpu.ts
 
         def ll_portal_runner(*args):

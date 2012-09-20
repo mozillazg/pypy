@@ -3,8 +3,8 @@ import sys
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 from pypy.jit.tool.oparser import parse, OpParser
-from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.history import AbstractDescr, BoxInt, JitCellToken,\
+from pypy.jit.metainterp.resoperation import rop, BoxInt
+from pypy.jit.metainterp.history import AbstractDescr, JitCellToken,\
      TargetToken
 
 class BaseTestOparser(object):
@@ -28,7 +28,8 @@ class BaseTestOparser(object):
         assert [op.getopnum() for op in loop.operations] == [rop.INT_ADD, rop.INT_SUB,
                                                         rop.FINISH]
         assert len(loop.inputargs) == 2
-        assert loop.operations[-1].getdescr()
+        #assert loop.operations[-1].getdescr()
+        # descr is invented by optimizations
 
     def test_const_ptr_subops(self):
         x = """
@@ -39,7 +40,8 @@ class BaseTestOparser(object):
         vtable = lltype.nullptr(S)
         loop = self.parse(x, None, locals())
         assert len(loop.operations) == 1
-        assert loop.operations[0].getdescr()
+        #assert loop.operations[0].getdescr()
+        # descr is invented by optimizations
         assert loop.operations[0].get_extra("failargs") == []
 
     def test_descr(self):
