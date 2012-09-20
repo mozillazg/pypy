@@ -3,7 +3,7 @@ from pypy.jit.metainterp.resoperation import rop
 
 def check_early_force(opt, opnum, num, arg):
     try:
-        value = arg.get_extra("optimizer_value")
+        value = arg.get_extra("optimize_value")
     except KeyError:
         return
     value.force_box(opt)

@@ -233,6 +233,15 @@ class OptValue(object):
     def setinteriorfield(self, index, ofs, value):
         raise NotImplementedError
 
+    def __repr__(self):
+        if self.level == LEVEL_UNKNOWN:
+            return '<Opt %r>' % self.box
+        if self.level == LEVEL_NONNULL:
+            return '<OptNonNull %r>' % self.box
+        if self.level == LEVEL_KNOWNCLASS:
+            return '<OptKnownClass (%s) %r>' % (self.known_class, self.box)
+        assert self.level == LEVEL_CONSTANT
+        return '<OptConst %r>' % self.box
 
 class ConstantValue(OptValue):
     def __init__(self, box):
@@ -522,7 +531,7 @@ class Optimizer(Optimization):
 
     def get_value_replacement(self, v):
         try:
-            value = v.get_extra("opt_replacement")
+            value = v.get_extra("optimize_value")
         except KeyError:
             return None
         else:
@@ -536,6 +545,8 @@ class Optimizer(Optimization):
     def _emit_operation(self, op):
         assert op.getopnum() not in opgroups.CALL_PURE
         op = op.copy_if_modified_by_optimization(self)
+        if isinstance(op, Const):
+            return
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.Counters.OPT_GUARDS)
@@ -594,22 +605,6 @@ class Optimizer(Optimization):
                 # a real GUARD_VALUE.  Make it use one counter per value.
                 descr.make_a_counter_per_value(op)
         return op
-
-    def make_args_key(self, op):
-        n = op.numargs()
-        args = [None] * (n + 2)
-        for i in range(n):
-            arg = op.getarg(i)
-            try:
-                value = self.values[arg]
-            except KeyError:
-                pass
-            else:
-                arg = value.get_key_box()
-            args[i] = arg
-        args[n] = ConstInt(op.getopnum())
-        args[n + 1] = op.getdescr()
-        return args
 
     def optimize_default(self, op):
         self.emit_operation(op)
