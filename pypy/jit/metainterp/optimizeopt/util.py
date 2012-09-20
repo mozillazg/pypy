@@ -107,41 +107,14 @@ class ArgsDict(object):
             return candidate
         return None
 
-    def setitem(self, op):
+    def add(self, op):
         hash = op._get_hash_() & self.bucket_size
         self.buckets[hash] = op # don't care about collisions
 
-# def args_eq(args1, args2):
-#     make_sure_not_resized(args1)
-#     make_sure_not_resized(args2)
-#     if len(args1) != len(args2):
-#         return False
-#     for i in range(len(args1)):
-#         arg1 = args1[i]
-#         arg2 = args2[i]
-#         if arg1 is None:
-#             if arg2 is not None:
-#                 return False
-#         elif not arg1.same_box(arg2):
-#             return False
-#     return True
-
-# def args_hash(args):
-#     make_sure_not_resized(args)
-#     res = 0x345678
-#     for arg in args:
-#         if arg is None:
-#             y = 17
-#         else:
-#             y = arg._get_hash_()
-#         res = intmask((1000003 * res) ^ y)
-#     return res
-
-# def args_dict():
-#     return r_dict(args_eq, args_hash)
-
-# def args_dict_box():
-#     return r_dict(args_eq, args_hash)
+    def copy(self):
+        a = ArgsDict()
+        a.buckets = self.buckets[:]
+        return a
 
 
 # ____________________________________________________________

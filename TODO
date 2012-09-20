@@ -1,0 +1,2 @@
+
+* make OptValue somehow leaner using subclassing instead of one-size-fit-most

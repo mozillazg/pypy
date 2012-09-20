@@ -585,7 +585,8 @@ class AbstractResOp(AbstractValue):
 
     @specialize.arg(1)
     def del_extra(self, key):
-        delattr(self, key)
+        if hasattr(self, key):
+            delattr(self, key)
 
     @classmethod
     def getopnum(cls):
@@ -900,6 +901,8 @@ class ResOpWithDescr(AbstractResOp):
         check_descr(descr)
 
     def get_descr_hash(self):
+        if self._descr is None:
+            return 0 # for tests
         return compute_identity_hash(self._descr)
 
 class GuardResOp(ResOpWithDescr):

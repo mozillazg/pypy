@@ -9,6 +9,7 @@ class GeneralizationStrategy(object):
 
 class KillHugeIntBounds(GeneralizationStrategy):
     def apply(self):
+        return # so far we don't care
         for v in self.optimizer.values.values():
             if v.is_constant():
                 continue

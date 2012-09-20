@@ -1,13 +1,10 @@
-from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimizeopt.virtualstate import VirtualStateAdder, ShortBoxes, BadVirtualState
 from pypy.jit.metainterp.compile import ResumeGuardDescr
-from pypy.jit.metainterp.history import TreeLoop, TargetToken, JitCellToken
-from pypy.jit.metainterp.jitexc import JitException
+from pypy.jit.metainterp.history import TargetToken, JitCellToken
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.optimizer import *
 from pypy.jit.metainterp.optimizeopt.generalize import KillHugeIntBounds
-from pypy.jit.metainterp.inliner import Inliner
-from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.resoperation import rop, create_resop
 from pypy.jit.metainterp.resume import Snapshot
 import sys, os
 
@@ -93,8 +90,7 @@ class UnrollOptimizer(Optimization):
 
         cell_token = jumpop.getdescr()
         assert isinstance(cell_token, JitCellToken)
-        stop_label = ResOperation(rop.LABEL, jumpop.getarglist(), None, TargetToken(cell_token))
-
+        stop_label = create_resop(rop.LABEL, None, jumpop.getarglist(), TargetToken(cell_token))
         
         if jumpop.getopnum() == rop.JUMP:
             if self.jump_to_already_compiled_trace(jumpop):
@@ -107,7 +103,7 @@ class UnrollOptimizer(Optimization):
 
             if start_label and self.jump_to_start_label(start_label, stop_label):
                 # Initial label matches, jump to it
-                jumpop = ResOperation(rop.JUMP, stop_label.getarglist(), None,
+                jumpop = create_resop(rop.JUMP, None, stop_label.getarglist(),
                                       descr=start_label.getdescr())
                 if self.short:
                     # Construct our short preamble
@@ -199,7 +195,8 @@ class UnrollOptimizer(Optimization):
         assert isinstance(target_token, TargetToken)
         targetop.initarglist(inputargs)
         target_token.virtual_state = virtual_state
-        target_token.short_preamble = [ResOperation(rop.LABEL, short_inputargs, None)]
+        target_token.short_preamble = [create_resop(rop.LABEL, None,
+                                                    short_inputargs)]
         target_token.resume_at_jump_descr = resume_at_jump_descr
 
         exported_values = {}

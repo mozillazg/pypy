@@ -1,12 +1,13 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
 from pypy.jit.metainterp.resoperation import rop, create_resop_2
-from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
+from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method,\
+     ArgsDict
 
 class OptPure(Optimization):
     def __init__(self):
         self.posponedop = None
-        self.pure_operations = args_dict()
-        self.emitted_pure_operations = {}
+        self.pure_operations = ArgsDict()
+        self.emitted_pure_operations = []
 
     def propagate_forward(self, op):
         dispatch_opt(self, op)
@@ -37,15 +38,14 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
-            args = self.optimizer.make_args_key(op)
-            oldop = self.pure_operations.get(args, None)
-            if oldop is not None and oldop.getdescr() is op.getdescr():
+            oldop = self.pure_operations.get(op)
+            if oldop is not None:
                 assert oldop.getopnum() == op.getopnum()
                 self.optimizer.make_equal_to(op.result, self.getvalue(oldop.result),
                                    True)
                 return
             else:
-                self.pure_operations[args] = op
+                self.pure_operations.add(op)
                 self.remember_emitting_pure(op)
 
         # otherwise, the operation remains
@@ -112,11 +112,13 @@ class OptPure(Optimization):
         return self.pure_operations.get(key, None)
 
     def remember_emitting_pure(self, op):
-        self.emitted_pure_operations[op] = True
+        self.emitted_pure_operations.append(op)
 
     def produce_potential_short_preamble_ops(self, sb):
         for op in self.emitted_pure_operations:
-            if op.getopnum() == rop.GETARRAYITEM_GC_PURE or \
+            if op.getopnum() == rop.GETARRAYITEM_GC_PURE_i or \
+               op.getopnum() == rop.GETARRAYITEM_GC_PURE_p or \
+               op.getopnum() == rop.GETARRAYITEM_GC_PURE_f or \
                op.getopnum() == rop.STRGETITEM or \
                op.getopnum() == rop.UNICODEGETITEM:
                 if not self.getvalue(op.getarg(1)).is_constant():

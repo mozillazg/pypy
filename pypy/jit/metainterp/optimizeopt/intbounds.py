@@ -31,12 +31,7 @@ class OptIntBounds(Optimization):
         b = v.intbound
         if b.has_lower and b.has_upper and b.lower == b.upper:
             v.make_constant(ConstInt(b.lower))
-
-        try:
-            op = self.optimizer.producer[box]
-        except KeyError:
-            return
-        dispatch_bounds_ops(self, op)
+        dispatch_bounds_ops(self, box)
 
     def optimize_GUARD_TRUE(self, op):
         self.emit_operation(op)

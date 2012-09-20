@@ -12,9 +12,8 @@ from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt,\
 from pypy.jit.metainterp.history import TreeLoop, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr
 from pypy.jit.metainterp.resoperation import BoxPtr, BoxFloat, Box, BoxInt
-from pypy.jit.metainterp import history, resoperation
+from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.optimize import InvalidLoop
-from pypy.jit.metainterp.inliner import Inliner
 from pypy.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP
 from pypy.jit.codewriter import heaptracker, longlong
 
@@ -408,18 +407,18 @@ class _DoneWithThisFrameDescr(AbstractFailDescr):
 
 class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd):
-        assert jitdriver_sd.result_type == history.VOID
+        assert jitdriver_sd.result_type == resoperation.VOID
         raise metainterp_sd.DoneWithThisFrameVoid()
 
 class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd):
-        assert jitdriver_sd.result_type == history.INT
+        assert jitdriver_sd.result_type == resoperation.INT
         result = metainterp_sd.cpu.get_latest_value_int(0)
         raise metainterp_sd.DoneWithThisFrameInt(result)
 
 class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd):
-        assert jitdriver_sd.result_type == history.REF
+        assert jitdriver_sd.result_type == resoperation.REF
         cpu = metainterp_sd.cpu
         result = cpu.get_latest_value_ref(0)
         cpu.clear_latest_values(1)
@@ -427,7 +426,7 @@ class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
 
 class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd):
-        assert jitdriver_sd.result_type == history.FLOAT
+        assert jitdriver_sd.result_type == resoperation.FLOAT
         result = metainterp_sd.cpu.get_latest_value_float(0)
         raise metainterp_sd.DoneWithThisFrameFloat(result)
 
@@ -505,11 +504,11 @@ class ResumeGuardDescr(ResumeDescr):
         else:
             if i > self.CNT_BASE_MASK:
                 return    # probably never, but better safe than sorry
-            if box.type == history.INT:
+            if box.type == resoperation.INT:
                 cnt = self.CNT_INT
-            elif box.type == history.REF:
+            elif box.type == resoperation.REF:
                 cnt = self.CNT_REF
-            elif box.type == history.FLOAT:
+            elif box.type == resoperation.FLOAT:
                 cnt = self.CNT_FLOAT
             else:
                 assert 0, box.type
@@ -838,9 +837,9 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
     assert len(redargtypes) == nb_red_args
     inputargs = []
     for kind in redargtypes:
-        if   kind == history.INT:   box = BoxInt()
-        elif kind == history.REF:   box = BoxPtr()
-        elif kind == history.FLOAT: box = BoxFloat()
+        if   kind == resoperation.INT:   box = BoxInt()
+        elif kind == resoperation.REF:   box = BoxPtr()
+        elif kind == resoperation.FLOAT: box = BoxFloat()
         else: raise AssertionError
         inputargs.append(box)
     k = jitdriver_sd.portal_runner_adr

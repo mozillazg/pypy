@@ -13,12 +13,11 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.codewriter.heaptracker import register_known_gctype
 from pypy.jit.tool.oparser import parse, pure_parse
 from pypy.jit.metainterp.quasiimmut import QuasiImmutDescr
-from pypy.jit.metainterp import compile, resume, history
+from pypy.jit.metainterp import compile, resume
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.config.pypyoption import get_pypy_config
 from pypy.jit.metainterp.resoperation import rop, create_resop, BoxPtr,\
-     create_resop_0
-from pypy.jit.metainterp.optimizeopt.unroll import Inliner
+     create_resop_0, REF, INT, FLOAT
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):
@@ -76,7 +75,7 @@ def test_argsdict():
     d = ArgsDict()
     op = create_resop_0(rop.FORCE_TOKEN, 13)
     assert d.get(op) is None
-    d.setitem(op)
+    d.add(op)
     assert d.get(op) is op
 
 # ____________________________________________________________
@@ -378,7 +377,7 @@ class Storage(compile.ResumeGuardDescr):
         return res
 
 def _sortboxes(boxes):
-    _kind2count = {history.INT: 1, history.REF: 2, history.FLOAT: 3}
+    _kind2count = {INT: 1, REF: 2, FLOAT: 3}
     return sorted(boxes, key=lambda box: _kind2count[box.type])
 
 class BaseTest(object):
@@ -407,15 +406,12 @@ class BaseTest(object):
         assert equaloplists(optimized.operations,
                             expected.operations, False, remap, text_right)
 
-    def _do_optimize_loop(self, loop):
+    def _do_optimize_loop(self, loop, call_pure_results):
         from pypy.jit.metainterp.optimizeopt import optimize_trace
-        #from pypy.jit.metainterp.optimizeopt.util import args_dict
 
         self.loop = loop
-        #loop.call_pure_results = args_dict()
-        #if call_pure_results is not None:
-        #    for k, v in call_pure_results.items():
-        #        loop.call_pure_results[list(k)] = v
+        if call_pure_results is not None:
+            loop.call_pure_results = call_pure_results.copy()
         metainterp_sd = FakeMetaInterpStaticData(self.cpu)
         if hasattr(self, 'vrefinfo'):
             metainterp_sd.virtualref_info = self.vrefinfo
@@ -424,7 +420,7 @@ class BaseTest(object):
         #
         optimize_trace(metainterp_sd, loop, self.enable_opts)
 
-    def unroll_and_optimize(self, loop):#, call_pure_results=None):
+    def unroll_and_optimize(self, loop, call_pure_results=None):
         operations =  loop.operations
         jumpop = operations[-1]
         assert jumpop.getopnum() == rop.JUMP
@@ -443,19 +439,17 @@ class BaseTest(object):
                                             operations +  \
                               [create_resop(rop.LABEL, None, jump_args,
                                             descr=token)]
-        self._do_optimize_loop(preamble)#, call_pure_results)
+        self._do_optimize_loop(preamble, call_pure_results)
 
         assert preamble.operations[-1].getopnum() == rop.LABEL
 
-        import pdb
-        pdb.set_trace()
-        inliner = Inliner(inputargs, jump_args)
         loop.resume_at_jump_descr = preamble.resume_at_jump_descr
+        for op in operations:
+            op.del_extra("optimize_value")
+        # deal with jump args
         loop.operations = [preamble.operations[-1]] + \
-                          [inliner.inline_op(op) for op in cloned_operations] + \
-                          [ResOperation(rop.JUMP, [inliner.inline_arg(a) for a in jump_args],
-                                        None, descr=token)] 
-                          #[inliner.inline_op(jumpop)]
+                          operations + \
+                          [create_resop(rop.JUMP, None, jump_args, descr=token)]
         assert loop.operations[-1].getopnum() == rop.JUMP
         assert loop.operations[0].getopnum() == rop.LABEL
         loop.inputargs = loop.operations[0].getarglist()

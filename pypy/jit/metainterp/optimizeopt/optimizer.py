@@ -7,8 +7,7 @@ from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
      Const, ConstInt, ConstFloat
-from pypy.jit.metainterp.typesystem import llhelper, oohelper
-from pypy.tool.pairtype import extendabletype
+from pypy.jit.metainterp.typesystem import llhelper
 from pypy.rlib.objectmodel import specialize
 
 LEVEL_UNKNOWN    = '\x00'
@@ -19,6 +18,7 @@ LEVEL_CONSTANT   = '\x03'
 MODE_ARRAY   = '\x00'
 MODE_STR     = '\x01'
 MODE_UNICODE = '\x02'
+
 class LenBound(object):
     def __init__(self, mode, descr, bound):
         self.mode = mode
@@ -29,7 +29,6 @@ class LenBound(object):
         return LenBound(self.mode, self.descr, self.bound.clone())
 
 class OptValue(object):
-    __metaclass__ = extendabletype
     _attrs_ = ('box', 'known_class', 'last_guard', 'level', 'intbound', 'lenbound')
     last_guard = None
 
@@ -401,23 +400,24 @@ class Optimizer(Optimization):
         self.resumedata_memo.forget_numberings(virtualbox)
 
     def getinterned(self, box):
+        # WTF is this function doing?
+        if box.type != REF:
+            return box
         constbox = self.get_constant_box(box)
         if constbox is None:
             return box
-        if constbox.type == REF:
-            xxx
-            value = constbox.getref_base()
-            if not value:
-                return box
-            return self.interned_refs.setdefault(value, box)
+        value = constbox.getref_base()
+        if not value:
+            return box
+        return self.interned_refs.setdefault(value, box)
         #elif constbox.type == INT:
         #    value = constbox.getint()
         #    return self.interned_ints.setdefault(value, box)
-        else:
-            return box
 
     @specialize.argtype(0)
     def getvalue(self, box):
+        if box.is_constant():
+            return ConstantValue(box)
         box = self.getinterned(box)
         try:
             value = box.get_extra("optimize_value")
