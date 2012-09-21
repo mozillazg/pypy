@@ -2235,12 +2235,12 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             if flag:
                self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(frame, 0))
-               values.append(self.cpu.get_latest_value_int(frame, 2))
+               values.append(self.cpu.get_latest_value_int(token, 0))
+               values.append(self.cpu.get_latest_value_int(token, 2))
                values.append(token)
             return 42
 
-        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2249,10 +2249,10 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
-        tok = BoxInt()
+        tok = BoxPtr()
         faildescr = BasicFailDescr(1)
         ops = [
-        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.JIT_FRAME, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
@@ -2280,12 +2280,12 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             if flag:
                self.cpu.force(token)
-               values.append(self.cpu.get_latest_value_int(frame, 0))
-               values.append(self.cpu.get_latest_value_int(frame, 2))
+               values.append(self.cpu.get_latest_value_int(token, 0))
+               values.append(self.cpu.get_latest_value_int(token, 2))
                values.append(token)
             return 42.5
 
-        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Float)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Float)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2294,10 +2294,10 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         i1 = BoxInt()
         f2 = BoxFloat()
-        tok = BoxInt()
+        tok = BoxPtr()
         faildescr = BasicFailDescr(1)
         ops = [
-        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.JIT_FRAME, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], f2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
@@ -2334,7 +2334,6 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = cpu._calldescr_dynamic_for_tests([types.uchar], types.sint)
         i1 = BoxInt()
         i2 = BoxInt()
-        tok = BoxInt()
         faildescr = BasicFailDescr(1)
         ops = [
         ResOperation(rop.CALL_RELEASE_GIL, [funcbox, i1], i2,
@@ -2391,7 +2390,6 @@ class LLtypeBackendTest(BaseBackendTest):
         i1 = BoxInt()
         i2 = BoxInt()
         i3 = BoxInt()
-        tok = BoxInt()
         faildescr = BasicFailDescr(1)
         ops = [
         ResOperation(rop.CALL_RELEASE_GIL, [funcbox, i0, i1, i2, i3], None,
@@ -2490,7 +2488,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.invalidate_loop(looptoken)
 
         frame = self.cpu.execute_token(looptoken, -42, 9)
-        assert self.get_latest_descr(frame) is faildescr
+        assert self.cpu.get_latest_descr(frame) is faildescr
         assert self.cpu.get_latest_value_int(frame, 0) == 9
         print 'step 2 ok'
         print '-'*79
@@ -2758,7 +2756,7 @@ class LLtypeBackendTest(BaseBackendTest):
             lltype.Ptr(lltype.FuncType(ARGS, RES)), ARGS, RES,
             EffectInfo.MOST_GENERAL)
         args = [i+1 for i in range(10)]
-        res = self.cpu.execute_token(looptoken, *args)
+        frame = self.cpu.execute_token(looptoken, *args)
         assert self.cpu.get_latest_value_int(frame, 0) == 55
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
@@ -2771,7 +2769,7 @@ class LLtypeBackendTest(BaseBackendTest):
         othertoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
         args = [i+1 for i in range(10)]
-        res = self.cpu.execute_token(othertoken, *args)
+        frame = self.cpu.execute_token(othertoken, *args)
         assert self.cpu.get_latest_value_int(frame, 0) == 13
         assert called == [done_number]
 
@@ -2782,7 +2780,7 @@ class LLtypeBackendTest(BaseBackendTest):
             othertoken = JitCellToken()
             self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
             args = [i+1 for i in range(10)]
-            res = self.cpu.execute_token(othertoken, *args)
+            frame = self.cpu.execute_token(othertoken, *args)
             assert self.cpu.get_latest_value_int(frame, 0) == 97
             assert not called
         finally:
@@ -2824,7 +2822,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(2.3)]
-        res = self.cpu.execute_token(looptoken, *args)
+        frame = self.cpu.execute_token(looptoken, *args)
         x = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(x) == 1.2 + 2.3
         ops = '''
@@ -2838,7 +2836,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(3.2)]
-        res = self.cpu.execute_token(othertoken, *args)
+        frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [done_number]
@@ -2851,7 +2849,7 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
             args = [longlong.getfloatstorage(1.2),
                     longlong.getfloatstorage(3.2)]
-            res = self.cpu.execute_token(othertoken, *args)
+            frame = self.cpu.execute_token(othertoken, *args)
             x = self.cpu.get_latest_value_float(frame, 0)
             assert longlong.getrealfloat(x) == 1.2 + 3.2
             assert not called
@@ -2918,7 +2916,7 @@ class LLtypeBackendTest(BaseBackendTest):
         done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
         args = [longlong.getfloatstorage(1.25),
                 longlong.getfloatstorage(2.35)]
-        res = self.cpu.execute_token(looptoken, *args)
+        frame = self.cpu.execute_token(looptoken, *args)
         x = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(x) == 1.25 + 2.35
         assert not called
@@ -2936,7 +2934,7 @@ class LLtypeBackendTest(BaseBackendTest):
         # normal call_assembler: goes to looptoken
         args = [longlong.getfloatstorage(1.25),
                 longlong.getfloatstorage(3.25)]
-        res = self.cpu.execute_token(othertoken, *args)
+        frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [done_number]
@@ -2959,7 +2957,7 @@ class LLtypeBackendTest(BaseBackendTest):
         # now, our call_assembler should go to looptoken2
         args = [longlong.getfloatstorage(6.0),
                 longlong.getfloatstorage(1.5)]         # 6.0-1.5 == 1.25+3.25
-        res = self.cpu.execute_token(othertoken, *args)
+        frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(x) == 13.5
         assert called == [done_number]
@@ -3654,11 +3652,11 @@ class LLtypeBackendTest(BaseBackendTest):
         values = []
         def maybe_force(token, flag):
             self.cpu.force(token)
-            values.append(self.cpu.get_latest_value_int(frame, 0))
+            values.append(self.cpu.get_latest_value_int(token, 0))
             values.append(token)
             return 42
 
-        FUNC = self.FuncType([lltype.Signed, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -3666,10 +3664,10 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
-        tok = BoxInt()
+        tok = BoxPtr()
         faildescr = BasicFailDescr(23)
         ops = [
-        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.JIT_FRAME, [], tok),
         ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
                      descr=calldescr),
         ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
