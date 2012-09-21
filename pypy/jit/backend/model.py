@@ -108,9 +108,9 @@ class AbstractCPU(object):
     def execute_token(self, looptoken, *args):
         """NOT_RPYTHON (for tests only)
         Execute the generated code referenced by the looptoken.
-        Returns the descr of the last executed operation: either the one
-        attached to the failing guard, or the one attached to the FINISH.
-        Use get_latest_value_xxx() afterwards to read the result(s).
+        It runs it until either a guard fails, or until we reach
+        the FINISH operation.  It returns the "jit frame" object
+        which should be inspected with the get_latest_xyz() methods.
         """
         argtypes = [lltype.typeOf(x) for x in args]
         execute = self.make_execute_token(*argtypes)
@@ -122,42 +122,36 @@ class AbstractCPU(object):
         """
         raise NotImplementedError
 
-    def get_latest_value_int(self, index):
+    def get_latest_descr(self, jitframe):
+        """Return the descr of the last operation executed by the
+        jitframe."""
+        raise NotImplementedError
+
+    def get_latest_value_int(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
         or from 'args' if it was a FINISH).  Returns an int."""
         raise NotImplementedError
 
-    def get_latest_value_float(self, index):
+    def get_latest_value_float(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
         or from 'args' if it was a FINISH).  Returns a float."""
         raise NotImplementedError
 
-    def get_latest_value_ref(self, index):
+    def get_latest_value_ref(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
         or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
         raise NotImplementedError
 
-    def get_latest_value_count(self):
+    def get_latest_value_count(self, jitframe):
         """Return how many values are ready to be returned by
         get_latest_value_xxx().  Only after a guard failure; not
         necessarily correct after a FINISH."""
         raise NotImplementedError
 
-    def get_latest_force_token(self):
-        """After a GUARD_NOT_FORCED fails, this function returns the
-        same FORCE_TOKEN result as the one in the just-failed loop."""
-        raise NotImplementedError
-
-    def clear_latest_values(self, count):
-        """Clear the latest values (at least the ref ones), so that
-        they no longer keep objects alive.  'count' is the number of
-        values -- normally get_latest_value_count()."""
-        raise NotImplementedError
-
-    def grab_exc_value(self):
+    def grab_exc_value(self, jitframe):
         """Return and clear the exception set by the latest execute_token(),
         when it exits due to a failure of a GUARD_EXCEPTION or
         GUARD_NO_EXCEPTION.  (Returns a GCREF)"""        # XXX remove me
@@ -316,9 +310,6 @@ class AbstractCPU(object):
     def bh_copystrcontent(self, src, dst, srcstart, dststart, length):
         raise NotImplementedError
     def bh_copyunicodecontent(self, src, dst, srcstart, dststart, length):
-        raise NotImplementedError
-
-    def force(self, force_token):
         raise NotImplementedError
 
 

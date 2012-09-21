@@ -174,7 +174,7 @@ TYPES = {
     'cast_ptr_to_int' : (('ref',), 'int'),
     'cast_int_to_ptr' : (('int',), 'ref'),
     'debug_merge_point': (('ref', 'int', 'int'), None),
-    'force_token'     : ((), 'int'),
+    'jit_frame'       : ((), 'ref'),
     'call_may_force'  : (('int', 'varargs'), 'intorptr'),
     'guard_not_forced': ((), None),
 }
@@ -480,6 +480,7 @@ class Frame(object):
         self.opindex = 1
         self._forced = False
         self._may_force = -1
+        self._last_exception = None
 
     def getenv(self, v):
         from pypy.jit.backend.llgraph.runner import Descr
@@ -507,8 +508,7 @@ class Frame(object):
         """Execute all operations in a loop,
         possibly following to other loops as well.
         """
-        global _last_exception
-        assert _last_exception is None, "exception left behind"
+        assert self._last_exception is None, "exception left behind"
         verbose = True
         self.opindex = 0
         while True:
@@ -539,7 +539,7 @@ class Frame(object):
                         if self.verbose:
                             log.trace('failed: %s' % (
                                 ', '.join(map(str, fail_args)),))
-                        return op.fail_index
+                        return
                 #verbose = self.verbose
                 assert (result is None) == (op.result is None)
                 if op.result is not None:
@@ -570,7 +570,7 @@ class Frame(object):
                     log.trace('finished: %s' % (
                         ', '.join(map(str, args)),))
                 self.fail_args = args
-                return op.fail_index
+                return
 
             else:
                 assert 0, "unknown final operation %d" % (op.opnum,)
@@ -704,14 +704,13 @@ class Frame(object):
             raise GuardFailed
 
     def op_guard_no_exception(self, _):
-        if _last_exception:
+        if self._last_exception:
             raise GuardFailed
 
     def _check_exception(self, expected_exception):
-        global _last_exception
         expected_exception = self._cast_exception(expected_exception)
         assert expected_exception
-        exc = _last_exception
+        exc = self._last_exception
         if exc:
             got = exc.args[0]
             # exact match!
@@ -730,11 +729,10 @@ class Frame(object):
         return rclass.ll_issubclass(cls1, cls2)
 
     def op_guard_exception(self, _, expected_exception):
-        global _last_exception
         if not self._check_exception(expected_exception):
             raise GuardFailed
-        res = _last_exception[1]
-        _last_exception = None
+        res = self._last_exception[1]
+        self._last_exception = None
         return res
 
     def op_guard_no_overflow(self, _):
@@ -962,8 +960,7 @@ class Frame(object):
         return self._do_call(calldescr, func, args, call_with_llptr=True)
 
     def _do_call(self, calldescr, func, args, call_with_llptr):
-        global _last_exception
-        assert _last_exception is None, "exception left behind"
+        assert self._last_exception is None, "exception left behind"
         assert _call_args_i == _call_args_r == _call_args_f == []
         args_in_order = []
         for x in args:
@@ -983,7 +980,7 @@ class Frame(object):
             return _do_call_common(func, args_in_order, calldescr,
                                    call_with_llptr)
         except LLException, lle:
-            _last_exception = lle
+            self._last_exception = lle
             d = {'v': None,
                  REF: lltype.nullptr(llmemory.GCREF.TO),
                  INT: 0,
@@ -1004,9 +1001,9 @@ class Frame(object):
     def op_new_array(self, arraydescr, count):
         return do_new_array(arraydescr.ofs, count)
 
-    def op_force_token(self, descr):
+    def op_jit_frame(self, descr):
         opaque_frame = _to_opaque(self)
-        return llmemory.cast_ptr_to_adr(opaque_frame)
+        return opaque_frame
 
     def op_read_timestamp(self, descr):
         return read_timestamp()
@@ -1025,7 +1022,6 @@ class Frame(object):
         return self._do_call_assembler(wref_loop_token, *args)
 
     def _do_call_assembler(self, wref_loop_token, *args):
-        global _last_exception
         loop_token = wref_loop_token()
         assert loop_token, "CALL_ASSEMBLER to a target that already died"
         ctl = loop_token.compiled_loop_token
@@ -1074,8 +1070,8 @@ class Frame(object):
             try:
                 return assembler_helper_ptr(failindex, vable)
             except LLException, lle:
-                assert _last_exception is None, "exception left behind"
-                _last_exception = lle
+                assert self._last_exception is None, "exception left behind"
+                self._last_exception = lle
                 # fish op
                 op = self.loop.operations[self.opindex]
                 if op.result is not None:
@@ -1312,6 +1308,11 @@ def frame_execute(frame):
     del frame.env
     return result
 
+def frame_descr_index(frame):
+    frame = _from_opaque(frame)
+    op = frame.loop.operations[frame.opindex]
+    return op.fail_index
+
 def frame_int_getvalue(frame, num):
     frame = _from_opaque(frame)
     assert num >= 0
@@ -1337,18 +1338,11 @@ def frame_get_value_count(frame):
     frame = _from_opaque(frame)
     return len(frame.fail_args)
 
-def frame_clear_latest_values(frame, count):
+def grab_exc_value(frame):
     frame = _from_opaque(frame)
-    assert count == len(frame.fail_args)
-    del frame.fail_args
-
-_last_exception = None
-
-def grab_exc_value():
-    global _last_exception
-    if _last_exception is not None:
-        result = _last_exception.args[1]
-        _last_exception = None
+    if frame._last_exception is not None:
+        result = frame._last_exception.args[1]
+        frame._last_exception = None
         return lltype.cast_opaque_ptr(llmemory.GCREF, result)
     else:
         return lltype.nullptr(llmemory.GCREF.TO)
@@ -1388,14 +1382,6 @@ def force(opaque_frame):
     assert opnum == rop.CALL_MAY_FORCE or opnum == rop.CALL_ASSEMBLER
     frame._populate_fail_args(guard_op, skip=call_op.result)
     return frame.fail_index
-
-def get_forced_token_frame(force_token):
-    opaque_frame = llmemory.cast_adr_to_ptr(force_token,
-                                            lltype.Ptr(_TO_OPAQUE[Frame]))
-    return opaque_frame
-
-def get_frame_forced_token(opaque_frame):
-    return llmemory.cast_ptr_to_adr(opaque_frame)
 
 ##def cast_adr_to_int(memocast, adr):
 ##    # xxx slow
@@ -1782,7 +1768,6 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
 
 # for ootype meth and staticmeth
 def call_maybe_on_top_of_llinterp(meth, args):
-    global _last_exception
     if isinstance(meth, ootype._bound_meth):
         mymethod = meth.meth
         myargs = [meth.inst] + list(args)
@@ -1796,7 +1781,7 @@ def call_maybe_on_top_of_llinterp(meth, args):
         else:
             result = meth(*args)
     except XXX-LLException, e:
-        _last_exception = e
+        self._last_exception = e
         result = get_err_result_for_type(mymethod._TYPE.RESULT)
     return result
 
@@ -1862,12 +1847,12 @@ def setannotation(func, annotation, specialize_as_constant=False):
 
 
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
-FRAME = lltype.Ptr(lltype.OpaqueType("Frame"))
-OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
+FRAME = llmemory.GCREF
+#OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO
 _TO_OPAQUE[Frame] = FRAME.TO
-_TO_OPAQUE[OOFrame] = OOFRAME.TO
+#_TO_OPAQUE[OOFrame] = OOFRAME.TO
 
 s_CompiledLoop = annmodel.SomePtr(COMPILEDLOOP)
 s_Frame = annmodel.SomePtr(FRAME)
@@ -1908,16 +1893,14 @@ setannotation(set_future_value_int, annmodel.s_None)
 setannotation(set_future_value_ref, annmodel.s_None)
 setannotation(set_future_value_float, annmodel.s_None)
 setannotation(frame_execute, annmodel.SomeInteger())
+setannotation(frame_descr_index, annmodel.SomeInteger())
 setannotation(frame_int_getvalue, annmodel.SomeInteger())
 setannotation(frame_ptr_getvalue, annmodel.SomePtr(llmemory.GCREF))
 setannotation(frame_float_getvalue, s_FloatStorage)
 setannotation(frame_get_value_count, annmodel.SomeInteger())
-setannotation(frame_clear_latest_values, annmodel.s_None)
-
+ 
 setannotation(grab_exc_value, annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
-setannotation(get_forced_token_frame, s_Frame)
-setannotation(get_frame_forced_token, annmodel.SomeAddress())
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())
 setannotation(do_strlen, annmodel.SomeInteger())

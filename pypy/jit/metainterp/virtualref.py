@@ -1,6 +1,6 @@
 from pypy.rpython.rmodel import inputconst, log
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, jitframe
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.jit import InvalidVirtualRef
 
@@ -12,7 +12,7 @@ class VirtualRefInfo:
         # we make the low-level type of an RPython class directly
         self.JIT_VIRTUAL_REF = lltype.GcStruct('JitVirtualRef',
             ('super', rclass.OBJECT),
-            ('virtual_token', lltype.Signed),
+            ('jit_frame', jitframe.JITFRAMEPTR),
             ('forced', rclass.OBJECTPTR))
         self.jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
                                                     zero=True, flavor='raw',
@@ -24,8 +24,7 @@ class VirtualRefInfo:
         adr = heaptracker.adr2int(adr)
         self.jit_virtual_ref_const_class = history.ConstInt(adr)
         fielddescrof = self.cpu.fielddescrof
-        self.descr_virtual_token = fielddescrof(self.JIT_VIRTUAL_REF,
-                                                'virtual_token')
+        self.descr_jit_frame = fielddescrof(self.JIT_VIRTUAL_REF, 'jit_frame')
         self.descr_forced = fielddescrof(self.JIT_VIRTUAL_REF, 'forced')
         #
         # record the type JIT_VIRTUAL_REF explicitly in the rtyper, too
@@ -67,21 +66,12 @@ class VirtualRefInfo:
 
     # ____________________________________________________________
 
-    # The 'virtual_token' field has the same meaning as the 'vable_token' field
-    # of a virtualizable.  It is equal to:
-    #  * -3 (TOKEN_NONE) when tracing, except as described below;
-    #  * -1 (TOKEN_TRACING_RESCALL) during tracing when we do a residual call;
-    #  * addr in the CPU stack (set by FORCE_TOKEN) when running the assembler;
-    #  * -3 (TOKEN_NONE) after the virtual is forced, if it is forced at all.
-    TOKEN_NONE            = -3
-    TOKEN_TRACING_RESCALL = -1
-
     def virtual_ref_during_tracing(self, real_object):
         assert real_object
         vref = lltype.malloc(self.JIT_VIRTUAL_REF)
         p = lltype.cast_pointer(rclass.OBJECTPTR, vref)
         p.typeptr = self.jit_virtual_ref_vtable
-        vref.virtual_token = self.TOKEN_NONE
+        vref.jit_frame = jitframe.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
         return lltype.cast_opaque_ptr(llmemory.GCREF, vref)
 
@@ -95,19 +85,19 @@ class VirtualRefInfo:
         if not self.is_virtual_ref(gcref):
             return
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
-        assert vref.virtual_token == self.TOKEN_NONE
-        vref.virtual_token = self.TOKEN_TRACING_RESCALL
+        assert vref.jit_frame == jitframe.TOKEN_NONE
+        vref.jit_frame = jitframe.TOKEN_TRACING_RESCALL
 
     def tracing_after_residual_call(self, gcref):
         if not self.is_virtual_ref(gcref):
             return False
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
         assert vref.forced
-        if vref.virtual_token != self.TOKEN_NONE:
+        if vref.jit_frame != jitframe.TOKEN_NONE:
             # not modified by the residual call; assert that it is still
             # set to TOKEN_TRACING_RESCALL and clear it.
-            assert vref.virtual_token == self.TOKEN_TRACING_RESCALL
-            vref.virtual_token = self.TOKEN_NONE
+            assert vref.jit_frame == jitframe.TOKEN_TRACING_RESCALL
+            vref.jit_frame = jitframe.TOKEN_NONE
             return False
         else:
             # marker "modified during residual call" set.
@@ -118,8 +108,8 @@ class VirtualRefInfo:
             return
         assert real_object
         vref = lltype.cast_opaque_ptr(lltype.Ptr(self.JIT_VIRTUAL_REF), gcref)
-        assert vref.virtual_token != self.TOKEN_TRACING_RESCALL
-        vref.virtual_token = self.TOKEN_NONE
+        assert vref.jit_frame != jitframe.TOKEN_TRACING_RESCALL
+        vref.jit_frame = jitframe.TOKEN_NONE
         vref.forced = lltype.cast_opaque_ptr(rclass.OBJECTPTR, real_object)
 
     # ____________________________________________________________
@@ -150,20 +140,20 @@ class VirtualRefInfo:
 
     def force_virtual(self, inst):
         vref = lltype.cast_pointer(lltype.Ptr(self.JIT_VIRTUAL_REF), inst)
-        token = vref.virtual_token
-        if token != self.TOKEN_NONE:
-            if token == self.TOKEN_TRACING_RESCALL:
+        token = vref.jit_frame
+        if token != jitframe.TOKEN_NONE:
+            if token == jitframe.TOKEN_TRACING_RESCALL:
                 # The "virtual" is not a virtual at all during tracing.
-                # We only need to reset virtual_token to TOKEN_NONE
+                # We only need to reset jit_frame to TOKEN_NONE
                 # as a marker for the tracing, to tell it that this
                 # "virtual" escapes.
                 assert vref.forced
-                vref.virtual_token = self.TOKEN_NONE
+                vref.jit_frame = jitframe.TOKEN_NONE
             else:
                 assert not vref.forced
                 from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
                 ResumeGuardForcedDescr.force_now(self.cpu, token)
-                assert vref.virtual_token == self.TOKEN_NONE
+                assert vref.jit_frame == jitframe.TOKEN_NONE
                 assert vref.forced
         elif not vref.forced:
             # token == TOKEN_NONE and the vref was not forced: it's invalid

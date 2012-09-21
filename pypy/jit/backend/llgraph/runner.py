@@ -264,10 +264,9 @@ class BaseCPU(model.AbstractCPU):
         # setup the frame
         llimpl.frame_clear(frame, compiled_version)
         # run the loop
-        fail_index = llimpl.frame_execute(frame)
-        # we hit a FAIL operation.
-        self.latest_frame = frame
-        return fail_index
+        llimpl.frame_execute(frame)
+        # we hit a FINISH operation, or a failing GUARD_*
+        return frame
 
     def make_execute_token(self, *argtypes):
         nb_args = len(argtypes)
@@ -287,29 +286,29 @@ class BaseCPU(model.AbstractCPU):
                 else:
                     assert 0
             #
-            fail_index = self._execute_token(loop_token)
-            return self.get_fail_descr_from_number(fail_index)
+            jit_frame = self._execute_token(loop_token)
+            return jit_frame
         #
         return execute_token
 
-    def get_latest_value_int(self, index):
-        return llimpl.frame_int_getvalue(self.latest_frame, index)
+    def get_latest_descr(self, jitframe):
+        fail_index = llimpl.frame_descr_index(jitframe)
+        return self.get_fail_descr_from_number(fail_index)
 
-    def get_latest_value_ref(self, index):
-        return llimpl.frame_ptr_getvalue(self.latest_frame, index)
+    def get_latest_value_int(self, jitframe, index):
+        return llimpl.frame_int_getvalue(jitframe, index)
 
-    def get_latest_value_float(self, index):
-        return llimpl.frame_float_getvalue(self.latest_frame, index)
+    def get_latest_value_ref(self, jitframe, index):
+        return llimpl.frame_ptr_getvalue(jitframe, index)
 
-    def get_latest_value_count(self):
-        return llimpl.frame_get_value_count(self.latest_frame)
+    def get_latest_value_float(self, jitframe, index):
+        return llimpl.frame_float_getvalue(jitframe, index)
 
-    def get_latest_force_token(self):
-        token = llimpl.get_frame_forced_token(self.latest_frame)
-        return heaptracker.adr2int(token)
+    def get_latest_value_count(self, jitframe):
+        return llimpl.frame_get_value_count(jitframe)
 
-    def clear_latest_values(self, count):
-        llimpl.frame_clear_latest_values(self.latest_frame, count)
+    def grab_exc_value(self, jitframe):
+        return llimpl.grab_exc_value(jitframe)
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         if we_are_translated():
@@ -384,9 +383,6 @@ class LLtypeCPU(BaseCPU):
         from pypy.jit.backend.llsupport import ffisupport
         return ffisupport.calldescr_dynamic_for_tests(self, atypes, rtype,
                                                       abiname)
-
-    def grab_exc_value(self):
-        return llimpl.grab_exc_value()
 
     def arraydescrof(self, A):
         assert A.OF != lltype.Void
@@ -590,11 +586,8 @@ class LLtypeCPU(BaseCPU):
     def get_all_loop_runs(self):
         return lltype.malloc(LOOP_RUN_CONTAINER, 0)
 
-    def force(self, force_token):
-        token = llmemory.cast_int_to_adr(force_token)
-        frame = llimpl.get_forced_token_frame(token)
+    def force(self, frame):
         fail_index = llimpl.force(frame)
-        self.latest_frame = frame
         return self.get_fail_descr_from_number(fail_index)
 
 
