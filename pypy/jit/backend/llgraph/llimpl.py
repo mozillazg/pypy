@@ -1043,7 +1043,7 @@ class Frame(object):
                 else:
                     raise Exception("Nonsense type %s" % TYPE)
 
-            failindex = self.cpu._execute_token(loop_token)
+            subframe = self.cpu._execute_token(loop_token)
             jd = loop_token.outermost_jitdriver_sd
             assert jd is not None, ("call_assembler(): the loop_token needs "
                                     "to have 'outermost_jitdriver_sd'")
@@ -1053,6 +1053,7 @@ class Frame(object):
                 vable = lltype.nullptr(llmemory.GCREF.TO)
             #
             # Emulate the fast path
+            failindex = self.cpu.get_latest_descr(subframe)
             if failindex == self.cpu.done_with_this_frame_int_v:
                 reset_vable(jd, vable)
                 return self.cpu.get_latest_value_int(0)
