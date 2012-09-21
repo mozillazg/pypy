@@ -2308,11 +2308,11 @@ class MetaInterp(object):
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             vinfo.tracing_before_residual_call(virtualizable)
             #
-            force_token_box = history.BoxInt()
-            self.history.record(rop.FORCE_TOKEN, [], force_token_box)
+            jit_frame_box = history.BoxPtr()
+            self.history.record(rop.JIT_FRAME, [], jit_frame_box)
             self.history.record(rop.SETFIELD_GC, [virtualizable_box,
-                                                  force_token_box],
-                                None, descr=vinfo.vable_token_descr)
+                                                  jit_frame_box],
+                                None, descr=vinfo.jit_frame_descr)
 
     def vrefs_after_residual_call(self):
         vrefinfo = self.staticdata.virtualref_info

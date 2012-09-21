@@ -14,5 +14,5 @@ class Virtualizable2InstanceRepr(AbstractVirtualizable2InstanceRepr, InstanceRep
             llfields.append(('vable_token', VABLERTI))
         return llfields
 
-    def set_vable(self, llops, vinst, force_cast=False):
-        pass # TODO
+    #def set_vable(self, llops, vinst, force_cast=False):
+    #    pass # TODO

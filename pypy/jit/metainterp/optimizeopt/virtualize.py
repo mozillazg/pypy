@@ -399,7 +399,7 @@ class OptVirtualize(optimizer.Optimization):
         # but the point is that doing so does not force the original structure.
         op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
         vrefvalue = self.make_virtual(c_cls, op.result, op)
-        tokenbox = BoxInt()
+        tokenbox = BoxPtr()
         self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
         vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
 

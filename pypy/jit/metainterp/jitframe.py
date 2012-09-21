@@ -1,12 +1,33 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
+from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.lltypesystem.rvirtualizable2 import JITFRAMEPTR
 
 
-GCINDEXLIST = lltype.GcArray(rffi.UINT)
+GCINDEXLIST = lltype.GcArray(rffi.USHORT)
 
 JITFRAME = lltype.GcStruct('JITFRAME',
                            ('gcindexlist', lltype.Ptr(GCINDEXLIST)),
-                           ('items', lltype.Array(llmemory.Address)))
-JITFRAMEPTR = lltype.Ptr(JITFRAME)
+                           ('items', lltype.Array(llmemory.Address)),
+                           rtti=True)
+JITFRAMEPTR.TO.become(JITFRAME)
+
+# Constants used for the 'jit_frame' field of virtualizables/virtualrefs:
+#
+#   1. TOKEN_NONE means not in the JIT at all, except as described below.
+#
+#   2. TOKEN_NONE too when tracing is in progress; except:
+#
+#   3. the special value TOKEN_TRACING_RESCALL during tracing when we do a
+#      residual call, calling random unknown other parts of the interpreter;
+#      it is reset to TOKEN_NONE as soon as something occurs to the
+#      virtualizable.
+#
+#   4. when running the machine code with a virtualizable, it is set
+#      to the actual CPU frame allocated by the generated assembler,
+#      as fetched with the 'JIT_FRAME' resoperation.
+#
+TOKEN_NONE            = lltype.nullptr(JITFRAME)
+TOKEN_TRACING_RESCALL = lltype.malloc(JITFRAME, 0, immortal=True, zero=True)
 
 # ____________________________________________________________
 
@@ -37,4 +58,4 @@ def customtrace(obj, prev):
 CUSTOMTRACEFUNC = lltype.FuncType([llmemory.Address, llmemory.Address],
                                   llmemory.Address)
 customtraceptr = llhelper(lltype.Ptr(CUSTOMTRACEFUNC), customtrace)
-lltype.attachRuntimeTypeInfo(SHADOWSTACKREF, customtraceptr=customtraceptr)
+lltype.attachRuntimeTypeInfo(JITFRAME, customtraceptr=customtraceptr)
