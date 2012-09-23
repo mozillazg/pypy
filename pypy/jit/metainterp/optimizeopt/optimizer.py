@@ -319,9 +319,9 @@ class Optimization(object):
         if self.optimizer.optpure:
             self.optimizer.optpure.pure(opnum, result, arg0, arg1)
 
-    def has_pure_result(self, opnum, args, descr):
+    def has_pure_result(self, op_key):
         if self.optimizer.optpure:
-            return self.optimizer.optpure.has_pure_result(opnum, args, descr)
+            return self.optimizer.optpure.has_pure_result(op_key)
         return False
 
     def get_pure_result(self, key):

@@ -97,13 +97,11 @@ class OptPure(Optimization):
         op = create_resop_2(opnum, result, arg0, arg1)
         self.pure_operations.add(op)
 
-    def has_pure_result(self, opnum, args, descr):
-        op = ResOperation(opnum, args, None, descr)
-        key = self.optimizer.make_args_key(op)
-        op = self.pure_operations.get(key, None)
+    def has_pure_result(self, op_key):
+        op = self.pure_operations.get(op_key)
         if op is None:
             return False
-        return op.getdescr() is descr
+        return op.getdescr() is op_key.getdescr()
 
     def get_pure_result(self, key):
         return self.pure_operations.get(key)

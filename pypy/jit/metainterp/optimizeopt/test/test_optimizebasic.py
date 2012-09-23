@@ -559,14 +559,16 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_const_guard_value(self):
         ops = """
-        []
-        i = int_add(5, 3)
+        [i0]
+        guard_value(i0, 2) []
+        i = int_add(5, i0)
         guard_value(i, 8) []
-        jump()
+        jump(i0)
         """
         expected = """
-        []
-        jump()
+        [i0]
+        guard_value(i0, 2) []
+        jump(2)
         """
         self.optimize_loop(ops, expected)
 

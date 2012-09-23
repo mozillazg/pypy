@@ -4,9 +4,10 @@ from pypy.jit.metainterp.jitexc import JitException
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization,\
      MODE_ARRAY, LEVEL_KNOWNCLASS
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop, opgroups, Const
+from pypy.jit.metainterp.resoperation import rop, opgroups, Const, INT,\
+     FLOAT, create_resop_1
 from pypy.rlib.objectmodel import we_are_translated
-
+from pypy.rpython.lltypesystem import lltype, llmemory
 
 class CachedField(object):
     def __init__(self):
@@ -395,8 +396,18 @@ class OptHeap(Optimization):
     optimize_GETFIELD_GC_PURE_p = optimize_GETFIELD_GC_PURE_i
 
     def optimize_SETFIELD_GC(self, op):
-        if self.has_pure_result(rop.GETFIELD_GC_PURE, [op.getarg(0)],
-                                op.getdescr()):
+        if op.type == INT:
+            op_key = create_resop_1(rop.GETFIELD_GC_PURE_i, 0, op.getarg(0),
+                                    op.getdescr())
+        elif op.type == FLOAT:
+            op_key = create_resop_1(rop.GETFIELD_GC_PURE_f, 0.0, op.getarg(0),
+                                    op.getdescr())
+        else:
+            op_key = create_resop_1(rop.GETFIELD_GC_PURE_p,
+                                    lltype.nullptr(llmemory.GCREF.TO),
+                                    op.getarg(0),
+                                    op.getdescr())
+        if self.has_pure_result(op_key):
             os.write(2, '[bogus _immutable_field_ declaration: %s]\n' %
                      (op.getdescr().repr_of_descr()))
             raise BogusPureField

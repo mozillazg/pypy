@@ -94,7 +94,7 @@ class ArgsDict(object):
     """
     def __init__(self, bucket_size=BUCKET_SIZE):
         self.buckets = [None] * bucket_size
-        self.bucket_size = bucket_size
+        self.bucket_size = bucket_size - 1
 
     def get(self, op):
         hash = op._get_hash_() & self.bucket_size
