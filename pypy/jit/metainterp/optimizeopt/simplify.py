@@ -10,6 +10,7 @@ class OptSimplify(Optimization):
 
     def _new_optimize_call(tp):
         def optimize_call(self, op):
+            xxx
             self.emit_operation(op.copy_and_change(getattr(rop, 'CALL_' + tp)))
     optimize_CALL_PURE_i = _new_optimize_call('i')
     optimize_CALL_PURE_f = _new_optimize_call('f')
@@ -39,6 +40,7 @@ class OptSimplify(Optimization):
         if not self.unroll:
             descr = op.getdescr()
             if isinstance(descr, JitCellToken):
+                xxx
                 return self.optimize_JUMP(op.copy_and_change(rop.JUMP))
             self.last_label_descr = op.getdescr()
         self.emit_operation(op)
@@ -58,7 +60,8 @@ class OptSimplify(Optimization):
                 assert len(descr.target_tokens) == 1
                 newdescr = descr.target_tokens[0]
             if newdescr is not descr or op.opnum != rop.JUMP:
-                op = op.copy_and_change(op.opnum, descr=newdescr)
+                op = self.optimizer.copy_and_change(op, op.opnum,
+                                                    descr=newdescr)
         self.emit_operation(op)
 
 dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',

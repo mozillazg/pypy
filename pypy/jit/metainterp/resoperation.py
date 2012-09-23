@@ -1036,8 +1036,12 @@ class UnaryOp(object):
         new_arg = opt.get_value_replacement(self._arg0)
         if new_arg is None:
             return self
-        return create_resop_1(self.opnum, self.getresult(), new_arg,
-                              self.getdescr())
+        res = create_resop_1(self.opnum, self.getresult(), new_arg,
+                             self.getdescr())
+        if self.is_guard():
+            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+            res.set_rd_snapshot(self.get_rd_snapshot())
+        return res
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, descr=None):
@@ -1091,10 +1095,14 @@ class BinaryOp(object):
         new_arg1 = opt.get_value_replacement(self._arg1)
         if new_arg0 is None and new_arg1 is None:
             return self
-        return create_resop_2(self.opnum, self.getresult(),
-                              new_arg0 or self._arg0,
-                              new_arg1 or self._arg1,
-                              self.getdescr())
+        res = create_resop_2(self.opnum, self.getresult(),
+                             new_arg0 or self._arg0,
+                             new_arg1 or self._arg1,
+                             self.getdescr())
+        if self.is_guard():
+            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+            res.set_rd_snapshot(self.get_rd_snapshot())
+        return res
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum, arg0=None, arg1=None, descr=None):

@@ -133,6 +133,7 @@ class OptRewrite(Optimization):
                     # x & (x - 1) == 0 is a quick test for power of 2
                     if x & (x - 1) == 0:
                         new_rhs = ConstInt(highest_bit(lhs.box.getint()))
+                        xxx
                         op = op.copy_and_change(rop.INT_LSHIFT, args=[rhs.box, new_rhs])
                         break
             self.emit_operation(op)
@@ -240,6 +241,7 @@ class OptRewrite(Optimization):
                 assert expected_classbox is not None
                 if not previous_classbox.same_constant(expected_classbox):
                     raise InvalidLoop('A GUARD_VALUE was proven to always fail')
+            xxx
             op = old_guard_op.copy_and_change(rop.GUARD_VALUE,
                                       args = [old_guard_op.getarg(0), op.getarg(1)])
             self.optimizer.replaces_guard[op] = old_guard_op
@@ -288,6 +290,7 @@ class OptRewrite(Optimization):
             if old_guard_op.getopnum() == rop.GUARD_NONNULL:
                 # it was a guard_nonnull, which we replace with a
                 # guard_nonnull_class.
+                xxx
                 op = old_guard_op.copy_and_change (rop.GUARD_NONNULL_CLASS,
                                          args = [old_guard_op.getarg(0), op.getarg(1)])
                 self.optimizer.replaces_guard[op] = old_guard_op
@@ -322,6 +325,7 @@ class OptRewrite(Optimization):
         # change the op to be a normal call, from the backend's point of view
         # there is no reason to have a separate operation for this
         self.loop_invariant_producer[key] = op
+        xxx
         op = op.copy_and_change(rop.CALL)
         self.emit_operation(op)
         resvalue = self.getvalue(op)
@@ -340,7 +344,7 @@ class OptRewrite(Optimization):
             self.emit_operation(op)
 
     def optimize_INT_IS_TRUE(self, op):
-        if self.getvalue(op.getarg(0)) in self.optimizer.bool_boxes:
+        if self.getvalue(op.getarg(0)).is_bool_box:
             self.make_equal_to(op, self.getvalue(op.getarg(0)))
             return
         self._optimize_nullness(op, op.getarg(0), True)
@@ -487,6 +491,7 @@ class OptRewrite(Optimization):
         if v1.intbound.known_ge(IntBound(0, 0)) and v2.is_constant():
             val = v2.box.getint()
             if val & (val - 1) == 0 and val > 0: # val == 2**shift
+                xxx
                 op = op.copy_and_change(rop.INT_RSHIFT,
                                         args = [op.getarg(0), ConstInt(highest_bit(val))])
         self.emit_operation(op)

@@ -113,6 +113,7 @@ class OptIntBounds(Optimization):
                 # nonneg % power-of-two ==> nonneg & (power-of-two - 1)
                 arg1 = op.getarg(0)
                 arg2 = ConstInt(val-1)
+                xxx
                 op = op.copy_and_change(rop.INT_AND, args=[arg1, arg2])
         self.emit_operation(op)
         if v2.is_constant():
@@ -202,7 +203,7 @@ class OptIntBounds(Optimization):
             # Transform into INT_ADD.  The following guard will be killed
             # by optimize_GUARD_NO_OVERFLOW; if we see instead an
             # optimize_GUARD_OVERFLOW, then InvalidLoop.
-            op = op.copy_and_change(rop.INT_ADD)
+            op = self.optimizer.copy_and_change(op, rop.INT_ADD)
         self.emit_operation(op) # emit the op
         r = self.getvalue(op)
         r.intbound.intersect(resbound)
@@ -212,6 +213,7 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.sub_bound(v2.intbound)
         if resbound.bounded():
+            xxx
             op = op.copy_and_change(rop.INT_SUB)
         self.emit_operation(op) # emit the op
         r = self.getvalue(op)
@@ -222,6 +224,7 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.mul_bound(v2.intbound)
         if resbound.bounded():
+            xxx
             op = op.copy_and_change(rop.INT_MUL)
         self.emit_operation(op)
         r = self.getvalue(op)

@@ -6,7 +6,7 @@ from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
-     Const, ConstInt, ConstFloat
+     Const, ConstInt, ConstFloat, AbstractValue
 from pypy.jit.metainterp.typesystem import llhelper
 from pypy.rlib.objectmodel import specialize
 
@@ -29,13 +29,14 @@ class LenBound(object):
         return LenBound(self.mode, self.descr, self.bound.clone())
 
 class OptValue(object):
-    _attrs_ = ('box', 'known_class', 'last_guard', 'level', 'intbound', 'lenbound')
+    _attrs_ = ('box', 'known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
     last_guard = None
 
     level = LEVEL_UNKNOWN
     known_class = None
     intbound = ImmutableIntUnbounded()
     lenbound = None
+    is_bool_box = False
 
     def __init__(self, box, level=None, known_class=None, intbound=None):
         self.box = box
@@ -282,8 +283,8 @@ class Optimization(object):
     def make_constant_int(self, box, intconst):
         return self.optimizer.make_constant_int(box, intconst)
 
-    def make_equal_to(self, box, value):
-        return self.optimizer.make_equal_to(box, value)
+    def replace(self, box, value):
+        return self.optimizer.replace(box, value)
 
     def get_constant_box(self, box):
         return self.optimizer.get_constant_box(box)
@@ -348,7 +349,6 @@ class Optimizer(Optimization):
         self.interned_refs = self.cpu.ts.new_ref_dict()
         self.interned_ints = {}
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
-        self.bool_boxes = {}
         self.pendingfields = []
         self.quasi_immutable_deps = None
         self.opaque_pointers = {}
@@ -437,6 +437,19 @@ class Optimizer(Optimization):
         self.ensure_imported(value)
         return value
 
+    def copy_op_if_modified_by_optimization(self, op):
+        new_op = op.copy_if_modified_by_optimization(self)
+        if new_op is not op:
+            self.replace(op, new_op)
+        return new_op
+
+    @specialize.arg(2)
+    def copy_and_change(self, op, opnum, *args, **kwds): 
+        new_op = op.copy_and_change(opnum, *args, **kwds)
+        if new_op is not op:
+            self.replace(op, new_op)
+        return new_op
+
     def ensure_imported(self, value):
         pass
 
@@ -462,17 +475,18 @@ class Optimizer(Optimization):
     def clear_newoperations(self):
         self._newoperations = []
 
-    def make_equal_to(self, box, value, replace=False):
-        assert isinstance(value, OptValue)
-        if replace:
-            assert not box.has_extra("optimize_value")
-        box.set_extra("optimize_value", value)
+    def replace(self, what, with_):
+        assert isinstance(what, AbstractValue)
+        assert isinstance(with_, AbstractValue)
+        val = self.getvalue(with_)
+        # completely remove the old optimize value
+        what.set_extra("optimize_value", val)
 
     def make_constant(self, box, constbox):
-        self.make_equal_to(box, ConstantValue(constbox))
+        self.getvalue(box).make_constant(constbox)
 
     def make_constant_int(self, box, intvalue):
-        self.make_constant(box, ConstInt(intvalue))
+        self.getvalue(box).make_constant(ConstInt(intvalue))
 
     def new_ptr_box(self):
         return self.cpu.ts.BoxRef()
@@ -531,7 +545,7 @@ class Optimizer(Optimization):
 
     def emit_operation(self, op):
         if op.returns_bool_result():
-            self.bool_boxes[self.getvalue(op)] = None
+            self.getvalue(op).is_bool_box = True
         self._emit_operation(op)
 
     def get_value_replacement(self, v):
@@ -549,7 +563,7 @@ class Optimizer(Optimization):
     @specialize.argtype(0)
     def _emit_operation(self, op):
         assert op.getopnum() not in opgroups.CALL_PURE
-        op = op.copy_if_modified_by_optimization(self)
+        op = self.copy_op_if_modified_by_optimization(op)
         if isinstance(op, Const):
             return
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
@@ -579,6 +593,7 @@ class Optimizer(Optimization):
     def store_final_boxes_in_guard(self, op):
         if op.getdescr() is not None:
             # means we need to copy the op and attach a new descr
+            xxx
             op = op.copy_and_change(op.getopnum(), descr=None)
         descr = op.invent_descr()
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
@@ -591,7 +606,7 @@ class Optimizer(Optimization):
         descr.store_final_boxes(op, newboxes)
         #
         if op.getopnum() == rop.GUARD_VALUE:
-            if self.getvalue(op.getarg(0)) in self.bool_boxes:
+            if self.getvalue(op.getarg(0)).is_bool_box:
                 # Hack: turn guard_value(bool) into guard_true/guard_false.
                 # This is done after the operation is emitted to let
                 # store_final_boxes_in_guard set the guard_opnum field of the
