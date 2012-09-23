@@ -442,14 +442,14 @@ class OptVirtualize(optimizer.Optimization):
         if value.is_forced_virtual() and op.is_always_pure():
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is not None:
-                self.make_equal_to(op.result, fieldvalue)
+                self.replace(op, fieldvalue.op)
                 return
         if value.is_virtual():
             assert isinstance(value, AbstractVirtualValue)
             fieldvalue = value.getfield(op.getdescr(), None)
             if fieldvalue is None:
                 fieldvalue = self.optimizer.new_const(op.getdescr())
-            self.make_equal_to(op.result, fieldvalue)
+            self.replace(op, fieldvalue.op)
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
