@@ -277,6 +277,9 @@ class Optimization(object):
     def getvalue(self, box):
         return self.optimizer.getvalue(box)
 
+    def setvalue(self, box, value):
+        self.optimizer.setvalue(box, value)
+
     def make_constant(self, box, constbox):
         return self.optimizer.make_constant(box, constbox)
 
@@ -424,7 +427,6 @@ class Optimizer(Optimization):
         #    value = constbox.getint()
         #    return self.interned_ints.setdefault(value, box)
 
-    @specialize.argtype(0)
     def getvalue(self, box):
         if box.is_constant():
             return ConstantValue(box)
@@ -436,6 +438,11 @@ class Optimizer(Optimization):
             box.set_extra("optimize_value", value)
         self.ensure_imported(value)
         return value
+
+    def setvalue(self, box, value):
+        assert not box.is_constant()
+        assert  not box.has_extra("optimize_value")
+        box.set_extra("optimize_value", value)
 
     def copy_op_if_modified_by_optimization(self, op):
         new_op = op.copy_if_modified_by_optimization(self)

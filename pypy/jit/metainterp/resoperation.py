@@ -199,7 +199,8 @@ class AbstractValue(object):
     @specialize.arg(1)
     def del_extra(self, key):
         if key == 'optimize_value':
-            del self._optimize_value
+            if hasattr(self, '_optimize_value'):
+                del self._optimize_value
 
 def getkind(TYPE, supports_floats=True,
                   supports_longlong=True,
@@ -1208,9 +1209,9 @@ class N_aryOp(object):
         return self._args[i]
 
     @specialize.arg(1)
-    def foreach_arg(self, func, arg):
+    def foreach_arg(self, func, func_arg):
         for i, arg in enumerate(self._args):
-            func(arg, self.getopnum(), i, arg)
+            func(func_arg, self.getopnum(), i, arg)
 
     @specialize.argtype(1)
     def copy_if_modified_by_optimization(self, opt):

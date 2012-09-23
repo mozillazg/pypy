@@ -10,14 +10,12 @@ from pypy.jit.metainterp.optimizeopt.optimizer import OptValue
 
 class AbstractVirtualValue(optimizer.OptValue):
     _attrs_ = ('keybox', 'source_op', '_cached_vinfo')
-    box = None
     level = optimizer.LEVEL_NONNULL
     _cached_vinfo = None
 
-    def __init__(self, keybox, source_op=None):
-        self.keybox = keybox   # only used as a key in dictionaries
-        self.source_op = source_op  # the NEW_WITH_VTABLE/NEW_ARRAY operation
-                                    # that builds this box
+    def __init__(self, op):
+        self.op = op
+        self.forced = False
 
     def is_forced_virtual(self):
         return self.box is not None
@@ -28,10 +26,10 @@ class AbstractVirtualValue(optimizer.OptValue):
         return self.box
 
     def force_box(self, optforce):
-        if self.box is None:
-            optforce.forget_numberings(self.keybox)
+        if not self.forced:
+            optforce.forget_numberings(self.op)
             self._really_force(optforce)
-        return self.box
+        return self.op
 
     def force_at_end_of_preamble(self, already_forced, optforce):
         value = already_forced.get(self, None)
@@ -70,8 +68,8 @@ get_fielddescrlist_cache._annspecialcase_ = "specialize:memo"
 class AbstractVirtualStructValue(AbstractVirtualValue):
     _attrs_ = ('_fields', 'cpu', '_cached_sorted_fields')
 
-    def __init__(self, cpu, keybox, source_op=None):
-        AbstractVirtualValue.__init__(self, keybox, source_op)
+    def __init__(self, cpu, op):
+        AbstractVirtualValue.__init__(self, op)
         self.cpu = cpu
         self._fields = {}
         self._cached_sorted_fields = None
@@ -128,12 +126,9 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
         return self
 
     def _really_force(self, optforce):
-        op = self.source_op
-        assert op is not None
-        # ^^^ This case should not occur any more (see test_bug_3).
-        #
+        op = self.op
         if not we_are_translated():
-            op.name = 'FORCE ' + self.source_op.name
+            op.name = 'FORCE ' + op.name
 
         if self._is_immutable_and_filled_with_constants():
             box = optforce.optimizer.constant_fold(op)
@@ -146,7 +141,7 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
             # keep self._fields, because it's all immutable anyway
         else:
             optforce.emit_operation(op)
-            self.box = box = op.result
+            self.forced = True
             #
             iteritems = self._fields.iteritems()
             if not we_are_translated(): #random order is fine, except for tests
@@ -201,8 +196,8 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
 class VirtualValue(AbstractVirtualStructValue):
     level = optimizer.LEVEL_KNOWNCLASS
 
-    def __init__(self, cpu, known_class, keybox, source_op=None):
-        AbstractVirtualStructValue.__init__(self, cpu, keybox, source_op)
+    def __init__(self, cpu, known_class, op):
+        AbstractVirtualStructValue.__init__(self, cpu, op)
         assert isinstance(known_class, Const)
         self.known_class = known_class
 
@@ -222,8 +217,8 @@ class VirtualValue(AbstractVirtualStructValue):
 
 class VStructValue(AbstractVirtualStructValue):
 
-    def __init__(self, cpu, structdescr, keybox, source_op=None):
-        AbstractVirtualStructValue.__init__(self, cpu, keybox, source_op)
+    def __init__(self, cpu, structdescr, op):
+        AbstractVirtualStructValue.__init__(self, cpu, op)
         self.structdescr = structdescr
 
     def _make_virtual(self, modifier):
@@ -236,8 +231,8 @@ class VStructValue(AbstractVirtualStructValue):
 
 class VArrayValue(AbstractVirtualValue):
 
-    def __init__(self, arraydescr, constvalue, size, keybox, source_op=None):
-        AbstractVirtualValue.__init__(self, keybox, source_op)
+    def __init__(self, arraydescr, constvalue, size, op):
+        AbstractVirtualValue.__init__(self, op)
         self.arraydescr = arraydescr
         self.constvalue = constvalue
         self._items = [self.constvalue] * size
@@ -293,8 +288,8 @@ class VArrayValue(AbstractVirtualValue):
         return modifier.make_varray(self.arraydescr)
 
 class VArrayStructValue(AbstractVirtualValue):
-    def __init__(self, arraydescr, size, keybox, source_op=None):
-        AbstractVirtualValue.__init__(self, keybox, source_op)
+    def __init__(self, arraydescr, size, op):
+        AbstractVirtualValue.__init__(self, op)
         self.arraydescr = arraydescr
         self._items = [{} for _ in xrange(size)]
 
@@ -366,9 +361,9 @@ class OptVirtualize(optimizer.Optimization):
     def new(self):
         return OptVirtualize()
 
-    def make_virtual(self, known_class, box, source_op=None):
-        vvalue = VirtualValue(self.optimizer.cpu, known_class, box, source_op)
-        self.make_equal_to(box, vvalue)
+    def make_virtual(self, known_class, op):
+        vvalue = VirtualValue(self.optimizer.cpu, known_class, op)
+        self.setvalue(op, vvalue)
         return vvalue
 
     def make_varray(self, arraydescr, size, box, source_op=None):
@@ -475,10 +470,10 @@ class OptVirtualize(optimizer.Optimization):
             self.emit_operation(op)
 
     def optimize_NEW_WITH_VTABLE(self, op):
-        self.make_virtual(op.getarg(0), op.result, op)
+        self.make_virtual(op.getarg(0), op)
 
     def optimize_NEW(self, op):
-        self.make_vstruct(op.getdescr(), op.result, op)
+        self.make_vstruct(op.getdescr(), op)
 
     def optimize_NEW_ARRAY(self, op):
         sizebox = self.get_constant_box(op.getarg(0))
