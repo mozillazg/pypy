@@ -27,6 +27,24 @@ class ESCAPE_OP(N_aryOp, ResOpNone, ResOpWithDescr):
     def getopnum(cls):
         return cls.OPNUM
 
+    def copy_if_modified_by_optimization(self, opt):
+        newargs = None
+        for i, arg in enumerate(self._args):
+            new_arg = opt.get_value_replacement(arg)
+            if new_arg is not None:
+                if newargs is None:
+                    newargs = []
+                    for k in range(i):
+                        newargs.append(self._args[k])
+                    self._args[:i]
+                newargs.append(new_arg)
+            elif newargs is not None:
+                newargs.append(arg)
+        if newargs is None:
+            return self
+        return ESCAPE_OP(self.OPNUM, newargs, self.getresult(),
+                         self.getdescr())
+
 class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
 
     OPNUM = -124

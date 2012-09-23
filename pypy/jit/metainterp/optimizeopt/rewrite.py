@@ -97,14 +97,16 @@ class OptRewrite(Optimization):
             self.pure(rop.INT_SUB, op.getarg(1).getint(), op.getarg(0), op)
 
     def optimize_INT_ADD(self, op):
-        v1 = self.getvalue(op.getarg(0))
-        v2 = self.getvalue(op.getarg(1))
+        arg1 = op.getarg(0)
+        arg2 = op.getarg(1)
+        v1 = self.getvalue(arg1)
+        v2 = self.getvalue(arg2)
 
         # If one side of the op is 0 the result is the other side.
         if v1.is_constant() and v1.box.getint() == 0:
-            self.make_equal_to(op, v2)
+            self.replace(op, arg2)
         elif v2.is_constant() and v2.box.getint() == 0:
-            self.make_equal_to(op, v1)
+            self.replace(op, arg1)
         else:
             self.emit_operation(op)
             # Synthesize the reverse op for optimize_default to reuse
