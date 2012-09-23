@@ -290,7 +290,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_guard_class_constant(self):
         ops = """
         [i0]
-        p0 = same_as(ConstPtr(myptr))
+        p0 = same_as_p(ConstPtr(myptr))
         guard_class(p0, ConstClass(node_vtable)) []
         jump(i0)
         """

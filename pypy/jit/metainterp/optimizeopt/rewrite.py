@@ -505,7 +505,7 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
 
     def optimize_SAME_AS_i(self, op):
-        self.make_equal_to(op, self.getvalue(op.getarg(0)))
+        self.replace(op, op.getarg(0))
     optimize_SAME_AS_p = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
 
