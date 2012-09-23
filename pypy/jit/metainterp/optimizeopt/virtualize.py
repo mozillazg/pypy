@@ -3,7 +3,8 @@ from pypy.jit.metainterp.executor import execute
 from pypy.jit.metainterp.optimizeopt import optimizer
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     descrlist_dict, sort_descrs)
-from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, BoxInt
+from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, BoxInt,\
+     create_resop_2
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import OptValue
 
@@ -154,9 +155,8 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
                 if value.is_null():
                     continue
                 subbox = value.force_box(optforce)
-                op = ResOperation(rop.SETFIELD_GC, [box, subbox], None,
-                                  descr=ofs)
-
+                op = create_resop_2(rop.SETFIELD_GC, None, self.op, subbox,
+                                    descr=ofs)
                 optforce.emit_operation(op)
 
     def _get_field_descr_list(self):

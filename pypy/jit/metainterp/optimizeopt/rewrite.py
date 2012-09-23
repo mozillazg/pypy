@@ -344,7 +344,7 @@ class OptRewrite(Optimization):
 
     def optimize_INT_IS_TRUE(self, op):
         if self.getvalue(op.getarg(0)).is_bool_box:
-            self.make_equal_to(op, self.getvalue(op.getarg(0)))
+            self.replace(op, op.getarg(0))
             return
         self._optimize_nullness(op, op.getarg(0), True)
 

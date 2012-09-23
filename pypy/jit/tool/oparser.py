@@ -20,7 +20,7 @@ class ESCAPE_OP(N_aryOp, ResOpNone, ResOpWithDescr):
     def __init__(self, opnum, args, result, descr=None):
         assert opnum == self.OPNUM
         self.result = result
-        self.initarglist(args)
+        self._args = args
         self.setdescr(descr)
 
     @classmethod

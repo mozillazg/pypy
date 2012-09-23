@@ -18,7 +18,7 @@ def test_store_final_boxes_in_guard():
     b1 = BoxInt()
     opt = optimizeopt.Optimizer(FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
-    op = create_resop_1(rop.GUARD_TRUE, None, 'dummy')
+    op = create_resop_1(rop.GUARD_TRUE, None, BoxInt(0))
     # setup rd data
     fi0 = resume.FrameInfo(None, "code0", 11)
     op._rd_frame_info_list = resume.FrameInfo(fi0, "code1", 33)
@@ -370,21 +370,19 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_remove_consecutive_guard_value_constfold(self):
         ops = """
-        []
-        i0 = escape()
+        [i0]
         guard_value(i0, 0) []
         i1 = int_add(i0, 1)
         guard_value(i1, 1) []
         i2 = int_add(i1, 2)
         escape(i2)
-        jump()
+        jump(i0)
         """
         expected = """
-        []
-        i0 = escape()
+        [i0]
         guard_value(i0, 0) []
         escape(3)
-        jump()
+        jump(0)
         """
         self.optimize_loop(ops, expected)
 
@@ -483,17 +481,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_ooisnull_on_null_ptr_1(self):
         ops = """
-        []
-        p0 = escape()
+        [p0, p1]
         guard_isnull(p0) []
         guard_isnull(p0) []
-        jump()
+        jump(p1, p1)
         """
         expected = """
-        []
-        p0 = escape()
+        [p0, p1]
         guard_isnull(p0) []
-        jump()
+        jump(p1, p1)
         """
         self.optimize_loop(ops, expected)
 
@@ -574,12 +570,16 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_constptr_guard_value(self):
         ops = """
-        []
-        p1 = escape()
+        [p1]
         guard_value(p1, ConstPtr(myptr)) []
-        jump()
+        jump(p1)
         """
-        self.optimize_loop(ops, ops)
+        expected = """
+        [p1]
+        guard_value(p1, ConstPtr(myptr)) []
+        jump(ConstPtr(myptr))
+        """
+        self.optimize_loop(ops, expected)
 
     def test_guard_value_to_guard_true(self):
         ops = """
@@ -649,7 +649,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_p123_simple(self):
         ops = """
         [i1, p2, p3]
-        i3 = getfield_gc(p3, descr=valuedescr)
+        i3 = getfield_gc_i(p3, descr=valuedescr)
         escape(i3)
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i1, descr=valuedescr)
@@ -661,7 +661,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_p123_nested(self):
         ops = """
         [i1, p2, p3]
-        i3 = getfield_gc(p3, descr=valuedescr)
+        i3 = getfield_gc_i(p3, descr=valuedescr)
         escape(i3)
         p1 = new_with_vtable(ConstClass(node_vtable))
         p1sub = new_with_vtable(ConstClass(node_vtable2))
@@ -677,8 +677,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_p123_anti_nested(self):
         ops = """
         [i1, p2, p3]
-        p3sub = getfield_gc(p3, descr=nextdescr)
-        i3 = getfield_gc(p3sub, descr=valuedescr)
+        p3sub = getfield_gc_p(p3, descr=nextdescr)
+        i3 = getfield_gc_i(p3sub, descr=valuedescr)
         escape(i3)
         p1 = new_with_vtable(ConstClass(node_vtable))
         p2sub = new_with_vtable(ConstClass(node_vtable2))
@@ -695,7 +695,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_keep_guard_no_exception(self):
         ops = """
         [i1]
-        i2 = call(i1, descr=nonwritedescr)
+        i2 = call_i(i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
         jump(i2)
         """
@@ -704,13 +704,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_keep_guard_no_exception_with_call_pure_that_is_not_folded(self):
         ops = """
         [i1]
-        i2 = call_pure(123456, i1, descr=nonwritedescr)
+        i2 = call_pure_i(123456, i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
         jump(i2)
         """
         expected = """
         [i1]
-        i2 = call(123456, i1, descr=nonwritedescr)
+        i2 = call_i(123456, i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
         jump(i2)
         """

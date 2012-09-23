@@ -43,7 +43,9 @@ def create_resop(opnum, result, args, descr=None):
         op = cls()
     else:
         op = cls(result)
-    op.initarglist(args)
+    for _arg in args:
+        assert _arg.type != VOID
+    op._args = args
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
         assert not op.is_guard()
@@ -76,6 +78,7 @@ def create_resop_1(opnum, result, arg0, descr=None):
         op = cls()
     else:
         op = cls(result)
+    assert arg0.type != VOID
     op._arg0 = arg0
     if descr is not None:
         assert isinstance(op, ResOpWithDescr)
@@ -94,6 +97,8 @@ def create_resop_2(opnum, result, arg0, arg1, descr=None):
         op = cls()
     else:
         op = cls(result)
+    assert arg0.type != VOID
+    assert arg1.type != VOID
     op._arg0 = arg0
     op._arg1 = arg1
     if descr is not None:
@@ -113,6 +118,9 @@ def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
         op = cls()
     else:
         op = cls(result)
+    assert arg0.type != VOID
+    assert arg1.type != VOID
+    assert arg2.type != VOID
     op._arg0 = arg0
     op._arg1 = arg1
     op._arg2 = arg2
@@ -653,10 +661,6 @@ class AbstractResOp(AbstractValue):
     # methods implemented by the arity mixins
     # ---------------------------------------
 
-    def initarglist(self, args):
-        "This is supposed to be called only just after the ResOp has been created"
-        raise NotImplementedError
-
     def getarglist(self):
         raise NotImplementedError
 
@@ -973,9 +977,6 @@ class NullaryOp(object):
 
     NUMARGS = 0
 
-    def initarglist(self, args):
-        assert len(args) == 0
-
     def getarglist(self):
         return []
 
@@ -1011,10 +1012,6 @@ class UnaryOp(object):
     _arg0 = None
 
     NUMARGS = 1
-
-    def initarglist(self, args):
-        assert len(args) == 1
-        self._arg0, = args
 
     def getarglist(self):
         return [self._arg0]
@@ -1066,10 +1063,6 @@ class BinaryOp(object):
     _arg1 = None
 
     NUMARGS = 2
-
-    def initarglist(self, args):
-        assert len(args) == 2
-        self._arg0, self._arg1 = args
 
     def numargs(self):
         return 2
@@ -1131,10 +1124,6 @@ class TernaryOp(object):
 
     NUMARGS = 3
 
-    def initarglist(self, args):
-        assert len(args) == 3
-        self._arg0, self._arg1, self._arg2 = args
-
     def getarglist(self):
         return [self._arg0, self._arg1, self._arg2]
 
@@ -1195,9 +1184,6 @@ class N_aryOp(object):
     _args = None
 
     NUMARGS = -1
-
-    def initarglist(self, args):
-        self._args = args
 
     def getarglist(self):
         return self._args

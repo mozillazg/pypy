@@ -264,7 +264,7 @@ class OptHeap(Optimization):
             opnum == rop.COPYUNICODECONTENT):    # no effect on GC struct/array
             return
         if opnum in opgroups.ALLCALLS:
-            if opnum == rop.CALL_ASSEMBLER:
+            if opnum in opgroups.CALL_ASSEMBLER:
                 self._seen_guard_not_invalidated = False
             else:
                 effectinfo = op.getdescr().get_extra_info()
@@ -377,7 +377,7 @@ class OptHeap(Optimization):
         structvalue.ensure_nonnull()
         self.emit_operation(op)
         # then remember the result of reading the field
-        fieldvalue = self.getvalue(op.result)
+        fieldvalue = self.getvalue(op)
         cf.remember_field_value(structvalue, fieldvalue, op)
     optimize_GETFIELD_GC_p = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
