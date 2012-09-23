@@ -18,7 +18,10 @@ class AbstractVirtualValue(optimizer.OptValue):
         self.forced = False
 
     def is_forced_virtual(self):
-        return self.box is not None
+        return self.forced
+
+    def is_virtual(self):
+        return not self.forced
 
     def get_key_box(self):
         if self.box is None:

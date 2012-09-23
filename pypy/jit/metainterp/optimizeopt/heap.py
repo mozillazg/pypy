@@ -113,7 +113,7 @@ class CachedField(object):
         if newvalue not in self._cached_fields and value in self._cached_fields:
             self._cached_fields[newvalue] = self._cached_fields[value]
             op = self._cached_fields_getfield_op[value].clone()
-            constbox = value.box
+            constbox = value.op
             assert isinstance(constbox, Const)
             op.setarg(0, constbox)
             self._cached_fields_getfield_op[newvalue] = op
@@ -294,7 +294,7 @@ class OptHeap(Optimization):
 
     def turned_constant(self, value):
         assert value.is_constant()
-        newvalue = self.getvalue(value.box)
+        newvalue = self.getvalue(value.op)
         if value is not newvalue:
             for cf in self.cached_fields.itervalues():
                 cf.turned_constant(newvalue, value)

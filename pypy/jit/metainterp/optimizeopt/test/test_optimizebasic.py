@@ -503,7 +503,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         pv = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(pv, p0, descr=valuedescr)
         guard_nonnull(p0) []
-        p1 = getfield_gc(pv, descr=valuedescr)
+        p1 = getfield_gc_p(pv, descr=valuedescr)
         guard_nonnull(p1) []
         jump(p0)
         """

@@ -34,10 +34,10 @@ class OptRewrite(Optimization):
         if oldop is not None and oldop.getdescr() is op.getdescr():
             value = self.getvalue(oldop)
             if value.is_constant():
-                if value.box.same_constant(CONST_1):
+                if value.op.same_constant(CONST_1):
                     self.make_constant(op, CONST_0)
                     return True
-                elif value.box.same_constant(CONST_0):
+                elif value.op.same_constant(CONST_0):
                     self.make_constant(op, CONST_1)
                     return True
 
@@ -88,7 +88,7 @@ class OptRewrite(Optimization):
     def optimize_INT_SUB(self, op):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
-        if v2.is_constant() and v2.box.getint() == 0:
+        if v2.is_constant() and v2.op.getint() == 0:
             self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
@@ -103,9 +103,9 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(arg2)
 
         # If one side of the op is 0 the result is the other side.
-        if v1.is_constant() and v1.box.getint() == 0:
+        if v1.is_constant() and v1.op.getint() == 0:
             self.replace(op, arg2)
-        elif v2.is_constant() and v2.box.getint() == 0:
+        elif v2.is_constant() and v2.op.getint() == 0:
             self.replace(op, arg1)
         else:
             self.emit_operation(op)
@@ -118,20 +118,20 @@ class OptRewrite(Optimization):
         v2 = self.getvalue(op.getarg(1))
 
         # If one side of the op is 1 the result is the other side.
-        if v1.is_constant() and v1.box.getint() == 1:
+        if v1.is_constant() and v1.op.getint() == 1:
             self.make_equal_to(op, v2)
-        elif v2.is_constant() and v2.box.getint() == 1:
+        elif v2.is_constant() and v2.op.getint() == 1:
             self.make_equal_to(op, v1)
-        elif (v1.is_constant() and v1.box.getint() == 0) or \
-             (v2.is_constant() and v2.box.getint() == 0):
+        elif (v1.is_constant() and v1.op.getint() == 0) or \
+             (v2.is_constant() and v2.op.getint() == 0):
             self.make_constant_int(op, 0)
         else:
             for lhs, rhs in [(v1, v2), (v2, v1)]:
                 if lhs.is_constant():
-                    x = lhs.box.getint()
+                    x = lhs.op.getint()
                     # x & (x - 1) == 0 is a quick test for power of 2
                     if x & (x - 1) == 0:
-                        new_rhs = ConstInt(highest_bit(lhs.box.getint()))
+                        new_rhs = ConstInt(highest_bit(lhs.op.getint()))
                         xxx
                         op = op.copy_and_change(rop.INT_LSHIFT, args=[rhs.box, new_rhs])
                         break
@@ -141,7 +141,7 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
 
-        if v2.is_constant() and v2.box.getint() == 1:
+        if v2.is_constant() and v2.op.getint() == 1:
             self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
@@ -150,7 +150,7 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
 
-        if v2.is_constant() and v2.box.getint() == 0:
+        if v2.is_constant() and v2.op.getint() == 0:
             self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
@@ -159,7 +159,7 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
 
-        if v2.is_constant() and v2.box.getint() == 0:
+        if v2.is_constant() and v2.op.getint() == 0:
             self.make_equal_to(op, v1)
         else:
             self.emit_operation(op)
@@ -175,10 +175,10 @@ class OptRewrite(Optimization):
             v2 = self.getvalue(rhs)
 
             if v1.is_constant():
-                if v1.box.getfloat() == 1.0:
+                if v1.op.getfloat() == 1.0:
                     self.make_equal_to(op, v2)
                     return
-                elif v1.box.getfloat() == -1.0:
+                elif v1.op.getfloat() == -1.0:
                     self.emit_operation(ResOperation(
                         rop.FLOAT_NEG, [rhs], op
                     ))
@@ -194,7 +194,7 @@ class OptRewrite(Optimization):
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.getarg(0))
         if value.is_constant():
-            box = value.box
+            box = value.op
             assert isinstance(box, Const)
             #if not box.same_constant(constbox):
             #    raise Exception('A GUARD_{VALUE,TRUE,FALSE} was proven to' +
@@ -481,14 +481,14 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
 
-        if v2.is_constant() and v2.box.getint() == 1:
+        if v2.is_constant() and v2.op.getint() == 1:
             self.make_equal_to(op, v1)
             return
-        elif v1.is_constant() and v1.box.getint() == 0:
+        elif v1.is_constant() and v1.op.getint() == 0:
             self.make_constant_int(op, 0)
             return
         if v1.intbound.known_ge(IntBound(0, 0)) and v2.is_constant():
-            val = v2.box.getint()
+            val = v2.op.getint()
             if val & (val - 1) == 0 and val > 0: # val == 2**shift
                 xxx
                 op = op.copy_and_change(rop.INT_RSHIFT,

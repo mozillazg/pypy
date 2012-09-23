@@ -1,6 +1,6 @@
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
-from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF
+from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF, INT
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
@@ -29,7 +29,7 @@ class LenBound(object):
         return LenBound(self.mode, self.descr, self.bound.clone())
 
 class OptValue(object):
-    _attrs_ = ('box', 'known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
+    _attrs_ = ('known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
     last_guard = None
 
     level = LEVEL_UNKNOWN
@@ -38,21 +38,31 @@ class OptValue(object):
     lenbound = None
     is_bool_box = False
 
-    def __init__(self, box, level=None, known_class=None, intbound=None):
-        self.box = box
+    def getbox(self):
+        import pdb
+        pdb.set_trace()
+
+    def setbox(self, x):
+        import pdb
+        pdb.set_trace()
+
+    box = property(getbox, setbox)
+
+    def __init__(self, op, level=None, known_class=None, intbound=None):
+        self.op = op
         if level is not None:
             self.level = level
         self.known_class = known_class
         if intbound:
             self.intbound = intbound
         else:
-            if isinstance(box, BoxInt):
+            if op is not None and op.type == INT:
                 self.intbound = IntBound(MININT, MAXINT)
             else:
                 self.intbound = IntUnbounded()
 
-        if isinstance(box, Const):
-            self.make_constant(box)
+        if isinstance(op, Const):
+            self.make_constant(op)
         # invariant: box is a Const if and only if level == LEVEL_CONSTANT
 
     def make_len_gt(self, mode, descr, val):
@@ -118,10 +128,10 @@ class OptValue(object):
 
 
     def force_box(self, optforce):
-        return self.box
+        return self.op
 
     def get_key_box(self):
-        return self.box
+        return self.op
 
     def force_at_end_of_preamble(self, already_forced, optforce):
         return self
@@ -139,9 +149,9 @@ class OptValue(object):
 
     def is_null(self):
         if self.is_constant():
-            box = self.box
-            assert isinstance(box, Const)
-            return not box.nonnull()
+            op = self.op
+            assert isinstance(op, Const)
+            return not op.nonnull()
         return False
 
     def same_value(self, other):
@@ -154,7 +164,7 @@ class OptValue(object):
     def make_constant(self, constbox):
         """Replace 'self.box' with a Const box."""
         assert isinstance(constbox, Const)
-        self.box = constbox
+        self.op = constbox
         self.level = LEVEL_CONSTANT
 
         if isinstance(constbox, ConstInt):
@@ -168,7 +178,7 @@ class OptValue(object):
         if level == LEVEL_KNOWNCLASS:
             return self.known_class
         elif level == LEVEL_CONSTANT:
-            return cpu.ts.cls_of_box(self.box)
+            return cpu.ts.cls_of_box(self.op)
         else:
             return None
 
@@ -188,9 +198,9 @@ class OptValue(object):
         if level == LEVEL_NONNULL or level == LEVEL_KNOWNCLASS:
             return True
         elif level == LEVEL_CONSTANT:
-            box = self.box
-            assert isinstance(box, Const)
-            return box.nonnull()
+            op = self.op
+            assert isinstance(op, Const)
+            return op.nonnull()
         elif self.intbound:
             if self.intbound.known_gt(IntBound(0, 0)) or \
                self.intbound.known_lt(IntBound(0, 0)):
@@ -208,7 +218,7 @@ class OptValue(object):
         # Don't check this with 'isinstance(_, VirtualValue)'!
         # Even if it is a VirtualValue, the 'box' can be non-None,
         # meaning it has been forced.
-        return self.box is None
+        return False
 
     def is_forced_virtual(self):
         return False
@@ -470,7 +480,7 @@ class Optimizer(Optimization):
         except KeyError:
             return None
         if value.is_constant():
-            constbox = value.box
+            constbox = value.op
             assert isinstance(constbox, Const)
             return constbox
         return None
