@@ -107,7 +107,7 @@ class OptPure(Optimization):
         return op.getdescr() is descr
 
     def get_pure_result(self, key):
-        return self.pure_operations.get(key, None)
+        return self.pure_operations.get(key)
 
     def remember_emitting_pure(self, op):
         self.emitted_pure_operations.append(op)
