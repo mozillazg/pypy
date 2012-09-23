@@ -1,6 +1,7 @@
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
-from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF, INT
+from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF, INT,\
+     create_resop_1
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
@@ -630,13 +631,15 @@ class Optimizer(Optimization):
                 # descr to the original rop.GUARD_VALUE.
                 constvalue = op.getarg(1).getint()
                 if constvalue == 0:
-                    opnum = rop.GUARD_FALSE
-                elif constvalue == 1:
-                    opnum = rop.GUARD_TRUE
+                    newop = create_resop_1(rop.GUARD_FALSE, None,
+                                           op.getarg(0))
+                elif constvalue == 1: 
+                    newop = create_resop_1(rop.GUARD_TRUE, None,
+                                           op.getarg(0))
                 else:
                     raise AssertionError("uh?")
-                newop = ResOperation(opnum, [op.getarg(0)], op.result, descr)
-                newop.setfailargs(op.getfailargs())
+                newop.set_extra("failargs", op.get_extra("failargs"))
+                self.replace(op, newop)
                 return newop
             else:
                 # a real GUARD_VALUE.  Make it use one counter per value.
