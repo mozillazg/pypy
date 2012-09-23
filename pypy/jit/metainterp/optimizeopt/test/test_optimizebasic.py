@@ -222,12 +222,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constfold_all(self):
         from pypy.jit.backend.llgraph.llimpl import TYPES     # xxx fish
         from pypy.jit.metainterp.executor import execute_nonspec
-        from pypy.jit.metainterp.history import BoxInt
+        from pypy.jit.metainterp.resoperation import BoxInt
         import random
-        for opnum in range(rop.INT_ADD, rop.SAME_AS+1):
+        for opnum in [rop._ALWAYS_PURE_FIRST, rop._ALWAYS_PURE_NO_PTR_LAST]:
             try:
                 op = opname[opnum]
             except KeyError:
+                continue
+            if op.startswith('_'):
                 continue
             if 'FLOAT' in op:
                 continue

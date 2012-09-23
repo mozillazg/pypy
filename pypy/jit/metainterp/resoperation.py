@@ -1330,6 +1330,7 @@ _oplist = [
     'INT_FORCE_GE_ZERO/1/i',
     #
     'SAME_AS/1/*',      # gets a Const or a Box, turns it into another Box
+    '_ALWAYS_PURE_NO_PTR_LAST',
     'CAST_PTR_TO_INT/1/i',
     'CAST_INT_TO_PTR/1/p',
     #
