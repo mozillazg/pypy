@@ -114,15 +114,15 @@ class BaseTestBasic(BaseTest):
 
     enable_opts = "intbounds:rewrite:virtualize:string:earlyforce:pure:heap"
 
-    def optimize_loop(self, ops, optops, call_pure_results=None):
-        loop = self.parse(ops)
+    def optimize_loop(self, ops, optops, results=None):
+        loop = self.parse(ops, results=results)
         token = JitCellToken()
         loop.operations = [create_resop(rop.LABEL, None, loop.inputargs, descr=TargetToken(token))] + \
                           loop.operations
         if loop.operations[-1].getopnum() == rop.JUMP:
             loop.operations[-1]._descr = token
         expected = convert_old_style_to_targets(self.parse(optops), jump=True)
-        self._do_optimize_loop(loop, call_pure_results)
+        self._do_optimize_loop(loop)
         print '\n'.join([str(o) for o in loop.operations])
         self.assert_equal(loop, expected)
 
@@ -717,12 +717,10 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         self.optimize_loop(ops, expected)
 
     def test_remove_guard_no_exception_with_call_pure_on_constant_args(self):
-        arg_consts = [ConstInt(i) for i in (123456, 81)]
-        call_pure_results = {tuple(arg_consts): ConstInt(5)}
         ops = """
         [i1]
-        i3 = same_as(81)
-        i2 = call_pure(123456, i3, descr=nonwritedescr)
+        i3 = same_as_i(81)
+        i2 = call_pure_i(123456, i3, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
         jump(i2)
         """
@@ -730,7 +728,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         jump(5)
         """
-        self.optimize_loop(ops, expected, call_pure_results)
+        self.optimize_loop(ops, expected, results=[81, 5, None, None])
 
     def test_remove_guard_no_exception_with_duplicated_call_pure(self):
         ops = """

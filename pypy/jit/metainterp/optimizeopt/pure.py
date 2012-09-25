@@ -1,12 +1,12 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
-from pypy.jit.metainterp.resoperation import rop, create_resop_2, create_resop
+from pypy.jit.metainterp.resoperation import rop, create_resop_2
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method,\
-     ArgsDict
+     ArgsSet
 
 class OptPure(Optimization):
     def __init__(self):
         self.posponedop = None
-        self.pure_operations = ArgsDict()
+        self.pure_operations = ArgsSet()
         self.emitted_pure_operations = []
 
     def propagate_forward(self, op):

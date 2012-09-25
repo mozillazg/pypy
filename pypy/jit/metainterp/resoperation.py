@@ -461,6 +461,9 @@ class ConstInt(Const):
     def getint(self):
         return self.value
 
+    def eq_value(self, other):
+        return self.value == other.getint() # crash if incompatible type
+
     def getaddr(self):
         return heaptracker.int2adr(self.value)
 
@@ -499,6 +502,10 @@ class ConstFloat(Const):
     def getfloatstorage(self):
         return self.value
 
+    def eq_value(self, other):
+        return self.value == other.getfloatstorage()
+    # crash if incompatible type
+
     def _get_hash_(self):
         return longlong.gethash(self.value)
 
@@ -536,6 +543,10 @@ class ConstPtr(Const):
     def getref(self, PTR):
         return lltype.cast_opaque_ptr(PTR, self.getref_base())
     getref._annspecialcase_ = 'specialize:arg(1)'
+
+    def eq_value(self, other):
+        return self.value == other.getref_base()
+    # crash if incompatible type
 
     def _get_hash_(self):
         if self.value:
@@ -826,6 +837,9 @@ class ResOpInt(object):
     def wrap_constant(intval):
         return ConstInt(intval)
 
+    def constbox(self):
+        return ConstInt(self.intval)
+
     def get_result_hash(self):
         return make_hashable_int(self.intval)
 
@@ -852,6 +866,9 @@ class ResOpFloat(object):
     @staticmethod
     def wrap_constant(floatval):
         return ConstFloat(floatval)
+
+    def constbox(self):
+        return ConstFloat(self.floatval)
 
     def get_result_hash(self):
         return longlong.gethash(self.floatval)
@@ -885,6 +902,9 @@ class ResOpPointer(object):
     @staticmethod
     def wrap_constant(pval):
         return ConstPtr(pval)
+
+    def constbox(self):
+        return ConstPtr(self.pval)
 
     def result_eq(self, other):
         assert isinstance(other, self.__class__)
@@ -990,7 +1010,9 @@ class NullaryOp(object):
         pass        
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, descr=None):
+    def copy_and_change(self, newopnum=-1, descr=None):
+        if newopnum == -1:
+            newopnum = self.getopnum()
         res = create_resop_0(newopnum, self.getresult(),
                              descr or self.getdescr())
         if self.is_guard():
@@ -1042,7 +1064,9 @@ class UnaryOp(object):
         return res
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None, descr=None):
+    def copy_and_change(self, newopnum=-1, arg0=None, descr=None):
+        if newopnum == -1:
+            newopnum = self.getopnum()
         res = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
                              descr or self.getdescr())
         if self.is_guard():
@@ -1099,7 +1123,9 @@ class BinaryOp(object):
         return res
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None, arg1=None, descr=None):
+    def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, descr=None):
+        if newopnum == -1:
+            newopnum = self.getopnum()
         res = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
                              arg1 or self._arg1,
                              descr or self.getdescr())
@@ -1161,8 +1187,10 @@ class TernaryOp(object):
                               self.getdescr())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, arg0=None, arg1=None, arg2=None,
+    def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
                         descr=None):
+        if newopnum == -1:
+            newopnum = self.getopnum()
         r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1, arg2 or self._arg2,
                            descr or self.getdescr())
@@ -1219,7 +1247,9 @@ class N_aryOp(object):
                             newargs, self.getdescr())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum, newargs=None, descr=None):
+    def copy_and_change(self, newopnum=-1, newargs=None, descr=None):
+        if newopnum == -1:
+            newopnum = self.getopnum()
         r = create_resop(newopnum, self.getresult(),
                          newargs or self.getarglist(),
                          descr or self.getdescr())

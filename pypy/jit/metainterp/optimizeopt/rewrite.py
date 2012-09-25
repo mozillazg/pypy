@@ -447,24 +447,15 @@ class OptRewrite(Optimization):
         return False
 
     def optimize_CALL_PURE_i(self, op):
-        arg_consts = []
         for i in range(op.numargs()):
             arg = op.getarg(i)
             const = self.get_constant_box(arg)
-            if const is None:
+            if const is None or not const.eq_value(arg):
                 break
-            arg_consts.append(const)
         else:
-            # all constant arguments: check if we already know the result
-            try:
-                result = self.optimizer.call_pure_results[arg_consts]
-            except KeyError:
-                pass
-            else:
-                # this removes a CALL_PURE with all constant arguments.
-                self.make_constant(op, result)
-                self.last_emitted_operation = REMOVED
-                return
+            self.make_constant(op, op.constbox())
+            self.last_emitted_operation = REMOVED
+            return
         self.emit_operation(op)
     optimize_CALL_PURE_f = optimize_CALL_PURE_i
     optimize_CALL_PURE_p = optimize_CALL_PURE_i

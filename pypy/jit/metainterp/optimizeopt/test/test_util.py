@@ -8,7 +8,7 @@ from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.history import (TreeLoop, AbstractDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.optimizeopt.util import sort_descrs, equaloplists,\
-     ArgsDict
+     ArgsDict, ArgsSet
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.codewriter.heaptracker import register_known_gctype
 from pypy.jit.tool.oparser import parse, pure_parse
@@ -17,7 +17,7 @@ from pypy.jit.metainterp import compile, resume
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.config.pypyoption import get_pypy_config
 from pypy.jit.metainterp.resoperation import rop, create_resop, BoxPtr,\
-     create_resop_0, REF, INT, FLOAT
+     create_resop_0, REF, INT, FLOAT, create_resop_2, BoxInt
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):
@@ -71,12 +71,31 @@ def test_equaloplists_fail_args():
                    "equaloplists(loop1.operations, loop3.operations)")
 
 
-def test_argsdict():
-    d = ArgsDict()
+def test_argsset():
+    d = ArgsSet()
     op = create_resop_0(rop.FORCE_TOKEN, 13)
     assert d.get(op) is None
     d.add(op)
     assert d.get(op) is op
+    d2 = d.copy()
+    op2 = create_resop_2(rop.INT_ADD, 15, BoxInt(0), BoxInt(1))
+    d2.add(op2)
+    assert d2.get(op) is op
+    assert d2.get(op2) is op2
+    assert d.get(op2) is None
+
+def test_argdict():
+    d = ArgsDict()
+    op = create_resop_0(rop.FORCE_TOKEN, 13)
+    assert d.get(op) is None
+    d.set(op, 3)
+    assert d.get(op) == 3
+    d2 = d.copy()
+    op2 = create_resop_2(rop.INT_ADD, 15, BoxInt(0), BoxInt(1))
+    d2.set(op2, 5)
+    assert d2.get(op2) == 5
+    assert d2.get(op) == 3
+    assert d.get(op2) is None
 
 # ____________________________________________________________
 
@@ -378,10 +397,11 @@ def _sortboxes(boxes):
 
 class BaseTest(object):
 
-    def parse(self, s, boxkinds=None):
+    def parse(self, s, boxkinds=None, results=None):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
-                     boxkinds=boxkinds)
+                     boxkinds=boxkinds,
+                     results=results)
 
     def invent_fail_descr(self, model, fail_args):
         xxx
@@ -402,12 +422,10 @@ class BaseTest(object):
         assert equaloplists(optimized.operations,
                             expected.operations, False, remap, text_right)
 
-    def _do_optimize_loop(self, loop, call_pure_results):
+    def _do_optimize_loop(self, loop):
         from pypy.jit.metainterp.optimizeopt import optimize_trace
 
         self.loop = loop
-        if call_pure_results is not None:
-            loop.call_pure_results = call_pure_results.copy()
         metainterp_sd = FakeMetaInterpStaticData(self.cpu)
         if hasattr(self, 'vrefinfo'):
             metainterp_sd.virtualref_info = self.vrefinfo
@@ -421,7 +439,7 @@ class BaseTest(object):
                 op._rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
         optimize_trace(metainterp_sd, loop, self.enable_opts)
 
-    def unroll_and_optimize(self, loop, call_pure_results=None):
+    def unroll_and_optimize(self, loop):
         operations =  loop.operations
         jumpop = operations[-1]
         assert jumpop.getopnum() == rop.JUMP
@@ -440,7 +458,7 @@ class BaseTest(object):
                                             operations +  \
                               [create_resop(rop.LABEL, None, jump_args,
                                             descr=token)]
-        self._do_optimize_loop(preamble, call_pure_results)
+        self._do_optimize_loop(preamble)
 
         assert preamble.operations[-1].getopnum() == rop.LABEL
 
@@ -454,7 +472,7 @@ class BaseTest(object):
         assert loop.operations[0].getopnum() == rop.LABEL
         loop.inputargs = loop.operations[0].getarglist()
 
-        self._do_optimize_loop(loop, call_pure_results)
+        self._do_optimize_loop(loop)
         extra_same_as = []
         while loop.operations[0].getopnum() != rop.LABEL:
             extra_same_as.append(loop.operations[0])

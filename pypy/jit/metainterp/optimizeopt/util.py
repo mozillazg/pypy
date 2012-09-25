@@ -87,35 +87,50 @@ def descrlist_dict():
 
 BUCKET_SIZE = 1024
 
-class ArgsDict(object):
-    """ An imprecise dict. If you look it up and it's there, it's correct,
-    however we don't care about collisions, so a colliding element can
-    kick someone else out
-    """
-    def __init__(self, bucket_size=BUCKET_SIZE):
-        self.buckets = [None] * bucket_size
-        self.bucket_size = bucket_size - 1
+def new_args_set(has_value=False):
+    class ArgsSet(object):
+        """ An imprecise dict. If you look it up and it's there, it's correct,
+        however we don't care about collisions, so a colliding element can
+        kick someone else out
+        """
+        def __init__(self, bucket_size=BUCKET_SIZE):
+            self.buckets = [None] * bucket_size
+            if has_value:
+                self.values = [None] * bucket_size
+            self.bucket_size = bucket_size - 1
 
-    def get(self, op):
-        hash = op._get_hash_() & self.bucket_size
-        candidate = self.buckets[hash]
-        if candidate is None:
+        def get(self, op):
+            hash = op._get_hash_() & self.bucket_size
+            candidate = self.buckets[hash]
+            if candidate is None:
+                return None
+            if candidate.__class__ != op.__class__:
+                return None # collision
+            if op.eq(candidate):
+                if has_value:
+                    return self.values[hash]
+                return candidate
             return None
-        if candidate.__class__ != op.__class__:
-            return None # collision
-        if op.eq(candidate):
-            return candidate
-        return None
 
-    def add(self, op):
-        hash = op._get_hash_() & self.bucket_size
-        self.buckets[hash] = op # don't care about collisions
+        if has_value:
+            def set(self, op, v):
+                hash = op._get_hash_() & self.bucket_size
+                self.buckets[hash] = op # don't care about collisions
+                self.values[hash] = v
+        else:
+            def add(self, op):
+                hash = op._get_hash_() & self.bucket_size
+                self.buckets[hash] = op # don't care about collisions
 
-    def copy(self):
-        a = ArgsDict()
-        a.buckets = self.buckets[:]
-        return a
-
+        def copy(self):
+            a = ArgsSet()
+            a.buckets = self.buckets[:]
+            if has_value:
+                a.values = self.values[:]
+            return a
+    return ArgsSet
+ArgsSet = new_args_set()
+ArgsDict = new_args_set(True)
 
 # ____________________________________________________________
 
