@@ -219,8 +219,10 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
         z = 0
     return create_resop_2(rop.INT_MUL_OVF, z, box1, box2)
 
-def do_same_as(cpu, _, box):
+def do_same_as_i(cpu, _, box):
     return box.clonebox()
+do_same_as_f = do_same_as_i
+do_same_as_p = do_same_as_i
 
 def do_copystrcontent(cpu, _, srcbox, dstbox,
                       srcstartbox, dststartbox, lengthbox):
@@ -276,6 +278,7 @@ def do_jit_debug(cpu, _, arg0, arg1, arg2, arg3):
 def _make_execute_list():
     execute_by_num_args = {}
     for key, value in rop.__dict__.items():
+        orig_key = key
         if not key.startswith('_'):
             if (rop._FINAL_FIRST <= value <= rop._FINAL_LAST or
                 rop._GUARD_FIRST <= value <= rop._GUARD_LAST):
@@ -301,8 +304,8 @@ def _make_execute_list():
                 continue
             #
             # Maybe the same without the _PURE suffix?
-            if key.endswith('_PURE'):
-                key = key[:-5]
+            if key[-7:-2] == '_PURE':
+                key = key[:-7] + key[-2:]
                 name = 'do_' + key.lower()
                 if name in globals():
                     execute[value] = globals()[name]
@@ -344,9 +347,24 @@ def _make_execute_list():
                          rop.CALL_MALLOC_GC,
                          rop.CALL_MALLOC_NURSERY,
                          rop.LABEL,
+                         rop.GETARRAYITEM_RAW_PURE_N,
+                         rop.GETFIELD_RAW_p,
+                         rop.GETARRAYITEM_RAW_PURE_p,
+                         rop.SAME_AS_N,
+                         rop.GETINTERIORFIELD_GC_N,
+                         rop.GETFIELD_RAW_N,
+                         rop.GETFIELD_RAW_PURE_N,
+                         rop.GETFIELD_RAW_PURE_p,
+                         rop.GETARRAYITEM_RAW_N,
+                         rop.GETFIELD_GC_PURE_N,
+                         rop.GETARRAYITEM_GC_PURE_N,
+                         rop.GETARRAYITEM_GC_N,
+                         rop.GETFIELD_GC_N,
+                         rop.GETARRAYITEM_RAW_p,
+                         rop.RAW_LOAD_N,
                          ):      # list of opcodes never executed by pyjitpl
                 continue
-            #raise AssertionError("missing %r" % (key,))
+            raise AssertionError("missing %r" % (orig_key,))
     return execute_by_num_args
 
 def make_execute_function_with_boxes(opnum, name, func):

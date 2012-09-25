@@ -1012,28 +1012,28 @@ class BlackholeInterpreter(object):
 
     @arguments("cpu", "r", "d", "d", "i", returns="i")
     def bhimpl_getlistitem_gc_i(cpu, lst, itemsdescr, arraydescr, index):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
         return cpu.bh_getarrayitem_gc_i(arraydescr, items, index)
     @arguments("cpu", "r", "d", "d", "i", returns="r")
     def bhimpl_getlistitem_gc_r(cpu, lst, itemsdescr, arraydescr, index):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
-        return cpu.bh_getarrayitem_gc_r(arraydescr, items, index)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
+        return cpu.bh_getarrayitem_gc_p(arraydescr, items, index)
     @arguments("cpu", "r", "d", "d", "i", returns="f")
     def bhimpl_getlistitem_gc_f(cpu, lst, itemsdescr, arraydescr, index):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
         return cpu.bh_getarrayitem_gc_f(arraydescr, items, index)
 
     @arguments("cpu", "r", "d", "d", "i", "i")
     def bhimpl_setlistitem_gc_i(cpu, lst, itemsdescr, arraydescr, index, nval):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
         cpu.bh_setarrayitem_gc_i(arraydescr, items, index, nval)
     @arguments("cpu", "r", "d", "d", "i", "r")
     def bhimpl_setlistitem_gc_r(cpu, lst, itemsdescr, arraydescr, index, nval):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
         cpu.bh_setarrayitem_gc_r(arraydescr, items, index, nval)
     @arguments("cpu", "r", "d", "d", "i", "f")
     def bhimpl_setlistitem_gc_f(cpu, lst, itemsdescr, arraydescr, index, nval):
-        items = cpu.bh_getfield_gc_r(lst, itemsdescr)
+        items = cpu.bh_getfield_gc_p(lst, itemsdescr)
         cpu.bh_setarrayitem_gc_f(arraydescr, items, index, nval)
 
     # ----------
@@ -1123,14 +1123,14 @@ class BlackholeInterpreter(object):
     def bhimpl_getarrayitem_gc_i(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_i(arraydescr, array, index)
     @arguments("cpu", "r", "i", "d", returns="r")
-    def bhimpl_getarrayitem_gc_r(cpu, array, index, arraydescr):
-        return cpu.bh_getarrayitem_gc_r(arraydescr, array, index)
+    def bhimpl_getarrayitem_gc_p(cpu, array, index, arraydescr):
+        return cpu.bh_getarrayitem_gc_p(arraydescr, array, index)
     @arguments("cpu", "r", "i", "d", returns="f")
     def bhimpl_getarrayitem_gc_f(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_f(arraydescr, array, index)
 
     bhimpl_getarrayitem_gc_i_pure = bhimpl_getarrayitem_gc_i
-    bhimpl_getarrayitem_gc_r_pure = bhimpl_getarrayitem_gc_r
+    bhimpl_getarrayitem_gc_p_pure = bhimpl_getarrayitem_gc_p
     bhimpl_getarrayitem_gc_f_pure = bhimpl_getarrayitem_gc_f
 
     @arguments("cpu", "i", "i", "d", returns="i")
@@ -1168,41 +1168,41 @@ class BlackholeInterpreter(object):
 
     @arguments("cpu", "r", "d", "d", "i", returns="i")
     def bhimpl_getarrayitem_vable_i(cpu, vable, fielddescr, arraydescr, index):
-        array = cpu.bh_getfield_gc_r(vable, fielddescr)
+        array = cpu.bh_getfield_gc_p(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_i(arraydescr, array, index)
     @arguments("cpu", "r", "d", "d", "i", returns="r")
     def bhimpl_getarrayitem_vable_r(cpu, vable, fielddescr, arraydescr, index):
-        array = cpu.bh_getfield_gc_r(vable, fielddescr)
-        return cpu.bh_getarrayitem_gc_r(arraydescr, array, index)
+        array = cpu.bh_getfield_gc_p(vable, fielddescr)
+        return cpu.bh_getarrayitem_gc_p(arraydescr, array, index)
     @arguments("cpu", "r", "d", "d", "i", returns="f")
     def bhimpl_getarrayitem_vable_f(cpu, vable, fielddescr, arraydescr, index):
-        array = cpu.bh_getfield_gc_r(vable, fielddescr)
+        array = cpu.bh_getfield_gc_p(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_f(arraydescr, array, index)
 
     @arguments("cpu", "r", "d", "d", "i", "i")
     def bhimpl_setarrayitem_vable_i(cpu, vable, fdescr, adescr, index, newval):
-        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        array = cpu.bh_getfield_gc_p(vable, fdescr)
         cpu.bh_setarrayitem_gc_i(adescr, array, index, newval)
     @arguments("cpu", "r", "d", "d", "i", "r")
     def bhimpl_setarrayitem_vable_r(cpu, vable, fdescr, adescr, index, newval):
-        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        array = cpu.bh_getfield_gc_p(vable, fdescr)
         cpu.bh_setarrayitem_gc_r(adescr, array, index, newval)
     @arguments("cpu", "r", "d", "d", "i", "f")
     def bhimpl_setarrayitem_vable_f(cpu, vable, fdescr, adescr, index, newval):
-        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        array = cpu.bh_getfield_gc_p(vable, fdescr)
         cpu.bh_setarrayitem_gc_f(adescr, array, index, newval)
 
     @arguments("cpu", "r", "d", "d", returns="i")
     def bhimpl_arraylen_vable(cpu, vable, fdescr, adescr):
-        array = cpu.bh_getfield_gc_r(vable, fdescr)
+        array = cpu.bh_getfield_gc_p(vable, fdescr)
         return cpu.bh_arraylen_gc(adescr, array)
 
     @arguments("cpu", "r", "i", "d", returns="i")
     def bhimpl_getinteriorfield_gc_i(cpu, array, index, descr):
         return cpu.bh_getinteriorfield_gc_i(array, index, descr)
     @arguments("cpu", "r", "i", "d", returns="r")
-    def bhimpl_getinteriorfield_gc_r(cpu, array, index, descr):
-        return cpu.bh_getinteriorfield_gc_r(array, index, descr)
+    def bhimpl_getinteriorfield_gc_p(cpu, array, index, descr):
+        return cpu.bh_getinteriorfield_gc_p(array, index, descr)
     @arguments("cpu", "r", "i", "d", returns="f")
     def bhimpl_getinteriorfield_gc_f(cpu, array, index, descr):
         return cpu.bh_getinteriorfield_gc_f(array, index, descr)
@@ -1221,22 +1221,22 @@ class BlackholeInterpreter(object):
     def bhimpl_getfield_gc_i(cpu, struct, fielddescr):
         return cpu.bh_getfield_gc_i(struct, fielddescr)
     @arguments("cpu", "r", "d", returns="r")
-    def bhimpl_getfield_gc_r(cpu, struct, fielddescr):
-        return cpu.bh_getfield_gc_r(struct, fielddescr)
+    def bhimpl_getfield_gc_p(cpu, struct, fielddescr):
+        return cpu.bh_getfield_gc_p(struct, fielddescr)
     @arguments("cpu", "r", "d", returns="f")
     def bhimpl_getfield_gc_f(cpu, struct, fielddescr):
         return cpu.bh_getfield_gc_f(struct, fielddescr)
 
     bhimpl_getfield_gc_i_pure = bhimpl_getfield_gc_i
-    bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
+    bhimpl_getfield_gc_p_pure = bhimpl_getfield_gc_p
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
     bhimpl_getfield_vable_i = bhimpl_getfield_gc_i
-    bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
+    bhimpl_getfield_vable_p = bhimpl_getfield_gc_p
     bhimpl_getfield_vable_f = bhimpl_getfield_gc_f
 
     bhimpl_getfield_gc_i_greenfield = bhimpl_getfield_gc_i
-    bhimpl_getfield_gc_r_greenfield = bhimpl_getfield_gc_r
+    bhimpl_getfield_gc_p_greenfield = bhimpl_getfield_gc_p
     bhimpl_getfield_gc_f_greenfield = bhimpl_getfield_gc_f
 
     @arguments("cpu", "i", "d", returns="i")

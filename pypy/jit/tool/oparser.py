@@ -115,6 +115,7 @@ class OpParser(object):
                 tt = self.model.TargetToken(token)
                 self._consts[poss_descr] = tt
                 return tt
+            raise
 
     def box_for_var(self, elem):
         try:
@@ -284,7 +285,10 @@ class OpParser(object):
         if opnum == FORCE_SPILL.OPNUM:
             return FORCE_SPILL(opnum, args, result, descr)
         else:
-            return create_resop_dispatch(opnum, result, args, descr)
+            r = create_resop_dispatch(opnum, result, args)
+            if descr is not None:
+                r.setdescr(descr)
+            return r
 
     def parse_result_op(self, line, num):
         res, op = line.split("=", 1)
@@ -305,7 +309,7 @@ class OpParser(object):
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
-        res = self.create_op(opnum, self._example_for(opnum), args, descr)
+        res = self.create_op(opnum, None, args, descr)
         if fail_args is not None:
             res.set_extra("failargs", fail_args)
         return res

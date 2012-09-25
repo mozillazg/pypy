@@ -113,6 +113,14 @@ class BaseBackendTest(Runner):
             namespace['targettoken'] = TargetToken()
         if 'faildescr' not in namespace:
             namespace['faildescr'] = BasicFailDescr(1)
+        if 'faildescr1' not in namespace:
+            namespace['faildescr1'] = BasicFailDescr(1)
+        if 'faildescr2' not in namespace:
+            namespace['faildescr2'] = BasicFailDescr(2)
+        if 'faildescr3' not in namespace:
+            namespace['faildescr3'] = BasicFailDescr(3)
+        if 'faildescr4' not in namespace:
+            namespace['faildescr4'] = BasicFailDescr(4)
         loop = parse(s, namespace=namespace)
         return loop.inputargs, loop.operations, JitCellToken()
 
@@ -173,7 +181,7 @@ class BaseBackendTest(Runner):
         label(i0, descr=targettoken)
         i1 = int_add(i0, 1)
         i2 = int_le(i1, 9)
-        guard_true(i2) [i1]
+        guard_true(i2, descr=faildescr) [i1]
         jump(i1, descr=targettoken)
         """, namespace={'targettoken': TargetToken()})
         i1 = inputargs[0]
@@ -257,7 +265,7 @@ class BaseBackendTest(Runner):
         inputargs, operations, looptoken = self.parse("""
         [i0]
         guard_false(i0, descr=faildescr1) [i0]
-        finish()
+        finish(descr=faildescr3)
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
 
@@ -266,7 +274,7 @@ class BaseBackendTest(Runner):
             bridge_source.append("i%d = int_add(i%d, 1)" % (i + 1, i))
         failargs = ",".join(["i%d" % i for i in range(1000)])
         bridge_source.append("guard_false(i0, descr=faildescr2) [%s]" % failargs)
-        bridge_source.append("finish()")
+        bridge_source.append("finish(descr=faildescr4)")
         inputargs, bridge, _ = self.parse("\n".join(bridge_source),
                                           namespace=locals())
         self.cpu.compile_bridge(faildescr1, inputargs, bridge, looptoken)
@@ -1278,7 +1286,8 @@ class BaseBackendTest(Runner):
                     inputargs = [ib for ib in [ibox1, ibox2]
                                     if isinstance(ib, BoxInt)]
                     op0 = create_resop_2(opname, 0, ibox1, ibox2)
-                    op1 = create_resop_1(opguard, None, op0, descr=faildescr1)
+                    op1 = create_resop_1(opguard, None, op0)
+                    op1.setdescr(faildescr1)
                     op2 = create_resop(rop.FINISH, None, [], descr=faildescr2)
                     op1.set_extra("failargs", [])
                     operations = [op0, op1, op2]
@@ -1331,7 +1340,8 @@ class BaseBackendTest(Runner):
                     inputargs = [fb for fb in [fbox1, fbox2]
                                     if isinstance(fb, BoxFloat)]
                     op0 = create_resop_2(opname, 0, fbox1, fbox2)
-                    op1 = create_resop_1(opguard, None, op0, descr=faildescr1)
+                    op1 = create_resop_1(opguard, None, op0)
+                    op1.setdescr(faildescr1)
                     op1.set_extra("failargs", [])
                     op2 = create_resop(rop.FINISH, None, [], descr=faildescr2)
                     operations = [op0, op1, op2]
@@ -1456,8 +1466,8 @@ class BaseBackendTest(Runner):
                     for guard_opnum, expected_id in [(rop.GUARD_TRUE, 1),
                                                      (rop.GUARD_FALSE, 0)]:
                         op0 = create_resop_2(opnum, 0, *testcase)
-                        op1 = create_resop_1(guard_opnum, None, op0,
-                                             descr=BasicFailDescr(4))
+                        op1 = create_resop_1(guard_opnum, None, op0)
+                        op1.setdescr(BasicFailDescr(4))
                         op2 = create_resop(rop.FINISH, None, [],
                                            descr=BasicFailDescr(5))
                         op1.set_extra("failargs", [])
@@ -1728,8 +1738,8 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0]
         i1 = same_as_i(1)
         call_n(ConstClass(fptr), i0, descr=calldescr)
-        p0 = guard_exception(ConstClass(xtp)) [i1]
-        finish(0, p0)
+        p0 = guard_exception(ConstClass(xtp), descr=faildescr2) [i1]
+        finish(0, p0, descr=faildescr1)
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
         fptr = llhelper(FPTR, func)
@@ -1746,6 +1756,8 @@ class LLtypeBackendTest(BaseBackendTest):
 
         exc_tp = xtp
         exc_ptr = xptr
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
         loop = parse(ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -1785,8 +1797,8 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0]
         i1 = same_as_i(1)
         call_n(ConstClass(fptr), i0, descr=calldescr)
-        guard_no_exception() [i1]
-        finish(0)
+        guard_no_exception(descr=faildescr1) [i1]
+        finish(0, descr=faildescr2)
         '''
         loop = parse(ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
@@ -2472,8 +2484,8 @@ class LLtypeBackendTest(BaseBackendTest):
         i16 = int_add(i15, i7)
         i17 = int_add(i16, i8)
         i18 = int_add(i17, i9)
-        finish(i18)'''
-        loop = parse(ops)
+        finish(i18, descr=faildescr1)'''
+        loop = parse(ops, namespace={'faildescr1': BasicFailDescr(1)})
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -2489,9 +2501,11 @@ class LLtypeBackendTest(BaseBackendTest):
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
         i10 = int_add(i0, 42)
         i11 = call_assembler_i(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
-        guard_not_forced()[]
-        finish(i11)
+        guard_not_forced(descr=faildescr1)[]
+        finish(i11, descr=faildescr2)
         '''
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
@@ -2525,8 +2539,8 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [f0, f1]
         f2 = float_add(f0, f1)
-        finish(f2)'''
-        loop = parse(ops)
+        finish(f2, descr=faildescr)'''
+        loop = parse(ops, namespace={'faildescr': BasicFailDescr(1)})
         done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -2539,9 +2553,11 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [f4, f5]
         f3 = call_assembler_f(f4, f5, descr=looptoken)
-        guard_not_forced()[]
-        finish(f3)
+        guard_not_forced(descr=faildescr1)[]
+        finish(f3, descr=faildescr2)
         '''
+        faildescr1 = BasicFailDescr(1)
+        faildescr2 = BasicFailDescr(2)
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
@@ -2616,8 +2632,8 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [f0, f1]
         f2 = float_add(f0, f1)
-        finish(f2)'''
-        loop = parse(ops)
+        finish(f2, descr=faildescr1)'''
+        loop = parse(ops, namespace={'faildescr1': BasicFailDescr(1)})
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -2631,9 +2647,11 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [f4, f5]
         f3 = call_assembler_f(f4, f5, descr=looptoken)
-        guard_not_forced()[]
-        finish(f3)
+        guard_not_forced(descr=faildescr1)[]
+        finish(f3, descr=faildescr2)
         '''
+        faildescr2 = BasicFailDescr(2)
+        faildescr1 = BasicFailDescr(1)
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
@@ -2651,8 +2669,8 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [f0, f1]
         f2 = float_sub(f0, f1)
-        finish(f2)'''
-        loop = parse(ops)
+        finish(f2, descr=faildescr)'''
+        loop = parse(ops, namespace={'faildescr': BasicFailDescr(1)})
         looptoken2 = JitCellToken()
         looptoken2.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken2)
@@ -3061,8 +3079,9 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = """
         [i0]
         i1 = int_force_ge_zero(i0)    # but forced to be in a register
-        finish(i1, descr=1)
+        finish(i1, descr=faildescr1)
         """
+        faildescr1 = BasicFailDescr(1)
         loop = parse(ops, self.cpu, namespace=locals())
         descr = loop.operations[-1].getdescr()
         looptoken = JitCellToken()
@@ -3201,7 +3220,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             i2 = raw_load_i(i0, i1, descr=arraydescr)
-            finish(i2)
+            finish(i2, descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3209,6 +3228,7 @@ class LLtypeBackendTest(BaseBackendTest):
                 p[i] = '\xDD'
             value = rffi.cast(T, 0x4243444546474849)
             rawstorage.raw_storage_setitem(p, 16, value)
+            faildescr1 = BasicFailDescr(1)
             loop = parse(ops, self.cpu, namespace=locals())
             looptoken = JitCellToken()
             self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -3226,7 +3246,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             f2 = raw_load_f(i0, i1, descr=arraydescr)
-            finish(f2)
+            finish(f2, descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3234,6 +3254,7 @@ class LLtypeBackendTest(BaseBackendTest):
                 p[i] = '\xDD'
             value = rffi.cast(T, 1.12e20)
             rawstorage.raw_storage_setitem(p, 16, value)
+            faildescr1 = BasicFailDescr(1)
             loop = parse(ops, self.cpu, namespace=locals())
             looptoken = JitCellToken()
             self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -3253,13 +3274,14 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, i2]
             raw_store(i0, i1, i2, descr=arraydescr)
-            finish()
+            finish(descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
             for i in range(31):
                 p[i] = '\xDD'
             value = 0x4243444546474849 & sys.maxint
+            faildescr1 = BasicFailDescr(1)
             loop = parse(ops, self.cpu, namespace=locals())
             looptoken = JitCellToken()
             self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -3277,13 +3299,14 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, f2]
             raw_store(i0, i1, f2, descr=arraydescr)
-            finish()
+            finish(descr=faildescr1)
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
             for i in range(31):
                 p[i] = '\xDD'
             value = 1.23e20
+            faildescr1 = BasicFailDescr(1)
             loop = parse(ops, self.cpu, namespace=locals())
             looptoken = JitCellToken()
             self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
