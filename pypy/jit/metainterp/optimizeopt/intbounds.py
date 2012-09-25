@@ -170,9 +170,9 @@ class OptIntBounds(Optimization):
             # Else, synthesize the non overflowing op for optimize_default to
             # reuse, as well as the reverse op
             elif opnum == rop.INT_ADD_OVF:
-                self.pure(rop.INT_ADD, args[:], result)
-                self.pure(rop.INT_SUB, [result, args[1]], args[0])
-                self.pure(rop.INT_SUB, [result, args[0]], args[1])
+                self.pure(rop.INT_ADD, result.getint(), args[0], args[1])
+                self.pure(rop.INT_SUB, args[0].getint(), result, args[1])
+                self.pure(rop.INT_SUB, args[1].getint(), result, args[0])
             elif opnum == rop.INT_SUB_OVF:
                 self.pure(rop.INT_SUB, args[:], result)
                 self.pure(rop.INT_ADD, [result, args[1]], args[0])

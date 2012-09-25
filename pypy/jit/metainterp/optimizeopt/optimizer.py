@@ -260,7 +260,7 @@ class ConstantValue(OptValue):
         self.make_constant(box)
 
     def __repr__(self):
-        return 'Constant(%r)' % (self.box,)
+        return 'Constant(%r)' % (self.op,)
 
 CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
@@ -361,7 +361,6 @@ class Optimizer(Optimization):
         self.cpu = metainterp_sd.cpu
         self.loop = loop
         self.interned_refs = self.cpu.ts.new_ref_dict()
-        self.interned_ints = {}
         self.resumedata_memo = resume.ResumeDataLoopMemo(metainterp_sd)
         self.pendingfields = []
         self.quasi_immutable_deps = None
@@ -423,25 +422,16 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_FORCINGS)
         self.resumedata_memo.forget_numberings(virtualbox)
 
-    def getinterned(self, box):
-        # WTF is this function doing?
-        if box.type != REF:
-            return box
-        constbox = self.get_constant_box(box)
-        if constbox is None:
-            return box
-        value = constbox.getref_base()
-        if not value:
-            return box
-        return self.interned_refs.setdefault(value, box)
-        #elif constbox.type == INT:
-        #    value = constbox.getint()
-        #    return self.interned_ints.setdefault(value, box)
-
     def getvalue(self, box):
         if box.is_constant():
+            if box.type == REF:
+                try:
+                    return self.interned_refs[box.getref_base()]
+                except KeyError:
+                    val = ConstantValue(box)
+                    self.interned_refs[box.getref_base()] = val
+                    return val
             return ConstantValue(box)
-        box = self.getinterned(box)
         try:
             value = box.get_extra("optimize_value")
         except KeyError:

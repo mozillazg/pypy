@@ -371,7 +371,7 @@ class OptHeap(Optimization):
         cf = self.field_cache(op.getdescr())
         fieldvalue = cf.getfield_from_cache(self, structvalue)
         if fieldvalue is not None:
-            self.make_equal_to(op.result, fieldvalue)
+            self.replace(op, fieldvalue.op)
             return
         # default case: produce the operation
         structvalue.ensure_nonnull()

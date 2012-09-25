@@ -376,9 +376,9 @@ class OptVirtualize(optimizer.Optimization):
         self.setvalue(op, vvalue)
         return vvalue
 
-    def make_vstruct(self, structdescr, box, source_op=None):
-        vvalue = VStructValue(self.optimizer.cpu, structdescr, box, source_op)
-        self.make_equal_to(box, vvalue)
+    def make_vstruct(self, structdescr, op):
+        vvalue = VStructValue(self.optimizer.cpu, structdescr, op)
+        self.setvalue(op, vvalue)
         return vvalue
 
     def optimize_VIRTUAL_REF(self, op):
