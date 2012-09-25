@@ -74,7 +74,7 @@ class OptPure(Optimization):
         return optimize_CALL_PURE
     optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
     optimize_CALL_PURE_f = _new_optimize_call_pure(rop.CALL_f)
-    optimize_CALL_PURE_p = _new_optimize_call_pure(rop.CALL_p)
+    optimize_CALL_PURE_r = _new_optimize_call_pure(rop.CALL_r)
     optimize_CALL_PURE_N = _new_optimize_call_pure(rop.CALL_N)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
@@ -118,7 +118,7 @@ class OptPure(Optimization):
     def produce_potential_short_preamble_ops(self, sb):
         for op in self.emitted_pure_operations:
             if op.getopnum() == rop.GETARRAYITEM_GC_PURE_i or \
-               op.getopnum() == rop.GETARRAYITEM_GC_PURE_p or \
+               op.getopnum() == rop.GETARRAYITEM_GC_PURE_r or \
                op.getopnum() == rop.GETARRAYITEM_GC_PURE_f or \
                op.getopnum() == rop.STRGETITEM or \
                op.getopnum() == rop.UNICODEGETITEM:

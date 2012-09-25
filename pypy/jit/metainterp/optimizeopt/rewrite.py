@@ -343,7 +343,7 @@ class OptRewrite(Optimization):
             self.loop_invariant_results[key] = op
         return optimize_CALL_LOOPINVARIANT
     optimize_CALL_LOOPINVARIANT_i = _new_optimize_call_loopinvariant(rop.CALL_i)
-    optimize_CALL_LOOPINVARIANT_p = _new_optimize_call_loopinvariant(rop.CALL_p)
+    optimize_CALL_LOOPINVARIANT_r = _new_optimize_call_loopinvariant(rop.CALL_r)
     optimize_CALL_LOOPINVARIANT_f = _new_optimize_call_loopinvariant(rop.CALL_f)
     optimize_CALL_LOOPINVARIANT_N = _new_optimize_call_loopinvariant(rop.CALL_N)
 
@@ -517,7 +517,7 @@ class OptRewrite(Optimization):
 
     def optimize_SAME_AS_i(self, op):
         self.replace(op, op.getarg(0))
-    optimize_SAME_AS_p = optimize_SAME_AS_i
+    optimize_SAME_AS_r = optimize_SAME_AS_i
     optimize_SAME_AS_f = optimize_SAME_AS_i
 
 dispatch_opt = make_dispatcher_method(OptRewrite, 'optimize_',

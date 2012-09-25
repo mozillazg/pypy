@@ -95,7 +95,7 @@ def create_resop_1(opnum, result, arg0, descr=None):
     cls = opclasses[opnum]
     assert cls.NUMARGS == 1
     if (cls.is_always_pure() and
-        opnum not in (rop.SAME_AS_i, rop.SAME_AS_f, rop.SAME_AS_p)):
+        opnum not in (rop.SAME_AS_i, rop.SAME_AS_f, rop.SAME_AS_r)):
         if arg0.is_constant():
             return cls.wrap_constant(result)
     if result is None:
@@ -386,6 +386,9 @@ class BoxInt(Box):
     def repr_rpython(self):
         return repr_rpython(self, 'bi')
 
+    def eq_value(self, other):
+        return self.value == other.getint()
+
 class BoxFloat(Box):
     type = FLOAT
     _attrs_ = ('value',)
@@ -414,6 +417,9 @@ class BoxFloat(Box):
 
     def repr_rpython(self):
         return repr_rpython(self, 'bf')
+
+    def eq_value(self, other):
+        return self.value == other.getfloatstorage()
 
 class BoxPtr(Box):
     type = REF
@@ -450,6 +456,9 @@ class BoxPtr(Box):
 
     def repr_rpython(self):
         return repr_rpython(self, 'bp')
+
+    def eq_value(self, other):
+        return self.value == other.getref_base()
 
     _getrepr_ = repr_pointer
 
@@ -730,7 +739,7 @@ class AbstractResOp(AbstractValue):
         if descr is not None:
             if other.getdescr() is not descr:
                 return False
-        if not self.result_eq(other):
+        if not self.eq_value(other):
             return False
         if not self.args_eq(other):
             return False
@@ -882,7 +891,7 @@ class ResOpNone(object):
     def get_result_hash(self):
         return 0
 
-    def result_eq(self, other):
+    def eq_value(self, other):
         return True
 
 class ResOpInt(object):
@@ -910,9 +919,8 @@ class ResOpInt(object):
     def get_result_hash(self):
         return make_hashable_int(self.intval)
 
-    def result_eq(self, other):
-        assert isinstance(other, self.__class__)
-        return self.intval == other.intval
+    def eq_value(self, other):
+        return self.intval == other.getint()
 
 class ResOpFloat(object):
     _mixin_ = True
@@ -940,9 +948,8 @@ class ResOpFloat(object):
     def get_result_hash(self):
         return longlong.gethash(self.floatval)
 
-    def result_eq(self, other):
-        assert isinstance(other, self.__class__)
-        return self.floatval == other.floatval
+    def eq_value(self, other):
+        return self.floatval == other.getfloatstorage()
 
 class ResOpPointer(object):
     _mixin_ = True
@@ -955,6 +962,9 @@ class ResOpPointer(object):
     def getref_base(self):
         return self.pval
     getresult = getref_base
+
+    def getref(self, TYPE):
+        return lltype.cast_opaque_ptr(TYPE, self.getref_base())
 
     def getresultrepr(self):
         # XXX what do we want to put in here?
@@ -973,9 +983,8 @@ class ResOpPointer(object):
     def constbox(self):
         return ConstPtr(self.pval)
 
-    def result_eq(self, other):
-        assert isinstance(other, self.__class__)
-        return self.pval == other.pval
+    def eq_value(self, other):
+        return self.pval == other.getref_base()
 
 # ===================
 # Top of the hierachy
@@ -1356,7 +1365,7 @@ _oplist = [
     'GUARD_NONNULL_CLASS/2d/N',
     '_GUARD_FOLDABLE_LAST',
     'GUARD_NO_EXCEPTION/0d/N',   # may be called with an exception currently set
-    'GUARD_EXCEPTION/1d/p',      # may be called with an exception currently set
+    'GUARD_EXCEPTION/1d/r',      # may be called with an exception currently set
     'GUARD_NO_OVERFLOW/0d/N',
     'GUARD_OVERFLOW/0d/N',
     'GUARD_NOT_FORCED/0d/N',     # may be called with an exception currently set
@@ -1416,7 +1425,7 @@ _oplist = [
     'SAME_AS/1/*',      # gets a Const or a Box, turns it into another Box
     '_ALWAYS_PURE_NO_PTR_LAST',
     'CAST_PTR_TO_INT/1/i',
-    'CAST_INT_TO_PTR/1/p',
+    'CAST_INT_TO_PTR/1/r',
     #
     'PTR_EQ/2b/i',
     'PTR_NE/2b/i',
@@ -1447,11 +1456,11 @@ _oplist = [
     'GETFIELD_GC/1d/*',
     'GETFIELD_RAW/1d/*',
     '_MALLOC_FIRST',
-    'NEW/0d/p',
-    'NEW_WITH_VTABLE/1/p',
-    'NEW_ARRAY/1d/p',
-    'NEWSTR/1/p',
-    'NEWUNICODE/1/p',
+    'NEW/0d/r',
+    'NEW_WITH_VTABLE/1/r',
+    'NEW_ARRAY/1d/r',
+    'NEWSTR/1/r',
+    'NEWUNICODE/1/r',
     '_MALLOC_LAST',
     'FORCE_TOKEN/0/i',
     'VIRTUAL_REF/2/i',         # removed before it's passed to the backend
@@ -1490,8 +1499,8 @@ _oplist = [
     #'OOSEND',                     # ootype operation
     #'OOSEND_PURE',                # ootype operation
     'CALL_PURE/*d/*',             # removed before it's passed to the backend
-    'CALL_MALLOC_GC/*d/p',      # like CALL, but NULL => propagate MemoryError
-    'CALL_MALLOC_NURSERY/1/p',  # nursery malloc, const number of bytes, zeroed
+    'CALL_MALLOC_GC/*d/r',      # like CALL, but NULL => propagate MemoryError
+    'CALL_MALLOC_NURSERY/1/r',  # nursery malloc, const number of bytes, zeroed
     '_CALL_LAST',
     '_CANRAISE_LAST', # ----- end of can_raise operations -----
 
@@ -1589,7 +1598,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
         'N': ResOpNone,
         'i': ResOpInt,
         'f': ResOpFloat,
-        'p': ResOpPointer,
+        'r': ResOpPointer,
     }
 
     is_guard = name.startswith('GUARD')
@@ -1604,7 +1613,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
 
     if tp == '*':
         res = []
-        for tp in ['f', 'p', 'i', 'N']:
+        for tp in ['f', 'r', 'i', 'N']:
             cls_name = '%s_OP_%s' % (name, tp)
             bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
             dic = {'opnum': opnum}

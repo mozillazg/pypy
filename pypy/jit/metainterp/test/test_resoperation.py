@@ -4,6 +4,8 @@ from pypy.jit.metainterp.history import AbstractDescr
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 class FakeBox(object):
+    type = rop.INT
+    
     def __init__(self, v):
         self.v = v
 
@@ -30,27 +32,6 @@ class FakeDescr(AbstractDescr):
 
     def _get_hash_(self):
         return id(self)
-
-def test_arity_mixins():
-    cases = [
-        (0, rop.NullaryOp),
-        (1, rop.UnaryOp),
-        (2, rop.BinaryOp),
-        (3, rop.TernaryOp),
-        (9, rop.N_aryOp)
-        ]
-
-    def test_case(n, cls):
-        obj = cls()
-        obj.initarglist(range(n))
-        assert obj.getarglist() == range(n)
-        assert obj.numargs() == n
-        for i in range(n):
-            assert obj.getarg(i) == i
-        py.test.raises(IndexError, obj.getarg, n+1)
-
-    for n, cls in cases:
-        test_case(n, cls)
 
 def test_concrete_classes():
     cls = rop.opclasses[rop.rop.INT_ADD]
@@ -92,7 +73,7 @@ def test_instantiate():
     assert op.getfloat() == 15.5
     assert op.getdescr() is mydescr
 
-    op = rop.create_resop(rop.rop.CALL_p, lltype.nullptr(llmemory.GCREF.TO),
+    op = rop.create_resop(rop.rop.CALL_r, lltype.nullptr(llmemory.GCREF.TO),
                           [FakeBox('a'), FakeBox('b')], descr=mydescr)
     assert op.getarglist() == [FakeBox('a'), FakeBox('b')]
     assert not op.getref_base()
@@ -112,7 +93,8 @@ def test_can_malloc():
 
 def test_repr():
     mydescr = FakeDescr()
-    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None, descr=mydescr)
+    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None)
+    op.setdescr(mydescr)
     assert repr(op) == 'guard_no_exception(, descr=descr)'
     op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
     assert repr(op) == '3 = int_add(a, b)'
@@ -129,7 +111,8 @@ class MockOpt(object):
 
 def test_copy_if_modified_by_optimization():
     mydescr = FakeDescr()
-    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None, descr=mydescr)
+    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None)
+    op.setdescr(mydescr)
     assert op.copy_if_modified_by_optimization(MockOpt({})) is op
     op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
     assert op.copy_if_modified_by_optimization(MockOpt({})) is op

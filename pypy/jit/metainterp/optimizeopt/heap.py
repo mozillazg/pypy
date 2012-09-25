@@ -379,7 +379,7 @@ class OptHeap(Optimization):
         # then remember the result of reading the field
         fieldvalue = self.getvalue(op)
         cf.remember_field_value(structvalue, fieldvalue, op)
-    optimize_GETFIELD_GC_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
     def optimize_GETFIELD_GC_PURE_i(self, op):
@@ -393,7 +393,7 @@ class OptHeap(Optimization):
         structvalue.ensure_nonnull()
         self.emit_operation(op)
     optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_PURE_i
-    optimize_GETFIELD_GC_PURE_p = optimize_GETFIELD_GC_PURE_i
+    optimize_GETFIELD_GC_PURE_r = optimize_GETFIELD_GC_PURE_i
 
     def optimize_SETFIELD_GC(self, op):
         if op.type == INT:
@@ -403,7 +403,7 @@ class OptHeap(Optimization):
             op_key = create_resop_1(rop.GETFIELD_GC_PURE_f, 0.0, op.getarg(0),
                                     op.getdescr())
         else:
-            op_key = create_resop_1(rop.GETFIELD_GC_PURE_p,
+            op_key = create_resop_1(rop.GETFIELD_GC_PURE_r,
                                     lltype.nullptr(llmemory.GCREF.TO),
                                     op.getarg(0),
                                     op.getdescr())
@@ -439,7 +439,7 @@ class OptHeap(Optimization):
         if cf is not None:
             fieldvalue = self.getvalue(op)
             cf.remember_field_value(arrayvalue, fieldvalue, op)
-    optimize_GETARRAYITEM_GC_p = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_r = optimize_GETARRAYITEM_GC_i
     optimize_GETARRAYITEM_GC_f = optimize_GETARRAYITEM_GC_i
 
     def optimize_GETARRAYITEM_GC_PURE_i(self, op):
@@ -461,7 +461,7 @@ class OptHeap(Optimization):
         # default case: produce the operation
         arrayvalue.ensure_nonnull()
         self.emit_operation(op)
-    optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_PURE_i
+    optimize_GETARRAYITEM_GC_PURE_r = optimize_GETARRAYITEM_GC_PURE_i
     optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_PURE_i
 
     def optimize_SETARRAYITEM_GC(self, op):
@@ -474,7 +474,7 @@ class OptHeap(Optimization):
                                     op.getarg(0), op.getarg(1),
                                     op.getdescr())
         else:
-            op_key = create_resop_2(rop.GETARRAYITEM_GC_PURE_p,
+            op_key = create_resop_2(rop.GETARRAYITEM_GC_PURE_r,
                                     lltype.nullptr(llmemory.GCREF.TO),
                                     op.getarg(0),
                                     op.getarg(1),

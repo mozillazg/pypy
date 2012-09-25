@@ -79,19 +79,19 @@ def new_do_call(opnum, tp):
 
 do_call_i = new_do_call(rop.CALL_i, 'i')
 do_call_f = new_do_call(rop.CALL_f, 'f')
-do_call_p = new_do_call(rop.CALL_p, 'p')
+do_call_r = new_do_call(rop.CALL_r, 'r')
 do_call_n = new_do_call(rop.CALL_N, 'N')
 do_call_loopinvariant_i = new_do_call(rop.CALL_LOOPINVARIANT_i, 'i')
 do_call_loopinvariant_f = new_do_call(rop.CALL_LOOPINVARIANT_f, 'f')
-do_call_loopinvariant_p = new_do_call(rop.CALL_LOOPINVARIANT_p, 'p')
+do_call_loopinvariant_r = new_do_call(rop.CALL_LOOPINVARIANT_r, 'r')
 do_call_loopinvariant_n = new_do_call(rop.CALL_LOOPINVARIANT_N, 'N')
 do_call_may_force_i = new_do_call(rop.CALL_MAY_FORCE_i, 'i')
 do_call_may_force_f = new_do_call(rop.CALL_MAY_FORCE_f, 'f')
-do_call_may_force_p = new_do_call(rop.CALL_MAY_FORCE_p, 'p')
+do_call_may_force_r = new_do_call(rop.CALL_MAY_FORCE_r, 'r')
 do_call_may_force_n = new_do_call(rop.CALL_MAY_FORCE_N, 'N')
 do_call_pure_i = new_do_call(rop.CALL_PURE_i, 'i')
 do_call_pure_f = new_do_call(rop.CALL_PURE_f, 'f')
-do_call_pure_p = new_do_call(rop.CALL_PURE_p, 'p')
+do_call_pure_r = new_do_call(rop.CALL_PURE_r, 'r')
 do_call_pure_n = new_do_call(rop.CALL_PURE_N, 'N')
 
 def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
@@ -157,7 +157,7 @@ def do_raw_store(cpu, _, addrbox, offsetbox, valuebox, arraydescr):
     else:
         cpu.bh_raw_store_i(addr, offset, arraydescr, valuebox.getint())
 
-def do_raw_load_p(cpu, _, addrbox, offsetbox, arraydescr):
+def do_raw_load_r(cpu, _, addrbox, offsetbox, arraydescr):
     raise AssertionError("cannot store GC pointers in raw store")
 
 def do_raw_load_i(cpu, _, addrbox, offsetbox, arraydescr):
@@ -220,9 +220,9 @@ def do_int_mul_ovf(cpu, metainterp, box1, box2):
     return create_resop_2(rop.INT_MUL_OVF, z, box1, box2)
 
 def do_same_as_i(cpu, _, box):
-    return box.clonebox()
+    return box.nonconstbox()
 do_same_as_f = do_same_as_i
-do_same_as_p = do_same_as_i
+do_same_as_r = do_same_as_i
 
 def do_copystrcontent(cpu, _, srcbox, dstbox,
                       srcstartbox, dststartbox, lengthbox):
@@ -326,7 +326,7 @@ def _make_execute_list():
                     continue
             if value in (rop.FORCE_TOKEN,
                          rop.CALL_ASSEMBLER_i,
-                         rop.CALL_ASSEMBLER_p,
+                         rop.CALL_ASSEMBLER_r,
                          rop.CALL_ASSEMBLER_f,
                          rop.CALL_ASSEMBLER_N,
                          rop.COND_CALL_GC_WB,
@@ -335,12 +335,12 @@ def _make_execute_list():
                          rop.JIT_DEBUG,
                          rop.SETARRAYITEM_RAW,
                          rop.GETINTERIORFIELD_RAW_i,
-                         rop.GETINTERIORFIELD_RAW_p,
+                         rop.GETINTERIORFIELD_RAW_r,
                          rop.GETINTERIORFIELD_RAW_f,
                          rop.GETINTERIORFIELD_RAW_N,
                          rop.SETINTERIORFIELD_RAW,
                          rop.CALL_RELEASE_GIL_i,
-                         rop.CALL_RELEASE_GIL_p,
+                         rop.CALL_RELEASE_GIL_r,
                          rop.CALL_RELEASE_GIL_f,
                          rop.CALL_RELEASE_GIL_N,
                          rop.QUASIIMMUT_FIELD,
@@ -348,19 +348,19 @@ def _make_execute_list():
                          rop.CALL_MALLOC_NURSERY,
                          rop.LABEL,
                          rop.GETARRAYITEM_RAW_PURE_N,
-                         rop.GETFIELD_RAW_p,
-                         rop.GETARRAYITEM_RAW_PURE_p,
+                         rop.GETFIELD_RAW_r,
+                         rop.GETARRAYITEM_RAW_PURE_r,
                          rop.SAME_AS_N,
                          rop.GETINTERIORFIELD_GC_N,
                          rop.GETFIELD_RAW_N,
                          rop.GETFIELD_RAW_PURE_N,
-                         rop.GETFIELD_RAW_PURE_p,
+                         rop.GETFIELD_RAW_PURE_r,
                          rop.GETARRAYITEM_RAW_N,
                          rop.GETFIELD_GC_PURE_N,
                          rop.GETARRAYITEM_GC_PURE_N,
                          rop.GETARRAYITEM_GC_N,
                          rop.GETFIELD_GC_N,
-                         rop.GETARRAYITEM_RAW_p,
+                         rop.GETARRAYITEM_RAW_r,
                          rop.RAW_LOAD_N,
                          ):      # list of opcodes never executed by pyjitpl
                 continue

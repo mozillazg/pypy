@@ -446,13 +446,13 @@ class OptVirtualize(optimizer.Optimization):
         else:
             value.ensure_nonnull()
             self.emit_operation(op)
-    optimize_GETFIELD_GC_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_f = optimize_GETFIELD_GC_i
 
     # note: the following line does not mean that the two operations are
     # completely equivalent, because GETFIELD_GC_PURE is_always_pure().
     optimize_GETFIELD_GC_PURE_i = optimize_GETFIELD_GC_i
-    optimize_GETFIELD_GC_PURE_p = optimize_GETFIELD_GC_i
+    optimize_GETFIELD_GC_PURE_r = optimize_GETFIELD_GC_i
     optimize_GETFIELD_GC_PURE_f = optimize_GETFIELD_GC_i
 
     def optimize_SETFIELD_GC(self, op):
@@ -506,14 +506,14 @@ class OptVirtualize(optimizer.Optimization):
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
-    optimize_GETARRAYITEM_GC_p = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_r = optimize_GETARRAYITEM_GC_i
     optimize_GETARRAYITEM_GC_f = optimize_GETARRAYITEM_GC_i
 
     # note: the following line does not mean that the two operations are
     # completely equivalent, because GETARRAYITEM_GC_PURE is_always_pure().
     optimize_GETARRAYITEM_GC_PURE_i = optimize_GETARRAYITEM_GC_i
     optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_i
-    optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_i
+    optimize_GETARRAYITEM_GC_PURE_r = optimize_GETARRAYITEM_GC_i
 
     def optimize_SETARRAYITEM_GC(self, op):
         value = self.getvalue(op.getarg(0))

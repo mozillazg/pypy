@@ -789,7 +789,7 @@ class Frame(object):
     def op_getarrayitem_gc_i(self, arraydescr, array, index):
         return do_getarrayitem_gc_int(array, index)
 
-    def op_getarrayitem_gc_p(self, arraydescr, array, index):
+    def op_getarrayitem_gc_r(self, arraydescr, array, index):
         return do_getarrayitem_gc_ptr(array, index)
 
     def op_getarrayitem_gc_f(self, arraydescr, array, index):
@@ -797,7 +797,7 @@ class Frame(object):
 
     op_getarrayitem_gc_pure_i = op_getarrayitem_gc_i
     op_getarrayitem_gc_pure_f = op_getarrayitem_gc_f
-    op_getarrayitem_gc_pure_p = op_getarrayitem_gc_p
+    op_getarrayitem_gc_pure_r = op_getarrayitem_gc_r
 
     def op_getarrayitem_raw_i(self, arraydescr, array, index):
         return do_getarrayitem_raw_int(array, index, arraydescr.ofs)
@@ -814,12 +814,12 @@ class Frame(object):
     def op_getfield_gc_f(self, fielddescr, struct):
         return do_getfield_gc_float(struct, fielddescr.ofs)
 
-    def op_getfield_gc_p(self, fielddescr, struct):
+    def op_getfield_gc_r(self, fielddescr, struct):
         return do_getfield_gc_ptr(struct, fielddescr.ofs)
 
     op_getfield_gc_pure_i = op_getfield_gc_i
     op_getfield_gc_pure_f = op_getfield_gc_f
-    op_getfield_gc_pure_p = op_getfield_gc_p
+    op_getfield_gc_pure_r = op_getfield_gc_r
 
     def op_getfield_raw(self, fielddescr, struct):
         if fielddescr.typeinfo == REF:
@@ -883,7 +883,7 @@ class Frame(object):
     def op_getinteriorfield_gc_i(self, descr, array, index):
         return do_getinteriorfield_gc_int(array, index, descr.ofs)
 
-    def op_getinteriorfield_gc_p(self, descr, array, index):
+    def op_getinteriorfield_gc_r(self, descr, array, index):
         return do_getinteriorfield_gc_ptr(array, index, descr.ofs)
 
     def op_getinteriorfield_gc_f(self, descr, array, index):
@@ -1430,7 +1430,7 @@ class GuardFailed(Exception):
 
 def do_same_as_i(x):
     return x
-do_same_as_p = do_same_as_i
+do_same_as_r = do_same_as_i
 do_same_as_f = do_same_as_i
 
 def do_arraylen_gc(arraydescr, array):

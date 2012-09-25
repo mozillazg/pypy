@@ -254,7 +254,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_guard_class_constant(self):
         ops = """
         [i0]
-        p0 = same_as_p(ConstPtr(myptr))
+        p0 = same_as_r(ConstPtr(myptr))
         guard_class(p0, ConstClass(node_vtable)) []
         jump(i0)
         """
@@ -463,7 +463,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         pv = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(pv, p0, descr=valuedescr)
         guard_nonnull(p0) []
-        p1 = getfield_gc_p(pv, descr=valuedescr)
+        p1 = getfield_gc_r(pv, descr=valuedescr)
         guard_nonnull(p1) []
         jump(p0)
         """
@@ -641,7 +641,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_p123_anti_nested(self):
         ops = """
         [i1, p2, p3]
-        p3sub = getfield_gc_p(p3, descr=nextdescr)
+        p3sub = getfield_gc_r(p3, descr=nextdescr)
         i3 = getfield_gc_i(p3sub, descr=valuedescr)
         escape(i3)
         p1 = new_with_vtable(ConstClass(node_vtable))
@@ -934,7 +934,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         p0 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p0, NULL, descr=nextdescr)
-        p2 = getfield_gc_p(p0, descr=nextdescr)
+        p2 = getfield_gc_r(p0, descr=nextdescr)
         i1 = ptr_eq(p2, NULL)
         jump(i1)
         """
@@ -949,7 +949,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         p0 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p0, ConstPtr(myptr), descr=nextdescr)
-        p2 = getfield_gc_p(p0, descr=nextdescr)
+        p2 = getfield_gc_r(p0, descr=nextdescr)
         i1 = ptr_eq(p2, NULL)
         jump(i1)
         """
@@ -1562,7 +1562,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p1, i1, descr=valuedescr)
         setfield_gc(p0, p1, descr=nextdescr)
         setfield_raw(i1, i1, descr=valuedescr)    # random op with side-effects
-        p2 = getfield_gc_p(p0, descr=nextdescr)
+        p2 = getfield_gc_r(p0, descr=nextdescr)
         i2 = getfield_gc_i(p2, descr=valuedescr)
         setfield_gc(p0, NULL, descr=nextdescr)
         escape(i2)
@@ -1684,10 +1684,10 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_duplicate_getarrayitem_1(self):
         ops = """
         [p1]
-        p2 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p3 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
-        p4 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p5 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
+        p2 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_r(p1, 1, descr=arraydescr2)
+        p4 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, 1, descr=arraydescr2)
         escape(p2)
         escape(p3)
         escape(p4)
@@ -1696,8 +1696,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p1]
-        p2 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p3 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
+        p2 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_r(p1, 1, descr=arraydescr2)
         escape(p2)
         escape(p3)
         escape(p2)
@@ -1710,7 +1710,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, p2]
         setarrayitem_gc(p1, 0, p2, descr=arraydescr2)
-        p3 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         escape(p3)
         jump(p1, p3)
         """
@@ -1728,8 +1728,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, p2, p3, i1]
         setarrayitem_gc(p1, 0, p2, descr=arraydescr2)
         setarrayitem_gc(p1, i1, p3, descr=arraydescr2)
-        p4 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p5 = getarrayitem_gc_p(p1, i1, descr=arraydescr2)
+        p4 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, i1, descr=arraydescr2)
         escape(p4)
         escape(p5)
         jump(p1, p2, p3, i1)
@@ -1738,7 +1738,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, p2, p3, i1]
         setarrayitem_gc(p1, 0, p2, descr=arraydescr2)
         setarrayitem_gc(p1, i1, p3, descr=arraydescr2)
-        p4 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p4 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         escape(p4)
         escape(p3)
         jump(p1, p2, p3, i1)
@@ -1751,9 +1751,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setarrayitem_gc(p1, i1, p2, descr=arraydescr2)
         setarrayitem_gc(p1, 0, p3, descr=arraydescr2)
         setarrayitem_gc(p1, 1, p4, descr=arraydescr2)
-        p5 = getarrayitem_gc_p(p1, i1, descr=arraydescr2)
-        p6 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p7 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, i1, descr=arraydescr2)
+        p6 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p7 = getarrayitem_gc_r(p1, 1, descr=arraydescr2)
         escape(p5)
         escape(p6)
         escape(p7)
@@ -1764,7 +1764,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setarrayitem_gc(p1, i1, p2, descr=arraydescr2)
         setarrayitem_gc(p1, 0, p3, descr=arraydescr2)
         setarrayitem_gc(p1, 1, p4, descr=arraydescr2)
-        p5 = getarrayitem_gc_p(p1, i1, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, i1, descr=arraydescr2)
         escape(p5)
         escape(p3)
         escape(p4)
@@ -1776,9 +1776,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p0, p1, p2]
         guard_value(p0, ConstPtr(myptr)) []
-        p3 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         i4 = getfield_gc_pure_i(p0, descr=valuedescr)
-        p5 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         escape(p3)
         escape(i4)
         escape(p5)
@@ -1787,7 +1787,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         expected = """
         [p0, p1, p2]
         guard_value(p0, ConstPtr(myptr)) []
-        p3 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         escape(p3)
         escape(5)
         escape(p3)
@@ -1800,8 +1800,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, p2, p3, p4, i1]
         setarrayitem_gc(p1, 0, p3, descr=arraydescr2)
         setarrayitem_gc(p2, 1, p4, descr=arraydescr2)
-        p5 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
-        p6 = getarrayitem_gc_p(p2, 1, descr=arraydescr2)
+        p5 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
+        p6 = getarrayitem_gc_r(p2, 1, descr=arraydescr2)
         escape(p5)
         escape(p6)
         jump(p1, p2, p3, p4, i1)
@@ -1885,7 +1885,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_bug_2(self):
         ops = """
         [i0, p1]
-        p4 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p4 = getarrayitem_gc_r(p1, 0, descr=arraydescr2)
         guard_nonnull(p4) []
         escape(p4)
         #
@@ -2101,8 +2101,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_oois_of_itself(self):
         ops = """
         [p0]
-        p1 = getfield_gc_p(p0, descr=nextdescr)
-        p2 = getfield_gc_p(p0, descr=nextdescr)
+        p1 = getfield_gc_r(p0, descr=nextdescr)
+        p2 = getfield_gc_r(p0, descr=nextdescr)
         i1 = ptr_eq(p1, p2)
         guard_true(i1) []
         i2 = ptr_ne(p1, p2)
@@ -2111,7 +2111,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p0]
-        p1 = getfield_gc_p(p0, descr=nextdescr)
+        p1 = getfield_gc_r(p0, descr=nextdescr)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
@@ -2403,7 +2403,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
                 if strict:
                     assert box.eq(oparse.getvar(varname))
                 else:
-                    assert box.value == oparse.getvar(varname).value
+                    assert box.eq_value(oparse.getvar(varname))
             else:
                 tag, resolved, fieldstext = virtuals[varname]
                 if tag[0] == 'virtual':
@@ -2415,7 +2415,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
                 else:
                     assert 0
                 if resolved is not None:
-                    assert resolved.value == box.value
+                    assert resolved.getref_base() == box.getref_base()
                 else:
                     virtuals[varname] = tag, box, fieldstext
         #
@@ -2429,8 +2429,10 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         for pvar, pfieldname, pfieldvar in pendingfields:
             box = oparse.getvar(pvar)
             fielddescr = self.namespace[pfieldname.strip()]
+            # guess the correct type
+            opnum = getattr(rop, 'GETFIELD_GC_' + fielddescr.typeinfo)
             fieldbox = executor.execute(self.cpu, None,
-                                        rop.GETFIELD_GC,
+                                        opnum,
                                         fielddescr,
                                         box)
             _variables_equal(fieldbox, pfieldvar, strict=True)
@@ -2447,8 +2449,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
                 if tag[0] in ('virtual', 'vstruct'):
                     fieldname, fieldvalue = fieldtext.split('=')
                     fielddescr = self.namespace[fieldname.strip()]
+                    opnum = getattr(rop, 'GETFIELD_GC_' + fielddescr.typeinfo)
                     fieldbox = executor.execute(self.cpu, None,
-                                                rop.GETFIELD_GC,
+                                                opnum,
                                                 fielddescr,
                                                 resolved)
                 elif tag[0] == 'varray':
@@ -2465,7 +2468,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def check_expanded_fail_descr(self, expectedtext, guard_opnum):
         from pypy.jit.metainterp.test.test_resume import ResumeDataFakeReader
         from pypy.jit.metainterp.test.test_resume import MyMetaInterp
-        guard_op, = [op for op in self.loop.operations if op.is_guard()]
+        guard_op, = [op for op in self.loop.operations if op.is_guard()
+                     and op.getopnum() == guard_opnum]
         fail_args = guard_op.get_extra("failargs")
         fdescr = guard_op.getdescr()
         assert fdescr.guard_opnum == guard_opnum
@@ -2476,20 +2480,22 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_expand_fail_1(self):
         ops = """
-        [i1, i3]
+        [i1, i3, i5]
         # first rename i3 into i4
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i3, descr=valuedescr)
-        i4 = getfield_gc(p1, descr=valuedescr)
+        i4 = getfield_gc_i(p1, descr=valuedescr)
         #
-        i2 = int_add(10, 5)
+        guard_value(i5, 5) [i4]
+        i2 = int_add(10, i5)
         guard_true(i1) [i2, i4]
-        jump(i1, i4)
+        jump(i1, i4, i5)
         """
         expected = """
-        [i1, i3]
+        [i1, i3, i5]
+        guard_value(i5, 5) [i3]
         guard_true(i1) [i3]
-        jump(1, i3)
+        jump(1, i3, 5)
         """
         self.optimize_loop(ops, expected)
         self.check_expanded_fail_descr('15, i3', rop.GUARD_TRUE)
@@ -2539,12 +2545,12 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_expand_fail_4(self):
         for arg in ['p1', 'i2,p1', 'p1,p2', 'p2,p1',
                     'i2,p1,p2', 'i2,p2,p1']:
-            self.setup_method() # humpf
+            self.setup_method(self.test_expand_fail_4) # humpf
             ops = """
             [i1, i2, i3]
             p1 = new_with_vtable(ConstClass(node_vtable))
             setfield_gc(p1, i3, descr=valuedescr)
-            i4 = getfield_gc(p1, descr=valuedescr)   # copy of i3
+            i4 = getfield_gc_i(p1, descr=valuedescr)   # copy of i3
             p2 = new_with_vtable(ConstClass(node_vtable))
             setfield_gc(p1, i2, descr=valuedescr)
             setfield_gc(p1, p2, descr=nextdescr)
@@ -2633,8 +2639,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p2, i1, descr=adescr)
         setfield_gc(p2, p1, descr=bdescr)
         guard_true(i1) [p2]
-        i3 = getfield_gc(p2, descr=adescr)
-        p3 = getfield_gc(p2, descr=bdescr)
+        i3 = getfield_gc_i(p2, descr=adescr)
+        p3 = getfield_gc_r(p2, descr=bdescr)
         jump(i3, p3)
         """
         expected = """

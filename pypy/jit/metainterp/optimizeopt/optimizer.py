@@ -688,7 +688,7 @@ class Optimizer(Optimization):
     def optimize_SAME_AS_i(self, op):
         self.make_equal_to(op.result, self.getvalue(op.getarg(0)))
     optimize_SAME_AS_f = optimize_SAME_AS_i
-    optimize_SAME_AS_p = optimize_SAME_AS_i
+    optimize_SAME_AS_r = optimize_SAME_AS_i
 
     def optimize_MARK_OPAQUE_PTR(self, op):
         value = self.getvalue(op.getarg(0))

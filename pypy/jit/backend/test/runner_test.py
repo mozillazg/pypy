@@ -646,7 +646,7 @@ class BaseBackendTest(Runner):
         res = self.execute_operation(rop.SETFIELD_GC, [t_box, u_box],
                                      'void', descr=fielddescr2)
         assert res is None
-        res = self.execute_operation(rop.GETFIELD_GC_p, [t_box],
+        res = self.execute_operation(rop.GETFIELD_GC_r, [t_box],
                                      'ref', descr=fielddescr2)
         assert res == u_box.value
         #
@@ -654,7 +654,7 @@ class BaseBackendTest(Runner):
         res = self.execute_operation(rop.SETFIELD_GC, [t_box, null_const],
                                      'void', descr=fielddescr2)
         assert res is None
-        res = self.execute_operation(rop.GETFIELD_GC_p, [t_box],
+        res = self.execute_operation(rop.GETFIELD_GC_r, [t_box],
                                      'ref', descr=fielddescr2)
         assert res == null_const.value
         if self.cpu.supports_floats:
@@ -827,7 +827,7 @@ class BaseBackendTest(Runner):
                                                          a_box],
                                    'void', descr=arraydescr)
         assert r is None
-        r = self.execute_operation(rop.GETARRAYITEM_GC_p, [b_box, BoxInt(1)],
+        r = self.execute_operation(rop.GETARRAYITEM_GC_r, [b_box, BoxInt(1)],
                                    'ref', descr=arraydescr)
         assert r == a_box.value
         #
@@ -969,7 +969,8 @@ class BaseBackendTest(Runner):
         assert r == s_box.getref_base()
         self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3, pdescr,
                                           s_box.getref_base())
-        r = self.execute_operation(rop.GETINTERIORFIELD_GC_p, [a_box, BoxInt(3)],
+        r = self.execute_operation(rop.GETINTERIORFIELD_GC_r,
+                                   [a_box, BoxInt(3)],
                                    'ref', descr=pdescr)
         assert r == s_box.getref_base()
 
@@ -1050,9 +1051,9 @@ class BaseBackendTest(Runner):
         r = self.execute_operation(rop.SAME_AS_i, [BoxInt(5)], 'int')
         assert r == 5
         u_box = self.alloc_unicode(u"hello\u1234")
-        r = self.execute_operation(rop.SAME_AS_p, [u_box.constbox()], 'ref')
+        r = self.execute_operation(rop.SAME_AS_r, [u_box.constbox()], 'ref')
         assert r == u_box.value
-        r = self.execute_operation(rop.SAME_AS_p, [u_box], 'ref')
+        r = self.execute_operation(rop.SAME_AS_r, [u_box], 'ref')
         assert r == u_box.value
 
         if self.cpu.supports_floats:
