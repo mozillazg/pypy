@@ -266,8 +266,8 @@ CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
 CVAL_ZERO    = ConstantValue(CONST_0)
 CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(0.0))
-llhelper.CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
-#oohelper.CVAL_NULLREF = ConstantValue(oohelper.CONST_NULL)
+CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
+llhelper.CVAL_NULLREF = CVAL_NULLREF
 REMOVED = AbstractResOp()
 
 
@@ -425,6 +425,8 @@ class Optimizer(Optimization):
     def getvalue(self, box):
         if box.is_constant():
             if box.type == REF:
+                if not box.getref_base():
+                    return CVAL_NULLREF
                 try:
                     return self.interned_refs[box.getref_base()]
                 except KeyError:
