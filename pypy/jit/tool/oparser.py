@@ -68,8 +68,8 @@ class OpParser(object):
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system, boxkinds,
-                 invent_fail_descr=True, allow_no_failargs=False,
-                 nonstrict=False):
+                 invent_fail_descr=True,
+                 nonstrict=False, results=None):
         self.input = input
         self.vars = {}
         self.cpu = cpu
@@ -82,9 +82,9 @@ class OpParser(object):
             self._cache = {}
         self.invent_fail_descr = invent_fail_descr
         self.nonstrict = nonstrict
-        self.allow_no_failargs = allow_no_failargs
         self.model = get_model(self.use_mock_model)
         self.original_jitcell_token = self.model.JitCellToken()
+        self.results = results
 
     def get_const(self, name, typ):
         if self._consts is None:
@@ -251,7 +251,7 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
-                if not self.nonstrict and not self.allow_no_failargs:
+                if not self.nonstrict:
                     raise ParseError("missing fail_args for guard operation")
                 fail_args = None
             else:
@@ -286,14 +286,18 @@ class OpParser(object):
         else:
             return create_resop_dispatch(opnum, result, args, descr)
 
-    def parse_result_op(self, line):
+    def parse_result_op(self, line, num):
         res, op = line.split("=", 1)
         res = res.strip()
         op = op.strip()
         opnum, args, descr, fail_args = self.parse_op(op)
         if res in self.vars:
             raise ParseError("Double assign to var %s in line: %s" % (res, line))
-        opres = self.create_op(opnum, self._example_for(opnum), args, descr)
+        if self.results is None:
+            result = self._example_for(opnum)
+        else:
+            result = self.results[num]
+        opres = self.create_op(opnum, result, args, descr)
         self.vars[res] = opres
         if fail_args is not None:
             opres.set_extra("failargs", fail_args)
@@ -306,9 +310,9 @@ class OpParser(object):
             res.set_extra("failargs", fail_args)
         return res
 
-    def parse_next_op(self, line):
+    def parse_next_op(self, line, num):
         if "=" in line and line.find('(') > line.find('='):
-            return self.parse_result_op(line)
+            return self.parse_result_op(line, num)
         else:
             return self.parse_op_no_result(line)
 
@@ -361,7 +365,7 @@ class OpParser(object):
                 if line == '--end of the loop--':
                     last_offset = offset
                 else:
-                    op = self.parse_next_op(line)
+                    op = self.parse_next_op(line, len(ops))
                     if offset:
                         op.offset = offset
                     ops.append(op)
@@ -398,11 +402,11 @@ class OpParser(object):
 def parse(input, cpu=None, namespace=None, type_system='lltype',
           boxkinds=None, invent_fail_descr=True,
           no_namespace=False, nonstrict=False, OpParser=OpParser,
-          allow_no_failargs=False):
+          results=None):
     if namespace is None and not no_namespace:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system, boxkinds,
-                    invent_fail_descr, allow_no_failargs, nonstrict).parse()
+                    invent_fail_descr, nonstrict, results).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False
