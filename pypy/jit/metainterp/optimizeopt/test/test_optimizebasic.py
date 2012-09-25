@@ -1244,8 +1244,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_varray_2(self):
         ops = """
         [i0, p1]
-        i1 = getarrayitem_gc(p1, 0, descr=arraydescr)
-        i2 = getarrayitem_gc(p1, 1, descr=arraydescr)
+        i1 = getarrayitem_gc_i(p1, 0, descr=arraydescr)
+        i2 = getarrayitem_gc_i(p1, 1, descr=arraydescr)
         i3 = int_sub(i1, i2)
         guard_value(i3, 15) []
         p2 = new_array(2, descr=arraydescr)
@@ -1265,7 +1265,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_p123_array(self):
         ops = """
         [i1, p2, p3]
-        i3 = getarrayitem_gc(p3, 0, descr=arraydescr)
+        i3 = getarrayitem_gc_i(p3, 0, descr=arraydescr)
         escape(i3)
         p1 = new_array(1, descr=arraydescr)
         setarrayitem_gc(p1, 0, i1, descr=arraydescr)
@@ -1568,8 +1568,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p1, i1, descr=valuedescr)
         #
         # some operations on which the above setfield_gc cannot have effect
-        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
-        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i3 = getarrayitem_gc_pure_i(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc_i(p3, i3, descr=arraydescr)
         i5 = int_add(i3, i4)
         setarrayitem_gc(p3, 0, i5, descr=arraydescr)
         setfield_gc(p1, i4, descr=nextdescr)
@@ -1580,8 +1580,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         expected = """
         [p1, i1, i2, p3]
         #
-        i3 = getarrayitem_gc_pure(p3, 1, descr=arraydescr)
-        i4 = getarrayitem_gc(p3, i3, descr=arraydescr)
+        i3 = getarrayitem_gc_pure_i(p3, 1, descr=arraydescr)
+        i4 = getarrayitem_gc_i(p3, i3, descr=arraydescr)
         i5 = int_add(i3, i4)
         #
         setfield_gc(p1, i2, descr=valuedescr)
@@ -1720,10 +1720,10 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_duplicate_getarrayitem_1(self):
         ops = """
         [p1]
-        p2 = getarrayitem_gc(p1, 0, descr=arraydescr2)
-        p3 = getarrayitem_gc(p1, 1, descr=arraydescr2)
-        p4 = getarrayitem_gc(p1, 0, descr=arraydescr2)
-        p5 = getarrayitem_gc(p1, 1, descr=arraydescr2)
+        p2 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
+        p4 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p5 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
         escape(p2)
         escape(p3)
         escape(p4)
@@ -1732,8 +1732,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p1]
-        p2 = getarrayitem_gc(p1, 0, descr=arraydescr2)
-        p3 = getarrayitem_gc(p1, 1, descr=arraydescr2)
+        p2 = getarrayitem_gc_p(p1, 0, descr=arraydescr2)
+        p3 = getarrayitem_gc_p(p1, 1, descr=arraydescr2)
         escape(p2)
         escape(p3)
         escape(p2)
