@@ -184,7 +184,7 @@ class OptRewrite(Optimization):
                     ))
                     return
         self.emit_operation(op)
-        self.pure(rop.FLOAT_MUL, [arg2, arg1], op)
+        self.pure(rop.FLOAT_MUL, op.getfloat(), arg2, arg1)
 
     def optimize_FLOAT_NEG(self, op):
         v1 = op.getarg(0)
@@ -309,29 +309,30 @@ class OptRewrite(Optimization):
                               'fail')
         self.optimize_GUARD_CLASS(op)
 
-    def optimize_CALL_LOOPINVARIANT_i(self, op):
-        arg = op.getarg(0)
-        # 'arg' must be a Const, because residual_call in codewriter
-        # expects a compile-time constant
-        assert isinstance(arg, Const)
-        key = make_hashable_int(arg.getint())
+    def _new_optimize_call_loopinvariant(opnum):
+        def optimize_CALL_LOOPINVARIANT(self, op):
+            arg = op.getarg(0)
+            # 'arg' must be a Const, because residual_call in codewriter
+            # expects a compile-time constant
+            assert isinstance(arg, Const)
+            key = make_hashable_int(arg.getint())
 
-        resvalue = self.loop_invariant_results.get(key, None)
-        if resvalue is not None:
-            self.make_equal_to(op, resvalue)
-            self.last_emitted_operation = REMOVED
-            return
-        # change the op to be a normal call, from the backend's point of view
-        # there is no reason to have a separate operation for this
-        self.loop_invariant_producer[key] = op
-        xxx
-        op = op.copy_and_change(rop.CALL)
-        self.emit_operation(op)
-        resvalue = self.getvalue(op)
-        self.loop_invariant_results[key] = resvalue
-    optimize_CALL_LOOPINVARIANT_p = optimize_CALL_LOOPINVARIANT_i
-    optimize_CALL_LOOPINVARIANT_f = optimize_CALL_LOOPINVARIANT_i
-    optimize_CALL_LOOPINVARIANT_N = optimize_CALL_LOOPINVARIANT_i
+            resop = self.loop_invariant_results.get(key, None)
+            if resop is not None:
+                self.replace(op, resop)
+                self.last_emitted_operation = REMOVED
+                return
+            # change the op to be a normal call, from the backend's point of view
+            # there is no reason to have a separate operation for this
+            self.loop_invariant_producer[key] = op
+            op = self.optimizer.copy_and_change(op, opnum)
+            self.emit_operation(op)
+            self.loop_invariant_results[key] = op
+        return optimize_CALL_LOOPINVARIANT
+    optimize_CALL_LOOPINVARIANT_i = _new_optimize_call_loopinvariant(rop.CALL_i)
+    optimize_CALL_LOOPINVARIANT_p = _new_optimize_call_loopinvariant(rop.CALL_p)
+    optimize_CALL_LOOPINVARIANT_f = _new_optimize_call_loopinvariant(rop.CALL_f)
+    optimize_CALL_LOOPINVARIANT_N = _new_optimize_call_loopinvariant(rop.CALL_N)
 
     def _optimize_nullness(self, op, box, expect_nonnull):
         value = self.getvalue(box)
@@ -447,6 +448,11 @@ class OptRewrite(Optimization):
         return False
 
     def optimize_CALL_PURE_i(self, op):
+        # Note that we can safely read the contents of boxes here, because
+        # we compare the value of unoptimized op (which is correct) with
+        # proven constants. In the rare case where proven constants are
+        # different, we just emit it (to be precise we emit CALL_x, but
+        # it's being done by someone else)
         for i in range(op.numargs()):
             arg = op.getarg(i)
             const = self.get_constant_box(arg)

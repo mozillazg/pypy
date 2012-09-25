@@ -4,7 +4,7 @@ from pypy.jit.metainterp.optimizeopt import optimizer
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     descrlist_dict, sort_descrs)
 from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, BoxInt,\
-     create_resop_2
+     create_resop_2, create_resop_3
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import OptValue
 
@@ -144,8 +144,8 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
                         ofs, box, subbox)
             # keep self._fields, because it's all immutable anyway
         else:
-            optforce.emit_operation(op)
             self.forced = True
+            optforce.emit_operation(op)
             #
             iteritems = self._fields.iteritems()
             if not we_are_translated(): #random order is fine, except for tests
@@ -260,20 +260,19 @@ class VArrayValue(AbstractVirtualValue):
         return self
 
     def _really_force(self, optforce):
-        assert self.source_op is not None
         if not we_are_translated():
-            self.source_op.name = 'FORCE ' + self.source_op.name
-        optforce.emit_operation(self.source_op)
-        self.box = box = self.source_op.result
+            self.op.name = 'FORCE ' + self.source_op.name
+        self.forced = True
+        optforce.emit_operation(self.op)
         for index in range(len(self._items)):
             subvalue = self._items[index]
             if subvalue is not self.constvalue:
                 if subvalue.is_null():
                     continue
                 subbox = subvalue.force_box(optforce)
-                op = ResOperation(rop.SETARRAYITEM_GC,
-                                  [box, ConstInt(index), subbox], None,
-                                  descr=self.arraydescr)
+                op = create_resop_3(rop.SETARRAYITEM_GC, None,
+                                    self.op, ConstInt(index), subbox,
+                                    descr=self.arraydescr)
                 optforce.emit_operation(op)
 
     def get_args_for_fail(self, modifier):
@@ -307,11 +306,10 @@ class VArrayStructValue(AbstractVirtualValue):
         self._items[index][ofs] = itemvalue
 
     def _really_force(self, optforce):
-        assert self.source_op is not None
         if not we_are_translated():
-            self.source_op.name = 'FORCE ' + self.source_op.name
-        optforce.emit_operation(self.source_op)
-        self.box = box = self.source_op.result
+            self.op.name = 'FORCE ' + self.op.name
+        self.forced = True
+        optforce.emit_operation(self.op)
         for index in range(len(self._items)):
             iteritems = self._items[index].iteritems()
             # random order is fine, except for tests
@@ -320,9 +318,9 @@ class VArrayStructValue(AbstractVirtualValue):
                 iteritems.sort(key = lambda (x, y): x.sort_key())
             for descr, value in iteritems:
                 subbox = value.force_box(optforce)
-                op = ResOperation(rop.SETINTERIORFIELD_GC,
-                    [box, ConstInt(index), subbox], None, descr=descr
-                )
+                op = create_resop_3(rop.SETINTERIORFIELD_GC, None,
+                                    self.op, ConstInt(index), subbox,
+                                    descr=descr)
                 optforce.emit_operation(op)
 
     def _get_list_of_descrs(self):
@@ -369,13 +367,13 @@ class OptVirtualize(optimizer.Optimization):
         self.setvalue(op, vvalue)
         return vvalue
 
-    def make_varray(self, arraydescr, size, box, source_op=None):
+    def make_varray(self, arraydescr, size, op):
         if arraydescr.is_array_of_structs():
-            vvalue = VArrayStructValue(arraydescr, size, box, source_op)
+            vvalue = VArrayStructValue(arraydescr, size, op)
         else:
             constvalue = self.new_const_item(arraydescr)
-            vvalue = VArrayValue(arraydescr, constvalue, size, box, source_op)
-        self.make_equal_to(box, vvalue)
+            vvalue = VArrayValue(arraydescr, constvalue, size, op)
+        self.setvalue(op, vvalue)
         return vvalue
 
     def make_vstruct(self, structdescr, box, source_op=None):
@@ -484,11 +482,10 @@ class OptVirtualize(optimizer.Optimization):
             # if the original 'op' did not have a ConstInt as argument,
             # build a new one with the ConstInt argument
             if not isinstance(op.getarg(0), ConstInt):
-                op = ResOperation(rop.NEW_ARRAY, [sizebox], op.result,
-                                  descr=op.getdescr())
-            self.make_varray(op.getdescr(), sizebox.getint(), op.result, op)
+                op = self.optimizer.copy_and_change(op, newargs=[sizebox])
+            self.make_varray(op.getdescr(), sizebox.getint(), op)
         else:
-            self.getvalue(op.result).ensure_nonnull()
+            self.getvalue(op).ensure_nonnull()
             self.emit_operation(op)
 
     def optimize_ARRAYLEN_GC(self, op):
@@ -540,7 +537,7 @@ class OptVirtualize(optimizer.Optimization):
                 )
                 if fieldvalue is None:
                     fieldvalue = self.new_const(descr)
-                self.make_equal_to(op.result, fieldvalue)
+                self.replace(op, fieldvalue.op)
                 return
         value.ensure_nonnull()
         self.emit_operation(op)

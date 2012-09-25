@@ -247,13 +247,13 @@ class OptValue(object):
 
     def __repr__(self):
         if self.level == LEVEL_UNKNOWN:
-            return '<Opt %r>' % self.box
+            return '<Opt %r>' % self.op
         if self.level == LEVEL_NONNULL:
-            return '<OptNonNull %r>' % self.box
+            return '<OptNonNull %r>' % self.op
         if self.level == LEVEL_KNOWNCLASS:
-            return '<OptKnownClass (%s) %r>' % (self.known_class, self.box)
+            return '<OptKnownClass (%s) %r>' % (self.known_class, self.op)
         assert self.level == LEVEL_CONSTANT
-        return '<OptConst %r>' % self.box
+        return '<OptConst %r>' % self.op
 
 class ConstantValue(OptValue):
     def __init__(self, box):

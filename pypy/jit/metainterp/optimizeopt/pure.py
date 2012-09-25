@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
-from pypy.jit.metainterp.resoperation import rop, create_resop_2
+from pypy.jit.metainterp.resoperation import rop, create_resop_2, create_resop_1
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method,\
      ArgsSet
 
@@ -93,8 +93,11 @@ class OptPure(Optimization):
     def setup(self):
         self.optimizer.optpure = self
 
-    def pure(self, opnum, result, arg0, arg1):
-        op = create_resop_2(opnum, result, arg0, arg1)
+    def pure(self, opnum, result, arg0, arg1=None):
+        if arg1 is None:
+            op = create_resop_1(opnum, result, arg0)
+        else:
+            op = create_resop_2(opnum, result, arg0, arg1)
         self.pure_operations.add(op)
 
     def has_pure_result(self, op_key):

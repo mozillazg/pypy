@@ -905,7 +905,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
-        i0 = getfield_gc(p1, descr=valuedescr)
+        i0 = getfield_gc_i(p1, descr=valuedescr)
         i1 = int_add(i0, 1)
         jump(i1)
         """
@@ -970,7 +970,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         p0 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p0, NULL, descr=nextdescr)
-        p2 = getfield_gc(p0, descr=nextdescr)
+        p2 = getfield_gc_p(p0, descr=nextdescr)
         i1 = ptr_eq(p2, NULL)
         jump(i1)
         """
@@ -985,7 +985,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         p0 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p0, ConstPtr(myptr), descr=nextdescr)
-        p2 = getfield_gc(p0, descr=nextdescr)
+        p2 = getfield_gc_p(p0, descr=nextdescr)
         i1 = ptr_eq(p2, NULL)
         jump(i1)
         """
@@ -1003,11 +1003,11 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setinteriorfield_gc(p0, 0, f1, descr=compleximagdescr)
         setinteriorfield_gc(p0, 1, f2, descr=complexrealdescr)
         setinteriorfield_gc(p0, 1, f3, descr=compleximagdescr)
-        f4 = getinteriorfield_gc(p0, 0, descr=complexrealdescr)
-        f5 = getinteriorfield_gc(p0, 1, descr=complexrealdescr)
+        f4 = getinteriorfield_gc_f(p0, 0, descr=complexrealdescr)
+        f5 = getinteriorfield_gc_f(p0, 1, descr=complexrealdescr)
         f6 = float_mul(f4, f5)
-        f7 = getinteriorfield_gc(p0, 0, descr=compleximagdescr)
-        f8 = getinteriorfield_gc(p0, 1, descr=compleximagdescr)
+        f7 = getinteriorfield_gc_f(p0, 0, descr=compleximagdescr)
+        f8 = getinteriorfield_gc_f(p0, 1, descr=compleximagdescr)
         f9 = float_mul(f7, f8)
         f10 = float_add(f6, f9)
         finish(f10)
@@ -1027,11 +1027,11 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p0 = new_array(1, descr=complexarraydescr)
         setinteriorfield_gc(p0, 0, f0, descr=complexrealdescr)
         setinteriorfield_gc(p0, 0, f1, descr=compleximagdescr)
-        f2 = getinteriorfield_gc(p0, 0, descr=complexrealdescr)
-        f3 = getinteriorfield_gc(p0, 0, descr=compleximagdescr)
+        f2 = getinteriorfield_gc_f(p0, 0, descr=complexrealdescr)
+        f3 = getinteriorfield_gc_f(p0, 0, descr=compleximagdescr)
         f4 = float_mul(f2, f3)
-        i0 = escape(f4, p0)
-        finish(i0)
+        escape(f4, p0)
+        finish()
         """
         expected = """
         [f0, f1]
@@ -1039,8 +1039,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p0 = new_array(1, descr=complexarraydescr)
         setinteriorfield_gc(p0, 0, f0, descr=complexrealdescr)
         setinteriorfield_gc(p0, 0, f1, descr=compleximagdescr)
-        i0 = escape(f2, p0)
-        finish(i0)
+        escape(f2, p0)
+        finish()
         """
         self.optimize_loop(ops, expected)
 
