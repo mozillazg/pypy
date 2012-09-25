@@ -658,6 +658,8 @@ class AbstractResOp(AbstractValue):
         'llgraph_var2index': 'llgraph internal attribute',
         'optimize_value': 'value replacement for the optimizer. only valid for'
                           ' the length of optimization pass',
+        'optimize_replace': 'replacement for the op by another op, can be '
+                            'chained',
     }
 
     extras = None

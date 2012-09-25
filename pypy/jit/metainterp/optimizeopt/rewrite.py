@@ -80,17 +80,16 @@ class OptRewrite(Optimization):
         v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v1.is_null():
-            self.make_equal_to(op, v2)
+            self.replace(op, op.getarg(1))
         elif v2.is_null():
-            self.make_equal_to(op, v1)
+            self.replace(op, op.getarg(0))
         else:
             self.emit_operation(op)
 
     def optimize_INT_SUB(self, op):
-        v1 = self.getvalue(op.getarg(0))
         v2 = self.getvalue(op.getarg(1))
         if v2.is_constant() and v2.op.getint() == 0:
-            self.make_equal_to(op, v1)
+            self.replace(op, op.getarg(0))
         else:
             self.emit_operation(op)
             # Synthesize the reverse ops for optimize_default to reuse

@@ -213,8 +213,7 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.sub_bound(v2.intbound)
         if resbound.bounded():
-            xxx
-            op = op.copy_and_change(rop.INT_SUB)
+            op = self.optimizer.copy_and_change(op, rop.INT_SUB)
         self.emit_operation(op) # emit the op
         r = self.getvalue(op)
         r.intbound.intersect(resbound)

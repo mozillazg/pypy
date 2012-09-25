@@ -426,6 +426,11 @@ class Optimizer(Optimization):
         self.resumedata_memo.forget_numberings(virtualbox)
 
     def getvalue(self, box):
+        try:
+            while True:
+                box = box.get_extra("optimize_replace")
+        except KeyError:
+            pass
         if box.is_constant():
             if box.type == REF:
                 if not box.getref_base():
@@ -447,7 +452,7 @@ class Optimizer(Optimization):
 
     def setvalue(self, box, value):
         assert not box.is_constant()
-        assert  not box.has_extra("optimize_value")
+        assert not box.has_extra("optimize_value")
         box.set_extra("optimize_value", value)
 
     def copy_op_if_modified_by_optimization(self, op):
@@ -471,7 +476,7 @@ class Optimizer(Optimization):
         if isinstance(box, Const):
             return box
         try:
-            value = box.get_extra("optimize_value")
+            value = self.getvalue(box)
             self.ensure_imported(value)
         except KeyError:
             return None
@@ -491,9 +496,9 @@ class Optimizer(Optimization):
     def replace(self, what, with_):
         assert isinstance(what, AbstractValue)
         assert isinstance(with_, AbstractValue)
-        val = self.getvalue(with_)
-        # completely remove the old optimize value
-        what.set_extra("optimize_value", val)
+        assert not what.has_extra("optimize_replace")
+        assert not what.is_constant()
+        what.set_extra("optimize_replace", with_)
 
     def make_constant(self, box, constbox):
         self.getvalue(box).make_constant(constbox)
@@ -543,8 +548,10 @@ class Optimizer(Optimization):
             self.first_optimization.propagate_forward(op)
         for arg in self.loop.inputargs:
             arg.del_extra("optimize_value")
+            arg.del_extra("optimize_replace")
         for op in self.loop.operations:
             op.del_extra("optimize_value")
+            op.del_extra("optimize_replace")
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
@@ -561,17 +568,17 @@ class Optimizer(Optimization):
             self.getvalue(op).is_bool_box = True
         self._emit_operation(op)
 
-    def get_value_replacement(self, v):
+    def get_value_replacement(self, box):
         try:
-            value = v.get_extra("optimize_value")
+            value = self.getvalue(box)
         except KeyError:
             return None
         else:
             self.ensure_imported(value)
-            value = value.force_box(self)
-            if value is v:
+            forced_box = value.force_box(self)
+            if forced_box is box:
                 return None
-            return value
+            return forced_box
 
     @specialize.argtype(0)
     def _emit_operation(self, op):
