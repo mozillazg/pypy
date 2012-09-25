@@ -5,7 +5,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization,\
      MODE_ARRAY, LEVEL_KNOWNCLASS
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, opgroups, Const, INT,\
-     FLOAT, create_resop_1
+     FLOAT, create_resop_1, create_resop_2
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory
 
@@ -463,9 +463,21 @@ class OptHeap(Optimization):
     optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_PURE_i
 
     def optimize_SETARRAYITEM_GC(self, op):
-        if self.has_pure_result(rop.GETARRAYITEM_GC_PURE, [op.getarg(0),
-                                                           op.getarg(1)],
-                                op.getdescr()):
+        if op.type == INT:
+            op_key = create_resop_2(rop.GETARRAYITEM_GC_PURE_i, 0, op.getarg(0),
+                                    op.getarg(1),
+                                    op.getdescr())
+        elif op.type == FLOAT:
+            op_key = create_resop_2(rop.GETARRAYITEM_GC_PURE_f, 0.0,
+                                    op.getarg(0), op.getarg(1),
+                                    op.getdescr())
+        else:
+            op_key = create_resop_2(rop.GETARRAYITEM_GC_PURE_p,
+                                    lltype.nullptr(llmemory.GCREF.TO),
+                                    op.getarg(0),
+                                    op.getarg(1),
+                                    op.getdescr())
+        if self.has_pure_result(op_key):
             os.write(2, '[bogus immutable array declaration: %s]\n' %
                      (op.getdescr().repr_of_descr()))
             raise BogusPureField
@@ -473,13 +485,15 @@ class OptHeap(Optimization):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
-            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(),
+                                   indexvalue.op.getint())
             # use the cache on (arraydescr, index), which is a constant
-            cf = self.arrayitem_cache(op.getdescr(), indexvalue.box.getint())
+            cf = self.arrayitem_cache(op.getdescr(), indexvalue.op.getint())
             cf.do_setfield(self, op)
         else:
             # variable index, so make sure the lazy setarrayitems are done
-            self.force_lazy_setarrayitem(op.getdescr(), indexvalue=indexvalue, can_cache=False)
+            self.force_lazy_setarrayitem(op.getdescr(), indexvalue=indexvalue,
+                                         can_cache=False)
             # and then emit the operation
             self.emit_operation(op)
 

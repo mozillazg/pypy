@@ -1145,7 +1145,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         expected = """
         [p0, i]
         guard_value(p0, ConstPtr(myptr)) []
-        jump(p0, 5)
+        jump(ConstPtr(myptr), 5)
         """
         self.node.value = 5
         self.optimize_loop(ops, expected)
@@ -1167,7 +1167,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         guard_value(i3, 3) []
         setarrayitem_gc(p1, 1, i1, descr=arraydescr)
         setarrayitem_gc(p1, 0, 25, descr=arraydescr)
-        i2 = getarrayitem_gc(p1, 1, descr=arraydescr)
+        i2 = getarrayitem_gc_i(p1, 1, descr=arraydescr)
         jump(i2)
         """
         expected = """
@@ -1181,7 +1181,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         p1 = new_array(2, descr=arraydescr)
         setarrayitem_gc(p1, 0, 25, descr=arraydescr)
-        i2 = getarrayitem_gc(p1, 1, descr=arraydescr)
+        i2 = getarrayitem_gc_i(p1, 1, descr=arraydescr)
         jump(i2)
         """
         expected = """
@@ -1198,7 +1198,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         guard_value(i3, 3) []
         setarrayitem_gc(p1, 1, f1, descr=floatarraydescr)
         setarrayitem_gc(p1, 0, 3.5, descr=floatarraydescr)
-        f2 = getarrayitem_gc(p1, 1, descr=floatarraydescr)
+        f2 = getarrayitem_gc_f(p1, 1, descr=floatarraydescr)
         jump(f2)
         """
         expected = """

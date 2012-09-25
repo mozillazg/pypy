@@ -261,7 +261,7 @@ class VArrayValue(AbstractVirtualValue):
 
     def _really_force(self, optforce):
         if not we_are_translated():
-            self.op.name = 'FORCE ' + self.source_op.name
+            self.op.name = 'FORCE ' + self.op.name
         self.forced = True
         optforce.emit_operation(self.op)
         for index in range(len(self._items)):
@@ -491,7 +491,7 @@ class OptVirtualize(optimizer.Optimization):
     def optimize_ARRAYLEN_GC(self, op):
         value = self.getvalue(op.getarg(0))
         if value.is_virtual():
-            self.make_constant_int(op.result, value.getlength())
+            self.make_constant_int(op, value.getlength())
         else:
             value.ensure_nonnull()
             ###self.optimize_default(op)
@@ -503,7 +503,7 @@ class OptVirtualize(optimizer.Optimization):
             indexbox = self.get_constant_box(op.getarg(1))
             if indexbox is not None:
                 itemvalue = value.getitem(indexbox.getint())
-                self.make_equal_to(op.result, itemvalue)
+                self.replace(op, itemvalue.op)
                 return
         value.ensure_nonnull()
         self.emit_operation(op)
