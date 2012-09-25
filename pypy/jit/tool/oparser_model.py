@@ -91,13 +91,13 @@ def get_mock_model():
                 return True
 
         class ConstInt(Const):
-            pass
+            type = 'i'
 
         class ConstPtr(Const):
-            pass
+            type = 'p'
 
         class ConstFloat(Const):
-            pass
+            type = 'f'
 
         @classmethod
         def get_const_ptr_for_string(cls, s):

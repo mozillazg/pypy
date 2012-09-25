@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
-from pypy.jit.metainterp.resoperation import rop, create_resop_2
+from pypy.jit.metainterp.resoperation import rop, create_resop_2, create_resop
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method,\
      ArgsDict
 
@@ -54,27 +54,29 @@ class OptPure(Optimization):
         if nextop:
             self.emit_operation(nextop)
 
-    def optimize_CALL_PURE_i(self, op):
-        args = self.optimizer.make_args_key(op)
-        oldop = self.pure_operations.get(args, None)
-        if oldop is not None and oldop.getdescr() is op.getdescr():
-            assert oldop.getopnum() == op.getopnum()
-            # this removes a CALL_PURE that has the same (non-constant)
-            # arguments as a previous CALL_PURE.
-            self.make_equal_to(op.result, self.getvalue(oldop.result))
-            self.last_emitted_operation = REMOVED
-            return
-        else:
-            self.pure_operations[args] = op
-            self.remember_emitting_pure(op)
+    def _new_optimize_call_pure(opnum):
+        def optimize_CALL_PURE(self, op):
+            oldop = self.pure_operations.get(op)
+            if oldop is not None and oldop.getdescr() is op.getdescr():
+                assert oldop.getopnum() == op.getopnum()
+                # this removes a CALL_PURE that has the same (non-constant)
+                # arguments as a previous CALL_PURE.
+                self.make_equal_to(op.result, self.getvalue(oldop.result))
+                self.last_emitted_operation = REMOVED
+                return
+            else:
+                self.pure_operations.add(op)
+                self.remember_emitting_pure(op)
 
-        # replace CALL_PURE with just CALL
-        args = op.getarglist()
-        self.emit_operation(ResOperation(rop.CALL, args, op.result,
-                                         op.getdescr()))
-    optimize_CALL_PURE_f = optimize_CALL_PURE_i
-    optimize_CALL_PURE_p = optimize_CALL_PURE_i
-    optimize_CALL_PURE_N = optimize_CALL_PURE_i
+            # replace CALL_PURE with just CALL
+            args = op.getarglist()
+            self.emit_operation(create_resop(opnum, op.getresult(), args,
+                                             op.getdescr()))
+        return optimize_CALL_PURE
+    optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
+    optimize_CALL_PURE_f = _new_optimize_call_pure(rop.CALL_f)
+    optimize_CALL_PURE_p = _new_optimize_call_pure(rop.CALL_p)
+    optimize_CALL_PURE_N = _new_optimize_call_pure(rop.CALL_N)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:

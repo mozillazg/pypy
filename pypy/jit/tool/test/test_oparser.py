@@ -184,7 +184,7 @@ class BaseTestOparser(object):
         guard_true(i0, descr=<Guard0>)
         '''
         loop = self.parse(x, nonstrict=True)
-        assert loop.operations[0].get_extra("failargs") == []
+        assert not loop.operations[0].has_extra("failargs")
 
     def test_no_inputargs(self):
         x = '''

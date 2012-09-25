@@ -249,23 +249,26 @@ class OpParser(object):
         if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
-            if (i <= 0 or j <= 0) and not self.nonstrict:
-                raise ParseError("missing fail_args for guard operation")
-            fail_args = []
-            if i < j:
-                for arg in line[i:j].split(','):
-                    arg = arg.strip()
-                    if arg == 'None':
-                        fail_arg = None
-                    else:
-                        try:
-                            fail_arg = self.vars[arg]
-                        except KeyError:
-                            raise ParseError(
-                                "Unknown var in fail_args: %s" % arg)
-                    fail_args.append(fail_arg)
-            if hasattr(descr, '_oparser_uses_descr_of_guard'):
-                descr._oparser_uses_descr_of_guard(self, fail_args)
+            if i <= 0 or j <= 0:
+                if not self.nonstrict:
+                    raise ParseError("missing fail_args for guard operation")
+                fail_args = None
+            else:
+                fail_args = []
+                if i < j:
+                    for arg in line[i:j].split(','):
+                        arg = arg.strip()
+                        if arg == 'None':
+                            fail_arg = None
+                        else:
+                            try:
+                                fail_arg = self.vars[arg]
+                            except KeyError:
+                                raise ParseError(
+                                    "Unknown var in fail_args: %s" % arg)
+                        fail_args.append(fail_arg)
+                if hasattr(descr, '_oparser_uses_descr_of_guard'):
+                    descr._oparser_uses_descr_of_guard(self, fail_args)
         else:
             fail_args = None
             if opnum == rop.JUMP:

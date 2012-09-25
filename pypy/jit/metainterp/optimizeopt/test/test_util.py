@@ -384,6 +384,7 @@ class BaseTest(object):
                      boxkinds=boxkinds)
 
     def invent_fail_descr(self, model, fail_args):
+        xxx
         if fail_args is None:
             return None
         descr = Storage()
