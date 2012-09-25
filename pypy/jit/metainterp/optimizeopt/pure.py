@@ -61,7 +61,7 @@ class OptPure(Optimization):
                 assert oldop.getopnum() == op.getopnum()
                 # this removes a CALL_PURE that has the same (non-constant)
                 # arguments as a previous CALL_PURE.
-                self.make_equal_to(op.result, self.getvalue(oldop.result))
+                self.replace(op, oldop)
                 self.last_emitted_operation = REMOVED
                 return
             else:

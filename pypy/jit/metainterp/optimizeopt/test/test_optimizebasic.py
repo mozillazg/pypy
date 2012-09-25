@@ -733,15 +733,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_remove_guard_no_exception_with_duplicated_call_pure(self):
         ops = """
         [i1]
-        i2 = call_pure(123456, i1, descr=nonwritedescr)
+        i2 = call_pure_i(123456, i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
-        i3 = call_pure(123456, i1, descr=nonwritedescr)
+        i3 = call_pure_i(123456, i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2, i3]
         jump(i3)
         """
         expected = """
         [i1]
-        i2 = call(123456, i1, descr=nonwritedescr)
+        i2 = call_i(123456, i1, descr=nonwritedescr)
         guard_no_exception() [i1, i2]
         jump(i2)
         """
@@ -752,20 +752,20 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_call_loopinvariant(self):
         ops = """
         [i1]
-        i2 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        i2 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
         guard_no_exception() []
         guard_value(i2, 1) []
-        i3 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        i3 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
         guard_no_exception() []
         guard_value(i3, 1) []
-        i4 = call_loopinvariant(1, i1, descr=nonwritedescr)
+        i4 = call_loopinvariant_i(1, i1, descr=nonwritedescr)
         guard_no_exception() []
         guard_value(i4, 1) []
         jump(i1)
         """
         expected = """
         [i1]
-        i2 = call(1, i1, descr=nonwritedescr)
+        i2 = call_i(1, i1, descr=nonwritedescr)
         guard_no_exception() []
         guard_value(i2, 1) []
         jump(i1)
