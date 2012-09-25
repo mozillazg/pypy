@@ -187,7 +187,7 @@ class BaseTestOparser(object):
         assert not loop.operations[0].has_extra("failargs")
 
     def test_fail_args_invent_snapshot(self):
-        def f(op):
+        def f(op, oparser):
             op.set_rd_snapshot(['foo'])
         
         x = '''

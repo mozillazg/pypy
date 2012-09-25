@@ -183,16 +183,20 @@ class OptValue(object):
         else:
             return None
 
-    def make_constant_class(self, classbox, guardop):
+    def make_constant_class(self, classbox, guardop, index):
         assert self.level < LEVEL_KNOWNCLASS
         self.known_class = classbox
         self.level = LEVEL_KNOWNCLASS
+        assert self.last_guard is None
         self.last_guard = guardop
+        self.last_guard_pos = index
 
-    def make_nonnull(self, guardop):
+    def make_nonnull(self, guardop, index):
         assert self.level < LEVEL_NONNULL
         self.level = LEVEL_NONNULL
+        assert self.last_guard is None
         self.last_guard = guardop
+        self.last_guard_pos = index
 
     def is_nonnull(self):
         level = self.level
@@ -365,7 +369,6 @@ class Optimizer(Optimization):
         self.pendingfields = []
         self.quasi_immutable_deps = None
         self.opaque_pointers = {}
-        self.replaces_guard = {}
         self._newoperations = []
         self.optimizer = self
         self.optpure = None
@@ -579,26 +582,10 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
         if op.is_guard():
             self.metainterp_sd.profiler.count(jitprof.Counters.OPT_GUARDS)
-            if self.replaces_guard and op in self.replaces_guard:
-                self.replace_op(self.replaces_guard[op], op)
-                del self.replaces_guard[op]
-                return
-            else:
-                op = self.store_final_boxes_in_guard(op)
+            op = self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
         self._newoperations.append(op)
-
-    def replace_op(self, old_op, new_op):
-        # XXX: Do we want to cache indexes to prevent search?
-        i = len(self._newoperations)
-        while i > 0:
-            i -= 1
-            if self._newoperations[i] is old_op:
-                self._newoperations[i] = new_op
-                break
-        else:
-            assert False
 
     def store_final_boxes_in_guard(self, op):
         if op.getdescr() is not None:
@@ -640,6 +627,13 @@ class Optimizer(Optimization):
 
     def optimize_default(self, op):
         self.emit_operation(op)
+
+    def get_pos(self):
+        return len(self._newoperations)
+
+    def replace_op(self, value, new_guard_op):
+        assert self._newoperations[value.last_guard_pos] is value.last_guard
+        self._newoperations[value.last_guard_pos] = new_guard_op
 
     def constant_fold(self, op):
         argboxes = [self.get_constant_box(op.getarg(i))

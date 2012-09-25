@@ -270,8 +270,6 @@ class OpParser(object):
                                 raise ParseError(
                                     "Unknown var in fail_args: %s" % arg)
                         fail_args.append(fail_arg)
-                if hasattr(descr, '_oparser_uses_descr_of_guard'):
-                    descr._oparser_uses_descr_of_guard(self, fail_args)
         else:
             fail_args = None
             if opnum == rop.JUMP:
@@ -307,7 +305,7 @@ class OpParser(object):
         if fail_args is not None:
             opres.set_extra("failargs", fail_args)
         if self.process_guard and opres.is_guard():
-            self.process_guard(opres)
+            self.process_guard(opres, self)
         return opres
 
     def parse_op_no_result(self, line):
@@ -316,7 +314,7 @@ class OpParser(object):
         if fail_args is not None:
             res.set_extra("failargs", fail_args)
         if self.process_guard and res.is_guard():
-            self.process_guard(res)
+            self.process_guard(res, self)
         return res
 
     def parse_next_op(self, line, num):

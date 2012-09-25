@@ -403,10 +403,17 @@ class BaseTest(object):
                      boxkinds=boxkinds,
                      results=results, process_guard=self.process_guard)
 
-    def process_guard(self, guard_op):
+    def setup_method(self, meth):
+        self.oparsers = []
+
+    def teardown_method(self, meth):
+        del self.oparsers
+
+    def process_guard(self, guard_op, oparser):
         fail_args = guard_op.get_extra("failargs")
         guard_op.set_rd_frame_info_list(resume.FrameInfo(None, "code", 11))
         guard_op.set_rd_snapshot(resume.Snapshot(None, _sortboxes(fail_args)))
+        self.oparsers.append(oparser)
 
     def assert_equal(self, optimized, expected, text_right=None):
         from pypy.jit.metainterp.optimizeopt.util import equaloplists

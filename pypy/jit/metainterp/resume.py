@@ -1,5 +1,5 @@
 from pypy.jit.metainterp.resoperation import Const, ConstInt, getkind
-from pypy.jit.metainterp.resoperation import BoxInt, BoxPtr, BoxFloat, Box
+from pypy.jit.metainterp.resoperation import BoxInt, BoxPtr, BoxFloat
 from pypy.jit.metainterp.resoperation import INT, REF, FLOAT
 from pypy.jit.metainterp.history import AbstractDescr
 from pypy.jit.metainterp.resoperation import rop

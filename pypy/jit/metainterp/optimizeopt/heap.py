@@ -427,7 +427,7 @@ class OptHeap(Optimization):
             cf = self.arrayitem_cache(op.getdescr(), indexvalue.op.getint())
             fieldvalue = cf.getfield_from_cache(self, arrayvalue)
             if fieldvalue is not None:
-                self.make_equal_to(op.result, fieldvalue)
+                self.replace(op, fieldvalue.op)
                 return
         else:
             # variable index, so make sure the lazy setarrayitems are done
