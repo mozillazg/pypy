@@ -57,7 +57,7 @@ class OptRewrite(Optimization):
             key_op = op.copy_and_change(oldopnum)
             oldop = self.get_pure_result(key_op)
             if oldop is not None and oldop.getdescr() is op.getdescr():
-                self.make_equal_to(op, self.getvalue(oldop))
+                self.replace(op, oldop)
                 return True
 
         oldopnum = opboolinvers[opboolreflex[op.getopnum()]]

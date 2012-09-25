@@ -706,9 +706,9 @@ class AbstractResOp(AbstractValue):
         """
         if self._hash != 0:
             return self._hash
-        hash = (intmask(self.getopnum() << 18) +
-                intmask(self.get_result_hash() << 13) +
-                intmask(self.get_descr_hash() << 5) +
+        hash = (self.getopnum() ^
+                self.get_result_hash() ^
+                self.get_descr_hash() ^
                 self.get_arg_hash())
         if hash == 0:
             hash = -1

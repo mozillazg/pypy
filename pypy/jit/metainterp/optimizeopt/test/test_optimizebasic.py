@@ -2101,8 +2101,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_oois_of_itself(self):
         ops = """
         [p0]
-        p1 = getfield_gc(p0, descr=nextdescr)
-        p2 = getfield_gc(p0, descr=nextdescr)
+        p1 = getfield_gc_p(p0, descr=nextdescr)
+        p2 = getfield_gc_p(p0, descr=nextdescr)
         i1 = ptr_eq(p1, p2)
         guard_true(i1) []
         i2 = ptr_ne(p1, p2)
@@ -2111,7 +2111,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p0]
-        p1 = getfield_gc(p0, descr=nextdescr)
+        p1 = getfield_gc_p(p0, descr=nextdescr)
         jump(p0)
         """
         self.optimize_loop(ops, expected)
