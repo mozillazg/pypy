@@ -1,3 +1,21 @@
+
+""" This files describes the model used in pyjitpl. Note that all of the
+following are IMMUTABLE. That means that we cannot just randomly change
+parameters, instead we need to create a new version and setup the correct
+forwarding. Optimizeopt uses optimize_value extra parameter for setting
+up the forwarding of resops. Public interface:
+
+* create_resop, create_resop_0, create_resop_1, create_resop_2, create_resop_3
+
+  create resops of various amount of arguments
+
+* BoxInt, BoxFloat, BoxPtr - various types of Boxes. Boxes are inputargs to
+  the loop.
+
+* ConstInt, ConstFloat, ConstPtr - constant versions of boxes
+
+"""
+
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
@@ -31,6 +49,8 @@ def create_resop_dispatch(opnum, result, args, descr=None):
 
 @specialize.arg(0)
 def create_resop(opnum, result, args, descr=None):
+    """ Create an N-args resop with given opnum and args
+    """
     cls = opclasses[opnum]
     assert cls.NUMARGS == -1
     if cls.is_always_pure():
@@ -54,6 +74,8 @@ def create_resop(opnum, result, args, descr=None):
 
 @specialize.arg(0)
 def create_resop_0(opnum, result, descr=None):
+    """ Create an 0-arg resop with given opnum and args
+    """
     cls = opclasses[opnum]
     assert cls.NUMARGS == 0
     if result is None:
@@ -68,6 +90,8 @@ def create_resop_0(opnum, result, descr=None):
 
 @specialize.arg(0)
 def create_resop_1(opnum, result, arg0, descr=None):
+    """ Create a 1-arg resop with given opnum and args
+    """
     cls = opclasses[opnum]
     assert cls.NUMARGS == 1
     if (cls.is_always_pure() and
@@ -88,6 +112,8 @@ def create_resop_1(opnum, result, arg0, descr=None):
 
 @specialize.arg(0)
 def create_resop_2(opnum, result, arg0, arg1, descr=None):
+    """ Create a 2-arg resop with given opnum and args
+    """
     cls = opclasses[opnum]
     assert cls.NUMARGS == 2
     if cls.is_always_pure():
@@ -109,6 +135,8 @@ def create_resop_2(opnum, result, arg0, arg1, descr=None):
 
 @specialize.arg(0)
 def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
+    """ Create a 3-arg resop with given opnum and args
+    """
     cls = opclasses[opnum]
     assert cls.NUMARGS == 3
     if cls.is_always_pure():
@@ -134,12 +162,19 @@ class AbstractValue(object):
     __slots__ = ()
 
     def getint(self):
+        """ Get an integer value, if the box supports it, otherwise crash
+        """
         raise NotImplementedError
 
     def getfloatstorage(self):
+        """ Get a floatstorage value, if the box supports it, otherwise crash.
+        Floatstorage is either real float or longlong, depends on 32 vs 64bit
+        """
         raise NotImplementedError
 
     def getfloat(self):
+        """ Get a float value, if the box supports it, otherwise crash
+        """
         return longlong.getrealfloat(self.getfloatstorage())
 
     def getlonglong(self):
@@ -147,28 +182,47 @@ class AbstractValue(object):
         return self.getfloatstorage()
 
     def getref_base(self):
+        """ Get a base pointer (to llmemory.GCREF) if the box is a pointer box,
+        otherwise crash
+        """
         raise NotImplementedError
 
     def getref(self, TYPE):
+        """ Get a pointer to type TYPE if the box is a pointer box,
+        otherwise crash
+        """
         raise NotImplementedError
     getref._annspecialcase_ = 'specialize:arg(1)'
 
     def _get_hash_(self):
+        """ Compute the hash of the value. Since values are immutable this
+        is safe
+        """
         return compute_identity_hash(self)
 
     def constbox(self):
+        """ Return a constant value of the current box wrapped in an
+        apropriate constant class
+        """
         raise NotImplementedError
 
     def nonconstbox(self):
+        """ Return a box value of the current constant wrapped in an
+        apropriate box class
+        """
         raise NotImplementedError
 
     def getaddr(self):
         raise NotImplementedError
 
     def sort_key(self):
+        """ Key for sorting
+        """
         raise NotImplementedError
 
     def nonnull(self):
+        """ Is this pointer box nonnull?
+        """
         raise NotImplementedError
 
     def repr_rpython(self):
@@ -178,6 +232,9 @@ class AbstractValue(object):
         raise NotImplementedError
 
     def eq(self, other):
+        """ Equality on the same terms as _get_hash_. By default identity
+        equality, overriden by Boxes and Consts
+        """
         return self is other
 
     def is_constant(self):
@@ -185,30 +242,7 @@ class AbstractValue(object):
 
     @specialize.arg(1)
     def get_extra(self, key):
-        if key == 'llgraph_var2index':
-            return self.llgraph_var2index
-        if key == 'optimize_value':
-            try:
-                return self._optimize_value
-            except AttributeError:
-                raise KeyError
         raise KeyError
-
-    @specialize.arg(1)
-    def set_extra(self, key, value):
-        if key == 'llgraph_var2index':
-            self.llgraph_var2index = value
-            return
-        if key == 'optimize_value':
-            self._optimize_value = value
-            return
-        raise KeyError
-
-    @specialize.arg(1)
-    def del_extra(self, key):
-        if key == 'optimize_value':
-            if hasattr(self, '_optimize_value'):
-                del self._optimize_value
 
 def getkind(TYPE, supports_floats=True,
                   supports_longlong=True,
@@ -288,6 +322,33 @@ class Box(AbstractValue):
 
     def is_constant(self):
         return False
+
+    @specialize.arg(1)
+    def get_extra(self, key):
+        if key == 'llgraph_var2index':
+            return self.llgraph_var2index
+        if key == 'optimize_value':
+            try:
+                return self._optimize_value
+            except AttributeError:
+                raise KeyError
+        raise KeyError
+
+    @specialize.arg(1)
+    def set_extra(self, key, value):
+        if key == 'llgraph_var2index':
+            self.llgraph_var2index = value
+            return
+        if key == 'optimize_value':
+            self._optimize_value = value
+            return
+        raise KeyError
+
+    @specialize.arg(1)
+    def del_extra(self, key):
+        if key == 'optimize_value':
+            if hasattr(self, '_optimize_value'):
+                del self._optimize_value
 
 class BoxInt(Box):
     type = INT
@@ -640,8 +701,9 @@ class AbstractResOp(AbstractValue):
         raise Exception("Should not hash resops, use get/set extra instead")
 
     def _get_hash_(self):
-        # rpython level implementation of hash, cache it because computations
-        # depending on the arguments might be a little tricky
+        """ rpython level implementation of hash, cache it because computations
+        depending on the arguments might be a little tricky
+        """
         if self._hash != 0:
             return self._hash
         hash = (intmask(self.getopnum() << 18) +
@@ -654,6 +716,9 @@ class AbstractResOp(AbstractValue):
         return hash
 
     def eq(self, other):
+        """ ResOp is equal when the number is equal, all arguments and the
+        actual numeric value of result
+        """
         if self is other:
             return True
         if self.__class__ != other.__class__:
