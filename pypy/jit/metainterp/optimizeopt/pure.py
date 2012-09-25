@@ -69,9 +69,7 @@ class OptPure(Optimization):
                 self.remember_emitting_pure(op)
 
             # replace CALL_PURE with just CALL
-            args = op.getarglist()
-            self.emit_operation(create_resop(opnum, op.getresult(), args,
-                                             op.getdescr()))
+            self.emit_operation(self.optimizer.copy_and_change(op, opnum))
         return optimize_CALL_PURE
     optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
     optimize_CALL_PURE_f = _new_optimize_call_pure(rop.CALL_f)
