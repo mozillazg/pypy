@@ -186,6 +186,17 @@ class BaseTestOparser(object):
         loop = self.parse(x, nonstrict=True)
         assert not loop.operations[0].has_extra("failargs")
 
+    def test_fail_args_invent_snapshot(self):
+        def f(op):
+            op.set_rd_snapshot(['foo'])
+        
+        x = '''
+        [i0]
+        guard_true(i0, descr=<Guard0>) [i0]
+        '''
+        loop = self.parse(x, process_guard=f)
+        assert loop.operations[0].get_rd_snapshot() == ['foo']
+
     def test_results(self):
         x = '''
         [i0]

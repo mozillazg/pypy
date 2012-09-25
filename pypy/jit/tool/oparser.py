@@ -69,7 +69,7 @@ class OpParser(object):
 
     def __init__(self, input, cpu, namespace, type_system, boxkinds,
                  invent_fail_descr=True,
-                 nonstrict=False, results=None):
+                 nonstrict=False, results=None, process_guard=None):
         self.input = input
         self.vars = {}
         self.cpu = cpu
@@ -85,6 +85,7 @@ class OpParser(object):
         self.model = get_model(self.use_mock_model)
         self.original_jitcell_token = self.model.JitCellToken()
         self.results = results
+        self.process_guard = process_guard
 
     def get_const(self, name, typ):
         if self._consts is None:
@@ -288,6 +289,8 @@ class OpParser(object):
             r = create_resop_dispatch(opnum, result, args)
             if descr is not None:
                 r.setdescr(descr)
+            if self.process_guard and r.is_guard():
+                self.process_guard(r)
             return r
 
     def parse_result_op(self, line, num):
@@ -406,11 +409,12 @@ class OpParser(object):
 def parse(input, cpu=None, namespace=None, type_system='lltype',
           boxkinds=None, invent_fail_descr=True,
           no_namespace=False, nonstrict=False, OpParser=OpParser,
-          results=None):
+          results=None, process_guard=None):
     if namespace is None and not no_namespace:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system, boxkinds,
-                    invent_fail_descr, nonstrict, results).parse()
+                    invent_fail_descr, nonstrict, results,
+                    process_guard).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False
