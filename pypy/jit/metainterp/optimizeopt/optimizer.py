@@ -661,7 +661,8 @@ class Optimizer(Optimization):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
-            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(),
+                                   indexvalue.op.getint())
         self.optimize_default(op)
     optimize_GETARRAYITEM_GC_PURE_f = optimize_GETARRAYITEM_GC_PURE_i
     optimize_GETARRAYITEM_GC_PURE_p = optimize_GETARRAYITEM_GC_PURE_i    

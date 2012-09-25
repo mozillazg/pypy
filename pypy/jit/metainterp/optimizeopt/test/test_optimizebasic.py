@@ -1512,7 +1512,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, i1]
         setfield_gc(p1, i1, descr=valuedescr)
         escape()
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         escape(i2)
         jump(p1, i1)
         """
@@ -1536,7 +1536,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, i1, i3]
         setfield_gc(p1, i1, descr=valuedescr)
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         setfield_gc(p1, i3, descr=valuedescr)
         escape(i2)
         jump(p1, i1, i3)
@@ -1553,7 +1553,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, p2, i1, i3]
         setfield_gc(p1, i1, descr=valuedescr)
-        i2 = getfield_gc(p2, descr=valuedescr)
+        i2 = getfield_gc_i(p2, descr=valuedescr)
         setfield_gc(p1, i3, descr=valuedescr)
         escape(i2)
         jump(p1, p2, i1, i3)

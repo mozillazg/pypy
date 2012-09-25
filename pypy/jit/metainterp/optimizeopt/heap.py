@@ -447,12 +447,13 @@ class OptHeap(Optimization):
         indexvalue = self.getvalue(op.getarg(1))
         cf = None
         if indexvalue.is_constant():
-            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(),
+                                   indexvalue.op.getint())
             # use the cache on (arraydescr, index), which is a constant
-            cf = self.arrayitem_cache(op.getdescr(), indexvalue.box.getint())
+            cf = self.arrayitem_cache(op.getdescr(), indexvalue.op.getint())
             fieldvalue = cf.getfield_from_cache(self, arrayvalue)
             if fieldvalue is not None:
-                self.make_equal_to(op.result, fieldvalue)
+                self.replace(op, fieldvalue.op)
                 return
         else:
             # variable index, so make sure the lazy setarrayitems are done
