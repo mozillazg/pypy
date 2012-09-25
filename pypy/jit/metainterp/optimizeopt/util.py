@@ -128,6 +128,9 @@ def new_args_set(has_value=False):
             if has_value:
                 a.values = self.values[:]
             return a
+
+        def __repr__(self):
+            return 'ArgsSet(%s)' % ([item for item in self.buckets if item is not None],)
     return ArgsSet
 ArgsSet = new_args_set()
 ArgsDict = new_args_set(True)

@@ -1673,6 +1673,15 @@ _opboolreflex = {
     rop.PTR_NE: rop.PTR_NE,
     }
 
+@specialize.memo()
+def example_for_opnum(opnum):
+    if opclasses[opnum].type == INT:
+        return 0
+    elif opclasses[opnum].type == FLOAT:
+        return 0.0
+    else:
+        return lltype.nullptr(llmemory.GCREF.TO)
+
 opboolinvers = [-1] * len(opclasses)
 opboolreflex = [-1] * len(opclasses)
 for k, v in _opboolreflex.iteritems():

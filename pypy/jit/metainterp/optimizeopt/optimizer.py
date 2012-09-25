@@ -320,9 +320,9 @@ class Optimization(object):
         return self.optimizer.new_const_item(arraydescr)
 
     @specialize.arg(1)
-    def pure(self, opnum, result, arg0, arg1):
+    def pure(self, oldop, opnum, arg0, arg1=None):
         if self.optimizer.optpure:
-            self.optimizer.optpure.pure(opnum, result, arg0, arg1)
+            self.optimizer.optpure.pure(oldop, opnum, arg0, arg1)
 
     def has_pure_result(self, op_key):
         if self.optimizer.optpure:

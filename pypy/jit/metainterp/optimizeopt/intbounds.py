@@ -141,6 +141,7 @@ class OptIntBounds(Optimization):
         # b.has_lower
         if b.has_lower and b.has_upper:
             # Synthesize the reverse op for optimize_default to reuse
+            xxx
             self.pure(rop.INT_RSHIFT, [op, op.getarg(1)], op.getarg(0))
 
     def optimize_INT_RSHIFT(self, op):
@@ -170,14 +171,16 @@ class OptIntBounds(Optimization):
             # Else, synthesize the non overflowing op for optimize_default to
             # reuse, as well as the reverse op
             elif opnum == rop.INT_ADD_OVF:
-                self.pure(rop.INT_ADD, result.getint(), args[0], args[1])
-                self.pure(rop.INT_SUB, args[0].getint(), result, args[1])
-                self.pure(rop.INT_SUB, args[1].getint(), result, args[0])
+                self.pure(result, rop.INT_ADD, args[0], args[1])
+                self.pure(args[0], rop.INT_SUB, result, args[1])
+                self.pure(args[1], rop.INT_SUB, result, args[0])
             elif opnum == rop.INT_SUB_OVF:
+                xxxx
                 self.pure(rop.INT_SUB, args[:], result)
                 self.pure(rop.INT_ADD, [result, args[1]], args[0])
                 self.pure(rop.INT_SUB, [args[0], result], args[1])
             elif opnum == rop.INT_MUL_OVF:
+                xxxx
                 self.pure(rop.INT_MUL, args[:], result)
         self.emit_operation(op)
 

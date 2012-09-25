@@ -93,8 +93,8 @@ class OptRewrite(Optimization):
         else:
             self.emit_operation(op)
             # Synthesize the reverse ops for optimize_default to reuse
-            self.pure(rop.INT_ADD, op.getarg(0).getint(), op, op.getarg(1))
-            self.pure(rop.INT_SUB, op.getarg(1).getint(), op.getarg(0), op)
+            self.pure(op.getarg(0), rop.INT_ADD, op, op.getarg(1))
+            self.pure(op.getarg(1), rop.INT_SUB, op.getarg(0), op)
 
     def optimize_INT_ADD(self, op):
         arg1 = op.getarg(0)
@@ -110,8 +110,8 @@ class OptRewrite(Optimization):
         else:
             self.emit_operation(op)
             # Synthesize the reverse op for optimize_default to reuse
-            self.pure(rop.INT_SUB, op.getarg(0).getint(), op, op.getarg(1))
-            self.pure(rop.INT_SUB, op.getarg(1).getint(), op, op.getarg(0))
+            self.pure(op.getarg(0), rop.INT_SUB, op, op.getarg(1))
+            self.pure(op.getarg(1), rop.INT_SUB, op, op.getarg(0))
 
     def optimize_INT_MUL(self, op):
         v1 = self.getvalue(op.getarg(0))
@@ -172,24 +172,22 @@ class OptRewrite(Optimization):
         # work in all cases, including NaN and inf
         for lhs, rhs in [(arg1, arg2), (arg2, arg1)]:
             v1 = self.getvalue(lhs)
-            v2 = self.getvalue(rhs)
 
             if v1.is_constant():
                 if v1.op.getfloat() == 1.0:
-                    self.make_equal_to(op, v2)
+                    self.replace(op, rhs)
                     return
                 elif v1.op.getfloat() == -1.0:
-                    self.emit_operation(ResOperation(
-                        rop.FLOAT_NEG, [rhs], op
-                    ))
+                    new_op = create_resop_1(rop.FLOAT_NEG, 0.0, rhs)
+                    self.replace(op, new_op)
+                    self.emit_operation(new_op)
                     return
         self.emit_operation(op)
-        self.pure(rop.FLOAT_MUL, op.getfloat(), arg2, arg1)
+        self.pure(op, rop.FLOAT_MUL, arg2, arg1)
 
     def optimize_FLOAT_NEG(self, op):
-        v1 = op.getarg(0)
         self.emit_operation(op)
-        self.pure(rop.FLOAT_NEG, [op], v1)
+        self.pure(op.getarg(0), rop.FLOAT_NEG, op)
 
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getvalue(op.getarg(0))
@@ -508,10 +506,12 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
 
     def optimize_CAST_PTR_TO_INT(self, op):
+        xxx
         self.pure(rop.CAST_INT_TO_PTR, [op], op.getarg(0))
         self.emit_operation(op)
 
     def optimize_CAST_INT_TO_PTR(self, op):
+        xxx
         self.pure(rop.CAST_PTR_TO_INT, [op], op.getarg(0))
         self.emit_operation(op)
 

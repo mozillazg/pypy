@@ -1,12 +1,14 @@
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, REMOVED
-from pypy.jit.metainterp.resoperation import rop, create_resop_2, create_resop_1
+from pypy.jit.metainterp.resoperation import rop, create_resop_2,\
+     create_resop_1, example_for_opnum
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method,\
-     ArgsSet
+     ArgsDict
+from pypy.rlib.objectmodel import specialize
 
 class OptPure(Optimization):
     def __init__(self):
         self.posponedop = None
-        self.pure_operations = ArgsSet()
+        self.pure_operations = ArgsDict()
         self.emitted_pure_operations = []
 
     def propagate_forward(self, op):
@@ -40,11 +42,10 @@ class OptPure(Optimization):
             # did we do the exact same operation already?
             oldop = self.pure_operations.get(op)
             if oldop is not None:
-                assert oldop.getopnum() == op.getopnum()
                 self.replace(op, oldop)
                 return
             else:
-                self.pure_operations.add(op)
+                self.pure_operations.set(op, op)
                 self.remember_emitting_pure(op)
 
         # otherwise, the operation remains
@@ -65,7 +66,7 @@ class OptPure(Optimization):
                 self.last_emitted_operation = REMOVED
                 return
             else:
-                self.pure_operations.add(op)
+                self.pure_operations.set(op, op)
                 self.remember_emitting_pure(op)
 
             # replace CALL_PURE with just CALL
@@ -93,12 +94,14 @@ class OptPure(Optimization):
     def setup(self):
         self.optimizer.optpure = self
 
-    def pure(self, opnum, result, arg0, arg1=None):
+    @specialize.arg(2)
+    def pure(self, oldop, opnum, arg0, arg1=None):
+        result = example_for_opnum(opnum)
         if arg1 is None:
             op = create_resop_1(opnum, result, arg0)
         else:
             op = create_resop_2(opnum, result, arg0, arg1)
-        self.pure_operations.add(op)
+        self.pure_operations.set(op, oldop)
 
     def has_pure_result(self, op_key):
         op = self.pure_operations.get(op_key)
