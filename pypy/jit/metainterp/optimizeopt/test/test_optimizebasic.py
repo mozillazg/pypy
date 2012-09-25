@@ -1049,7 +1049,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
-        i0 = getfield_gc(p1, descr=valuedescr)
+        i0 = getfield_gc_i(p1, descr=valuedescr)
         i1 = int_add(i0, 1)
         escape(p1)
         escape(p1)
@@ -1069,7 +1069,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_nonvirtual_2(self):
         ops = """
         [i, p0]
-        i0 = getfield_gc(p0, descr=valuedescr)
+        i0 = getfield_gc_i(p0, descr=valuedescr)
         escape(p0)
         i1 = int_add(i0, i)
         p1 = new_with_vtable(ConstClass(node_vtable))
@@ -1084,9 +1084,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
-        i1 = getfield_gc(p1, descr=valuedescr)
+        i1 = getfield_gc_i(p1, descr=valuedescr)
         escape(p1)
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         i3 = int_add(i1, i2)
         jump(i3)
         """
@@ -1095,7 +1095,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
         escape(p1)
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         i3 = int_add(i, i2)
         jump(i3)
         """
@@ -1106,17 +1106,17 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
-        i1 = getfield_gc(p1, descr=valuedescr)
+        i1 = getfield_gc_i(p1, descr=valuedescr)
         setfield_gc(p1, 0, descr=valuedescr)
         escape(p1)
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         jump(i2)
         """
         expected = """
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         escape(p1)
-        i2 = getfield_gc(p1, descr=valuedescr)
+        i2 = getfield_gc_i(p1, descr=valuedescr)
         jump(i2)
         """
         self.optimize_loop(ops, expected)
@@ -1126,7 +1126,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i]
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, i, descr=valuedescr)
-        i1 = getfield_gc_pure(p1, descr=valuedescr)
+        i1 = getfield_gc_pure_i(p1, descr=valuedescr)
         jump(i1)
         """
         expected = """
@@ -1137,13 +1137,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_getfield_gc_pure_2(self):
         ops = """
-        [i]
-        i1 = getfield_gc_pure(ConstPtr(myptr), descr=valuedescr)
-        jump(i1)
+        [p0, i]
+        guard_value(p0, ConstPtr(myptr)) []
+        i1 = getfield_gc_pure_i(p0, descr=valuedescr)
+        jump(p0, i1)
         """
         expected = """
-        [i]
-        jump(5)
+        [p0, i]
+        guard_value(p0, ConstPtr(myptr)) []
+        jump(p0, 5)
         """
         self.node.value = 5
         self.optimize_loop(ops, expected)
@@ -1151,7 +1153,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_getfield_gc_nonpure_2(self):
         ops = """
         [i]
-        i1 = getfield_gc(ConstPtr(myptr), descr=valuedescr)
+        i1 = getfield_gc_i(ConstPtr(myptr), descr=valuedescr)
         jump(i1)
         """
         expected = ops
