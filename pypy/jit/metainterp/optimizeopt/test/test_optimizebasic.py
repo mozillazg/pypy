@@ -558,7 +558,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i0]
         guard_value(i0, 2) []
         i = int_add(5, i0)
-        guard_value(i, 8) []
+        guard_value(i, 7) []
         jump(i0)
         """
         expected = """
