@@ -1279,7 +1279,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         []
         p2 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p2, 3, descr=valuedescr)
-        i1 = getfield_gc(p2, descr=valuedescr)    # i1 = const 3
+        i1 = getfield_gc_i(p2, descr=valuedescr)    # i1 = const 3
         p1 = new_array(i1, descr=arraydescr)
         escape(p1)
         i2 = arraylen_gc(p1)

@@ -421,9 +421,10 @@ class OptHeap(Optimization):
         indexvalue = self.getvalue(op.getarg(1))
         cf = None
         if indexvalue.is_constant():
-            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_ARRAY, op.getdescr(),
+                                   indexvalue.op.getint())
             # use the cache on (arraydescr, index), which is a constant
-            cf = self.arrayitem_cache(op.getdescr(), indexvalue.box.getint())
+            cf = self.arrayitem_cache(op.getdescr(), indexvalue.op.getint())
             fieldvalue = cf.getfield_from_cache(self, arrayvalue)
             if fieldvalue is not None:
                 self.make_equal_to(op.result, fieldvalue)
@@ -436,7 +437,7 @@ class OptHeap(Optimization):
         self.emit_operation(op)
         # the remember the result of reading the array item
         if cf is not None:
-            fieldvalue = self.getvalue(op.result)
+            fieldvalue = self.getvalue(op)
             cf.remember_field_value(arrayvalue, fieldvalue, op)
     optimize_GETARRAYITEM_GC_p = optimize_GETARRAYITEM_GC_i
     optimize_GETARRAYITEM_GC_f = optimize_GETARRAYITEM_GC_i

@@ -461,9 +461,9 @@ class Optimizer(Optimization):
             self.replace(op, new_op)
         return new_op
 
-    @specialize.arg(2)
-    def copy_and_change(self, op, opnum, *args, **kwds): 
-        new_op = op.copy_and_change(opnum, *args, **kwds)
+    # XXX some RPython magic needed
+    def copy_and_change(self, op, *args, **kwds): 
+        new_op = op.copy_and_change(*args, **kwds)
         if new_op is not op:
             self.replace(op, new_op)
         return new_op

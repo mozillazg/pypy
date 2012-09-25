@@ -482,8 +482,12 @@ class OptVirtualize(optimizer.Optimization):
             # if the original 'op' did not have a ConstInt as argument,
             # build a new one with the ConstInt argument
             if not isinstance(op.getarg(0), ConstInt):
-                op = self.optimizer.copy_and_change(op, newargs=[sizebox])
-            self.make_varray(op.getdescr(), sizebox.getint(), op)
+                new_op = op.copy_and_change(arg0=sizebox)
+            else:
+                new_op = op
+            self.make_varray(op.getdescr(), sizebox.getint(), new_op)
+            if op is not new_op:
+                self.setvalue(op, self.getvalue(new_op))
         else:
             self.getvalue(op).ensure_nonnull()
             self.emit_operation(op)
