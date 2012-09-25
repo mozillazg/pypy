@@ -271,13 +271,13 @@ class VArrayValue(AbstractVirtualValue):
                 optforce.emit_operation(op)
 
     def get_args_for_fail(self, modifier):
-        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+        if not self.forced and not modifier.already_seen_virtual(self.op):
             # checks for recursion: it is False unless
             # we have already seen the very same keybox
             itemboxes = []
             for itemvalue in self._items:
                 itemboxes.append(itemvalue.get_key_box())
-            modifier.register_virtual_fields(self.keybox, itemboxes)
+            modifier.register_virtual_fields(self.op, itemboxes)
             for itemvalue in self._items:
                 itemvalue.get_args_for_fail(modifier)
 
