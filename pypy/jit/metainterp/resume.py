@@ -300,7 +300,7 @@ class ResumeDataVirtualAdder(object):
         self._register_boxes(fieldboxes)
 
     def register_box(self, box):
-        if (isinstance(box, Box) and box not in self.liveboxes_from_env
+        if (not box.is_constant() and box not in self.liveboxes_from_env
                                  and box not in self.liveboxes):
             self.liveboxes[box] = UNASSIGNED
 

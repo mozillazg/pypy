@@ -24,11 +24,6 @@ class AbstractVirtualValue(optimizer.OptValue):
     def is_virtual(self):
         return not self.forced
 
-    def get_key_box(self):
-        if self.box is None:
-            return self.keybox
-        return self.box
-
     def force_box(self, optforce):
         if not self.forced:
             optforce.forget_numberings(self.op)
@@ -186,12 +181,12 @@ class AbstractVirtualStructValue(AbstractVirtualValue):
         return lst
 
     def get_args_for_fail(self, modifier):
-        if self.box is None and not modifier.already_seen_virtual(self.keybox):
+        if not self.forced and not modifier.already_seen_virtual(self.op):
             # checks for recursion: it is False unless
             # we have already seen the very same keybox
             lst = self._get_field_descr_list()
             fieldboxes = [self._fields[ofs].get_key_box() for ofs in lst]
-            modifier.register_virtual_fields(self.keybox, fieldboxes)
+            modifier.register_virtual_fields(self.op, fieldboxes)
             for ofs in lst:
                 fieldvalue = self._fields[ofs]
                 fieldvalue.get_args_for_fail(modifier)

@@ -1598,8 +1598,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p1, i1, descr=valuedescr)
         setfield_gc(p0, p1, descr=nextdescr)
         setfield_raw(i1, i1, descr=valuedescr)    # random op with side-effects
-        p2 = getfield_gc(p0, descr=nextdescr)
-        i2 = getfield_gc(p2, descr=valuedescr)
+        p2 = getfield_gc_p(p0, descr=nextdescr)
+        i2 = getfield_gc_i(p2, descr=valuedescr)
         setfield_gc(p0, NULL, descr=nextdescr)
         escape(i2)
         jump(p0, i1)
@@ -1641,7 +1641,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, i2, i3]
         p2 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p1, p2, descr=nextdescr)
-        guard_true(i3) []
+        guard_true(i3) [p1]
         i4 = int_neg(i2)
         setfield_gc(p1, NULL, descr=nextdescr)
         jump(p1, i2, i4)

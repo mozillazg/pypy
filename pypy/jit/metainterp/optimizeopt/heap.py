@@ -360,7 +360,7 @@ class OptHeap(Optimization):
                     assert itemindex >= 0
                 else:
                     assert 0
-                pendingfields.append((op.getdescr(), value.box,
+                pendingfields.append((op.getdescr(), value.op,
                                       fieldvalue.get_key_box(), itemindex))
             else:
                 cf.force_lazy_setfield(self)

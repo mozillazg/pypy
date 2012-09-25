@@ -401,16 +401,12 @@ class BaseTest(object):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
                      boxkinds=boxkinds,
-                     results=results)
+                     results=results, process_guard=self.process_guard)
 
-    def invent_fail_descr(self, model, fail_args):
-        xxx
-        if fail_args is None:
-            return None
-        descr = Storage()
-        descr.rd_frame_info_list = resume.FrameInfo(None, "code", 11)
-        descr.rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
-        return descr
+    def process_guard(self, guard_op):
+        fail_args = guard_op.get_extra("failargs")
+        guard_op.set_rd_frame_info_list(resume.FrameInfo(None, "code", 11))
+        guard_op.set_rd_snapshot(resume.Snapshot(None, _sortboxes(fail_args)))
 
     def assert_equal(self, optimized, expected, text_right=None):
         from pypy.jit.metainterp.optimizeopt.util import equaloplists

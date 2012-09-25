@@ -289,8 +289,6 @@ class OpParser(object):
             r = create_resop_dispatch(opnum, result, args)
             if descr is not None:
                 r.setdescr(descr)
-            if self.process_guard and r.is_guard():
-                self.process_guard(r)
             return r
 
     def parse_result_op(self, line, num):
@@ -308,6 +306,8 @@ class OpParser(object):
         self.vars[res] = opres
         if fail_args is not None:
             opres.set_extra("failargs", fail_args)
+        if self.process_guard and opres.is_guard():
+            self.process_guard(opres)
         return opres
 
     def parse_op_no_result(self, line):
@@ -315,6 +315,8 @@ class OpParser(object):
         res = self.create_op(opnum, None, args, descr)
         if fail_args is not None:
             res.set_extra("failargs", fail_args)
+        if self.process_guard and res.is_guard():
+            self.process_guard(res)
         return res
 
     def parse_next_op(self, line, num):
