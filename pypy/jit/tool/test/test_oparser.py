@@ -186,6 +186,14 @@ class BaseTestOparser(object):
         loop = self.parse(x, nonstrict=True)
         assert not loop.operations[0].has_extra("failargs")
 
+    def test_no_fail_args_2(self):
+        x = '''
+        [i0]
+        guard_true(i0, descr=<Guard0>)
+        '''
+        loop = self.parse(x, allow_no_failargs=True)
+        assert not loop.operations[0].has_extra("failargs")
+
     def test_no_inputargs(self):
         x = '''
         i2 = int_add(i0, i1)

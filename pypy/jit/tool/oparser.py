@@ -68,7 +68,7 @@ class OpParser(object):
     use_mock_model = False
 
     def __init__(self, input, cpu, namespace, type_system, boxkinds,
-                 invent_fail_descr=True,
+                 invent_fail_descr=True, allow_no_failargs=False,
                  nonstrict=False):
         self.input = input
         self.vars = {}
@@ -82,6 +82,7 @@ class OpParser(object):
             self._cache = {}
         self.invent_fail_descr = invent_fail_descr
         self.nonstrict = nonstrict
+        self.allow_no_failargs = allow_no_failargs
         self.model = get_model(self.use_mock_model)
         self.original_jitcell_token = self.model.JitCellToken()
 
@@ -250,7 +251,7 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
-                if not self.nonstrict:
+                if not self.nonstrict and not self.allow_no_failargs:
                     raise ParseError("missing fail_args for guard operation")
                 fail_args = None
             else:
@@ -396,11 +397,12 @@ class OpParser(object):
 
 def parse(input, cpu=None, namespace=None, type_system='lltype',
           boxkinds=None, invent_fail_descr=True,
-          no_namespace=False, nonstrict=False, OpParser=OpParser):
+          no_namespace=False, nonstrict=False, OpParser=OpParser,
+          allow_no_failargs=False):
     if namespace is None and not no_namespace:
         namespace = {}
     return OpParser(input, cpu, namespace, type_system, boxkinds,
-                    invent_fail_descr, nonstrict).parse()
+                    invent_fail_descr, allow_no_failargs, nonstrict).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False
