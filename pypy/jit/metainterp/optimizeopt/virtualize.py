@@ -4,9 +4,10 @@ from pypy.jit.metainterp.optimizeopt import optimizer
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     descrlist_dict, sort_descrs)
 from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, BoxInt,\
-     create_resop_2, create_resop_3
+     create_resop_2, create_resop_3, create_resop_1, create_resop_0
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.jit.metainterp.optimizeopt.optimizer import OptValue
+from pypy.jit.metainterp.typesystem import llhelper
 
 
 class AbstractVirtualValue(optimizer.OptValue):
@@ -377,7 +378,6 @@ class OptVirtualize(optimizer.Optimization):
         return vvalue
 
     def optimize_VIRTUAL_REF(self, op):
-        indexbox = op.getarg(1)
         #
         # get some constants
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info
@@ -387,11 +387,12 @@ class OptVirtualize(optimizer.Optimization):
         # Replace the VIRTUAL_REF operation with a virtual structure of type
         # 'jit_virtual_ref'.  The jit_virtual_ref structure may be forced soon,
         # but the point is that doing so does not force the original structure.
-        op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
-        vrefvalue = self.make_virtual(c_cls, op.result, op)
-        tokenbox = BoxInt()
-        self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
-        vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
+        new_op = create_resop_1(rop.NEW_WITH_VTABLE, llhelper.NULLREF,
+                                c_cls)
+        vrefvalue = self.make_virtual(c_cls, new_op)
+        token_op = create_resop_0(rop.FORCE_TOKEN, 0)
+        self.emit_operation(token_op)
+        vrefvalue.setfield(descr_virtual_token, self.getvalue(token_op))
 
     def optimize_VIRTUAL_REF_FINISH(self, op):
         # This operation is used in two cases.  In normal cases, it
@@ -413,13 +414,13 @@ class OptVirtualize(optimizer.Optimization):
         # - set 'forced' to point to the real object
         objbox = op.getarg(1)
         if not self.optimizer.cpu.ts.CONST_NULL.same_constant(objbox):
-            seo(ResOperation(rop.SETFIELD_GC, op.getarglist(), None,
-                             descr = vrefinfo.descr_forced))
+            seo(create_resop_2(rop.SETFIELD_GC, None, op.getarg(0),
+                               op.getarg(1), descr=vrefinfo.descr_forced))
 
         # - set 'virtual_token' to TOKEN_NONE
-        args = [op.getarg(0), ConstInt(vrefinfo.TOKEN_NONE)]
-        seo(ResOperation(rop.SETFIELD_GC, args, None,
-                         descr = vrefinfo.descr_virtual_token))
+        seo(create_resop_2(rop.SETFIELD_GC, None, op.getarg(0),
+                           ConstInt(vrefinfo.TOKEN_NONE),
+                           descr = vrefinfo.descr_virtual_token))
         # Note that in some cases the virtual in op.getarg(1) has been forced
         # already.  This is fine.  In that case, and *if* a residual
         # CALL_MAY_FORCE suddenly turns out to access it, then it will
