@@ -1,3 +1,16 @@
+
+""" This file implements the entry point to optimizations - the Optimizer.
+optimizations are dispatched in order they're passed and for each operation
+optimize_XYZ where XYZ is the name of resop is called. The method can choose
+to return None (optimized away) or call self.emit_operation which means
+it'll be passed onto the next one.
+
+Each resop can have an extra attribute optimize_replace, which points to
+a new version of the same resop. Also each one can have optimize_value,
+which is valid when optimize_replace is not set. There is 1-1 mapping, which
+means that two resops cannot share the optimize_value extra attribute
+"""
+
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
 from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF, INT,\
