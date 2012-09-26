@@ -175,10 +175,9 @@ class OptIntBounds(Optimization):
                 self.pure(args[0], rop.INT_SUB, result, args[1])
                 self.pure(args[1], rop.INT_SUB, result, args[0])
             elif opnum == rop.INT_SUB_OVF:
-                xxxx
-                self.pure(rop.INT_SUB, args[:], result)
-                self.pure(rop.INT_ADD, [result, args[1]], args[0])
-                self.pure(rop.INT_SUB, [args[0], result], args[1])
+                self.pure(result, rop.INT_SUB, args[0], args[1])
+                self.pure(args[0], rop.INT_ADD, result, args[1])
+                self.pure(args[1], rop.INT_SUB, args[0], result)
             elif opnum == rop.INT_MUL_OVF:
                 xxxx
                 self.pure(rop.INT_MUL, args[:], result)

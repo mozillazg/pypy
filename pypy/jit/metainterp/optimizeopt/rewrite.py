@@ -54,7 +54,8 @@ class OptRewrite(Optimization):
 
         oldopnum = opboolreflex[op.getopnum()] # FIXME: add INT_ADD, INT_MUL
         if oldopnum != -1:
-            key_op = op.copy_and_change(oldopnum)
+            key_op = op.copy_and_change(oldopnum, arg0=op.getarg(1),
+                                        arg1=op.getarg(0))
             oldop = self.get_pure_result(key_op)
             if oldop is not None and oldop.getdescr() is op.getdescr():
                 self.replace(op, oldop)
@@ -62,7 +63,8 @@ class OptRewrite(Optimization):
 
         oldopnum = opboolinvers[opboolreflex[op.getopnum()]]
         if oldopnum != -1:
-            key_op = op.copy_and_change(oldopnum)
+            key_op = op.copy_and_change(oldopnum, arg0=op.getarg(1),
+                                        arg1=op.getarg(0))
             if self.try_boolinvers(op, key_op):
                 return True
 
