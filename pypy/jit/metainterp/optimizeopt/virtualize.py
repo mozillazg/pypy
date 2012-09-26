@@ -389,6 +389,7 @@ class OptVirtualize(optimizer.Optimization):
         # but the point is that doing so does not force the original structure.
         new_op = create_resop_1(rop.NEW_WITH_VTABLE, llhelper.NULLREF,
                                 c_cls)
+        self.replace(op, new_op)
         vrefvalue = self.make_virtual(c_cls, new_op)
         token_op = create_resop_0(rop.FORCE_TOKEN, 0)
         self.emit_operation(token_op)
