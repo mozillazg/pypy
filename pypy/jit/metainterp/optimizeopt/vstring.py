@@ -409,9 +409,9 @@ class OptString(optimizer.Optimization):
             vvalue = self.make_vstring_plain(op, mode)
             vvalue.setup(length_box.getint())
         else:
-            self.getvalue(op.result).ensure_nonnull()
+            self.getvalue(op).ensure_nonnull()
             self.emit_operation(op)
-            self.pure(mode.STRLEN, [op.result], op.getarg(0))
+            self.pure(op.getarg(0), mode.STRLEN, op)
 
     def optimize_STRSETITEM(self, op):
         value = self.getvalue(op.getarg(0))

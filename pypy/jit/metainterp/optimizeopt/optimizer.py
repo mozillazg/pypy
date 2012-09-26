@@ -22,7 +22,7 @@ from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
      Const, ConstInt, ConstFloat, AbstractValue
 from pypy.jit.metainterp.typesystem import llhelper
-from pypy.rlib.objectmodel import specialize
+from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.tool.pairtype import extendabletype
 
 LEVEL_UNKNOWN    = '\x00'
@@ -42,6 +42,11 @@ class LenBound(object):
 
     def clone(self):
         return LenBound(self.mode, self.descr, self.bound.clone())
+
+class exploder(object):
+    def __getattribute__(self, attr):
+        import pdb
+        pdb.set_trace()
 
 class OptValue(object):
     _attrs_ = ('known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
@@ -305,8 +310,8 @@ class Optimization(object):
         self.next_optimization.propagate_forward(op)
 
     # FIXME: Move some of these here?
-    def getvalue(self, box):
-        return self.optimizer.getvalue(box)
+    def getvalue(self, box, create=True):
+        return self.optimizer.getvalue(box, create=create)
 
     def setvalue(self, box, value):
         self.optimizer.setvalue(box, value)
@@ -442,7 +447,7 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_FORCINGS)
         self.resumedata_memo.forget_numberings(virtualbox)
 
-    def getvalue(self, box):
+    def getvalue(self, box, create=True):
         try:
             while True:
                 box = box.get_extra("optimize_replace")
@@ -462,6 +467,8 @@ class Optimizer(Optimization):
         try:
             value = box.get_extra("optimize_value")
         except KeyError:
+            if not create:
+                return None
             value = OptValue(box)
             box.set_extra("optimize_value", value)
         self.ensure_imported(value)
@@ -515,6 +522,13 @@ class Optimizer(Optimization):
         assert isinstance(with_, AbstractValue)
         assert not what.has_extra("optimize_replace")
         assert not what.is_constant()
+        if what.has_extra("optimize_value"):
+            v = what.get_extra("optimize_value")
+            v.op = with_
+            with_.set_extra("optimize_value", v)
+        #if not we_are_translated():
+        #    if what.has_extra("optimize_value"):
+        #        what.get_extra("optimize_value").__class__ = exploder
         what.set_extra("optimize_replace", with_)
 
     def make_constant(self, box, constbox):

@@ -2,11 +2,9 @@ from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.resoperation import rop
 
 def check_early_force(opt, opnum, num, arg):
-    try:
-        value = arg.get_extra("optimize_value")
-    except KeyError:
-        return
-    value.force_box(opt)
+    value = opt.getvalue(arg, create=False)
+    if value is not None:
+        value.force_box(opt)
 
 class OptEarlyForce(Optimization):
     def propagate_forward(self, op):

@@ -113,8 +113,8 @@ class OptIntBounds(Optimization):
                 # nonneg % power-of-two ==> nonneg & (power-of-two - 1)
                 arg1 = op.getarg(0)
                 arg2 = ConstInt(val-1)
-                xxx
-                op = op.copy_and_change(rop.INT_AND, args=[arg1, arg2])
+                op = self.optimizer.copy_and_change(op, rop.INT_AND, arg0=arg1,
+                                                    arg1=arg2)
         self.emit_operation(op)
         if v2.is_constant():
             val = v2.op.getint()

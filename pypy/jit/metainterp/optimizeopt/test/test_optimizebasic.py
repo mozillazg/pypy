@@ -4690,7 +4690,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p0, i0]
         i1 = int_add(i0, 1)
-        p1 = call(0, p0, i0, i1, descr=strslicedescr)
+        p1 = call_r(0, p0, i0, i1, descr=strslicedescr)
         escape(p1)
         jump(p0, i1)
         """
@@ -4859,7 +4859,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setarrayitem_gc(p0, 0, 3)
         setarrayitem_gc(p0, 2, 4)
         setarrayitem_gc(p0, i0, 15)
-        i2 = getarrayitem_gc(p0, 2)
+        i2 = getarrayitem_gc_i(p0, 2)
         jump(p0, i2)
         """
         # Remove the getarrayitem_gc, because we know that p[i0] does not alias
@@ -4936,7 +4936,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         p0 = newstr(6)
         copystrcontent(s"hello!", p0, 0, 0, 6)
-        p1 = call(0, p0, s"abc123", descr=strconcatdescr)
+        p1 = call_r(0, p0, s"abc123", descr=strconcatdescr)
         i0 = strgetitem(p1, i1)
         finish(i0)
         """
