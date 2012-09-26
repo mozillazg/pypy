@@ -23,6 +23,7 @@ from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
      Const, ConstInt, ConstFloat, AbstractValue
 from pypy.jit.metainterp.typesystem import llhelper
 from pypy.rlib.objectmodel import specialize
+from pypy.tool.pairtype import extendabletype
 
 LEVEL_UNKNOWN    = '\x00'
 LEVEL_NONNULL    = '\x01'
@@ -44,8 +45,10 @@ class LenBound(object):
 
 class OptValue(object):
     _attrs_ = ('known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
-    last_guard = None
 
+    __metaclass__ = extendabletype
+    
+    last_guard = None
     level = LEVEL_UNKNOWN
     known_class = None
     intbound = ImmutableIntUnbounded()

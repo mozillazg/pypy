@@ -293,6 +293,9 @@ class Box(AbstractValue):
     def nonconstbox(self):
         return self
 
+    def _get_hash_(self):
+        return compute_identity_hash(self)
+
     def __repr__(self):
         result = str(self)
         if self._extended_display:
@@ -374,9 +377,6 @@ class BoxInt(Box):
     def getaddr(self):
         return heaptracker.int2adr(self.value)
 
-    def _get_hash_(self):
-        return make_hashable_int(self.value)
-
     def nonnull(self):
         return self.value != 0
 
@@ -405,9 +405,6 @@ class BoxFloat(Box):
 
     def getfloatstorage(self):
         return self.value
-
-    def _get_hash_(self):
-        return longlong.gethash(self.value)
 
     def nonnull(self):
         return self.value != longlong.ZEROF
@@ -444,12 +441,6 @@ class BoxPtr(Box):
 
     def getaddr(self):
         return llmemory.cast_ptr_to_adr(self.value)
-
-    def _get_hash_(self):
-        if self.value:
-            return lltype.identityhash(self.value)
-        else:
-            return 0
 
     def nonnull(self):
         return bool(self.value)
@@ -718,7 +709,7 @@ class AbstractResOp(AbstractValue):
         if self._hash != 0:
             return self._hash
         hash = (self.getopnum() ^
-                self.get_result_hash() ^
+                intmask(self.get_result_hash() << 4) ^
                 self.get_descr_hash() ^
                 self.get_arg_hash())
         if hash == 0:
@@ -1210,7 +1201,7 @@ class BinaryOp(object):
         return res
 
     def get_arg_hash(self):
-        return (intmask(self._arg0._get_hash_() << 16) +
+        return (intmask(self._arg0._get_hash_() << 1) ^
                 self._arg1._get_hash_())
 
     def args_eq(self, other):
@@ -1273,8 +1264,8 @@ class TernaryOp(object):
         return r
 
     def get_arg_hash(self):
-        return (intmask(self._arg0._get_hash_() << 24) +
-                intmask(self._arg1._get_hash_() << 16) +
+        return (intmask(self._arg0._get_hash_() << 2) ^
+                intmask(self._arg1._get_hash_() << 1) ^
                 self._arg2._get_hash_())
 
     def args_eq(self, other):

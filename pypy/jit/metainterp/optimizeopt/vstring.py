@@ -6,7 +6,7 @@ from pypy.jit.metainterp.optimizeopt.optimizer import CONST_0, CONST_1
 from pypy.jit.metainterp.optimizeopt.optimizer import llhelper, REMOVED
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, ConstPtr,\
-     BoxInt, BoxPtr, REF, INT
+     BoxInt, BoxPtr, REF, INT, create_resop_1
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython import annlowlevel
@@ -59,10 +59,10 @@ class __extend__(optimizer.OptValue):
         if string_optimizer is None:
             return None
         self.ensure_nonnull()
-        box = self.force_box(string_optimizer)
-        if lengthbox is None:
-            lengthbox = BoxInt()
-        string_optimizer.emit_operation(ResOperation(mode.STRLEN, [box], lengthbox))
+        self.force_box(string_optimizer)
+        # ???
+        #lengthop = create_resop_1(mode.STRLEN, 0, box)
+        string_optimizer.emit_operation(lengthbox)
         return lengthbox
 
     @specialize.arg(1)
@@ -482,11 +482,11 @@ class OptString(optimizer.Optimization):
 
     def _optimize_STRLEN(self, op, mode):
         value = self.getvalue(op.getarg(0))
-        lengthbox = value.getstrlen(self, mode, op.result)
-        if op.result in self.optimizer.values:
-            assert self.getvalue(op.result) is self.getvalue(lengthbox)
-        elif op.result is not lengthbox:
-            self.make_equal_to(op.result, self.getvalue(lengthbox))
+        lengthbox = value.getstrlen(self, mode, op)
+        if op.has_extra("optimize_value"):
+            assert self.getvalue(op) is self.getvalue(lengthbox)
+        elif op is not lengthbox:
+            self.replace(op, lengthbox)
 
     def optimize_COPYSTRCONTENT(self, op):
         self._optimize_COPYSTRCONTENT(op, mode_string)

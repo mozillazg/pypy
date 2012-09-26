@@ -40,6 +40,8 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
+            import pdb
+            pdb.set_trace()
             oldop = self.pure_operations.get(op)
             if oldop is not None:
                 self.replace(op, oldop)

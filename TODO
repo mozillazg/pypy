@@ -1,5 +1,6 @@
 
-* make OptValue somehow leaner using subclassing instead of one-size-fit-most
+* make OptValue somehow leaner using subclassing instead of one-size-fit-most.
+  right now we have 1-1, so should be easy to make OptValue immutable
 
 * rethink interning vs other ideas of caching for getinterned on optimizer
   and cache fields
