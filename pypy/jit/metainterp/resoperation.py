@@ -244,6 +244,9 @@ class AbstractValue(object):
     def get_extra(self, key):
         raise KeyError
 
+    def get_key_op(self, optimizer):
+        return self
+
 def getkind(TYPE, supports_floats=True,
                   supports_longlong=True,
                   supports_singlefloats=True):
@@ -711,7 +714,7 @@ class AbstractResOp(AbstractValue):
         hash = (self.getopnum() ^
                 intmask(self.get_result_hash() << 4) ^
                 self.get_descr_hash() ^
-                self.get_arg_hash())
+                intmask(self.get_arg_hash() << 1))
         if hash == 0:
             hash = -1
         self._hash = hash
@@ -1089,6 +1092,9 @@ class NullaryOp(object):
     def copy_if_modified_by_optimization(self, opt):
         return self
 
+    def get_key_op(self, opt):
+        return self
+
     def get_arg_hash(self):
         return 0
 
@@ -1128,6 +1134,14 @@ class UnaryOp(object):
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
         return res
+
+    def get_key_op(self, opt):
+        new_arg = opt.getvalue(self._arg0).get_key_box()
+        if new_arg is self._arg0:
+            return self
+        res = create_resop_1(self.opnum, self.getresult(), new_arg,
+                             self.getdescr())
+        return res        
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum=-1, arg0=None, descr=None):
@@ -1188,6 +1202,15 @@ class BinaryOp(object):
             res.set_rd_snapshot(self.get_rd_snapshot())
         return res
 
+    @specialize.argtype(1)
+    def get_key_op(self, opt):
+        new_arg0 = opt.getvalue(self._arg0).get_key_box()
+        new_arg1 = opt.getvalue(self._arg1).get_key_box()
+        if new_arg0 is self._arg0 and new_arg1 is self._arg0:
+            return self
+        return create_resop_2(self.opnum, self.getresult(),
+                              new_arg0, new_arg1, self.getdescr())
+
     @specialize.arg(1)
     def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, descr=None):
         if newopnum == -1:
@@ -1201,7 +1224,7 @@ class BinaryOp(object):
         return res
 
     def get_arg_hash(self):
-        return (intmask(self._arg0._get_hash_() << 1) ^
+        return (intmask(self._arg0._get_hash_() << 3) ^
                 self._arg1._get_hash_())
 
     def args_eq(self, other):
@@ -1252,6 +1275,17 @@ class TernaryOp(object):
                               new_arg2 or self._arg2,
                               self.getdescr())
 
+    @specialize.argtype(1)
+    def get_key_op(self, opt):
+        new_arg0 = opt.getvalue(self._arg0).get_key_box()
+        new_arg1 = opt.getvalue(self._arg1).get_key_box()
+        new_arg2 = opt.getvalue(self._arg2).get_key_box()
+        if (new_arg0 is self._arg0 and new_arg1 is self._arg1 and
+            new_arg2 is self._arg2):
+            return self
+        return create_resop_3(self.opnum, self.getresult(),
+                              new_arg0, new_arg1, new_arg2, self.getdescr())
+
     @specialize.arg(1)
     def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
                         descr=None):
@@ -1264,8 +1298,8 @@ class TernaryOp(object):
         return r
 
     def get_arg_hash(self):
-        return (intmask(self._arg0._get_hash_() << 2) ^
-                intmask(self._arg1._get_hash_() << 1) ^
+        return (intmask(self._arg0._get_hash_() << 5) ^
+                intmask(self._arg1._get_hash_() << 2) ^
                 self._arg2._get_hash_())
 
     def args_eq(self, other):
@@ -1303,7 +1337,6 @@ class N_aryOp(object):
                     newargs = newlist_hint(len(self._args))
                     for k in range(i):
                         newargs.append(self._args[k])
-                    self._args[:i]
                 newargs.append(new_arg)
             elif newargs is not None:
                 newargs.append(arg)
@@ -1311,6 +1344,24 @@ class N_aryOp(object):
             return self
         return create_resop(self.opnum, self.getresult(),
                             newargs, self.getdescr())
+
+    @specialize.argtype(1)
+    def get_key_op(self, opt):
+        newargs = None
+        for i, arg in enumerate(self._args):
+            new_arg = opt.getvalue(arg).get_key_box()
+            if new_arg is not arg:
+                if newargs is None:
+                    newargs = newlist_hint(len(self._args))
+                    for k in range(i):
+                        newargs.append(self._args[k])
+                newargs.append(new_arg)
+            elif newargs is not None:
+                newargs.append(arg)
+        if newargs is None:
+            return self
+        return create_resop(self.opnum, self.getresult(),
+                            newargs, self.getdescr())        
 
     @specialize.arg(1)
     def copy_and_change(self, newopnum=-1, newargs=None, descr=None):
@@ -1325,7 +1376,7 @@ class N_aryOp(object):
     def get_arg_hash(self):
         hash = 0
         for i, arg in enumerate(self._args):
-            hash += intmask(arg._get_hash_() << (i & 15))
+            hash ^= intmask(arg._get_hash_() << (i & 15))
         return hash
 
     def args_eq(self, other):

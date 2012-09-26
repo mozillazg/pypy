@@ -93,6 +93,7 @@ class OptRewrite(Optimization):
         else:
             self.emit_operation(op)
             # Synthesize the reverse ops for optimize_default to reuse
+            self.pure(op.getarg(0), rop.INT_ADD, op.getarg(1), op)
             self.pure(op.getarg(0), rop.INT_ADD, op, op.getarg(1))
             self.pure(op.getarg(1), rop.INT_SUB, op.getarg(0), op)
 

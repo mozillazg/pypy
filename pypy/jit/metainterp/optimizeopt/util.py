@@ -94,7 +94,7 @@ def descrlist_dict():
 
 # ____________________________________________________________
 
-BUCKET_SIZE = 1024
+BUCKET_SIZE = 8192
 
 def new_args_set(has_value=False):
     class ArgsSet(object):
@@ -124,6 +124,9 @@ def new_args_set(has_value=False):
         if has_value:
             def set(self, op, v):
                 hash = op._get_hash_() & self.bucket_size
+                if self.buckets[hash] is not None and not self.buckets[hash].eq(op):
+                    import pdb
+                    pdb.set_trace()
                 self.buckets[hash] = op # don't care about collisions
                 self.values[hash] = v
         else:
@@ -148,6 +151,9 @@ def new_args_set(has_value=False):
             def __repr__(self):
                 return 'ArgsSet(%s)' % ([item for item in self.buckets
                                          if item is not None],)
+
+        def __len__(self):
+            return len([item for item in self.buckets if item is not None])
     return ArgsSet
 ArgsSet = new_args_set()
 ArgsDict = new_args_set(True)

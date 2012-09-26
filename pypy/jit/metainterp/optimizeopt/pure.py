@@ -40,14 +40,13 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
-            import pdb
-            pdb.set_trace()
-            oldop = self.pure_operations.get(op)
+            key_op = op.get_key_op(self.optimizer)
+            oldop = self.pure_operations.get(key_op)
             if oldop is not None:
                 self.replace(op, oldop)
                 return
             else:
-                self.pure_operations.set(op, op)
+                self.pure_operations.set(key_op, op)
                 self.remember_emitting_pure(op)
 
         # otherwise, the operation remains
@@ -68,7 +67,8 @@ class OptPure(Optimization):
                 self.last_emitted_operation = REMOVED
                 return
             else:
-                self.pure_operations.set(op, op)
+                new_op = op.copy_if_modified_by_optimization(self.optimizer)
+                self.pure_operations.set(new_op, op)
                 self.remember_emitting_pure(op)
 
             # replace CALL_PURE with just CALL
@@ -98,6 +98,9 @@ class OptPure(Optimization):
 
     @specialize.arg(2)
     def pure(self, oldop, opnum, arg0, arg1=None):
+        arg0 = arg0.get_key_op(self.optimizer)
+        if arg1 is not None:
+            arg1 = arg1.get_key_op(self.optimizer)
         result = example_for_opnum(opnum)
         if arg1 is None:
             op = create_resop_1(opnum, result, arg0)

@@ -3638,7 +3638,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_framestackdepth_overhead(self):
         ops = """
         [p0, i22]
-        i1 = getfield_gc(p0, descr=valuedescr)
+        i1 = getfield_gc_i(p0, descr=valuedescr)
         i2 = int_gt(i1, i22)
         guard_false(i2) []
         i3 = int_add(i1, 1)
@@ -3655,7 +3655,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p0, i22]
-        i1 = getfield_gc(p0, descr=valuedescr)
+        i1 = getfield_gc_i(p0, descr=valuedescr)
         i2 = int_gt(i1, i22)
         guard_false(i2) []
         i3 = int_add(i1, 1)
