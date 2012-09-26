@@ -10,7 +10,7 @@ from pypy.jit.metainterp.optimizeopt.pure import OptPure
 from pypy.jit.metainterp.optimizeopt.earlyforce import OptEarlyForce
 from pypy.rlib.jit import PARAMETERS, ENABLE_ALL_OPTS
 from pypy.rlib.unroll import unrolling_iterable
-from pypy.rlib.debug import debug_start, debug_stop, debug_print
+from pypy.rlib.debug import debug_start, debug_stop
 
 
 ALL_OPTS = [('intbounds', OptIntBounds),
@@ -47,7 +47,8 @@ def build_opt_chain(metainterp_sd, enable_opts):
 
     return optimizations, unroll
 
-def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True):
+def optimize_trace(jitdriver_sd, metainterp_sd, loop, enable_opts,
+                   inline_short_preamble=True):
     """Optimize loop.operations to remove internal overheadish operations.
     """
     debug_start("jit-optimize")
@@ -58,7 +59,8 @@ def optimize_trace(metainterp_sd, loop, enable_opts, inline_short_preamble=True)
         if unroll:
             optimize_unroll(metainterp_sd, loop, optimizations, inline_short_preamble)
         else:
-            optimizer = Optimizer(metainterp_sd, loop, optimizations)
+            optimizer = Optimizer(jitdriver_sd, metainterp_sd, loop,
+                                  optimizations)
             optimizer.propagate_all_forward()
     finally:
         debug_stop("jit-optimize")

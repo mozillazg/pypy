@@ -16,7 +16,7 @@ def test_store_final_boxes_in_guard():
     from pypy.jit.metainterp.resume import tag, TAGBOX
     b0 = BoxInt()
     b1 = BoxInt()
-    opt = optimizeopt.Optimizer(FakeMetaInterpStaticData(LLtypeMixin.cpu),
+    opt = optimizeopt.Optimizer(None, FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
     op = create_resop_1(rop.GUARD_TRUE, None, BoxInt(0))
     # setup rd data
@@ -3005,7 +3005,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         #
         p2 = virtual_ref(p1, 3)
         setfield_gc(p0, p2, descr=nextdescr)
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
         virtual_ref_finish(p2, p1)
         setfield_gc(p0, NULL, descr=nextdescr)
@@ -3019,7 +3019,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p2, i3, descr=virtualtokendescr)
         setfield_gc(p0, p2, descr=nextdescr)
         #
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
         #
         setfield_gc(p0, NULL, descr=nextdescr)
@@ -3044,8 +3044,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         #
         p2 = virtual_ref(p1, 2)
         setfield_gc(p0, p2, descr=nextdescr)
-        call_may_force(i1, descr=mayforcevirtdescr)
-        guard_not_forced(descr=fdescr) [p2, p1]
+        call_may_force_n(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [p2, p1]
         virtual_ref_finish(p2, p1)
         setfield_gc(p0, NULL, descr=nextdescr)
         jump(p0, i1)
@@ -3058,8 +3058,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setfield_gc(p2, i3, descr=virtualtokendescr)
         setfield_gc(p0, p2, descr=nextdescr)
         #
-        call_may_force(i1, descr=mayforcevirtdescr)
-        guard_not_forced(descr=fdescr) [p2, i1]
+        call_may_force_n(i1, descr=mayforcevirtdescr)
+        guard_not_forced() [p2, i1]
         #
         setfield_gc(p0, NULL, descr=nextdescr)
         p1 = new_with_vtable(ConstClass(node_vtable))
@@ -3089,8 +3089,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         #
         p2 = virtual_ref(p1, 2)
         setfield_gc(p0, p2, descr=refdescr)
-        call(i1, descr=nonwritedescr)
-        guard_no_exception(descr=fdescr) [p2, p1]
+        call_n(i1, descr=nonwritedescr)
+        guard_no_exception() [p2, p1]
         virtual_ref_finish(p2, p1)
         setfield_gc(p0, NULL, descr=refdescr)
         jump(p0, i1)
@@ -3098,8 +3098,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         expected = """
         [p0, i1]
         i3 = force_token()
-        call(i1, descr=nonwritedescr)
-        guard_no_exception(descr=fdescr) [i3, i1, p0]
+        call_n(i1, descr=nonwritedescr)
+        guard_no_exception() [i3, i1, p0]
         setfield_gc(p0, NULL, descr=refdescr)
         jump(p0, i1)
         """
@@ -3123,7 +3123,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p2 = virtual_ref(p1, 7)
         escape(p2)
         virtual_ref_finish(p2, p1)
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() []
         jump(i1)
         """
@@ -3136,7 +3136,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = new_with_vtable(ConstClass(node_vtable))
         setfield_gc(p2, p1, descr=virtualforceddescr)
         setfield_gc(p2, -3, descr=virtualtokendescr)
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() []
         jump(i1)
         """
@@ -3148,7 +3148,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p2 = virtual_ref(p1, 23)
         escape(p2)
         virtual_ref_finish(p2, p1)
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
         jump(i1, p1)
         """
@@ -3160,7 +3160,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         escape(p2)
         setfield_gc(p2, p1, descr=virtualforceddescr)
         setfield_gc(p2, -3, descr=virtualtokendescr)
-        call_may_force(i1, descr=mayforcevirtdescr)
+        call_may_force_n(i1, descr=mayforcevirtdescr)
         guard_not_forced() [i1]
         jump(i1, p1)
         """
@@ -3173,8 +3173,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         setarrayitem_gc(p1, 1, 1, descr=arraydescr)
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p2, 1, 3, descr=arraydescr)
-        call(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
-        i2 = getarrayitem_gc(p2, 1, descr=arraydescr)
+        call_n(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
+        i2 = getarrayitem_gc_i(p2, 1, descr=arraydescr)
         jump(i2)
         '''
         expected = '''
@@ -3190,8 +3190,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p1, 0, i0, descr=arraydescr)
         setarrayitem_gc(p2, 0, 3, descr=arraydescr)
-        call(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
-        i2 = getarrayitem_gc(p2, 0, descr=arraydescr)
+        call_n(0, p1, p2, 1, 1, 2, descr=arraycopydescr)
+        i2 = getarrayitem_gc_i(p2, 0, descr=arraydescr)
         jump(i2)
         '''
         expected = '''
@@ -3207,7 +3207,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p2 = new_array(3, descr=arraydescr)
         setarrayitem_gc(p1, 2, 10, descr=arraydescr)
         setarrayitem_gc(p2, 2, 13, descr=arraydescr)
-        call(0, p1, p2, 0, 0, 3, descr=arraycopydescr)
+        call_n(0, p1, p2, 0, 0, 3, descr=arraycopydescr)
         jump(p2)
         '''
         expected = '''
@@ -3224,7 +3224,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = '''
         [p1]
         p0 = new_array(0, descr=arraydescr)
-        call(0, p0, p1, 0, 0, 0, descr=arraycopydescr)
+        call_n(0, p0, p1, 0, 0, 0, descr=arraycopydescr)
         jump(p1)
         '''
         expected = '''

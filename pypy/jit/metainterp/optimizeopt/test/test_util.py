@@ -430,6 +430,7 @@ class BaseTest(object):
 
         self.loop = loop
         metainterp_sd = FakeMetaInterpStaticData(self.cpu)
+        jitdriver_sd = None
         if hasattr(self, 'vrefinfo'):
             metainterp_sd.virtualref_info = self.vrefinfo
         if hasattr(self, 'callinfocollection'):
@@ -440,7 +441,7 @@ class BaseTest(object):
                 fail_args = op.get_extra("failargs")
                 op._rd_frame_info_list = resume.FrameInfo(None, "code", 11)
                 op._rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
-        optimize_trace(metainterp_sd, loop, self.enable_opts)
+        optimize_trace(jitdriver_sd, metainterp_sd, loop, self.enable_opts)
 
     def unroll_and_optimize(self, loop):
         operations =  loop.operations

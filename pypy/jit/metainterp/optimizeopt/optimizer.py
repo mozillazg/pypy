@@ -360,7 +360,8 @@ class Optimization(object):
 
 class Optimizer(Optimization):
 
-    def __init__(self, metainterp_sd, loop, optimizations=None):
+    def __init__(self, jitdriver_sd, metainterp_sd, loop, optimizations=None):
+        self.jitdriver_sd = jitdriver_sd
         self.metainterp_sd = metainterp_sd
         self.cpu = metainterp_sd.cpu
         self.loop = loop
@@ -599,7 +600,7 @@ class Optimizer(Optimization):
             # means we need to copy the op and attach a new descr
             xxx
             op = op.copy_and_change(op.getopnum(), descr=None)
-        descr = op.invent_descr()
+        descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         try:
             newboxes = modifier.finish(self, self.pendingfields)

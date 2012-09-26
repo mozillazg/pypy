@@ -1048,13 +1048,12 @@ class GuardResOp(ResOpWithDescr):
             raise Exception("rd_frame_info_list already set")
         self._rd_frame_info_list = rd_frame_info_list
 
-    def invent_descr(self):
+    def invent_descr(self, jitdriver_sd, metainterp_sd):
         from pypy.jit.metainterp import compile
         
         opnum = self.getopnum()
         if opnum == rop.GUARD_NOT_FORCED:
-            descr = compile.ResumeGuardForcedDescr(metainterp_sd,
-                                                   metainterp.jitdriver_sd)
+            descr = compile.ResumeGuardForcedDescr(metainterp_sd, jitdriver_sd)
         elif opnum == rop.GUARD_NOT_INVALIDATED:
             descr = compile.ResumeGuardNotInvalidated()
         else:
