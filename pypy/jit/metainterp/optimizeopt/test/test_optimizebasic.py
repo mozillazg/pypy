@@ -4027,7 +4027,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_concat_1(self):
         ops = """
         [p1, p2]
-        p3 = call(0, p1, p2, descr=strconcatdescr)
+        p3 = call_r(0, p1, p2, descr=strconcatdescr)
         jump(p2, p3)
         """
         expected = """

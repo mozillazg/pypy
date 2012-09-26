@@ -179,8 +179,7 @@ class OptIntBounds(Optimization):
                 self.pure(args[0], rop.INT_ADD, result, args[1])
                 self.pure(args[1], rop.INT_SUB, args[0], result)
             elif opnum == rop.INT_MUL_OVF:
-                xxxx
-                self.pure(rop.INT_MUL, args[:], result)
+                self.pure(result, rop.INT_MUL, args[0], args[1])
         self.emit_operation(op)
 
     def optimize_GUARD_OVERFLOW(self, op):
@@ -225,8 +224,7 @@ class OptIntBounds(Optimization):
         v2 = self.getvalue(op.getarg(1))
         resbound = v1.intbound.mul_bound(v2.intbound)
         if resbound.bounded():
-            xxx
-            op = op.copy_and_change(rop.INT_MUL)
+            op = self.optimizer.copy_and_change(op, rop.INT_MUL)
         self.emit_operation(op)
         r = self.getvalue(op)
         r.intbound.intersect(resbound)
