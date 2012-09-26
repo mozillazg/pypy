@@ -31,7 +31,7 @@ def _findall(Class, name_prefix, op_prefix=None):
 def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
     ops = _findall(Class, name_prefix, op_prefix)
     def dispatch(self, op, *args):
-        if we_are_translated():
+        if we_are_translated() or op.getopnum() < 0:
             opnum = op.getopnum()
             for value, cls, func in ops:
                 if opnum == value:
