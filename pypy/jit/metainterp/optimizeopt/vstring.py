@@ -6,7 +6,8 @@ from pypy.jit.metainterp.optimizeopt.optimizer import CONST_0, CONST_1
 from pypy.jit.metainterp.optimizeopt.optimizer import llhelper, REMOVED
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, Const, ConstInt, ConstPtr,\
-     BoxInt, REF, INT, create_resop_1, create_resop_2, create_resop
+     BoxInt, REF, INT, create_resop_1, create_resop_2, create_resop,\
+     create_resop_3
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rpython import annlowlevel
@@ -182,10 +183,8 @@ class VStringPlainValue(VAbstractStringValue):
                 charbox = charvalue.force_box(string_optimizer)
                 if not (isinstance(charbox, Const) and
                         charbox.same_constant(CONST_0)):
-                    op = ResOperation(mode.STRSETITEM, [targetbox,
-                                                        offsetbox,
-                                                        charbox],
-                                      None)
+                    op = create_resop_3(mode.STRSETITEM, None,
+                                        targetbox, offsetbox, charbox)
                     string_optimizer.emit_operation(op)
             offsetbox = _int_add(string_optimizer, offsetbox, CONST_1)
         return offsetbox

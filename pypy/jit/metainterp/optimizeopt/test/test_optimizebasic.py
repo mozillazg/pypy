@@ -4048,7 +4048,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = newstr(2)
         strsetitem(p1, 0, i0)
         strsetitem(p1, 1, i1)
-        p3 = call(0, p1, p2, descr=strconcatdescr)
+        p3 = call_r(0, p1, p2, descr=strconcatdescr)
         jump(i1, i0, p3)
         """
         expected = """
