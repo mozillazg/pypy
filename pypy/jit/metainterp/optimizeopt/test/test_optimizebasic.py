@@ -4069,7 +4069,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = newstr(2)
         strsetitem(p1, 0, i0)
         strsetitem(p1, 1, i1)
-        p3 = call(0, p2, p1, descr=strconcatdescr)
+        p3 = call_r(0, p2, p1, descr=strconcatdescr)
         jump(i1, i0, p3)
         """
         expected = """
@@ -4089,8 +4089,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_concat_str_str_str(self):
         ops = """
         [p1, p2, p3]
-        p4 = call(0, p1, p2, descr=strconcatdescr)
-        p5 = call(0, p4, p3, descr=strconcatdescr)
+        p4 = call_r(0, p1, p2, descr=strconcatdescr)
+        p5 = call_r(0, p4, p3, descr=strconcatdescr)
         jump(p2, p3, p5)
         """
         expected = """
@@ -4111,7 +4111,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_concat_str_cstr1(self):
         ops = """
         [p2]
-        p3 = call(0, p2, s"x", descr=strconcatdescr)
+        p3 = call_r(0, p2, s"x", descr=strconcatdescr)
         jump(p3)
         """
         expected = """
@@ -4128,9 +4128,9 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_concat_consts(self):
         ops = """
         []
-        p1 = same_as(s"ab")
-        p2 = same_as(s"cde")
-        p3 = call(0, p1, p2, descr=strconcatdescr)
+        p1 = same_as_r(s"ab")
+        p2 = same_as_r(s"cde")
+        p3 = call_r(0, p1, p2, descr=strconcatdescr)
         escape(p3)
         jump()
         """
@@ -4147,8 +4147,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p0 = newstr(1)
         strsetitem(p0, 0, i0)
         p1 = newstr(0)
-        p2 = call(0, p0, p1, descr=strconcatdescr)
-        i1 = call(0, p2, p0, descr=strequaldescr)
+        p2 = call_r(0, p0, p1, descr=strconcatdescr)
+        i1 = call_i(0, p2, p0, descr=strequaldescr)
         finish(i1)
         """
         expected = """
@@ -4163,8 +4163,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p0 = newstr(0)
         p1 = newstr(1)
         strsetitem(p1, 0, i0)
-        p2 = call(0, p0, p1, descr=strconcatdescr)
-        i1 = call(0, p2, p1, descr=strequaldescr)
+        p2 = call_r(0, p0, p1, descr=strconcatdescr)
+        i1 = call_i(0, p2, p1, descr=strequaldescr)
         finish(i1)
         """
         expected = """
@@ -4176,7 +4176,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_slice_1(self):
         ops = """
         [p1, i1, i2]
-        p2 = call(0, p1, i1, i2, descr=strslicedescr)
+        p2 = call_r(0, p1, i1, i2, descr=strslicedescr)
         jump(p2, i1, i2)
         """
         expected = """
@@ -4191,7 +4191,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_slice_2(self):
         ops = """
         [p1, i2]
-        p2 = call(0, p1, 0, i2, descr=strslicedescr)
+        p2 = call_r(0, p1, 0, i2, descr=strslicedescr)
         jump(p2, i2)
         """
         expected = """
@@ -4205,8 +4205,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_slice_3(self):
         ops = """
         [p1, i1, i2, i3, i4]
-        p2 = call(0, p1, i1, i2, descr=strslicedescr)
-        p3 = call(0, p2, i3, i4, descr=strslicedescr)
+        p2 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        p3 = call_r(0, p2, i3, i4, descr=strslicedescr)
         jump(p3, i1, i2, i3, i4)
         """
         expected = """
@@ -4223,7 +4223,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_slice_getitem1(self):
         ops = """
         [p1, i1, i2, i3]
-        p2 = call(0, p1, i1, i2, descr=strslicedescr)
+        p2 = call_r(0, p1, i1, i2, descr=strslicedescr)
         i4 = strgetitem(p2, i3)
         escape(i4)
         jump(p1, i1, i2, i3)
@@ -4244,7 +4244,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = newstr(2)
         strsetitem(p1, 0, i3)
         strsetitem(p1, 1, i4)
-        p2 = call(0, p1, 1, 2, descr=strslicedescr)
+        p2 = call_r(0, p1, 1, 2, descr=strslicedescr)
         i5 = strgetitem(p2, 0)
         escape(i5)
         jump(i3, i4)
@@ -4259,8 +4259,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_slice_concat(self):
         ops = """
         [p1, i1, i2, p2]
-        p3 = call(0, p1, i1, i2, descr=strslicedescr)
-        p4 = call(0, p3, p2, descr=strconcatdescr)
+        p3 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        p4 = call_r(0, p3, p2, descr=strconcatdescr)
         jump(p4, i1, i2, p2)
         """
         expected = """
@@ -4280,7 +4280,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         []
         p0 = newstr(11)
         copystrcontent(s"hello world", p0, 0, 0, 11)
-        p1 = call(0, p0, 0, 5, descr=strslicedescr)
+        p1 = call_r(0, p0, 0, 5, descr=strslicedescr)
         finish(p1)
         """
         expected = """
@@ -4318,7 +4318,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_noop1(self):
         ops = """
         [p1, p2]
-        i0 = call(0, p1, p2, descr=strequaldescr)
+        i0 = call_i(0, p1, p2, descr=strequaldescr)
         escape(i0)
         jump(p1, p2)
         """
@@ -4327,8 +4327,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_noop2(self):
         ops = """
         [p1, p2, p3]
-        p4 = call(0, p1, p2, descr=strconcatdescr)
-        i0 = call(0, p3, p4, descr=strequaldescr)
+        p4 = call_r(0, p1, p2, descr=strconcatdescr)
+        i0 = call_i(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, p2, p3)
         """
@@ -4340,7 +4340,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p4 = newstr(i3)
         copystrcontent(p1, p4, 0, 0, i1)
         copystrcontent(p2, p4, 0, i1, i2)
-        i0 = call(0, p3, p4, descr=strequaldescr)
+        i0 = call_i(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, p2, p3)
         """
@@ -4349,15 +4349,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_slice1(self):
         ops = """
         [p1, i1, i2, p3]
-        p4 = call(0, p1, i1, i2, descr=strslicedescr)
-        i0 = call(0, p4, p3, descr=strequaldescr)
+        p4 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        i0 = call_i(0, p4, p3, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
         expected = """
         [p1, i1, i2, p3]
         i3 = int_sub(i2, i1)
-        i0 = call(0, p1, i1, i3, p3, descr=streq_slice_checknull_descr)
+        i0 = call_i(0, p1, i1, i3, p3, descr=streq_slice_checknull_descr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
@@ -4366,15 +4366,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_slice2(self):
         ops = """
         [p1, i1, i2, p3]
-        p4 = call(0, p1, i1, i2, descr=strslicedescr)
-        i0 = call(0, p3, p4, descr=strequaldescr)
+        p4 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        i0 = call_i(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
         expected = """
         [p1, i1, i2, p3]
         i4 = int_sub(i2, i1)
-        i0 = call(0, p1, i1, i4, p3, descr=streq_slice_checknull_descr)
+        i0 = call_i(0, p1, i1, i4, p3, descr=streq_slice_checknull_descr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
@@ -4384,8 +4384,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, i1, i2, p3]
         guard_nonnull(p3) []
-        p4 = call(0, p1, i1, i2, descr=strslicedescr)
-        i0 = call(0, p3, p4, descr=strequaldescr)
+        p4 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        i0 = call_i(0, p3, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
@@ -4393,7 +4393,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [p1, i1, i2, p3]
         guard_nonnull(p3) []
         i4 = int_sub(i2, i1)
-        i0 = call(0, p1, i1, i4, p3, descr=streq_slice_nonnull_descr)
+        i0 = call_i(0, p1, i1, i4, p3, descr=streq_slice_nonnull_descr)
         escape(i0)
         jump(p1, i1, i2, p3)
         """
@@ -4402,15 +4402,15 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_slice4(self):
         ops = """
         [p1, i1, i2]
-        p3 = call(0, p1, i1, i2, descr=strslicedescr)
-        i0 = call(0, p3, s"x", descr=strequaldescr)
+        p3 = call_r(0, p1, i1, i2, descr=strslicedescr)
+        i0 = call_i(0, p3, s"x", descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2)
         """
         expected = """
         [p1, i1, i2]
         i3 = int_sub(i2, i1)
-        i0 = call(0, p1, i1, i3, 120, descr=streq_slice_char_descr)
+        i0 = call_i(0, p1, i1, i3, 120, descr=streq_slice_char_descr)
         escape(i0)
         jump(p1, i1, i2)
         """
@@ -4419,17 +4419,17 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_slice5(self):
         ops = """
         [p1, i1, i2, i3]
-        p4 = call(0, p1, i1, i2, descr=strslicedescr)
+        p4 = call_r(0, p1, i1, i2, descr=strslicedescr)
         p5 = newstr(1)
         strsetitem(p5, 0, i3)
-        i0 = call(0, p5, p4, descr=strequaldescr)
+        i0 = call_i(0, p5, p4, descr=strequaldescr)
         escape(i0)
         jump(p1, i1, i2, i3)
         """
         expected = """
         [p1, i1, i2, i3]
         i4 = int_sub(i2, i1)
-        i0 = call(0, p1, i1, i4, i3, descr=streq_slice_char_descr)
+        i0 = call_i(0, p1, i1, i4, i3, descr=streq_slice_char_descr)
         escape(i0)
         jump(p1, i1, i2, i3)
         """
@@ -4438,7 +4438,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_none1(self):
         ops = """
         [p1]
-        i0 = call(0, p1, NULL, descr=strequaldescr)
+        i0 = call_i(0, p1, NULL, descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4453,7 +4453,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_none2(self):
         ops = """
         [p1]
-        i0 = call(0, NULL, p1, descr=strequaldescr)
+        i0 = call_i(0, NULL, p1, descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4469,14 +4469,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, s"hello world", descr=strequaldescr)
+        i0 = call_i(0, p1, s"hello world", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
         expected = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, s"hello world", descr=streq_nonnull_descr)
+        i0 = call_i(0, p1, s"hello world", descr=streq_nonnull_descr)
         escape(i0)
         jump(p1)
         """
@@ -4486,7 +4486,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, s"", descr=strequaldescr)
+        i0 = call_i(0, p1, s"", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
@@ -4504,14 +4504,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, s"x", descr=strequaldescr)
+        i0 = call_i(0, p1, s"x", descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
         expected = """
         [p1]
         guard_nonnull(p1) []
-        i0 = call(0, p1, 120, descr=streq_nonnull_char_descr)
+        i0 = call_i(0, p1, 120, descr=streq_nonnull_char_descr)
         escape(i0)
         jump(p1)
         """
@@ -4520,8 +4520,8 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_nonnull4(self):
         ops = """
         [p1, p2]
-        p4 = call(0, p1, p2, descr=strconcatdescr)
-        i0 = call(0, s"hello world", p4, descr=strequaldescr)
+        p4 = call_r(0, p1, p2, descr=strconcatdescr)
+        i0 = call_i(0, s"hello world", p4, descr=strequaldescr)
         escape(i0)
         jump(p1, p2)
         """
@@ -4533,7 +4533,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p4 = newstr(i3)
         copystrcontent(p1, p4, 0, 0, i1)
         copystrcontent(p2, p4, 0, i1, i2)
-        i0 = call(0, s"hello world", p4, descr=streq_nonnull_descr)
+        i0 = call_i(0, s"hello world", p4, descr=streq_nonnull_descr)
         escape(i0)
         jump(p1, p2)
         """
@@ -4543,7 +4543,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i1]
         p1 = newstr(0)
-        i0 = call(0, p1, s"", descr=strequaldescr)
+        i0 = call_i(0, p1, s"", descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4559,7 +4559,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         p1 = newstr(1)
         strsetitem(p1, 0, i1)
-        i0 = call(0, p1, s"x", descr=strequaldescr)
+        i0 = call_i(0, p1, s"x", descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4577,7 +4577,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = newstr(2)
         strsetitem(p1, 0, i1)
         strsetitem(p1, 1, i2)
-        i0 = call(0, p1, s"xy", descr=strequaldescr)
+        i0 = call_i(0, p1, s"xy", descr=strequaldescr)
         escape(i0)
         jump(i1, i2)
         """
@@ -4586,7 +4586,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         p1 = newstr(2)
         strsetitem(p1, 0, i1)
         strsetitem(p1, 1, i2)
-        i0 = call(0, p1, s"xy", descr=streq_lengthok_descr)
+        i0 = call_i(0, p1, s"xy", descr=streq_lengthok_descr)
         escape(i0)
         jump(i1, i2)
         """
@@ -4595,13 +4595,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str_equal_chars3(self):
         ops = """
         [p1]
-        i0 = call(0, s"x", p1, descr=strequaldescr)
+        i0 = call_i(0, s"x", p1, descr=strequaldescr)
         escape(i0)
         jump(p1)
         """
         expected = """
         [p1]
-        i0 = call(0, p1, 120, descr=streq_checknull_char_descr)
+        i0 = call_i(0, p1, 120, descr=streq_checknull_char_descr)
         escape(i0)
         jump(p1)
         """
@@ -4612,7 +4612,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         [i1]
         p1 = newstr(1)
         strsetitem(p1, 0, i1)
-        i0 = call(0, s"xy", p1, descr=strequaldescr)
+        i0 = call_i(0, s"xy", p1, descr=strequaldescr)
         escape(i0)
         jump(i1)
         """
@@ -4626,7 +4626,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str2unicode_constant(self):
         ops = """
         []
-        p0 = call(0, "xy", descr=s2u_descr)      # string -> unicode
+        p0 = call_r(0, "xy", descr=s2u_descr)      # string -> unicode
         escape(p0)
         jump()
         """
@@ -4640,7 +4640,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_str2unicode_nonconstant(self):
         ops = """
         [p0]
-        p1 = call(0, p0, descr=s2u_descr)      # string -> unicode
+        p1 = call_r(0, p0, descr=s2u_descr)      # string -> unicode
         escape(p1)
         jump(p1)
         """
