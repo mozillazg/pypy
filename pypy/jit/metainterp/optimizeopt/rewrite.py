@@ -203,6 +203,7 @@ class OptRewrite(Optimization):
             return
         if emit_operation:
             self.emit_operation(op)
+        value = self.getvalue(op.getarg(0)) # might have been forwarded
         value.make_constant(constbox)
         self.optimizer.turned_constant(value)
 
