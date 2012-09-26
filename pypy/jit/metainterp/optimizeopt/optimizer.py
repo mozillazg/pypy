@@ -703,14 +703,14 @@ class Optimizer(Optimization):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
-            arrayvalue.make_len_gt(MODE_STR, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_STR, op.getdescr(), indexvalue.op.getint())
         self.optimize_default(op)
 
     def optimize_UNICODEGETITEM(self, op):
         indexvalue = self.getvalue(op.getarg(1))
         if indexvalue.is_constant():
             arrayvalue = self.getvalue(op.getarg(0))
-            arrayvalue.make_len_gt(MODE_UNICODE, op.getdescr(), indexvalue.box.getint())
+            arrayvalue.make_len_gt(MODE_UNICODE, op.getdescr(), indexvalue.op.getint())
         self.optimize_default(op)
 
     # These are typically removed already by OptRewrite, but it can be

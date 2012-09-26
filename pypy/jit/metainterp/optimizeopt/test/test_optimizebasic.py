@@ -4957,7 +4957,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         []
         p0 = newstr(6)
         copystrcontent(s"hello!", p0, 0, 0, 6)
-        p1 = call(0, p0, s"abc123", descr=strconcatdescr)
+        p1 = call_r(0, p0, s"abc123", descr=strconcatdescr)
         i0 = strgetitem(p1, 0)
         finish(i0)
         """
@@ -4972,12 +4972,14 @@ class BaseTestOptimizeBasic(BaseTestBasic):
 
     def test_ptr_eq_str_constant(self):
         ops = """
-        []
-        i0 = ptr_eq(s"abc", s"\x00")
+        [p0]
+        guard_value(p0, s"abc") []
+        i0 = ptr_eq(p0, s"\x00")
         finish(i0)
         """
         expected = """
-        []
+        [p0]
+        guard_value(p0, s"abc") []
         finish(0)
         """
         self.optimize_loop(ops, expected)
