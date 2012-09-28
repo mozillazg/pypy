@@ -12,6 +12,7 @@ from pypy.rpython.rclass import FieldListAccessor
 from pypy.jit.metainterp.warmspot import get_stats, get_translator
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.optimizeopt.test.test_util import LLtypeMixin
+from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 
 def promote_virtualizable(*args):
     pass
@@ -41,7 +42,7 @@ class ExplicitVirtualizableTests:
     XY = lltype.GcStruct(
         'XY',
         ('parent', rclass.OBJECT),
-        ('vable_token', lltype.Signed),
+        ('jit_frame', JITFRAMEPTR),
         ('inst_x', lltype.Signed),
         ('inst_node', lltype.Ptr(LLtypeMixin.NODE)),
         hints = {'virtualizable2_accessor': FieldListAccessor()})
@@ -56,7 +57,7 @@ class ExplicitVirtualizableTests:
 
     def setup(self):
         xy = lltype.malloc(self.XY)
-        xy.vable_token = 0
+        xy.jit_frame = lltype.nullptr(JITFRAMEPTR.TO)
         xy.parent.typeptr = self.xy_vtable
         return xy
 
@@ -206,7 +207,7 @@ class ExplicitVirtualizableTests:
     XY2 = lltype.GcStruct(
         'XY2',
         ('parent', rclass.OBJECT),
-        ('vable_token', lltype.Signed),
+        ('jit_frame', JITFRAMEPTR),
         ('inst_x', lltype.Signed),
         ('inst_l1', lltype.Ptr(lltype.GcArray(lltype.Signed))),
         ('inst_l2', lltype.Ptr(lltype.GcArray(lltype.Signed))),
@@ -220,7 +221,7 @@ class ExplicitVirtualizableTests:
 
     def setup2(self):
         xy2 = lltype.malloc(self.XY2)
-        xy2.vable_token = 0
+        xy2.jit_frame = lltype.nullptr(JITFRAMEPTR.TO)
         xy2.parent.typeptr = self.xy2_vtable
         return xy2
 
@@ -393,7 +394,7 @@ class ExplicitVirtualizableTests:
 
     def setup2sub(self):
         xy2 = lltype.malloc(self.XY2SUB)
-        xy2.parent.vable_token = 0
+        xy2.parent.jit_frame = lltype.nullptr(JITFRAMEPTR.TO)
         xy2.parent.parent.typeptr = self.xy2_vtable
         return xy2
 

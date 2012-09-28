@@ -26,6 +26,7 @@ if sys.maxint > 2147483647:
     getrealfloat    = lambda x: x
     gethash         = compute_hash
     is_longlong     = lambda TYPE: False
+    longlong2floatstorage = longlong2float.longlong2float
 
     # -------------------------------------
 else:
@@ -42,6 +43,7 @@ else:
     gethash         = lambda xll: rarithmetic.intmask(xll - (xll >> 32))
     is_longlong     = lambda TYPE: (TYPE is lltype.SignedLongLong or
                                     TYPE is lltype.UnsignedLongLong)
+    longlong2floatstorage = lambda x: x
 
     # -------------------------------------
 

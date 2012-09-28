@@ -154,7 +154,7 @@ class AbstractDescr(AbstractValue):
 class AbstractFailDescr(AbstractDescr):
     index = -1
 
-    def handle_fail(self, metainterp_sd, jitdriver_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError

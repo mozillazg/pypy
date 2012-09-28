@@ -690,8 +690,9 @@ class AbstractResumeDataReader(object):
     virtuals_cache = None
     virtual_default = None
 
-    def _init(self, cpu, storage):
+    def _init(self, cpu, jitframe, storage):
         self.cpu = cpu
+        self.jitframe = jitframe
         self.cur_numb = storage.rd_numb
         self.consts = storage.rd_consts
 
@@ -769,14 +770,11 @@ class AbstractResumeDataReader(object):
         value = self.decode_float(self.cur_numb.nums[index])
         self.write_a_float(register_index, value)
 
-    def done(self):
-        self.cpu.clear_latest_values(self.cpu.get_latest_value_count())
-
 # ---------- when resuming for pyjitpl.py, make boxes ----------
 
-def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
+def rebuild_from_resumedata(metainterp, jitframe, storage, virtualizable_info,
                             greenfield_info):
-    resumereader = ResumeDataBoxReader(storage, metainterp)
+    resumereader = ResumeDataBoxReader(jitframe, storage, metainterp)
     boxes = resumereader.consume_vref_and_vable_boxes(virtualizable_info,
                                                       greenfield_info)
     virtualizable_boxes, virtualref_boxes = boxes
@@ -790,16 +788,16 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
         if frameinfo is None:
             break
     metainterp.framestack.reverse()
-    resumereader.done()
     return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
     unique_id = lambda: None
 
-    def __init__(self, storage, metainterp):
-        self._init(metainterp.cpu, storage)
+    def __init__(self, jitframe, storage, metainterp):
+        self._init(metainterp.cpu, jitframe, storage)
         self.metainterp = metainterp
-        self.liveboxes = [None] * metainterp.cpu.get_latest_value_count()
+        count = metainterp.cpu.get_latest_value_count(jitframe)
+        self.liveboxes = [None] * count
         self._prepare(storage)
 
     def consume_boxes(self, info, boxes_i, boxes_r, boxes_f):
@@ -974,12 +972,13 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         if num < 0:
             num += len(self.liveboxes)
             assert num >= 0
+        jitframe = self.jitframe
         if kind == INT:
-            box = BoxInt(self.cpu.get_latest_value_int(num))
+            box = BoxInt(self.cpu.get_latest_value_int(jitframe, num))
         elif kind == REF:
-            box = BoxPtr(self.cpu.get_latest_value_ref(num))
+            box = BoxPtr(self.cpu.get_latest_value_ref(jitframe, num))
         elif kind == FLOAT:
-            box = BoxFloat(self.cpu.get_latest_value_float(num))
+            box = BoxFloat(self.cpu.get_latest_value_float(jitframe, num))
         else:
             assert 0, "bad kind: %d" % ord(kind)
         self.liveboxes[num] = box
@@ -1003,14 +1002,14 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
 
 # ---------- when resuming for blackholing, get direct values ----------
 
-def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
-                              all_virtuals=None):
+def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd,
+                              jitframe, storage, all_virtuals=None):
     # The initialization is stack-critical code: it must not be interrupted by
     # StackOverflow, otherwise the jit_virtual_refs are left in a dangling state.
     rstack._stack_criticalcode_start()
     try:
         resumereader = ResumeDataDirectReader(blackholeinterpbuilder.metainterp_sd,
-                                              storage, all_virtuals)
+                                              jitframe, storage, all_virtuals)
         vinfo = jitdriver_sd.virtualizable_info
         ginfo = jitdriver_sd.greenfield_info
         vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
@@ -1043,7 +1042,6 @@ def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
         frameinfo = frameinfo.prev
         if frameinfo is None:
             break
-    resumereader.done()
     return firstbh
 
 def force_from_resumedata(metainterp_sd, storage, vinfo, ginfo):
@@ -1061,8 +1059,8 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     #             1: in handle_async_forcing
     #             2: resuming from the GUARD_NOT_FORCED
 
-    def __init__(self, metainterp_sd, storage, all_virtuals=None):
-        self._init(metainterp_sd.cpu, storage)
+    def __init__(self, metainterp_sd, jitframe, storage, all_virtuals=None):
+        self._init(metainterp_sd.cpu, jitframe, storage)
         self.callinfocollection = metainterp_sd.callinfocollection
         if all_virtuals is None:        # common case
             self._prepare(storage)
@@ -1240,9 +1238,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return num
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_int(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_int(jitframe, num)
 
     def decode_ref(self, tagged):
         num, tag = untag(tagged)
@@ -1254,9 +1253,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return self.getvirtual(num)
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_ref(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_ref(jitframe, num)
 
     def decode_float(self, tagged):
         num, tag = untag(tagged)
@@ -1264,9 +1264,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return self.consts[num].getfloatstorage()
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_float(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_float(jitframe, num)
 
     def write_an_int(self, index, int):
         self.blackholeinterp.setarg_i(index, int)
