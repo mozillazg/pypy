@@ -2716,13 +2716,16 @@ class LLtypeBackendTest(BaseBackendTest):
         lltype.free(x, flavor='raw')
 
     def test_assembler_call(self):
+        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         called = []
-        def assembler_helper(failindex, virtualizable):
-            assert self.cpu.get_latest_value_int(frame, 0) == 97
+        def assembler_helper(jitframe, virtualizable):
+            assert self.cpu.get_latest_value_int(jitframe, 0) == 97
+            faildescr =self.cpu.get_latest_descr(jitframe)
+            failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 4 + 9
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([lltype.Signed, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Signed))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
@@ -2787,16 +2790,19 @@ class LLtypeBackendTest(BaseBackendTest):
             del self.cpu.done_with_this_frame_int_v
 
     def test_assembler_call_float(self):
+        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
-        def assembler_helper(failindex, virtualizable):
-            x = self.cpu.get_latest_value_float(frame, 0)
+        def assembler_helper(jitframe, virtualizable):
+            x = self.cpu.get_latest_value_float(jitframe, 0)
             assert longlong.getrealfloat(x) == 1.2 + 3.2
+            faildescr =self.cpu.get_latest_descr(jitframe)
+            failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([lltype.Signed, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Float))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
@@ -2881,16 +2887,19 @@ class LLtypeBackendTest(BaseBackendTest):
         lltype.free(a, flavor='raw')
 
     def test_redirect_call_assembler(self):
+        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
-        def assembler_helper(failindex, virtualizable):
-            x = self.cpu.get_latest_value_float(frame, 0)
+        def assembler_helper(jitframe, virtualizable):
+            x = self.cpu.get_latest_value_float(jitframe, 0)
             assert longlong.getrealfloat(x) == 1.25 + 3.25
+            faildescr =self.cpu.get_latest_descr(jitframe)
+            failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([lltype.Signed, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Float))
         class FakeJitDriverSD:
             index_of_virtualizable = -1

@@ -1,5 +1,7 @@
 from pypy.rlib.debug import debug_start, debug_print, debug_stop
+from pypy.rlib.rarithmetic import intmask
 from pypy.jit.metainterp import history
+from pypy.jit.codewriter.longlong import longlong2floatstorage
 from pypy.rpython.lltypesystem import lltype
 
 
@@ -125,37 +127,37 @@ class AbstractCPU(object):
     def get_latest_descr(self, jitframe):
         """Return the descr of the last operation executed by the
         jitframe."""
-        raise NotImplementedError
+        return jitframe.jf_descr
 
     def get_latest_value_int(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
         or from 'args' if it was a FINISH).  Returns an int."""
-        raise NotImplementedError
+        return intmask(jitframe.jf_nongcvalues[index])
 
     def get_latest_value_float(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a float."""
-        raise NotImplementedError
+        or from 'args' if it was a FINISH).  Returns a FLOATSTORAGE."""
+        return longlong2floatstorage(jitframe.jf_nongcvalues[index])
 
     def get_latest_value_ref(self, jitframe, index):
         """Returns the value for the index'th argument to the
         last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
-        raise NotImplementedError
+        or from 'args' if it was a FINISH).  Returns a GCREF."""
+        return jitframe.jf_gcvalues[index]
 
     def get_latest_value_count(self, jitframe):
         """Return how many values are ready to be returned by
         get_latest_value_xxx().  Only after a guard failure; not
         necessarily correct after a FINISH."""
-        raise NotImplementedError
+        return len(jitframe.jf_gcvalues)
 
     def grab_exc_value(self, jitframe):
         """Return and clear the exception set by the latest execute_token(),
         when it exits due to a failure of a GUARD_EXCEPTION or
         GUARD_NO_EXCEPTION.  (Returns a GCREF)"""        # XXX remove me
-        raise NotImplementedError
+        return jitframe.jf_excvalue
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is

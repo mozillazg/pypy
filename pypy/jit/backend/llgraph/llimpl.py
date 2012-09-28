@@ -1053,23 +1053,24 @@ class Frame(object):
                 vable = lltype.nullptr(llmemory.GCREF.TO)
             #
             # Emulate the fast path
-            failindex = self.cpu.get_latest_descr(subframe)
+            failindex = frame_descr_index(subframe)
             if failindex == self.cpu.done_with_this_frame_int_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_int(0)
+                return self.cpu.get_latest_value_int(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_ref_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_ref(0)
+                return self.cpu.get_latest_value_ref(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_float_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_float(0)
+                return self.cpu.get_latest_value_float(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_void_v:
                 reset_vable(jd, vable)
                 return None
             #
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
+            assembler_helper = assembler_helper_ptr._obj._callable
             try:
-                return assembler_helper_ptr(failindex, vable)
+                return assembler_helper(subframe, vable)
             except LLException, lle:
                 assert self._last_exception is None, "exception left behind"
                 self._last_exception = lle

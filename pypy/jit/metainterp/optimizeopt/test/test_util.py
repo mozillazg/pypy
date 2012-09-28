@@ -245,7 +245,7 @@ class LLtypeMixin(object):
         pass
     FakeWarmRunnerDesc.cpu = cpu
     vrefinfo = VirtualRefInfo(FakeWarmRunnerDesc)
-    virtualtokendescr = vrefinfo.descr_virtual_token
+    virtualtokendescr = vrefinfo.descr_jit_frame
     virtualforceddescr = vrefinfo.descr_forced
     jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
     jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)

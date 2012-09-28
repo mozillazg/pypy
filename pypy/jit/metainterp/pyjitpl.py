@@ -1928,7 +1928,7 @@ class MetaInterp(object):
             self.run_blackhole_interp_to_cancel_tracing(stb)
         assert False, "should always raise"
 
-    def handle_guard_failure(self, key):
+    def handle_guard_failure(self, jitframe, key):
         debug_start('jit-tracing')
         self.staticdata.profiler.start_tracing()
         assert isinstance(key, compile.ResumeGuardDescr)
@@ -1936,7 +1936,7 @@ class MetaInterp(object):
         # sure that it stays alive as long as this MetaInterp
         self.resumekey_original_loop_token = key.wref_original_loop_token()
         self.staticdata.try_to_free_some_loops()
-        self.initialize_state_from_guard_failure(key)
+        self.initialize_state_from_guard_failure(jitframe, key)
         try:
             return self._handle_guard_failure(key)
         finally:
@@ -2251,7 +2251,7 @@ class MetaInterp(object):
         self.initialize_withgreenfields(original_boxes)
         self.initialize_virtualizable(original_boxes)
 
-    def initialize_state_from_guard_failure(self, resumedescr):
+    def initialize_state_from_guard_failure(self, jitframe, resumedescr):
         # guard failure: rebuild a complete MIFrame stack
         # This is stack-critical code: it must not be interrupted by StackOverflow,
         # otherwise the jit_virtual_refs are left in a dangling state.
@@ -2259,7 +2259,8 @@ class MetaInterp(object):
         try:
             self.portal_call_depth = -1 # always one portal around
             self.history = history.History()
-            inputargs_and_holes = self.rebuild_state_after_failure(resumedescr)
+            inputargs_and_holes = self.rebuild_state_after_failure(jitframe,
+                                                                   resumedescr)
             self.history.inputargs = [box for box in inputargs_and_holes if box]
         finally:
             rstack._stack_criticalcode_stop()
@@ -2291,7 +2292,7 @@ class MetaInterp(object):
         vinfo = self.jitdriver_sd.virtualizable_info
         virtualizable_box = self.virtualizable_boxes[-1]
         virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
-        vinfo.clear_vable_token(virtualizable)
+        vinfo.clear_jit_frame(virtualizable)
 
     def vable_and_vrefs_before_residual_call(self):
         vrefinfo = self.staticdata.virtualref_info
@@ -2378,12 +2379,12 @@ class MetaInterp(object):
     def assert_no_exception(self):
         assert self.last_exc_value_box is None
 
-    def rebuild_state_after_failure(self, resumedescr):
+    def rebuild_state_after_failure(self, jitframe, resumedescr):
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
         self.framestack = []
-        boxlists = resume.rebuild_from_resumedata(self, resumedescr, vinfo,
-                                                  ginfo)
+        boxlists = resume.rebuild_from_resumedata(self, jitframe, resumedescr,
+                                                  vinfo, ginfo)
         inputargs_and_holes, virtualizable_boxes, virtualref_boxes = boxlists
         #
         # virtual refs: make the vrefs point to the freshly allocated virtuals
