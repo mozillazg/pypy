@@ -18,6 +18,10 @@ class Storage:
     rd_virtuals = None
     rd_pendingfields = None
 
+class FakeJitFrame(object):
+    pass
+fakeframe = FakeJitFrame()
+
 
 class FakeOptimizer(object):
     def __init__(self, values):
@@ -102,13 +106,17 @@ class MyCPU:
         CONST_NULL = ConstPtr(gcrefnull)
     def __init__(self, values):
         self.values = values
-    def get_latest_value_count(self):
+    def get_latest_value_count(self, jitframe):
+        assert jitframe is fakeframe
         return len(self.values)
-    def get_latest_value_int(self, index):
+    def get_latest_value_int(self, jitframe, index):
+        assert jitframe is fakeframe
         return self.values[index]
-    def get_latest_value_ref(self, index):
+    def get_latest_value_ref(self, jitframe, index):
+        assert jitframe is fakeframe
         return self.values[index]
-    def get_latest_value_float(self, index):
+    def get_latest_value_float(self, jitframe, index):
+        assert jitframe is fakeframe
         return self.values[index]
 
 class MyBlackholeInterp:
@@ -181,12 +189,12 @@ def test_simple_read():
     #
     cpu = MyCPU([42, gcref1, -66])
     metainterp = MyMetaInterp(cpu)
-    reader = ResumeDataDirectReader(metainterp, storage)
+    reader = ResumeDataDirectReader(metainterp, fakeframe, storage)
     _next_section(reader, 42, 111, gcrefnull, 42, gcref1)
     _next_section(reader, 222, 333)
     _next_section(reader, 42, gcref1, -66)
     #
-    reader = ResumeDataBoxReader(storage, metainterp)
+    reader = ResumeDataBoxReader(fakeframe, storage, metainterp)
     bi, br, bf = [None]*3, [None]*2, [None]*0
     info = MyBlackholeInterp([lltype.Signed, lltype.Signed,
                               llmemory.GCREF, lltype.Signed,
@@ -222,7 +230,7 @@ def test_simple_read_tagged_ints():
     storage.rd_numb = numb
     #
     cpu = MyCPU([])
-    reader = ResumeDataDirectReader(MyMetaInterp(cpu), storage)
+    reader = ResumeDataDirectReader(MyMetaInterp(cpu), fakeframe, storage)
     _next_section(reader, 100)
 
 
@@ -240,7 +248,8 @@ def test_prepare_virtuals():
     class FakeMetainterp(object):
         _already_allocated_resume_virtuals = None
         cpu = None
-    reader = ResumeDataDirectReader(MyMetaInterp(None), FakeStorage())
+    reader = ResumeDataDirectReader(MyMetaInterp(None),
+                                    fakeframe, FakeStorage())
     assert reader.force_all_virtuals() == ["allocated", reader.virtual_default]
 
 # ____________________________________________________________
@@ -959,7 +968,7 @@ def test_virtual_adder_int_constants():
     liveboxes = modifier.finish(FakeOptimizer({}))
     assert storage.rd_snapshot is None
     cpu = MyCPU([])
-    reader = ResumeDataDirectReader(MyMetaInterp(cpu), storage)
+    reader = ResumeDataDirectReader(MyMetaInterp(cpu), fakeframe, storage)
     _next_section(reader, sys.maxint, 2**16, -65)
     _next_section(reader, 2, 3)
     _next_section(reader, sys.maxint, 1, sys.maxint, 2**16)
@@ -985,7 +994,7 @@ def test_virtual_adder_memo_const_sharing():
 class ResumeDataFakeReader(ResumeDataBoxReader):
     """Another subclass of AbstractResumeDataReader meant for tests."""
     def __init__(self, storage, newboxes, metainterp):
-        self._init(metainterp.cpu, storage)
+        self._init(metainterp.cpu, fakeframe, storage)
         self.liveboxes = newboxes
         self.metainterp = metainterp
         self._prepare(storage)
