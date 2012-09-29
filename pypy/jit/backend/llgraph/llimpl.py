@@ -1810,8 +1810,9 @@ def get_err_result_for_type(T):
 
 def reset_vable(jd, vable):
     if jd.index_of_virtualizable != -1:
-        fielddescr = jd.vable_token_descr
-        do_setfield_gc_int(vable, fielddescr.ofs, 0)
+        fielddescr = jd.jit_frame_descr
+        do_setfield_gc_ptr(vable, fielddescr.ofs,
+                           lltype.nullptr(llmemory.GCREF.TO))
 
 def redirect_call_assembler(cpu, oldlooptoken, newlooptoken):
     oldclt = oldlooptoken.compiled_loop_token

@@ -1,6 +1,6 @@
 from pypy.jit.codewriter.heaptracker import vtable2descr
 from pypy.jit.metainterp.executor import execute
-from pypy.jit.metainterp.history import Const, ConstInt, BoxInt
+from pypy.jit.metainterp.history import Const, ConstInt, BoxInt, BoxPtr
 from pypy.jit.metainterp.optimizeopt import optimizer
 from pypy.jit.metainterp.optimizeopt.util import (make_dispatcher_method,
     descrlist_dict, sort_descrs)
@@ -392,7 +392,7 @@ class OptVirtualize(optimizer.Optimization):
         # get some constants
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info
         c_cls = vrefinfo.jit_virtual_ref_const_class
-        descr_virtual_token = vrefinfo.descr_virtual_token
+        descr_jit_frame = vrefinfo.descr_jit_frame
         #
         # Replace the VIRTUAL_REF operation with a virtual structure of type
         # 'jit_virtual_ref'.  The jit_virtual_ref structure may be forced soon,
@@ -400,8 +400,8 @@ class OptVirtualize(optimizer.Optimization):
         op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
         vrefvalue = self.make_virtual(c_cls, op.result, op)
         tokenbox = BoxPtr()
-        self.emit_operation(ResOperation(rop.FORCE_TOKEN, [], tokenbox))
-        vrefvalue.setfield(descr_virtual_token, self.getvalue(tokenbox))
+        self.emit_operation(ResOperation(rop.JIT_FRAME, [], tokenbox))
+        vrefvalue.setfield(descr_jit_frame, self.getvalue(tokenbox))
 
     def optimize_VIRTUAL_REF_FINISH(self, op):
         # This operation is used in two cases.  In normal cases, it
@@ -426,10 +426,10 @@ class OptVirtualize(optimizer.Optimization):
             seo(ResOperation(rop.SETFIELD_GC, op.getarglist(), None,
                              descr = vrefinfo.descr_forced))
 
-        # - set 'virtual_token' to TOKEN_NONE
-        args = [op.getarg(0), ConstInt(vrefinfo.TOKEN_NONE)]
+        # - set 'virtual_token' to TOKEN_NONE (== NULL)
+        args = [op.getarg(0), self.optimizer.cpu.ts.CONST_NULL]
         seo(ResOperation(rop.SETFIELD_GC, args, None,
-                         descr = vrefinfo.descr_virtual_token))
+                         descr = vrefinfo.descr_jit_frame))
         # Note that in some cases the virtual in op.getarg(1) has been forced
         # already.  This is fine.  In that case, and *if* a residual
         # CALL_MAY_FORCE suddenly turns out to access it, then it will

@@ -7,6 +7,7 @@ from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
 from pypy.jit.metainterp.warmspot import get_stats
+from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 
 class RecursiveTests:
 
@@ -817,13 +818,13 @@ class RecursiveTests:
                 llinterpcall(lltype.Void, check_ll_frame, subframe)
         def check_ll_frame(ll_subframe):
             # This is called with the low-level Struct that is the frame.
-            # Check that the vable_token was correctly reset to zero.
+            # Check that the jit_frame was correctly reset to zero.
             # Note that in order for that test to catch failures, it needs
-            # three levels of recursion: the vable_token of the subframe
+            # three levels of recursion: the jit_frame of the subframe
             # at the level 2 is set to a non-zero value when doing the
             # call to the level 3 only.  This used to fail when the test
             # is run via pypy.jit.backend.x86.test.test_recursive.
-            assert ll_subframe.vable_token == 0
+            assert ll_subframe.jit_frame == lltype.nullptr(JITFRAMEPTR.TO)
 
         def main(codeno):
             frame = Frame()

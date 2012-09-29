@@ -8,6 +8,7 @@ from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin, _get_jitcodes
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.virtualref import VirtualRefInfo
+from pypy.jit.metainterp import jitframe
 
 debug_print = lloperation.llop.debug_print
 
@@ -109,20 +110,20 @@ class VRefTests:
                   if str(box._getrepr_()).endswith('JitVirtualRef')]
         assert len(bxs2) == 1
         JIT_VIRTUAL_REF = self.vrefinfo.JIT_VIRTUAL_REF
-        bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).virtual_token = 1234567
+        someframe = lltype.malloc(jitframe.JITFRAMEPTR.TO, 5)
+        bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).jit_frame = someframe
         #
         # try reloading from blackhole.py's point of view
         from pypy.jit.metainterp.resume import ResumeDataDirectReader
         cpu = self.metainterp.cpu
-        cpu.get_latest_value_count = lambda : len(guard_op.getfailargs())
-        cpu.get_latest_value_int = lambda i:guard_op.getfailargs()[i].getint()
-        cpu.get_latest_value_ref = lambda i:guard_op.getfailargs()[i].getref_base()
-        cpu.clear_latest_values = lambda count: None
+        cpu.get_latest_value_count = lambda f: len(guard_op.getfailargs())
+        cpu.get_latest_value_int = lambda f,i:guard_op.getfailargs()[i].getint()
+        cpu.get_latest_value_ref = lambda f,i:guard_op.getfailargs()[i].getref_base()
         class FakeMetaInterpSd:
             callinfocollection = None
         FakeMetaInterpSd.cpu = cpu
         resumereader = ResumeDataDirectReader(FakeMetaInterpSd(),
-                                              guard_op.getdescr())
+                                              someframe, guard_op.getdescr())
         vrefinfo = self.metainterp.staticdata.virtualref_info
         lst = []
         vrefinfo.continue_tracing = lambda vref, virtual: \
@@ -134,7 +135,8 @@ class VRefTests:
                                lst[0][0])  # assert correct type
         #
         # try reloading from pyjitpl's point of view
-        self.metainterp.rebuild_state_after_failure(guard_op.getdescr())
+        self.metainterp.rebuild_state_after_failure(someframe,
+                                                    guard_op.getdescr())
         assert len(self.metainterp.framestack) == 1
         assert len(self.metainterp.virtualref_boxes) == 2
         assert self.metainterp.virtualref_boxes[0].value == bxs1[0].value

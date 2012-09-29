@@ -174,24 +174,27 @@ def test_compile_tmp_callback():
     #
     raiseme = None
     # only two arguments must be passed in
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
     assert fail_descr is FakeJitDriverSD().portal_finishtoken
     #
     EXC = lltype.GcStruct('EXC')
     llexc = lltype.malloc(EXC)
     raiseme = LLException("exception class", llexc)
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
     assert isinstance(fail_descr, compile.PropagateExceptionDescr)
-    got = cpu.grab_exc_value()
+    got = cpu.grab_exc_value(jit_frame)
     assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), got) == llexc
     #
     class FakeMetaInterpSD:
         class ExitFrameWithExceptionRef(Exception):
             pass
     FakeMetaInterpSD.cpu = cpu
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
     try:
-        fail_descr.handle_fail(FakeMetaInterpSD(), None)
+        fail_descr.handle_fail(FakeMetaInterpSD(), None, jit_frame)
     except FakeMetaInterpSD.ExitFrameWithExceptionRef, e:
         assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), e.args[1]) == llexc
     else:
