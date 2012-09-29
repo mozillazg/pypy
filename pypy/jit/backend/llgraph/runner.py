@@ -587,7 +587,8 @@ class LLtypeCPU(BaseCPU):
         return lltype.malloc(LOOP_RUN_CONTAINER, 0)
 
     def force(self, frame):
-        fail_index = llimpl.force(frame)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, frame)
+        fail_index = llimpl.force(opaqueframe)
         return self.get_fail_descr_from_number(fail_index)
 
 
