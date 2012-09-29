@@ -653,16 +653,16 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # the virtualrefs and virtualizable have been forced by
         # handle_async_forcing() just a moment ago.
         from pypy.jit.metainterp.blackhole import resume_in_blackhole
-        token = metainterp_sd.cpu.get_latest_force_token()
-        all_virtuals = self.fetch_data(token)
+        all_virtuals = self.fetch_data(jitframe)
         if all_virtuals is None:
             all_virtuals = []
         assert jitdriver_sd is self.jitdriver_sd
-        resume_in_blackhole(metainterp_sd, jitdriver_sd, self, all_virtuals)
+        resume_in_blackhole(metainterp_sd, jitdriver_sd, jitframe, self,
+                            all_virtuals)
         assert 0, "unreachable"
 
     @staticmethod
-    def force_now(cpu, token):
+    def force_now(cpu, jitframetoken):
         # Called during a residual call from the assembler, if the code
         # actually needs to force one of the virtualrefs or the virtualizable.
         # Implemented by forcing *all* virtualrefs and the virtualizable.
@@ -672,22 +672,23 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # an inconsistent state
         rstack._stack_criticalcode_start()
         try:
-            faildescr = cpu.force(token)
+            faildescr = cpu.force(jitframetoken)
             assert isinstance(faildescr, ResumeGuardForcedDescr)
-            faildescr.handle_async_forcing(token)
+            faildescr.handle_async_forcing(jitframetoken)
         finally:
             rstack._stack_criticalcode_stop()
 
-    def handle_async_forcing(self, force_token):
+    def handle_async_forcing(self, jitframe):
         from pypy.jit.metainterp.resume import force_from_resumedata
         metainterp_sd = self.metainterp_sd
         vinfo = self.jitdriver_sd.virtualizable_info
         ginfo = self.jitdriver_sd.greenfield_info
-        all_virtuals = force_from_resumedata(metainterp_sd, self, vinfo, ginfo)
+        all_virtuals = force_from_resumedata(metainterp_sd, jitframe, self,
+                                             vinfo, ginfo)
         # The virtualizable data was stored on the real virtualizable above.
         # Handle all_virtuals: keep them for later blackholing from the
         # future failure of the GUARD_NOT_FORCED
-        self.save_data(force_token, all_virtuals)
+        self.save_data(jitframe, all_virtuals)
 
     def save_data(self, key, value):
         globaldata = self.metainterp_sd.globaldata
