@@ -16,8 +16,9 @@ from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
-from pypy.jit.metainterp import resoperation, jitframe
+from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 from pypy.jit.backend.llgraph import symbolic
 from pypy.jit.codewriter import longlong
 from pypy.jit.codewriter.effectinfo import EffectInfo
@@ -480,7 +481,7 @@ def compile_redirect_fail(old_loop, old_index, new_loop):
 
 class Frame(object):
     OPHANDLERS = [None] * (rop._LAST+1)
-    _TYPE = jitframe.JITFRAMEPTR.TO
+    _TYPE = JITFRAMEPTR.TO
 
     def __init__(self, cpu):
         self.verbose = False
@@ -1065,15 +1066,16 @@ class Frame(object):
             #
             # Emulate the fast path
             failindex = frame_descr_index(subframe)
+            realsubframe = lltype.cast_opaque_ptr(JITFRAMEPTR, subframe)
             if failindex == self.cpu.done_with_this_frame_int_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_int(subframe, 0)
+                return self.cpu.get_latest_value_int(realsubframe, 0)
             if failindex == self.cpu.done_with_this_frame_ref_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_ref(subframe, 0)
+                return self.cpu.get_latest_value_ref(realsubframe, 0)
             if failindex == self.cpu.done_with_this_frame_float_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_float(subframe, 0)
+                return self.cpu.get_latest_value_float(realsubframe, 0)
             if failindex == self.cpu.done_with_this_frame_void_v:
                 reset_vable(jd, vable)
                 return None
@@ -1081,7 +1083,7 @@ class Frame(object):
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
             assembler_helper = assembler_helper_ptr._obj._callable
             try:
-                return assembler_helper(subframe, vable)
+                return assembler_helper(realsubframe, vable)
             except LLException, lle:
                 assert self._last_exception is None, "exception left behind"
                 self._last_exception = lle
@@ -1860,7 +1862,7 @@ def setannotation(func, annotation, specialize_as_constant=False):
 
 
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
-FRAME = jitframe.JITFRAMEPTR
+FRAME = JITFRAMEPTR
 #OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO

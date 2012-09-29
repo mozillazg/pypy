@@ -12,6 +12,7 @@ from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import REF, INT, FLOAT, STRUCT
 from pypy.jit.metainterp.warmstate import unwrap
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import llimpl, symbolic
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
@@ -287,32 +288,39 @@ class BaseCPU(model.AbstractCPU):
                     assert 0
             #
             jit_frame = self._execute_token(loop_token)
+            jit_frame = lltype.cast_opaque_ptr(JITFRAMEPTR, jit_frame)
             return jit_frame
         #
         return execute_token
 
     def get_latest_descr(self, jitframe):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         fail_index = llimpl.frame_descr_index(opaqueframe)
         return self.get_fail_descr_from_number(fail_index)
 
     def get_latest_value_int(self, jitframe, index):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         return llimpl.frame_int_getvalue(opaqueframe, index)
 
     def get_latest_value_ref(self, jitframe, index):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         return llimpl.frame_ptr_getvalue(opaqueframe, index)
 
     def get_latest_value_float(self, jitframe, index):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         return llimpl.frame_float_getvalue(opaqueframe, index)
 
     def get_latest_value_count(self, jitframe):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         return llimpl.frame_get_value_count(opaqueframe)
 
     def grab_exc_value(self, jitframe):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         return llimpl.grab_exc_value(opaqueframe)
 
@@ -593,6 +601,7 @@ class LLtypeCPU(BaseCPU):
         return lltype.malloc(LOOP_RUN_CONTAINER, 0)
 
     def force(self, jitframe):
+        assert lltype.typeOf(jitframe) == JITFRAMEPTR
         opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         fail_index = llimpl.force(opaqueframe)
         return self.get_fail_descr_from_number(fail_index)
