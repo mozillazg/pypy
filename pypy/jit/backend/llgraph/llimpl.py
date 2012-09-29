@@ -16,7 +16,7 @@ from pypy.rpython.module.support import LLSupport, OOSupport
 from pypy.rpython.llinterp import LLException
 from pypy.rpython.extregistry import ExtRegistryEntry
 
-from pypy.jit.metainterp import resoperation
+from pypy.jit.metainterp import resoperation, jitframe
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.backend.llgraph import symbolic
 from pypy.jit.codewriter import longlong
@@ -36,7 +36,10 @@ IS_32_BIT = r_ulonglong is not r_uint
 
 
 def _from_opaque(opq):
-    return opq._obj.externalobj
+    try:
+        return opq._obj.externalobj
+    except AttributeError:
+        return opq._obj.container
 
 _TO_OPAQUE = {}
 
@@ -44,8 +47,12 @@ def _to_opaque(value):
     try:
         return value._the_opaque_pointer
     except AttributeError:
-        op = lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
-                              externalobj=value)
+        if isinstance(value, Frame):
+            op = lltype.opaqueptr(llmemory.GCREF.TO, 'frame',
+                                  container=value)
+        else:
+            op = lltype.opaqueptr(_TO_OPAQUE[value.__class__], 'opaque',
+                                  externalobj=value)
         value._the_opaque_pointer = op
         return op
 
@@ -473,6 +480,7 @@ def compile_redirect_fail(old_loop, old_index, new_loop):
 
 class Frame(object):
     OPHANDLERS = [None] * (rop._LAST+1)
+    _TYPE = jitframe.JITFRAMEPTR.TO
 
     def __init__(self, cpu):
         self.verbose = False
@@ -622,6 +630,9 @@ class Frame(object):
         count = sum(_stats.exec_counters.values())
         count_jumps = _stats.exec_jumps
         log.trace('ran %d operations, %d jumps' % (count, count_jumps))
+
+    def _normalizedcontainer(self):
+        return self        # for lltype
 
     # ----------
 
@@ -1849,11 +1860,11 @@ def setannotation(func, annotation, specialize_as_constant=False):
 
 
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
-FRAME = llmemory.GCREF
+FRAME = jitframe.JITFRAMEPTR
 #OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO
-_TO_OPAQUE[Frame] = FRAME.TO
+#_TO_OPAQUE[Frame] = FRAME.TO
 #_TO_OPAQUE[OOFrame] = OOFRAME.TO
 
 s_CompiledLoop = annmodel.SomePtr(COMPILEDLOOP)
