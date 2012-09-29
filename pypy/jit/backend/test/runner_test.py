@@ -9,6 +9,7 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
                                          ConstObj, BoxFloat, ConstFloat)
 from pypy.jit.metainterp.resoperation import ResOperation, rop
 from pypy.jit.metainterp.typesystem import deref
+from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.tool.oparser import parse
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -2192,6 +2193,7 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_force_operations_returning_void(self):
         values = []
         def maybe_force(token, flag):
+            assert lltype.typeOf(token) == JITFRAMEPTR
             if flag:
                 descr = self.cpu.force(token)
                 values.append(descr)
@@ -2199,7 +2201,7 @@ class LLtypeBackendTest(BaseBackendTest):
                 values.append(self.cpu.get_latest_value_int(token, 1))
                 values.append(token)
 
-        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Void)
+        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2240,7 +2242,7 @@ class LLtypeBackendTest(BaseBackendTest):
                values.append(token)
             return 42
 
-        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2285,7 +2287,7 @@ class LLtypeBackendTest(BaseBackendTest):
                values.append(token)
             return 42.5
 
-        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Float)
+        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Float)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2716,7 +2718,6 @@ class LLtypeBackendTest(BaseBackendTest):
         lltype.free(x, flavor='raw')
 
     def test_assembler_call(self):
-        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         called = []
         def assembler_helper(jitframe, virtualizable):
             assert self.cpu.get_latest_value_int(jitframe, 0) == 97
@@ -2790,7 +2791,6 @@ class LLtypeBackendTest(BaseBackendTest):
             del self.cpu.done_with_this_frame_int_v
 
     def test_assembler_call_float(self):
-        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
@@ -2887,7 +2887,6 @@ class LLtypeBackendTest(BaseBackendTest):
         lltype.free(a, flavor='raw')
 
     def test_redirect_call_assembler(self):
-        from pypy.jit.metainterp.jitframe import JITFRAMEPTR
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
@@ -3665,7 +3664,7 @@ class LLtypeBackendTest(BaseBackendTest):
             values.append(token)
             return 42
 
-        FUNC = self.FuncType([llmemory.GCREF, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
