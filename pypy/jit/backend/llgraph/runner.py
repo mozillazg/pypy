@@ -292,23 +292,29 @@ class BaseCPU(model.AbstractCPU):
         return execute_token
 
     def get_latest_descr(self, jitframe):
-        fail_index = llimpl.frame_descr_index(jitframe)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        fail_index = llimpl.frame_descr_index(opaqueframe)
         return self.get_fail_descr_from_number(fail_index)
 
     def get_latest_value_int(self, jitframe, index):
-        return llimpl.frame_int_getvalue(jitframe, index)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        return llimpl.frame_int_getvalue(opaqueframe, index)
 
     def get_latest_value_ref(self, jitframe, index):
-        return llimpl.frame_ptr_getvalue(jitframe, index)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        return llimpl.frame_ptr_getvalue(opaqueframe, index)
 
     def get_latest_value_float(self, jitframe, index):
-        return llimpl.frame_float_getvalue(jitframe, index)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        return llimpl.frame_float_getvalue(opaqueframe, index)
 
     def get_latest_value_count(self, jitframe):
-        return llimpl.frame_get_value_count(jitframe)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        return llimpl.frame_get_value_count(opaqueframe)
 
     def grab_exc_value(self, jitframe):
-        return llimpl.grab_exc_value(jitframe)
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
+        return llimpl.grab_exc_value(opaqueframe)
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         if we_are_translated():
@@ -586,8 +592,8 @@ class LLtypeCPU(BaseCPU):
     def get_all_loop_runs(self):
         return lltype.malloc(LOOP_RUN_CONTAINER, 0)
 
-    def force(self, frame):
-        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, frame)
+    def force(self, jitframe):
+        opaqueframe = lltype.cast_opaque_ptr(llmemory.GCREF, jitframe)
         fail_index = llimpl.force(opaqueframe)
         return self.get_fail_descr_from_number(fail_index)
 
