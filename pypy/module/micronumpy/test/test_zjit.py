@@ -64,7 +64,6 @@ class TestNumpyJIt(LLJitMixin):
             self.__class__.graph = graph
         reset_stats()
         pyjitpl._warmrunnerdesc.memory_manager.alive_loops.clear()
-        py.test.skip("don't run for now")
         return self.interp.eval_graph(self.graph, [i])
 
     def define_add():
@@ -76,10 +75,10 @@ class TestNumpyJIt(LLJitMixin):
 
     def test_add(self):
         result = self.run("add")
-        self.check_simple_loop({'raw_load': 2, 'float_add': 1,
-                                'raw_store': 1, 'int_add': 1,
-                                'int_ge': 1, 'guard_false': 1, 'jump': 1,
-                                'arraylen_gc': 1})
+        self.check_simple_loop({'float_add': 1, 'getfield_gc': 4,
+                                'raw_load': 2, 'setfield_gc': 3,
+                                'raw_store': 1, 'int_add': 3,
+                                'int_ge': 1, 'guard_false': 1, 'jump': 1})
         assert result == 3 + 3
 
     def define_float_add():
@@ -91,24 +90,24 @@ class TestNumpyJIt(LLJitMixin):
     def test_floatadd(self):
         result = self.run("float_add")
         assert result == 3 + 3
-        self.check_simple_loop({"raw_load": 1, "float_add": 1,
-                                "raw_store": 1, "int_add": 1,
-                                "int_ge": 1, "guard_false": 1, "jump": 1,
-                                'arraylen_gc': 1})
+        self.check_simple_loop({"getfield_gc": 2, "setfield_gc": 2,
+                                "raw_load": 1, "float_add": 1,
+                                "raw_store": 1, "int_add": 2,
+                                "int_ge": 1, "guard_false": 1, "jump": 1})
 
     def define_sum():
         return """
         a = |30|
-        b = a + a
-        sum(b)
+        sum(a)
         """
 
     def test_sum(self):
         result = self.run("sum")
-        assert result == 2 * sum(range(30))
-        self.check_simple_loop({"raw_load": 2, "float_add": 2,
+        assert result == sum(range(30))
+        self.check_simple_loop({"raw_load": 1, "float_add": 1,
                                 "int_add": 1, "int_ge": 1, "guard_false": 1,
-                                "jump": 1, 'arraylen_gc': 1})
+                                "setfield_gc": 1, "setfield_gc": 1,
+                                "jump": 1})
 
     def define_axissum():
         return """
@@ -120,71 +119,33 @@ class TestNumpyJIt(LLJitMixin):
     def test_axissum(self):
         result = self.run("axissum")
         assert result == 30
-        # XXX note - the bridge here is fairly crucial and yet it's pretty
-        #            bogus. We need to improve the situation somehow.
-        self.check_simple_loop({'raw_load': 2,
-                                'raw_store': 1,
-                                'arraylen_gc': 2,
-                                'guard_true': 1,
-                                'int_lt': 1,
-                                'jump': 1,
-                                'float_add': 1,
-                                'int_add': 3,
-                                })
-
-    def define_prod():
-        return """
-        a = |30|
-        b = a + a
-        prod(b)
-        """
-
-    def test_prod(self):
-        result = self.run("prod")
-        expected = 1
-        for i in range(30):
-            expected *= i * 2
-        assert result == expected
-        self.check_simple_loop({"raw_load": 2, "float_add": 1,
-                                "float_mul": 1, "int_add": 1,
-                                "int_ge": 1, "guard_false": 1, "jump": 1,
-                                'arraylen_gc': 1})
+        # XXX deal with the bridge at some point
+        self.check_simple_loop({'raw_load':2, 'float_add': 1,
+                                'raw_store': 1, 'getarrayitem_gc': 3,
+                                'getarrayitem_gc_pure': 1, 'int_add': 2,
+                                'int_sub': 1, 'setfield_gc': 1,
+                                'int_lt': 1, 'guard_true': 1,
+                                'setarrayitem_gc': 1})
 
     def define_max():
         return """
         a = |30|
         a[13] = 128
-        b = a + a
-        max(b)
+        max(a)
         """
 
     def test_max(self):
         result = self.run("max")
-        assert result == 256
-        py.test.skip("not there yet, getting though")
-        self.check_simple_loop({"raw_load": 2, "float_add": 1,
-                                "float_mul": 1, "int_add": 1,
-                                "int_lt": 1, "guard_true": 1, "jump": 1})
-
-    def test_min(self):
-        py.test.skip("broken, investigate")
-        result = self.run("""
-        a = |30|
-        a[15] = -12
-        b = a + a
-        min(b)
-        """)
-        assert result == -24
-        self.check_simple_loop({"raw_load": 2, "float_add": 1,
-                                "float_mul": 1, "int_add": 1,
-                                "int_lt": 1, "guard_true": 1, "jump": 1})
+        assert result == 128
+        self.check_simple_loop({"raw_load": 1, "float_gt": 1,
+                                "guard_false": 2, "int_add": 1,
+                                "int_ge": 1, "setfield_gc": 1})
 
     def define_any():
         return """
         a = [0,0,0,0,0,0,0,0,0,0,0]
         a[8] = -12
-        b = a + a
-        any(b)
+        any(a)
         """
 
     def test_any(self):
@@ -196,35 +157,10 @@ class TestNumpyJIt(LLJitMixin):
                                 "int_ge": 1, "jump": 1,
                                 "guard_false": 2, 'arraylen_gc': 1})
 
-    def define_already_forced():
-        return """
-        a = |30|
-        b = a + 4.5
-        b -> 5 # forces
-        c = b * 8
-        c -> 5
-        """
-
-    def test_already_forced(self):
-        result = self.run("already_forced")
-        assert result == (5 + 4.5) * 8
-        # This is the sum of the ops for both loops, however if you remove the
-        # optimization then you end up with 2 float_adds, so we can still be
-        # sure it was optimized correctly.
-        py.test.skip("too fragile")
-        self.check_resops({'raw_store': 4, 'getfield_gc': 22,
-                           'getarrayitem_gc': 4, 'getarrayitem_gc_pure': 2,
-                           'getfield_gc_pure': 8,
-                           'guard_class': 8, 'int_add': 8, 'float_mul': 2,
-                           'jump': 2, 'int_ge': 4,
-                           'raw_load': 4, 'float_add': 2,
-                           'guard_false': 4, 'arraylen_gc': 2, 'same_as': 2})
-
     def define_ufunc():
         return """
         a = |30|
-        b = a + a
-        c = unegative(b)
+        c = unegative(a)
         c -> 3
         """
 
@@ -236,31 +172,6 @@ class TestNumpyJIt(LLJitMixin):
                                 "raw_store": 1, "int_add": 1,
                                 "int_ge": 1, "guard_false": 1, "jump": 1,
                                 'arraylen_gc': 1})
-
-    def define_specialization():
-        return """
-        a = |30|
-        b = a + a
-        c = unegative(b)
-        c -> 3
-        d = a * a
-        unegative(d)
-        d -> 3
-        d = a * a
-        unegative(d)
-        d -> 3
-        d = a * a
-        unegative(d)
-        d -> 3
-        d = a * a
-        unegative(d)
-        d -> 3
-        """
-
-    def test_specialization(self):
-        self.run("specialization")
-        # This is 3, not 2 because there is a bridge for the exit.
-        self.check_trace_count(3)
 
     def define_slice():
         return """
