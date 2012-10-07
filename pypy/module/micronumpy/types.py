@@ -257,8 +257,8 @@ class Bool(BaseType, Primitive):
 
     @specialize.argtype(1)
     def box(self, value):
-        box = Primitive.box(self, value)
-        if box.value:
+        value = lookup_type_dict(lltype.typeOf(value)).for_computation(value)
+        if value:
             return self.True
         else:
             return self.False
@@ -276,7 +276,8 @@ class Bool(BaseType, Primitive):
     def str_format(self, box):
         return "True" if self.unbox(box) else "False"
 
-    def for_computation(self, v):
+    @staticmethod
+    def for_computation(v):
         return int(v)
 
     def default_fromstring(self, space):
@@ -311,7 +312,8 @@ class Integer(Primitive):
     def str_format(self, box):
         return str(self.for_computation(self.unbox(box)))
 
-    def for_computation(self, v):
+    @staticmethod
+    def for_computation(v):
         return widen(v)
 
     def default_fromstring(self, space):
@@ -556,7 +558,8 @@ class Float(Primitive):
         return float2string(self.for_computation(self.unbox(box)), "g",
                             rfloat.DTSF_STR_PRECISION)
 
-    def for_computation(self, v):
+    @staticmethod
+    def for_computation(v):
         return float(v)
 
     def default_fromstring(self, space):
@@ -986,10 +989,18 @@ for tp in [UInt32, UInt64]:
         break
 del tp
 
+TYPE_DICT = {}
+
 def _setup():
     # compute alignment
     for tp in globals().values():
         if isinstance(tp, type) and hasattr(tp, 'T'):
             tp.alignment = clibffi.cast_type_to_ffitype(tp.T).c_alignment
+            TYPE_DICT[tp.T] = tp
+
+@specialize.memo()
+def lookup_type_dict(T):
+    return TYPE_DICT[T]
+
 _setup()
 del _setup

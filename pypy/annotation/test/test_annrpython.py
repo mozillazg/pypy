@@ -2524,6 +2524,36 @@ class TestAnnotateTestCase:
         s = a.build_types(f, [])
         assert s.const == 2
 
+    def test_mixin_staticmethod(self):
+        class A(object):
+            _mixin_ = True
+
+            def __init__(self, v):
+                self.v = v
+
+            @staticmethod
+            def x(foo):
+                return len(foo)
+
+            def m(self):
+                return self.x(self.v)
+
+        class B(A):
+            pass
+
+        class C(A):
+            pass
+
+        def f(i):
+            if i:
+                return B([1, 2, 3]).m()
+            else:
+                return C("xyz").m()
+
+        a = self.RPythonAnnotator()
+        s = a.build_types(f, [int])
+        assert isinstance(s, annmodel.SomeInteger)
+
     def test___class___attribute(self):
         class Base(object): pass
         class A(Base): pass
