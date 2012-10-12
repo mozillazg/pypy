@@ -36,3 +36,10 @@ def test_mutable_copy():
     assert op2.getarglist() == ['a', 'b', 'c']
     op2 = op.mutable_copy(rop.rop.CALL_i, [FakeBox('a')])
     assert op2.getarglist() == ['a']
+
+def test_failargs():
+    op = rop.create_resop_0(rop.rop.GUARD_NO_OVERFLOW, None)
+    assert not hasattr(op, 'set_failargs')
+    op2 = op.mutable_copy()
+    op2.set_failargs([1, 2, 3])
+    assert op2.get_failargs() == [1, 2, 3]

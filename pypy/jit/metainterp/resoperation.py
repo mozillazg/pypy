@@ -28,20 +28,22 @@ STRUCT = 's'
 VOID  = 'v'
 HOLE = '_'
 
-def create_resop_dispatch(opnum, result, args, descr=None):
+def create_resop_dispatch(opnum, result, args, descr=None, mutable=False):
     """ NOT_RPYTHON this is for tests only!
     """
     cls = opclasses[opnum]
     if cls.NUMARGS == 0:
-        return create_resop_0(opnum, result, descr)
+        return create_resop_0(opnum, result, descr, mutable=mutable)
     elif cls.NUMARGS == 1:
-        return create_resop_1(opnum, result, args[0], descr)
+        return create_resop_1(opnum, result, args[0], descr, mutable=mutable)
     elif cls.NUMARGS == 2:
-        return create_resop_2(opnum, result, args[0], args[1], descr)
+        return create_resop_2(opnum, result, args[0], args[1], descr,
+                              mutable=mutable)
     elif cls.NUMARGS == 3:
-        return create_resop_3(opnum, result, args[0], args[1], args[2], descr)
+        return create_resop_3(opnum, result, args[0], args[1], args[2], descr,
+                              mutable=mutable)
     else:
-        return create_resop(opnum, result, args, descr)
+        return create_resop(opnum, result, args, descr, mutable=mutable)
 
 @specialize.memo()
 def _getcls(opnum, mutable):

@@ -8,6 +8,7 @@ from pypy.jit.tool.oparser_model import get_model
 from pypy.jit.metainterp.resoperation import rop, opclasses, rop_lowercase,\
      ResOpWithDescr, N_aryOp, UnaryOp, PlainResOp, create_resop_dispatch,\
      ResOpNone, create_resop_0, example_for_opnum
+from pypy.jit.metainterp import optmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 class ParseError(Exception):
@@ -274,7 +275,8 @@ class OpParser(object):
         if opnum == FORCE_SPILL.OPNUM:
             return FORCE_SPILL(opnum, args, result, descr)
         else:
-            r = create_resop_dispatch(opnum, result, args)
+            r = create_resop_dispatch(opnum, result, args,
+                                      mutable=self.guards_with_failargs)
             if descr is not None:
                 r.setdescr(descr)
             return r
@@ -293,14 +295,14 @@ class OpParser(object):
         opres = self.create_op(opnum, result, args, descr)
         self.vars[res] = opres
         if fail_args is not None:
-            explode
+            opres.set_failargs(fail_args)
         return opres
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
         res = self.create_op(opnum, None, args, descr)
         if fail_args is not None:
-            explode
+            res.set_failargs(fail_args)
         return res
 
     def parse_next_op(self, line, num):
