@@ -95,10 +95,8 @@ def test_can_malloc():
                                   FakeBox('b')).can_malloc()
 
 def test_repr():
-    mydescr = FakeDescr()
     op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None)
-    op.setdescr(mydescr)
-    assert repr(op) == 'guard_no_exception(, descr=descr)'
+    assert repr(op) == 'guard_no_exception()'
     op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
     assert repr(op) == '3 = int_add(a, b)'
     # XXX more tests once we decide what we actually want to print
@@ -111,35 +109,6 @@ class MockOpt(object):
         if v in self.d:
             return FakeBox('rrr')
         return None
-
-def test_copy_and_change():    
-    op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
-    op2 = op.copy_and_change(rop.rop.INT_IS_TRUE)
-    assert op2.opnum == rop.rop.INT_IS_TRUE
-    assert op2.getarg(0) == FakeBox('a')
-    op2 = op.copy_and_change(rop.rop.INT_IS_TRUE, FakeBox('b'))
-    assert op2.opnum == rop.rop.INT_IS_TRUE
-    assert op2.getarg(0) == FakeBox('b')
-    assert op2 is not op
-    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
-    op2 = op.copy_and_change(rop.rop.INT_SUB)
-    assert op2.opnum == rop.rop.INT_SUB
-    assert op2.getarglist() == [FakeBox("a"), FakeBox("b")]
-    op2 = op.copy_and_change(rop.rop.INT_SUB, None, FakeBox("c"))
-    assert op2.opnum == rop.rop.INT_SUB
-    assert op2.getarglist() == [FakeBox("a"), FakeBox("c")]
-    op = rop.create_resop_3(rop.rop.STRSETITEM, None, FakeBox('a'),
-                            FakeBox('b'), FakeBox('c'))
-    op2 = op.copy_and_change(rop.rop.UNICODESETITEM, None, FakeBox("c"))
-    assert op2.opnum == rop.rop.UNICODESETITEM
-    assert op2.getarglist() == [FakeBox("a"), FakeBox("c"), FakeBox("c")]    
-    mydescr = FakeDescr()
-    op = rop.create_resop(rop.rop.CALL_PURE_i, 13, [FakeBox('a'), FakeBox('b'),
-                            FakeBox('c')], descr=mydescr)
-    op2 = op.copy_and_change(rop.rop.CALL_i)
-    assert op2.getarglist() == ['a', 'b', 'c']
-    op2 = op.copy_and_change(rop.rop.CALL_i, [FakeBox('a')])
-    assert op2.getarglist() == ['a']
 
 def test_hashes_eq():
     arg1 = rop.create_resop_1(rop.rop.FLOAT_NEG, 12.5,

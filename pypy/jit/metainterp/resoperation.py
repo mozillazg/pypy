@@ -43,11 +43,18 @@ def create_resop_dispatch(opnum, result, args, descr=None):
     else:
         return create_resop(opnum, result, args, descr)
 
-@specialize.arg(0)
-def create_resop(opnum, result, args, descr=None):
+@specialize.memo()
+def _getcls(opnum, mutable):
+    if mutable:
+        return opclasses_mutable[opnum]
+    else:
+        return opclasses[opnum]
+
+@specialize.arg(0, 4)
+def create_resop(opnum, result, args, descr=None, mutable=False):
     """ Create an N-args resop with given opnum and args
     """
-    cls = opclasses[opnum]
+    cls = _getcls(opnum, mutable)
     assert cls.NUMARGS == -1
     if cls.is_always_pure():
         for arg in args:
@@ -68,11 +75,11 @@ def create_resop(opnum, result, args, descr=None):
         op.setdescr(descr)
     return op
 
-@specialize.arg(0)
-def create_resop_0(opnum, result, descr=None):
+@specialize.arg(0, 3)
+def create_resop_0(opnum, result, descr=None, mutable=False):
     """ Create an 0-arg resop with given opnum and args
     """
-    cls = opclasses[opnum]
+    cls = _getcls(opnum, mutable)
     assert cls.NUMARGS == 0
     if result is None:
         op = cls()
@@ -84,11 +91,11 @@ def create_resop_0(opnum, result, descr=None):
         op.setdescr(descr)
     return op
 
-@specialize.arg(0)
-def create_resop_1(opnum, result, arg0, descr=None):
+@specialize.arg(0, 4)
+def create_resop_1(opnum, result, arg0, descr=None, mutable=False):
     """ Create a 1-arg resop with given opnum and args
     """
-    cls = opclasses[opnum]
+    cls = _getcls(opnum, mutable)
     assert cls.NUMARGS == 1
     if (cls.is_always_pure() and
         opnum not in (rop.SAME_AS_i, rop.SAME_AS_f, rop.SAME_AS_r)):
@@ -106,11 +113,11 @@ def create_resop_1(opnum, result, arg0, descr=None):
         op.setdescr(descr)
     return op
 
-@specialize.arg(0)
-def create_resop_2(opnum, result, arg0, arg1, descr=None):
+@specialize.arg(0, 5)
+def create_resop_2(opnum, result, arg0, arg1, descr=None, mutable=False):
     """ Create a 2-arg resop with given opnum and args
     """
-    cls = opclasses[opnum]
+    cls = _getcls(opnum, mutable)
     assert cls.NUMARGS == 2
     if cls.is_always_pure():
         if arg0.is_constant() and arg1.is_constant():
@@ -129,11 +136,11 @@ def create_resop_2(opnum, result, arg0, arg1, descr=None):
         op.setdescr(descr)
     return op
 
-@specialize.arg(0)
-def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None):
+@specialize.arg(0, 6)
+def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None, mutable=False):
     """ Create a 3-arg resop with given opnum and args
     """
-    cls = opclasses[opnum]
+    cls = _getcls(opnum, mutable)
     assert cls.NUMARGS == 3
     if cls.is_always_pure():
         if arg0.is_constant() and arg1.is_constant() and arg2.is_constant():
@@ -474,8 +481,12 @@ class AbstractResOp(AbstractValue):
     # debug
     name = ""
     pc = 0
+
     _hash = 0
     opnum = 0
+
+    is_mutable = False
+    _forwarded = None
 
     @classmethod
     def getopnum(cls):
@@ -862,11 +873,11 @@ class NullaryOp(object):
         pass        
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum=-1, descr=None):
+    def mutable_copy(self, newopnum=-1, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_0(newopnum, self.getresult(),
-                             descr or self.getdescr())
+                             descr or self.getdescr(), mutable=True)
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
@@ -912,11 +923,11 @@ class UnaryOp(object):
         return res        
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum=-1, arg0=None, descr=None):
+    def mutable_copy(self, newopnum=-1, arg0=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
-                             descr or self.getdescr())
+                             descr or self.getdescr(), mutable=True)
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
@@ -965,12 +976,13 @@ class BinaryOp(object):
                               new_arg0, new_arg1, self.getdescr())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, descr=None):
+    def mutable_copy(self, newopnum=-1, arg0=None, arg1=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
                              arg1 or self._arg1,
-                             descr or self.getdescr())
+                             descr or self.getdescr(),
+                             mutable=True)
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
@@ -1026,13 +1038,13 @@ class TernaryOp(object):
                               new_arg0, new_arg1, new_arg2, self.getdescr())
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
-                        descr=None):
+    def mutable_copy(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
+                     descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1, arg2 or self._arg2,
-                           descr or self.getdescr())
+                           descr or self.getdescr(), mutable=True)
         assert not r.is_guard()
         return r
 
@@ -1085,12 +1097,12 @@ class N_aryOp(object):
                             newargs, self.getdescr())        
 
     @specialize.arg(1)
-    def copy_and_change(self, newopnum=-1, newargs=None, descr=None):
+    def mutable_copy(self, newopnum=-1, newargs=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         r = create_resop(newopnum, self.getresult(),
                          newargs or self.getarglist(),
-                         descr or self.getdescr())
+                         descr or self.getdescr(), mutable=True)
         assert not r.is_guard()
         return r
 
@@ -1284,6 +1296,8 @@ class rop_lowercase(object):
     pass # for convinience
 
 opclasses = []   # mapping numbers to the concrete ResOp class
+                 # mapping numbers to the concrete ResOp, mutable version
+opclasses_mutable = []
 opname = {}      # mapping numbers to the original names, for debugging
 oparity = []     # mapping numbers to the arity of the operation or -1
 opwithdescr = [] # mapping numbers to a flag "takes a descr"
@@ -1366,7 +1380,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
 
     is_guard = name.startswith('GUARD')
     if is_guard:
-        assert withdescr
+        assert not withdescr
         baseclass = GuardResOp
     elif withdescr:
         baseclass = ResOpWithDescr
