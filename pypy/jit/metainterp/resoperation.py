@@ -2,15 +2,11 @@
 """ This files describes the model used in pyjitpl. Note that all of the
 following are IMMUTABLE. That means that we cannot just randomly change
 parameters, instead we need to create a new version and setup the correct
-forwarding. Optimizeopt uses optimize_value extra parameter for setting
-up the forwarding of resops. Public interface:
+forwarding. Public interface:
 
 * create_resop, create_resop_0, create_resop_1, create_resop_2, create_resop_3
 
   create resops of various amount of arguments
-
-* BoxInt, BoxFloat, BoxPtr - various types of Boxes. Boxes are inputargs to
-  the loop.
 
 * ConstInt, ConstFloat, ConstPtr - constant versions of boxes
 
@@ -240,10 +236,6 @@ class AbstractValue(object):
     def is_constant(self):
         return False
 
-    @specialize.arg(1)
-    def get_extra(self, key):
-        raise KeyError
-
     def get_key_op(self, optimizer):
         return self
 
@@ -288,175 +280,6 @@ def repr_pointer(box):
     except AttributeError:
         return box.value
 
-class Box(AbstractValue):
-    __slots__ = ()
-    _counter = 0
-    _extended_display = True
-
-    def nonconstbox(self):
-        return self
-
-    def _get_hash_(self):
-        return compute_identity_hash(self)
-
-    def __repr__(self):
-        result = str(self)
-        if self._extended_display:
-            result += '(%s)' % self._getrepr_()
-        return result
-
-    def __str__(self):
-        if not hasattr(self, '_str'):
-            try:
-                if self.type == INT:
-                    t = 'i'
-                elif self.type == FLOAT:
-                    t = 'f'
-                else:
-                    t = 'p'
-            except AttributeError:
-                t = 'b'
-            self._str = '%s%d' % (t, Box._counter)
-            Box._counter += 1
-        return self._str
-
-    def _get_str(self):    # for debugging only
-        return self.constbox()._get_str()
-
-    def forget_value(self):
-        raise NotImplementedError
-
-    def is_constant(self):
-        return False
-
-    @specialize.arg(1)
-    def get_extra(self, key):
-        if key == 'llgraph_var2index':
-            return self.llgraph_var2index
-        if key == 'optimize_value':
-            try:
-                return self._optimize_value
-            except AttributeError:
-                raise KeyError
-        raise KeyError
-
-    @specialize.arg(1)
-    def set_extra(self, key, value):
-        if key == 'llgraph_var2index':
-            self.llgraph_var2index = value
-            return
-        if key == 'optimize_value':
-            self._optimize_value = value
-            return
-        raise KeyError
-
-    @specialize.arg(1)
-    def del_extra(self, key):
-        if key == 'optimize_value':
-            if hasattr(self, '_optimize_value'):
-                del self._optimize_value
-
-class BoxInt(Box):
-    type = INT
-    _attrs_ = ('value',)
-
-    def __init__(self, value=0):
-        if not we_are_translated():
-            if is_valid_int(value):
-                value = int(value)    # bool -> int
-            else:
-                assert isinstance(value, Symbolic)
-        self.value = value
-
-    def forget_value(self):
-        self.value = 0
-
-    def constbox(self):
-        return ConstInt(self.value)
-
-    def getint(self):
-        return self.value
-
-    def getaddr(self):
-        return heaptracker.int2adr(self.value)
-
-    def nonnull(self):
-        return self.value != 0
-
-    def _getrepr_(self):
-        return self.value
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'bi')
-
-    def eq_value(self, other):
-        return self.value == other.getint()
-
-class BoxFloat(Box):
-    type = FLOAT
-    _attrs_ = ('value',)
-
-    def __init__(self, valuestorage=longlong.ZEROF):
-        assert lltype.typeOf(valuestorage) is longlong.FLOATSTORAGE
-        self.value = valuestorage
-
-    def forget_value(self):
-        self.value = longlong.ZEROF
-
-    def constbox(self):
-        return ConstFloat(self.value)
-
-    def getfloatstorage(self):
-        return self.value
-
-    def nonnull(self):
-        return self.value != longlong.ZEROF
-
-    def _getrepr_(self):
-        return self.getfloat()
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'bf')
-
-    def eq_value(self, other):
-        return self.value == other.getfloatstorage()
-
-class BoxPtr(Box):
-    type = REF
-    _attrs_ = ('value',)
-
-    def __init__(self, value=lltype.nullptr(llmemory.GCREF.TO)):
-        assert lltype.typeOf(value) == llmemory.GCREF
-        self.value = value
-
-    def forget_value(self):
-        self.value = lltype.nullptr(llmemory.GCREF.TO)
-
-    def constbox(self):
-        return ConstPtr(self.value)
-
-    def getref_base(self):
-        return self.value
-
-    def getref(self, PTR):
-        return lltype.cast_opaque_ptr(PTR, self.getref_base())
-    getref._annspecialcase_ = 'specialize:arg(1)'
-
-    def getaddr(self):
-        return llmemory.cast_ptr_to_adr(self.value)
-
-    def nonnull(self):
-        return bool(self.value)
-
-    def repr_rpython(self):
-        return repr_rpython(self, 'bp')
-
-    def eq_value(self, other):
-        return self.value == other.getref_base()
-
-    _getrepr_ = repr_pointer
-
-NULLBOX = BoxPtr()
 
 class Const(AbstractValue):
     __slots__ = ()
@@ -653,46 +476,6 @@ class AbstractResOp(AbstractValue):
     pc = 0
     _hash = 0
     opnum = 0
-
-    DOCUMENTED_KEYS = {
-        'failargs': 'arguments for guard ops that are alive. '
-                    'valid from optimizations (store_final_args) until '
-                    'the backend',
-        'llgraph_var2index': 'llgraph internal attribute',
-        'optimize_value': 'value replacement for the optimizer. only valid for'
-                          ' the length of optimization pass',
-        'optimize_replace': 'replacement for the op by another op, can be '
-                            'chained',
-    }
-
-    extras = None
-    # ResOps are immutable, however someone can store a temporary
-    # extra mutable stuff here, in the extras field. Other fields (including
-    # descr) should be deeply immutable. This replaces various dictionaries
-    # that has been previously used.
-
-    @specialize.arg(1)
-    def get_extra(self, key):
-        if key not in self.DOCUMENTED_KEYS:
-            raise Exception("Please document '%s' extra parameter and it's lifetime" % key)
-        if not hasattr(self, key):
-            raise KeyError
-        return getattr(self, key)
-
-    @specialize.arg(1)
-    def has_extra(self, key):
-        return hasattr(self, key)
-
-    @specialize.arg(1)
-    def set_extra(self, key, value):
-        if key not in self.DOCUMENTED_KEYS:
-            raise Exception("Please document '%s' extra parameter and it's lifetime" % key)
-        setattr(self, key, value)
-
-    @specialize.arg(1)
-    def del_extra(self, key):
-        if hasattr(self, key):
-            delattr(self, key)
 
     @classmethod
     def getopnum(cls):
@@ -1394,6 +1177,7 @@ _oplist = [
     '_FINAL_LAST',
 
     'LABEL/*d/N',
+    'INPUT/0/*',
 
     '_GUARD_FIRST',
     '_GUARD_FOLDABLE_FIRST',

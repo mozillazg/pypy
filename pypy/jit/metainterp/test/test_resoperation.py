@@ -17,14 +17,17 @@ class FakeBox(object):
     def __ne__(self, other):
         return not self == other
 
-    def __hash__(self):
-        return hash(self.v)
-
     def __str__(self):
         return self.v
 
     def is_constant(self):
         return False
+
+    def _get_hash_(self):
+        return 75 + self.v
+
+    def eq(self, other):
+        return self.v == other.v
 
 class FakeDescr(AbstractDescr):
     def __repr__(self):
@@ -109,37 +112,6 @@ class MockOpt(object):
             return FakeBox('rrr')
         return None
 
-def test_copy_if_modified_by_optimization():
-    mydescr = FakeDescr()
-    op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None)
-    op.setdescr(mydescr)
-    assert op.copy_if_modified_by_optimization(MockOpt({})) is op
-    op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
-    assert op.copy_if_modified_by_optimization(MockOpt({})) is op
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('a')])))
-    assert op2 is not op
-    assert op2.getarg(0) == FakeBox('rrr')
-    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('c')])))
-    assert op2 is op
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
-    assert op2 is not op
-    assert op2._arg0 is op._arg0
-    assert op2._arg1 != op._arg1
-    assert op2.getint() == op.getint()
-    op = rop.create_resop_3(rop.rop.STRSETITEM, None, FakeBox('a'),
-                            FakeBox('b'), FakeBox('c'))
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
-    assert op2 is not op
-    op = rop.create_resop(rop.rop.CALL_i, 13, [FakeBox('a'), FakeBox('b'),
-                            FakeBox('c')], descr=mydescr)
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('aa')])))
-    assert op2 is op
-    op2 = op.copy_if_modified_by_optimization(MockOpt(set([FakeBox('b')])))
-    assert op2 is not op
-    assert op2.getarglist() == [FakeBox("a"), FakeBox("rrr"), FakeBox("c")]
-    assert op2.getdescr() == mydescr
-
 def test_copy_and_change():    
     op = rop.create_resop_1(rop.rop.INT_IS_ZERO, 1, FakeBox('a'))
     op2 = op.copy_and_change(rop.rop.INT_IS_TRUE)
@@ -169,13 +141,9 @@ def test_copy_and_change():
     op2 = op.copy_and_change(rop.rop.CALL_i, [FakeBox('a')])
     assert op2.getarglist() == ['a']
 
-def test_get_set_extra():
-    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
-    op.set_extra("failargs", 2)
-    assert op.get_extra("failargs") == 2
-
 def test_hashes_eq():
-    arg1 = rop.create_resop_1(rop.rop.FLOAT_NEG, 12.5, rop.BoxFloat(3.5))
+    arg1 = rop.create_resop_1(rop.rop.FLOAT_NEG, 12.5,
+                              rop.create_resop_0(rop.rop.INPUT_f, 3.5))
     op = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
                             arg1)
     ope = rop.create_resop_2(rop.rop.FLOAT_ADD, 13.5, rop.ConstFloat(3.0),
@@ -204,39 +172,35 @@ def test_hashes_eq():
     s = lltype.malloc(S)
     nonnull_ref = lltype.cast_opaque_ptr(llmemory.GCREF, s)
     nullref = lltype.nullptr(llmemory.GCREF.TO)
-    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
-    op1 = rop.create_resop_1(rop.rop.NEWSTR, nonnull_ref, rop.BoxInt(5))
+    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, FakeBox(5))
+    op1 = rop.create_resop_1(rop.rop.NEWSTR, nonnull_ref, FakeBox(5))
     assert op._get_hash_() != op1._get_hash_()
     assert not op.eq(op1)
-    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(5))
-    op1 = rop.create_resop_1(rop.rop.NEWSTR, nullref, rop.BoxInt(15))
+    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, FakeBox(5))
+    op1 = rop.create_resop_1(rop.rop.NEWSTR, nullref, FakeBox(5))
+    assert op._get_hash_() == op1._get_hash_()
+    assert op.eq(op1)
+    op = rop.create_resop_1(rop.rop.NEWSTR, nullref, FakeBox(5))
+    op1 = rop.create_resop_1(rop.rop.NEWSTR, nullref, FakeBox(15))
     assert op._get_hash_() != op1._get_hash_()
     assert not op.eq(op1)
 
     descr = FakeDescr()
     descr2 = FakeDescr()
-    op = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0), rop.BoxFloat(2.0),
-                                               rop.BoxPtr(nullref)], descr)
-    op1 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
-                                                rop.BoxFloat(2.0),
-                                                rop.BoxPtr(nullref)], descr2)
-    op2 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
-                                                rop.BoxFloat(2.5),
-                                                rop.BoxPtr(nullref)], descr)
-    op3 = rop.create_resop(rop.rop.CALL_i, 15, [rop.BoxInt(0),
-                                                rop.BoxFloat(2.0),
-                                                rop.BoxPtr(nullref)], descr)
-    op4 = rop.create_resop(rop.rop.CALL_i, 12, [rop.BoxInt(0),
-                                                rop.BoxFloat(2.0),
-                                                rop.BoxPtr(nonnull_ref)], descr)
+    op = rop.create_resop(rop.rop.CALL_i, 12, [FakeBox(0), FakeBox(2),
+                                               FakeBox(4)], descr)
+    op1 = rop.create_resop(rop.rop.CALL_i, 12, [FakeBox(0), FakeBox(2),
+                                                FakeBox(4)], descr2)
+    op2 = rop.create_resop(rop.rop.CALL_i, 12, [FakeBox(0), FakeBox(3),
+                                                FakeBox(4)], descr)
+    op3 = rop.create_resop(rop.rop.CALL_i, 15, [FakeBox(0), FakeBox(2),
+                                                FakeBox(4)], descr)
     assert op1._get_hash_() != op._get_hash_()
     assert op2._get_hash_() != op._get_hash_()
     assert op3._get_hash_() != op._get_hash_()
-    assert op4._get_hash_() != op._get_hash_()
     assert not op.eq(op1)
     assert not op.eq(op2)
     assert not op.eq(op3)
-    assert not op.eq(op4)
 
     # class StrangeDescr(AbstractDescr):
     #     def _get_hash_(self):
