@@ -803,7 +803,7 @@ class ResOpWithDescr(AbstractResOp):
             return 0 # for tests
         return compute_identity_hash(self._descr)
 
-class GuardResOp(ResOpWithDescr):
+class GuardResOp(PlainResOp):
 
     # gathered during tracing
     _rd_snapshot = None
@@ -872,9 +872,6 @@ class NullaryOp(object):
             res.set_rd_snapshot(self.get_rd_snapshot())
         return res
 
-    def copy_if_modified_by_optimization(self, opt):
-        return self
-
     def get_key_op(self, opt):
         return self
 
@@ -905,18 +902,6 @@ class UnaryOp(object):
     @specialize.arg(1)
     def foreach_arg(self, func, arg):
         func(arg, self.getopnum(), 0, self._arg0)
-
-    @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt):
-        new_arg = opt.get_value_replacement(self._arg0)
-        if new_arg is None:
-            return self
-        res = create_resop_1(self.opnum, self.getresult(), new_arg,
-                             self.getdescr())
-        if self.is_guard():
-            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
-            res.set_rd_snapshot(self.get_rd_snapshot())
-        return res
 
     def get_key_op(self, opt):
         new_arg = opt.getvalue(self._arg0).get_key_box()
@@ -969,21 +954,6 @@ class BinaryOp(object):
     def foreach_arg(self, func, arg):
         func(arg, self.getopnum(), 0, self._arg0)
         func(arg, self.getopnum(), 1, self._arg1)
-
-    @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt):
-        new_arg0 = opt.get_value_replacement(self._arg0)
-        new_arg1 = opt.get_value_replacement(self._arg1)
-        if new_arg0 is None and new_arg1 is None:
-            return self
-        res = create_resop_2(self.opnum, self.getresult(),
-                             new_arg0 or self._arg0,
-                             new_arg1 or self._arg1,
-                             self.getdescr())
-        if self.is_guard():
-            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
-            res.set_rd_snapshot(self.get_rd_snapshot())
-        return res
 
     @specialize.argtype(1)
     def get_key_op(self, opt):
@@ -1045,20 +1015,6 @@ class TernaryOp(object):
         func(arg, self.getopnum(), 2, self._arg2)
 
     @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt):
-        assert not self.is_guard()
-        new_arg0 = opt.get_value_replacement(self._arg0)
-        new_arg1 = opt.get_value_replacement(self._arg1)
-        new_arg2 = opt.get_value_replacement(self._arg2)
-        if new_arg0 is None and new_arg1 is None and new_arg2 is None:
-            return self
-        return create_resop_3(self.opnum, self.getresult(),
-                              new_arg0 or self._arg0,
-                              new_arg1 or self._arg1,
-                              new_arg2 or self._arg2,
-                              self.getdescr())
-
-    @specialize.argtype(1)
     def get_key_op(self, opt):
         new_arg0 = opt.getvalue(self._arg0).get_key_box()
         new_arg1 = opt.getvalue(self._arg1).get_key_box()
@@ -1109,24 +1065,6 @@ class N_aryOp(object):
     def foreach_arg(self, func, func_arg):
         for i, arg in enumerate(self._args):
             func(func_arg, self.getopnum(), i, arg)
-
-    @specialize.argtype(1)
-    def copy_if_modified_by_optimization(self, opt):
-        newargs = None
-        for i, arg in enumerate(self._args):
-            new_arg = opt.get_value_replacement(arg)
-            if new_arg is not None:
-                if newargs is None:
-                    newargs = newlist_hint(len(self._args))
-                    for k in range(i):
-                        newargs.append(self._args[k])
-                newargs.append(new_arg)
-            elif newargs is not None:
-                newargs.append(arg)
-        if newargs is None:
-            return self
-        return create_resop(self.opnum, self.getresult(),
-                            newargs, self.getdescr())
 
     @specialize.argtype(1)
     def get_key_op(self, opt):
@@ -1181,20 +1119,20 @@ _oplist = [
 
     '_GUARD_FIRST',
     '_GUARD_FOLDABLE_FIRST',
-    'GUARD_TRUE/1d/N',
-    'GUARD_FALSE/1d/N',
-    'GUARD_VALUE/2d/N',
-    'GUARD_CLASS/2d/N',
-    'GUARD_NONNULL/1d/N',
-    'GUARD_ISNULL/1d/N',
-    'GUARD_NONNULL_CLASS/2d/N',
+    'GUARD_TRUE/1/N',
+    'GUARD_FALSE/1/N',
+    'GUARD_VALUE/2/N',
+    'GUARD_CLASS/2/N',
+    'GUARD_NONNULL/1/N',
+    'GUARD_ISNULL/1/N',
+    'GUARD_NONNULL_CLASS/2/N',
     '_GUARD_FOLDABLE_LAST',
-    'GUARD_NO_EXCEPTION/0d/N',   # may be called with an exception currently set
-    'GUARD_EXCEPTION/1d/r',      # may be called with an exception currently set
-    'GUARD_NO_OVERFLOW/0d/N',
-    'GUARD_OVERFLOW/0d/N',
-    'GUARD_NOT_FORCED/0d/N',     # may be called with an exception currently set
-    'GUARD_NOT_INVALIDATED/0d/N',
+    'GUARD_NO_EXCEPTION/0/N',   # may be called with an exception currently set
+    'GUARD_EXCEPTION/1/r',      # may be called with an exception currently set
+    'GUARD_NO_OVERFLOW/0/N',
+    'GUARD_OVERFLOW/0/N',
+    'GUARD_NOT_FORCED/0/N',     # may be called with an exception currently set
+    'GUARD_NOT_INVALIDATED/0/N',
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
