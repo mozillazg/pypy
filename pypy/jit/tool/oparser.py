@@ -7,7 +7,7 @@ from pypy.jit.tool.oparser_model import get_model
 
 from pypy.jit.metainterp.resoperation import rop, opclasses, rop_lowercase,\
      ResOpWithDescr, N_aryOp, UnaryOp, PlainResOp, create_resop_dispatch,\
-     ResOpNone
+     ResOpNone, create_resop_0, example_for_opnum
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 class ParseError(Exception):
@@ -67,25 +67,23 @@ class OpParser(object):
 
     use_mock_model = False
 
-    def __init__(self, input, cpu, namespace, type_system, boxkinds,
-                 invent_fail_descr=True,
-                 nonstrict=False, results=None, process_guard=None):
+    def __init__(self, input, cpu, namespace, type_system,
+                 invent_fail_descr=True, results=None,
+                 guards_with_failargs=False):
         self.input = input
         self.vars = {}
         self.cpu = cpu
         self._consts = namespace
         self.type_system = type_system
-        self.boxkinds = boxkinds or {}
+        self.guards_with_failargs = guards_with_failargs
         if namespace is not None:
             self._cache = namespace.setdefault('_CACHE_', {})
         else:
             self._cache = {}
         self.invent_fail_descr = invent_fail_descr
-        self.nonstrict = nonstrict
         self.model = get_model(self.use_mock_model)
         self.original_jitcell_token = self.model.JitCellToken()
         self.results = results
-        self.process_guard = process_guard
 
     def get_const(self, name, typ):
         if self._consts is None:
@@ -123,25 +121,15 @@ class OpParser(object):
             return self._cache[self.type_system, elem]
         except KeyError:
             pass
-        if elem.startswith('i'):
-            # integer
-            box = self.model.BoxInt()
-            _box_counter_more_than(self.model, elem[1:])
-        elif elem.startswith('f'):
-            box = self.model.BoxFloat()
-            _box_counter_more_than(self.model, elem[1:])
-        elif elem.startswith('p'):
-            # pointer
-            ts = getattr(self.cpu, 'ts', self.model.llhelper)
-            box = ts.BoxRef()
-            _box_counter_more_than(self.model, elem[1:])
-        else:
-            for prefix, boxclass in self.boxkinds.iteritems():
-                if elem.startswith(prefix):
-                    box = boxclass()
-                    break
+        if elem[0] in 'ifp':
+            if elem[0] == 'p':
+                p = 'r'
             else:
-                raise ParseError("Unknown variable type: %s" % elem)
+                p = elem[0]
+            opnum = getattr(rop, 'INPUT_' + p)
+            box = create_resop_0(opnum, example_for_opnum(opnum))
+        else:
+            raise ParseError("Unknown variable type: %s" % elem)
         self._cache[self.type_system, elem] = box
         box._str = elem
         return box
@@ -196,8 +184,8 @@ class OpParser(object):
             elif arg.startswith('ConstPtr('):
                 name = arg[len('ConstPtr('):-1]
                 return self.get_const(name, 'ptr')
-            if arg not in self.vars and self.nonstrict:
-                self.newvar(arg)
+            if arg not in self.vars:
+                raise Exception("unexpected var %s" % (arg,))
             return self.vars[arg]
 
     def _example_for(self, opnum):
@@ -253,10 +241,12 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
-                if not self.nonstrict:
+                if self.guards_with_failargs:
                     raise ParseError("missing fail_args for guard operation")
                 fail_args = None
             else:
+                if not self.guards_with_failargs:
+                    raise ParseError("fail_args should be NULL")
                 fail_args = []
                 if i < j:
                     for arg in line[i:j].split(','):
@@ -303,18 +293,14 @@ class OpParser(object):
         opres = self.create_op(opnum, result, args, descr)
         self.vars[res] = opres
         if fail_args is not None:
-            opres.set_extra("failargs", fail_args)
-        if self.process_guard and opres.is_guard():
-            self.process_guard(opres, self)
+            explode
         return opres
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
         res = self.create_op(opnum, None, args, descr)
         if fail_args is not None:
-            res.set_extra("failargs", fail_args)
-        if self.process_guard and res.is_guard():
-            self.process_guard(res, self)
+            explode
         return res
 
     def parse_next_op(self, line, num):
@@ -396,8 +382,8 @@ class OpParser(object):
         line = lines[0]
         base_indent = len(line) - len(line.lstrip(' '))
         line = line.strip()
-        if not line.startswith('[') and self.nonstrict:
-            return base_indent, [], lines
+        if not line.startswith('['):
+            raise ParseError("error parsing %s as inputargs" % (line,))
         lines = lines[1:]
         if line == '[]':
             return base_indent, [], lines
@@ -406,21 +392,16 @@ class OpParser(object):
         inpargs = self.parse_header_line(line[1:-1])
         return base_indent, inpargs, lines
 
-def parse(input, cpu=None, namespace=None, type_system='lltype',
-          boxkinds=None, invent_fail_descr=True,
-          no_namespace=False, nonstrict=False, OpParser=OpParser,
-          results=None, process_guard=None):
-    if namespace is None and not no_namespace:
+DEFAULT = object()
+
+def parse(input, cpu=None, namespace=DEFAULT, type_system='lltype',
+          invent_fail_descr=True, OpParser=OpParser,
+          results=None, guards_with_failargs=False):
+    if namespace is DEFAULT:
         namespace = {}
-    return OpParser(input, cpu, namespace, type_system, boxkinds,
-                    invent_fail_descr, nonstrict, results,
-                    process_guard).parse()
+    return OpParser(input, cpu, namespace, type_system,
+                    invent_fail_descr, results, guards_with_failargs).parse()
 
 def pure_parse(*args, **kwds):
     kwds['invent_fail_descr'] = False
     return parse(*args, **kwds)
-
-
-def _box_counter_more_than(model, s):
-    if s.isdigit():
-        model.Box._counter = max(model.Box._counter, int(s)+1)

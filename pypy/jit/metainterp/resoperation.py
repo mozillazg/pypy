@@ -481,12 +481,13 @@ class AbstractResOp(AbstractValue):
     # debug
     name = ""
     pc = 0
+    _counter = 0
 
     _hash = 0
     opnum = 0
 
     is_mutable = False
-    _forwarded = None
+    _forwarded = None    
 
     @classmethod
     def getopnum(cls):
@@ -566,11 +567,25 @@ class AbstractResOp(AbstractValue):
         except NotImplementedError:
             return object.__repr__(self)
 
+    def __str__(self):
+        if not hasattr(self, '_str'):
+            if self.type == INT:
+                t = 'i'
+            elif self.type == FLOAT:
+                t = 'f'
+            else:
+                t = 'p'
+            self._str = '%s%d' % (t, AbstractResOp._counter)
+            AbstractResOp._counter += 1
+        return self._str
+
     def repr(self, graytext=False):
         # RPython-friendly version
+        args = self.getarglist()
+        argsrepr = ', '.join([str(a) for a in args])
         resultrepr = self.getresultrepr()
         if resultrepr is not None:
-            sres = '%s = ' % (resultrepr,)
+            sres = '%s = ' % (str(self),)
         else:
             sres = ''
         if self.name:
@@ -579,14 +594,12 @@ class AbstractResOp(AbstractValue):
                 prefix = "\f%s\f" % prefix
         else:
             prefix = ""
-        args = self.getarglist()
         descr = self.getdescr()
         if descr is None or we_are_translated():
-            return '%s%s%s(%s)' % (prefix, sres, self.getopname(),
-                                 ', '.join([str(a) for a in args]))
+            return '%s%s%s(%s)' % (prefix, sres, self.getopname(), argsrepr)
         else:
             return '%s%s%s(%s, descr=%r)' % (prefix, sres, self.getopname(),
-                                             ', '.join([str(a) for a in args]), descr)
+                                             argsrepr, descr)
 
     @classmethod
     def getopname(cls):
@@ -685,7 +698,7 @@ class ResOpNone(object):
 class ResOpInt(object):
     _mixin_ = True
     type = INT
-    
+
     def __init__(self, intval):
         assert isinstance(intval, int)
         self.intval = intval
@@ -713,7 +726,7 @@ class ResOpInt(object):
 class ResOpFloat(object):
     _mixin_ = True
     type = FLOAT
-    
+
     def __init__(self, floatval):
         #assert isinstance(floatval, float)
         # XXX not sure between float or float storage
@@ -742,7 +755,7 @@ class ResOpFloat(object):
 class ResOpPointer(object):
     _mixin_ = True
     type = REF
-    
+
     def __init__(self, pval):
         assert lltype.typeOf(pval) == llmemory.GCREF
         self.pval = pval

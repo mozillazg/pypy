@@ -43,7 +43,6 @@ class LLTypeHelper(TypeSystemHelper):
     nullptr = staticmethod(lltype.nullptr)
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_ptr)
     BASETYPE = llmemory.GCREF
-    BoxRef = resoperation.BoxPtr
     ConstRef = resoperation.ConstPtr
     loops_done_with_this_frame_ref = None # patched by compile.py
     NULLREF = resoperation.ConstPtr.value
@@ -85,9 +84,6 @@ class LLTypeHelper(TypeSystemHelper):
 
     def get_exception_box(self, etype):
         return resoperation.ConstInt(etype)
-
-    def get_exc_value_box(self, evalue):
-        return resoperation.BoxPtr(evalue)
 
     def get_exception_obj(self, evaluebox):
         # only works when translated
@@ -152,7 +148,6 @@ class OOTypeHelper(TypeSystemHelper):
     nullptr = staticmethod(ootype.null)
     cast_instance_to_base_ref = staticmethod(cast_instance_to_base_obj)
     BASETYPE = ootype.Object
-    #BoxRef = resoperation.BoxObj
     #ConstRef = resoperation.ConstObj
     loops_done_with_this_frame_ref = None # patched by compile.py
     #$NULLREF = resoperation.ConstObj.value
@@ -192,9 +187,6 @@ class OOTypeHelper(TypeSystemHelper):
 
     def get_exception_box(self, etype):
         return resoperation.ConstObj(etype)
-
-    def get_exc_value_box(self, evalue):
-        return resoperation.BoxObj(evalue)
 
     def get_exception_obj(self, evaluebox):
         # only works when translated

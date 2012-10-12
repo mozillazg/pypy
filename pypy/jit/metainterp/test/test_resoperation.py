@@ -97,9 +97,11 @@ def test_can_malloc():
 def test_repr():
     op = rop.create_resop_0(rop.rop.GUARD_NO_EXCEPTION, None)
     assert repr(op) == 'guard_no_exception()'
-    op = rop.create_resop_2(rop.rop.INT_ADD, 3, FakeBox("a"), FakeBox("b"))
-    assert repr(op) == '3 = int_add(a, b)'
-    # XXX more tests once we decide what we actually want to print
+    c = op._counter
+    i0 = rop.create_resop_0(rop.rop.INPUT_i, 3)
+    op = rop.create_resop_2(rop.rop.INT_ADD, 3, i0, i0)
+    assert repr(op) == 'i%d = int_add(i%d, i%d)' % (c+1, c, c)
+    assert str(op) == 'i%d' % (c + 1,)
 
 class MockOpt(object):
     def __init__(self, replacements):

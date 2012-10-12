@@ -3,7 +3,7 @@ import sys
 from pypy.rpython.lltypesystem import lltype, llmemory
 
 from pypy.jit.tool.oparser import parse, OpParser
-from pypy.jit.metainterp.resoperation import rop, BoxInt
+from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import AbstractDescr, JitCellToken,\
      TargetToken
 
@@ -31,19 +31,6 @@ class BaseTestOparser(object):
         #assert loop.operations[-1].getdescr()
         # descr is invented by optimizations
 
-    def test_const_ptr_subops(self):
-        x = """
-        [p0]
-        guard_class(p0, ConstClass(vtable)) []
-        """
-        S = lltype.Struct('S')
-        vtable = lltype.nullptr(S)
-        loop = self.parse(x, None, locals())
-        assert len(loop.operations) == 1
-        #assert loop.operations[0].getdescr()
-        # descr is invented by optimizations
-        assert loop.operations[0].get_extra("failargs") == []
-
     def test_descr(self):
         class Xyz(AbstractDescr):
             I_am_a_descr = True # for the mock case
@@ -59,7 +46,7 @@ class BaseTestOparser(object):
     def test_after_fail(self):
         x = """
         [i0]
-        guard_value(i0, 3) []
+        guard_value(i0, 3)
         i1 = int_add(1, 2)
         """
         loop = self.parse(x, None, {})
@@ -122,18 +109,16 @@ class BaseTestOparser(object):
         '''
         loop = self.parse(x)
         box = loop.operations[0].getarg(0)
-        # we cannot use isinstance, because in case of mock the class will be
-        # constructed on the fly
-        assert box.__class__.__name__ == 'BoxFloat'
+        assert box.type == 'f'
 
     def test_debug_merge_point(self):
-        x = '''
+        x = """
         []
         debug_merge_point(0, 0, "info")
         debug_merge_point(0, 0, 'info')
         debug_merge_point(1, 1, '<some ('other.')> info')
         debug_merge_point(0, 0, '(stuff) #1')
-        '''
+        """
         loop = self.parse(x)
         assert loop.operations[0].getarg(2)._get_str() == 'info'
         assert loop.operations[0].getarg(1).value == 0
@@ -162,11 +147,9 @@ class BaseTestOparser(object):
     jump(i6, i4, descr=<Loop0>)
     """
 
-    def test_parse_no_namespace(self):
-        loop = self.parse(self.example_loop_log, no_namespace=True)
-
     def test_attach_comment_to_loop(self):
-        loop = self.parse(self.example_loop_log, no_namespace=True)
+        py.test.skip("failargs")
+        loop = self.parse(self.example_loop_log, guards_with_failargs=True)
         assert loop.comment == '    # bridge out of Guard12, 6 ops'
 
     def test_parse_new_with_comma(self):
@@ -178,25 +161,6 @@ class BaseTestOparser(object):
         loop = self.parse(x)
         assert loop.operations[0].getopname() == 'new'
 
-    def test_no_fail_args(self):
-        x = '''
-        [i0]
-        guard_true(i0, descr=<Guard0>)
-        '''
-        loop = self.parse(x, nonstrict=True)
-        assert not loop.operations[0].has_extra("failargs")
-
-    def test_fail_args_invent_snapshot(self):
-        def f(op, oparser):
-            op.set_rd_snapshot(['foo'])
-        
-        x = '''
-        [i0]
-        guard_true(i0, descr=<Guard0>) [i0]
-        '''
-        loop = self.parse(x, process_guard=f)
-        assert loop.operations[0].get_rd_snapshot() == ['foo']
-
     def test_results(self):
         x = '''
         [i0]
@@ -206,14 +170,6 @@ class BaseTestOparser(object):
         loop = self.parse(x, results=[13, 12])
         assert loop.operations[0].getint() == 13
         assert loop.operations[1].getint() == 12
-
-    def test_no_inputargs(self):
-        x = '''
-        i2 = int_add(i0, i1)
-        '''
-        loop = self.parse(x, nonstrict=True)
-        assert loop.inputargs == []
-        assert loop.operations[0].getopname() == 'int_add'
 
     def test_offsets(self):
         x = """
@@ -241,15 +197,6 @@ class BaseTestOparser(object):
 class TestOpParser(BaseTestOparser):
 
     OpParser = OpParser
-
-    def test_boxkind(self):
-        py.test.skip("what's that?")
-        x = """
-        [sum0]
-        """
-        loop = self.parse(x, None, {}, boxkinds={'sum': BoxInt})
-        b = loop.getboxes()
-        assert isinstance(b.sum0, BoxInt)
 
     def test_label(self):
         x = """
