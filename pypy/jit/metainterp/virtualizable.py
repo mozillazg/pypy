@@ -216,6 +216,7 @@ class VirtualizableInfo(object):
         self.cast_gcref_to_vtype = cast_gcref_to_vtype
 
         def reset_jit_frame(virtualizable):
+            virtualizable = cast_gcref_to_vtype(virtualizable)
             virtualizable.jit_frame = jitframe.TOKEN_NONE
         self.reset_jit_frame = reset_jit_frame
 

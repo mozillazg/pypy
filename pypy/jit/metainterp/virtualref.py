@@ -12,7 +12,7 @@ class VirtualRefInfo:
         # we make the low-level type of an RPython class directly
         self.JIT_VIRTUAL_REF = lltype.GcStruct('JitVirtualRef',
             ('super', rclass.OBJECT),
-            ('jit_frame', jitframe.JITFRAMEPTR),
+            ('jit_frame', llmemory.GCREF),
             ('forced', rclass.OBJECTPTR))
         self.jit_virtual_ref_vtable = lltype.malloc(rclass.OBJECT_VTABLE,
                                                     zero=True, flavor='raw',

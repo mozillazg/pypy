@@ -18,7 +18,6 @@ from pypy.rpython.extregistry import ExtRegistryEntry
 
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 from pypy.jit.backend.llgraph import symbolic
 from pypy.jit.codewriter import longlong
 from pypy.jit.codewriter.effectinfo import EffectInfo
@@ -481,7 +480,6 @@ def compile_redirect_fail(old_loop, old_index, new_loop):
 
 class Frame(object):
     OPHANDLERS = [None] * (rop._LAST+1)
-    _TYPE = JITFRAMEPTR.TO
 
     def __init__(self, cpu):
         self.verbose = False
@@ -517,6 +515,7 @@ class Frame(object):
         """Execute all operations in a loop,
         possibly following to other loops as well.
         """
+        assert self._may_force == -1
         assert self._last_exception is None, "exception left behind"
         verbose = True
         self.opindex = 0
@@ -578,7 +577,11 @@ class Frame(object):
                 if self.verbose:
                     log.trace('finished: %s' % (
                         ', '.join(map(str, args)),))
-                self.fail_args = args
+                assert len(op.args) <= 1, "FINISH with more than 1 arg"
+                self.finish_args = op.args
+                self.fail_args = op.fail_args
+                self.fail_index = op.fail_index
+                self._may_force = self.opindex
                 return
 
             else:
@@ -1066,16 +1069,15 @@ class Frame(object):
             #
             # Emulate the fast path
             failindex = frame_descr_index(subframe)
-            realsubframe = lltype.cast_opaque_ptr(JITFRAMEPTR, subframe)
             if failindex == self.cpu.done_with_this_frame_int_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_int(realsubframe, 0)
+                return self.cpu.get_latest_value_int(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_ref_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_ref(realsubframe, 0)
+                return self.cpu.get_latest_value_ref(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_float_v:
                 reset_vable(jd, vable)
-                return self.cpu.get_latest_value_float(realsubframe, 0)
+                return self.cpu.get_latest_value_float(subframe, 0)
             if failindex == self.cpu.done_with_this_frame_void_v:
                 reset_vable(jd, vable)
                 return None
@@ -1083,7 +1085,7 @@ class Frame(object):
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
             assembler_helper = assembler_helper_ptr._obj._callable
             try:
-                return assembler_helper(realsubframe, vable)
+                return assembler_helper(subframe, vable)
             except LLException, lle:
                 assert self._last_exception is None, "exception left behind"
                 self._last_exception = lle
@@ -1320,7 +1322,6 @@ def frame_execute(frame):
             import sys, pdb
             pdb.post_mortem(sys.exc_info()[2])
         raise
-    del frame.env
     return result
 
 def frame_descr_index(frame):
@@ -1392,10 +1393,13 @@ def force(opaque_frame):
     frame._forced = True
     assert frame._may_force >= 0
     call_op = frame.loop.operations[frame._may_force]
-    guard_op = frame.loop.operations[frame._may_force+1]
     opnum = call_op.opnum
-    assert opnum == rop.CALL_MAY_FORCE or opnum == rop.CALL_ASSEMBLER
-    frame._populate_fail_args(guard_op, skip=call_op.result)
+    if opnum != rop.FINISH:
+        assert opnum == rop.CALL_MAY_FORCE or opnum == rop.CALL_ASSEMBLER
+        guard_op = frame.loop.operations[frame._may_force+1]
+        frame._populate_fail_args(guard_op, skip=call_op.result)
+    else:
+        frame._populate_fail_args(call_op)
     return frame.fail_index
 
 ##def cast_adr_to_int(memocast, adr):
@@ -1863,12 +1867,12 @@ def setannotation(func, annotation, specialize_as_constant=False):
 
 
 COMPILEDLOOP = lltype.Ptr(lltype.OpaqueType("CompiledLoop"))
-FRAME = JITFRAMEPTR
-#OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
+FRAME = lltype.Ptr(lltype.OpaqueType("Frame"))
+OOFRAME = lltype.Ptr(lltype.OpaqueType("OOFrame"))
 
 _TO_OPAQUE[CompiledLoop] = COMPILEDLOOP.TO
-#_TO_OPAQUE[Frame] = FRAME.TO
-#_TO_OPAQUE[OOFrame] = OOFRAME.TO
+_TO_OPAQUE[Frame] = FRAME.TO
+_TO_OPAQUE[OOFrame] = OOFRAME.TO
 
 s_CompiledLoop = annmodel.SomePtr(COMPILEDLOOP)
 s_Frame = annmodel.SomePtr(FRAME)
