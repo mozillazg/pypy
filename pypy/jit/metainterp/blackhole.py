@@ -1549,7 +1549,6 @@ def _handle_jitexception(blackholeinterp, jitexc):
 def resume_in_blackhole(metainterp_sd, jitdriver_sd, jitframe, resumedescr,
                         all_virtuals=None):
     from pypy.jit.metainterp.resume import blackhole_from_resumedata
-    #debug_start('jit-blackhole')
     blackholeinterp = blackhole_from_resumedata(
         metainterp_sd.blackholeinterpbuilder,
         jitdriver_sd,
@@ -1564,15 +1563,11 @@ def resume_in_blackhole(metainterp_sd, jitdriver_sd, jitframe, resumedescr,
     current_exc = blackholeinterp._prepare_resume_from_failure(
         resumedescr.guard_opnum, jitframe, dont_change_position)
 
-    #try:
     _run_forever(blackholeinterp, current_exc)
-    #finally:
-        #debug_stop('jit-blackhole')
 
 def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
     # Get a chain of blackhole interpreters and fill them by copying
     # 'metainterp.framestack'.
-    #debug_start('jit-blackhole')
     metainterp_sd = metainterp.staticdata
     nextbh = None
     for frame in metainterp.framestack:
@@ -1590,7 +1585,4 @@ def convert_and_run_from_pyjitpl(metainterp, raising_exception=False):
         firstbh.exception_last_value = current_exc
         current_exc = lltype.nullptr(rclass.OBJECTPTR.TO)
     #
-    #try:
     _run_forever(firstbh, current_exc)
-    #finally:
-        #debug_stop('jit-blackhole')

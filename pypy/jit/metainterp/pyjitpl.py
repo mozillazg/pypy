@@ -1459,8 +1459,6 @@ class MetaInterpStaticData(object):
         self._addr2name_keys = []
         self._addr2name_values = []
 
-        self.__dict__.update(compile.make_done_loop_tokens())
-
     def _freeze_(self):
         return True
 
@@ -1499,18 +1497,6 @@ class MetaInterpStaticData(object):
         self.virtualref_info = codewriter.callcontrol.virtualref_info
         self.callinfocollection = codewriter.callcontrol.callinfocollection
         self.has_libffi_call = codewriter.callcontrol.has_libffi_call
-        #
-        # store this information for fastpath of call_assembler
-        # (only the paths that can actually be taken)
-        for jd in self.jitdrivers_sd:
-            name = {history.INT: 'int',
-                    history.REF: 'ref',
-                    history.FLOAT: 'float',
-                    history.VOID: 'void'}[jd.result_type]
-            tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
-            jd.portal_finishtoken = tokens[0].finishdescr
-            num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
-            setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
         #
         exc_descr = compile.PropagateExceptionDescr()
         num = self.cpu.get_fail_descr_number(exc_descr)
@@ -1598,8 +1584,6 @@ class MetaInterpGlobalData(object):
         self.indirectcall_dict = None
         self.addr2name = None
         self.loopnumbering = 0
-        self.resume_virtuals = {}
-        self.resume_virtuals_not_translated = []
 
 # ____________________________________________________________
 
@@ -2204,40 +2188,34 @@ class MetaInterp(object):
             self.raise_continue_running_normally(live_arg_boxes, jitcell_token)
 
     def compile_done_with_this_frame(self, exitbox):
-        self.gen_store_back_in_virtualizable()
-        # temporarily put a JUMP to a pseudo-loop
-        sd = self.staticdata
         result_type = self.jitdriver_sd.result_type
         if result_type == history.VOID:
             assert exitbox is None
-            exits = []
-            loop_tokens = sd.loop_tokens_done_with_this_frame_void
+            self.compile_done([], compile.DoneWithThisFrameDescrVoid)
         elif result_type == history.INT:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_int
+            self.compile_done([exitbox], compile.DoneWithThisFrameDescrInt)
         elif result_type == history.REF:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_ref
+            self.compile_done([exitbox], compile.DoneWithThisFrameDescrRef)
         elif result_type == history.FLOAT:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_float
+            self.compile_done([exitbox], compile.DoneWithThisFrameDescrFloat)
         else:
             assert False
-        # FIXME: kill TerminatingLoopToken?
-        # FIXME: can we call compile_trace?
-        token = loop_tokens[0].finishdescr
-        self.history.record(rop.FINISH, exits, None, descr=token)
-        target_token = compile.compile_trace(self, self.resumekey)
-        if target_token is not token:
-            compile.giveup()
 
     def compile_exit_frame_with_exception(self, valuebox):
-        self.gen_store_back_in_virtualizable()
-        sd = self.staticdata
-        token = sd.loop_tokens_exit_frame_with_exception_ref[0].finishdescr
-        self.history.record(rop.FINISH, [valuebox], None, descr=token)
+        self.compile_done([valuebox], compile.ExitFrameWithExceptionDescrRef)
+
+    def compile_done(self, exits, DoneCls):
+        self.record_set_jit_frame()
+        virtualizable_boxes = None
+        if (self.jitdriver_sd.virtualizable_info is not None or
+            self.jitdriver_sd.greenfield_info is not None):
+            virtualizable_boxes = self.virtualizable_boxes
+        assert len(self.virtualref_boxes) == 0
+        token = DoneCls(self.staticdata, self.jitdriver_sd)
+        resume.capture_resumedata([], virtualizable_boxes, [], token)
+        self.history.record(rop.FINISH, exits, None, descr=token)
         target_token = compile.compile_trace(self, self.resumekey)
-        if target_token is not token:
+        if target_token is None:
             compile.giveup()
 
     @specialize.arg(1)
@@ -2325,7 +2303,12 @@ class MetaInterp(object):
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
             vinfo.tracing_before_residual_call(virtualizable)
-            #
+            self.record_set_jit_frame()
+
+    def record_set_jit_frame(self):
+        vinfo = self.jitdriver_sd.virtualizable_info
+        if vinfo is not None:
+            virtualizable_box = self.virtualizable_boxes[-1]
             jit_frame_box = history.BoxPtr()
             self.history.record(rop.JIT_FRAME, [], jit_frame_box)
             self.history.record(rop.SETFIELD_GC, [virtualizable_box,
@@ -2423,7 +2406,9 @@ class MetaInterp(object):
             # warmstate.py.
             virtualizable_box = self.virtualizable_boxes[-1]
             virtualizable = vinfo.unwrap_virtualizable_box(virtualizable_box)
-            assert not vinfo.is_token_nonnull_gcref(virtualizable)
+            # clear the jit_frame, forgetting whatever stale value it has
+            # so far, and store the content of the boxes into the virtualizable
+            vinfo.reset_jit_frame(virtualizable)
             # fill the virtualizable with the local boxes
             self.synchronize_virtualizable()
         #
@@ -2458,28 +2443,6 @@ class MetaInterp(object):
             self.virtualizable_boxes = vinfo.read_boxes(self.cpu,
                                                         virtualizable)
             self.virtualizable_boxes.append(virtualizable_box)
-
-    def gen_store_back_in_virtualizable(self):
-        vinfo = self.jitdriver_sd.virtualizable_info
-        if vinfo is not None:
-            # xxx only write back the fields really modified
-            vbox = self.virtualizable_boxes[-1]
-            for i in range(vinfo.num_static_extra_boxes):
-                fieldbox = self.virtualizable_boxes[i]
-                descr = vinfo.static_field_descrs[i]
-                self.execute_and_record(rop.SETFIELD_GC, descr, vbox, fieldbox)
-            i = vinfo.num_static_extra_boxes
-            virtualizable = vinfo.unwrap_virtualizable_box(vbox)
-            for k in range(vinfo.num_arrays):
-                descr = vinfo.array_field_descrs[k]
-                abox = self.execute_and_record(rop.GETFIELD_GC, descr, vbox)
-                descr = vinfo.array_descrs[k]
-                for j in range(vinfo.get_array_length(virtualizable, k)):
-                    itembox = self.virtualizable_boxes[i]
-                    i += 1
-                    self.execute_and_record(rop.SETARRAYITEM_GC, descr,
-                                            abox, ConstInt(j), itembox)
-            assert i + 1 == len(self.virtualizable_boxes)
 
     def replace_box(self, oldbox, newbox):
         assert isinstance(oldbox, Box)

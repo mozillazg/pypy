@@ -546,6 +546,8 @@ class Optimizer(Optimization):
                 op = self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
+        elif op.getopnum() == rop.FINISH:
+            op = self.store_final_boxes_in_guard(op)
         if op.result:
             if op.result in self.seen_results:
                 raise ValueError, "invalid optimization"

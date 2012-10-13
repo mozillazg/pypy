@@ -153,11 +153,19 @@ class AbstractCPU(object):
         necessarily correct after a FINISH."""
         return len(jitframe.jf_gcvalues)
 
-    def grab_exc_value(self, jitframe):
-        """Return and clear the exception set by the latest execute_token(),
-        when it exits due to a failure of a GUARD_EXCEPTION or
-        GUARD_NO_EXCEPTION.  (Returns a GCREF)"""        # XXX remove me
-        return jitframe.jf_excvalue
+    def get_finish_value_int(self, jitframe):
+        """Return the result passed to FINISH, which was an int."""
+        return jitframe.jf_finish_int
+
+    def get_finish_value_float(self, jitframe):
+        """Return the result passed to FINISH, which was a FLOATSTORAGE."""
+        return jitframe.jf_finish_float
+
+    def get_finish_value_ref(self, jitframe):
+        """Return and clear the result passed to FINISH, which was a GCREF.
+        Also used when it exits due to a failure of a GUARD_EXCEPTION or
+        GUARD_NO_EXCEPTION, to return the exception."""
+        return jitframe.jf_finish_ref
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is

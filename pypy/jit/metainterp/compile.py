@@ -411,71 +411,6 @@ def send_bridge_to_backend(jitdriver_sd, metainterp_sd, faildescr, inputargs,
 
 # ____________________________________________________________
 
-class _DoneWithThisFrameDescr(AbstractFailDescr):
-    pass
-
-class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
-        assert jitdriver_sd.result_type == history.VOID
-        raise metainterp_sd.DoneWithThisFrameVoid()
-
-class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
-        assert jitdriver_sd.result_type == history.INT
-        result = metainterp_sd.cpu.get_latest_value_int(jitframe, 0)
-        raise metainterp_sd.DoneWithThisFrameInt(result)
-
-class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
-        assert jitdriver_sd.result_type == history.REF
-        cpu = metainterp_sd.cpu
-        result = cpu.get_latest_value_ref(jitframe, 0)
-        raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
-
-class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
-        assert jitdriver_sd.result_type == history.FLOAT
-        result = metainterp_sd.cpu.get_latest_value_float(jitframe, 0)
-        raise metainterp_sd.DoneWithThisFrameFloat(result)
-
-class ExitFrameWithExceptionDescrRef(_DoneWithThisFrameDescr):
-    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
-        cpu = metainterp_sd.cpu
-        value = cpu.get_latest_value_ref(jitframe, 0)
-        raise metainterp_sd.ExitFrameWithExceptionRef(cpu, value)
-
-
-class TerminatingLoopToken(JitCellToken): # FIXME: kill?
-    terminating = True
-
-    def __init__(self, nargs, finishdescr):
-        self.finishdescr = finishdescr
-
-def make_done_loop_tokens():
-    done_with_this_frame_descr_void = DoneWithThisFrameDescrVoid()
-    done_with_this_frame_descr_int = DoneWithThisFrameDescrInt()
-    done_with_this_frame_descr_ref = DoneWithThisFrameDescrRef()
-    done_with_this_frame_descr_float = DoneWithThisFrameDescrFloat()
-    exit_frame_with_exception_descr_ref = ExitFrameWithExceptionDescrRef()
-
-    # pseudo loop tokens to make the life of optimize.py easier
-    return {'loop_tokens_done_with_this_frame_int': [
-                TerminatingLoopToken(1, done_with_this_frame_descr_int)
-                ],
-            'loop_tokens_done_with_this_frame_ref': [
-                TerminatingLoopToken(1, done_with_this_frame_descr_ref)
-                ],
-            'loop_tokens_done_with_this_frame_float': [
-                TerminatingLoopToken(1, done_with_this_frame_descr_float)
-                ],
-            'loop_tokens_done_with_this_frame_void': [
-                TerminatingLoopToken(0, done_with_this_frame_descr_void)
-                ],
-            'loop_tokens_exit_frame_with_exception_ref': [
-                TerminatingLoopToken(1, exit_frame_with_exception_descr_ref)
-                ],
-            }
-
 class ResumeDescr(AbstractFailDescr):
     pass
 
@@ -698,7 +633,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # future failure of the GUARD_NOT_FORCED
         self.save_data(jitframe, all_virtuals)
 
-    def save_data(self, key, value):
+    def save_data(self, jitframe, value):
+        return   # XXXXX
         globaldata = self.metainterp_sd.globaldata
         if we_are_translated():
             assert key not in globaldata.resume_virtuals
@@ -710,6 +646,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
             rv.append((key, value))
 
     def fetch_data(self, key):
+        XXXXX
         globaldata = self.metainterp_sd.globaldata
         if we_are_translated():
             assert key in globaldata.resume_virtuals
@@ -727,8 +664,7 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         return data
 
     def _clone_if_mutable(self):
-        res = ResumeGuardForcedDescr(self.metainterp_sd,
-                                     self.jitdriver_sd)
+        res = self.__class__(self.metainterp_sd, self.jitdriver_sd)
         self.copy_all_attributes_into(res)
         return res
 
@@ -815,6 +751,46 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd.stats.add_jitcell_token(jitcell_token)
 
 
+_DoneWithThisFrameDescr = ResumeGuardForcedDescr    # XXX replace me
+
+class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
+        assert jitdriver_sd is self.jitdriver_sd
+        assert jitdriver_sd.result_type == history.VOID
+        raise metainterp_sd.DoneWithThisFrameVoid()
+
+class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
+        assert jitdriver_sd is self.jitdriver_sd
+        assert jitdriver_sd.result_type == history.INT
+        result = metainterp_sd.cpu.get_finish_value_int(jitframe)
+        raise metainterp_sd.DoneWithThisFrameInt(result)
+
+class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
+        assert jitdriver_sd is self.jitdriver_sd
+        assert jitdriver_sd.result_type == history.REF
+        cpu = metainterp_sd.cpu
+        result = cpu.get_finish_value_ref(jitframe)
+        raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
+
+class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
+        assert jitdriver_sd is self.jitdriver_sd
+        assert jitdriver_sd.result_type == history.FLOAT
+        result = metainterp_sd.cpu.get_finish_value_float(jitframe)
+        raise metainterp_sd.DoneWithThisFrameFloat(result)
+
+class ExitFrameWithExceptionDescrRef(_DoneWithThisFrameDescr):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
+        assert jitdriver_sd is self.jitdriver_sd
+        cpu = metainterp_sd.cpu
+        value = cpu.get_finish_value_ref(jitframe)
+        raise metainterp_sd.ExitFrameWithExceptionRef(cpu, value)
+
+# ____________________________________________________________
+
+
 def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
     """Try to compile a new bridge leading from the beginning of the history
     to some existing place.
@@ -874,6 +850,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
     calls back the interpreter.  Used temporarily: a fully compiled
     version of the code may end up replacing it.
     """
+    XXXX # fix me
     jitcell_token = make_jitcell_token(jitdriver_sd)
     nb_red_args = jitdriver_sd.num_red_args
     assert len(redargtypes) == nb_red_args

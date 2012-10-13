@@ -12,7 +12,6 @@ from pypy.jit.metainterp import history
 from pypy.jit.metainterp.history import REF, INT, FLOAT, STRUCT
 from pypy.jit.metainterp.warmstate import unwrap
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import llimpl, symbolic
 from pypy.jit.metainterp.typesystem import llhelper, oohelper
@@ -216,7 +215,7 @@ class BaseCPU(model.AbstractCPU):
                 else:
                     raise Exception("'%s' args contain: %r" % (op.getopname(),
                                                                x))
-            if op.is_guard():
+            if op.is_guard() or op.getopnum() == rop.FINISH:
                 faildescr = op.getdescr()
                 assert isinstance(faildescr, history.AbstractFailDescr)
                 faildescr._fail_args_types = []
@@ -252,9 +251,7 @@ class BaseCPU(model.AbstractCPU):
             targettoken = op.getdescr()
             llimpl.compile_add_jump_target(c, targettoken, clt)
         elif op.getopnum() == rop.FINISH:
-            faildescr = op.getdescr()
-            index = self.get_fail_descr_number(faildescr)
-            llimpl.compile_add_fail(c, index)
+            pass
         else:
             assert False, "unknown operation"
 

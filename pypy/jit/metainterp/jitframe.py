@@ -1,15 +1,5 @@
-from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.rpython.annlowlevel import llhelper
+from pypy.rpython.lltypesystem import lltype, llmemory
 
-
-_LONGLONGARRAY = lltype.GcArray(lltype.SignedLongLong)
-
-JITFRAME = lltype.GcStruct('JITFRAME',
-               ('jf_descr', llmemory.GCREF),
-               ('jf_excvalue', llmemory.GCREF),
-               ('jf_nongcvalues', lltype.Ptr(_LONGLONGARRAY)),
-               ('jf_gcvalues', lltype.Array(llmemory.GCREF)))
-JITFRAMEPTR = lltype.Ptr(JITFRAME)
 
 # Constants used for the 'jit_frame' field of virtualizables/virtualrefs:
 #

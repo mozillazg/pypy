@@ -12,7 +12,6 @@ from pypy.rpython.rclass import FieldListAccessor
 from pypy.jit.metainterp.warmspot import get_stats, get_translator
 from pypy.jit.metainterp import history
 from pypy.jit.metainterp.optimizeopt.test.test_util import LLtypeMixin
-from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 
 def promote_virtualizable(*args):
     pass
@@ -145,10 +144,40 @@ class ExplicitVirtualizableTests:
             while m > 0:
                 g(xy, n)
                 m -= 1
+            promote_virtualizable(xy, 'inst_x')
             return xy.inst_x
         res = self.meta_interp(f, [18])
         assert res == 10180
         self.check_resops(setfield_gc=0, getfield_gc=2)
+
+    def test_synchronize_in_return_with_rescall(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'xy'],
+                                virtualizables = ['xy'])
+        @dont_look_inside
+        def rescall(xy, n):
+            if n > 9999999:
+                promote_virtualizable(xy, 'inst_x')
+        def g(xy, n):
+            while n > 0:
+                myjitdriver.can_enter_jit(xy=xy, n=n)
+                myjitdriver.jit_merge_point(xy=xy, n=n)
+                promote_virtualizable(xy, 'inst_x')
+                xy.inst_x += 1
+                rescall(xy, n)
+                n -= 1
+        def f(n):
+            xy = self.setup()
+            xy.inst_x = 10000
+            m = 10
+            while m > 0:
+                g(xy, n)
+                m -= 1
+            promote_virtualizable(xy, 'inst_x')
+            return xy.inst_x
+        res = self.meta_interp(f, [18])
+        assert res == 10180
+        # two setfield_gc(virtualizable, jit_frame)
+        self.check_resops(setfield_gc=2, getfield_gc=2)
 
     def test_virtualizable_and_greens(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n', 'xy'],

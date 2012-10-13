@@ -55,13 +55,17 @@ def _ensure_parent_resumedata(framestack, n):
 def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
     n = len(framestack)-1
-    top = framestack[n]
-    _ensure_parent_resumedata(framestack, n)
-    frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
-                                top.jitcode, top.pc)
+    if n >= 0:
+        top = framestack[n]
+        _ensure_parent_resumedata(framestack, n)
+        frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
+                                    top.jitcode, top.pc)
+        snapshot = Snapshot(top.parent_resumedata_snapshot,
+                            top.get_list_of_active_boxes(False))
+    else:
+        frame_info_list = None
+        snapshot = None
     storage.rd_frame_info_list = frame_info_list
-    snapshot = Snapshot(top.parent_resumedata_snapshot,
-                        top.get_list_of_active_boxes(False))
     if virtualizable_boxes is not None:
         boxes = virtualref_boxes + virtualizable_boxes
     else:
@@ -1103,11 +1107,9 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             assert vinfo.is_token_nonnull_gcref(virtualizable)
             vinfo.reset_token_gcref(virtualizable)
         else:
-            # just jumped away from assembler (case 4 in the comment in
-            # virtualizable.py) into tracing (case 2); check that vable_token
-            # is and stays 0.  Note the call to reset_vable_token() in
-            # warmstate.py.
-            assert not vinfo.is_token_nonnull_gcref(virtualizable)
+            # here, virtualizable.jit_frame may contain a leftover from
+            # earlier.  We have to clean it here.
+            vinfo.reset_jit_frame(virtualizable)
         return vinfo.write_from_resume_data_partial(virtualizable, self, numb)
 
     def load_value_of_type(self, TYPE, tagged):
