@@ -165,12 +165,18 @@ class AbstractCPU(object):
         """Return and clear the result passed to FINISH, which was a GCREF.
         Also used when it exits due to a failure of a GUARD_EXCEPTION or
         GUARD_NO_EXCEPTION, to return the exception."""
+        xxxx
         return jitframe.jf_finish_ref
 
-    def set_finish_value_ref(self, jitframe, value):
+    def get_savedata_ref(self, jitframe):
+        """Return and clear the last value stored by the frontend with
+        set_savedata_ref."""
+        xxxx
+
+    def set_savedata_ref(self, jitframe, value):
         """Store on the jitframe a random GCREF value that will be returned
-        by the following call to get_finish_value_ref()."""
-        jitframe.jf_finish_ref = value
+        by the following call to get_savedata_ref()."""
+        xxxx
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is

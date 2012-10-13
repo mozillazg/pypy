@@ -640,10 +640,10 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def save_data(self, jitframe, value):
         llvalue = erase_list_virtuals(value)
-        self.metainterp_sd.cpu.set_finish_value_ref(jitframe, llvalue)
+        self.metainterp_sd.cpu.set_savedata_ref(jitframe, llvalue)
 
     def fetch_data(self, jitframe):
-        llvalue = self.metainterp_sd.cpu.get_finish_value_ref(jitframe)
+        llvalue = self.metainterp_sd.cpu.get_savedata_ref(jitframe)
         return unerase_list_virtuals(llvalue)
 
     def _clone_if_mutable(self):
