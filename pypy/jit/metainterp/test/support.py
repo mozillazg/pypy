@@ -145,11 +145,11 @@ def _run_with_machine_code(testself, args):
     faildescr = cpu.get_latest_descr(frame)
     assert faildescr.__class__.__name__.startswith('DoneWithThisFrameDescr')
     if metainterp.jitdriver_sd.result_type == history.INT:
-        return cpu.get_latest_value_int(frame, 0)
+        return cpu.get_finish_value_int(frame)
     elif metainterp.jitdriver_sd.result_type == history.REF:
-        return cpu.get_latest_value_ref(frame, 0)
+        return cpu.get_finish_value_ref(frame)
     elif metainterp.jitdriver_sd.result_type == history.FLOAT:
-        return cpu.get_latest_value_float(frame, 0)
+        return cpu.get_finish_value_float(frame)
     else:
         return None
 

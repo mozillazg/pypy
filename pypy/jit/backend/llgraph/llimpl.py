@@ -488,6 +488,7 @@ class Frame(object):
         self._forced = False
         self._may_force = -1
         self._last_exception = None
+        self._finish_value = None
 
     def getenv(self, v):
         from pypy.jit.backend.llgraph.runner import Descr
@@ -516,6 +517,7 @@ class Frame(object):
         possibly following to other loops as well.
         """
         assert self._may_force == -1
+        assert self._finish_value is None
         assert self._last_exception is None, "exception left behind"
         verbose = True
         self.opindex = 0
@@ -578,7 +580,10 @@ class Frame(object):
                     log.trace('finished: %s' % (
                         ', '.join(map(str, args)),))
                 assert len(op.args) <= 1, "FINISH with more than 1 arg"
-                self.finish_args = op.args
+                if len(op.args) == 1:
+                    self._finish_value = self.getenv(op.args[0])
+                else:
+                    self._finish_value = "finished, and got no argument"
                 self.fail_args = op.fail_args
                 self.fail_index = op.fail_index
                 self._may_force = self.opindex
@@ -1354,14 +1359,30 @@ def frame_get_value_count(frame):
     frame = _from_opaque(frame)
     return len(frame.fail_args)
 
-def grab_exc_value(frame):
+def finish_value_int(frame):
     frame = _from_opaque(frame)
-    if frame._last_exception is not None:
-        result = frame._last_exception.args[1]
-        frame._last_exception = None
-        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
-    else:
-        return lltype.nullptr(llmemory.GCREF.TO)
+    x = frame._finish_value
+    assert isinstance(x, int)
+    return x
+
+def finish_value_float(frame):
+    frame = _from_opaque(frame)
+    x = frame._finish_value
+    assert lltype.typeOf(x) is longlong.FLOATSTORAGE
+    return x
+
+def finish_value_ref(frame):
+    frame = _from_opaque(frame)
+    x = frame._finish_value
+    if x is None:
+        if frame._last_exception is not None:
+            result = frame._last_exception.args[1]
+            frame._last_exception = None
+            return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+        else:
+            return lltype.nullptr(llmemory.GCREF.TO)
+    assert lltype.typeOf(x) == llmemory.GCREF
+    return x
 
 ##_pseudo_exceptions = {}
 
@@ -1919,7 +1940,9 @@ setannotation(frame_ptr_getvalue, annmodel.SomePtr(llmemory.GCREF))
 setannotation(frame_float_getvalue, s_FloatStorage)
 setannotation(frame_get_value_count, annmodel.SomeInteger())
  
-setannotation(grab_exc_value, annmodel.SomePtr(llmemory.GCREF))
+setannotation(finish_value_int,   annmodel.SomeInteger())
+setannotation(finish_value_float, s_FloatStorage)
+setannotation(finish_value_ref,   annmodel.SomePtr(llmemory.GCREF))
 setannotation(force, annmodel.SomeInteger())
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())

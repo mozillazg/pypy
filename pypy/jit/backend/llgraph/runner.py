@@ -309,9 +309,17 @@ class BaseCPU(model.AbstractCPU):
         assert lltype.typeOf(jitframe) == llmemory.GCREF
         return llimpl.frame_get_value_count(jitframe)
 
-    def grab_exc_value(self, jitframe):
+    def get_finish_value_int(self, jitframe):
         assert lltype.typeOf(jitframe) == llmemory.GCREF
-        return llimpl.grab_exc_value(jitframe)
+        return llimpl.finish_value_int(jitframe)
+
+    def get_finish_value_float(self, jitframe):
+        assert lltype.typeOf(jitframe) == llmemory.GCREF
+        return llimpl.finish_value_float(jitframe)
+
+    def get_finish_value_ref(self, jitframe):
+        assert lltype.typeOf(jitframe) == llmemory.GCREF
+        return llimpl.finish_value_ref(jitframe)
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         if we_are_translated():
