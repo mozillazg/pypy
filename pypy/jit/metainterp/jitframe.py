@@ -1,6 +1,5 @@
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.annlowlevel import llhelper
-from pypy.rpython.lltypesystem.rvirtualizable2 import JITFRAMEPTR
 
 
 _LONGLONGARRAY = lltype.GcArray(lltype.SignedLongLong)
@@ -10,7 +9,7 @@ JITFRAME = lltype.GcStruct('JITFRAME',
                ('jf_excvalue', llmemory.GCREF),
                ('jf_nongcvalues', lltype.Ptr(_LONGLONGARRAY)),
                ('jf_gcvalues', lltype.Array(llmemory.GCREF)))
-JITFRAMEPTR.TO.become(JITFRAME)
+JITFRAMEPTR = lltype.Ptr(JITFRAME)
 
 # Constants used for the 'jit_frame' field of virtualizables/virtualrefs:
 #
@@ -27,5 +26,8 @@ JITFRAMEPTR.TO.become(JITFRAME)
 #      to the actual CPU frame allocated by the generated assembler,
 #      as fetched with the 'JIT_FRAME' resoperation.
 #
-TOKEN_NONE            = lltype.nullptr(JITFRAME)
-TOKEN_TRACING_RESCALL = lltype.malloc(JITFRAME, 0, immortal=True, zero=True)
+TOKEN_NONE = lltype.nullptr(llmemory.GCREF.TO)
+
+_JITFRAME_TRACING = lltype.GcStruct('JITFRAME_TRACING')
+TOKEN_TRACING_RESCALL = lltype.cast_opaque_ptr(
+    llmemory.GCREF, lltype.malloc(_JITFRAME_TRACING, immortal=True))

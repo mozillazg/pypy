@@ -1,10 +1,9 @@
-from pypy.rpython.rmodel import inputconst
-from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.lltypesystem.rclass import InstanceRepr, OBJECTPTR
+from pypy.rpython.lltypesystem import llmemory
+from pypy.rpython.lltypesystem.rclass import InstanceRepr
 from pypy.rpython.rvirtualizable2 import AbstractVirtualizable2InstanceRepr
 
 
-JITFRAMEPTR = lltype.Ptr(lltype.GcForwardReference())
+JITFRAMEPTR = llmemory.GCREF
 
 
 class Virtualizable2InstanceRepr(AbstractVirtualizable2InstanceRepr, InstanceRepr):
@@ -14,14 +13,3 @@ class Virtualizable2InstanceRepr(AbstractVirtualizable2InstanceRepr, InstanceRep
         if self.top_of_virtualizable_hierarchy:
             llfields.append(('jit_frame', JITFRAMEPTR))
         return llfields
-
-    #def set_vable(self, llops, vinst, force_cast=False):
-    #    if self.top_of_virtualizable_hierarchy:
-    #        if force_cast:
-    #            vinst = llops.genop('cast_pointer', [vinst], resulttype=self)
-    #        cname = inputconst(lltype.Void, 'vable_token')
-    #        cvalue = inputconst(llmemory.GCREF,
-    #                            lltype.nullptr(llmemory.GCREF.TO))
-    #        llops.genop('setfield', [vinst, cname, cvalue])
-    #    else:
-    #        self.rbase.set_vable(llops, vinst, force_cast=True)

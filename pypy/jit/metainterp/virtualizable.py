@@ -221,20 +221,20 @@ class VirtualizableInfo(object):
 
         def clear_jit_frame(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            if virtualizable.jit_frame:
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 force_now(virtualizable)
-                assert not virtualizable.jit_frame
+                assert virtualizable.jit_frame == jitframe.TOKEN_NONE
         self.clear_jit_frame = clear_jit_frame
 
         def tracing_before_residual_call(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            assert not virtualizable.jit_frame
+            assert virtualizable.jit_frame == jitframe.TOKEN_NONE
             virtualizable.jit_frame = jitframe.TOKEN_TRACING_RESCALL
         self.tracing_before_residual_call = tracing_before_residual_call
 
         def tracing_after_residual_call(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            if virtualizable.jit_frame:
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 # not modified by the residual call; assert that it is still
                 # set to TOKEN_TRACING_RESCALL and clear it.
                 assert virtualizable.jit_frame == jitframe.TOKEN_TRACING_RESCALL
@@ -262,7 +262,7 @@ class VirtualizableInfo(object):
 
         def is_token_nonnull_gcref(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            return bool(virtualizable.jit_frame)
+            return virtualizable.jit_frame != jitframe.TOKEN_NONE
         self.is_token_nonnull_gcref = is_token_nonnull_gcref
 
         def reset_token_gcref(virtualizable):
@@ -276,7 +276,7 @@ class VirtualizableInfo(object):
     def finish(self):
         #
         def force_virtualizable_if_necessary(virtualizable):
-            if virtualizable.jit_frame:
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 self.force_now(virtualizable)
         force_virtualizable_if_necessary._always_inline_ = True
         #
