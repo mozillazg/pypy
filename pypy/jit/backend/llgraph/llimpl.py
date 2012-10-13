@@ -1381,8 +1381,12 @@ def finish_value_ref(frame):
             return lltype.cast_opaque_ptr(llmemory.GCREF, result)
         else:
             return lltype.nullptr(llmemory.GCREF.TO)
-    assert lltype.typeOf(x) == llmemory.GCREF
+    #assert lltype.typeOf(x) == llmemory.GCREF
     return x
+
+def set_finish_value_ref(frame, value):
+    frame = _from_opaque(frame)
+    frame._finish_value = value
 
 ##_pseudo_exceptions = {}
 
@@ -1943,6 +1947,7 @@ setannotation(frame_get_value_count, annmodel.SomeInteger())
 setannotation(finish_value_int,   annmodel.SomeInteger())
 setannotation(finish_value_float, s_FloatStorage)
 setannotation(finish_value_ref,   annmodel.SomePtr(llmemory.GCREF))
+setannotation(set_finish_value_ref, annmodel.s_None)
 setannotation(force, annmodel.SomeInteger())
 
 setannotation(do_arraylen_gc, annmodel.SomeInteger())

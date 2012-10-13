@@ -167,6 +167,11 @@ class AbstractCPU(object):
         GUARD_NO_EXCEPTION, to return the exception."""
         return jitframe.jf_finish_ref
 
+    def set_finish_value_ref(self, jitframe, value):
+        """Store on the jitframe a random GCREF value that will be returned
+        by the following call to get_finish_value_ref()."""
+        jitframe.jf_finish_ref = value
+
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is
         enough to redirect all CALL_ASSEMBLERs already compiled that call
