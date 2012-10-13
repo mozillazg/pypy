@@ -6,6 +6,7 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib import rstack
 from pypy.rlib.jit import JitDebugInfo, Counters
+from pypy.rlib.rerased import new_erasing_pair
 from pypy.conftest import option
 from pypy.tool.sourcetools import func_with_new_name
 
@@ -584,6 +585,10 @@ class ResumeAtPositionDescr(ResumeGuardDescr):
         self.copy_all_attributes_into(res)
         return res
 
+
+erase_list_virtuals, unerase_list_virtuals = (
+    new_erasing_pair("list of virtuals"))
+
 class ResumeGuardForcedDescr(ResumeGuardDescr):
 
     def __init__(self, metainterp_sd, jitdriver_sd):
@@ -634,34 +639,12 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         self.save_data(jitframe, all_virtuals)
 
     def save_data(self, jitframe, value):
-        return   # XXXXX
-        globaldata = self.metainterp_sd.globaldata
-        if we_are_translated():
-            assert key not in globaldata.resume_virtuals
-            globaldata.resume_virtuals[key] = value
-        else:
-            rv = globaldata.resume_virtuals_not_translated
-            for key1, value1 in rv:
-                assert key1 != key
-            rv.append((key, value))
+        llvalue = erase_list_virtuals(value)
+        self.metainterp_sd.cpu.set_finish_value_ref(jitframe, llvalue)
 
-    def fetch_data(self, key):
-        XXXXX
-        globaldata = self.metainterp_sd.globaldata
-        if we_are_translated():
-            assert key in globaldata.resume_virtuals
-            data = globaldata.resume_virtuals[key]
-            del globaldata.resume_virtuals[key]
-        else:
-            rv = globaldata.resume_virtuals_not_translated
-            for i in range(len(rv)):
-                if rv[i][0] == key:
-                    data = rv[i][1]
-                    del rv[i]
-                    break
-            else:
-                assert 0, "not found: %r" % (key,)
-        return data
+    def fetch_data(self, jitframe):
+        llvalue = self.metainterp_sd.cpu.get_finish_value_ref(jitframe)
+        return unerase_list_virtuals(llvalue)
 
     def _clone_if_mutable(self):
         res = self.__class__(self.metainterp_sd, self.jitdriver_sd)

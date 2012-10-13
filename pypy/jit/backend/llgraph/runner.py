@@ -321,6 +321,11 @@ class BaseCPU(model.AbstractCPU):
         assert lltype.typeOf(jitframe) == llmemory.GCREF
         return llimpl.finish_value_ref(jitframe)
 
+    def set_finish_value_ref(self, jitframe, value):
+        assert lltype.typeOf(jitframe) == llmemory.GCREF
+        #assert lltype.typeOf(value) == llmemory.GCREF
+        llimpl.set_finish_value_ref(jitframe, value)
+
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         if we_are_translated():
             raise ValueError("CALL_ASSEMBLER not supported")
