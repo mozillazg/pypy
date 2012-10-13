@@ -321,10 +321,14 @@ class BaseCPU(model.AbstractCPU):
         assert lltype.typeOf(jitframe) == llmemory.GCREF
         return llimpl.finish_value_ref(jitframe)
 
-    def set_finish_value_ref(self, jitframe, value):
+    def get_savedata_ref(self, jitframe):
+        assert lltype.typeOf(jitframe) == llmemory.GCREF
+        return llimpl.get_savedata_ref(jitframe)
+
+    def set_savedata_ref(self, jitframe, value):
         assert lltype.typeOf(jitframe) == llmemory.GCREF
         #assert lltype.typeOf(value) == llmemory.GCREF
-        llimpl.set_finish_value_ref(jitframe, value)
+        llimpl.set_savedata_ref(jitframe, value)
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         if we_are_translated():
