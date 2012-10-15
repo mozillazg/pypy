@@ -1061,6 +1061,7 @@ class Frame(object):
                     raise Exception("Nonsense type %s" % TYPE)
 
             subframe = self.cpu._execute_token(loop_token)
+            jd = loop_token.outermost_jitdriver_sd
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
             assembler_helper = assembler_helper_ptr._obj._callable
             try:

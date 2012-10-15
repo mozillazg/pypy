@@ -165,7 +165,7 @@ def test_compile_tmp_callback():
         portal_runner_ptr = llhelper(lltype.Ptr(FUNC), ll_portal_runner)
         portal_runner_adr = llmemory.cast_ptr_to_adr(portal_runner_ptr)
         portal_calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, None)
-        portal_finishtoken = compile.DoneWithThisFrameDescrInt()
+        portal_finishtoken = compile.DoneWithThisFrameDescrInt(None, None)
         num_red_args = 2
         result_type = INT
     #
@@ -184,7 +184,7 @@ def test_compile_tmp_callback():
     jit_frame = cpu.execute_token(loop_token, -156, -178)
     fail_descr = cpu.get_latest_descr(jit_frame)
     assert isinstance(fail_descr, compile.PropagateExceptionDescr)
-    got = cpu.grab_exc_value(jit_frame)
+    got = cpu.get_finish_value_ref(jit_frame)
     assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), got) == llexc
     #
     class FakeMetaInterpSD:
