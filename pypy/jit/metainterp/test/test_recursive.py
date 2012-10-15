@@ -6,8 +6,8 @@ from pypy.rlib.debug import fatalerror
 from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
+from pypy.rpython.lltypesystem import llmemory
 from pypy.jit.metainterp.warmspot import get_stats
-from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 
 class RecursiveTests:
 
@@ -824,7 +824,7 @@ class RecursiveTests:
             # at the level 2 is set to a non-zero value when doing the
             # call to the level 3 only.  This used to fail when the test
             # is run via pypy.jit.backend.x86.test.test_recursive.
-            assert ll_subframe.jit_frame == lltype.nullptr(JITFRAMEPTR.TO)
+            assert ll_subframe.jit_frame == lltype.nullptr(llmemory.GCREF.TO)
 
         def main(codeno):
             frame = Frame()

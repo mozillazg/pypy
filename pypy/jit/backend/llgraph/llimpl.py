@@ -1064,33 +1064,10 @@ class Frame(object):
                     raise Exception("Nonsense type %s" % TYPE)
 
             subframe = self.cpu._execute_token(loop_token)
-            jd = loop_token.outermost_jitdriver_sd
-            assert jd is not None, ("call_assembler(): the loop_token needs "
-                                    "to have 'outermost_jitdriver_sd'")
-            if jd.index_of_virtualizable != -1:
-                vable = args[jd.index_of_virtualizable]
-            else:
-                vable = lltype.nullptr(llmemory.GCREF.TO)
-            #
-            # Emulate the fast path
-            failindex = frame_descr_index(subframe)
-            if failindex == self.cpu.done_with_this_frame_int_v:
-                reset_vable(jd, vable)
-                return self.cpu.get_latest_value_int(subframe, 0)
-            if failindex == self.cpu.done_with_this_frame_ref_v:
-                reset_vable(jd, vable)
-                return self.cpu.get_latest_value_ref(subframe, 0)
-            if failindex == self.cpu.done_with_this_frame_float_v:
-                reset_vable(jd, vable)
-                return self.cpu.get_latest_value_float(subframe, 0)
-            if failindex == self.cpu.done_with_this_frame_void_v:
-                reset_vable(jd, vable)
-                return None
-            #
             assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
             assembler_helper = assembler_helper_ptr._obj._callable
             try:
-                return assembler_helper(subframe, vable)
+                return assembler_helper(subframe)
             except LLException, lle:
                 assert self._last_exception is None, "exception left behind"
                 self._last_exception = lle
@@ -1845,6 +1822,7 @@ def get_err_result_for_type(T):
         return 0
 
 def reset_vable(jd, vable):
+    xxxxxxxxxxxxx
     if jd.index_of_virtualizable != -1:
         fielddescr = jd.jit_frame_descr
         do_setfield_gc_ptr(vable, fielddescr.ofs,
