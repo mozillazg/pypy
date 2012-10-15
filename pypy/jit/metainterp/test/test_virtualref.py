@@ -110,7 +110,9 @@ class VRefTests:
                   if str(box._getrepr_()).endswith('JitVirtualRef')]
         assert len(bxs2) == 1
         JIT_VIRTUAL_REF = self.vrefinfo.JIT_VIRTUAL_REF
-        someframe = lltype.malloc(jitframe.JITFRAMEPTR.TO, 5)
+        JITFRAME = lltype.GcStruct('SOME_JIT_FRAME')
+        someframe = lltype.malloc(JITFRAME)
+        someframe = lltype.cast_opaque_ptr(llmemory.GCREF, someframe)
         bxs2[0].getref(lltype.Ptr(JIT_VIRTUAL_REF)).jit_frame = someframe
         #
         # try reloading from blackhole.py's point of view

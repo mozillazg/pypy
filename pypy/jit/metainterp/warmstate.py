@@ -574,7 +574,6 @@ class WarmEnterState(object):
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
         jd = self.jitdriver_sd
-        cpu = self.cpu
 
         def can_inline_greenargs(*greenargs):
             if can_never_inline(*greenargs):
@@ -611,8 +610,9 @@ class WarmEnterState(object):
                 if cell.counter == -1:    # used to be a valid entry bridge,
                     cell.counter = 0      # but was freed in the meantime.
                 memmgr = warmrunnerdesc.memory_manager
-                procedure_token = compile_tmp_callback(cpu, jd, greenkey,
-                                                       redargtypes, memmgr)
+                procedure_token = compile_tmp_callback(
+                    warmrunnerdesc.metainterp_sd, jd,
+                    greenkey, redargtypes, memmgr)
                 cell.set_procedure_token(procedure_token)
             return procedure_token
         self.get_assembler_token = get_assembler_token

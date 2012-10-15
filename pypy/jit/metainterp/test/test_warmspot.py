@@ -1,5 +1,5 @@
 import py
-from pypy.rpython.lltypesystem import lltype
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, set_param, unroll_safe
 from pypy.jit.backend.llgraph import runner
@@ -331,6 +331,8 @@ class TestWarmspotDirect(object):
         exc_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
         cls.exc_vtable = exc_vtable
 
+        cls.FAKEFRAME = lltype.GcStruct('FAKEFRAME')
+
         class FakeFailDescr(object):
             def __init__(self, no):
                 self.no = no
@@ -377,7 +379,7 @@ class TestWarmspotDirect(object):
                 return "not callable"
 
             def get_latest_descr(self, frame):
-                assert lltype.typeOf(frame) == JITFRAMEPTR
+                assert frame._obj.container._TYPE == cls.FAKEFRAME
                 return FakeFailDescr(self._fail_index)
 
         driver = JitDriver(reds = ['red'], greens = ['green'])
@@ -401,14 +403,15 @@ class TestWarmspotDirect(object):
 
         [jd] = self.desc.jitdrivers_sd
         cpu = self.desc.cpu
-        fakeframe = lltype.malloc(JITFRAMEPTR.TO, 5)
+        fakeframe = lltype.malloc(self.FAKEFRAME)
+        fakeframe = lltype.cast_opaque_ptr(llmemory.GCREF, fakeframe)
         cpu._fail_index = 0
-        assert jd._assembler_call_helper(fakeframe, 0) == 3
+        assert jd._assembler_call_helper(fakeframe) == 3
         cpu._fail_index = 1
-        assert jd._assembler_call_helper(fakeframe, 0) == 10
+        assert jd._assembler_call_helper(fakeframe) == 10
         try:
             cpu._fail_index = 3
-            jd._assembler_call_helper(fakeframe, 0)
+            jd._assembler_call_helper(fakeframe)
         except LLException, lle:
             assert lle[0] == self.exc_vtable
         else:
