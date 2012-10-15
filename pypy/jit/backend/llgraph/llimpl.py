@@ -800,9 +800,6 @@ class Frame(object):
         self.overflow_flag = ovf
         return z
 
-    def op_keepalive(self, _, x):
-        pass
-
     # ----------
     # delegating to the builtins do_xxx() (done automatically for simple cases)
 
