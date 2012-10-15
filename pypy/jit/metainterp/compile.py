@@ -823,7 +823,7 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
 class PropagateExceptionDescr(AbstractFailDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         cpu = metainterp_sd.cpu
-        exception = cpu.grab_exc_value(jitframe)
+        exception = cpu.get_finish_value_ref(jitframe)
         assert exception, "PropagateExceptionDescr: no exception??"
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, exception)
 
@@ -833,7 +833,6 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
     calls back the interpreter.  Used temporarily: a fully compiled
     version of the code may end up replacing it.
     """
-    XXXX # fix me
     jitcell_token = make_jitcell_token(jitdriver_sd)
     nb_red_args = jitdriver_sd.num_red_args
     assert len(redargtypes) == nb_red_args
@@ -872,6 +871,7 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
         ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
         ]
     operations[1].setfailargs([])
+    operations[2].setfailargs([])
     operations = get_deep_immutable_oplist(operations)
     cpu.compile_loop(inputargs, operations, jitcell_token, log=False)
     if memory_manager is not None:    # for tests
