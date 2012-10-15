@@ -6,7 +6,6 @@ from pypy.jit.backend.llgraph import runner
 
 from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_NAMES
-from pypy.jit.metainterp.jitframe import JITFRAMEPTR
 
 
 class Exit(Exception):
