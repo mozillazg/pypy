@@ -820,14 +820,14 @@ def compile_trace(metainterp, resumekey, resume_at_jump_descr=None):
 
 # ____________________________________________________________
 
-class PropagateExceptionDescr(AbstractFailDescr):
+class PropagateExceptionDescr(ResumeDescr):
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         cpu = metainterp_sd.cpu
         exception = cpu.get_finish_value_ref(jitframe)
         assert exception, "PropagateExceptionDescr: no exception??"
         raise metainterp_sd.ExitFrameWithExceptionRef(cpu, exception)
 
-def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
+def compile_tmp_callback(metainterp_sd, jitdriver_sd, greenboxes, redargtypes,
                          memory_manager=None):
     """Make a LoopToken that corresponds to assembler code that just
     calls back the interpreter.  Used temporarily: a fully compiled
@@ -850,12 +850,16 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
     result_type = jitdriver_sd.result_type
     if result_type == history.INT:
         result = BoxInt()
+        DoneCls = DoneWithThisFrameDescrInt
     elif result_type == history.REF:
         result = BoxPtr()
+        DoneCls = DoneWithThisFrameDescrRef
     elif result_type == history.FLOAT:
         result = BoxFloat()
+        DoneCls = DoneWithThisFrameDescrFloat
     elif result_type == history.VOID:
         result = None
+        DoneCls = DoneWithThisFrameDescrVoid
     else:
         assert 0, "bad result_type"
     if result is not None:
@@ -865,14 +869,16 @@ def compile_tmp_callback(cpu, jitdriver_sd, greenboxes, redargtypes,
     #
     jd = jitdriver_sd
     faildescr = PropagateExceptionDescr()
+    finishdescr = DoneCls(metainterp_sd, jitdriver_sd)
     operations = [
         ResOperation(rop.CALL, callargs, result, descr=jd.portal_calldescr),
         ResOperation(rop.GUARD_NO_EXCEPTION, [], None, descr=faildescr),
-        ResOperation(rop.FINISH, finishargs, None, descr=jd.portal_finishtoken)
+        ResOperation(rop.FINISH, finishargs, None, descr=finishdescr)
         ]
     operations[1].setfailargs([])
     operations[2].setfailargs([])
     operations = get_deep_immutable_oplist(operations)
+    cpu = metainterp_sd.cpu
     cpu.compile_loop(inputargs, operations, jitcell_token, log=False)
     if memory_manager is not None:    # for tests
         memory_manager.keep_loop_alive(jitcell_token)

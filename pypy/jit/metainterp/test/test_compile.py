@@ -165,18 +165,21 @@ def test_compile_tmp_callback():
         portal_runner_ptr = llhelper(lltype.Ptr(FUNC), ll_portal_runner)
         portal_runner_adr = llmemory.cast_ptr_to_adr(portal_runner_ptr)
         portal_calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, None)
-        portal_finishtoken = compile.DoneWithThisFrameDescrInt(None, None)
         num_red_args = 2
         result_type = INT
     #
-    loop_token = compile_tmp_callback(cpu, FakeJitDriverSD(),
+    class FakeMetaInterpSD:
+        pass
+    FakeMetaInterpSD.cpu = cpu
+    #
+    loop_token = compile_tmp_callback(FakeMetaInterpSD, FakeJitDriverSD(),
                                       [ConstInt(12), ConstInt(34)], "ii")
     #
     raiseme = None
     # only two arguments must be passed in
     jit_frame = cpu.execute_token(loop_token, -156, -178)
     fail_descr = cpu.get_latest_descr(jit_frame)
-    assert fail_descr is FakeJitDriverSD().portal_finishtoken
+    assert isinstance(fail_descr, compile.DoneWithThisFrameDescrInt)
     #
     EXC = lltype.GcStruct('EXC')
     llexc = lltype.malloc(EXC)

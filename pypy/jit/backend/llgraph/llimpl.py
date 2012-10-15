@@ -479,6 +479,7 @@ def compile_redirect_fail(old_loop, old_index, new_loop):
 # ------------------------------
 
 class Frame(object):
+    _carry_around_for_tests = True
     OPHANDLERS = [None] * (rop._LAST+1)
 
     def __init__(self, cpu):

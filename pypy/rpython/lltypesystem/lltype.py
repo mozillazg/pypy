@@ -1049,6 +1049,8 @@ def normalizeptr(p, check=True):
         # this must be an opaque ptr originating from an integer
         assert isinstance(obj, _opaque)
         return cast_int_to_ptr(obj.ORIGTYPE, container)
+    if getattr(container, '_carry_around_for_tests', False):
+        return p
     if container is not obj:
         p = _ptr(Ptr(typeOf(container)), container, p._solid)
     return p
