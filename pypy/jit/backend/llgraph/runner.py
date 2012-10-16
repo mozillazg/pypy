@@ -2,9 +2,15 @@
 from weakref import WeakKeyDictionary
 
 from pypy.jit.backend import model
-from pypy.jit.metainterp.history import Const
+from pypy.jit.backend.llgraph import support
+from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, INT,\
+     REF, FLOAT
 from pypy.jit.metainterp.resoperation import rop
+
 from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.lltypesystem import lltype, llmemory
+
+from pypy.rlib.rarithmetic import ovfcheck
 
 class LLLoop(object):
     def __init__(self, inputargs, operations):
@@ -26,11 +32,18 @@ class Jump(Exception):
         self.descr = descr
         self.args = args
 
+class CallDescr(AbstractDescr):
+    def __init__(self, RESULT, ARGS):
+        self.RESULT = RESULT
+        self.ARGS = ARGS
+
 class LLGraphCPU(model.AbstractCPU):
     def __init__(self, rtyper):
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
         self.known_labels = WeakKeyDictionary()
+        self.exc_value = lltype.nullptr(llmemory.GCREF.TO)
+        self.descrs = {}
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
         self.total_compiled_loops += 1
@@ -70,6 +83,42 @@ class LLGraphCPU(model.AbstractCPU):
     def clear_latest_values(self, count):
         del self.latest_values
 
+    def grab_exc_value(self):
+        return self.exc_value
+
+    def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
+        key = (getkind(RESULT),
+               tuple([getkind(A) for A in ARGS]),
+               effect_info)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = CallDescr(RESULT, ARGS)
+            self.descrs[key] = descr
+            return descr
+
+
+
+    def _calldescr_dynamic_for_tests(self, atypes, rtype,
+                                     abiname='FFI_DEFAULT_ABI'):
+        # XXX WTF is that and why it breaks all abstractions?
+        from pypy.jit.backend.llsupport import ffisupport
+        return ffisupport.calldescr_dynamic_for_tests(self, atypes, rtype,
+                                                      abiname)
+
+    # ------------------------------------------------------------
+
+    def call(self, func, calldescr, args):
+        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
+        res = func(*args)
+        return support.cast_result(calldescr.RESULT, res)
+
+    def do_call(self, func, calldescr, args_i, args_r, args_f):
+        args = support.cast_call_args(calldescr.ARGS, args_i, args_r, args_f)
+        return self.call(func, calldescr, args)
+
+    bh_call_i = do_call
+
 class LLFrame(object):
     def __init__(self, cpu, argboxes, args):
         self.env = {}
@@ -77,6 +126,7 @@ class LLFrame(object):
         assert len(argboxes) == len(args)
         for box, arg in zip(argboxes, args):
             self.env[box] = arg
+        self.overflow_flag = False
 
     def lookup(self, arg):
         if isinstance(arg, Const):
@@ -149,10 +199,54 @@ class LLFrame(object):
 
     def execute_guard_false(self, descr, arg):
         if arg:
-            self.fail_guard(descr)    
+            self.fail_guard(descr)
+
+    def execute_int_add_ovf(self, _, x, y):
+        try:
+            z = ovfcheck(x + y)
+        except OverflowError:
+            ovf = True
+            z = 0
+        else:
+            ovf = False
+        self.overflow_flag = ovf
+        return z
+
+    def execute_int_sub_ovf(self, _, x, y):
+        try:
+            z = ovfcheck(x - y)
+        except OverflowError:
+            ovf = True
+            z = 0
+        else:
+            ovf = False
+        self.overflow_flag = ovf
+        return z
+
+    def execute_int_mul_ovf(self, _, x, y):
+        try:
+            z = ovfcheck(x * y)
+        except OverflowError:
+            ovf = True
+            z = 0
+        else:
+            ovf = False
+        self.overflow_flag = ovf
+        return z        
+
+    def execute_guard_no_overflow(self, descr):
+        if self.overflow_flag:
+            self.fail_guard(descr)
+
+    def execute_guard_overflow(self, descr):
+        if not self.overflow_flag:
+            self.fail_guard(descr)
 
     def execute_jump(self, descr, *args):
         raise Jump(descr, args)
+
+    def execute_call(self, descr, *args):
+        return self.cpu.call(args[0], descr, args[1:])
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
@@ -176,7 +270,8 @@ def _setup():
     for k, v in rop.__dict__.iteritems():
         if not k.startswith("_"):
             func = _make_impl_from_blackhole_interp(k)
-            if func is not None:
-                setattr(LLFrame, 'execute_' + k.lower(), func)
+            fname = 'execute_' + k.lower()
+            if func is not None and not hasattr(LLFrame, fname):
+                setattr(LLFrame, fname, func)
 
 _setup()

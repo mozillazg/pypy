@@ -216,7 +216,7 @@ class AbstractCPU(object):
     def arraydescrof(self, A):
         raise NotImplementedError
 
-    def calldescrof(self, FUNC, ARGS, RESULT):
+    def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         # FUNC is the original function type, but ARGS is a list of types
         # with Voids removed
         raise NotImplementedError

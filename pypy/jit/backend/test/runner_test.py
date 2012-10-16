@@ -474,7 +474,7 @@ class BaseBackendTest(Runner):
                     ]
                 ops[1].setfailargs([])
             else:
-                v_exc = self.cpu.ts.BoxRef()
+                v_exc = BoxPtr()
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
                     ResOperation(rop.GUARD_OVERFLOW, [], None,
