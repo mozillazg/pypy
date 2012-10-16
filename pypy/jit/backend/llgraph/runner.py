@@ -33,10 +33,16 @@ class LLGraphCPU(model.AbstractCPU):
         self.known_labels = WeakKeyDictionary()
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+        self.total_compiled_loops += 1
         for i, op in enumerate(operations):
             if op.getopnum() == rop.LABEL:
                 self.known_labels[op.getdescr()] = (operations, i)
         looptoken._llgraph_loop = LLLoop(inputargs, operations)
+
+    def compile_bridge(self, faildescr, inputargs, operations,
+                       original_loop_token):
+        faildescr._llgraph_bridge = LLLoop(inputargs, operations)
+        self.total_compiled_bridges += 1
 
     def make_execute_token(self, *argtypes):
         return self._execute_token
@@ -57,6 +63,12 @@ class LLGraphCPU(model.AbstractCPU):
     def get_latest_value_int(self, index):
         return self.latest_values[index]
     get_latest_value_float = get_latest_value_int
+
+    def get_latest_value_count(self):
+        return len(self.latest_values)
+
+    def clear_latest_values(self, count):
+        del self.latest_values
 
 class LLFrame(object):
     def __init__(self, cpu, argboxes, args):
@@ -86,6 +98,16 @@ class LLFrame(object):
                 self.do_renaming(label_op.getarglist(), j.args)
                 i += 1
                 continue
+            except GuardFailed, gf:
+                if hasattr(gf.descr, '_llgraph_bridge'):
+                    i = 0
+                    bridge = gf.descr._llgraph_bridge
+                    operations = bridge.operations
+                    newargs = [self.env[arg] for arg in
+                               self.current_op.getfailargs() if arg is not None]
+                    self.do_renaming(bridge.inputargs, newargs)
+                    continue
+                raise
             if op.result is not None:
                 assert resval is not None
                 self.env[op.result] = resval
@@ -111,6 +133,9 @@ class LLFrame(object):
 
     # -----------------------------------------------------
 
+    def fail_guard(self, descr):
+        raise GuardFailed(self._getfailargs(), descr)
+
     def execute_finish(self, descr, arg=None):
         raise ExecutionFinished(descr, arg)
 
@@ -120,7 +145,11 @@ class LLFrame(object):
 
     def execute_guard_true(self, descr, arg):
         if not arg:
-            raise GuardFailed(self._getfailargs(), descr)
+            self.fail_guard(descr)
+
+    def execute_guard_false(self, descr, arg):
+        if arg:
+            self.fail_guard(descr)    
 
     def execute_jump(self, descr, *args):
         raise Jump(descr, args)
