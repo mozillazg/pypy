@@ -1,7 +1,6 @@
 from pypy.rlib.debug import debug_start, debug_print, debug_stop
 from pypy.rlib.rarithmetic import intmask
 from pypy.jit.metainterp import history
-from pypy.jit.codewriter.longlong import longlong2floatstorage
 from pypy.rpython.lltypesystem import lltype
 
 
@@ -127,56 +126,51 @@ class AbstractCPU(object):
     def get_latest_descr(self, jitframe):
         """Return the descr of the last operation executed by the
         jitframe."""
-        return jitframe.jf_descr
+        raise NotImplementedError
 
     def get_latest_value_int(self, jitframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns an int."""
-        return intmask(jitframe.jf_nongcvalues[index])
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns an int."""
+        raise NotImplementedError
 
     def get_latest_value_float(self, jitframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a FLOATSTORAGE."""
-        return longlong2floatstorage(jitframe.jf_nongcvalues[index])
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns a FLOATSTORAGE."""
+        raise NotImplementedError
 
     def get_latest_value_ref(self, jitframe, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a GCREF."""
-        return jitframe.jf_gcvalues[index]
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns a GCREF."""
+        raise NotImplementedError
 
     def get_latest_value_count(self, jitframe):
         """Return how many values are ready to be returned by
-        get_latest_value_xxx().  Only after a guard failure; not
-        necessarily correct after a FINISH."""
-        return len(jitframe.jf_gcvalues)
+        get_latest_value_xxx()."""
+        raise NotImplementedError
 
     def get_finish_value_int(self, jitframe):
         """Return the result passed to FINISH, which was an int."""
-        return jitframe.jf_finish_int
+        raise NotImplementedError
 
     def get_finish_value_float(self, jitframe):
         """Return the result passed to FINISH, which was a FLOATSTORAGE."""
-        return jitframe.jf_finish_float
+        raise NotImplementedError
 
     def get_finish_value_ref(self, jitframe):
         """Return and clear the result passed to FINISH, which was a GCREF.
         Also used when it exits due to a failure of a GUARD_EXCEPTION or
         GUARD_NO_EXCEPTION, to return the exception."""
-        xxxx
-        return jitframe.jf_finish_ref
+        raise NotImplementedError
 
     def get_savedata_ref(self, jitframe):
         """Return and clear the last value stored by the frontend with
         set_savedata_ref."""
-        xxxx
+        raise NotImplementedError
 
     def set_savedata_ref(self, jitframe, value):
         """Store on the jitframe a random GCREF value that will be returned
         by the following call to get_savedata_ref()."""
-        xxxx
+        raise NotImplementedError
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
         """Redirect oldlooptoken to newlooptoken.  More precisely, it is

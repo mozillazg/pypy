@@ -21,13 +21,15 @@ else:
 #        +--------------------+    <== aligned to 16 bytes
 
 if WORD == 4:
+    # enough for calls with up to 7 arguments, or 7 scratch stores
     SCRATCH_SIZE = 7     # total size: 32 bytes
 else:
+    # enough for calls with up to 6+3 arguments, or 3 scratch stores
     SCRATCH_SIZE = 3     # total size: 32 bytes
 
 # All the rest of the data is in a GC-managed variable-size "frame".
 # This frame object's address is always stored in the register EBP/RBP.
-# A frame is a jit.backend.llsupport.llmodel.FRAME = GcArray(Signed).
+# A frame is a jit.backend.llsupport.jitframe.JITFRAME.
 # The following locations are indices in this array.
 
 # The frame's fixed size gives the standard fixed part at the
