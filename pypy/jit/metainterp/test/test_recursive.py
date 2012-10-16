@@ -774,6 +774,9 @@ class RecursiveTests:
                            virtualizables = ['frame'],
                            get_printable_location = lambda codeno : str(codeno))
 
+        class Oups(Exception):
+            pass
+
         def main(codeno):
             frame = Frame()
             frame.thing = Thing(0)
@@ -790,6 +793,8 @@ class RecursiveTests:
                     subframe = Frame()
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
+                    if subframe.thing.val != nextval:
+                        raise Oups
                 frame.thing = Thing(nextval + 1)
                 i += 1
             return frame.thing.val
