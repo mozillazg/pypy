@@ -641,7 +641,7 @@ class Frame(object):
         count_jumps = _stats.exec_jumps
         log.trace('ran %d operations, %d jumps' % (count, count_jumps))
 
-    def _normalizedcontainer(self):
+    def _normalizedcontainer(self, check="ignored"):
         return self        # for lltype
 
     # ----------

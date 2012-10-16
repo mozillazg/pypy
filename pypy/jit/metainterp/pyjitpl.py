@@ -719,8 +719,8 @@ class MIFrame(object):
         standard_box = self.metainterp.virtualizable_boxes[-1]
         if standard_box is box:
             return False
-        if self.metainterp.heapcache.is_nonstandard_virtualizable(box):
-            return True
+        #if self.metainterp.heapcache.is_nonstandard_virtualizable(box):
+        #    return True
         eqbox = self.metainterp.execute_and_record(rop.PTR_EQ, None,
                                                    box, standard_box)
         eqbox = self.implement_guard_value(pc, eqbox)
@@ -728,8 +728,29 @@ class MIFrame(object):
         if isstandard:
             self.metainterp.replace_box(box, standard_box)
         else:
-            self.metainterp.heapcache.nonstandard_virtualizables_now_known(box)
+            self._force_virtualizable_if_necessary(box, pc)
+            pass #self.metainterp.heapcache.nonstandard_virtualizables_now_known(box)
         return not isstandard
+
+    def _force_virtualizable_if_necessary(self, box, orgpc):
+        vinfo = self.metainterp.jitdriver_sd.virtualizable_info
+        if vinfo is None:
+            return        # xxx?
+        if self.metainterp.heapcache.is_unescaped(box):
+            return
+        jfbox = self._opimpl_getfield_gc_any(box, vinfo.jit_frame_descr)
+        if not self._establish_nullity(jfbox, orgpc):
+            return      # jfbox is NULL
+        cpu = self.metainterp.cpu
+        descr = cpu.jitframe_get_jfdescr_descr()
+        jfdescrbox = self._opimpl_getfield_gc_any(jfbox, descr)
+        jfdescrbox = self.implement_guard_value(pc, jfdescrbox)
+        jfdescr = jfdescrbox.getref_base()
+        descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
+        if not descr:
+            return
+        import pdb; pdb.set_trace()
+        xxx
 
     def _get_virtualizable_field_index(self, fielddescr):
         # Get the index of a fielddescr.  Must only be called for
