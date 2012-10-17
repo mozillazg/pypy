@@ -37,6 +37,16 @@ class CallDescr(AbstractDescr):
         self.RESULT = RESULT
         self.ARGS = ARGS
 
+class FieldDescr(AbstractDescr):
+    def __init__(self, S, fieldname):
+        self.S = S
+        self.fieldname = fieldname
+        self.FIELD = getattr(S, fieldname)
+
+    def is_pointer_field(self):
+        return getkind(self.FIELD) == 'ref'
+
+
 class LLGraphCPU(model.AbstractCPU):
     def __init__(self, rtyper):
         self.rtyper = rtyper
@@ -76,6 +86,7 @@ class LLGraphCPU(model.AbstractCPU):
     def get_latest_value_int(self, index):
         return self.latest_values[index]
     get_latest_value_float = get_latest_value_int
+    get_latest_value_ref   = get_latest_value_int
 
     def get_latest_value_count(self):
         return len(self.latest_values)
@@ -87,7 +98,7 @@ class LLGraphCPU(model.AbstractCPU):
         return self.exc_value
 
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
-        key = (getkind(RESULT),
+        key = ('call', getkind(RESULT),
                tuple([getkind(A) for A in ARGS]),
                effect_info)
         try:
@@ -97,7 +108,14 @@ class LLGraphCPU(model.AbstractCPU):
             self.descrs[key] = descr
             return descr
 
-
+    def fielddescrof(self, S, fieldname):
+        key = ('field', S, fieldname)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = FieldDescr(S, fieldname)
+            self.descrs[key] = descr
+            return descr
 
     def _calldescr_dynamic_for_tests(self, atypes, rtype,
                                      abiname='FFI_DEFAULT_ABI'):
@@ -247,6 +265,14 @@ class LLFrame(object):
 
     def execute_call(self, descr, *args):
         return self.cpu.call(args[0], descr, args[1:])
+
+    def execute_getfield_gc(self, descr, p):
+        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
+
+    def execute_setfield_gc(self, descr, p, newvalue):
+        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        setattr(p, descr.fieldname, support.cast_arg(descr.FIELD, newvalue))
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):

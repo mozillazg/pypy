@@ -75,6 +75,19 @@ def cast_from_int(TYPE, x):
             x = heaptracker.adr2int(x)
         return lltype.cast_primitive(TYPE, x)
 
+def cast_from_ptr(TYPE, x):
+    return lltype.cast_opaque_ptr(TYPE, x)
+
+def cast_arg(TP, x):
+    kind = getkind(TP)
+    if kind == 'int':
+        return cast_from_int(TP, x)
+    elif kind == 'ref':
+        return cast_from_ptr(TP, x)
+    else:
+        assert kind == 'float'
+        return cast_from_floatstorage(TP, x)
+
 def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
     argsiter_i = iter(args_i or [])
     argsiter_r = iter(args_r or [])
@@ -91,7 +104,7 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
                     n = orderiter.next()
                     assert n == 'r'
                 x = argsiter_r.next()
-                x = lltype.cast_opaque_ptr(TYPE, x)
+                x = cast_from_ptr(TYPE, x)
             elif TYPE is lltype.Float or longlong.is_longlong(TYPE):
                 if args_in_order is not None:
                     n = orderiter.next()
