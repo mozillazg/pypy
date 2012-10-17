@@ -73,6 +73,16 @@ class FieldDescr(AbstractDescr):
     def is_pointer_field(self):
         return getkind(self.FIELD) == 'ref'
 
+    def is_float_field(self):
+        return getkind(self.FIELD) == 'float'
+
+    def is_field_signed(self):
+        return _is_signed_kind(self.FIELD)
+
+def _is_signed_kind(TYPE):
+    return (TYPE is not lltype.Bool and isinstance(TYPE, lltype.Number) and
+            rffi.cast(TYPE, -1) == -1)
+
 class ArrayDescr(AbstractDescr):
     def __init__(self, A):
         self.A = A
@@ -82,6 +92,15 @@ class ArrayDescr(AbstractDescr):
 
     def is_array_of_pointers(self):
         return getkind(self.A.OF) == 'ref'
+
+    def is_array_of_floats(self):
+        return getkind(self.A.OF) == 'float'
+
+    def is_item_signed(self):
+        return _is_signed_kind(self.A.OF)
+
+    def is_array_of_structs(self):
+        return isinstance(self.A.OF, lltype.Struct)
 
 class InteriorFieldDescr(AbstractDescr):
     def __init__(self, A, fieldname):
@@ -94,57 +113,73 @@ class InteriorFieldDescr(AbstractDescr):
 
 
 class LLGraphCPU(model.AbstractCPU):
+    from pypy.jit.metainterp.typesystem import llhelper as ts
     supports_floats = True
     supports_longlong = True
     supports_singlefloats = True
+    translate_support_code = False
 
-    def __init__(self, rtyper):
+    def __init__(self, rtyper, stats=None, *ignored_args, **ignored_kwds):
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
         self.known_labels = WeakKeyDictionary()
         self.last_exception = None
         self.descrs = {}
+        class MiniStats:
+            pass
+        self.stats = stats or MiniStats()
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+        clt = model.CompiledLoopToken(self, looptoken.number)
+        looptoken.compiled_loop_token = clt
         lltrace = LLTrace(inputargs, operations, looptoken)
-        looptoken._llgraph_loop = lltrace
-        looptoken._llgraph_alltraces = [lltrace]
+        clt._llgraph_loop = lltrace
+        clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
-        self.total_compiled_loops += 1
 
     def compile_bridge(self, faildescr, inputargs, operations,
-                       original_loop_token):
+                       original_loop_token, log=True):
+        clt = original_loop_token.compiled_loop_token
+        clt.compiling_a_bridge()
         lltrace = LLTrace(inputargs, operations, original_loop_token)
         faildescr._llgraph_bridge = lltrace
-        original_loop_token._llgraph_alltraces.append(lltrace)
+        clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)
-        self.total_compiled_bridges += 1
 
     def _record_labels(self, lltrace):
+        # xxx pfff, we need to clone the list of operations because the
+        # front-end will mutate them under our feet again
+        lltrace.operations = [op.copy_and_change(op.getopnum())
+                              for op in lltrace.operations]
         for i, op in enumerate(lltrace.operations):
             if op.getopnum() == rop.LABEL:
                 self.known_labels[op.getdescr()] = (lltrace, i)
 
     def invalidate_loop(self, looptoken):
-        for trace in looptoken._llgraph_alltraces:
+        for trace in looptoken.compiled_loop_token._llgraph_alltraces:
             trace.invalid = True
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
-        oldtrace = oldlooptoken._llgraph_loop
-        newtrace = newlooptoken._llgraph_loop
+        oldtrace = oldlooptoken.compiled_loop_token._llgraph_loop
+        newtrace = newlooptoken.compiled_loop_token._llgraph_loop
         OLD = [box.type for box in oldtrace.inputargs]
         NEW = [box.type for box in newtrace.inputargs]
         assert OLD == NEW
         assert not hasattr(oldlooptoken, '_llgraph_redirected')
-        oldlooptoken._llgraph_redirected = True
-        oldlooptoken._llgraph_loop = newtrace
+        oldlooptoken.compiled_loop_token._llgraph_redirected = True
+        oldlooptoken.compiled_loop_token._llgraph_loop = newtrace
+
+    def free_loop_and_bridges(self, compiled_loop_token):
+        for c in compiled_loop_token._llgraph_alltraces:
+            c.has_been_freed = True
+        model.AbstractCPU.free_loop_and_bridges(self, compiled_loop_token)
 
     def make_execute_token(self, *argtypes):
         return self._execute_token
 
     def _execute_token(self, loop_token, *args):
-        lltrace = loop_token._llgraph_loop
+        lltrace = loop_token.compiled_loop_token._llgraph_loop
         frame = LLFrame(self, lltrace.inputargs, args)
         try:
             frame.execute(lltrace)
@@ -270,7 +305,12 @@ class LLGraphCPU(model.AbstractCPU):
     def _do_call(self, func, args_i, args_r, args_f, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
-        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
+        ptr = llmemory.cast_int_to_adr(func).ptr
+        if hasattr(ptr._obj, 'graph'):
+            def func(*args):
+                return self.llinterp.eval_graph(ptr._obj.graph, args)
+        else:
+            func = ptr._obj._callable
         return self.call(func, args, TP.RESULT, calldescr)
 
     bh_call_i = _do_call
@@ -282,6 +322,7 @@ class LLGraphCPU(model.AbstractCPU):
         p = support.cast_arg(lltype.Ptr(descr.S), p)
         return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
 
+    bh_getfield_gc_pure = bh_getfield_gc
     bh_getfield_gc_i = bh_getfield_gc
     bh_getfield_gc_r = bh_getfield_gc
     bh_getfield_gc_f = bh_getfield_gc
@@ -467,6 +508,7 @@ class LLFrame(object):
         del lltrace
         i = 0
         while True:
+            assert not self.lltrace.has_been_freed
             op = self.lltrace.operations[i]
             if op.getopnum() == -124:      # force_spill, for tests
                 i += 1
@@ -637,6 +679,7 @@ class LLFrame(object):
             self.fail_guard(descr)
 
     def execute_jump(self, descr, *args):
+        assert descr is not None
         raise Jump(descr, args)
 
     def _do_math_sqrt(self, value):
