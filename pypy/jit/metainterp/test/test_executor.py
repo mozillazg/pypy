@@ -47,18 +47,18 @@ class FakeCPU(AbstractCPU):
     def bh_new(self, descr):
         return FakeResultR('new', descr)
 
-    def bh_arraylen_gc(self, descr, array):
+    def bh_arraylen_gc(self, array, descr):
         assert not array
         assert isinstance(descr, FakeDescr)
         return 55
 
-    def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
+    def bh_setfield_gc_f(self, struct, newvalue, fielddescr):
         self.fakesetfield = (struct, newvalue, fielddescr)
 
-    def bh_setarrayitem_gc_f(self, arraydescr, array, index, newvalue):
+    def bh_setarrayitem_gc_f(self, array, index, newvalue, arraydescr):
         self.fakesetarrayitem = (array, index, newvalue, arraydescr)
 
-    def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
+    def bh_call_f(self, func, args_i, args_r, args_f, calldescr):
         self.fakecalled = (func, calldescr, args_i, args_r, args_f)
         return longlong.getfloatstorage(42.5)
 
