@@ -3,7 +3,7 @@ from pypy.rlib.jit import JitDriver, hint, set_param
 from pypy.rlib.jit import unroll_safe, dont_look_inside, promote
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import fatalerror
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
 from pypy.jit.metainterp.warmspot import get_stats
@@ -1264,7 +1264,4 @@ class RecursiveTests:
 
 
 class TestLLtype(RecursiveTests, LLJitMixin):
-    pass
-
-class TestOOtype(RecursiveTests, OOJitMixin):
     pass

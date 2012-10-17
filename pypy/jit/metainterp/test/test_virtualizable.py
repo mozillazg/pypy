@@ -7,7 +7,7 @@ from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.jit import JitDriver, hint, dont_look_inside, promote
 from pypy.rlib.rarithmetic import intmask
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rpython.rclass import FieldListAccessor
 from pypy.jit.metainterp.warmspot import get_stats, get_translator
 from pypy.jit.metainterp import history
@@ -1374,12 +1374,7 @@ class ImplicitVirtualizableTests:
         print main(100)
         res = self.meta_interp(main, [100], inline=True, enable_opts='')
 
-class TestOOtype(#ExplicitVirtualizableTests,
-                 ImplicitVirtualizableTests,
-                 OOJitMixin):
-    pass
 
-        
 class TestLLtype(ExplicitVirtualizableTests,
                  ImplicitVirtualizableTests,
                  LLJitMixin):

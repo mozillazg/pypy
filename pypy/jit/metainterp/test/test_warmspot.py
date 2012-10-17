@@ -3,7 +3,7 @@ from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, set_param, unroll_safe
 from pypy.jit.backend.llgraph import runner
 
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_NAMES
 
 
@@ -313,12 +313,8 @@ class WarmspotTests(object):
 
 
 class TestLLWarmspot(WarmspotTests, LLJitMixin):
-    CPUClass = runner.LLtypeCPU
-    type_system = 'lltype'
+    pass
 
-class TestOOWarmspot(WarmspotTests, OOJitMixin):
-    ##CPUClass = runner.OOtypeCPU
-    type_system = 'ootype'
 
 class TestWarmspotDirect(object):
     def setup_class(cls):
