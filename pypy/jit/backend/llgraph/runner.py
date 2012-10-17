@@ -40,7 +40,7 @@ class Jump(Exception):
         self.args = args
 
 class CallDescr(AbstractDescr):
-    def __init__(self, RESULT, ARGS, extrainfo=None):
+    def __init__(self, RESULT, ARGS, extrainfo):
         self.RESULT = RESULT
         self.ARGS = ARGS
         self.extrainfo = extrainfo
@@ -306,7 +306,7 @@ class LLGraphCPU(model.AbstractCPU):
         try:
             return self.descrs[key]
         except KeyError:
-            descr = CallDescr(RESULT, ARGS)
+            descr = CallDescr(RESULT, ARGS, extrainfo)
             self.descrs[key] = descr
             return descr
 
@@ -485,7 +485,7 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_new(self, sizedescr):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
-                                      lltype.malloc(sizedescr.S))
+                                      lltype.malloc(sizedescr.S, zero=True))
 
     def bh_new_with_vtable(self, vtable, descr):
         result = lltype.malloc(descr.S)
