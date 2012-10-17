@@ -259,31 +259,39 @@ class LLGraphCPU(model.AbstractCPU):
         array = a._obj.container
         return array.getlength()
 
+    def bh_getarrayitem_gc(self, a, index, descr):
+        array = a._obj.container
+        return support.cast_result(descr.A.OF, array.getitem(index))
+
+    bh_getarrayitem_gc_i = bh_getarrayitem_gc
+    bh_getarrayitem_gc_r = bh_getarrayitem_gc
+    bh_getarrayitem_gc_f = bh_getarrayitem_gc
+
     def bh_setarrayitem_gc(self, a, index, item, descr):
         array = a._obj.container
         array.setitem(index, support.cast_arg(descr.A.OF, item))
 
-    def bh_getarrayitem_gc(self, a, index, descr):
-        array = a._obj.container
-        return support.cast_result(descr.A.OF, array.getitem(index))
+    bh_setarrayitem_gc_i = bh_setarrayitem_gc
+    bh_setarrayitem_gc_r = bh_setarrayitem_gc
+    bh_setarrayitem_gc_f = bh_setarrayitem_gc
 
     def bh_getinteriorfield_gc(self, a, index, descr):
         array = a._obj.container
         return support.cast_result(descr.FIELD,
                           getattr(array.getitem(index), descr.fieldname))
 
-    bh_getinteriorfield_gc_f = bh_getinteriorfield_gc
     bh_getinteriorfield_gc_i = bh_getinteriorfield_gc
     bh_getinteriorfield_gc_r = bh_getinteriorfield_gc
+    bh_getinteriorfield_gc_f = bh_getinteriorfield_gc
 
     def bh_setinteriorfield_gc(self, a, index, item, descr):
         array = a._obj.container
         setattr(array.getitem(index), descr.fieldname,
                 support.cast_arg(descr.FIELD, item))
 
-    bh_setinteriorfield_gc_f = bh_setinteriorfield_gc
-    bh_setinteriorfield_gc_r = bh_setinteriorfield_gc
     bh_setinteriorfield_gc_i = bh_setinteriorfield_gc
+    bh_setinteriorfield_gc_r = bh_setinteriorfield_gc
+    bh_setinteriorfield_gc_f = bh_setinteriorfield_gc
 
     def bh_newstr(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
