@@ -8,7 +8,7 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.codewriter import heaptracker
 
 from pypy.rpython.llinterp import LLInterpreter, LLException
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
+from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 
 from pypy.rlib.rarithmetic import ovfcheck
 
@@ -199,10 +199,7 @@ class LLGraphCPU(model.AbstractCPU):
 
     # ------------------------------------------------------------
 
-    def call(self, func, args, calldescr):
-        TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
-        RESULT = TP.RESULT
-        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
+    def call(self, func, args, RESULT, calldescr):
         try:
             res = func(*args)
             self.last_exception = None
@@ -218,7 +215,8 @@ class LLGraphCPU(model.AbstractCPU):
     def _do_call(self, func, args_i, args_r, args_f, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
-        return self.call(func, args, calldescr)
+        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
+        return self.call(func, args, TP.RESULT, calldescr)
 
     bh_call_i = _do_call
     bh_call_r = _do_call
@@ -453,6 +451,13 @@ class LLFrame(object):
         self.cpu.last_exception = None
         return support.cast_to_ptr(res)
 
+    def execute_guard_not_forced(self, descr):
+        pass     # XXX
+
+    def execute_guard_not_invalidated(self, descr):
+        if self.loop.invalid:
+            raise GuardFailed
+
     def execute_int_add_ovf(self, _, x, y):
         try:
             z = ovfcheck(x + y)
@@ -497,9 +502,18 @@ class LLFrame(object):
     def execute_jump(self, descr, *args):
         raise Jump(descr, args)
 
-    def execute_call(self, descr, *args):
-        call_args = support.cast_call_args_in_order(args[0], args[1:])
-        return self.cpu.call(args[0], call_args, descr)
+    def execute_call(self, descr, func, *args):
+        TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
+        ARGS = TP.ARGS
+        call_args = support.cast_call_args_in_order(ARGS, args)
+        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
+        return self.cpu.call(func, call_args, TP.RESULT, descr)
+
+    def execute_call_release_gil(self, descr, func, *args):
+        call_args = support.cast_call_args_in_order(descr.ARGS, args)
+        FUNC = lltype.FuncType(descr.ARGS, descr.RESULT)
+        func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
+        return self.cpu.call(func_to_call, call_args, descr.RESULT, descr)
 
     def execute_same_as(self, _, x):
         return x
@@ -510,6 +524,9 @@ class LLFrame(object):
     def execute_new_with_vtable(self, _, vtable):
         descr = heaptracker.vtable2descr(self.cpu, vtable)
         return self.cpu.bh_new_with_vtable(vtable, descr)
+
+    def execute_force_token(self, _):
+        import py; py.test.skip("XXX")
 
 
 def _setup():
