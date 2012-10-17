@@ -239,29 +239,6 @@ class LLGraphCPU(model.AbstractCPU):
         array = a._obj.container
         return support.cast_result(descr.A.OF, array.getitem(index))
 
-    def bh_strlen(self, s):
-        return s._obj.container.chars.getlength()
-
-    def bh_strgetitem(self, s, item):
-        return ord(s._obj.container.chars.getitem(item))
-
-    def bh_strsetitem(self, s, item, v):
-        s._obj.container.chars.setitem(item, chr(v))
-
-    def bh_copystrcontent(self, src, dst, srcstart, dststart, length):
-        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), src)
-        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), dst)
-        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
-        assert 0 <= dststart <= dststart + length <= len(dst.chars)
-        rstr.copy_string_contents(src, dst, srcstart, dststart, length)
-
-    def bh_copyunicodecontent(self, src, dst, srcstart, dststart, length):
-        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), src)
-        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), dst)
-        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
-        assert 0 <= dststart <= dststart + length <= len(dst.chars)
-        rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
-
     def bh_getinteriorfield_gc(self, a, index, descr):
         array = a._obj.container
         return support.cast_result(descr.FIELD,
@@ -280,6 +257,26 @@ class LLGraphCPU(model.AbstractCPU):
     bh_setinteriorfield_gc_r = bh_setinteriorfield_gc
     bh_setinteriorfield_gc_i = bh_setinteriorfield_gc
 
+    def bh_newstr(self, length):
+        return lltype.cast_opaque_ptr(llmemory.GCREF,
+                                      lltype.malloc(rstr.STR, length))
+
+    def bh_strlen(self, s):
+        return s._obj.container.chars.getlength()
+
+    def bh_strgetitem(self, s, item):
+        return ord(s._obj.container.chars.getitem(item))
+
+    def bh_strsetitem(self, s, item, v):
+        s._obj.container.chars.setitem(item, chr(v))
+
+    def bh_copystrcontent(self, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_string_contents(src, dst, srcstart, dststart, length)
+
     def bh_newunicode(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
                                       lltype.malloc(rstr.UNICODE, length))
@@ -293,16 +290,27 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_unicodesetitem(self, string, index, newvalue):
         string._obj.container.chars.setitem(index, unichr(newvalue))
 
+    def bh_copyunicodecontent(self, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
+
     def bh_new(self, sizedescr):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
                                       lltype.malloc(sizedescr.S))
 
-    def bh_new_with_vtable(self, descr, vtable):
+    def bh_new_with_vtable(self, vtable, descr):
         result = lltype.malloc(descr.S)
         result_as_objptr = lltype.cast_pointer(rclass.OBJECTPTR, result)
         result_as_objptr.typeptr = support.cast_from_int(rclass.CLASSTYPE,
                                                          vtable)
         return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+
+    def bh_new_array(self, length, arraydescr):
+        array = lltype.malloc(arraydescr.A, length, zero=True)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, array)
 
 
 class LLFrame(object):
@@ -467,7 +475,7 @@ class LLFrame(object):
 
     def execute_new_with_vtable(self, _, vtable):
         descr = heaptracker.vtable2descr(self.cpu, vtable)
-        return self.cpu.bh_new_with_vtable(descr, vtable)
+        return self.cpu.bh_new_with_vtable(vtable, descr)
 
 
 def _setup():
