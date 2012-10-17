@@ -440,7 +440,7 @@ class AbstractLLCPU(AbstractCPU):
         # --- end of GC unsafe code ---
         return fval
 
-    def bh_setinteriorfield_gc_i(self, gcref, itemindex, descr, value):
+    def bh_setinteriorfield_gc_i(self, gcref, itemindex, value, descr):
         assert isinstance(descr, InteriorFieldDescr)
         arraydescr = descr.arraydescr
         ofs, size, _ = self.unpack_arraydescr_size(arraydescr)
@@ -458,7 +458,7 @@ class AbstractLLCPU(AbstractCPU):
         else:
             raise NotImplementedError("size = %d" % fieldsize)
 
-    def bh_setinteriorfield_gc_r(self, gcref, itemindex, descr, newvalue):
+    def bh_setinteriorfield_gc_r(self, gcref, itemindex, newvalue, descr):
         assert isinstance(descr, InteriorFieldDescr)
         arraydescr = descr.arraydescr
         ofs, size, _ = self.unpack_arraydescr_size(arraydescr)
@@ -471,7 +471,7 @@ class AbstractLLCPU(AbstractCPU):
         items[0] = self.cast_gcref_to_int(newvalue)
         # --- end of GC unsafe code ---
 
-    def bh_setinteriorfield_gc_f(self, gcref, itemindex, descr, newvalue):
+    def bh_setinteriorfield_gc_f(self, gcref, itemindex, newvalue, descr):
         assert isinstance(descr, InteriorFieldDescr)
         arraydescr = descr.arraydescr
         ofs, size, _ = self.unpack_arraydescr_size(arraydescr)
@@ -588,7 +588,7 @@ class AbstractLLCPU(AbstractCPU):
     bh_setfield_raw_r = _base_do_setfield_r
     bh_setfield_raw_f = _base_do_setfield_f
 
-    def bh_raw_store_i(self, addr, offset, descr, newvalue):
+    def bh_raw_store_i(self, addr, offset, newvalue, descr):
         ofs, size, sign = self.unpack_arraydescr_size(descr)
         items = addr + offset
         for TYPE, _, itemsize in unroll_basic_sizes:
@@ -597,7 +597,7 @@ class AbstractLLCPU(AbstractCPU):
                 items[0] = rffi.cast(TYPE, newvalue)
                 break
 
-    def bh_raw_store_f(self, addr, offset, descr, newvalue):
+    def bh_raw_store_f(self, addr, offset, newvalue, descr):
         items = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE), addr + offset)
         items[0] = newvalue
 
