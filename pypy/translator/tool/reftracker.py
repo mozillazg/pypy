@@ -33,7 +33,10 @@ class BaseRefTrackerPage(GraphPage):
                 self.links[word] = linktext
             s = '<%s> %s\\n%s' % (typename, word, s)
             nodename = 'node%d' % len(nodes)
-            dotgen.emit_node(nodename, label=s, shape="box")
+            kwds = {}
+            if i == len(objectlist) - 1:
+                kwds['color'] = 'red'
+            dotgen.emit_node(nodename, label=s, shape="box", **kwds)
             nodes[uid(objectlist[i])] = nodename
             for o2 in self.get_referents(objectlist[i]):
                 if o2 is None:
