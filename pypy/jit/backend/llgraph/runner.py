@@ -46,18 +46,26 @@ class CallDescr(AbstractDescr):
         self.extrainfo = extrainfo
     def get_extra_info(self):
         return self.extrainfo
+    def __repr__(self):
+        return 'CallDescr(%r, %r, %r)' % (self.RESULT, self.ARGS,
+                                          self.extrainfo)
 
 class SizeDescr(AbstractDescr):
     def __init__(self, S):
         self.S = S
     def as_vtable_size_descr(self):
         return self
+    def __repr__(self):
+        return 'SizeDescr(%r)' % (self.S,)
 
 class FieldDescr(AbstractDescr):
     def __init__(self, S, fieldname):
         self.S = S
         self.fieldname = fieldname
         self.FIELD = getattr(S, fieldname)
+
+    def __repr__(self):
+        return 'FieldDescr(%r, %r)' % (self.S, self.fieldname)
 
     def sort_key(self):
         return self.fieldname
@@ -69,6 +77,9 @@ class ArrayDescr(AbstractDescr):
     def __init__(self, A):
         self.A = A
 
+    def __repr__(self):
+        return 'ArrayDescr(%r)' % (self.A,)
+
     def is_array_of_pointers(self):
         return getkind(self.A.OF) == 'ref'
 
@@ -77,6 +88,10 @@ class InteriorFieldDescr(AbstractDescr):
         self.A = A
         self.fieldname = fieldname
         self.FIELD = getattr(A.OF, fieldname)
+
+    def __repr__(self):
+        return 'InteriorFieldDescr(%r, %r)' % (self.A, self.fieldname)
+
 
 class LLGraphCPU(model.AbstractCPU):
     supports_floats = True
@@ -338,6 +353,41 @@ class LLGraphCPU(model.AbstractCPU):
     bh_setinteriorfield_gc_i = bh_setinteriorfield_gc
     bh_setinteriorfield_gc_r = bh_setinteriorfield_gc
     bh_setinteriorfield_gc_f = bh_setinteriorfield_gc
+
+    def bh_raw_load_i(self, struct, offset, descr):
+        ll_p = rffi.cast(rffi.CCHARP, struct)
+        ll_p = rffi.cast(lltype.Ptr(descr.A), rffi.ptradd(ll_p, offset))
+        value = ll_p[0]
+        return support.cast_result(descr.A.OF, value)
+
+    def bh_raw_load_f(self, struct, offset, descr):
+        ll_p = rffi.cast(rffi.CCHARP, struct)
+        ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
+                         rffi.ptradd(ll_p, offset))
+        return ll_p[0]
+
+    def bh_raw_load(self, struct, offset, descr):
+        if descr.A.OF == lltype.Float:
+            return self.bh_raw_load_f(struct, offset, descr)
+        else:
+            return self.bh_raw_load_i(struct, offset, descr)
+
+    def bh_raw_store_i(self, struct, offset, newvalue, descr):
+        ll_p = rffi.cast(rffi.CCHARP, struct)
+        ll_p = rffi.cast(lltype.Ptr(descr.A), rffi.ptradd(ll_p, offset))
+        ll_p[0] = rffi.cast(descr.A.OF, newvalue)
+
+    def bh_raw_store_f(self, struct, offset, newvalue, descr):
+        ll_p = rffi.cast(rffi.CCHARP, struct)
+        ll_p = rffi.cast(rffi.CArrayPtr(longlong.FLOATSTORAGE),
+                         rffi.ptradd(ll_p, offset))
+        ll_p[0] = newvalue
+
+    def bh_raw_store(self, struct, offset, newvalue, descr):
+        if descr.A.OF == lltype.Float:
+            self.bh_raw_store_f(struct, offset, newvalue, descr)
+        else:
+            self.bh_raw_store_i(struct, offset, newvalue, descr)
 
     def bh_newstr(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
