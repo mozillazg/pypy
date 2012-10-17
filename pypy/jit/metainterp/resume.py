@@ -1142,7 +1142,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         return self.cpu.bh_new(typedescr)
 
     def allocate_array(self, arraydescr, length):
-        return self.cpu.bh_new_array(arraydescr, length)
+        return self.cpu.bh_new_array(length, arraydescr)
 
     def allocate_string(self, length):
         return self.cpu.bh_newstr(length)
@@ -1201,36 +1201,36 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
             newvalue = self.decode_ref(fieldnum)
-            self.cpu.bh_setfield_gc_r(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_r(struct, newvalue, descr)
         elif descr.is_float_field():
             newvalue = self.decode_float(fieldnum)
-            self.cpu.bh_setfield_gc_f(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_f(struct, newvalue, descr)
         else:
             newvalue = self.decode_int(fieldnum)
-            self.cpu.bh_setfield_gc_i(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_i(struct, newvalue, descr)
 
     def setinteriorfield(self, index, descr, array, fieldnum):
         if descr.is_pointer_field():
             newvalue = self.decode_ref(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_r(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_r(array, index, newvalue, descr)
         elif descr.is_float_field():
             newvalue = self.decode_float(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_f(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_f(array, index, newvalue, descr)
         else:
             newvalue = self.decode_int(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_i(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_i(array, index, newvalue, descr)
 
     def setarrayitem_int(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_int(fieldnum)
-        self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_i(array, index, newvalue, arraydescr)
 
     def setarrayitem_ref(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_ref(fieldnum)
-        self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_r(array, index, newvalue, arraydescr)
 
     def setarrayitem_float(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_float(fieldnum)
-        self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_f(array, index, newvalue, arraydescr)
 
     def decode_int(self, tagged):
         num, tag = untag(tagged)
