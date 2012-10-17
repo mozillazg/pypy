@@ -11,6 +11,7 @@ from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 
 from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.rtimer import read_timestamp
 
 class LLTrace(object):
     has_been_freed = False
@@ -53,6 +54,9 @@ class FieldDescr(AbstractDescr):
         self.fieldname = fieldname
         self.FIELD = getattr(S, fieldname)
 
+    def sort_key(self):
+        return self.fieldname
+
     def is_pointer_field(self):
         return getkind(self.FIELD) == 'ref'
 
@@ -70,7 +74,12 @@ class InteriorFieldDescr(AbstractDescr):
         self.FIELD = getattr(A.OF, fieldname)
 
 class LLGraphCPU(model.AbstractCPU):
+    supports_floats = True
+    supports_longlong = True
+    supports_singlefloats = True
+
     def __init__(self, rtyper):
+        model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
         self.known_labels = WeakKeyDictionary()
@@ -240,20 +249,30 @@ class LLGraphCPU(model.AbstractCPU):
     bh_call_v = _do_call
 
     def bh_getfield_gc(self, p, descr):
-        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        p = support.cast_arg(lltype.Ptr(descr.S), p)
         return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
 
     bh_getfield_gc_i = bh_getfield_gc
     bh_getfield_gc_r = bh_getfield_gc
     bh_getfield_gc_f = bh_getfield_gc
 
+    bh_getfield_raw   = bh_getfield_gc
+    bh_getfield_raw_i = bh_getfield_raw
+    bh_getfield_raw_r = bh_getfield_raw
+    bh_getfield_raw_f = bh_getfield_raw
+
     def bh_setfield_gc(self, p, newvalue, descr):
-        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        p = support.cast_arg(lltype.Ptr(descr.S), p)
         setattr(p, descr.fieldname, support.cast_arg(descr.FIELD, newvalue))
 
     bh_setfield_gc_i = bh_setfield_gc
     bh_setfield_gc_r = bh_setfield_gc
     bh_setfield_gc_f = bh_setfield_gc
+
+    bh_setfield_raw   = bh_setfield_gc
+    bh_setfield_raw_i = bh_setfield_raw
+    bh_setfield_raw_r = bh_setfield_raw
+    bh_setfield_raw_f = bh_setfield_raw
 
     def bh_arraylen_gc(self, a, descr):
         array = a._obj.container
@@ -348,6 +367,9 @@ class LLGraphCPU(model.AbstractCPU):
         array = lltype.malloc(arraydescr.A, length, zero=True)
         return lltype.cast_opaque_ptr(llmemory.GCREF, array)
 
+    def bh_read_timestamp(self):
+        return read_timestamp()
+
 
 class LLFrame(object):
     def __init__(self, cpu, argboxes, args):
@@ -369,6 +391,9 @@ class LLFrame(object):
         i = 0
         while True:
             op = self.lltrace.operations[i]
+            if op.getopnum() == -124:      # force_spill, for tests
+                i += 1
+                continue
             args = [self.lookup(arg) for arg in op.getarglist()]
             self.current_op = op # for label
             try:
