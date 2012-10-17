@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
 from pypy.jit.metainterp.resoperation import rop
 
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass
 
 from pypy.rlib.rarithmetic import ovfcheck
 
@@ -45,6 +45,12 @@ class FieldDescr(AbstractDescr):
     def is_pointer_field(self):
         return getkind(self.FIELD) == 'ref'
 
+class ArrayDescr(AbstractDescr):
+    def __init__(self, A):
+        self.A = A
+
+    def is_array_of_pointers(self):
+        return getkind(self.A.OF) == 'ref'
 
 class LLGraphCPU(model.AbstractCPU):
     def __init__(self, rtyper):
@@ -113,6 +119,15 @@ class LLGraphCPU(model.AbstractCPU):
             return self.descrs[key]
         except KeyError:
             descr = FieldDescr(S, fieldname)
+            self.descrs[key] = descr
+            return descr
+
+    def arraydescrof(self, A):
+        key = ('array', A)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = ArrayDescr(A)
             self.descrs[key] = descr
             return descr
 
@@ -244,6 +259,30 @@ class LLFrame(object):
         if arg:
             self.fail_guard(descr)
 
+    def execute_guard_value(self, descr, arg1, arg2):
+        if arg1 != arg2:
+            self.fail_guard(descr)
+
+    def execute_guard_nonnull(self, descr, arg):
+        if not arg:
+            self.fail_guard(descr)
+
+    def execute_guard_isnull(self, descr, arg):
+        if arg:
+            self.fail_guard(descr)
+
+    def execute_guard_class(self, descr, arg, klass):
+        value = lltype.cast_opaque_ptr(rclass.OBJECTPTR, arg)
+        expected_class = llmemory.cast_adr_to_ptr(
+            llmemory.cast_int_to_adr(klass),
+            rclass.CLASSTYPE)
+        if value.typeptr != expected_class:
+            self.fail_guard(descr)
+
+    def execute_guard_nonnull_class(self, descr, arg, klass):
+        self.execute_guard_nonnull(descr, arg)
+        self.execute_guard_class(descr, arg, klass)
+
     def execute_int_add_ovf(self, _, x, y):
         try:
             z = ovfcheck(x + y)
@@ -299,6 +338,18 @@ class LLFrame(object):
     def execute_setfield_gc(self, descr, p, newvalue):
         p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
         setattr(p, descr.fieldname, support.cast_arg(descr.FIELD, newvalue))
+
+    def execute_arraylen_gc(self, descr, a):
+        array = a._obj.container
+        return array.getlength()
+
+    def execute_setarrayitem_gc(self, descr, a, index, item):
+        array = a._obj.container
+        array.setitem(index, support.cast_arg(descr.A.OF, item))
+
+    def execute_getarrayitem_gc(self, descr, a, index):
+        array = a._obj.container
+        return support.cast_result(descr.A.OF, array.getitem(index))
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
