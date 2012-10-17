@@ -3,9 +3,10 @@ from weakref import WeakKeyDictionary
 
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
-from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
+from pypy.jit.metainterp.history import Const, getkind, AbstractDescr
+from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID
 from pypy.jit.metainterp.resoperation import rop
-from pypy.jit.codewriter import heaptracker
+from pypy.jit.codewriter import longlong, heaptracker
 
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
@@ -415,7 +416,16 @@ class LLFrame(object):
                     continue
                 raise
             if op.result is not None:
-                assert resval is not None
+                # typecheck the result
+                if op.result.type == INT:
+                    assert lltype.typeOf(resval) == lltype.Signed
+                elif op.result.type == REF:
+                    assert lltype.typeOf(resval) == llmemory.GCREF
+                elif op.result.type == FLOAT:
+                    assert lltype.typeOf(resval) == longlong.FLOATSTORAGE
+                else:
+                    raise AssertionError(op.result.type)
+                #
                 self.env[op.result] = resval
             else:
                 assert resval is None
@@ -564,6 +574,48 @@ class LLFrame(object):
         FUNC = lltype.FuncType(descr.ARGS, descr.RESULT)
         func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
         return self.cpu.call(func_to_call, call_args, descr.RESULT, descr)
+
+    def execute_call_assembler(self, descr, *args):
+        faildescr = self.cpu._execute_token(descr, *args)
+        jd = descr.outermost_jitdriver_sd
+        if jd.index_of_virtualizable != -1:
+            vable = args[jd.index_of_virtualizable]
+        else:
+            vable = lltype.nullptr(llmemory.GCREF.TO)
+        #
+        # Emulate the fast path
+        failindex = self.cpu.get_fail_descr_number(faildescr)
+        if failindex == self.cpu.done_with_this_frame_int_v:
+            self._reset_vable(jd, vable)
+            return self.cpu.get_latest_value_int(0)
+        if failindex == self.cpu.done_with_this_frame_ref_v:
+            self._reset_vable(jd, vable)
+            return self.cpu.get_latest_value_ref(0)
+        if failindex == self.cpu.done_with_this_frame_float_v:
+            self._reset_vable(jd, vable)
+            return self.cpu.get_latest_value_float(0)
+        if failindex == self.cpu.done_with_this_frame_void_v:
+            self._reset_vable(jd, vable)
+            return None
+        #
+        assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
+        try:
+            result = assembler_helper_ptr(failindex, vable)
+        except LLException, lle:
+            xxxxxxxxxx
+            assert _last_exception is None, "exception left behind"
+            _last_exception = lle
+            # fish op
+            op = self.loop.operations[self.opindex]
+            if op.result is not None:
+                yyyyyyyyyyyyy
+                return 0
+        return support.cast_result(lltype.typeOf(result), result)
+
+    def _reset_vable(self, jd, vable):
+        if jd.index_of_virtualizable != -1:
+            fielddescr = jd.vable_token_descr
+            self.cpu.bh_setfield_gc_i(vable, 0, fielddescr)
 
     def execute_same_as(self, _, x):
         return x
