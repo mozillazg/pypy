@@ -134,8 +134,7 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
     assert list(argsiter_f) == []
     return args
 
-def cast_call_args_in_order(func, args):
-    ARGS = llmemory.cast_int_to_adr(func).ptr._obj._TYPE.ARGS
+def cast_call_args_in_order(ARGS, args):
     call_args = []
     for ARG, arg in zip(ARGS, args):
         kind = getkind(ARG)
