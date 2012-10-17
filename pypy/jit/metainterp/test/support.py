@@ -233,7 +233,7 @@ class JitMixin:
 
 class LLJitMixin(JitMixin):
     type_system = 'lltype'
-    CPUClass = runner.LLtypeCPU
+    CPUClass = runner.LLGraphCPU
 
     @staticmethod
     def Ptr(T):
