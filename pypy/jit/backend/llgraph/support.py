@@ -48,9 +48,12 @@ def cast_result(TP, x):
         return cast_to_int(x)
     elif kind == 'ref':
         return cast_to_ptr(x)
-    else:
-        assert kind == 'float'
+    elif kind == 'float':
         return cast_to_floatstorage(x)
+    else:
+        assert kind == 'void'
+        assert x is None
+        return None
 
 def cast_from_floatstorage(TYPE, x):
     assert isinstance(x, longlong.r_float_storage)
