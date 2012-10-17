@@ -2586,11 +2586,11 @@ class LLtypeBackendTest(BaseBackendTest):
             c[3] = 3.5
             descr_C = cpu.arraydescrof(C)
             x = cpu.bh_getarrayitem_gc_f(
-                descr_C, lltype.cast_opaque_ptr(llmemory.GCREF, c), 3)
+                lltype.cast_opaque_ptr(llmemory.GCREF, c), 3, descr_C)
             assert longlong.getrealfloat(x) == 3.5
             cpu.bh_setarrayitem_gc_f(
-                descr_C, lltype.cast_opaque_ptr(llmemory.GCREF, c), 4,
-                longlong.getfloatstorage(4.5))
+                lltype.cast_opaque_ptr(llmemory.GCREF, c), 4,
+                longlong.getfloatstorage(4.5), descr_C)
             assert c[4] == 4.5
         s = rstr.mallocstr(6)
         x = cpu.bh_strlen(lltype.cast_opaque_ptr(llmemory.GCREF, s))
@@ -2635,15 +2635,14 @@ class LLtypeBackendTest(BaseBackendTest):
         #
         cpu.bh_setfield_raw_i(
             heaptracker.adr2int(llmemory.cast_ptr_to_adr(rs)),
-            descrfld_rx, ord('!'))
+            ord('!'), descrfld_rx)
         assert rs.x == '!'
         #
-
         if self.cpu.supports_floats:
             descrfld_z = cpu.fielddescrof(S, 'z')
             cpu.bh_setfield_gc_f(
                 lltype.cast_opaque_ptr(llmemory.GCREF, s),
-                descrfld_z, longlong.getfloatstorage(3.5))
+                longlong.getfloatstorage(3.5), descrfld_z)
             assert s.z == 3.5
             s.z = 3.2
             x = cpu.bh_getfield_gc_f(
@@ -2674,7 +2673,7 @@ class LLtypeBackendTest(BaseBackendTest):
         vtable2 = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
         vtable2_int = heaptracker.adr2int(llmemory.cast_ptr_to_adr(vtable2))
         heaptracker.register_known_gctype(cpu, vtable2, rclass.OBJECT)
-        x = cpu.bh_new_with_vtable(descrsize2, vtable2_int)
+        x = cpu.bh_new_with_vtable(vtable2_int, descrsize2)
         lltype.cast_opaque_ptr(lltype.Ptr(rclass.OBJECT), x)    # type check
         # well...
         #assert x.getref(rclass.OBJECTPTR).typeptr == vtable2
