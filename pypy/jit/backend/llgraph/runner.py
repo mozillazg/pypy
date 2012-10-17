@@ -111,6 +111,16 @@ class LLGraphCPU(model.AbstractCPU):
         for trace in looptoken._llgraph_alltraces:
             trace.invalid = True
 
+    def redirect_call_assembler(self, oldlooptoken, newlooptoken):
+        oldtrace = oldlooptoken._llgraph_loop
+        newtrace = newlooptoken._llgraph_loop
+        OLD = [box.type for box in oldtrace.inputargs]
+        NEW = [box.type for box in newtrace.inputargs]
+        assert OLD == NEW
+        assert not hasattr(oldlooptoken, '_llgraph_redirected')
+        oldlooptoken._llgraph_redirected = True
+        oldlooptoken._llgraph_loop = newtrace
+
     def make_execute_token(self, *argtypes):
         return self._execute_token
 
