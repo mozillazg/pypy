@@ -12,10 +12,14 @@ from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 
 from pypy.rlib.rarithmetic import ovfcheck
 
-class LLLoop(object):
-    def __init__(self, inputargs, operations):
+class LLTrace(object):
+    has_been_freed = False
+    invalid = False
+
+    def __init__(self, inputargs, operations, looptoken):
         self.inputargs = inputargs
         self.operations = operations
+        self.looptoken = looptoken
 
 class GuardFailed(Exception):
     def __init__(self, failargs, descr):
@@ -74,25 +78,37 @@ class LLGraphCPU(model.AbstractCPU):
         self.descrs = {}
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
+        lltrace = LLTrace(inputargs, operations, looptoken)
+        looptoken._llgraph_loop = lltrace
+        looptoken._llgraph_alltraces = [lltrace]
+        self._record_labels(lltrace)
         self.total_compiled_loops += 1
-        for i, op in enumerate(operations):
-            if op.getopnum() == rop.LABEL:
-                self.known_labels[op.getdescr()] = (operations, i)
-        looptoken._llgraph_loop = LLLoop(inputargs, operations)
 
     def compile_bridge(self, faildescr, inputargs, operations,
                        original_loop_token):
-        faildescr._llgraph_bridge = LLLoop(inputargs, operations)
+        lltrace = LLTrace(inputargs, operations, original_loop_token)
+        faildescr._llgraph_bridge = lltrace
+        original_loop_token._llgraph_alltraces.append(lltrace)
+        self._record_labels(lltrace)
         self.total_compiled_bridges += 1
+
+    def _record_labels(self, lltrace):
+        for i, op in enumerate(lltrace.operations):
+            if op.getopnum() == rop.LABEL:
+                self.known_labels[op.getdescr()] = (lltrace, i)
+
+    def invalidate_loop(self, looptoken):
+        for trace in looptoken._llgraph_alltraces:
+            trace.invalid = True
 
     def make_execute_token(self, *argtypes):
         return self._execute_token
 
     def _execute_token(self, loop_token, *args):
-        loop = loop_token._llgraph_loop
-        frame = LLFrame(self, loop.inputargs, args)
+        lltrace = loop_token._llgraph_loop
+        frame = LLFrame(self, lltrace.inputargs, args)
         try:
-            frame.execute(loop.operations)
+            frame.execute(lltrace)
             assert False
         except ExecutionFinished, e:
             self.latest_values = e.args
@@ -339,29 +355,30 @@ class LLFrame(object):
             return arg.value
         return self.env[arg]
 
-    def execute(self, operations):
+    def execute(self, lltrace):
+        self.lltrace = lltrace
+        del lltrace
         i = 0
         while True:
-            op = operations[i]
+            op = self.lltrace.operations[i]
             args = [self.lookup(arg) for arg in op.getarglist()]
             self.current_op = op # for label
             try:
                 resval = getattr(self, 'execute_' + op.getopname())(op.getdescr(),
                                                                     *args)
             except Jump, j:
-                operations, i = self.cpu.known_labels[j.descr]
-                label_op = operations[i]
+                self.lltrace, i = self.cpu.known_labels[j.descr]
+                label_op = self.lltrace.operations[i]
                 self.do_renaming(label_op.getarglist(), j.args)
                 i += 1
                 continue
             except GuardFailed, gf:
                 if hasattr(gf.descr, '_llgraph_bridge'):
                     i = 0
-                    bridge = gf.descr._llgraph_bridge
-                    operations = bridge.operations
+                    self.lltrace = gf.descr._llgraph_bridge
                     newargs = [self.env[arg] for arg in
                                self.current_op.getfailargs() if arg is not None]
-                    self.do_renaming(bridge.inputargs, newargs)
+                    self.do_renaming(self.lltrace.inputargs, newargs)
                     continue
                 raise
             if op.result is not None:
@@ -455,8 +472,8 @@ class LLFrame(object):
         pass     # XXX
 
     def execute_guard_not_invalidated(self, descr):
-        if self.loop.invalid:
-            raise GuardFailed
+        if self.lltrace.invalid:
+            self.fail_guard(descr)
 
     def execute_int_add_ovf(self, _, x, y):
         try:
