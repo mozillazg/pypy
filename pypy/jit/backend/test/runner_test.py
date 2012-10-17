@@ -2564,13 +2564,13 @@ class LLtypeBackendTest(BaseBackendTest):
         A = lltype.GcArray(lltype.Char)
         descr_A = cpu.arraydescrof(A)
         a = lltype.malloc(A, 5)
-        x = cpu.bh_arraylen_gc(descr_A,
-                               lltype.cast_opaque_ptr(llmemory.GCREF, a))
+        x = cpu.bh_arraylen_gc(lltype.cast_opaque_ptr(llmemory.GCREF, a),
+                               descr_A)
         assert x == 5
         #
         a[2] = 'Y'
         x = cpu.bh_getarrayitem_gc_i(
-            descr_A, lltype.cast_opaque_ptr(llmemory.GCREF, a), 2)
+            lltype.cast_opaque_ptr(llmemory.GCREF, a), 2, descr_A)
         assert x == ord('Y')
         #
         B = lltype.GcArray(lltype.Ptr(A))
@@ -2578,7 +2578,7 @@ class LLtypeBackendTest(BaseBackendTest):
         b = lltype.malloc(B, 4)
         b[3] = a
         x = cpu.bh_getarrayitem_gc_r(
-            descr_B, lltype.cast_opaque_ptr(llmemory.GCREF, b), 3)
+            lltype.cast_opaque_ptr(llmemory.GCREF, b), 3, descr_B)
         assert lltype.cast_opaque_ptr(lltype.Ptr(A), x) == a
         if self.cpu.supports_floats:
             C = lltype.GcArray(lltype.Float)
@@ -2610,8 +2610,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert x == ord('Z')
         #
         cpu.bh_setfield_gc_i(lltype.cast_opaque_ptr(llmemory.GCREF, s),
-                             descrfld_x,
-                             ord('4'))
+                             ord('4'), descrfld_x)
         assert s.x == '4'
         #
         descrfld_y = cpu.fielddescrof(S, 'y')
@@ -2622,7 +2621,7 @@ class LLtypeBackendTest(BaseBackendTest):
         #
         s.y = lltype.nullptr(A)
         cpu.bh_setfield_gc_r(lltype.cast_opaque_ptr(llmemory.GCREF, s),
-                             descrfld_y, x)
+                             x, descrfld_y)
         assert s.y == a
         #
         RS = lltype.Struct('S', ('x', lltype.Char))  #, ('y', lltype.Ptr(A)))
@@ -2685,11 +2684,11 @@ class LLtypeBackendTest(BaseBackendTest):
         array = lltype.cast_opaque_ptr(lltype.Ptr(A), x)
         assert len(array) == 7
         #
-        cpu.bh_setarrayitem_gc_i(descr_A, x, 5, ord('*'))
+        cpu.bh_setarrayitem_gc_i(x, 5, ord('*'), descr_A)
         assert array[5] == '*'
         #
         cpu.bh_setarrayitem_gc_r(
-            descr_B, lltype.cast_opaque_ptr(llmemory.GCREF, b), 1, x)
+            lltype.cast_opaque_ptr(llmemory.GCREF, b), 1, x, descr_B)
         assert b[1] == array
         #
         x = cpu.bh_newstr(5)
