@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.codewriter import heaptracker
 
-from pypy.rpython.llinterp import LLInterpreter
+from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 
 from pypy.rlib.rarithmetic import ovfcheck
@@ -70,7 +70,7 @@ class LLGraphCPU(model.AbstractCPU):
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
         self.known_labels = WeakKeyDictionary()
-        self.exc_value = lltype.nullptr(llmemory.GCREF.TO)
+        self.last_exception = None
         self.descrs = {}
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
@@ -113,7 +113,12 @@ class LLGraphCPU(model.AbstractCPU):
         del self.latest_values
 
     def grab_exc_value(self):
-        return self.exc_value
+        if self.last_exception is not None:
+            result = self.last_exception.args[1]
+            self.last_exception = None
+            return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+        else:
+            return lltype.nullptr(llmemory.GCREF.TO)
 
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         key = ('call', getkind(RESULT),
@@ -194,17 +199,26 @@ class LLGraphCPU(model.AbstractCPU):
 
     # ------------------------------------------------------------
 
-    def call(self, func, calldescr, args):
+    def call(self, func, args, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         RESULT = TP.RESULT
         func = llmemory.cast_int_to_adr(func).ptr._obj._callable
-        res = func(*args)
+        try:
+            res = func(*args)
+            self.last_exception = None
+        except LLException, lle:
+            self.last_exception = lle
+            d = {'void': None,
+                 'ref': lltype.nullptr(llmemory.GCREF.TO),
+                 'int': 0,
+                 'float': 0.0}
+            res = d[getkind(RESULT)]
         return support.cast_result(RESULT, res)
 
     def _do_call(self, func, args_i, args_r, args_f, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
-        return self.call(func, calldescr, args)
+        return self.call(func, args, calldescr)
 
     bh_call_i = _do_call
     bh_call_r = _do_call
@@ -419,6 +433,26 @@ class LLFrame(object):
         self.execute_guard_nonnull(descr, arg)
         self.execute_guard_class(descr, arg, klass)
 
+    def execute_guard_no_exception(self, descr):
+        if self.cpu.last_exception is not None:
+            self.fail_guard(descr)
+
+    def execute_guard_exception(self, descr, excklass):
+        lle = self.cpu.last_exception
+        if lle is None:
+            gotklass = lltype.nullptr(rclass.CLASSTYPE.TO)
+        else:
+            gotklass = lle.args[0]
+        excklass = llmemory.cast_adr_to_ptr(
+            llmemory.cast_int_to_adr(excklass),
+            rclass.CLASSTYPE)
+        if gotklass != excklass:
+            self.fail_guard(descr)
+        #
+        res = lle.args[1]
+        self.cpu.last_exception = None
+        return support.cast_to_ptr(res)
+
     def execute_int_add_ovf(self, _, x, y):
         try:
             z = ovfcheck(x + y)
@@ -465,7 +499,7 @@ class LLFrame(object):
 
     def execute_call(self, descr, *args):
         call_args = support.cast_call_args_in_order(args[0], args[1:])
-        return self.cpu.call(args[0], descr, call_args)
+        return self.cpu.call(args[0], call_args, descr)
 
     def execute_same_as(self, _, x):
         return x
