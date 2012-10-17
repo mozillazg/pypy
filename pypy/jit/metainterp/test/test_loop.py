@@ -2,7 +2,7 @@ import py
 from pypy.rlib.jit import JitDriver, hint, set_param
 from pypy.rlib.objectmodel import compute_hash
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp import history
@@ -907,8 +907,6 @@ class LoopTest(object):
         res = self.meta_interp(f, [20, 10])
         assert res == f(20, 10)
 
-class TestOOtype(LoopTest, OOJitMixin):
-    pass
 
 class TestLLtype(LoopTest, LLJitMixin):
     pass

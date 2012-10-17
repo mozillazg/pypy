@@ -1,5 +1,5 @@
 import math
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.rfloat import isinf, isnan, INFINITY, NAN
 
 class MathTests:
@@ -39,9 +39,6 @@ class MathTests:
         assert isnan(res) and not isinf(res)
         self.check_operations_history(call_pure=0)
 
-
-class TestOOtype(MathTests, OOJitMixin):
-    pass
 
 class TestLLtype(MathTests, LLJitMixin):
     pass

@@ -1,5 +1,5 @@
 import py
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.jit import JitDriver
 
 class ListTests(object):
@@ -94,9 +94,6 @@ class ListTests(object):
         assert res == 41
         self.check_resops(call=0, guard_value=0)
 
-# we don't support resizable lists on ootype
-#class TestOOtype(ListTests, OOJitMixin):
-#    pass
 
 class TestLLtype(ListTests, LLJitMixin):
     pass

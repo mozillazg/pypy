@@ -1,6 +1,6 @@
 import py
 from pypy.jit.codewriter.policy import StopAtXPolicy
-from pypy.jit.metainterp.test.support import OOJitMixin, LLJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 
 
 class ToyLanguageTests:
@@ -141,8 +141,6 @@ class ToyLanguageTests:
                 meth_func = meth.im_func
                 del meth_func._jit_look_inside_
 
-class TestOOtype(ToyLanguageTests, OOJitMixin):
-    pass
 
 class TestLLtype(ToyLanguageTests, LLJitMixin):
     pass

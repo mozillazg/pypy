@@ -3757,8 +3757,6 @@ class BaseLLtypeTests(BasicTests):
             res = self.interp_operations(f, [x])
             assert res == x or isnan(x) and isnan(res)
 
-
-class TestLLtype(BaseLLtypeTests, LLJitMixin):
     def test_tagged(self):
         from pypy.rlib.objectmodel import UnboxedValue
         class Base(object):
@@ -3883,3 +3881,7 @@ class TestLLtype(BaseLLtypeTests, LLJitMixin):
             return 42
         self.interp_operations(f, [1, 2, 3])
         self.check_operations_history(call=1, guard_no_exception=0)
+
+
+class TestLLtype(BaseLLtypeTests, LLJitMixin):
+    pass

@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.objectmodel import newlist_hint
 from pypy.rlib.jit import JitDriver
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 
 
 class ListTests:
@@ -261,10 +261,6 @@ class ListTests:
         r = self.interp_operations(f, [-1])
         assert r == 0
 
-class TestOOtype(ListTests, OOJitMixin):
-    pass
-
-class TestLLtype(ListTests, LLJitMixin):
     def test_listops_dont_invalidate_caches(self):
         class A(object):
             pass
@@ -292,3 +288,7 @@ class TestLLtype(ListTests, LLJitMixin):
         # There is the one actual field on a, plus several fields on the list
         # itself
         self.check_resops(getfield_gc=10)
+
+
+class TestLLtype(ListTests, LLJitMixin):
+    pass

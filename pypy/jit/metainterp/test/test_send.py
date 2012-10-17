@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.jit import JitDriver, promote, elidable, set_param
 from pypy.jit.codewriter.policy import StopAtXPolicy
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 
 class SendTests(object):
     
@@ -634,9 +634,6 @@ class SendTests(object):
         res = self.meta_interp(fn, [20], policy=StopAtXPolicy(extern))
         assert res == 21
 
-
-class TestOOtype(SendTests, OOJitMixin):
-    pass
 
 class TestLLtype(SendTests, LLJitMixin):
     pass

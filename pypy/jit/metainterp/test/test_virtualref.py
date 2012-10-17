@@ -5,7 +5,7 @@ from pypy.rlib.jit import JitDriver, dont_look_inside, vref_None
 from pypy.rlib.jit import virtual_ref, virtual_ref_finish, InvalidVirtualRef
 from pypy.rlib.jit import non_virtual_ref
 from pypy.rlib.objectmodel import compute_unique_id
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin, _get_jitcodes
+from pypy.jit.metainterp.test.support import LLJitMixin, _get_jitcodes
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.virtualref import VirtualRefInfo
 
