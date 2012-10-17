@@ -7,7 +7,7 @@ from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
 from pypy.jit.metainterp.resoperation import rop
 
 from pypy.rpython.llinterp import LLInterpreter
-from pypy.rpython.lltypesystem import lltype, llmemory, rclass
+from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
 
 from pypy.rlib.rarithmetic import ovfcheck
 
@@ -51,6 +51,12 @@ class ArrayDescr(AbstractDescr):
 
     def is_array_of_pointers(self):
         return getkind(self.A.OF) == 'ref'
+
+class InteriorFieldDescr(AbstractDescr):
+    def __init__(self, A, fieldname):
+        self.A = A
+        self.fieldname = fieldname
+        self.FIELD = getattr(A.OF, fieldname)
 
 class LLGraphCPU(model.AbstractCPU):
     def __init__(self, rtyper):
@@ -131,6 +137,15 @@ class LLGraphCPU(model.AbstractCPU):
             self.descrs[key] = descr
             return descr
 
+    def interiorfielddescrof(self, A, fieldname):
+        key = ('interiorfield', A, fieldname)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = InteriorFieldDescr(A, fieldname)
+            self.descrs[key] = descr
+            return descr        
+
     def _calldescr_dynamic_for_tests(self, atypes, rtype,
                                      abiname='FFI_DEFAULT_ABI'):
         # XXX WTF is that and why it breaks all abstractions?
@@ -170,12 +185,36 @@ class LLGraphCPU(model.AbstractCPU):
         res = func(*args)
         return support.cast_result(RESULT, res)
 
-    def do_call(self, func, calldescr, args_i, args_r, args_f):
+    def _do_call(self, func, calldescr, args_i, args_r, args_f):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
         return self.call(func, calldescr, args)
 
-    bh_call_i = do_call
+    bh_call_i = _do_call
+
+    def do_getinteriorfield_gc(self, a, index, descr):
+        array = a._obj.container
+        return support.cast_result(descr.FIELD,
+                          getattr(array.getitem(index), descr.fieldname))
+
+    bh_getinteriorfield_gc_f = do_getinteriorfield_gc
+    bh_getinteriorfield_gc_i = do_getinteriorfield_gc
+    bh_getinteriorfield_gc_r = do_getinteriorfield_gc
+
+    def do_setinteriorfield_gc(self, a, index, item, descr):
+        array = a._obj.container
+        setattr(array.getitem(index), descr.fieldname,
+                support.cast_arg(descr.FIELD, item))
+
+    bh_setinteriorfield_gc_f = do_setinteriorfield_gc
+    bh_setinteriorfield_gc_r = do_setinteriorfield_gc
+    bh_setinteriorfield_gc_i = do_setinteriorfield_gc
+
+    def do_newunicode(self, length):
+        return lltype.cast_opaque_ptr(llmemory.GCREF,
+                                      lltype.malloc(rstr.UNICODE, length))
+
+    bh_newunicode = do_newunicode
 
 class LLFrame(object):
     def __init__(self, cpu, argboxes, args):
@@ -351,6 +390,29 @@ class LLFrame(object):
         array = a._obj.container
         return support.cast_result(descr.A.OF, array.getitem(index))
 
+    def execute_strlen(self, descr, s):
+        return s._obj.container.chars.getlength()
+
+    def execute_strgetitem(self, descr, s, item):
+        return ord(s._obj.container.chars.getitem(item))
+
+    def execute_strsetitem(self, descr, s, item, v):
+        s._obj.container.chars.setitem(item, chr(v))
+
+    def execute_copystrcontent(self, _, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_string_contents(src, dst, srcstart, dststart, length)
+
+    def execute_copyunicodecontent(self, _, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
+
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
         from pypy.jit.metainterp.blackhole import BlackholeInterpreter
@@ -370,11 +432,20 @@ def _setup():
         _op_default_implementation.func_name = 'execute_' + opname
         return _op_default_implementation
 
+    def _new_execute(opname):
+        def execute(self, descr, *args):
+            new_args = args + (descr,)
+            return getattr(self.cpu, 'do_' + opname)(*new_args)
+        execute.func_name = 'execute_' + opname
+        return execute
+
     for k, v in rop.__dict__.iteritems():
         if not k.startswith("_"):
             func = _make_impl_from_blackhole_interp(k)
             fname = 'execute_' + k.lower()
             if func is not None and not hasattr(LLFrame, fname):
                 setattr(LLFrame, fname, func)
+            elif hasattr(LLGraphCPU, 'do_' + k.lower()):
+                setattr(LLFrame, fname, _new_execute(k.lower()))
 
 _setup()

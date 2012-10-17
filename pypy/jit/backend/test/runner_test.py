@@ -1002,7 +1002,7 @@ class BaseBackendTest(Runner):
                                'void', descr=kdescr)
         f = self.cpu.bh_getinteriorfield_gc_f(a_box.getref_base(), 3, kdescr)
         assert longlong.getrealfloat(f) == 1.5
-        self.cpu.bh_setinteriorfield_gc_f(a_box.getref_base(), 3, kdescr, longlong.getfloatstorage(2.5))
+        self.cpu.bh_setinteriorfield_gc_f(a_box.getref_base(), 3, longlong.getfloatstorage(2.5), kdescr)
         r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
                                    'float', descr=kdescr)
         assert r.getfloat() == 2.5
@@ -1028,7 +1028,7 @@ class BaseBackendTest(Runner):
         for name, TYPE in NUMBER_FIELDS[::-1]:
             vdescr = self.cpu.interiorfielddescrof(A, name)
             self.cpu.bh_setinteriorfield_gc_i(a_box.getref_base(), 3,
-                                              vdescr, -25)
+                                              -25, vdescr)
         for name, TYPE in NUMBER_FIELDS:
             vdescr = self.cpu.interiorfielddescrof(A, name)
             r = self.execute_operation(rop.GETINTERIORFIELD_GC,
@@ -1041,8 +1041,8 @@ class BaseBackendTest(Runner):
                                'void', descr=pdescr)
         r = self.cpu.bh_getinteriorfield_gc_r(a_box.getref_base(), 4, pdescr)
         assert r == s_box.getref_base()
-        self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3, pdescr,
-                                          s_box.getref_base())
+        self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3,
+                                          s_box.getref_base(), pdescr)
         r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
                                    'ref', descr=pdescr)
         assert r.getref_base() == s_box.getref_base()
