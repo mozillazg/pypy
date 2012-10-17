@@ -13,6 +13,12 @@ class TestLLTypeLLGraph(LLtypeBackendTest):
     def setup_method(self, _):
         self.cpu = self.cpu_type(None)
 
+    def test_cond_call_gc_wb(self):
+        py.test.skip("does not make much sense on the llgraph backend")
+
+    test_cond_call_gc_wb_array = test_cond_call_gc_wb
+    test_cond_call_gc_wb_array_card_marking_fast_path = test_cond_call_gc_wb
+
     def test_backends_dont_keep_loops_alive(self):
         py.test.skip("does not make much sense on the llgraph backend")
 
