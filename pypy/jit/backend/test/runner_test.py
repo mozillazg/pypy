@@ -3027,7 +3027,7 @@ class LLtypeBackendTest(BaseBackendTest):
             expected = rffi.cast(lltype.Signed, rffi.cast(RESTYPE, value))
             a[3] = rffi.cast(RESTYPE, value)
             x = cpu.bh_getarrayitem_gc_i(
-                descrarray, lltype.cast_opaque_ptr(llmemory.GCREF, a), 3)
+                lltype.cast_opaque_ptr(llmemory.GCREF, a), 3, descrarray)
             assert x == expected, (
                 "%r: got %r, expected %r" % (RESTYPE, x, expected))
 
@@ -3069,7 +3069,7 @@ class LLtypeBackendTest(BaseBackendTest):
             expected = rffi.cast(lltype.Signed, rffi.cast(RESTYPE, value))
             a[3] = rffi.cast(RESTYPE, value)
             a_rawint = heaptracker.adr2int(llmemory.cast_ptr_to_adr(a))
-            x = cpu.bh_getarrayitem_raw_i(descrarray, a_rawint, 3)
+            x = cpu.bh_getarrayitem_raw_i(a_rawint, 3, descrarray)
             assert x == expected, (
                 "%r: got %r, expected %r" % (RESTYPE, x, expected))
             lltype.free(a, flavor='raw')
