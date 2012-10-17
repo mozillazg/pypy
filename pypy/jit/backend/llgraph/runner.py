@@ -280,20 +280,32 @@ class LLGraphCPU(model.AbstractCPU):
         return array.getlength()
 
     def bh_getarrayitem_gc(self, a, index, descr):
-        array = a._obj.container
+        a = support.cast_arg(lltype.Ptr(descr.A), a)
+        array = a._obj
         return support.cast_result(descr.A.OF, array.getitem(index))
 
     bh_getarrayitem_gc_i = bh_getarrayitem_gc
     bh_getarrayitem_gc_r = bh_getarrayitem_gc
     bh_getarrayitem_gc_f = bh_getarrayitem_gc
 
+    bh_getarrayitem_raw   = bh_getarrayitem_gc
+    bh_getarrayitem_raw_i = bh_getarrayitem_raw
+    bh_getarrayitem_raw_r = bh_getarrayitem_raw
+    bh_getarrayitem_raw_f = bh_getarrayitem_raw
+
     def bh_setarrayitem_gc(self, a, index, item, descr):
-        array = a._obj.container
+        a = support.cast_arg(lltype.Ptr(descr.A), a)
+        array = a._obj
         array.setitem(index, support.cast_arg(descr.A.OF, item))
 
     bh_setarrayitem_gc_i = bh_setarrayitem_gc
     bh_setarrayitem_gc_r = bh_setarrayitem_gc
     bh_setarrayitem_gc_f = bh_setarrayitem_gc
+
+    bh_setarrayitem_raw   = bh_setarrayitem_gc
+    bh_setarrayitem_raw_i = bh_setarrayitem_raw
+    bh_setarrayitem_raw_r = bh_setarrayitem_raw
+    bh_setarrayitem_raw_f = bh_setarrayitem_raw
 
     def bh_getinteriorfield_gc(self, a, index, descr):
         array = a._obj.container
