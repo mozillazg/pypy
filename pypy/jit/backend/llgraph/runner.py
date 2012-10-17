@@ -7,6 +7,7 @@ from pypy.jit.metainterp.history import Const, getkind, AbstractDescr
 from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.codewriter import longlong, heaptracker
+from pypy.jit.codewriter.effectinfo import EffectInfo
 
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
@@ -39,9 +40,12 @@ class Jump(Exception):
         self.args = args
 
 class CallDescr(AbstractDescr):
-    def __init__(self, RESULT, ARGS):
+    def __init__(self, RESULT, ARGS, extrainfo=None):
         self.RESULT = RESULT
         self.ARGS = ARGS
+        self.extrainfo = extrainfo
+    def get_extra_info(self):
+        return self.extrainfo
 
 class SizeDescr(AbstractDescr):
     def __init__(self, S):
@@ -163,7 +167,7 @@ class LLGraphCPU(model.AbstractCPU):
         try:
             return self.descrs[key]
         except KeyError:
-            descr = CallDescr(RESULT, ARGS)
+            descr = CallDescr(RESULT, ARGS, effect_info)
             self.descrs[key] = descr
             return descr
 
@@ -440,7 +444,8 @@ class LLFrame(object):
             if op.result is not None:
                 # typecheck the result
                 if op.result.type == INT:
-                    assert lltype.typeOf(resval) == lltype.Signed
+                    resval = int(resval)
+                    assert isinstance(resval, int)
                 elif op.result.type == REF:
                     assert lltype.typeOf(resval) == llmemory.GCREF
                 elif op.result.type == FLOAT:
@@ -584,12 +589,23 @@ class LLFrame(object):
     def execute_jump(self, descr, *args):
         raise Jump(descr, args)
 
-    def execute_call(self, descr, func, *args):
+    def _do_math_sqrt(self, value):
+        import math
+        y = support.cast_from_floatstorage(lltype.Float, value)
+        x = math.sqrt(y)
+        return support.cast_to_floatstorage(x)
+
+    def execute_call(self, calldescr, func, *args):
+        effectinfo = calldescr.get_extra_info()
+        if effectinfo is not None and hasattr(effectinfo, 'oopspecindex'):
+            oopspecindex = effectinfo.oopspecindex
+            if oopspecindex == EffectInfo.OS_MATH_SQRT:
+                return self._do_math_sqrt(args[0])
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         ARGS = TP.ARGS
         call_args = support.cast_call_args_in_order(ARGS, args)
         func = llmemory.cast_int_to_adr(func).ptr._obj._callable
-        return self.cpu.call(func, call_args, TP.RESULT, descr)
+        return self.cpu.call(func, call_args, TP.RESULT, calldescr)
 
     def execute_call_release_gil(self, descr, func, *args):
         call_args = support.cast_call_args_in_order(descr.ARGS, args)
