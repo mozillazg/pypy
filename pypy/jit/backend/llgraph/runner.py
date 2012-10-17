@@ -5,6 +5,7 @@ from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
 from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
 from pypy.jit.metainterp.resoperation import rop
+from pypy.jit.codewriter import heaptracker
 
 from pypy.rpython.llinterp import LLInterpreter
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr
@@ -22,9 +23,9 @@ class GuardFailed(Exception):
         self.descr = descr
 
 class ExecutionFinished(Exception):
-    def __init__(self, descr, arg):
+    def __init__(self, descr, args):
         self.descr = descr
-        self.arg = arg
+        self.args = args
 
 class Jump(Exception):
     def __init__(self, descr, args):
@@ -35,6 +36,12 @@ class CallDescr(AbstractDescr):
     def __init__(self, RESULT, ARGS):
         self.RESULT = RESULT
         self.ARGS = ARGS
+
+class SizeDescr(AbstractDescr):
+    def __init__(self, S):
+        self.S = S
+    def as_vtable_size_descr(self):
+        return self
 
 class FieldDescr(AbstractDescr):
     def __init__(self, S, fieldname):
@@ -88,7 +95,7 @@ class LLGraphCPU(model.AbstractCPU):
             frame.execute(loop.operations)
             assert False
         except ExecutionFinished, e:
-            self.latest_values = [e.arg]
+            self.latest_values = e.args
             return e.descr
         except GuardFailed, e:
             self.latest_values = e.failargs
@@ -116,6 +123,15 @@ class LLGraphCPU(model.AbstractCPU):
             return self.descrs[key]
         except KeyError:
             descr = CallDescr(RESULT, ARGS)
+            self.descrs[key] = descr
+            return descr
+
+    def sizeof(self, S):
+        key = ('size', S)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = SizeDescr(S)
             self.descrs[key] = descr
             return descr
 
@@ -185,36 +201,109 @@ class LLGraphCPU(model.AbstractCPU):
         res = func(*args)
         return support.cast_result(RESULT, res)
 
-    def _do_call(self, func, calldescr, args_i, args_r, args_f):
+    def _do_call(self, func, args_i, args_r, args_f, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
         return self.call(func, calldescr, args)
 
     bh_call_i = _do_call
+    bh_call_r = _do_call
+    bh_call_f = _do_call
+    bh_call_v = _do_call
 
-    def do_getinteriorfield_gc(self, a, index, descr):
+    def bh_getfield_gc(self, p, descr):
+        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
+
+    bh_getfield_gc_i = bh_getfield_gc
+    bh_getfield_gc_r = bh_getfield_gc
+    bh_getfield_gc_f = bh_getfield_gc
+
+    def bh_setfield_gc(self, p, newvalue, descr):
+        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
+        setattr(p, descr.fieldname, support.cast_arg(descr.FIELD, newvalue))
+
+    bh_setfield_gc_i = bh_setfield_gc
+    bh_setfield_gc_r = bh_setfield_gc
+    bh_setfield_gc_f = bh_setfield_gc
+
+    def bh_arraylen_gc(self, a, descr):
+        array = a._obj.container
+        return array.getlength()
+
+    def bh_setarrayitem_gc(self, a, index, item, descr):
+        array = a._obj.container
+        array.setitem(index, support.cast_arg(descr.A.OF, item))
+
+    def bh_getarrayitem_gc(self, a, index, descr):
+        array = a._obj.container
+        return support.cast_result(descr.A.OF, array.getitem(index))
+
+    def bh_strlen(self, s):
+        return s._obj.container.chars.getlength()
+
+    def bh_strgetitem(self, s, item):
+        return ord(s._obj.container.chars.getitem(item))
+
+    def bh_strsetitem(self, s, item, v):
+        s._obj.container.chars.setitem(item, chr(v))
+
+    def bh_copystrcontent(self, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_string_contents(src, dst, srcstart, dststart, length)
+
+    def bh_copyunicodecontent(self, src, dst, srcstart, dststart, length):
+        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), src)
+        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), dst)
+        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
+        assert 0 <= dststart <= dststart + length <= len(dst.chars)
+        rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
+
+    def bh_getinteriorfield_gc(self, a, index, descr):
         array = a._obj.container
         return support.cast_result(descr.FIELD,
                           getattr(array.getitem(index), descr.fieldname))
 
-    bh_getinteriorfield_gc_f = do_getinteriorfield_gc
-    bh_getinteriorfield_gc_i = do_getinteriorfield_gc
-    bh_getinteriorfield_gc_r = do_getinteriorfield_gc
+    bh_getinteriorfield_gc_f = bh_getinteriorfield_gc
+    bh_getinteriorfield_gc_i = bh_getinteriorfield_gc
+    bh_getinteriorfield_gc_r = bh_getinteriorfield_gc
 
-    def do_setinteriorfield_gc(self, a, index, item, descr):
+    def bh_setinteriorfield_gc(self, a, index, item, descr):
         array = a._obj.container
         setattr(array.getitem(index), descr.fieldname,
                 support.cast_arg(descr.FIELD, item))
 
-    bh_setinteriorfield_gc_f = do_setinteriorfield_gc
-    bh_setinteriorfield_gc_r = do_setinteriorfield_gc
-    bh_setinteriorfield_gc_i = do_setinteriorfield_gc
+    bh_setinteriorfield_gc_f = bh_setinteriorfield_gc
+    bh_setinteriorfield_gc_r = bh_setinteriorfield_gc
+    bh_setinteriorfield_gc_i = bh_setinteriorfield_gc
 
-    def do_newunicode(self, length):
+    def bh_newunicode(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
                                       lltype.malloc(rstr.UNICODE, length))
 
-    bh_newunicode = do_newunicode
+    def bh_unicodelen(self, string):
+        return string._obj.container.chars.getlength()
+
+    def bh_unicodegetitem(self, string, index):
+        return ord(string._obj.container.chars.getitem(index))
+
+    def bh_unicodesetitem(self, string, index, newvalue):
+        string._obj.container.chars.setitem(index, unichr(newvalue))
+
+    def bh_new(self, sizedescr):
+        return lltype.cast_opaque_ptr(llmemory.GCREF,
+                                      lltype.malloc(sizedescr.S))
+
+    def bh_new_with_vtable(self, descr, vtable):
+        result = lltype.malloc(descr.S)
+        result_as_objptr = lltype.cast_pointer(rclass.OBJECTPTR, result)
+        result_as_objptr.typeptr = support.cast_from_int(rclass.CLASSTYPE,
+                                                         vtable)
+        return lltype.cast_opaque_ptr(llmemory.GCREF, result)
+
 
 class LLFrame(object):
     def __init__(self, cpu, argboxes, args):
@@ -283,8 +372,8 @@ class LLFrame(object):
     def fail_guard(self, descr):
         raise GuardFailed(self._getfailargs(), descr)
 
-    def execute_finish(self, descr, arg=None):
-        raise ExecutionFinished(descr, arg)
+    def execute_finish(self, descr, *args):
+        raise ExecutionFinished(descr, args)
 
     def execute_label(self, descr, *args):
         argboxes = self.current_op.getarglist()
@@ -370,48 +459,16 @@ class LLFrame(object):
         call_args = support.cast_call_args_in_order(args[0], args[1:])
         return self.cpu.call(args[0], descr, call_args)
 
-    def execute_getfield_gc(self, descr, p):
-        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
-        return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
+    def execute_same_as(self, _, x):
+        return x
 
-    def execute_setfield_gc(self, descr, p, newvalue):
-        p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)
-        setattr(p, descr.fieldname, support.cast_arg(descr.FIELD, newvalue))
+    def execute_debug_merge_point(self, descr, *args):
+        pass
 
-    def execute_arraylen_gc(self, descr, a):
-        array = a._obj.container
-        return array.getlength()
+    def execute_new_with_vtable(self, _, vtable):
+        descr = heaptracker.vtable2descr(self.cpu, vtable)
+        return self.cpu.bh_new_with_vtable(descr, vtable)
 
-    def execute_setarrayitem_gc(self, descr, a, index, item):
-        array = a._obj.container
-        array.setitem(index, support.cast_arg(descr.A.OF, item))
-
-    def execute_getarrayitem_gc(self, descr, a, index):
-        array = a._obj.container
-        return support.cast_result(descr.A.OF, array.getitem(index))
-
-    def execute_strlen(self, descr, s):
-        return s._obj.container.chars.getlength()
-
-    def execute_strgetitem(self, descr, s, item):
-        return ord(s._obj.container.chars.getitem(item))
-
-    def execute_strsetitem(self, descr, s, item, v):
-        s._obj.container.chars.setitem(item, chr(v))
-
-    def execute_copystrcontent(self, _, src, dst, srcstart, dststart, length):
-        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), src)
-        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.STR), dst)
-        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
-        assert 0 <= dststart <= dststart + length <= len(dst.chars)
-        rstr.copy_string_contents(src, dst, srcstart, dststart, length)
-
-    def execute_copyunicodecontent(self, _, src, dst, srcstart, dststart, length):
-        src = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), src)
-        dst = lltype.cast_opaque_ptr(lltype.Ptr(rstr.UNICODE), dst)
-        assert 0 <= srcstart <= srcstart + length <= len(src.chars)
-        assert 0 <= dststart <= dststart + length <= len(dst.chars)
-        rstr.copy_unicode_contents(src, dst, srcstart, dststart, length)
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
@@ -434,18 +491,21 @@ def _setup():
 
     def _new_execute(opname):
         def execute(self, descr, *args):
-            new_args = args + (descr,)
-            return getattr(self.cpu, 'do_' + opname)(*new_args)
+            if descr is not None:
+                new_args = args + (descr,)
+            else:
+                new_args = args
+            return getattr(self.cpu, 'bh_' + opname)(*new_args)
         execute.func_name = 'execute_' + opname
         return execute
 
     for k, v in rop.__dict__.iteritems():
         if not k.startswith("_"):
-            func = _make_impl_from_blackhole_interp(k)
             fname = 'execute_' + k.lower()
-            if func is not None and not hasattr(LLFrame, fname):
+            if not hasattr(LLFrame, fname):
+                func = _make_impl_from_blackhole_interp(k)
+                if func is None:
+                    func = _new_execute(k.lower())
                 setattr(LLFrame, fname, func)
-            elif hasattr(LLGraphCPU, 'do_' + k.lower()):
-                setattr(LLFrame, fname, _new_execute(k.lower()))
 
 _setup()

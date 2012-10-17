@@ -511,7 +511,7 @@ class BaseBackendTest(Runner):
         calldescr = cpu.calldescrof(deref(FPTR), (lltype.Char,), lltype.Char,
                                     EffectInfo.MOST_GENERAL)
         x = cpu.bh_call_i(self.get_funcbox(cpu, func_ptr).value,
-                          calldescr, [ord('A')], None, None)
+                          [ord('A')], None, None, calldescr)
         assert x == ord('B')
         if cpu.supports_floats:
             def func(f, i):
@@ -525,8 +525,8 @@ class BaseBackendTest(Runner):
             calldescr = cpu.calldescrof(FTP, FTP.ARGS, FTP.RESULT,
                                         EffectInfo.MOST_GENERAL)
             x = cpu.bh_call_f(self.get_funcbox(cpu, func_ptr).value,
-                              calldescr,
-                              [42], None, [longlong.getfloatstorage(3.5)])
+                              [42], None, [longlong.getfloatstorage(3.5)],
+                              calldescr)
             assert longlong.getrealfloat(x) == 3.5 - 42
 
     def test_call(self):
@@ -1926,7 +1926,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert s.parent.chr2 == chr(150)
         r = self.cpu.bh_getfield_gc_i(r1.value, descrshort)
         assert r == 1313
-        self.cpu.bh_setfield_gc_i(r1.value, descrshort, 1333)
+        self.cpu.bh_setfield_gc_i(r1.value, 1333, descrshort)
         r = self.cpu.bh_getfield_gc_i(r1.value, descrshort)
         assert r == 1333
         r = self.execute_operation(rop.GETFIELD_GC, [r1], 'int',
@@ -2681,7 +2681,7 @@ class LLtypeBackendTest(BaseBackendTest):
         #assert x.getref(rclass.OBJECTPTR).typeptr == vtable2
         #
         arraydescr = cpu.arraydescrof(A)
-        x = cpu.bh_new_array(arraydescr, 7)
+        x = cpu.bh_new_array(7, arraydescr)
         array = lltype.cast_opaque_ptr(lltype.Ptr(A), x)
         assert len(array) == 7
         #
@@ -3129,7 +3129,7 @@ class LLtypeBackendTest(BaseBackendTest):
             calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                              EffectInfo.MOST_GENERAL)
             x = self.cpu.bh_call_i(self.get_funcbox(self.cpu, f).value,
-                                   calldescr, [value], None, None)
+                                   [value], None, None, calldescr)
             assert x == expected, (
                 "%r: got %r, expected %r" % (RESTYPE, x, expected))
 
@@ -3198,7 +3198,7 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         x = self.cpu.bh_call_f(self.get_funcbox(self.cpu, f).value,
-                               calldescr, None, None, [value])
+                               None, None, [value], calldescr)
         assert x == expected
 
     def test_longlong_result_of_call_compiled(self):
@@ -3257,7 +3257,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ivalue = longlong.singlefloat2int(value)
         iexpected = longlong.singlefloat2int(expected)
         x = self.cpu.bh_call_i(self.get_funcbox(self.cpu, f).value,
-                               calldescr, [ivalue], None, None)
+                               [ivalue], None, None, calldescr)
         assert x == iexpected
 
     def test_singlefloat_result_of_call_compiled(self):
