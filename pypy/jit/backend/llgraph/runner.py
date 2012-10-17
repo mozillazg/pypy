@@ -61,8 +61,13 @@ class CallDescr(AbstractDescr):
 class SizeDescr(AbstractDescr):
     def __init__(self, S):
         self.S = S
+
     def as_vtable_size_descr(self):
         return self
+
+    def count_fields_if_immutable(self):
+        return heaptracker.count_fields_if_immutable(self.S)
+
     def __repr__(self):
         return 'SizeDescr(%r)' % (self.S,)
 
@@ -119,6 +124,15 @@ class InteriorFieldDescr(AbstractDescr):
     def __repr__(self):
         return 'InteriorFieldDescr(%r, %r)' % (self.A, self.fieldname)
 
+    def sort_key(self):
+        return self.fieldname
+
+    def is_pointer_field(self):
+        return getkind(self.FIELD) == 'ref'
+
+    def is_float_field(self):
+        return getkind(self.FIELD) == 'float'
+
 
 class LLGraphCPU(model.AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
@@ -158,6 +172,7 @@ class LLGraphCPU(model.AbstractCPU):
     def _record_labels(self, lltrace):
         # xxx pfff, we need to clone the list of operations because the
         # front-end will mutate them under our feet again
+        # xXX pffffffff2 not enough to make sure things are freed
         lltrace.operations = [op.copy_and_change(op.getopnum())
                               for op in lltrace.operations]
         for i, op in enumerate(lltrace.operations):
@@ -351,6 +366,7 @@ class LLGraphCPU(model.AbstractCPU):
         array = a._obj
         return support.cast_result(descr.A.OF, array.getitem(index))
 
+    bh_getarrayitem_gc_pure = bh_getarrayitem_gc
     bh_getarrayitem_gc_i = bh_getarrayitem_gc
     bh_getarrayitem_gc_r = bh_getarrayitem_gc
     bh_getarrayitem_gc_f = bh_getarrayitem_gc
@@ -538,8 +554,9 @@ class LLFrame(object):
             if op.result is not None:
                 # typecheck the result
                 if op.result.type == INT:
-                    resval = int(resval)
-                    assert isinstance(resval, int)
+                    if isinstance(resval, bool):
+                        resval = int(resval)
+                    assert lltype.typeOf(resval) == lltype.Signed
                 elif op.result.type == REF:
                     assert lltype.typeOf(resval) == llmemory.GCREF
                 elif op.result.type == FLOAT:
