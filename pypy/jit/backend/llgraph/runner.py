@@ -19,10 +19,9 @@ class LLTrace(object):
     has_been_freed = False
     invalid = False
 
-    def __init__(self, inputargs, operations, looptoken):
+    def __init__(self, inputargs, operations):
         self.inputargs = inputargs
         self.operations = operations
-        self.looptoken = looptoken
 
 class GuardFailed(Exception):
     def __init__(self, failargs, descr):
@@ -155,7 +154,7 @@ class LLGraphCPU(model.AbstractCPU):
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
         looptoken.compiled_loop_token = clt
-        lltrace = LLTrace(inputargs, operations, looptoken)
+        lltrace = LLTrace(inputargs, operations)
         clt._llgraph_loop = lltrace
         clt._llgraph_alltraces = [lltrace]
         self._record_labels(lltrace)
@@ -164,7 +163,7 @@ class LLGraphCPU(model.AbstractCPU):
                        original_loop_token, log=True):
         clt = original_loop_token.compiled_loop_token
         clt.compiling_a_bridge()
-        lltrace = LLTrace(inputargs, operations, original_loop_token)
+        lltrace = LLTrace(inputargs, operations)
         faildescr._llgraph_bridge = lltrace
         clt._llgraph_alltraces.append(lltrace)
         self._record_labels(lltrace)
@@ -196,6 +195,8 @@ class LLGraphCPU(model.AbstractCPU):
     def free_loop_and_bridges(self, compiled_loop_token):
         for c in compiled_loop_token._llgraph_alltraces:
             c.has_been_freed = True
+        compiled_loop_token._llgraph_alltraces = []
+        compiled_loop_token._llgraph_loop = None
         model.AbstractCPU.free_loop_and_bridges(self, compiled_loop_token)
 
     def make_execute_token(self, *argtypes):
@@ -447,7 +448,8 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_newstr(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
-                                      lltype.malloc(rstr.STR, length))
+                                      lltype.malloc(rstr.STR, length,
+                                                    zero=True))
 
     def bh_strlen(self, s):
         return s._obj.container.chars.getlength()
@@ -467,7 +469,8 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_newunicode(self, length):
         return lltype.cast_opaque_ptr(llmemory.GCREF,
-                                      lltype.malloc(rstr.UNICODE, length))
+                                      lltype.malloc(rstr.UNICODE, length,
+                                                    zero=True))
 
     def bh_unicodelen(self, string):
         return string._obj.container.chars.getlength()
@@ -490,7 +493,7 @@ class LLGraphCPU(model.AbstractCPU):
                                       lltype.malloc(sizedescr.S, zero=True))
 
     def bh_new_with_vtable(self, vtable, descr):
-        result = lltype.malloc(descr.S)
+        result = lltype.malloc(descr.S, zero=True)
         result_as_objptr = lltype.cast_pointer(rclass.OBJECTPTR, result)
         result_as_objptr.typeptr = support.cast_from_int(rclass.CLASSTYPE,
                                                          vtable)

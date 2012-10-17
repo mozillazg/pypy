@@ -218,6 +218,7 @@ class _TestIntegration(LLJitMixin):
         res = self.meta_interp(f, [1], loop_longevity=4, inline=True)
         assert res == 42
         self.check_jitcell_token_count(6)
+        import pdb;pdb.set_trace()
         tokens = [t() for t in get_stats().jitcell_token_wrefs]
         # Some loops have been freed
         assert None in tokens
@@ -254,4 +255,3 @@ if __name__ == '__main__':
         finally:
             if hasattr(test, 'teardown_class'):
                 test.teardown_class()
-            
