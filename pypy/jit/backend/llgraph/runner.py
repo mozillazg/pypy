@@ -3,8 +3,7 @@ from weakref import WeakKeyDictionary
 
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
-from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, INT,\
-     REF, FLOAT
+from pypy.jit.metainterp.history import Const, getkind, AbstractDescr, VOID
 from pypy.jit.metainterp.resoperation import rop
 
 from pypy.rpython.llinterp import LLInterpreter
@@ -124,15 +123,41 @@ class LLGraphCPU(model.AbstractCPU):
         return ffisupport.calldescr_dynamic_for_tests(self, atypes, rtype,
                                                       abiname)
 
+    def calldescrof_dynamic(self, cif_description, extrainfo):
+        # XXX WTF, this is happy nonsense
+        from pypy.jit.backend.llsupport.ffisupport import get_ffi_type_kind
+        from pypy.jit.backend.llsupport.ffisupport import UnsupportedKind
+        ARGS = []
+        try:
+            for itp in range(cif_description.nargs):
+                arg = cif_description.atypes[itp]
+                kind = get_ffi_type_kind(self, arg)
+                if kind != VOID:
+                    ARGS.append(support.kind2TYPE[kind[0]])
+            RESULT = support.kind2TYPE[get_ffi_type_kind(self, cif_description.rtype)[0]]
+        except UnsupportedKind:
+            return None
+        key = ('call_dynamic', RESULT, tuple(ARGS),
+               extrainfo, cif_description.abi)
+        try:
+            return self.descrs[key]
+        except KeyError:
+            descr = CallDescr(RESULT, ARGS)
+            self.descrs[key] = descr
+            return descr
+
     # ------------------------------------------------------------
 
     def call(self, func, calldescr, args):
+        TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
+        RESULT = TP.RESULT
         func = llmemory.cast_int_to_adr(func).ptr._obj._callable
         res = func(*args)
-        return support.cast_result(calldescr.RESULT, res)
+        return support.cast_result(RESULT, res)
 
     def do_call(self, func, calldescr, args_i, args_r, args_f):
-        args = support.cast_call_args(calldescr.ARGS, args_i, args_r, args_f)
+        TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
+        args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
         return self.call(func, calldescr, args)
 
     bh_call_i = do_call
@@ -264,7 +289,8 @@ class LLFrame(object):
         raise Jump(descr, args)
 
     def execute_call(self, descr, *args):
-        return self.cpu.call(args[0], descr, args[1:])
+        call_args = support.cast_call_args_in_order(args[0], args[1:])
+        return self.cpu.call(args[0], descr, call_args)
 
     def execute_getfield_gc(self, descr, p):
         p = lltype.cast_opaque_ptr(lltype.Ptr(descr.S), p)

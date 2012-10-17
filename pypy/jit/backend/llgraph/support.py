@@ -9,6 +9,14 @@ from pypy.rpython.lltypesystem import lltype, rffi, llmemory
 
 IS_32_BIT = r_ulonglong is not r_uint
 
+kind2TYPE = {
+    'i': lltype.Signed,
+    'f': lltype.Float,
+    'L': lltype.SignedLongLong,
+    'S': lltype.SingleFloat,
+    'v': lltype.Void,
+    }
+
 def cast_to_int(x):
     TP = lltype.typeOf(x)
     if isinstance(TP, lltype.Ptr):
@@ -122,3 +130,17 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
     assert list(argsiter_r) == []
     assert list(argsiter_f) == []
     return args
+
+def cast_call_args_in_order(func, args):
+    ARGS = llmemory.cast_int_to_adr(func).ptr._obj._TYPE.ARGS
+    call_args = []
+    for ARG, arg in zip(ARGS, args):
+        kind = getkind(ARG)
+        if kind == 'int':
+            n = cast_from_int(ARG, arg)
+        elif kind == 'ref':
+            n = cast_from_ptr(ARG, arg)
+        else:
+            n = cast_from_floatstorage(ARG, arg)
+        call_args.append(n)
+    return call_args
