@@ -44,11 +44,19 @@ class CallDescr(AbstractDescr):
         self.RESULT = RESULT
         self.ARGS = ARGS
         self.extrainfo = extrainfo
-    def get_extra_info(self):
-        return self.extrainfo
+
     def __repr__(self):
         return 'CallDescr(%r, %r, %r)' % (self.RESULT, self.ARGS,
                                           self.extrainfo)
+
+    def get_extra_info(self):
+        return self.extrainfo
+
+    def get_arg_types(self):
+        return ''.join([getkind(ARG)[0] for ARG in self.ARGS])
+
+    def get_result_type(self):
+        return getkind(self.RESULT)[0]
 
 class SizeDescr(AbstractDescr):
     def __init__(self, S):
@@ -289,29 +297,18 @@ class LLGraphCPU(model.AbstractCPU):
 
     # ------------------------------------------------------------
 
-    def call(self, func, args, RESULT, calldescr):
-        try:
-            res = func(*args)
-            self.last_exception = None
-        except LLException, lle:
-            self.last_exception = lle
-            d = {'void': None,
-                 'ref': lltype.nullptr(llmemory.GCREF.TO),
-                 'int': 0,
-                 'float': 0.0}
-            res = d[getkind(RESULT)]
+    def maybe_on_top_of_llinterp(self, func, args, RESULT):
+        ptr = llmemory.cast_int_to_adr(func).ptr
+        if hasattr(ptr._obj, 'graph'):
+            res = self.llinterp.eval_graph(ptr._obj.graph, args)
+        else:
+            res = ptr._obj._callable(*args)
         return support.cast_result(RESULT, res)
 
     def _do_call(self, func, args_i, args_r, args_f, calldescr):
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
         args = support.cast_call_args(TP.ARGS, args_i, args_r, args_f)
-        ptr = llmemory.cast_int_to_adr(func).ptr
-        if hasattr(ptr._obj, 'graph'):
-            def func(*args):
-                return self.llinterp.eval_graph(ptr._obj.graph, args)
-        else:
-            func = ptr._obj._callable
-        return self.call(func, args, TP.RESULT, calldescr)
+        return self.maybe_on_top_of_llinterp(func, args, TP.RESULT)
 
     bh_call_i = _do_call
     bh_call_r = _do_call
@@ -484,6 +481,11 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_new_array(self, length, arraydescr):
         array = lltype.malloc(arraydescr.A, length, zero=True)
         return lltype.cast_opaque_ptr(llmemory.GCREF, array)
+
+    def bh_classof(self, struct):
+        struct = lltype.cast_opaque_ptr(rclass.OBJECTPTR, struct)
+        result_adr = llmemory.cast_ptr_to_adr(struct.typeptr)
+        return heaptracker.adr2int(result_adr)
 
     def bh_read_timestamp(self):
         return read_timestamp()
@@ -695,16 +697,27 @@ class LLFrame(object):
             if oopspecindex == EffectInfo.OS_MATH_SQRT:
                 return self._do_math_sqrt(args[0])
         TP = llmemory.cast_int_to_adr(func).ptr._obj._TYPE
-        ARGS = TP.ARGS
-        call_args = support.cast_call_args_in_order(ARGS, args)
-        func = llmemory.cast_int_to_adr(func).ptr._obj._callable
-        return self.cpu.call(func, call_args, TP.RESULT, calldescr)
+        call_args = support.cast_call_args_in_order(TP.ARGS, args)
+        try:
+            res = self.cpu.maybe_on_top_of_llinterp(func, call_args, TP.RESULT)
+            self.cpu.last_exception = None
+        except LLException, lle:
+            self.cpu.last_exception = lle
+            d = {'void': None,
+                 'ref': lltype.nullptr(llmemory.GCREF.TO),
+                 'int': 0,
+                 'float': 0.0}
+            res = d[getkind(TP.RESULT)]
+        return res
+
+    execute_call_may_force = execute_call
 
     def execute_call_release_gil(self, descr, func, *args):
         call_args = support.cast_call_args_in_order(descr.ARGS, args)
         FUNC = lltype.FuncType(descr.ARGS, descr.RESULT)
         func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
-        return self.cpu.call(func_to_call, call_args, descr.RESULT, descr)
+        result = func_to_call(*call_args)
+        return support.cast_result(descr.RESULT, result)
 
     def execute_call_assembler(self, descr, *args):
         faildescr = self.cpu._execute_token(descr, *args)

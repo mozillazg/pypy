@@ -33,6 +33,9 @@ __metaclass__ = type
 
 
 class FunctionGraph(object):
+    __slots__ = ('startblock', '__dict__')
+    # xxx the __slots__ is for try_show(), to make get_referrers() work. HACK
+
     def __init__(self, name, startblock, return_var=None):
         self.name        = name    # function name (possibly mangled already)
         self.startblock  = startblock

@@ -136,13 +136,22 @@ def cast_call_args(ARGS, args_i, args_r, args_f, args_in_order=None):
 
 def cast_call_args_in_order(ARGS, args):
     call_args = []
-    for ARG, arg in zip(ARGS, args):
+    i = 0
+    for ARG in ARGS:
         kind = getkind(ARG)
         if kind == 'int':
-            n = cast_from_int(ARG, arg)
+            n = cast_from_int(ARG, args[i])
+            i += 1
         elif kind == 'ref':
-            n = cast_from_ptr(ARG, arg)
+            n = cast_from_ptr(ARG, args[i])
+            i += 1
+        elif kind == 'float':
+            n = cast_from_floatstorage(ARG, args[i])
+            i += 1
+        elif kind == 'void':
+            n = None
         else:
-            n = cast_from_floatstorage(ARG, arg)
+            raise AssertionError(kind)
         call_args.append(n)
+    assert i == len(args)
     return call_args
