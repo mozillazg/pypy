@@ -243,12 +243,18 @@ class LLGraphCPU(model.AbstractCPU):
     def force(self, frame):
         assert not frame._forced
         frame._forced = True
-        guard_op = frame.lltrace.operations[frame.current_index + 1]
         call_op = frame.current_op
+        if call_op.getopnum() == rop.FINISH:
+            guard_op = call_op
+        else:
+            guard_op = frame.lltrace.operations[frame.current_index + 1]
         frame.latest_values = frame._getfailargs(guard_op, call_op.result)
         descr = guard_op.getdescr()
         frame.latest_descr = descr
         return descr
+
+    def set_savedata_ref(self, frame, data):
+        frame.saved_data = data
 
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         key = ('call', getkind(RESULT),
@@ -529,6 +535,13 @@ class LLGraphCPU(model.AbstractCPU):
 
 class LLFrame(object):
     _TYPE = llmemory.GCREF
+
+    # some obscure hacks to support comparison with llmemory.GCREF
+    def __ne__(self, other):
+        return not self == other
+    def __eq__(self, other):
+        return isinstance(other, LLFrame) and self is other
+    
     _forced = False
     _execution_finished = False
     
