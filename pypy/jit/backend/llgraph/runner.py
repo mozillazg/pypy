@@ -130,13 +130,10 @@ class InteriorFieldDescr(AbstractDescr):
     def is_float_field(self):
         return getkind(self.FIELD) == 'float'
 
-def _example_res(kind):
-    d = {'v': None,
-         'r': lltype.nullptr(llmemory.GCREF.TO),
-         'i': 0,
-         'f': 0.0}
-    return d[kind[0]]
-
+_example_res = {'v': None,
+                'r': lltype.nullptr(llmemory.GCREF.TO),
+                'i': 0,
+                'f': 0.0}
 
 class LLGraphCPU(model.AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
@@ -731,7 +728,7 @@ class LLFrame(object):
             self.cpu.last_exception = None
         except LLException, lle:
             self.cpu.last_exception = lle
-            res = _example_res[getkind(TP.RESULT)]
+            res = _example_res[getkind(TP.RESULT)[0]]
         return res
 
     execute_call_may_force = execute_call
@@ -773,7 +770,7 @@ class LLFrame(object):
             assert self.cpu.last_exception is None, "exception left behind"
             self.cpu.last_exception = lle
             if self.current_op.result is not None:
-                return _example_res(self.current_op.result.type)
+                return _example_res[self.current_op.result.type]
             return None
         return support.cast_result(lltype.typeOf(result), result)
 
