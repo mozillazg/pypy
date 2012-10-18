@@ -766,31 +766,12 @@ class LLFrame(object):
         return support.cast_result(descr.RESULT, result)
 
     def execute_call_assembler(self, descr, *args):
-        faildescr = self.cpu._execute_token(descr, *args)
+        frame = self.cpu._execute_token(descr, *args)
         jd = descr.outermost_jitdriver_sd
-        if jd.index_of_virtualizable != -1:
-            vable = args[jd.index_of_virtualizable]
-        else:
-            vable = lltype.nullptr(llmemory.GCREF.TO)
-        #
-        # Emulate the fast path
-        failindex = self.cpu.get_fail_descr_number(faildescr)
-        if failindex == self.cpu.done_with_this_frame_int_v:
-            self._reset_vable(jd, vable)
-            return self.cpu.get_latest_value_int(0)
-        if failindex == self.cpu.done_with_this_frame_ref_v:
-            self._reset_vable(jd, vable)
-            return self.cpu.get_latest_value_ref(0)
-        if failindex == self.cpu.done_with_this_frame_float_v:
-            self._reset_vable(jd, vable)
-            return self.cpu.get_latest_value_float(0)
-        if failindex == self.cpu.done_with_this_frame_void_v:
-            self._reset_vable(jd, vable)
-            return None
-        #
+        # xxx fast path?????
         assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
         try:
-            result = assembler_helper_ptr(failindex, vable)
+            result = assembler_helper_ptr(frame)
         except LLException, lle:
             assert self.last_exception is None, "exception left behind"
             self.last_exception = lle
@@ -798,11 +779,6 @@ class LLFrame(object):
                 return _example_res[self.current_op.result.type]
             return None
         return support.cast_result(lltype.typeOf(result), result)
-
-    def _reset_vable(self, jd, vable):
-        if jd.index_of_virtualizable != -1:
-            fielddescr = jd.vable_token_descr
-            self.cpu.bh_setfield_gc_i(vable, 0, fielddescr)
 
     def execute_same_as(self, _, x):
         return x
