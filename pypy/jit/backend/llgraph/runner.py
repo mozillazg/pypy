@@ -786,7 +786,13 @@ class LLFrame(object):
         return x
 
     def execute_debug_merge_point(self, descr, *args):
-        pass
+        from pypy.jit.metainterp.warmspot import get_stats
+        try:
+            stats = get_stats()
+        except AttributeError:
+            pass
+        else:
+            stats.add_merge_point_location(args[1:])
 
     def execute_new_with_vtable(self, _, vtable):
         descr = heaptracker.vtable2descr(self.cpu, vtable)
