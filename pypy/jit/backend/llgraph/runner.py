@@ -1,6 +1,4 @@
 
-from weakref import WeakKeyDictionary
-
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
 from pypy.jit.metainterp.history import Const, getkind, AbstractDescr
@@ -151,7 +149,6 @@ class LLGraphCPU(model.AbstractCPU):
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
-        self.known_labels = WeakKeyDictionary()
         self.last_exception = None
         self.descrs = {}
         class MiniStats:
@@ -183,7 +180,7 @@ class LLGraphCPU(model.AbstractCPU):
                               for op in lltrace.operations]
         for i, op in enumerate(lltrace.operations):
             if op.getopnum() == rop.LABEL:
-                self.known_labels[op.getdescr()] = (lltrace, i)
+                op.getdescr()._llgraph_target = (lltrace, i)
 
     def invalidate_loop(self, looptoken):
         for trace in looptoken.compiled_loop_token._llgraph_alltraces:
@@ -551,7 +548,7 @@ class LLFrame(object):
                 resval = getattr(self, 'execute_' + op.getopname())(op.getdescr(),
                                                                     *args)
             except Jump, j:
-                self.lltrace, i = self.cpu.known_labels[j.descr]
+                self.lltrace, i = j.descr._llgraph_target
                 label_op = self.lltrace.operations[i]
                 self.do_renaming(label_op.getarglist(), j.args)
                 i += 1
