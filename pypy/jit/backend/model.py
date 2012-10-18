@@ -12,11 +12,6 @@ class AbstractCPU(object):
     # Boxes and Consts are BoxFloats and ConstFloats.
     supports_singlefloats = False
 
-    done_with_this_frame_void_v = -1
-    done_with_this_frame_int_v = -1
-    done_with_this_frame_ref_v = -1
-    done_with_this_frame_float_v = -1
-    propagate_exception_v = -1
     total_compiled_loops = 0
     total_compiled_bridges = 0
     total_freed_loops = 0
