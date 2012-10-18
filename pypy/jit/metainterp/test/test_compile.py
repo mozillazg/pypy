@@ -152,7 +152,7 @@ def test_compile_tmp_callback():
     from pypy.rpython.annlowlevel import llhelper
     from pypy.rpython.llinterp import LLException
     #
-    cpu = runner.LLtypeCPU(None)
+    cpu = runner.LLGraphCPU(None)
     FUNC = lltype.FuncType([lltype.Signed]*4, lltype.Signed)
     def ll_portal_runner(g1, g2, r3, r4):
         assert (g1, g2, r3, r4) == (12, 34, -156, -178)

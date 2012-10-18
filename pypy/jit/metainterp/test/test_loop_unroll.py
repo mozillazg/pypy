@@ -1,7 +1,7 @@
 import py
 from pypy.rlib.jit import JitDriver
 from pypy.jit.metainterp.test import test_loop
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_NAMES
 
 class LoopUnrollTest(test_loop.LoopTest):
@@ -16,7 +16,3 @@ class LoopUnrollTest(test_loop.LoopTest):
 
 class TestLLtype(LoopUnrollTest, LLJitMixin):
     pass
-
-class TestOOtype(LoopUnrollTest, OOJitMixin):
-    pass
-

@@ -1,4 +1,4 @@
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.jit import JitDriver
 
 
@@ -55,6 +55,3 @@ class GreenFieldsTests:
 
 class TestLLtypeGreenFieldsTests(GreenFieldsTests, LLJitMixin):
     pass
-
-class TestOOtypeGreenFieldsTests(GreenFieldsTests, OOJitMixin):
-   pass
