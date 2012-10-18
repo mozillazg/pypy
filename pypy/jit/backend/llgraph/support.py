@@ -85,6 +85,8 @@ def cast_from_int(TYPE, x):
         return lltype.cast_primitive(TYPE, x)
 
 def cast_from_ptr(TYPE, x):
+    if lltype.typeOf(x) == TYPE:
+        return x
     return lltype.cast_opaque_ptr(TYPE, x)
 
 def cast_arg(TP, x):

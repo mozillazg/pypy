@@ -2200,7 +2200,7 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_force_operations_returning_void(self):
         values = []
         def maybe_force(token, flag):
-            assert lltype.typeOf(token) == JITFRAMEPTR
+            assert lltype.typeOf(token) == cpu.JITFRAMEPTR
             if flag:
                 descr = self.cpu.force(token)
                 values.append(descr)
@@ -2208,7 +2208,7 @@ class LLtypeBackendTest(BaseBackendTest):
                 values.append(self.cpu.get_latest_value_int(token, 1))
                 values.append(token)
 
-        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Void)
+        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Void)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2249,7 +2249,8 @@ class LLtypeBackendTest(BaseBackendTest):
                values.append(token)
             return 42
 
-        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed],
+                             lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2294,7 +2295,7 @@ class LLtypeBackendTest(BaseBackendTest):
                values.append(token)
             return 42.5
 
-        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Float)
+        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Float)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
@@ -2731,7 +2732,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 4 + 9
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Signed))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
@@ -2807,7 +2808,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Float))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
@@ -2903,7 +2904,7 @@ class LLtypeBackendTest(BaseBackendTest):
             called.append(failindex)
             return 13.5
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([JITFRAMEPTR, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR, llmemory.GCREF],
                                              lltype.Float))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
@@ -3669,7 +3670,7 @@ class LLtypeBackendTest(BaseBackendTest):
             values.append(token)
             return 42
 
-        FUNC = self.FuncType([JITFRAMEPTR, lltype.Signed], lltype.Signed)
+        FUNC = self.FuncType([self.cpu.JITFRAMEPTR, lltype.Signed], lltype.Signed)
         func_ptr = llhelper(lltype.Ptr(FUNC), maybe_force)
         funcbox = self.get_funcbox(self.cpu, func_ptr).constbox()
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
