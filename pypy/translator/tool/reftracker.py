@@ -14,7 +14,7 @@ MARKER = object()
 
 class BaseRefTrackerPage(GraphPage):
 
-    def compute(self, objectlist):
+    def compute(self, objectlist, highlight=set()):
         assert objectlist[0] is MARKER
         self.objectlist = objectlist
         dotgen = DotGen('reftracker')
@@ -34,7 +34,7 @@ class BaseRefTrackerPage(GraphPage):
             s = '<%s> %s\\n%s' % (typename, word, s)
             nodename = 'node%d' % len(nodes)
             kwds = {}
-            if i == len(objectlist) - 1:
+            if i in highlight:
                 kwds['color'] = 'red'
             dotgen.emit_node(nodename, label=s, shape="box", **kwds)
             nodes[uid(objectlist[i])] = nodename
@@ -78,11 +78,13 @@ class BaseRefTrackerPage(GraphPage):
             for o2 in self.get_referrers(objectlist[i]):
                 if uid(o2) == id1:
                     found = o2
+        highlight = set()
         if found is not None:
+            highlight.add(len(objectlist))
             objectlist = objectlist + [found]
         else:
             print '*** NOTE: object not found'
-        return self.newpage(objectlist)
+        return self.newpage(objectlist, highlight)
 
     def formatobject(self, o):
         header = self.shortrepr(o, compact=False)
@@ -106,8 +108,8 @@ class BaseRefTrackerPage(GraphPage):
     def edgelabel(self, o1, o2):
         return ''
 
-    def newpage(self, objectlist):
-        return self.__class__(objectlist)
+    def newpage(self, *args):
+        return self.__class__(*args)
 
 
 class RefTrackerPage(BaseRefTrackerPage):
