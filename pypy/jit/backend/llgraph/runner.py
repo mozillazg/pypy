@@ -12,7 +12,7 @@ from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.llinterp import LLInterpreter, LLException
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi, rclass, rstr
 
-from pypy.rlib.rarithmetic import ovfcheck
+from pypy.rlib.rarithmetic import ovfcheck, r_uint, r_ulonglong
 from pypy.rlib.rtimer import read_timestamp
 
 class LLTrace(object):
@@ -132,11 +132,18 @@ class InteriorFieldDescr(AbstractDescr):
     def is_float_field(self):
         return getkind(self.FIELD) == 'float'
 
+def _example_res(kind):
+    d = {'v': None,
+         'r': lltype.nullptr(llmemory.GCREF.TO),
+         'i': 0,
+         'f': 0.0}
+    return d[kind[0]]
+
 
 class LLGraphCPU(model.AbstractCPU):
     from pypy.jit.metainterp.typesystem import llhelper as ts
     supports_floats = True
-    supports_longlong = True
+    supports_longlong = r_uint is not r_ulonglong
     supports_singlefloats = True
     translate_support_code = False
 
@@ -191,6 +198,8 @@ class LLGraphCPU(model.AbstractCPU):
         assert not hasattr(oldlooptoken, '_llgraph_redirected')
         oldlooptoken.compiled_loop_token._llgraph_redirected = True
         oldlooptoken.compiled_loop_token._llgraph_loop = newtrace
+        alltraces = newlooptoken.compiled_loop_token._llgraph_alltraces
+        oldlooptoken.compiled_loop_token._llgraph_alltraces = alltraces
 
     def free_loop_and_bridges(self, compiled_loop_token):
         for c in compiled_loop_token._llgraph_alltraces:
@@ -725,11 +734,7 @@ class LLFrame(object):
             self.cpu.last_exception = None
         except LLException, lle:
             self.cpu.last_exception = lle
-            d = {'void': None,
-                 'ref': lltype.nullptr(llmemory.GCREF.TO),
-                 'int': 0,
-                 'float': 0.0}
-            res = d[getkind(TP.RESULT)]
+            res = _example_res[getkind(TP.RESULT)]
         return res
 
     execute_call_may_force = execute_call
@@ -768,14 +773,11 @@ class LLFrame(object):
         try:
             result = assembler_helper_ptr(failindex, vable)
         except LLException, lle:
-            xxxxxxxxxx
-            assert _last_exception is None, "exception left behind"
-            _last_exception = lle
-            # fish op
-            op = self.loop.operations[self.opindex]
-            if op.result is not None:
-                yyyyyyyyyyyyy
-                return 0
+            assert self.cpu.last_exception is None, "exception left behind"
+            self.cpu.last_exception = lle
+            if self.current_op.result is not None:
+                return _example_res(self.current_op.result.type)
+            return None
         return support.cast_result(lltype.typeOf(result), result)
 
     def _reset_vable(self, jd, vable):
