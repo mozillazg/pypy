@@ -146,7 +146,6 @@ class LLGraphCPU(model.AbstractCPU):
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
         self.llinterp = LLInterpreter(rtyper)
-        self.last_exception = None
         self.descrs = {}
         class MiniStats:
             pass
@@ -212,27 +211,32 @@ class LLGraphCPU(model.AbstractCPU):
             frame.execute(lltrace)
             assert False
         except ExecutionFinished, e:
-            self.latest_values = e.args
-            return e.descr
+            frame.latest_values = e.args
+            frame.latest_descr = e.descr
+            return frame
         except GuardFailed, e:
-            self.latest_values = e.failargs
-            return e.descr
+            frame.latest_values = e.failargs
+            frame.latest_descr = e.descr
+            return frame
 
-    def get_latest_value_int(self, index):
-        return self.latest_values[index]
+    def get_latest_value_int(self, frame, index):
+        return frame.latest_values[index]
     get_latest_value_float = get_latest_value_int
     get_latest_value_ref   = get_latest_value_int
 
-    def get_latest_value_count(self):
-        return len(self.latest_values)
+    def get_latest_value_count(self, frame):
+        return len(frame.latest_values)
+
+    def get_latest_descr(self, frame):
+        return frame.latest_descr
 
     def clear_latest_values(self, count):
         del self.latest_values
 
-    def grab_exc_value(self):
-        if self.last_exception is not None:
-            result = self.last_exception.args[1]
-            self.last_exception = None
+    def grab_exc_value(self, frame):
+        if frame.last_exception is not None:
+            result = frame.last_exception.args[1]
+            frame.last_exception = None
             return lltype.cast_opaque_ptr(llmemory.GCREF, result)
         else:
             return lltype.nullptr(llmemory.GCREF.TO)
@@ -523,6 +527,7 @@ class LLFrame(object):
         for box, arg in zip(argboxes, args):
             self.env[box] = arg
         self.overflow_flag = False
+        self.last_exception = None
 
     def lookup(self, arg):
         if isinstance(arg, Const):
@@ -638,11 +643,11 @@ class LLFrame(object):
         self.execute_guard_class(descr, arg, klass)
 
     def execute_guard_no_exception(self, descr):
-        if self.cpu.last_exception is not None:
+        if self.last_exception is not None:
             self.fail_guard(descr)
 
     def execute_guard_exception(self, descr, excklass):
-        lle = self.cpu.last_exception
+        lle = self.last_exception
         if lle is None:
             gotklass = lltype.nullptr(rclass.CLASSTYPE.TO)
         else:
@@ -654,7 +659,7 @@ class LLFrame(object):
             self.fail_guard(descr)
         #
         res = lle.args[1]
-        self.cpu.last_exception = None
+        self.last_exception = None
         return support.cast_to_ptr(res)
 
     def execute_guard_not_forced(self, descr):
@@ -725,9 +730,9 @@ class LLFrame(object):
         call_args = support.cast_call_args_in_order(TP.ARGS, args)
         try:
             res = self.cpu.maybe_on_top_of_llinterp(func, call_args, TP.RESULT)
-            self.cpu.last_exception = None
+            self.last_exception = None
         except LLException, lle:
-            self.cpu.last_exception = lle
+            self.last_exception = lle
             res = _example_res[getkind(TP.RESULT)[0]]
         return res
 
@@ -767,8 +772,8 @@ class LLFrame(object):
         try:
             result = assembler_helper_ptr(failindex, vable)
         except LLException, lle:
-            assert self.cpu.last_exception is None, "exception left behind"
-            self.cpu.last_exception = lle
+            assert self.last_exception is None, "exception left behind"
+            self.last_exception = lle
             if self.current_op.result is not None:
                 return _example_res[self.current_op.result.type]
             return None
