@@ -2724,7 +2724,6 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_assembler_call(self):
         called = []
         def assembler_helper(jitframe):
-            assert self.cpu.get_finish_value_int(jitframe) == 97
             faildescr = self.cpu.get_latest_descr(jitframe)
             failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
@@ -2743,7 +2742,8 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.reserve_some_free_fail_descr_number()
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
-        i10 = int_add(i0, i1)
+        i10 = int_add_ovf(i0, i1)
+        guard_no_overflow() []
         i11 = int_add(i10, i2)
         i12 = int_add(i11, i3)
         i13 = int_add(i12, i4)
@@ -2756,7 +2756,8 @@ class LLtypeBackendTest(BaseBackendTest):
         loop = parse(ops)
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
-        done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
+        fail_number = self.cpu.get_fail_descr_number(
+            loop.operations[1].getdescr())
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         ARGS = [lltype.Signed] * 10
         RES = lltype.Signed
@@ -2775,33 +2776,26 @@ class LLtypeBackendTest(BaseBackendTest):
         '''
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
+
+        # test the fast path, which should not call assembler_helper()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
         args = [i+1 for i in range(10)]
         frame = self.cpu.execute_token(othertoken, *args)
-        assert self.cpu.get_finish_value_int(frame) == 13
-        assert called == [done_number]
+        assert self.cpu.get_finish_value_int(frame) == 97
+        assert called == []
 
-        # test the fast path, which should not call assembler_helper()
-        del called[:]
-        self.cpu.done_with_this_frame_int_v = done_number
-        try:
-            othertoken = JitCellToken()
-            self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
-            args = [i+1 for i in range(10)]
-            frame = self.cpu.execute_token(othertoken, *args)
-            assert self.cpu.get_finish_value_int(frame) == 97
-            assert not called
-        finally:
-            del self.cpu.done_with_this_frame_int_v
+        # test the slow path, going via assembler_helper()
+        args[1] = sys.maxint
+        frame = self.cpu.execute_token(othertoken, *args)
+        assert self.cpu.get_finish_value_int(frame) == 13
+        assert called == [fail_number]
 
     def test_assembler_call_float(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         called = []
         def assembler_helper(jitframe):
-            x = self.cpu.get_finish_value_float(jitframe)
-            assert longlong.getrealfloat(x) == 1.2 + 3.2
-            faildescr =self.cpu.get_latest_descr(jitframe)
+            faildescr = self.cpu.get_latest_descr(jitframe)
             failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 13.5
@@ -2823,10 +2817,13 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.reserve_some_free_fail_descr_number()
         ops = '''
         [f0, f1]
+        i0 = float_eq(f0, -1.0)
+        guard_false(i0) []
         f2 = float_add(f0, f1)
         finish(f2)'''
         loop = parse(ops)
-        done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
+        fail_number = self.cpu.get_fail_descr_number(
+            loop.operations[1].getdescr())
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -2844,27 +2841,21 @@ class LLtypeBackendTest(BaseBackendTest):
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
+
+        # test the fast path, which should not call assembler_helper()
         args = [longlong.getfloatstorage(1.2),
                 longlong.getfloatstorage(3.2)]
         frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_finish_value_float(frame)
-        assert longlong.getrealfloat(x) == 13.5
-        assert called == [done_number]
+        assert longlong.getrealfloat(x) == 1.2 + 3.2
+        assert called == []
 
-        # test the fast path, which should not call assembler_helper()
-        del called[:]
-        self.cpu.done_with_this_frame_float_v = done_number
-        try:
-            othertoken = JitCellToken()
-            self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
-            args = [longlong.getfloatstorage(1.2),
-                    longlong.getfloatstorage(3.2)]
-            frame = self.cpu.execute_token(othertoken, *args)
-            x = self.cpu.get_finish_value_float(frame)
-            assert longlong.getrealfloat(x) == 1.2 + 3.2
-            assert not called
-        finally:
-            del self.cpu.done_with_this_frame_float_v
+        # test the slow path, going via assembler_helper()
+        args[0] = longlong.getfloatstorage(-1.0)
+        frame = self.cpu.execute_token(othertoken, *args)
+        x = self.cpu.get_finish_value_float(frame)
+        assert longlong.getrealfloat(x) == 13.5
+        assert called == [fail_number]
 
     def test_raw_malloced_getarrayitem(self):
         ARRAY = rffi.CArray(lltype.Signed)
@@ -2895,8 +2886,6 @@ class LLtypeBackendTest(BaseBackendTest):
             py.test.skip("requires floats")
         called = []
         def assembler_helper(jitframe):
-            x = self.cpu.get_finish_value_float(jitframe)
-            assert longlong.getrealfloat(x) == 1.25 + 3.25
             faildescr =self.cpu.get_latest_descr(jitframe)
             failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
@@ -2919,13 +2908,16 @@ class LLtypeBackendTest(BaseBackendTest):
             self.cpu.reserve_some_free_fail_descr_number()
         ops = '''
         [f0, f1]
+        i0 = float_eq(f0, -1.0)
+        guard_false(i0) []
         f2 = float_add(f0, f1)
         finish(f2)'''
         loop = parse(ops)
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
-        done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
+        fail_number = self.cpu.get_fail_descr_number(
+            loop.operations[1].getdescr())
         args = [longlong.getfloatstorage(1.25),
                 longlong.getfloatstorage(2.35)]
         frame = self.cpu.execute_token(looptoken, *args)
@@ -2948,31 +2940,46 @@ class LLtypeBackendTest(BaseBackendTest):
                 longlong.getfloatstorage(3.25)]
         frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_finish_value_float(frame)
+        assert longlong.getrealfloat(x) == 1.25 + 3.25
+        assert called == []
+
+        args[0] = longlong.getfloatstorage(-1.0)
+        frame = self.cpu.execute_token(othertoken, *args)
+        x = self.cpu.get_finish_value_float(frame)
         assert longlong.getrealfloat(x) == 13.5
-        assert called == [done_number]
+        assert called == [fail_number]
         del called[:]
 
         # compile a replacement
         ops = '''
         [f0, f1]
+        i0 = float_eq(f0, -2.0)
+        guard_false(i0) []
         f2 = float_sub(f0, f1)
         finish(f2)'''
         loop = parse(ops)
         looptoken2 = JitCellToken()
         looptoken2.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken2)
-        done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
+        fail_number = self.cpu.get_fail_descr_number(
+            loop.operations[1].getdescr())
 
         # install it
         self.cpu.redirect_call_assembler(looptoken, looptoken2)
 
         # now, our call_assembler should go to looptoken2
-        args = [longlong.getfloatstorage(6.0),
-                longlong.getfloatstorage(1.5)]         # 6.0-1.5 == 1.25+3.25
+        args = [longlong.getfloatstorage(116.0),
+                longlong.getfloatstorage(1.5)]
+        frame = self.cpu.execute_token(othertoken, *args)
+        x = self.cpu.get_finish_value_float(frame)
+        assert longlong.getrealfloat(x) == 116.0 - 1.5
+        assert called == []
+
+        args[0] = longlong.getfloatstorage(-2.0)
         frame = self.cpu.execute_token(othertoken, *args)
         x = self.cpu.get_finish_value_float(frame)
         assert longlong.getrealfloat(x) == 13.5
-        assert called == [done_number]
+        assert called == [fail_number]
 
     def test_short_result_of_getfield_direct(self):
         # Test that a getfield that returns a CHAR, SHORT or INT, signed
