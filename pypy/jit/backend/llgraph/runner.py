@@ -256,6 +256,9 @@ class LLGraphCPU(model.AbstractCPU):
     def set_savedata_ref(self, frame, data):
         frame.saved_data = data
 
+    def get_savedata_ref(self, frame):
+        return frame.saved_data
+
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         key = ('call', getkind(RESULT),
                tuple([getkind(A) for A in ARGS]),

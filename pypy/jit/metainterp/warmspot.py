@@ -441,7 +441,10 @@ class WarmRunnerDesc(object):
         def crash_in_jit(e):
             tb = not we_are_translated() and sys.exc_info()[2]
             try:
-                raise e
+                if we_are_translated():
+                    raise e
+                else:
+                    raise
             except JitException:
                 raise     # go through
             except MemoryError:
