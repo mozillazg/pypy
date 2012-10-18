@@ -2725,14 +2725,14 @@ class LLtypeBackendTest(BaseBackendTest):
 
     def test_assembler_call(self):
         called = []
-        def assembler_helper(jitframe, virtualizable):
+        def assembler_helper(jitframe):
             assert self.cpu.get_latest_value_int(jitframe, 0) == 97
-            faildescr =self.cpu.get_latest_descr(jitframe)
+            faildescr =self.cpu.get_latest_descr(jitframe) 
             failindex = self.cpu.get_fail_descr_number(faildescr)
             called.append(failindex)
             return 4 + 9
 
-        FUNCPTR = lltype.Ptr(lltype.FuncType([self.cpu.JITFRAMEPTR, llmemory.GCREF],
+        FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
                                              lltype.Signed))
         class FakeJitDriverSD:
             index_of_virtualizable = -1
