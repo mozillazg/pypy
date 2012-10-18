@@ -3884,4 +3884,5 @@ class BaseLLtypeTests(BasicTests):
 
 
 class TestLLtype(BaseLLtypeTests, LLJitMixin):
-    pass
+    def test_free_object(self):
+        py.test.skip("llgraph backend keeps alive boxes which keep alive values")
