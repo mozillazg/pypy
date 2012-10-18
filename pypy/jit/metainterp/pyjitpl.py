@@ -745,7 +745,7 @@ class MIFrame(object):
         cpu = self.metainterp.cpu
         descr = cpu.jitframe_get_jfdescr_descr()
         jfdescrbox = self._opimpl_getfield_gc_any(jfbox, descr)
-        jfdescrbox = self.implement_guard_value(pc, jfdescrbox)
+        jfdescrbox = self.implement_guard_value(orgpc, jfdescrbox)
         jfdescr = jfdescrbox.getref_base()
         descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
         if not descr:
