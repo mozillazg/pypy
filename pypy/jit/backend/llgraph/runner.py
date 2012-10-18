@@ -142,6 +142,8 @@ class LLGraphCPU(model.AbstractCPU):
     supports_singlefloats = True
     translate_support_code = False
 
+    JITFRAMEPTR = llmemory.GCREF
+
     def __init__(self, rtyper, stats=None, *ignored_args, **ignored_kwds):
         model.AbstractCPU.__init__(self)
         self.rtyper = rtyper
@@ -240,6 +242,16 @@ class LLGraphCPU(model.AbstractCPU):
             return lltype.cast_opaque_ptr(llmemory.GCREF, result)
         else:
             return lltype.nullptr(llmemory.GCREF.TO)
+
+    def force(self, frame):
+        assert not frame._forced
+        frame._forced = True
+        guard_op = frame.lltrace.operations[frame.current_index + 1]
+        call_op = frame.current_op
+        frame.latest_values = frame._getfailargs(guard_op, call_op.result)
+        descr = guard_op.getdescr()
+        frame.latest_descr = descr
+        return descr
 
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         key = ('call', getkind(RESULT),
@@ -518,8 +530,10 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_read_timestamp(self):
         return read_timestamp()
 
-
 class LLFrame(object):
+    _TYPE = llmemory.GCREF
+    _forced = False
+    
     def __init__(self, cpu, argboxes, args):
         self.env = {}
         self.cpu = cpu
@@ -546,6 +560,7 @@ class LLFrame(object):
                 continue
             args = [self.lookup(arg) for arg in op.getarglist()]
             self.current_op = op # for label
+            self.current_index = i
             try:
                 resval = getattr(self, 'execute_' + op.getopname())(op.getdescr(),
                                                                     *args)
@@ -582,11 +597,15 @@ class LLFrame(object):
                 assert resval is None
             i += 1
 
-    def _getfailargs(self):
+    def _getfailargs(self, op=None, skip=None):
+        if op is None:
+            op = self.current_op
         r = []
-        for arg in self.current_op.getfailargs():
+        for arg in op.getfailargs():
             if arg is None:
                 r.append(None)
+            elif arg is skip:
+                r.append(_example_res[skip.type])
             else:
                 r.append(self.env[arg])
         return r
@@ -663,7 +682,8 @@ class LLFrame(object):
         return support.cast_to_ptr(res)
 
     def execute_guard_not_forced(self, descr):
-        pass     # XXX
+        if self._forced:
+            self.fail_guard(descr)
 
     def execute_guard_not_invalidated(self, descr):
         if self.lltrace.invalid:
@@ -800,9 +820,8 @@ class LLFrame(object):
         descr = heaptracker.vtable2descr(self.cpu, vtable)
         return self.cpu.bh_new_with_vtable(vtable, descr)
 
-    def execute_force_token(self, _):
-        import py; py.test.skip("XXX")
-
+    def execute_jit_frame(self, _):
+        return self
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
