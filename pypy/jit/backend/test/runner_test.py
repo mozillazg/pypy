@@ -1368,7 +1368,7 @@ class BaseBackendTest(Runner):
         force_spill(f1)
         force_spill(f2)
         guard_false(i0) [f1, f2, f3]
-        finish()"""
+        finish() []"""
         loop = parse(loopops)
         looptoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -1980,7 +1980,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
         p0 = guard_exception(ConstClass(xtp)) [i1]
-        finish(p0)
+        finish(p0) []
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
         fptr = llhelper(FPTR, func)
@@ -2033,7 +2033,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
         guard_no_exception() [i1]
-        finish(-100)
+        finish(-100) []
         '''
         loop = parse(ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
@@ -2766,7 +2766,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i16 = int_add(i15, i7)
         i17 = int_add(i16, i8)
         i18 = int_add(i17, i9)
-        finish(i18)'''
+        finish(i18) []'''
         loop = parse(ops)
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -2786,7 +2786,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i10 = int_add(i0, 42)
         i11 = call_assembler(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
         guard_not_forced()[]
-        finish(i11)
+        finish(i11) []
         '''
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
@@ -2834,7 +2834,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -1.0)
         guard_false(i0) []
         f2 = float_add(f0, f1)
-        finish(f2)'''
+        finish(f2) []'''
         loop = parse(ops)
         fail_number = self.cpu.get_fail_descr_number(
             loop.operations[1].getdescr())
@@ -2850,7 +2850,7 @@ class LLtypeBackendTest(BaseBackendTest):
         [f4, f5]
         f3 = call_assembler(f4, f5, descr=looptoken)
         guard_not_forced()[]
-        finish(f3)
+        finish(f3) []
         '''
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
@@ -2925,7 +2925,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -1.0)
         guard_false(i0) []
         f2 = float_add(f0, f1)
-        finish(f2)'''
+        finish(f2) []'''
         loop = parse(ops)
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -2943,7 +2943,7 @@ class LLtypeBackendTest(BaseBackendTest):
         [f4, f5]
         f3 = call_assembler(f4, f5, descr=looptoken)
         guard_not_forced()[]
-        finish(f3)
+        finish(f3) []
         '''
         loop = parse(ops, namespace=locals())
         othertoken = JitCellToken()
@@ -2970,7 +2970,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -2.0)
         guard_false(i0) []
         f2 = float_sub(f0, f1)
-        finish(f2)'''
+        finish(f2) []'''
         loop = parse(ops)
         looptoken2 = JitCellToken()
         looptoken2.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -3416,7 +3416,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = """
         [i0]
         i1 = int_force_ge_zero(i0)    # but forced to be in a register
-        finish(i1, descr=1)
+        finish(i1, descr=1) []
         """
         loop = parse(ops, self.cpu, namespace=locals())
         descr = loop.operations[-1].getdescr()
@@ -3588,7 +3588,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             i2 = raw_load(i0, i1, descr=arraydescr)
-            finish(i2)
+            finish(i2) []
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3613,7 +3613,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1]
             f2 = raw_load(i0, i1, descr=arraydescr)
-            finish(f2)
+            finish(f2) []
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3640,7 +3640,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, i2]
             raw_store(i0, i1, i2, descr=arraydescr)
-            finish()
+            finish() []
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3664,7 +3664,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, f2]
             raw_store(i0, i1, f2, descr=arraydescr)
-            finish()
+            finish() []
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
