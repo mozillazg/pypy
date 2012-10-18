@@ -464,8 +464,11 @@ class LLFrame(object):
         if isinstance(exc, OSError):
             self.op_direct_call(exdata.fn_raise_OSError, exc.errno)
             assert False, "op_direct_call above should have raised"
+        elif exc.__class__.__name__ == 'UnknownException':
+            raise original[0], original[1], original[2]    # just re-raise it
         else:
-            evalue = exdata.get_standard_ll_exc_instance_by_class(exc.__class__)
+            evalue = exdata.get_standard_ll_exc_instance_by_class(
+                exc.__class__, original[2])
             etype = self.op_direct_call(exdata.fn_type_of_exc_inst, evalue)
         raise LLException(etype, evalue, *extraargs)
 

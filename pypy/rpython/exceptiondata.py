@@ -69,9 +69,9 @@ class AbstractExceptionData:
         example = self.cast_exception(self.lltype_of_exception_value, example)
         return example
 
-    def get_standard_ll_exc_instance_by_class(self, exceptionclass):
+    def get_standard_ll_exc_instance_by_class(self, exceptionclass, tb=None):
         if exceptionclass not in self.standardexceptions:
-            raise UnknownException(exceptionclass)
+            raise UnknownException(exceptionclass, tb)
         clsdef = self.rtyper.annotator.bookkeeper.getuniqueclassdef(
             exceptionclass)
         return self.get_standard_ll_exc_instance(self.rtyper, clsdef)

@@ -1,5 +1,5 @@
 from pypy.rlib import jit
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 
 @jit.dont_look_inside
 def escape(x):
@@ -177,6 +177,3 @@ class ImmutableFieldsTests:
 
 class TestLLtypeImmutableFieldsTests(ImmutableFieldsTests, LLJitMixin):
     pass
-
-class TestOOtypeImmutableFieldsTests(ImmutableFieldsTests, OOJitMixin):
-   pass

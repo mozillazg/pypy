@@ -10,7 +10,7 @@ from pypy.rlib.objectmodel import we_are_translated
 # in warmstate.py), apart from the 'alive_loops' set in MemoryManager,
 # which is the only (long-living) place that keeps them alive.  If a
 # loop was not called for long enough, then it is removed from
-# 'alive_loops'.  It will soon be freed by the GC.  LoopToken.__del__
+# 'alive_loops'.  It will soon be freed by the GC.  CompiledLoopToken.__del__
 # calls the method cpu.free_loop_and_bridges().
 #
 # The alive_loops set is maintained using the notion of a global

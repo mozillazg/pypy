@@ -1,6 +1,6 @@
 """Tests for multiple JitDrivers."""
 from pypy.rlib.jit import JitDriver, unroll_safe, set_param
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.warmspot import get_stats
 
 
@@ -144,7 +144,4 @@ class MultipleJitDriversTests(object):
 
 
 class TestLLtype(MultipleJitDriversTests, LLJitMixin):
-    pass
-
-class TestOOtype(MultipleJitDriversTests, OOJitMixin):
     pass

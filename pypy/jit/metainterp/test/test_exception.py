@@ -1,5 +1,5 @@
 import py, sys
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.jit import JitDriver, dont_look_inside
 from pypy.rlib.rarithmetic import ovfcheck, LONG_BIT, intmask
 from pypy.jit.codewriter.policy import StopAtXPolicy
@@ -616,9 +616,6 @@ class MyError(Exception):
     def __init__(self, n):
         self.n = n
 
-
-class TestOOtype(ExceptionTests, OOJitMixin):
-    pass
 
 class TestLLtype(ExceptionTests, LLJitMixin):
     pass
