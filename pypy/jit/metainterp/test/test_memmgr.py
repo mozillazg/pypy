@@ -117,7 +117,8 @@ class _TestIntegration(LLJitMixin):
         # we should see only the loop and the entry bridge
         self.check_target_token_count(2)
 
-    def test_target_loop_kept_alive_or_not(self):
+    def XXXskipped_test_target_loop_kept_alive_or_not(self):
+        # SKIPPED: the llgraph backend keeps too much things alive
         myjitdriver = JitDriver(greens=['m'], reds=['n'])
         def g(m):
             n = 10
@@ -160,7 +161,8 @@ class _TestIntegration(LLJitMixin):
         # we should see a loop for each call to g()
         self.check_enter_count(8 + 20*2)
 
-    def test_throw_away_old_loops(self):
+    def XXXskipped_test_throw_away_old_loops(self):
+        # SKIPPED: the llgraph backend keeps too much things alive
         myjitdriver = JitDriver(greens=['m'], reds=['n'])
         def g(m):
             n = 10
@@ -236,7 +238,6 @@ class _TestIntegration(LLJitMixin):
                         setattr(token.compiled_loop_token, key, 'STUBBED')
         del tokens, token
         import gc; gc.collect(); gc.collect(); gc.collect(); gc.collect()
-        import pdb;pdb.set_trace()
         # from pypy.translator.tool.reftracker import track
         # track(get_stats().jitcell_token_wrefs[8]())
         #
