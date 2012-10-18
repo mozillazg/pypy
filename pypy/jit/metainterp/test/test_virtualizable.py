@@ -229,7 +229,7 @@ class ExplicitVirtualizableTests:
         res = self.meta_interp(f, [20])
         assert res == 134
         self.check_simple_loop(setfield_gc=1, getfield_gc=0)
-        self.check_resops(setfield_gc=2, getfield_gc=3)
+        self.check_resops(setfield_gc=2, getfield_gc=4)
 
     # ------------------------------
 

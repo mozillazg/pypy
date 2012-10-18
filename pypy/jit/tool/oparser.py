@@ -225,7 +225,8 @@ class OpParser(object):
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
         args, descr = self.parse_args(opname, line[num + 1:endnum])
-        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
+        fail_args = None
+        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST or opnum == rop.FINISH:
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if (i <= 0 or j <= 0) and not self.nonstrict:
@@ -248,7 +249,6 @@ class OpParser(object):
             if hasattr(descr, '_oparser_uses_descr_of_guard'):
                 descr._oparser_uses_descr_of_guard(self, fail_args)
         else:
-            fail_args = None
             if opnum == rop.FINISH:
                 if descr is None and self.invent_fail_descr:
                     descr = self.invent_fail_descr(self.model, fail_args)
