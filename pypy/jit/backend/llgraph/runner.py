@@ -27,9 +27,9 @@ class GuardFailed(Exception):
         self.descr = descr
 
 class ExecutionFinished(Exception):
-    def __init__(self, descr, args):
+    def __init__(self, descr, arg=None):
         self.descr = descr
-        self.args = args
+        self.arg = arg
 
 class Jump(Exception):
     def __init__(self, descr, args):
@@ -213,7 +213,7 @@ class LLGraphCPU(model.AbstractCPU):
             frame.execute(lltrace)
             assert False
         except ExecutionFinished, e:
-            frame.latest_values = e.args
+            frame.finish_value = e.arg
             frame.latest_descr = e.descr
             return frame
         except GuardFailed, e:
@@ -232,16 +232,10 @@ class LLGraphCPU(model.AbstractCPU):
     def get_latest_descr(self, frame):
         return frame.latest_descr
 
-    def clear_latest_values(self, count):
-        del self.latest_values
-
-    def grab_exc_value(self, frame):
-        if frame.last_exception is not None:
-            result = frame.last_exception.args[1]
-            frame.last_exception = None
-            return lltype.cast_opaque_ptr(llmemory.GCREF, result)
-        else:
-            return lltype.nullptr(llmemory.GCREF.TO)
+    def get_finish_value_int(self, frame):
+        return frame.finish_value
+    get_finish_value_float = get_finish_value_int
+    get_finish_value_ref   = get_finish_value_int
 
     def force(self, frame):
         assert not frame._forced
@@ -619,11 +613,18 @@ class LLFrame(object):
 
     # -----------------------------------------------------
 
-    def fail_guard(self, descr):
+    def fail_guard(self, descr, saveexc=False):
+        if saveexc:
+            if self.last_exception is not None:
+                result = self.last_exception.args[1]
+                gcref = lltype.cast_opaque_ptr(llmemory.GCREF, result)
+            else:
+                gcref = lltype.nullptr(llmemory.GCREF.TO)
+            self.finish_value = gcref
         raise GuardFailed(self._getfailargs(), descr)
 
-    def execute_finish(self, descr, *args):
-        raise ExecutionFinished(descr, args)
+    def execute_finish(self, descr, arg=None):
+        raise ExecutionFinished(descr, arg)
 
     def execute_label(self, descr, *args):
         argboxes = self.current_op.getarglist()
@@ -663,7 +664,7 @@ class LLFrame(object):
 
     def execute_guard_no_exception(self, descr):
         if self.last_exception is not None:
-            self.fail_guard(descr)
+            self.fail_guard(descr, saveexc=True)
 
     def execute_guard_exception(self, descr, excklass):
         lle = self.last_exception
@@ -675,7 +676,7 @@ class LLFrame(object):
             llmemory.cast_int_to_adr(excklass),
             rclass.CLASSTYPE)
         if gotklass != excklass:
-            self.fail_guard(descr)
+            self.fail_guard(descr, saveexc=True)
         #
         res = lle.args[1]
         self.last_exception = None
