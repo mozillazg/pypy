@@ -27,9 +27,10 @@ class GuardFailed(Exception):
         self.descr = descr
 
 class ExecutionFinished(Exception):
-    def __init__(self, descr, arg=None):
+    def __init__(self, descr, arg, failargs):
         self.descr = descr
         self.arg = arg
+        self.failargs = failargs
 
 class Jump(Exception):
     def __init__(self, descr, args):
@@ -214,6 +215,7 @@ class LLGraphCPU(model.AbstractCPU):
             assert False
         except ExecutionFinished, e:
             frame.finish_value = e.arg
+            frame.latest_values = e.failargs
             frame.latest_descr = e.descr
             return frame
         except GuardFailed, e:
@@ -624,7 +626,11 @@ class LLFrame(object):
         raise GuardFailed(self._getfailargs(), descr)
 
     def execute_finish(self, descr, arg=None):
-        raise ExecutionFinished(descr, arg)
+        if self.current_op.getfailargs() is not None:
+            failargs = self._getfailargs()
+        else:
+            failargs = None   # compatibility
+        raise ExecutionFinished(descr, arg, failargs)
 
     def execute_label(self, descr, *args):
         argboxes = self.current_op.getarglist()
