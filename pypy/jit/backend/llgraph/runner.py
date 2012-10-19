@@ -135,6 +135,14 @@ class JFDescrDescr(AbstractDescr):
     def is_pointer_field(self):
         return True
 
+class JFValueDescr(AbstractDescr):
+    def __init__(self, kind):
+        self.kind = kind
+    def is_pointer_field(self):
+        return self.kind == 'ref'
+    def is_float_field(self):
+        return self.kind == 'float'
+
 _example_res = {'v': None,
                 'r': lltype.nullptr(llmemory.GCREF.TO),
                 'i': 0,
@@ -148,6 +156,10 @@ class LLGraphCPU(model.AbstractCPU):
     translate_support_code = False
 
     JITFRAMEPTR = llmemory.GCREF
+
+    jfdescr_for_int   = JFValueDescr('int')
+    jfdescr_for_ref   = JFValueDescr('ref')
+    jfdescr_for_float = JFValueDescr('float')
 
     def __init__(self, rtyper, stats=None, *ignored_args, **ignored_kwds):
         model.AbstractCPU.__init__(self)
@@ -381,7 +393,11 @@ class LLGraphCPU(model.AbstractCPU):
 
     def bh_getfield_gc(self, p, descr):
         if isinstance(descr, JFDescrDescr):
-            p.latest_descr._TYPE = llmemory.GCREF # <XXX> HACK <XXX/>
+            result = p.latest_descr
+            # <XXX> HACK
+            result._TYPE = llmemory.GCREF
+            result._identityhash = lambda: hash(result)   # for rd_hash()
+            # <XXX/>
             return p.latest_descr
         p = support.cast_arg(lltype.Ptr(descr.S), p)
         return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
@@ -445,6 +461,9 @@ class LLGraphCPU(model.AbstractCPU):
     bh_setarrayitem_raw_f = bh_setarrayitem_raw
 
     def bh_getinteriorfield_gc(self, a, index, descr):
+        if isinstance(descr, JFValueDescr):
+            assert isinstance(a, LLFrame)
+            return a.latest_values[index]
         array = a._obj.container
         return support.cast_result(descr.FIELD,
                           getattr(array.getitem(index), descr.fieldname))

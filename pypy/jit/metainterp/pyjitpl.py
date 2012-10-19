@@ -751,7 +751,7 @@ class MIFrame(object):
         if not descr:
             return
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
-                                                     vinfo, box)
+                                                     vinfo, box, jfbox)
 
     def _get_virtualizable_field_index(self, fielddescr):
         # Get the index of a fielddescr.  Must only be called for
