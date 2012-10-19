@@ -131,6 +131,10 @@ class InteriorFieldDescr(AbstractDescr):
     def is_float_field(self):
         return getkind(self.FIELD) == 'float'
 
+class JFDescrDescr(AbstractDescr):
+    def is_pointer_field(self):
+        return True
+
 _example_res = {'v': None,
                 'r': lltype.nullptr(llmemory.GCREF.TO),
                 'i': 0,
@@ -270,6 +274,14 @@ class LLGraphCPU(model.AbstractCPU):
     def get_savedata_ref(self, frame):
         return frame.saved_data
 
+    def jitframe_get_jfdescr_descr(self):
+        return JFDescrDescr()
+
+    def jitframe_cast_jfdescr_to_descr(self, descr):
+        return descr
+    
+    # ------------------------------------------------------------
+
     def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         key = ('call', getkind(RESULT),
                tuple([getkind(A) for A in ARGS]),
@@ -368,6 +380,9 @@ class LLGraphCPU(model.AbstractCPU):
     bh_call_v = _do_call
 
     def bh_getfield_gc(self, p, descr):
+        if isinstance(descr, JFDescrDescr):
+            p.latest_descr._TYPE = llmemory.GCREF # <XXX> HACK <XXX/>
+            return p.latest_descr
         p = support.cast_arg(lltype.Ptr(descr.S), p)
         return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
 

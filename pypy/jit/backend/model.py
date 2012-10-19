@@ -232,6 +232,11 @@ class AbstractCPU(object):
     def typedescrof(self, TYPE):
         raise NotImplementedError
 
+    def jitframe_get_jfdescr_descr(self):
+        """ Return a descr that can be used to read the XXX field
+        """
+        raise NotImplementedError
+
     # ---------- the backend-dependent operations ----------
 
     # lltype specific operations

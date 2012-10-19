@@ -694,9 +694,8 @@ class AbstractResumeDataReader(object):
     virtuals_cache = None
     virtual_default = None
 
-    def _init(self, cpu, jitframe, storage):
+    def _init(self, cpu, storage):
         self.cpu = cpu
-        self.jitframe = jitframe
         self.cur_numb = storage.rd_numb
         self.consts = storage.rd_consts
 
@@ -798,7 +797,8 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     unique_id = lambda: None
 
     def __init__(self, jitframe, storage, metainterp):
-        self._init(metainterp.cpu, jitframe, storage)
+        self._init(metainterp.cpu, storage)
+        self.jitframe = jitframe
         self.metainterp = metainterp
         count = metainterp.cpu.get_latest_value_count(jitframe)
         self.liveboxes = [None] * count
@@ -1004,6 +1004,22 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     def write_a_float(self, index, box):
         self.boxes_f[index] = box
 
+def rebuild_virtualizable_from_resumedata(metainterp, storage,
+                                          virtualizable_info, vable_box):
+    resumereader = ResumeDataForceVirtualizableReader(storage, metainterp,
+                                                      vable_box)
+    resumereader.consume_vref_and_vable_boxes(virtualizable_info,
+                                              None)
+
+class ResumeDataForceVirtualizableReader(ResumeDataBoxReader):
+    def __init__(self, storage, metainterp, vable_box):
+        self.metainterp = metainterp
+        self._init(metainterp.cpu, storage)
+        self.liveboxes = [None] * xxx
+
+    def load_box_from_cpu(self, num, kind):
+        xxx
+
 # ---------- when resuming for blackholing, get direct values ----------
 
 def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd,
@@ -1064,7 +1080,8 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     #             2: resuming from the GUARD_NOT_FORCED
 
     def __init__(self, metainterp_sd, jitframe, storage, all_virtuals=None):
-        self._init(metainterp_sd.cpu, jitframe, storage)
+        self._init(metainterp_sd.cpu, storage)
+        self.jitframe = jitframe
         self.callinfocollection = metainterp_sd.callinfocollection
         if all_virtuals is None:        # common case
             self._prepare(storage)
