@@ -595,6 +595,14 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         self.metainterp_sd = metainterp_sd
         self.jitdriver_sd = jitdriver_sd
 
+    def store_final_boxes(self, guard_op, boxes):
+        # override this method to also store the length on 'self'
+        ResumeGuardDescr.store_final_boxes(self, guard_op, boxes)
+        self.latest_value_count = len(boxes)
+
+    def get_latest_value_count(self):
+        return self.latest_value_count
+
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         # Failures of a GUARD_NOT_FORCED are never compiled, but
         # always just blackholed.  First fish for the data saved when

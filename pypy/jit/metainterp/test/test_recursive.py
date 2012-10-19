@@ -867,6 +867,9 @@ class RecursiveTests:
                 self.l = l
                 self.s = s
 
+        class Oups(Exception):
+            pass
+
         def main(codeno, n, a):
             frame = Frame([a, a+1, a+2, a+3], 0)
             return f(codeno, n, a, frame)
@@ -886,11 +889,14 @@ class RecursiveTests:
                 if codeno == 0:
                     subframe = Frame([n, n+1, n+2, n+3], 0)
                     x += f(1, 10, 1, subframe)
+                    if subframe.l[3] != 42:
+                        raise Oups
                 s = frame.s
                 assert s >= 0
                 x += frame.l[s]
                 x += len(frame.l)
                 frame.s -= 1
+            frame.l[3] = 42
             return x
 
         res = self.meta_interp(main, [0, 10, 1], listops=True, inline=True)

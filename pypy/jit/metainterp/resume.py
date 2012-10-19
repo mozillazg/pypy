@@ -1004,21 +1004,58 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     def write_a_float(self, index, box):
         self.boxes_f[index] = box
 
-def rebuild_virtualizable_from_resumedata(metainterp, storage,
-                                          virtualizable_info, vable_box):
+def rebuild_virtualizable_from_resumedata(metainterp, storage, vinfo,
+                                          vable_box, jfbox):
     resumereader = ResumeDataForceVirtualizableReader(storage, metainterp,
-                                                      vable_box)
-    resumereader.consume_vref_and_vable_boxes(virtualizable_info,
-                                              None)
+                                                      jfbox)
+    numb = resumereader.cur_numb
+    virtualizable = vinfo.unwrap_virtualizable_box(vable_box)
+    boxes = vinfo.load_list_of_boxes(virtualizable, resumereader, numb)
+    #
+    for i in range(len(vinfo.static_field_descrs)):
+        descr = vinfo.static_field_descrs[i]
+        metainterp.execute_and_record(rop.SETFIELD_GC, descr,
+                                      vable_box, boxes[i])
+    srcindex = len(vinfo.static_field_descrs)
+    for array_index in range(len(vinfo.array_field_descrs)):
+        length = vinfo.get_array_length(virtualizable, array_index)
+        box_array = metainterp.execute_and_record(rop.GETFIELD_GC,
+                        vinfo.array_field_descrs[array_index], vable_box)
+        array_descr = vinfo.array_descrs[array_index]
+        for i in range(length):
+            metainterp.execute_and_record(rop.SETARRAYITEM_GC, array_descr,
+                                          box_array, ConstInt(i),
+                                          boxes[srcindex])
+            srcindex += 1
+    assert srcindex + 1 == len(boxes)
 
 class ResumeDataForceVirtualizableReader(ResumeDataBoxReader):
-    def __init__(self, storage, metainterp, vable_box):
+    def __init__(self, storage, metainterp, jfbox):
         self.metainterp = metainterp
         self._init(metainterp.cpu, storage)
-        self.liveboxes = [None] * xxx
+        count = storage.get_latest_value_count()
+        self.liveboxes = [None] * count
+        self.jfbox = jfbox
+        self._prepare_virtuals(storage.rd_virtuals)
 
     def load_box_from_cpu(self, num, kind):
-        xxx
+        if num < 0:
+            num += len(self.liveboxes)
+            assert num >= 0
+        cpu = self.metainterp.cpu
+        if kind == INT:
+            descr = cpu.jfdescr_for_int
+        elif kind == REF:
+            descr = cpu.jfdescr_for_ref
+        elif kind == FLOAT:
+            descr = cpu.jfdescr_for_float
+        else:
+            assert 0, "bad kind: %d" % ord(kind)
+        box = self.metainterp.execute_and_record(rop.GETINTERIORFIELD_GC,
+                                                 descr, self.jfbox,
+                                                 ConstInt(num))
+        self.liveboxes[num] = box
+        return box
 
 # ---------- when resuming for blackholing, get direct values ----------
 
