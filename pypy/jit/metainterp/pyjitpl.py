@@ -753,7 +753,8 @@ class MIFrame(object):
         jfdescr = jfdescrbox.getref_base()
         descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
         if not descr:
-            return
+            XXX # shall we simply force and abort here??? this is an equivalent
+            # of sys._getframe()
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
                                                      vinfo, box, jfbox)
         self._opimpl_setfield_gc_any(box, vinfo.jit_frame_descr,
