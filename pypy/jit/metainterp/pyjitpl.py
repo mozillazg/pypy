@@ -2540,6 +2540,10 @@ class MetaInterp(object):
         args = arglist[num_green_args+1:]
         assert len(args) == targetjitdriver_sd.num_red_args
         warmrunnerstate = targetjitdriver_sd.warmstate
+        if targetjitdriver_sd.virtualizable_info is not None:
+            vbox = args[targetjitdriver_sd.index_of_virtualizable]
+            frame = self.framestack[-1]
+            frame._force_virtualizable_if_necessary(vbox, frame.pc)
         token = warmrunnerstate.get_assembler_token(greenargs)
         op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
         self.history.operations.append(op)
