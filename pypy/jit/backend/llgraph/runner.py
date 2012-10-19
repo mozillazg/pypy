@@ -236,9 +236,20 @@ class LLGraphCPU(model.AbstractCPU):
         return frame.latest_descr
 
     def get_finish_value_int(self, frame):
-        return frame.finish_value
+        res = frame.finish_value
+        del frame.finish_value
+        return res
     get_finish_value_float = get_finish_value_int
     get_finish_value_ref   = get_finish_value_int
+
+    def grab_exc_value(self, frame):
+        if frame.last_exception is not None:
+            result = frame.last_exception.args[1]
+            gcref = lltype.cast_opaque_ptr(llmemory.GCREF, result)
+        else:
+            gcref = lltype.nullptr(llmemory.GCREF.TO)
+        frame.last_exception = None
+        return gcref
 
     def force(self, frame):
         assert not frame._forced
@@ -547,6 +558,7 @@ class LLFrame(object):
     
     _forced = False
     _execution_finished = False
+    finish_value = None
     
     def __init__(self, cpu, argboxes, args):
         self.env = {}
@@ -633,14 +645,7 @@ class LLFrame(object):
 
     # -----------------------------------------------------
 
-    def fail_guard(self, descr, saveexc=False):
-        if saveexc:
-            if self.last_exception is not None:
-                result = self.last_exception.args[1]
-                gcref = lltype.cast_opaque_ptr(llmemory.GCREF, result)
-            else:
-                gcref = lltype.nullptr(llmemory.GCREF.TO)
-            self.finish_value = gcref
+    def fail_guard(self, descr):
         raise GuardFailed(self._getfailargs(), descr)
 
     def execute_finish(self, descr, arg=None):
@@ -688,7 +693,7 @@ class LLFrame(object):
 
     def execute_guard_no_exception(self, descr):
         if self.last_exception is not None:
-            self.fail_guard(descr, saveexc=True)
+            self.fail_guard(descr)
 
     def execute_guard_exception(self, descr, excklass):
         lle = self.last_exception
@@ -700,7 +705,7 @@ class LLFrame(object):
             llmemory.cast_int_to_adr(excklass),
             rclass.CLASSTYPE)
         if gotklass != excklass:
-            self.fail_guard(descr, saveexc=True)
+            self.fail_guard(descr)
         #
         res = lle.args[1]
         self.last_exception = None
