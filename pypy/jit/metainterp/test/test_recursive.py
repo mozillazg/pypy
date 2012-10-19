@@ -783,6 +783,10 @@ class RecursiveTests:
             portal(codeno, frame)
             return frame.thing.val
 
+        @dont_look_inside
+        def escaping(f, t1):
+            assert f.thing is t1
+
         def portal(codeno, frame):
             i = 0
             while i < 10:
@@ -793,8 +797,10 @@ class RecursiveTests:
                     subframe = Frame()
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
-                    if subframe.thing.val != nextval:
+                    t1 = subframe.thing
+                    if t1.val != nextval:
                         raise Oups
+                    escaping(subframe, t1)
                 frame.thing = Thing(nextval + 1)
                 i += 1
             return frame.thing.val
