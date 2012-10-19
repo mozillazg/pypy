@@ -217,7 +217,7 @@ class LLGraphCPU(model.AbstractCPU):
             frame.finish_value = e.arg
             frame.latest_values = e.failargs
             frame.latest_descr = e.descr
-            frame._execution_finished = True
+            frame._execution_finished_normally = e.descr.fast_path_done
             return frame
         except GuardFailed, e:
             frame.latest_values = e.failargs
@@ -557,7 +557,7 @@ class LLFrame(object):
         return isinstance(other, LLFrame) and self is other
     
     _forced = False
-    _execution_finished = False
+    _execution_finished_normally = False
     finish_value = None
     
     def __init__(self, cpu, argboxes, args):
@@ -797,7 +797,7 @@ class LLFrame(object):
 
     def execute_call_assembler(self, descr, *args):
         frame = self.cpu._execute_token(descr, *args)
-        if frame._execution_finished:    # fast path
+        if frame._execution_finished_normally:    # fast path
             return frame.finish_value
         jd = descr.outermost_jitdriver_sd
         assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish

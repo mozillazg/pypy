@@ -734,15 +734,19 @@ class ResumeFromInterpDescr(ResumeDescr):
         metainterp_sd.stats.add_jitcell_token(jitcell_token)
 
 
-_DoneWithThisFrameDescr = ResumeGuardForcedDescr    # XXX replace me
+_DoneWithThisFrameDescr = ResumeGuardForcedDescr # XXX
 
 class DoneWithThisFrameDescrVoid(_DoneWithThisFrameDescr):
+    fast_path_done = True
+    
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         assert jitdriver_sd is self.jitdriver_sd
         assert jitdriver_sd.result_type == history.VOID
         raise metainterp_sd.DoneWithThisFrameVoid()
 
 class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
+    fast_path_done = True
+
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         assert jitdriver_sd is self.jitdriver_sd
         assert jitdriver_sd.result_type == history.INT
@@ -750,6 +754,8 @@ class DoneWithThisFrameDescrInt(_DoneWithThisFrameDescr):
         raise metainterp_sd.DoneWithThisFrameInt(result)
 
 class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
+    fast_path_done = True
+
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         assert jitdriver_sd is self.jitdriver_sd
         assert jitdriver_sd.result_type == history.REF
@@ -758,6 +764,8 @@ class DoneWithThisFrameDescrRef(_DoneWithThisFrameDescr):
         raise metainterp_sd.DoneWithThisFrameRef(cpu, result)
 
 class DoneWithThisFrameDescrFloat(_DoneWithThisFrameDescr):
+    fast_path_done = True
+
     def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         assert jitdriver_sd is self.jitdriver_sd
         assert jitdriver_sd.result_type == history.FLOAT
