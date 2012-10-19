@@ -169,6 +169,7 @@ class LLGraphCPU(model.AbstractCPU):
         class MiniStats:
             pass
         self.stats = stats or MiniStats()
+        self.TOKEN_TRACING_RESCALL = NotAFrame()
 
     def compile_loop(self, inputargs, operations, looptoken, log=True, name=''):
         clt = model.CompiledLoopToken(self, looptoken.number)
@@ -394,11 +395,13 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_getfield_gc(self, p, descr):
         if isinstance(descr, JFDescrDescr):
             result = p.latest_descr
+            if result is None:
+                return lltype.nullptr(llmemory.GCREF.TO)
             # <XXX> HACK
             result._TYPE = llmemory.GCREF
             result._identityhash = lambda: hash(result)   # for rd_hash()
             # <XXX/>
-            return p.latest_descr
+            return result
         p = support.cast_arg(lltype.Ptr(descr.S), p)
         return support.cast_result(descr.FIELD, getattr(p, descr.fieldname))
 
@@ -581,8 +584,20 @@ class LLGraphCPU(model.AbstractCPU):
     def bh_read_timestamp(self):
         return read_timestamp()
 
+class NotAFrame(object):
+    _TYPE = llmemory.GCREF
+
+    class latest_descr:
+        pass
+
+    def __eq__(self, other):
+        return isinstance(other, NotAFrame)
+    def __ne__(self, other):
+        return not (self == other)
+
 class LLFrame(object):
     _TYPE = llmemory.GCREF
+    latest_descr = None
 
     # some obscure hacks to support comparison with llmemory.GCREF
     def __ne__(self, other):

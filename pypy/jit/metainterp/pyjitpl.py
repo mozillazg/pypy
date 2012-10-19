@@ -743,6 +743,10 @@ class MIFrame(object):
         if not self._establish_nullity(jfbox, orgpc):
             return      # jfbox is NULL
         cpu = self.metainterp.cpu
+        if jfbox.getref_base() == cpu.TOKEN_TRACING_RESCALL:
+            # we're trying to force a virtualizable that is being traced,
+            # abort as bad loop
+            raise SwitchToBlackhole(Counters.ABORT_BAD_LOOP)
         descr = cpu.jitframe_get_jfdescr_descr()
         jfdescrbox = self._opimpl_getfield_gc_any(jfbox, descr)
         jfdescrbox = self.implement_guard_value(orgpc, jfdescrbox)
