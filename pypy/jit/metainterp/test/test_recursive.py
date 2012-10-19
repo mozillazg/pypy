@@ -958,6 +958,36 @@ class RecursiveTests:
                                policy=StopAtXPolicy(change))
         assert res == main(0)
 
+    def test_call_assembler_two_virtualizables(self):
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+
+            def __init__(self, thing):
+                self.thing = thing
+
+        driver = JitDriver(greens = ['codeno'],
+                           reds = ['i', 'frame', 'parent_frame'],
+                           virtualizables = ['frame'])
+
+        def portal(codeno, parent_frame):
+            i = 0
+            frame = Frame(codeno)
+            while i < 10:
+                driver.jit_merge_point(i=i, frame=frame, codeno=codeno,
+                                       parent_frame=parent_frame)
+                frame.thing = frame.thing + parent_frame.thing
+                if codeno == 0:
+                    portal((i % 2) + 1, frame)
+                i += 1
+            return frame.thing
+
+        def main():
+            frame = Frame(0)
+            return portal(0, frame)
+
+        res = self.meta_interp(main, [], inline=True)
+        assert res == main()
+
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno))
