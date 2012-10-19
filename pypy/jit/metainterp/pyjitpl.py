@@ -750,8 +750,8 @@ class MIFrame(object):
         descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
         if not descr:
             return
-        import pdb; pdb.set_trace()
-        xxx
+        resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
+                                                     vinfo, box)
 
     def _get_virtualizable_field_index(self, fielddescr):
         # Get the index of a fielddescr.  Must only be called for
