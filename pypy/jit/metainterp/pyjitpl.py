@@ -752,6 +752,8 @@ class MIFrame(object):
             return
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
                                                      vinfo, box, jfbox)
+        self._opimpl_setfield_gc_any(box, vinfo.jit_frame_descr,
+                                     history.CONST_NULL)
 
     def _get_virtualizable_field_index(self, fielddescr):
         # Get the index of a fielddescr.  Must only be called for
