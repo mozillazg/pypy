@@ -140,6 +140,8 @@ class AbstractValue(object):
 class AbstractDescr(AbstractValue):
     __slots__ = ()
 
+    fast_path_done = False
+
     def repr_of_descr(self):
         return '%r' % (self,)
 
