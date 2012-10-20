@@ -19,6 +19,17 @@ rsyncignore = ['_cache']
 #
 option = None
 
+
+def braindead_deindent(self):
+    """monkeypatch that wont end up doing stupid in the python tokenizer"""
+    text = '\n'.join(self.lines)
+    short = py.std.textwrap.dedent(text)
+    newsource = py.code.Source()
+    newsource.lines[:] = short.splitlines()
+    return newsource
+
+py.code.Source.deindent = braindead_deindent
+
 def pytest_report_header():
     return "pytest-%s from %s" %(pytest.__version__, pytest.__file__)
 
@@ -90,15 +101,7 @@ def gettestobjspace(name=None, **kwds):
 def maketestobjspace(config=None):
     if config is None:
         config = make_config(option)
-    try:
-        space = make_objspace(config)
-    except OperationError, e:
-        check_keyboard_interrupt(e)
-        if option.verbose:
-            import traceback
-            traceback.print_exc()
-        py.test.fail("fatal: cannot initialize objspace: %r" %
-                         (config.objspace.name,))
+    space = make_objspace(config)
     space.startup() # Initialize all builtin modules
     space.setitem(space.builtin.w_dict, space.wrap('AssertionError'),
                   appsupport.build_pytest_assertion(space))
@@ -542,6 +545,7 @@ class ExpectTestMethod(py.test.collect.Function):
 
     def _spawn(self, *args, **kwds):
         import pexpect
+        kwds.setdefault('timeout', 600)
         child = pexpect.spawn(*args, **kwds)
         child.logfile = sys.stdout
         return child

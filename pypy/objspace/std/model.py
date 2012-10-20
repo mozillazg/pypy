@@ -102,7 +102,9 @@ class StdTypeModel:
             tupleobject.W_TupleObject: [],
             listobject.W_ListObject: [],
             dictmultiobject.W_DictMultiObject: [],
-            dictmultiobject.W_DictMultiIterObject: [],
+            dictmultiobject.W_DictMultiIterKeysObject: [],
+            dictmultiobject.W_DictMultiIterValuesObject: [],
+            dictmultiobject.W_DictMultiIterItemsObject: [],
             stringobject.W_StringObject: [],
             bytearrayobject.W_BytearrayObject: [],
             typeobject.W_TypeObject: [],
@@ -128,7 +130,9 @@ class StdTypeModel:
 
         self.imported_but_not_registered = {
             dictmultiobject.W_DictMultiObject: True, # XXXXXX
-            dictmultiobject.W_DictMultiIterObject: True,
+            dictmultiobject.W_DictMultiIterKeysObject: True,
+            dictmultiobject.W_DictMultiIterValuesObject: True,
+            dictmultiobject.W_DictMultiIterItemsObject: True,
             listobject.W_ListObject: True,
             stringobject.W_StringObject: True,
             tupleobject.W_TupleObject: True,
@@ -177,6 +181,10 @@ class StdTypeModel:
                 (longobject.W_LongObject, smallintobject.delegate_SmallInt2Long),
                 (complexobject.W_ComplexObject, smallintobject.delegate_SmallInt2Complex),
                 ]
+
+        if config.objspace.usemodules.micronumpy:
+            from pypy.module.micronumpy.stdobjspace import register_delegates
+            register_delegates(self.typeorder)
 
         self.typeorder[boolobject.W_BoolObject] += [
             (intobject.W_IntObject,     boolobject.delegate_Bool2IntObject),

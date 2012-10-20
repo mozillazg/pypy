@@ -21,6 +21,12 @@ UNICODELTR = 'U'
 INTPLTR = 'p'
 UINTPLTR = 'P'
 
+def decode_w_dtype(space, w_dtype):
+    if space.is_none(w_dtype):
+        return None
+    return space.interp_w(W_Dtype,
+          space.call_function(space.gettypefor(W_Dtype), w_dtype))
+
 class W_Dtype(Wrappable):
     _immutable_fields_ = ["itemtype", "num", "kind"]
 
@@ -43,6 +49,11 @@ class W_Dtype(Wrappable):
     def box(self, value):
         return self.itemtype.box(value)
 
+    @specialize.argtype(1, 2)
+    def box_complex(self, real, imag):
+        return self.itemtype.box_complex(real, imag)
+
+
     def coerce(self, space, w_item):
         return self.itemtype.coerce(space, self, w_item)
 
@@ -58,11 +69,16 @@ class W_Dtype(Wrappable):
     def fill(self, storage, box, start, stop):
         self.itemtype.fill(storage, self.get_size(), box, start, stop, 0)
 
+    def get_name(self):
+        if self.char == 'S':
+            return '|S' + str(self.get_size())
+        return self.name
+
     def descr_str(self, space):
-        return space.wrap(self.name)
+        return space.wrap(self.get_name())
 
     def descr_repr(self, space):
-        return space.wrap("dtype('%s')" % self.name)
+        return space.wrap("dtype('%s')" % self.get_name())
 
     def descr_get_itemsize(self, space):
         return space.wrap(self.itemtype.get_element_size())
@@ -118,11 +134,17 @@ class W_Dtype(Wrappable):
     def is_signed(self):
         return self.kind == SIGNEDLTR
 
+    def is_complex_type(self):
+        return (self.num == 14 or self.num == 15)
+
     def is_bool_type(self):
         return self.kind == BOOLLTR
 
     def is_record_type(self):
         return self.fields is not None
+
+    def is_flexible_type(self):
+        return (self.num == 18 or self.num == 19 or self.num == 20)
 
     def __repr__(self):
         if self.fields is not None:
@@ -197,7 +219,7 @@ def dtype_from_spec(space, name):
 def descr__new__(space, w_subtype, w_dtype):
     cache = get_dtype_cache(space)
 
-    if space.is_w(w_dtype, space.w_None):
+    if space.is_none(w_dtype):
         return cache.w_float64dtype
     elif space.isinstance_w(w_dtype, w_subtype):
         return w_dtype
@@ -390,6 +412,31 @@ class DtypeCache(object):
             alternate_constructors=[space.w_float],
             aliases=["float"],
         )
+        # self.w_float128dtype = W_Dtype(
+        #     types.Float128(),
+        #     num=13,
+        #     kind=FLOATINGLTR,
+        #     name="float128",
+        #     ...
+        # )
+        self.w_complex64dtype = W_Dtype(
+            types.Complex64(),
+            num=14,
+            kind=FLOATINGLTR,
+            name="complex64",
+            char="F",
+            w_box_type = space.gettypefor(interp_boxes.W_Complex64Box),
+        )
+        self.w_complex128dtype = W_Dtype(
+            types.Complex128(),
+            num=15,
+            kind=FLOATINGLTR,
+            name="complex128",
+            char="D",
+            w_box_type = space.gettypefor(interp_boxes.W_Complex128Box),
+            alternate_constructors=[space.w_complex],
+            aliases=["complex"],
+        )
         self.w_stringdtype = W_Dtype(
             types.StringType(1),
             num=18,
@@ -452,8 +499,9 @@ class DtypeCache(object):
             self.w_int16dtype, self.w_uint16dtype, self.w_int32dtype,
             self.w_uint32dtype, self.w_longdtype, self.w_ulongdtype,
             self.w_int64dtype, self.w_uint64dtype,
-            self.w_float32dtype,
-            self.w_float64dtype, self.w_stringdtype, self.w_unicodedtype,
+            self.w_float32dtype, self.w_float64dtype, self.w_complex64dtype,
+            self.w_complex128dtype,
+            self.w_stringdtype, self.w_unicodedtype,
             self.w_voiddtype, self.w_intpdtype, self.w_uintpdtype,
         ]
         self.float_dtypes_by_num_bytes = sorted(
