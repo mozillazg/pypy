@@ -375,7 +375,8 @@ class __extend__(W_NDimArray):
                                                        space.w_False]))
         return w_d
 
-    def descr_argsort(self, space, w_axis=-1, w_kind='quicksort', w_order=None):
+    @unwrap_spec(axis=int, kind=str)
+    def descr_argsort(self, space, axis=-1, kind='quicksort', w_order=None):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "argsort not implemented yet"))
 
@@ -387,11 +388,13 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "base not implemented yet"))
 
-    def descr_byteswap(self, space, w_inplace=False):
+    @unwrap_spec(inplace=bool)
+    def descr_byteswap(self, space, inplace=False):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "byteswap not implemented yet"))
 
-    def descr_choose(self, space, w_choices, w_out=None, w_mode='raise'):
+    @unwrap_spec(mode=str)
+    def descr_choose(self, space, w_choices, w_out=None, mode='raise'):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "choose not implemented yet"))
 
@@ -419,7 +422,8 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "data not implemented yet"))
 
-    def descr_diagonal(self, space, w_offset=0, w_axis1=0, w_axis2=1): 
+    @unwrap_spec(offset=int, axis1=int, axis2=int)
+    def descr_diagonal(self, space, offset=0, axis1=0, axis2=1): 
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "diagonal not implemented yet"))
 
@@ -461,7 +465,8 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "ptp (peak to peak) not implemented yet"))
 
-    def descr_put(self, space, w_indices, w_values, w_mode='raise'):
+    @unwrap_spec(mode=str)    
+    def descr_put(self, space, w_indices, w_values, mode='raise'):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "put not implemented yet"))
 
@@ -469,15 +474,18 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "real not implemented yet"))
 
-    def descr_resize(self, space, w_new_shape, w_refcheck=True):
+    @unwrap_spec(refcheck=bool)
+    def descr_resize(self, space, w_new_shape, refcheck=True):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "resize not implemented yet"))
 
-    def descr_round(self, space, w_decimals=0, w_out=None):
+    @unwrap_spec(decimals=int)
+    def descr_round(self, space, decimals=0, w_out=None):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "round not implemented yet"))
 
-    def descr_searchsorted(self, space, w_v, w_side='left'):
+    @unwrap_spec(side=str)    
+    def descr_searchsorted(self, space, w_v, side='left'):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "searchsorted not implemented yet"))
 
@@ -485,7 +493,8 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "setasflat not implemented yet"))
 
-    def descr_setfield(self, space, w_val, w_dtype, w_offset=0):
+    @unwrap_spec(offset=int)    
+    def descr_setfield(self, space, w_val, w_dtype, offset=0):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "setfield not implemented yet"))
 
@@ -493,7 +502,8 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "setflags not implemented yet"))
 
-    def descr_sort(self, space, w_axis=-1, w_kind='quicksort', w_order=None):
+    @unwrap_spec(axis=int, kind=str)
+    def descr_sort(self, space, axis=-1, kind='quicksort', w_order=None):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "sort not implemented yet"))
 
@@ -505,11 +515,13 @@ class __extend__(W_NDimArray):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "strides not implemented yet"))
 
-    def descr_tofile(self, space, w_fid, w_sep="", w_format="%s"):
+    @unwrap_spec(sep=str, format_=str)
+    def descr_tofile(self, space, w_fid, sep="", format_="%s"):
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "tofile not implemented yet"))
 
-    def descr_trace(self, space, w_offset=0, w_axis1=0, w_axis2=1,
+    @unwrap_spec(offset=int, axis1=str, axis2=int)
+    def descr_trace(self, space, offset=0, axis1=0, axis2=1,
                     w_dtype=None, w_out=None): 
         raise OperationError(space.w_NotImplementedError, space.wrap(
             "trace not implemented yet"))
