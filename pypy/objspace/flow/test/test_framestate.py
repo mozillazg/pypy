@@ -1,24 +1,24 @@
-from py.test import raises
 from pypy.objspace.flow.model import *
-from pypy.interpreter.pycode import PyCode
 from pypy.rlib.unroll import SpecTag
 from pypy.objspace.flow.objspace import FlowObjSpace
 from pypy.objspace.flow.flowcontext import FlowSpaceFrame
+from pypy.objspace.flow.bytecode import HostCode
+from pypy.objspace.flow.pygraph import PyGraph
 
 class TestFrameState:
     def setup_class(cls):
         cls.space = FlowObjSpace()
 
     def getframe(self, func):
-        space = self.space
         try:
             func = func.im_func
         except AttributeError:
             pass
-        code = func.func_code
-        code = PyCode._from_code(self.space, code)
-        frame = FlowSpaceFrame(space, code, func)
+        code = HostCode._from_code(func.func_code)
+        graph = PyGraph(func, code)
+        frame = FlowSpaceFrame(self.space, graph, code)
         # hack the frame
+        frame.setstate(graph.startblock.framestate)
         frame.locals_stack_w[frame.pycode.co_nlocals-1] = Constant(None)
         return frame
 
