@@ -129,7 +129,7 @@ class BaseBackendTest(Runner):
         return loop.inputargs, loop.operations, JitCellToken()
 
     def test_compile_linear_loop(self):
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr = BasicFailDescr(1)
         inputargs, ops, token = self.parse("""
         [i0]
@@ -138,6 +138,18 @@ class BaseBackendTest(Runner):
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         fail = self.cpu.execute_token(token, 2)
+        res = self.cpu.get_latest_value_int(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        i0 = BoxInt()
+        i1 = BoxInt()
+        operations = [
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.FINISH, [i1], None, descr=BasicFailDescr(1))
+            ]
+        inputargs = [i0]
+        looptoken = JitCellToken()
+        self.cpu.compile_loop(inputargs, operations, looptoken)
+        fail = self.cpu.execute_token(looptoken, 2)
         res = self.cpu.get_latest_value_int(0)
 =======
         i0 = BoxInt()
@@ -151,7 +163,7 @@ class BaseBackendTest(Runner):
         self.cpu.compile_loop(inputargs, operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 2)
         res = self.cpu.get_finish_value_int(frame)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert res == 3
         assert self.cpu.get_latest_descr(frame).identifier == 1
 
@@ -201,15 +213,19 @@ class BaseBackendTest(Runner):
         """, namespace=locals())
 
         self.cpu.compile_loop(inputargs, operations, looptoken)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         fail = self.cpu.execute_token(looptoken, 44)
         assert fail.identifier == 3
+        res = self.cpu.get_latest_value_int(2)
+||||||| /tmp/runner_test.py~base._aMykN
+        fail = self.cpu.execute_token(looptoken, 44)
+        assert fail.identifier == 2
         res = self.cpu.get_latest_value_int(2)
 =======
         frame = self.cpu.execute_token(looptoken, 44)
         assert self.cpu.get_latest_descr(frame).identifier == 2
         res = self.cpu.get_latest_value_int(frame, 2)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert res == 10
 
     def test_backends_dont_keep_loops_alive(self):
@@ -261,15 +277,19 @@ class BaseBackendTest(Runner):
         self.cpu.compile_bridge(faildescr4,
                                 inputargs, bridge_ops, looptoken)
 
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         fail = self.cpu.execute_token(looptoken, 2)
         assert fail.identifier == 5
+        res = self.cpu.get_latest_value_int(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        fail = self.cpu.execute_token(looptoken, 2)
+        assert fail.identifier == 2
         res = self.cpu.get_latest_value_int(0)
 =======
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 2
         res = self.cpu.get_latest_value_int(frame, 0)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert res == 20
 
         assert self.cpu.total_compiled_loops == 1
@@ -324,21 +344,27 @@ class BaseBackendTest(Runner):
                                           namespace=locals())
         self.cpu.compile_bridge(faildescr1, inputargs, bridge, looptoken)
 
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         fail = self.cpu.execute_token(looptoken, 1)
         assert fail.identifier == 2
+||||||| /tmp/runner_test.py~base._aMykN
+        fail = self.cpu.execute_token(looptoken, 1)
+        assert fail.identifier == 3
 =======
         frame = self.cpu.execute_token(looptoken, 1)
         assert self.cpu.get_latest_descr(frame).identifier == 3
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         for i in range(1000):
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             res = self.cpu.get_latest_value_int(i)
             assert res == 1 + i
+||||||| /tmp/runner_test.py~base._aMykN
+            res = self.cpu.get_latest_value_int(i)
+            assert res == 2 + i
 =======
             res = self.cpu.get_latest_value_int(frame, i)
             assert res == 2 + i
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
     def test_get_latest_value_count(self):
         faildescr1 = BasicFailDescr(1)
@@ -368,13 +394,22 @@ class BaseBackendTest(Runner):
                     return AbstractFailDescr.__setattr__(self, name, value)
                 py.test.fail("finish descrs should not be touched")
         faildescr = UntouchableFailDescr() # to check that is not touched
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         namespace = {'faildescr': faildescr}
         inputargs, operations, looptoken = self.parse("""
         [i0]
         finish(i0, descr=faildescr)
         """, namespace=namespace)
         self.cpu.compile_loop(inputargs, operations, looptoken)
+        fail = self.cpu.execute_token(looptoken, 99)
+        assert fail is faildescr
+        res = self.cpu.get_latest_value_int(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        looptoken = JitCellToken()
+        operations = [
+            ResOperation(rop.FINISH, [i0], None, descr=faildescr)
+            ]
+        self.cpu.compile_loop([i0], operations, looptoken)
         fail = self.cpu.execute_token(looptoken, 99)
         assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
@@ -387,15 +422,24 @@ class BaseBackendTest(Runner):
         frame = self.cpu.execute_token(looptoken, 99)
         assert self.cpu.get_latest_descr(frame) is faildescr
         res = self.cpu.get_finish_value_int(frame)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert res == 99
 
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, operations, looptoken = self.parse("""
         []
         finish(42, descr=faildescr)
         """, namespace=namespace)
         self.cpu.compile_loop(inputargs, operations, looptoken)
+        fail = self.cpu.execute_token(looptoken)
+        assert fail is faildescr
+        res = self.cpu.get_latest_value_int(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        looptoken = JitCellToken()
+        operations = [
+            ResOperation(rop.FINISH, [ConstInt(42)], None, descr=faildescr)
+            ]
+        self.cpu.compile_loop([], operations, looptoken)
         fail = self.cpu.execute_token(looptoken)
         assert fail is faildescr
         res = self.cpu.get_latest_value_int(0)
@@ -408,7 +452,7 @@ class BaseBackendTest(Runner):
         frame = self.cpu.execute_token(looptoken)
         assert self.cpu.get_latest_descr(frame) is faildescr
         res = self.cpu.get_finish_value_int(frame)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert res == 42
 
         _, operations, looptoken = self.parse("""
@@ -443,7 +487,7 @@ class BaseBackendTest(Runner):
 
     def test_execute_operations_in_env(self):
         cpu = self.cpu
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, operations, looptoken = self.parse("""
         [ix, iy]
         label(iy, ix, descr=targettoken)
@@ -455,6 +499,28 @@ class BaseBackendTest(Runner):
         """, None)
         cpu.compile_loop(inputargs, operations, looptoken)
         self.cpu.execute_token(looptoken, 0, 10)
+        assert self.cpu.get_latest_value_int(0) == 0
+        assert self.cpu.get_latest_value_int(1) == 55
+||||||| /tmp/runner_test.py~base._aMykN
+        x = BoxInt(123)
+        y = BoxInt(456)
+        z = BoxInt(579)
+        t = BoxInt(455)
+        u = BoxInt(0)    # False
+        looptoken = JitCellToken()
+        targettoken = TargetToken()
+        operations = [
+            ResOperation(rop.LABEL, [y, x], None, descr=targettoken),
+            ResOperation(rop.INT_ADD, [x, y], z),
+            ResOperation(rop.INT_SUB, [y, ConstInt(1)], t),
+            ResOperation(rop.INT_EQ, [t, ConstInt(0)], u),
+            ResOperation(rop.GUARD_FALSE, [u], None,
+                         descr=BasicFailDescr()),
+            ResOperation(rop.JUMP, [t, z], None, descr=targettoken),
+            ]
+        operations[-2].setfailargs([t, z])
+        cpu.compile_loop([x, y], operations, looptoken)
+        res = self.cpu.execute_token(looptoken, 0, 10)
         assert self.cpu.get_latest_value_int(0) == 0
         assert self.cpu.get_latest_value_int(1) == 55
 =======
@@ -479,7 +545,7 @@ class BaseBackendTest(Runner):
         frame = self.cpu.execute_token(looptoken, 0, 10)
         assert self.cpu.get_latest_value_int(frame, 0) == 0
         assert self.cpu.get_latest_value_int(frame, 1) == 55
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
     def test_int_operations(self):
         from pypy.jit.metainterp.test.test_executor import get_int_tests
@@ -516,6 +582,7 @@ class BaseBackendTest(Runner):
                 """ % op, namespace={'faildescr1': BasicFailDescr(1),
                                      'faildescr2': BasicFailDescr(2)})
             else:
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
                 inputargs, operations, looptoken = self.parse("""
                 [i1, i2]
                 ires = %s(i1, i2)
@@ -523,20 +590,16 @@ class BaseBackendTest(Runner):
                 finish(descr=faildescr2)
                 """ % op, namespace={'faildescr1': BasicFailDescr(1),
                                      'faildescr2': BasicFailDescr(2)})
-            #
-<<<<<<< local
-            self.cpu.compile_loop(inputargs, operations, looptoken)
-=======
-            if not reversed:
+||||||| /tmp/runner_test.py~base._aMykN
+                v_exc = self.cpu.ts.BoxRef()
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
-                    ResOperation(rop.GUARD_NO_OVERFLOW, [], None,
+                    ResOperation(rop.GUARD_OVERFLOW, [], None,
                                  descr=BasicFailDescr(1)),
-                    ResOperation(rop.FINISH, [v_res], None,
-                                 descr=BasicFailDescr(2)),
+                    ResOperation(rop.FINISH, [], None, descr=BasicFailDescr(2)),
                     ]
-                ops[1].setfailargs([])
-            else:
+                ops[1].setfailargs([v_res])
+=======
                 v_exc = BoxPtr()
                 ops = [
                     ResOperation(opnum, [v1, v2], v_res),
@@ -545,10 +608,9 @@ class BaseBackendTest(Runner):
                     ResOperation(rop.FINISH, [], None, descr=BasicFailDescr(2)),
                     ]
                 ops[1].setfailargs([v_res])
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             #
-            looptoken = JitCellToken()
-            self.cpu.compile_loop([v1, v2], ops, looptoken)
->>>>>>> other
+            self.cpu.compile_loop(inputargs, operations, looptoken)
             for x, y, z in testcases:
                 frame = self.cpu.execute_token(looptoken, x, y)
                 if (z == boom) ^ reversed:
@@ -648,11 +710,13 @@ class BaseBackendTest(Runner):
                                         EffectInfo.MOST_GENERAL)
             funcbox = self.get_funcbox(cpu, func_ptr)
             args = ([boxfloat(.1) for i in range(7)] +
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
                     [boxint(1), boxint(2), boxfloat(.2), boxfloat(.3),
+||||||| /tmp/runner_test.py~base._aMykN
+                    [BoxInt(1), BoxInt(2), boxfloat(.2), boxfloat(.3),
 =======
                     [BoxInt(1), boxfloat(.2), BoxInt(2), boxfloat(.3),
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                      boxfloat(.4)])
             res = self.execute_operation(rop.CALL_f,
                                          [funcbox] + args,
@@ -1072,13 +1136,16 @@ class BaseBackendTest(Runner):
                                'void', descr=kdescr)
         f = self.cpu.bh_getinteriorfield_gc_f(a_box.getref_base(), 3, kdescr)
         assert longlong.getrealfloat(f) == 1.5
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         self.cpu.bh_setinteriorfield_gc_f(a_box.getref_base(), 3, kdescr, longlong.getfloatstorage(2.5))
         r = self.execute_operation(rop.GETINTERIORFIELD_GC_f, [a_box, boxint(3)],
+||||||| /tmp/runner_test.py~base._aMykN
+        self.cpu.bh_setinteriorfield_gc_f(a_box.getref_base(), 3, kdescr, longlong.getfloatstorage(2.5))
+        r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
 =======
         self.cpu.bh_setinteriorfield_gc_f(a_box.getref_base(), 3, longlong.getfloatstorage(2.5), kdescr)
         r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                                    'float', descr=kdescr)
         assert r == 2.5
         #
@@ -1116,19 +1183,25 @@ class BaseBackendTest(Runner):
                                'void', descr=pdescr)
         r = self.cpu.bh_getinteriorfield_gc_r(a_box.getref_base(), 4, pdescr)
         assert r == s_box.getref_base()
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3, pdescr,
                                           s_box.getref_base())
         r = self.execute_operation(rop.GETINTERIORFIELD_GC_r,
                                    [a_box, boxint(3)],
+||||||| /tmp/runner_test.py~base._aMykN
+        self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3, pdescr,
+                                          s_box.getref_base())
+        r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
 =======
         self.cpu.bh_setinteriorfield_gc_r(a_box.getref_base(), 3,
                                           s_box.getref_base(), pdescr)
         r = self.execute_operation(rop.GETINTERIORFIELD_GC, [a_box, BoxInt(3)],
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                                    'ref', descr=pdescr)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         assert r == s_box.getref_base()
+||||||| /tmp/runner_test.py~base._aMykN
+        assert r.getref_base() == s_box.getref_base()
 =======
         assert r.getref_base() == s_box.getref_base()
         #
@@ -1138,7 +1211,7 @@ class BaseBackendTest(Runner):
                                'void', descr=vsdescr)
         r = self.cpu.bh_getinteriorfield_gc_i(a_box.getref_base(), 4, vsdescr)
         assert r == 4
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
     def test_string_basic(self):
         s_box = self.alloc_string("hello\xfe")
@@ -1282,11 +1355,13 @@ class BaseBackendTest(Runner):
                 retvalues.insert(kk, y)
             #
             operations.append(
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
                 create_resop(rop.FINISH, None, retboxes, descr=faildescr)
+||||||| /tmp/runner_test.py~base._aMykN
+                ResOperation(rop.FINISH, retboxes, None, descr=faildescr)
 =======
                 ResOperation(rop.FINISH, [], None, descr=faildescr)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                 )
             operations[-1].setfailargs(retboxes)
             print inputargs
@@ -1298,13 +1373,16 @@ class BaseBackendTest(Runner):
             assert self.cpu.get_latest_descr(frame).identifier == 42
             #
             for k in range(len(retvalues)):
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
                 if retboxes[k].type == 'i':
+                    got = self.cpu.get_latest_value_int(k)
+||||||| /tmp/runner_test.py~base._aMykN
+                if isinstance(retboxes[k], BoxInt):
                     got = self.cpu.get_latest_value_int(k)
 =======
                 if isinstance(retboxes[k], BoxInt):
                     got = self.cpu.get_latest_value_int(frame, k)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                 else:
                     got = self.cpu.get_latest_value_float(frame, k)
                 assert got == retvalues[k]
@@ -1372,13 +1450,16 @@ class BaseBackendTest(Runner):
                     assert 0
             values[index_counter] = 11
             #
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             fail = self.cpu.execute_token(looptoken, *values)
             assert fail.identifier == 1
+||||||| /tmp/runner_test.py~base._aMykN
+            fail = self.cpu.execute_token(looptoken, *values)
+            assert fail.identifier == 15
 =======
             frame = self.cpu.execute_token(looptoken, *values)
             assert self.cpu.get_latest_descr(frame).identifier == 15
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             #
             dstvalues = values[:]
             for _ in range(11):
@@ -1390,11 +1471,17 @@ class BaseBackendTest(Runner):
             #
             assert dstvalues[index_counter] == 11
             dstvalues[index_counter] = 0
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             for i, (box, val) in enumerate(zip(inpargs, dstvalues)):
                 if isinstance(box, boxint):
                     got = self.cpu.get_latest_value_int(i)
                 elif isinstance(box, boxptr):
+                    got = self.cpu.get_latest_value_ref(i)
+||||||| /tmp/runner_test.py~base._aMykN
+            for i, (box, val) in enumerate(zip(inputargs, dstvalues)):
+                if isinstance(box, BoxInt):
+                    got = self.cpu.get_latest_value_int(i)
+                elif isinstance(box, BoxPtr):
                     got = self.cpu.get_latest_value_ref(i)
 =======
             for i, (box, val) in enumerate(zip(inputargs, dstvalues)):
@@ -1402,7 +1489,7 @@ class BaseBackendTest(Runner):
                     got = self.cpu.get_latest_value_int(frame, i)
                 elif isinstance(box, BoxPtr):
                     got = self.cpu.get_latest_value_ref(frame, i)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
                 elif isinstance(box, BoxFloat):
                     got = self.cpu.get_latest_value_float(frame, i)
                 else:
@@ -1416,7 +1503,7 @@ class BaseBackendTest(Runner):
         fboxes = "f0, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11"
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         targettoken = TargetToken()
         inputargs, operations, looptoken = self.parse("""
         [%(fboxes)s]
@@ -1428,6 +1515,16 @@ class BaseBackendTest(Runner):
                                    'faildescr2': faildescr2,
                                    'targettoken': targettoken})
         self.cpu.compile_loop(inputargs, operations, looptoken)
+||||||| /tmp/runner_test.py~base._aMykN
+        operations = [
+            ResOperation(rop.LABEL, fboxes, None, descr=targettoken),
+            ResOperation(rop.FLOAT_LE, [fboxes[0], constfloat(9.2)], i2),
+            ResOperation(rop.GUARD_TRUE, [i2], None, descr=faildescr1),
+            ResOperation(rop.FINISH, fboxes, None, descr=faildescr2),
+            ]
+        operations[-2].setfailargs(fboxes)
+        looptoken = JitCellToken()
+        self.cpu.compile_loop(fboxes, operations, looptoken)
 =======
         operations = [
             ResOperation(rop.LABEL, fboxes, None, descr=targettoken),
@@ -1439,7 +1536,7 @@ class BaseBackendTest(Runner):
         operations[-1].setfailargs(fboxes)
         looptoken = JitCellToken()
         self.cpu.compile_loop(fboxes, operations, looptoken)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
         inputargs, operations, _  = self.parse("""
         [%s]
@@ -1457,13 +1554,16 @@ class BaseBackendTest(Runner):
         assert self.cpu.get_latest_descr(frame).identifier == 2
         res = self.cpu.get_latest_value_float(frame, 0)
         assert longlong.getrealfloat(res) == 8.5
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         for i in range(1, len(fboxes.split(","))):
+            got = longlong.getrealfloat(self.cpu.get_latest_value_float(i))
+||||||| /tmp/runner_test.py~base._aMykN
+        for i in range(1, len(fboxes)):
             got = longlong.getrealfloat(self.cpu.get_latest_value_float(i))
 =======
         for i in range(1, len(fboxes)):
             got = longlong.getrealfloat(self.cpu.get_latest_value_float(frame, i))
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             assert got == 13.5 + 6.73 * i
 
     def test_compile_bridge_spilled_float(self):
@@ -1975,14 +2075,15 @@ class LLtypeBackendTest(BaseBackendTest):
         assert res == -19
 
     def test_convert_float_bytes(self):
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         box = boxfloat(2.5)
+||||||| /tmp/runner_test.py~base._aMykN
 =======
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
         if not self.cpu.supports_longlong:
             py.test.skip("longlong test")
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         t = 'int' if longlong.is_64_bit else 'float'
         res = self.execute_operation(rop.CONVERT_FLOAT_BYTES_TO_LONGLONG,
                                      [box], t)
@@ -2041,13 +2142,16 @@ class LLtypeBackendTest(BaseBackendTest):
         assert s.parent.chr2 == chr(150)
         r = self.cpu.bh_getfield_gc_i(r1, descrshort)
         assert r == 1313
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         self.cpu.bh_setfield_gc_i(r1, descrshort, 1333)
         r = self.cpu.bh_getfield_gc_i(r1, descrshort)
+||||||| /tmp/runner_test.py~base._aMykN
+        self.cpu.bh_setfield_gc_i(r1.value, descrshort, 1333)
+        r = self.cpu.bh_getfield_gc_i(r1.value, descrshort)
 =======
         self.cpu.bh_setfield_gc_i(r1.value, 1333, descrshort)
         r = self.cpu.bh_getfield_gc_i(r1.value, descrshort)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert r == 1333
         r = self.execute_operation(rop.GETFIELD_GC_i, [boxptr(r1)], 'int',
                                    descr=descrshort)
@@ -2090,17 +2194,22 @@ class LLtypeBackendTest(BaseBackendTest):
 
         ops = '''
         [i0]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         i1 = same_as_i(1)
         call_n(ConstClass(fptr), i0, descr=calldescr)
         p0 = guard_exception(ConstClass(xtp), descr=faildescr2) [i1]
         finish(0, p0, descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+        i1 = same_as(1)
+        call(ConstClass(fptr), i0, descr=calldescr)
+        p0 = guard_exception(ConstClass(xtp)) [i1]
+        finish(0, p0)
 =======
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
         p0 = guard_exception(ConstClass(xtp)) [i1]
         finish(p0) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         '''
         FPTR = lltype.Ptr(lltype.FuncType([lltype.Signed], lltype.Void))
         fptr = llhelper(FPTR, func)
@@ -2152,17 +2261,22 @@ class LLtypeBackendTest(BaseBackendTest):
         exc_ptr = xptr
         ops = '''
         [i0]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         i1 = same_as_i(1)
         call_n(ConstClass(fptr), i0, descr=calldescr)
         guard_no_exception(descr=faildescr1) [i1]
         finish(0, descr=faildescr2)
+||||||| /tmp/runner_test.py~base._aMykN
+        i1 = same_as(1)
+        call(ConstClass(fptr), i0, descr=calldescr)
+        guard_no_exception() [i1]
+        finish(0)
 =======
         i1 = same_as(1)
         call(ConstClass(fptr), i0, descr=calldescr)
         guard_no_exception() [i1]
         finish(-100) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         '''
         loop = parse(ops, self.cpu, namespace=locals())
         looptoken = JitCellToken()
@@ -2343,14 +2457,18 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         cpu = self.cpu
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+||||||| /tmp/runner_test.py~base._aMykN
+        i0 = BoxInt()
+        i1 = BoxInt()
+        tok = BoxInt()
 =======
         i0 = BoxInt()
         i1 = BoxInt()
         tok = BoxPtr()
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         faildescr = BasicFailDescr(1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr0 = BasicFailDescr(0)
         inputargs, operations, looptoken = self.parse("""
         [i0, i1]
@@ -2360,6 +2478,20 @@ class LLtypeBackendTest(BaseBackendTest):
         finish(i0, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
+        fail = self.cpu.execute_token(looptoken, 20, 0)
+        assert fail.identifier == 0
+        assert self.cpu.get_latest_value_int(0) == 20
+||||||| /tmp/runner_test.py~base._aMykN
+        ops = [
+        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], None,
+                     descr=calldescr),
+        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
+        ResOperation(rop.FINISH, [i0], None, descr=BasicFailDescr(0))
+        ]
+        ops[2].setfailargs([i1, i0])
+        looptoken = JitCellToken()
+        self.cpu.compile_loop([i0, i1], ops, looptoken)
         fail = self.cpu.execute_token(looptoken, 20, 0)
         assert fail.identifier == 0
         assert self.cpu.get_latest_value_int(0) == 20
@@ -2377,7 +2509,7 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, 20, 0)
         assert self.cpu.get_latest_descr(frame).identifier == 0
         assert self.cpu.get_finish_value_int(frame) == 20
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert values == []
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
@@ -2402,16 +2534,21 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         cpu = self.cpu
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr0 = BasicFailDescr(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        tok = BoxInt()
 =======
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
         tok = BoxPtr()
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         faildescr = BasicFailDescr(1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, ops, looptoken = self.parse("""
         [i0, i1]
         itok = force_token()
@@ -2420,6 +2557,20 @@ class LLtypeBackendTest(BaseBackendTest):
         finish(i2, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
+        fail = self.cpu.execute_token(looptoken, 20, 0)
+        assert fail.identifier == 0
+        assert self.cpu.get_latest_value_int(0) == 42
+||||||| /tmp/runner_test.py~base._aMykN
+        ops = [
+        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], i2,
+                     descr=calldescr),
+        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
+        ResOperation(rop.FINISH, [i2], None, descr=BasicFailDescr(0))
+        ]
+        ops[2].setfailargs([i1, i2, i0])
+        looptoken = JitCellToken()
+        self.cpu.compile_loop([i0, i1], ops, looptoken)
         fail = self.cpu.execute_token(looptoken, 20, 0)
         assert fail.identifier == 0
         assert self.cpu.get_latest_value_int(0) == 42
@@ -2437,7 +2588,7 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, 20, 0)
         assert self.cpu.get_latest_descr(frame).identifier == 0
         assert self.cpu.get_finish_value_int(frame) == 42
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert values == []
 
         frame = self.cpu.execute_token(looptoken, 10, 1)
@@ -2464,15 +2615,20 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = self.cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT,
                                          EffectInfo.MOST_GENERAL)
         cpu = self.cpu
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+||||||| /tmp/runner_test.py~base._aMykN
+        i0 = BoxInt()
+        i1 = BoxInt()
+        f2 = BoxFloat()
+        tok = BoxInt()
 =======
         i0 = BoxInt()
         i1 = BoxInt()
         f2 = BoxFloat()
         tok = BoxPtr()
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         faildescr = BasicFailDescr(1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr0 = BasicFailDescr(0)
         inputargs, ops, looptoken = self.parse("""
         [i0, i1]
@@ -2482,6 +2638,20 @@ class LLtypeBackendTest(BaseBackendTest):
         finish(f0, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
+        fail = self.cpu.execute_token(looptoken, 20, 0)
+        assert fail.identifier == 0
+        x = self.cpu.get_latest_value_float(0)
+||||||| /tmp/runner_test.py~base._aMykN
+        ops = [
+        ResOperation(rop.FORCE_TOKEN, [], tok),
+        ResOperation(rop.CALL_MAY_FORCE, [funcbox, tok, i1], f2,
+                     descr=calldescr),
+        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
+        ResOperation(rop.FINISH, [f2], None, descr=BasicFailDescr(0))
+        ]
+        ops[2].setfailargs([i1, f2, i0])
+        looptoken = JitCellToken()
+        self.cpu.compile_loop([i0, i1], ops, looptoken)
         fail = self.cpu.execute_token(looptoken, 20, 0)
         assert fail.identifier == 0
         x = self.cpu.get_latest_value_float(0)
@@ -2499,7 +2669,7 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, 20, 0)
         assert self.cpu.get_latest_descr(frame).identifier == 0
         x = self.cpu.get_finish_value_float(frame)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         assert longlong.getrealfloat(x) == 42.5
         assert values == []
 
@@ -2537,13 +2707,17 @@ class LLtypeBackendTest(BaseBackendTest):
         cpu = self.cpu
         func_adr = c_tolower.funcsym
         calldescr = cpu._calldescr_dynamic_for_tests([types.uchar], types.sint)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+||||||| /tmp/runner_test.py~base._aMykN
+        i1 = BoxInt()
+        i2 = BoxInt()
+        tok = BoxInt()
 =======
         i1 = BoxInt()
         i2 = BoxInt()
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         faildescr = BasicFailDescr(1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr0 = BasicFailDescr(0)
         inputargs, operations, looptoken = self.parse("""
         [i1]
@@ -2552,6 +2726,19 @@ class LLtypeBackendTest(BaseBackendTest):
         finish(i2, descr=faildescr0)
         """, locals())
         self.cpu.compile_loop(inputargs, operations, looptoken)
+        fail = self.cpu.execute_token(looptoken, ord('G'))
+        assert fail.identifier == 0
+        assert self.cpu.get_latest_value_int(0) == ord('g')
+||||||| /tmp/runner_test.py~base._aMykN
+        ops = [
+        ResOperation(rop.CALL_RELEASE_GIL, [funcbox, i1], i2,
+                     descr=calldescr),
+        ResOperation(rop.GUARD_NOT_FORCED, [], None, descr=faildescr),
+        ResOperation(rop.FINISH, [i2], None, descr=BasicFailDescr(0))
+        ]
+        ops[1].setfailargs([i1, i2])
+        looptoken = JitCellToken()
+        self.cpu.compile_loop([i1], ops, looptoken)
         fail = self.cpu.execute_token(looptoken, ord('G'))
         assert fail.identifier == 0
         assert self.cpu.get_latest_value_int(0) == ord('g')
@@ -2568,7 +2755,7 @@ class LLtypeBackendTest(BaseBackendTest):
         frame = self.cpu.execute_token(looptoken, ord('G'))
         assert self.cpu.get_latest_descr(frame).identifier == 0
         assert self.cpu.get_finish_value_int(frame) == ord('g')
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
     def test_call_to_c_function_with_callback(self):
         from pypy.rlib.libffi import CDLL, types, ArgChain, clibffi
@@ -2607,13 +2794,19 @@ class LLtypeBackendTest(BaseBackendTest):
         calldescr = cpu._calldescr_dynamic_for_tests(
             [types.pointer, types_size_t, types_size_t, types.pointer],
             types.void)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+||||||| /tmp/runner_test.py~base._aMykN
+        i0 = BoxInt()
+        i1 = BoxInt()
+        i2 = BoxInt()
+        i3 = BoxInt()
+        tok = BoxInt()
 =======
         i0 = BoxInt()
         i1 = BoxInt()
         i2 = BoxInt()
         i3 = BoxInt()
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         faildescr = BasicFailDescr(1)
         faildescr0 = BasicFailDescr(0)
         inputargs, ops, looptoken = self.parse("""
@@ -2744,7 +2937,7 @@ class LLtypeBackendTest(BaseBackendTest):
         # the guard, jumping to the label will hit the invalidation code too
         faildescr = BasicFailDescr(1)
         labeldescr = TargetToken()
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         faildescr3 = BasicFailDescr(3)
         inputargs, ops, looptoken = self.parse("""
         [i0]
@@ -2753,6 +2946,15 @@ class LLtypeBackendTest(BaseBackendTest):
         finish(i0, descr=faildescr3)
         """, locals())
         self.cpu.compile_loop(inputargs, ops, looptoken)
+||||||| /tmp/runner_test.py~base._aMykN
+        ops = [
+            ResOperation(rop.GUARD_NOT_INVALIDATED, [], None, descr=faildescr),
+            ResOperation(rop.LABEL, [i0], None, descr=labeldescr),
+            ResOperation(rop.FINISH, [i0], None, descr=BasicFailDescr(3)),
+        ]
+        ops[0].setfailargs([])
+        looptoken = JitCellToken()
+        self.cpu.compile_loop([i0], ops, looptoken)
 =======
         finishdescr = BasicFailDescr(3)
         ops = [
@@ -2763,7 +2965,7 @@ class LLtypeBackendTest(BaseBackendTest):
         ops[0].setfailargs([])
         looptoken = JitCellToken()
         self.cpu.compile_loop([i0], ops, looptoken)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         # mark as failing
         self.cpu.invalidate_loop(looptoken)
         # attach a bridge
@@ -2973,14 +3175,17 @@ class LLtypeBackendTest(BaseBackendTest):
         i16 = int_add(i15, i7)
         i17 = int_add(i16, i8)
         i18 = int_add(i17, i9)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         finish(i18, descr=faildescr1)'''
         loop = parse(ops, namespace={'faildescr1': BasicFailDescr(1)})
+||||||| /tmp/runner_test.py~base._aMykN
+        finish(i18)'''
+        loop = parse(ops)
 =======
         finish(i18) []'''
         loop = parse(ops)
         loop.operations[-1].getdescr().fast_path_done = True
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         fail_number = self.cpu.get_fail_descr_number(
@@ -2997,15 +3202,19 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = '''
         [i0, i1, i2, i3, i4, i5, i6, i7, i8, i9]
         i10 = int_add(i0, 42)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         i11 = call_assembler_i(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
         guard_not_forced(descr=faildescr1)[]
         finish(i11, descr=faildescr2)
+||||||| /tmp/runner_test.py~base._aMykN
+        i11 = call_assembler(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
+        guard_not_forced()[]
+        finish(i11)
 =======
         i11 = call_assembler(i10, i1, i2, i3, i4, i5, i6, i7, i8, i9, descr=looptoken)
         guard_not_forced()[]
         finish(i11) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         '''
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
@@ -3055,9 +3264,13 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -1.0)
         guard_false(i0) []
         f2 = float_add(f0, f1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         finish(f2, descr=faildescr)'''
         loop = parse(ops, namespace={'faildescr': BasicFailDescr(1)})
+        done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
+||||||| /tmp/runner_test.py~base._aMykN
+        finish(f2)'''
+        loop = parse(ops)
         done_number = self.cpu.get_fail_descr_number(loop.operations[-1].getdescr())
 =======
         finish(f2) []'''
@@ -3065,7 +3278,7 @@ class LLtypeBackendTest(BaseBackendTest):
         loop.operations[-1].getdescr().fast_path_done = True
         fail_number = self.cpu.get_fail_descr_number(
             loop.operations[1].getdescr())
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -3076,15 +3289,19 @@ class LLtypeBackendTest(BaseBackendTest):
         assert longlong.getrealfloat(x) == 1.2 + 2.3
         ops = '''
         [f4, f5]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         f3 = call_assembler_f(f4, f5, descr=looptoken)
         guard_not_forced(descr=faildescr1)[]
         finish(f3, descr=faildescr2)
+||||||| /tmp/runner_test.py~base._aMykN
+        f3 = call_assembler(f4, f5, descr=looptoken)
+        guard_not_forced()[]
+        finish(f3)
 =======
         f3 = call_assembler(f4, f5, descr=looptoken)
         guard_not_forced()[]
         finish(f3) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         '''
         faildescr1 = BasicFailDescr(1)
         faildescr2 = BasicFailDescr(2)
@@ -3214,14 +3431,17 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -1.0)
         guard_false(i0) []
         f2 = float_add(f0, f1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         finish(f2, descr=faildescr1)'''
         loop = parse(ops, namespace={'faildescr1': BasicFailDescr(1)})
+||||||| /tmp/runner_test.py~base._aMykN
+        finish(f2)'''
+        loop = parse(ops)
 =======
         finish(f2) []'''
         loop = parse(ops)
         loop.operations[-1].getdescr().fast_path_done = True
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -3236,15 +3456,19 @@ class LLtypeBackendTest(BaseBackendTest):
 
         ops = '''
         [f4, f5]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         f3 = call_assembler_f(f4, f5, descr=looptoken)
         guard_not_forced(descr=faildescr1)[]
         finish(f3, descr=faildescr2)
+||||||| /tmp/runner_test.py~base._aMykN
+        f3 = call_assembler(f4, f5, descr=looptoken)
+        guard_not_forced()[]
+        finish(f3)
 =======
         f3 = call_assembler(f4, f5, descr=looptoken)
         guard_not_forced()[]
         finish(f3) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         '''
         faildescr2 = BasicFailDescr(2)
         faildescr1 = BasicFailDescr(1)
@@ -3273,14 +3497,17 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = float_eq(f0, -2.0)
         guard_false(i0) []
         f2 = float_sub(f0, f1)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         finish(f2, descr=faildescr)'''
         loop = parse(ops, namespace={'faildescr': BasicFailDescr(1)})
+||||||| /tmp/runner_test.py~base._aMykN
+        finish(f2)'''
+        loop = parse(ops)
 =======
         finish(f2) []'''
         loop2 = parse(ops2)
         loop2.operations[-1].getdescr().fast_path_done = True
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         looptoken2 = JitCellToken()
         looptoken2.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop2.inputargs, loop2.operations, looptoken2)
@@ -3703,12 +3930,19 @@ class LLtypeBackendTest(BaseBackendTest):
         res = self.cpu.get_latest_value_int(frame, 0)
         assert res == 10
 
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, operations, _ = self.parse("""
         [i0]
         i2 = int_sub(i0, 20)
         jump(i2, descr=targettoken2)
         """, locals())
+        self.cpu.compile_bridge(faildescr, inputargs, operations, looptoken)
+||||||| /tmp/runner_test.py~base._aMykN
+        inputargs = [i0]
+        operations = [
+            ResOperation(rop.INT_SUB, [i0, ConstInt(20)], i2),
+            ResOperation(rop.JUMP, [i2], None, descr=targettoken2),
+            ]
         self.cpu.compile_bridge(faildescr, inputargs, operations, looptoken)
 =======
         inputargs2 = [i0]
@@ -3717,7 +3951,7 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.JUMP, [i2], None, descr=targettoken2),
             ]
         self.cpu.compile_bridge(faildescr, inputargs2, operations2, looptoken)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 3
@@ -3728,11 +3962,13 @@ class LLtypeBackendTest(BaseBackendTest):
         ops = """
         [i0]
         i1 = int_force_ge_zero(i0)    # but forced to be in a register
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         finish(i1, descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+        finish(i1, descr=1)
 =======
         finish(i1, descr=1) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
         """
         faildescr1 = BasicFailDescr(1)
         loop = parse(ops, self.cpu, namespace=locals())
@@ -3825,7 +4061,7 @@ class LLtypeBackendTest(BaseBackendTest):
         cpu = self.cpu
         calldescr = cpu.calldescrof(deref(FPTR), (lltype.Signed,)*9, lltype.Void,
                                     EffectInfo.MOST_GENERAL)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, operations, looptoken = self.parse("""
         [i0]
         label(i0, descr=targettoken1)
@@ -3854,6 +4090,46 @@ class LLtypeBackendTest(BaseBackendTest):
         guard_true(i20, descr=faildescr) []
         jump(i19, descr=targettoken1)
         """, locals())
+        self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken1)
+||||||| /tmp/runner_test.py~base._aMykN
+        funcbox = self.get_funcbox(cpu, func_ptr)
+
+        i0 = BoxInt(); i1 = BoxInt(); i2 = BoxInt(); i3 = BoxInt(); i4 = BoxInt()
+        i5 = BoxInt(); i6 = BoxInt(); i7 = BoxInt(); i8 = BoxInt(); i9 = BoxInt()
+        i10 = BoxInt(); i11 = BoxInt(); i12 = BoxInt(); i13 = BoxInt(); i14 = BoxInt()
+        i15 = BoxInt(); i16 = BoxInt(); i17 = BoxInt(); i18 = BoxInt(); i19 = BoxInt()
+        i20 = BoxInt()
+        inputargs = [i0]
+        operations = [
+            ResOperation(rop.LABEL, [i0], None, descr=targettoken1),
+            ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
+            ResOperation(rop.INT_ADD, [i1, ConstInt(1)], i2),
+            ResOperation(rop.INT_ADD, [i2, ConstInt(1)], i3),
+            ResOperation(rop.INT_ADD, [i3, ConstInt(1)], i4),
+            ResOperation(rop.INT_ADD, [i4, ConstInt(1)], i5),
+            ResOperation(rop.INT_ADD, [i5, ConstInt(1)], i6),
+            ResOperation(rop.INT_ADD, [i6, ConstInt(1)], i7),
+            ResOperation(rop.INT_ADD, [i7, ConstInt(1)], i8),
+            ResOperation(rop.INT_ADD, [i8, ConstInt(1)], i9),
+            ResOperation(rop.INT_ADD, [i9, ConstInt(1)], i10),
+            ResOperation(rop.INT_ADD, [i10, ConstInt(1)], i11),
+            ResOperation(rop.INT_ADD, [i11, ConstInt(1)], i12),
+            ResOperation(rop.INT_ADD, [i12, ConstInt(1)], i13),
+            ResOperation(rop.INT_ADD, [i13, ConstInt(1)], i14),
+            ResOperation(rop.INT_ADD, [i14, ConstInt(1)], i15),
+            ResOperation(rop.INT_ADD, [i15, ConstInt(1)], i16),
+            ResOperation(rop.INT_ADD, [i16, ConstInt(1)], i17),
+            ResOperation(rop.INT_ADD, [i17, ConstInt(1)], i18),
+            ResOperation(rop.INT_ADD, [i18, ConstInt(1)], i19),
+            ResOperation(rop.CALL, [funcbox, i2, i4, i6, i8, i10, i12, i14, i16, i18],
+                         None, descr=calldescr),
+            ResOperation(rop.CALL, [funcbox, i2, i4, i6, i8, i10, i12, i14, i16, i18],
+                         None, descr=calldescr),
+            ResOperation(rop.INT_LT, [i19, ConstInt(100)], i20),
+            ResOperation(rop.GUARD_TRUE, [i20], None, descr=BasicFailDescr(42)),
+            ResOperation(rop.JUMP, [i19], None, descr=targettoken1),
+            ]
+        operations[-2].setfailargs([])
         self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken1)
 =======
         funcbox = self.get_funcbox(cpu, func_ptr)
@@ -3896,13 +4172,20 @@ class LLtypeBackendTest(BaseBackendTest):
         operations2[-2].setfailargs([])
         self.cpu.compile_bridge(faildescr1, inputargs2, operations2,
                                 looptoken1)
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
         inputargs, operations, looptoken2 = self.parse("""
         [i0]
         jump(0, descr=targettoken1)
         """, locals())
+        self.cpu.compile_loop(inputargs, operations, looptoken2)
+||||||| /tmp/runner_test.py~base._aMykN
+        looptoken2 = JitCellToken()
+        inputargs = [BoxInt()]
+        operations = [
+            ResOperation(rop.JUMP, [ConstInt(0)], None, descr=targettoken1),
+            ]
         self.cpu.compile_loop(inputargs, operations, looptoken2)
 =======
         looptoken2 = JitCellToken()
@@ -3911,15 +4194,18 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.JUMP, [ConstInt(0)], None, descr=targettoken1),
             ]
         self.cpu.compile_loop(inputargs3, operations3, looptoken2)
->>>>>>> other
 
-<<<<<<< local
-        fail = self.cpu.execute_token(looptoken2, -9)
-        assert fail.identifier == 1
-=======
         frame = self.cpu.execute_token(looptoken2, -9)
         assert self.cpu.get_latest_descr(frame).identifier == 42
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+        fail = self.cpu.execute_token(looptoken2, -9)
+        assert fail.identifier == 1
+||||||| /tmp/runner_test.py~base._aMykN
+        fail = self.cpu.execute_token(looptoken2, -9)
+        assert fail.identifier == 42
+=======
     def test_wrong_guard_nonnull_class(self):
         t_box, T_box = self.alloc_instance(self.T)
         null_box = self.null_instance()
@@ -3938,7 +4224,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_bridge(faildescr, [], operations, looptoken)
         frame = self.cpu.execute_token(looptoken, null_box.getref_base())
         assert self.cpu.get_latest_descr(frame).identifier == 99
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
 
     def test_raw_load_int(self):
         from pypy.rlib import rawstorage
@@ -3948,13 +4234,16 @@ class LLtypeBackendTest(BaseBackendTest):
                   rffi.ULONG, rffi.LONG]:
             ops = """
             [i0, i1]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             i2 = raw_load_i(i0, i1, descr=arraydescr)
             finish(i2, descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+            i2 = raw_load(i0, i1, descr=arraydescr)
+            finish(i2)
 =======
             i2 = raw_load(i0, i1, descr=arraydescr)
             finish(i2) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -3979,13 +4268,16 @@ class LLtypeBackendTest(BaseBackendTest):
         for T in [rffi.DOUBLE]:
             ops = """
             [i0, i1]
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             f2 = raw_load_f(i0, i1, descr=arraydescr)
             finish(f2, descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+            f2 = raw_load(i0, i1, descr=arraydescr)
+            finish(f2)
 =======
             f2 = raw_load(i0, i1, descr=arraydescr)
             finish(f2) []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -4013,11 +4305,13 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, i2]
             raw_store(i0, i1, i2, descr=arraydescr)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             finish(descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+            finish()
 =======
             finish() []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -4042,11 +4336,13 @@ class LLtypeBackendTest(BaseBackendTest):
             ops = """
             [i0, i1, f2]
             raw_store(i0, i1, f2, descr=arraydescr)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
             finish(descr=faildescr1)
+||||||| /tmp/runner_test.py~base._aMykN
+            finish()
 =======
             finish() []
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
             """
             arraydescr = self.cpu.arraydescrof(rffi.CArray(T))
             p = rawstorage.alloc_raw_storage(31)
@@ -4063,7 +4359,50 @@ class LLtypeBackendTest(BaseBackendTest):
             result = rawstorage.raw_storage_getitem(T, p, 16)
             assert result == rffi.cast(T, value)
             rawstorage.free_raw_storage(p)
-<<<<<<< local
+<<<<<<< /64/home/arigo/hg/pypy/result-in-resops/pypy/jit/backend/test/runner_test.py
+||||||| /tmp/runner_test.py~base._aMykN
+
+class OOtypeBackendTest(BaseBackendTest):
+
+    type_system = 'ootype'
+    Ptr = staticmethod(lambda x: x)
+    FuncType = ootype.StaticMethod
+    malloc = staticmethod(ootype.new)
+    nullptr = staticmethod(ootype.null)
+
+    def setup_class(cls):
+        py.test.skip("ootype tests skipped")
+
+    @classmethod
+    def get_funcbox(cls, cpu, func_ptr):
+        return BoxObj(ootype.cast_to_object(func_ptr))
+
+    S = ootype.Instance('S', ootype.ROOT, {'value': ootype.Signed,
+                                           'chr1': ootype.Char,
+                                           'chr2': ootype.Char})
+    S._add_fields({'next': S})
+    T = ootype.Instance('T', S)
+    U = ootype.Instance('U', T)
+
+    def alloc_instance(self, T):
+        t = ootype.new(T)
+        cls = ootype.classof(t)
+        t_box = BoxObj(ootype.cast_to_object(t))
+        T_box = ConstObj(ootype.cast_to_object(cls))
+        return t_box, T_box
+
+    def null_instance(self):
+        return BoxObj(ootype.NULL)
+
+    def alloc_array_of(self, ITEM, length):
+        py.test.skip("implement me")
+
+    def alloc_string(self, string):
+        py.test.skip("implement me")
+
+    def alloc_unicode(self, unicode):
+        py.test.skip("implement me")
+
 =======
 
     def test_forcing_op_with_fail_arg_in_reg(self):
@@ -4143,4 +4482,4 @@ class OOtypeBackendTest(BaseBackendTest):
     def alloc_unicode(self, unicode):
         py.test.skip("implement me")
 
->>>>>>> other
+>>>>>>> /tmp/runner_test.py~other.b8EcdI
