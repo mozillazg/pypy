@@ -294,15 +294,6 @@ class LLGraphCPU(model.AbstractCPU):
     def force(self, frame):
         assert not frame._forced
         frame._forced = True
-        call_op = frame.current_op
-        if call_op.getopnum() == rop.FINISH:
-            guard_op = call_op
-        else:
-            guard_op = frame.lltrace.operations[frame.current_index + 1]
-        frame.latest_values = frame._getfailargs(guard_op, call_op.result)
-        descr = _getdescr(guard_op)
-        frame.latest_descr = descr
-        return descr
 
     def set_savedata_ref(self, frame, data):
         frame.saved_data = data
@@ -858,7 +849,16 @@ class LLFrame(object):
             res = _example_res[getkind(TP.RESULT)[0]]
         return res
 
-    execute_call_may_force = execute_call
+    def execute_call_may_force(self, calldescr, func, *args):
+        call_op = self.lltrace.operations[self.current_index]
+        guard_op = self.lltrace.operations[self.current_index + 1]
+        assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
+        self.latest_values = self._getfailargs(guard_op, skip=call_op.result)
+        self.latest_descr = _getdescr(guard_op)
+        res = self.execute_call(calldescr, func, *args)
+        del self.latest_descr
+        del self.latest_values
+        return res
 
     def execute_call_release_gil(self, descr, func, *args):
         call_args = support.cast_call_args_in_order(descr.ARGS, args)
