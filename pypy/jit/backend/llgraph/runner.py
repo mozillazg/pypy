@@ -616,7 +616,6 @@ class NotAFrame(object):
 
 class LLFrame(object):
     _TYPE = llmemory.GCREF
-    latest_descr = None
 
     # some obscure hacks to support comparison with llmemory.GCREF
     def __ne__(self, other):
