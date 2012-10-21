@@ -758,8 +758,7 @@ class MIFrame(object):
         jfdescr = jfdescrbox.getref_base()
         descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
         if not descr:
-            xxx
-            raise SwitchToBlackhole(Counters.ABORT_ESCAPE)
+            raise Exception("descr should not be none while inside a recursive call")
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
                                                      vinfo, box, jfbox)
         self._opimpl_setfield_gc_any(box, vinfo.jit_frame_descr,
