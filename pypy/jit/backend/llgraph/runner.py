@@ -872,26 +872,26 @@ class LLFrame(object):
         return support.cast_result(descr.RESULT, result)
 
     def execute_call_assembler(self, descr, *args):
-        frame = self.cpu._execute_token(descr, *args)
-        if frame._execution_finished_normally:    # fast path
-            return frame.finish_value
-        #
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
         self.latest_values = self._getfailargs(guard_op, skip=call_op.result)
         self.latest_descr = _getdescr(guard_op)
         #
-        jd = descr.outermost_jitdriver_sd
-        assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
-        try:
-            result = assembler_helper_ptr(frame)
-        except LLException, lle:
-            assert self.last_exception is None, "exception left behind"
-            self.last_exception = lle
-            if self.current_op.result is not None:
-                return _example_res[self.current_op.result.type]
-            return None
+        frame = self.cpu._execute_token(descr, *args)
+        if frame._execution_finished_normally:    # fast path
+            result = frame.finish_value
+        else:
+            jd = descr.outermost_jitdriver_sd
+            assembler_helper_ptr = jd.assembler_helper_adr.ptr  # fish
+            try:
+                result = assembler_helper_ptr(frame)
+            except LLException, lle:
+                assert self.last_exception is None, "exception left behind"
+                self.last_exception = lle
+                if self.current_op.result is not None:
+                    return _example_res[self.current_op.result.type]
+                return None
         #
         del self.latest_descr
         del self.latest_values

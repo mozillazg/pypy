@@ -2885,6 +2885,15 @@ class LLtypeBackendTest(BaseBackendTest):
 
         FUNCPTR = lltype.Ptr(lltype.FuncType([llmemory.GCREF],
                                              llmemory.GCREF))
+
+        def func2(jitframe1):
+            called.append(self.cpu.get_latest_descr(jitframe1))
+        FPTR2 = lltype.Ptr(lltype.FuncType([llmemory.GCREF], lltype.Void))
+        fptr2 = llhelper(FPTR2, func2)
+        calldescr2 = self.cpu.calldescrof(FPTR2.TO, FPTR2.TO.ARGS,
+                                          FPTR2.TO.RESULT,
+                                          EffectInfo.MOST_GENERAL)
+
         class FakeJitDriverSD:
             _assembler_helper_ptr = llhelper(FUNCPTR, assembler_helper)
             assembler_helper_adr = llmemory.cast_ptr_to_adr(
@@ -2892,8 +2901,9 @@ class LLtypeBackendTest(BaseBackendTest):
 
         ops = '''
         [p0]
+        call(ConstClass(fptr2), p0, descr=calldescr2)
         finish(p0) []'''
-        loop = parse(ops)
+        loop = parse(ops, namespace=locals())
         # not a fast_path finish!
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
@@ -2918,7 +2928,7 @@ class LLtypeBackendTest(BaseBackendTest):
 
         frame = self.cpu.execute_token(othertoken)
         assert not self.cpu.get_finish_value_ref(frame)
-        assert called == [foodescr]
+        assert called == [foodescr] * 2
 
     def test_raw_malloced_getarrayitem(self):
         ARRAY = rffi.CArray(lltype.Signed)
