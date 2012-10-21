@@ -2550,10 +2550,11 @@ class LLtypeBackendTest(BaseBackendTest):
         i0 = BoxInt()
         faildescr = BasicFailDescr(1)
         labeldescr = TargetToken()
+        finishdescr = BasicFailDescr(3)
         ops = [
             ResOperation(rop.GUARD_NOT_INVALIDATED, [], None, descr=faildescr),
             ResOperation(rop.LABEL, [i0], None, descr=labeldescr),
-            ResOperation(rop.FINISH, [i0], None, descr=BasicFailDescr(3)),
+            ResOperation(rop.FINISH, [i0], None, descr=finishdescr),
         ]
         ops[0].setfailargs([])
         looptoken = JitCellToken()
@@ -2771,6 +2772,7 @@ class LLtypeBackendTest(BaseBackendTest):
         i18 = int_add(i17, i9)
         finish(i18) []'''
         loop = parse(ops)
+        loop.operations[-1].getdescr().fast_path_done = True
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         fail_number = self.cpu.get_fail_descr_number(
@@ -2798,7 +2800,8 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop.inputargs, loop.operations, othertoken)
         args = [i+1 for i in range(10)]
         frame = self.cpu.execute_token(othertoken, *args)
-        assert self.cpu.get_finish_value_int(frame) == 97
+        res = self.cpu.get_finish_value_int(frame)
+        assert res == 97
         assert called == []
 
         # test the slow path, going via assembler_helper()
@@ -2839,6 +2842,7 @@ class LLtypeBackendTest(BaseBackendTest):
         f2 = float_add(f0, f1)
         finish(f2) []'''
         loop = parse(ops)
+        loop.operations[-1].getdescr().fast_path_done = True
         fail_number = self.cpu.get_fail_descr_number(
             loop.operations[1].getdescr())
         looptoken = JitCellToken()
@@ -2930,6 +2934,7 @@ class LLtypeBackendTest(BaseBackendTest):
         f2 = float_add(f0, f1)
         finish(f2) []'''
         loop = parse(ops)
+        loop.operations[-1].getdescr().fast_path_done = True
         looptoken = JitCellToken()
         looptoken.outermost_jitdriver_sd = FakeJitDriverSD()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
@@ -2968,18 +2973,19 @@ class LLtypeBackendTest(BaseBackendTest):
         del called[:]
 
         # compile a replacement
-        ops = '''
+        ops2 = '''
         [f0, f1]
         i0 = float_eq(f0, -2.0)
         guard_false(i0) []
         f2 = float_sub(f0, f1)
         finish(f2) []'''
-        loop = parse(ops)
+        loop2 = parse(ops2)
+        loop2.operations[-1].getdescr().fast_path_done = True
         looptoken2 = JitCellToken()
         looptoken2.outermost_jitdriver_sd = FakeJitDriverSD()
-        self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken2)
+        self.cpu.compile_loop(loop2.inputargs, loop2.operations, looptoken2)
         fail_number = self.cpu.get_fail_descr_number(
-            loop.operations[1].getdescr())
+            loop2.operations[1].getdescr())
 
         # install it
         self.cpu.redirect_call_assembler(looptoken, looptoken2)
@@ -3403,12 +3409,12 @@ class LLtypeBackendTest(BaseBackendTest):
         res = self.cpu.get_latest_value_int(frame, 0)
         assert res == 10
 
-        inputargs = [i0]
-        operations = [
+        inputargs2 = [i0]
+        operations2 = [
             ResOperation(rop.INT_SUB, [i0, ConstInt(20)], i2),
             ResOperation(rop.JUMP, [i2], None, descr=targettoken2),
             ]
-        self.cpu.compile_bridge(faildescr, inputargs, operations, looptoken)
+        self.cpu.compile_bridge(faildescr, inputargs2, operations2, looptoken)
 
         frame = self.cpu.execute_token(looptoken, 2)
         assert self.cpu.get_latest_descr(frame).identifier == 3
@@ -3520,8 +3526,8 @@ class LLtypeBackendTest(BaseBackendTest):
         i10 = BoxInt(); i11 = BoxInt(); i12 = BoxInt(); i13 = BoxInt(); i14 = BoxInt()
         i15 = BoxInt(); i16 = BoxInt(); i17 = BoxInt(); i18 = BoxInt(); i19 = BoxInt()
         i20 = BoxInt()
-        inputargs = [i0]
-        operations = [
+        inputargs2 = [i0]
+        operations2 = [
             ResOperation(rop.LABEL, [i0], None, descr=targettoken1),
             ResOperation(rop.INT_ADD, [i0, ConstInt(1)], i1),
             ResOperation(rop.INT_ADD, [i1, ConstInt(1)], i2),
@@ -3550,15 +3556,16 @@ class LLtypeBackendTest(BaseBackendTest):
             ResOperation(rop.GUARD_TRUE, [i20], None, descr=BasicFailDescr(42)),
             ResOperation(rop.JUMP, [i19], None, descr=targettoken1),
             ]
-        operations[-2].setfailargs([])
-        self.cpu.compile_bridge(faildescr1, inputargs, operations, looptoken1)
+        operations2[-2].setfailargs([])
+        self.cpu.compile_bridge(faildescr1, inputargs2, operations2,
+                                looptoken1)
 
         looptoken2 = JitCellToken()
-        inputargs = [BoxInt()]
-        operations = [
+        inputargs3 = [BoxInt()]
+        operations3 = [
             ResOperation(rop.JUMP, [ConstInt(0)], None, descr=targettoken1),
             ]
-        self.cpu.compile_loop(inputargs, operations, looptoken2)
+        self.cpu.compile_loop(inputargs3, operations3, looptoken2)
 
         frame = self.cpu.execute_token(looptoken2, -9)
         assert self.cpu.get_latest_descr(frame).identifier == 42
