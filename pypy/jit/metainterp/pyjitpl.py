@@ -41,6 +41,11 @@ class MIFrame(object):
         self.registers_r = [None] * 256
         self.registers_f = [None] * 256
 
+    def __repr__(self):
+        if hasattr(self, 'jitcode'):
+            return '<MIFrame for %s>' % self.jitcode.name
+        return '<MIFrame <uninitialized>>'
+
     def setup(self, jitcode, greenkey=None):
         assert isinstance(jitcode, JitCode)
         self.jitcode = jitcode
@@ -1094,6 +1099,8 @@ class MIFrame(object):
             # with make_result_of_lastop(), so the lastop must be right:
             # it must be the call to 'self', and not the jit_merge_point
             # itself, which has no result at all.
+            import pdb
+            pdb.set_trace()
             assert len(self.metainterp.framestack) >= 2
             try:
                 self.metainterp.finishframe(None)
@@ -2549,8 +2556,6 @@ class MetaInterp(object):
         if targetjitdriver_sd.virtualizable_info is not None and orgpc != -1:
             vbox = args[targetjitdriver_sd.index_of_virtualizable]
             frame = self.framestack[-1]
-            import pdb
-            pdb.set_trace()
             frame._force_virtualizable_if_necessary(vbox, orgpc)
         token = warmrunnerstate.get_assembler_token(greenargs)
         op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
