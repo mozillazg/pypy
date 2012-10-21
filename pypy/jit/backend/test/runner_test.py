@@ -2200,8 +2200,10 @@ class LLtypeBackendTest(BaseBackendTest):
         def maybe_force(token, flag):
             assert lltype.typeOf(token) == cpu.JITFRAMEPTR
             if flag:
-                descr = self.cpu.force(token)
+                descr = self.cpu.get_latest_descr(token)
                 values.append(descr)
+                x = self.cpu.force(token)
+                assert x is None
                 values.append(self.cpu.get_latest_value_int(token, 0))
                 values.append(self.cpu.get_latest_value_int(token, 1))
                 values.append(token)
@@ -2329,16 +2331,17 @@ class LLtypeBackendTest(BaseBackendTest):
         assert values == [1, 10, frame]
 
     def test_force_from_finish(self):
+        finishdescr = BasicFailDescr(1)
         loop = parse('''
         [i1, i2]
         p0 = jit_frame()
         finish(p0, descr=faildescr1) [i1, i2]
-        ''', namespace={'faildescr1': BasicFailDescr(1)})
+        ''', namespace={'faildescr1': finishdescr})
         looptoken = JitCellToken()
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 20, 0)
-        descr = self.cpu.force(frame)
-        assert self.cpu.get_latest_descr(frame) is descr
+        self.cpu.force(frame)
+        assert self.cpu.get_latest_descr(frame) is finishdescr
         assert self.cpu.get_latest_value_int(frame, 0) == 20
         assert self.cpu.get_latest_value_int(frame, 1) == 0
 
