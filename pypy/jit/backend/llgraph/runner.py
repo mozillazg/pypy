@@ -1,4 +1,4 @@
-
+import weakref
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
 from pypy.jit.metainterp.history import Const, getkind, AbstractDescr
@@ -18,8 +18,36 @@ class LLTrace(object):
     invalid = False
 
     def __init__(self, inputargs, operations):
-        self.inputargs = inputargs
-        self.operations = operations
+        # We need to clone the list of operations because the
+        # front-end will mutate them under our feet again.  We also
+        # need to make sure things get freed.
+        def mapping(box, _cache={}):
+            if isinstance(box, Const) or box is None:
+                return box
+            try:
+                newbox = _cache[box]
+            except KeyError:
+                newbox = _cache[box] = box.clonebox()
+            return newbox
+        #
+        self.inputargs = map(mapping, inputargs)
+        self.operations = []
+        for op in operations:
+            if op.getdescr() is not None:
+                newdescr = WeakrefDescr(op.getdescr())
+            else:
+                newdescr = None
+            newop = op.copy_and_change(op.getopnum(),
+                                       map(mapping, op.getarglist()),
+                                       mapping(op.result),
+                                       newdescr)
+            if op.getfailargs() is not None:
+                newop.setfailargs(map(mapping, op.getfailargs()))
+            self.operations.append(newop)
+
+class WeakrefDescr(AbstractDescr):
+    def __init__(self, realdescr):
+        self.realdescrref = weakref.ref(realdescr)
 
 class GuardFailed(Exception):
     def __init__(self, failargs, descr):
@@ -189,14 +217,9 @@ class LLGraphCPU(model.AbstractCPU):
         self._record_labels(lltrace)
 
     def _record_labels(self, lltrace):
-        # xxx pfff, we need to clone the list of operations because the
-        # front-end will mutate them under our feet again
-        # xXX pffffffff2 not enough to make sure things are freed
-        lltrace.operations = [op.copy_and_change(op.getopnum())
-                              for op in lltrace.operations]
         for i, op in enumerate(lltrace.operations):
             if op.getopnum() == rop.LABEL:
-                op.getdescr()._llgraph_target = (lltrace, i)
+                _getdescr(op)._llgraph_target = (lltrace, i)
 
     def invalidate_loop(self, looptoken):
         for trace in looptoken.compiled_loop_token._llgraph_alltraces:
@@ -277,7 +300,7 @@ class LLGraphCPU(model.AbstractCPU):
         else:
             guard_op = frame.lltrace.operations[frame.current_index + 1]
         frame.latest_values = frame._getfailargs(guard_op, call_op.result)
-        descr = guard_op.getdescr()
+        descr = _getdescr(guard_op)
         frame.latest_descr = descr
         return descr
 
@@ -637,8 +660,8 @@ class LLFrame(object):
             self.current_op = op # for label
             self.current_index = i
             try:
-                resval = getattr(self, 'execute_' + op.getopname())(op.getdescr(),
-                                                                    *args)
+                resval = getattr(self, 'execute_' + op.getopname())(
+                    _getdescr(op), *args)
             except Jump, j:
                 self.lltrace, i = j.descr._llgraph_target
                 label_op = self.lltrace.operations[i]
@@ -878,6 +901,13 @@ class LLFrame(object):
 
     def execute_jit_frame(self, _):
         return self
+
+def _getdescr(op):
+    d = op.getdescr()
+    if d is not None:
+        d = d.realdescrref()
+        assert d is not None, "the descr disappeared: %r" % (op,)
+    return d
 
 def _setup():
     def _make_impl_from_blackhole_interp(opname):
