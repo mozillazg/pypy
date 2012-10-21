@@ -628,7 +628,8 @@ class ResumeGuardForcedDescr(ResumeGuardDescr):
         # an inconsistent state
         rstack._stack_criticalcode_start()
         try:
-            faildescr = cpu.force(jitframetoken)
+            cpu.force(jitframetoken)
+            faildescr = cpu.get_latest_descr(jitframetoken)
             assert isinstance(faildescr, ResumeGuardForcedDescr)
             faildescr.handle_async_forcing(jitframetoken)
         finally:
