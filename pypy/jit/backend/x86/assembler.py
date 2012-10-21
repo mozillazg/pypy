@@ -30,7 +30,6 @@ from pypy.jit.backend.x86.regloc import (eax, ecx, edx, ebx,
 from pypy.rlib.objectmodel import we_are_translated, specialize
 from pypy.jit.backend.x86 import rx86, regloc, codebuf
 from pypy.jit.metainterp.resoperation import rop, ResOperation
-from pypy.jit.backend.x86.support import values_array
 from pypy.jit.backend.x86 import support
 from pypy.rlib.debug import (debug_print, debug_start, debug_stop,
                              have_debug_prints)
@@ -73,11 +72,6 @@ class Assembler386(object):
         self.cpu = cpu
         self.verbose = False
         self.rtyper = cpu.rtyper
-        self.fail_boxes_int = values_array(lltype.Signed, failargs_limit)
-        self.fail_boxes_ptr = values_array(llmemory.GCREF, failargs_limit)
-        self.fail_boxes_float = values_array(longlong.FLOATSTORAGE,
-                                             failargs_limit)
-        self.fail_ebp = 0
         self.loop_run_counters = []
         self.float_const_neg_addr = 0
         self.float_const_abs_addr = 0
@@ -88,7 +82,6 @@ class Assembler386(object):
         self.setup_failure_recovery()
         self._debug = False
         self.debug_counter_descr = cpu.fielddescrof(DEBUG_COUNTER, 'i')
-        self.fail_boxes_count = 0
         self.datablockwrapper = None
         self.stack_check_slowpath = 0
         self.propagate_exception_path = 0

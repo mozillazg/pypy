@@ -1252,7 +1252,7 @@ _oplist = [
     'NEWSTR/1/r',
     'NEWUNICODE/1/r',
     '_MALLOC_LAST',
-    'FORCE_TOKEN/0/i',
+    'JIT_FRAME/0/r',
     'VIRTUAL_REF/2/i',         # removed before it's passed to the backend
     'READ_TIMESTAMP/0/L',      # float on 32bit, int on 64bit
     'MARK_OPAQUE_PTR/1b/N',
@@ -1271,13 +1271,12 @@ _oplist = [
     'COND_CALL_GC_WB/2d/N', # [objptr, newvalue] (for the write barrier)
     'COND_CALL_GC_WB_ARRAY/3d/N', # [objptr, arrayindex, newvalue] (write barr.)
     'DEBUG_MERGE_POINT/*/N',      # debugging only
-    'JIT_DEBUG/4/N',              # debugging only
+    'JIT_DEBUG/*/N',              # debugging only
     'VIRTUAL_REF_FINISH/2/N',   # removed before it's passed to the backend
     'COPYSTRCONTENT/5/N',       # src, dst, srcstart, dststart, length
     'COPYUNICODECONTENT/5/N',
     'QUASIIMMUT_FIELD/1d/N',    # [objptr], descr=SlowMutateDescr
     'RECORD_KNOWN_CLASS/2/N',   # [objptr, clsptr]
-    'KEEPALIVE/1/N',
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     '_CALL_FIRST',
@@ -1394,8 +1393,8 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
     }
 
     is_guard = name.startswith('GUARD')
-    if is_guard:
-        assert not withdescr
+    if is_guard or name == 'FINISH':
+        assert withdescr
         baseclass = GuardResOp
     elif withdescr:
         baseclass = ResOpWithDescr

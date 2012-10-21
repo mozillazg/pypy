@@ -2967,7 +2967,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         """
         expected = """
         [p1]
-        i0 = force_token()
+        p0 = jit_frame()
         jump(p1)
         """
         self.optimize_loop(ops, expected)

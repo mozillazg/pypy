@@ -151,7 +151,7 @@ def test_compile_tmp_callback():
     from pypy.rpython.annlowlevel import llhelper
     from pypy.rpython.llinterp import LLException
     #
-    cpu = runner.LLtypeCPU(None)
+    cpu = runner.LLGraphCPU(None)
     FUNC = lltype.FuncType([lltype.Signed]*4, lltype.Signed)
     def ll_portal_runner(g1, g2, r3, r4):
         assert (g1, g2, r3, r4) == (12, 34, -156, -178)
@@ -164,33 +164,39 @@ def test_compile_tmp_callback():
         portal_runner_ptr = llhelper(lltype.Ptr(FUNC), ll_portal_runner)
         portal_runner_adr = llmemory.cast_ptr_to_adr(portal_runner_ptr)
         portal_calldescr = cpu.calldescrof(FUNC, FUNC.ARGS, FUNC.RESULT, None)
-        portal_finishtoken = compile.DoneWithThisFrameDescrInt()
         num_red_args = 2
         result_type = INT
     #
-    loop_token = compile_tmp_callback(cpu, FakeJitDriverSD(),
+    class FakeMetaInterpSD:
+        pass
+    FakeMetaInterpSD.cpu = cpu
+    #
+    loop_token = compile_tmp_callback(FakeMetaInterpSD, FakeJitDriverSD(),
                                       [ConstInt(12), ConstInt(34)], "ii")
     #
     raiseme = None
     # only two arguments must be passed in
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
-    assert fail_descr is FakeJitDriverSD().portal_finishtoken
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
+    assert isinstance(fail_descr, compile.DoneWithThisFrameDescrInt)
     #
     EXC = lltype.GcStruct('EXC')
     llexc = lltype.malloc(EXC)
     raiseme = LLException("exception class", llexc)
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
     assert isinstance(fail_descr, compile.PropagateExceptionDescr)
-    got = cpu.grab_exc_value()
+    got = cpu.get_finish_value_ref(jit_frame)
     assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), got) == llexc
     #
     class FakeMetaInterpSD:
         class ExitFrameWithExceptionRef(Exception):
             pass
     FakeMetaInterpSD.cpu = cpu
-    fail_descr = cpu.execute_token(loop_token, -156, -178)
+    jit_frame = cpu.execute_token(loop_token, -156, -178)
+    fail_descr = cpu.get_latest_descr(jit_frame)
     try:
-        fail_descr.handle_fail(FakeMetaInterpSD(), None)
+        fail_descr.handle_fail(FakeMetaInterpSD(), None, jit_frame)
     except FakeMetaInterpSD.ExitFrameWithExceptionRef, e:
         assert lltype.cast_opaque_ptr(lltype.Ptr(EXC), e.args[1]) == llexc
     else:

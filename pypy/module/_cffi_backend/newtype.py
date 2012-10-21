@@ -38,6 +38,7 @@ eptype("unsigned long long", rffi.LONGLONG, ctypeprim.W_CTypePrimitiveUnsigned)
 eptype("float",  rffi.FLOAT,  ctypeprim.W_CTypePrimitiveFloat)
 eptype("double", rffi.DOUBLE, ctypeprim.W_CTypePrimitiveFloat)
 eptype("long double", rffi.LONGDOUBLE, ctypeprim.W_CTypePrimitiveLongDouble)
+eptype("_Bool",  lltype.Bool,          ctypeprim.W_CTypePrimitiveBool)
 
 @unwrap_spec(name=str)
 def new_primitive_type(space, name):
@@ -211,12 +212,12 @@ def complete_struct_or_union(space, ctype, w_fields, w_ignored=None,
     if is_union:
         assert offset == 0
         offset = maxsize
-    offset = (offset + alignment - 1) & ~(alignment-1)
 
     # Like C, if the size of this structure would be zero, we compute it
     # as 1 instead.  But for ctypes support, we allow the manually-
     # specified totalsize to be zero in this case.
     if totalsize < 0:
+        offset = (offset + alignment - 1) & ~(alignment-1)
         totalsize = offset or 1
     elif totalsize < offset:
         raise operationerrfmt(space.w_TypeError,
@@ -247,7 +248,17 @@ def new_enum_type(space, name, w_enumerators, w_enumvalues):
         raise OperationError(space.w_ValueError,
                              space.wrap("tuple args must have the same size"))
     enumerators = [space.str_w(w) for w in enumerators_w]
-    enumvalues  = [space.int_w(w) for w in enumvalues_w]
+    enumvalues = []
+    try:
+        for w in enumvalues_w:
+            enumvalues.append(space.c_int_w(w))
+    except OperationError, e:
+        if not e.match(space, space.w_OverflowError):
+            raise
+        i = len(enumvalues)
+        raise operationerrfmt(space.w_OverflowError,
+            "enum '%s' declaration for '%s' does not fit an int",
+                              name, enumerators[i])
     ctype = ctypeenum.W_CTypeEnum(space, name, enumerators, enumvalues)
     return ctype
 

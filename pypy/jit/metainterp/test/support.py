@@ -141,14 +141,15 @@ def _run_with_machine_code(testself, args):
     for i in range(len(args) - num_green_args):
         x = args[num_green_args + i]
         args1.append(unspecialize_value(x))
-    faildescr = cpu.execute_token(procedure_token, *args1)
+    frame = cpu.execute_token(procedure_token, *args1)
+    faildescr = cpu.get_latest_descr(frame)
     assert faildescr.__class__.__name__.startswith('DoneWithThisFrameDescr')
     if metainterp.jitdriver_sd.result_type == history.INT:
-        return cpu.get_latest_value_int(0)
+        return cpu.get_finish_value_int(frame)
     elif metainterp.jitdriver_sd.result_type == history.REF:
-        return cpu.get_latest_value_ref(0)
+        return cpu.get_finish_value_ref(frame)
     elif metainterp.jitdriver_sd.result_type == history.FLOAT:
-        return cpu.get_latest_value_float(0)
+        return cpu.get_finish_value_float(frame)
     else:
         return None
 
@@ -233,7 +234,7 @@ class JitMixin:
 
 class LLJitMixin(JitMixin):
     type_system = 'lltype'
-    CPUClass = runner.LLtypeCPU
+    CPUClass = runner.LLGraphCPU
 
     @staticmethod
     def Ptr(T):
@@ -255,38 +256,6 @@ class LLJitMixin(JitMixin):
         NODE = lltype.GcForwardReference()
         NODE.become(lltype.GcStruct('NODE', ('value', lltype.Signed),
                                             ('next', lltype.Ptr(NODE))))
-        return NODE
-    
-class OOJitMixin(JitMixin):
-    type_system = 'ootype'
-    #CPUClass = runner.OOtypeCPU
-
-    def setup_class(cls):
-        py.test.skip("ootype tests skipped for now")
-
-    @staticmethod
-    def Ptr(T):
-        return T
-
-    @staticmethod
-    def GcStruct(name, *fields, **kwds):
-        if 'hints' in kwds:
-            kwds['_hints'] = kwds['hints']
-            del kwds['hints']
-        I = ootype.Instance(name, ootype.ROOT, dict(fields), **kwds)
-        return I
-
-    malloc = staticmethod(ootype.new)
-    nullptr = staticmethod(ootype.null)
-
-    @staticmethod
-    def malloc_immortal(T):
-        return ootype.new(T)
-
-    def _get_NODE(self):
-        NODE = ootype.Instance('NODE', ootype.ROOT, {})
-        NODE._add_fields({'value': ootype.Signed,
-                          'next': NODE})
         return NODE
 
 # ____________________________________________________________

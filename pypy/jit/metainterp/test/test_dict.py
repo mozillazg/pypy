@@ -1,5 +1,5 @@
 import py
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.jit import JitDriver
 from pypy.rlib import objectmodel
 
@@ -177,9 +177,6 @@ class DictTests:
         self.check_simple_loop({'int_sub': 1, 'int_gt': 1, 'guard_true': 1,
                                 'jump': 1})
 
-
-class TestOOtype(DictTests, OOJitMixin):
-    pass
 
 class TestLLtype(DictTests, LLJitMixin):
     pass

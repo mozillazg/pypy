@@ -17,13 +17,15 @@ FAILARGS_LIMIT = 1000
 class AbstractDescr(AbstractValue):
     __slots__ = ()
 
+    fast_path_done = False
+
     def repr_of_descr(self):
         return '%r' % (self,)
 
 class AbstractFailDescr(AbstractDescr):
     index = -1
 
-    def handle_fail(self, metainterp_sd, jitdriver_sd):
+    def handle_fail(self, metainterp_sd, jitdriver_sd, jitframe):
         raise NotImplementedError
     def compile_and_attach(self, metainterp, new_loop):
         raise NotImplementedError
@@ -87,7 +89,6 @@ class JitCellToken(AbstractDescr):
     target_tokens = None
     failed_states = None
     retraced_count = 0
-    terminating = False # see TerminatingLoopToken in compile.py
     invalidated = False
     outermost_jitdriver_sd = None
     # and more data specified by the backend when the loop is compiled
@@ -218,7 +219,7 @@ class TreeLoop(object):
                 box = op.getarg(i)
                 if isinstance(box, Box):
                     assert box in seen
-            if op.is_guard():
+            if op.is_guard() or op.getopnum() == rop.FINISH:
                 assert op.getdescr() is not None
                 if hasattr(op.getdescr(), '_debug_suboperations'):
                     ops = op.getdescr()._debug_suboperations

@@ -1,7 +1,7 @@
 import py
 
 from pypy.jit.codewriter.policy import StopAtXPolicy
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rlib.debug import debug_print
 from pypy.rlib.jit import JitDriver, dont_look_inside, we_are_jitted,\
      promote_string
@@ -30,7 +30,7 @@ class StringTests:
             return i
         res = self.meta_interp(f, [10, True, _str('h')], listops=True)
         assert res == 5
-        self.check_resops(**{self.CALL: 1, self.CALL_PURE: 0})
+        self.check_resops(call=1, call_pure=0)
 
     def test_eq_folded(self):
         _str = self._str
@@ -50,7 +50,7 @@ class StringTests:
             return i
         res = self.meta_interp(f, [10, True, _str('h')], listops=True)
         assert res == 5
-        self.check_resops(**{self.CALL: 0, self.CALL_PURE: 0})
+        self.check_resops(call=0, call_pure=0)
 
     def test_newstr(self):
         _str, _chr = self._str, self._chr
@@ -516,13 +516,9 @@ class StringTests:
         self.meta_interp(f, [0])
         self.check_resops(call=7)
 
-#class TestOOtype(StringTests, OOJitMixin):
-#    CALL = "oosend"
-#    CALL_PURE = "oosend_pure"
 
 class TestLLtype(StringTests, LLJitMixin):
-    CALL = "call"
-    CALL_PURE = "call_pure"
+    pass
 
 class TestLLtypeUnicode(TestLLtype):
     _str, _chr = unicode, unichr

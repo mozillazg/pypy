@@ -5,6 +5,7 @@ from pypy.rlib.rarithmetic import intmask
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.resoperation import rop
+from pypy.rlib.objectmodel import we_are_translated
 
 # ____________________________________________________________
 # Misc. utilities
@@ -31,7 +32,11 @@ def _findall(Class, name_prefix, op_prefix=None):
 def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
     ops = _findall(Class, name_prefix, op_prefix)
     def dispatch(self, op, *args):
+<<<<<<< local
         if we_are_translated() or op.getopnum() < 0:
+=======
+        if we_are_translated():
+>>>>>>> other
             opnum = op.getopnum()
             for value, cls, func in ops:
                 if opnum == value:
@@ -40,13 +45,20 @@ def make_dispatcher_method(Class, name_prefix, op_prefix=None, default=None):
             if default:
                 return default(self, op, *args)
         else:
+<<<<<<< local
             name = resoperation.opname[op.getopnum()]
             func = getattr(Class, name_prefix + name, None)
+=======
+            func = getattr(Class, name_prefix + op.getopname().upper(), None)
+>>>>>>> other
             if func is not None:
                 return func(self, op, *args)
             if default:
                 return default(self, op, *args)
+<<<<<<< local
 
+=======
+>>>>>>> other
     dispatch.func_name = "dispatch_" + name_prefix
     return dispatch
 

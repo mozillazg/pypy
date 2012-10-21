@@ -1,4 +1,5 @@
 from pypy.rlib.debug import debug_start, debug_print, debug_stop
+from pypy.rlib.rarithmetic import intmask
 from pypy.jit.metainterp import history
 from pypy.rpython.lltypesystem import lltype
 
@@ -11,15 +12,15 @@ class AbstractCPU(object):
     # Boxes and Consts are BoxFloats and ConstFloats.
     supports_singlefloats = False
 
-    done_with_this_frame_void_v = -1
-    done_with_this_frame_int_v = -1
-    done_with_this_frame_ref_v = -1
-    done_with_this_frame_float_v = -1
-    propagate_exception_v = -1
     total_compiled_loops = 0
     total_compiled_bridges = 0
     total_freed_loops = 0
     total_freed_bridges = 0
+
+    # for heaptracker
+    # _all_size_descrs_with_vtable = None
+    _vtable_to_descr_dict = None
+
 
     def __init__(self):
         self.fail_descr_list = []
@@ -92,7 +93,7 @@ class AbstractCPU(object):
         The FailDescr is the descr of the original guard that failed.
 
         Optionally, return a ``ops_offset`` dictionary.  See the docstring of
-        ``compiled_loop`` for more informations about it.
+        ``compiled_loop`` for more information about it.
         """
         raise NotImplementedError
 
@@ -103,9 +104,9 @@ class AbstractCPU(object):
     def execute_token(self, looptoken, *args):
         """NOT_RPYTHON (for tests only)
         Execute the generated code referenced by the looptoken.
-        Returns the descr of the last executed operation: either the one
-        attached to the failing guard, or the one attached to the FINISH.
-        Use get_latest_value_xxx() afterwards to read the result(s).
+        It runs it until either a guard fails, or until we reach
+        the FINISH operation.  It returns the "jit frame" object
+        which should be inspected with the get_latest_xyz() methods.
         """
         argtypes = [lltype.typeOf(x) for x in args]
         execute = self.make_execute_token(*argtypes)
@@ -117,45 +118,53 @@ class AbstractCPU(object):
         """
         raise NotImplementedError
 
-    def get_latest_value_int(self, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns an int."""
+    def get_latest_descr(self, jitframe):
+        """Return the descr of the last operation executed by the
+        jitframe."""
         raise NotImplementedError
 
-    def get_latest_value_float(self, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a float."""
+    def get_latest_value_int(self, jitframe, index):
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns an int."""
         raise NotImplementedError
 
-    def get_latest_value_ref(self, index):
-        """Returns the value for the index'th argument to the
-        last executed operation (from 'fail_args' if it was a guard,
-        or from 'args' if it was a FINISH).  Returns a ptr or an obj."""
+    def get_latest_value_float(self, jitframe, index):
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns a FLOATSTORAGE."""
         raise NotImplementedError
 
-    def get_latest_value_count(self):
+    def get_latest_value_ref(self, jitframe, index):
+        """Returns the value for the index'th 'fail_args' of the
+        last executed operation.  Returns a GCREF."""
+        raise NotImplementedError
+
+    def get_latest_value_count(self, jitframe):
         """Return how many values are ready to be returned by
-        get_latest_value_xxx().  Only after a guard failure; not
-        necessarily correct after a FINISH."""
+        get_latest_value_xxx()."""
         raise NotImplementedError
 
-    def get_latest_force_token(self):
-        """After a GUARD_NOT_FORCED fails, this function returns the
-        same FORCE_TOKEN result as the one in the just-failed loop."""
+    def get_finish_value_int(self, jitframe):
+        """Return the result passed to FINISH, which was an int."""
         raise NotImplementedError
 
-    def clear_latest_values(self, count):
-        """Clear the latest values (at least the ref ones), so that
-        they no longer keep objects alive.  'count' is the number of
-        values -- normally get_latest_value_count()."""
+    def get_finish_value_float(self, jitframe):
+        """Return the result passed to FINISH, which was a FLOATSTORAGE."""
         raise NotImplementedError
 
-    def grab_exc_value(self):
-        """Return and clear the exception set by the latest execute_token(),
-        when it exits due to a failure of a GUARD_EXCEPTION or
-        GUARD_NO_EXCEPTION.  (Returns a GCREF)"""        # XXX remove me
+    def get_finish_value_ref(self, jitframe):
+        """Return and clear the result passed to FINISH, which was a GCREF.
+        Also used when it exits due to a failure of a GUARD_EXCEPTION or
+        GUARD_NO_EXCEPTION, to return the exception."""
+        raise NotImplementedError
+
+    def get_savedata_ref(self, jitframe):
+        """Return and clear the last value stored by the frontend with
+        set_savedata_ref."""
+        raise NotImplementedError
+
+    def set_savedata_ref(self, jitframe, value):
+        """Store on the jitframe a random GCREF value that will be returned
+        by the following call to get_savedata_ref()."""
         raise NotImplementedError
 
     def redirect_call_assembler(self, oldlooptoken, newlooptoken):
@@ -211,7 +220,7 @@ class AbstractCPU(object):
     def arraydescrof(self, A):
         raise NotImplementedError
 
-    def calldescrof(self, FUNC, ARGS, RESULT):
+    def calldescrof(self, FUNC, ARGS, RESULT, effect_info):
         # FUNC is the original function type, but ARGS is a list of types
         # with Voids removed
         raise NotImplementedError
@@ -223,16 +232,21 @@ class AbstractCPU(object):
     def typedescrof(self, TYPE):
         raise NotImplementedError
 
+    def jitframe_get_jfdescr_descr(self):
+        """ Return a descr that can be used to read the XXX field
+        """
+        raise NotImplementedError
+
     # ---------- the backend-dependent operations ----------
 
     # lltype specific operations
     # --------------------------
 
-    def bh_getarrayitem_gc_i(self, arraydescr, array, index):
+    def bh_getarrayitem_gc_i(self, array, index, arraydescr):
         raise NotImplementedError
-    def bh_getarrayitem_gc_r(self, arraydescr, array, index):
+    def bh_getarrayitem_gc_r(self, array, index, arraydescr):
         raise NotImplementedError
-    def bh_getarrayitem_gc_f(self, arraydescr, array, index):
+    def bh_getarrayitem_gc_f(self, array, index, arraydescr):
         raise NotImplementedError
 
     def bh_getfield_gc_i(self, struct, fielddescr):
@@ -251,49 +265,63 @@ class AbstractCPU(object):
 
     def bh_new(self, sizedescr):
         raise NotImplementedError
-    def bh_new_with_vtable(self, sizedescr, vtable):
+    def bh_new_with_vtable(self, vtable, sizedescr):
         raise NotImplementedError
-    def bh_new_array(self, arraydescr, length):
+    def bh_new_array(self, length, arraydescr):
         raise NotImplementedError
     def bh_newstr(self, length):
         raise NotImplementedError
     def bh_newunicode(self, length):
         raise NotImplementedError
 
-    def bh_arraylen_gc(self, arraydescr, array):
+    def bh_arraylen_gc(self, array, arraydescr):
         raise NotImplementedError
 
     def bh_classof(self, struct):
         raise NotImplementedError
 
-    def bh_setarrayitem_gc_i(self, arraydescr, array, index, newvalue):
+    def bh_setarrayitem_gc_i(self, array, index, newvalue, arraydescr):
         raise NotImplementedError
-    def bh_setarrayitem_gc_r(self, arraydescr, array, index, newvalue):
+    def bh_setarrayitem_gc_r(self, array, index, newvalue, arraydescr):
         raise NotImplementedError
-    def bh_setarrayitem_gc_f(self, arraydescr, array, index, newvalue):
-        raise NotImplementedError
-
-    def bh_setfield_gc_i(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
-    def bh_setfield_gc_r(self, struct, fielddescr, newvalue):
-        raise NotImplementedError
-    def bh_setfield_gc_f(self, struct, fielddescr, newvalue):
+    def bh_setarrayitem_gc_f(self, array, index, newvalue, arraydescr):
         raise NotImplementedError
 
-    def bh_setfield_raw_i(self, struct, fielddescr, newvalue):
+    def bh_setfield_gc_i(self, struct, newvalue, fielddescr):
         raise NotImplementedError
-    def bh_setfield_raw_r(self, struct, fielddescr, newvalue):
+    def bh_setfield_gc_r(self, struct, newvalue, fielddescr):
         raise NotImplementedError
-    def bh_setfield_raw_f(self, struct, fielddescr, newvalue):
+    def bh_setfield_gc_f(self, struct, newvalue, fielddescr):
         raise NotImplementedError
 
-    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+    def bh_setfield_raw_i(self, struct, newvalue, fielddescr):
         raise NotImplementedError
-    def bh_call_r(self, func, calldescr, args_i, args_r, args_f):
+    def bh_setfield_raw_r(self, struct, newvalue, fielddescr):
         raise NotImplementedError
-    def bh_call_f(self, func, calldescr, args_i, args_r, args_f):
+    def bh_setfield_raw_f(self, struct, newvalue, fielddescr):
         raise NotImplementedError
-    def bh_call_v(self, func, calldescr, args_i, args_r, args_f):
+
+    def bh_getinteriorfield_gc_i(self, array, index, descr):
+        raise NotImplementedError
+    def bh_getinteriorfield_gc_r(self, array, index, descr):
+        raise NotImplementedError
+    def bh_getinteriorfield_gc_f(self, array, index, descr):
+        raise NotImplementedError
+
+    def bh_setinteriorfield_gc_i(self, array, index, item, descr):
+        raise NotImplementedError
+    def bh_setinteriorfield_gc_r(self, array, index, item, descr):
+        raise NotImplementedError
+    def bh_setinteriorfield_gc_f(self, array, index, item, descr):
+        raise NotImplementedError
+
+    def bh_call_i(self, func, args_i, args_r, args_f, calldescr):
+        raise NotImplementedError
+    def bh_call_r(self, func, args_i, args_r, args_f, calldescr):
+        raise NotImplementedError
+    def bh_call_f(self, func, args_i, args_r, args_f, calldescr):
+        raise NotImplementedError
+    def bh_call_v(self, func, args_i, args_r, args_f, calldescr):
         raise NotImplementedError
 
     def bh_strlen(self, string):
@@ -311,9 +339,6 @@ class AbstractCPU(object):
     def bh_copystrcontent(self, src, dst, srcstart, dststart, length):
         raise NotImplementedError
     def bh_copyunicodecontent(self, src, dst, srcstart, dststart, length):
-        raise NotImplementedError
-
-    def force(self, force_token):
         raise NotImplementedError
 
 

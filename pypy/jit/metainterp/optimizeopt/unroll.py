@@ -314,7 +314,7 @@ class UnrollOptimizer(Optimization):
         except BadVirtualState:
             raise InvalidLoop('The state of the optimizer at the end of ' +
                               'peeled loop is inconsistent with the ' +
-                              'VirtualState at the begining of the peeled ' +
+                              'VirtualState at the beginning of the peeled ' +
                               'loop')
         jumpop.initarglist(jumpargs)
 

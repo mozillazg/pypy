@@ -18,7 +18,7 @@ class HeapCache(object):
         # escapes.
         self.dependencies = {}
         # contains frame boxes that are not virtualizables
-        self.nonstandard_virtualizables = {}
+        #self.nonstandard_virtualizables = {}
 
         # heap cache
         # maps descrs to {from_box, to_box} dicts
@@ -137,11 +137,11 @@ class HeapCache(object):
     def class_now_known(self, box):
         self.known_class_boxes[box] = None
 
-    def is_nonstandard_virtualizable(self, box):
-        return box in self.nonstandard_virtualizables
+    #def is_nonstandard_virtualizable(self, box):
+    #    return box in self.nonstandard_virtualizables
 
-    def nonstandard_virtualizables_now_known(self, box):
-        self.nonstandard_virtualizables[box] = None
+    #def nonstandard_virtualizables_now_known(self, box):
+    #    self.nonstandard_virtualizables[box] = None
 
     def is_unescaped(self, box):
         return self.new_boxes.get(box, False)

@@ -415,9 +415,10 @@ class Transformer(object):
                 self.make_three_lists(op.args[1:1+num_green_args]) +
                 self.make_three_lists(op.args[1+num_green_args:]))
         kind = getkind(op.result.concretetype)[0]
-        op0 = SpaceOperation('recursive_call_%s' % kind, args, op.result)
-        op1 = SpaceOperation('-live-', [], None)
-        return ops + [op0, op1]
+        op0 = SpaceOperation('-live-', [], None)
+        op1 = SpaceOperation('recursive_call_%s' % kind, args, op.result)
+        op2 = SpaceOperation('-live-', [], None)
+        return ops + [op0, op1, op2]
 
     handle_residual_indirect_call = handle_residual_call
 

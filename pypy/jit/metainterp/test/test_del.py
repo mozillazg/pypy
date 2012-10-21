@@ -2,7 +2,7 @@ import py
 from pypy.rlib.jit import JitDriver, dont_look_inside
 from pypy.rlib.objectmodel import keepalive_until_here
 from pypy.rlib import rgc
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 
 
 class DelTests:
@@ -124,7 +124,6 @@ class DelTests:
         assert res == 1001
 
 
-class TestLLtype(DelTests, LLJitMixin):
     def test_signal_action(self):
         from pypy.module.signal.interp_signal import SignalActionFlag
         action = SignalActionFlag()
@@ -148,7 +147,6 @@ class TestLLtype(DelTests, LLJitMixin):
         self.meta_interp(f, [20])
         self.check_resops(call_pure=0, setfield_raw=2, call=0, getfield_raw=2)
 
-class TestOOtype(DelTests, OOJitMixin):
-    def setup_class(cls):
-        py.test.skip("XXX dels are not implemented in the"
-                     " static CLI or JVM backend")
+
+class TestLLtype(DelTests, LLJitMixin):
+    pass

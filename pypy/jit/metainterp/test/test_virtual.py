@@ -2,7 +2,7 @@ import py
 from pypy.rlib.jit import JitDriver, promote, dont_look_inside
 from pypy.rlib.objectmodel import compute_unique_id
 from pypy.jit.codewriter.policy import StopAtXPolicy
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rpython.lltypesystem import lltype, rclass
 from pypy.rpython.lltypesystem.lloperation import llop
 from pypy.rpython.ootypesystem import ootype
@@ -1178,15 +1178,6 @@ class TestLLtype_Instance(VirtualTests, LLJitMixin):
         self.check_resops(new_with_vtable=0, setfield_gc=0, getfield_gc=0,
                           new=0)
 
-class TestOOtype_Instance(VirtualTests, OOJitMixin):
-    _new_op = 'new_with_vtable'
-    _field_prefix = 'o'
-    
-    @staticmethod
-    def _new():
-        return MyClass()
-
-    test_class_with_default_fields = TestLLtype_Instance.test_class_with_default_fields.im_func
 
 # ____________________________________________________________
 # Run 2: all the tests use lltype.malloc to make a NODE
@@ -1203,19 +1194,6 @@ class TestLLtype_NotObject(VirtualTests, LLJitMixin):
     def _new():
         return lltype.malloc(NODE)
 
-
-OONODE = ootype.Instance('NODE', ootype.ROOT, {})
-OONODE._add_fields({'value': ootype.Signed,
-                    'floatval' : ootype.Float,
-                    'extra': ootype.Signed})
-
-class TestOOtype_NotObject(VirtualTests, OOJitMixin):
-    _new_op = 'new_with_vtable'
-    _field_prefix = ''
-    
-    @staticmethod
-    def _new():
-        return ootype.new(OONODE)
 
 # ____________________________________________________________
 # Run 3: all the tests use lltype.malloc to make a NODE2
@@ -1239,10 +1217,9 @@ class TestLLtype_Object(VirtualTests, LLJitMixin):
         p.parent.typeptr = vtable2
         return p
 
-# misc
 
-class TestOOTypeMisc(VirtualMiscTests, OOJitMixin):
-    pass
+# ____________________________________________________________
+# misc
 
 class TestLLTypeMisc(VirtualMiscTests, LLJitMixin):
     pass

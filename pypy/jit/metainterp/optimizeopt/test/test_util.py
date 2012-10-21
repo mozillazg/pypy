@@ -111,7 +111,7 @@ class LLtypeMixin(object):
     node_vtable2 = lltype.malloc(OBJECT_VTABLE, immortal=True)
     node_vtable2.name = rclass.alloc_array_name('node2')
     node_vtable_adr2 = llmemory.cast_ptr_to_adr(node_vtable2)
-    cpu = runner.LLtypeCPU(None)
+    cpu = runner.LLGraphCPU(None)
 
     NODE = lltype.GcForwardReference()
     NODE.become(lltype.GcStruct('NODE', ('parent', OBJECT),
@@ -269,7 +269,7 @@ class LLtypeMixin(object):
         pass
     FakeWarmRunnerDesc.cpu = cpu
     vrefinfo = VirtualRefInfo(FakeWarmRunnerDesc)
-    virtualtokendescr = vrefinfo.descr_virtual_token
+    virtualtokendescr = vrefinfo.descr_jit_frame
     virtualforceddescr = vrefinfo.descr_forced
     jit_virtual_ref_vtable = vrefinfo.jit_virtual_ref_vtable
     jvr_vtable_adr = llmemory.cast_ptr_to_adr(jit_virtual_ref_vtable)

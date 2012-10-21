@@ -49,28 +49,28 @@ def new_do_call(opnum, tp):
         # do the call using the correct function from the cpu
         if tp == 'i':
             try:
-                result = cpu.bh_call_i(func, descr, args_i, args_r, args_f)
+                result = cpu.bh_call_i(func, args_i, args_r, args_f, descr)
             except Exception, e:
                 metainterp.execute_raised(e)
                 result = 0
             return create_resop(opnum, result, argboxes, descr)
         if tp == 'p':
             try:
-                result = cpu.bh_call_r(func, descr, args_i, args_r, args_f)
+                result = cpu.bh_call_r(func, args_i, args_r, args_f, descr)
             except Exception, e:
                 metainterp.execute_raised(e)
                 result = NULL
             return create_resop(opnum, result, argboxes, descr)
         if tp == 'f':
             try:
-                result = cpu.bh_call_f(func, descr, args_i, args_r, args_f)
+                result = cpu.bh_call_f(func, args_i, args_r, args_f, descr)
             except Exception, e:
                 metainterp.execute_raised(e)
                 result = longlong.ZEROF
             return create_resop(opnum, result, argboxes, descr)
         if tp == 'N':
             try:
-                cpu.bh_call_v(func, descr, args_i, args_r, args_f)
+                cpu.bh_call_v(func, args_i, args_r, args_f, descr)
             except Exception, e:
                 metainterp.execute_raised(e)
             return create_resop(opnum, None, argboxes, descr)
@@ -98,54 +98,54 @@ def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getref_base()
     index = indexbox.getint()
     if arraydescr.is_array_of_pointers():
-        cpu.bh_setarrayitem_gc_r(arraydescr, array, index,
-                                 itembox.getref_base())
+        cpu.bh_setarrayitem_gc_r(array, index,
+                                 itembox.getref_base(), arraydescr)
     elif arraydescr.is_array_of_floats():
-        cpu.bh_setarrayitem_gc_f(arraydescr, array, index,
-                                 itembox.getfloatstorage())
+        cpu.bh_setarrayitem_gc_f(array, index,
+                                 itembox.getfloatstorage(), arraydescr)
     else:
-        cpu.bh_setarrayitem_gc_i(arraydescr, array, index, itembox.getint())
+        cpu.bh_setarrayitem_gc_i(array, index, itembox.getint(), arraydescr)
 
 def do_setarrayitem_raw(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getint()
     index = indexbox.getint()
     assert not arraydescr.is_array_of_pointers()
     if arraydescr.is_array_of_floats():
-        cpu.bh_setarrayitem_raw_f(arraydescr, array, index,
-                                  itembox.getfloatstorage())
+        cpu.bh_setarrayitem_raw_f(array, index,
+                                  itembox.getfloatstorage(), arraydescr)
     else:
-        cpu.bh_setarrayitem_raw_i(arraydescr, array, index, itembox.getint())
+        cpu.bh_setarrayitem_raw_i(array, index, itembox.getint(), arraydescr)
 
 def do_setinteriorfield_gc(cpu, _, arraybox, indexbox, valuebox, descr):
     array = arraybox.getref_base()
     index = indexbox.getint()
     if descr.is_pointer_field():
-        cpu.bh_setinteriorfield_gc_r(array, index, descr,
-                                     valuebox.getref_base())
+        cpu.bh_setinteriorfield_gc_r(array, index,
+                                     valuebox.getref_base(), descr)
     elif descr.is_float_field():
-        cpu.bh_setinteriorfield_gc_f(array, index, descr,
-                                     valuebox.getfloatstorage())
+        cpu.bh_setinteriorfield_gc_f(array, index,
+                                     valuebox.getfloatstorage(), descr)
     else:
-        cpu.bh_setinteriorfield_gc_i(array, index, descr,
-                                     valuebox.getint())
+        cpu.bh_setinteriorfield_gc_i(array, index,
+                                     valuebox.getint(), descr)
 
 def do_setfield_gc(cpu, _, structbox, itembox, fielddescr):
     struct = structbox.getref_base()
     if fielddescr.is_pointer_field():
-        cpu.bh_setfield_gc_r(struct, fielddescr, itembox.getref_base())
+        cpu.bh_setfield_gc_r(struct, itembox.getref_base(), fielddescr)
     elif fielddescr.is_float_field():
-        cpu.bh_setfield_gc_f(struct, fielddescr, itembox.getfloatstorage())
+        cpu.bh_setfield_gc_f(struct, itembox.getfloatstorage(), fielddescr)
     else:
-        cpu.bh_setfield_gc_i(struct, fielddescr, itembox.getint())
+        cpu.bh_setfield_gc_i(struct, itembox.getint(), fielddescr)
 
 def do_setfield_raw(cpu, _, structbox, itembox, fielddescr):
     struct = structbox.getint()
     if fielddescr.is_pointer_field():
-        cpu.bh_setfield_raw_r(struct, fielddescr, itembox.getref_base())
+        cpu.bh_setfield_raw_r(struct, itembox.getref_base(), fielddescr)
     elif fielddescr.is_float_field():
-        cpu.bh_setfield_raw_f(struct, fielddescr, itembox.getfloatstorage())
+        cpu.bh_setfield_raw_f(struct, itembox.getfloatstorage(), fielddescr)
     else:
-        cpu.bh_setfield_raw_i(struct, fielddescr, itembox.getint())
+        cpu.bh_setfield_raw_i(struct, itembox.getint(), fielddescr)
 
 def do_raw_store(cpu, _, addrbox, offsetbox, valuebox, arraydescr):
     addr = addrbox.getint()
@@ -153,9 +153,10 @@ def do_raw_store(cpu, _, addrbox, offsetbox, valuebox, arraydescr):
     if arraydescr.is_array_of_pointers():
         raise AssertionError("cannot store GC pointers in raw store")
     elif arraydescr.is_array_of_floats():
-        cpu.bh_raw_store_f(addr, offset, arraydescr,valuebox.getfloatstorage())
+        cpu.bh_raw_store_f(addr, offset, valuebox.getfloatstorage(),
+                           arraydescr)
     else:
-        cpu.bh_raw_store_i(addr, offset, arraydescr, valuebox.getint())
+        cpu.bh_raw_store_i(addr, offset, valuebox.getint(), arraydescr)
 
 def do_raw_load_r(cpu, _, addrbox, offsetbox, arraydescr):
     raise AssertionError("cannot store GC pointers in raw store")
@@ -178,7 +179,7 @@ def exec_new_with_vtable(cpu, clsbox):
     from pypy.jit.codewriter import heaptracker
     vtable = clsbox.getint()
     descr = heaptracker.vtable2descr(cpu, vtable)
-    return cpu.bh_new_with_vtable(descr, vtable)
+    return cpu.bh_new_with_vtable(vtable, descr)
 
 def do_new_with_vtable(cpu, _, clsbox):
     pval = exec_new_with_vtable(cpu, clsbox)
@@ -250,12 +251,6 @@ def do_read_timestamp(cpu, _):
         assert isinstance(x, r_longlong)  # 32-bit
     return create_resop_0(rop.READ_TIMESTAMP, x)
 
-def do_keepalive(cpu, _, x):
-    pass
-
-def do_jit_debug(cpu, _, arg0, arg1, arg2, arg3):
-    pass
-
 # ____________________________________________________________
 
 ##def do_force_token(cpu):
@@ -324,11 +319,16 @@ def _make_execute_list():
                 if func is not None:
                     execute[value] = func
                     continue
+<<<<<<< local
             if value in (rop.FORCE_TOKEN,
                          rop.CALL_ASSEMBLER_i,
                          rop.CALL_ASSEMBLER_r,
                          rop.CALL_ASSEMBLER_f,
                          rop.CALL_ASSEMBLER_N,
+=======
+            if value in (rop.JIT_FRAME,
+                         rop.CALL_ASSEMBLER,
+>>>>>>> other
                          rop.COND_CALL_GC_WB,
                          rop.COND_CALL_GC_WB_ARRAY,
                          rop.DEBUG_MERGE_POINT,

@@ -63,6 +63,9 @@ class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
     def clone(self):
         return FORCE_SPILL(self.OPNUM, self.getarglist()[:])
 
+    def copy_and_change(self, opnum, args, result, descr):
+        return FORCE_SPILL(opnum, args, result, descr)
+
 
 class OpParser(object):
 
@@ -238,7 +241,8 @@ class OpParser(object):
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
         args, descr = self.parse_args(opname, line[num + 1:endnum])
-        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST:
+        fail_args = None
+        if rop._GUARD_FIRST <= opnum <= rop._GUARD_LAST or opnum == rop.FINISH:
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
@@ -262,8 +266,10 @@ class OpParser(object):
                                     "Unknown var in fail_args: %s" % arg)
                         fail_args.append(fail_arg)
         else:
-            fail_args = None
-            if opnum == rop.JUMP:
+            if opnum == rop.FINISH:
+                if descr is None and self.invent_fail_descr:
+                    descr = self.invent_fail_descr(self.model, fail_args)
+            elif opnum == rop.JUMP:
                 if descr is None and self.invent_fail_descr:
                     descr = self.original_jitcell_token
 

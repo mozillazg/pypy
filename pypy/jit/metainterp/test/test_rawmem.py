@@ -6,7 +6,7 @@ from pypy.rlib.rawstorage import (alloc_raw_storage, raw_storage_setitem,
 class RawMemTests(object):
     def test_cast_void_ptr(self):
         TP = lltype.Array(lltype.Float, hints={"nolength": True})
-        VOID_TP = lltype.Array(lltype.Void, hints={"nolength": True, "uncast_on_llgraph": True})
+        VOID_TP = lltype.Array(lltype.Void, hints={"nolength": True})
         class A(object):
             def __init__(self, x):
                 self.storage = rffi.cast(lltype.Ptr(VOID_TP), x)

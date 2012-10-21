@@ -301,23 +301,23 @@ class WarmEnterState(object):
         func_execute_token = self.cpu.make_execute_token(*ARGS)
 
         def execute_assembler(loop_token, *args):
-            # Call the backend to run the 'looptoken' with the given
-            # input args.
-            fail_descr = func_execute_token(loop_token, *args)
-            #
-            # If we have a virtualizable, we have to reset its
-            # 'vable_token' field afterwards
+            # XXX temporary: we need to force the virtualizable, in case
+            # it contains a jit_frame.  Do better later.
             if vinfo is not None:
                 virtualizable = args[index_of_virtualizable]
-                virtualizable = vinfo.cast_gcref_to_vtype(virtualizable)
-                vinfo.reset_vable_token(virtualizable)
+                vinfo.clear_jit_frame(virtualizable)
+            #
+            # Call the backend to run the 'looptoken' with the given
+            # input args.
+            frame = func_execute_token(loop_token, *args)
             #
             # Record in the memmgr that we just ran this loop,
             # so that it will keep it alive for a longer time
             warmrunnerdesc.memory_manager.keep_loop_alive(loop_token)
             #
             # Handle the failure
-            fail_descr.handle_fail(metainterp_sd, jitdriver_sd)
+            fail_descr = self.cpu.get_latest_descr(frame)
+            fail_descr.handle_fail(metainterp_sd, jitdriver_sd, frame)
             #
             assert 0, "should have raised"
 
@@ -574,7 +574,6 @@ class WarmEnterState(object):
         unwrap_greenkey = self.make_unwrap_greenkey()
         jit_getter = self.make_jitcell_getter()
         jd = self.jitdriver_sd
-        cpu = self.cpu
 
         def can_inline_greenargs(*greenargs):
             if can_never_inline(*greenargs):
@@ -611,8 +610,9 @@ class WarmEnterState(object):
                 if cell.counter == -1:    # used to be a valid entry bridge,
                     cell.counter = 0      # but was freed in the meantime.
                 memmgr = warmrunnerdesc.memory_manager
-                procedure_token = compile_tmp_callback(cpu, jd, greenkey,
-                                                       redargtypes, memmgr)
+                procedure_token = compile_tmp_callback(
+                    warmrunnerdesc.metainterp_sd, jd,
+                    greenkey, redargtypes, memmgr)
                 cell.set_procedure_token(procedure_token)
             return procedure_token
         self.get_assembler_token = get_assembler_token

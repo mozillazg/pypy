@@ -441,7 +441,10 @@ class WarmRunnerDesc(object):
         def crash_in_jit(e):
             tb = not we_are_translated() and sys.exc_info()[2]
             try:
-                raise e
+                if we_are_translated():
+                    raise e
+                else:
+                    raise
             except JitException:
                 raise     # go through
             except MemoryError:
@@ -550,7 +553,7 @@ class WarmRunnerDesc(object):
         else:
             assert False
         (_, jd._PTR_ASSEMBLER_HELPER_FUNCTYPE) = self.cpu.ts.get_FuncType(
-            [lltype.Signed, llmemory.GCREF], ASMRESTYPE)
+            [llmemory.GCREF], ASMRESTYPE)
 
     def rewrite_can_enter_jits(self):
         sublists = {}
@@ -803,14 +806,10 @@ class WarmRunnerDesc(object):
 
         vinfo = jd.virtualizable_info
 
-        def assembler_call_helper(failindex, virtualizableref):
-            fail_descr = self.cpu.get_fail_descr_from_number(failindex)
-            if vinfo is not None:
-                virtualizable = lltype.cast_opaque_ptr(
-                    vinfo.VTYPEPTR, virtualizableref)
-                vinfo.reset_vable_token(virtualizable)
+        def assembler_call_helper(jitframe):
+            fail_descr = self.cpu.get_latest_descr(jitframe)
             try:
-                fail_descr.handle_fail(self.metainterp_sd, jd)
+                fail_descr.handle_fail(self.metainterp_sd, jd, jitframe)
             except JitException, e:
                 return handle_jitexception(e)
             else:
@@ -823,7 +822,7 @@ class WarmRunnerDesc(object):
         jd.assembler_helper_adr = llmemory.cast_ptr_to_adr(
             jd._assembler_helper_ptr)
         if vinfo is not None:
-            jd.vable_token_descr = vinfo.vable_token_descr
+            jd.jit_frame_descr = vinfo.jit_frame_descr
 
         def handle_jitexception_from_blackhole(bhcaller, e):
             result = handle_jitexception(e)

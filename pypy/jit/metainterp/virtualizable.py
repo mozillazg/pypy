@@ -7,17 +7,16 @@ from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.unroll import unrolling_iterable
 from pypy.rlib.nonconst import NonConstant
 from pypy.jit.metainterp.typesystem import deref, fieldType, arrayItem
-from pypy.jit.metainterp import history
+from pypy.jit.metainterp import history, jitframe
 from pypy.jit.metainterp.warmstate import wrap, unwrap
 from pypy.rlib.objectmodel import specialize
 
 class VirtualizableInfo(object):
-    TOKEN_NONE            = 0      # must be 0 -- see also x86.call_assembler
-    TOKEN_TRACING_RESCALL = -1
 
     def __init__(self, warmrunnerdesc, VTYPEPTR):
         self.warmrunnerdesc = warmrunnerdesc
         cpu = warmrunnerdesc.cpu
+        self.TOKEN_TRACING_RESCALL = cpu.TOKEN_TRACING_RESCALL
         if cpu.ts.name == 'ootype':
             import py
             py.test.skip("ootype: fix virtualizables")
@@ -28,7 +27,7 @@ class VirtualizableInfo(object):
             VTYPEPTR = cpu.ts.get_superclass(VTYPEPTR)
         self.VTYPEPTR = VTYPEPTR
         self.VTYPE = VTYPE = deref(VTYPEPTR)
-        self.vable_token_descr = cpu.fielddescrof(VTYPE, 'vable_token')
+        self.jit_frame_descr = cpu.fielddescrof(VTYPE, 'jit_frame')
         #
         accessor = VTYPE._hints['virtualizable2_accessor']
         all_fields = accessor.fields
@@ -217,30 +216,31 @@ class VirtualizableInfo(object):
             return lltype.cast_opaque_ptr(VTYPEPTR, virtualizable)
         self.cast_gcref_to_vtype = cast_gcref_to_vtype
 
-        def reset_vable_token(virtualizable):
-            virtualizable.vable_token = VirtualizableInfo.TOKEN_NONE
-        self.reset_vable_token = reset_vable_token
-
-        def clear_vable_token(virtualizable):
+        def reset_jit_frame(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            if virtualizable.vable_token:
+            virtualizable.jit_frame = jitframe.TOKEN_NONE
+        self.reset_jit_frame = reset_jit_frame
+
+        def clear_jit_frame(virtualizable):
+            virtualizable = cast_gcref_to_vtype(virtualizable)
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 force_now(virtualizable)
-                assert not virtualizable.vable_token
-        self.clear_vable_token = clear_vable_token
+                assert virtualizable.jit_frame == jitframe.TOKEN_NONE
+        self.clear_jit_frame = clear_jit_frame
 
         def tracing_before_residual_call(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            assert not virtualizable.vable_token
-            virtualizable.vable_token = VirtualizableInfo.TOKEN_TRACING_RESCALL
+            assert virtualizable.jit_frame == jitframe.TOKEN_NONE
+            virtualizable.jit_frame = self.TOKEN_TRACING_RESCALL
         self.tracing_before_residual_call = tracing_before_residual_call
 
         def tracing_after_residual_call(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            if virtualizable.vable_token:
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 # not modified by the residual call; assert that it is still
                 # set to TOKEN_TRACING_RESCALL and clear it.
-                assert virtualizable.vable_token == VirtualizableInfo.TOKEN_TRACING_RESCALL
-                virtualizable.vable_token = VirtualizableInfo.TOKEN_NONE
+                assert virtualizable.jit_frame == self.TOKEN_TRACING_RESCALL
+                virtualizable.jit_frame = jitframe.TOKEN_NONE
                 return False
             else:
                 # marker "modified during residual call" set.
@@ -248,28 +248,28 @@ class VirtualizableInfo(object):
         self.tracing_after_residual_call = tracing_after_residual_call
 
         def force_now(virtualizable):
-            token = virtualizable.vable_token
-            if token == VirtualizableInfo.TOKEN_TRACING_RESCALL:
+            token = virtualizable.jit_frame
+            if token == self.TOKEN_TRACING_RESCALL:
                 # The values in the virtualizable are always correct during
-                # tracing.  We only need to reset vable_token to TOKEN_NONE
+                # tracing.  We only need to reset jit_frame to TOKEN_NONE
                 # as a marker for the tracing, to tell it that this
                 # virtualizable escapes.
-                virtualizable.vable_token = VirtualizableInfo.TOKEN_NONE
+                virtualizable.jit_frame = jitframe.TOKEN_NONE
             else:
                 from pypy.jit.metainterp.compile import ResumeGuardForcedDescr
                 ResumeGuardForcedDescr.force_now(cpu, token)
-                assert virtualizable.vable_token == VirtualizableInfo.TOKEN_NONE
+                assert virtualizable.jit_frame == jitframe.TOKEN_NONE
         force_now._dont_inline_ = True
         self.force_now = force_now
 
         def is_token_nonnull_gcref(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            return bool(virtualizable.vable_token)
+            return virtualizable.jit_frame != jitframe.TOKEN_NONE
         self.is_token_nonnull_gcref = is_token_nonnull_gcref
 
         def reset_token_gcref(virtualizable):
             virtualizable = cast_gcref_to_vtype(virtualizable)
-            virtualizable.vable_token = VirtualizableInfo.TOKEN_NONE
+            virtualizable.jit_frame = jitframe.TOKEN_NONE
         self.reset_token_gcref = reset_token_gcref
 
     def _freeze_(self):
@@ -278,8 +278,9 @@ class VirtualizableInfo(object):
     def finish(self):
         #
         def force_virtualizable_if_necessary(virtualizable):
-            if virtualizable.vable_token:
+            if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 self.force_now(virtualizable)
+        self.force_virtualizable_if_necessary = force_virtualizable_if_necessary
         force_virtualizable_if_necessary._always_inline_ = True
         #
         all_graphs = self.warmrunnerdesc.translator.graphs
@@ -295,19 +296,3 @@ class VirtualizableInfo(object):
      
     def is_vtypeptr(self, TYPE):
         return rvirtualizable2.match_virtualizable_type(TYPE, self.VTYPEPTR)
-
-# ____________________________________________________________
-#
-# The 'vable_token' field of a virtualizable is either 0, -1, or points
-# into the CPU stack to a particular field in the current frame.  It is:
-#
-#   1. 0 (TOKEN_NONE) if not in the JIT at all, except as described below.
-#
-#   2. equal to 0 when tracing is in progress; except:
-#
-#   3. equal to -1 (TOKEN_TRACING_RESCALL) during tracing when we do a
-#      residual call, calling random unknown other parts of the interpreter;
-#      it is reset to 0 as soon as something occurs to the virtualizable.
-#
-#   4. when running the machine code with a virtualizable, it is set
-#      to the address in the CPU stack by the FORCE_TOKEN operation.

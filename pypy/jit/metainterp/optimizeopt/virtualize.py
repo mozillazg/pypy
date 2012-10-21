@@ -382,11 +382,12 @@ class OptVirtualize(optimizer.Optimization):
         # get some constants
         vrefinfo = self.optimizer.metainterp_sd.virtualref_info
         c_cls = vrefinfo.jit_virtual_ref_const_class
-        descr_virtual_token = vrefinfo.descr_virtual_token
+        descr_jit_frame = vrefinfo.descr_jit_frame
         #
         # Replace the VIRTUAL_REF operation with a virtual structure of type
         # 'jit_virtual_ref'.  The jit_virtual_ref structure may be forced soon,
         # but the point is that doing so does not force the original structure.
+<<<<<<< local
         new_op = create_resop_1(rop.NEW_WITH_VTABLE, llhelper.NULLREF,
                                 c_cls)
         self.replace(op, new_op)
@@ -394,6 +395,13 @@ class OptVirtualize(optimizer.Optimization):
         token_op = create_resop_0(rop.FORCE_TOKEN, 0)
         self.emit_operation(token_op)
         vrefvalue.setfield(descr_virtual_token, self.getvalue(token_op))
+=======
+        op = ResOperation(rop.NEW_WITH_VTABLE, [c_cls], op.result)
+        vrefvalue = self.make_virtual(c_cls, op.result, op)
+        tokenbox = BoxPtr()
+        self.emit_operation(ResOperation(rop.JIT_FRAME, [], tokenbox))
+        vrefvalue.setfield(descr_jit_frame, self.getvalue(tokenbox))
+>>>>>>> other
 
     def optimize_VIRTUAL_REF_FINISH(self, op):
         # This operation is used in two cases.  In normal cases, it
@@ -418,10 +426,17 @@ class OptVirtualize(optimizer.Optimization):
             seo(create_resop_2(rop.SETFIELD_GC, None, op.getarg(0),
                                op.getarg(1), descr=vrefinfo.descr_forced))
 
+<<<<<<< local
         # - set 'virtual_token' to TOKEN_NONE
         seo(create_resop_2(rop.SETFIELD_GC, None, op.getarg(0),
                            ConstInt(vrefinfo.TOKEN_NONE),
                            descr = vrefinfo.descr_virtual_token))
+=======
+        # - set 'virtual_token' to TOKEN_NONE (== NULL)
+        args = [op.getarg(0), self.optimizer.cpu.ts.CONST_NULL]
+        seo(ResOperation(rop.SETFIELD_GC, args, None,
+                         descr = vrefinfo.descr_jit_frame))
+>>>>>>> other
         # Note that in some cases the virtual in op.getarg(1) has been forced
         # already.  This is fine.  In that case, and *if* a residual
         # CALL_MAY_FORCE suddenly turns out to access it, then it will

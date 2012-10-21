@@ -54,13 +54,17 @@ def capture_resumedata(framestack, virtualizable_boxes, virtualref_boxes,
                        storage):
     xxx
     n = len(framestack)-1
-    top = framestack[n]
-    _ensure_parent_resumedata(framestack, n)
-    frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
-                                top.jitcode, top.pc)
+    if n >= 0:
+        top = framestack[n]
+        _ensure_parent_resumedata(framestack, n)
+        frame_info_list = FrameInfo(top.parent_resumedata_frame_info_list,
+                                    top.jitcode, top.pc)
+        snapshot = Snapshot(top.parent_resumedata_snapshot,
+                            top.get_list_of_active_boxes(False))
+    else:
+        frame_info_list = None
+        snapshot = None
     storage.rd_frame_info_list = frame_info_list
-    snapshot = Snapshot(top.parent_resumedata_snapshot,
-                        top.get_list_of_active_boxes(False))
     if virtualizable_boxes is not None:
         boxes = virtualref_boxes + virtualizable_boxes
     else:
@@ -768,14 +772,11 @@ class AbstractResumeDataReader(object):
         value = self.decode_float(self.cur_numb.nums[index])
         self.write_a_float(register_index, value)
 
-    def done(self):
-        self.cpu.clear_latest_values(self.cpu.get_latest_value_count())
-
 # ---------- when resuming for pyjitpl.py, make boxes ----------
 
-def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
+def rebuild_from_resumedata(metainterp, jitframe, storage, virtualizable_info,
                             greenfield_info):
-    resumereader = ResumeDataBoxReader(storage, metainterp)
+    resumereader = ResumeDataBoxReader(jitframe, storage, metainterp)
     boxes = resumereader.consume_vref_and_vable_boxes(virtualizable_info,
                                                       greenfield_info)
     virtualizable_boxes, virtualref_boxes = boxes
@@ -789,16 +790,17 @@ def rebuild_from_resumedata(metainterp, storage, virtualizable_info,
         if frameinfo is None:
             break
     metainterp.framestack.reverse()
-    resumereader.done()
     return resumereader.liveboxes, virtualizable_boxes, virtualref_boxes
 
 class ResumeDataBoxReader(AbstractResumeDataReader):
     unique_id = lambda: None
 
-    def __init__(self, storage, metainterp):
+    def __init__(self, jitframe, storage, metainterp):
         self._init(metainterp.cpu, storage)
+        self.jitframe = jitframe
         self.metainterp = metainterp
-        self.liveboxes = [None] * metainterp.cpu.get_latest_value_count()
+        count = metainterp.cpu.get_latest_value_count(jitframe)
+        self.liveboxes = [None] * count
         self._prepare(storage)
 
     def consume_boxes(self, info, boxes_i, boxes_r, boxes_f):
@@ -973,12 +975,13 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
         if num < 0:
             num += len(self.liveboxes)
             assert num >= 0
+        jitframe = self.jitframe
         if kind == INT:
-            box = BoxInt(self.cpu.get_latest_value_int(num))
+            box = BoxInt(self.cpu.get_latest_value_int(jitframe, num))
         elif kind == REF:
-            box = BoxPtr(self.cpu.get_latest_value_ref(num))
+            box = BoxPtr(self.cpu.get_latest_value_ref(jitframe, num))
         elif kind == FLOAT:
-            box = BoxFloat(self.cpu.get_latest_value_float(num))
+            box = BoxFloat(self.cpu.get_latest_value_float(jitframe, num))
         else:
             assert 0, "bad kind: %d" % ord(kind)
         self.liveboxes[num] = box
@@ -1000,16 +1003,69 @@ class ResumeDataBoxReader(AbstractResumeDataReader):
     def write_a_float(self, index, box):
         self.boxes_f[index] = box
 
+def rebuild_virtualizable_from_resumedata(metainterp, storage, vinfo,
+                                          vable_box, jfbox):
+    resumereader = ResumeDataForceVirtualizableReader(storage, metainterp,
+                                                      jfbox)
+    numb = resumereader.cur_numb
+    virtualizable = vinfo.unwrap_virtualizable_box(vable_box)
+    boxes = vinfo.load_list_of_boxes(virtualizable, resumereader, numb)
+    #
+    for i in range(len(vinfo.static_field_descrs)):
+        descr = vinfo.static_field_descrs[i]
+        metainterp.execute_and_record(rop.SETFIELD_GC, descr,
+                                      vable_box, boxes[i])
+    srcindex = len(vinfo.static_field_descrs)
+    for array_index in range(len(vinfo.array_field_descrs)):
+        length = vinfo.get_array_length(virtualizable, array_index)
+        box_array = metainterp.execute_and_record(rop.GETFIELD_GC,
+                        vinfo.array_field_descrs[array_index], vable_box)
+        array_descr = vinfo.array_descrs[array_index]
+        for i in range(length):
+            metainterp.execute_and_record(rop.SETARRAYITEM_GC, array_descr,
+                                          box_array, ConstInt(i),
+                                          boxes[srcindex])
+            srcindex += 1
+    assert srcindex + 1 == len(boxes)
+
+class ResumeDataForceVirtualizableReader(ResumeDataBoxReader):
+    def __init__(self, storage, metainterp, jfbox):
+        self.metainterp = metainterp
+        self._init(metainterp.cpu, storage)
+        count = storage.get_latest_value_count()
+        self.liveboxes = [None] * count
+        self.jfbox = jfbox
+        self._prepare_virtuals(storage.rd_virtuals)
+
+    def load_box_from_cpu(self, num, kind):
+        if num < 0:
+            num += len(self.liveboxes)
+            assert num >= 0
+        cpu = self.metainterp.cpu
+        if kind == INT:
+            descr = cpu.jfdescr_for_int
+        elif kind == REF:
+            descr = cpu.jfdescr_for_ref
+        elif kind == FLOAT:
+            descr = cpu.jfdescr_for_float
+        else:
+            assert 0, "bad kind: %d" % ord(kind)
+        box = self.metainterp.execute_and_record(rop.GETINTERIORFIELD_GC,
+                                                 descr, self.jfbox,
+                                                 ConstInt(num))
+        self.liveboxes[num] = box
+        return box
+
 # ---------- when resuming for blackholing, get direct values ----------
 
-def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
-                              all_virtuals=None):
+def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd,
+                              jitframe, storage, all_virtuals=None):
     # The initialization is stack-critical code: it must not be interrupted by
     # StackOverflow, otherwise the jit_virtual_refs are left in a dangling state.
     rstack._stack_criticalcode_start()
     try:
         resumereader = ResumeDataDirectReader(blackholeinterpbuilder.metainterp_sd,
-                                              storage, all_virtuals)
+                                              jitframe, storage, all_virtuals)
         vinfo = jitdriver_sd.virtualizable_info
         ginfo = jitdriver_sd.greenfield_info
         vrefinfo = blackholeinterpbuilder.metainterp_sd.virtualref_info
@@ -1025,6 +1081,7 @@ def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
     frameinfo = storage.rd_frame_info_list
     while True:
         curbh = blackholeinterpbuilder.acquire_interp()
+        curbh.vinfo = jitdriver_sd.virtualizable_info
         curbh.nextblackholeinterp = nextbh
         nextbh = curbh
         frameinfo = frameinfo.prev
@@ -1042,11 +1099,10 @@ def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd, storage,
         frameinfo = frameinfo.prev
         if frameinfo is None:
             break
-    resumereader.done()
     return firstbh
 
-def force_from_resumedata(metainterp_sd, storage, vinfo, ginfo):
-    resumereader = ResumeDataDirectReader(metainterp_sd, storage)
+def force_from_resumedata(metainterp_sd, jitframe, storage, vinfo, ginfo):
+    resumereader = ResumeDataDirectReader(metainterp_sd, jitframe, storage)
     resumereader.handling_async_forcing()
     vrefinfo = metainterp_sd.virtualref_info
     resumereader.consume_vref_and_vable(vrefinfo, vinfo, ginfo)
@@ -1060,8 +1116,9 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     #             1: in handle_async_forcing
     #             2: resuming from the GUARD_NOT_FORCED
 
-    def __init__(self, metainterp_sd, storage, all_virtuals=None):
+    def __init__(self, metainterp_sd, jitframe, storage, all_virtuals=None):
         self._init(metainterp_sd.cpu, storage)
+        self.jitframe = jitframe
         self.callinfocollection = metainterp_sd.callinfocollection
         if all_virtuals is None:        # common case
             self._prepare(storage)
@@ -1104,11 +1161,9 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             assert vinfo.is_token_nonnull_gcref(virtualizable)
             vinfo.reset_token_gcref(virtualizable)
         else:
-            # just jumped away from assembler (case 4 in the comment in
-            # virtualizable.py) into tracing (case 2); check that vable_token
-            # is and stays 0.  Note the call to reset_vable_token() in
-            # warmstate.py.
-            assert not vinfo.is_token_nonnull_gcref(virtualizable)
+            # here, virtualizable.jit_frame may contain a leftover from
+            # earlier.  We have to clean it here.
+            vinfo.reset_jit_frame(virtualizable)
         return vinfo.write_from_resume_data_partial(virtualizable, self, numb)
 
     def load_value_of_type(self, TYPE, tagged):
@@ -1141,7 +1196,7 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
         return self.cpu.bh_new(typedescr)
 
     def allocate_array(self, arraydescr, length):
-        return self.cpu.bh_new_array(arraydescr, length)
+        return self.cpu.bh_new_array(length, arraydescr)
 
     def allocate_string(self, length):
         return self.cpu.bh_newstr(length)
@@ -1200,36 +1255,36 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
     def setfield(self, descr, struct, fieldnum):
         if descr.is_pointer_field():
             newvalue = self.decode_ref(fieldnum)
-            self.cpu.bh_setfield_gc_r(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_r(struct, newvalue, descr)
         elif descr.is_float_field():
             newvalue = self.decode_float(fieldnum)
-            self.cpu.bh_setfield_gc_f(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_f(struct, newvalue, descr)
         else:
             newvalue = self.decode_int(fieldnum)
-            self.cpu.bh_setfield_gc_i(struct, descr, newvalue)
+            self.cpu.bh_setfield_gc_i(struct, newvalue, descr)
 
     def setinteriorfield(self, index, descr, array, fieldnum):
         if descr.is_pointer_field():
             newvalue = self.decode_ref(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_r(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_r(array, index, newvalue, descr)
         elif descr.is_float_field():
             newvalue = self.decode_float(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_f(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_f(array, index, newvalue, descr)
         else:
             newvalue = self.decode_int(fieldnum)
-            self.cpu.bh_setinteriorfield_gc_i(array, index, descr, newvalue)
+            self.cpu.bh_setinteriorfield_gc_i(array, index, newvalue, descr)
 
     def setarrayitem_int(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_int(fieldnum)
-        self.cpu.bh_setarrayitem_gc_i(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_i(array, index, newvalue, arraydescr)
 
     def setarrayitem_ref(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_ref(fieldnum)
-        self.cpu.bh_setarrayitem_gc_r(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_r(array, index, newvalue, arraydescr)
 
     def setarrayitem_float(self, arraydescr, array, index, fieldnum):
         newvalue = self.decode_float(fieldnum)
-        self.cpu.bh_setarrayitem_gc_f(arraydescr, array, index, newvalue)
+        self.cpu.bh_setarrayitem_gc_f(array, index, newvalue, arraydescr)
 
     def decode_int(self, tagged):
         num, tag = untag(tagged)
@@ -1239,9 +1294,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return num
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_int(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_int(jitframe, num)
 
     def decode_ref(self, tagged):
         num, tag = untag(tagged)
@@ -1253,9 +1309,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return self.getvirtual(num)
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_ref(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_ref(jitframe, num)
 
     def decode_float(self, tagged):
         num, tag = untag(tagged)
@@ -1263,9 +1320,10 @@ class ResumeDataDirectReader(AbstractResumeDataReader):
             return self.consts[num].getfloatstorage()
         else:
             assert tag == TAGBOX
+            jitframe = self.jitframe
             if num < 0:
-                num += self.cpu.get_latest_value_count()
-            return self.cpu.get_latest_value_float(num)
+                num += self.cpu.get_latest_value_count(jitframe)
+            return self.cpu.get_latest_value_float(jitframe, num)
 
     def write_an_int(self, index, int):
         self.blackholeinterp.setarg_i(index, int)

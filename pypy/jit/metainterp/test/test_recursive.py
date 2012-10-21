@@ -3,9 +3,10 @@ from pypy.rlib.jit import JitDriver, hint, set_param
 from pypy.rlib.jit import unroll_safe, dont_look_inside, promote
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rlib.debug import fatalerror
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.rpython.annlowlevel import hlstr
+from pypy.rpython.lltypesystem import llmemory
 from pypy.jit.metainterp.warmspot import get_stats
 
 class RecursiveTests:
@@ -773,11 +774,18 @@ class RecursiveTests:
                            virtualizables = ['frame'],
                            get_printable_location = lambda codeno : str(codeno))
 
+        class Oups(Exception):
+            pass
+
         def main(codeno):
             frame = Frame()
             frame.thing = Thing(0)
             portal(codeno, frame)
             return frame.thing.val
+
+        @dont_look_inside
+        def escaping(f, t1):
+            assert f.thing is t1
 
         def portal(codeno, frame):
             i = 0
@@ -789,59 +797,10 @@ class RecursiveTests:
                     subframe = Frame()
                     subframe.thing = Thing(nextval)
                     nextval = portal(1, subframe)
-                frame.thing = Thing(nextval + 1)
-                i += 1
-            return frame.thing.val
-
-        res = self.meta_interp(main, [0], inline=True)
-        assert res == main(0)
-
-    def test_directly_call_assembler_virtualizable_reset_token(self):
-        from pypy.rpython.lltypesystem import lltype
-        from pypy.rlib.debug import llinterpcall
-
-        class Thing(object):
-            def __init__(self, val):
-                self.val = val
-        
-        class Frame(object):
-            _virtualizable2_ = ['thing']
-        
-        driver = JitDriver(greens = ['codeno'], reds = ['i', 'frame'],
-                           virtualizables = ['frame'],
-                           get_printable_location = lambda codeno : str(codeno))
-
-        @dont_look_inside
-        def check_frame(subframe):
-            if we_are_translated():
-                llinterpcall(lltype.Void, check_ll_frame, subframe)
-        def check_ll_frame(ll_subframe):
-            # This is called with the low-level Struct that is the frame.
-            # Check that the vable_token was correctly reset to zero.
-            # Note that in order for that test to catch failures, it needs
-            # three levels of recursion: the vable_token of the subframe
-            # at the level 2 is set to a non-zero value when doing the
-            # call to the level 3 only.  This used to fail when the test
-            # is run via pypy.jit.backend.x86.test.test_recursive.
-            assert ll_subframe.vable_token == 0
-
-        def main(codeno):
-            frame = Frame()
-            frame.thing = Thing(0)
-            portal(codeno, frame)
-            return frame.thing.val
-
-        def portal(codeno, frame):
-            i = 0
-            while i < 5:
-                driver.can_enter_jit(frame=frame, codeno=codeno, i=i)
-                driver.jit_merge_point(frame=frame, codeno=codeno, i=i)
-                nextval = frame.thing.val
-                if codeno < 2:
-                    subframe = Frame()
-                    subframe.thing = Thing(nextval)
-                    nextval = portal(codeno + 1, subframe)
-                    check_frame(subframe)
+                    t1 = subframe.thing
+                    if t1.val != nextval:
+                        raise Oups
+                    escaping(subframe, t1)
                 frame.thing = Thing(nextval + 1)
                 i += 1
             return frame.thing.val
@@ -914,6 +873,9 @@ class RecursiveTests:
                 self.l = l
                 self.s = s
 
+        class Oups(Exception):
+            pass
+
         def main(codeno, n, a):
             frame = Frame([a, a+1, a+2, a+3], 0)
             return f(codeno, n, a, frame)
@@ -933,11 +895,14 @@ class RecursiveTests:
                 if codeno == 0:
                     subframe = Frame([n, n+1, n+2, n+3], 0)
                     x += f(1, 10, 1, subframe)
+                    if subframe.l[3] != 42:
+                        raise Oups
                 s = frame.s
                 assert s >= 0
                 x += frame.l[s]
                 x += len(frame.l)
                 frame.s -= 1
+            frame.l[3] = 42
             return x
 
         res = self.meta_interp(main, [0, 10, 1], listops=True, inline=True)
@@ -992,6 +957,99 @@ class RecursiveTests:
         res = self.meta_interp(main, [0], inline=True,
                                policy=StopAtXPolicy(change))
         assert res == main(0)
+
+    def test_call_assembler_force_from_inside(self):
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+
+            def __init__(self, thing):
+                self.thing = thing
+
+        driver = JitDriver(greens = ['codeno'],
+                           reds = ['i', 'frame', 'parent_frame'],
+                           virtualizables = ['frame'])
+
+        def portal(codeno, parent_frame):
+            i = 0
+            frame = Frame(codeno)
+            while i < 10:
+                driver.jit_merge_point(i=i, frame=frame, codeno=codeno,
+                                       parent_frame=parent_frame)
+                frame.thing = frame.thing + parent_frame.thing
+                if codeno == 0:
+                    portal((i % 2) + 1, frame)
+                i += 1
+            return frame.thing
+
+        def main():
+            frame = Frame(0)
+            return portal(0, frame)
+
+        res = self.meta_interp(main, [], inline=True)
+        assert res == main()
+
+    def test_call_assembler_two_virtualizables(self):
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+
+            def __init__(self, thing):
+                self.thing = thing
+
+        driver = JitDriver(greens = ['codeno'],
+                           reds = ['i', 'frame', 'frames'],
+                           virtualizables = ['frame'])
+
+        def portal(codeno, frame, frames):
+            i = 0
+            while i < 10:
+                driver.jit_merge_point(i=i, frame=frame, codeno=codeno,
+                                       frames=frames)
+                frame.thing = frame.thing + 1
+                if codeno == 0:
+                    no = (i % 2)
+                    newframe = frames[no]
+                    frame.thing += portal(no + 1, newframe, None)
+                i += 1
+            return frame.thing
+
+        def main():
+            frames = [Frame(1), Frame(2)]
+            return portal(0, Frame(0), frames)
+
+        res = self.meta_interp(main, [], inline=True)
+        assert res == main()
+
+    def test_call_assembler_force_in_the_blackhole(self):
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+
+            def __init__(self, thing):
+                self.thing = thing
+
+        driver = JitDriver(greens = ['codeno'],
+                           reds = ['i', 'frame', 'frames'],
+                           virtualizables = ['frame'])
+
+        def portal(codeno, frame, frames):
+            i = 0
+            while i < 10:
+                driver.jit_merge_point(i=i, frame=frame, codeno=codeno,
+                                       frames=frames)
+                frame.thing = frame.thing + 1
+                if codeno == 0:
+                    no = (i % 2)
+                    newframe = frames[no]
+                    frame.thing += portal(no + 1, newframe, None)
+                    frame.thing += newframe.thing
+                i += 1
+            return frame.thing
+
+        def main():
+            frames = [Frame(1), Frame(2)]
+            return portal(0, Frame(0), frames)
+
+        res = self.meta_interp(main, [], inline=True)
+        assert res == main()
 
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
@@ -1264,7 +1322,4 @@ class RecursiveTests:
 
 
 class TestLLtype(RecursiveTests, LLJitMixin):
-    pass
-
-class TestOOtype(RecursiveTests, OOJitMixin):
     pass

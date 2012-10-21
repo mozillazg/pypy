@@ -623,6 +623,8 @@ class Optimizer(Optimization):
             op = self.store_final_boxes_in_guard(op)
         elif op.can_raise():
             self.exception_might_have_happened = True
+        elif op.getopnum() == rop.FINISH:
+            op = self.store_final_boxes_in_guard(op)
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):

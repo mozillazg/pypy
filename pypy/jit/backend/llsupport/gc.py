@@ -83,15 +83,15 @@ class GcLLDescription(GcCache):
         assert isinstance(sizedescr, SizeDescr)
         return self._bh_malloc(sizedescr)
 
-    def gc_malloc_array(self, arraydescr, num_elem):
+    def gc_malloc_array(self, num_elem, arraydescr):
         assert isinstance(arraydescr, ArrayDescr)
-        return self._bh_malloc_array(arraydescr, num_elem)
+        return self._bh_malloc_array(num_elem, arraydescr)
 
     def gc_malloc_str(self, num_elem):
-        return self._bh_malloc_array(self.str_descr, num_elem)
+        return self._bh_malloc_array(num_elem, self.str_descr)
 
     def gc_malloc_unicode(self, num_elem):
-        return self._bh_malloc_array(self.unicode_descr, num_elem)
+        return self._bh_malloc_array(num_elem, self.unicode_descr)
 
     def _record_constptrs(self, op, gcrefs_output_list):
         for i in range(op.numargs()):
@@ -193,7 +193,7 @@ class GcLLDescr_boehm(GcLLDescription):
     def _bh_malloc(self, sizedescr):
         return self.malloc_fixedsize(sizedescr.size)
 
-    def _bh_malloc_array(self, arraydescr, num_elem):
+    def _bh_malloc_array(self, num_elem, arraydescr):
         return self.malloc_array(arraydescr.basesize, num_elem,
                                  arraydescr.itemsize,
                                  arraydescr.lendescr.offset)
@@ -717,6 +717,7 @@ class GcLLDescr_framework(GcLLDescription):
         def malloc_nursery_slowpath(size):
             """Allocate 'size' null bytes out of the nursery.
             Note that the fast path is typically inlined by the backend."""
+            assert size >= self.minimal_size_in_nursery
             if self.DEBUG:
                 self._random_usage_of_xmm_registers()
             type_id = rffi.cast(llgroup.HALFWORD, 0)    # missing here
@@ -729,6 +730,7 @@ class GcLLDescr_framework(GcLLDescription):
         def malloc_array(itemsize, tid, num_elem):
             """Allocate an array with a variable-size num_elem.
             Only works for standard arrays."""
+            assert num_elem >= 0, 'num_elem should be >= 0'
             type_id = llop.extract_ushort(llgroup.HALFWORD, tid)
             check_typeid(type_id)
             return llop1.do_malloc_varsize_clear(
@@ -800,7 +802,7 @@ class GcLLDescr_framework(GcLLDescription):
                                                type_id, sizedescr.size,
                                                False, False, False)
 
-    def _bh_malloc_array(self, arraydescr, num_elem):
+    def _bh_malloc_array(self, num_elem, arraydescr):
         from pypy.rpython.memory.gctypelayout import check_typeid
         llop1 = self.llop1
         type_id = llop.extract_ushort(llgroup.HALFWORD, arraydescr.tid)

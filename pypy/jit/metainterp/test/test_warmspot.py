@@ -1,9 +1,10 @@
 import py
+from pypy.rpython.lltypesystem import lltype, llmemory
 from pypy.jit.metainterp.warmspot import get_stats
 from pypy.rlib.jit import JitDriver, set_param, unroll_safe
 from pypy.jit.backend.llgraph import runner
 
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_NAMES
 
 
@@ -313,12 +314,8 @@ class WarmspotTests(object):
 
 
 class TestLLWarmspot(WarmspotTests, LLJitMixin):
-    CPUClass = runner.LLtypeCPU
-    type_system = 'lltype'
+    pass
 
-class TestOOWarmspot(WarmspotTests, OOJitMixin):
-    ##CPUClass = runner.OOtypeCPU
-    type_system = 'ootype'
 
 class TestWarmspotDirect(object):
     def setup_class(cls):
@@ -330,10 +327,12 @@ class TestWarmspotDirect(object):
         exc_vtable = lltype.malloc(OBJECT_VTABLE, immortal=True)
         cls.exc_vtable = exc_vtable
 
+        cls.FAKEFRAME = lltype.GcStruct('FAKEFRAME')
+
         class FakeFailDescr(object):
             def __init__(self, no):
                 self.no = no
-            def handle_fail(self, metainterp_sd, jitdrivers_sd):
+            def handle_fail(self, metainterp_sd, jitdrivers_sd, jitframe):
                 no = self.no
                 if no == 0:
                     raise metainterp_sd.warmrunnerdesc.DoneWithThisFrameInt(3)
@@ -372,11 +371,12 @@ class TestWarmspotDirect(object):
             calldescrof  = nodescr
             sizeof       = nodescr
 
-            def get_fail_descr_from_number(self, no):
-                return FakeFailDescr(no)
-
             def make_execute_token(self, *ARGS):
                 return "not callable"
+
+            def get_latest_descr(self, frame):
+                assert frame._obj.container._TYPE == cls.FAKEFRAME
+                return FakeFailDescr(self._fail_index)
 
         driver = JitDriver(reds = ['red'], greens = ['green'])
 
@@ -398,10 +398,16 @@ class TestWarmspotDirect(object):
         from pypy.rpython.llinterp import LLException
 
         [jd] = self.desc.jitdrivers_sd
-        assert jd._assembler_call_helper(0, 0) == 3
-        assert jd._assembler_call_helper(1, 0) == 10
+        cpu = self.desc.cpu
+        fakeframe = lltype.malloc(self.FAKEFRAME)
+        fakeframe = lltype.cast_opaque_ptr(llmemory.GCREF, fakeframe)
+        cpu._fail_index = 0
+        assert jd._assembler_call_helper(fakeframe) == 3
+        cpu._fail_index = 1
+        assert jd._assembler_call_helper(fakeframe) == 10
         try:
-            jd._assembler_call_helper(3, 0)
+            cpu._fail_index = 3
+            jd._assembler_call_helper(fakeframe)
         except LLException, lle:
             assert lle[0] == self.exc_vtable
         else:

@@ -7,6 +7,9 @@ from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.metainterp.history import AbstractDescr, JitCellToken,\
      TargetToken
 
+class FakeDescr(AbstractDescr):
+    pass
+
 class BaseTestOparser(object):
 
     OpParser = None
@@ -21,7 +24,7 @@ class BaseTestOparser(object):
         # a comment
         i2 = int_add(i0, i1)
         i3 = int_sub(i2, 3) # another comment
-        finish() # (tricky)
+        finish() [] # (tricky)
         """
         loop = self.parse(x)
         assert len(loop.operations) == 3
@@ -30,6 +33,16 @@ class BaseTestOparser(object):
         assert len(loop.inputargs) == 2
         #assert loop.operations[-1].getdescr()
         # descr is invented by optimizations
+
+    def test_failargs_finish(self):
+        d = FakeDescr()
+        x = """
+        [p0]
+        finish(descr=f) [p0]
+        """
+        loop = self.parse(x, None, {'f': d})
+        assert loop.operations[0].getdescr() is d
+        assert loop.operations[0].getfailargs() == loop.inputargs
 
     def test_descr(self):
         class Xyz(AbstractDescr):

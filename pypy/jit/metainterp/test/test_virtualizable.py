@@ -7,7 +7,7 @@ from pypy.jit.codewriter.policy import StopAtXPolicy
 from pypy.jit.codewriter import heaptracker
 from pypy.rlib.jit import JitDriver, hint, dont_look_inside, promote
 from pypy.rlib.rarithmetic import intmask
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.rpython.rclass import FieldListAccessor
 from pypy.jit.metainterp.warmspot import get_stats, get_translator
 from pypy.jit.metainterp import history
@@ -41,7 +41,7 @@ class ExplicitVirtualizableTests:
     XY = lltype.GcStruct(
         'XY',
         ('parent', rclass.OBJECT),
-        ('vable_token', lltype.Signed),
+        ('jit_frame', llmemory.GCREF),
         ('inst_x', lltype.Signed),
         ('inst_node', lltype.Ptr(LLtypeMixin.NODE)),
         hints = {'virtualizable2_accessor': FieldListAccessor()})
@@ -56,7 +56,7 @@ class ExplicitVirtualizableTests:
 
     def setup(self):
         xy = lltype.malloc(self.XY)
-        xy.vable_token = 0
+        xy.jit_frame = lltype.nullptr(llmemory.GCREF.TO)
         xy.parent.typeptr = self.xy_vtable
         return xy
 
@@ -144,10 +144,40 @@ class ExplicitVirtualizableTests:
             while m > 0:
                 g(xy, n)
                 m -= 1
+            promote_virtualizable(xy, 'inst_x')
             return xy.inst_x
         res = self.meta_interp(f, [18])
         assert res == 10180
         self.check_resops(setfield_gc=0, getfield_gc=2)
+
+    def test_synchronize_in_return_with_rescall(self):
+        myjitdriver = JitDriver(greens = [], reds = ['n', 'xy'],
+                                virtualizables = ['xy'])
+        @dont_look_inside
+        def rescall(xy, n):
+            if n > 9999999:
+                promote_virtualizable(xy, 'inst_x')
+        def g(xy, n):
+            while n > 0:
+                myjitdriver.can_enter_jit(xy=xy, n=n)
+                myjitdriver.jit_merge_point(xy=xy, n=n)
+                promote_virtualizable(xy, 'inst_x')
+                xy.inst_x += 1
+                rescall(xy, n)
+                n -= 1
+        def f(n):
+            xy = self.setup()
+            xy.inst_x = 10000
+            m = 10
+            while m > 0:
+                g(xy, n)
+                m -= 1
+            promote_virtualizable(xy, 'inst_x')
+            return xy.inst_x
+        res = self.meta_interp(f, [18])
+        assert res == 10180
+        # two setfield_gc(virtualizable, jit_frame)
+        self.check_resops(setfield_gc=2, getfield_gc=2)
 
     def test_virtualizable_and_greens(self):
         myjitdriver = JitDriver(greens = ['m'], reds = ['n', 'xy'],
@@ -199,14 +229,14 @@ class ExplicitVirtualizableTests:
         res = self.meta_interp(f, [20])
         assert res == 134
         self.check_simple_loop(setfield_gc=1, getfield_gc=0)
-        self.check_resops(setfield_gc=2, getfield_gc=3)
+        self.check_resops(setfield_gc=2, getfield_gc=4)
 
     # ------------------------------
 
     XY2 = lltype.GcStruct(
         'XY2',
         ('parent', rclass.OBJECT),
-        ('vable_token', lltype.Signed),
+        ('jit_frame', llmemory.GCREF),
         ('inst_x', lltype.Signed),
         ('inst_l1', lltype.Ptr(lltype.GcArray(lltype.Signed))),
         ('inst_l2', lltype.Ptr(lltype.GcArray(lltype.Signed))),
@@ -220,7 +250,7 @@ class ExplicitVirtualizableTests:
 
     def setup2(self):
         xy2 = lltype.malloc(self.XY2)
-        xy2.vable_token = 0
+        xy2.jit_frame = lltype.nullptr(llmemory.GCREF.TO)
         xy2.parent.typeptr = self.xy2_vtable
         return xy2
 
@@ -276,6 +306,7 @@ class ExplicitVirtualizableTests:
             while m > 0:
                 g(xy2, n)
                 m -= 1
+            promote_virtualizable(xy2, 'inst_l2')
             return xy2.inst_l2[0]
         assert f(18) == 10360
         res = self.meta_interp(f, [18])
@@ -379,7 +410,7 @@ class ExplicitVirtualizableTests:
         res = self.meta_interp(f, [20], enable_opts='')
         assert res == expected
         self.check_simple_loop(setarrayitem_gc=1, setfield_gc=0,
-                               getarrayitem_gc=1, arraylen_gc=1, getfield_gc=1)
+                               getarrayitem_gc=1, arraylen_gc=1, getfield_gc=2)
 
     # ------------------------------
 
@@ -393,7 +424,7 @@ class ExplicitVirtualizableTests:
 
     def setup2sub(self):
         xy2 = lltype.malloc(self.XY2SUB)
-        xy2.parent.vable_token = 0
+        xy2.parent.jit_frame = lltype.nullptr(llmemory.GCREF.TO)
         xy2.parent.parent.typeptr = self.xy2_vtable
         return xy2
 
@@ -422,6 +453,7 @@ class ExplicitVirtualizableTests:
             while m > 0:
                 g(xy2, n)
                 m -= 1
+            promote_virtualizable(xy2.parent, 'inst_l2')
             return xy2.parent.inst_l2[0]
         assert f(18) == 10360
         res = self.meta_interp(f, [18])
@@ -1374,12 +1406,7 @@ class ImplicitVirtualizableTests:
         print main(100)
         res = self.meta_interp(main, [100], inline=True, enable_opts='')
 
-class TestOOtype(#ExplicitVirtualizableTests,
-                 ImplicitVirtualizableTests,
-                 OOJitMixin):
-    pass
 
-        
 class TestLLtype(ExplicitVirtualizableTests,
                  ImplicitVirtualizableTests,
                  LLJitMixin):

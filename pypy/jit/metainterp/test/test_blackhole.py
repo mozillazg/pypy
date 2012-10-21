@@ -1,6 +1,6 @@
 import py
 from pypy.rlib.jit import JitDriver
-from pypy.jit.metainterp.test.support import LLJitMixin, OOJitMixin
+from pypy.jit.metainterp.test.support import LLJitMixin
 from pypy.jit.metainterp.blackhole import BlackholeInterpBuilder
 from pypy.jit.metainterp.blackhole import BlackholeInterpreter
 from pypy.jit.metainterp.blackhole import convert_and_run_from_pyjitpl
@@ -15,7 +15,7 @@ class FakeCodeWriter:
 class FakeAssembler:
     pass
 class FakeCPU:
-    def bh_call_i(self, func, calldescr, args_i, args_r, args_f):
+    def bh_call_i(self, func, args_i, args_r, args_f, calldescr):
         assert func == 321
         assert calldescr == "<calldescr>"
         if args_i[0] < 0:
