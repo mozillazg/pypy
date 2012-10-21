@@ -1019,6 +1019,38 @@ class RecursiveTests:
         res = self.meta_interp(main, [], inline=True)
         assert res == main()
 
+    def test_call_assembler_force_in_the_blackhole(self):
+        class Frame(object):
+            _virtualizable2_ = ['thing']
+
+            def __init__(self, thing):
+                self.thing = thing
+
+        driver = JitDriver(greens = ['codeno'],
+                           reds = ['i', 'frame', 'frames'],
+                           virtualizables = ['frame'])
+
+        def portal(codeno, frame, frames):
+            i = 0
+            while i < 10:
+                driver.jit_merge_point(i=i, frame=frame, codeno=codeno,
+                                       frames=frames)
+                frame.thing = frame.thing + 1
+                if codeno == 0:
+                    no = (i % 2)
+                    newframe = frames[no]
+                    frame.thing += portal(no + 1, newframe, None)
+                    frame.thing += newframe.thing
+                i += 1
+            return frame.thing
+
+        def main():
+            frames = [Frame(1), Frame(2)]
+            return portal(0, Frame(0), frames)
+
+        res = self.meta_interp(main, [], inline=True)
+        assert res == main()
+
     def test_assembler_call_red_args(self):
         driver = JitDriver(greens = ['codeno'], reds = ['i', 'k'],
                            get_printable_location = lambda codeno : str(codeno))
