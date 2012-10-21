@@ -33,22 +33,27 @@ umath.ERR_CALL  = 3
 umath.ERR_PRINT = 4
 umath.ERR_LOG   = 5
 
-umath.UFUNC_SHIFT_DIVIDEBYZERO = 0
-umath.UFUNC_SHIFT_OVERFLOW   = 3
-umath.UFUNC_SHIFT_UNDERFLOW  = 6
-umath.UFUNC_SHIFT_INVALID    = 9
+umath.SHIFT_DIVIDEBYZERO = 0
+umath.SHIFT_OVERFLOW   = 3
+umath.SHIFT_UNDERFLOW  = 6
+umath.SHIFT_INVALID    = 9
 
 umath.UFUNC_BUFSIZE_DEFAULT = 8192
 umath.ERR_DEFAULT2 = \
-        (umath.ERR_WARN << umath.UFUNC_SHIFT_DIVIDEBYZERO) +  \
-        (umath.ERR_WARN << umath.UFUNC_SHIFT_OVERFLOW) +      \
-        (umath.ERR_WARN << umath.UFUNC_SHIFT_INVALID)
+        (umath.ERR_WARN << umath.SHIFT_DIVIDEBYZERO) +  \
+        (umath.ERR_WARN << umath.SHIFT_OVERFLOW) +      \
+        (umath.ERR_WARN << umath.SHIFT_INVALID)
 
 _errobj = [10000, 0, None]
-def _seterrobj(*args):
+def _seterrobj(args):
+    global _errobj
     _errobj = args
 
+def _geterrobj():
+    return _errobj
+
 umath.seterrobj = _seterrobj
+umath.geterrobj = _geterrobj
 
 umath.PINF = float('inf')
 umath.NAN = float('nan')
@@ -56,6 +61,7 @@ umath.pi = _math.pi
 
 def not_implemented_func(*args, **kwargs):
     raise NotImplementedError("implemented yet")
+
 
 setattr(_numpypy, 'frompyfunc', not_implemented_func)
 setattr(_numpypy, 'mod', not_implemented_func)
