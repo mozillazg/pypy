@@ -2004,7 +2004,7 @@ class LLtypeBackendTest(BaseBackendTest):
         assert self.cpu.get_finish_value_ref(frame) == xptr
         frame = self.cpu.execute_token(looptoken, 0)
         assert self.cpu.get_latest_value_int(frame, 0) == 1
-        excvalue = self.cpu.get_finish_value_ref(frame)
+        excvalue = self.cpu.grab_exc_value(frame)
         assert not excvalue
 
         ytp = lltype.malloc(rclass.OBJECT_VTABLE, immortal=True)
@@ -2023,7 +2023,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 1)
         assert self.cpu.get_latest_value_int(frame, 0) == 1
-        excvalue = self.cpu.get_finish_value_ref(frame)
+        excvalue = self.cpu.grab_exc_value(frame)
         assert excvalue == yptr
 
         exc_tp = xtp
@@ -2040,7 +2040,7 @@ class LLtypeBackendTest(BaseBackendTest):
         self.cpu.compile_loop(loop.inputargs, loop.operations, looptoken)
         frame = self.cpu.execute_token(looptoken, 1)
         assert self.cpu.get_latest_value_int(frame, 0) == 1
-        excvalue = self.cpu.get_finish_value_ref(frame)
+        excvalue = self.cpu.grab_exc_value(frame)
         assert excvalue == xptr
         frame = self.cpu.execute_token(looptoken, 0)
         assert self.cpu.get_finish_value_int(frame) == -100
