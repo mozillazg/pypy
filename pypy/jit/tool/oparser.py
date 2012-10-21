@@ -45,8 +45,8 @@ class FORCE_SPILL(UnaryOp, PlainResOp):
     def clone(self):
         return FORCE_SPILL(self.OPNUM, self.getarglist()[:])
 
-    def copy_and_change(self, opnum):   # no arguments accepted
-        return self.clone()
+    def copy_and_change(self, opnum, args, result, descr):
+        return FORCE_SPILL(opnum, args, result, descr)
 
 
 def default_fail_descr(model, fail_args=None):
