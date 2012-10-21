@@ -753,6 +753,7 @@ class MIFrame(object):
         jfdescr = jfdescrbox.getref_base()
         descr = cpu.jitframe_cast_jfdescr_to_descr(jfdescr)
         if not descr:
+            xxx
             raise SwitchToBlackhole(Counters.ABORT_ESCAPE)
         resume.rebuild_virtualizable_from_resumedata(self.metainterp, descr,
                                                      vinfo, box, jfbox)
@@ -891,8 +892,8 @@ class MIFrame(object):
     opimpl_residual_call_irf_f = _opimpl_residual_call3
     opimpl_residual_call_irf_v = _opimpl_residual_call3
 
-    @arguments("int", "boxes3", "boxes3")
-    def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes):
+    @arguments("int", "boxes3", "boxes3", "orgpc")
+    def _opimpl_recursive_call(self, jdindex, greenboxes, redboxes, orgpc):
         targetjitdriver_sd = self.metainterp.staticdata.jitdrivers_sd[jdindex]
         allboxes = greenboxes + redboxes
         warmrunnerstate = targetjitdriver_sd.warmstate
@@ -900,6 +901,7 @@ class MIFrame(object):
         if warmrunnerstate.inlining:
             if warmrunnerstate.can_inline_callable(greenboxes):
                 portal_code = targetjitdriver_sd.mainjitcode
+                self.orgpc_before_recursive_call = orgpc
                 return self.metainterp.perform_call(portal_code, allboxes,
                                                     greenkey=greenboxes)
             assembler_call = True
@@ -908,16 +910,17 @@ class MIFrame(object):
             self.verify_green_args(targetjitdriver_sd, greenboxes)
         #
         return self.do_recursive_call(targetjitdriver_sd, allboxes,
-                                      assembler_call)
+                                      assembler_call, orgpc=orgpc)
 
     def do_recursive_call(self, targetjitdriver_sd, allboxes,
-                          assembler_call=False):
+                          assembler_call=False, orgpc=-1):
         portal_code = targetjitdriver_sd.mainjitcode
         k = targetjitdriver_sd.portal_runner_adr
         funcbox = ConstInt(heaptracker.adr2int(k))
         return self.do_residual_call(funcbox, portal_code.calldescr, allboxes,
                                      assembler_call=assembler_call,
-                                     assembler_call_jd=targetjitdriver_sd)
+                                     assembler_call_jd=targetjitdriver_sd,
+                                     orgpc=orgpc)
 
     opimpl_recursive_call_i = _opimpl_recursive_call
     opimpl_recursive_call_r = _opimpl_recursive_call
@@ -1098,7 +1101,8 @@ class MIFrame(object):
                 pass
             frame = self.metainterp.framestack[-1]
             frame.do_recursive_call(jitdriver_sd, greenboxes + redboxes,
-                                    assembler_call=True)
+                                    assembler_call=True,
+                                    orgpc=frame.orgpc_before_recursive_call)
             raise ChangeFrame
 
     def debug_merge_point(self, jitdriver_sd, jd_index, portal_call_depth, current_call_id, greenkey):
@@ -1377,7 +1381,8 @@ class MIFrame(object):
 
     def do_residual_call(self, funcbox, descr, argboxes,
                          assembler_call=False,
-                         assembler_call_jd=None):
+                         assembler_call_jd=None,
+                         orgpc=-1):
         # First build allboxes: it may need some reordering from the
         # list provided in argboxes, depending on the order in which
         # the arguments are expected by the function
@@ -1412,7 +1417,7 @@ class MIFrame(object):
         #
         effectinfo = descr.get_extra_info()
         if (assembler_call or
-                effectinfo.check_forces_virtual_or_virtualizable()):
+            effectinfo.check_forces_virtual_or_virtualizable()):
             # residual calls require attention to keep virtualizables in-sync
             self.metainterp.clear_exception()
             self.metainterp.vable_and_vrefs_before_residual_call()
@@ -1420,7 +1425,8 @@ class MIFrame(object):
                 rop.CALL_MAY_FORCE, allboxes, descr=descr)
             self.metainterp.vrefs_after_residual_call()
             if assembler_call:
-                self.metainterp.direct_assembler_call(assembler_call_jd)
+                self.metainterp.direct_assembler_call(assembler_call_jd,
+                                                      orgpc)
             if resbox is not None:
                 self.make_result_of_lastop(resbox)
             self.metainterp.vable_after_residual_call()
@@ -2528,7 +2534,7 @@ class MetaInterp(object):
         self.history.operations[-1] = newop
         return resbox
 
-    def direct_assembler_call(self, targetjitdriver_sd):
+    def direct_assembler_call(self, targetjitdriver_sd, orgpc):
         """ Generate a direct call to assembler for portal entry point,
         patching the CALL_MAY_FORCE that occurred just now.
         """
@@ -2540,10 +2546,12 @@ class MetaInterp(object):
         args = arglist[num_green_args+1:]
         assert len(args) == targetjitdriver_sd.num_red_args
         warmrunnerstate = targetjitdriver_sd.warmstate
-        if targetjitdriver_sd.virtualizable_info is not None:
+        if targetjitdriver_sd.virtualizable_info is not None and orgpc != -1:
             vbox = args[targetjitdriver_sd.index_of_virtualizable]
             frame = self.framestack[-1]
-            frame._force_virtualizable_if_necessary(vbox, frame.pc)
+            import pdb
+            pdb.set_trace()
+            frame._force_virtualizable_if_necessary(vbox, orgpc)
         token = warmrunnerstate.get_assembler_token(greenargs)
         op = op.copy_and_change(rop.CALL_ASSEMBLER, args=args, descr=token)
         self.history.operations.append(op)
