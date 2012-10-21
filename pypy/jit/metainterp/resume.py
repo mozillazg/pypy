@@ -1082,6 +1082,7 @@ def blackhole_from_resumedata(blackholeinterpbuilder, jitdriver_sd,
     frameinfo = storage.rd_frame_info_list
     while True:
         curbh = blackholeinterpbuilder.acquire_interp()
+        curbh.vinfo = jitdriver_sd.virtualizable_info
         curbh.nextblackholeinterp = nextbh
         nextbh = curbh
         frameinfo = frameinfo.prev

@@ -39,6 +39,9 @@ NULL = lltype.nullptr(llmemory.GCREF.TO)
 
 # ____________________________________________________________
 
+def bh_force_vable(vinfo, vable):
+    vable = lltype.cast_opaque_ptr(vinfo.VTYPEPTR, vable)
+    vinfo.force_virtualizable_if_necessary(vable)
 
 class BlackholeInterpBuilder(object):
     verbose = True
@@ -147,6 +150,8 @@ class BlackholeInterpBuilder(object):
                     value = self
                 elif argtype == 'cpu':
                     value = self.cpu
+                elif argtype == 'vinfo':
+                    value = self.vinfo
                 elif argtype == 'pc':
                     value = position
                 elif argtype == 'd' or argtype == 'j':
@@ -1165,34 +1170,47 @@ class BlackholeInterpreter(object):
     def bhimpl_arraylen_gc(cpu, array, arraydescr):
         return cpu.bh_arraylen_gc(array, arraydescr)
 
-    @arguments("cpu", "r", "d", "d", "i", returns="i")
-    def bhimpl_getarrayitem_vable_i(cpu, vable, fielddescr, arraydescr, index):
+    @arguments("cpu", "vinfo", "r", "d", "d", "i", returns="i")
+    def bhimpl_getarrayitem_vable_i(cpu, vinfo, vable, fielddescr, arraydescr,
+                                    index):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_i(array, index, arraydescr)
-    @arguments("cpu", "r", "d", "d", "i", returns="r")
-    def bhimpl_getarrayitem_vable_r(cpu, vable, fielddescr, arraydescr, index):
+    @arguments("cpu", "vinfo", "r", "d", "d", "i", returns="r")
+    def bhimpl_getarrayitem_vable_r(cpu, vinfo, vable, fielddescr, arraydescr,
+                                    index):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_r(array, index, arraydescr)
     @arguments("cpu", "r", "d", "d", "i", returns="f")
-    def bhimpl_getarrayitem_vable_f(cpu, vable, fielddescr, arraydescr, index):
+    def bhimpl_getarrayitem_vable_f(cpu, vinfo, vable, fielddescr, arraydescr,
+                                    index):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_f(array, index, arraydescr)
 
-    @arguments("cpu", "r", "d", "d", "i", "i")
-    def bhimpl_setarrayitem_vable_i(cpu, vable, fdescr, adescr, index, newval):
+    @arguments("cpu", "vinfo", "r", "d", "d", "i", "i")
+    def bhimpl_setarrayitem_vable_i(cpu, vinfo, vable, fdescr, adescr, index,
+                                    newval):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_i(array, index, newval, adescr)
-    @arguments("cpu", "r", "d", "d", "i", "r")
-    def bhimpl_setarrayitem_vable_r(cpu, vable, fdescr, adescr, index, newval):
+    @arguments("cpu", "vinfo", "r", "d", "d", "i", "r")
+    def bhimpl_setarrayitem_vable_r(cpu, vinfo, vable, fdescr, adescr, index,
+                                    newval):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_r(array, index, newval, adescr)
-    @arguments("cpu", "r", "d", "d", "i", "f")
-    def bhimpl_setarrayitem_vable_f(cpu, vable, fdescr, adescr, index, newval):
+    @arguments("cpu", "vinfo", "r", "d", "d", "i", "f")
+    def bhimpl_setarrayitem_vable_f(cpu, vinfo, vable, fdescr, adescr, index,
+                                    newval):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_f(array, index, newval, adescr)
 
-    @arguments("cpu", "r", "d", "d", returns="i")
-    def bhimpl_arraylen_vable(cpu, vable, fdescr, adescr):
+    @arguments("cpu", "vinfo", "r", "d", "d", returns="i")
+    def bhimpl_arraylen_vable(cpu, vinfo, vable, fdescr, adescr):
+        bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         return cpu.bh_arraylen_gc(array, adescr)
 
@@ -1230,9 +1248,18 @@ class BlackholeInterpreter(object):
     bhimpl_getfield_gc_r_pure = bhimpl_getfield_gc_r
     bhimpl_getfield_gc_f_pure = bhimpl_getfield_gc_f
 
-    bhimpl_getfield_vable_i = bhimpl_getfield_gc_i
-    bhimpl_getfield_vable_r = bhimpl_getfield_gc_r
-    bhimpl_getfield_vable_f = bhimpl_getfield_gc_f
+    @arguments("cpu", "vinfo", "r", "d", returns="i")
+    def bhimpl_getfield_vable_i(cpu, vinfo, vable, fielddescr):
+        bh_force_vable(vinfo, vable)
+        return cpu.bh_getfield_gc_i(vable, fielddescr)
+    @arguments("cpu", "vinfo", "r", "d", returns="r")
+    def bhimpl_getfield_vable_r(cpu, vinfo, vable, fielddescr):
+        bh_force_vable(vinfo, vable)
+        return cpu.bh_getfield_gc_r(vable, fielddescr)
+    @arguments("cpu", "vinfo", "r", "d", returns="f")
+    def bhimpl_getfield_vable_f(cpu, vinfo, vable, fielddescr):
+        bh_force_vable(vinfo, vable)
+        return cpu.bh_getfield_gc_f(vable, fielddescr)
 
     bhimpl_getfield_gc_i_greenfield = bhimpl_getfield_gc_i
     bhimpl_getfield_gc_r_greenfield = bhimpl_getfield_gc_r
@@ -1262,9 +1289,18 @@ class BlackholeInterpreter(object):
     def bhimpl_setfield_gc_f(cpu, struct, fielddescr, newvalue):
         cpu.bh_setfield_gc_f(struct, newvalue, fielddescr)
 
-    bhimpl_setfield_vable_i = bhimpl_setfield_gc_i
-    bhimpl_setfield_vable_r = bhimpl_setfield_gc_r
-    bhimpl_setfield_vable_f = bhimpl_setfield_gc_f
+    @arguments("cpu", "vinfo", "r", "d", "i")
+    def bhimpl_setfield_vable_i(cpu, vinfo, struct, fielddescr, newvalue):
+        bh_force_vable(vinfo, struct)
+        cpu.bh_setfield_gc_i(struct, newvalue, fielddescr)
+    @arguments("cpu", "vinfo", "r", "d", "r")
+    def bhimpl_setfield_vable_r(cpu, vinfo, struct, fielddescr, newvalue):
+        bh_force_vable(vinfo, struct)
+        cpu.bh_setfield_gc_r(struct, newvalue, fielddescr)
+    @arguments("cpu", "vinfo", "r", "d", "f")
+    def bhimpl_setfield_vable_f(cpu, vinfo, struct, fielddescr, newvalue):
+        bh_force_vable(vinfo, struct)
+        cpu.bh_setfield_gc_f(struct, newvalue, fielddescr)
 
     @arguments("cpu", "i", "d", "i")
     def bhimpl_setfield_raw_i(cpu, struct, fielddescr, newvalue):

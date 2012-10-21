@@ -295,6 +295,11 @@ class LLGraphCPU(model.AbstractCPU):
         assert not frame._forced
         frame._forced = True
 
+    def force_vable_if_necessary(self, vable):
+        if vable.jitframe:
+            self.force(vable.jitframe)
+            vable.jitframe = lltype.nulltpr(llmemory.GCREF.TO)
+
     def set_savedata_ref(self, frame, data):
         frame.saved_data = data
 

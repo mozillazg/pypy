@@ -280,6 +280,7 @@ class VirtualizableInfo(object):
         def force_virtualizable_if_necessary(virtualizable):
             if virtualizable.jit_frame != jitframe.TOKEN_NONE:
                 self.force_now(virtualizable)
+        self.force_virtualizable_if_necessary = force_virtualizable_if_necessary
         force_virtualizable_if_necessary._always_inline_ = True
         #
         all_graphs = self.warmrunnerdesc.translator.graphs
