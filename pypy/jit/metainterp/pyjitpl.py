@@ -906,7 +906,6 @@ class MIFrame(object):
         if warmrunnerstate.inlining:
             if warmrunnerstate.can_inline_callable(greenboxes):
                 portal_code = targetjitdriver_sd.mainjitcode
-                self.orgpc_before_recursive_call = orgpc
                 return self.metainterp.perform_call(portal_code, allboxes,
                                                     greenkey=greenboxes)
             assembler_call = True
@@ -1099,8 +1098,8 @@ class MIFrame(object):
             # with make_result_of_lastop(), so the lastop must be right:
             # it must be the call to 'self', and not the jit_merge_point
             # itself, which has no result at all.
-            import pdb
-            pdb.set_trace()
+            vbox = redboxes[jitdriver_sd.index_of_virtualizable]
+            self._force_virtualizable_if_necessary(vbox, orgpc)
             assert len(self.metainterp.framestack) >= 2
             try:
                 self.metainterp.finishframe(None)
@@ -1109,7 +1108,7 @@ class MIFrame(object):
             frame = self.metainterp.framestack[-1]
             frame.do_recursive_call(jitdriver_sd, greenboxes + redboxes,
                                     assembler_call=True,
-                                    orgpc=frame.orgpc_before_recursive_call)
+                                    orgpc=-1) # don't force the virtualizable
             raise ChangeFrame
 
     def debug_merge_point(self, jitdriver_sd, jd_index, portal_call_depth, current_call_id, greenkey):
