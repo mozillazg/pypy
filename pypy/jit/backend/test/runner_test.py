@@ -7,7 +7,7 @@ from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
      create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
      create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum
 from pypy.jit.metainterp.test.support import boxint, boxfloat,\
-     boxlonglong_on_32bit, boxptr, constfloat, boxlonglong
+     boxlonglong_on_32bit, boxptr, constfloat
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
@@ -1797,16 +1797,18 @@ class LLtypeBackendTest(BaseBackendTest):
     def test_convert_float_bytes(self):
         if not self.cpu.supports_floats:
             py.test.skip("requires floats")
-        #if not self.cpu.supports_longlong:
-        #    py.test.skip("longlong test")
         box = boxfloat(2.5)
         t = 'int' if longlong.is_64_bit else 'float'
         res = self.execute_operation(rop.CONVERT_FLOAT_BYTES_TO_LONGLONG,
                                      [box], t)
-        assert res == 2.5
+        assert longlong.longlong2floatstorage(res) == 2.5
 
+        if longlong.is_64_bit:
+            box = boxint(res)
+        else:
+            box = boxfloat(res)
         res = self.execute_operation(rop.CONVERT_LONGLONG_BYTES_TO_FLOAT,
-                                     [boxlonglong(res)], 'float')
+                                     [box], 'float')
         assert res == 2.5
 
     def test_ooops_non_gc(self):
