@@ -1,21 +1,9 @@
 
 import py
 import random
-try:
-    from itertools import product
-except ImportError:
-    # Python 2.5, this is taken from the CPython docs, but simplified.
-    def product(*args):
-        # product('ABCD', 'xy') --> Ax Ay Bx By Cx Cy Dx Dy
-        # product(range(2), repeat=3) --> 000 001 010 011 100 101 110 111
-        pools = map(tuple, args)
-        result = [[]]
-        for pool in pools:
-            result = [x+[y] for x in result for y in pool]
-        for prod in result:
-            yield tuple(prod)
+from itertools import product
 
-from pypy.objspace.flow.model import FunctionGraph, Block, Link
+from pypy.objspace.flow.model import Block, Link
 from pypy.objspace.flow.model import SpaceOperation, Variable, Constant
 from pypy.rpython.lltypesystem import lltype, llmemory, rclass, rstr, rffi
 from pypy.rpython.lltypesystem.module import ll_math

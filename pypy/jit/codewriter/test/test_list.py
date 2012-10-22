@@ -144,7 +144,7 @@ def test_fixed_setitem():
                                          varoftype(lltype.Signed),
                                          varoftype(lltype.Signed)],
                  lltype.Void, """
-                     setarrayitem_gc_i %r0, <ArrayDescr>, %i0, %i1
+                     setarrayitem_gc_i %r0, %i0, %i1, <ArrayDescr>
                  """)
     builtin_test('list.setitem/NEG', [varoftype(FIXEDLIST),
                                       varoftype(lltype.Signed),
@@ -152,7 +152,7 @@ def test_fixed_setitem():
                  lltype.Void, """
                      -live-
                      check_neg_index %r0, <ArrayDescr>, %i0 -> %i1
-                     setarrayitem_gc_i %r0, <ArrayDescr>, %i1, %i2
+                     setarrayitem_gc_i %r0, %i1, %i2, <ArrayDescr>
                  """)
 
 def test_fixed_len():

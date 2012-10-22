@@ -580,8 +580,8 @@ class Transformer(object):
             kind = getkind(op.result.concretetype)
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('getarrayitem_vable_%s' % kind[0],
-                                   [v_base, arrayfielddescr, arraydescr,
-                                    op.args[1]], op.result)]
+                                   [v_base, op.args[1], arrayfielddescr,
+                                    arraydescr], op.result)]
         # normal case follows
         pure = ''
         immut = ARRAY._immutable_field(None)
@@ -604,12 +604,12 @@ class Transformer(object):
             kind = getkind(op.args[2].concretetype)
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('setarrayitem_vable_%s' % kind[0],
-                                   [v_base, arrayfielddescr, arraydescr,
-                                    op.args[1], op.args[2]], None)]
+                                   [v_base, op.args[1], op.args[2],
+                                    arrayfielddescr, arraydescr], None)]
         arraydescr = self.cpu.arraydescrof(ARRAY)
         kind = getkind(op.args[2].concretetype)
         return SpaceOperation('setarrayitem_%s_%s' % (ARRAY._gckind, kind[0]),
-                              [op.args[0], arraydescr, op.args[1], op.args[2]],
+                              [op.args[0], op.args[1], op.args[2], arraydescr],
                               None)
 
     def rewrite_op_getarraysize(self, op):
@@ -1535,13 +1535,13 @@ class Transformer(object):
             kind = getkind(args[2].concretetype)
             return [SpaceOperation('-live-', [], None),
                     SpaceOperation('setarrayitem_vable_%s' % kind[0],
-                                   [v_base, arrayfielddescr, arraydescr,
-                                    args[1], args[2]], None)]
+                                   [v_base, args[1], args[2],
+                                    arrayfielddescr, arraydescr], None)]
         v_index, extraop = self._prepare_list_getset(op, arraydescr, args,
                                                      'check_neg_index')
         kind = getkind(args[2].concretetype)[0]
         op = SpaceOperation('setarrayitem_gc_%s' % kind,
-                            [args[0], arraydescr, v_index, args[2]], None)
+                            [args[0], v_index, args[2], arraydescr], None)
         return extraop + [op]
 
     def do_fixed_list_ll_arraycopy(self, op, args, arraydescr):
