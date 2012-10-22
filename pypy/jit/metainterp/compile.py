@@ -12,7 +12,6 @@ from pypy.jit.metainterp.resoperation import rop, create_resop, ConstInt,\
      ConstPtr
 from pypy.jit.metainterp.history import TreeLoop, JitCellToken, TargetToken
 from pypy.jit.metainterp.history import AbstractFailDescr
-from pypy.jit.metainterp.resoperation import BoxPtr, BoxFloat, Box, BoxInt
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.resume import NUMBERING, PENDINGFIELDSP

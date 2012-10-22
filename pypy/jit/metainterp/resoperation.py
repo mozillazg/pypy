@@ -1394,7 +1394,6 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
 
     is_guard = name.startswith('GUARD')
     if is_guard or name == 'FINISH':
-        assert withdescr
         baseclass = GuardResOp
     elif withdescr:
         baseclass = ResOpWithDescr

@@ -1,8 +1,9 @@
 import weakref
 from pypy.jit.backend import model
 from pypy.jit.backend.llgraph import support
-from pypy.jit.metainterp.history import Const, getkind, AbstractDescr
-from pypy.jit.metainterp.history import INT, REF, FLOAT, VOID
+from pypy.jit.metainterp.history import AbstractDescr
+from pypy.jit.metainterp.resoperation import Const, getkind
+from pypy.jit.metainterp.resoperation import INT, REF, FLOAT, VOID
 from pypy.jit.metainterp.resoperation import rop
 from pypy.jit.codewriter import longlong, heaptracker
 from pypy.jit.codewriter.effectinfo import EffectInfo
