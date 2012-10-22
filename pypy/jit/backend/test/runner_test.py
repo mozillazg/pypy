@@ -7,7 +7,7 @@ from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
      create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
      create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum
 from pypy.jit.metainterp.test.support import boxint, boxfloat,\
-     boxlonglong_on_32bit, boxptr, constfloat
+     boxlonglong_on_32bit, boxptr, constfloat, boxlonglong
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
