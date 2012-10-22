@@ -246,7 +246,7 @@ class OpParser(object):
             i = line.find('[', endnum) + 1
             j = line.find(']', i)
             if i <= 0 or j <= 0:
-                if self.guards_with_failargs:
+                if self.guards_with_failargs and opnum != rop.FINISH:
                     raise ParseError("missing fail_args for guard operation")
                 fail_args = None
             else:
@@ -301,14 +301,14 @@ class OpParser(object):
         opres = self.create_op(opnum, result, args, descr)
         self.vars[res] = opres
         if fail_args is not None:
-            opres.set_failargs(fail_args)
+            opres.setfailargs(fail_args)
         return opres
 
     def parse_op_no_result(self, line):
         opnum, args, descr, fail_args = self.parse_op(line)
         res = self.create_op(opnum, None, args, descr)
         if fail_args is not None:
-            res.set_failargs(fail_args)
+            res.setfailargs(fail_args)
         return res
 
     def parse_next_op(self, line, num):

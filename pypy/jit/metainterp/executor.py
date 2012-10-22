@@ -319,16 +319,11 @@ def _make_execute_list():
                 if func is not None:
                     execute[value] = func
                     continue
-<<<<<<< local
-            if value in (rop.FORCE_TOKEN,
+            if value in (rop.JIT_FRAME,
                          rop.CALL_ASSEMBLER_i,
                          rop.CALL_ASSEMBLER_r,
                          rop.CALL_ASSEMBLER_f,
                          rop.CALL_ASSEMBLER_N,
-=======
-            if value in (rop.JIT_FRAME,
-                         rop.CALL_ASSEMBLER,
->>>>>>> other
                          rop.COND_CALL_GC_WB,
                          rop.COND_CALL_GC_WB_ARRAY,
                          rop.DEBUG_MERGE_POINT,

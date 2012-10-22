@@ -47,8 +47,8 @@ class LLTrace(object):
                                        map(mapping, op.getarglist()),
                                        mapping(op.result),
                                        newdescr)
-            if op.get_failargs() is not None:
-                newop.setfailargs(map(mapping, op.get_failargs()))
+            if op.getfailargs() is not None:
+                newop.setfailargs(map(mapping, op.getfailargs()))
             self.operations.append(newop)
 
 class WeakrefDescr(AbstractDescr):
@@ -674,7 +674,7 @@ class LLFrame(object):
                     i = 0
                     self.lltrace = gf.descr._llgraph_bridge
                     newargs = [self.env[arg] for arg in
-                              self.current_op.get_failargs() if arg is not None]
+                              self.current_op.getfailargs() if arg is not None]
                     self.do_renaming(self.lltrace.inputargs, newargs)
                     continue
                 raise
@@ -697,7 +697,7 @@ class LLFrame(object):
         if op is None:
             op = self.current_op
         r = []
-        for arg in op.get_failargs():
+        for arg in op.getfailargs():
             if arg is None:
                 r.append(None)
             elif arg is skip:
@@ -719,7 +719,7 @@ class LLFrame(object):
         raise GuardFailed(self._getfailargs(), descr)
 
     def execute_finish(self, descr, arg=None):
-        if self.current_op.get_failargs() is not None:
+        if self.current_op.getfailargs() is not None:
             failargs = self._getfailargs()
         else:
             failargs = None   # compatibility
