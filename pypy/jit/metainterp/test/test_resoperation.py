@@ -135,8 +135,8 @@ def test_hashes_eq():
     assert ope._get_hash_() == op._get_hash_()
     assert ope.eq(op)
 
-    op = rop.create_resop_0(rop.rop.FORCE_TOKEN, 13)
-    op1 = rop.create_resop_0(rop.rop.FORCE_TOKEN, 15)
+    op = rop.create_resop_0(rop.rop.INPUT_i, 13)
+    op1 = rop.create_resop_0(rop.rop.INPUT_i, 15)
     assert op._get_hash_() != op1._get_hash_()
     assert not op.eq(op1)
     S = lltype.GcStruct('S')

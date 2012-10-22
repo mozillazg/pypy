@@ -498,7 +498,7 @@ class AbstractResOp(AbstractValue):
     def __hash__(self):
         import sys
         co_fname = sys._getframe(1).f_code.co_filename
-        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py'):
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname:
             return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
 
@@ -1393,7 +1393,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
     }
 
     is_guard = name.startswith('GUARD')
-    if is_guard or name == 'FINISH':
+    if is_guard:
         baseclass = GuardResOp
     elif withdescr:
         baseclass = ResOpWithDescr

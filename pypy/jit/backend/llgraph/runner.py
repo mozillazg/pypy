@@ -22,6 +22,11 @@ class LLTrace(object):
         # We need to clone the list of operations because the
         # front-end will mutate them under our feet again.  We also
         # need to make sure things get freed.
+
+        # XXX for now
+        self.operations = operations
+        self.inputargs = inputargs
+        return
         def mapping(box, _cache={}):
             if isinstance(box, Const) or box is None:
                 return box
@@ -673,22 +678,19 @@ class LLFrame(object):
                     self.do_renaming(self.lltrace.inputargs, newargs)
                     continue
                 raise
-            if op.result is not None:
+            if op.type == INT:
                 # typecheck the result
-                if op.result.type == INT:
-                    if isinstance(resval, bool):
-                        resval = int(resval)
-                    assert lltype.typeOf(resval) == lltype.Signed
-                elif op.result.type == REF:
-                    assert lltype.typeOf(resval) == llmemory.GCREF
-                elif op.result.type == FLOAT:
-                    assert lltype.typeOf(resval) == longlong.FLOATSTORAGE
-                else:
-                    raise AssertionError(op.result.type)
-                #
-                self.env[op.result] = resval
+                if isinstance(resval, bool):
+                    resval = int(resval)
+                assert lltype.typeOf(resval) == lltype.Signed
+            elif op.type == REF:
+                assert lltype.typeOf(resval) == llmemory.GCREF
+            elif op.type == FLOAT:
+                assert lltype.typeOf(resval) == longlong.FLOATSTORAGE
             else:
+                assert op.type == VOID
                 assert resval is None
+            self.env[op] = resval
             i += 1
 
     def _getfailargs(self, op=None, skip=None):
@@ -919,9 +921,10 @@ class LLFrame(object):
 
 def _getdescr(op):
     d = op.getdescr()
-    if d is not None:
-        d = d.realdescrref()
-        assert d is not None, "the descr disappeared: %r" % (op,)
+    # XXX for now
+    #if d is not None:
+    #    d = d.realdescrref()
+    #    assert d is not None, "the descr disappeared: %r" % (op,)
     return d
 
 def _setup():
