@@ -135,9 +135,9 @@ class OptimizeOptTest(BaseTestWithUnroll):
     def test_simple(self):
         ops = """
         []
-        f = escape()
+        f = escape_f(0)
         f0 = float_sub(f, 1.0)
-        guard_value(f0, 0.0) [f0]
+        guard_value(f0, 0.0)
         escape(f)
         jump()
         """

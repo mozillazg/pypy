@@ -9,6 +9,7 @@ from pypy.jit.metainterp.history import (TreeLoop, AbstractDescr,
                                          JitCellToken, TargetToken)
 from pypy.jit.metainterp.optimizeopt.util import sort_descrs, equaloplists,\
      ArgsDict, ArgsSet
+from pypy.jit.metainterp.test.support import boxptr
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.codewriter.heaptracker import register_known_gctype
 from pypy.jit.tool.oparser import parse, pure_parse
@@ -124,11 +125,11 @@ class LLtypeMixin(object):
     node.parent.typeptr = node_vtable
     node2 = lltype.malloc(NODE2)
     node2.parent.parent.typeptr = node_vtable2
-    nodebox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node))
-    myptr = nodebox.value
+    myptr = lltype.cast_opaque_ptr(llmemory.GCREF, node)
+    nodebox = boxptr(myptr)
     myptr2 = lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(NODE))
     nullptr = lltype.nullptr(llmemory.GCREF.TO)
-    nodebox2 = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, node2))
+    nodebox2 = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, node2))
     nodesize = cpu.sizeof(NODE)
     nodesize2 = cpu.sizeof(NODE2)
     valuedescr = cpu.fielddescrof(NODE, 'value')
@@ -145,8 +146,8 @@ class LLtypeMixin(object):
     quasi = lltype.malloc(QUASI, immortal=True)
     quasi.inst_field = -4247
     quasifielddescr = cpu.fielddescrof(QUASI, 'inst_field')
-    quasibox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, quasi))
-    quasiptr = quasibox.value
+    quasiptr = lltype.cast_opaque_ptr(llmemory.GCREF, quasi)
+    quasibox = boxptr(quasiptr)
     quasiimmutdescr = QuasiImmutDescr(cpu, quasibox,
                                       quasifielddescr,
                                       cpu.fielddescrof(QUASI, 'mutate_field'))
@@ -181,7 +182,7 @@ class LLtypeMixin(object):
     ssize = cpu.sizeof(S)
     adescr = cpu.fielddescrof(S, 'a')
     bdescr = cpu.fielddescrof(S, 'b')
-    sbox = BoxPtr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S)))
+    sbox = boxptr(lltype.cast_opaque_ptr(llmemory.GCREF, lltype.malloc(S)))
     arraydescr2 = cpu.arraydescrof(lltype.GcArray(lltype.Ptr(S)))
 
     T = lltype.GcStruct('TUPLE',
@@ -397,11 +398,10 @@ def _sortboxes(boxes):
 
 class BaseTest(object):
 
-    def parse(self, s, boxkinds=None, results=None):
+    def parse(self, s, results=None):
         return parse(s, self.cpu, self.namespace,
                      type_system=self.type_system,
-                     boxkinds=boxkinds,
-                     results=results, process_guard=self.process_guard)
+                     results=results)
 
     def setup_method(self, meth):
         self.oparsers = []

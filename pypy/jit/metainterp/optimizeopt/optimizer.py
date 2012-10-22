@@ -628,11 +628,9 @@ class Optimizer(Optimization):
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
-        if op.getdescr() is not None:
-            # means we need to copy the op and attach a new descr
-            xxx
-            op = op.copy_and_change(op.getopnum(), descr=None)
+        assert op.getdescr() is None
         descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
+        op.setdescr(descr)
         modifier = resume.ResumeDataVirtualAdder(descr, self.resumedata_memo)
         try:
             newboxes = modifier.finish(self, self.pendingfields)

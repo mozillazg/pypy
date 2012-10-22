@@ -341,7 +341,8 @@ def _make_execute_list():
                          rop.CALL_MALLOC_NURSERY,
                          rop.LABEL,
                          rop.INPUT_i, rop.INPUT_r, rop.INPUT_f,
-                         rop.FORCE_SPILL, rop.ESCAPE,
+                         rop.FORCE_SPILL, rop.ESCAPE, rop.ESCAPE_r,
+                         rop.ESCAPE_f,
                          ):      # list of opcodes never executed by pyjitpl
                 continue
             raise AssertionError("missing %r" % (orig_key,))

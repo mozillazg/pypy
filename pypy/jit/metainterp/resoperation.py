@@ -843,7 +843,6 @@ class GuardResOp(PlainResOp):
             descr = compile.ResumeGuardDescr()
         descr.rd_snapshot = self._rd_snapshot
         descr.rd_frame_info_list = self._rd_frame_info_list
-        self.setdescr(descr)
         return descr
 
 # ============
@@ -1256,6 +1255,8 @@ _oplist = [
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
     'ESCAPE/1/v', # tests
+    'ESCAPE_r/1/r', # tests
+    'ESCAPE_f/1/f', # tests
     'FORCE_SPILL/1/v', # tests
 
     'SETARRAYITEM_GC/3d/v',

@@ -8,17 +8,18 @@ import pypy.jit.metainterp.optimizeopt.virtualize as virtualize
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.history import get_const_ptr_for_string
 from pypy.jit.metainterp import executor, compile, resume
-from pypy.jit.metainterp.resoperation import rop, opname, ConstInt, BoxInt,\
+from pypy.jit.metainterp.resoperation import rop, opname, ConstInt,\
      create_resop_1, create_resop
+from pypy.jit.metainterp.test.support import boxint
 from pypy.rlib.rarithmetic import LONG_BIT
 
 def test_store_final_boxes_in_guard():
     from pypy.jit.metainterp.resume import tag, TAGBOX
-    b0 = BoxInt()
-    b1 = BoxInt()
+    b0 = boxint()
+    b1 = boxint()
     opt = optimizeopt.Optimizer(None, FakeMetaInterpStaticData(LLtypeMixin.cpu),
                                 None)
-    op = create_resop_1(rop.GUARD_TRUE, None, BoxInt(0))
+    op = create_resop_1(rop.GUARD_TRUE, None, boxint(0), mutable=True)
     # setup rd data
     fi0 = resume.FrameInfo(None, "code0", 11)
     op._rd_frame_info_list = resume.FrameInfo(fi0, "code1", 33)
@@ -186,7 +187,6 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constfold_all(self):
         from pypy.jit.backend.llgraph.llimpl import TYPES     # xxx fish
         from pypy.jit.metainterp.executor import execute_nonspec
-        from pypy.jit.metainterp.resoperation import BoxInt
         import random
         for opnum in [rop._ALWAYS_PURE_FIRST, rop._ALWAYS_PURE_NO_PTR_LAST]:
             try:
@@ -209,7 +209,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
             escape(i1)
             jump()
             """ % (op.lower(), ', '.join(map(str, args)))
-            argboxes = [BoxInt(a) for a in args]
+            argboxes = [boxint(a) for a in args]
             expected_value = execute_nonspec(self.cpu, None, opnum,
                                              argboxes).getint()
             expected = """
@@ -1463,7 +1463,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1]
         i1 = getfield_gc_i(p1, descr=valuedescr)
-        escape()
+        escape(0)
         i2 = getfield_gc_i(p1, descr=valuedescr)
         escape(i1)
         escape(i2)
@@ -1475,7 +1475,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, i1]
         setfield_gc(p1, i1, descr=valuedescr)
-        escape()
+        escape(0)
         i2 = getfield_gc_i(p1, descr=valuedescr)
         escape(i2)
         jump(p1, i1)
@@ -1581,7 +1581,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [p1, i1, i2]
         setfield_gc(p1, i1, descr=valuedescr)
-        escape()
+        escape(0)
         setfield_gc(p1, i2, descr=valuedescr)
         jump(p1, i1, i2)
         """
@@ -1866,7 +1866,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         escape(p4)
         #
         p2 = new_with_vtable(ConstClass(node_vtable))
-        p3 = escape()
+        p3 = escape(0)
         setfield_gc(p2, p3, descr=nextdescr)
         jump(i0, p2)
         """
@@ -1875,7 +1875,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         guard_nonnull(p4) []
         escape(p4)
         #
-        p3 = escape()
+        p3 = escape(0)
         jump(i0, p3)
         """
         py.test.skip("XXX")
@@ -1890,7 +1890,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         escape(p4)
         #
         p2 = new_array(1, descr=arraydescr2)
-        p3 = escape()
+        p3 = escape(0)
         setarrayitem_gc(p2, 0, p3, descr=arraydescr2)
         jump(i0, p2)
         """
@@ -1899,7 +1899,7 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         guard_nonnull(p4) []
         escape(p4)
         #
-        p3 = escape()
+        p3 = escape(0)
         jump(i0, p3)
         """
         py.test.skip("XXX")
