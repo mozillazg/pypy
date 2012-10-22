@@ -280,19 +280,13 @@ class OptValue(object):
         assert self.level == LEVEL_CONSTANT
         return '<OptConst %r>' % self.op
 
-class ConstantValue(OptValue):
-    def __init__(self, box):
-        self.make_constant(box)
-
-    def __repr__(self):
-        return 'Constant(%r)' % (self.op,)
-
 CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
-CVAL_ZERO    = ConstantValue(CONST_0)
-CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(longlong.getfloatstorage(0.0)))
-CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
-llhelper.CVAL_NULLREF = CVAL_NULLREF
+#CVAL_ZERO    = ConstantValue(CONST_0)
+#CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(longlong.getfloatstorage(0.0)))
+#CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
+CONST_NULL = llhelper.CONST_NULL
+#llhelper.CVAL_NULLREF = CVAL_NULLREF
 REMOVED = AbstractResOp()
 
 
@@ -447,34 +441,25 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_FORCINGS)
         self.resumedata_memo.forget_numberings(virtualbox)
 
-    def getvalue(self, box, create=True):
-        try:
-            while True:
-                box = box.get_extra("optimize_replace")
-        except KeyError:
-            pass
+    def getvalue(self, box):
         if box.is_constant():
             if box.type == REF:
                 if not box.getref_base():
-                    return CVAL_NULLREF
+                    return CONST_NULL
                 try:
                     return self.interned_refs[box.getref_base()]
                 except KeyError:
-                    val = ConstantValue(box)
-                    self.interned_refs[box.getref_base()] = val
-                    return val
-            return ConstantValue(box)
-        try:
-            value = box.get_extra("optimize_value")
-        except KeyError:
-            if not create:
-                return None
-            value = OptValue(box)
-            box.set_extra("optimize_value", value)
-        self.ensure_imported(value)
+                    self.interned_refs[box.getref_base()] = box
+                    return box
+            return box
+        value = box._forwarded
+        if value is None:
+            value = box.make_forwarded_copy()
+        #self.ensure_imported(value)
         return value
 
     def setvalue(self, box, value):
+        xxx
         assert not box.is_constant()
         assert not box.has_extra("optimize_value")
         box.set_extra("optimize_value", value)

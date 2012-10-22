@@ -867,7 +867,7 @@ class NullaryOp(object):
         pass        
 
     @specialize.arg(1)
-    def mutable_copy(self, newopnum=-1, descr=None):
+    def make_forwarded_copy(self, newopnum=-1, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_0(newopnum, self.getresult(),
@@ -875,6 +875,9 @@ class NullaryOp(object):
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
+        assert not self.is_mutable
+        assert not self._forwarded
+        self._forwarded = res
         return res
 
     def get_key_op(self, opt):
@@ -917,7 +920,7 @@ class UnaryOp(object):
         return res        
 
     @specialize.arg(1)
-    def mutable_copy(self, newopnum=-1, arg0=None, descr=None):
+    def make_forwarded_copy(self, newopnum=-1, arg0=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
@@ -925,6 +928,9 @@ class UnaryOp(object):
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
+        assert not self.is_mutable
+        assert not self._forwarded
+        self._forwarded = res
         return res
 
     def get_arg_hash(self):
@@ -970,7 +976,7 @@ class BinaryOp(object):
                               new_arg0, new_arg1, self.getdescr())
 
     @specialize.arg(1)
-    def mutable_copy(self, newopnum=-1, arg0=None, arg1=None, descr=None):
+    def make_forwarded_copy(self, newopnum=-1, arg0=None, arg1=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         res = create_resop_2(newopnum, self.getresult(), arg0 or self._arg0,
@@ -980,6 +986,9 @@ class BinaryOp(object):
         if self.is_guard():
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
+        assert not self._forwarded
+        assert not self.is_mutable
+        self._forwarded = res
         return res
 
     def get_arg_hash(self):
@@ -1032,7 +1041,7 @@ class TernaryOp(object):
                               new_arg0, new_arg1, new_arg2, self.getdescr())
 
     @specialize.arg(1)
-    def mutable_copy(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
+    def make_forwarded_copy(self, newopnum=-1, arg0=None, arg1=None, arg2=None,
                      descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
@@ -1040,6 +1049,9 @@ class TernaryOp(object):
                            arg1 or self._arg1, arg2 or self._arg2,
                            descr or self.getdescr(), mutable=True)
         assert not r.is_guard()
+        assert not self._forwarded
+        assert not self.is_mutable
+        self._forwarded = r
         return r
 
     def get_arg_hash(self):
@@ -1091,13 +1103,16 @@ class N_aryOp(object):
                             newargs, self.getdescr())        
 
     @specialize.arg(1)
-    def mutable_copy(self, newopnum=-1, newargs=None, descr=None):
+    def make_forwarded_copy(self, newopnum=-1, newargs=None, descr=None):
         if newopnum == -1:
             newopnum = self.getopnum()
         r = create_resop(newopnum, self.getresult(),
                          newargs or self.getarglist(),
                          descr or self.getdescr(), mutable=True)
         assert not r.is_guard()
+        assert not self._forwarded
+        assert not self.is_mutable
+        self._forwarded = r
         return r
 
     def get_arg_hash(self):
