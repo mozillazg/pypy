@@ -141,18 +141,16 @@ class BaseBackendTest(Runner):
         assert self.cpu.get_latest_descr(frame).identifier == 1
 
     def test_compile_linear_float_loop(self):
-        i0 = BoxFloat()
-        i1 = BoxFloat()
-        operations = [
-            ResOperation(rop.FLOAT_ADD, [i0, constfloat(2.3)], i1),
-            ResOperation(rop.FINISH, [i1], None, descr=BasicFailDescr(1))
-            ]
-        inputargs = [i0]
-        looptoken = JitCellToken()
-        self.cpu.compile_loop(inputargs, operations, looptoken)
-        frame = self.cpu.execute_token(looptoken, longlong.getfloatstorage(2.8))
-        res = self.cpu.get_finish_value_int(frame)
-        assert longlong.getrealfloat(res) == 5.1
+        faildescr = BasicFailDescr(1)
+        inputargs, ops, token = self.parse("""
+        [f0]
+        f1 = float_add(f0, 1.)
+        finish(f1, descr=faildescr) []
+        """, namespace=locals())
+        self.cpu.compile_loop(inputargs, ops, token)
+        frame = self.cpu.execute_token(token, longlong.getfloatstorage(2.8))
+        res = self.cpu.get_finish_value_float(frame)
+        assert longlong.getrealfloat(res) == 3.8
         assert self.cpu.get_latest_descr(frame).identifier == 1
 
     def test_compile_loop(self):
