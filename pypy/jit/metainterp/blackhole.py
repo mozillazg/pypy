@@ -1123,14 +1123,14 @@ class BlackholeInterpreter(object):
     def bhimpl_new_array(cpu, arraydescr, length):
         return cpu.bh_new_array(length, arraydescr)
 
-    @arguments("cpu", "r", "d", "i", returns="i")
-    def bhimpl_getarrayitem_gc_i(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="i")
+    def bhimpl_getarrayitem_gc_i(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_i(array, index, arraydescr)
-    @arguments("cpu", "r", "d", "i", returns="r")
-    def bhimpl_getarrayitem_gc_r(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="r")
+    def bhimpl_getarrayitem_gc_r(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_r(array, index, arraydescr)
-    @arguments("cpu", "r", "d", "i", returns="f")
-    def bhimpl_getarrayitem_gc_f(cpu, array, arraydescr, index):
+    @arguments("cpu", "r", "i", "d", returns="f")
+    def bhimpl_getarrayitem_gc_f(cpu, array, index, arraydescr):
         return cpu.bh_getarrayitem_gc_f(array, index, arraydescr)
 
     bhimpl_getarrayitem_gc_i_pure = bhimpl_getarrayitem_gc_i
@@ -1147,21 +1147,21 @@ class BlackholeInterpreter(object):
     bhimpl_getarrayitem_raw_i_pure = bhimpl_getarrayitem_raw_i
     bhimpl_getarrayitem_raw_f_pure = bhimpl_getarrayitem_raw_f
 
-    @arguments("cpu", "r", "d", "i", "i")
-    def bhimpl_setarrayitem_gc_i(cpu, array, arraydescr, index, newvalue):
+    @arguments("cpu", "r", "i", "i", "d")
+    def bhimpl_setarrayitem_gc_i(cpu, array, index, newvalue, arraydescr):
         cpu.bh_setarrayitem_gc_i(array, index, newvalue, arraydescr)
-    @arguments("cpu", "r", "d", "i", "r")
-    def bhimpl_setarrayitem_gc_r(cpu, array, arraydescr, index, newvalue):
+    @arguments("cpu", "r", "i", "r", "d")
+    def bhimpl_setarrayitem_gc_r(cpu, array, index, newvalue, arraydescr):
         cpu.bh_setarrayitem_gc_r(array, index, newvalue, arraydescr)
-    @arguments("cpu", "r", "d", "i", "f")
-    def bhimpl_setarrayitem_gc_f(cpu, array, arraydescr, index, newvalue):
+    @arguments("cpu", "r", "i", "f", "d")
+    def bhimpl_setarrayitem_gc_f(cpu, array, index, newvalue, arraydescr):
         cpu.bh_setarrayitem_gc_f(array, index, newvalue, arraydescr)
 
-    @arguments("cpu", "i", "d", "i", "i")
-    def bhimpl_setarrayitem_raw_i(cpu, array, arraydescr, index, newvalue):
+    @arguments("cpu", "i", "i", "i", "d")
+    def bhimpl_setarrayitem_raw_i(cpu, array, index, newvalue, arraydescr):
         cpu.bh_setarrayitem_raw_i(array, index, newvalue, arraydescr)
-    @arguments("cpu", "i", "d", "i", "f")
-    def bhimpl_setarrayitem_raw_f(cpu, array, arraydescr, index, newvalue):
+    @arguments("cpu", "i", "i", "f", "d")
+    def bhimpl_setarrayitem_raw_f(cpu, array, index, newvalue, arraydescr):
         cpu.bh_setarrayitem_raw_f(array, index, newvalue, arraydescr)
 
     # note, there is no 'r' here, since it can't happen
@@ -1170,40 +1170,40 @@ class BlackholeInterpreter(object):
     def bhimpl_arraylen_gc(cpu, array, arraydescr):
         return cpu.bh_arraylen_gc(array, arraydescr)
 
-    @arguments("cpu", "vinfo", "r", "d", "d", "i", returns="i")
-    def bhimpl_getarrayitem_vable_i(cpu, vinfo, vable, fielddescr, arraydescr,
-                                    index):
+    @arguments("cpu", "vinfo", "r", "i", "d", "d", returns="i")
+    def bhimpl_getarrayitem_vable_i(cpu, vinfo, vable, index, fielddescr,
+                                    arraydescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_i(array, index, arraydescr)
-    @arguments("cpu", "vinfo", "r", "d", "d", "i", returns="r")
-    def bhimpl_getarrayitem_vable_r(cpu, vinfo, vable, fielddescr, arraydescr,
-                                    index):
+    @arguments("cpu", "vinfo", "r", "i", "d", "d", returns="r")
+    def bhimpl_getarrayitem_vable_r(cpu, vinfo, vable, index, fielddescr,
+                                    arraydescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_r(array, index, arraydescr)
-    @arguments("cpu", "r", "d", "d", "i", returns="f")
-    def bhimpl_getarrayitem_vable_f(cpu, vinfo, vable, fielddescr, arraydescr,
-                                    index):
+    @arguments("cpu", "r", "i", "d", "d", returns="f")
+    def bhimpl_getarrayitem_vable_f(cpu, vinfo, vable, index, fielddescr,
+                                    arraydescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fielddescr)
         return cpu.bh_getarrayitem_gc_f(array, index, arraydescr)
 
-    @arguments("cpu", "vinfo", "r", "d", "d", "i", "i")
-    def bhimpl_setarrayitem_vable_i(cpu, vinfo, vable, fdescr, adescr, index,
-                                    newval):
+    @arguments("cpu", "vinfo", "r", "i", "i", "d", "d")
+    def bhimpl_setarrayitem_vable_i(cpu, vinfo, vable, index, newval,
+                                    fdescr, adescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_i(array, index, newval, adescr)
-    @arguments("cpu", "vinfo", "r", "d", "d", "i", "r")
-    def bhimpl_setarrayitem_vable_r(cpu, vinfo, vable, fdescr, adescr, index,
-                                    newval):
+    @arguments("cpu", "vinfo", "r", "i", "r", "d", "d")
+    def bhimpl_setarrayitem_vable_r(cpu, vinfo, vable, index, newval,
+                                    fdescr, adescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_r(array, index, newval, adescr)
-    @arguments("cpu", "vinfo", "r", "d", "d", "i", "f")
-    def bhimpl_setarrayitem_vable_f(cpu, vinfo, vable, fdescr, adescr, index,
-                                    newval):
+    @arguments("cpu", "vinfo", "r", "i", "f", "d", "d")
+    def bhimpl_setarrayitem_vable_f(cpu, vinfo, vable, index, newval,
+                                    fdescr, adescr):
         bh_force_vable(vinfo, vable)
         array = cpu.bh_getfield_gc_r(vable, fdescr)
         cpu.bh_setarrayitem_gc_f(array, index, newval, adescr)
