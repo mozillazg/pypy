@@ -3,7 +3,7 @@
 """
 
 from pypy.tool.sourcetools import func_with_new_name
-from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable
+from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop
 
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
@@ -21,7 +21,7 @@ def create_mutable_subclasses():
         else:
             class Mutable(cls):
                 is_mutable = True
-            if cls.is_guard():
+            if cls.is_guard() or cls.getopnum() == rop.FINISH:
                 addattr(Mutable, 'failargs')
             Mutable.__name__ = cls.__name__ + '_mutable'
         assert len(opclasses_mutable) == i

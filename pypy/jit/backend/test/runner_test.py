@@ -9,7 +9,6 @@ from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
-from pypy.rpython.ootypesystem import ootype
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter import heaptracker, longlong
@@ -125,7 +124,7 @@ class BaseBackendTest(Runner):
             namespace['faildescr3'] = BasicFailDescr(3)
         if 'faildescr4' not in namespace:
             namespace['faildescr4'] = BasicFailDescr(4)
-        loop = parse(s, namespace=namespace)
+        loop = parse(s, namespace=namespace, guards_with_failargs=True)
         return loop.inputargs, loop.operations, JitCellToken()
 
     def test_compile_linear_loop(self):
@@ -133,7 +132,7 @@ class BaseBackendTest(Runner):
         inputargs, ops, token = self.parse("""
         [i0]
         i1 = int_add(i0, 1)
-        finish(i1, descr=faildescr)
+        finish(i1, descr=faildescr) []
         """, namespace=locals())
         self.cpu.compile_loop(inputargs, ops, token)
         frame = self.cpu.execute_token(token, 2)
