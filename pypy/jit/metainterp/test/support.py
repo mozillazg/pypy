@@ -29,12 +29,6 @@ def boxptr(x=lltype.nullptr(llmemory.GCREF.TO)):
 def constfloat(x):
     return ConstFloat(longlong.getfloatstorage(x))
 
-def boxlonglong(ll):
-    if longlong.is_64_bit:
-        return boxint(ll)
-    else:
-        return boxfloat(ll)
-
 def _get_jitcodes(testself, CPUClass, func, values, type_system,
                   supports_longlong=False, translationoptions={}, **kwds):
     from pypy.jit.codewriter import support
