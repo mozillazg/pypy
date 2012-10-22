@@ -6,40 +6,17 @@ from pypy.jit.metainterp.history import (AbstractFailDescr,
 from pypy.jit.metainterp.resoperation import rop, create_resop_dispatch,\
      create_resop, ConstInt, ConstPtr, ConstFloat, create_resop_2,\
      create_resop_1, create_resop_0, INT, REF, FLOAT, example_for_opnum
+from pypy.jit.metainterp.test.support import boxint, boxfloat,\
+     boxlonglong_on_32bit, boxptr, constfloat
 from pypy.jit.metainterp.typesystem import deref
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.rpython.lltypesystem import lltype, llmemory, rstr, rffi, rclass
 from pypy.rpython.annlowlevel import llhelper
 from pypy.rpython.llinterp import LLException
 from pypy.jit.codewriter import heaptracker, longlong
-from pypy.rlib import longlong2float
 from pypy.rlib.rarithmetic import intmask, is_valid_int
 from pypy.jit.backend.detect_cpu import autodetect_main_model_and_size
 from pypy.jit.tool import oparser
-
-
-def boxfloat(x=None):
-    if x is None:
-        x = example_for_opnum(rop.INPUT_f)
-    return create_resop_0(rop.INPUT_f, longlong.getfloatstorage(x))
-
-def boxlonglong_on_32bit(x):
-    return create_resop_0(rop.INPUT_f, x)
-
-def boxint(x=0):
-    return create_resop_0(rop.INPUT_i, x)
-
-def boxptr(x=lltype.nullptr(llmemory.GCREF.TO)):
-    return create_resop_0(rop.INPUT_r, x)
-
-def constfloat(x):
-    return ConstFloat(longlong.getfloatstorage(x))
-
-def boxlonglong(ll):
-    if longlong.is_64_bit:
-        return boxint(ll)
-    else:
-        return boxfloat(ll)
 
 
 class Runner(object):

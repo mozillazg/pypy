@@ -16,8 +16,8 @@ from pypy.jit.metainterp.quasiimmut import QuasiImmutDescr
 from pypy.jit.metainterp import compile, resume
 from pypy.jit.metainterp.jitprof import EmptyProfiler
 from pypy.config.pypyoption import get_pypy_config
-from pypy.jit.metainterp.resoperation import rop, create_resop, BoxPtr,\
-     create_resop_0, REF, INT, FLOAT, create_resop_2, BoxInt
+from pypy.jit.metainterp.resoperation import rop, create_resop,\
+     create_resop_0, REF, INT, FLOAT, create_resop_2
 
 def test_sort_descrs():
     class PseudoDescr(AbstractDescr):
@@ -409,12 +409,6 @@ class BaseTest(object):
     def teardown_method(self, meth):
         del self.oparsers
 
-    def process_guard(self, guard_op, oparser):
-        fail_args = guard_op.get_extra("failargs")
-        guard_op.set_rd_frame_info_list(resume.FrameInfo(None, "code", 11))
-        guard_op.set_rd_snapshot(resume.Snapshot(None, _sortboxes(fail_args)))
-        self.oparsers.append(oparser)
-
     def assert_equal(self, optimized, expected, text_right=None):
         from pypy.jit.metainterp.optimizeopt.util import equaloplists
         assert len(optimized.inputargs) == len(expected.inputargs)
@@ -436,11 +430,6 @@ class BaseTest(object):
         if hasattr(self, 'callinfocollection'):
             metainterp_sd.callinfocollection = self.callinfocollection
         #
-        for op in loop.operations:
-            if op.is_guard():
-                fail_args = op.get_extra("failargs")
-                op._rd_frame_info_list = resume.FrameInfo(None, "code", 11)
-                op._rd_snapshot = resume.Snapshot(None, _sortboxes(fail_args))
         optimize_trace(jitdriver_sd, metainterp_sd, loop, self.enable_opts)
 
     def unroll_and_optimize(self, loop):

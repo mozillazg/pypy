@@ -1,15 +1,39 @@
 
-import py, sys
+import sys
 from pypy.rpython.lltypesystem import lltype, llmemory
-from pypy.rpython.ootypesystem import ootype
 from pypy.jit.backend.llgraph import runner
 from pypy.jit.metainterp.warmspot import ll_meta_interp, get_stats
 from pypy.jit.metainterp.warmstate import unspecialize_value
 from pypy.jit.metainterp.optimizeopt import ALL_OPTS_DICT
+from pypy.jit.metainterp.resoperation import example_for_opnum, create_resop_0,\
+     rop, ConstFloat
 from pypy.jit.metainterp import pyjitpl, history
 from pypy.jit.codewriter.policy import JitPolicy
 from pypy.jit.codewriter import codewriter, longlong
 from pypy.rlib.rfloat import isnan
+
+def boxfloat(x=None):
+    if x is None:
+        x = example_for_opnum(rop.INPUT_f)
+    return create_resop_0(rop.INPUT_f, longlong.getfloatstorage(x))
+
+def boxlonglong_on_32bit(x):
+    return create_resop_0(rop.INPUT_f, x)
+
+def boxint(x=0):
+    return create_resop_0(rop.INPUT_i, x)
+
+def boxptr(x=lltype.nullptr(llmemory.GCREF.TO)):
+    return create_resop_0(rop.INPUT_r, x)
+
+def constfloat(x):
+    return ConstFloat(longlong.getfloatstorage(x))
+
+def boxlonglong(ll):
+    if longlong.is_64_bit:
+        return boxint(ll)
+    else:
+        return boxfloat(ll)
 
 def _get_jitcodes(testself, CPUClass, func, values, type_system,
                   supports_longlong=False, translationoptions={}, **kwds):
