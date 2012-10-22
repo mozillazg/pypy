@@ -864,7 +864,7 @@ class LLFrame(object):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
-        self.latest_values = self._getfailargs(guard_op, skip=call_op.result)
+        self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         res = self.execute_call(calldescr, func, *args)
         del self.latest_descr
@@ -881,12 +881,16 @@ class LLFrame(object):
         func_to_call = rffi.cast(lltype.Ptr(FUNC), func)
         result = func_to_call(*call_args)
         return support.cast_result(descr.RESULT, result)
+    execute_call_release_gil_i = execute_call_release_gil
+    execute_call_release_gil_r = execute_call_release_gil
+    execute_call_release_gil_f = execute_call_release_gil
+    execute_call_release_gil_v = execute_call_release_gil
 
     def execute_call_assembler(self, descr, *args):
         call_op = self.lltrace.operations[self.current_index]
         guard_op = self.lltrace.operations[self.current_index + 1]
         assert guard_op.getopnum() == rop.GUARD_NOT_FORCED
-        self.latest_values = self._getfailargs(guard_op, skip=call_op.result)
+        self.latest_values = self._getfailargs(guard_op, skip=call_op)
         self.latest_descr = _getdescr(guard_op)
         #
         frame = self.cpu._execute_token(descr, *args)
@@ -907,11 +911,16 @@ class LLFrame(object):
         del self.latest_descr
         del self.latest_values
         return support.cast_result(lltype.typeOf(result), result)
+    execute_call_assembler_i = execute_call_assembler
+    execute_call_assembler_r = execute_call_assembler
+    execute_call_assembler_f = execute_call_assembler
+    execute_call_assembler_v = execute_call_assembler
 
-    def execute_same_as_i(self, _, x):
+    def execute_same_as(self, _, x):
         return x
-    execute_same_as_f = execute_same_as_i
-    execute_same_as_r = execute_same_as_i
+    execute_same_as_i = execute_same_as
+    execute_same_as_r = execute_same_as
+    execute_same_as_f = execute_same_as
 
     def execute_debug_merge_point(self, descr, *args):
         from pypy.jit.metainterp.warmspot import get_stats

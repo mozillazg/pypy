@@ -21,6 +21,7 @@ from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
      Const, ConstInt, ConstFloat, AbstractValue
 from pypy.jit.metainterp.typesystem import llhelper
+from pypy.jit.codewriter import longlong
 from pypy.rlib.objectmodel import specialize, we_are_translated
 from pypy.tool.pairtype import extendabletype
 
@@ -289,7 +290,7 @@ class ConstantValue(OptValue):
 CONST_0      = ConstInt(0)
 CONST_1      = ConstInt(1)
 CVAL_ZERO    = ConstantValue(CONST_0)
-CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(0.0))
+CVAL_ZERO_FLOAT = ConstantValue(ConstFloat(longlong.getfloatstorage(0.0)))
 CVAL_NULLREF = ConstantValue(llhelper.CONST_NULL)
 llhelper.CVAL_NULLREF = CVAL_NULLREF
 REMOVED = AbstractResOp()

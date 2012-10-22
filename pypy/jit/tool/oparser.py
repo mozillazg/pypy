@@ -10,6 +10,7 @@ from pypy.jit.metainterp.resoperation import rop, opclasses, rop_lowercase,\
      ResOpNone, create_resop_0, example_for_opnum
 from pypy.jit.metainterp import optmodel
 from pypy.rpython.lltypesystem import lltype, llmemory
+from pypy.rlib.objectmodel import Symbolic
 
 class ParseError(Exception):
     pass
@@ -45,7 +46,9 @@ class OpParser(object):
                 return self.model.ConstPtr(obj)
             else:
                 assert typ == 'class'
-                return self.model.ConstInt(self.model.ptr_to_int(obj))
+                if not isinstance(obj, Symbolic):
+                    obj = self.model.ptr_to_int(obj)
+                return self.model.ConstInt(obj)
         else:
             if typ == 'ptr':
                 return self.model.ConstObj(obj)
