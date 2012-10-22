@@ -349,7 +349,7 @@ class OptRewrite(Optimization):
     optimize_CALL_LOOPINVARIANT_i = _new_optimize_call_loopinvariant(rop.CALL_i)
     optimize_CALL_LOOPINVARIANT_r = _new_optimize_call_loopinvariant(rop.CALL_r)
     optimize_CALL_LOOPINVARIANT_f = _new_optimize_call_loopinvariant(rop.CALL_f)
-    optimize_CALL_LOOPINVARIANT_N = _new_optimize_call_loopinvariant(rop.CALL_N)
+    optimize_CALL_LOOPINVARIANT_v = _new_optimize_call_loopinvariant(rop.CALL_v)
 
     def _optimize_nullness(self, op, box, expect_nonnull):
         value = self.getvalue(box)
@@ -434,7 +434,7 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
     optimize_CALL_p = optimize_CALL_i
     optimize_CALL_f = optimize_CALL_i
-    optimize_CALL_N = optimize_CALL_i
+    optimize_CALL_v = optimize_CALL_i
 
     def _optimize_CALL_ARRAYCOPY(self, op):
         source_value = self.getvalue(op.getarg(1))
@@ -482,7 +482,7 @@ class OptRewrite(Optimization):
         self.emit_operation(op)
     optimize_CALL_PURE_f = optimize_CALL_PURE_i
     optimize_CALL_PURE_p = optimize_CALL_PURE_i
-    optimize_CALL_PURE_N = optimize_CALL_PURE_i
+    optimize_CALL_PURE_v = optimize_CALL_PURE_i
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:

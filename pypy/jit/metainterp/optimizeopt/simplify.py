@@ -14,12 +14,12 @@ class OptSimplify(Optimization):
             self.emit_operation(op.copy_and_change(getattr(rop, 'CALL_' + tp)))
     optimize_CALL_PURE_i = _new_optimize_call('i')
     optimize_CALL_PURE_f = _new_optimize_call('f')
-    optimize_CALL_PURE_N = _new_optimize_call('N')
-    optimize_CALL_PURE_p = _new_optimize_call('p')
+    optimize_CALL_PURE_v = _new_optimize_call('v')
+    optimize_CALL_PURE_r = _new_optimize_call('r')
     optimize_CALL_LOOPINVARIANT_i = _new_optimize_call('i')
     optimize_CALL_LOOPINVARIANT_f = _new_optimize_call('f')
-    optimize_CALL_LOOPINVARIANT_N = _new_optimize_call('N')
-    optimize_CALL_LOOPINVARIANT_p = _new_optimize_call('p')
+    optimize_CALL_LOOPINVARIANT_v = _new_optimize_call('v')
+    optimize_CALL_LOOPINVARIANT_r = _new_optimize_call('r')
     
     def optimize_VIRTUAL_REF_FINISH(self, op):
         pass

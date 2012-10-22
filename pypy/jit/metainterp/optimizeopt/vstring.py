@@ -541,12 +541,12 @@ class OptString(optimizer.Optimization):
         self.emit_operation(op)
     optimize_CALL_f = optimize_CALL_i
     optimize_CALL_r = optimize_CALL_i
-    optimize_CALL_N = optimize_CALL_i
+    optimize_CALL_v = optimize_CALL_i
 
     optimize_CALL_PURE_i = optimize_CALL_i
     optimize_CALL_PURE_f = optimize_CALL_i
     optimize_CALL_PURE_p = optimize_CALL_i
-    optimize_CALL_PURE_N = optimize_CALL_i
+    optimize_CALL_PURE_v = optimize_CALL_i
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:

@@ -654,9 +654,6 @@ class LLFrame(object):
         while True:
             assert not self.lltrace.has_been_freed
             op = self.lltrace.operations[i]
-            if op.getopnum() == -124:      # force_spill, for tests
-                i += 1
-                continue
             args = [self.lookup(arg) for arg in op.getarglist()]
             self.current_op = op # for label
             self.current_index = i
@@ -717,6 +714,9 @@ class LLFrame(object):
 
     def fail_guard(self, descr):
         raise GuardFailed(self._getfailargs(), descr)
+
+    def execute_force_spill(self, _, arg):
+        pass
 
     def execute_finish(self, descr, arg=None):
         if self.current_op.getfailargs() is not None:
@@ -855,6 +855,10 @@ class LLFrame(object):
             self.last_exception = lle
             res = _example_res[getkind(TP.RESULT)[0]]
         return res
+    execute_call_i = execute_call
+    execute_call_r = execute_call
+    execute_call_f = execute_call
+    execute_call_v = execute_call
 
     def execute_call_may_force(self, calldescr, func, *args):
         call_op = self.lltrace.operations[self.current_index]
@@ -866,6 +870,10 @@ class LLFrame(object):
         del self.latest_descr
         del self.latest_values
         return res
+    execute_call_may_force_i = execute_call_may_force
+    execute_call_may_force_r = execute_call_may_force
+    execute_call_may_force_f = execute_call_may_force
+    execute_call_may_force_v = execute_call_may_force
 
     def execute_call_release_gil(self, descr, func, *args):
         call_args = support.cast_call_args_in_order(descr.ARGS, args)
@@ -900,8 +908,10 @@ class LLFrame(object):
         del self.latest_values
         return support.cast_result(lltype.typeOf(result), result)
 
-    def execute_same_as(self, _, x):
+    def execute_same_as_i(self, _, x):
         return x
+    execute_same_as_f = execute_same_as_i
+    execute_same_as_r = execute_same_as_i
 
     def execute_debug_merge_point(self, descr, *args):
         from pypy.jit.metainterp.warmspot import get_stats

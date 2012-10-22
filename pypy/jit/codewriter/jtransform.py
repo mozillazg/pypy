@@ -1492,7 +1492,7 @@ class Transformer(object):
             v = Variable('new_length')
             v.concretetype = lltype.Signed
             ops.append(SpaceOperation('int_force_ge_zero', [v_length], v))
-        ops.append(SpaceOperation('new_array', [arraydescr, v], op.result))
+        ops.append(SpaceOperation('new_array', [v, arraydescr], op.result))
         return ops
 
     def do_fixed_list_len(self, op, args, arraydescr):

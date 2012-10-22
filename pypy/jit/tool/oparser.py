@@ -14,59 +14,6 @@ from pypy.rpython.lltypesystem import lltype, llmemory
 class ParseError(Exception):
     pass
 
-class ESCAPE_OP(N_aryOp, ResOpNone, ResOpWithDescr):
-
-    OPNUM = -123
-
-    def __init__(self, opnum, args, result, descr=None):
-        assert opnum == self.OPNUM
-        self.result = result
-        self._args = args
-        self.setdescr(descr)
-
-    @classmethod
-    def getopnum(cls):
-        return cls.OPNUM
-
-    def copy_if_modified_by_optimization(self, opt):
-        newargs = None
-        for i, arg in enumerate(self._args):
-            new_arg = opt.get_value_replacement(arg)
-            if new_arg is not None:
-                if newargs is None:
-                    newargs = []
-                    for k in range(i):
-                        newargs.append(self._args[k])
-                    self._args[:i]
-                newargs.append(new_arg)
-            elif newargs is not None:
-                newargs.append(arg)
-        if newargs is None:
-            return self
-        return ESCAPE_OP(self.OPNUM, newargs, self.getresult(),
-                         self.getdescr())
-
-class FORCE_SPILL(UnaryOp, ResOpNone, PlainResOp):
-
-    OPNUM = -124
-
-    def __init__(self, opnum, args, result=None, descr=None):
-        assert result is None
-        assert descr is None
-        assert opnum == self.OPNUM
-        self.result = result
-        self.initarglist(args)
-
-    def getopnum(self):
-        return self.OPNUM
-
-    def clone(self):
-        return FORCE_SPILL(self.OPNUM, self.getarglist()[:])
-
-    def copy_and_change(self, opnum, args, result, descr):
-        return FORCE_SPILL(opnum, args, result, descr)
-
-
 class OpParser(object):
 
     use_mock_model = False
@@ -231,12 +178,7 @@ class OpParser(object):
         try:
             opnum = getattr(rop_lowercase, opname)
         except AttributeError:
-            if opname == 'escape':
-                opnum = ESCAPE_OP.OPNUM
-            elif opname == 'force_spill':
-                opnum = FORCE_SPILL.OPNUM
-            else:
-                raise ParseError("unknown op: %s" % opname)
+            raise ParseError("unknown op: %s" % opname)
         endnum = line.rfind(')')
         if endnum == -1:
             raise ParseError("invalid line: %s" % line)
@@ -276,16 +218,11 @@ class OpParser(object):
         return opnum, args, descr, fail_args
 
     def create_op(self, opnum, result, args, descr):
-        if opnum == ESCAPE_OP.OPNUM:
-            return ESCAPE_OP(opnum, args, result, descr)
-        if opnum == FORCE_SPILL.OPNUM:
-            return FORCE_SPILL(opnum, args, result, descr)
-        else:
-            r = create_resop_dispatch(opnum, result, args,
-                                      mutable=self.guards_with_failargs)
-            if descr is not None:
-                r.setdescr(descr)
-            return r
+        r = create_resop_dispatch(opnum, result, args,
+                                  mutable=self.guards_with_failargs)
+        if descr is not None:
+            r.setdescr(descr)
+        return r
 
     def parse_result_op(self, line, num):
         res, op = line.split("=", 1)

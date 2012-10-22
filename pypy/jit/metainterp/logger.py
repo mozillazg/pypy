@@ -2,7 +2,7 @@ from pypy.rlib.debug import have_debug_prints
 from pypy.rlib.debug import debug_start, debug_stop, debug_print
 from pypy.rlib.objectmodel import we_are_translated
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
-from pypy.jit.metainterp.resoperation import rop, ConstInt, BoxInt, BoxFloat
+from pypy.jit.metainterp.resoperation import rop, ConstInt
 from pypy.jit.metainterp.history import TargetToken
 
 class Logger(object):

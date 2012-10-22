@@ -13,8 +13,7 @@ means that two resops cannot share the optimize_value extra attribute
 
 from pypy.jit.metainterp import jitprof, resume, compile
 from pypy.jit.metainterp.executor import execute_nonspec
-from pypy.jit.metainterp.resoperation import BoxInt, BoxFloat, REF, INT,\
-     create_resop_1
+from pypy.jit.metainterp.resoperation import REF, INT, create_resop_1
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      ImmutableIntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT

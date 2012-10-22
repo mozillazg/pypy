@@ -80,19 +80,19 @@ def new_do_call(opnum, tp):
 do_call_i = new_do_call(rop.CALL_i, 'i')
 do_call_f = new_do_call(rop.CALL_f, 'f')
 do_call_r = new_do_call(rop.CALL_r, 'r')
-do_call_n = new_do_call(rop.CALL_N, 'N')
+do_call_v = new_do_call(rop.CALL_v, 'v')
 do_call_loopinvariant_i = new_do_call(rop.CALL_LOOPINVARIANT_i, 'i')
 do_call_loopinvariant_f = new_do_call(rop.CALL_LOOPINVARIANT_f, 'f')
 do_call_loopinvariant_r = new_do_call(rop.CALL_LOOPINVARIANT_r, 'r')
-do_call_loopinvariant_n = new_do_call(rop.CALL_LOOPINVARIANT_N, 'N')
+do_call_loopinvariant_v = new_do_call(rop.CALL_LOOPINVARIANT_v, 'v')
 do_call_may_force_i = new_do_call(rop.CALL_MAY_FORCE_i, 'i')
 do_call_may_force_f = new_do_call(rop.CALL_MAY_FORCE_f, 'f')
 do_call_may_force_r = new_do_call(rop.CALL_MAY_FORCE_r, 'r')
-do_call_may_force_n = new_do_call(rop.CALL_MAY_FORCE_N, 'N')
+do_call_may_force_v = new_do_call(rop.CALL_MAY_FORCE_v, 'v')
 do_call_pure_i = new_do_call(rop.CALL_PURE_i, 'i')
 do_call_pure_f = new_do_call(rop.CALL_PURE_f, 'f')
 do_call_pure_r = new_do_call(rop.CALL_PURE_r, 'r')
-do_call_pure_n = new_do_call(rop.CALL_PURE_N, 'N')
+do_call_pure_v = new_do_call(rop.CALL_PURE_v, 'v')
 
 def do_setarrayitem_gc(cpu, _, arraybox, indexbox, itembox, arraydescr):
     array = arraybox.getref_base()
@@ -323,40 +323,25 @@ def _make_execute_list():
                          rop.CALL_ASSEMBLER_i,
                          rop.CALL_ASSEMBLER_r,
                          rop.CALL_ASSEMBLER_f,
-                         rop.CALL_ASSEMBLER_N,
+                         rop.CALL_ASSEMBLER_v,
                          rop.COND_CALL_GC_WB,
                          rop.COND_CALL_GC_WB_ARRAY,
                          rop.DEBUG_MERGE_POINT,
                          rop.JIT_DEBUG,
                          rop.SETARRAYITEM_RAW,
                          rop.GETINTERIORFIELD_RAW_i,
-                         rop.GETINTERIORFIELD_RAW_r,
                          rop.GETINTERIORFIELD_RAW_f,
-                         rop.GETINTERIORFIELD_RAW_N,
                          rop.SETINTERIORFIELD_RAW,
                          rop.CALL_RELEASE_GIL_i,
                          rop.CALL_RELEASE_GIL_r,
                          rop.CALL_RELEASE_GIL_f,
-                         rop.CALL_RELEASE_GIL_N,
+                         rop.CALL_RELEASE_GIL_v,
                          rop.QUASIIMMUT_FIELD,
                          rop.CALL_MALLOC_GC,
                          rop.CALL_MALLOC_NURSERY,
                          rop.LABEL,
-                         rop.GETARRAYITEM_RAW_PURE_N,
-                         rop.GETFIELD_RAW_r,
-                         rop.GETARRAYITEM_RAW_PURE_r,
-                         rop.SAME_AS_N,
-                         rop.GETINTERIORFIELD_GC_N,
-                         rop.GETFIELD_RAW_N,
-                         rop.GETFIELD_RAW_PURE_N,
-                         rop.GETFIELD_RAW_PURE_r,
-                         rop.GETARRAYITEM_RAW_N,
-                         rop.GETFIELD_GC_PURE_N,
-                         rop.GETARRAYITEM_GC_PURE_N,
-                         rop.GETARRAYITEM_GC_N,
-                         rop.GETFIELD_GC_N,
-                         rop.GETARRAYITEM_RAW_r,
-                         rop.RAW_LOAD_N,
+                         rop.INPUT_i, rop.INPUT_r, rop.INPUT_f,
+                         rop.FORCE_SPILL, rop.ESCAPE,
                          ):      # list of opcodes never executed by pyjitpl
                 continue
             raise AssertionError("missing %r" % (orig_key,))

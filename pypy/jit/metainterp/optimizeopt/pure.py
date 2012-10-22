@@ -77,7 +77,7 @@ class OptPure(Optimization):
     optimize_CALL_PURE_i = _new_optimize_call_pure(rop.CALL_i)
     optimize_CALL_PURE_f = _new_optimize_call_pure(rop.CALL_f)
     optimize_CALL_PURE_r = _new_optimize_call_pure(rop.CALL_r)
-    optimize_CALL_PURE_N = _new_optimize_call_pure(rop.CALL_N)
+    optimize_CALL_PURE_v = _new_optimize_call_pure(rop.CALL_v)
 
     def optimize_GUARD_NO_EXCEPTION(self, op):
         if self.last_emitted_operation is REMOVED:

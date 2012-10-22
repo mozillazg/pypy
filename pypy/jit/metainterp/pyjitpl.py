@@ -11,7 +11,7 @@ from pypy.jit.metainterp.resoperation import Const, ConstInt, ConstPtr,\
      ConstFloat
 from pypy.jit.metainterp.history import TargetToken
 from pypy.jit.metainterp.resoperation import rop, create_resop, create_resop_0,\
-     create_resop_1, create_resop_2, Box
+     create_resop_1, create_resop_2
 from pypy.jit.metainterp import resoperation
 from pypy.jit.metainterp import executor
 from pypy.jit.metainterp.logger import Logger
@@ -1538,25 +1538,6 @@ class MetaInterpStaticData(object):
         self.callinfocollection = codewriter.callcontrol.callinfocollection
         self.has_libffi_call = codewriter.callcontrol.has_libffi_call
         #
-<<<<<<< local
-        # store this information for fastpath of call_assembler
-        # (only the paths that can actually be taken)
-        for jd in self.jitdrivers_sd:
-            name = {resoperation.INT: 'int',
-                    resoperation.REF: 'ref',
-                    resoperation.FLOAT: 'float',
-                    resoperation.VOID: 'void'}[jd.result_type]
-            tokens = getattr(self, 'loop_tokens_done_with_this_frame_%s' % name)
-            jd.portal_finishtoken = tokens[0].finishdescr
-            num = self.cpu.get_fail_descr_number(tokens[0].finishdescr)
-            setattr(self.cpu, 'done_with_this_frame_%s_v' % name, num)
-        #
-=======
->>>>>>> other
-        exc_descr = compile.PropagateExceptionDescr()
-        num = self.cpu.get_fail_descr_number(exc_descr)
-        self.cpu.propagate_exception_v = num
-        #
         self.globaldata = MetaInterpGlobalData(self)
 
     def _setup_once(self):
@@ -2248,19 +2229,6 @@ class MetaInterp(object):
         result_type = self.jitdriver_sd.result_type
         if result_type == resoperation.VOID:
             assert exitbox is None
-<<<<<<< local
-            exits = []
-            loop_tokens = sd.loop_tokens_done_with_this_frame_void
-        elif result_type == resoperation.INT:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_int
-        elif result_type == resoperation.REF:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_ref
-        elif result_type == resoperation.FLOAT:
-            exits = [exitbox]
-            loop_tokens = sd.loop_tokens_done_with_this_frame_float
-=======
             self.compile_done([], compile.DoneWithThisFrameDescrVoid)
         elif result_type == history.INT:
             self.compile_done([exitbox], compile.DoneWithThisFrameDescrInt)
@@ -2268,15 +2236,8 @@ class MetaInterp(object):
             self.compile_done([exitbox], compile.DoneWithThisFrameDescrRef)
         elif result_type == history.FLOAT:
             self.compile_done([exitbox], compile.DoneWithThisFrameDescrFloat)
->>>>>>> other
         else:
             assert False
-<<<<<<< local
-        # FIXME: kill TerminatingLoopToken?
-        # FIXME: can we call compile_trace?
-        token = loop_tokens[0].finishdescr
-        self.history.record(create_resop(rop.FINISH, None, exits, descr=token))
-=======
 
     def compile_exit_frame_with_exception(self, valuebox):
         self.compile_done([valuebox], compile.ExitFrameWithExceptionDescrRef)
@@ -2291,7 +2252,6 @@ class MetaInterp(object):
         token = DoneCls(self.staticdata, self.jitdriver_sd)
         resume.capture_resumedata([], virtualizable_boxes, [], token)
         self.history.record(rop.FINISH, exits, None, descr=token)
->>>>>>> other
         target_token = compile.compile_trace(self, self.resumekey)
         if target_token is None:
             compile.giveup()

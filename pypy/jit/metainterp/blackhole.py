@@ -1119,8 +1119,8 @@ class BlackholeInterpreter(object):
         return cpu.bh_call_v(jitcode.get_fnaddr_as_int(),
                              args_i, args_r, args_f, jitcode.calldescr)
 
-    @arguments("cpu", "d", "i", returns="r")
-    def bhimpl_new_array(cpu, arraydescr, length):
+    @arguments("cpu", "i", "d", returns="r")
+    def bhimpl_new_array(cpu, length, arraydescr):
         return cpu.bh_new_array(length, arraydescr)
 
     @arguments("cpu", "r", "i", "d", returns="i")

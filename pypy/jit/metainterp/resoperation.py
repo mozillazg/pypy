@@ -72,8 +72,6 @@ def create_resop(opnum, result, args, descr=None, mutable=False):
         assert _arg.type != VOID
     op._args = args
     if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -88,8 +86,6 @@ def create_resop_0(opnum, result, descr=None, mutable=False):
     else:
         op = cls(result)
     if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -110,8 +106,6 @@ def create_resop_1(opnum, result, arg0, descr=None, mutable=False):
     assert arg0.type != VOID
     op._arg0 = arg0
     if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -133,8 +127,6 @@ def create_resop_2(opnum, result, arg0, arg1, descr=None, mutable=False):
     op._arg0 = arg0
     op._arg1 = arg1
     if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -158,8 +150,6 @@ def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None, mutable=False):
     op._arg1 = arg1
     op._arg2 = arg2
     if descr is not None:
-        assert isinstance(op, ResOpWithDescr)
-        assert not op.is_guard()
         op.setdescr(descr)
     return op
 
@@ -208,12 +198,6 @@ class AbstractValue(object):
     def constbox(self):
         """ Return a constant value of the current box wrapped in an
         apropriate constant class
-        """
-        raise NotImplementedError
-
-    def nonconstbox(self):
-        """ Return a box value of the current constant wrapped in an
-        apropriate box class
         """
         raise NotImplementedError
 
@@ -351,9 +335,6 @@ class ConstInt(Const):
                 assert isinstance(value, Symbolic)
         self.value = value
 
-    def nonconstbox(self):
-        return BoxInt(self.value)
-
     def getint(self):
         return self.value
 
@@ -392,9 +373,6 @@ class ConstFloat(Const):
         assert lltype.typeOf(valuestorage) is longlong.FLOATSTORAGE
         self.value = valuestorage
 
-    def nonconstbox(self):
-        return BoxFloat(self.value)
-
     def getfloatstorage(self):
         return self.value
 
@@ -429,9 +407,6 @@ class ConstPtr(Const):
     def __init__(self, value):
         assert lltype.typeOf(value) == llmemory.GCREF
         self.value = value
-
-    def nonconstbox(self):
-        return BoxPtr(self.value)
 
     def getref_base(self):
         return self.value
@@ -496,9 +471,10 @@ class AbstractResOp(AbstractValue):
         return cls.opnum
 
     def __hash__(self):
+        # XXX this is a hack kill me
         import sys
         co_fname = sys._getframe(1).f_code.co_filename
-        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname:
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname:
             return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
 
@@ -702,7 +678,11 @@ class ResOpInt(object):
     type = INT
 
     def __init__(self, intval):
-        assert isinstance(intval, int)
+        if not we_are_translated():
+            if is_valid_int(intval):
+                intval = int(intval)
+            else:
+                assert isinstance(intval, Symbolic)
         self.intval = intval
 
     def getint(self):
@@ -1136,30 +1116,42 @@ class N_aryOp(object):
 # ____________________________________________________________
 
 _oplist = [
+    # key:
+    # _<something> means just a marker
+    # OPNAME/<number-of-parameters-or-*>[d]/T
+    # where:
+    #  "*" in parameter list means any number
+    #  "d" means if there is a descr associated with a resop
+    # T can be one of "r", "i", "f", "v", "*" or "?"
+    # "r", "i", "f" - normal return, appropriate type
+    # "v" - void return type
+    # "*" - four variants will be generated, "r", "i", "f", "v"
+    # "?" - three variants will be generated, "r", "i", "f"
+    
     '_FINAL_FIRST',
-    'JUMP/*d/N',
-    'FINISH/*d/N',
+    'JUMP/*d/v',
+    'FINISH/*d/v',
     '_FINAL_LAST',
 
-    'LABEL/*d/N',
-    'INPUT/0/*',
+    'LABEL/*d/v',
+    'INPUT/0/?',
 
     '_GUARD_FIRST',
     '_GUARD_FOLDABLE_FIRST',
-    'GUARD_TRUE/1/N',
-    'GUARD_FALSE/1/N',
-    'GUARD_VALUE/2/N',
-    'GUARD_CLASS/2/N',
-    'GUARD_NONNULL/1/N',
-    'GUARD_ISNULL/1/N',
-    'GUARD_NONNULL_CLASS/2/N',
+    'GUARD_TRUE/1/v',
+    'GUARD_FALSE/1/v',
+    'GUARD_VALUE/2/v',
+    'GUARD_CLASS/2/v',
+    'GUARD_NONNULL/1/v',
+    'GUARD_ISNULL/1/v',
+    'GUARD_NONNULL_CLASS/2/v',
     '_GUARD_FOLDABLE_LAST',
-    'GUARD_NO_EXCEPTION/0/N',   # may be called with an exception currently set
+    'GUARD_NO_EXCEPTION/0/v',   # may be called with an exception currently set
     'GUARD_EXCEPTION/1/r',      # may be called with an exception currently set
-    'GUARD_NO_OVERFLOW/0/N',
-    'GUARD_OVERFLOW/0/N',
-    'GUARD_NOT_FORCED/0/N',     # may be called with an exception currently set
-    'GUARD_NOT_INVALIDATED/0/N',
+    'GUARD_NO_OVERFLOW/0/v',
+    'GUARD_OVERFLOW/0/v',
+    'GUARD_NOT_FORCED/0/v',     # may be called with an exception currently set
+    'GUARD_NOT_INVALIDATED/0/v',
     '_GUARD_LAST', # ----- end of guard operations -----
 
     '_NOSIDEEFFECT_FIRST', # ----- start of no_side_effect operations -----
@@ -1212,7 +1204,7 @@ _oplist = [
     'INT_INVERT/1/i',
     'INT_FORCE_GE_ZERO/1/i',
     #
-    'SAME_AS/1/*',      # gets a Const or a Box, turns it into another Box
+    'SAME_AS/1/?',      # gets a Const or a Box, turns it into another Box
     '_ALWAYS_PURE_NO_PTR_LAST',
     'CAST_PTR_TO_INT/1/i',
     'CAST_INT_TO_PTR/1/r',
@@ -1225,10 +1217,11 @@ _oplist = [
     'ARRAYLEN_GC/1d/i',
     'STRLEN/1/i',
     'STRGETITEM/2/i',
-    'GETFIELD_GC_PURE/1d/*',
-    'GETFIELD_RAW_PURE/1d/*',
-    'GETARRAYITEM_GC_PURE/2d/*',
-    'GETARRAYITEM_RAW_PURE/2d/*',
+    'GETFIELD_GC_PURE/1d/?',
+    'GETFIELD_RAW_PURE/1d/?',
+    'GETARRAYITEM_GC_PURE/2d/?',
+    'GETARRAYITEM_RAW_PURE_i/2d/i',
+    'GETARRAYITEM_RAW_PURE_f/2d/f',
     'UNICODELEN/1/i',
     'UNICODEGETITEM/2/i',
     #
@@ -1238,13 +1231,17 @@ _oplist = [
     #
     '_ALWAYS_PURE_LAST',  # ----- end of always_pure operations -----
 
-    'GETARRAYITEM_GC/2d/*',
-    'GETARRAYITEM_RAW/2d/*',
-    'GETINTERIORFIELD_GC/2d/*',
-    'GETINTERIORFIELD_RAW/2d/*',
-    'RAW_LOAD/2d/*',
-    'GETFIELD_GC/1d/*',
-    'GETFIELD_RAW/1d/*',
+    'GETARRAYITEM_GC/2d/?',
+    'GETARRAYITEM_RAW_i/2d/i',
+    'GETARRAYITEM_RAW_f/2d/f',
+    'GETINTERIORFIELD_GC/2d/?',
+    'GETINTERIORFIELD_RAW_i/2d/i',
+    'GETINTERIORFIELD_RAW_f/2d/f',
+    'RAW_LOAD_i/2d/i',
+    'RAW_LOAD_f/2d/f',
+    'GETFIELD_GC/1d/?',
+    'GETFIELD_RAW_i/1d/i',
+    'GETFIELD_RAW_f/1d/f',
     '_MALLOC_FIRST',
     'NEW/0d/r',
     'NEW_WITH_VTABLE/1/r',
@@ -1255,28 +1252,31 @@ _oplist = [
     'JIT_FRAME/0/r',
     'VIRTUAL_REF/2/i',         # removed before it's passed to the backend
     'READ_TIMESTAMP/0/L',      # float on 32bit, int on 64bit
-    'MARK_OPAQUE_PTR/1b/N',
+    'MARK_OPAQUE_PTR/1b/v',
     '_NOSIDEEFFECT_LAST', # ----- end of no_side_effect operations -----
 
-    'SETARRAYITEM_GC/3d/N',
-    'SETARRAYITEM_RAW/3d/N',
-    'SETINTERIORFIELD_GC/3d/N',
-    'SETINTERIORFIELD_RAW/3d/N', # only used by llsupport/rewrite.py
-    'RAW_STORE/3d/N',
-    'SETFIELD_GC/2d/N',
-    'SETFIELD_RAW/2d/N',
-    'STRSETITEM/3/N',
-    'UNICODESETITEM/3/N',
+    'ESCAPE/1/v', # tests
+    'FORCE_SPILL/1/v', # tests
+
+    'SETARRAYITEM_GC/3d/v',
+    'SETARRAYITEM_RAW/3d/v',
+    'SETINTERIORFIELD_GC/3d/v',
+    'SETINTERIORFIELD_RAW/3d/v', # only used by llsupport/rewrite.py
+    'RAW_STORE/3d/v',
+    'SETFIELD_GC/2d/v',
+    'SETFIELD_RAW/2d/v',
+    'STRSETITEM/3/v',
+    'UNICODESETITEM/3/v',
     #'RUNTIMENEW/1',     # ootype operation
-    'COND_CALL_GC_WB/2d/N', # [objptr, newvalue] (for the write barrier)
-    'COND_CALL_GC_WB_ARRAY/3d/N', # [objptr, arrayindex, newvalue] (write barr.)
-    'DEBUG_MERGE_POINT/*/N',      # debugging only
-    'JIT_DEBUG/*/N',              # debugging only
-    'VIRTUAL_REF_FINISH/2/N',   # removed before it's passed to the backend
-    'COPYSTRCONTENT/5/N',       # src, dst, srcstart, dststart, length
-    'COPYUNICODECONTENT/5/N',
-    'QUASIIMMUT_FIELD/1d/N',    # [objptr], descr=SlowMutateDescr
-    'RECORD_KNOWN_CLASS/2/N',   # [objptr, clsptr]
+    'COND_CALL_GC_WB/2d/v', # [objptr, newvalue] (for the write barrier)
+    'COND_CALL_GC_WB_ARRAY/3d/v', # [objptr, arrayindex, newvalue] (write barr.)
+    'DEBUG_MERGE_POINT/*/v',      # debugging only
+    'JIT_DEBUG/*/v',              # debugging only
+    'VIRTUAL_REF_FINISH/2/v',   # removed before it's passed to the backend
+    'COPYSTRCONTENT/5/v',       # src, dst, srcstart, dststart, length
+    'COPYUNICODECONTENT/5/v',
+    'QUASIIMMUT_FIELD/1d/v',    # [objptr], descr=SlowMutateDescr
+    'RECORD_KNOWN_CLASS/2/v',   # [objptr, clsptr]
 
     '_CANRAISE_FIRST', # ----- start of can_raise operations -----
     '_CALL_FIRST',
@@ -1336,7 +1336,7 @@ def setup(debug_print=False):
             else:
                 arity = int(arity)
         else:
-            arity, withdescr, boolresult, tp = -1, True, False, "N"  # default
+            arity, withdescr, boolresult, tp = -1, True, False, "v"  # default
         if not basename.startswith('_'):
             clss = create_classes_for_op(basename, i, arity, withdescr, tp)
         else:
@@ -1386,7 +1386,7 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
         3: TernaryOp
         }
     tpmixin = {
-        'N': ResOpNone,
+        'v': ResOpNone,
         'i': ResOpInt,
         'f': ResOpFloat,
         'r': ResOpPointer,
@@ -1401,15 +1401,19 @@ def create_classes_for_op(name, opnum, arity, withdescr, tp):
         baseclass = PlainResOp
     mixin = arity2mixin.get(arity, N_aryOp)
 
-    if tp == '*':
+    if tp in '*?':
         res = []
-        for tp in ['f', 'r', 'i', 'N']:
+        if tp == '*':
+            lst = ['i', 'r', 'f', 'v']
+        else:
+            lst = ['i', 'r', 'f']
+        for tp in lst:
             cls_name = '%s_OP_%s' % (name, tp)
             bases = (get_base_class(mixin, tpmixin[tp], baseclass),)
             dic = {'opnum': opnum}
             res.append((type(cls_name, bases, dic), name + '_' + tp, tp))
             opnum += 1
-        return res   
+        return res
     else:
         if tp == 'L':
             if longlong.is_64_bit:
