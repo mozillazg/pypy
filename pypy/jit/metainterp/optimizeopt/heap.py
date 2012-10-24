@@ -229,17 +229,17 @@ class OptHeap(Optimization):
             cf = submap[index] = CachedField()
         return cf
 
-    def emit_operation(self, op):
-        self.emitting_operation(op)
-        if self.posponedop:
-            posponedop = self.posponedop
-            self.posponedop = None
-            self.next_optimization.propagate_forward(posponedop)
-        if (op.is_comparison() or op.getopnum() in opgroups.CALL_MAY_FORCE
-            or op.is_ovf()):
-            self.posponedop = op
-        else:
-            Optimization.emit_operation(self, op)
+    #def emit_operation(self, op):
+    #    self.emitting_operation(op)
+    #    if self.posponedop:
+    #        posponedop = self.posponedop
+    #        self.posponedop = None
+    #        self.next_optimization.propagate_forward(posponedop)
+    #    if (op.is_comparison() or op.getopnum() in opgroups.CALL_MAY_FORCE
+    #        or op.is_ovf()):
+    #        self.posponedop = op
+    #    else:
+    #        Optimization.emit_operation(self, op)
 
     def emitting_operation(self, op):
         if op.has_no_side_effect():
@@ -540,6 +540,6 @@ class OptHeap(Optimization):
         self.emit_operation(op)
 
 
-dispatch_opt = make_dispatcher_method(OptHeap, 'optimize_',
-        default=OptHeap.emit_operation)
-OptHeap.propagate_forward = dispatch_opt
+#dispatch_opt = make_dispatcher_method(OptHeap, 'optimize_',
+#        default=OptHeap.emit_operation)
+#OptHeap.propagate_forward = dispatch_opt

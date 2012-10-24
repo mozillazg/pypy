@@ -172,8 +172,8 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={},
     text_right = text_right or 'expected'
     print '%s| %s' % ('optimized'.center(width), text_right.center(width))
     for op1, op2 in zip(oplist1, oplist2):
-        txt1 = str(op1)
-        txt2 = str(op2)
+        txt1 = repr(op1)
+        txt2 = repr(op2)
         while txt1 or txt2:
             print '%s| %s' % (txt1[:width].ljust(width), txt2[:width])
             txt1 = txt1[width:]

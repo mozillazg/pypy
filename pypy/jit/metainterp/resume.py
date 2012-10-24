@@ -198,9 +198,8 @@ class ResumeDataLoopMemo(object):
         length = len(boxes)
         numb = lltype.malloc(NUMBERING, length)
         for i in range(length):
-            box = boxes[i]
-            value = optimizer.getvalue(box)
-            box = value.get_key_box()
+            op = boxes[i]
+            optimized_op = optimizer.get_optimized_op(op)
 
             if isinstance(box, Const):
                 tagged = self.getconst(box)

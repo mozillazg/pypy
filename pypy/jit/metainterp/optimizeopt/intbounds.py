@@ -15,12 +15,12 @@ class OptIntBounds(Optimization):
     def new(self):
         return OptIntBounds()
 
-    def propagate_forward(self, op):
-        dispatch_opt(self, op)
+    #def propagate_forward(self, op):
+    #    dispatch_opt(self, op)
 
-    def opt_default(self, op):
-        assert not op.is_ovf()
-        self.emit_operation(op)
+    #def opt_default(self, op):
+    #    assert not op.is_ovf()
+    #    self.emit_operation(op)
 
 
     def propagate_bounds_backward(self, box):
@@ -471,6 +471,6 @@ class OptIntBounds(Optimization):
     propagate_bounds_INT_MUL_OVF  = propagate_bounds_INT_MUL
 
 
-dispatch_opt = make_dispatcher_method(OptIntBounds, 'optimize_',
-        default=OptIntBounds.opt_default)
-dispatch_bounds_ops = make_dispatcher_method(OptIntBounds, 'propagate_bounds_')
+#dispatch_opt = make_dispatcher_method(OptIntBounds, 'optimize_',
+#        default=OptIntBounds.opt_default)
+#dispatch_bounds_ops = make_dispatcher_method(OptIntBounds, 'propagate_bounds_')

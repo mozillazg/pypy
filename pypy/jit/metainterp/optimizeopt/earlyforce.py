@@ -8,6 +8,8 @@ def check_early_force(opt, opnum, num, arg):
 
 class OptEarlyForce(Optimization):
     def propagate_forward(self, op):
+        self.emit_operation(op)
+        return
         opnum = op.getopnum()
         if (opnum != rop.SETFIELD_GC and 
             opnum != rop.SETARRAYITEM_GC and

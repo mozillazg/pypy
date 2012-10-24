@@ -728,8 +728,8 @@ class OptString(optimizer.Optimization):
     def propagate_forward(self, op):
         dispatch_opt(self, op)
 
-dispatch_opt = make_dispatcher_method(OptString, 'optimize_',
-        default=OptString.emit_operation)
+#dispatch_opt = make_dispatcher_method(OptString, 'optimize_',
+#        default=OptString.emit_operation)
 
 def _findall_call_oopspec():
     prefix = 'opt_call_stroruni_'

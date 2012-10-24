@@ -11,9 +11,6 @@ class OptPure(Optimization):
         self.pure_operations = ArgsDict()
         self.emitted_pure_operations = []
 
-    def propagate_forward(self, op):
-        dispatch_opt(self, op)
-
     def optimize_default(self, op):
         canfold = op.is_always_pure()
         if op.is_ovf():
@@ -27,9 +24,10 @@ class OptPure(Optimization):
         else:
             nextop = None
 
+        newop = self.getforwarded(op)
         if canfold:
             for i in range(op.numargs()):
-                if self.get_constant_box(op.getarg(i)) is None:
+                if self.get_constant_op(op.getarg(i)) is None:
                     break
             else:
                 # all constant arguments: constant-fold away
@@ -40,21 +38,20 @@ class OptPure(Optimization):
                 return
 
             # did we do the exact same operation already?
-            key_op = op.get_key_op(self.optimizer)
-            oldop = self.pure_operations.get(key_op)
+            oldop = self.pure_operations.get(newop)
             if oldop is not None:
                 self.replace(op, oldop)
                 return
             else:
-                self.pure_operations.set(key_op, op)
+                self.pure_operations.set(newop, op)
                 self.remember_emitting_pure(op)
 
         # otherwise, the operation remains
-        self.emit_operation(op)
         if op.returns_bool_result():
-            self.getvalue(op).is_bool_box = True
+            newop.is_bool_box = True
         if nextop:
             self.emit_operation(nextop)
+        return newop
 
     def _new_optimize_call_pure(opnum):
         def optimize_CALL_PURE(self, op):
@@ -131,5 +128,5 @@ class OptPure(Optimization):
                     continue
             sb.add_potential(op)
 
-dispatch_opt = make_dispatcher_method(OptPure, 'optimize_',
-                                      default=OptPure.optimize_default)
+#dispatch_opt = make_dispatcher_method(OptPure, 'optimize_',
+#                                      default=OptPure.optimize_default)

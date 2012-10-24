@@ -64,6 +64,6 @@ class OptSimplify(Optimization):
                                                     descr=newdescr)
         self.emit_operation(op)
 
-dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',
-        default=OptSimplify.emit_operation)
-OptSimplify.propagate_forward = dispatch_opt
+#dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',
+#        default=OptSimplify.emit_operation)
+#OptSimplify.propagate_forward = dispatch_opt

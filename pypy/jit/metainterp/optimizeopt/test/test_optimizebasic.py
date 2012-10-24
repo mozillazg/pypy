@@ -134,13 +134,13 @@ class BaseTestOptimizeBasic(BaseTestBasic):
         ops = """
         [i]
         i0 = int_sub(i, 1)
-        guard_value(i0, 0) [i0]
+        guard_value(i0, 0)
         jump(i)
         """
         expected = """
         [i]
         i0 = int_sub(i, 1)
-        guard_value(i0, 0) [i0]
+        guard_value(i0, 0)
         jump(1)
         """
         self.optimize_loop(ops, expected)

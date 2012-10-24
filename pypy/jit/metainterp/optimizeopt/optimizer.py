@@ -2,13 +2,12 @@
 """ This file implements the entry point to optimizations - the Optimizer.
 optimizations are dispatched in order they're passed and for each operation
 optimize_XYZ where XYZ is the name of resop is called. The method can choose
-to return None (optimized away) or call self.emit_operation which means
+to return None (optimized away) or return the operation to emit.
 it'll be passed onto the next one.
 
-Each resop can have an extra attribute optimize_replace, which points to
-a new version of the same resop. Also each one can have optimize_value,
-which is valid when optimize_replace is not set. There is 1-1 mapping, which
-means that two resops cannot share the optimize_value extra attribute
+Each resop can have an extra attribute _forwarded, which points to
+a new version of the same resop. It can be a mutable resop (from optmodel)
+or a constant.
 """
 
 from pypy.jit.metainterp import jitprof, resume, compile
@@ -19,10 +18,9 @@ from pypy.jit.metainterp.optimizeopt.intutils import IntBound, IntUnbounded, \
                                                      IntLowerBound, MININT, MAXINT
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
 from pypy.jit.metainterp.resoperation import rop, AbstractResOp, opgroups,\
-     Const, ConstInt, ConstFloat, AbstractValue
+     Const, ConstInt, opname
 from pypy.jit.metainterp.typesystem import llhelper
-from pypy.jit.codewriter import longlong
-from pypy.rlib.objectmodel import specialize, we_are_translated
+from pypy.rlib.objectmodel import specialize
 from pypy.tool.pairtype import extendabletype
 
 LEVEL_UNKNOWN    = '\x00'
@@ -43,11 +41,6 @@ class LenBound(object):
     def clone(self):
         return LenBound(self.mode, self.descr, self.bound.clone())
 
-class exploder(object):
-    def __getattribute__(self, attr):
-        import pdb
-        pdb.set_trace()
-
 class OptValue(object):
     _attrs_ = ('known_class', 'last_guard', 'level', 'intbound', 'lenbound', 'is_bool_box')
 
@@ -58,17 +51,6 @@ class OptValue(object):
     known_class = None
     intbound = ImmutableIntUnbounded()
     lenbound = None
-    is_bool_box = False
-
-    def getbox(self):
-        import pdb
-        pdb.set_trace()
-
-    def setbox(self, x):
-        import pdb
-        pdb.set_trace()
-
-    box = property(getbox, setbox)
 
     def __init__(self, op, level=None, known_class=None, intbound=None):
         self.op = op
@@ -196,6 +178,7 @@ class OptValue(object):
             self.intbound = IntUnbounded()
 
     def get_constant_class(self, cpu):
+        xxx
         level = self.level
         if level == LEVEL_KNOWNCLASS:
             return self.known_class
@@ -291,21 +274,32 @@ REMOVED = AbstractResOp()
 
 
 class Optimization(object):
-    next_optimization = None
+    optimize_default = None
 
     def __init__(self):
         pass # make rpython happy
 
-    def propagate_forward(self, op):
-        raise NotImplementedError
+    #def propagate_forward(self, op):
+    #    raise NotImplementedError
 
-    def emit_operation(self, op):
-        self.last_emitted_operation = op
-        self.next_optimization.propagate_forward(op)
+    #def emit_operation(self, op):
+    #    self.last_emitted_operation = op
+    #    self.next_optimization.propagate_forward(op)
+
+    def optimize_operation(self, op):
+        name = 'optimize_' + opname[op.getopnum()]
+        next_func = getattr(self, name, self.optimize_default)
+        if next_func is not None:
+            op = next_func(op)
+            if op is None:
+                return
+            else:
+                self.last_emitted_operation = op
+        return op
 
     # FIXME: Move some of these here?
-    def getvalue(self, box, create=True):
-        return self.optimizer.getvalue(box, create=create)
+    def getforwarded(self, op):
+        return self.optimizer.getforwarded(op)
 
     def setvalue(self, box, value):
         self.optimizer.setvalue(box, value)
@@ -319,8 +313,8 @@ class Optimization(object):
     def replace(self, box, value):
         return self.optimizer.replace(box, value)
 
-    def get_constant_box(self, box):
-        return self.optimizer.get_constant_box(box)
+    def get_constant_op(self, op):
+        return self.optimizer.get_constant_op(op)
 
     def new_box(self, fieldofs):
         return self.optimizer.new_box(fieldofs)
@@ -392,24 +386,10 @@ class Optimizer(Optimization):
         if loop is not None:
             self.call_pure_results = loop.call_pure_results
 
-        self.set_optimizations(optimizations)
+        self.optimizations = optimizations
+        for opt in optimizations:
+            opt.optimizer = self
         self.setup()
-
-    def set_optimizations(self, optimizations):
-        if optimizations:
-            self.first_optimization = optimizations[0]
-            for i in range(1, len(optimizations)):
-                optimizations[i - 1].next_optimization = optimizations[i]
-            optimizations[-1].next_optimization = self
-            for o in optimizations:
-                o.optimizer = self
-                o.last_emitted_operation = None
-                o.setup()
-        else:
-            optimizations = []
-            self.first_optimization = self
-
-        self.optimizations  = optimizations
 
     def force_at_end_of_preamble(self):
         for o in self.optimizations:
@@ -441,20 +421,29 @@ class Optimizer(Optimization):
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_FORCINGS)
         self.resumedata_memo.forget_numberings(virtualbox)
 
-    def getvalue(self, box):
-        if box.is_constant():
-            if box.type == REF:
-                if not box.getref_base():
+    def getforwarded(self, op):
+        if op.is_constant():
+            if op.type == REF:
+                if not op.getref_base():
                     return CONST_NULL
                 try:
-                    return self.interned_refs[box.getref_base()]
+                    return self.interned_refs[op.getref_base()]
                 except KeyError:
-                    self.interned_refs[box.getref_base()] = box
-                    return box
-            return box
-        value = box._forwarded
+                    self.interned_refs[op.getref_base()] = op
+                    return op
+            return op
+        value = op._forwarded
         if value is None:
-            value = box.make_forwarded_copy()
+            value = op.make_forwarded_copy()
+        else:
+            if value._forwarded:
+                while value._forwarded:
+                    value = value._forwarded
+                to_patch = op
+                while to_patch._forwarded:
+                    next = to_patch._forwarded
+                    to_patch._forwarded = value
+                    to_patch = next
         #self.ensure_imported(value)
         return value
 
@@ -465,13 +454,15 @@ class Optimizer(Optimization):
         box.set_extra("optimize_value", value)
 
     def copy_op_if_modified_by_optimization(self, op):
+        xxxx
         new_op = op.copy_if_modified_by_optimization(self)
         if new_op is not op:
             self.replace(op, new_op)
         return new_op
 
     # XXX some RPython magic needed
-    def copy_and_change(self, op, *args, **kwds): 
+    def copy_and_change(self, op, *args, **kwds):
+        xxx
         new_op = op.copy_and_change(*args, **kwds)
         if new_op is not op:
             self.replace(op, new_op)
@@ -481,19 +472,10 @@ class Optimizer(Optimization):
         pass
 
     @specialize.argtype(0)
-    def get_constant_box(self, box):
-        if isinstance(box, Const):
-            return box
-        try:
-            value = self.getvalue(box)
-            self.ensure_imported(value)
-        except KeyError:
-            return None
-        if value.is_constant():
-            constbox = value.op
-            assert isinstance(constbox, Const)
-            return constbox
-        return None
+    def get_constant_op(self, op):
+        op = self.getforwarded(op)
+        if isinstance(op, Const):
+            return op
 
     def get_newoperations(self):
         self.flush()
@@ -501,20 +483,6 @@ class Optimizer(Optimization):
 
     def clear_newoperations(self):
         self._newoperations = []
-
-    def replace(self, what, with_):
-        assert isinstance(what, AbstractValue)
-        assert isinstance(with_, AbstractValue)
-        assert not what.has_extra("optimize_replace")
-        assert not what.is_constant()
-        if what.has_extra("optimize_value"):
-            v = what.get_extra("optimize_value")
-            v.op = with_
-            with_.set_extra("optimize_value", v)
-        #if not we_are_translated():
-        #    if what.has_extra("optimize_value"):
-        #        what.get_extra("optimize_value").__class__ = exploder
-        what.set_extra("optimize_replace", with_)
 
     def make_constant(self, box, constbox):
         self.getvalue(box).make_constant(constbox)
@@ -560,14 +528,16 @@ class Optimizer(Optimization):
     def propagate_all_forward(self, clear=True):
         if clear:
             self.clear_newoperations()
-        for op in self.loop.operations:
-            self.first_optimization.propagate_forward(op)
-        for arg in self.loop.inputargs:
-            arg.del_extra("optimize_value")
-            arg.del_extra("optimize_replace")
-        for op in self.loop.operations:
-            op.del_extra("optimize_value")
-            op.del_extra("optimize_replace")
+        i = 0
+        while i < len(self.loop.operations):
+            op = self.loop.operations[i]
+            for opt in self.optimizations:
+                op = opt.optimize_operation(op)
+                if op is None:
+                    break
+            else:
+                self.emit_operation(op)
+            i += 1
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
@@ -584,22 +554,10 @@ class Optimizer(Optimization):
             self.getvalue(op).is_bool_box = True
         self._emit_operation(op)
 
-    def get_value_replacement(self, box):
-        try:
-            value = self.getvalue(box)
-        except KeyError:
-            return None
-        else:
-            self.ensure_imported(value)
-            forced_box = value.force_box(self)
-            if forced_box is box:
-                return None
-            return forced_box
-
     @specialize.argtype(0)
     def _emit_operation(self, op):
         assert op.getopnum() not in opgroups.CALL_PURE
-        op = self.copy_op_if_modified_by_optimization(op)
+        assert not op._forwarded
         if isinstance(op, Const):
             return
         self.metainterp_sd.profiler.count(jitprof.Counters.OPT_OPS)
@@ -613,6 +571,7 @@ class Optimizer(Optimization):
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
+        return # XXX we disable it for tests
         assert op.getdescr() is None
         descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
         op.setdescr(descr)

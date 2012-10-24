@@ -474,7 +474,7 @@ class AbstractResOp(AbstractValue):
         # XXX this is a hack kill me
         import sys
         co_fname = sys._getframe(1).f_code.co_filename
-        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname:
+        if co_fname.endswith('resume.py') or co_fname.endswith('optimizeopt/util.py') or 'backend/llgraph' in co_fname or 'backend/test' in co_fname or 'test/test_util' in co_fname:
             return object.__hash__(self)
         raise Exception("Should not hash resops, use get/set extra instead")
 
@@ -649,6 +649,13 @@ class AbstractResOp(AbstractValue):
         elif opnum < 0:
             return False     # for tests
         return opboolresult[opnum]
+
+    # some debugging help
+
+    def __setattr__(self, attr, val):
+        if attr not in ['_hash', '_str']:
+            assert self._forwarded is None
+        object.__setattr__(self, attr, val)
 
 # ===========
 # type mixins
