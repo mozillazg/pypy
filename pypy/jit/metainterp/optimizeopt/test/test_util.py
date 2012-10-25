@@ -413,7 +413,7 @@ class BaseTest(object):
         from pypy.jit.metainterp.optimizeopt.util import equaloplists
         assert len(optimized.inputargs) == len(expected.inputargs)
         remap = {}
-        for box1, box2 in zip(optimized.inputargs, expected.inputargs):
+        for box1, box2 in zip(optimized.operations[0].getarglist(), expected.inputargs):
             #assert box1.__class__ == box2.__class__
             remap[box2] = box1
         assert equaloplists(optimized.operations,
@@ -501,7 +501,7 @@ class FakeDescrWithSnapshot(compile.ResumeGuardDescr):
 def convert_old_style_to_targets(loop, jump):
     newloop = TreeLoop(loop.name)
     newloop.inputargs = loop.inputargs
-    newloop.operations = [create_resop(rop.LABEL, None, loop.inputargs, descr=FakeDescr())] + \
+    newloop.operations = [create_resop(rop.LABEL, None, loop.inputargs[:], descr=FakeDescr())] + \
                       loop.operations
     if not jump:
         assert newloop.operations[-1].getopnum() == rop.JUMP

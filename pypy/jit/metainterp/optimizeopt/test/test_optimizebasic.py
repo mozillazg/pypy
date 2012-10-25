@@ -118,7 +118,7 @@ class BaseTestBasic(BaseTest):
     def optimize_loop(self, ops, optops, results=None):
         loop = self.parse(ops, results=results)
         token = JitCellToken()
-        loop.operations = [create_resop(rop.LABEL, None, loop.inputargs, descr=TargetToken(token))] + \
+        loop.operations = [create_resop(rop.LABEL, None, loop.inputargs[:], descr=TargetToken(token))] + \
                           loop.operations
         if loop.operations[-1].getopnum() == rop.JUMP:
             loop.operations[-1]._descr = token
@@ -148,18 +148,18 @@ class BaseTestOptimizeBasic(BaseTestBasic):
     def test_constant_propagate(self):
         ops = """
         [i]
-        guard_value(i, 2) []
+        guard_value(i, 2)
         i0 = int_add(i, 3)
         i1 = int_is_true(i0)
-        guard_true(i1) []
+        guard_true(i1)
         i2 = int_is_zero(i1)
-        guard_false(i2) []
-        guard_value(i0, 5) []
+        guard_false(i2)
+        guard_value(i0, 5)
         jump(i)
         """
         expected = """
         [i]
-        guard_value(i, 2) []
+        guard_value(i, 2)
         jump(2)
         """
         self.optimize_loop(ops, expected)

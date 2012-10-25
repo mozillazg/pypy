@@ -531,6 +531,11 @@ class Optimizer(Optimization):
             for opt in reversed(self.optimizations):
                 opt.postprocess_op(orig_op)
             i += 1
+        # clean up
+        for op in self.loop.operations:
+            op._forwarded = None
+        for arg in self.loop.inputargs:
+            arg._forwarded = None
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps
         # accumulate counters
