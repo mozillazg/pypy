@@ -675,6 +675,26 @@ class AbstractResOp(AbstractValue):
                     pdb.set_trace()
         return object.__getattribute__(self, attr)
 
+    def getforwarded(self):
+        value = self._forwarded
+        if value is None:
+            # we only need to make a new copy if the old one is immutable
+            if self.is_mutable:
+                value = self
+            else:
+                value = self.make_forwarded_copy()
+        else:
+            if value._forwarded:
+                while value._forwarded:
+                    value = value._forwarded
+                to_patch = self
+                while to_patch._forwarded:
+                    next = to_patch._forwarded
+                    to_patch._forwarded = value
+                    to_patch = next
+        #self.ensure_imported(value)
+        return value
+
 # ===========
 # type mixins
 # ===========
@@ -892,6 +912,9 @@ class NullaryOp(object):
     def getarg(self, i):
         raise IndexError
 
+    def setarg(self, i, v):
+        raise IndexError
+
     def foreach_arg(self, func, arg):
         pass        
 
@@ -930,6 +953,12 @@ class UnaryOp(object):
     def getarg(self, i):
         if i == 0:
             return self._arg0
+        else:
+            raise IndexError
+
+    def setarg(self, i, v):
+        if i == 0:
+            self._arg0 = v
         else:
             raise IndexError
 
@@ -978,6 +1007,14 @@ class BinaryOp(object):
             return self._arg0
         elif i == 1:
             return self._arg1
+        else:
+            raise IndexError
+
+    def setarg(self, i, v):
+        if i == 0:
+            self._arg0 = v
+        elif i == 1:
+            self._arg1 = v
         else:
             raise IndexError
 
@@ -1046,6 +1083,16 @@ class TernaryOp(object):
         else:
             raise IndexError
 
+    def setarg(self, i, v):
+        if i == 0:
+            self._arg0 = v
+        elif i == 1:
+            self._arg1 = v
+        elif i == 2:
+            self._arg2 = v
+        else:
+            raise IndexError
+
     @specialize.arg(1)
     def foreach_arg(self, func, arg):
         func(arg, self.getopnum(), 0, self._arg0)
@@ -1100,6 +1147,9 @@ class N_aryOp(object):
 
     def getarg(self, i):
         return self._args[i]
+
+    def setarg(self, i, v):
+        self._args[i] = v
 
     @specialize.arg(1)
     def foreach_arg(self, func, func_arg):

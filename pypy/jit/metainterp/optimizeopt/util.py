@@ -193,27 +193,27 @@ def equaloplists(oplist1, oplist2, strict_fail_args=True, remap={},
             remap[op2] = op1
         if op1.is_guard():
             assert op2.is_guard()
-            if op1.get_extra("failargs") or op2.get_extra("failargs"):
-                assert (len(op1.get_extra("failargs")) ==
-                        len(op2.get_extra("failargs")))
-                if strict_fail_args:
-                    for x, y in zip(op1.get_extra("failargs"),
-                                    op2.get_extra("failargs")):
-                        if x is None:
-                            assert remap.get(y, y) is None
-                        else:
-                            assert x.eq(remap.get(y, y))
-                else:
-                    fail_args1 = set(op1.get_extra("failargs"))
-                    fail_args2 = set([remap.get(y, y) for y in
-                                      op2.get_extra("failargs")])
-                    for x in fail_args1:
-                        for y in fail_args2:
-                            if x.eq(y):
-                                fail_args2.remove(y)
-                                break
-                        else:
-                            assert False
+            # if op1.get_extra("failargs") or op2.get_extra("failargs"):
+            #     assert (len(op1.get_extra("failargs")) ==
+            #             len(op2.get_extra("failargs")))
+            #     if strict_fail_args:
+            #         for x, y in zip(op1.get_extra("failargs"),
+            #                         op2.get_extra("failargs")):
+            #             if x is None:
+            #                 assert remap.get(y, y) is None
+            #             else:
+            #                 assert x.eq(remap.get(y, y))
+            #     else:
+            #         fail_args1 = set(op1.get_extra("failargs"))
+            #         fail_args2 = set([remap.get(y, y) for y in
+            #                           op2.get_extra("failargs")])
+            #         for x in fail_args1:
+            #             for y in fail_args2:
+            #                 if x.eq(y):
+            #                     fail_args2.remove(y)
+            #                     break
+            #             else:
+            #                 assert False
         elif op1.getopnum() not in (rop.JUMP, rop.LABEL):      # xxx obscure
             assert op1.getdescr() == op2.getdescr()
     assert len(oplist1) == len(oplist2)

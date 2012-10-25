@@ -432,24 +432,7 @@ class Optimizer(Optimization):
                     self.interned_refs[op.getref_base()] = op
                     return op
             return op
-        value = op._forwarded
-        if value is None:
-            # we only need to make a new copy if the old one is immutable
-            if op.is_mutable:
-                value = op
-            else:
-                value = op.make_forwarded_copy()
-        else:
-            if value._forwarded:
-                while value._forwarded:
-                    value = value._forwarded
-                to_patch = op
-                while to_patch._forwarded:
-                    next = to_patch._forwarded
-                    to_patch._forwarded = value
-                    to_patch = next
-        #self.ensure_imported(value)
-        return value
+        return op.getforwarded()
 
     def setvalue(self, box, value):
         xxx
@@ -579,6 +562,11 @@ class Optimizer(Optimization):
         elif op.getopnum() == rop.FINISH:
             op = self.store_final_boxes_in_guard(op)
         assert op is not None
+        if op.getopnum() == rop.JUMP:
+            import pdb
+            pdb.set_trace()
+        for i in range(op.numargs()):
+            op.setarg(i, self.getforwarded(op.getarg(i)))
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
