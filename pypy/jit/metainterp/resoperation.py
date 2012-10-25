@@ -365,9 +365,6 @@ class ConstInt(Const):
     def repr_rpython(self):
         return repr_rpython(self, 'ci')
 
-    def getboolbox(self):
-        return False # for optimization
-
 CONST_FALSE = ConstInt(0)
 CONST_TRUE  = ConstInt(1)
 

@@ -12,6 +12,9 @@ class __extend__(ConstInt):
     def getintbound(self):
         return ConstantIntBound(self.getint())
 
+    def getboolbox(self):
+        return False # for optimization
+
 class __extend__(Const):
     def getlastguard(self):
         return None
