@@ -89,15 +89,15 @@ class OptRewrite(Optimization):
             self.emit_operation(op)
 
     def optimize_INT_SUB(self, op):
-        v2 = self.getvalue(op.getarg(1))
-        if v2.is_constant() and v2.op.getint() == 0:
+        v2 = self.getforwarded(op.getarg(1))
+        if v2.is_constant() and v2.getint() == 0:
             self.replace(op, op.getarg(0))
         else:
-            self.emit_operation(op)
             # Synthesize the reverse ops for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_ADD, op.getarg(1), op)
             self.pure(op.getarg(0), rop.INT_ADD, op, op.getarg(1))
             self.pure(op.getarg(1), rop.INT_SUB, op.getarg(0), op)
+            return op
 
     def optimize_INT_ADD(self, op):
         arg1 = op.getarg(0)
@@ -193,8 +193,9 @@ class OptRewrite(Optimization):
         self.pure(op.getarg(0), rop.FLOAT_NEG, op)
 
     def optimize_guard(self, op, constbox, emit_operation=True):
-        value = self.getvalue(op.getarg(0))
+        value = self.getforwarded(op.getarg(0))
         if value.is_constant():
+            xxx
             box = value.op
             assert isinstance(box, Const)
             if not box.same_constant(constbox):
@@ -202,10 +203,16 @@ class OptRewrite(Optimization):
                                   'always fail')
             return
         if emit_operation:
-            self.emit_operation(op)
-        value = self.getvalue(op.getarg(0)) # might have been forwarded
+            return self.getforwarded(op)
+
+    def postprocess_guard(self, op):
+        value = self.getforwarded(op.getarg(0))
         value.make_constant(constbox)
         self.optimizer.turned_constant(value)
+
+    def postprocess_op(self, op):
+        if op.is_guard():
+            self.postprocess_guard(op)
 
     def optimize_GUARD_ISNULL(self, op):
         value = self.getvalue(op.getarg(0))
@@ -227,12 +234,12 @@ class OptRewrite(Optimization):
         value.make_nonnull(op, pos)
 
     def optimize_GUARD_VALUE(self, op):
-        value = self.getvalue(op.getarg(0))
-        if value.last_guard:
+        value = self.getforwarded(op.getarg(0))
+        if value.getlastguard():
             # there already has been a guard_nonnull or guard_class or
             # guard_nonnull_class on this value, which is rather silly.
             # replace the original guard with a guard_value
-            old_guard_op = value.last_guard
+            old_guard_op = value.getlastguard()
             if old_guard_op.getopnum() != rop.GUARD_NONNULL:
                 # This is only safe if the class of the guard_value matches the
                 # class of the guard_*_class, otherwise the intermediate ops might

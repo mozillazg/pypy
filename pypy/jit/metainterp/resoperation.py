@@ -12,14 +12,14 @@ forwarding. Public interface:
 
 """
 
-from pypy.rlib.objectmodel import we_are_translated, specialize
+from pypy.jit.codewriter import longlong
+from pypy.jit.codewriter import heaptracker
 from pypy.rpython.lltypesystem import lltype, llmemory, rffi
 from pypy.rpython.ootypesystem import ootype
-from pypy.jit.codewriter import longlong
-from pypy.rlib.objectmodel import compute_identity_hash, newlist_hint,\
-     compute_unique_id, Symbolic
-from pypy.jit.codewriter import heaptracker
 from pypy.rlib.rarithmetic import is_valid_int, intmask
+from pypy.rlib.objectmodel import compute_identity_hash, newlist_hint,\
+     compute_unique_id, Symbolic, we_are_translated, specialize
+from pypy.tool.pairtype import extendabletype
 
 INT   = 'i'
 REF   = 'r'
@@ -155,6 +155,8 @@ def create_resop_3(opnum, result, arg0, arg1, arg2, descr=None, mutable=False):
 
 class AbstractValue(object):
     __slots__ = ()
+
+    __metaclass__ = extendabletype
 
     def getint(self):
         """ Get an integer value, if the box supports it, otherwise crash
@@ -456,8 +458,8 @@ class AbstractResOp(AbstractValue):
     """The central ResOperation class, representing one operation."""
 
     # debug
-    name = ""
-    pc = 0
+    _name = ""
+    _pc = 0
     _counter = 0
 
     _hash = 0
@@ -566,8 +568,8 @@ class AbstractResOp(AbstractValue):
             sres = '%s = ' % (str(self),)
         else:
             sres = ''
-        if self.name:
-            prefix = "%s:%s   " % (self.name, self.pc)
+        if self._name:
+            prefix = "%s:%s   " % (self._name, self._pc)
             if graytext:
                 prefix = "\f%s\f" % prefix
         else:
@@ -650,12 +652,26 @@ class AbstractResOp(AbstractValue):
             return False     # for tests
         return opboolresult[opnum]
 
+    def _copy_extra_attrs(self, new):
+        pass
+    
     # some debugging help
 
     def __setattr__(self, attr, val):
         if attr not in ['_hash', '_str']:
             assert self._forwarded is None
         object.__setattr__(self, attr, val)
+
+    def __getattribute__(self, attr):
+        if not attr.startswith('_') and attr != 'type':
+            # methods are fine
+            if not callable(getattr(self.__class__, attr, None)):
+                try:
+                    assert self._forwarded is None
+                except AssertionError:
+                    import pdb
+                    pdb.set_trace()
+        return object.__getattribute__(self, attr)
 
 # ===========
 # type mixins
@@ -690,27 +706,27 @@ class ResOpInt(object):
                 intval = int(intval)
             else:
                 assert isinstance(intval, Symbolic)
-        self.intval = intval
+        self._intval = intval
 
     def getint(self):
-        return self.intval
+        return self._intval
     getresult = getint
 
     def getresultrepr(self):
-        return str(self.intval)
+        return str(self._intval)
 
     @staticmethod
     def wrap_constant(intval):
         return ConstInt(intval)
 
     def constbox(self):
-        return ConstInt(self.intval)
+        return ConstInt(self._intval)
 
     def get_result_hash(self):
-        return make_hashable_int(self.intval)
+        return make_hashable_int(self._intval)
 
     def eq_value(self, other):
-        return self.intval == other.getint()
+        return self._intval == other.getint()
 
 class ResOpFloat(object):
     _mixin_ = True
@@ -719,13 +735,13 @@ class ResOpFloat(object):
     def __init__(self, floatval):
         #assert isinstance(floatval, float)
         # XXX not sure between float or float storage
-        self.floatval = floatval
+        self._floatval = floatval
 
     def getresultrepr(self):
-        return str(self.floatval)
+        return str(self._floatval)
 
     def getfloatstorage(self):
-        return self.floatval
+        return self._floatval
     getresult = getfloatstorage
 
     @staticmethod
@@ -733,13 +749,13 @@ class ResOpFloat(object):
         return ConstFloat(floatval)
 
     def constbox(self):
-        return ConstFloat(self.floatval)
+        return ConstFloat(self._floatval)
 
     def get_result_hash(self):
-        return longlong.gethash(self.floatval)
+        return longlong.gethash(self._floatval)
 
     def eq_value(self, other):
-        return self.floatval == other.getfloatstorage()
+        return self._floatval == other.getfloatstorage()
 
 class ResOpPointer(object):
     _mixin_ = True
@@ -747,10 +763,10 @@ class ResOpPointer(object):
 
     def __init__(self, pval):
         assert lltype.typeOf(pval) == llmemory.GCREF
-        self.pval = pval
+        self._pval = pval
 
     def getref_base(self):
-        return self.pval
+        return self._pval
     getresult = getref_base
 
     def getref(self, TYPE):
@@ -758,11 +774,11 @@ class ResOpPointer(object):
 
     def getresultrepr(self):
         # XXX what do we want to put in here?
-        return str(self.pval)
+        return str(self._pval)
 
     def get_result_hash(self):
-        if self.pval:
-            return lltype.identityhash(self.pval)
+        if self._pval:
+            return lltype.identityhash(self._pval)
         else:
             return 0
 
@@ -771,10 +787,10 @@ class ResOpPointer(object):
         return ConstPtr(pval)
 
     def constbox(self):
-        return ConstPtr(self.pval)
+        return ConstPtr(self._pval)
 
     def eq_value(self, other):
-        return self.pval == other.getref_base()
+        return self._pval == other.getref_base()
 
 # ===================
 # Top of the hierachy
@@ -852,6 +868,10 @@ class GuardResOp(PlainResOp):
         descr.rd_frame_info_list = self._rd_frame_info_list
         return descr
 
+    def _copy_extra_attrs(self, res):
+        res.set_rd_frame_info_list(self.get_rd_frame_info_list())
+        res.set_rd_snapshot(self.get_rd_snapshot())
+
 # ============
 # arity mixins
 # ============
@@ -879,12 +899,9 @@ class NullaryOp(object):
             newopnum = self.getopnum()
         res = create_resop_0(newopnum, self.getresult(),
                              descr or self.getdescr(), mutable=True)
-        if self.is_guard():
-            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
-            res.set_rd_snapshot(self.get_rd_snapshot())
-        assert not self.is_mutable
         assert not self._forwarded
         self._forwarded = res
+        self._copy_extra_attrs(res)
         return res
 
     def get_key_op(self, opt):
@@ -932,12 +949,9 @@ class UnaryOp(object):
             newopnum = self.getopnum()
         res = create_resop_1(newopnum, self.getresult(), arg0 or self._arg0,
                              descr or self.getdescr(), mutable=True)
-        if self.is_guard():
-            res.set_rd_frame_info_list(self.get_rd_frame_info_list())
-            res.set_rd_snapshot(self.get_rd_snapshot())
-        assert not self.is_mutable
         assert not self._forwarded
         self._forwarded = res
+        self._copy_extra_attrs(res)
         return res
 
     def get_arg_hash(self):
@@ -994,8 +1008,8 @@ class BinaryOp(object):
             res.set_rd_frame_info_list(self.get_rd_frame_info_list())
             res.set_rd_snapshot(self.get_rd_snapshot())
         assert not self._forwarded
-        assert not self.is_mutable
         self._forwarded = res
+        self._copy_extra_attrs(res)
         return res
 
     def get_arg_hash(self):
@@ -1055,10 +1069,9 @@ class TernaryOp(object):
         r = create_resop_3(newopnum, self.getresult(), arg0 or self._arg0,
                            arg1 or self._arg1, arg2 or self._arg2,
                            descr or self.getdescr(), mutable=True)
-        assert not r.is_guard()
         assert not self._forwarded
-        assert not self.is_mutable
         self._forwarded = r
+        self._copy_extra_attrs(r)
         return r
 
     def get_arg_hash(self):
@@ -1116,9 +1129,8 @@ class N_aryOp(object):
         r = create_resop(newopnum, self.getresult(),
                          newargs or self.getarglist(),
                          descr or self.getdescr(), mutable=True)
-        assert not r.is_guard()
         assert not self._forwarded
-        assert not self.is_mutable
+        self._copy_extra_attrs(r)
         self._forwarded = r
         return r
 

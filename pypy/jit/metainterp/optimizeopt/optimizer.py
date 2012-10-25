@@ -297,6 +297,15 @@ class Optimization(object):
                 self.last_emitted_operation = op
         return op
 
+    def postprocess_op(self, op):
+        name = 'postprocess_' + opname[op.getopnum()]
+        next_func = getattr(self, name, self.postprocess_default)
+        if next_func is not None:
+            next_func(op)
+
+    def postprocess_default(self, op):
+        pass
+
     # FIXME: Move some of these here?
     def getforwarded(self, op):
         return self.optimizer.getforwarded(op)
@@ -434,7 +443,11 @@ class Optimizer(Optimization):
             return op
         value = op._forwarded
         if value is None:
-            value = op.make_forwarded_copy()
+            # we only need to make a new copy if the old one is immutable
+            if op.is_mutable:
+                value = op
+            else:
+                value = op.make_forwarded_copy()
         else:
             if value._forwarded:
                 while value._forwarded:
@@ -531,12 +544,15 @@ class Optimizer(Optimization):
         i = 0
         while i < len(self.loop.operations):
             op = self.loop.operations[i]
+            orig_op = op
             for opt in self.optimizations:
                 op = opt.optimize_operation(op)
                 if op is None:
                     break
             else:
                 self.emit_operation(op)
+            for opt in self.optimizations:
+                opt.postprocess_op(orig_op)
             i += 1
         self.loop.operations = self.get_newoperations()
         self.loop.quasi_immutable_deps = self.quasi_immutable_deps

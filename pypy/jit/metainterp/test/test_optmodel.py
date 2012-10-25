@@ -42,7 +42,7 @@ def test_make_forwarded_copy():
 
 def test_failargs():
     op = rop.create_resop_0(rop.rop.GUARD_NO_OVERFLOW, None)
-    assert not hasattr(op, 'set_failargs')
+    assert not hasattr(op, 'setfailargs')
     op2 = op.make_forwarded_copy()
     assert op._forwarded is op2
     op2.setfailargs([1, 2, 3])

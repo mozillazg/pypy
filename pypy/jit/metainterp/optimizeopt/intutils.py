@@ -248,7 +248,14 @@ class IntBound(object):
             guards.append(op)
             op = ResOperation(rop.GUARD_TRUE, [res], None)
             guards.append(op)
-    
+
+class ConstantIntBound(IntBound):
+    has_upper = True
+    has_lower = True
+
+    def __init__(self, v):
+        self.upper = v
+        self.lower = v
 
 class IntUpperBound(IntBound):
     def __init__(self, upper):
