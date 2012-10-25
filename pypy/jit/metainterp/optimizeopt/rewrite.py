@@ -1,7 +1,8 @@
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound
-from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
+from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
+     CONST_0
 from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
                                               ConstInt, make_hashable_int,
                                               create_resop_2, Const)
@@ -22,12 +23,6 @@ class OptRewrite(Optimization):
     def produce_potential_short_preamble_ops(self, sb):
         for op in self.loop_invariant_producer.values():
             sb.add_potential(op)
-
-    def propagate_forward(self, op):
-        if self.find_rewritable_bool(op):
-            return
-
-        dispatch_opt(self, op)
 
     def try_boolinvers(self, op, key_op):
         oldop = self.get_pure_result(key_op)
@@ -101,19 +96,19 @@ class OptRewrite(Optimization):
     def optimize_INT_ADD(self, op):
         arg1 = op.getarg(0)
         arg2 = op.getarg(1)
-        v1 = self.getvalue(arg1)
-        v2 = self.getvalue(arg2)
+        v1 = self.getforwarded(arg1)
+        v2 = self.getforwarded(arg2)
 
         # If one side of the op is 0 the result is the other side.
-        if v1.is_constant() and v1.op.getint() == 0:
+        if v1.is_constant() and v1.getint() == 0:
             self.replace(op, arg2)
-        elif v2.is_constant() and v2.op.getint() == 0:
+        elif v2.is_constant() and v2.getint() == 0:
             self.replace(op, arg1)
         else:
-            self.emit_operation(op)
             # Synthesize the reverse op for optimize_default to reuse
             self.pure(op.getarg(0), rop.INT_SUB, op, op.getarg(1))
             self.pure(op.getarg(1), rop.INT_SUB, op, op.getarg(0))
+            return op
 
     def optimize_INT_MUL(self, op):
         v1 = self.getvalue(op.getarg(0))
@@ -194,10 +189,7 @@ class OptRewrite(Optimization):
     def optimize_guard(self, op, constbox, emit_operation=True):
         value = self.getforwarded(op.getarg(0))
         if value.is_constant():
-            xxx
-            box = value.op
-            assert isinstance(box, Const)
-            if not box.same_constant(constbox):
+            if not value.same_constant(constbox):
                 raise InvalidLoop('A GUARD_{VALUE,TRUE,FALSE} was proven to' +
                                   'always fail')
             return
@@ -213,6 +205,12 @@ class OptRewrite(Optimization):
         constbox = op.getarg(1)
         assert isinstance(constbox, Const)
         self.postprocess_guard(op, constbox)
+
+    def postprocess_GUARD_TRUE(self, op):
+        self.postprocess_guard(op, CONST_1)
+
+    def postprocess_GUARD_FALSE(self, op):
+        self.postprocess_guard(op, CONST_0)        
 
     def postprocess_default(self, op):
         if op.is_guard():
@@ -364,6 +362,7 @@ class OptRewrite(Optimization):
     optimize_CALL_LOOPINVARIANT_v = _new_optimize_call_loopinvariant(rop.CALL_v)
 
     def _optimize_nullness(self, op, box, expect_nonnull):
+        return op
         value = self.getvalue(box)
         if value.is_nonnull():
             self.make_constant_int(op, expect_nonnull)
@@ -373,10 +372,11 @@ class OptRewrite(Optimization):
             self.emit_operation(op)
 
     def optimize_INT_IS_TRUE(self, op):
-        if self.getvalue(op.getarg(0)).is_bool_box:
+        value = self.getforwarded(op.getarg(0))
+        if value.getboolbox():
             self.replace(op, op.getarg(0))
             return
-        self._optimize_nullness(op, op.getarg(0), True)
+        return self._optimize_nullness(op, op.getarg(0), True)
 
     def optimize_INT_IS_ZERO(self, op):
         self._optimize_nullness(op, op.getarg(0), False)

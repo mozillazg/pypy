@@ -296,6 +296,9 @@ class Const(AbstractValue):
     def is_constant(self):
         return True
 
+    def getlastguard(self):
+        return None
+
 def repr_rpython(box, typechars):
     return '%s/%s%d' % (box._get_hash_(), typechars,
                         compute_unique_id(box))
@@ -364,6 +367,9 @@ class ConstInt(Const):
 
     def repr_rpython(self):
         return repr_rpython(self, 'ci')
+
+    def getboolbox(self):
+        return False # for optimization
 
 CONST_FALSE = ConstInt(0)
 CONST_TRUE  = ConstInt(1)

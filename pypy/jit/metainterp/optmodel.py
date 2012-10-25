@@ -45,6 +45,7 @@ def create_mutable_subclasses():
             if cls.type == INT:
                 # all the integers have bounds
                 addattr(Mutable, 'intbound', imm_int_unbound)
+                addattr(Mutable, 'boolbox', False)
             # for tracking last guard and merging GUARD_VALUE with
             # GUARD_NONNULL etc
             addattr(Mutable, 'lastguard', None)

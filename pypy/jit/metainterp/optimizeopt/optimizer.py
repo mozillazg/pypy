@@ -587,6 +587,7 @@ class Optimizer(Optimization):
         descr.store_final_boxes(op, newboxes)
         #
         if op.getopnum() == rop.GUARD_VALUE:
+            xxx
             if self.getvalue(op.getarg(0)).is_bool_box:
                 # Hack: turn guard_value(bool) into guard_true/guard_false.
                 # This is done after the operation is emitted to let
@@ -620,7 +621,7 @@ class Optimizer(Optimization):
         self._newoperations[value.last_guard_pos] = new_guard_op
 
     def constant_fold(self, op):
-        argboxes = [self.get_constant_box(op.getarg(i))
+        argboxes = [self.get_constant_op(op.getarg(i))
                     for i in range(op.numargs())]
         resbox = execute_nonspec(self.cpu, None,
                                  op.getopnum(), argboxes, op.getdescr())

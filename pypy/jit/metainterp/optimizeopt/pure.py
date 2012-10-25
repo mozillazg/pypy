@@ -48,7 +48,7 @@ class OptPure(Optimization):
 
         # otherwise, the operation remains
         if newop.returns_bool_result():
-            newop.is_bool_box = True
+            newop.setboolbox(True)
         if nextop:
             self.emit_operation(nextop)
         return newop
