@@ -472,7 +472,8 @@ class Optimizer(Optimization):
         self._newoperations = []
 
     def make_constant(self, op, constbox):
-        self.getforwarded(op)._forwarded = constbox
+        if not op.is_constant():
+            self.getforwarded(op)._forwarded = constbox
 
     def make_constant_int(self, box, intvalue):
         self.getvalue(box).make_constant(ConstInt(intvalue))
@@ -527,7 +528,7 @@ class Optimizer(Optimization):
                     break
             else:
                 self.emit_operation(op)
-            for opt in self.optimizations:
+            for opt in reversed(self.optimizations):
                 opt.postprocess_op(orig_op)
             i += 1
         self.loop.operations = self.get_newoperations()
@@ -562,9 +563,6 @@ class Optimizer(Optimization):
         elif op.getopnum() == rop.FINISH:
             op = self.store_final_boxes_in_guard(op)
         assert op is not None
-        if op.getopnum() == rop.JUMP:
-            import pdb
-            pdb.set_trace()
         for i in range(op.numargs()):
             op.setarg(i, self.getforwarded(op.getarg(i)))
         self._newoperations.append(op)

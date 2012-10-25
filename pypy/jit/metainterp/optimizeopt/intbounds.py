@@ -32,7 +32,7 @@ class OptIntBounds(Optimization):
         v = self.getforwarded(op)
         b = v.getintbound()
         if b.has_lower and b.has_upper and b.lower == b.upper:
-            v.make_constant(ConstInt(b.lower))
+            self.make_constant(v, ConstInt(b.lower))
         dispatch_bounds_ops(self, op)
 
     def postprocess_GUARD_TRUE(self, op):
