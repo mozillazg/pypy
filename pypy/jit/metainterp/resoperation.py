@@ -296,9 +296,6 @@ class Const(AbstractValue):
     def is_constant(self):
         return True
 
-    def getlastguard(self):
-        return None
-
 def repr_rpython(box, typechars):
     return '%s/%s%d' % (box._get_hash_(), typechars,
                         compute_unique_id(box))

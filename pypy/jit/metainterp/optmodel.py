@@ -4,13 +4,17 @@
 
 from pypy.tool.sourcetools import func_with_new_name
 from pypy.jit.metainterp.resoperation import opclasses, opclasses_mutable, rop,\
-     INT, ConstInt
+     INT, ConstInt, Const
 from pypy.jit.metainterp.optimizeopt.intutils import ImmutableIntUnbounded,\
      ConstantIntBound
 
 class __extend__(ConstInt):
     def getintbound(self):
         return ConstantIntBound(self.getint())
+
+class __extend__(Const):
+    def getlastguard(self):
+        return None
 
 def create_mutable_subclasses():
     def addattr(cls, attr, default_value=None):
