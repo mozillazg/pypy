@@ -165,18 +165,6 @@ class OptValue(object):
             return self.box.same_constant(other.box)
         return self is other
 
-    def make_constant(self, constbox):
-        """Replace 'self.box' with a Const box."""
-        assert isinstance(constbox, Const)
-        self.op = constbox
-        self.level = LEVEL_CONSTANT
-
-        if isinstance(constbox, ConstInt):
-            val = constbox.getint()
-            self.intbound = IntBound(val, val)
-        else:
-            self.intbound = IntUnbounded()
-
     def get_constant_class(self, cpu):
         xxx
         level = self.level
@@ -285,6 +273,9 @@ class Optimization(object):
     #def emit_operation(self, op):
     #    self.last_emitted_operation = op
     #    self.next_optimization.propagate_forward(op)
+
+    def process_inputargs(self, args):
+        pass
 
     def optimize_operation(self, op):
         name = 'optimize_' + opname[op.getopnum()]
@@ -497,8 +488,8 @@ class Optimizer(Optimization):
     def clear_newoperations(self):
         self._newoperations = []
 
-    def make_constant(self, box, constbox):
-        self.getvalue(box).make_constant(constbox)
+    def make_constant(self, op, constbox):
+        self.getforwarded(op)._forwarded = constbox
 
     def make_constant_int(self, box, intvalue):
         self.getvalue(box).make_constant(ConstInt(intvalue))
@@ -542,6 +533,8 @@ class Optimizer(Optimization):
         if clear:
             self.clear_newoperations()
         i = 0
+        for opt in self.optimizations:
+            opt.process_inputargs(self.loop.inputargs)
         while i < len(self.loop.operations):
             op = self.loop.operations[i]
             orig_op = op
@@ -567,6 +560,7 @@ class Optimizer(Optimization):
 
     def emit_operation(self, op):
         if op.returns_bool_result():
+            xxxx
             self.getvalue(op).is_bool_box = True
         self._emit_operation(op)
 
@@ -584,10 +578,11 @@ class Optimizer(Optimization):
             self.exception_might_have_happened = True
         elif op.getopnum() == rop.FINISH:
             op = self.store_final_boxes_in_guard(op)
+        assert op is not None
         self._newoperations.append(op)
 
     def store_final_boxes_in_guard(self, op):
-        return # XXX we disable it for tests
+        return op # XXX we disable it for tests
         assert op.getdescr() is None
         descr = op.invent_descr(self.jitdriver_sd, self.metainterp_sd)
         op.setdescr(descr)

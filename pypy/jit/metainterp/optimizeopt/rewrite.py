@@ -1,11 +1,10 @@
 from pypy.jit.codewriter.effectinfo import EffectInfo
 from pypy.jit.metainterp.optimize import InvalidLoop
 from pypy.jit.metainterp.optimizeopt.intutils import IntBound
-from pypy.jit.metainterp.optimizeopt.optimizer import *
-from pypy.jit.metainterp.optimizeopt.util import _findall, make_dispatcher_method
+from pypy.jit.metainterp.optimizeopt.optimizer import Optimization
 from pypy.jit.metainterp.resoperation import (opboolinvers, opboolreflex, rop,
                                               ConstInt, make_hashable_int,
-                                              create_resop_2)
+                                              create_resop_2, Const)
 from pypy.rlib.rarithmetic import highest_bit
 
 
@@ -205,14 +204,19 @@ class OptRewrite(Optimization):
         if emit_operation:
             return self.getforwarded(op)
 
-    def postprocess_guard(self, op):
+    def postprocess_guard(self, op, constbox):
         value = self.getforwarded(op.getarg(0))
-        value.make_constant(constbox)
-        self.optimizer.turned_constant(value)
+        self.optimizer.make_constant(value, constbox)
+        self.optimizer.turned_constant(op.getarg(0))
 
-    def postprocess_op(self, op):
+    def postprocess_GUARD_VALUE(self, op):
+        constbox = op.getarg(1)
+        assert isinstance(constbox, Const)
+        self.postprocess_guard(op, constbox)
+
+    def postprocess_default(self, op):
         if op.is_guard():
-            self.postprocess_guard(op)
+            xxx
 
     def optimize_GUARD_ISNULL(self, op):
         value = self.getvalue(op.getarg(0))
@@ -236,6 +240,7 @@ class OptRewrite(Optimization):
     def optimize_GUARD_VALUE(self, op):
         value = self.getforwarded(op.getarg(0))
         if value.getlastguard():
+            xxx
             # there already has been a guard_nonnull or guard_class or
             # guard_nonnull_class on this value, which is rather silly.
             # replace the original guard with a guard_value
@@ -271,7 +276,7 @@ class OptRewrite(Optimization):
             emit_operation = True
         constbox = op.getarg(1)
         assert isinstance(constbox, Const)
-        self.optimize_guard(op, constbox, emit_operation=emit_operation)
+        return self.optimize_guard(op, constbox, emit_operation=emit_operation)
 
     def optimize_GUARD_TRUE(self, op):
         self.optimize_guard(op, CONST_1)

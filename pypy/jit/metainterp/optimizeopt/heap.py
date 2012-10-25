@@ -294,14 +294,12 @@ class OptHeap(Optimization):
             # of virtualref_info and virtualizable_info are not gcptrs.
 
     def turned_constant(self, value):
-        assert value.is_constant()
-        newvalue = self.getvalue(value.op)
-        if value is not newvalue:
-            for cf in self.cached_fields.itervalues():
+        value = self.getforwarded(value)
+        for cf in self.cached_fields.itervalues():
+            cf.turned_constant(newvalue, value)
+        for submap in self.cached_arrayitems.itervalues():
+            for cf in submap.itervalues():
                 cf.turned_constant(newvalue, value)
-            for submap in self.cached_arrayitems.itervalues():
-                for cf in submap.itervalues():
-                    cf.turned_constant(newvalue, value)
 
     def force_lazy_setfield(self, descr, can_cache=True):
         try:

@@ -279,6 +279,8 @@ def repr_pointer(box):
 class Const(AbstractValue):
     __slots__ = ()
 
+    _forwarded = None # always
+
     def constbox(self):
         return self
 
@@ -658,7 +660,7 @@ class AbstractResOp(AbstractValue):
     # some debugging help
 
     def __setattr__(self, attr, val):
-        if attr not in ['_hash', '_str']:
+        if attr not in ['_hash', '_str', '_forwarded']:
             assert self._forwarded is None
         object.__setattr__(self, attr, val)
 
@@ -814,7 +816,7 @@ class ResOpWithDescr(AbstractResOp):
         # backend provides it with cpu.fielddescrof(), cpu.arraydescrof(),
         # cpu.calldescrof(), and cpu.typedescrof().
         self._check_descr(descr)
-        if self._descr is not None:
+        if self._descr is not None and not self.is_mutable:
             raise Exception("descr already set!")
         self._descr = descr
 

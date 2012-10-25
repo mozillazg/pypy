@@ -2,9 +2,9 @@ import sys
 from pypy.jit.metainterp.optimizeopt.optimizer import Optimization, CONST_1,\
      CONST_0, MODE_ARRAY, MODE_STR, MODE_UNICODE
 from pypy.jit.metainterp.optimizeopt.intutils import (IntBound, IntLowerBound,
-    IntUpperBound)
+    IntUpperBound, MININT, MAXINT)
 from pypy.jit.metainterp.optimizeopt.util import make_dispatcher_method
-from pypy.jit.metainterp.resoperation import rop, ConstInt, AbstractResOp
+from pypy.jit.metainterp.resoperation import rop, ConstInt, INT
 from pypy.jit.metainterp.optimize import InvalidLoop
 
 
@@ -15,25 +15,25 @@ class OptIntBounds(Optimization):
     def new(self):
         return OptIntBounds()
 
-    #def propagate_forward(self, op):
-    #    dispatch_opt(self, op)
+    def process_inputargs(self, args):
+        for arg in args:
+            if arg.type == INT:
+                self.getforwarded(arg).setintbound(IntBound(MININT, MAXINT))
+    
+    def optimize_operation(self, op):
+        if op.type == INT:
+            self.getforwarded(op).setintbound(IntBound(MININT, MAXINT))
+        return Optimization.optimize_operation(self, op)
 
-    #def opt_default(self, op):
-    #    assert not op.is_ovf()
-    #    self.emit_operation(op)
-
-
-    def propagate_bounds_backward(self, box):
+    def propagate_bounds_backward(self, op):
         # FIXME: This takes care of the instruction where box is the reuslt
         #        but the bounds produced by all instructions where box is
         #        an argument might also be tighten
-        xxx
-        v = self.getvalue(box)
+        v = self.getforwarded(op)
         b = v.getintbound()
         if b.has_lower and b.has_upper and b.lower == b.upper:
             v.make_constant(ConstInt(b.lower))
-        if isinstance(box, AbstractResOp):
-            dispatch_bounds_ops(self, box)
+        dispatch_bounds_ops(self, op)
 
     def postprocess_GUARD_TRUE(self, op):
         self.propagate_bounds_backward(op.getarg(0))
@@ -436,9 +436,9 @@ class OptIntBounds(Optimization):
             self.propagate_bounds_backward(op.getarg(1))
 
     def propagate_bounds_INT_SUB(self, op):
-        v1 = self.getvalue(op.getarg(0))
-        v2 = self.getvalue(op.getarg(1))
-        r = self.getvalue(op)
+        v1 = self.getforwarded(op.getarg(0))
+        v2 = self.getforwarded(op.getarg(1))
+        r = self.getforwarded(op)
         b = r.getintbound().add_bound(v2.getintbound())
         if v1.getintbound().intersect(b):
             self.propagate_bounds_backward(op.getarg(0))
@@ -470,6 +470,4 @@ class OptIntBounds(Optimization):
     propagate_bounds_INT_MUL_OVF  = propagate_bounds_INT_MUL
 
 
-#dispatch_opt = make_dispatcher_method(OptIntBounds, 'optimize_',
-#        default=OptIntBounds.opt_default)
-#dispatch_bounds_ops = make_dispatcher_method(OptIntBounds, 'propagate_bounds_')
+dispatch_bounds_ops = make_dispatcher_method(OptIntBounds, 'propagate_bounds_')

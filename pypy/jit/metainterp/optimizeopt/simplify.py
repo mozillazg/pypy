@@ -46,6 +46,7 @@ class OptSimplify(Optimization):
         return op
         
     def optimize_JUMP(self, op):
+        op = self.getforwarded(op)
         if not self.unroll:
             descr = op.getdescr()
             newdescr = None
@@ -60,9 +61,8 @@ class OptSimplify(Optimization):
                 assert len(descr.target_tokens) == 1
                 newdescr = descr.target_tokens[0]
             if newdescr is not descr or op.opnum != rop.JUMP:
-                op = self.optimizer.copy_and_change(op, op.opnum,
-                                                    descr=newdescr)
-        self.emit_operation(op)
+                op.setdescr(newdescr)
+        return op
 
 #dispatch_opt = make_dispatcher_method(OptSimplify, 'optimize_',
 #        default=OptSimplify.emit_operation)
